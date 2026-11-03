@@ -13,10 +13,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { sceneSeekState } from '../director/timeline.js';
+import {
+  effectiveShotHoldSec,
+  shotRuntimeDurationSec,
+} from '../scenes/shotPresentation.js';
+import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
+import { createScenePackRegistry } from '../scenes/packs/registry.js';
 
 const adapter = await import('./blenderCamera.js');
-test('a portable camera manifest adapter exists', () => {
-  assert.equal(typeof adapter.exportCameraManifest, 'function');
+test('a portable USD camera exporter exists', () => {
+  assert.equal(typeof adapter.sampleSceneCameras, 'function');
+  assert.equal(typeof adapter.exportCameraUsda, 'function');
 });
 
 const origin = { lat: 0, lon: 0, height: 0 };
@@ -46,7 +53,7 @@ const project = (
 const near = (a, b, eps = 1e-8) =>
   a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < eps, `${a} != ${b}`));
 const camera = (changes = {}, opts = {}) =>
-  adapter.exportCameraManifest(
+  adapter.sampleSceneCameras(
     project([{ id: 'camera', durationSec: 1, camera: pose(changes) }]),
     options(opts),
   ).frames[0];
@@ -129,12 +136,11 @@ test('explicit horizontal lens works for landscape and portrait output', () => {
     [1920, 1080],
     [1080, 1920],
   ]) {
-    const m = adapter.exportCameraManifest(
-      project(),
-      options({ width, height }),
-    );
+    const m = adapter.sampleSceneCameras(project(), options({ width, height }));
     assert.ok(Math.abs(m.camera.lensMm - 18) < 1e-10);
-    assert.equal(m.camera.sensorFit, 'HORIZONTAL');
+    assert.ok(
+      Math.abs(m.camera.sensorHeightMm - (36 * height) / width) < 1e-10,
+    );
     assert.ok(
       Math.abs(m.camera.verticalFovRadians - 2 * Math.atan(height / width)) <
         1e-10,
@@ -142,7 +148,7 @@ test('explicit horizontal lens works for landscape and portrait output', () => {
   }
 });
 
-test('anchors, cubic moves, cuts, holds and rational frame timing survive JSON round trip', () => {
+test('anchors, cubic moves, cuts, holds and rational frame timing are sampled', () => {
   const p = project([
     {
       id: 'move',
@@ -173,7 +179,7 @@ test('anchors, cubic moves, cuts, holds and rational frame timing survive JSON r
       altitudeReference: 'ellipsoid',
     },
   ];
-  const m = adapter.exportCameraManifest(
+  const m = adapter.sampleSceneCameras(
     p,
     options({
       origin: { lat: 0, lon: 180, height: 0 },
@@ -190,7 +196,6 @@ test('anchors, cubic moves, cuts, holds and rational frame timing survive JSON r
   assert.equal(m.frames[18].shotId, 'cut');
   assert.equal(m.frames[18].timeSec, (18 * 1001) / 30000);
   near(m.frames[12].position, m.frames[17].position);
-  assert.deepEqual(JSON.parse(JSON.stringify(m)), m);
   assert.equal(p.scenes[0].shots[0].camera.anchorId, 'end');
 });
 
@@ -202,20 +207,18 @@ test('invalid or ambiguous input fails before export', () => {
     { origin: { lat: 0, lon: NaN, height: 0 } },
     { horizontalFovDegrees: 180 },
   ]) {
-    assert.throws(() =>
-      adapter.exportCameraManifest(project(), options(change)),
-    );
+    assert.throws(() => adapter.sampleSceneCameras(project(), options(change)));
   }
   assert.throws(() => camera({ lon: 20 }), /100 km/);
   const multiple = project();
   multiple.scenes.push({ ...multiple.scenes[0], id: 'other' });
   assert.throws(
-    () => adapter.exportCameraManifest(multiple, options()),
+    () => adapter.sampleSceneCameras(multiple, options()),
     /scene/i,
   );
   assert.throws(
     () =>
-      adapter.exportCameraManifest(
+      adapter.sampleSceneCameras(
         project([{ id: 'missing', camera: { heading: 0 } }]),
         options(),
       ),
@@ -223,7 +226,7 @@ test('invalid or ambiguous input fails before export', () => {
   );
   assert.throws(
     () =>
-      adapter.exportCameraManifest(
+      adapter.sampleSceneCameras(
         project([{ id: 'long', camera: pose(), durationSec: 86400 }]),
         options(),
       ),
@@ -233,12 +236,12 @@ test('invalid or ambiguous input fails before export', () => {
 
 test('projection settings cannot be silently clamped by Blender', () => {
   assert.throws(
-    () => adapter.exportCameraManifest(project(), options({ width: 1 })),
+    () => adapter.sampleSceneCameras(project(), options({ width: 1 })),
     /width/,
   );
   assert.throws(
     () =>
-      adapter.exportCameraManifest(
+      adapter.sampleSceneCameras(
         project(),
         options({ horizontalFovDegrees: 179, sensorWidthMm: 1 }),
       ),
@@ -261,7 +264,7 @@ test('every exported sample agrees with Director seeking at fractional shot boun
       holdSec: 0.13,
     },
   ]);
-  const m = adapter.exportCameraManifest(p, options());
+  const m = adapter.sampleSceneCameras(p, options());
   assert.equal(m.frames.length, 21);
   for (const sample of m.frames) {
     const state = sceneSeekState(
@@ -283,7 +286,7 @@ test('CLI works in paths with spaces and refuses overwrites or invalid projectio
   const directory = mkdtempSync(join(tmpdir(), 'gev camera '));
   try {
     const input = join(directory, 'saved scene.json');
-    const output = join(directory, 'camera manifest.json');
+    const output = join(directory, 'camera stage.usda');
     writeFileSync(input, JSON.stringify(project()));
     const script = fileURLToPath(
       new URL('../../tools/export-blender-camera.mjs', import.meta.url),
@@ -309,11 +312,21 @@ test('CLI works in paths with spaces and refuses overwrites or invalid projectio
     assert.equal(first.status, 0, first.stderr);
     assert.match(first.stdout, /CAMERA_EXPORT_OK/);
     const contents = readFileSync(output, 'utf8');
-    assert.equal(JSON.parse(contents).timeline.fps.denominator, 1001);
+    assert.match(contents, /^#usda 1\.0\n/);
+    assert.match(contents, /userProperties:gevFps = "30000\/1001"/);
     const repeat = spawnSync(process.execPath, args, { encoding: 'utf8' });
     assert.equal(repeat.status, 1);
     assert.equal(readFileSync(output, 'utf8'), contents);
-    const invalidOutput = join(directory, 'invalid.json');
+    const jsonOutput = join(directory, 'cameras.json');
+    const wrongExtension = [...args];
+    wrongExtension[wrongExtension.indexOf(output)] = jsonOutput;
+    const rejected = spawnSync(process.execPath, wrongExtension, {
+      encoding: 'utf8',
+    });
+    assert.equal(rejected.status, 1);
+    assert.match(rejected.stderr, /\.usda/);
+    assert.equal(existsSync(jsonOutput), false);
+    const invalidOutput = join(directory, 'invalid.usda');
     const invalid = [...args];
     invalid[invalid.indexOf(output)] = invalidOutput;
     invalid[invalid.length - 1] = '180';
@@ -337,7 +350,7 @@ test('ordinary submillisecond shots retain the Director seek duration floor', ()
       holdSec: 0.1,
     },
   ]);
-  const m = adapter.exportCameraManifest(p, options());
+  const m = adapter.sampleSceneCameras(p, options());
   const sample = m.frames[1];
   const state = sceneSeekState(
     p.scenes[0],
@@ -360,8 +373,221 @@ test('long decimal timelines do not gain a rounding-only frame', () => {
       camera: pose(),
     })),
   );
-  const m = adapter.exportCameraManifest(p, options());
+  const m = adapter.sampleSceneCameras(p, options());
   assert.equal(m.timeline.durationSec, 1000);
   assert.equal(m.frames.length, 30000);
   assert.equal(m.shots[9999].frameEndExclusive, 30001);
+});
+
+const runtimeSeek = (scene, timeSec, durationSec, packs) =>
+  sceneSeekState(
+    scene,
+    timeSec / durationSec,
+    (s, shot) => shotRuntimeDurationSec(s, shot, packs),
+    (s, shot) => effectiveShotHoldSec(s, shot, packs),
+  );
+
+test('shot timing follows Director runtime holds, not only the saved holdSec', () => {
+  // The Director's Mailung trim plays a 7.65 s hold although 15 s was saved.
+  const p = project([
+    {
+      id: 'mailung',
+      sourcePackId: 'bhote-koshi-nepal-evidence-pack',
+      durationSec: 4.2,
+      holdSec: 15,
+      camera: pose(),
+      layers: {
+        'bhote-koshi-2026': {
+          enabled: true,
+          params: { presentation: 'scene-beat', beatId: 'mailung-bazzar' },
+        },
+      },
+    },
+    { id: 'next', durationSec: 1, holdSec: 0, camera: pose({ heading: 90 }) },
+  ]);
+  const before = structuredClone(p);
+  const m = adapter.sampleSceneCameras(p, options());
+  const [first, second] = m.shots;
+  assert.equal(first.authoredHoldSec, 15);
+  assert.equal(first.runtimeHoldSec, 7.65);
+  assert.equal(second.startTimeSec, 4.2 + 7.65);
+  // Summing authored holds would start the next shot 7.35 s (220 frames) later.
+  assert.equal(second.frameStart, Math.ceil((4.2 + 7.65) * 30) + 1);
+  assert.equal(m.timeline.durationSec, 4.2 + 7.65 + 1);
+  const packs = createDefaultScenePacks();
+  p.scenes[0].shots.forEach((shot, i) =>
+    assert.equal(
+      m.shots[i].runtimeHoldSec,
+      effectiveShotHoldSec(p.scenes[0], shot, packs),
+    ),
+  );
+  for (const sample of m.frames) {
+    const state = runtimeSeek(
+      p.scenes[0],
+      sample.timeSec,
+      m.timeline.durationSec,
+      packs,
+    );
+    assert.equal(sample.shotId, state.shot.id);
+    const expected = adapter.cameraPoseToEnu(state.camera, origin);
+    near(sample.position, expected.position);
+    sample.basisColumns.forEach((axis, i) =>
+      near(axis, expected.basisColumns[i]),
+    );
+  }
+  assert.deepEqual(p, before, 'export never rewrites saved shots');
+});
+
+test('registered minimum holds and evidence-sequence durations shift later shots', () => {
+  const packs = createScenePackRegistry({
+    recipes: [
+      {
+        id: 'sample',
+        runtimeControlsByBeat: {
+          arrival: { evidenceSequence: true, evidenceSequenceDurationSec: 2.5 },
+        },
+      },
+    ],
+    adapters: [
+      { minimumHoldSec: (states) => (states.overview?.enabled ? 3 : 0) },
+    ],
+  });
+  const p = project([
+    {
+      id: 'evidence',
+      sourcePackId: 'sample',
+      durationSec: 1,
+      holdSec: 0.5,
+      camera: pose(),
+      layers: {
+        sample: {
+          enabled: true,
+          params: { presentation: 'scene-beat', beatId: 'arrival' },
+        },
+      },
+    },
+    {
+      id: 'overview',
+      durationSec: 1,
+      holdSec: 0,
+      camera: pose({ heading: 45 }),
+      layers: { overview: { enabled: true, params: {} } },
+    },
+    { id: 'last', durationSec: 1, holdSec: 0, camera: pose({ heading: 90 }) },
+  ]);
+  const m = adapter.sampleSceneCameras(p, options({ scenePacks: packs }));
+  assert.deepEqual(
+    m.shots.map((s) => [s.startTimeSec, s.runtimeHoldSec, s.frameStart]),
+    [
+      [0, 2.5, 1],
+      [3.5, 3, 106],
+      [7.5, 0, 226],
+    ],
+  );
+  assert.equal(m.frames.length, 255);
+  // The holds match the Director's own seek path, which resolves layer states itself.
+  p.scenes[0].shots.forEach((shot, i) =>
+    assert.equal(
+      m.shots[i].runtimeHoldSec,
+      effectiveShotHoldSec(p.scenes[0], shot, packs),
+    ),
+  );
+  for (const sample of m.frames) {
+    assert.equal(
+      sample.shotId,
+      runtimeSeek(p.scenes[0], sample.timeSec, m.timeline.durationSec, packs)
+        .shot.id,
+    );
+  }
+});
+
+const usdNumbers = (text) =>
+  text.match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/g).map(Number);
+
+test('USD stage is Z-up meters with one camera per shot and per-frame matrices', () => {
+  const p = project([
+    {
+      id: 'first shot',
+      title: 'He said "hi"\n',
+      durationSec: 0.2,
+      holdSec: 0,
+      camera: pose({ heading: 30, roll: 10, alt: 50 }),
+    },
+    {
+      id: 'second',
+      durationSec: 0.1,
+      holdSec: 0,
+      camera: pose({ heading: 200, lon: 0.0005, pitch: -30 }),
+    },
+  ]);
+  const { usda, samples } = adapter.exportCameraUsda(p, options());
+  assert.match(usda, /^#usda 1\.0\n/);
+  for (const line of [
+    'upAxis = "Z"',
+    'metersPerUnit = 1',
+    'startTimeCode = 1',
+    `endTimeCode = ${samples.timeline.frameEnd}`,
+    'timeCodesPerSecond = 30',
+    'framesPerSecond = 30',
+    'defaultPrim = "GEV"',
+  ])
+    assert.ok(usda.includes(`\n    ${line}\n`), line);
+  assert.match(usda, /string gevSchema = "gev\.camera-usd\.v1"/);
+  const cameras = usda.split('\n    def Camera ').slice(1);
+  assert.equal(cameras.length, 2);
+  assert.match(cameras[0], /^"Shot_001_first_shot"/);
+  assert.match(cameras[1], /^"Shot_002_second"/);
+  // USD lens values are tenths of a scene unit (100 mm at metersPerUnit 1):
+  // a 90 degree horizontal FOV on a 36 mm sensor is an 18 mm lens.
+  assert.match(cameras[0], /\n {8}float focalLength = 0\.18\n/);
+  assert.match(cameras[0], /\n {8}float horizontalAperture = 0\.36\n/);
+  assert.match(cameras[0], /\n {8}float verticalAperture = 0\.2025\n/);
+  assert.match(cameras[0], /\n {8}token projection = "perspective"\n/);
+  assert.ok(
+    cameras[0].includes(
+      'custom string userProperties:gevShotTitle = "He said \\"hi\\"\\n"',
+    ),
+  );
+  assert.ok(
+    cameras[0].includes(
+      'custom string userProperties:gevShotId = "first shot"',
+    ),
+  );
+  cameras.forEach((text, index) => {
+    const shot = samples.shots[index];
+    const keys = [...text.matchAll(/\n {12}(\d+): \((.*)\),/g)];
+    assert.deepEqual(
+      keys.map(([, key]) => Number(key)),
+      Array.from(
+        { length: shot.frameEndExclusive - shot.frameStart },
+        (_, i) => shot.frameStart + i,
+      ),
+    );
+    for (const [, key, matrix] of keys) {
+      const values = usdNumbers(matrix);
+      const frame = samples.frames[Number(key) - 1];
+      assert.equal(frame.shotId, shot.id);
+      const [right, up, back] = frame.basisColumns;
+      near(values, [...right, 0, ...up, 0, ...back, 0, ...frame.position, 1]);
+    }
+    assert.match(
+      text,
+      /uniform token\[\] xformOpOrder = \["xformOp:transform"\]/,
+    );
+  });
+});
+
+test('USD stage records rational fps and portrait apertures', () => {
+  const { usda, samples } = adapter.exportCameraUsda(
+    project(),
+    options({
+      width: 1080,
+      height: 1920,
+      fps: { numerator: 30000, denominator: 1001 },
+    }),
+  );
+  assert.ok(usda.includes(`\n    timeCodesPerSecond = ${30000 / 1001}\n`));
+  assert.ok(usda.includes('userProperties:gevFps = "30000/1001"'));
+  assert.match(usda, /float verticalAperture = 0\.64\n/);
+  assert.equal(samples.timeline.frameEnd, 30);
 });

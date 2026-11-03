@@ -6,11 +6,11 @@ automatically.
 
 ## Offline Blender camera interchange
 
-`export-blender-camera.mjs` exports cameras from a saved Director scene;
-`blender/camera_import.py` imports an editable rig into a new Blender scene.
-These tools require no key, environment file, browser or network access and
-export no imagery or geometry. Usage, format and synthetic projection checks:
-[Blender cameras](../docs/BLENDER-CAMERAS.md).
+`export-blender-camera.mjs` exports the cameras of a saved Director scene as a
+plain-text USD stage (`.usda`) that Blender opens with File > Import >
+Universal Scene Description. It requires no key, environment file, browser,
+network access or Blender add-on, and exports no imagery or geometry. Usage,
+format and lens units: [Blender cameras](../docs/BLENDER-CAMERAS.md).
 
 Output files go to `output/` by default (gitignored).
 

@@ -28,6 +28,3 @@ pinokio/.installed
 
 # Transient: a release interrupted mid-assembly (npm run changelog recovers it)
 changelog.d/.assembling/
-
-# Optional Blender camera importer Python cache.
-tools/blender/__pycache__/

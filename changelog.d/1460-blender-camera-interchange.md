@@ -1,3 +1,3 @@
-- Export saved Director scenes to editable Blender cameras with a camera-only
-  offline manifest preserving ENU coordinates, lens and rational timing, plus
-  an importer and projection checks (UBN606, #1460).
+- Export saved Director scenes as camera-only USD (`.usda`) stages that Blender
+  imports natively, with ENU meter coordinates, lens in USD units, rational fps
+  and the same runtime shot timing as Director playback (UBN606, #1460).

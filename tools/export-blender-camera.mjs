@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-/** Offline scene-to-camera manifest CLI. Reads JSON only; never loads .env or a viewer. */
+/** Offline scene-to-USD camera CLI. Reads JSON only; never loads .env or a viewer. */
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import {
   parseSceneDocument,
   SCENE_DOCUMENT_LIMITS,
 } from '../src/director/document.js';
-import { exportCameraManifest } from '../src/tooling/blenderCamera.js';
+import { exportCameraUsda } from '../src/tooling/blenderCamera.js';
 
 try {
   const { values } = parseArgs({
@@ -25,7 +25,7 @@ try {
   });
   if (values.help) {
     console.log(
-      'Usage: node tools/export-blender-camera.mjs --input scene.json --output camera.json --origin lat,lon,ellipsoidHeight --fps 30 (or 30000/1001) --width 1920 --height 1080 --horizontal-fov-deg 60 [--scene id] [--sensor-width-mm 36]',
+      'Usage: node tools/export-blender-camera.mjs --input scene.json --output cameras.usda --origin lat,lon,ellipsoidHeight --fps 30 (or 30000/1001) --width 1920 --height 1080 --horizontal-fov-deg 60 [--scene id] [--sensor-width-mm 36]',
     );
   } else {
     for (const key of [
@@ -39,6 +39,8 @@ try {
     ]) {
       if (!values[key]?.trim()) throw new Error(`Missing --${key}; use --help`);
     }
+    if (!values.output.endsWith('.usda'))
+      throw new Error('output must be a new file ending in .usda');
     if (!/^\d+(?:\/\d+)?$/.test(values.fps))
       throw new Error('fps must be an integer or integer ratio');
     const originParts = values.origin.split(',');
@@ -49,7 +51,7 @@ try {
     const document = parseSceneDocument(await readFile(values.input, 'utf8'));
     const [numerator, denominator = 1] = values.fps.split('/').map(Number);
     const [lat, lon, height] = originParts.map(Number);
-    const manifest = exportCameraManifest(document, {
+    const { usda, samples } = exportCameraUsda(document, {
       sceneId: values.scene,
       origin: { lat, lon, height },
       fps: { numerator, denominator },
@@ -58,12 +60,9 @@ try {
       horizontalFovDegrees: Number(values['horizontal-fov-deg']),
       sensorWidthMm: Number(values['sensor-width-mm']),
     });
-    const json = JSON.stringify(manifest, null, 2) + '\n';
-    if (Buffer.byteLength(json) > 64 * 1024 * 1024)
-      throw new Error('Camera manifest exceeds 64 MiB');
-    await writeFile(values.output, json, { flag: 'wx' });
+    await writeFile(values.output, usda, { flag: 'wx' });
     console.log(
-      `CAMERA_EXPORT_OK: ${manifest.shots.length} shots, ${manifest.frames.length} frames`,
+      `CAMERA_EXPORT_OK: ${samples.shots.length} shots, ${samples.frames.length} frames`,
     );
   }
 } catch (error) {

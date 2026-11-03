@@ -647,14 +647,14 @@ untouched, and the shot is not rebuilt.
 See [camera directions](DIRECTOR-CAMERA.md).
 
 An opt-in offline [Blender camera bridge](BLENDER-CAMERAS.md) exports a saved
-Director scene as ENU meter camera samples with an explicit WGS84 ellipsoid
-origin, horizontal lens and rational fps. It reuses Director seek interpolation
-and authored timing; runtime layer timing, implicit live flyTo paths, imagery
-and geometry are outside this camera-only format. The Python importer creates
-a separate editable scene with per-shot cameras and timeline markers.
-The synthetic `tools/blender/check_import.py` check compares actual Blender
-projection and saved-file reload against a separate Cesium Camera oracle
-without rendering or provider access.
+Director scene as a camera-only USD stage (`.usda`) that Blender imports
+natively: Z-up meters in a local ENU frame around an explicit WGS84 ellipsoid
+origin, one camera per shot with per-frame transforms, lens values in USD's
+tenths of a scene unit and rational fps recorded alongside frame-number time
+codes. It uses Director seek interpolation and the runtime shot timing from
+`shotPresentation.js`, so registered pack holds, minimum holds and
+evidence-sequence durations match playback. Implicit live flyTo paths, imagery
+and geometry are outside this camera-only format.
 
 Realtime voice composes separate connection, response/tool, Radio handoff, input
 and audio-meter, cost, viewport-context and diagnostic owners. The existing

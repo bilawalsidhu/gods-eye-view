@@ -1,4 +1,4 @@
-/** Camera-only interchange. No viewer, providers, environment files or terrain access. */
+/** Camera-only USD interchange. No viewer, providers, environment files or terrain access. */
 import * as C from 'cesium';
 import { validateSceneDocument } from '../director/document.js';
 import {
@@ -7,9 +7,20 @@ import {
   sampleCameraMove,
 } from '../director/camera.js';
 import { cameraAtProgress } from '../director/timeline.js';
+import {
+  effectiveShotHoldSec,
+  runtimeLayerStatesForShot,
+  shotRuntimeDurationSec,
+} from '../scenes/shotPresentation.js';
+import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
 
-export const CAMERA_MANIFEST_SCHEMA = 'gev.camera-manifest.v1';
+export const CAMERA_USD_SCHEMA = 'gev.camera-usd.v1';
 export const MAX_CAMERA_FRAMES = 100000;
+export const MAX_CAMERA_USDA_BYTES = 64 * 1024 * 1024;
+// USD camera lens attributes are tenths of a scene unit. With metersPerUnit = 1
+// one tenth is 100 mm; Blender's importer multiplies by 100 * metersPerUnit.
+const MM_PER_USD_LENS_UNIT = 100;
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
 
 function number(value, label, min, max) {
   if (
@@ -34,7 +45,8 @@ function position(pose, heightKey = 'alt') {
 
 /** Convert Cesium's WGS84/heading-pitch-roll pose to a fixed Blender ENU frame.
  * Angles are degrees; alt and origin.height are WGS84 ellipsoid meters.
- * The returned columns are Blender's local X (right), Y (up), Z (back).
+ * The returned columns are the camera's local X (right), Y (up), Z (back),
+ * which is the USD and Blender camera convention (looking down local -Z).
  */
 export function cameraPoseToEnu(pose, origin) {
   position(pose);
@@ -105,11 +117,40 @@ function identity(value, label) {
   return value;
 }
 
-/** Export one existing scene using Director seek interpolation and authored timing.
+/** Resolve the flight-plus-hold seconds and holds that Director playback and seeking use.
+ * Both come from shotPresentation.js, so registered pack overrides, minimum holds and
+ * evidence-sequence durations match the app instead of the saved holdSec alone.
+ */
+export function sceneRuntimeTiming(
+  scene,
+  scenePacks = createDefaultScenePacks(),
+) {
+  const byShot = new Map();
+  for (const shot of scene.shots) {
+    const durationSec = shotRuntimeDurationSec(scene, shot, scenePacks);
+    // Same states shotRuntimeDurationSec uses; omitting them would rebuild
+    // every shot's timing per call (quadratic for long scenes).
+    const holdSec = effectiveShotHoldSec(
+      scene,
+      shot,
+      scenePacks,
+      runtimeLayerStatesForShot(shot, scenePacks),
+    );
+    number(durationSec, `Shot ${shot.id} runtime duration`, 0, 1e7);
+    number(holdSec, `Shot ${shot.id} runtime hold`, 0, 1e7);
+    byShot.set(shot, { durationSec, holdSec });
+  }
+  return {
+    durationFor: (_scene, shot) => byShot.get(shot).durationSec,
+    holdFor: (_scene, shot) => byShot.get(shot).holdSec,
+  };
+}
+
+/** Sample one saved scene with Director seek interpolation and runtime playback timing.
  * Projection is explicit because scene documents do not store viewport lenses.
  * Frame 1 samples time zero; the final sample precedes the exclusive end time.
  */
-export function exportCameraManifest(
+export function sampleSceneCameras(
   project,
   {
     sceneId,
@@ -119,6 +160,7 @@ export function exportCameraManifest(
     height,
     horizontalFovDegrees,
     sensorWidthMm = 36,
+    scenePacks = createDefaultScenePacks(),
   } = {},
 ) {
   validateSceneDocument(project);
@@ -144,6 +186,7 @@ export function exportCameraManifest(
   const scene = candidates[0];
   identity(scene.id, 'Scene');
   if (!scene.shots.length) throw new Error('Scene has no camera shots');
+  const timing = sceneRuntimeTiming(scene, scenePacks);
   const frameAt = (seconds) => {
     const frame = seconds * rate;
     return (
@@ -154,6 +197,14 @@ export function exportCameraManifest(
   };
   let elapsed = 0;
   let rounding = 0;
+  const resolved = scene.shots.map((shot, index) => ({
+    target: resolveCameraPose(scene, shot.camera),
+    previous: resolveCameraPose(
+      scene,
+      scene.shots[index - 1]?.camera || shot.camera,
+    ),
+    move: resolveCameraMove(scene, shot),
+  }));
   const shots = scene.shots.map((shot) => {
     identity(shot.id, 'Shot');
     const camera = resolveCameraPose(scene, shot.camera);
@@ -162,18 +213,13 @@ export function exportCameraManifest(
     if (move) position(move.from);
     cameraPoseToEnu(camera, origin);
     if (move) cameraPoseToEnu(move.from, origin);
-    const durationSec = shot.durationSec || 4;
-    const holdSec = shot.holdSec || 0;
+    const runtimeDurationSec = timing.durationFor(scene, shot);
     const startTimeSec = elapsed;
     // Compensated summation prevents long decimal timelines gaining a frame.
-    const increment = durationSec + holdSec - rounding;
+    const increment = runtimeDurationSec - rounding;
     const next = elapsed + increment;
     rounding = next - elapsed - increment;
     elapsed = next;
-    const frameStart = frameAt(startTimeSec);
-    const frameEndExclusive = frameAt(elapsed);
-    if (frameStart >= frameEndExclusive)
-      throw new Error(`Shot ${shot.id} has no sampled frame at this fps`);
     return {
       id: shot.id,
       title: shot.title || '',
@@ -185,47 +231,66 @@ export function exportCameraManifest(
         : {}),
       startTimeSec,
       endTimeSec: elapsed,
-      durationSec,
-      holdSec,
-      frameStart,
-      frameEndExclusive,
-      camera,
-      move,
+      flightDurationSec: shot.durationSec || 4,
+      authoredHoldSec: Number(shot.holdSec) || 0,
+      runtimeHoldSec: timing.holdFor(scene, shot),
+      frameStart: 0,
+      frameEndExclusive: 0,
     };
   });
   const frameCount = frameAt(elapsed) - 1;
   if (frameCount > MAX_CAMERA_FRAMES)
     throw new RangeError(`Export exceeds ${MAX_CAMERA_FRAMES} camera frames`);
+  if (frameCount < 1) throw new Error('Scene has no sampled frame at this fps');
+  // Mirror sceneSeekState (src/director/timeline.js) step for step, walking
+  // shots forward once instead of rescanning every shot for every frame.
+  // Tests compare each sample with sceneSeekState itself.
+  const seekEnds = [];
+  for (const shot of scene.shots)
+    seekEnds.push((seekEnds.at(-1) || 0) + timing.durationFor(scene, shot));
+  const seekTotalSec = seekEnds.at(-1);
   const frames = [];
   let shotIndex = 0;
   for (let frame = 1; frame <= frameCount; frame += 1) {
+    const timeSec = ((frame - 1) * fps.denominator) / fps.numerator;
+    const normalized = clamp01(timeSec / seekTotalSec);
     while (
-      frame >= shots[shotIndex].frameEndExclusive &&
-      shotIndex < shots.length - 1
+      shotIndex < shots.length - 1 &&
+      !(normalized < seekEnds[shotIndex] / seekTotalSec)
     )
       shotIndex += 1;
-    const shot = shots[shotIndex];
-    const timeSec = ((frame - 1) * fps.denominator) / fps.numerator;
-    const progress = Math.max(
-      0,
-      Math.min(
-        1,
-        (timeSec - shot.startTimeSec) / Math.max(0.001, shot.durationSec),
-      ),
+    const source = scene.shots[shotIndex];
+    const startElapsedSec = shotIndex ? seekEnds[shotIndex - 1] : 0;
+    const elapsedSec = Math.max(normalized * seekTotalSec, startElapsedSec);
+    const flightDurationSec = source.durationSec || 4;
+    const shotDurationSec = Math.max(
+      0.001,
+      flightDurationSec + timing.holdFor(scene, source),
     );
-    const pose = shot.move
-      ? sampleCameraMove(shot.move, progress)
-      : cameraAtProgress(
-          shots[shotIndex - 1]?.camera || shot.camera,
-          shot.camera,
-          progress,
-        );
+    const shotElapsedSec = Math.max(
+      0,
+      Math.min(shotDurationSec, elapsedSec - startElapsedSec),
+    );
+    const cameraProgress = clamp01(
+      shotElapsedSec / Math.max(0.001, flightDurationSec),
+    );
+    const { target, previous, move } = resolved[shotIndex];
+    const pose = move
+      ? sampleCameraMove(move, cameraProgress)
+      : cameraAtProgress(previous, target, cameraProgress);
+    const shot = shots[shotIndex];
+    if (!shot.frameStart) shot.frameStart = frame;
+    shot.frameEndExclusive = frame + 1;
     frames.push({
       frame,
       timeSec,
       shotId: shot.id,
       ...cameraPoseToEnu(pose, origin),
     });
+  }
+  for (const shot of shots) {
+    if (!shot.frameStart)
+      throw new Error(`Shot ${shot.id} has no sampled frame at this fps`);
   }
   const horizontalFovRadians = C.Math.toRadians(horizontalFovDegrees);
   const lensMm = number(
@@ -235,12 +300,12 @@ export function exportCameraManifest(
     10000,
   );
   return {
-    schema: CAMERA_MANIFEST_SCHEMA,
+    schema: CAMERA_USD_SCHEMA,
     source: {
       sceneId: scene.id,
       sceneTitle: scene.title || '',
       documentVersion: project.version ?? 1,
-      sampling: 'director-seek-authored-timing',
+      sampling: 'director-seek-runtime-timing',
       attributions: (scene.dataPacks || []).map(({ attribution }) =>
         structuredClone(attribution),
       ),
@@ -254,8 +319,8 @@ export function exportCameraManifest(
     },
     camera: {
       projection: 'perspective',
-      sensorFit: 'HORIZONTAL',
       sensorWidthMm,
+      sensorHeightMm: (sensorWidthMm * height) / width,
       lensMm,
       horizontalFovRadians,
       verticalFovRadians:
@@ -273,4 +338,150 @@ export function exportCameraManifest(
     shots,
     frames,
   };
+}
+
+/** Shortest decimal for a finite double, without signed zero or 17-digit noise. */
+function usdNumber(value) {
+  const rounded = Number(value.toPrecision(15));
+  return Object.is(rounded, -0) ? '0' : String(rounded);
+}
+
+/** Quote text for a .usda string literal. */
+function usdString(value) {
+  return `"${String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t')
+    .replace(
+      /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g,
+      (char) => `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}`,
+    )}"`;
+}
+
+/** USD prim names are identifiers; saved IDs stay in custom properties. */
+function shotPrimName(shot, index) {
+  const safe = shot.id.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 40);
+  return `Shot_${String(index + 1).padStart(3, '0')}_${safe}`;
+}
+
+/** USD matrices are row-vector: rows are camera X, Y, Z axes, then translation. */
+function usdMatrix({ position: p, basisColumns: [right, up, back] }) {
+  const row = (values, w) => `(${[...values, w].map(usdNumber).join(', ')})`;
+  return `( ${row(right, 0)}, ${row(up, 0)}, ${row(back, 0)}, ${row(p, 1)} )`;
+}
+
+/** Write sampled cameras as a plain-text USD stage that Blender imports natively.
+ * Z-up meters, one perspective camera per shot, time codes equal to frame numbers.
+ */
+export function cameraSamplesToUsda(samples) {
+  const { source, coordinates, camera, timeline, shots, frames } = samples;
+  const rate = timeline.fps.numerator / timeline.fps.denominator;
+  const shotTable = shots.map(
+    ({
+      id,
+      title,
+      sourcePackId,
+      sourcePackVersion,
+      startTimeSec,
+      endTimeSec,
+      flightDurationSec,
+      authoredHoldSec,
+      runtimeHoldSec,
+      frameStart,
+      frameEndExclusive,
+    }) => ({
+      id,
+      title,
+      ...(sourcePackId ? { sourcePackId, sourcePackVersion } : {}),
+      startTimeSec,
+      endTimeSec,
+      flightDurationSec,
+      authoredHoldSec,
+      runtimeHoldSec,
+      frameStart,
+      frameEndExclusive,
+    }),
+  );
+  const json = (value) => usdString(JSON.stringify(value));
+  const out = [
+    '#usda 1.0',
+    '(',
+    '    customLayerData = {',
+    `        string gevCamera = ${json(camera)}`,
+    `        string gevCoordinates = ${json(coordinates)}`,
+    `        string gevSchema = ${usdString(CAMERA_USD_SCHEMA)}`,
+    `        string gevShots = ${json(shotTable)}`,
+    `        string gevSource = ${json(source)}`,
+    `        string gevTimeline = ${json(timeline)}`,
+    '    }',
+    '    defaultPrim = "GEV"',
+    `    doc = ${usdString("God's Eye View Director cameras: ENU meters around a WGS84 ellipsoid origin; time codes are frame numbers.")}`,
+    `    endTimeCode = ${timeline.frameEnd}`,
+    `    framesPerSecond = ${rate}`,
+    '    metersPerUnit = 1',
+    `    startTimeCode = ${timeline.frameStart}`,
+    `    timeCodesPerSecond = ${rate}`,
+    '    upAxis = "Z"',
+    ')',
+    '',
+    'def Xform "GEV"',
+    '{',
+    `    custom string userProperties:gevSchema = ${usdString(CAMERA_USD_SCHEMA)}`,
+    `    custom string userProperties:gevSceneId = ${usdString(source.sceneId)}`,
+    `    custom string userProperties:gevSceneTitle = ${usdString(source.sceneTitle)}`,
+    `    custom string userProperties:gevOrigin = ${json(coordinates.origin)}`,
+    `    custom string userProperties:gevFps = ${usdString(`${timeline.fps.numerator}/${timeline.fps.denominator}`)}`,
+    `    custom int userProperties:gevWidth = ${timeline.width}`,
+    `    custom int userProperties:gevHeight = ${timeline.height}`,
+    `    custom string userProperties:gevAttributions = ${json(source.attributions)}`,
+  ];
+  shots.forEach((shot, index) => {
+    out.push(
+      '',
+      `    def Camera ${usdString(shotPrimName(shot, index))}`,
+      '    {',
+      '        float2 clippingRange = (0.01, 200000)',
+      `        float focalLength = ${usdNumber(camera.lensMm / MM_PER_USD_LENS_UNIT)}`,
+      `        float horizontalAperture = ${usdNumber(camera.sensorWidthMm / MM_PER_USD_LENS_UNIT)}`,
+      `        float verticalAperture = ${usdNumber(camera.sensorHeightMm / MM_PER_USD_LENS_UNIT)}`,
+      '        token projection = "perspective"',
+      `        custom string userProperties:gevShotId = ${usdString(shot.id)}`,
+      `        custom string userProperties:gevShotTitle = ${usdString(shot.title)}`,
+      ...(shot.sourcePackId
+        ? [
+            `        custom string userProperties:gevSourcePackId = ${usdString(shot.sourcePackId)}`,
+            `        custom string userProperties:gevSourcePackVersion = ${usdString(shot.sourcePackVersion ?? '')}`,
+          ]
+        : []),
+      `        custom int userProperties:gevFrameStart = ${shot.frameStart}`,
+      `        custom int userProperties:gevFrameEndExclusive = ${shot.frameEndExclusive}`,
+      `        custom double userProperties:gevStartTimeSec = ${usdNumber(shot.startTimeSec)}`,
+      `        custom double userProperties:gevEndTimeSec = ${usdNumber(shot.endTimeSec)}`,
+      `        custom double userProperties:gevFlightDurationSec = ${usdNumber(shot.flightDurationSec)}`,
+      `        custom double userProperties:gevAuthoredHoldSec = ${usdNumber(shot.authoredHoldSec)}`,
+      `        custom double userProperties:gevRuntimeHoldSec = ${usdNumber(shot.runtimeHoldSec)}`,
+      '        matrix4d xformOp:transform.timeSamples = {',
+    );
+    for (let f = shot.frameStart; f < shot.frameEndExclusive; f += 1) {
+      out.push(`            ${f}: ${usdMatrix(frames[f - 1])},`);
+    }
+    out.push(
+      '        }',
+      '        uniform token[] xformOpOrder = ["xformOp:transform"]',
+      '    }',
+    );
+  });
+  out.push('}', '');
+  return out.join('\n');
+}
+
+/** Export one saved scene as a .usda camera stage. */
+export function exportCameraUsda(project, options) {
+  const samples = sampleSceneCameras(project, options);
+  const usda = cameraSamplesToUsda(samples);
+  if (Buffer.byteLength(usda) > MAX_CAMERA_USDA_BYTES)
+    throw new RangeError('Camera USD exceeds 64 MiB');
+  return { usda, samples };
 }
