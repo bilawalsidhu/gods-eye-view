@@ -1,7 +1,7 @@
 import { SceneDirector } from '../scenes/director.js';
 import { createSessionAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
-import { initGeoFileImport } from '../ui/geoFileImport.js';
+import { createGeoFileImport } from '../ui/geoFileImport.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
@@ -43,6 +43,28 @@ export function sessionAnnotations({
     );
   }
   return layerSession.annotations;
+}
+
+/**
+ * A tool of the page session (created once, destroyed with the page) when
+ * there is one, else of this application. `create()` may return null.
+ */
+function sessionTool(layerSession, name, defer, create) {
+  if (!layerSession) {
+    const tool = create();
+    defer(() => tool?.destroy());
+    return tool;
+  }
+  const tools = (layerSession.tools ??= {});
+  if (!(name in tools)) {
+    const tool = (tools[name] = create());
+    layerSession.lifetime.signal.addEventListener(
+      'abort',
+      () => tool?.destroy(),
+      { once: true },
+    );
+  }
+  return tools[name];
 }
 
 function destroyAnnotations(annotations) {
@@ -152,17 +174,23 @@ export function createApplicationTools({
   });
   defer(() => drawTool?.destroy());
   // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
-  // own data source. They live for the page session, so the application
-  // lifetime removes them and the drop listeners on the viewer container.
-  const geoFileImport = initGeoFileImport({
+  // own data source. They live for the page session: an engine switch takes
+  // them off this viewer, and the next Cesium viewer reads them again. The
+  // drop listeners belong to this viewer.
+  const geoFileImport = sessionTool(layerSession, 'geoImport', defer, () =>
+    createGeoFileImport({
+      navigation: styleManager,
+      ground: operations.surface?.groundFloor,
+      publish: (view) => displayStore.publishGeoImport(view),
+      connect: connectDisplay,
+    }),
+  );
+  geoFileImport?.attachScene({
     viewer,
     navigation: styleManager,
-    ground: operations.surface?.groundFloor,
     subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
-    publish: (view) => displayStore.publishGeoImport(view),
-    connect: connectDisplay,
   });
-  defer(() => geoFileImport?.destroy());
+  defer(() => geoFileImport?.detachScene());
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
   // panel lives on the right rail, so both belong to the application
   // lifetime. The tileset lets the layer drape while the globe is hidden.
