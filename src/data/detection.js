@@ -53,6 +53,7 @@ import {
   isCyberContactSonarActive as isCyberSonarActive,
   isCyberContactThemeActive as isCyberMapThemeActive,
 } from '../cyberSonar.js';
+import { awarenessEchoAt, getAwarenessEchoField } from '../awarenessEcho.js';
 
 /**
  * @module detection
@@ -103,6 +104,8 @@ const SPARSE_ZONE_FRACTION = 0.5;
 const LABEL_SOLVE_INTERVAL_MS = 125;
 /** Alpha bands retain bracket batching while approximating a continuous radial fade. */
 const BRACKET_ALPHA_STEPS = 4;
+/** Finer bands for Global Context echo brackets, whose fade is animated. */
+const ECHO_ALPHA_STEPS = 8;
 /** Stable per-layer candidate safety cap; independent of density and camera bearing. */
 const LAYER_CANDIDATE_CAP = 2600;
 const LAYER_WEIGHTS = Object.freeze({
@@ -1335,6 +1338,10 @@ function _drawOverlay(frame) {
   const tiers = _theme.tiers || null;
   const colorFor = (key) => (tiers && tiers[key]) || _theme.line;
   const bracketPaths = new Map();
+  // Global Context sonar echoes: a second bracket, banded by strength, around
+  // each flight or vessel a pulse front has just crossed.
+  const echoField = getAwarenessEchoField();
+  const echoPaths = echoField ? new Array(ECHO_ALPHA_STEPS + 1) : null;
   const pathFor = (map, color, alpha) => {
     const band = Math.max(
       1,
@@ -1437,6 +1444,24 @@ function _drawOverlay(frame) {
         halfH,
       );
       visibleCount++;
+      if (echoPaths) {
+        const echo = awarenessEchoAt(obj._layerId, obj.position, now);
+        if (echo > 0.01) {
+          // Starts on the contact's bracket and spreads outward as it fades.
+          const band = Math.max(
+            1,
+            Math.ceil(echo * admissionAlpha * ECHO_ALPHA_STEPS),
+          );
+          const spread = echoField.echo.spreadPx * (1 - echo);
+          appendCornerBracket(
+            (echoPaths[band] ??= new Path2D()),
+            sx,
+            sy,
+            halfW + spread,
+            halfH + spread,
+          );
+        }
+      }
       if (obj.type === 'AIR')
         aircraftBracketSectors[detectionHorizontalSector(sx, width)]++;
       if (bracketAlpha >= 1) bracketOpacityCounts.full++;
@@ -1575,6 +1600,17 @@ function _drawOverlay(frame) {
       _ctx.strokeStyle = entry.color;
       _ctx.stroke(entry.path);
     }
+  }
+  if (echoPaths) {
+    _ctx.lineWidth = echoField.echo.lineWidth;
+    _ctx.strokeStyle = echoField.echo.color;
+    for (let band = 1; band <= ECHO_ALPHA_STEPS; band++) {
+      if (!echoPaths[band]) continue;
+      _ctx.globalAlpha =
+        fade * (band / ECHO_ALPHA_STEPS) * bracketPresentationOpacity;
+      _ctx.stroke(echoPaths[band]);
+    }
+    _ctx.lineWidth = bracketWidth;
   }
 
   const renderEntries = _labelArbiter.renderEntries(candidateMap, now);

@@ -49,7 +49,10 @@ export const CONTEXT_RIM_HEIGHT_M = 2500;
  *  the FLIR, NVG and CRT styles. A bright core inside a dark halo keeps
  *  luminance contrast on light and dark ground alike, and luminance is what
  *  the monochrome styles keep. The core is the Context panel's blue; the halo
- *  is the map-card ink. Widths are screen pixels; `outlineWidth` is per side. */
+ *  is the map-card ink. Widths are screen pixels; `outlineWidth` is per side.
+ *  While the sonar pulses run, the ring rests at `restOpacity` and flashes
+ *  to full as each pulse reaches it, fading over `flashMs`. Without pulses
+ *  (reduced motion, or a scene that cannot animate) it stays on screen. */
 
 export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
   color: 'rgba(98, 181, 255, 0.95)',
@@ -57,6 +60,58 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
   width: 4,
   outlineWidth: 1,
   segments: 128,
+  flashMs: 1800,
+  restOpacity: 0,
+});
+
+/** @constant Sonar-style pulses that grow slowly from the subject to the
+ *  range ring and are almost gone when they reach it. `count` pulses share
+ *  one `periodMs`, evenly staggered, so a new one starts every
+ *  `periodMs / count`. Each starts at `startFraction` of the radius, fades in
+ *  over `fadeInFraction` of its travel, then fades as (1 - travel) to the
+ *  `fadeOutPower` down to `endOpacityFraction` of `peakOpacity`, so a pulse
+ *  is dim but still visible when it reaches the ring and the ring flashes. Behind each line a radial gradient in the same blue fades
+ *  inward over `gradientDepthFraction` of the radius, at most
+ *  `gradientOpacity` strong. The gradient disc is rebuilt only after the
+ *  subject moves `gradientRebuildM`, since a soft band 2 km off centre on a
+ *  250 km disc does not show. The gradient shader takes at most four pulses.
+ *  The pulses do not hold continuous rendering: a parked Contacts view must
+ *  not repaint every frame. They ask for a frame every `frameIntervalMs`
+ *  instead, the cadence the Cyber sonar uses for parked scenes; when
+ *  something else already renders continuously they update every frame.
+ *  Skipped under prefers-reduced-motion. */
+
+export const AWARENESS_RANGE_PULSE = Object.freeze({
+  count: 3,
+  periodMs: 9000,
+  startFraction: 0.02,
+  fadeInFraction: 0.08,
+  fadeOutPower: 1.5,
+  endOpacityFraction: 0.35,
+  peakOpacity: 0.6,
+  width: 3,
+  outlineWidth: 1,
+  segments: 96,
+  gradientDepthFraction: 0.35,
+  gradientOpacity: 0.22,
+  gradientGranularityDeg: 0.25,
+  gradientRebuildM: 2000,
+  frameIntervalMs: 80,
+});
+
+/** @constant Sonar echoes on contact brackets. When a pulse front reaches a
+ *  flight, military aircraft or AIS vessel in the window, the detection
+ *  overlay draws a second bracket in `color` around that contact's own
+ *  bracket. It starts on the bracket and spreads outward by up to `spreadPx`
+ *  as it fades over `fadeMs`, so the frame pulses. Only `layerIds` echo;
+ *  mapped installations have no detection bracket. */
+
+export const AWARENESS_RANGE_ECHO = Object.freeze({
+  layerIds: ['flights', 'military', 'ais-live-vessels'],
+  fadeMs: 1400,
+  color: 'rgb(98, 181, 255)',
+  spreadPx: 8,
+  lineWidth: 1.75,
 });
 
 export const VESSEL_FOCUS_RADIUS_M = 3000;

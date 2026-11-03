@@ -12,10 +12,17 @@ import {
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
 import {
   AWARENESS_PAGE_SIZE,
+  AWARENESS_RANGE_ECHO,
+  AWARENESS_RANGE_PULSE,
   AWARENESS_RANGE_RING_STYLE,
   CONTEXT_RIM_HEIGHT_M,
 } from './policy.js';
 import { formatAwarenessDirection } from './presentation.js';
+import {
+  awarenessEchoStrength,
+  clearAwarenessEchoField,
+  setAwarenessEchoField,
+} from '../../awarenessEcho.js';
 
 /**
  * A closed ring of positions `radiusM` along the surface from `groundCenter`,
@@ -26,6 +33,7 @@ import { formatAwarenessDirection } from './presentation.js';
  * @param {number} radiusM Surface radius in metres.
  * @param {number} heightM Height of the ring above the ellipsoid.
  * @param {number} [segments] Chords around the ring.
+ * @param {Cesium.Cartesian3[]} [result] Array whose Cartesians are reused.
  * @returns {Cesium.Cartesian3[]} `segments + 1` positions; the last repeats the first.
  */
 export function awarenessRangeRingPositions(
@@ -33,6 +41,7 @@ export function awarenessRangeRingPositions(
   radiusM,
   heightM,
   segments = AWARENESS_RANGE_RING_STYLE.segments,
+  result = [],
 ) {
   const { latitude, longitude } =
     Cesium.Cartographic.fromCartesian(groundCenter);
@@ -43,7 +52,8 @@ export function awarenessRangeRingPositions(
   const w = 1 - e2 * sinLat * sinLat;
   const meridional = (a * (1 - e2)) / (w * Math.sqrt(w));
   const primeVertical = a / Math.sqrt(w);
-  const positions = [];
+  const positions = result;
+  positions.length = segments + 1;
   for (let i = 0; i <= segments; i++) {
     const bearing = ((i % segments) / segments) * Cesium.Math.TWO_PI;
     const cosB = Math.cos(bearing);
@@ -59,9 +69,134 @@ export function awarenessRangeRingPositions(
         sinB * Math.sin(angular) * cosLat,
         Math.cos(angular) - sinLat * Math.sin(lat),
       );
-    positions.push(Cesium.Cartesian3.fromRadians(lon, lat, heightM));
+    positions[i] = Cesium.Cartesian3.fromRadians(
+      lon,
+      lat,
+      heightM,
+      Cesium.Ellipsoid.WGS84,
+      positions[i],
+    );
   }
   return positions;
+}
+
+/**
+ * Where pulse `index` is at `nowMs`: its radius and opacity. Pulses travel at
+ * constant speed from `startFraction` of the range to the full range, fade in
+ * over `fadeInFraction` of the way, then fade as (1 - travel) to the
+ * `fadeOutPower` down to `endOpacityFraction` of the peak, so each is dim
+ * but still visible when it reaches the range ring. The opacity already
+ * includes `peakOpacity`.
+ * @param {number} nowMs Monotonic clock in milliseconds.
+ * @param {number} index Pulse number, 0 to `count - 1`.
+ * @param {number} [radiusM] Range the pulses grow to.
+ * @param {object} [pulse] Timing and shape, see `AWARENESS_RANGE_PULSE`.
+ * @returns {{radiusM: number, alpha: number}}
+ */
+export function awarenessPulseState(
+  nowMs,
+  index,
+  radiusM = AWARENESS_RADIUS_M,
+  pulse = AWARENESS_RANGE_PULSE,
+) {
+  const cycle = nowMs / pulse.periodMs + index / pulse.count;
+  const phase = cycle - Math.floor(cycle);
+  return {
+    radiusM:
+      radiusM * (pulse.startFraction + (1 - pulse.startFraction) * phase),
+    alpha:
+      pulse.peakOpacity *
+      Math.min(1, phase / pulse.fadeInFraction) *
+      (pulse.endOpacityFraction +
+        (1 - pulse.endOpacityFraction) * (1 - phase) ** pulse.fadeOutPower),
+  };
+}
+
+/** Whether the viewer asked the system for less motion. */
+function prefersReducedMotion() {
+  return (
+    globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ??
+    false
+  );
+}
+
+/**
+ * How strongly the 250 km ring shows at `nowMs` while pulses run: 1 as a
+ * pulse front reaches it, fading over `flashMs`, so the ring appears once
+ * per arriving pulse instead of standing on screen.
+ * @param {number} nowMs Monotonic clock in milliseconds.
+ * @returns {number} 0 to 1.
+ */
+export function awarenessRingFlash(nowMs) {
+  return awarenessEchoStrength(
+    nowMs,
+    AWARENESS_RADIUS_M,
+    AWARENESS_RADIUS_M,
+    AWARENESS_RANGE_PULSE,
+    { fadeMs: AWARENESS_RANGE_RING_STYLE.flashMs },
+  );
+}
+
+/** Most pulses the gradient shader draws; its uniforms are vec4s. */
+export const AWARENESS_PULSE_GRADIENT_MAX = 4;
+
+// Ellipse texture coordinates put the centre at (0.5, 0.5) and the rim at
+// distance 0.5, so `r` is the fraction of the range. Behind each pulse line
+// the band is strongest at the line and fades to nothing `depth` inward.
+const PULSE_GRADIENT_SOURCE = `
+uniform vec4 color;
+uniform vec4 radii;
+uniform vec4 alphas;
+uniform float depth;
+czm_material czm_getMaterial(czm_materialInput materialInput) {
+  czm_material material = czm_getDefaultMaterial(materialInput);
+  float r = length(materialInput.st - vec2(0.5)) * 2.0;
+  float alpha = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float inside = radii[i] - r;
+    if (inside >= 0.0 && inside <= depth) {
+      float t = 1.0 - inside / depth;
+      alpha += alphas[i] * t * t;
+    }
+  }
+  material.diffuse = color.rgb;
+  material.alpha = clamp(alpha * color.a, 0.0, 1.0);
+  return material;
+}
+`;
+
+/**
+ * The pulse gradient: one flat, translucent, unpickable disc the size of the
+ * range ring whose shader draws a band behind each pulse. Moving pulses only
+ * change its uniforms; the disc is rebuilt only when the subject moves.
+ * @param {Cesium.Cartesian3} groundCenter Disc centre on the ellipsoid.
+ * @param {Cesium.Material} material Shared pulse-gradient material.
+ * @returns {Cesium.Primitive}
+ */
+function createPulseGradient(groundCenter, material) {
+  return new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: new Cesium.EllipseGeometry({
+        center: groundCenter,
+        semiMajorAxis: AWARENESS_RADIUS_M,
+        semiMinorAxis: AWARENESS_RADIUS_M,
+        height: CONTEXT_RIM_HEIGHT_M,
+        granularity: Cesium.Math.toRadians(
+          AWARENESS_RANGE_PULSE.gradientGranularityDeg,
+        ),
+        vertexFormat:
+          Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
+      }),
+    }),
+    appearance: new Cesium.MaterialAppearance({
+      material,
+      flat: true,
+      translucent: true,
+      faceForward: true,
+    }),
+    asynchronous: false,
+    allowPicking: false,
+  });
 }
 
 export function createRendering({
@@ -323,6 +458,11 @@ export function createRendering({
   }
 
   function clearVisual() {
+    globalThis.clearInterval(layerState.visual?.pulseTimer);
+    layerState.visual?.removePulseListener?.();
+    if (layerState.visual?.gradient && layerState.viewer)
+      layerState.viewer.scene.primitives.remove(layerState.visual.gradient);
+    clearAwarenessEchoField();
     if (layerState.visual?.entities && layerState.viewer) {
       for (const entity of layerState.visual.entities)
         layerState.viewer.entities.remove(entity);
@@ -354,9 +494,26 @@ export function createRendering({
           AWARENESS_RADIUS_M,
           CONTEXT_RIM_HEIGHT_M,
         );
-        for (const entity of layerState.visual.entities)
-          entity.polyline.positions.setValue(positions);
+        // Pulse lines read `visual.center` every frame and follow on their
+        // own. The gradient disc is geometry, so it is rebuilt, but only
+        // every `gradientRebuildM`: a build costs a few milliseconds.
+        layerState.visual.ring.polyline.positions.setValue(positions);
         Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
+        const { gradient, gradientCenter } = layerState.visual;
+        if (
+          gradient &&
+          Cesium.Cartesian3.distance(gradientCenter, groundCenter) >=
+            AWARENESS_RANGE_PULSE.gradientRebuildM
+        ) {
+          const primitives = layerState.viewer.scene.primitives;
+          layerState.visual.gradient = primitives.add(
+            createPulseGradient(groundCenter, gradient.appearance.material),
+          );
+          // Primitive.destroy leaves the material alone, so the new disc
+          // keeps sharing it.
+          primitives.remove(gradient);
+          Cesium.Cartesian3.clone(groundCenter, gradientCenter);
+        }
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
       }
@@ -365,35 +522,143 @@ export function createRendering({
     clearVisual();
 
     const entities = [];
+    const scene = layerState.viewer.scene;
+    // A viewer without a primitive collection or a preRender hook (headless
+    // tools, partial stubs) gets the static ring only, as the Cyber sonar
+    // scene does. So does a viewer who prefers reduced motion.
+    const animate = Boolean(
+      !prefersReducedMotion() &&
+      scene?.primitives?.add &&
+      scene?.preRender?.addEventListener,
+    );
 
     // A polyline, not an ellipse outline: WebGL draws ellipse outlines at
     // 1 px whatever `outlineWidth` says, and the ring needs a halo.
     const ring = AWARENESS_RANGE_RING_STYLE;
-    entities.push(
-      layerState.viewer.entities.add({
-        polyline: {
-          positions: new Cesium.ConstantProperty(
-            awarenessRangeRingPositions(
-              groundCenter,
-              AWARENESS_RADIUS_M,
-              CONTEXT_RIM_HEIGHT_M,
-            ),
+    const core = Cesium.Color.fromCssColorString(ring.color);
+    const halo = Cesium.Color.fromCssColorString(ring.outlineColor);
+    // While pulses run, the ring flashes as each one arrives and otherwise
+    // rests at `restOpacity`; without pulses it stays on screen.
+    const flashing = (base) => {
+      const color = base.clone();
+      return new Cesium.CallbackProperty(() => {
+        const flash = awarenessRingFlash(performance.now());
+        color.alpha = base.alpha * Math.max(ring.restOpacity, flash);
+        return color;
+      }, false);
+    };
+    const ringEntity = layerState.viewer.entities.add({
+      polyline: {
+        positions: new Cesium.ConstantProperty(
+          awarenessRangeRingPositions(
+            groundCenter,
+            AWARENESS_RADIUS_M,
+            CONTEXT_RIM_HEIGHT_M,
           ),
-          width: ring.width,
-          arcType: Cesium.ArcType.NONE,
-          material: new Cesium.PolylineOutlineMaterialProperty({
-            color: Cesium.Color.fromCssColorString(ring.color),
-            outlineColor: Cesium.Color.fromCssColorString(ring.outlineColor),
-            outlineWidth: ring.outlineWidth,
+        ),
+        width: ring.width,
+        arcType: Cesium.ArcType.NONE,
+        material: new Cesium.PolylineOutlineMaterialProperty({
+          color: animate ? flashing(core) : core,
+          outlineColor: animate ? flashing(halo) : halo,
+          outlineWidth: ring.outlineWidth,
+        }),
+      },
+    });
+    entities.push(ringEntity);
+
+    const center = Cesium.Cartesian3.clone(groundCenter);
+    let gradient = null;
+    let removePulseListener = null;
+    let pulseTimer = null;
+    if (animate) {
+      const pulse = AWARENESS_RANGE_PULSE;
+      for (let index = 0; index < pulse.count; index++) {
+        const positions = [];
+        const coreColor = core.clone();
+        const haloColor = halo.clone();
+        const stateAt = () => awarenessPulseState(performance.now(), index);
+        entities.push(
+          layerState.viewer.entities.add({
+            polyline: {
+              positions: new Cesium.CallbackProperty(
+                () =>
+                  awarenessRangeRingPositions(
+                    center,
+                    stateAt().radiusM,
+                    CONTEXT_RIM_HEIGHT_M,
+                    pulse.segments,
+                    positions,
+                  ),
+                false,
+              ),
+              width: pulse.width,
+              arcType: Cesium.ArcType.NONE,
+              material: new Cesium.PolylineOutlineMaterialProperty({
+                color: new Cesium.CallbackProperty(() => {
+                  coreColor.alpha = core.alpha * stateAt().alpha;
+                  return coreColor;
+                }, false),
+                outlineColor: new Cesium.CallbackProperty(() => {
+                  haloColor.alpha = halo.alpha * stateAt().alpha;
+                  return haloColor;
+                }, false),
+                outlineWidth: pulse.outlineWidth,
+              }),
+            },
           }),
-        },
-      }),
-    );
+        );
+      }
+      const count = Math.min(pulse.count, AWARENESS_PULSE_GRADIENT_MAX);
+      const uniforms = {
+        color: core.clone(),
+        radii: new Cesium.Cartesian4(),
+        alphas: new Cesium.Cartesian4(),
+        depth: pulse.gradientDepthFraction,
+      };
+      uniforms.color.alpha = pulse.gradientOpacity;
+      const material = new Cesium.Material({
+        fabric: { uniforms, source: PULSE_GRADIENT_SOURCE },
+        translucent: true,
+      });
+      gradient = scene.primitives.add(
+        createPulseGradient(groundCenter, material),
+      );
+      const radii = [0, 0, 0, 0];
+      const alphas = [0, 0, 0, 0];
+      removePulseListener = scene.preRender.addEventListener(() => {
+        const nowMs = performance.now();
+        for (let index = 0; index < count; index++) {
+          const state = awarenessPulseState(nowMs, index);
+          radii[index] = state.radiusM / AWARENESS_RADIUS_M;
+          alphas[index] = state.alpha;
+        }
+        Cesium.Cartesian4.fromArray(radii, 0, material.uniforms.radii);
+        Cesium.Cartesian4.fromArray(alphas, 0, material.uniforms.alphas);
+      });
+      // The detection overlay pulses the brackets of flights and vessels a
+      // front crosses; it reads the centre in place, so it follows too.
+      setAwarenessEchoField({
+        center,
+        radiusM: AWARENESS_RADIUS_M,
+        pulse,
+        echo: AWARENESS_RANGE_ECHO,
+      });
+      pulseTimer = globalThis.setInterval(
+        () => governorRequestRender('awareness-pulse'),
+        pulse.frameIntervalMs,
+      );
+    }
 
     layerState.visual = {
       key,
       entities,
-      center: Cesium.Cartesian3.clone(groundCenter),
+      ring: ringEntity,
+      center,
+      gradient,
+      gradientCenter: Cesium.Cartesian3.clone(groundCenter),
+      removePulseListener,
+      pulseTimer,
     };
     governorRequestRender('awareness-visual');
   }
