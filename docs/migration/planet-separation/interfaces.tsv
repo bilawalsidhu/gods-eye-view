@@ -1,379 +1,379 @@
-вид	идентификатор	цель/зависимости	пакет_работ	проверка
-export	./infrastructure	./src/data/infrastructure.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./infrastructure/geojson	./src/data/localGeojsonCore.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./infrastructure/lod	./src/data/localGeojsonLod.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application	./src/app/application.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/viewer	./src/app/viewer.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./build/vite	./build/vite.js	DELIVERY	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/live	./server/providers/live.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/adsb-lol	./src/data/adsbLolFallback.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/places	./server/providers/places.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/places	./src/data/placeProviderPayloads.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/space	./server/providers/space.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/space	./src/data/spaceProviderRequests.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/terrain	./server/providers/terrain.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/terrain	./src/data/terrainHeightsProxy.js	PLANET	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/traffic	./server/providers/traffic.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/traffic	./src/data/tomtomTiles.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/firms	./server/providers/firms.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/gbfs	./server/providers/gbfs.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/gbfs	./src/data/gbfsSource.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/cctv	./server/providers/cctv.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/radio	./server/providers/radio.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/overpass	./server/providers/overpass.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/military-installations	./server/providers/military-installations.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/regional	./server/providers/regional.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/openai	./server/providers/openai.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/standalone/key-setup	./server/standalone/key-setup.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./search	./src/search/index.js	NAV	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/panels	./src/ui/panelDisclosure.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/surfaces	./src/ui/surfaceKeyboard.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/layout	./src/ui/panelRails.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/input	./src/ui/visualInput.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/display	./src/ui/displayControls.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/effects	./src/ui/effects.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/effects/bloom	./src/bloom.js	FX	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/maps	./src/ui/mapSource.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/layers	./src/ui/layers.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/layers/feedback	./src/loadingFeedback.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/location	./src/ui/location.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/radio	./src/ui/radio.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/cctv	./src/ui/cctv.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/context	./src/ui/context.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/context/policy	./src/contextModePolicy.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/cockpit	./src/ui/cockpit.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/cockpit/math	./src/cockpitMath.js	NAV	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/cockpit/layout	./src/cockpitUtilityLayout.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/cockpit/vision	./src/cockpitVisionPolicy.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/scenes	./src/ui/scenes.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/shell	./src/ui/applicationShell.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/styles	./src/ui/styles.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./director	./src/director/playback.js	AUTHOR	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./scenes	./src/scenes/director.js	AUTHOR	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/live	./src/sources/live/index.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/flights	./src/layers/flights/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/military	./src/layers/military/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./aircraft	./src/layers/aircraft/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/vessels	./src/layers/vessels/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/earthquakes	./src/layers/earthquakes/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/recent-imagery	./src/layers/recentImagery/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/recent-imagery/source	./src/layers/recentImagery/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/perimeters	./src/layers/perimeters/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/gnss	./src/layers/gnss/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/ghostmaps	./src/layers/ghostMaps/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/firms-csv	./src/data/firmsCsv.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/firms	./src/layers/firms/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/satellites	./src/layers/satellites/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/launches	./src/layers/launches/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/installations	./src/layers/installations/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/awareness	./src/layers/awareness/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/traffic	./src/layers/traffic/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/bikeshare	./src/layers/bikeshare/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/directions	./src/layers/directions/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/directions/source	./src/layers/directions/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/cctv	./src/layers/cctv/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/air-quality	./src/layers/airQuality/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/alpr	./src/layers/alpr/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/radio	./src/layers/radio/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/submarine-cables	./src/layers/submarineCables/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/bundled-cables	./src/layers/submarineCables/bundledSource.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./geography/natural-earth	./src/data/naturalEarthRegions.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./geography/neighborhoods	./src/data/neighborhoodPolygons.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./maps/controller	./src/maps/controller.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./maps/catalog	./src/maps/catalog.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./maps/imagery	./src/maps/imagery.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./maps/terrain	./src/maps/terrain.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./maps/3d	./src/maps/google3d.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./maps/defaults	./src/maps/defaultSources.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/controller	./src/voice/realtimeController.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/control	./src/voice/control.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/realtime-backend	./src/voice/realtimeBackend.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/commands	./src/voice/commands.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/cost	./src/voice/voiceCost.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/scene	./src/app/scene.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/controls	./src/app/controls.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/data	./src/app/data.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/tools	./src/app/tools.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/chrome	./src/app/startupChrome.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/sources	./src/app/sources.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/services	./src/services/application.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/requests	./src/services/requests.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/errors	./src/app/errors.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/composition	./src/ui/composition.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/hud	./src/hud.js	OVERLAY	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./standalone/settings	./src/keySetup.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/actions	./src/voice/gevActions.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./annotations	./src/annotations/index.js	AUTHOR	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./context	./src/data/contextStore.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./build/register-vue	./build/registerVue.js	DELIVERY	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/catalog	./src/app/catalog.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./standalone/catalog	./src/standalone/catalog.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/layers	./src/app/constructCatalog.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./application/operations	./src/app/operations.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./data/lifecycle	./src/data/lifecycle.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/navigation	./src/ui/navigationController.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/share-restoration	./src/ui/shareRestoration.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./share/view-codec	./src/share/viewCodec.js	VIEW	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./share/link-path	./src/share/shareLinkPath.js	VIEW	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/visual-settings	./src/ui/visualSettings.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./ui/panel-chrome	./src/ui/panelChrome.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/flights/records	./src/layers/flights/records.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/flights/ingestion	./src/layers/flights/ingestion.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/military/records	./src/layers/military/records.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/military/ingestion	./src/layers/military/ingestion.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/vessels/records	./src/layers/vessels/records.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/vessels/ingestion	./src/layers/vessels/ingestion.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/radio-browser	./src/sources/radioBrowser.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/cctv-types	./src/sources/cctvTypes.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/regional	./src/data/regionalModel.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/action-schemas	./src/voice/actionSchemas.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/session	./src/voice/session.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/session-controls	./src/voice/sessionCommands.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./voice/realtime-session	./src/voice/realtimeSession.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/alpr/source	./src/layers/alpr/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/bikeshare/source	./src/layers/bikeshare/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/cctv/source	./src/layers/cctv/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/air-quality/source	./src/layers/airQuality/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/earthquakes/source	./src/layers/earthquakes/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/perimeters/source	./src/layers/perimeters/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/gnss/source	./src/layers/gnss/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/ghostmaps/source	./src/layers/ghostMaps/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/firms/source	./src/layers/firms/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/installations/source	./src/layers/installations/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/launches/source	./src/layers/launches/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/radio/source	./src/layers/radio/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/satellites/source	./src/layers/satellites/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/traffic/source	./src/layers/traffic/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/reference	./src/sources/reference.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/submarine-cables/source	./src/layers/submarineCables/bundledSource.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/http-body	./src/sources/httpBody.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/overpass	./src/sources/overpass.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./search/nominatim	./src/search/nominatim.js	NAV	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/nominatim	./src/sources/nominatim.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/transit	./server/providers/transit.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/transit	./src/data/transitProxy.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/transit	./src/layers/transit/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/transit/standalone	./src/data/transit.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/transit/source	./src/layers/transit/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/transit-service	./src/sources/transitService.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./sources/map-features	./src/sources/overpassFeatures.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./server/providers/mapillary	./server/providers/mapillary.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/street-level	./src/layers/streetLevel/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/street-level/mapillary	./src/layers/streetLevel/providers/mapillary/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/street-level/mapillary/source	./src/layers/streetLevel/providers/mapillary/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/street-level/google	./src/layers/streetLevel/providers/google/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/street-level/kartaview	./src/layers/streetLevel/providers/kartaview/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./layers/street-level/panoramax	./src/layers/streetLevel/providers/panoramax/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./tools	./src/tools/index.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./tools/mcp	./src/tools/mcp/index.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./tools/panel	./src/tools/panel.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./tools/services	./src/tools/services.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./view	./src/view/index.js	VIEW	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-export	./agent/world-packet	./src/agent/worldPacket.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions
-boundary	infrastructure	./infrastructure,./infrastructure/geojson,./infrastructure/lod	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	application	./application	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	viewer	./application/viewer	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	vite-build	./build/vite,./build/register-vue	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	live-providers	./server/providers/live	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	adsb-lol-source	./sources/adsb-lol	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	place-providers	./server/providers/places	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	place-payloads	./sources/places	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	space-providers	./server/providers/space	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	space-requests	./sources/space	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	terrain-provider	./server/providers/terrain	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	terrain-source	./sources/terrain	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	traffic-provider	./server/providers/traffic	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	traffic-source	./sources/traffic	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	firms-csv	./sources/firms-csv	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	firms-provider	./server/providers/firms	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	gbfs-provider	./server/providers/gbfs	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	gbfs-source	./sources/gbfs	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	cctv-provider	./server/providers/cctv	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	mapillary-provider	./server/providers/mapillary	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	radio-provider	./server/providers/radio	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	overpass-provider	./server/providers/overpass	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	military-installations-provider	./server/providers/military-installations	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	regional-provider	./server/providers/regional	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	openai-provider	./server/providers/openai	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	standalone-key-setup	./server/standalone/key-setup	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	place-search	./search	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	panel-disclosure	./ui/panels	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	surface-keyboard	./ui/surfaces	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	panel-rail-layout	./ui/layout	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	visual-input	./ui/input	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	display-controls	./ui/display	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	visual-effects	./ui/effects,./ui/effects/bloom	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	map-source-controls	./ui/maps	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	layer-panel	./ui/layers,./ui/layers/feedback	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	location-controls	./ui/location	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	radio-controls	./ui/radio	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	cctv-controls	./ui/cctv	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	context-controls	./ui/context,./ui/context/policy	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	cockpit-controls	./ui/cockpit,./ui/cockpit/math,./ui/cockpit/layout,./ui/cockpit/vision	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	scene-controls	./ui/scenes	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	ui-shell	./ui/shell	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	ui-styles	./ui/styles	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	director	./director	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	scenes	./scenes	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	live-observations	./sources/live	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	civil-flights	./layers/flights	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	military-flights	./layers/military	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	aircraft-mechanics	./aircraft	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	vessel-layer	./layers/vessels	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	earthquakes	./layers/earthquakes	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	recent-imagery	./layers/recent-imagery	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	fire-layer	./layers/firms	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	satellites-layer	./layers/satellites	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	launches-layer	./layers/launches	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	installations-layer	./layers/installations	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	awareness-layer	./layers/awareness	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	traffic-layer	./layers/traffic	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	bikeshare-layer	./layers/bikeshare	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	cctv-layer	./layers/cctv	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	street-level-layer	./layers/street-level,./layers/street-level/mapillary,./layers/street-level/mapillary/source,./layers/street-level/google,./layers/street-level/kartaview,./layers/street-level/panoramax	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	alpr-cameras	./layers/alpr	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	radio-layer	./layers/radio	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	submarine-cables	./layers/submarine-cables	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	bundled-cables	./sources/bundled-cables	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	geography	./geography/natural-earth,./geography/neighborhoods	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	maps	./maps/controller,./maps/catalog,./maps/imagery,./maps/terrain,./maps/3d,./maps/defaults	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	voice-connection	./voice/controller,./voice/control,./voice/realtime-backend,./voice/commands,./voice/cost,./voice/realtime-session	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	application-components	./application/scene,./application/controls,./application/data,./application/tools,./application/chrome,./application/sources,./application/services,./application/requests,./application/errors,./ui/composition,./ui/hud,./standalone/settings,./voice/actions,./annotations,./context,./standalone/catalog	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	application-catalog	./application/catalog	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	application-layer-construction	./application/layers	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	application-operations	./application/operations	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	layer-lifecycle	./data/lifecycle	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	ui-navigation	./ui/navigation	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	ui-share-restoration	./ui/share-restoration	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	ui-visual-settings	./ui/visual-settings	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	ui-panel-chrome	./ui/panel-chrome	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	civil-flight-records	./layers/flights/records	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	civil-flight-ingestion	./layers/flights/ingestion	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	military-flight-records	./layers/military/records	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	military-flight-ingestion	./layers/military/ingestion	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	vessel-records	./layers/vessels/records	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	vessel-ingestion	./layers/vessels/ingestion	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	directions-source	./layers/directions/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	recent-imagery-source	./layers/recent-imagery/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	directions-layer	./layers/directions	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	radio-browser-source	./sources/radio-browser	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	cctv-types-source	./sources/cctv-types	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	regional-source	./sources/regional	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	voice-action-schemas	./voice/action-schemas	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	voice-session	./voice/session	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	voice-session-controls	./voice/session-controls	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	alpr-source	./layers/alpr/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	bikeshare-source	./layers/bikeshare/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	cctv-source	./layers/cctv/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	earthquakes-source	./layers/earthquakes/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	firms-source	./layers/firms/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	installations-source	./layers/installations/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	launches-source	./layers/launches/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	radio-source	./layers/radio/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	satellites-source	./layers/satellites/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	traffic-source-factory	./layers/traffic/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	reference-sources	./sources/reference,./layers/submarine-cables/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	nominatim-provider	./search/nominatim	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	source-http-body	./sources/http-body	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	overpass-lexer	./sources/overpass	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	nominatim-source	./sources/nominatim	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	transit-provider	./server/providers/transit	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	transit-source	./sources/transit	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	transit-standalone	./layers/transit/standalone	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	transit-layer	./layers/transit	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	transit-source-factory	./layers/transit/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	transit-service	./sources/transit-service	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	map-feature-source	./sources/map-features	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	perimeters	./layers/perimeters	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	gnss	./layers/gnss	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	gnss-source	./layers/gnss/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	share-view-codec	./share/view-codec	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	share-link-path	./share/link-path	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	ghostmaps	./layers/ghostmaps	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	ghostmaps-source	./layers/ghostmaps/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	perimeters-source	./layers/perimeters/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	tools	./tools	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	tools-mcp	./tools/mcp	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	tools-panel	./tools/panel	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	tools-services	./tools/services	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	view	./view	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	air-quality	./layers/air-quality	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	air-quality-source	./layers/air-quality/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-boundary	agent-world-packet	./agent/world-packet	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса
-action	fly_to_location	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду
-action	select_nearest_aircraft	src/voice/actionSchemas.js → gevActions.js	NAV	Один ключ цели после передачи камеры; отказ, исчезновение цели и выход не оставляют скрытый объект или заблокированный ввод
-action	adjust_camera_zoom	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду
-action	zoom_to_globe	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду
-action	set_layer_visibility	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability
-action	show_data_layers_menu	src/voice/actionSchemas.js → gevActions.js	UI	Та же команда изменяет тот же контроллер/таймер, фокус и обратное действие сохраняются после swap
-action	set_panel_open	src/voice/actionSchemas.js → gevActions.js	UI	Та же команда изменяет тот же контроллер/таймер, фокус и обратное действие сохраняются после swap
-action	set_voice_inactivity_timeout	src/voice/actionSchemas.js → gevActions.js	UI	Та же команда изменяет тот же контроллер/таймер, фокус и обратное действие сохраняются после swap
-action	set_context_mode	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability
-action	control_cockpit	src/voice/actionSchemas.js → gevActions.js	NAV	Один ключ цели после передачи камеры; отказ, исчезновение цели и выход не оставляют скрытый объект или заблокированный ввод
-action	set_visual_style	src/voice/actionSchemas.js → gevActions.js	FX	При наличии эффекта проверить реальный кадр, при отсутствии — явный статус и сохранение выбранных параметров
-action	get_entity_context	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability
-action	get_current_view_state	src/voice/actionSchemas.js → gevActions.js	VIEW	Состояние читается из той же сессии, при смене возвращаются только согласованные pose/map/layer IDs
-action	set_hud	src/voice/actionSchemas.js → gevActions.js	UI	Та же команда изменяет тот же контроллер/таймер, фокус и обратное действие сохраняются после swap
-action	set_cyber_sonar	src/voice/actionSchemas.js → gevActions.js	FX	При наличии эффекта проверить реальный кадр, при отсутствии — явный статус и сохранение выбранных параметров
-action	set_detection	src/voice/actionSchemas.js → gevActions.js	FX	При наличии эффекта проверить реальный кадр, при отсутствии — явный статус и сохранение выбранных параметров
-action	set_map_stack	src/voice/actionSchemas.js → gevActions.js	MAP	Отмена медленного тайла, отсутствие ключа, rollback к предыдущему стеку, сохранение активных слоёв
-action	set_post_processing	src/voice/actionSchemas.js → gevActions.js	FX	При наличии эффекта проверить реальный кадр, при отсутствии — явный статус и сохранение выбранных параметров
-action	control_scene	src/voice/actionSchemas.js → gevActions.js	AUTHOR	Сохранить документ/позицию таймлайна или операции рисования; один обработчик picking, отмена без посторонних удалений
-action	control_cctv	src/voice/actionSchemas.js → gevActions.js	MEDIA	Сохранить выбор потока/станции и единственный медиасеанс; action/status корректны без графики, проекция требует capability
-action	control_radio	src/voice/actionSchemas.js → gevActions.js	MEDIA	Сохранить выбор потока/станции и единственный медиасеанс; action/status корректны без графики, проекция требует capability
-action	track_entity	src/voice/actionSchemas.js → gevActions.js	NAV	Один ключ цели после передачи камеры; отказ, исчезновение цели и выход не оставляют скрытый объект или заблокированный ввод
-action	stop_tracking	src/voice/actionSchemas.js → gevActions.js	NAV	Один ключ цели после передачи камеры; отказ, исчезновение цели и выход не оставляют скрытый объект или заблокированный ввод
-action	frame_overhead	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду
-action	annotate_map	src/voice/actionSchemas.js → gevActions.js	AUTHOR	Сохранить документ/позицию таймлайна или операции рисования; один обработчик picking, отмена без посторонних удалений
-action	clear_annotations	src/voice/actionSchemas.js → gevActions.js	AUTHOR	Сохранить документ/позицию таймлайна или операции рисования; один обработчик picking, отмена без посторонних удалений
-action	move_camera	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду
-action	fly_route	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду
-action	analyst_query	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability
-action	next_iss_pass	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability
-action	next_satellite_pass	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability
-tool	get_earthquakes	earthquakes	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (earthquakes). Доступность данных не зависит от типа рендерера.
-tool	get_active_fires	fires	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (fires). Доступность данных не зависит от типа рендерера.
-tool	get_recent_launches	launches	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (launches). Доступность данных не зависит от типа рендерера.
-tool	aircraft_in_area	aircraft	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (aircraft). Доступность данных не зависит от типа рендерера.
-tool	find_aircraft	aircraft	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (aircraft). Доступность данных не зависит от типа рендерера.
-tool	get_aircraft_track	aircraft	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (aircraft). Доступность данных не зависит от типа рендерера.
-tool	get_aircraft_info	aircraft	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (aircraft). Доступность данных не зависит от типа рендерера.
-tool	vessels_in_area	vessels	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (vessels). Доступность данных не зависит от типа рендерера.
-tool	find_vessel	vessels	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (vessels). Доступность данных не зависит от типа рендерера.
-tool	get_vessel_track	vessels	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (vessels). Доступность данных не зависит от типа рендерера.
-tool	next_satellite_pass	satellites	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (satellites). Доступность данных не зависит от типа рендерера.
-tool	satellites_overhead	satellites	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (satellites). Доступность данных не зависит от типа рендерера.
-tool	find_cctv_cameras	cctv	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (cctv). Доступность данных не зависит от типа рендерера.
-tool	get_cctv_snapshot	cctv	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (cctv). Доступность данных не зависит от типа рендерера.
-tool	find_alpr_cameras	alpr	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (alpr). Доступность данных не зависит от типа рендерера.
-tool	find_radio_stations	radio	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (radio). Доступность данных не зависит от типа рендерера.
-tool	search_places	placeSearch	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (placeSearch). Доступность данных не зависит от типа рендерера.
-tool	places_nearby	placeSearch	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (placeSearch). Доступность данных не зависит от типа рендерера.
-tool	plan_route	routing	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (routing). Доступность данных не зависит от типа рендерера.
-tool	get_bike_share	bikeshare	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (bikeshare). Доступность данных не зависит от типа рендерера.
-tool	get_transit_vehicles	transit	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (transit). Доступность данных не зависит от типа рендерера.
-tool	get_traffic_flow	traffic	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (traffic). Доступность данных не зависит от типа рендерера.
-tool	get_weather	weather	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (weather). Доступность данных не зависит от типа рендерера.
-tool	get_weather_map	weatherMaps	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (weatherMaps). Доступность данных не зависит от типа рендерера.
-tool	get_wind	wind	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (wind). Доступность данных не зависит от типа рендерера.
-tool	get_recent_imagery	imagery	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (imagery). Доступность данных не зависит от типа рендерера.
-tool	find_submarine_cables	cables	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (cables). Доступность данных не зависит от типа рендерера.
-tool	find_infrastructure	infrastructure	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (infrastructure). Доступность данных не зависит от типа рендерера.
-tool	get_bhote_koshi_flood	events	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (events). Доступность данных не зависит от типа рендерера.
-tool	get_regional_brief	regional	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (regional). Доступность данных не зависит от типа рендерера.
-tool	get_cyclones	cyclones	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (cyclones). Доступность данных не зависит от типа рендерера.
-tool	get_fire_perimeters	perimeters	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (perimeters). Доступность данных не зависит от типа рендерера.
-tool	get_terrain_height	terrain	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (terrain). Доступность данных не зависит от типа рендерера.
-tool	find_military_installations	installations	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (installations). Доступность данных не зависит от типа рендерера.
-tool	get_map_features	features	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (features). Доступность данных не зависит от типа рендерера.
-tool	situation_brief	weather	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (weather). Доступность данных не зависит от типа рендерера.
-tool	military_awareness	military	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (military). Доступность данных не зависит от типа рендерера.
-tool	get_hud_caption	weather,summary	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (weather,summary). Доступность данных не зависит от типа рендерера.
-tool	show_in_gods_eye_view	app	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (app). Проверить ссылку или panel handoff с работающей и недоступной сценой.
-tool	panel_request	app	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (app). Проверить ссылку или panel handoff с работающей и недоступной сценой.
-basemap	photoreal	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture
-basemap	bing-aerial	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture
-basemap	bing-labels	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture
-basemap	esri-imagery	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture
-basemap	sentinel2	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture
-basemap	osm	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture
+вид	идентификатор	цель/зависимости	пакет_работ	проверка	результат	доказательство
+export	./infrastructure	./src/data/infrastructure.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./infrastructure/geojson	./src/data/localGeojsonCore.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./infrastructure/lod	./src/data/localGeojsonLod.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application	./src/app/application.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/viewer	./src/app/viewer.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./build/vite	./build/vite.js	DELIVERY	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/live	./server/providers/live.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/adsb-lol	./src/data/adsbLolFallback.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/places	./server/providers/places.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/places	./src/data/placeProviderPayloads.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/space	./server/providers/space.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/space	./src/data/spaceProviderRequests.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/terrain	./server/providers/terrain.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/terrain	./src/data/terrainHeightsProxy.js	PLANET	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/traffic	./server/providers/traffic.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/traffic	./src/data/tomtomTiles.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/firms	./server/providers/firms.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/gbfs	./server/providers/gbfs.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/gbfs	./src/data/gbfsSource.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/cctv	./server/providers/cctv.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/radio	./server/providers/radio.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/overpass	./server/providers/overpass.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/military-installations	./server/providers/military-installations.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/regional	./server/providers/regional.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/openai	./server/providers/openai.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/standalone/key-setup	./server/standalone/key-setup.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./search	./src/search/index.js	NAV	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/panels	./src/ui/panelDisclosure.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/surfaces	./src/ui/surfaceKeyboard.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/layout	./src/ui/panelRails.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/input	./src/ui/visualInput.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/display	./src/ui/displayControls.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/effects	./src/ui/effects.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/effects/bloom	./src/bloom.js	FX	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/maps	./src/ui/mapSource.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/layers	./src/ui/layers.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/layers/feedback	./src/loadingFeedback.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/location	./src/ui/location.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/radio	./src/ui/radio.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/cctv	./src/ui/cctv.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/context	./src/ui/context.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/context/policy	./src/contextModePolicy.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/cockpit	./src/ui/cockpit.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/cockpit/math	./src/cockpitMath.js	NAV	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/cockpit/layout	./src/cockpitUtilityLayout.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/cockpit/vision	./src/cockpitVisionPolicy.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/scenes	./src/ui/scenes.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/shell	./src/ui/applicationShell.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/styles	./src/ui/styles.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./director	./src/director/playback.js	AUTHOR	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./scenes	./src/scenes/director.js	AUTHOR	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/live	./src/sources/live/index.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/flights	./src/layers/flights/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/military	./src/layers/military/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./aircraft	./src/layers/aircraft/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/vessels	./src/layers/vessels/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/earthquakes	./src/layers/earthquakes/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/recent-imagery	./src/layers/recentImagery/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/recent-imagery/source	./src/layers/recentImagery/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/perimeters	./src/layers/perimeters/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/gnss	./src/layers/gnss/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/ghostmaps	./src/layers/ghostMaps/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/firms-csv	./src/data/firmsCsv.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/firms	./src/layers/firms/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/satellites	./src/layers/satellites/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/launches	./src/layers/launches/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/installations	./src/layers/installations/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/awareness	./src/layers/awareness/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/traffic	./src/layers/traffic/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/bikeshare	./src/layers/bikeshare/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/directions	./src/layers/directions/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/directions/source	./src/layers/directions/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/cctv	./src/layers/cctv/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/air-quality	./src/layers/airQuality/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/alpr	./src/layers/alpr/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/radio	./src/layers/radio/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/submarine-cables	./src/layers/submarineCables/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/bundled-cables	./src/layers/submarineCables/bundledSource.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./geography/natural-earth	./src/data/naturalEarthRegions.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./geography/neighborhoods	./src/data/neighborhoodPolygons.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./maps/controller	./src/maps/controller.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./maps/catalog	./src/maps/catalog.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./maps/imagery	./src/maps/imagery.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./maps/terrain	./src/maps/terrain.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./maps/3d	./src/maps/google3d.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./maps/defaults	./src/maps/defaultSources.js	MAP	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/controller	./src/voice/realtimeController.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/control	./src/voice/control.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/realtime-backend	./src/voice/realtimeBackend.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/commands	./src/voice/commands.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/cost	./src/voice/voiceCost.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/scene	./src/app/scene.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/controls	./src/app/controls.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/data	./src/app/data.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/tools	./src/app/tools.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/chrome	./src/app/startupChrome.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/sources	./src/app/sources.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/services	./src/services/application.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/requests	./src/services/requests.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/errors	./src/app/errors.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/composition	./src/ui/composition.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/hud	./src/hud.js	OVERLAY	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./standalone/settings	./src/keySetup.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/actions	./src/voice/gevActions.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./annotations	./src/annotations/index.js	AUTHOR	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./context	./src/data/contextStore.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./build/register-vue	./build/registerVue.js	DELIVERY	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/catalog	./src/app/catalog.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./standalone/catalog	./src/standalone/catalog.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/layers	./src/app/constructCatalog.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./application/operations	./src/app/operations.js	SESSION	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./data/lifecycle	./src/data/lifecycle.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/navigation	./src/ui/navigationController.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/share-restoration	./src/ui/shareRestoration.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./share/view-codec	./src/share/viewCodec.js	VIEW	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./share/link-path	./src/share/shareLinkPath.js	VIEW	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/visual-settings	./src/ui/visualSettings.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./ui/panel-chrome	./src/ui/panelChrome.js	UI	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/flights/records	./src/layers/flights/records.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/flights/ingestion	./src/layers/flights/ingestion.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/military/records	./src/layers/military/records.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/military/ingestion	./src/layers/military/ingestion.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/vessels/records	./src/layers/vessels/records.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/vessels/ingestion	./src/layers/vessels/ingestion.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/radio-browser	./src/sources/radioBrowser.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/cctv-types	./src/sources/cctvTypes.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/regional	./src/data/regionalModel.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/action-schemas	./src/voice/actionSchemas.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/session	./src/voice/session.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/session-controls	./src/voice/sessionCommands.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./voice/realtime-session	./src/voice/realtimeSession.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/alpr/source	./src/layers/alpr/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/bikeshare/source	./src/layers/bikeshare/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/cctv/source	./src/layers/cctv/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/air-quality/source	./src/layers/airQuality/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/earthquakes/source	./src/layers/earthquakes/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/perimeters/source	./src/layers/perimeters/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/gnss/source	./src/layers/gnss/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/ghostmaps/source	./src/layers/ghostMaps/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/firms/source	./src/layers/firms/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/installations/source	./src/layers/installations/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/launches/source	./src/layers/launches/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/radio/source	./src/layers/radio/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/satellites/source	./src/layers/satellites/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/traffic/source	./src/layers/traffic/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/reference	./src/sources/reference.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/submarine-cables/source	./src/layers/submarineCables/bundledSource.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/http-body	./src/sources/httpBody.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/overpass	./src/sources/overpass.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./search/nominatim	./src/search/nominatim.js	NAV	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/nominatim	./src/sources/nominatim.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/transit	./server/providers/transit.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/transit	./src/data/transitProxy.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/transit	./src/layers/transit/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/transit/standalone	./src/data/transit.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/transit/source	./src/layers/transit/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/transit-service	./src/sources/transitService.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./sources/map-features	./src/sources/overpassFeatures.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./server/providers/mapillary	./server/providers/mapillary.js	PLATFORM	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/street-level	./src/layers/streetLevel/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/street-level/mapillary	./src/layers/streetLevel/providers/mapillary/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/street-level/mapillary/source	./src/layers/streetLevel/providers/mapillary/source.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/street-level/google	./src/layers/streetLevel/providers/google/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/street-level/kartaview	./src/layers/streetLevel/providers/kartaview/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./layers/street-level/panoramax	./src/layers/streetLevel/providers/panoramax/index.js	LAYER	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./tools	./src/tools/index.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./tools/mcp	./src/tools/mcp/index.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./tools/panel	./src/tools/panel.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./tools/services	./src/tools/services.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./view	./src/view/index.js	VIEW	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+export	./agent/world-packet	./src/agent/worldPacket.js	TOOLS	Импорт по прежнему имени, совместимость аргументов и результата; browser/Node согласно conditions		
+boundary	infrastructure	./infrastructure,./infrastructure/geojson,./infrastructure/lod	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	application	./application	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	viewer	./application/viewer	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	vite-build	./build/vite,./build/register-vue	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	live-providers	./server/providers/live	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	adsb-lol-source	./sources/adsb-lol	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	place-providers	./server/providers/places	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	place-payloads	./sources/places	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	space-providers	./server/providers/space	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	space-requests	./sources/space	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	terrain-provider	./server/providers/terrain	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	terrain-source	./sources/terrain	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	traffic-provider	./server/providers/traffic	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	traffic-source	./sources/traffic	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	firms-csv	./sources/firms-csv	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	firms-provider	./server/providers/firms	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	gbfs-provider	./server/providers/gbfs	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	gbfs-source	./sources/gbfs	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	cctv-provider	./server/providers/cctv	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	mapillary-provider	./server/providers/mapillary	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	radio-provider	./server/providers/radio	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	overpass-provider	./server/providers/overpass	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	military-installations-provider	./server/providers/military-installations	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	regional-provider	./server/providers/regional	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	openai-provider	./server/providers/openai	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	standalone-key-setup	./server/standalone/key-setup	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	place-search	./search	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	panel-disclosure	./ui/panels	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	surface-keyboard	./ui/surfaces	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	panel-rail-layout	./ui/layout	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	visual-input	./ui/input	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	display-controls	./ui/display	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	visual-effects	./ui/effects,./ui/effects/bloom	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	map-source-controls	./ui/maps	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	layer-panel	./ui/layers,./ui/layers/feedback	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	location-controls	./ui/location	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	radio-controls	./ui/radio	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	cctv-controls	./ui/cctv	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	context-controls	./ui/context,./ui/context/policy	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	cockpit-controls	./ui/cockpit,./ui/cockpit/math,./ui/cockpit/layout,./ui/cockpit/vision	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	scene-controls	./ui/scenes	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	ui-shell	./ui/shell	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	ui-styles	./ui/styles	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	director	./director	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	scenes	./scenes	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	live-observations	./sources/live	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	civil-flights	./layers/flights	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	military-flights	./layers/military	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	aircraft-mechanics	./aircraft	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	vessel-layer	./layers/vessels	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	earthquakes	./layers/earthquakes	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	recent-imagery	./layers/recent-imagery	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	fire-layer	./layers/firms	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	satellites-layer	./layers/satellites	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	launches-layer	./layers/launches	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	installations-layer	./layers/installations	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	awareness-layer	./layers/awareness	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	traffic-layer	./layers/traffic	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	bikeshare-layer	./layers/bikeshare	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	cctv-layer	./layers/cctv	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	street-level-layer	./layers/street-level,./layers/street-level/mapillary,./layers/street-level/mapillary/source,./layers/street-level/google,./layers/street-level/kartaview,./layers/street-level/panoramax	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	alpr-cameras	./layers/alpr	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	radio-layer	./layers/radio	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	submarine-cables	./layers/submarine-cables	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	bundled-cables	./sources/bundled-cables	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	geography	./geography/natural-earth,./geography/neighborhoods	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	maps	./maps/controller,./maps/catalog,./maps/imagery,./maps/terrain,./maps/3d,./maps/defaults	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	voice-connection	./voice/controller,./voice/control,./voice/realtime-backend,./voice/commands,./voice/cost,./voice/realtime-session	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	application-components	./application/scene,./application/controls,./application/data,./application/tools,./application/chrome,./application/sources,./application/services,./application/requests,./application/errors,./ui/composition,./ui/hud,./standalone/settings,./voice/actions,./annotations,./context,./standalone/catalog	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	application-catalog	./application/catalog	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	application-layer-construction	./application/layers	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	application-operations	./application/operations	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	layer-lifecycle	./data/lifecycle	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	ui-navigation	./ui/navigation	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	ui-share-restoration	./ui/share-restoration	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	ui-visual-settings	./ui/visual-settings	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	ui-panel-chrome	./ui/panel-chrome	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	civil-flight-records	./layers/flights/records	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	civil-flight-ingestion	./layers/flights/ingestion	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	military-flight-records	./layers/military/records	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	military-flight-ingestion	./layers/military/ingestion	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	vessel-records	./layers/vessels/records	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	vessel-ingestion	./layers/vessels/ingestion	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	directions-source	./layers/directions/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	recent-imagery-source	./layers/recent-imagery/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	directions-layer	./layers/directions	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	radio-browser-source	./sources/radio-browser	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	cctv-types-source	./sources/cctv-types	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	regional-source	./sources/regional	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	voice-action-schemas	./voice/action-schemas	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	voice-session	./voice/session	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	voice-session-controls	./voice/session-controls	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	alpr-source	./layers/alpr/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	bikeshare-source	./layers/bikeshare/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	cctv-source	./layers/cctv/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	earthquakes-source	./layers/earthquakes/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	firms-source	./layers/firms/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	installations-source	./layers/installations/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	launches-source	./layers/launches/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	radio-source	./layers/radio/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	satellites-source	./layers/satellites/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	traffic-source-factory	./layers/traffic/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	reference-sources	./sources/reference,./layers/submarine-cables/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	nominatim-provider	./search/nominatim	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	source-http-body	./sources/http-body	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	overpass-lexer	./sources/overpass	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	nominatim-source	./sources/nominatim	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	transit-provider	./server/providers/transit	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	transit-source	./sources/transit	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	transit-standalone	./layers/transit/standalone	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	transit-layer	./layers/transit	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	transit-source-factory	./layers/transit/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	transit-service	./sources/transit-service	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	map-feature-source	./sources/map-features	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	perimeters	./layers/perimeters	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	gnss	./layers/gnss	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	gnss-source	./layers/gnss/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	share-view-codec	./share/view-codec	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	share-link-path	./share/link-path	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	ghostmaps	./layers/ghostmaps	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	ghostmaps-source	./layers/ghostmaps/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	perimeters-source	./layers/perimeters/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	tools	./tools	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	tools-mcp	./tools/mcp	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	tools-panel	./tools/panel	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	tools-services	./tools/services	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	view	./view	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	air-quality	./layers/air-quality	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	air-quality-source	./layers/air-quality/source	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+boundary	agent-world-packet	./agent/world-packet	VERIFY	Сохранить разрешённые направления импортов; провести check:boundaries после переноса		
+action	fly_to_location	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду	не проверено	parity voice-tools-platform.md:45 (не проверено)
+action	select_nearest_aircraft	src/voice/actionSchemas.js → gevActions.js	NAV	Один ключ цели после передачи камеры; отказ, исчезновение цели и выход не оставляют скрытый объект или заблокированный ввод	pass	parity voice-tools-platform.md:46 (pass)
+action	adjust_camera_zoom	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду	не проверено	parity voice-tools-platform.md:47 (не проверено)
+action	zoom_to_globe	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду	не проверено	parity voice-tools-platform.md:48 (не проверено)
+action	set_layer_visibility	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability	не проверено	parity voice-tools-platform.md:49 (не проверено)
+action	show_data_layers_menu	src/voice/actionSchemas.js → gevActions.js	UI	Та же команда изменяет тот же контроллер/таймер, фокус и обратное действие сохраняются после swap	не проверено	parity voice-tools-platform.md:50 (не проверено)
+action	set_panel_open	src/voice/actionSchemas.js → gevActions.js	UI	Та же команда изменяет тот же контроллер/таймер, фокус и обратное действие сохраняются после swap	не проверено	parity voice-tools-platform.md:51 (не проверено)
+action	set_voice_inactivity_timeout	src/voice/actionSchemas.js → gevActions.js	UI	Та же команда изменяет тот же контроллер/таймер, фокус и обратное действие сохраняются после swap	не проверено	
+action	set_context_mode	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability	не проверено	parity voice-tools-platform.md:52 (не проверено)
+action	control_cockpit	src/voice/actionSchemas.js → gevActions.js	NAV	Один ключ цели после передачи камеры; отказ, исчезновение цели и выход не оставляют скрытый объект или заблокированный ввод	не проверено	parity voice-tools-platform.md:53 (не проверено)
+action	set_visual_style	src/voice/actionSchemas.js → gevActions.js	FX	При наличии эффекта проверить реальный кадр, при отсутствии — явный статус и сохранение выбранных параметров	fail	parity voice-tools-platform.md:54 (fail)
+action	get_entity_context	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability	не проверено	parity voice-tools-platform.md:55 (не проверено)
+action	get_current_view_state	src/voice/actionSchemas.js → gevActions.js	VIEW	Состояние читается из той же сессии, при смене возвращаются только согласованные pose/map/layer IDs	не проверено	parity voice-tools-platform.md:56 (не проверено)
+action	set_hud	src/voice/actionSchemas.js → gevActions.js	UI	Та же команда изменяет тот же контроллер/таймер, фокус и обратное действие сохраняются после swap	не проверено	parity voice-tools-platform.md:57 (не проверено)
+action	set_cyber_sonar	src/voice/actionSchemas.js → gevActions.js	FX	При наличии эффекта проверить реальный кадр, при отсутствии — явный статус и сохранение выбранных параметров	не проверено	parity voice-tools-platform.md:58 (не проверено)
+action	set_detection	src/voice/actionSchemas.js → gevActions.js	FX	При наличии эффекта проверить реальный кадр, при отсутствии — явный статус и сохранение выбранных параметров	не проверено	parity voice-tools-platform.md:59 (не проверено)
+action	set_map_stack	src/voice/actionSchemas.js → gevActions.js	MAP	Отмена медленного тайла, отсутствие ключа, rollback к предыдущему стеку, сохранение активных слоёв	не проверено	parity voice-tools-platform.md:60 (не проверено)
+action	set_post_processing	src/voice/actionSchemas.js → gevActions.js	FX	При наличии эффекта проверить реальный кадр, при отсутствии — явный статус и сохранение выбранных параметров	fail	parity voice-tools-platform.md:61 (fail)
+action	control_scene	src/voice/actionSchemas.js → gevActions.js	AUTHOR	Сохранить документ/позицию таймлайна или операции рисования; один обработчик picking, отмена без посторонних удалений	не проверено	parity voice-tools-platform.md:62 (не проверено)
+action	control_cctv	src/voice/actionSchemas.js → gevActions.js	MEDIA	Сохранить выбор потока/станции и единственный медиасеанс; action/status корректны без графики, проекция требует capability	не проверено	parity voice-tools-platform.md:63 (не проверено)
+action	control_radio	src/voice/actionSchemas.js → gevActions.js	MEDIA	Сохранить выбор потока/станции и единственный медиасеанс; action/status корректны без графики, проекция требует capability	не проверено	parity voice-tools-platform.md:64 (не проверено)
+action	track_entity	src/voice/actionSchemas.js → gevActions.js	NAV	Один ключ цели после передачи камеры; отказ, исчезновение цели и выход не оставляют скрытый объект или заблокированный ввод	не проверено	parity voice-tools-platform.md:65 (не проверено)
+action	stop_tracking	src/voice/actionSchemas.js → gevActions.js	NAV	Один ключ цели после передачи камеры; отказ, исчезновение цели и выход не оставляют скрытый объект или заблокированный ввод	pass	parity voice-tools-platform.md:66 (pass)
+action	frame_overhead	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду	не проверено	parity voice-tools-platform.md:67 (не проверено)
+action	annotate_map	src/voice/actionSchemas.js → gevActions.js	AUTHOR	Сохранить документ/позицию таймлайна или операции рисования; один обработчик picking, отмена без посторонних удалений	fail	parity voice-tools-platform.md:68 (fail)
+action	clear_annotations	src/voice/actionSchemas.js → gevActions.js	AUTHOR	Сохранить документ/позицию таймлайна или операции рисования; один обработчик picking, отмена без посторонних удалений	fail	parity voice-tools-platform.md:69 (fail)
+action	move_camera	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду	fail	parity voice-tools-platform.md:70 (fail)
+action	fly_route	src/voice/actionSchemas.js → gevActions.js	NAV	Перенести активную позу и фазу движения; сравнить итоговый target/offset; пользовательский жест и смена цели завершают старую команду	fail	parity voice-tools-platform.md:71 (fail)
+action	analyst_query	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability	не проверено	parity voice-tools-platform.md:72 (не проверено)
+action	next_iss_pass	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability	pass	parity voice-tools-platform.md:73 (pass)
+action	next_satellite_pass	src/voice/actionSchemas.js → gevActions.js	LAYER	Данные доступны без GPU; смена сцены посередине запроса не меняет выбор/порядок результатов или intent. Для экранных аспектов проверить capability	не проверено	parity voice-tools-platform.md:74 (не проверено)
+tool	get_earthquakes	earthquakes	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (earthquakes). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:270 (pass)
+tool	get_active_fires	fires	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (fires). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:271 (pass)
+tool	get_recent_launches	launches	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (launches). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:272 (pass)
+tool	aircraft_in_area	aircraft	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (aircraft). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:273 (pass)
+tool	find_aircraft	aircraft	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (aircraft). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:274 (pass)
+tool	get_aircraft_track	aircraft	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (aircraft). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:275 (pass)
+tool	get_aircraft_info	aircraft	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (aircraft). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:276 (pass)
+tool	vessels_in_area	vessels	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (vessels). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:277 (pass)
+tool	find_vessel	vessels	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (vessels). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:278 (pass)
+tool	get_vessel_track	vessels	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (vessels). Доступность данных не зависит от типа рендерера.	не проверено	parity voice-tools-platform.md:279 (не проверено)
+tool	next_satellite_pass	satellites	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (satellites). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:280 (pass)
+tool	satellites_overhead	satellites	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (satellites). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:281 (pass)
+tool	find_cctv_cameras	cctv	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (cctv). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:282 (pass)
+tool	get_cctv_snapshot	cctv	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (cctv). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:283 (pass)
+tool	find_alpr_cameras	alpr	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (alpr). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:284 (pass)
+tool	find_radio_stations	radio	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (radio). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:285 (pass)
+tool	search_places	placeSearch	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (placeSearch). Доступность данных не зависит от типа рендерера.	платный сервис	parity voice-tools-platform.md:286 (платный сервис)
+tool	places_nearby	placeSearch	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (placeSearch). Доступность данных не зависит от типа рендерера.	платный сервис	parity voice-tools-platform.md:287 (платный сервис)
+tool	plan_route	routing	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (routing). Доступность данных не зависит от типа рендерера.	не проверено	parity voice-tools-platform.md:288 (не проверено)
+tool	get_bike_share	bikeshare	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (bikeshare). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:289 (pass)
+tool	get_transit_vehicles	transit	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (transit). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:290 (pass)
+tool	get_traffic_flow	traffic	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (traffic). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:291 (pass)
+tool	get_weather	weather	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (weather). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:292 (pass)
+tool	get_weather_map	weatherMaps	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (weatherMaps). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:293 (pass)
+tool	get_wind	wind	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (wind). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:294 (pass)
+tool	get_recent_imagery	imagery	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (imagery). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:295 (pass)
+tool	find_submarine_cables	cables	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (cables). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:296 (pass)
+tool	find_infrastructure	infrastructure	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (infrastructure). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:297 (pass)
+tool	get_bhote_koshi_flood	events	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (events). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:298 (pass)
+tool	get_regional_brief	regional	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (regional). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:299 (pass)
+tool	get_cyclones	cyclones	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (cyclones). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:300 (pass)
+tool	get_fire_perimeters	perimeters	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (perimeters). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:301 (pass)
+tool	get_terrain_height	terrain	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (terrain). Доступность данных не зависит от типа рендерера.	не проверено	parity voice-tools-platform.md:302 (не проверено)
+tool	find_military_installations	installations	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (installations). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:303 (pass)
+tool	get_map_features	features	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (features). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:304 (pass)
+tool	situation_brief	weather	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (weather). Доступность данных не зависит от типа рендерера.	не проверено	parity voice-tools-platform.md:305 (не проверено)
+tool	military_awareness	military	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (military). Доступность данных не зависит от типа рендерера.	не проверено	parity voice-tools-platform.md:306 (не проверено)
+tool	get_hud_caption	weather,summary	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (weather,summary). Доступность данных не зависит от типа рендерера.	pass	parity voice-tools-platform.md:307 (pass)
+tool	show_in_gods_eye_view	app	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (app). Проверить ссылку или panel handoff с работающей и недоступной сценой.	pass	parity voice-tools-platform.md:308 (pass)
+tool	panel_request	app	TOOLS	Проверить формат результата, права, доступные surfaces и отмену; выполнить с fixture (app). Проверить ссылку или panel handoff с работающей и недоступной сценой.	pass	parity voice-tools-platform.md:309 (pass)
+basemap	photoreal	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture	платный сервис	платный сервис: Google 3D Tiles
+basemap	bing-aerial	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture	платный сервис	платный сервис: Bing
+basemap	bing-labels	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture	платный сервис	платный сервис: Bing
+basemap	esri-imagery	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture	pass	unit src/globe/navara/maps.test.mjs::setBaseImagery builds Navara raster layers for OSM and Esri, one at a time; unit src/maps/controller.test.mjs::repeated Esri shot handoffs retain imagery and keep tile fallback live; unit src/maps/controller.test.mjs::Esri construction fallback reports and attributes the source actually rendered; unit src/maps/sourceFactories.test.mjs::Esri uses Re:Earth without keys and preserves ion terrain when configured
+basemap	sentinel2	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture	не проверено	
+basemap	osm	src/maps/catalog.js	MAP	Ссылка и выбор сохраняют ID, наличие источника, порядок и attribution; платный источник только fixture	pass	unit src/globe/cesium/maps.test.mjs::setBaseImagery builds providers from plain descriptions; unit src/globe/cesium/maps.test.mjs::every catalog globe stack works as a registry source; unit src/globe/navara/maps.test.mjs::setBaseImagery builds Navara raster layers for OSM and Esri, one at a time

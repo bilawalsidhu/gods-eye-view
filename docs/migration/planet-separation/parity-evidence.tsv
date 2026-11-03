@@ -1,0 +1,790 @@
+ключ	вид	ссылка	что_проверяет
+layers-a.md:25	unit	src/data/aircraftClass.test.mjs::type-code classification (military layer path)	Типы ICAO раскладываются по классам fastjet, helicopter, quadjet, widebody, turboprop, light, airliner.
+layers-a.md:25	unit	src/data/aircraftClass.test.mjs::bizjet + uav classes (2026-08-16 Hangar fleet)	Типы ICAO бизнес-джетов и БПЛА дают классы bizjet и uav.
+layers-a.md:25	unit	src/data/aircraftClass.test.mjs::category fallback (flights layer path — OpenSky extended int)	Без типа класс берётся из категории OpenSky, включая glider.
+layers-a.md:25	unit	src/data/aircraftClass.test.mjs::ADS-B emitter string categories	Строковые категории ADS-B (A7, A5, A1, B1) дают helicopter, widebody, light, glider.
+layers-a.md:26	unit	src/data/aircraftClass.test.mjs::scale/url tables cover every class	Для каждого из 10 классов есть 2D-масштаб, 3D-масштаб в диапазоне и URL модели.
+layers-a.md:26	unit	src/data/aircraftClass.test.mjs::CLASS_MODEL_REAL entries carry the fields the layers consume	Каждая реальная GLB-модель класса имеет url, radiusM и bellyM.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::hangar fleet: helicopter registry pins match the shipped GLB (/models/bell206.glb)	Радиус и высота брюха bell206.glb в реестре совпадают с замером файла.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::hangar fleet: light registry pins match the shipped GLB (/models/c172.glb)	Радиус и высота брюха c172.glb в реестре совпадают с замером файла.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::hangar fleet: bizjet registry pins match the shipped GLB (/models/citation2.glb)	Радиус и высота брюха citation2.glb в реестре совпадают с замером файла.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::hangar fleet: uav registry pins match the shipped GLB (/models/mq9.glb)	Радиус и высота брюха mq9.glb в реестре совпадают с замером файла.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::hangar fleet: widebody registry pins match the shipped GLB (/models/b789.glb)	Радиус и высота брюха b789.glb в реестре совпадают с замером файла.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::hangar fleet: turboprop registry pins match the shipped GLB (/models/atr72.glb)	Радиус и высота брюха atr72.glb в реестре совпадают с замером файла.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::military layer airplane.glb constants match the measured GLB and flights calibration	Константы airplane.glb (масштаб, радиус, брюхо) совпадают с замером и калибровкой рейсов.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::shared-model visual-centre metadata matches the shipped GLBs	Визуальный центр общих моделей совпадает с замером GLB.
+layers-a.md:26	unit	src/data/modelScale.test.mjs::every approved aircraft model has a trail anchor on its real aft-belly hull	Точка крепления следа каждой модели лежит на корпусе под хвостом.
+layers-a.md:26	unit	src/layers/aircraft/render/navara.test.mjs::a model pose is the Cesium model frame, turned to Navara's glTF axes	На Navara модель загружается по той же спецификации и ставится в ту же позу, что на Cesium.
+layers-a.md:26	unit	src/layers/aircraft/render/cesium.test.mjs::model loads carry the layer spec; the IR boost loads an UNLIT model	На Cesium модель загружается со спецификацией слоя.
+layers-a.md:28	unit	src/data/militaryRegistry.test.mjs::active-change listener fires on transitions only, with committed state	Флаг активности военного слоя оповещает слушателей только при смене значения.
+layers-a.md:28	unit	src/layers/aircraft/classification.test.mjs::classification uses normalized identities and respects its polling interval and active layer	Реестр военных ICAO сам опрашивает источник раз в 60 с и не опрашивает, пока военный слой активен.
+layers-a.md:28	unit	src/data/militaryFlights.edgeCases.test.mjs::edge:military: an ICAO in both feeds draws one target and keeps the military card	Гражданский слой не рисует самолёт, чей ICAO есть в военном реестре.
+layers-a.md:29	unit	src/data/renderAltitude.test.mjs::Denver case: no geo_altitude, baro 1600 + N -17.3 -> ~=1582.7	Барометрическая высота переводится в эллипсоидальную прибавлением N.
+layers-a.md:29	unit	src/data/renderAltitude.test.mjs::onGround with a finite surfaceM wins over everything else	Самолёт на земле ставится на высоту поверхности.
+layers-a.md:29	unit	src/data/geoid.test.mjs::orthometricToEllipsoidal adds the geoid undulation to the MSL height	Перевод MSL в эллипсоид прибавляет N из сетки геоида.
+layers-a.md:30	unit	src/data/routePlausible.test.mjs::plane in London with an SFO→LAX route: implausible	Маршрут, на котором самолёт не может находиться, признаётся неправдоподобным.
+layers-a.md:30	unit	src/data/routePlausible.test.mjs::plane mid-route SFO→LAX: plausible	Самолёт посреди своего маршрута проходит проверку.
+layers-a.md:30	unit	src/data/flights.test.mjs::flights analyst record: implausible route is suppressed (routeOk=false)	Неправдоподобный маршрут скрывается из записи рейса.
+layers-a.md:30	unit	src/data/contactMatch.test.mjs::hex outranks every softer match	Совпадение по hex важнее любого другого совпадения.
+layers-a.md:30	unit	src/data/contactMatch.test.mjs::an exact callsign beats an exact registration, whatever the feed order	Точный позывной важнее точной регистрации.
+layers-a.md:30	unit	src/data/contactMatch.test.mjs::a registration matches in the form the operator says it	Регистрация находится в устной форме.
+layers-a.md:31	unit	src/data/trackedModelRegime.test.mjs::enter and exit thresholds are ASYMMETRIC — the anti-flap band	Пороги входа и выхода из 3D-режима разные (гистерезис).
+layers-a.md:31	unit	src/data/trackedModelRegime.test.mjs::the regime enters at the enter ceiling and leaves only past the exit ceiling	Режим 3D включается на пороге входа и выключается только за порогом выхода.
+layers-a.md:31	unit	src/data/trackingClickGesture.test.mjs::civilian and military tracked model caps both expose the owner-selected 200 px feel	Предел размера модели в пикселях равен 200 для обоих слоёв.
+layers-a.md:31	unit	src/data/trackedCamera.test.mjs::tracked model shrinks smoothly when close enough to exceed the pixel cap	Модель плавно уменьшается, когда превышает предел в пикселях.
+layers-a.md:31	unit	src/data/trackingClickGesture.test.mjs::tracking click discrimination pins the travel/duration boundary matrix	Классификатор отличает клик от перетаскивания по смещению и длительности.
+layers-a.md:34	unit	src/data/tr3bRegistry.test.mjs::tr3b registry: toggle round-trips and normalizes the contact id	Преобразование в TR-3B включается и выключается по ID контакта.
+layers-a.md:34	unit	src/data/tr3bRegistry.test.mjs::tr3b sprite variant: unconverted passes the class through, converted picks by style	Преобразованный контакт получает треугольник, при ИК-режиме вариант tr3bHot.
+layers-a.md:34	unit	src/data/tr3bRegistry.test.mjs::tr3b sprites are real distinct glyphs, not the airliner fallback	Обычный и ИК-треугольник TR-3B — отдельные чёрные значки.
+layers-a.md:34	unit	src/data/tr3bRegistry.test.mjs::conversions are session-scoped and no lifecycle path clears them	Преобразования живут только в сессии, не сохраняются и не сбрасываются слоем.
+layers-a.md:48	unit	src/data/focusDeemphasis.test.mjs::smoothing converges over configured attack and release instead of snapping	Притухание идёт за 300 мс, восстановление за 600 мс.
+layers-a.md:48	unit	src/data/focusDeemphasis.test.mjs::focus decision never falls below the configured floor	Прозрачность не опускается ниже заданного минимума.
+layers-a.md:48	unit	src/data/focusDeemphasis.test.mjs::per-sprite state attacks, restores after focus clears, and settles at one	Значок притухает при выборе цели и возвращается после снятия выбора.
+layers-a.md:48	unit	src/data/focusDeemphasis.test.mjs::a focus target projects through the engine registered for its scene	Цель фокуса проецируется через движок своей сцены.
+layers-a.md:48	unit	src/layers/aircraft/render/navara.test.mjs::fleet sprites write the mover store, once per frame	На Navara изменённая прозрачность значка доходит до буфера.
+layers-a.md:51	unit	src/data/selectionDispatcher.test.mjs::a click on an owned object selects it; empty space deselects everyone	Клик по своему объекту выбирает его, клик в пустоту снимает выбор.
+layers-a.md:51	unit	src/data/selectionDispatcher.test.mjs::another layer's pick is not empty space, owned through the shared registry	Объект соседнего слоя распознаётся через общий реестр и не считается пустотой.
+layers-a.md:51	unit	src/data/selectionDispatcher.test.mjs::trails do not take clicks: the object under a trail is selected	Клик по следу выбирает объект под ним.
+layers-a.md:51	unit	src/data/selectionDispatcher.test.mjs::Escape reaches every owner; an owner without handlers only owns	Escape доходит до каждого слоя-владельца.
+layers-a.md:51	unit	src/layers/flights/renderer.test.mjs::the flights logic draws and follows on the Navara renderer (fake engine)	На Navara клик по самолёту выбирает его и запускает слежение.
+layers-a.md:51	unit	src/layers/flights/renderer.test.mjs::the flights logic draws, selects and follows only through its renderer	Клик по самому сопровождаемому значку ничего не меняет, клик в пустоту снимает выбор.
+layers-a.md:60	unit	src/data/tr3bRegistry.test.mjs::a conversion survives a poll refresh, in both the billboard and the tracked card	Преобразованный в TR-3B контакт остаётся треугольником после обновления данных.
+layers-a.md:60	unit	src/data/tr3bRegistry.test.mjs::tr3b sprites are real distinct glyphs, not the airliner fallback	Значок TR-3B — отдельный чёрный треугольник.
+layers-a.md:60	unit	src/layers/aircraft/render/navara.test.mjs::the atlas has every glyph at the fleet and tracked sizes	Атлас Navara содержит все значки, включая TR-3B, в обоих размерах.
+layers-a.md:62	unit	src/data/layerState.test.mjs::explicit manager params and visibility revoke module-owned pending tracking restore	Явное действие пользователя отменяет ожидающее восстановление слежения из ссылки.
+layers-a.md:62	unit	src/data/layerState.test.mjs::tracking restore refreshes the destination feed before the module resolves Follow	Восстановление слежения ждёт свежих данных, прежде чем решить, есть ли самолёт.
+layers-a.md:62	unit	src/data/flights.test.mjs::share-Follow absence requires an accepted OpenSky snapshot	Отсутствие самолёта признаётся только по принятому снимку OpenSky.
+layers-a.md:77	unit	src/data/militaryFlights.edgeCases.test.mjs::edge:military: an ICAO in both feeds draws one target and keeps the military card	Самолёт из обоих источников рисуется один раз с военной карточкой.
+layers-a.md:77	unit	src/layers/military/renderer.test.mjs::the military logic draws and follows on the Navara renderer; the follow passes between flights and military	На Navara слежение переходит между военным и гражданским слоем в обе стороны.
+layers-a.md:88	unit	src/sdr/controller.test.mjs::CHANGE DEVICE reopens through the WebUSB picker	Смена устройства открывает выбор WebUSB.
+layers-a.md:88	unit	src/sdr/controller.test.mjs::remembered WebUSB receiver is reused without opening the picker	Запомненный приёмник открывается без окна выбора.
+layers-a.md:88	unit	src/sdr/controller.test.mjs::ADS-B opens at manual 28.0 dB and gain changes apply live without reconnecting	Усиление 28 дБ по умолчанию и меняется без переподключения.
+layers-a.md:88	unit	src/sdr/controller.test.mjs::switching to ADS-B moves to the authorized 1090 MHz channel of a dual board	Режим ADS-B переходит на канал 1090 МГц.
+layers-a.md:88	unit	src/sdr/adsbDecoder.test.mjs::extracts a CRC-valid Mode S frame from synthetic 2 Msps IQ	Демодулятор извлекает кадр Mode S с верным CRC из IQ-потока.
+layers-a.md:88	unit	src/sdr/controller.test.mjs::ADS-B updates report CRC-valid messages per second, heard and positioned	Состояние приёмника сообщает число сообщений в секунду.
+layers-a.md:89	unit	src/layers/localAdsb/feeds.test.mjs::configured feeds poll every second between start and stop, on the browser clock	Ленты декодеров опрашиваются раз в секунду между start и stop, время пересчитывается на часы браузера.
+layers-a.md:89	unit	src/layers/localAdsb/feeds.test.mjs::an aircraft a feed drops is kept until 60 s after its last message	Самолёт по ICAO и диапазону хранится 60 с после последнего сообщения.
+layers-a.md:89	unit	src/layers/localAdsb/index.test.mjs::feed records merge with browser SDR records by ICAO and UAT-only aircraft get a ring	Слой запускает опрос при включении и останавливает при выключении, записи лент сливаются с WebUSB по ICAO.
+layers-a.md:106	unit	src/layers/vessels/viewArea.test.mjs::the area asked for follows the camera height, and a wide view asks for every vessel	Радиус запроса следует высоте камеры в пределах 10–450 км.
+layers-a.md:106	unit	src/layers/vessels/viewArea.test.mjs::a view asks again only after moving or zooming a quarter of its radius	Новый запрос идёт только при сдвиге или изменении радиуса на четверть.
+layers-a.md:106	unit	src/layers/vessels/ingestion.test.mjs::vessels are asked for by the area in view, and again only when the view moves away	Источник получает область вида и повторный запрос только после сдвига.
+layers-a.md:109	unit	src/data/vesselLabels.test.mjs::vessel viewport cohort preserves the shipped 118px grid density	Число подписей задаётся сеткой 118 px и не превышает 900.
+layers-a.md:109	unit	src/data/aisLiveVessels.test.mjs::cardScreenSeparated: rejects candidates inside the min separation radius	Подписи ближе 150 px друг к другу отбрасываются.
+layers-a.md:109	unit	src/data/aisLiveVessels.test.mjs::vessel host publication preserves the shipped grid winner and separation selector	Публикуются победители сетки с учётом разноса и приоритета.
+layers-a.md:109	unit	src/data/vesselLabels.test.mjs::vessel host policy uses always-on shared fade and protected selected lane	Карточка выбранного судна идёт в защищённом верхнем слое.
+layers-a.md:109	unit	src/data/aisLiveVessels.test.mjs::buildSelectedVesselCard: destination line + STALE marker; placeholders for missing data	Карточка выбранного судна несёт пометку STALE.
+layers-a.md:110	unit	src/layers/vessels/renderer.test.mjs::vessels on the Navara renderer: one always-on-top chevron bank, MMSI picks, the trail on engine.lines	На Navara клик по судну выбирает его.
+layers-a.md:110	unit	src/layers/vessels/renderer.test.mjs::vessel logic draws and selects through a plain renderer on an engine, with no Cesium	Клик выбирает судно, клик в пустоту снимает выбор (логика без Cesium).
+layers-a.md:110	unit	src/data/aisLiveVessels.test.mjs::vessel interaction wire: Escape deselects the selected vessel	Escape снимает выбор судна.
+layers-a.md:110	unit	src/data/aisLiveVessels.test.mjs::vessel interaction wire: selecting a vessel by click requests a camera transfer	Выбор судна кликом запрашивает перелёт камеры к нему.
+layers-a.md:128	unit	src/data/satellitesTrackedRefresh.test.mjs::satellite pre-render refreshes the tracked altitude on each propagated frame	Подпись сопровождаемого спутника показывает класс и обновляемую высоту.
+layers-a.md:128	unit	src/data/satellitesTrackedRefresh.test.mjs::ISS ambient and tracked lifecycle uses cached host entries with no native labels or duplicate text	Постоянная подпись МКС скрывается, когда МКС сопровождается.
+layers-a.md:128	unit	src/data/satellitesTrackedRefresh.test.mjs::a tracked docked cluster consolidates its companions onto one card	Пристыкованные к МКС аппараты называются в одной карточке.
+layers-a.md:128	unit	src/data/trackedReadout.test.mjs::on a globe engine the readout follows engine.camera.follow's plain-data label	На Navara карточка сопровождаемой МКС публикуется и обновляется через слежение движка.
+layers-a.md:131	unit	src/layers/satellites/source.test.mjs::satellite pass prediction methods report no-tle on cold catalog and coerce IDs	Пролёт МКС и любого спутника считается по NORAD; поиск по имени различает точное, неоднозначное и ненайденное.
+layers-a.md:131	unit	src/data/satellitePass.test.mjs::findNextSatellitePass resolves pass boundaries with sub-second precision	Границы пролёта над наблюдателем вычисляются с точностью до долей секунды.
+layers-a.md:131	unit	src/voice/gevActions.test.mjs::general satellite pass resolves once, refuses ambiguity, and preserves ISS call semantics	Голосовой инструмент пролёта отказывает при неоднозначном имени.
+layers-a.md:131	unit	src/voice/gevActionsEngine.test.mjs::next_iss_pass observes from the engine camera	next_iss_pass работает на движке без Cesium.
+layers-a.md:142	unit	src/data/rocketLaunches.test.mjs::excludes launches outside the rolling 30-day window and missing coordinates	Пуски вне 30-дневного окна и без координат отбрасываются.
+layers-a.md:142	unit	src/data/rocketLaunches.test.mjs::normalizes recent launches and preserves supplied trajectory/orbit data	Нормализация сохраняет траекторию, только если LL2 её прислал.
+layers-a.md:142	unit	src/data/rocketLaunches.test.mjs::keeps failed-launch mission details truthful without inventing paths	Без присланной траектории путь не выдумывается.
+layers-a.md:142	unit	src/data/rocketLaunches.test.mjs::bounds the post-TLE refresh to one resolved-catalog rebuild	После активного TLE делается одна повторная сборка.
+layers-a.md:148	unit	src/data/rocketLaunches.test.mjs::builds a surface-safe ascent that meets the orbit without a phase jump	Оценочный подъём не уходит под землю и стыкуется с орбитой без скачка.
+layers-a.md:148	unit	src/data/rocketLaunches.test.mjs::keeps a tangent-blended inclined ascent outside the globe	Наклонный подъём остаётся над глобусом.
+layers-a.md:148	unit	src/data/rocketLaunches.test.mjs::uses a propagated insertion reference instead of the radial nearest orbit point	Орбита начинается в точке выведения.
+layers-a.md:148	unit	src/data/rocketLaunches.test.mjs::projects a west-coast ascent forward into orbit without reversing course	Подъём продолжается в орбиту без разворота.
+layers-a.md:150	unit	src/data/rocketLaunches.test.mjs::advances the live orbit marker between whole seconds	Положение на орбите непрерывно между целыми секундами.
+layers-a.md:150	unit	src/data/rocketLaunches.test.mjs::hands replay directly from ascent into orbit	Маркер переходит с подъёма на орбиту без паузы.
+layers-a.md:150	unit	src/data/rocketLaunches.test.mjs::uses the core GMST frame transform for mission orbit primitives	Орбита поворачивается по GMST вместе с вращением Земли.
+layers-a.md:150	unit	src/layers/launches/render/navara.test.mjs::mission bank growth, callbacks and source visibility write actual mover stores	На Navara позиция маркера читается из обратного вызова каждый кадр.
+layers-a.md:151	unit	src/data/rocketLaunches.test.mjs::runs the five-second tile hold before a full T-10 countdown	Перед отсчётом 10 с идёт пятисекундная пауза для тайлов.
+layers-a.md:151	unit	src/data/rocketLaunches.test.mjs::holds replay at the pad for a real-time countdown independent of replay speed	Отсчёт идёт в реальном времени при любой скорости.
+layers-a.md:151	unit	src/data/rocketLaunches.test.mjs::derives replay ascent duration from mission timing instead of a fixed constant	Длительность подъёма берётся из хронологии LL2 в пределах 8–36 с.
+layers-a.md:151	unit	src/data/rocketLaunches.test.mjs::hands replay directly from ascent into orbit	Орбитальная фаза длится 28 с после подъёма.
+layers-a.md:151	unit	src/data/rocketLaunches.test.mjs::clamps and snaps ascent replay speed to supported quarter steps	Скорость ограничена 0,25–4.
+layers-a.md:151	unit	src/data/rocketLaunches.test.mjs::shifts replay start time so pause duration does not advance the mission	Пауза не сдвигает миссию.
+layers-a.md:151	unit	src/layers/launches/replayClock.test.mjs::pause, resume and speed changes use app time without a wall-clock jump	Пауза, продолжение и смена скорости идут по часам приложения без скачка.
+layers-a.md:151	qa	space-engine-switch--missions	На обеих планетах сохраняются выбранная миссия, пауза и скорость 4.
+layers-a.md:152	unit	src/data/rocketLaunches.test.mjs::keeps the chase camera in a rear-quarter view of the forward path	Камера держится сзади-сбоку от траектории.
+layers-a.md:152	unit	src/data/rocketLaunches.test.mjs::limits replay camera yaw through heading wraps	Поворот камеры за кадр ограничен, в том числе через 360°.
+layers-a.md:152	unit	src/data/rocketLaunches.test.mjs::pulls replay camera from close ascent tracking into a globe-scale orbit view	Наклон и дальность камеры переходят от подъёма к виду всей Земли.
+layers-a.md:152	unit	src/data/rocketLaunches.test.mjs::frames the complete high-apogee orbit together with Earth	Кадр охватывает Землю и всю орбиту.
+layers-a.md:152	unit	src/data/rocketLaunches.test.mjs::keeps the forward orbit tangent moving toward screen-left	Направление движения по орбите остаётся влево по экрану.
+layers-a.md:153	unit	src/data/rocketLaunches.test.mjs::aligns the replay rocket nose to the projected path tangent	Нос ракеты повёрнут по экранной проекции траектории.
+layers-a.md:153	unit	src/data/rocketLaunches.test.mjs::smooths small replay marker reprojection jitter but snaps camera jumps	Мелкое дрожание сглаживается, скачки камеры не сглаживаются.
+layers-a.md:153	unit	src/data/rocketLaunches.test.mjs::shows the screen-space rocket only while replay is active	Экранная ракета видна только во время воспроизведения.
+layers-a.md:153	unit	src/layers/launches/replayOverlay.test.mjs::the scene chrome renders the overlay in the globe container	Наложение ракеты рисуется в контейнере глобуса.
+layers-a.md:156	unit	src/data/rocketLaunches.test.mjs::replay releases aircraft tracking through both owning layer APIs	Воспроизведение снимает слежение за самолётами в обоих слоях.
+layers-a.md:156	unit	src/data/rocketLaunches.test.mjs::restores the complete standalone Satellite style after mission mode	После Space Missions возвращаются прежние параметры спутников.
+layers-a.md:156	unit	src/data/rocketLaunches.test.mjs::treats an already-active Satellite catalog mode as idempotent	Уже включённый режим каталога спутников не переключается повторно.
+layers-a.md:156	unit	src/data/rocketLaunches.test.mjs::enable is transactional: a failed satellites dependency rolls the module back and a retry recaptures	Сбой включения спутников откатывает Space Missions.
+layers-a.md:165	unit	src/layers/awareness/queries.test.mjs::aircraft window marks a capped layer as a lower bound	Запрос ограничен 20 000 записей, при превышении слой помечается неполным.
+layers-a.md:165	unit	src/data/militaryAwareness.test.mjs::the contacts window reports exactly the counts the panel renders	Окно контактов берёт радиус 250 км и те же числа, что панель.
+layers-a.md:165	unit	src/data/militaryAwareness.test.mjs::the voice query snapshot is a detached copy of the rendered aircraft cohort	Голос получает неизменяемую копию того же набора, что панель.
+layers-a.md:166	unit	src/layers/awareness/queries.test.mjs::Contacts excludes square corners and measures from the current moving subject	Расстояния считаются от текущего положения движущегося объекта.
+layers-a.md:166	unit	src/data/militaryAwareness.test.mjs::a cached Context subject re-reads its label when enrichment lands after selection	Подпись объекта обновляется, когда приходит обогащение.
+layers-a.md:166	unit	src/data/militaryAwareness.test.mjs::an evicted aircraft becomes CONTACT LOST instead of collapsing the panel	Пропавший самолёт помечается CONTACT LOST.
+layers-a.md:170	unit	src/data/militaryAwareness.test.mjs::Context entry tracks a nearer civilian aircraft over a farther military aircraft	Фокус берёт ближайший самолёт.
+layers-a.md:170	unit	src/data/militaryAwareness.test.mjs::Context entry prefers military aircraft on an exact nearest-distance tie	При равенстве расстояний побеждает военный.
+layers-a.md:170	unit	src/data/militaryAwareness.test.mjs::Contacts vessel autofocus takes navigation authority before it frames	Без самолётов камера летит к судну со сферой 3 км.
+layers-a.md:171	unit	src/data/militaryAwareness.test.mjs::Contacts refresh cadence is snappy while the camera moves and parked otherwise	Обновление каждые 750 мс в покое и 100–200 мс при движении камеры.
+layers-a.md:171	unit	src/data/militaryAwareness.test.mjs::motion ends only after the pose has been unchanged through the settle window	Движение заканчивается через 250 мс без изменения позы.
+layers-a.md:171	unit	src/data/militaryAwareness.test.mjs::intermittent pose-bin crossings cannot refresh faster than the motion floor	Медленное движение не учащает обновление сверх нижней границы.
+layers-a.md:182	unit	src/layers/alpr/source.test.mjs::each view reads the finest attributed extract zoom that fits 16 tiles	Выбирается самый подробный зум от z12 до z9, укладывающийся в лимит тайлов.
+layers-a.md:182	unit	src/data/alprCameras.test.mjs::snapAlprBox: snaps outward to the query grid and clamps to valid ranges	Область вида расширяется наружу до сетки запросов.
+layers-a.md:182	unit	src/data/alprCameras.test.mjs::nearby camera moves reuse the snapped query but count and register only in-view nodes	Мелкие сдвиги внутри покрытой области не дают нового запроса.
+layers-a.md:182	unit	src/data/alprCameras.test.mjs::moves inside a pending query do not restart it; moving to another city cancels it	Уход в другой город отменяет запрос.
+layers-a.md:182	unit	src/data/alprCameras.test.mjs::alprRetryDelayMs: doubles from a 30s floor to a 240s ceiling	Повтор при недоступности идёт с удвоением от 30 до 240 с.
+layers-a.md:182	unit	src/data/alprCameras.test.mjs::empty mapped coverage, stale data and a saturated response remain distinct	Сообщения о пустом покрытии, устаревших данных и переполнении различаются.
+layers-a.md:182	unit	src/layers/alpr/source.test.mjs::wide detail view returns zoom guidance before any fetch and can retry a smaller view	Слишком широкий вид даёт совет приблизиться без запроса.
+layers-a.md:182	unit	src/layers/alpr/source.test.mjs::outside extract coverage is an explicit no-data state without Overpass	Вне покрытия выдаётся явное состояние «нет данных».
+layers-a.md:185	unit	src/data/alprCameras.test.mjs::markers sit on the cached floor; unknown floors clamp only until they resolve	Камеры ставятся на кэшированный уровень земли.
+layers-a.md:185	unit	src/layers/alpr/overlay.test.mjs::a still view replaces floor anchors with the rendered surface, within the floor window	На Cesium в неподвижном виде уровень уточняется по видимой поверхности в допустимом окне.
+layers-a.md:185	unit	src/layers/alpr/render/navaraOverlay.test.mjs::ALPR overlay samples two settled anchors per paint and rejects roof-height outliers	На Navara уточнение по поверхности идёт порциями и отбрасывает высоты крыш.
+layers-a.md:185	unit	src/layers/alpr/render/navara.test.mjs::retired ALPR floor requests cannot rewrite a newer marker or a destroyed set	На Navara камеры ставятся по запросам уровня земли.
+layers-a.md:186	unit	src/layers/alpr/overlay.test.mjs::the overlay bounds its cohort and promotes selection while leaving farther cameras native	На Cesium холст рисует не больше 64 камер, выбранная поверх и попадает в клик.
+layers-a.md:186	unit	src/layers/alpr/overlay.test.mjs::an unresolved surface preserves the native marker; the horizon removes overlay hits	На Cesium камеры за горизонтом не попадают в клик.
+layers-a.md:186	unit	src/layers/alpr/render/navaraOverlay.test.mjs::ALPR overlay retains the 64-camera budget, paints selection last and invents no bearing	На Navara тот же предел 64 камер и выбранная камера поверх.
+layers-a.md:186	unit	src/layers/alpr/render/navaraOverlay.test.mjs::ALPR overlay horizon and disposal remove hits, painting and ownership	На Navara камеры за горизонтом не попадают в клик.
+layers-a.md:188	unit	src/data/alprCameras.test.mjs::OSM attribution stays inline while ALPR displays and follows toggles	Атрибуция OSM показывается, пока слой включён, и уходит при выключении.
+layers-a.md:188	unit	src/layers/alpr/render/navara.test.mjs::ten ALPR toggles clear contexts, picks and credits without allocating new sets	На Navara атрибуция включается и снимается вместе со слоем.
+layers-a.md:188	unit	src/layers/alpr/source.test.mjs::provider attribution escapes markup and rejects executable links	Ссылка атрибуции экранируется и не исполняется.
+layers-a.md:189	unit	src/data/alprCameras.test.mjs::loaded cameras outside the view say so instead of looking unloaded	Строка слоя различает загруженные и видимые камеры.
+layers-a.md:189	unit	src/data/alprCameras.test.mjs::empty mapped coverage, stale data and a saturated response remain distinct	Строка слоя различает устаревшие данные и переполнение.
+layers-a.md:189	unit	src/layers/alpr/render/navara.test.mjs::ALPR batches a dense viewport, respects the cap and never follows a tracked target	На Navara превышение предела помечает слой переполненным.
+layers-a.md:216	unit	src/layers/cctv/render/navara.test.mjs::CCTV focus uses the engine sphere-flight fields and native range/pitch	На Navara перелёт к камере идёт по сфере с курсом камеры, наклоном сверху и плавностью.
+layers-a.md:216	unit	src/data/cctv.test.mjs::CCTV focus reports when the camera flight starts	На Cesium перелёт к камере идёт через flyToBoundingSphere.
+layers-a.md:218	unit	src/data/cctvViewshed.test.mjs::cameraHue: deterministic golden-angle spacing in [0, 360)	Оттенок камеры постоянен и распределён по золотому углу.
+layers-a.md:218	unit	src/data/cctvViewshed.test.mjs::viewshedColors: fill/line pairs with the designed alphas	Заливка объёма полупрозрачна.
+layers-a.md:218	unit	src/data/cctvViewshed.test.mjs::frustumVolumeGeometryData: 5 vertices are exactly the input Cartesians	Пирамида из 5 вершин совпадает с вершинами каркаса.
+layers-a.md:218	unit	src/data/cctvViewshed.test.mjs::portable viewshed colours exactly match the native palette across hue wraps	Цвета объёма одинаковы для обоих движков.
+layers-a.md:218	unit	src/layers/cctv/render/navaraMeshes.test.mjs::Navara CCTV volume preserves native world vertices and releases geometry/material	На Navara объём строится по тем же мировым вершинам.
+layers-a.md:224	unit	src/data/cctv.test.mjs::calibration v2 round-trip: writeCalibrationStoreV2 → readCalibrationStoreV2 preserves values/source/savedAt	Калибровка v2 сохраняется с источником и временем.
+layers-a.md:224	unit	src/data/cctv.test.mjs::deriveCalBadge: CALIBRATED when the camera carries a manual v2 calibration	Значок CAL показывает ручную калибровку.
+layers-a.md:224	unit	src/data/cctv.test.mjs::deriveCalBadge: CURATED for a hand-authored catalog prior with no manual save	Значок CAL различает курируемый каталог.
+layers-a.md:224	unit	src/layers/cctv/headingConfidence.test.mjs::low confidence marks the bearing estimated	Низкая уверенность курса помечает его оценочным.
+layers-a.md:226	unit	src/layers/cctv/rendering.test.mjs::focus de-emphasis fades each icon from its own color	Значки неактивных камер притухают от своего цвета.
+layers-a.md:226	unit	src/data/cctv.test.mjs::real active monitor plane owns one protected host label and no native label entity	Подпись активной плоскости защищена от перекрытия.
+layers-a.md:236	unit	src/data/cyclonesProxy.test.mjs::dev and preview serve only fixed bounded NOAA queries, caching a complete snapshot	Сервер ходит только на фиксированные адреса NOAA.
+layers-a.md:236	unit	src/data/cyclonesProxy.test.mjs::five-minute TTL, failure cooldown and age-limited last-good retain original advisory/fetch clocks	Обновление раз в 5 минут, при сбое отдаётся последний снимок с пометкой.
+layers-a.md:236	unit	src/layers/cyclones/source.test.mjs::source is lazy and fixed-origin, caps bytes, and honors pre-abort	Клиент читает только свой адрес и ограничивает объём ответа.
+layers-a.md:236	unit	src/data/cyclonesProxy.test.mjs::coherent geometry is retained with holes/dateline while older advisory geometry is omitted	Трек и конус остаются только при совпадении номера бюллетеня.
+layers-a.md:236	unit	src/layers/cyclones/index.test.mjs::empty successful coverage, unavailable source and stale advisory are different states	Пустое покрытие, недоступность и устаревший бюллетень различаются.
+layers-a.md:236	qa	weather-engine-switch	На обеих планетах новый бюллетень убирает устаревшие трек и конус без повторного чтения.
+layers-a.md:243	unit	src/layers/cyclones/index.test.mjs::advisory selection uses accessible row descriptors and shared camera handoff	Строка слоя показывает число штормов, детали выбранного, оговорку о покрытии и статус геометрии.
+layers-a.md:243	unit	src/layers/cyclones/coverage.test.mjs::en: coverage and fallback status read as before	Оговорка о покрытии и запасной статус показываются.
+layers-b.md:25	unit	src/data/directions.test.mjs::row chips: modes, arming, and command availability follow the state	Чипы DRIVE/WALK/BIKE, SET A, SET B, swap, FLY, clear идут в нужном порядке и включаются по состоянию.
+layers-b.md:25	unit	src/data/directions.test.mjs::stats guide the user, show progress, and summarize a route honestly	Строка показывает подсказки, расстояние и время маршрута, а также текст ошибки.
+layers-b.md:45	unit	src/layers/earthquakes/edgeCases.test.mjs::edge:earthquakes: an expired record is dropped and a duplicate never forks the ID set	getAnalystRecords слоя отдаёт записи по ID без привязки к движку.
+layers-b.md:45	unit	src/data/earthquakes.test.mjs::earthquake analyst record: full record maps every contract field	Запись аналитика содержит все поля контракта.
+layers-b.md:45	unit	src/tools/queries/queries.test.mjs::earthquakes are filtered, ordered strongest first and capped	Инструмент get_earthquakes фильтрует, сортирует по силе и ограничивает число.
+layers-b.md:76	платный сервис	Google Places	Поиск рядом идёт одним запросом к Google Places, без ключей не проверить.
+layers-b.md:89	qa	ground-layer-switch	На Navara и Cesium клик по контуру выбирает пожар и показывает карточку, клик снаружи её убирает.
+layers-b.md:89	unit	src/layers/perimeters/ownership.test.mjs::clicking a perimeter publishes its incident card; empty space clears it	Клик по контуру публикует карточку через хост подписей, клик в пустоту её снимает.
+layers-b.md:89	unit	src/layers/perimeters/cards.test.mjs::the card anchors at the vertex mean of the largest polygon	Карточка привязана к центру самого большого кольца.
+layers-b.md:91	unit	src/tools/queries/environment.test.mjs::fire perimeters are placed by their outline and sorted by size	Инструмент get_fire_perimeters находит пожары по контуру и сортирует по площади.
+layers-b.md:100	unit	src/layers/radio/source.test.mjs::radio source confines directory and click requests to their existing routes	Каталог берётся из /api/radio/stations, recordClick шлёт POST на /api/radio/click/{id}.
+layers-b.md:100	unit	src/data/radio.test.mjs::unusable directory responses preserve warm client state atomically	Ответ каталога с испорченными метаданными свежести не принимается, состояние stale выставляется и снимается.
+layers-b.md:100	unit	src/data/radio.test.mjs::station-level tags produce canonical and detected-genre categories	Теги станций дают канонические категории и жанры.
+layers-b.md:100	unit	src/data/radio.test.mjs::global viewport ranking prefers English stations, then distance	На глобальном виде англоязычные станции идут первыми.
+layers-b.md:100	unit	src/data/radio.test.mjs::explicit Radio requests combine category, country, station name, and distance	Запрос фильтрует станции по категории и стране.
+layers-b.md:108	unit	src/ui/radioTuner.test.mjs::a render shows the band at the selected station with its tick tape	Шкала тюнера рисует диапазон с засечками и текущей станцией.
+layers-b.md:108	unit	src/ui/radioTuner.test.mjs::a keyboard tune drags, previews and commits the next station	Перетаскивание показывает станцию заранее (preview) и фиксирует её (commit).
+layers-b.md:108	unit	src/ui/radioTuner.test.mjs::a pointer released between stations snaps the needle before it may animate	Перетаскивание указателем ведёт стрелку и фиксирует станцию при отпускании.
+layers-b.md:108	unit	src/ui/radioTuner.test.mjs::a cancelled pointer drag returns the needle to where it started	Отменённое перетаскивание вызывает cancel и возвращает стрелку на место.
+layers-b.md:108	unit	src/data/radio.test.mjs::directory tuner bands preserve stable filtered order without injecting outside selections	Диапазон тюнера ограничен 750 станциями в порядке фильтра.
+layers-b.md:108	unit	src/data/radioNextState.test.mjs::a silent dial release stops the tuner noise and suspends its audio context, even before resume() settles	Во время настройки играет шум через WebAudio, после отпускания он останавливается.
+layers-b.md:118	unit	src/layers/recentImagery/index.test.mjs::USE VIEW takes the camera rectangle and refuses a view over the cap instead of shrinking it	USE VIEW берёт прямоугольник вида камеры и отказывает при ширине больше 1 000 км.
+layers-b.md:118	unit	src/layers/recentImagery/model.test.mjs::boxFromPin builds a 10 km square within 2% at any latitude and refuses what cannot validate	Булавка строит квадрат 10 км вокруг точки.
+layers-b.md:118	unit	src/ui/imageryBoxTool.test.mjs::a session claims the pointer, borrows the stock clicks, freezes the camera only mid-drag and returns everything with the box	На Cesium инструмент рамки забирает указатель, замораживает камеру во время протяжки и рисует прямоугольник.
+layers-b.md:118	unit	src/ui/imageryBoxNavara.test.mjs::blur and destruction during a Navara box drag return input and pointer ownership	На Navara протяжка рамки отключает управление камерой и показывает предпросмотр прямоугольника.
+layers-b.md:118	qa	w2-imagery	На Navara протяжка мышью задаёт рамку без движения камеры, USE VIEW работает от камеры движка.
+layers-b.md:119	unit	src/layers/recentImagery/catalog.test.mjs::CMR pages follow the CMR-Search-After cursor up to 2,000 records and truncation stays honest	Поиск CMR листает по CMR-Search-After и останавливается на 2 000 записях.
+layers-b.md:119	unit	src/layers/recentImagery/catalog.test.mjs::both HLS collections fold with the VIIRS days; one failing product is reported, not fatal	S30, L30 и дни VIIRS собираются в один список кандидатов.
+layers-b.md:119	unit	src/layers/recentImagery/model.test.mjs::coverage samples the box corners and centre against the union of footprints	Покрытие рамки днём считается по объединению следов гранул.
+layers-b.md:119	unit	src/layers/recentImagery/model.test.mjs::START HERE is the newest all-clear HLS day; unknown cloud is never clear	Облачность фильтрует кандидатов, ранжирование выбирает день START HERE.
+layers-b.md:119	unit	src/layers/recentImagery/model.test.mjs::merging sorts newest day first, then S30, L30, VIIRS, and the first key wins	Кандидаты упорядочены по дню и продукту.
+layers-b.md:120	unit	src/layers/recentImagery/thumbnails.test.mjs::Data-Present decides the day: present with an object URL and sensing time, empty, or error	Заголовок Data-Present решает, есть ли снимок за день.
+layers-b.md:120	unit	src/layers/recentImagery/thumbnails.test.mjs::at most maxInFlight fetches run and the queue drains by priority	Одновременных загрузок миниатюр не больше лимита.
+layers-b.md:120	unit	src/layers/recentImagery/thumbnails.test.mjs::decoded thumbnails are evicted least-recently-used and revoked; a read is not a use and an evicted day keeps what it learned	Декодированные миниатюры вытесняются по LRU.
+layers-b.md:120	unit	src/layers/recentImagery/model.test.mjs::GIBS templates put y before x; Worldview snapshots take south,west,north,east	Миниатюра берётся из Worldview snapshots с рамкой в нужном порядке.
+layers-b.md:120	unit	src/layers/recentImagery/index.test.mjs::arrow focus previews the focused present day after the 250 ms debounce; only the last of a burst drapes	Фокус стрелками показывает день после задержки 250 мс.
+layers-b.md:120	unit	src/ui/recentImagery.test.mjs::cards carry thumbnail, date, sensor, cloud, START HERE and PREVIEW; the chips follow the mode without moving	Карточки ленты несут миниатюру, дату, сенсор и облачность.
+layers-b.md:123	unit	src/layers/recentImagery/index.test.mjs::any image on the map holds the Esri lease; the last image cleared hands Google 3D back	Пока показан день, слой держит аренду карты Esri и возвращает прежнюю после очистки.
+layers-b.md:123	unit	src/layers/recentImagery/index.test.mjs::a re-lease refused by another owner says so, drapes without a swipe and does not loop	Если аренду держит другой владелец, слой получает отказ.
+layers-b.md:123	unit	src/maps/controller.test.mjs::an imagery comparison lease rejects a second owner synchronously until released	Контроллер карт отказывает второму владельцу аренды до её освобождения.
+layers-b.md:125	unit	src/layers/recentImagery/index.test.mjs::ZOOM IN: an oversized box or view flies top-down to its centre at the height whose view is 400 km wide	ZOOM IN летит вертикально вниз к центру рамки на высоту по FOV за 1,2 с.
+layers-b.md:125	unit	src/layers/recentImagery/model.test.mjs::ZOOM IN: the height whose top-down view is 400 km wide, clamped to 5–400 km; a box centre	Высота ZOOM IN считается по углу обзора.
+layers-b.md:125	qa	w2-imagery	На Navara ZOOM IN приводит камеру на рассчитанную высоту.
+layers-b.md:126	unit	src/tools/queries/imagery.test.mjs::the most recent clear image is returned with its date and sensor	Инструмент get_recent_imagery возвращает последний ясный снимок с датой и сенсором.
+layers-b.md:126	unit	src/layers/recentImagery/index.test.mjs::share links restore the box, both pins, the mode and a non-default split once, without publishing back	Ссылка восстанавливает рамку, закрепления и режим m.
+layers-b.md:126	unit	src/layers/recentImagery/model.test.mjs::rectangles convert from radians and the share-link quantization round-trips	Кодирование рамки для ссылки обратимо.
+layers-b.md:135	unit	src/layers/streetLevel/index.test.mjs::Street View starts off, and the layer row names the key of the providers that are on	Провайдеры Mapillary и Google включаются по отдельности, строка называет нужный ключ.
+layers-b.md:135	unit	src/layers/streetLevel/uiState.test.mjs::the layer is key-gated only when every switched-on provider lacks its key	Состояние «нужен ключ» зависит от включённых провайдеров.
+layers-b.md:135	unit	src/layers/streetLevel/uiState.test.mjs::a rejected key gates like a missing one and is named as rejected	Отвергнутый ключ показывается как отвергнутый.
+layers-b.md:135	unit	src/layers/streetLevel/uiState.test.mjs::a key-gated layer offers the switched-off sources that would draw with a key already set	При отсутствии ключа слой предлагает другие источники.
+layers-b.md:135	unit	src/layers/streetLevel/filter.test.mjs::passesImageryFilter applies panorama mode and the cut-off	Фильтры «только панорамы» и дата отсечения применяются к снимкам.
+layers-b.md:135	unit	src/layers/streetLevel/filter.test.mjs::resolveFilter turns relative days into an absolute cut-off	«За N дней» превращается в абсолютную дату.
+layers-b.md:135	unit	src/layers/streetLevel/params.test.mjs::decodeParams round-trips and ignores unknown or malformed keys	Параметры провайдеров и фильтра проходят через ссылку туда и обратно.
+layers-b.md:138	платный сервис	Google 3D Tiles	Режим Cast работает только на сетке Google Photorealistic 3D Tiles.
+layers-b.md:142	платный сервис	Google Street View	Строка про Google Street View.
+layers-b.md:144	платный сервис	Google Street View	Открытие по клику на землю есть только у Google Street View.
+layers-b.md:161	unit	src/tools/queries/cables.test.mjs::cables are found by area and name, with landing points and attribution	Инструмент find_submarine_cables ищет кабели по области и имени.
+layers-b.md:195	unit	src/layers/transit/lifecycle.test.mjs::the detection metric says what the display is doing, not what the feed claims	Контакт DETECT для машины несёт id маршрута, класс с режимом и метрику по отображаемому движению.
+layers-b.md:195	unit	src/layers/transit/lifecycle.test.mjs::DETECT contacts carry a bracket tier per mode, keyed or keyless alike	У каждого режима свой класс рамки transit_* в контактах.
+layers-b.md:205	unit	src/layers/weather/source.test.mjs::observed source accepts bounded exact times and refuses malformed or unsorted frames	Манифест принимается только с не более чем 13 кадрами, допустимыми границами и уровнем; иначе отклоняется.
+layers-b.md:205	unit	src/layers/weather/source.test.mjs::weather tile URLs are same origin and ignore upstream templates	Клиент читает /api/weather/manifest?product=… и строит тайлы только через /api/weather/tile.
+layers-b.md:205	unit	src/data/weatherProxy.test.mjs::manifest provides honest coverage, actual frame times and a same-origin tile template	Манифест radar, clouds и clouds-regional отдаёт времена кадров, geographic-тайлинг 256 px до уровня 6.
+layers-b.md:205	unit	src/data/weatherProxy.test.mjs::lightning density uses a fixed observed WMS product with attribution and ten-minute metadata TTL	Четвёртый продукт, молнии, отдаётся через тот же сервер манифеста.
+layers-b.md:205	unit	src/data/weatherProxy.test.mjs::metadata caps advertised frames without fabricating interval timestamps	Сервер оставляет не больше 13 последних кадров и отвергает некорректные границы и времена.
+layers-b.md:208	платный сервис	Google 3D Tiles	Ветка с поднятой оболочкой включается только под Google 3D Tiles.
+layers-b.md:209	unit	src/layers/weather/infraredAlpha.test.mjs::filtered infrared preserves RGB and input bytes, scales existing alpha, and matches the old linear threshold	Режим filtered задаёт альфу по порогам 0,4–0,7, не меняя цвет.
+layers-b.md:209	unit	src/layers/weather/infraredAlpha.test.mjs::full infrared preserves every channel including partial and zero alpha	Режим full оставляет все каналы как есть.
+layers-b.md:209	unit	src/layers/weather/infraredImage.test.mjs::flipY draws a bottom-up image upright, then restores the transform	flipY переворачивает перевёрнутое изображение мозаики.
+layers-b.md:209	unit	src/layers/weather/weather.test.mjs::mosaic cache skips fetch and decode, separates modes, evicts LRU at 6 and clears per instance	Кэш ИК-мозаик хранит до 6 штук, вытесняет самую давнюю и разделяет режимы.
+layers-b.md:209	unit	src/layers/weather/shellRendering.test.mjs::shell heights stack every product with lightning highest	Бюджет кэша декодированных кадров — 128 МиБ.
+layers-b.md:209	unit	src/layers/weather/shellRendering.test.mjs::decoded frames are a byte-bounded LRU that never evicts the displayed frame	LRU по байтам вытесняет старые мозаики и никогда не вытесняет показанный кадр.
+layers-b.md:211	unit	src/layers/weather/shellRendering.test.mjs::first frame stages invisibly, requests renders until drawable and then commits	Первый кадр готовится невидимым и показывается только когда готов к отрисовке.
+layers-b.md:211	unit	src/layers/weather/shellRendering.test.mjs::a new frame keeps the previous image until decoded, then swaps the uniform	Новый кадр заменяет старый только после декодирования, без пустого кадра.
+layers-b.md:211	unit	src/layers/weather/shellRendering.test.mjs::prefetch warms a decoded frame without staging and cancels cleanly	Предзагрузка декодирует кадр без показа и корректно отменяется.
+layers-b.md:211	unit	src/layers/weather/weather.test.mjs::weather stages invisibly, waits for pending tiles and render readiness, and replaces atomically	На тайловом пути кадр готовится скрытым и заменяет прежний атомарно.
+layers-b.md:211	unit	src/layers/weather/weather.test.mjs::camera movement drops abandoned deferred tiles but still waits for admitted requests	Допуск тайловых запросов: брошенные отложенные запросы снимаются, допущенные дожидаются.
+layers-b.md:212	unit	src/tools/queries/atmosphere.test.mjs::weather maps return the latest frame as an image over the area	get_weather_map возвращает последний кадр изображением над областью и сообщает о недоступности.
+layers-b.md:212	unit	src/tools/queries/environment.test.mjs::weather describes current conditions at a point or place	get_weather описывает текущую погоду в точке или месте.
+layers-b.md:221	unit	src/layers/wind/source.test.mjs::wind source requests optional companions and splits exact U/V/scalar byte regions	Клиент читает /api/wind/manifest и бинарное тело u/v плюс необязательное скалярное поле (температура, давление).
+layers-b.md:221	unit	src/layers/wind/source.test.mjs::wind source rejects foreign URLs, excessive grids and non-finite values	Слишком большие сетки, чужие адреса и не-числа отклоняются.
+layers-b.md:221	unit	src/data/windProxy.test.mjs::wind grid ids and URLs are model-scoped	Сервер отдаёт манифест и сетку отдельно для GFS и ECMWF IFS.
+layers-b.md:221	unit	src/data/windProxy.test.mjs::wind grid route returns Float32 U then V	Маршрут сетки отдаёт Float32 u, затем v.
+layers-b.md:221	unit	src/data/windGfs.test.mjs::wind range fetch rejects invalid offsets and caps chunked bodies	Загрузка GRIB с источника ограничена по байтам.
+layers-b.md:221	unit	src/data/windDecode.test.mjs::decoder uses bounded virtual storage and releases both handle and message on errors	GRIB декодируется на сервере Node в ограниченном хранилище с освобождением ресурсов.
+layers-b.md:221	unit	src/data/windIfs.test.mjs::IFS 2t and msl companions use the same issue/valid object as 10u and 10v	Скалярные поля IFS (2t, msl) берутся из того же выпуска, что и ветер.
+layers-b.md:238	платный сервис	Bing	Bing Aerial и Bing Labels через ресурсы Cesium ion без ключей не проверить.
+layers-b.md:238	fail	src/maps/sourceFactories.test.mjs::on the Navara engine photoreal keys on the browser key and ion imagery is unavailable	Тест утверждает, что на Navara Bing Aerial и Bing Labels недоступны даже с токеном ion.
+layers-b.md:239	платный сервис	Google 3D Tiles	Google Photorealistic 3D по ключу браузера без ключей не проверить.
+layers-b.md:240	платный сервис	Google 3D Tiles	Google 3D через Cesium ion (ресурс 2275207) без ключей не проверить.
+layers-b.md:240	fail	src/maps/sourceFactories.test.mjs::on the Navara engine photoreal keys on the browser key and ion imagery is unavailable	Тест утверждает, что на Navara с одним токеном ion Google 3D недоступен.
+layers-b.md:241	платный сервис	Google 3D Tiles	Google 3D по токену с сервера без ключей не проверить.
+layers-b.md:242	платный сервис	Google 3D Tiles	Настройки кэша и коллизий относятся к тайлсету Google 3D, его без ключей не проверить.
+layers-b.md:245	unit	src/maps/controller.test.mjs::returning to the live provider supersedes a pending switch without rebuilding imagery	Более новое переключение отменяет старое (счётчик поколений), кэш провайдера переиспользуется, под Google 3D глобус скрыт, для растровой подложки показан.
+layers-b.md:245	unit	src/maps/controller.test.mjs::subscribe hears every settled activation — silent switches, fallbacks and recoveries — until unsubscribed or destroyed	Подписчики слышат каждое завершённое переключение, в том числе тихое, запасное и восстановление.
+layers-b.md:245	unit	src/maps/controller.test.mjs::on a non-Cesium engine the controller sends descriptions and builds nothing	На Navara контроллер переключает слои через описания engine.maps.
+layers-b.md:245	unit	src/globe/cesium/maps.test.mjs::setPhotorealTiles shows a given tileset and hides the globe; null reverses it	Cesium: фотореалистичные тайлы скрывают глобус, снятие тайлов возвращает его.
+layers-b.md:245	unit	src/globe/navara/maps.test.mjs::base imagery hidden by photoreal comes back; a new one replaces it without a raster gap	Navara: подложка скрыта под фотореалистичными тайлами и возвращается после их снятия.
+layers-b.md:247	unit	src/globe/navara/maps.test.mjs::setBaseImagery builds Navara raster layers for OSM and Esri, one at a time	Navara показывает подпись OSM и Esri для своей подложки.
+layers-b.md:247	unit	src/globe/navara/maps.test.mjs::setPhotorealTiles shows Google 3D tiles with a browser key and the Google credit	Navara показывает подпись Google вместе с тайлами и убирает её вместе с ними.
+layers-b.md:247	unit	src/globe/cesium/maps.test.mjs::setPhotorealTiles(null) clears the photoreal credit and restores the base imagery	Cesium показывает подпись Google при тайлах и возвращает подпись Esri при подложке.
+layers-b.md:247	unit	src/maps/sceneApply.test.mjs::the map scene shows its credit through a given credits capability	Подпись источника (Esri, OSM) выводится через подписи движка и снимается при уничтожении.
+layers-b.md:258	unit	src/overlays/worldOverlay.test.mjs::on a globe engine the host projects with viewProjection and culls with horizonVisible	Хост проецирует якоря матрицей viewProjection движка и проверяет за горизонтом по поднятому якорю cullPosition.
+layers-b.md:258	unit	src/overlays/worldOverlay.test.mjs::position getters snapshot once per frame and cockpit-gated sources disappear	Позиция-функция (движущийся якорь) читается один раз за кадр.
+layers-b.md:259	unit	src/overlays/worldOverlayDraw.test.mjs::variant measurement and all six painters remain renderer-local	Canvas2D рисует подпись, трек, карточку, миниатюру, выбранный и сопровождаемый вид.
+layers-b.md:259	unit	src/overlays/worldOverlayDraw.test.mjs::thumbnail painter preserves the shipped CCTV 104x77 geometry and drawing coordinates	Миниатюра CCTV рисуется в прежней геометрии.
+layers-b.md:259	unit	src/overlays/worldOverlayDraw.test.mjs::shared tactical painter preserves FIRMS card metrics and top-rule treatment	Карточка рисует заголовок, строки и акцентную линию в прежних размерах.
+layers-b.md:259	unit	src/overlays/worldOverlayDraw.test.mjs::every detection theme carries a callout plate inside the ambient band	Каждая тема обнаружения задаёт прозрачность подложки в допустимой полосе.
+layers-b.md:259	unit	src/overlays/worldOverlayDraw.test.mjs::text measurement cache is font-aware and font hooks follow host lifetime	Кэш измерения текста учитывает шрифт.
+layers-b.md:259	unit	src/overlays/worldOverlay.test.mjs::canvas backing store tracks CSS size and live DPR	Размер холста следует CSS-размеру и текущему devicePixelRatio.
+layers-b.md:262	unit	src/overlays/worldOverlay.test.mjs::UI exclusions stay per-rect: overlapping chrome never merges into a bounding union	Прямоугольники панелей исключаются из размещения по отдельности.
+layers-b.md:262	unit	src/overlays/worldOverlay.test.mjs::chrome that fills the viewport suppresses neither cards nor the detection lane	Исключение работает как мягкое предпочтение: элементы во весь экран не гасят карточки.
+layers-b.md:262	unit	src/overlays/worldOverlay.test.mjs::genuine chrome changes still invalidate: add, remove, and own-attribute flips	Кэш прямоугольников обновляется по наблюдателям при добавлении, удалении и смене атрибутов.
+layers-b.md:262	unit	src/overlays/worldOverlay.test.mjs::cockpit keeps its cards and its detection lane, and hides only the tracked readout	Окна кабины учитываются при размещении, карточки остаются.
+layers-b.md:263	unit	src/overlays/worldOverlay.test.mjs::paint rectangles publish from a pool and topmost interactive lookup wins	hitTestWorldOverlay и getOverlayPaintRect находят верхний интерактивный элемент.
+layers-b.md:263	unit	src/overlays/worldOverlay.test.mjs::accessible actions announce only accepted focus and expose selected state	Список действий доступности объявляет принятый фокус и выбранное состояние.
+layers-b.md:263	unit	src/overlays/worldOverlayActionsView.test.mjs::the target list renders each painted action and the last announcement	Список целей показывает каждое нарисованное действие и последнее объявление в живой области.
+layers-b.md:263	unit	src/overlays/worldOverlayActionsView.test.mjs::a button activates its own list’s target	Кнопка вызывает activate() своей цели.
+ui-visuals.md:21	unit	src/app/application.test.mjs::startup shares one promise and teardown keeps data alive for controls	Общий createApplication обоих движков: запуск одним промисом, разбор в обратном порядке (Tools, Controls, Data, Scene), повторный start после destroy отклоняется.
+ui-visuals.md:21	unit	src/app/application.test.mjs::destroy aborts an in-flight constructor and cleans late acquisitions before resolving	destroy во время конструктора прерывает его и освобождает поздно захваченные ресурсы до завершения.
+ui-visuals.md:22	unit	src/ui/panelNavigation.test.mjs::each stack gets a rail of its offered panels, marking the open one	Левый рейл перечисляет предложенные панели (Data Layers, Scenes) и отмечает открытую.
+ui-visuals.md:22	unit	src/ui/sidePanelDisclosure.test.mjs::explicit opening collapses side peers and claims their restoration lanes in every theme	Явное открытие панели сворачивает соседей своей стороны (одна открытая за раз, левый аккордеон отдельно от правого).
+ui-visuals.md:22	unit	src/panelStackLayout.test.mjs::later panels below half their natural height auto-collapse while the first is preserved	Автосворачивание: поздние панели ниже половины естественной высоты сворачиваются, первая остаётся.
+ui-visuals.md:30	unit	src/ui/globeActions.test.mjs::every button calls its owner	Кнопки clear layers, share, tilt, north-up и reset вызывают своих владельцев в общей оболочке.
+ui-visuals.md:30	unit	src/ui/globeActions.test.mjs::the tilt and compass buttons show the published camera	Кнопки tilt и компаса показывают опубликованное состояние камеры.
+ui-visuals.md:31	unit	src/ui/statusChipsView.test.mjs::the chips render what the status store publishes	Чипы global loading, traffic sync и CCTV frames показывают опубликованные метки, детали и прогресс.
+ui-visuals.md:31	unit	src/ui/statusChipsView.test.mjs::a change flaps its changed columns over the same text node, then settles	Смена метки перелистывает изменённые столбцы split-flap и успокаивается на тексте.
+ui-visuals.md:31	unit	src/ui/statusChipOwners.test.mjs::the camera grid chip counts frames, flashes the total, then hides	Чип CCTV считает кадры, показывает итог и скрывается.
+ui-visuals.md:31	unit	src/ui/statusChipOwners.test.mjs::the road network chip clears its progress once the sync lands and keeps its label	Чип синхронизации трафика очищает прогресс после завершения и сохраняет метку.
+ui-visuals.md:32	unit	src/ui/toastView.test.mjs::a toast shows its message, then fades out keeping its text	Тост показывает сообщение с role=status и гаснет по таймеру.
+ui-visuals.md:32	unit	src/loadingFeedback.test.mjs::acquiring notices persist without a dwell until explicitly cleared	Постоянное уведомление держится без таймера до явной очистки.
+ui-visuals.md:32	unit	src/ui/shellLifecycle.test.mjs::a finite notice covers the persistent engine notice only for its dwell	Временное уведомление перекрывает постоянное уведомление движка только на своё время.
+ui-visuals.md:35	unit	src/ui/layerKeyRequirement.test.mjs::the guidance names the environment variable and where to set it	Подсказка строки слоя называет переменную окружения (FIRMS_MAP_KEY) и где её задать.
+ui-visuals.md:35	unit	src/ui/layerPanel.test.mjs::readout rows contain only toggles and metadata; ordinary rows retain controls	Строки слоёв содержат переключатели и метаданные, обычные строки сохраняют элементы управления.
+ui-visuals.md:35	unit	src/ui/layerPanel.test.mjs::partial feed controls distinguish incomplete records from stale data and outages	Статус строки различает неполные записи, устаревшие данные и отказ источника.
+ui-visuals.md:35	unit	src/ui/layerPanel.test.mjs::a globe switch remount keeps the Utilities and Data Layers rows mounted	При смене глобуса строки Data Layers и Utilities остаются теми же элементами.
+ui-visuals.md:39	unit	src/ui/weatherPanel.test.mjs::count, hidden-empty and first-appearance expansion survive remount and owner collapse	Счётчик карточек, скрытие пустой панели и раскрытие при первом появлении.
+ui-visuals.md:39	unit	src/ui/weatherPanel.test.mjs::a change of open card scrolls its header into view once; refreshes never move the body	Смена открытой карточки один раз прокручивает её заголовок в видимую область.
+ui-visuals.md:39	unit	src/ui/weatherPanel.test.mjs::accordion changes only on headers, newly enabled layers and loss of the open layer	Раскрываемые карточки ведут себя как аккордеон.
+ui-visuals.md:40	unit	src/ui/recentImagery.test.mjs::cards carry thumbnail, date, sensor, cloud, START HERE and PREVIEW; the chips follow the mode without moving	Лента карточек дней с миниатюрой, датой, сенсором и облачностью.
+ui-visuals.md:40	unit	src/ui/recentImagery.test.mjs::strip keys: arrows preview after the debounce, S / A / B pin, Enter previews, repeats are ignored	Слоты A/B закрепляются из ленты.
+ui-visuals.md:40	unit	src/ui/recentImagery.test.mjs::the divider exists only while a swipe is live, labelled A / B or IMAGE / BASEMAP; SWAP trades its sides and Space does nothing	SWAP меняет стороны A/B.
+ui-visuals.md:40	unit	src/ui/recentImagery.test.mjs::opacity drives both images; EXPORT downloads the pin or the preview and EXPORT B only exists in A / B	Прозрачность и EXPORT.
+ui-visuals.md:40	unit	src/ui/recentImagery.test.mjs::DETAILS is a collapsed rail card holding every note, and the empty-days toggle	Карточка DETAILS.
+ui-visuals.md:40	qa	w2-imagery	На обеих планетах рисуются обе закреплённые даты A/B; на Navara проверены SWAP, разделитель и прозрачность по пикселям.
+ui-visuals.md:43	qa	nepal-event-switch	На Navara, Cesium и снова Navara та же модель и медиапанель события, пауза на 0.52, разделитель меняет изображение.
+ui-visuals.md:56	unit	src/overlays/worldOverlay.test.mjs::accessible actions announce only accepted focus and expose selected state	Доступный список целей оверлея (на контракте движка) с выбранным состоянием и строкой статуса.
+ui-visuals.md:57	qa	layer-handoff	На обеих планетах кабина активна, тот же самолёт, режим обзора и видимый HUD кабины.
+ui-visuals.md:57	unit	src/ui/cockpitInstruments.test.mjs::a HUD update renders every readout	HUD кабины: позывной, скорость с ободом, высота, курс, лента компаса, часы и позиция.
+ui-visuals.md:57	unit	src/ui/cockpitInstruments.test.mjs::a route shows the flight plan and the destination arrow	Маршрут и стрелка направления на пункт назначения.
+ui-visuals.md:57	unit	src/cockpitTracking.test.mjs::Cockpit entry rollback restores the tracker captured before Contacts activation	Неудачный вход в кабину откатывает слежение к прежней цели.
+ui-visuals.md:57	unit	src/ui/cockpitPresence.test.mjs::entering shows the HUD and focuses the exit once it renders; exiting returns focus to the entry	Вход показывает HUD и фокусирует выход, выход возвращает фокус.
+ui-visuals.md:59	unit	src/ui/cockpitContext.test.mjs::a snapshot fills the card and keeps classes other code sets	Панель контакта: ближайший по когорте, дистанция, пеленг, неопределённость, состояния prev/next.
+ui-visuals.md:59	unit	src/cockpitMath.test.mjs::Contact panel survives NEXT onto a vessel or installation subject	NEXT переходит на судно или объект, панель остаётся.
+ui-visuals.md:60	unit	src/ui/cockpitBriefing.test.mjs::pages, the cycle toggle and the source follow the controller	Брифинг листается по страницам, переключатель автоцикла и источник.
+ui-visuals.md:60	unit	src/ui/cockpitController.test.mjs::stopped Cockpit cannot rearm briefing rotation or request a fresh region	Автоповорот страниц брифинга запускается и прекращается с кабиной.
+ui-visuals.md:60	unit	src/cockpitSignalFocus.test.mjs::rows render the signals the controller presents	Поток сигналов рисует строки от контроллера.
+ui-visuals.md:62	unit	src/cockpitUtilityLayout.test.mjs::the strip hangs 12px under the REC readout when the briefing card leaves room	Полоса утилит висит на 12 px под REC.
+ui-visuals.md:62	unit	src/cockpitUtilityLayout.test.mjs::the corridor is measured from the resolved top and floors on a launcher, not 120	Размер коридора считается от вычисленного верха.
+ui-visuals.md:71	unit	src/ui/locationControls.test.mjs::the mini status shows the city, a landmark or a searched place	Мини-статус показывает город, достопримечательность или найденное место.
+ui-visuals.md:71	unit	src/locationStatus.test.mjs::a free-text search reports the destination, never the empty placeholder	Для поиска мини-статус берёт адрес назначения.
+ui-visuals.md:71	unit	src/locationReadouts.test.mjs::the mini-status reads its copy from the shared formatter	Текст мини-статуса из общего форматтера.
+ui-visuals.md:72	unit	src/navigationPolicy.test.mjs::a free camera is stamped, released, then flown — in that order	Навигация ставит штамп, освобождает слежение и только потом летит.
+ui-visuals.md:72	unit	src/navigationPolicy.test.mjs::cockpit refuses without stamping or releasing anything	Отказ в кабине без штампа и освобождения, с тостом.
+ui-visuals.md:72	unit	src/navigationPolicy.test.mjs::deferred handoff: a superseded request neither flies nor releases	Отложенное назначение, вытесненное новым, не летит.
+ui-visuals.md:72	unit	src/navigationPolicy.test.mjs::layer authority announcements distinguish passive autofocus from direct intent	Полномочия камеры различают пассивный автофокус и прямое намерение.
+ui-visuals.md:72	unit	src/ui/stateOwners.test.mjs::navigation generations belong to their owner and teardown closes both entry paths	Счётчик поколений навигации принадлежит владельцу и закрывается при разборе.
+ui-visuals.md:74	unit	src/ui/cameraOrientationControls.test.mjs::the controls run on a globe engine alone	Tilt и north-up работают через контракт движка без viewer.
+ui-visuals.md:74	unit	src/ui/cameraOrientationControls.test.mjs::north-up and tilt inside an engine's own follow keep following (Navara)	North-up и tilt внутри слежения движка (путь Navara) сохраняют слежение.
+ui-visuals.md:74	unit	src/locations.test.mjs::the globe flight publishes its callbacks under Cesium's own option names	Сброс к виду глобуса летит через движок и отдаёт завершение и отмену.
+ui-visuals.md:75	unit	src/worldFocus.test.mjs::the transfer flight supersedes any flight in progress and keeps the operator heading	Перенос камеры к цели слоя отменяет текущий полёт, сохраняет курс.
+ui-visuals.md:75	unit	src/ui/shellLifetime.test.mjs::world focus uses the engine when the shell has no Cesium viewer	Без Cesium viewer фокус на цель летит через движок.
+ui-visuals.md:77	fail	src/maps/sourceFactories.test.mjs::on the Navara engine photoreal keys on the browser key and ion imagery is unavailable	На Navara Bing Aerial и Bing Labels недоступны даже с токеном ion.
+ui-visuals.md:83	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальный стиль недоступен: пресеты и их переход не применяются.
+ui-visuals.md:84	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальные стили (в том числе Retro) недоступны.
+ui-visuals.md:85	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальные стили (в том числе Surveillance) недоступны.
+ui-visuals.md:86	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara стиль thermal отклоняется как недоступный.
+ui-visuals.md:87	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальные стили (в том числе Anime) недоступны.
+ui-visuals.md:88	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальные стили (в том числе Noir) недоступны.
+ui-visuals.md:90	unit	src/ui/commandDock.test.mjs::before VisualSettings publishes, the dock shows NORMAL	Док показывает NORMAL до первой публикации.
+ui-visuals.md:90	unit	src/ui/commandDock.test.mjs::the active style marks its button and labels the dock and the corner	Активный стиль отмечается в доке и угловом индикаторе.
+ui-visuals.md:90	unit	src/locationReadouts.test.mjs::the ACTIVE STYLE indicator is written from the style name and nothing else	Индикатор ACTIVE STYLE пишется из имени стиля.
+ui-visuals.md:91	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara пост-обработка (bloom) отклоняется как недоступная.
+ui-visuals.md:92	unit	src/ui/visualEffects.test.mjs::without a viewer the engine sharpens with the same amount scale	Без viewer (Navara) движок получает amount = 0.1 + v*2 и переключатель.
+ui-visuals.md:92	unit	src/ui/visualEffects.test.mjs::with a viewer the Cesium stage sharpens and the engine mirrors its state	На Cesium стадия sharpen получает тот же amount и состояние.
+ui-visuals.md:92	qa	engine-switch	На Navara движок рисует sharpen с amount 1.7 при 80 %, переключатель и значение переживают смены.
+ui-visuals.md:96	платный сервис	Google 3D Tiles	Туман относится к фотореалистичным тайлам Google.
+ui-visuals.md:98	unit	src/renderGovernor.test.mjs::install with zero holds enters idle mode and pins maximumRenderTimeChange	Cesium: без удержаний режим по запросу.
+ui-visuals.md:98	unit	src/renderGovernor.test.mjs::mode stays continuous until the LAST holder releases	Cesium: непрерывный режим до освобождения последнего удержания.
+ui-visuals.md:98	unit	src/renderGovernor.test.mjs::on a non-Cesium globe engine the governor drives engine.render with owner-counted holds	Navara-движок: удержания со счётом владельцев и requestRender идут в engine.render.
+ui-visuals.md:98	unit	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	В режиме Navara губернатор установлен на движке и управляет непрерывным рендером.
+ui-visuals.md:99	unit	src/ui/imagerySplit.test.mjs::keyboard steps 1 percent, 5 percent with Shift, and jumps to Home and End	Разделитель: шаги клавиатурой, Home и End.
+ui-visuals.md:99	unit	src/ui/imagerySplit.test.mjs::pointer drags follow the primary pointer only	Перетаскивание линии основным указателем.
+ui-visuals.md:99	unit	src/ui/imagerySplit.test.mjs::destroy withdraws the line, clears the CSS property, restores the scene split once, and is idempotent	CSS-переменная и scene.splitPosition восстанавливаются при уничтожении.
+ui-visuals.md:99	unit	src/ui/imagerySplitView.test.mjs::the divider renders on the body with its labels and slider	Разделитель рисуется с подписями и слайдером (ARIA).
+ui-visuals.md:99	qa	w2-imagery	Разделитель A/B рисует обе даты на обеих планетах; на Navara физическое перетаскивание и Home/End меняют пиксели.
+ui-visuals.md:100	unit	src/ui/imageryBoxTool.test.mjs::a session claims the pointer, borrows the stock clicks, freezes the camera only mid-drag and returns everything with the box	Cesium: нажатие, протяжка и отпускание дают рамку.
+ui-visuals.md:100	unit	src/ui/imageryBoxNavara.test.mjs::blur and destruction during a Navara box drag return input and pointer ownership	Navara: протяжка рамки захватывает ввод и возвращает его.
+ui-visuals.md:100	qa	w2-imagery	На Navara физическая протяжка рамки выбирает географию без движения камеры.
+ui-visuals.md:110	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the viewer-only actions refuse with a structured result	На Navara move_camera (орбита, панорама, наклон) отклоняется как недоступная.
+ui-visuals.md:111	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the viewer-only actions refuse with a structured result	На Navara fly_route отклоняется как недоступная.
+ui-visuals.md:112	unit	src/cameraGroundGuard.test.mjs::the guard runs on a globe engine alone and yields to its next camera command	Страж земли поднимает камеру через контракт движка и уступает новой команде.
+ui-visuals.md:112	unit	src/cameraGroundGuard.test.mjs::a buried camera is lifted clear of the surface	Закопанная камера поднимается над поверхностью.
+ui-visuals.md:114	unit	src/globe/follow.test.mjs::a follow carries the camera with the target, keeps user changes, ends on a command	Общий контроллер слежения (его использует Navara) несёт камеру за целью.
+ui-visuals.md:114	unit	src/globe/cesium/follow.test.mjs::follow tracks a native entity: one exact frame, zoom limits, stop restores	Cesium: слежение за сущностью.
+ui-visuals.md:114	qa	layer-handoff	На обеих планетах сохраняется отслеживаемый самолёт и кабина.
+ui-visuals.md:116	unit	src/ui/cameraOrientationControls.test.mjs::center picking prefers terrain over the ellipsoid and falls through an invalid depth hit	Cesium: цель в центре кадра берётся с рельефа, иначе с эллипсоида.
+ui-visuals.md:116	unit	src/ui/cameraOrientationControls.test.mjs::the controls run on a globe engine alone	Через контракт движка tilt и north-up находят цель в центре кадра и сохраняют её.
+ui-visuals.md:117	unit	src/globe/cesium/projector.test.mjs::worldToWindow returns a fresh geo value or fills result	Cesium: проекция мира в окно.
+ui-visuals.md:117	unit	src/globe/navara/cameraMath.test.mjs::viewProjection agrees with projectToWindow	Navara: матрица viewProjection совпадает с проекцией в окно.
+ui-visuals.md:117	unit	src/globe/navara/cameraModel.test.mjs::picks, projection and view rectangle come from the pose and canvas size	Navara: проекция и прямоугольник вида из позы камеры.
+ui-visuals.md:126	unit	src/voice/cloudVoiceAuth.test.mjs::cloud voice auth defaults to API key and persists OAuth independently	Режим авторизации облачного голоса хранится и по умолчанию API key.
+ui-visuals.md:126	unit	src/ui/providerSettings.test.mjs::the cloud voice toggle switches back to the API key and says so	Переключатель в диалоге возвращает режим API key.
+ui-visuals.md:127	unit	src/ui/layerKeyRequirement.test.mjs::guidance appears only for a key that is actually missing and actually named	Подсказка появляется только для отсутствующего ключа.
+ui-visuals.md:127	unit	src/ui/layerKeyRequirement.test.mjs::the guidance names the environment variable and where to set it	Подсказка называет переменную и Provider Settings.
+ui-visuals.md:128	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara стартовый хром запускается с initializeWelcome = null: первого запуска нет.
+ui-visuals.md:129	unit	src/share/viewCodec.test.mjs::every registered field round-trips at once	Кодек вида: камера, стиль, параметры, bloom, sharpen, HUD, обнаружение, панели и слои кодируются и декодируются.
+ui-visuals.md:129	unit	src/ui/shareButton.test.mjs::copyLink copies exactly what buildLink builds	Копирование ссылки в буфер.
+ui-visuals.md:129	unit	src/ui/shareButton.test.mjs::buildLink is a /share link stamped with its creation time, without ?lang	Ссылка несёт время создания.
+ui-visuals.md:129	qa	engine-switch	На обеих планетах хеш несёт map, lat, lon, alt и тот же вид.
+ui-visuals.md:130	unit	src/sharelink.navigation.test.mjs::a navigated share runs the start-up restore pipeline and supersedes the delayed one	Восстановление по ссылке идёт стартовым конвейером и вытесняет отложенное.
+ui-visuals.md:130	unit	src/sharelink.navigation.test.mjs::a newer navigation supersedes an older restore and its pending write	Новое восстановление отменяет старое.
+ui-visuals.md:133	unit	src/loadingFeedback.test.mjs::normalizes lifecycle and refresh loading without owning manager state	Модель загрузки нормализует состояния слоёв.
+ui-visuals.md:133	unit	src/loadingFeedback.test.mjs::distinguishes accepted-data refresh from initial loading	Обновление отличается от первичной загрузки.
+ui-visuals.md:133	unit	src/loadingFeedback.test.mjs::acquiring notices persist without a dwell until explicitly cleared	Постоянные уведомления против временных.
+ui-visuals.md:135	unit	src/app/debugHandleSwitch.test.mjs::the debug handle leaves window between engines and comes back the same	window.__godsEyeView уходит между движками и возвращается тем же (Navara).
+ui-visuals.md:135	unit	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	В режиме Navara __godsEyeView несёт engine, viewer = null.
+ui-visuals.md:135	unit	src/app/globeEngine.test.mjs::the debug handle exposes the engine beside the viewer	Cesium: __godsEyeView несёт engine рядом с viewer.
+ui-visuals.md:142	unit	src/i18n/i18n.test.mjs::t() returns English text in English and translates in Russian	Общий t() переводит строки.
+ui-visuals.md:142	unit	src/i18n/i18n.test.mjs::resolveLocale: ?lang= wins, then the stored choice, then browser languages, then English	Выбор языка.
+ui-visuals.md:142	unit	src/i18n/catalog.test.mjs::every catalog file is a shipped locale and every non-English locale has a catalog	Каталоги есть для всех языков.
+ui-visuals.md:143	unit	src/ui/surfaceKeyboard.test.mjs::Escape claims input before calling dismissal; reentrant destruction is safe	surfaceKeyboard: Escape закрывает поверхность.
+ui-visuals.md:143	unit	src/panelEscape.test.mjs::Escape collapses an expanded panel and returns focus to its disclosure	Escape сворачивает панель и возвращает фокус.
+ui-visuals.md:143	unit	src/mapSourceFocus.test.mjs::Escape cancels immediately, closes the tray and restores disclosure focus	Escape закрывает трей дока.
+ui-visuals.md:143	unit	src/ui/sceneSharingView.test.mjs::Cancel and Escape close through the owner; dispose removes the dialog	Escape закрывает диалог.
+ui-visuals.md:146	unit	src/overlays/worldOverlay.test.mjs::accessible actions announce only accepted focus and expose selected state	Видимый список целей карты как доступная альтернатива холсту, на контракте движка.
+voice-tools-platform.md:46	unit	src/voice/gevActionsEngine.test.mjs::select_nearest_aircraft runs on the engine end to end	На движке Navara (fakeEngine) действие долетает и выбирает ближайший самолёт, а не дальний.
+voice-tools-platform.md:46	unit	src/voice/gevActions.test.mjs::nearest-aircraft voice action serializes layer enable, arrival, refresh, airborne query, and selection	Порядок: включение Flights, полёт, ожидание прибытия, обновление слоя, исключение севшего, выбор ближайшего.
+voice-tools-platform.md:46	unit	src/voice/gevActions.test.mjs::fallback with zero airborne records reports enabled fallback without selecting a landed aircraft	Севший самолёт не выбирается, если в воздухе никого нет.
+voice-tools-platform.md:54	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	Тест утверждает, что на Navara set_visual_style отказывает с UNAVAILABLE_ON_ENGINE и стиль не применяется.
+voice-tools-platform.md:61	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	Тест утверждает, что на Navara set_post_processing (bloom) отказывает с UNAVAILABLE_ON_ENGINE.
+voice-tools-platform.md:66	unit	src/voice/gevActionsEngine.test.mjs::stop_tracking stops the engine follow	На Navara stop_tracking снимает следование камеры движка и отпускает трекер слоя.
+voice-tools-platform.md:66	unit	src/voice/gevActions.test.mjs::voice Stop Tracking clears all durable tracker IDs even without active trackers	Сохранённые ID слежения flights/military/satellites очищаются.
+voice-tools-platform.md:66	unit	src/voice/gevActions.test.mjs::voice Stop Tracking reports exact layers whose active or durable clear failed	На Cesium камера отпускает trackedEntity даже при частичном сбое очистки.
+voice-tools-platform.md:68	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the viewer-only actions refuse with a structured result	Тест утверждает, что на Navara annotate_map отказывает с UNAVAILABLE_ON_ENGINE и не трогает контроллеры.
+voice-tools-platform.md:69	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the viewer-only actions refuse with a structured result	Тест утверждает, что на Navara clear_annotations отказывает с UNAVAILABLE_ON_ENGINE.
+voice-tools-platform.md:70	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the viewer-only actions refuse with a structured result	Тест утверждает, что на Navara move_camera отказывает с UNAVAILABLE_ON_ENGINE и не двигает камеру.
+voice-tools-platform.md:71	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the viewer-only actions refuse with a structured result	Тест утверждает, что на Navara fly_route отказывает с UNAVAILABLE_ON_ENGINE.
+voice-tools-platform.md:73	unit	src/voice/gevActionsEngine.test.mjs::next_iss_pass observes from the engine camera	На Navara без места наблюдатель берётся из камеры движка.
+voice-tools-platform.md:73	unit	src/voice/gevActions.test.mjs::ISS voice lookup uses the registered satellite instance	Пролёт МКС над заданной точкой с minElevationDeg передаётся слою спутников.
+voice-tools-platform.md:80	unit	src/voice/realtimeBackend.test.mjs::separate configured token and SDP transports preserve model metadata and credential scope	Получение токена и обмен SDP идут через свои транспорты с моделью и областью ключа.
+voice-tools-platform.md:80	unit	src/voice/realtimeBackend.test.mjs::cancellation rejects late token and SDP bodies without promoting a stopped connection	Отмена старта отбрасывает поздние токен и SDP.
+voice-tools-platform.md:80	unit	src/voice/realtimeOwners.test.mjs::retained peer and channel callbacks cannot act after stop or enter a replacement session	Канал данных, микрофон и элемент воспроизведения принадлежат текущему сеансу и освобождаются при Stop.
+voice-tools-platform.md:80	unit	src/voice/realtimeOwners.test.mjs::an offer resolved after restart cannot change the replacement peer description	Поздний offer старого старта не меняет новый peer.
+voice-tools-platform.md:80	unit	src/voice/sceneVoice.test.mjs::an engine switch keeps the voice session and its transport	Один голосовой сеанс и транспорт обслуживают и Cesium, и Navara.
+voice-tools-platform.md:83	unit	src/voice/gevRealtime.test.mjs::a typed command with nothing in flight is answered immediately	Набранная команда уходит в тот же сеанс и сразу получает ответ.
+voice-tools-platform.md:83	unit	src/voice/gevRealtime.test.mjs::a typed command mid-response defers its turn instead of colliding	Набранная команда во время ответа откладывается, а не сталкивается с ним.
+voice-tools-platform.md:84	unit	src/voice/voiceCost.test.mjs::registry exposes exactly the two tiers the UI offers	Есть ровно два уровня модели: standard и mini.
+voice-tools-platform.md:84	unit	src/voice/gevRealtime.test.mjs::voice tier round-trips through storage	Выбранный уровень сохраняется и читается обратно.
+voice-tools-platform.md:84	unit	src/voice/voiceCost.test.mjs::standard cost is the exact sum of tokens x per-1M rates	Счётчик стоимости считает токены по тарифам.
+voice-tools-platform.md:84	unit	src/voice/realtimeCostPanel.test.mjs::soft cost warning is visible outside closed Settings, while ordinary spend stays inside	Счётчик расходов и предупреждение о лимите видны в интерфейсе.
+voice-tools-platform.md:84	unit	src/voice/gevRealtime.test.mjs::F4: once the cap latches, queued function calls do not execute	После срабатывания лимита расходов вызовы инструментов не выполняются.
+voice-tools-platform.md:88	unit	src/voice/pointerContext.test.mjs::dwell: the pick runs once when the pointer settles and the snapshot reuses it	Выбор под указателем делается один раз после задержки и переиспользуется в снимке при начале речи.
+voice-tools-platform.md:88	unit	src/voice/pointerContext.test.mjs::freshness: off-canvas, parked at the edge, or idle too long is not a referent	Указатель вне холста, у края или устаревший не считается целью.
+voice-tools-platform.md:88	unit	src/voice/pointerContext.test.mjs::push-to-talk: the keydown snapshot is held for every speech start in the hold	Снимок по нажатию Space держится для всех начал речи в удержании.
+voice-tools-platform.md:88	unit	src/voice/pointerCrop.test.mjs::crop: a camera move before or during capture drops it; pixels only name their own pose	Ключ позы камеры: после движения камеры пиксельное чтение отбрасывается.
+voice-tools-platform.md:88	unit	src/voice/gevActionsEngine.test.mjs::the camera pose key reads the engine as it reads the viewer	Ключ позы камеры на Navara совпадает с ключом Cesium для той же позы.
+voice-tools-platform.md:88	unit	src/voice/gevActionsEngine.test.mjs::the pointer picker picks through the engine	На Navara выбор под указателем идёт через picker движка.
+voice-tools-platform.md:90	unit	src/voice/pointerReticle.test.mjs::reticle: shows at the pointed pixel and caps its lifetime	Прицел появляется в указанном пикселе и снимается по максимальному времени.
+voice-tools-platform.md:90	unit	src/voice/pointerReticle.test.mjs::reticle: leaves when a tool moves the camera, lingers after a reply	Прицел уходит при движении камеры инструментом и после завершения ответа.
+voice-tools-platform.md:90	unit	src/voice/pointerReticleView.test.mjs::the reticle shows at the pointed pixel, hides, and leaves on destroy	DOM-кольцо ставится в точку, скрывается и удаляется.
+voice-tools-platform.md:90	unit	src/voice/sceneVoice.test.mjs::an engine switch keeps the voice session and its transport	Указатель голоса переходит на холст Navara при смене движка.
+voice-tools-platform.md:91	unit	src/voice/deixis.test.mjs::track_entity: "track that one" follows the pointed aircraft by identity	"Этот" превращается в цель под указателем кодом.
+voice-tools-platform.md:91	unit	src/voice/deixis.test.mjs::referents: numbered items resolve for track, fly and context	Нумерованные referent:n разрешаются кодом для track, fly и context.
+voice-tools-platform.md:91	unit	src/voice/deixis.test.mjs::analyst_query: "how many flights around here" becomes a radius at the pointer	"Здесь" превращается в радиус вокруг точки указателя.
+voice-tools-platform.md:91	unit	src/voice/pointAndAsk.test.mjs::deixis prompt lint: one short rule, and every sentinel it names exists in the schema	Подсказка модели называет только сентинелы, которые есть в схеме.
+voice-tools-platform.md:91	unit	src/voice/gevActions.test.mjs::point-and-ask: the runner resolves pointer and referent targets	Исполнитель сам подставляет цели pointer и referent.
+voice-tools-platform.md:92	unit	src/voice/speech.test.mjs::layer toggles confirm the resulting state and fold only material feed tags	Конверт say/display и оговорки о состоянии фида.
+voice-tools-platform.md:92	unit	src/voice/speech.test.mjs::view state speaks enabled layers only and is a silent lookup by default	schedule silent, say не длиннее 25 слов и без хеджей.
+voice-tools-platform.md:92	unit	src/voice/speech.test.mjs::frame_overhead keeps the essential scope audible and lists referents	Нумерованные referents в конверте.
+voice-tools-platform.md:92	unit	src/voice/speech.test.mjs::builders never break an action and callers can override analyst speech	Построители речи по инструментам не ломают результат.
+voice-tools-platform.md:92	unit	src/voice/turnMetrics.test.mjs::hedge lint finds filler phrases and ignores plain answers	Линт речи находит слова-паразиты.
+voice-tools-platform.md:93	unit	src/voice/narration.test.mjs::a slow tool gets the earcon at 700 ms and its current step spoken at 1.5 s	Время первой строки прогресса и earcon.
+voice-tools-platform.md:93	unit	src/voice/narration.test.mjs::step changes speak at most twice, at least 3 s apart	Интервал между строками и лимит на ход.
+voice-tools-platform.md:93	unit	src/voice/narration.test.mjs::a spoken preamble suppresses step lines but keeps one still-working line	Строка «ещё работаю».
+voice-tools-platform.md:93	unit	src/voice/narration.test.mjs::the earcon only plays when its output cannot reach the microphone	Earcon звучит только при выключенном микрофоне.
+voice-tools-platform.md:94	unit	src/voice/voiceCard.test.mjs::presentation: a slow annotate turn shows captions, plan steps and the result card	Карточка показывает субтитры, план и последний результат.
+voice-tools-platform.md:94	unit	src/voice/voiceControlView.test.mjs::the card renders its plan, chips, lines, referents and notes	Карточка рисует план, строки и нумерованные referents.
+voice-tools-platform.md:95	unit	src/voice/gevRealtime.test.mjs::voice ownership ducks tuner static before pausing broadcaster audio	Радио приглушается или ставится на паузу, пока говорит ассистент.
+voice-tools-platform.md:95	unit	src/voice/gevRealtime.test.mjs::prepared Radio playback is verified under mute before voice closes	Подготовленное воспроизведение радио после подтверждения.
+voice-tools-platform.md:95	unit	src/voice/gevRealtime.test.mjs::Radio handoff waits for response.done so later multi-intent tools execute before voice closes	Передача радио ждёт конца ответа.
+voice-tools-platform.md:95	unit	src/voice/gevRealtime.test.mjs::dedicated and generic Radio OFF reservations freeze an in-flight playback handoff	Резервации более сильных действий (OFF) замораживают передачу.
+voice-tools-platform.md:96	unit	src/voice/layerManifest.test.mjs::tool enums are generated from the manifest	Списки toggle/context/query в схемах берутся из манифеста.
+voice-tools-platform.md:96	unit	src/voice/layerManifest.test.mjs::spoken aliases resolve to real layers, keep every legacy phrase and never collide	Голосовые псевдонимы слоёв.
+voice-tools-platform.md:96	unit	src/voice/layerManifest.test.mjs::each layer declares a query or the reason it has none	У каждого слоя есть поля запроса или причина их отсутствия.
+voice-tools-platform.md:96	unit	src/data/analystEngine.test.mjs::a written unit converts to the field unit or is refused	Типы и единицы полей аналитика.
+voice-tools-platform.md:98	unit	src/tooling/localServices.test.mjs::Realtime handler preserves tools and default instructions, isolates supplied annotation guidance, and keeps the upstream key server-side	Эндпоинт токена передаёт инструкции и список инструментов.
+voice-tools-platform.md:98	unit	src/tooling/localServices.test.mjs::Realtime sessions carry supplied tools, and the standalone voice adds the catalog queries	Сеанс получает голосовые инструменты и запросы каталога.
+voice-tools-platform.md:98	unit	src/tooling/localServices.test.mjs::the voice instructions name only tools the voice session offers	Промпт называет только предлагаемые инструменты.
+voice-tools-platform.md:109	unit	src/tools/catalog.test.mjs::definitions are validated, frozen and read-only by default	defineTool проверяет и замораживает определение.
+voice-tools-platform.md:109	unit	src/tools/catalog.test.mjs::composition rejects duplicates unless replaced, and hides tools without services	composeCatalog: replace и скрытие инструментов без сервисов.
+voice-tools-platform.md:109	unit	src/tools/catalog.test.mjs::calls validate arguments and pass through interceptors outermost first	Проверка аргументов и интерсепторы.
+voice-tools-platform.md:109	unit	src/tools/catalog.test.mjs::the validator checks every supported keyword	Подмножество JSON Schema.
+voice-tools-platform.md:109	unit	src/tools/catalog.test.mjs::tool errors only use known codes	Коды ToolError.
+voice-tools-platform.md:109	unit	src/tools/surfaces.test.mjs::a surface view hides tools from clients but not from composites	Составной инструмент вызывает скрытый.
+voice-tools-platform.md:110	unit	src/tools/surfaces.test.mjs::each surface offers the tools the table does not turn off	toolsForSurface по таблице TOOL_SURFACES для mcp и voice.
+voice-tools-platform.md:110	unit	src/tools/surfaces.test.mjs::overrides turn a tool on or off for one surface	Переопределения поверхности.
+voice-tools-platform.md:110	unit	src/tools/surfaces.test.mjs::a surface view hides tools from clients but not from composites	catalogForSurface скрывает инструмент.
+voice-tools-platform.md:111	unit	src/tools/functions.test.mjs::catalog tools become independent function records	toFunctionTools.
+voice-tools-platform.md:111	unit	src/tools/functions.test.mjs::results become function outputs without image data	toFunctionOutput с images_omitted.
+voice-tools-platform.md:114	unit	src/tools/places.test.mjs::place lookups are cached by name for a while, and failures are not	Разрешение мест через сервис геокодера.
+voice-tools-platform.md:114	unit	src/tools/queries/places.test.mjs::the place and route services read the app routes and translate failures	Поиск мест через /api/google/* и маршруты через /api/route.
+voice-tools-platform.md:117	unit	src/tools/queries/panelRequest.test.mjs::panel_request is for the panel only	panel_request виден только приложению.
+voice-tools-platform.md:117	unit	src/tools/queries/panelRequest.test.mjs::a call without the panel key is refused before any request	Без ключа страницы вызов отклоняется.
+voice-tools-platform.md:117	unit	src/tools/queries/panelRequest.test.mjs::routes the panel never loads are refused in any case or encoding	/api/setup, /api/realtime, /api/openai, /mcp и маршруты dev-сервера отклоняются в любом регистре и кодировке.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::analyst: every scope names itself in words	Области view/region/radius/anywhere.
+voice-tools-platform.md:118	unit	src/voice/deixis.test.mjs::analyst_query: "how many flights around here" becomes a radius at the pointer	Область pointer.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::analyst: attribute filter — above 40,000 ft (~12,192 m)	Фильтр gt.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::analyst: ships headed to Oakland (destination contains)	Фильтр contains.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::unknown fields, operators, scopes and wrong-typed values are refused with the allowed values	Типизированные фильтры и допустимые операторы.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::distance honours sortDir: desc is farthest first	Сортировка, направление и limit.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::analyst: follow-up re-filters the remembered set without re-snapshot	Память для уточняющего запроса.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::capped cohorts report returned/total/truncated and keep it on follow-up	Усечение и примечание о покрытии.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::an enabled but empty layer says why on screen	Примечание к пустому результату из статуса слоя.
+voice-tools-platform.md:118	unit	src/data/analystEngine.test.mjs::off, loading and unavailable layers are refused distinctly; a real zero stays ok	Состояние фида по слою.
+voice-tools-platform.md:118	unit	src/voice/gevActions.test.mjs::analyst_query and get_current_view_state carry stale feed provenance	Состояние фида в ответе analyst_query.
+voice-tools-platform.md:119	unit	src/annotations/regionRing.test.mjs::region ring: a slow admin-boundary lookup returns region-timeout within the budget	Медленный поиск административной границы укладывается в бюджет.
+voice-tools-platform.md:119	unit	src/annotations/regionRing.test.mjs::region ring: geocoded administrative scope wins over duplicate natural geography	Геокодирование и поиск административной границы.
+voice-tools-platform.md:119	unit	src/data/analystEngine.test.mjs::analyst: a region lookup timeout is reported as region-timeout	Аналитик сообщает тайм-аут региона.
+voice-tools-platform.md:119	unit	src/data/analystEngine.test.mjs::analyst: count flights over a region	Подсчёт внутри кольца региона.
+voice-tools-platform.md:120	unit	src/data/satellitePass.test.mjs::findNextSatellitePass resolves pass boundaries with sub-second precision	Прогноз пролёта.
+voice-tools-platform.md:120	unit	src/data/satellitePass.test.mjs::findNextSatellitePass skips non-visible passes when requireVisible is true	Видимость невооружённым глазом.
+voice-tools-platform.md:120	unit	src/data/satellitePass.test.mjs::isSatelliteSunlit accurately computes cylindrical umbra shadow	Освещённость спутника.
+voice-tools-platform.md:120	unit	src/data/satellitePass.test.mjs::observerSolarElevation distinguishes local noon from local midnight	Темнота у наблюдателя.
+voice-tools-platform.md:122	unit	src/tools/queries/events.test.mjs::the flood tool lists the bundled evidence in story order	Свидетельства по порядку истории, путь паводка и даты снимков.
+voice-tools-platform.md:132	unit	src/director/playback.test.mjs::queues rotate scenes, skip empty scenes, preserve shot identity and support a single scene	Очередь сцен по кругу.
+voice-tools-platform.md:132	unit	src/director/playback.test.mjs::playback sequences phases, releases only at scene changes, then releases the final scene	Фазы selectShot…completeShot по порядку.
+voice-tools-platform.md:132	unit	src/director/playback.test.mjs::flag cancellation while awaiting travel stops subsequent work and releases resources	Токен отмены останавливает дальнейшие фазы.
+voice-tools-platform.md:132	qa	director-engine-switch	Двухкадровая сцена доигрывается штатно при смене Navara→Cesium→Navara.
+voice-tools-platform.md:133	unit	src/director/clock.test.mjs::direct-load progress finishes once and snapshots cannot mutate the clock	Тикер загрузки.
+voice-tools-platform.md:133	unit	src/director/clock.test.mjs::Stop, abort and destroy settle long holds immediately and release their deadlines	Сроки удержания.
+voice-tools-platform.md:133	unit	src/director/timeline.test.mjs::scene time accounts for flight and hold; exact boundaries select the next shot	Шкала времени сцены.
+voice-tools-platform.md:133	unit	src/scenes/director.test.mjs::scene clock seek resolves the exact shot phase and camera in both directions	Перемотка вперёд и назад.
+voice-tools-platform.md:133	unit	src/scenes/director.test.mjs::scene clock subscribers receive authoritative forward playback snapshots	Тикеры прогона.
+voice-tools-platform.md:133	unit	src/scenes/director.test.mjs::cross-scene replay grants media ownership only after the previous scene releases its layers	Повтор кадра.
+voice-tools-platform.md:133	unit	src/scenes/director.test.mjs::a provider-owned hold fails boundedly if its owner never settles	Ожидание медиа ограничено.
+voice-tools-platform.md:133	unit	src/scenes/director.test.mjs::scene placement, flights and stop run on a globe engine without a viewer	Постановка камеры и Stop на Navara.
+voice-tools-platform.md:133	qa	director-engine-switch	Шкала прогона продолжается до второго кадра через смену движка.
+voice-tools-platform.md:135	unit	src/director/camera.test.mjs::move endpoints, easing, shortest arcs and hold agree with scene seeking	linear/cubic-in-out, кратчайшая дуга, перемотка в удержание даёт точную цель.
+voice-tools-platform.md:135	unit	src/director/director-dateline-seek.test.mjs::director seek follows the short dateline arc in both directions	Кратчайшая дуга по долготе.
+voice-tools-platform.md:135	unit	src/director/director-dateline-seek.test.mjs::director seek turns heading and roll the short way for any authored angles	Кратчайший поворот heading и roll.
+voice-tools-platform.md:135	unit	src/scenes/cameraMotion.test.mjs::motion uses the authored curve and releases the frame on completion	Поза выбирается на каждом кадре анимации.
+voice-tools-platform.md:135	unit	src/scenes/director.test.mjs::scene placement, flights and stop run on a globe engine without a viewer	Поза ставится на камеру движка Navara.
+voice-tools-platform.md:135	unit	src/scenes/director.test.mjs::zero camera pitch is preserved by both immediate placement and ordinary flight	Поза ставится на камеру Cesium.
+voice-tools-platform.md:138	unit	src/scenes/director.test.mjs::invalid and unsupported imports retain the current project, selection and saved bytes	Проект хранится в godsEyeView.sceneProject.v2.
+voice-tools-platform.md:138	unit	src/scenes/director.test.mjs::an unreadable saved project does not overwrite its recovery checkpoint (#971)	Нечитаемое сохранение защищено.
+voice-tools-platform.md:138	unit	src/scenes/director.test.mjs::unsupported stored documents cannot be overwritten by fallback edits	Неподдерживаемое сохранение не перезаписывается.
+voice-tools-platform.md:138	unit	src/scenes/director.test.mjs::a capture, update or import that cannot be saved keeps the "Scene not saved" status (#971)	Тост о несохранённой правке.
+voice-tools-platform.md:143	unit	src/scenes/packs/registry.test.mjs::registered pack rules apply to another source without editing the Director or saved shots	Минимальное удержание, предпочтение карты и отмена движения через createScenePackRegistry.
+voice-tools-platform.md:144	unit	src/director/camera.test.mjs::version 4 retains anchor identity, references and explicit move edits through normalization	Якоря и явные движения сохраняются.
+voice-tools-platform.md:144	unit	src/director/camera.test.mjs::unknown anchors, duplicate IDs, mixed references, bad easing and unspecified altitude are rejected	Высота относительно рельефа отклоняется.
+voice-tools-platform.md:147	unit	src/director/interactions/interactions.test.mjs::all four inert actions survive validation, migration and export without executing content	Действия card/focus/shot/layer проходят проверку.
+voice-tools-platform.md:147	unit	src/director/interactions/interactions.test.mjs::reject unknown fields, executable syntax, invalid references and missing reset baselines	Лимит 64 действия на кадр и простой текст card с HTTPS-ссылкой.
+voice-tools-platform.md:147	unit	src/director/interactions/interactions.test.mjs::actions preserve camera refusal, layer admission signal and explicit transition cap	Лимит цепочки переходов 64.
+voice-tools-platform.md:147	unit	src/scenes/interactionsView.test.mjs::an action reports its outcome and a card action shows its text and source	Карточка показывает текст и источник.
+voice-tools-platform.md:147	qa	director-engine-switch	Клик по точке, линии и полигону выбирает действие и Enter его выполняет на обеих планетах.
+voice-tools-platform.md:148	unit	src/director/sharing/sharing.test.mjs::preview reports unavailable sources/layers and missing bundle assets without applying anything	Предпросмотр сообщает недоступные источники, слои и файлы, ничего не применяя.
+voice-tools-platform.md:148	unit	src/scenes/director.test.mjs::invalid and unsupported imports retain the current project, selection and saved bytes	Неверный файл не заменяет проект.
+voice-tools-platform.md:148	unit	src/scenes/sharingDialogs.test.mjs::an import review holds Apply disabled while the import runs and reopens it on refusal	Применение только после обзора.
+voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::selected-scene bundles round trip bytes and attribution without mutating the project or fetching	JSON выбранной сцены и пакет с файлами.
+voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::bundle rejects malformed bytes, unknown fields, traversal, duplicates, missing files and broken integrity	Не больше 64 файлов, sha256 проверяется.
+voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::asset caps and declared integrity are enforced before creating a downloadable bundle	Не больше 8 МиБ на файл.
+voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::oversized files fail before reading and cancellation settles a stalled file without a late result	Общий лимит 50 МиБ.
+voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::bundle byte owner releases replacement data and has no network fallback	Байты пакета только в памяти.
+voice-tools-platform.md:166	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций не создаётся: tools.annotations равен null.
+voice-tools-platform.md:166	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the viewer-only actions refuse with a structured result	На Navara annotate_map и clear_annotations отказывают с кодом недоступности на движке.
+voice-tools-platform.md:167	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the viewer-only actions refuse with a structured result	На Navara annotate_map отказывает, разметка по названиям мест не выполняется.
+voice-tools-platform.md:168	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, типы меток не рисуются.
+voice-tools-platform.md:169	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, мировой рендерер меток не создаётся.
+voice-tools-platform.md:170	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, экранный рендерер меток не создаётся.
+voice-tools-platform.md:171	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, гибридный рендерер не создаётся.
+voice-tools-platform.md:172	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций, через который идут ручные фигуры, не создаётся.
+voice-tools-platform.md:173	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, контуры регионов как метки не рисуются.
+voice-tools-platform.md:174	unit	src/data/inputOwnership.test.mjs::the pointer starts free and a claim hands back a lease	Указатель свободен, захват выдаёт одну аренду владельцу.
+voice-tools-platform.md:174	unit	src/data/pickRegistry.test.mjs::ownership: sibling layers recognize each other via String-coerced ids	Общий реестр владения кликами распознаёт пики соседних слоёв.
+voice-tools-platform.md:174	unit	src/data/pickRegistry.test.mjs::engine pick results (input payloads) resolve like scene picks	Пики движка разрешаются так же, как пики сцены Cesium.
+voice-tools-platform.md:180	unit	src/search/offlineGeocoders.test.mjs::the offline providers answer ahead of the network ones, which stay in order	Координаты и встроенные названия отвечают без сети, затем Google, затем Photon.
+voice-tools-platform.md:180	unit	src/search/placeSearch.test.mjs::standalone geocoding falls back after Google connection, JSON and refusal failures	При сбое Google поиск переходит к Photon.
+voice-tools-platform.md:180	unit	src/search/photonSetting.test.mjs::the last-resort route is skipped when the server reports Nominatim unconfigured	Последний шаг /api/geocode вызывается только когда Nominatim настроен.
+voice-tools-platform.md:181	unit	src/search/coordinateParser.test.mjs::a plain decimal pair is latitude then longitude	Пара десятичных чисел читается как широта и долгота.
+voice-tools-platform.md:181	unit	src/search/coordinateParser.test.mjs::hemisphere letters fix the axis, in either order	Буквы полушарий задают ось в любом порядке.
+voice-tools-platform.md:181	unit	src/search/coordinateParser.test.mjs::malformed and ambiguous coordinates are refused, never guessed	Неверные и неоднозначные координаты отклоняются без угадывания.
+voice-tools-platform.md:181	unit	src/search/coordinateParser.test.mjs::whitespace boundaries preserve degree signs and hemisphere ownership	Знак градуса и буквы полушарий разбираются при пробелах.
+voice-tools-platform.md:183	unit	src/search/nominatim.test.mjs::Nominatim normalizes framing and reverse context through independent configured endpoints	Обратное геокодирование через Nominatim нормализует контекст места.
+voice-tools-platform.md:183	платный сервис	Google Places	Контекст места и ближайшие места берутся из Google Places.
+voice-tools-platform.md:184	unit	src/tooling/nominatimGuardLifecycle.test.mjs::independent public gates sharing state enforce spacing and cap	Независимые шлюзы Nominatim с общим состоянием выдерживают интервал между запросами.
+voice-tools-platform.md:184	unit	src/tooling/nominatimSearchRoute.test.mjs::a burst past the queue bound is refused rather than queued for minutes	Очередь поиска Nominatim ограничена, лишние запросы отклоняются.
+voice-tools-platform.md:198	unit	src/sdr/controller.test.mjs::a stalled USB read times out and tears the session down on its own	Зависшее чтение USB по сторожевому таймеру закрывает сессию с ошибкой.
+voice-tools-platform.md:198	unit	src/sdr/controller.test.mjs::stop() settles within its deadline even when the raw USB close never settles	stop() завершается в срок, даже если закрытие устройства зависло.
+voice-tools-platform.md:198	unit	src/sdr/controller.test.mjs::ADS-B updates report CRC-valid messages per second, heard and positioned	Счётчик скорости сообщений ADS-B публикуется в состоянии.
+voice-tools-platform.md:198	unit	src/sdr/controller.test.mjs::a receiver whose initialization fails is closed and destroy() settles	Ошибка инициализации приёмника закрывает устройство.
+voice-tools-platform.md:198	qa	local-adsb-engine-switch	Приёмник и декодер переживают смену планеты без повторного открытия.
+voice-tools-platform.md:199	unit	src/sdr/usbDevices.test.mjs::ADS-B mode prefers the 1090 MHz channel of a dual-channel board	На двухканальной плате ADS-B выбирает канал 1090.
+voice-tools-platform.md:199	unit	src/sdr/usbDevices.test.mjs::a remembered device wins, matched by the full identity rather than serial alone	Запомненное устройство сравнивается по полной идентичности.
+voice-tools-platform.md:199	unit	src/sdr/usbDevices.test.mjs::device memory is per mode and tolerates unavailable storage	Память устройства хранится отдельно для каждого режима.
+voice-tools-platform.md:200	unit	src/sdr/gain.test.mjs::gain steps are the R820T table and ADS-B defaults to manual 28.0 dB	Шаги усиления R820T, по умолчанию для ADS-B 28,0 дБ.
+voice-tools-platform.md:200	unit	src/sdr/gain.test.mjs::per-mode gain persists in storage and survives unavailable storage	Усиление сохраняется отдельно для каждого режима.
+voice-tools-platform.md:202	unit	src/sdr/spectrum.test.mjs::FFT-shifted spectrum preserves the sign and offset of a complex tone	Спектр после FFT-сдвига сохраняет знак и смещение тона.
+voice-tools-platform.md:202	unit	src/sdr/spectrum.test.mjs::directional FM seek chooses the nearest rounded station in-band	Поиск FM в направлении находит ближайший пик станции в диапазоне.
+voice-tools-platform.md:203	unit	src/sdr/adsbDecoder.test.mjs::extracts a CRC-valid Mode S frame from synthetic 2 Msps IQ	Из IQ извлекается кадр Mode S с верной CRC.
+voice-tools-platform.md:203	unit	src/sdr/adsbDecoder.test.mjs::globally decodes a valid even/odd CPR pair and expires tracks at 60 seconds	Пара CPR чёт/нечет декодируется, трек истекает через 60 с.
+voice-tools-platform.md:203	unit	src/sdr/adsbDecoder.test.mjs::a surface even/odd pair decodes to the published position and marks the aircraft on the ground	Наземная пара CPR даёт опубликованную позицию.
+voice-tools-platform.md:203	unit	src/sdr/adsbDecoder.test.mjs::a corrupt even/odd pair is refused and the track stays on dump1090	Проверка скорости отбрасывает испорченную пару позиций.
+voice-tools-platform.md:204	unit	src/layers/localAdsb/index.test.mjs::feed records merge with browser SDR records by ICAO and UAT-only aircraft get a ring	Записи сливаются по ICAO, новая позиция побеждает, у UAT-only кольцо (Cesium).
+voice-tools-platform.md:204	unit	src/layers/localAdsb/renderer.test.mjs::local aircraft draw, ring and select on the Navara renderer; the camera never follows	На Navara локальные самолёты рисуются с кольцом UAT и выбираются.
+voice-tools-platform.md:204	unit	src/layers/localAdsb/index.test.mjs::the receiver line names every band and source that heard the aircraft	Строка приёмника перечисляет все диапазоны и источники.
+voice-tools-platform.md:204	unit	src/layers/localAdsb/feeds.test.mjs::an aircraft a feed drops is kept until 60 s after its last message	Самолёт держится 60 с после последнего сообщения.
+voice-tools-platform.md:204	qa	local-adsb-engine-switch	Выбранный локальный самолёт остаётся на обеих планетах.
+voice-tools-platform.md:205	unit	src/data/localReceiversProxy.test.mjs::LOCAL_RECEIVER_FEEDS accepts local http(s) aircraft.json feeds per band	Принимаются локальные ленты aircraft.json по диапазонам.
+voice-tools-platform.md:205	unit	src/data/localReceiversProxy.test.mjs::LOCAL_RECEIVER_FEEDS rejects public, link-local and named hosts, bad paths and bands	Отклоняются публичные хосты, неверные пути и учётные данные в URL.
+voice-tools-platform.md:205	unit	src/data/localReceiversProxy.test.mjs::a feed whose own now is over 10 s old is stale; failures are unreachable	Лента старше 10 с stale, сбой unreachable.
+voice-tools-platform.md:205	unit	src/data/localReceiversProxy.test.mjs::live feeds are read in parallel and labelled with their band	Живые ленты читаются параллельно с меткой диапазона и статусом.
+voice-tools-platform.md:206	unit	src/data/radioProxy.test.mjs::normalization keeps only healthy geolocated public HTTPS MP3/AAC streams	Остаются только геопривязанные публичные HTTPS-потоки.
+voice-tools-platform.md:206	unit	src/data/radioProxy.test.mjs::proxy coalesces refreshes, omits favicons, and counts known stations only	Каталог Radio Browser собирается через зеркала и кэшируется.
+voice-tools-platform.md:206	unit	src/data/radioProxy.test.mjs::a failed refresh serves the bounded previous catalog as stale	При сбое отдаётся последний хороший каталог как stale.
+voice-tools-platform.md:206	qa	radio-engine-switch	750 станций и одно чтение каталога на обеих планетах.
+voice-tools-platform.md:218	unit	src/data/manager.test.mjs::layer feed states distinguish unavailable, fallback, stale, and degraded controls	Состояния nominal, loading, degraded, stale, fallback, unavailable различаются.
+voice-tools-platform.md:218	unit	src/data/manager.test.mjs::feed state: guidance statuses are normal operation, not faults	Подсказки (zoom in, empty) не считаются сбоем.
+voice-tools-platform.md:218	unit	src/layers/vessels/ownership.test.mjs::partial vessel snapshots preserve freshness and recover after a complete update	Неполный снимок даёт состояние partial.
+voice-tools-platform.md:219	unit	src/data/layerState.test.mjs::share payload wins over local, passive restore writes nothing, and explicit success persists	Ссылка важнее локального состояния, явные изменения сохраняются в хранилище.
+voice-tools-platform.md:219	unit	src/data/layerState.test.mjs::absent share payload restores local state without rewriting it	Без ссылки слои восстанавливаются из хранилища браузера.
+voice-tools-platform.md:219	unit	src/data/layerState.test.mjs::all production layers and options round-trip through a v2 share URL	Все слои и опции проходят через ссылку v2 туда и обратно.
+voice-tools-platform.md:219	unit	src/data/layerStateTokenLedger.test.mjs::reservation ledger is complete, pinned, and rejects duplicate or malformed rows	Реестр токенов полон и отклоняет дубликаты.
+voice-tools-platform.md:221	unit	src/data/contextStore.test.mjs::a tracking layer subject becomes the selected entity context	Выбранный объект слоя становится контекстом выбранной сущности.
+voice-tools-platform.md:221	unit	src/data/contextStore.test.mjs::switching contacts moves the subject and leaves no stale record behind	Смена контакта не оставляет устаревшей записи.
+voice-tools-platform.md:237	unit	src/tooling/liveProviders.test.mjs::OpenSky state and track routes share tokens, retain cache and use regional fallback	/api/flights с OAuth и кэшем, /api/flights/track, запасной adsb.lol по точке камеры.
+voice-tools-platform.md:240	unit	src/tooling/liveProviders.test.mjs::AIS preview route ingests through the socket, returns tracks and disposes before restart	/api/vessels принимает AISStream, хранит треки и отдаёт live.
+voice-tools-platform.md:240	unit	src/data/aisWatchdog.test.mjs::liveness is data, not socket state: silence past staleMs reports stale	Сторожевой таймер AIS переводит тишину в stale.
+voice-tools-platform.md:242	unit	src/tooling/environmentProviders.test.mjs::FIRMS retains a large successful source during partial failure and filters stale data at serve time	/api/firms без FIRMS_MAP_KEY отвечает 503, с ключом отдаёт VIIRS.
+voice-tools-platform.md:242	unit	src/data/firePerimetersProxy.test.mjs::an explicit transfer-limit false stops paging; a fresh cache does not fetch	/api/fire-perimeters читает WFIGS и кэширует снимок.
+voice-tools-platform.md:242	unit	src/data/cyclonesProxy.test.mjs::dev and preview serve only fixed bounded NOAA queries, caching a complete snapshot	/api/cyclones читает NHC и NOAA GIS в dev и preview.
+voice-tools-platform.md:243	unit	src/data/weatherProxy.test.mjs::manifest provides honest coverage, actual frame times and a same-origin tile template	/api/weather отдаёт манифест радара и спутника.
+voice-tools-platform.md:243	unit	src/data/weatherProxy.test.mjs::tile fixes upstream host/layer/style/size/projection/time and caches exact frame bytes	/api/weather/tile ходит только в nowCOAST WMS и кэширует кадр.
+voice-tools-platform.md:243	unit	src/data/weatherProxy.test.mjs::every product serves one whole-extent image at its advertised bounds, sized up to its limit	/api/weather/image отдаёт радар, спутник и молнии.
+voice-tools-platform.md:243	unit	src/tooling/localServices.test.mjs::weather-only requests share upstream work and retain fresh and stale responses	/api/weather-effects читает Open-Meteo с кэшем.
+voice-tools-platform.md:243	unit	src/data/windProxy.test.mjs::wind grid route returns Float32 U then V	/api/wind/grid отдаёт сетку U и V.
+voice-tools-platform.md:243	unit	src/data/windGfs.test.mjs::wind range fetch rejects invalid offsets and caps chunked bodies	GRIB2 читается по byte-range с проверкой смещений.
+voice-tools-platform.md:243	unit	src/data/windIfs.test.mjs::IFS inventory selects only 10 m components and distinct index suffix	Для ECMWF IFS выбираются только компоненты ветра 10 м.
+voice-tools-platform.md:244	unit	src/tooling/environmentProviders.test.mjs::traffic middleware preserves keyless mode, caching, stale budget fallback and UTC rollover	/api/tomtom/flow без ключа 503, с ключом кэш на 120 с.
+voice-tools-platform.md:245	unit	src/data/overpassProxy.test.mjs::preflight checks memory, in-flight, then disk before consuming limiter quota	Preflight Overpass проверяет память, запросы в полёте и диск.
+voice-tools-platform.md:245	unit	src/data/overpassProxy.test.mjs::simplify: giant way geometry is decimated, endpoints preserved	Ответ Overpass упрощается с сохранением концов.
+voice-tools-platform.md:245	unit	src/data/overpassProxy.test.mjs::boundary-class queries detected for the long disk TTL	Запросы границ получают длинный TTL на диске.
+voice-tools-platform.md:245	unit	src/overpassProxy.test.mjs::disk cache rejects old refusals for fresh and stale reads but preserves last-good data	Дисковый кэш Overpass хранит последние хорошие данные.
+voice-tools-platform.md:245	unit	src/tooling/placeProviders.test.mjs::OSRM routing preserves aliases, cache, span guards and upstream failure behavior	/api/route ходит в OSRM, кэширует и проверяет запрос.
+voice-tools-platform.md:246	unit	src/data/installationProxy.test.mjs::the cache bbox snaps OUTWARD so a cached answer always covers the request	Окно военных объектов квантуется наружу.
+voice-tools-platform.md:246	unit	src/data/installationProxy.test.mjs::a real miss, write, and restart round trip serves from disk	Кэш объектов переживает перезапуск через диск.
+voice-tools-platform.md:249	unit	src/data/radioProxy.test.mjs::proxy coalesces refreshes, omits favicons, and counts known stations only	/api/radio/stations объединяет обновления Radio Browser.
+voice-tools-platform.md:249	unit	src/data/radioProxy.test.mjs::method and route validation happen before any upstream refresh	/api/radio проверяет метод и путь до запроса наверх.
+voice-tools-platform.md:251	unit	src/data/localReceiversProxy.test.mjs::live feeds are read in parallel and labelled with their band	/api/local-receivers/aircraft читает ленты и помечает диапазон.
+voice-tools-platform.md:252	unit	src/tooling/environmentProviders.test.mjs::terrain middleware bounds missing points and reconstructs repeated/reordered requests from cache	/api/terrain/heights ходит в Re:Earth Terrain и восстанавливает порядок из кэша.
+voice-tools-platform.md:253	платный сервис	Google Places	Маршруты Google Places требуют серверный ключ Google.
+voice-tools-platform.md:254	unit	src/tooling/mapillaryProvider.test.mjs::the plugin mounts the status and tile routes for dev and preview servers	Маршруты Mapillary status и tiles есть в dev и preview.
+voice-tools-platform.md:254	unit	src/tooling/mapillaryProvider.test.mjs::status reports whether a token exists, never its value	Статус сообщает о наличии токена, не раскрывая его.
+voice-tools-platform.md:254	unit	src/tooling/mapillaryProvider.test.mjs::a tile is trimmed, served with browser caching, then from memory	Тайл покрытия обрезается и кэшируется.
+voice-tools-platform.md:254	unit	src/tooling/mapillaryProvider.test.mjs::a tile held in memory past its TTL is fetched again	Тайл перечитывается после истечения TTL.
+voice-tools-platform.md:255	unit	src/tooling/localServices.test.mjs::Realtime handler keeps API key as default and uses OAuth only when requested	/api/realtime/token выдаёт токен по ключу или OAuth.
+voice-tools-platform.md:255	unit	src/tooling/localServices.test.mjs::OAuth status reports local sign-in availability without returning the token	/api/realtime/oauth-status сообщает о входе без токена.
+voice-tools-platform.md:255	unit	src/tooling/localServices.test.mjs::OAuth login endpoint shares pending attempts and never exposes credentials	/api/realtime/oauth-login запускает вход и не раскрывает данные.
+voice-tools-platform.md:255	unit	src/tooling/localServices.test.mjs::the debug-log sink stays bounded, rate limited, and quiet about failures	/api/realtime/debug-log ограничен по размеру и частоте.
+voice-tools-platform.md:255	unit	src/hudSummaryResponse.test.mjs::an es request reaches the model in Spanish and returns the canonical state	/api/openai/hud-summary возвращает подпись HUD от модели.
+voice-tools-platform.md:257	unit	src/tooling/previewServing.test.mjs::real dev and built-preview servers serve provider JSON and terminate unknown APIs	Неизвестный /api/* в dev и preview отвечает JSON 404, не SPA.
+voice-tools-platform.md:258	unit	src/tooling/googleTokenUnavailable.test.mjs::a real token provider registered first still wins	GET /api/google/tiles-token отдаёт accessToken и expiresAt.
+voice-tools-platform.md:258	unit	src/maps/googleTokens.test.mjs::a token is reused until shortly before it expires	Источник токена в браузере переиспользует токен до истечения.
+voice-tools-platform.md:258	платный сервис	Google 3D Tiles	Маршрут выдаёт токен для фотореалистичных тайлов Google; модульные тесты проверяют его с подставным провайдером.
+voice-tools-platform.md:270	unit	src/tools/queries/queries.test.mjs::earthquakes are filtered, ordered strongest first and capped	get_earthquakes: M2.5+ за 24 ч, сильнейшие первыми.
+voice-tools-platform.md:271	unit	src/tools/queries/queries.test.mjs::fires need an area and report a missing key as unavailable	get_active_fires: очаги в области, по убыванию FRP.
+voice-tools-platform.md:272	unit	src/tools/queries/queries.test.mjs::recent launches are newest first with missing fields as null	get_recent_launches: пуски за 30 дней, новые первыми.
+voice-tools-platform.md:273	unit	src/tools/queries/aviation.test.mjs::aircraft in an area are filtered, nearest first, with source details	aircraft_in_area: самолёты по расстоянию.
+voice-tools-platform.md:273	unit	src/tools/queries/aviation.test.mjs::the military feed is used on request and reported when missing	military: true читает военную ленту.
+voice-tools-platform.md:274	unit	src/tools/queries/aviation.test.mjs::aircraft are found by exactly one identifier across feeds	find_aircraft по позывному, ICAO24 или регистрации без области.
+voice-tools-platform.md:275	unit	src/tools/queries/aviation.test.mjs::tracks are ordered and thinned to 200 points	get_aircraft_track прореживает трек до 200 точек.
+voice-tools-platform.md:276	unit	src/tools/queries/aviation.test.mjs::aircraft info combines type and route lookups	get_aircraft_info объединяет тип, регистрацию и маршрут.
+voice-tools-platform.md:277	unit	src/tools/queries/maritime.test.mjs::vessels in an area are nearest first and filterable by type	vessels_in_area: суда по расстоянию, фильтр по типу.
+voice-tools-platform.md:278	unit	src/tools/queries/maritime.test.mjs::vessels are found by exactly one identifier	find_vessel по MMSI, IMO или имени.
+voice-tools-platform.md:280	unit	src/tools/queries/space.test.mjs::the next pass defaults to the ISS and reports times, peak and direction	next_satellite_pass по умолчанию МКС, времена и пик.
+voice-tools-platform.md:280	unit	src/data/satellitePass.test.mjs::findNextSatellitePass skips non-visible passes when requireVisible is true	Расчёт пролёта отбирает видимые глазом пролёты.
+voice-tools-platform.md:281	unit	src/tools/queries/space.test.mjs::satellites overhead are those above the elevation, highest first	satellites_overhead: спутники группы над местом сейчас.
+voice-tools-platform.md:282	unit	src/tools/queries/media.test.mjs::cameras in an area are listed nearest first	find_cctv_cameras: камеры по расстоянию.
+voice-tools-platform.md:283	unit	src/tools/queries/media.test.mjs::a snapshot returns the frame as an image with its credit	get_cctv_snapshot отдаёт кадр как image content.
+voice-tools-platform.md:284	unit	src/tools/queries/surveillance.test.mjs::mapped cameras are listed nearest first with their details	find_alpr_cameras: камеры OSM по расстоянию.
+voice-tools-platform.md:284	unit	src/tools/queries/surveillance.test.mjs::coverage, size and zoom limits are reported	Только США и Канада, не больше 3° на сторону.
+voice-tools-platform.md:285	unit	src/tools/queries/media.test.mjs::radio stations match area and every search term	find_radio_stations по области и словам с URL потока.
+voice-tools-platform.md:286	платный сервис	Google Places	search_places работает через Google Places.
+voice-tools-platform.md:287	платный сервис	Google Places	places_nearby работает через Google Places.
+voice-tools-platform.md:289	unit	src/tools/queries/mobility.test.mjs::bike share joins station information with live status inside the area	get_bike_share: станции GBFS с велосипедами и доками.
+voice-tools-platform.md:290	unit	src/tools/queries/mobility.test.mjs::transit vehicles come from nearby feeds and can be limited to a route	get_transit_vehicles: позиции GTFS-RT, фильтр по маршруту.
+voice-tools-platform.md:291	unit	src/tools/queries/mobility.test.mjs::traffic flow aggregates speed, congestion and closures by road length	get_traffic_flow: скорость TomTom относительно свободного потока.
+voice-tools-platform.md:291	unit	src/tools/queries/mobility.test.mjs::traffic reports a missing key, empty areas and areas that are too wide	Слишком широкая область отклоняется.
+voice-tools-platform.md:292	unit	src/tools/queries/environment.test.mjs::weather describes current conditions at a point or place	get_weather: текущие условия в месте.
+voice-tools-platform.md:293	unit	src/tools/queries/atmosphere.test.mjs::weather maps return the latest frame as an image over the area	get_weather_map: последний кадр радара, спутника или молний.
+voice-tools-platform.md:294	unit	src/tools/queries/atmosphere.test.mjs::wind is sampled from the model grid at the location	get_wind: ветер 10 м из сетки модели.
+voice-tools-platform.md:295	unit	src/tools/queries/imagery.test.mjs::the most recent clear image is returned with its date and sensor	get_recent_imagery: последний ясный снимок с датой и сенсором.
+voice-tools-platform.md:295	unit	src/tools/queries/imagery.test.mjs::overview fallback, empty results and invalid areas are reported	Запасной обзор VIIRS.
+voice-tools-platform.md:296	unit	src/tools/queries/cables.test.mjs::cables are found by area and name, with landing points and attribution	find_submarine_cables по области и имени с точками выхода.
+voice-tools-platform.md:297	unit	src/tools/queries/infrastructure.test.mjs::datacenters and dams are listed nearest first with their own fields	find_infrastructure: дата-центры и плотины по расстоянию.
+voice-tools-platform.md:298	unit	src/tools/queries/events.test.mjs::the flood tool lists the bundled evidence in story order	get_bhote_koshi_flood: свидетельства, путь потока, даты снимков.
+voice-tools-platform.md:299	unit	src/tools/queries/environment.test.mjs::the regional brief returns place, weather and at most ten headlines	get_regional_brief: место, погода, заголовки.
+voice-tools-platform.md:300	unit	src/tools/queries/environment.test.mjs::cyclones are listed strongest first and can be limited to an area	get_cyclones: циклоны, фильтр по области.
+voice-tools-platform.md:301	unit	src/tools/queries/environment.test.mjs::fire perimeters are placed by their outline and sorted by size	get_fire_perimeters: контуры по убыванию площади.
+voice-tools-platform.md:303	unit	src/tools/queries/environment.test.mjs::military installations need a bounded area and are nearest first	find_military_installations: окно не больше 10°.
+voice-tools-platform.md:304	unit	src/tools/queries/environment.test.mjs::map features name what is at a location and report an unconfigured server	get_map_features: адм. районы, места, памятники; без Overpass недоступно.
+voice-tools-platform.md:307	unit	src/tools/queries/environment.test.mjs::the HUD caption summarizes the brief through the summary service	get_hud_caption возвращает подпись HUD для области.
+voice-tools-platform.md:308	unit	src/tools/queries/share.test.mjs::links carry a camera, style, map and an entity to follow	Ссылка несёт камеру, стиль, карту и цель слежения.
+voice-tools-platform.md:308	unit	src/tools/queries/share.test.mjs::links turn on the requested layers with the app share-link codec	Ссылка включает слои через кодек приложения.
+voice-tools-platform.md:308	unit	src/view/index.test.mjs::annotations travel in the link, keeping only what the app draws	Метки передаются в ссылке вида.
+voice-tools-platform.md:308	unit	src/tools/globePanel.test.mjs::show_in_gods_eye_view names the panel and shows a view another answer returned	Инструмент указывает живую панель MCP Apps.
+voice-tools-platform.md:308	unit	src/tools/globePanel.test.mjs::the globe panel is an MCP Apps resource that loads the app through its server	Панель является ресурсом MCP Apps.
+voice-tools-platform.md:309	unit	src/tools/queries/panelRequest.test.mjs::panel_request is for the panel only	panel_request имеет visibility app.
+voice-tools-platform.md:309	unit	src/tools/mcp/mcp.test.mjs::a tool only an app may call says so, and answers it without JSON text	В tools/list стоит _meta.ui.visibility: [app].
+voice-tools-platform.md:309	unit	src/tools/queries/panelRequest.test.mjs::a request body and method pass through; settings and other sites do not	Прокси пропускает только файлы и маршруты данных приложения.
+voice-tools-platform.md:315	unit	src/tools/mcp/mcp.test.mjs::initialize negotiates a supported protocol version	initialize согласует версию протокола, ping отвечает.
+voice-tools-platform.md:315	unit	src/tools/mcp/mcp.test.mjs::tools are listed with titles, schemas and annotations, with surface overrides	tools/list отдаёт схемы и аннотации.
+voice-tools-platform.md:315	unit	src/tools/mcp/mcp.test.mjs::tool results carry text and structured content; failures stay generic	tools/call отдаёт text и structuredContent.
+voice-tools-platform.md:315	unit	src/tools/mcp/mcp.test.mjs::resources are listed and read, and tools name their UI resource	resources/list и resources/read работают.
+voice-tools-platform.md:315	unit	src/tools/queries/media.test.mjs::a snapshot returns the frame as an image with its credit	Ответ tools/call содержит image content.
+voice-tools-platform.md:316	unit	src/tools/localServer.test.mjs::the stdio server answers newline-delimited requests using only its data sources	Stdio-сервер отвечает на построчные JSON-RPC запросы.
+voice-tools-platform.md:316	unit	src/tools/localServer.test.mjs::command-line arguments are strict	Принимается --api-base.
+voice-tools-platform.md:317	unit	src/tools/localRoute.test.mjs::only direct loopback connections to this server are local	Только loopback, тот же Host и порт, тот же Origin, без forwarded, без шаринга.
+voice-tools-platform.md:317	unit	src/tools/localRoute.test.mjs::the /mcp route answers local MCP requests and refuses others	HTTP /mcp отвечает локальным POST и отказывает остальным.
+voice-tools-platform.md:318	unit	src/tools/localServer.test.mjs::relative API requests resolve against the configured base	Запросы инструментов идут на /api запущенного приложения.
+voice-tools-platform.md:318	unit	src/tools/localServer.test.mjs::the stdio server answers newline-delimited requests using only its data sources	createLocalMcpServer собирает сервисы поверх fetch.
+voice-tools-platform.md:326	unit	src/pinokioLauncherContract.test.mjs::Pinokio menu resolves the nested install marker and exposes each lifecycle state	Меню Pinokio: Install, Start, Open, Server, Update, Repair по состоянию установки.
+voice-tools-platform.md:328	unit	src/setupDoctor.test.mjs::doctor distinguishes supported, usable EOL, and unsupported Node versions	Doctor проверяет версию Node.
+voice-tools-platform.md:328	unit	src/setupDoctor.test.mjs::doctor rejects an empty node_modules and requires every direct package	Doctor проверяет зависимости.
+voice-tools-platform.md:328	unit	src/toolProjectRoot.test.mjs::tool project paths default to the installation and accept an explicit directory	GEV_PROJECT_ROOT задаёт корень проекта.
+voice-tools-platform.md:328	unit	src/toolProjectRoot.test.mjs::doctor inspects the selected project dependencies and dotenv without disclosing values	Doctor проверяет ключи выбранного проекта без раскрытия значений.
+interfaces.tsv:action:fly_to_location	parity	voice-tools-platform.md:45	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:select_nearest_aircraft	parity	voice-tools-platform.md:46	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:adjust_camera_zoom	parity	voice-tools-platform.md:47	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:zoom_to_globe	parity	voice-tools-platform.md:48	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_layer_visibility	parity	voice-tools-platform.md:49	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:show_data_layers_menu	parity	voice-tools-platform.md:50	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_panel_open	parity	voice-tools-platform.md:51	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_context_mode	parity	voice-tools-platform.md:52	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:control_cockpit	parity	voice-tools-platform.md:53	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_visual_style	parity	voice-tools-platform.md:54	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:get_entity_context	parity	voice-tools-platform.md:55	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:get_current_view_state	parity	voice-tools-platform.md:56	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_hud	parity	voice-tools-platform.md:57	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_cyber_sonar	parity	voice-tools-platform.md:58	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_detection	parity	voice-tools-platform.md:59	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_map_stack	parity	voice-tools-platform.md:60	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:set_post_processing	parity	voice-tools-platform.md:61	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:control_scene	parity	voice-tools-platform.md:62	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:control_cctv	parity	voice-tools-platform.md:63	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:control_radio	parity	voice-tools-platform.md:64	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:track_entity	parity	voice-tools-platform.md:65	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:stop_tracking	parity	voice-tools-platform.md:66	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:frame_overhead	parity	voice-tools-platform.md:67	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:annotate_map	parity	voice-tools-platform.md:68	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:clear_annotations	parity	voice-tools-platform.md:69	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:move_camera	parity	voice-tools-platform.md:70	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:fly_route	parity	voice-tools-platform.md:71	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:analyst_query	parity	voice-tools-platform.md:72	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:next_iss_pass	parity	voice-tools-platform.md:73	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:action:next_satellite_pass	parity	voice-tools-platform.md:74	Голосовое действие описано той же строкой parity.tsv.
+interfaces.tsv:tool:get_earthquakes	parity	voice-tools-platform.md:270	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_active_fires	parity	voice-tools-platform.md:271	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_recent_launches	parity	voice-tools-platform.md:272	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:aircraft_in_area	parity	voice-tools-platform.md:273	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:find_aircraft	parity	voice-tools-platform.md:274	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_aircraft_track	parity	voice-tools-platform.md:275	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_aircraft_info	parity	voice-tools-platform.md:276	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:vessels_in_area	parity	voice-tools-platform.md:277	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:find_vessel	parity	voice-tools-platform.md:278	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_vessel_track	parity	voice-tools-platform.md:279	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:next_satellite_pass	parity	voice-tools-platform.md:280	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:satellites_overhead	parity	voice-tools-platform.md:281	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:find_cctv_cameras	parity	voice-tools-platform.md:282	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_cctv_snapshot	parity	voice-tools-platform.md:283	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:find_alpr_cameras	parity	voice-tools-platform.md:284	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:find_radio_stations	parity	voice-tools-platform.md:285	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:search_places	parity	voice-tools-platform.md:286	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:places_nearby	parity	voice-tools-platform.md:287	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:plan_route	parity	voice-tools-platform.md:288	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_bike_share	parity	voice-tools-platform.md:289	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_transit_vehicles	parity	voice-tools-platform.md:290	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_traffic_flow	parity	voice-tools-platform.md:291	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_weather	parity	voice-tools-platform.md:292	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_weather_map	parity	voice-tools-platform.md:293	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_wind	parity	voice-tools-platform.md:294	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_recent_imagery	parity	voice-tools-platform.md:295	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:find_submarine_cables	parity	voice-tools-platform.md:296	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:find_infrastructure	parity	voice-tools-platform.md:297	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_bhote_koshi_flood	parity	voice-tools-platform.md:298	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_regional_brief	parity	voice-tools-platform.md:299	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_cyclones	parity	voice-tools-platform.md:300	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_fire_perimeters	parity	voice-tools-platform.md:301	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_terrain_height	parity	voice-tools-platform.md:302	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:find_military_installations	parity	voice-tools-platform.md:303	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_map_features	parity	voice-tools-platform.md:304	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:situation_brief	parity	voice-tools-platform.md:305	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:military_awareness	parity	voice-tools-platform.md:306	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:get_hud_caption	parity	voice-tools-platform.md:307	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:show_in_gods_eye_view	parity	voice-tools-platform.md:308	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:tool:panel_request	parity	voice-tools-platform.md:309	Инструмент Core описан той же строкой parity.tsv.
+interfaces.tsv:basemap:photoreal	платный сервис	Google 3D Tiles	Подложка — фотореалистичные тайлы Google.
+interfaces.tsv:basemap:bing-aerial	платный сервис	Bing	Снимки Bing через Cesium ion.
+interfaces.tsv:basemap:bing-labels	платный сервис	Bing	Снимки Bing с подписями через Cesium ion.
+interfaces.tsv:basemap:osm	unit	src/globe/cesium/maps.test.mjs::setBaseImagery builds providers from plain descriptions	Cesium строит OpenStreetMapImageryProvider по описанию osm; неудачная смена оставляет текущий слой.
+interfaces.tsv:basemap:osm	unit	src/globe/cesium/maps.test.mjs::every catalog globe stack works as a registry source	Cesium показывает источник osm из реестра каталога.
+interfaces.tsv:basemap:osm	unit	src/globe/navara/maps.test.mjs::setBaseImagery builds Navara raster layers for OSM and Esri, one at a time	Navara строит растровый слой OSM с адресом тайлов и подписью OpenStreetMap.
+interfaces.tsv:basemap:esri-imagery	unit	src/globe/navara/maps.test.mjs::setBaseImagery builds Navara raster layers for OSM and Esri, one at a time	Navara строит слой World_Imagery и показывает подпись Esri.
+interfaces.tsv:basemap:esri-imagery	unit	src/maps/controller.test.mjs::repeated Esri shot handoffs retain imagery and keep tile fallback live	Повторный выбор Esri сохраняет слой; два отказа тайлов переводят на OSM.
+interfaces.tsv:basemap:esri-imagery	unit	src/maps/controller.test.mjs::Esri construction fallback reports and attributes the source actually rendered	При отказе построения Esri подпись соответствует показанному источнику.
+interfaces.tsv:basemap:esri-imagery	unit	src/maps/sourceFactories.test.mjs::Esri uses Re:Earth without keys and preserves ion terrain when configured	Esri доступна без ключей и берёт рельеф Re:Earth.
