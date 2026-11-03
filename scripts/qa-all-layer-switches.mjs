@@ -373,6 +373,7 @@ const runs = [
   ['strict-context-loss', 'strict-context-loss', []],
   ['strict-failure-matrix', 'strict-failure-matrix', [], [], 600],
   ['strict-cold-chunks', 'strict-cold-chunks', []],
+  ['strict-prod-smoke', 'strict-prod-smoke', []],
   ['strict-soak', 'strict-soak', [], soakRuns, 1200],
   [
     'strict-soak--long',
