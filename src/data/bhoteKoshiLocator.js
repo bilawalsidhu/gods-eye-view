@@ -144,10 +144,10 @@ const NEARBY_CITIES = Object.freeze([
     placement: 'right-lower',
   }),
 ]);
-const BORDER_COLOR = Cesium.Color.fromCssColorString('#20e7f2');
+const BORDER_COLOR = () => Cesium.Color.fromCssColorString('#20e7f2');
 const BORDER_ACCENT = '#20e7f2';
 const INCIDENT_ACCENT = '#ffad55';
-const INCIDENT_COLOR = Cesium.Color.fromCssColorString(INCIDENT_ACCENT);
+const INCIDENT_COLOR = () => Cesium.Color.fromCssColorString(INCIDENT_ACCENT);
 
 const DEFAULT_OVERLAY_HOST = Object.freeze({
   setEntries: setOverlayEntries,
@@ -518,7 +518,7 @@ export function createBhoteKoshiLocatorLayer({
     sequenceStartedAt,
     visibleAfterMs = 0,
   ) {
-    addCallout(dataSource, INCIDENT, INCIDENT_COLOR, {
+    addCallout(dataSource, INCIDENT, INCIDENT_COLOR(), {
       sequenceStartedAt,
       visibleAfterMs,
     });
@@ -552,12 +552,12 @@ export function createBhoteKoshiLocatorLayer({
           false,
         ),
         color: new Cesium.CallbackProperty((_time, result) => {
-          const color = Cesium.Color.clone(INCIDENT_COLOR, result);
+          const color = Cesium.Color.clone(INCIDENT_COLOR(), result);
           color.alpha = 0.16 * (1 - pulseProgress());
           return color;
         }, false),
         outlineColor: new Cesium.CallbackProperty((_time, result) => {
-          const color = Cesium.Color.clone(INCIDENT_COLOR, result);
+          const color = Cesium.Color.clone(INCIDENT_COLOR(), result);
           color.alpha = isVisible() ? 0.08 + 0.78 * (1 - pulseProgress()) : 0;
           return color;
         }, false),
@@ -695,7 +695,7 @@ export function createBhoteKoshiLocatorLayer({
     labelPlacement = 'right',
     { showAnchor = true } = {},
   ) {
-    addCallout(dataSource, NEPAL, BORDER_COLOR, {
+    addCallout(dataSource, NEPAL, BORDER_COLOR(), {
       labelPlacement,
       sequenceStartedAt,
       showAnchor,
@@ -810,12 +810,12 @@ export function createBhoteKoshiLocatorLayer({
               false,
             ),
             color: new Cesium.CallbackProperty((_time, result) => {
-              const color = Cesium.Color.clone(INCIDENT_COLOR, result);
+              const color = Cesium.Color.clone(INCIDENT_COLOR(), result);
               color.alpha = 0.16 * (1 - pulseProgress());
               return color;
             }, false),
             outlineColor: new Cesium.CallbackProperty((_time, result) => {
-              const color = Cesium.Color.clone(INCIDENT_COLOR, result);
+              const color = Cesium.Color.clone(INCIDENT_COLOR(), result);
               color.alpha = 0.08 + 0.78 * (1 - pulseProgress());
               return color;
             }, false),
@@ -880,7 +880,7 @@ export function createBhoteKoshiLocatorLayer({
         positions: animatedPositions,
         width: 3.5,
         clampToGround: true,
-        material: BORDER_COLOR.withAlpha(0.96),
+        material: BORDER_COLOR().withAlpha(0.96),
         classificationType: Cesium.ClassificationType.BOTH,
       },
     });
@@ -905,7 +905,7 @@ export function createBhoteKoshiLocatorLayer({
       show: new Cesium.CallbackProperty(() => now() >= drawStartedAt, false),
       polygon: {
         hierarchy,
-        material: BORDER_COLOR.withAlpha(0.055),
+        material: BORDER_COLOR().withAlpha(0.055),
         classificationType: Cesium.ClassificationType.BOTH,
       },
     });
@@ -915,7 +915,7 @@ export function createBhoteKoshiLocatorLayer({
         positions: animatedPositions,
         width: 5,
         clampToGround: true,
-        material: BORDER_COLOR.withAlpha(0.12),
+        material: BORDER_COLOR().withAlpha(0.12),
         classificationType: Cesium.ClassificationType.BOTH,
       },
     });
@@ -925,7 +925,7 @@ export function createBhoteKoshiLocatorLayer({
         positions: animatedPositions,
         width: 2.5,
         clampToGround: true,
-        material: BORDER_COLOR.withAlpha(0.96),
+        material: BORDER_COLOR().withAlpha(0.96),
         classificationType: Cesium.ClassificationType.BOTH,
       },
     });

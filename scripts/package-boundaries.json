@@ -1984,6 +1984,7 @@
   "traffic-layer": {
     "exports": ["./layers/traffic"],
     "modules": [
+      "src/layers/shared/color.js",
       "src/data/cameraSensitivity.js",
       "src/data/flowMatch.js",
       "src/data/tomtomTiles.js",
@@ -2657,6 +2658,7 @@
       "src/app/layers/traffic.js",
       "src/app/operations.js",
       "src/app/scene.js",
+      "src/app/loadCesium.js",
       "src/sources/sourceSlot.js",
       "src/app/sources.js",
       "src/app/startupChrome.js",

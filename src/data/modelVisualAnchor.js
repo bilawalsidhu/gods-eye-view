@@ -1,4 +1,3 @@
-import { modelAxis } from './render/cesiumConstants.js';
 import * as geo from '../geo/index.js';
 /**
  * Model-space visual centres measured from the shipped GLBs' scene-space AABBs.
@@ -71,17 +70,9 @@ export const MODEL_TRAIL_ANCHOR_NATIVE = Object.freeze({
   '/models/atr72.glb': Object.freeze([12.9785, -1.2935, 0]),
 });
 
-/** @constant Cesium's OWN axis correction for a glTF loaded with the
- *  `Model.fromGltfAsync` defaults (upAxis Y, forwardAxis Z), assembled from its
- *  exported constants rather than restated as numbers here. `ModelSceneGraph`
- *  renders with `modelMatrix x components.transform x axisCorrection`, and the
- *  trail anchor has to ride the same chain or it lands on a different axis than
- *  the aircraft it is supposed to be attached to. */
-const AXIS_CORRECTION = geo.matrix4.multiplyTransformation(
-  modelAxis.Y_UP_TO_Z_UP,
-  modelAxis.Z_UP_TO_X_UP,
-  geo.matrix4.create(),
-);
+// glTF Y-up/Z-forward to the model frame: Cesium's Y_UP_TO_Z_UP ×
+// Z_UP_TO_X_UP, shared with Navara before the Cesium SDK is loaded.
+const AXIS_CORRECTION = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
 const _anchorScratch = geo.cartesian3.create();
 const _chainScratch = geo.matrix4.create();
 

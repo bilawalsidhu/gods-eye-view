@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+// Ion world imagery asset IDs; the catalog is available before the SDK loads.
 export const MAP_STACKS = [
   {
     id: 'photoreal',
@@ -12,7 +12,7 @@ export const MAP_STACKS = [
     label: 'Bing Aerial', // i18n-ignore: imagery product name
     shortLabel: 'Aerial',
     kind: 'ion',
-    style: Cesium.IonWorldImageryStyle.AERIAL,
+    style: 2,
     requiresIon: true,
   },
   {
@@ -20,7 +20,7 @@ export const MAP_STACKS = [
     label: 'Bing Labels', // i18n-ignore: imagery product name
     shortLabel: 'Labels',
     kind: 'ion',
-    style: Cesium.IonWorldImageryStyle.AERIAL_WITH_LABELS,
+    style: 3,
     requiresIon: true,
   },
   {
