@@ -226,7 +226,8 @@ export function createTerrainHeights({
    * - Remaining (deduplicated) coordinates are sent to `/api/terrain/heights`
    *   in sequential chunks of <=64 points.
    * - If a chunk request fails (network error, non-ok HTTP, malformed body),
-   *   every point in THAT chunk falls back to geoid math
+   *   every point in THAT chunk without a real height in the failure's
+   *   `partial` falls back to geoid math
    *   (`sourceOrthometricM + geoidHeight` or `geoidHeight` alone) rather than
    *   failing the whole batch — a transient proxy outage in the middle of a
    *   large batch shouldn't blank out entities whose chunk happened to land
@@ -314,15 +315,34 @@ export function createTerrainHeights({
             cacheStore(item.key, entry);
           }
         }
-      } catch {
+      } catch (error) {
         requestSignal?.throwIfAborted();
         // Proxy down (or cold cache had nothing to serve-stale) — fall back to
-        // geoid math for every point in this chunk. `ensureGeoidReady()` is
-        // awaited lazily, only on the fallback path, so the common (proxy
-        // healthy) case never pays for the geoid grid's dynamic import.
+        // geoid math for the points in this chunk. A failure that still
+        // carries real heights (the proxy's `partial`, e.g. cached points
+        // during an upstream 429 pause) keeps them; only the rest use the
+        // geoid. `ensureGeoidReady()` is awaited lazily, only on the fallback
+        // path, so the common (proxy healthy) case never pays for the geoid
+        // grid's dynamic import.
+        const partial =
+          Array.isArray(error?.partial) && error.partial.length === chunk.length
+            ? error.partial
+            : [];
+        const fallback = [];
+        chunk.forEach((item, index) => {
+          const ellipsoid = partial[index]?.ellipsoid;
+          if (!Number.isFinite(ellipsoid)) {
+            fallback.push(item);
+            return;
+          }
+          const entry = { ellipsoid, source: 'reearth' };
+          resolvedThisCall.set(item.key, entry);
+          cacheStore(item.key, entry);
+        });
+        if (fallback.length === 0) continue;
         await ensureGeoidReady();
         requestSignal?.throwIfAborted();
-        for (const item of chunk) {
+        for (const item of fallback) {
           const ellipsoid = geoidFallback(
             item.lat,
             item.lon,
