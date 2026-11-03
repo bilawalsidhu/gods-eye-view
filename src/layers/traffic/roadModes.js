@@ -112,6 +112,7 @@ function pairedSampleShare(segment, index) {
   }
   const length = cum[cum.length - 1];
   if (!(length > 0)) return 0;
+  const line = segment.line || segment;
   let paired = 0;
   let i = 1;
   for (const share of PAIRED_SIDE_SAMPLES) {
@@ -126,8 +127,10 @@ function pairedSampleShare(segment, index) {
         xs[i - 1] + dx * t,
         ys[i - 1] + dy * t,
         reverse,
-        // A line that doubles back beside itself is not its own pair.
-        (piece) => (piece.flow === segment ? 0 : PAIRED_SIDE_RADIUS_M),
+        // A line that doubles back beside itself, even clipped into pieces,
+        // is not its own pair.
+        (piece) =>
+          (piece.flow.line || piece.flow) === line ? 0 : PAIRED_SIDE_RADIUS_M,
       ).best
     )
       paired++;
