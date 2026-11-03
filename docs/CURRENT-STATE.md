@@ -4342,7 +4342,8 @@ calls `openNearest`. `provider` is `google` for "Street View", `mapillary`,
 `kartaview` or `panoramax` by name, else the lit source. Stages fail separately (`location`, `view`, `map`,
 `provider`, `layer`, `key`, `imagery`; `view` when cockpit, clean view,
 recording or scene playback hides the panel, checked after the flight and
-before anything switches or loads; an empty `imagery` result names a
+before anything switches or loads; embed mode exempts its own clean-view
+class because the photo is lifted above the globe; an empty `imagery` result names a
 narrowing 360°/flat or SINCE filter the source honours, as `filter`) and a
 newer turn retires the lookup
 (`openNearest`'s `signal` option), so nothing opens after the user moved on.
@@ -4366,9 +4367,13 @@ applies it through the action, and a plain link runs the action once restored
 (one shot: the rewritten hash drops `sl`). In embed mode the rail holding the
 panel is hidden, so an open photo moves to an overlay on the globe
 (`sl-viewer-wrap-embed`) and back when it closes; Esc closes it (in full
-screen, Esc leaves full screen first). A caller's abort is
+screen, Esc leaves full screen first). Image-loading failures render inside
+the embedded overlay, since the panel's error region is hidden with the rail.
+A caller's abort is
 honoured through the viewer's mount and load, not just the lookup, and only
-the lookup that still owns the panel may change its spinner or error. A
+the lookup that still owns the panel may change its spinner or error. Cancelling
+a lookup clears its loading state even when an existing photo stays open;
+internally retired lookups also release the caller's abort listener. A
 passive link's photos stand down if anyone navigated (a gesture, a search,
 the assistant) while the link waited behind its own marks. A plain
 link never loads a photo from a source that bills every load

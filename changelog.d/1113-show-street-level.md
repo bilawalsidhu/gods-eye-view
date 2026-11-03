@@ -11,11 +11,15 @@
   God's Eye View panel only for a result issued in the last five minutes. On
   a phone, a photo that opens or a link that arms opens the Cameras sheet;
   in cockpit, clean view, recording or scene playback the action says the
-  panel is hidden instead of loading a photo nobody sees. Mapillary's
+  panel is hidden instead of loading a photo nobody sees. Embedded photos
+  remain available over the clean globe. Mapillary's
   nearest-photo search asks for 100 photos, so the nearest and the filter's
   pick come from the spot's photos rather than an arbitrary eight. The source the
   action lights stays lit like a chip click. An unavailable map stack now
   reports the controller's own reason instead of always asking for a Cesium
   ion token. When nothing is found and a 360°, flat or SINCE filter the source
-  honours is on, the answer names the filter (Said Turksever, @asturksever,
+  honours is on, the answer names the filter. Cancelled lookups clear their
+  loading state over an existing photo and release their caller abort listeners.
+  Embedded photos show loading errors inside the overlay, and the OPEN prompt
+  uses the recipient's selected language (Said Turksever, @asturksever,
   #1113).

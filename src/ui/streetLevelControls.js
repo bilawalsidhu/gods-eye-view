@@ -318,6 +318,7 @@ export class StreetLevelControls {
     const wrap = this._elements.viewerWrap;
     if (!wrap || !document.body) return;
     const lift = open === true && isEmbedPage();
+    this.store.setEmbedOverlay(lift);
     if (lift && !this._embedHome) {
       this._embedHome = { parent: wrap.parentNode, next: wrap.nextSibling };
       document.body.appendChild(wrap);

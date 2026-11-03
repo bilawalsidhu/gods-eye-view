@@ -1038,3 +1038,36 @@ test('destroying the panel in embed mode puts an open photo back in the panel', 
     assert.equal(overGlobe(dom), false);
     assertSameNode(dom.wrap.parentNode, home);
   }));
+
+test('an embedded photo failure is shown inside the overlay, and only there', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    const failed = uiState({ open: true });
+    Object.assign(failed.street, {
+      imageId: null,
+      error: 'Image could not be opened',
+    });
+    await layer.publish(failed);
+    assert.equal(overGlobe(dom), true);
+    const error = dom.wrap.querySelector('#sl-viewer-error');
+    assert.ok(error, 'the overlay contains an error region');
+    assert.equal(error.hidden, false);
+    assert.match(error.textContent, /Image could not be opened/);
+    assert.equal(dom.root.querySelector('#sl-error').hidden, true);
+    await layer.publish(uiState({ open: true }));
+    assert.equal(error.hidden, true, 'a successful retry clears the error');
+    controls.destroy();
+  }));
+
+test('outside embed mode a photo failure stays in the panel error region', () =>
+  withDom(async (dom) => {
+    const failed = uiState({ open: true });
+    failed.street.error = 'Image could not be opened';
+    const { controls } = await stubPanel(dom, failed);
+    const error = dom.wrap.querySelector('#sl-viewer-error');
+    assert.ok(error);
+    assert.equal(error.hidden, true, 'no duplicate error inside the photo');
+    assert.equal(dom.root.querySelector('#sl-error').hidden, false);
+    controls.destroy();
+  }));

@@ -4668,3 +4668,25 @@ test('show_street_level in a view that hides its panel stops before anything loa
     }
   }
 });
+
+test('show_street_level opens over the clean embedded globe but respects its other exclusive modes', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const saved = globalThis.document;
+  try {
+    for (const mode of [null, 'cockpit-mode', 'recording-mode', 'scene-playback-mode']) {
+      const classes = new Set(['ui-embed', 'ui-clean-view', mode]);
+      globalThis.document = { body: { classList: { contains: (name) => classes.has(name) } } };
+      const { runner, order } = createStreetLevelHarness({ enabled: true });
+      const result = await runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+      if (mode) {
+        assert.deepEqual([result.ok, result.stage], [false, 'view'], mode);
+        assert.deepEqual(order.filter((step) => /^(map|params|open|arm|enable)/.test(step)), [], `${mode}: nothing switched`);
+      } else {
+        assert.equal(result.ok, true, 'embed clean view lifts the photo over the globe');
+        assert.ok(order.some((step) => step.startsWith('open:mapillary')));
+      }
+    }
+  } finally {
+    globalThis.document = saved;
+  }
+});

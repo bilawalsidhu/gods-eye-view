@@ -3440,9 +3440,17 @@ export async function showStreetLevel(
   }
 
   // Cockpit, clean view, recording and scene playback hide the panel the
-  // photo opens in: say so before anything loads unseen.
+  // photo opens in: say so before anything loads unseen. Embed mode uses
+  // clean view for its globe but lifts the photo out of the hidden rail.
   const body = globalThis.document?.body;
-  if (EXCLUSIVE_SURFACE_CLASSES.some((mode) => body?.classList?.contains(mode)))
+  const embedded = body?.classList?.contains('ui-embed') === true;
+  if (
+    EXCLUSIVE_SURFACE_CLASSES.some(
+      (mode) =>
+        body?.classList?.contains(mode) &&
+        !(embedded && mode === 'ui-clean-view'),
+    )
+  )
     return fail(
       'view',
       msg(

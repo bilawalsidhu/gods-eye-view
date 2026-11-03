@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getEventListeners } from 'node:events';
 import * as Cesium from 'cesium';
 import { createStreetLevelLayer } from './index.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
@@ -1665,6 +1666,85 @@ test('openNearest keeps honouring the caller after the lookup: an abort while th
   assert.equal(layer.getUIState().street.open, false);
   assert.equal(layer.getUIState().street.loading, false);
 });
+
+for (const rejectsOnAbort of [true, false]) {
+  test(`cancelling a lookup over an open photo clears its spinner (provider rejects: ${rejectsOnAbort})`, async (t) => {
+    const answer = deferred();
+    const provider = fakeProvider({
+      nearestImage: (_point, { signal }) => {
+        if (rejectsOnAbort)
+          signal.addEventListener('abort', () => answer.reject(signal.reason), {
+            once: true,
+          });
+        return answer.promise;
+      },
+    });
+    const { layer } = await enabledLayer(t, [provider]);
+    const { fakeHost } =
+      await import('../../testSupport/googleStreetViewFakes.mjs');
+    layer.attachViewerHost(fakeHost());
+    assert.equal(
+      await layer.openImage('mapillary', 'existing', { frame: false }),
+      true,
+    );
+    const controller = new AbortController();
+    const pending = layer.openNearest(
+      { lat: 1, lon: 2 },
+      { frame: false, signal: controller.signal },
+    );
+    assert.equal(layer.getUIState().street.loading, true);
+    controller.abort();
+    if (!rejectsOnAbort) answer.resolve('late-image');
+    assert.equal(await pending, false);
+    const street = layer.getUIState().street;
+    assert.equal(
+      street.loading,
+      false,
+      'the cancelled lookup owns and clears the spinner',
+    );
+    assert.equal(street.open, true, 'the existing photo remains open');
+    assert.equal(street.error, null);
+    assert.deepEqual(
+      provider.calls.open,
+      ['existing'],
+      'no replacement photo opens',
+    );
+  });
+}
+
+for (const rejectsOnAbort of [true, false]) {
+  test(`retired lookups release the caller listener (provider rejects: ${rejectsOnAbort})`, async (t) => {
+    let answer;
+    const provider = fakeProvider({
+      nearestImage: (_point, { signal }) => {
+        answer = deferred();
+        if (rejectsOnAbort)
+          signal.addEventListener('abort', () => answer.reject(signal.reason), {
+            once: true,
+          });
+        return answer.promise;
+      },
+    });
+    const { layer } = await enabledLayer(t, [provider]);
+    const lifetime = new AbortController();
+    for (let i = 0; i < 3; i++) {
+      const pending = layer.openNearest(
+        { lat: 1, lon: 2 },
+        { frame: false, signal: lifetime.signal },
+      );
+      assert.equal(getEventListeners(lifetime.signal, 'abort').length, 1);
+      layer.closeViewer();
+      if (!rejectsOnAbort) answer.resolve('late-image');
+      assert.equal(await pending, false);
+      assert.equal(
+        getEventListeners(lifetime.signal, 'abort').length,
+        0,
+        'closing the lookup releases its listener on the application lifetime',
+      );
+    }
+    assert.equal(lifetime.signal.aborted, false);
+  });
+}
 
 test('an aborted older lookup leaves its replacement’s spinner alone', async (t) => {
   const answers = [];

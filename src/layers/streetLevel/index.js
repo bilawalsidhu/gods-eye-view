@@ -724,7 +724,7 @@ export function createStreetLevelLayer({
         if (nearestLookup !== lookup) return false;
         nearestLookup = null;
         // The caller moved on: the panel shows nothing of this lookup.
-        if (state.street.loading && !state.street.open) {
+        if (state.street.loading) {
           state.street.loading = false;
           notify();
         }
@@ -751,13 +751,13 @@ export function createStreetLevelLayer({
         } catch (error) {
           if (callerSignal?.aborted) return retired();
           // Overtaken: whatever replaced it owns the panel, errors included.
-          if (signal.aborted) return false;
+          if (signal.aborted) return retired();
           // One provider failing (no key, offline) must not hide the others.
           lastError = error;
           continue;
         }
         if (callerSignal?.aborted) return retired();
-        if (signal.aborted) return false;
+        if (signal.aborted) return retired();
         if (!state.enabled) break;
         // Switched off, or its map left, while it looked: try the next.
         if (!imageId || !entry.on || !providerAvailable(entry)) continue;
