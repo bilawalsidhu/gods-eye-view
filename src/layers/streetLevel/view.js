@@ -227,7 +227,11 @@ export function viewFocus(
  * (NYC −22 m), and an occluder at 0 m would hide the cones around it.
  */
 const HORIZON_CULL_DEPTH_M = 1000;
-let HORIZON_CULL_ELLIPSOID;
+const HORIZON_CULL_ELLIPSOID = new Cesium.Ellipsoid(
+  Cesium.Ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
+  Cesium.Ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
+  Cesium.Ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
+);
 
 /**
  * Hide billboards and points behind the horizon: they skip the depth test, so
@@ -236,18 +240,12 @@ let HORIZON_CULL_ELLIPSOID;
  * @param {{getViewer: () => object|null, items: () => Iterable<{position: object, show: boolean}>, onChange?: () => void}} options
  */
 export function createHorizonCull({ getViewer, items, onChange }) {
-  let occluder;
+  const occluder = new Cesium.EllipsoidalOccluder(HORIZON_CULL_ELLIPSOID);
   let from = null;
   let stopListening = null;
 
   /** Show what is in front of the horizon, hide the rest; the count seen. */
   function cull(list, position) {
-    HORIZON_CULL_ELLIPSOID ??= new Cesium.Ellipsoid(
-      Cesium.Ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
-      Cesium.Ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
-      Cesium.Ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
-    );
-    occluder ??= new Cesium.EllipsoidalOccluder(HORIZON_CULL_ELLIPSOID);
     occluder.cameraPosition = position;
     let seen = 0;
     let changed = false;

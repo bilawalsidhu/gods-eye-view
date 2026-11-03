@@ -86,15 +86,11 @@ export const CABLE_GLOBE_STACK_IDS = Object.freeze(
 export const MARKER_COLLECTION_EXPECTATIONS = Object.freeze([
   Object.freeze({
     key: '_billboardCollection',
-    get type() {
-      return Cesium.BillboardCollection;
-    },
+    type: Cesium.BillboardCollection,
   }),
   Object.freeze({
     key: '_pointCollection',
-    get type() {
-      return Cesium.PointPrimitiveCollection;
-    },
+    type: Cesium.PointPrimitiveCollection,
   }),
 ]);
 

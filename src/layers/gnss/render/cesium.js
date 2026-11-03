@@ -1,6 +1,17 @@
 import * as Cesium from 'cesium';
 import { GNSS_LEVEL_COLORS } from '../records.js';
 
+/**
+ * GroundPrimitive allowPicking:false suppresses ids but still submits stencil
+ * commands in Cesium's pick pass, erasing picks of overlapping ground geometry.
+ * This fill participates only in rendering, so sibling polygons remain pickable.
+ */
+class GnssGroundFill extends Cesium.GroundPrimitive {
+  update(frameState) {
+    if (!frameState.passes.pick) super.update(frameState);
+  }
+}
+
 /** Degrees at the centre of the current view, or null before the camera settles. */
 export function defaultGnssViewAnchor(viewer) {
   const canvas = viewer?.scene?.canvas;
@@ -33,14 +44,6 @@ export function createGnssCesiumRenderer({
   viewer,
   viewAnchor = defaultGnssViewAnchor,
 }) {
-  // GroundPrimitive allowPicking:false still submits stencil commands in
-  // the pick pass. Keep this fill from erasing overlapping geometry's picks.
-  class GnssGroundFill extends Cesium.GroundPrimitive {
-    update(frameState) {
-      if (!frameState.passes.pick) super.update(frameState);
-    }
-  }
-
   const primitives = new Cesium.PrimitiveCollection();
   primitives.id = 'gnss-integrity';
   primitives.show = false;

@@ -21,17 +21,17 @@ const STYLE = [
   'imageSubRegion',
 ];
 
+class ImportedBillboards extends Cesium.BillboardCollection {
+  update(frameState) {
+    // Height queries should find the map, never another imported marker.
+    // Ordinary click picks and rendered screenshots still include the pins.
+    if (frameState.passes.pick && frameState.passes.offscreen) return;
+    super.update(frameState);
+  }
+}
+
 /** Own static imported pins without a per-frame Entity visualizer walk. */
 export function createImportedPins(dataSource, viewer) {
-  class ImportedBillboards extends Cesium.BillboardCollection {
-    update(frameState) {
-      // Height queries should find the map, never another imported marker.
-      // Ordinary click picks and rendered screenshots still include the pins.
-      if (frameState.passes.pick && frameState.passes.offscreen) return;
-      super.update(frameState);
-    }
-  }
-
   const all = dataSource.entities.values.slice();
   const now = Cesium.JulianDate.now();
   const pins = all.filter((entity) => entity.billboard && entity.position);

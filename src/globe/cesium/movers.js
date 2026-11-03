@@ -8,12 +8,12 @@
 import * as Cesium from 'cesium';
 import { createMoverRegistry } from '../movers.js';
 
-let scratchPosition;
-let scratchColor;
-let scratchQuaternion;
-let scratchRotation;
+const scratchPosition = new Cesium.Cartesian3();
+const scratchColor = new Cesium.Color();
+const scratchQuaternion = new Cesium.Quaternion();
+const scratchRotation = new Cesium.Matrix3();
 // Model.modelMatrix and Model.color copy what they are given.
-let scratchModelMatrix;
+const scratchModelMatrix = new Cesium.Matrix4();
 
 /** The atlas cells as canvases, by key (a DOM canvas or image source). */
 async function cropAtlasCells(atlas, keys) {
@@ -287,11 +287,6 @@ export function createCesiumMovers(
   viewer,
   { requestRender = () => viewer.scene.requestRender(), factories = {} } = {},
 ) {
-  scratchPosition ??= new Cesium.Cartesian3();
-  scratchColor ??= new Cesium.Color();
-  scratchQuaternion ??= new Cesium.Quaternion();
-  scratchRotation ??= new Cesium.Matrix3();
-  scratchModelMatrix ??= new Cesium.Matrix4();
   const make = { ...DEFAULT_FACTORIES, ...factories };
   const { scene } = viewer;
   let root = null;

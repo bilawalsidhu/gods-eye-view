@@ -46,10 +46,10 @@ const PALETTE = {
  *
  * BOTH paints onto terrain AND onto 3D tiles, so one value covers both worlds.
  */
+const CLASSIFY = Cesium.ClassificationType.BOTH;
+const CLAMP = Cesium.HeightReference.CLAMP_TO_GROUND;
 
 export function createWorldAnnotationRenderer(viewer) {
-  const CLASSIFY = Cesium.ClassificationType.BOTH;
-  const CLAMP = Cesium.HeightReference.CLAMP_TO_GROUND;
   const dataSource = new Cesium.CustomDataSource('gev-annotations');
   viewer.dataSources.add(dataSource);
   const osmAnnotations = new Set();

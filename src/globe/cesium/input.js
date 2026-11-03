@@ -6,6 +6,19 @@ import { normalizeInputOptions } from '../contract.js';
 import { createPickDelivery } from '../pickDelivery.js';
 import { toGeo2 } from './convert.js';
 
+const TYPES = {
+  click: Cesium.ScreenSpaceEventType.LEFT_CLICK,
+  doubleClick: Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+  move: Cesium.ScreenSpaceEventType.MOUSE_MOVE,
+  down: Cesium.ScreenSpaceEventType.LEFT_DOWN,
+  up: Cesium.ScreenSpaceEventType.LEFT_UP,
+};
+const KEYS = {
+  ctrl: Cesium.KeyboardEventModifier.CTRL,
+  shift: Cesium.KeyboardEventModifier.SHIFT,
+  alt: Cesium.KeyboardEventModifier.ALT,
+};
+
 // Cesium reuses its event objects; listeners get geo copies.
 const toEvent = (event) => {
   const result = {};
@@ -31,19 +44,6 @@ export function createCesiumInput(
     scheduleFrame = (run) => requestAnimationFrame(run),
   } = {},
 ) {
-  const TYPES = {
-    click: Cesium.ScreenSpaceEventType.LEFT_CLICK,
-    doubleClick: Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-    move: Cesium.ScreenSpaceEventType.MOUSE_MOVE,
-    down: Cesium.ScreenSpaceEventType.LEFT_DOWN,
-    up: Cesium.ScreenSpaceEventType.LEFT_UP,
-  };
-  const KEYS = {
-    ctrl: Cesium.KeyboardEventModifier.CTRL,
-    shift: Cesium.KeyboardEventModifier.SHIFT,
-    alt: Cesium.KeyboardEventModifier.ALT,
-  };
-
   const { scene } = viewer;
   let handler = null;
   let destroyed = false;

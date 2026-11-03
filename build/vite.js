@@ -186,9 +186,7 @@ export function createBrowserViteConfig({
       apiResponseHeadersPlugin(),
       // Next, so no provider route answers a Host the server does not allow.
       hostCheckPlugin(),
-      // Keep the SDK asset serving/copying and external imports, but let the
-      // scene load the script and stylesheet only when Cesium is requested.
-      { ...cesium(), transformIndexHtml: undefined },
+      cesium(),
       // Application views are Vue single-file components.
       vue(VUE_PLUGIN_OPTIONS),
       ...plugins,

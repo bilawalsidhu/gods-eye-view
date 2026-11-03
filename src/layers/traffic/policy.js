@@ -1,4 +1,4 @@
-import { rgbaFromCss } from '../shared/color.js';
+import * as Cesium from 'cesium';
 
 /**
  * @file Street Traffic selects TomTom, OpenMapTiles or Hybrid motor roads,
@@ -112,9 +112,9 @@ export const SIZE_BY_TYPE = {
  */
 
 export const FLOW_BUCKET_COLORS = {
-  free: rgbaFromCss('#2ecc71').withAlpha(0.9),
-  slow: rgbaFromCss('#f0b23e').withAlpha(0.9),
-  jam: rgbaFromCss('#e05252').withAlpha(0.9),
+  free: Cesium.Color.fromCssColorString('#2ecc71').withAlpha(0.9),
+  slow: Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.9),
+  jam: Cesium.Color.fromCssColorString('#e05252').withAlpha(0.9),
 };
 
 // ─── Jam-viz prototype (live mode only — see 2026-07-21 design doc) ────────
@@ -140,11 +140,12 @@ export const HEAT_JAM_PULSE_ALPHA = 0.2;
 
 /** @const {Cesium.Color} Jam corridor color (bucket red, alpha pulsed live). */
 
-export const HEAT_JAM_COLOR = rgbaFromCss('#e05252');
+export const HEAT_JAM_COLOR = Cesium.Color.fromCssColorString('#e05252');
 
 /** @const {Cesium.Color} Slow corridor color (bucket amber, faint + static). */
 
-export const HEAT_SLOW_COLOR = rgbaFromCss('#f0b23e').withAlpha(0.2);
+export const HEAT_SLOW_COLOR =
+  Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.2);
 
 /** @const {number} Far-distance scale floor for jam dots (shipped: 0.3). */
 

@@ -17,7 +17,6 @@ import {
 import { describeError } from './errors.js';
 import { createSceneEngine } from './globeEngine.js';
 import { onLocaleChange, t } from '../i18n/index.js';
-import { loadCesium } from './loadCesium.js';
 
 /**
  * Construct the application globe using the caller's local configuration.
@@ -140,8 +139,6 @@ async function createRenderer({
   }
   if (engineKind !== 'cesium')
     throw new TypeError(`Unknown globe engine: ${engineKind}`);
-  await loadCesium();
-  signal.throwIfAborted();
   loaderStatus.textContent = t('Configuring viewer...');
   // Provider attribution stays visible, including clean-view and recording.
   const creditContainer = document.createElement('div');
