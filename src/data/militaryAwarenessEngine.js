@@ -14,6 +14,21 @@ export const AWARENESS_RELATIONSHIP = Object.freeze({
   UNKNOWN: 'UNKNOWN',
 });
 
+/** The identity a nearby item is navigated by. */
+function awarenessItemId(item) {
+  return String(item?.icao24 || item?.mmsi || item?.id || '');
+}
+
+/**
+ * Break exact distance ties by identity, so the same contacts come back in the
+ * same order whatever order a feed (or a rebuilt scene) listed them in.
+ */
+export function compareAwarenessIds(a, b) {
+  const left = String(a ?? '');
+  const right = String(b ?? '');
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 /**
  * Search an expanding area synchronously, doubling the radius after each miss.
  * The maximum covers the farthest possible Earth-surface chord while keeping
@@ -110,7 +125,11 @@ export function summarizeAwarenessCohort(
         (item.distanceM ?? item.distance) >= 0,
     )
     .map((item) => ({ ...item, distanceM: item.distanceM ?? item.distance }))
-    .sort((a, b) => a.distanceM - b.distanceM);
+    .sort(
+      (a, b) =>
+        a.distanceM - b.distanceM ||
+        compareAwarenessIds(awarenessItemId(a), awarenessItemId(b)),
+    );
   return {
     relationship: normalized.length
       ? AWARENESS_RELATIONSHIP.NEARBY
@@ -177,7 +196,11 @@ export function getAwarenessNavigationTargets(
       Number(a.layerId !== subject?.layerId) -
       Number(b.layerId !== subject?.layerId);
     if (subjectOrder) return subjectOrder;
-    return (a.item.distanceM ?? Infinity) - (b.item.distanceM ?? Infinity);
+    return (
+      (a.item.distanceM ?? Infinity) - (b.item.distanceM ?? Infinity) ||
+      compareAwarenessIds(a.layerId, b.layerId) ||
+      compareAwarenessIds(a.id, b.id)
+    );
   });
   return targets;
 }
