@@ -95,6 +95,23 @@ test('a failed probe is retried after its backoff, not on every query', async ()
   ]);
 });
 
+test('a failed terrain request carries the real heights the server had', async () => {
+  const partial = [{ ellipsoid: 412.5 }, null];
+  const services = createApplicationRequestServices({
+    fetchImpl: async () => Response.json({ error: 'x', partial }, { status: 502 }),
+  });
+  const points = [{ lat: 30, lon: -97 }, { lat: 31, lon: -97 }];
+  await assert.rejects(services.terrain.getHeights(points), (error) => {
+    assert.match(error.message, /Terrain heights unavailable \(502\)/);
+    assert.deepEqual(error.partial, partial);
+    return true;
+  });
+  await assert.rejects(services.terrain.getHeights(points.slice(0, 1)), (error) => {
+    assert.equal(error.partial, undefined, 'a list of the wrong length is not attached');
+    return true;
+  });
+});
+
 test('the summary capability probe is asked once and unknown when unanswered', async () => {
   for (const [answer, expected] of [
     [() => Response.json({ configured: false }), false],
