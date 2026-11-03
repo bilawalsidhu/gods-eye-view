@@ -54,6 +54,7 @@ test('the Navara mode registers migrated renderers once', async () => {
       'gnss-integrity',
       's2-ghostmaps',
       'alpr-cameras',
+      'street-level',
       'satellites',
       'rocket-launches',
       'traffic',

@@ -457,6 +457,16 @@ export function createKartaViewProvider({
           coverage.attach(cesiumViewer);
         },
 
+        refreshCoverage: () => coverage.refresh(),
+        detachMap() {
+          coverage.releaseGraphics();
+          cones.releaseCollection(state.viewer);
+          state.viewer = null;
+        },
+        repaintMap() {
+          coverage.rebuild();
+          cones.rerender();
+        },
         deactivate() {
           coverage.detach();
           coverage.clear();

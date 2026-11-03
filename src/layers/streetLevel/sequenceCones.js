@@ -82,6 +82,10 @@ export function createSequenceCones({
 
   function ensureCollections(viewer) {
     if (state.sequence.collection) return;
+    if (viewer?.engine) {
+      state.sequence.collection = viewer.billboards(spriteId);
+      return;
+    }
     state.sequence.collection = new Cesium.BillboardCollection({
       scene: viewer.scene,
     });
@@ -128,7 +132,8 @@ export function createSequenceCones({
       });
       cones.push(billboard);
     }
-    horizon.update();
+    if (state.viewer?.engine) collection.changed();
+    else horizon.update();
     requestRender();
   }
 
@@ -137,7 +142,7 @@ export function createSequenceCones({
    * reloads a selected one (a provider that loads part of a sequence moved on).
    */
   async function select(sequenceId, { force = false } = {}) {
-    if (!sequenceId || !state.viewer) return;
+    if (!sequenceId || (!state.viewer && !state.context.waitingForView?.())) return;
     // Already on screen, or already on its way.
     if (
       !force &&
@@ -206,22 +211,27 @@ export function createSequenceCones({
     requestRender();
   }
 
-  function destroy(viewer) {
-    state.sequence.abort?.abort();
+  function releaseCollection(viewer) {
     horizon.stop();
     cones = [];
     const collection = state.sequence.collection;
     if (collection) {
       sprites?.unregisterSpriteCollection?.(spriteId, collection);
-      viewer?.scene?.primitives?.remove(collection);
+      if (viewer?.engine) collection.destroy();
+      else viewer?.scene?.primitives?.remove(collection);
       state.sequence.collection = null;
     }
+  }
+  function destroy(viewer) {
+    state.sequence.abort?.abort();
+    releaseCollection(viewer);
     state.sequence.images = [];
     state.sequence.selectedId = null;
   }
 
   return {
     ensureCollections,
+    releaseCollection,
     select,
     clearSelection,
     rerender,

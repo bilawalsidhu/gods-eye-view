@@ -10,7 +10,7 @@ export function createSelection({ state, parts }) {
     const viewer = state.viewer;
     if (!viewer || !state.enabled) return;
     if (input?.isPointerFree && !input.isPointerFree()) return;
-    const picked = viewer.scene.pick(
+    const picked = viewer.engine ? click.picked : viewer.scene.pick(
       click.position,
       CLICK_PICK_WINDOW_PX,
       CLICK_PICK_WINDOW_PX,
@@ -33,7 +33,7 @@ export function createSelection({ state, parts }) {
 
   /** Lon/lat of the ground under a screen point, or null (sky, no picker). */
   function groundPointAt(viewer, screenPosition) {
-    const position = state.services.scenePick?.pickGroundPosition?.(
+    const position = viewer.engine ? viewer.engine.picker.pickGlobe(screenPosition) : state.services.scenePick?.pickGroundPosition?.(
       viewer,
       screenPosition,
     );
@@ -68,6 +68,10 @@ export function createSelection({ state, parts }) {
 
   function install(viewer) {
     if (state.clickHandler) return;
+    if (viewer.engine) {
+      const remove = viewer.engine.input.on('click',onClick,{pick:true});
+      state.clickHandler = { isDestroyed:()=>false,destroy:remove };
+    } else {
     state.clickHandler = new Cesium.ScreenSpaceEventHandler(
       viewer.scene.canvas,
     );
@@ -75,6 +79,7 @@ export function createSelection({ state, parts }) {
       onClick,
       Cesium.ScreenSpaceEventType.LEFT_CLICK,
     );
+    }
     document.addEventListener('keydown', onKeyDown);
     picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, parts.router.ownsPick);
   }

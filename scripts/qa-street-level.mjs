@@ -125,7 +125,7 @@ const KEYLESS_HOSTS = [
  * `fixture`, which steps may change mid-run. `configured: undefined` lets the
  * server's real status route answer.
  */
-async function serveFixtures(page, fixture) {
+export async function serveFixtures(page, fixture) {
   // CDP Fetch on just these URLs: page-wide interception stalls Cesium workers.
   const cdp = await page.createCDPSession();
   await cdp.send('Fetch.enable', {
@@ -206,7 +206,7 @@ async function serveFixtures(page, fixture) {
   });
 }
 
-function newFixture(overrides = {}) {
+export function newFixture(overrides = {}) {
   return {
     configured: undefined,
     rejected: false,

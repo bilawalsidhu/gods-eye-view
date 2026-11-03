@@ -71,6 +71,7 @@ export function createStreetLevelLayer({
     isAvailable: (entry) => providerAvailable(entry),
   });
 
+  let waitingForView = false;
   let notifyQueued = false;
   function notify() {
     if (notifyQueued) return;
@@ -96,6 +97,7 @@ export function createStreetLevelLayer({
       getFilter: () => resolveFilter(state.filter),
       /** The layer and this provider's switch are both on. */
       isActive: () => state.enabled && entry.on,
+      waitingForView: () => waitingForView,
       notify,
       actions: {
         /** `{frame: false}` opens it without moving the camera. */
@@ -186,7 +188,7 @@ export function createStreetLevelLayer({
     cancelGroundRetry();
     const ready = state.enabled && groundClickHeightOk(state.viewer);
     if (
-      state.enabled &&
+      state.enabled && state.viewer &&
       !ready &&
       groundRetries < GROUND_RETRY_LIMIT &&
       groundUnderCamera(state.viewer) === null
@@ -257,14 +259,12 @@ export function createStreetLevelLayer({
 
   /** Ground under the screen centre; null for sky, undefined when it cannot aim. */
   function screenCentreGround() {
-    const canvas = state.viewer?.scene?.canvas;
+    const canvas = state.viewer?.engine?.host.canvas ?? state.viewer?.scene?.canvas;
     const pick = state.services.scenePick?.pickGroundPosition;
     if (!pick || !canvas?.clientWidth || !canvas?.clientHeight)
       return undefined;
-    const position = pick(state.viewer, {
-      x: canvas.clientWidth / 2,
-      y: canvas.clientHeight / 2,
-    });
+    const center = { x:canvas.clientWidth/2, y:canvas.clientHeight/2 };
+    const position = state.viewer.engine ? state.viewer.engine.picker.pickGlobe(center) : pick(state.viewer,center);
     const carto = position && geo.cartographic.fromCartesian(position);
     return carto
       ? {
@@ -477,24 +477,66 @@ export function createStreetLevelLayer({
       };
     },
 
-    init(viewer) {
-      state.viewer = viewer;
-      parts.marker.ensure(viewer);
-      parts.marker.setVisible(false);
-      for (const entry of state.providers.values()) {
-        entry.instance.init(viewer);
-        checkStatus(entry);
-      }
-      console.log('[Data:StreetLevel] Initialized');
+    init(viewer, options) {
+      this.attachRenderer(viewer,options);
+      for (const entry of state.providers.values()) checkStatus(entry);
     },
-
+    attachRenderer(viewer, {engine = null, waitForCameraRestore = false} = {}) {
+      const map = viewer ?? services.nativeRenderer?.(engine);
+      state.viewer = map;
+      waitingForView = waitForCameraRestore;
+      if (!map) return;
+      parts.marker.ensure(map);
+      parts.marker.setVisible(state.enabled);
+      for (const entry of state.providers.values()) {
+        entry.instance.init(map);
+        if(state.enabled && entry.on){
+          entry.instance.activate(map);
+          entry.instance.repaintMap?.();
+          if(providerAvailable(entry)) parts.credits.show(map,entry.def);
+        }
+      }
+      if (state.enabled) {
+        parts.selection.install(map);
+        watchCamera(map);
+        parts.marker.set(state.street.position,state.street.bearing,state.providers.get(state.street.providerId)?.def.marker);
+        remeasureGround();
+      }
+    },
+    resumeViewport() {
+      if (!waitingForView) return;
+      waitingForView=false;
+      if(state.enabled && state.viewer) {
+        for(const entry of activeEntries())entry.instance.refreshCoverage?.();
+        remeasureGround();
+      }
+    },
+    detachRenderer() {
+      const map=state.viewer;
+      if(!map)return;
+      waitingForView=true;
+      removeCameraListener?.();removeCameraListener=null;
+      cancelGroundRetry();
+      parts.framing.cancel();
+      parts.selection.uninstall();
+      for(const entry of state.providers.values()){
+        if(entry.instance.detachMap)entry.instance.detachMap();
+        else if(entry.on)entry.instance.deactivate();
+      }
+      parts.marker.destroy(map);
+      parts.credits.hideAll(map);
+      unsubscribeMapStack?.();
+      unsubscribeMapStack=null;
+      mapStack=null;
+      state.viewer=null;
+    },
     enable(viewer) {
       state.enabled = true;
-      state.viewer = viewer;
+      if (viewer) state.viewer = viewer;
       parts.marker.setVisible(true);
-      parts.selection.install(viewer);
+      parts.selection.install(state.viewer);
       for (const entry of activeEntries()) activate(entry);
-      watchCamera(viewer);
+      watchCamera(state.viewer);
       remeasureGround();
       notify();
     },
@@ -518,7 +560,8 @@ export function createStreetLevelLayer({
       return state.enabled;
     },
 
-    destroy(viewer = state.viewer) {
+    destroy() {
+      const viewer = state.viewer;
       layer.disable();
       for (const entry of state.providers.values())
         entry.instance.destroy(viewer);

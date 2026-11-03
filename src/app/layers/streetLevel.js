@@ -33,10 +33,11 @@ function defaultProviders(sources) {
  */
 export function createApplicationStreetLevel({
   sources = {},
+  nativeRenderer,
   providers = defaultProviders(sources),
 }) {
   return createStreetLevelLayer({
     providers,
-    services: { sprites, picking, input, scenePick, render },
+    services: { sprites, picking, input, scenePick, render, nativeRenderer },
   });
 }

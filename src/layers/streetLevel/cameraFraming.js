@@ -29,7 +29,8 @@ export function createCameraFraming({ state }) {
   function groundHeightAt(lon, lat, fallback) {
     const scene = state.viewer?.scene;
     const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-    let height = sampledSurfaceHeight(scene, carto);
+    const engine = state.viewer?.engine;
+    let height = engine ? engine.surface.sampleHeight(carto) ?? engine.surface.terrainHeight(carto) : sampledSurfaceHeight(scene, carto);
     if (height === null) height = scene?.globe?.getHeight?.(carto);
     if (!plausibleSurfaceHeight(height)) height = fallback;
     return plausibleSurfaceHeight(height) ? height : 0;
@@ -53,6 +54,13 @@ export function createCameraFraming({ state }) {
     const release = () => {
       if (flight === current) flight = null;
     };
+    if (state.viewer.engine) {
+      state.viewer.engine.camera.flyToSphere({
+        center:Cesium.Cartesian3.fromDegrees(position.lon,position.lat,ground+2),radius:4
+      }, {heading:Cesium.Math.toRadians(bearing || 0),pitch:Cesium.Math.toRadians(-32),range:140,duration:1.6,
+        complete:release,cancel:release});
+      return;
+    }
     state.viewer.camera.flyToBoundingSphere(
       new Cesium.BoundingSphere(
         Cesium.Cartesian3.fromDegrees(position.lon, position.lat, ground + 2),
