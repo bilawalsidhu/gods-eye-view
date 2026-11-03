@@ -51,8 +51,10 @@ const firstViewer = { name: 'first viewer' };
 const secondViewer = { name: 'second viewer' };
 
 async function boundManager(...layers) {
+  const options = layers.at(-1)?.module ? {} : layers.pop();
   const manager = new LayerLifecycle(firstViewer, {
     engine: engine('first'),
+    ...options,
   });
   const modules = layers.map(({ module }) => module);
   await manager.bindCatalog(firstViewer, engine('first'), catalog(...modules));
@@ -301,4 +303,157 @@ test('QA layers are reported when a scene switch drops them', async () => {
   }
   assert.equal(manager.layers.has('qa-probe'), false);
   assert.ok(warnings.some((line) => line.includes('qa-probe')));
+});
+
+const updatesOf = (calls) => calls.filter((call) => call[0] === 'update');
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test('a detach does not wait forever for an attachment that never settles', async () => {
+  let attachSignal;
+  const stuck = sceneLayer('stuck', {
+    attach(viewer, { signal }) {
+      if (viewer !== secondViewer) return undefined;
+      attachSignal = signal;
+      return new Promise(() => {});
+    },
+  });
+  const { manager, modules } = await boundManager(stuck, {
+    attachSettleTimeoutMs: 20,
+  });
+  await manager.detachScene();
+  const bound = quietly(() =>
+    manager.bindCatalog(secondViewer, engine('second'), catalog(...modules)),
+  );
+  await bound;
+  assert.equal(manager.viewer, secondViewer, 'the bind went on without it');
+  await quietly(() => manager.detachScene());
+  assert.equal(attachSignal.aborted, true, 'the late attachment was told');
+  assert.deepEqual(detaches(stuck.calls).at(-1), ['detach', secondViewer]);
+});
+
+test('a refresh due while attachments run is deferred once, not run twice', async () => {
+  let finishAttach;
+  const feed = sceneLayer('feed', {
+    attach(viewer) {
+      if (viewer !== secondViewer) return undefined;
+      return new Promise((resolve) => {
+        finishAttach = resolve;
+      });
+    },
+  });
+  const { manager, modules } = await boundManager(feed);
+  const entry = manager.layers.get('feed');
+  const before = updatesOf(feed.calls).length;
+  await manager.detachScene();
+  const bound = manager.bindCatalog(
+    secondViewer,
+    engine('second'),
+    catalog(...modules),
+  );
+  // An interval tick while the next scene is still attaching.
+  assert.equal(await manager._runPeriodicUpdate('feed', entry), false);
+  assert.equal(updatesOf(feed.calls).length, before);
+  finishAttach();
+  await bound;
+  await tick();
+  assert.equal(updatesOf(feed.calls).length, before + 1);
+  assert.equal(entry.refreshDeferred, false);
+});
+
+test('a normal refresh clears a deferred one', async () => {
+  const feed = sceneLayer('feed');
+  const { manager, modules } = await boundManager(feed);
+  const entry = manager.layers.get('feed');
+  await manager.detachScene();
+  await manager._runPeriodicUpdate('feed', entry);
+  assert.equal(entry.refreshDeferred, true);
+  manager._sceneDetached = false;
+  await manager._runPeriodicUpdate('feed', entry);
+  assert.equal(entry.refreshDeferred, false);
+  manager._sceneDetached = true;
+  const before = updatesOf(feed.calls).length;
+  await manager.bindCatalog(
+    secondViewer,
+    engine('second'),
+    catalog(...modules),
+  );
+  await tick();
+  assert.equal(updatesOf(feed.calls).length, before);
+});
+
+test('an explicit refresh between scenes waits for the next one and runs once', async () => {
+  const feed = sceneLayer('feed');
+  const { manager, modules } = await boundManager(feed);
+  const entry = manager.layers.get('feed');
+  await manager.detachScene();
+  await manager._runPeriodicUpdate('feed', entry); // a deferred interval tick
+  const before = updatesOf(feed.calls).length;
+  const refreshed = manager.refreshLayer('feed');
+  await tick();
+  assert.equal(updatesOf(feed.calls).length, before);
+  await manager.bindCatalog(
+    secondViewer,
+    engine('second'),
+    catalog(...modules),
+  );
+  assert.equal(await refreshed, true);
+  await tick();
+  assert.deepEqual(updatesOf(feed.calls).slice(before), [
+    ['update', secondViewer],
+  ]);
+});
+
+test('an explicit refresh between scenes ends false when its caller aborts', async () => {
+  const feed = sceneLayer('feed');
+  const { manager } = await boundManager(feed);
+  await manager.detachScene();
+  const caller = new AbortController();
+  const refreshed = manager.refreshLayer('feed', { signal: caller.signal });
+  caller.abort();
+  assert.equal(await refreshed, false);
+});
+
+test('a layer enabled between scenes initializes on the next scene', async () => {
+  const late = sceneLayer('late');
+  const present = sceneLayer('present');
+  const { manager, modules } = await boundManager(present);
+  const all = [...modules, late.module];
+  // Registered with the first catalog, never enabled there.
+  await manager.detachScene();
+  manager.register(late.module);
+  const enabled = manager.setEnabled('late', true, { origin: 'user' });
+  await tick();
+  assert.deepEqual(late.calls, [], 'no init against a missing scene');
+  await manager.bindCatalog(secondViewer, engine('second'), catalog(...all));
+  assert.equal(await enabled, true);
+  assert.deepEqual(late.calls.slice(0, 2), ['init', ['attach', secondViewer]]);
+});
+
+test('a detach does not deadlock on an enable parked for the next scene', async () => {
+  let finishAttach;
+  const slow = sceneLayer('slow', {
+    attach(viewer) {
+      if (viewer !== secondViewer) return undefined;
+      return new Promise((resolve) => {
+        finishAttach = resolve;
+      });
+    },
+  });
+  const other = sceneLayer('other');
+  const manager = new LayerLifecycle(firstViewer, { engine: engine('first') });
+  const modules = [slow.module, other.module];
+  await manager.bindCatalog(firstViewer, engine('first'), catalog(...modules));
+  await manager.setEnabled('slow', true, { origin: 'user' });
+  await manager.detachScene();
+  void manager.bindCatalog(secondViewer, engine('second'), catalog(...modules));
+  // Enabled while the second scene is still attaching: parked.
+  const enabled = manager.setEnabled('other', true, { origin: 'user' });
+  await tick();
+  const detached = manager.detachScene();
+  finishAttach();
+  await detached;
+  assert.equal(manager.viewer, null);
+  // Destroying the parked layer ends its enable instead of hanging.
+  assert.equal(await manager.destroyLayer('other'), true);
+  assert.equal(await enabled, false);
 });
