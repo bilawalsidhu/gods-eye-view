@@ -26,7 +26,7 @@ const VANDENBERG = {
 const pad = (launch, height = 0) =>
   geo.cartesian3.fromDegrees(launch.lon, launch.lat, height);
 
-function rig() {
+function rig({ tle = async () => '1 25544U' } = {}) {
   const engine = createFakeEngine({ kind: 'navara' });
   engine.fake.setPose({
     longitude: geo.math.toRadians(-100),
@@ -52,7 +52,7 @@ function rig() {
   let feed = [CAPE, VANDENBERG];
   const source = {
     getLaunches: async () => feed,
-    getActiveTle: async () => '1 25544U',
+    getActiveTle: () => tle(),
   };
   const parts = {
     panel: {
@@ -119,6 +119,7 @@ function rig() {
         ].includes(method),
       ),
     cleanup() {
+      parts.ingestion.clearPostTleRetry();
       state._sourceController.abort();
       parts.replay.stopMissionReplay();
       renderer.destroy();
@@ -179,6 +180,100 @@ test('edge:rocket-launches: a launch cancelled mid-flyover stops the flyover and
     assert.ok(near(r.engine.camera.pose().position, parked, 1));
     assert.equal(r.state._selectedLaunchId, CAPE.id, 'the card stays');
     assert.equal(r.shown(CAPE.id), true, 'the pad stays');
+  } finally {
+    r.cleanup();
+  }
+});
+
+/** An active-satellite lookup that answers only when the test says so. */
+function lateTle() {
+  let answer;
+  const pending = new Promise((resolve) => (answer = resolve));
+  return { tle: () => pending, answer: () => answer('1 25544U') };
+}
+const flights = (r) =>
+  r.cameraCommands().filter(({ method }) => method !== 'camera.lookAt');
+
+test('edge:rocket-launches: a late TLE answer and a refresh never take the camera from a superseded flyover', async () => {
+  const lookup = lateTle();
+  const r = rig({ tle: lookup.tle });
+  try {
+    await r.parts.ingestion.requestMissionUpdate();
+    r.parts.selection.setSelectedMission(CAPE.id);
+    r.parts.selection.focusMission(CAPE);
+    r.engine.fake.frames(200);
+    r.parts.replay.startMissionReplay(CAPE.id);
+    r.engine.fake.frames(20);
+    // The user moves on to the second mission's launch site.
+    r.parts.selection.setSelectedMission(VANDENBERG.id);
+    r.parts.selection.focusLaunchSite(VANDENBERG);
+    r.engine.fake.frames(400);
+    const parked = r.engine.camera.pose().position;
+    r.engine.fake.resetCalls();
+    lookup.answer();
+    await settle();
+    await r.parts.ingestion.requestMissionUpdate();
+    await settle();
+    r.engine.fake.frames(400);
+
+    assert.deepEqual(flights(r), [], 'no flight after the refresh');
+    assert.ok(near(r.engine.camera.pose().position, parked, 1));
+    assert.equal(r.state._selectedLaunchId, VANDENBERG.id);
+  } finally {
+    r.cleanup();
+  }
+});
+
+test('edge:rocket-launches: a late TLE answer and a refresh never take the camera after a running or cancelled flyover', async () => {
+  for (const cancel of [false, true]) {
+    const lookup = lateTle();
+    const r = rig({ tle: lookup.tle });
+    try {
+      await r.parts.ingestion.requestMissionUpdate();
+      r.parts.selection.setSelectedMission(CAPE.id);
+      r.parts.selection.focusMission(CAPE);
+      r.engine.fake.frames(200);
+      r.parts.replay.startMissionReplay(CAPE.id);
+      r.engine.fake.frames(20);
+      if (cancel) r.parts.replay.stopMissionReplay();
+      lookup.answer();
+      await settle();
+      // The refresh ends a running flyover (its tracks are rebuilt) and must
+      // leave the camera where the flyover put it.
+      const parked = r.engine.camera.pose().position;
+      r.engine.fake.resetCalls();
+      await r.parts.ingestion.requestMissionUpdate();
+      await settle();
+      r.engine.fake.frames(400);
+
+      assert.deepEqual(flights(r), [], `no flight (cancelled: ${cancel})`);
+      assert.ok(near(r.engine.camera.pose().position, parked, 1));
+      assert.equal(r.state._replayCameraLaunchId, null);
+      assert.equal(r.state._selectedLaunchId, CAPE.id, 'the card stays');
+    } finally {
+      r.cleanup();
+    }
+  }
+});
+
+test('edge:rocket-launches: a mission still framed when its late TLE arrives is framed again with the orbit', async () => {
+  const lookup = lateTle();
+  const r = rig({ tle: lookup.tle });
+  try {
+    await r.parts.ingestion.requestMissionUpdate();
+    r.parts.selection.setSelectedMission(CAPE.id);
+    r.parts.selection.focusMission(CAPE);
+    r.engine.fake.frames(200);
+    r.engine.fake.resetCalls();
+    lookup.answer();
+    await settle();
+    await r.parts.ingestion.requestMissionUpdate();
+    await settle();
+    assert.deepEqual(
+      flights(r).map(({ method }) => method),
+      ['camera.flyTo'],
+      'the orbit view is framed once',
+    );
   } finally {
     r.cleanup();
   }

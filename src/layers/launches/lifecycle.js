@@ -16,7 +16,10 @@ export function createLifecycle({
       layerState._orbitMatches = 0;
       this.attachRenderer(viewer, options);
     },
-    attachRenderer(viewer, { engine = null, waitForCameraRestore = false } = {}) {
+    attachRenderer(
+      viewer,
+      { engine = null, waitForCameraRestore = false } = {},
+    ) {
       layerState._engine = engine;
       layerState._renderer = services.renderer.create({ viewer, engine });
       layerState._viewer = layerState._renderer.view;
@@ -59,7 +62,8 @@ export function createLifecycle({
         holdContinuousRender('rocket-launches');
         layerState._dataSource.show = true;
         layerState._orbitMatches = 0;
-        for (const launch of layerState._launches) parts.rendering.addLaunchEntity(launch, layerState._renderedTleText);
+        for (const launch of layerState._launches)
+          parts.rendering.addLaunchEntity(launch, layerState._renderedTleText);
         parts.selection.showSelectedMission();
       }
       layerState._restoringViewport = true;
@@ -70,10 +74,18 @@ export function createLifecycle({
       if (!layerState._restoringViewport) return;
       layerState._restoringViewport = false;
       if (layerState._enabled && layerState._replayCameraLaunchId) {
-        parts.replay.startMissionReplay(layerState._replayCameraLaunchId, { resuming: true });
+        parts.replay.startMissionReplay(layerState._replayCameraLaunchId, {
+          resuming: true,
+        });
       } else if (layerState._enabled && layerState._missionZoomAnchorId) {
-        const launch = layerState._launches.find(item => item.id === layerState._missionZoomAnchorId);
-        if (launch) parts.selection.startMissionZoomAnchor(launch, layerState._missionZoomRange);
+        const launch = layerState._launches.find(
+          (item) => item.id === layerState._missionZoomAnchorId,
+        );
+        if (launch)
+          parts.selection.startMissionZoomAnchor(
+            launch,
+            layerState._missionZoomRange,
+          );
       }
       layerState._resumeRenderer?.();
       layerState._waitForRenderer = layerState._resumeRenderer = null;
@@ -81,15 +93,21 @@ export function createLifecycle({
 
     detachRenderer() {
       if (!layerState._renderer) return;
-      layerState._waitForRenderer ??= new Promise(resolve => { layerState._resumeRenderer = resolve; });
+      layerState._waitForRenderer ??= new Promise((resolve) => {
+        layerState._resumeRenderer = resolve;
+      });
       layerState._replayCameraToken++;
       layerState._replayCameraRemover?.();
       layerState._missionZoomAnchorRemover?.();
-      layerState._replayCameraRemover = layerState._missionZoomAnchorRemover = null;
+      layerState._replayCameraRemover = layerState._missionZoomAnchorRemover =
+        null;
       layerState._clickHandler?.destroy();
       layerState._moveHandler?.destroy();
       layerState._declutterHandler?.();
-      layerState._clickHandler = layerState._moveHandler = layerState._declutterHandler = null;
+      layerState._clickHandler =
+        layerState._moveHandler =
+        layerState._declutterHandler =
+          null;
       parts.launchPad.destroyLaunchPadZonePrimitive();
       parts.orbitRendering.removeMissionOrbitPrimitives();
       parts.overlays.clearMissionOverlaySources();
@@ -99,7 +117,11 @@ export function createLifecycle({
       layerState._replayTracks.clear();
       layerState._renderer.removeDataSource(layerState._dataSource);
       layerState._renderer.destroy();
-      layerState._dataSource = layerState._renderer = layerState._engine = layerState._viewer = null;
+      layerState._dataSource =
+        layerState._renderer =
+        layerState._engine =
+        layerState._viewer =
+          null;
       if (layerState._enabled) releaseContinuousRender('rocket-launches');
     },
 
@@ -158,6 +180,8 @@ export function createLifecycle({
       parts.launchPad.hideLaunchPadZone();
       parts.overlays.hideReplayVehicleOverlay();
       layerState._selectedLaunchId = null;
+      layerState._missionFocusIntentId = null;
+      layerState._focusAfterActiveLookup = false;
       parts.overlays.clearMissionOverlaySources();
       await parts.ingestion.restoreSatelliteDependency();
       parts.panel.renderMissionPanel();

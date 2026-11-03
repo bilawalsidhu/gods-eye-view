@@ -70,7 +70,8 @@ export function createIngestion({
           return null;
         layerState._activeTleText = text;
         layerState._focusAfterActiveLookup = Boolean(
-          layerState._selectedLaunchId,
+          layerState._selectedLaunchId &&
+          layerState._missionFocusIntentId === layerState._selectedLaunchId,
         );
         schedulePostTleRetry(token);
         return text;
@@ -210,7 +211,12 @@ export function createIngestion({
         parts.selection.setSelectedMission(null, false);
       } else {
         parts.selection.setSelectedMission(layerState._selectedLaunchId, true);
-        if (layerState._focusAfterActiveLookup) {
+        // Only a mission view nobody has left since the lookup answered: a
+        // flyover, a launch-site view or another mission supersedes it.
+        if (
+          layerState._focusAfterActiveLookup &&
+          layerState._missionFocusIntentId === layerState._selectedLaunchId
+        ) {
           parts.selection.focusMission(
             launches.find(
               (launch) => launch.id === layerState._selectedLaunchId,
