@@ -1824,6 +1824,7 @@ src/layers/launches/policyHelpers.js	LAYER	rocket-launches		Отделить и�
 src/layers/launches/render/cesium.js	LAYER	rocket-launches	cesium	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	launches-layer
 src/layers/launches/render/navara.js	LAYER	rocket-launches	three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/launches/render/navara.test.mjs	LAYER	rocket-launches		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/launches/render/navaraPadGround.js	LAYER	rocket-launches	postprocessing,three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/launches/rendering.js	LAYER	rocket-launches		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	launches-layer
 src/layers/launches/replay.js	LAYER	rocket-launches		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	launches-layer
 src/layers/launches/replay.test.mjs	LAYER	rocket-launches		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—

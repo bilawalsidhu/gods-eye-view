@@ -114,6 +114,7 @@ layers-a.md:153	unit	src/data/rocketLaunches.test.mjs::aligns the replay rocket 
 layers-a.md:153	unit	src/data/rocketLaunches.test.mjs::smooths small replay marker reprojection jitter but snaps camera jumps	Мелкое дрожание сглаживается, скачки камеры не сглаживаются.
 layers-a.md:153	unit	src/data/rocketLaunches.test.mjs::shows the screen-space rocket only while replay is active	Экранная ракета видна только во время воспроизведения.
 layers-a.md:153	unit	src/layers/launches/replayOverlay.test.mjs::the scene chrome renders the overlay in the globe container	Наложение ракеты рисуется в контейнере глобуса.
+layers-a.md:154	unit	src/layers/launches/render/navara.test.mjs::the pad zone is classified onto the surface with Cesium's fill, rim and emission	На Navara зона площадки классифицируется на рельеф и 3D-тайлы без выборки высоты, с теми же заливкой, ободом и свечением, что у Cesium (общий LAUNCH_PAD_ZONE_STYLE).
 layers-a.md:156	unit	src/data/rocketLaunches.test.mjs::replay releases aircraft tracking through both owning layer APIs	Воспроизведение снимает слежение за самолётами в обоих слоях.
 layers-a.md:156	unit	src/data/rocketLaunches.test.mjs::restores the complete standalone Satellite style after mission mode	После Space Missions возвращаются прежние параметры спутников.
 layers-a.md:156	unit	src/data/rocketLaunches.test.mjs::treats an already-active Satellite catalog mode as idempotent	Уже включённый режим каталога спутников не переключается повторно.

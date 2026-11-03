@@ -5,8 +5,11 @@ import {
   MISSION_ORBIT_PATTERN_GROUPS,
   MISSION_ORBIT_DASHES_PER_GROUP,
   LAUNCH_PAD_ZONE_RADIUS_M,
+  LAUNCH_PAD_ZONE_STYLE,
 } from '../policy.js';
 const HOVER_PICK_INTERVAL_MS = 120;
+/** A GLSL float literal (always with a decimal point). */
+const glslFloat = (value) => value.toFixed(4);
 
 /**
  * Bound hover picking independently of precise click selection. A move inside
@@ -209,19 +212,19 @@ export function createLaunchesCesiumRenderer(engine, { viewer } = {}) {
       fabric: {
         type: 'GevLaunchPadZone',
         uniforms: {
-          color: Cesium.Color.fromCssColorString('#22e6e6'),
-          fillAlpha: 0.105,
-          rimAlpha: 0.72,
+          color: Cesium.Color.fromCssColorString(LAUNCH_PAD_ZONE_STYLE.color),
+          fillAlpha: LAUNCH_PAD_ZONE_STYLE.fillAlpha,
+          rimAlpha: LAUNCH_PAD_ZONE_STYLE.rimAlpha,
         },
         source: `
         czm_material czm_getMaterial(czm_materialInput materialInput) {
           czm_material material = czm_getDefaultMaterial(materialInput);
           vec2 centered = (materialInput.st - vec2(0.5)) * 2.0;
           float radius = length(centered);
-          float inside = 1.0 - smoothstep(0.985, 1.0, radius);
-          float rim = smoothstep(0.952, 0.985, radius) * inside;
+          float inside = 1.0 - smoothstep(${glslFloat(LAUNCH_PAD_ZONE_STYLE.rimEnd)}, 1.0, radius);
+          float rim = smoothstep(${glslFloat(LAUNCH_PAD_ZONE_STYLE.rimStart)}, ${glslFloat(LAUNCH_PAD_ZONE_STYLE.rimEnd)}, radius) * inside;
           material.diffuse = color.rgb;
-          material.emission = color.rgb * rim * 0.35;
+          material.emission = color.rgb * rim * ${glslFloat(LAUNCH_PAD_ZONE_STYLE.emission)};
           material.alpha = color.a * inside * mix(fillAlpha, rimAlpha, rim);
           return material;
         }`,

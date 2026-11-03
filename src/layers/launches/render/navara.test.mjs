@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
 import { WHITE } from '../../shared/color.js';
+import { PerspectiveCamera, RGBADepthPacking } from 'three';
 import { createLaunchesNavaraRenderer } from './navara.js';
+import { PAD_GROUND_KEY, padGroundShader } from './navaraPadGround.js';
+import { LAUNCH_PAD_ZONE_STYLE } from '../policy.js';
 
 const position = geo.cartesian3.fromDegrees(0, 0, 1000);
 test('mission bank growth, callbacks and source visibility write actual mover stores', async () => {
@@ -130,41 +133,116 @@ test('mission hover uses engine drillPick and obeys disabled state', () => {
   engine.destroy();
 });
 
-test('flat pad uses a native mesh description, ellipsoid ENU placement and idempotent disposal', () => {
+test("the pad zone is classified onto the surface with Cesium's fill, rim and emission", () => {
   const engine = createFakeEngine();
   engine.fake.script('sampleHeight', 125);
-  let config,
-    removed = 0;
+  const effects = [];
+  let Desc;
+  class EffectDesc {
+    constructor(view, ctx, config) {
+      this.view = view;
+      this.ctx = ctx;
+      this.config = config;
+    }
+    find() {
+      return mrt;
+    }
+    onDestroy() {}
+  }
+  class NavaraEffect {
+    constructor(camera, effect) {
+      this.effect = effect;
+    }
+  }
+  const mrt = {
+    depthBuffer: { isTexture: true },
+    depthBufferPacking: RGBADepthPacking,
+  };
+  const camera = new PerspectiveCamera();
+  camera.position.set(6378137 + 2000, 0, 0);
+  camera.updateMatrixWorld();
   const view = {
-    registerMesh() {},
-    addMesh(value) {
-      config = value;
+    camera: { raw: camera },
+    registerEffect(key, desc) {
+      assert.equal(key, PAD_GROUND_KEY);
+      assert.ok(desc.insertAfter.includes('toneMapping'));
+      Desc = desc;
+    },
+    addEffect(config) {
+      const desc = new Desc(
+        view,
+        { getRenderTarget: () => ({ depthTexture: {} }) },
+        config,
+      );
+      desc.createPass();
+      const record = { desc, visible: config.visible, deleted: false };
+      effects.push(record);
       return {
-        delete() {
-          removed++;
+        update: ({ visible }) => (record.visible = visible),
+        delete: () => {
+          record.deleted = true;
+          desc.onDestroy();
         },
       };
     },
   };
   const renderer = createLaunchesNavaraRenderer(engine, {
     view,
-    MeshDesc: class {},
+    EffectDesc,
+    NavaraEffect,
   });
   const pad = renderer.createPad({ id: 'x', lon: 0, lat: 0 });
   assert.equal(
     engine.fake.callsOf('surface.sampleHeight').length,
     0,
-    'flat pad must not sample a coarse tile',
+    'classified onto the surface: no coarse tile height is sampled',
   );
-  const group = config.gevLaunchPad.group;
-  assert.equal(group.children.length, 2);
-  assert.equal(group.matrix.elements[12], 6378137);
-  assert.equal(group.children[0].material.polygonOffsetUnits, -4);
+  assert.equal(pad.heightM, null, 'no height of its own, as on Cesium');
+  assert.equal(effects.length, 1);
+  const { desc } = effects[0];
+  desc.updateFrame();
+  const u = desc.effect.uniforms;
+  // The pad 2 km below the camera, the ENU axes of lon 0, lat 0.
+  assert.deepEqual(u.get('uPadOffset').value.toArray(), [-2000, 0, 0]);
+  assert.deepEqual(u.get('uUp').value.toArray(), [1, 0, 0]);
+  assert.deepEqual(
+    u
+      .get('uEast')
+      .value.toArray()
+      .map((v) => Math.round(v) + 0),
+    [0, 1, 0],
+  );
+  assert.deepEqual(
+    u
+      .get('uNorth')
+      .value.toArray()
+      .map((v) => Math.round(v) + 0),
+    [0, 0, 1],
+  );
+  assert.equal(u.get('tAllDepth').value, mrt.depthBuffer);
+  // Cesium's GevLaunchPadZone material, from the same style.
+  const rgb = u
+    .get('uPadColor')
+    .value.toArray()
+    .map((v) => Math.round(v * 255));
+  assert.deepEqual(rgb, [0x22, 0xe6, 0xe6]);
+  for (const part of [
+    `smoothstep(${LAUNCH_PAD_ZONE_STYLE.rimEnd.toFixed(4)},1.0,radius)`,
+    `smoothstep(${LAUNCH_PAD_ZONE_STYLE.rimStart.toFixed(4)},${LAUNCH_PAD_ZONE_STYLE.rimEnd.toFixed(4)},radius)`,
+    `mix(${LAUNCH_PAD_ZONE_STYLE.fillAlpha.toFixed(4)},${LAUNCH_PAD_ZONE_STYLE.rimAlpha.toFixed(4)},rim)`,
+    `(1.0+${LAUNCH_PAD_ZONE_STYLE.emission.toFixed(4)}*rim)`,
+    '/500.0000',
+    'if(depth<surface-2e-7) return;',
+  ])
+    assert.ok(padGroundShader.includes(part), part);
   pad.show = false;
-  assert.equal(group.visible, false);
+  assert.equal(effects[0].visible, false);
+  pad.show = true;
+  assert.equal(effects[0].visible, true);
   pad.destroy();
   pad.destroy();
-  assert.equal(removed, 1);
+  assert.equal(effects[0].deleted, true);
+  assert.equal(effects.filter((e) => e.deleted).length, 1);
   renderer.destroy();
   engine.destroy();
 });
