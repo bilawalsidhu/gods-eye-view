@@ -1,0 +1,515 @@
+{
+  "commit": "c80864e5a67f25c5f37e3ef763002200fd3f3b29",
+  "dirty": false,
+  "dirtyFiles": [],
+  "dirtyFilesAtEnd": [
+    "docs/migration/planet-separation/README.md",
+    "docs/migration/planet-separation/acceptance.md",
+    "docs/migration/planet-separation/layers.md",
+    "docs/migration/planet-separation/progress.md",
+    "scripts/qa-engine-switch.mjs",
+    "scripts/qa-layer-handoff.mjs",
+    "src/app/catalog.test.mjs",
+    "src/app/data.js",
+    "src/data/bhoteKoshiEvent.js",
+    "src/data/bhoteKoshiEvent.test.mjs",
+    "src/data/layerStateCoordinator.js",
+    "src/data/lifecycle.js",
+    "src/data/lifecycleScene.test.mjs",
+    "src/layers/ghostMaps/index.js",
+    "src/layers/infrastructure/index.js",
+    "src/layers/infrastructure/session.test.mjs",
+    "src/layers/submarineCables/session.js",
+    "src/layers/submarineCables/session.test.mjs",
+    "src/main.js",
+    "src/sharelink.js",
+    "src/sharelink.navigation.test.mjs",
+    "src/standalone/engineSwitch.js",
+    "src/standalone/engineSwitch.test.mjs",
+    "src/ui/styles/controls.css",
+    "src/data/layerStateHandoff.test.mjs"
+  ],
+  "chrome": "Chrome/156.0.8078.79",
+  "puppeteerExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "node": "v26.12.0",
+  "platform": "darwin arm64",
+  "baseUrl": "http://127.0.0.1:4208",
+  "startedAt": "2026-11-03T11:09:24.162Z",
+  "finishedAt": "2026-11-03T11:21:25.125Z",
+  "layers": [
+    "air-quality",
+    "ais-live-vessels",
+    "alpr-cameras",
+    "bhote-koshi-2026",
+    "bhote-koshi-locator",
+    "bikeshare",
+    "cctv",
+    "directions",
+    "earthquakes",
+    "fire-perimeters",
+    "flights",
+    "gnss-integrity",
+    "local-adsb",
+    "local-dams",
+    "local-datacenters",
+    "local-firms",
+    "military",
+    "military-awareness",
+    "military-installations",
+    "radio",
+    "recent-imagery",
+    "rocket-launches",
+    "s2-ghostmaps",
+    "satellites",
+    "street-level",
+    "telegeography-submarine-cables",
+    "traffic",
+    "transit",
+    "weather-cyclones",
+    "weather-lightning",
+    "weather-radar",
+    "weather-satellite",
+    "wind"
+  ],
+  "passed": 28,
+  "failed": 0,
+  "scenarios": [
+    {
+      "label": "engine-switch",
+      "script": "scripts/qa-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "earthquakes"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 47.5,
+      "log": "engine-switch.log",
+      "logSha256": "398020f191492f2fa9623fceae9f4ac2c312b5f7eb28fc74f62cd491e4d79816"
+    },
+    {
+      "label": "director-engine-switch",
+      "script": "scripts/qa-director-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 46.9,
+      "log": "director-engine-switch.log",
+      "logSha256": "f1ad9279c2da96d9dfea3eee13137f37043b9dcf9ff8de42d2280094061fd68c"
+    },
+    {
+      "label": "layer-handoff",
+      "script": "scripts/qa-layer-handoff.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "flights"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 10,
+      "log": "layer-handoff.log",
+      "logSha256": "5e596f58b415bf6195360af37d7e54e090f0c2380c374b1bec913f472540306a"
+    },
+    {
+      "label": "layer-handoff--military",
+      "script": "scripts/qa-layer-handoff.mjs",
+      "args": [
+        "http://127.0.0.1:4208",
+        "--military"
+      ],
+      "layers": [
+        "military"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 10,
+      "log": "layer-handoff--military.log",
+      "logSha256": "5e596f58b415bf6195360af37d7e54e090f0c2380c374b1bec913f472540306a"
+    },
+    {
+      "label": "ground-layer-switch",
+      "script": "scripts/qa-ground-layer-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "ais-live-vessels",
+        "air-quality",
+        "gnss-integrity",
+        "fire-perimeters"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 72.1,
+      "log": "ground-layer-switch.log",
+      "logSha256": "e28197471ce3c6247314f8b0ef217f4e608e2846cf421f8a813506ae0ed0fab7"
+    },
+    {
+      "label": "contact-switch",
+      "script": "scripts/qa-contact-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "military-awareness",
+        "military-installations"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 9,
+      "log": "contact-switch.log",
+      "logSha256": "7fab7d06f72d44728a9b9eb84dada479dfd3e89b3d1cdb715741c659c37e48ed"
+    },
+    {
+      "label": "local-adsb-engine-switch",
+      "script": "scripts/qa-local-adsb-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "local-adsb"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 8.7,
+      "log": "local-adsb-engine-switch.log",
+      "logSha256": "fbf922362bb05996c6577ae76dce815cd656cf8e5800d6149dbbb41ab5959469"
+    },
+    {
+      "label": "ghostmaps-switch",
+      "script": "scripts/qa-ghostmaps-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "s2-ghostmaps"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 18.2,
+      "log": "ghostmaps-switch.log",
+      "logSha256": "612e68acaee1d46bc04063c7441c1c0089d6c1612affae9f793a7f3421afd44b"
+    },
+    {
+      "label": "weather-engine-switch",
+      "script": "scripts/qa-weather-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "weather-radar",
+        "weather-satellite",
+        "weather-lightning",
+        "weather-cyclones"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 15.8,
+      "log": "weather-engine-switch.log",
+      "logSha256": "89ebb54cdb64678e4260c80ece4ccaf4430b4195eb664bd7629742f81d973630"
+    },
+    {
+      "label": "wind-engine-switch",
+      "script": "scripts/qa-wind-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "wind"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 13.4,
+      "log": "wind-engine-switch.log",
+      "logSha256": "2d052aa4c8414606c4ee0b98f4c8281cfde1951c856cac941a97413c5bb301d1"
+    },
+    {
+      "label": "infrastructure-engine-switch",
+      "script": "scripts/qa-infrastructure-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "local-dams",
+        "local-datacenters"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 14.6,
+      "log": "infrastructure-engine-switch.log",
+      "logSha256": "abcb48a21fe0145090c71fa3bcb74bda01fb10012818d038ab9755c051a2cab7"
+    },
+    {
+      "label": "submarine-cables-engine-switch",
+      "script": "scripts/qa-submarine-cables-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "telegeography-submarine-cables"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 11.9,
+      "log": "submarine-cables-engine-switch.log",
+      "logSha256": "227caa7bdb17d6a6799c47791c7acd08912a3d1f25e75036476cbf1e29f4df3a"
+    },
+    {
+      "label": "directions-engine-switch",
+      "script": "scripts/qa-directions-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "directions"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 14.9,
+      "log": "directions-engine-switch.log",
+      "logSha256": "e79e9d3a6b4b08765a66d2da6f881f4c4edac0ad5d74eec37a414e012a9b3513"
+    },
+    {
+      "label": "nepal-locator-switch",
+      "script": "scripts/qa-nepal-locator-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "bhote-koshi-locator"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 16.6,
+      "log": "nepal-locator-switch.log",
+      "logSha256": "6475104879d5885dbe27fbad9dfc67405d323dc2471311f6a4d99da5803a335b"
+    },
+    {
+      "label": "nepal-event-switch",
+      "script": "scripts/qa-nepal-event-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "bhote-koshi-2026"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 14.6,
+      "log": "nepal-event-switch.log",
+      "logSha256": "b44d799d0476dbd8bb5945d1f507edcd0f981e3f993fa2066a1553e230fc4136"
+    },
+    {
+      "label": "traffic-engine-switch",
+      "script": "scripts/qa-traffic-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "traffic"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 14.3,
+      "log": "traffic-engine-switch.log",
+      "logSha256": "043a3598dc1863b1842e3a5615c5520af5429f745ecf7b2b072d49182989aaa8"
+    },
+    {
+      "label": "traffic-engine-switch--simulation",
+      "script": "scripts/qa-traffic-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208",
+        "--simulation"
+      ],
+      "layers": [
+        "traffic"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 13.8,
+      "log": "traffic-engine-switch--simulation.log",
+      "logSha256": "a718f60072815e1db6219161d48c4fb234abde75a608e37a22bd32bcd43c8d33"
+    },
+    {
+      "label": "street-level-engine-switch",
+      "script": "scripts/qa-street-level-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "street-level"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 9.6,
+      "log": "street-level-engine-switch.log",
+      "logSha256": "368789e88605c106784e06d76ec662860d4ad84dfb02d5c4290bd1d61626101b"
+    },
+    {
+      "label": "street-level-engine-switch--panoramax",
+      "script": "scripts/qa-street-level-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208",
+        "--panoramax"
+      ],
+      "layers": [
+        "street-level"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 8.9,
+      "log": "street-level-engine-switch--panoramax.log",
+      "logSha256": "0a825b9635ea17b0f55b8d1eb4dfbfb300378e2fc8635cde2b4a29f381fe6705"
+    },
+    {
+      "label": "radio-engine-switch",
+      "script": "scripts/qa-radio-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "radio"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 8.6,
+      "log": "radio-engine-switch.log",
+      "logSha256": "a46db0fa4b92100e4f0076a859500ca3da38ce36deadaf504e2b218f979cd128"
+    },
+    {
+      "label": "w2-imagery",
+      "script": "scripts/qa-w2-imagery.mjs",
+      "args": [
+        "--url",
+        "http://127.0.0.1:4208/?engine=navara",
+        "--report",
+        "<output>/imagery.json",
+        "--switch",
+        "--preview"
+      ],
+      "layers": [
+        "recent-imagery"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 167.3,
+      "log": "w2-imagery.log",
+      "logSha256": "1bda1f84bcfb380290fa617ecba4a780d5900420963e7f149ddb13c8b6ea9fa7"
+    },
+    {
+      "label": "fire-camera-switch",
+      "script": "scripts/qa-fire-camera-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "alpr-cameras"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 11.4,
+      "log": "fire-camera-switch.log",
+      "logSha256": "fa5df05da6634f8d3e680f0fd77663e7213a1c7378669d3bcb7a9a6f8d7fb311"
+    },
+    {
+      "label": "fire-camera-switch--fires",
+      "script": "scripts/qa-fire-camera-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208",
+        "--fires"
+      ],
+      "layers": [
+        "local-firms"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 12.7,
+      "log": "fire-camera-switch--fires.log",
+      "logSha256": "ab4938f4d0e5f0f82682cfda1353c676fd012ad9c4ff2e0b2934ba49d818c691"
+    },
+    {
+      "label": "urban-engine-switch",
+      "script": "scripts/qa-urban-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "bikeshare"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 13.5,
+      "log": "urban-engine-switch.log",
+      "logSha256": "f22042ae9d55eedab437035bea896c27f7ae4b576b4619570b70bd8ddf897361"
+    },
+    {
+      "label": "urban-engine-switch--transit",
+      "script": "scripts/qa-urban-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208",
+        "--transit"
+      ],
+      "layers": [
+        "transit"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 71.1,
+      "log": "urban-engine-switch--transit.log",
+      "logSha256": "0ea656d153b601e6de9f351499f6ad45d553c0d6ce0d8f401f71ceb1bf49806d"
+    },
+    {
+      "label": "cctv-engine-switch",
+      "script": "scripts/qa-cctv-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "cctv"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 10.5,
+      "log": "cctv-engine-switch.log",
+      "logSha256": "8d2c1a778c299400e9a9b34b2782d54c1875cc4dc1ff716b3aab281df45c1baf"
+    },
+    {
+      "label": "space-engine-switch",
+      "script": "scripts/qa-space-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208"
+      ],
+      "layers": [
+        "satellites"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 9.3,
+      "log": "space-engine-switch.log",
+      "logSha256": "e8f5b7829f3d1d72a084f2453238757c5a27d5428aef77a5a7a70d3ba709a42f"
+    },
+    {
+      "label": "space-engine-switch--missions",
+      "script": "scripts/qa-space-engine-switch.mjs",
+      "args": [
+        "http://127.0.0.1:4208",
+        "--missions"
+      ],
+      "layers": [
+        "rocket-launches"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "seconds": 45.7,
+      "log": "space-engine-switch--missions.log",
+      "logSha256": "944bf86556f3dc03b19f92bac0ddb1af10bf1c7cd374ae163f8916ef4d537c4d"
+    }
+  ]
+}

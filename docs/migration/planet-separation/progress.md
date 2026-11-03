@@ -1,8 +1,8 @@
 # Проверка отделения слоёв от планеты
 
-[Итоговая приёмка всех 33 слоёв и переключения движков](acceptance.md) содержит проверенную матрицу и команды воспроизведения.
+[Приёмка всех 33 слоёв и переключения движков](acceptance.md) описывает, что утверждают браузерные сценарии, что не проверено, и команды воспроизведения. Записи ниже сделаны по ходу работы; где они расходятся с приёмкой, верна приёмка.
 
-Рабочая ветка `codex/navara`. База плана `deb85ed5`. В таблице «удерживается» означает, что между сценами сохраняется экземпляр модели и его данные. Восстановление слоя из ссылки при создании нового экземпляра этой проверке не соответствует.
+Рабочая ветка `codex/navara`. База плана `9824bbba`. В таблице «удерживается» означает, что между сценами сохраняется экземпляр модели и его данные. Восстановление слоя из ссылки при создании нового экземпляра этой проверке не соответствует.
 
 | Слой | Что проверено |
 | --- | --- |
@@ -23,7 +23,7 @@
 
 При искусственном отказе создания WebGL-контекста Cesium восстанавливаются Navara, тот же рейс и кабина. Следующая попытка проходит успешно.
 
-Сборка и preview с пустыми `GOOGLE_MAPS_API_KEY` и `CESIUM_ION_TOKEN`. На отдельном разрешённом порту выполнить `node scripts/qa-layer-handoff.mjs http://127.0.0.1:4208/` и `node scripts/qa-engine-switch.mjs http://127.0.0.1:4208/`. Для проверки военного рейса передать `--military` в `qa-layer-handoff.mjs`. Проверка качества воздуха, GNSS и пожарных периметров — `node scripts/qa-ground-layer-switch.mjs http://127.0.0.1:4208/`. Скрипты используют headless Chrome и блокируют платные тайлы до перехода на страницу. Если эталонные данные меняются, повторить сначала сценарий без пользовательских ключей.
+Сборка и preview с пустыми ключами, как в разделе «Как повторить» [приёмки](acceptance.md), и `PUPPETEER_EXECUTABLE_PATH`, указывающим на установленный Chrome. На отдельном разрешённом порту выполнить `node scripts/qa-layer-handoff.mjs http://127.0.0.1:4208/` и `node scripts/qa-engine-switch.mjs http://127.0.0.1:4208/`. Для проверки военного рейса передать `--military` в `qa-layer-handoff.mjs`. Проверка качества воздуха, GNSS и пожарных периметров — `node scripts/qa-ground-layer-switch.mjs http://127.0.0.1:4208/`. Скрипты используют headless Chrome и блокируют платные тайлы до перехода на страницу. Если эталонные данные меняются, повторить сначала сценарий без пользовательских ключей.
 
 Для проверки Contacts выполнить `node scripts/qa-contact-switch.mjs http://127.0.0.1:4208/`.
 
@@ -33,67 +33,64 @@
 
 Для проверки полных инфраструктурных наборов выполнить `node scripts/qa-infrastructure-engine-switch.mjs http://127.0.0.1:4208/`.
 
-## Промежуточное состояние после первых 26 регистраций
+## Записи по слоям
 
-Из 33 слоёв каталога исходно в Navara зарегистрировано 15. С добавлением Air quality, GNSS Integrity и Fire Perimeters зарегистрировано 18. С Global Context зарегистрировано 19, с S2 GhostMaps — 20, с тремя погодными продуктами — 23, с циклонами — 24, с дамбами и дата-центрами — 26. У остальных исходных адаптеров ещё нужно отделить данные от сцены и пройти проверки по `layers.md`. Семь слоёв ожидают переноса графики. Строка выбранного рейса в панели Vue сохраняет идентичность при успешном переключении и отказе запуска кандидата. Остальные контроллеры интерфейса и инструменты ещё создаются заново. Нужны отдельные проверки фонового/быстрого переключения и потери активного графического контекста. Полный паритет не достигнут.
+### Local ADS-B
 
+Тюнер, опрос декодера, история движения по ICAO и выбранный самолёт принадлежат сессии слоя. При смене меняются только наборы моделей, следы и обработчики ввода. Приёмник-фикстура продолжал выдавать данные, пока сцена была отсоединена. В headless-прогоне на релизной сборке туда и обратно было одно открытие потока, ни одной остановки и ни одного закрытия устройства, выбранный самолёт восстановлен на обеих планетах. Физическое USB-устройство не открывалось.
 
-### Local ADS-B receiver handoff
+### Ветер
 
-The tuner, decoder poller, ICAO motion history and selected flight belong to the layer session. Only model banks, trail draws and input handlers change on switch. The receiver fixture advanced while detached. Headless release round trip kept one feed start, zero stops and zero device closes, with the selected aircraft restored on both globes. No physical USB device was opened.
+Модель прогноза владеет загрузкой GFS/IFS, скалярным полем, паузой, единицами и точкой замера. Navara рисует один инстансированный поток и кладёт цветовое поле под наблюдаемую погоду. На релизной сборке без ключей наблюдалось 7 200 траекторий на каждом движке; сценарий утверждает больше 1 000. Замер в точке дал 10 м/с с юго-запада и 40 °C из той же сетки, цвет температуры проверен в кадре. Фаза анимации шла после продолжения и стояла на паузе.
 
-### Wind on both globes
+### Подводные кабели
 
-The forecast model owns GFS/IFS acquisition, scalar overlay, pause, units and sampled position. Navara draws a single instanced flow mesh and composes the color field below observed weather. The keyless release round trip rendered 7,200 paths per engine, sampled 10 m/s from SW and 40 °C from the same grid, and proved the temperature color in the actual viewport. The animated phase advanced after resume and froze on pause. Package boundaries and the full unit suite passed.
+Источник переживает смену сцены во время загрузки. Navara рисует трассы одним векторным слоем на 534 цвета источника, объединяет опоры и маркеры, применяет общий порядок подписей и летит к выбранной посадочной точке. На релизной сборке без ключей загружены 712 кабелей и 1 917 посадочных точек; сценарий утверждает их сумму 2 629, по одному чтению каждого файла и не больше 160 подписей.
 
-### Submarine cables on both globes
+### Маршрут и полёт по нему
 
-The geographic source survives an in-flight scene change. Navara shares one route vector layer across 534 source colors, batches stems and marker tips, applies the common label ranking and flies to a clicked landing point. A keyless release round trip loaded all 712 cables and 1,917 landings, read each asset once, respected the 160-label ceiling and verified the landing flight. The full suite and package boundary checks passed.
+Слой хранит A/B, ожидающий запрос маршрута, выбранный манёвр и траекторию полёта. Обе камеры применяют одни кадры маршрута и ограничение высоты. Сценарий ставит A и B кликами на Navara, получает в Cesium маршрут, запрошенный до смены, восстанавливает выбранный шаг и дважды переключается во время FLY. Тот же ID движения продвигается на каждой планете (около 60 м за замер). Маршрут запрошен один раз. CLEAR удаляет маршрут; что он освобождает камеру, не утверждается.
 
-### Directions and an active route flight
+### Локатор Непала
 
-One layer retains A/B, a pending route, maneuver selection and the flight trajectory. Both cameras apply the same route frames and floor policy. The release test placed A and B with real Navara clicks, received the previously pending route in Cesium, restored the selected step, then switched twice during FLY. The same motion ID advanced on each globe (about 60 metres in each timed sample). CLEAR released it. The route was requested once. Full tests, boundaries, release build and keyless headless round trip passed.
+Локатор владеет границей Непала, часами презентации и графикой источника и при смене меняет только подключение к сцене. Navara рисует прижатую к поверхности геометрию в цветах карты и пульсирующие маркеры. Сценарий сравнивает тот же кадр с рекой и без неё. Наблюдалось 374 добавленных голубых пикселя на Navara, 413 на Cesium и 353 после возврата; утверждается больше 50. Попутно исправлены вычисление цвета под конкретный движок для TeleGeography и владение динамическими подписями источников на каждом экране.
 
-### Nepal locator
+### Бхоте-Коси
 
-The locator owns its Nepal boundary, presentation clock and source graphics, and switches only their scene attachment. Navara draws map-colored clamped geometry and pulse markers. The release test compared the same viewport with the river visible and hidden: 374 additional cyan pixels on Navara, 413 on Cesium, and 353 after returning to Navara. Also corrected engine-specific color evaluation for TeleGeography and dynamic credit ownership per display. The cable round trip passed again.
+Пакет события, пара исторических снимков, шкала на паузе и при воспроизведении, контейнер плеера и разделитель сохраняются. Navara накладывает растры на рельеф с учётом глубины и использует ту же геометрию разлива. Сценарий проверяет разные пиксели снимков до и после, одно чтение каждого файла события, ту же долю 52 % на паузе и продолжение воспроизведения на другом движке. Scene Director установлен на Navara, голосовой список сцен работает. Очередь кадров самого Director и сторонние пакеты сцен этим сценарием не проверяются.
 
-### Bhote Koshi reconstruction
+### Трафик
 
-The event pack, historical image pair, paused/playing timeline, player host and divider persist. Navara applies the geographic rasters to terrain depth and samples the same authored flood geometry. The release round trip proved different real before/after image pixels, one read of each event/image asset, identical 52 percent paused progress and continued playback on the next engine. Scene Director is now installed on Navara and its voice scene list works. Continuity of the Director’s own multi-shot queue and third-party scene data packs is separate from the event timeline round trip.
-
-### Traffic
-
-The city road source, flow requests, vehicle identities and simulation phase survive a switch. The incoming scene waits for the restored camera before querying its viewport or refreshing local surface heights. A release round trip in Austin retained 1,093 moving vehicles and 35 congestion corridors with fixture-backed live flow. The independent simulation case retained 620 vehicles. Both captures compared visible traffic against disabled traffic over the same streets.
+Источник дорог, запросы потока, ID машин и фаза симуляции переживают смену. Новая сцена ждёт восстановления камеры, прежде чем запрашивать область и уточнять высоты. С потоком из фикстуры в Остине наблюдались 1 093 машины и 35 коридоров пробок, в симуляции около 620 машин. После каждой смены сценарий утверждает не меньше 10 машин и прежние ID. Через несколько секунд после возврата на Navara население иногда сокращается до 112 или 260 машин, а часть машин оказывается под рельефом; это известный дефект, сценарий его печатает. Сравнение со скрытым слоем сделано по отдельным машинам на тёмной подложке-фикстуре.
 
 ### Street Level
 
-Coverage, sequence, attribution, photo hosts and filters now share the same owner. The release checks used physical Navara line clicks on fixture-backed KartaView and Panoramax coverage. The same mounted photo and all 36 KartaView or 73 Panoramax sequence images survived Navara → Cesium → Navara. Google Street View still requires an eligible Google map and a configured key; these tests used neither.
+Покрытие, последовательность, атрибуция, контейнеры фото и фильтры принадлежат одному владельцу. Сценарий кликает по линиям покрытия на Navara с фикстурами KartaView и Panoramax. Та же открытая фотография и то же число снимков последовательности (наблюдалось 36 для KartaView и 73 для Panoramax) сохранились на переходе Navara → Cesium → Navara. Google Street View требует подходящей карты Google и ключа; здесь не использовалось ни то, ни другое.
 
-### Radio and Recent Imagery
+### Радио и свежие снимки
 
-Radio kept one playing audio element, the selected broadcaster, volume and the original 750-station directory through Navara → Cesium → Navara. The fixture observed one play and one directory fetch. Recent Imagery retained both pinned dates and the original STAC search. Release screenshots sampled the expected red and green rasters on opposite sides on each engine. Box selection, divider dragging, a failed image replacement and cleanup also passed.
+Радио сохранило элемент audio, выбранную станцию, громкость и исходный каталог из 750 станций на переходе Navara → Cesium → Navara. Фикстура видела один запуск воспроизведения и один запрос каталога; при этом `HTMLMediaElement.prototype.play` подменён. Recent Imagery сохранил обе выбранные даты и исходный поиск STAC. На скриншотах релизной сборки красный и зелёный растры видны по разные стороны разделителя на каждом движке. Выбор рамкой, перетаскивание разделителя, неудачная замена снимка и очистка тоже прошли.
 
-### FIRMS and ALPR camera reports
+### FIRMS и камеры ALPR
 
-A pointer-selected FIRMS detection from a 371-fire snapshot and a pointer-selected camera in a 325-camera query stayed selected after both switches. Both layers reused the original records and acquisition timestamps and retained the application context selection. ALPR defers its viewport query until the new camera is in place; FIRMS recreates its horizon-culling and sprite-order bindings without reloading the feed.
+Очаг из 371 в снимке FIRMS и камера из 325 в запросе, выбранные указателем на Navara, остались выбранными после обеих смен. Оба слоя использовали прежние записи и время получения и сохранили выбор в Context. ALPR откладывает запрос области до установки новой камеры; FIRMS пересоздаёт отсечение по горизонту и порядок значков без перезагрузки фида.
 
-### Bikeshare and Transit
+### Велопрокат и транспорт
 
-The Boston GBFS test retained its selected dock, availability and 200 stations with one station-information request. Transit previously skipped proximity checks on a scene without a Cesium viewer. Its viewport now uses the active renderer. The MBTA fixture activated from the map, kept its 12 vehicles, selected bus and single trail-history request through both handoffs. The selection was made with a physical map click in both tests.
+Тест GBFS в Бостоне сохранил выбранную станцию и прежние ID станций при одном запросе информации о станциях. Наблюдалось 200 станций; доступность велосипедов не утверждается. Transit раньше пропускал проверку близости на сцене без Cesium viewer, теперь область берётся у активного рендерера. Фикстура MBTA сохранила 12 машин, выбранный автобус и один запрос истории следа на обоих переходах. Выбор в обоих тестах сделан кликом по карте.
 
-### CCTV projection and video
+### CCTV
 
-Camera records, calibration and the active decoder stay in the session. The renderer owns monitor planes, textures, markers, geometry and picking. The release check decoded a local 320 × 180 MP4, kept the same playing HTMLVideoElement through both switches, observed advancing decoded frames on each scene, retained the viewshed mode and created a native plane each time without another catalog request. The still-image scheduler and map-click regression tests also passed.
+Записи камер, калибровка и активный декодер остаются в сессии. Рендерер владеет плоскостями мониторов, текстурами, маркерами, геометрией и выбором. Сценарий декодирует локальный MP4 320 × 180, сохраняет тот же HTMLVideoElement на обеих сменах, видит новые кадры на каждой сцене и создаёт плоскость заново без повторного запроса каталога. Калибровка и видимость плоскости не утверждаются.
 
-### Satellites and Space Missions
+### Спутники и Space Missions
 
-A tracked ISS and its ring remained active through Navara → Cesium → Navara with all 6,839 core and dense satellite positions. Each of the seven fixture TLE groups was read once. The launch library, TLE dependency, selected mission, replay rate, pause and Space Missions mode retain their session. The recorded globe camera is restored before replay or follow takes it back. Space Missions exit restores the original layer visibility.
+Сопровождение МКС и её кольцо сохранились на переходе Navara → Cesium → Navara вместе с 6 839 положениями основных и плотных групп. Число чтений семи групп TLE на смене не меняется; что каждая прочитана ровно один раз, не утверждается. Каталог запусков, зависимость от TLE, выбранная миссия, скорость повтора, пауза и режим Space Missions принадлежат сессии. Записанная камера глобуса восстанавливается до того, как повтор или сопровождение снова её забирают. Выход из Space Missions восстанавливает исходную видимость слоёв.
 
 ### Авторские сцены и повтор запуска
 
 Scene Director теперь переживает смену движка вместе с очередью кадров, проектом, активными пакетами и медиапанелью. Проверены клик по точке, линии и полигону, цвет авторского PNG, тот же элемент audio и три чтения файлов для трёх пакетов за весь переход. Два кадра с разными типами движения камеры дошли до штатного завершения. При ошибке подключения пакета частичная графика очищается, а Stop отменяет ожидание новой сцены. В повторе космического запуска пауза уже после старта сохраняет одну и ту же фазу движения на обоих движках.
 
-### Итоговая приёмка
+### Приёмка
 
-Во всех 28 headless-сценариях получен результат PASS. Каталоги обеих планет совпадают по 33 ID, порядку и владельцам моделей. Повторяемая нагрузочная проверка прошла 500 переключений, а отдельный замер 50 переходов измерил ожидание первого правильного кадра. Методика и результаты записаны в [итоговую матрицу](acceptance.md).
+Результаты прогона всех 28 сценариев, что они утверждают и чего не проверяют, записаны в [приёмку](acceptance.md). Приложение по-прежнему собирается заново при каждой смене движка; сохраняются менеджер, модели и несколько снимков сессии.
