@@ -12,6 +12,7 @@ import {
   roadDotBudget,
 } from './policy.js';
 import { msg } from '../../i18n/index.js';
+import { nextTask } from '../../sources/vectorTiles.js';
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
@@ -253,6 +254,9 @@ export function createFlow({ state: layerState, services, parts, source }) {
       parts.rendering.renderRoadsForAltitude([], altitude, label, trace);
       return true;
     }
+    // Separate whole-graph preparation from tile completion and publication.
+    await nextTask();
+    if (!current()) return false;
     const scene = layerState._viewer.scene;
     // The enable-time estimate can predate the first local mesh (especially
     // after an intercontinental jump). Once previews have measured roads, use
@@ -476,6 +480,9 @@ export function createFlow({ state: layerState, services, parts, source }) {
         if (!lastPaint || performance.now() - lastPaint >= 120) paint();
       },
     };
+    // The first bounded surface slice needs its own task, not the prefix's tail.
+    await nextTask();
+    if (!current()) return false;
     let prepared = await prepareRoadSurfaces(
       unresolved,
       layerState._viewer.scene,

@@ -89,7 +89,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## ⚡ Quick Start
 
-**Start without an account or API keys.** Every path opens the same app with
+**Local setup needs no account or API keys.** The app opens with
 Esri satellite imagery and keyless terrain. OSM is the fallback if Esri is
 unreachable. Flights, military traffic, satellites, earthquakes, public
 cameras, radio, and launches are available without keys.
@@ -236,7 +236,11 @@ the container.
 
 ### Path 4 — GitHub Codespaces (cloud, no local install)
 
-Runs the same dev server in a cloud workspace, so Node and the dependencies
+Codespaces requires a GitHub account. Overpass queries and OpenAI voice token
+requests return HTTP 403 through its forwarded HTTPS URL, even with API keys
+in `.env` and `GEV_ALLOWED_HOSTS` configured. Use a local setup for these features.
+
+The codespace runs the dev server in a cloud workspace, so Node and the dependencies
 never touch your machine. The globe still renders in your own browser, so it
 needs the same graphics there as any other path. GitHub Free includes 120
 core-hours a month with no card on file — about 60 hours on the default 2-core
@@ -265,14 +269,13 @@ ignored on purpose, so pass that exact name.
 
 ⚠️ **A codespace is reachable from the internet.** Treat it as the
 wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
-Settings does not open on the forwarded URL, so put keys in the workspace
-`.env` by hand. `.env` is gitignored — never commit it. [SECURITY.md](SECURITY.md) has the
-threat model.
+Settings is unavailable on the forwarded URL. Never commit your workspace
+`.env`. [SECURITY.md](SECURITY.md) has the threat model.
 
 ### Then power it up — in the app, not in a file
 
-Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**
-chip in the bottom-right corner: Provider Settings lists every supported key,
+For a local setup, keys are upgrades, not prerequisites. When you want one,
+click the **POWER UP** chip in the bottom-right corner: Provider Settings lists every supported key,
 what it switches on, and where to get it. Paste, hit **SAVE KEYS**, and the app
 restarts itself with the new capability on. Once everything is configured the
 chip reads **POWERED UP** — and if a compact layout hides it, `?setup=1`
