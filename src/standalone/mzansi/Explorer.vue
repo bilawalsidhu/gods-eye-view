@@ -183,12 +183,26 @@ function keydown(event) {
     status.value = 'Map selection cancelled.';
   } else closePanel();
 }
+let bookmarkVersion = 0;
 async function loadBookmarks() {
-  cloudSaved.value = session.value
-    ? (await unwrap(cloud.from('bookmarks').select('place_id'))).map(
-        (r) => r.place_id,
-      )
-    : [];
+  const version = ++bookmarkVersion;
+  const userId = session.value?.user.id;
+  if (!userId) {
+    cloudSaved.value = [];
+    return;
+  }
+  try {
+    const rows = await unwrap(
+      cloud.from('bookmarks').select('place_id').eq('user_id', userId),
+    );
+    if (version === bookmarkVersion && session.value?.user.id === userId)
+      cloudSaved.value = rows.map((r) => r.place_id);
+  } catch (error) {
+    if (version === bookmarkVersion) {
+      cloudSaved.value = [];
+      status.value = error.message;
+    }
+  }
 }
 async function refreshCloud() {
   const version = ++requestVersion;
@@ -234,6 +248,7 @@ async function refreshCloud() {
   }
 }
 async function updateSession(value) {
+  cloudSaved.value = [];
   session.value = value;
   try {
     await loadBookmarks();
@@ -243,6 +258,8 @@ async function updateSession(value) {
   }
 }
 async function migrateFavourites() {
+  const userId = session.value?.user.id;
+  if (!userId) return;
   try {
     const ids = PLACES.filter((p) => saved.value.includes(p.id)).map(
       (p) => p.id,
@@ -254,10 +271,11 @@ async function migrateFavourites() {
         .eq('source_id', 'starter-reference')
         .in('external_id', ids),
     );
+    if (session.value?.user.id !== userId) return;
     if (rows.length)
       await unwrap(
         cloud.from('bookmarks').upsert(
-          rows.map((p) => ({ user_id: session.value.user.id, place_id: p.id })),
+          rows.map((p) => ({ user_id: userId, place_id: p.id })),
           { onConflict: 'user_id,place_id', ignoreDuplicates: true },
         ),
       );
@@ -337,6 +355,7 @@ watch([markers, results], () => {
 });
 onBeforeUnmount(() => {
   clearTimeout(queryTimer);
+  ++bookmarkVersion;
   ++requestVersion;
   stopPicking();
   document.removeEventListener('keydown', keydown);

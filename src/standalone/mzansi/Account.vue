@@ -18,6 +18,9 @@ const email = ref(''),
   name = ref(''),
   recovery = ref(false);
 let subscription;
+let viewVersion = 0;
+let authVersion = 0;
+let disposed = false;
 async function run(action) {
   busy.value = true;
   message.value = '';
@@ -30,39 +33,52 @@ async function run(action) {
   }
 }
 async function loadViews() {
-  views.value = props.session
-    ? await unwrap(
-        cloud
-          .from('saved_views')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(100),
-      )
-    : [];
+  const version = ++viewVersion;
+  const userId = props.session?.user.id;
+  views.value = [];
+  if (!userId || !cloud) return;
+  try {
+    const rows = await unwrap(
+      cloud
+        .from('saved_views')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(100),
+    );
+    if (
+      !disposed &&
+      version === viewVersion &&
+      props.session?.user.id === userId
+    )
+      views.value = rows;
+  } catch (error) {
+    if (!disposed && version === viewVersion) message.value = error.message;
+  }
 }
 onMounted(async () => {
   if (!cloud) return;
   subscription = cloud.auth.onAuthStateChange((event, session) => {
+    ++authVersion;
     emit('session', session);
     if (event === 'PASSWORD_RECOVERY') {
       recovery.value = true;
       mode.value = 'password';
     }
-    // Leave Supabase's auth lock before making another client request.
-    setTimeout(() => run(loadViews), 0);
   }).data.subscription;
+  const version = authVersion;
   await run(async () => {
     const { data, error } = await cloud.auth.getSession();
     if (error) throw error;
-    emit('session', data.session);
-    await loadViews();
+    if (!disposed && version === authVersion) emit('session', data.session);
   });
 });
-watch(
-  () => props.session,
-  () => run(loadViews),
-);
-onBeforeUnmount(() => subscription?.unsubscribe());
+watch(() => props.session?.user.id, loadViews, { immediate: true });
+onBeforeUnmount(() => {
+  disposed = true;
+  ++viewVersion;
+  subscription?.unsubscribe();
+});
 async function submit() {
   await run(async () => {
     const redirectTo = new URL('/', location.href).href;
@@ -123,7 +139,7 @@ function restore(view) {
     message.value = 'This view has invalid coordinates.';
     return;
   }
-  props.navigation.runImmediateNavigation('location', () =>
+  const accepted = props.navigation.runImmediateNavigation('location', () =>
     props.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(
         view.longitude,
@@ -141,6 +157,10 @@ function restore(view) {
         : 1.4,
     }),
   );
+  if (accepted === false) {
+    message.value = 'Finish the current navigation before restoring this view.';
+    return;
+  }
   emit('status', { filters: view.filters });
   message.value = 'Saved view restored.';
 }
