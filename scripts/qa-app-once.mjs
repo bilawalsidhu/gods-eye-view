@@ -80,6 +80,59 @@ async function prepareUi(page) {
   }, FIELD);
 }
 
+// The session's tools: a mark on the annotation board, an imported file and
+// the Draw shape, set on Cesium before the switches.
+async function prepareTools(page) {
+  return page.evaluate(async () => {
+    const annotated = await window.__gevAnnotations.annotate([
+      { type: 'pin', latitude: 42.3554, longitude: -71.0605, label: 'QA mark' },
+    ]);
+    const file = new File(
+      [
+        JSON.stringify({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { name: 'QA area' },
+              geometry: {
+                type: 'Polygon',
+                coordinates: [
+                  [
+                    [-71.07, 42.35],
+                    [-71.05, 42.35],
+                    [-71.05, 42.36],
+                    [-71.07, 42.35],
+                  ],
+                ],
+              },
+            },
+          ],
+        }),
+      ],
+      'qa-area.geojson',
+      { type: 'application/geo+json' },
+    );
+    const imported = await window.__gevGeoImport.importFiles([file]);
+    window.__gevDrawTool.setShape('line');
+    return { annotated: annotated.drawn, imported: imported[0]?.ok };
+  });
+}
+
+const readTools = (page) =>
+  page.evaluate(() => ({
+    marks: window.__gevAnnotations?.count() ?? null,
+    marksDrawn: window.__gevAnnotations?.attached ?? null,
+    files: window.__gevGeoImport?.list().length ?? null,
+    filesDrawn: window.__gevGeoImport?.diagnostics().drawn ?? null,
+    drawShape: window.__gevDrawTool?.shape ?? null,
+  }));
+
+// Listeners whose difference is the parked renderer's: the Navara engine
+// keeps its own input, resize and attribution listeners while it is parked
+// for a switch back (scripts that are not the session's).
+const PARKED_RENDERER = /@navara-engine\.js$/;
+
 const browser = await launch();
 try {
   const { page, errors } = await openSessionPage(
@@ -90,8 +143,20 @@ try {
   // Let the first boot's deferred listeners land before counting.
   await new Promise((resolve) => setTimeout(resolve, 2000));
   const boot = await readSession(page);
-  const bootListeners = await listenerCounts(page);
+  const bootListeners = await listenerCounts(page, { bySource: true });
   report.boot = boot;
+  report.toolsPrepared = await prepareTools(page);
+  check(
+    report.toolsPrepared.annotated === 1 && report.toolsPrepared.imported,
+    'the tools could not be prepared',
+    report.toolsPrepared,
+  );
+  // Let the imported file finish drawing.
+  await page.waitForFunction(
+    () => window.__gevGeoImport.diagnostics().drawn === 1,
+  );
+  const toolsBefore = await readTools(page);
+  report.toolsBefore = toolsBefore;
 
   await prepareUi(page);
   const escapeBefore = await escapeEffect(page);
@@ -110,17 +175,32 @@ try {
       await page.evaluate(() => {
         window.__qaParkedNavara = window.__godsEyeView.engine;
       });
-    if (report.switches.length === 1)
-      report.firstRoundTripListeners = listenerDifference(
-        bootListeners,
-        await listenerCounts(page),
+    if (report.switches.length === 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      report.firstRoundTrip = await listenerCounts(page, { bySource: true });
+    }
+    if (kind === 'cesium')
+      await page.waitForFunction(
+        () => window.__gevGeoImport.diagnostics().drawn === 1,
+        { timeout: 30_000 },
       );
+    const tools = await readTools(page);
+    check(
+      tools.marks === toolsBefore.marks &&
+        tools.files === toolsBefore.files &&
+        tools.drawShape === toolsBefore.drawShape &&
+        tools.marksDrawn === (kind === 'cesium') &&
+        tools.filesDrawn === (kind === 'cesium' ? 1 : 0),
+      `the session tools changed on the switch to ${kind}`,
+      { toolsBefore, tools },
+    );
     report.switches.push({
       kind,
       ms: Date.now() - started,
       ids: idDifference(boot.ids, state.ids),
       counters: state.counters,
       ui,
+      tools,
     });
     check(
       Object.keys(idDifference(boot.ids, state.ids)).length === 0,
@@ -141,13 +221,29 @@ try {
   }
   await new Promise((resolve) => setTimeout(resolve, 2000));
   const after = await readSession(page);
-  const afterListeners = await listenerCounts(page);
+  const afterListeners = await listenerCounts(page, { bySource: true });
   report.after = after;
+  // After three round trips the page holds exactly the listeners it held
+  // after the first boot, apart from the parked Navara renderer's own (it
+  // stays alive for the switch back), which the first round trip added and
+  // the later ones did not grow.
   report.listeners = listenerDifference(bootListeners, afterListeners);
+  report.listenersSinceFirstRoundTrip = listenerDifference(
+    report.firstRoundTrip,
+    afterListeners,
+  );
+  const sessionListeners = Object.keys(report.listeners).filter(
+    (key) => !PARKED_RENDERER.test(key),
+  );
   check(
-    Object.keys(report.listeners).length === 0,
-    'window/document listeners changed after three round trips',
+    sessionListeners.length === 0,
+    'session listeners on window/document changed after three round trips',
     report.listeners,
+  );
+  check(
+    Object.keys(report.listenersSinceFirstRoundTrip).length === 0,
+    'listeners on window/document grew after the first round trip',
+    report.listenersSinceFirstRoundTrip,
   );
   check(
     after.counters?.attachments === 1 + sequence.length &&
@@ -227,6 +323,24 @@ try {
   }
   report.errors = errors;
   check(errors.length === 0, 'page errors', errors);
+
+  // The legacy route (?switch=legacy) still builds an application per
+  // engine, for one release.
+  const legacy = await openSessionPage(
+    browser,
+    sessionAddress(base, { engine: 'cesium', extra: { switch: 'legacy' } }),
+  );
+  await waitReady(legacy.page, 'cesium');
+  await switchEngine(legacy.page, 'navara');
+  await switchEngine(legacy.page, 'cesium');
+  report.legacy = await readSession(legacy.page);
+  check(
+    report.legacy.counters.applications === 3,
+    'the legacy route builds an application per engine',
+    report.legacy.counters,
+  );
+  check(legacy.errors.length === 0, 'legacy page errors', legacy.errors);
+  await legacy.page.close();
   console.log(JSON.stringify(report, null, 2));
   if (!reportOnly) console.log('PASS application created once; session kept');
 } finally {
