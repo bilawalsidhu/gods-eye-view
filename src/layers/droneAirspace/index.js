@@ -18,6 +18,20 @@ export function droneAirspaceColor(typeCode) {
 const ringPositions = (ring) =>
   ring.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat));
 
+/**
+ * FNV-1a over a zone's rings: a short, deterministic fingerprint so a
+ * boundary change with unchanged attributes still alters the refresh signature.
+ */
+function geometryHash(polygons) {
+  const text = JSON.stringify(polygons);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 const PICK_PREFIX = 'drone-airspace:';
 const CARD_HOST_OPTIONS = Object.freeze({
   cohortLimit: 1,
@@ -197,9 +211,14 @@ export function createDroneAirspaceLayer({
             ? snapshot.fetchedAt
             : Date.now();
 
+        // FAA amends boundaries in its 8-week cycle without any attribute
+        // changing, so the geometry is part of the signature.
         const signature = JSON.stringify(
           rows
-            .map(({ polygons, ...facts }) => facts)
+            .map(({ polygons, ...facts }) => ({
+              ...facts,
+              geometry: geometryHash(polygons),
+            }))
             .sort((a, b) => a.stableId.localeCompare(b.stableId)),
         );
         if (signature === _snapshotSignature) {

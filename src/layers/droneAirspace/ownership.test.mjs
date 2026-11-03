@@ -196,3 +196,23 @@ test('a failed refresh after a stale snapshot reads as the failure, not stale', 
   assert.equal(h.layer.getStats().error, 'FAA SUA HTTP 502');
   assert.equal(layerFeedState(h.layer.getStats()), 'degraded');
 });
+
+test('a boundary change alone redraws the zone; identical geometry does not', async () => {
+  const moved = ring.map(([lon, lat]) => [lon + 0.5, lat]);
+  let rows = [row];
+  const h = harness({ getSnapshot: async () => rows });
+  await h.layer.update(h.viewer);
+  const [first] = h.sources[0].entities.values;
+  rows = [{ ...row, polygons: [[ring.map((point) => [...point])]] }];
+  await h.layer.update(h.viewer);
+  assert.equal(h.sources[0].entities.values[0], first, 'same geometry kept');
+  rows = [{ ...row, polygons: [[moved]] }];
+  await h.layer.update(h.viewer);
+  const [redrawn] = h.sources[0].entities.values;
+  assert.notEqual(redrawn, first, 'moved boundary must redraw');
+  assert.notDeepEqual(
+    redrawn.polyline.positions.getValue(),
+    first.polyline.positions.getValue(),
+  );
+  assert.ok(h.layer.getAnalystRecords()[0].lon > -76.6);
+});
