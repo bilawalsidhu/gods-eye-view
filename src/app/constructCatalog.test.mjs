@@ -245,6 +245,32 @@ test('the catalog per engine: Cesium as before, Navara only what it can show', a
   assert.equal(subset.get('military'), undefined);
 });
 
+test('both production registries attach to the same 33 session models', async (t) => {
+  const { registerNavaraLayerRenderers } = await import('./navaraMode.js');
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const options = {
+    layerSession: { lifetime },
+    sources: createStandaloneLayerSources(),
+    signal: lifetime.signal,
+    surface: fixtureSurface(lifetime.signal),
+  };
+  const cesium = createApplicationCatalog(options);
+  await registerNavaraLayerRenderers();
+  const navara = createApplicationCatalog({ ...options, engineKind: 'navara' });
+  assert.equal(cesium.layers.length, 33);
+  assert.deepEqual(
+    navara.layers.map(({ id }) => id),
+    cesium.layers.map(({ id }) => id),
+  );
+  assert.deepEqual(navara.metadata, cesium.metadata);
+  for (const layer of cesium.layers) {
+    assert.equal(navara.get(layer.id), layer, layer.id);
+    assert.equal(typeof layer.attachRenderer, 'function', layer.id);
+    assert.equal(typeof layer.detachRenderer, 'function', layer.id);
+  }
+});
+
 test('a GNSS integrity source can set the layer evidence window', (t) => {
   const lifetime = new AbortController();
   t.after(() => lifetime.abort());

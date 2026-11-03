@@ -2,6 +2,7 @@ import {switchGlobe} from './qa-switch-globe.mjs';
 import fs from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
+import { installTileCache } from './qa/tileCache.mjs';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { isExpectedPreviewSetupError, redact } from './qa-browserEvidence.mjs';
 
@@ -51,6 +52,7 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
   await blockPaidQaMaps(page);
+  await installTileCache(page);
   page.on('pageerror', (e) => report.errors.push(redact(e.message)));
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
@@ -64,7 +66,10 @@ try {
         ((/\b503\b/.test(text) &&
           String(message.location()?.url).includes('HLS_L30')) ||
           (failLandsat && /Failed to obtain image tile/.test(text))));
-    (expected ? report.expectedErrors : report.errors).push(text);
+    const source = message.location()?.url;
+    (expected ? report.expectedErrors : report.errors).push(
+      source ? text + ' (' + new URL(source, url).hostname + ')' : text,
+    );
   });
   const session = await page.createCDPSession();
   await session.send('Fetch.enable', {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
+import sharp from 'sharp';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { installTileCache } from './qa/tileCache.mjs';
 
@@ -29,7 +30,14 @@ try {
     window.fetch = (url, options) =>
       String(url).startsWith('https://earthquake.usgs.gov/earthquakes/feed/')
         ? Promise.resolve(
-            Response.json({ type: 'FeatureCollection', features: [] }),
+            Response.json({
+              type: 'FeatureCollection',
+              features: [{
+                type: 'Feature', id: 'qa-boston',
+                geometry: { type: 'Point', coordinates: [-71.0605, 42.3554, 8] },
+                properties: { mag: 4, time: Date.now(), place: 'QA Boston' },
+              }],
+            }),
           )
         : fetch(url, options);
   });
@@ -52,6 +60,24 @@ try {
         throw new Error('Keyless preview required');
     });
     assert.equal(await page.$eval('#globe-engine', (el) => el.value), kind);
+  }
+  async function verifyQuakeSurface(kind) {
+    const meanRed = async (enabled) => {
+      await page.evaluate(async (enabled) => {
+        const a = window.__godsEyeView;
+        await a.dataManager.setEnabled('earthquakes', enabled, { origin: 'user' });
+        a.engine.render.request('qa-quake-surface');
+      }, enabled);
+      if (enabled) await page.waitForFunction(() =>
+        window.__godsEyeView.dataManager.layers.get('earthquakes').module.getAnalystRecords().length === 1);
+      await new Promise(resolve => setTimeout(resolve, 1800));
+      const bytes = await page.screenshot({ clip: { x: 675, y: 403, width: 20, height: 20 } });
+      const { channels } = await sharp(bytes).stats();
+      return channels[0].mean - channels[1].mean;
+    };
+    const off = await meanRed(false), on = await meanRed(true);
+    assert.ok(on > off + 8, kind + ' must draw the shallow red earthquake footprint: ' + off + ' -> ' + on);
+    console.log('PASS', kind, 'earthquake footprint red minus green:', off, '->', on);
   }
   const stored = () => page.evaluate(() => localStorage.getItem('gev.engine'));
   async function switchTo(kind) {
@@ -151,6 +177,7 @@ try {
   }
   await page.goto(base.href, { waitUntil: 'domcontentloaded' });
   await ready('cesium');
+  await verifyQuakeSurface('cesium');
   const sharpen = () =>
     page.evaluate(
       () => window.__godsEyeView.styleManager.getControlState().sharpen,
@@ -162,6 +189,7 @@ try {
   });
   assert.deepEqual(await sharpen(), { enabled: true, intensityPct: 49 });
   await switchTo('navara');
+  await verifyQuakeSurface('navara');
   assert.deepEqual(await sharpen(), { enabled: true, intensityPct: 80 });
   assert.ok(
     await page.evaluate(
