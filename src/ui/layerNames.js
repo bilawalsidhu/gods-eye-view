@@ -32,6 +32,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'local-adsb': msg('Local ADS-B'),
   'osm-places': msg('OSM Places'),
   transit: msg('Transit'),
+  'us-groundwater': msg('U.S. Groundwater Wells'),
   'recent-imagery': msg('Recent Imagery'),
   'fire-perimeters': msg('Fire Perimeters'),
   'gnss-integrity': msg('GNSS Integrity'),
@@ -50,6 +51,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
 
 /** The layer panel's own English names, where they differ from the module's. */
 export const PANEL_LABEL_KEYS = Object.freeze({
+  'us-groundwater': msg('Water Wells'),
   'ais-live-vessels': msg('Live Vessels'),
   bikeshare: msg('Bike Share'),
   cctv: msg('Cameras'),

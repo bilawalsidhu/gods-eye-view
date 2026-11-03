@@ -51,6 +51,7 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
   's2-ghostmaps': contract(['s2-ghostmaps'], ['getCatalog', 'getFile']),
   cables: contract(['telegeography-submarine-cables'], ['fetch']),
   transit: contract(['transit'], ['requestSnapshot', 'getHistory']),
+  'us-groundwater': contract(['us-groundwater'], ['getSnapshot']),
 });
 
 /** An omitted provider is unavailable, never an authoritative empty dataset. */

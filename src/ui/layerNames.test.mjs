@@ -51,3 +51,24 @@ for (const locale of ['es', 'ru']) {
     }
   });
 }
+
+for (const locale of ['en', 'es', 'ru', 'zh-CN']) {
+  test(`${locale}: wells name omits snapshot and count labels are translated`, () => {
+    setLocale(locale);
+    try {
+      assert.equal(LAYER_NAME_KEYS['us-groundwater'], 'U.S. Groundwater Wells');
+      const name = t(LAYER_NAME_KEYS['us-groundwater']);
+      assert.doesNotMatch(name, /Snapshot|\uFFFD/);
+      if (locale !== 'en') {
+        assert.notEqual(name, 'U.S. Groundwater Wells');
+        assert.notEqual(
+          t('Catalog records: {count}', { count: '1' }),
+          'Catalog records: 1',
+        );
+        assert.notEqual(t('Water Wells'), 'Water Wells');
+      }
+    } finally {
+      setLocale('en');
+    }
+  });
+}
