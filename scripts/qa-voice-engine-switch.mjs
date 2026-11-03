@@ -8,8 +8,7 @@
 //   - a set_layer_visibility call after each switch ran on the engine shown;
 //   - a call made during a switch waited and ran on the incoming engine, and
 //     one whose wait ran out was refused with ENGINE_SWITCHING;
-//   - annotate_map works on Cesium, is refused on Navara, and the mark drawn
-//     before the switches is still on the board back on Cesium;
+//   - annotate_map works on both engines and marks survive each switch;
 //   - the session heard which engine it drives after each switch.
 //
 // node scripts/qa-voice-engine-switch.mjs http://127.0.0.1:<port>/
@@ -138,7 +137,7 @@ try {
   const annotated = await callTool(page, 'annotate_map', ANNOTATION);
   assert.equal(annotated.ok, true, JSON.stringify(annotated));
   assert.equal(annotated.engine, 'cesium');
-  const marks = await page.evaluate(() => window.__gevAnnotations.count());
+  let marks = await page.evaluate(() => window.__gevAnnotations.count());
   assert.ok(marks >= 1, 'the mark is on the board');
   results.push('PASS annotate_map drew a mark on Cesium');
 
@@ -154,14 +153,27 @@ try {
       await page.evaluate(() => window.__godsEyeView.engine.kind),
       kind,
     );
-    if (kind === 'navara') {
-      const refused = await callTool(page, 'annotate_map', ANNOTATION);
-      assert.equal(refused.ok, false, JSON.stringify(refused));
-      assert.equal(refused.engine, 'navara');
-    } else {
-      const count = await page.evaluate(() => window.__gevAnnotations.count());
-      assert.equal(count, marks, 'the mark survived the round trip');
-    }
+    const count = await page.evaluate(() => window.__gevAnnotations.count());
+    assert.equal(count, marks, 'the marks survived the switch');
+    const annotation = await callTool(page, 'annotate_map', {
+      annotations: [
+        {
+          type: 'pin',
+          latitude: 42.3554 + marks * 0.01,
+          longitude: -71.0605,
+          label: `QA voice mark ${marks}`,
+        },
+      ],
+    });
+    assert.equal(annotation.ok, true, JSON.stringify(annotation));
+    assert.equal(annotation.engine, kind);
+    marks = await page.evaluate(() => window.__gevAnnotations.count());
+    assert.equal(marks, count + 1, 'voice added a visible mark on this engine');
+    assert.equal(
+      await page.evaluate(() => window.__gevAnnotations.attached),
+      true,
+    );
+    results.push(`PASS ${kind}: annotate_map drew a mark`);
     results.push(`PASS ${kind}: set_layer_visibility ran on ${layer.engine}`);
   }
 

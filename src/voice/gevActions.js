@@ -44,6 +44,7 @@ import { voiceLayer, voiceLayerAliasMap } from './layerManifest.js';
 import { layerFeedState } from '../data/feedState.js';
 import {
   initCameraVerbs,
+  cameraVerbsSupported,
   moveCamera,
   flyRoute,
   interruptCameraMotion,
@@ -52,6 +53,7 @@ import {
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+import { engineCapabilities } from '../globe/contract.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
@@ -233,30 +235,8 @@ const FRAME_TARGETS = new Map([
   ['ships', 'ais-live-vessels'],
 ]);
 
-/**
- * The tools that still need the Cesium viewer or a subsystem built on it:
- * annotations and routes over them, camera verbs, the context mode and CCTV. Without a viewer (the Navara engine) each answers a structured
- * refusal (UNAVAILABLE_ON_ENGINE) instead of running.
- */
-export const VIEWER_ONLY_ACTIONS = Object.freeze([
-  'annotate_map',
-  'clear_annotations',
-  'fly_route',
-  'move_camera',
-]);
-/** The refusal code of a viewer-only tool on an engine without a viewer. */
+/** A tool's required capability is missing from the attached scene. */
 export const UNAVAILABLE_ON_ENGINE = 'UNAVAILABLE_ON_ENGINE';
-
-/**
- * The tools that change the look of the Cesium scene (post stages, bloom,
- * sharpen). The Navara engine has no visual styles yet: without a viewer
- * these refuse too, rather than answer ok while changing nothing (and
- * recording a style the view does not show).
- */
-export const CESIUM_LOOK_ACTIONS = Object.freeze([
-  'set_visual_style',
-  'set_post_processing',
-]);
 
 /** What each refused tool is, for the refusal's message. */
 export const UNAVAILABLE_FEATURES = Object.freeze({
@@ -265,11 +245,9 @@ export const UNAVAILABLE_FEATURES = Object.freeze({
   clear_annotations: 'Map annotation',
   fly_route: 'Route flying',
   move_camera: 'Camera motion (orbit, pan, tilt)',
-  set_context_mode: 'The Contacts mode',
-  control_radio: 'Radio',
-  control_cctv: 'CCTV',
   set_visual_style: 'The visual style',
   set_post_processing: 'Post-processing (bloom, sharpen)',
+  set_cyber_sonar: 'Cyber sonar',
 });
 
 /** The engine to switch to for a refused feature. */
@@ -332,8 +310,8 @@ const cameraCartographic = (engine) =>
 /**
  * Create application actions over the supplied scene and services. The
  * actions drive the globe `engine` (by default the one registered for the
- * viewer); `viewer` is null on an engine without one (Navara), where the
- * VIEWER_ONLY_ACTIONS refuse.
+ * viewer). Each action checks its scene services and render/camera capabilities;
+ * a missing capability returns UNAVAILABLE_ON_ENGINE on either engine.
  */
 export function createGevActionRunner({
   viewer,
@@ -376,11 +354,44 @@ export function createGevActionRunner({
       { memory: analystMemory },
     ));
   installViewTargetPrewarm(engine);
-  // The camera verbs (move_camera, fly_route) still run on the viewer.
-  if (viewer)
-    initCameraVerbs(viewer, () => getViewTargetCartesian(engine), {
+  // Keep Cesium's viewer rig; viewerless engines use the contract rig.
+  if (cameraVerbsSupported(viewer ?? engine))
+    initCameraVerbs(viewer ?? engine, () => getViewTargetCartesian(engine), {
       isCockpitActive: () => Boolean(styleManager?.getCockpitState?.()?.active),
     });
+  const annotationsAvailable = (method) =>
+    annotations?.attached !== false &&
+    typeof annotations?.[method] === 'function';
+  const renderSupported = (capability, method) =>
+    typeof styleManager?.[method] === 'function' &&
+    Boolean(viewer || engineCapabilities(engine)[capability]);
+  const postEffectSupported = (effect) =>
+    effect === 'bloom'
+      ? renderSupported('bloom', 'setBloom')
+      : typeof styleManager?.setSharpen === 'function' &&
+        Boolean(viewer || typeof engine?.render?.setSharpen === 'function');
+  function actionSupported(name) {
+    switch (name) {
+      case 'annotate_map':
+        return annotationsAvailable('annotate');
+      case 'clear_annotations':
+        return annotationsAvailable('clear');
+      case 'move_camera':
+        return cameraVerbsSupported(viewer ?? engine);
+      case 'fly_route':
+        return (
+          cameraVerbsSupported(viewer ?? engine) && annotationsAvailable('list')
+        );
+      case 'set_visual_style':
+        return renderSupported('visualStyles', 'setStyle');
+      case 'set_cyber_sonar':
+        return renderSupported('contactSonar', 'setCyberSonar');
+      case 'control_scene':
+        return Boolean(sceneDirector);
+      default:
+        return true;
+    }
+  }
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.
   const voiceUnavailable = (action) => ({
@@ -475,13 +486,7 @@ export function createGevActionRunner({
         /* Progress is advisory. */
       }
     };
-    if (
-      !viewer &&
-      ((name === 'control_scene' && !sceneDirector) ||
-        VIEWER_ONLY_ACTIONS.includes(name) ||
-        CESIUM_LOOK_ACTIONS.includes(name))
-    )
-      return unavailableOnEngine(name, engine);
+    if (!actionSupported(name)) return unavailableOnEngine(name, engine);
 
     // Navigation tools interrupt any continuous camera motion (spec §1.1) —
     // checked FIRST because each handler returns.
@@ -843,6 +848,12 @@ export function createGevActionRunner({
       const style = normalizeStyle(args.style);
       if (!style)
         throw new Error(`Unknown visual style: ${args.style || 'missing'}`);
+      if (
+        !viewer &&
+        style !== 'normal' &&
+        !engine.render.visualStyles.includes(style)
+      )
+        return unavailableOnEngine(name, engine, `The ${style} visual style`);
       styleManager.setStyle(style, { userInitiated: true });
       return { ok: true, action: 'set_visual_style', style };
     }
@@ -1371,13 +1382,6 @@ export function createGevActionRunner({
     }
 
     if (name === 'set_cyber_sonar') {
-      if (typeof styleManager?.setCyberSonar !== 'function') {
-        return {
-          ok: false,
-          action: 'set_cyber_sonar',
-          error: 'Cyber sonar controls are unavailable.',
-        };
-      }
       return { action: 'set_cyber_sonar', ...styleManager.setCyberSonar(args) };
     }
 
@@ -1405,35 +1409,39 @@ export function createGevActionRunner({
     }
 
     if (name === 'set_post_processing') {
-      const out = { ok: true, action: 'set_post_processing' };
-      if (args.bloom && typeof args.bloom === 'object') {
-        Object.assign(
-          out,
-          styleManager.setBloom({
-            enabled:
-              typeof args.bloom.enabled === 'boolean'
-                ? args.bloom.enabled
+      const out = { ok: true, action: 'set_post_processing', effects: {} };
+      for (const effect of ['bloom', 'sharpen']) {
+        const request = args[effect];
+        if (!request || typeof request !== 'object') continue;
+        const method = effect === 'bloom' ? 'setBloom' : 'setSharpen';
+        const result = postEffectSupported(effect)
+          ? styleManager[method]({
+              enabled:
+                typeof request.enabled === 'boolean'
+                  ? request.enabled
+                  : undefined,
+              intensityPct: Number.isFinite(Number(request.intensityPct))
+                ? Number(request.intensityPct)
                 : undefined,
-            intensityPct: Number.isFinite(Number(args.bloom.intensityPct))
-              ? Number(args.bloom.intensityPct)
-              : undefined,
-          }),
-        );
+            })
+          : unavailableOnEngine(name, engine, `Post-processing (${effect})`);
+        out.effects[effect] = result;
+        if (result[effect] !== undefined) out[effect] = result[effect];
       }
-      if (args.sharpen && typeof args.sharpen === 'object') {
-        Object.assign(
-          out,
-          styleManager.setSharpen({
-            enabled:
-              typeof args.sharpen.enabled === 'boolean'
-                ? args.sharpen.enabled
-                : undefined,
-            intensityPct: Number.isFinite(Number(args.sharpen.intensityPct))
-              ? Number(args.sharpen.intensityPct)
-              : undefined,
-          }),
-        );
+      const results = Object.values(out.effects);
+      const failed = results.filter((result) => result.ok === false);
+      if (failed.length) {
+        Object.assign(out, failed[0]);
+        out.ok = false;
+        out.partial = results.some((result) => result.ok === true);
+        out.error = failed.map((result) => result.error).join(' ');
       }
+      if (
+        !results.length &&
+        !postEffectSupported('bloom') &&
+        !postEffectSupported('sharpen')
+      )
+        return unavailableOnEngine(name, engine);
       return out;
     }
 
@@ -1531,6 +1539,8 @@ export function createGevActionRunner({
     let result = await runGevAction(name, deictic.args, runOptions);
     if (deictic.used && result && typeof result === 'object')
       result = { ...result, resolvedFrom: deictic.used };
+    if (Object.hasOwn(UNAVAILABLE_FEATURES, name))
+      result = { engine: engine?.kind ?? null, ...result };
     const out = attachVoiceResult(name, result, deictic.args, builders);
     // Only an accepted, still-current result may become "the last list": a
     // cancelled turn or one finishing after the session ended must not

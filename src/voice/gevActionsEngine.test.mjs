@@ -1,7 +1,7 @@
 // The W1 voice actions on the globe engine (phase 3, Task 9): the same
 // results as on the Cesium viewer, through engine.camera / picker /
-// projector only, and a structured refusal for the actions that still need
-// a viewer when there is none (the Navara engine).
+// projector only, and a structured refusal when a required capability
+// is missing from the attached scene.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,10 +10,8 @@ import * as geo from '../geo/index.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { GEV_ACTION_SCHEMAS } from './actionSchemas.js';
 import {
-  CESIUM_LOOK_ACTIONS,
   UNAVAILABLE_FEATURES,
   UNAVAILABLE_ON_ENGINE,
-  VIEWER_ONLY_ACTIONS,
   createGevActionRunner,
 } from './gevActions.js';
 import { cameraPoseKey } from './pointerContext.js';
@@ -87,16 +85,9 @@ const follow = (engine, position) =>
     viewFrom: { x: 0, y: -2000, z: 800 },
   });
 
-test('the viewer-only actions are one exported list of real tools', () => {
-  assert.deepEqual(VIEWER_ONLY_ACTIONS, [
-    'annotate_map',
-    'clear_annotations',
-    'fly_route',
-    'move_camera',
-  ]);
-  assert.ok(Object.isFrozen(VIEWER_ONLY_ACTIONS));
+test('every capability-gated action is a real offered tool', () => {
   const tools = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));
-  for (const name of VIEWER_ONLY_ACTIONS)
+  for (const name of Object.keys(UNAVAILABLE_FEATURES))
     assert.ok(tools.has(name), `${name} is a voice tool`);
 });
 
@@ -119,7 +110,7 @@ for (const kind of ['cesium', 'navara']) test(`${kind} enters cockpit on a ready
   assert.equal(result.state.active, true);
 });
 
-test('without a viewer the viewer-only actions refuse with a structured result', async () => {
+test('missing scene capabilities refuse with a structured result', async () => {
   const engine = engineOverAustin({ kind: 'navara' });
   const touched = [];
   const styleManager = new Proxy(navigatingStyleManager(), {
@@ -128,9 +119,15 @@ test('without a viewer the viewer-only actions refuse with a structured result',
       return target[key];
     },
   });
+  delete engine.camera.lookAt;
   const runner = runnerOn(engine, { styleManager });
   engine.fake.resetCalls();
-  for (const name of VIEWER_ONLY_ACTIONS) {
+  for (const name of [
+    'annotate_map',
+    'clear_annotations',
+    'fly_route',
+    'move_camera',
+  ]) {
     const result = await runner(name, { action: 'status' });
     assert.equal(result.ok, false, name);
     assert.equal(result.action, name);
@@ -149,7 +146,7 @@ test('without a viewer the viewer-only actions refuse with a structured result',
   assert.deepEqual(engine.fake.calls, [], 'a refusal moves no camera');
 });
 
-test('with a viewer the viewer-only actions still run', async () => {
+test('with a viewer radio still reports a missing layer', async () => {
   const runner = createGevActionRunner({
     viewer: {
       clock: { onTick: { addEventListener: () => () => {} } },
@@ -443,16 +440,7 @@ test('a fresh frame for capture comes from the engine render loop', async () => 
   }
 });
 
-test('every refused tool names its feature', () => {
-  for (const name of [...VIEWER_ONLY_ACTIONS, ...CESIUM_LOOK_ACTIONS])
-    assert.ok(UNAVAILABLE_FEATURES[name], `${name} has a feature name`);
-  assert.deepEqual(CESIUM_LOOK_ACTIONS, [
-    'set_visual_style',
-    'set_post_processing',
-  ]);
-});
-
-test('without a viewer the visual style and post-processing refuse and record nothing', async () => {
+test('missing visual style and bloom capabilities refuse and record nothing', async () => {
   const engine = engineOverAustin({ kind: 'navara' });
   const calls = [];
   const styleManager = navigatingStyleManager({
