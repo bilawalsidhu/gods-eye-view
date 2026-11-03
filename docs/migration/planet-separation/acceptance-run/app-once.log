@@ -1,0 +1,16 @@
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: the session tools changed on the switch to navara {"toolsBefore":{"marks":1,"marksDrawn":true,"files":1,"filesDrawn":1,"drawShape":"line"},"tools":{"marks":1,"marksDrawn":true,"files":1,"filesDrawn":1,"drawShape":"line"}}
+    at check (file://<scratch>/checkout/scripts/qa-app-once.mjs:32:12)
+    at file://<scratch>/checkout/scripts/qa-app-once.mjs:230:5 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: undefined,
+  expected: undefined,
+  operator: 'fail',
+  diff: 'simple'
+}
+
+Node.js v26.12.0

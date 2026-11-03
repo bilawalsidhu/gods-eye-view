@@ -1,0 +1,162 @@
+{
+  "scenario": "qa-urban-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=bikeshare",
+    "--evidence=<output>/evidence/urban-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "bikeshare"
+  ],
+  "coverage": {
+    "bikeshare": {
+      "cesium": 3,
+      "navara": 4
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 7799.0999999940395,
+      "idleAt": 8172.5999999940395
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 8544.699999988079,
+      "idleAt": 8622.799999982119
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "bikeshare",
+      "engine": "navara",
+      "claim": "a click on a station selects it",
+      "detail": {
+        "x": 463.89260327214583,
+        "y": 551.7483086089477,
+        "id": "boston-bluebikes:w2-bike-94"
+      }
+    },
+    {
+      "layer": "bikeshare",
+      "engine": "navara",
+      "claim": "200 stations, each with 7 bikes and 13 docks available and renting",
+      "detail": {
+        "count": 200,
+        "rows": 200,
+        "sample": {
+          "bikes": 7,
+          "docks": 13,
+          "renting": true
+        }
+      }
+    },
+    {
+      "layer": "bikeshare",
+      "engine": "cesium",
+      "claim": "same model, same records, the clicked object still selected, no source read again"
+    },
+    {
+      "layer": "bikeshare",
+      "engine": "cesium",
+      "claim": "200 stations, each with 7 bikes and 13 docks available and renting",
+      "detail": {
+        "count": 200,
+        "rows": 200,
+        "sample": {
+          "bikes": 7,
+          "docks": 13,
+          "renting": true
+        }
+      }
+    },
+    {
+      "layer": "bikeshare",
+      "engine": "cesium",
+      "claim": "a click on empty ground clears the selection; a click on the object selects it again",
+      "detail": {
+        "x": 462.2804862008795,
+        "y": 552.6797457829928,
+        "id": "boston-bluebikes:w2-bike-94"
+      }
+    },
+    {
+      "layer": "bikeshare",
+      "engine": "navara",
+      "claim": "same model, same records, the clicked object still selected, no source read again"
+    },
+    {
+      "layer": "bikeshare",
+      "engine": "navara",
+      "claim": "200 stations, each with 7 bikes and 13 docks available and renting",
+      "detail": {
+        "count": 200,
+        "rows": 200,
+        "sample": {
+          "bikes": 7,
+          "docks": 13,
+          "renting": true
+        }
+      }
+    }
+  ],
+  "network": {
+    "requests": 906,
+    "preview": 114,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/gbfs/https%3A%2F%2Fgbfs.bluebikes.com%2Fgbfs%2Fen%2Fstation_information.json": 1,
+      "/api/gbfs/https%3A%2F%2Fgbfs.bluebikes.com%2Fgbfs%2Fen%2Fstation_status.json": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 409,
+      "tiles.maps.eox.at": 366
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 786,
+      "fetched": 4,
+      "failed": 0,
+      "cancelled": 6,
+      "fetchedByHost": {
+        "tiles.maps.eox.at": 4
+      }
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [
+      "https://earthquake.usgs.gov/*",
+      "https://tiles.dontgetflocked.com/*",
+      "*://*.earthdata.nasa.gov/*"
+    ],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

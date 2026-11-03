@@ -1,0 +1,112 @@
+{
+  "scenario": "qa-local-adsb-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=local-adsb",
+    "--evidence=<output>/evidence/local-adsb-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "local-adsb"
+  ],
+  "coverage": {
+    "local-adsb": {
+      "cesium": 2,
+      "navara": 2
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 7951.5999999940395,
+      "idleAt": 8267.700000017881
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 11703.200000017881,
+      "idleAt": 11778.200000017881
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "local-adsb",
+      "engine": "cesium",
+      "claim": "same decoder, receiver and feeds, one feed start, selection republished"
+    },
+    {
+      "layer": "local-adsb",
+      "engine": "cesium",
+      "claim": "receiver polls continue and move the selected aircraft",
+      "detail": {
+        "polls": 2,
+        "lat": 41.535927394692926,
+        "stamp": 1793728445536
+      }
+    },
+    {
+      "layer": "local-adsb",
+      "engine": "navara",
+      "claim": "same decoder, receiver and feeds, one feed start, selection republished"
+    },
+    {
+      "layer": "local-adsb",
+      "engine": "navara",
+      "claim": "receiver polls continue and move the selected aircraft",
+      "detail": {
+        "polls": 6,
+        "lat": 41.53605553963349,
+        "stamp": 1793728449547
+      }
+    }
+  ],
+  "network": {
+    "requests": 635,
+    "preview": 136,
+    "previewApi": {
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/adsbdb/type": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 204,
+      "tiles.maps.eox.at": 278
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 497,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

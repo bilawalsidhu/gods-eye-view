@@ -1,0 +1,4 @@
+PASS {"kind":"cesium","temperature":"cold","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":1756,"frameWhileHidden":false,"firstFrameAfterShownMs":386,"history":1}
+PASS {"kind":"navara","temperature":"warm","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":128,"frameWhileHidden":false,"firstFrameAfterShownMs":24,"history":1}
+PASS {"kind":"cesium","temperature":"warm","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":9,"frameWhileHidden":true,"firstFrameAfterShownMs":28,"history":1}
+STRICT {"scenario":"qa-strict-hidden-switch","assertions":0,"coverage":{},"picks":3,"requests":764,"violations":0}

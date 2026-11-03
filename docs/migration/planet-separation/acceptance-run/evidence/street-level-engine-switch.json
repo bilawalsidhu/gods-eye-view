@@ -1,0 +1,139 @@
+{
+  "scenario": "qa-street-level-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=street-level",
+    "--evidence=<output>/evidence/street-level-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "street-level"
+  ],
+  "coverage": {
+    "street-level": {
+      "cesium": 2,
+      "navara": 3
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 7781.899999976158,
+      "idleAt": 7984.199999988079
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 8218.09999999404,
+      "idleAt": 8309.59999999404
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 8739.299999982119,
+      "idleAt": 8767
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "street-level",
+      "engine": "navara",
+      "claim": "a click on the coverage line opens its sequence and photo",
+      "detail": {
+        "x": 639,
+        "y": 420,
+        "id": "kv:line:14/2662/6285/0"
+      }
+    },
+    {
+      "layer": "street-level",
+      "engine": "cesium",
+      "claim": "same model, the same mounted photo, image and sequence; coverage kept"
+    },
+    {
+      "layer": "street-level",
+      "engine": "navara",
+      "claim": "same model, the same mounted photo, image and sequence; coverage kept"
+    },
+    {
+      "layer": "street-level",
+      "engine": "navara",
+      "claim": "no photo requested again by the switches"
+    },
+    {
+      "layer": "street-level",
+      "engine": "cesium",
+      "claim": "a click on the coverage line opens its sequence and photo",
+      "detail": {
+        "x": 638,
+        "y": 465,
+        "id": "kv:line:14/2662/6285/0"
+      }
+    }
+  ],
+  "network": {
+    "requests": 890,
+    "preview": 115,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/mapillary/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 355,
+      "tiles.maps.eox.at": 390,
+      "api.kartaview.org": 7,
+      "storage2.openstreetcam.org": 5,
+      "cdn.kartaview.org": 1
+    },
+    "fixtureResponses": 13,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 743,
+      "fetched": 17,
+      "failed": 0,
+      "cancelled": 13,
+      "fetchedByHost": {
+        "terrain.reearth.land": 10,
+        "tiles.maps.eox.at": 7
+      }
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [
+      "*://*.mapillary.com/*",
+      "https://api.kartaview.org/*",
+      "https://cdn.kartaview.org/*",
+      "*://*.openstreetcam.org/*",
+      "https://api.panoramax.xyz/*",
+      "https://panoramax.openstreetmap.fr/*"
+    ],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

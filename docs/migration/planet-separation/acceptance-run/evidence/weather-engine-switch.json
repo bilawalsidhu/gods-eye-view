@@ -1,0 +1,236 @@
+{
+  "scenario": "qa-weather-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=weather-radar,weather-satellite,weather-lightning,weather-cyclones",
+    "--evidence=<output>/evidence/weather-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "weather-radar",
+    "weather-satellite",
+    "weather-lightning",
+    "weather-cyclones"
+  ],
+  "coverage": {
+    "weather-radar": {
+      "cesium": 1,
+      "navara": 3
+    },
+    "weather-satellite": {
+      "cesium": 1,
+      "navara": 3
+    },
+    "weather-lightning": {
+      "cesium": 1,
+      "navara": 3
+    },
+    "weather-cyclones": {
+      "cesium": 1,
+      "navara": 2
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 10497.299999982119,
+      "idleAt": 10725.59999999404
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 12236.09999999404,
+      "idleAt": 12277.09999999404
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "weather-satellite",
+      "engine": "navara",
+      "claim": "latest frame paints in stacking order",
+      "detail": [
+        226.35416666666666,
+        227.90277777777777,
+        230.75
+      ]
+    },
+    {
+      "layer": "weather-radar",
+      "engine": "navara",
+      "claim": "latest frame paints in stacking order",
+      "detail": [
+        249.26388888888889,
+        45.61805555555556,
+        46.15277777777778
+      ]
+    },
+    {
+      "layer": "weather-lightning",
+      "engine": "navara",
+      "claim": "latest frame paints in stacking order",
+      "detail": [
+        49.80555555555556,
+        213.04861111111111,
+        213.01388888888889
+      ]
+    },
+    {
+      "layer": "weather-radar",
+      "engine": "navara",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        253.79166666666666,
+        9.04861111111111,
+        213.01388888888889
+      ]
+    },
+    {
+      "layer": "weather-satellite",
+      "engine": "navara",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        253.79166666666666,
+        9.04861111111111,
+        213.01388888888889
+      ]
+    },
+    {
+      "layer": "weather-lightning",
+      "engine": "navara",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        253.79166666666666,
+        9.04861111111111,
+        213.01388888888889
+      ]
+    },
+    {
+      "layer": "weather-radar",
+      "engine": "cesium",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        252.89583333333334,
+        8.270833333333334,
+        211.97222222222223
+      ]
+    },
+    {
+      "layer": "weather-satellite",
+      "engine": "cesium",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        252.89583333333334,
+        8.270833333333334,
+        211.97222222222223
+      ]
+    },
+    {
+      "layer": "weather-lightning",
+      "engine": "cesium",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        252.89583333333334,
+        8.270833333333334,
+        211.97222222222223
+      ]
+    },
+    {
+      "layer": "weather-radar",
+      "engine": "navara",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        253.79166666666666,
+        9.04861111111111,
+        213.01388888888889
+      ]
+    },
+    {
+      "layer": "weather-satellite",
+      "engine": "navara",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        253.79166666666666,
+        9.04861111111111,
+        213.01388888888889
+      ]
+    },
+    {
+      "layer": "weather-lightning",
+      "engine": "navara",
+      "claim": "same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar",
+      "detail": [
+        253.79166666666666,
+        9.04861111111111,
+        213.01388888888889
+      ]
+    },
+    {
+      "layer": "weather-cyclones",
+      "engine": "navara",
+      "claim": "storm, track, cone and forecast point; clicks outside and inside the cone deselect and select; no refetch"
+    },
+    {
+      "layer": "weather-cyclones",
+      "engine": "cesium",
+      "claim": "storm, track, cone and forecast point; clicks outside and inside the cone deselect and select; no refetch"
+    },
+    {
+      "layer": "weather-cyclones",
+      "engine": "navara",
+      "claim": "storm, track, cone and forecast point; clicks outside and inside the cone deselect and select; no refetch"
+    }
+  ],
+  "network": {
+    "requests": 674,
+    "preview": 182,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/weather/manifest": 3,
+      "/api/weather/image": 18,
+      "/api/google/tiles-token": 1,
+      "/api/weather/tile": 21,
+      "/api/cyclones": 2
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 214,
+      "tiles.maps.eox.at": 261
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 490,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

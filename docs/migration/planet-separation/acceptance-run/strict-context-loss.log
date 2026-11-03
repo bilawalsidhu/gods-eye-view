@@ -1,0 +1,77 @@
+after cold navara→cesium, outgoing context lost {"after":{"running":true,"engine":"cesium","manager":true,"models":true,"enabled":true,"address":"cesium","picker":"cesium","history":3},"loss":{"kind":"navara","lost":true,"restored":true,"restoredEvent":true},"drawn":true} {"toggle":"true","retry":false,"status":"Initializing systems...","loading":"hidden"}
+PASS {"case":"cold navara→cesium, outgoing context lost","lostKind":"navara","lost":true,"restoredEvent":true,"outcome":"switched","sessionIntact":true,"history":1,"drawn":true,"back":"navara","backEngine":"navara","backSessionIntact":true,"backDrawn":true,"backError":null,"pageErrors":[],"failed":[]}
+after warm cesium→navara, outgoing context lost {"after":{"running":true,"engine":"navara","manager":true,"models":true,"enabled":true,"address":"navara","picker":"navara","history":6},"loss":{"kind":"cesium","lost":true,"restored":true},"drawn":true} {"toggle":"true","retry":false,"status":"Initializing systems...","loading":"hidden"}
+PASS {"case":"warm cesium→navara, outgoing context lost","lostKind":"cesium","lost":true,"restoredEvent":false,"outcome":"switched","sessionIntact":true,"history":1,"drawn":true,"back":"cesium","backEngine":"cesium","backSessionIntact":true,"backDrawn":true,"backError":null,"pageErrors":[],"failed":[]}
+after warm navara→cesium, incoming context lost {"after":{"running":true,"engine":"cesium","manager":true,"models":true,"enabled":true,"address":"cesium","picker":"cesium","history":9},"loss":{"kind":"cesium","lost":true,"restored":true},"drawn":false} {"toggle":"false","retry":false,"status":"Initializing systems...","loading":"hidden"}
+FAIL {"case":"warm navara→cesium, incoming context lost","lostKind":"cesium","lost":true,"restoredEvent":false,"outcome":"switched","sessionIntact":true,"history":1,"drawn":false,"back":"navara","backEngine":"cesium","backSessionIntact":true,"backDrawn":false,"backError":"Waiting failed: 30000ms exceeded","pageErrors":[],"failed":["no non-blank frame from the running engine","the pick back to navara did not run it","no non-blank frame from navara after the pick back","the pick back failed: Waiting failed: 30000ms exceeded"]}
+after warm cesium→navara, incoming context lost {"after":{"running":true,"engine":"cesium","manager":true,"models":true,"enabled":true,"address":"cesium","picker":"cesium","history":4},"loss":{"kind":"navara","lost":true,"restored":true},"drawn":true} {"toggle":"true","retry":false,"status":"Initializing systems...","loading":"hidden"}
+PASS {"case":"warm cesium→navara, incoming context lost","lostKind":"navara","lost":true,"restoredEvent":false,"outcome":"rolled back","sessionIntact":true,"history":0,"drawn":true,"back":"navara","backEngine":"navara","backSessionIntact":true,"backDrawn":true,"backError":null,"pageErrors":[],"failed":[]}
+STRICT {"scenario":"qa-strict-context-loss","assertions":0,"coverage":{},"picks":11,"requests":2249,"violations":0}
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: context-loss cases that broke the contract
++ actual - expected
+
++ [
++   {
++     back: 'navara',
++     backDrawn: false,
++     backEngine: 'cesium',
++     backError: 'Waiting failed: 30000ms exceeded',
++     backSessionIntact: true,
++     case: 'warm navara→cesium, incoming context lost',
++     drawn: false,
++     failed: [
++       'no non-blank frame from the running engine',
++       'the pick back to navara did not run it',
++       'no non-blank frame from navara after the pick back',
++       'the pick back failed: Waiting failed: 30000ms exceeded'
++     ],
++     history: 1,
++     lost: true,
++     lostKind: 'cesium',
++     outcome: 'switched',
++     pageErrors: [],
++     restoredEvent: false,
++     sessionIntact: true
++   }
++ ]
+- []
+
+    at file://<scratch>/checkout/scripts/qa-strict-context-loss.mjs:230:10
+    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:599:9)
+    at async file://<scratch>/checkout/scripts/qa-strict-context-loss.mjs:35:1 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [
+    {
+      case: 'warm navara→cesium, incoming context lost',
+      lostKind: 'cesium',
+      lost: true,
+      restoredEvent: false,
+      outcome: 'switched',
+      sessionIntact: true,
+      history: 1,
+      drawn: false,
+      back: 'navara',
+      backEngine: 'cesium',
+      backSessionIntact: true,
+      backDrawn: false,
+      backError: 'Waiting failed: 30000ms exceeded',
+      pageErrors: [],
+      failed: [
+        'no non-blank frame from the running engine',
+        'the pick back to navara did not run it',
+        'no non-blank frame from navara after the pick back',
+        'the pick back failed: Waiting failed: 30000ms exceeded'
+      ]
+    }
+  ],
+  expected: [],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v26.12.0

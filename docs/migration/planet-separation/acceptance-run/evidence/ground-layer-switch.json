@@ -1,0 +1,288 @@
+{
+  "scenario": "qa-ground-layer-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=ais-live-vessels,air-quality,gnss-integrity,fire-perimeters",
+    "--evidence=<output>/evidence/ground-layer-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "ais-live-vessels",
+    "air-quality",
+    "gnss-integrity",
+    "fire-perimeters"
+  ],
+  "coverage": {
+    "ais-live-vessels": {
+      "cesium": 2,
+      "navara": 4
+    },
+    "air-quality": {
+      "cesium": 2,
+      "navara": 3
+    },
+    "gnss-integrity": {
+      "cesium": 2,
+      "navara": 3
+    },
+    "fire-perimeters": {
+      "cesium": 4,
+      "navara": 7
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 17001.09999999404,
+      "idleAt": 17219.69999998808
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 25085.69999998808,
+      "idleAt": 25179.69999998808
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 34321,
+      "idleAt": 34344.69999998808
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 34656.19999998808,
+      "idleAt": 34720.19999998808
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 37158.5,
+      "idleAt": 37226.09999999404
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 38155.89999997616,
+      "idleAt": 38268.29999998212
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "air-quality",
+      "engine": "navara",
+      "claim": "AQHI 9 station footprint drawn, one card row",
+      "detail": {
+        "off": -45.88636363636364,
+        "on": 58.8080808080808
+      }
+    },
+    {
+      "layer": "gnss-integrity",
+      "engine": "navara",
+      "claim": "one high GNSS cell drawn",
+      "detail": {
+        "off": -45.88636363636364,
+        "on": 75.58838383838383
+      }
+    },
+    {
+      "layer": "air-quality",
+      "engine": "cesium",
+      "claim": "same layer models after the switch"
+    },
+    {
+      "layer": "gnss-integrity",
+      "engine": "cesium",
+      "claim": "same layer models after the switch"
+    },
+    {
+      "layer": "air-quality",
+      "engine": "cesium",
+      "claim": "AQHI 9 station footprint drawn, one card row",
+      "detail": {
+        "off": -7.595959595959592,
+        "on": 65.47474747474747
+      }
+    },
+    {
+      "layer": "gnss-integrity",
+      "engine": "cesium",
+      "claim": "one high GNSS cell drawn",
+      "detail": {
+        "off": -7.595959595959592,
+        "on": 92.67676767676767
+      }
+    },
+    {
+      "layer": "air-quality",
+      "engine": "navara",
+      "claim": "same layer models after the switch"
+    },
+    {
+      "layer": "gnss-integrity",
+      "engine": "navara",
+      "claim": "same layer models after the switch"
+    },
+    {
+      "layer": "air-quality",
+      "engine": "navara",
+      "claim": "AQHI 9 station footprint drawn, one card row",
+      "detail": {
+        "off": -45.88636363636364,
+        "on": 58.8080808080808
+      }
+    },
+    {
+      "layer": "gnss-integrity",
+      "engine": "navara",
+      "claim": "one high GNSS cell drawn",
+      "detail": {
+        "off": -45.88636363636364,
+        "on": 75.58838383838383
+      }
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "navara",
+      "claim": "a click outside the perimeter clears the card"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "navara",
+      "claim": "a click on the ring selects the fire"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "navara",
+      "claim": "a click in the hole deselects the selected fire"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "cesium",
+      "claim": "same model; the incident card survives the switch"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "cesium",
+      "claim": "a click outside the perimeter clears the card"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "cesium",
+      "claim": "a click on the ring selects the fire"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "cesium",
+      "claim": "a click in the hole deselects the selected fire"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "navara",
+      "claim": "same model; the incident card survives the switch"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "navara",
+      "claim": "a click outside the perimeter clears the card"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "navara",
+      "claim": "a click on the ring selects the fire"
+    },
+    {
+      "layer": "fire-perimeters",
+      "engine": "navara",
+      "claim": "a click in the hole deselects the selected fire"
+    },
+    {
+      "layer": "ais-live-vessels",
+      "engine": "navara",
+      "claim": "a click on the chevron selects the vessel"
+    },
+    {
+      "layer": "ais-live-vessels",
+      "engine": "navara",
+      "claim": "same entry; selection, chevron and card kept; no new track request"
+    },
+    {
+      "layer": "ais-live-vessels",
+      "engine": "navara",
+      "claim": "a click on the chevron selects the vessel"
+    },
+    {
+      "layer": "ais-live-vessels",
+      "engine": "cesium",
+      "claim": "same entry; selection, chevron and card kept; no new track request"
+    },
+    {
+      "layer": "ais-live-vessels",
+      "engine": "cesium",
+      "claim": "a click on the chevron selects the vessel"
+    },
+    {
+      "layer": "ais-live-vessels",
+      "engine": "navara",
+      "claim": "same entry; selection, chevron and card kept; no new track request"
+    }
+  ],
+  "network": {
+    "requests": 649,
+    "preview": 177,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 210,
+      "tiles.maps.eox.at": 245
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 470,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

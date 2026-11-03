@@ -1,4 +1,4 @@
-latest weather-satellite [ 226.25, 227.83333333333334, 230.72222222222223 ]
+latest weather-satellite [ 226.35416666666666, 227.90277777777777, 230.75 ]
 latest weather-radar [ 249.26388888888889, 45.61805555555556, 46.15277777777778 ]
 latest weather-lightning [ 49.80555555555556, 213.04861111111111, 213.01388888888889 ]
 navara [ 253.79166666666666, 9.04861111111111, 213.01388888888889 ]
@@ -11,3 +11,4 @@ PASS navara pick advisory cone and retain selected storm
 PASS cesium pick advisory cone and retain selected storm
 PASS navara pick advisory cone and retain selected storm
 PASS advisory 11 removes expired geometry while retaining the storm
+STRICT {"scenario":"qa-weather-engine-switch","assertions":15,"coverage":{"weather-radar":{"cesium":1,"navara":3},"weather-satellite":{"cesium":1,"navara":3},"weather-lightning":{"cesium":1,"navara":3},"weather-cyclones":{"cesium":1,"navara":2}},"picks":2,"requests":674,"violations":0}

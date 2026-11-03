@@ -1,3 +1,4 @@
 cesium 750 00000000-0000-4000-8000-00000000000a playing 1 1
 navara 750 00000000-0000-4000-8000-00000000000a playing 1 1
 PASS one live radio player, one station directory and the same selection
+STRICT {"scenario":"qa-radio-engine-switch","assertions":2,"coverage":{"radio":{"cesium":1,"navara":1}},"picks":2,"requests":462,"violations":0}

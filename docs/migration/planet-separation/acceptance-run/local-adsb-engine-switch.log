@@ -1,1 +1,2 @@
 PASS retained local decoder, receiver, marker and selection in both scenes
+STRICT {"scenario":"qa-local-adsb-engine-switch","assertions":4,"coverage":{"local-adsb":{"cesium":2,"navara":2}},"picks":2,"requests":635,"violations":0}

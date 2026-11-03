@@ -1,4 +1,5 @@
-navara { enabled: true, playing: false, progress: 0.52, split: 0.27 } imagery difference 55.13706666666667
+navara { enabled: true, playing: false, progress: 0.52, split: 0.27 } imagery difference 55.09813333333334
 cesium { enabled: true, playing: false, progress: 0.52, split: 0.27 } imagery difference 83.53706666666666
-navara { enabled: true, playing: false, progress: 0.52, split: 0.27 } imagery difference 55.06933333333333
+navara { enabled: true, playing: false, progress: 0.52, split: 0.27 } imagery difference 55.1088
 PASS event timeline, paused and playing handoff, image pair, divider, player host and single asset acquisition
+STRICT {"scenario":"qa-nepal-event-switch","assertions":5,"coverage":{"bhote-koshi-2026":{"cesium":2,"navara":3}},"picks":3,"requests":911,"violations":0}

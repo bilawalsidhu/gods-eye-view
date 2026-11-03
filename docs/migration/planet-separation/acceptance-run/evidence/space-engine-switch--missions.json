@@ -1,0 +1,156 @@
+{
+  "scenario": "qa-space-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--missions",
+    "--layers=rocket-launches",
+    "--evidence=<output>/evidence/space-engine-switch--missions.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "rocket-launches"
+  ],
+  "coverage": {
+    "rocket-launches": {
+      "cesium": 3,
+      "navara": 3
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 22247.100000023842,
+      "idleAt": 22494.70000001788
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 23383.80000001192,
+      "idleAt": 23457.5
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 23597.5,
+      "idleAt": 23641.70000001788
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "rocket-launches",
+      "engine": "navara",
+      "claim": "the launch list and each TLE group read exactly once",
+      "detail": {
+        "/api/celestrak/stations": 1,
+        "/api/celestrak/visual": 1,
+        "/api/celestrak/gps-ops": 1,
+        "/api/celestrak/glo-ops": 1,
+        "/api/celestrak/galileo": 1,
+        "/api/celestrak/geo": 1,
+        "/api/celestrak/starlink": 1,
+        "/api/celestrak/active": 1,
+        "/api/launches": 1
+      }
+    },
+    {
+      "layer": "rocket-launches",
+      "engine": "cesium",
+      "claim": "same models; Space Missions mode, the same mission paused at the same progress, speed 4"
+    },
+    {
+      "layer": "rocket-launches",
+      "engine": "cesium",
+      "claim": "the launch list and each TLE group read exactly once",
+      "detail": {
+        "/api/celestrak/stations": 1,
+        "/api/celestrak/visual": 1,
+        "/api/celestrak/gps-ops": 1,
+        "/api/celestrak/glo-ops": 1,
+        "/api/celestrak/galileo": 1,
+        "/api/celestrak/geo": 1,
+        "/api/celestrak/starlink": 1,
+        "/api/celestrak/active": 1,
+        "/api/launches": 1
+      }
+    },
+    {
+      "layer": "rocket-launches",
+      "engine": "navara",
+      "claim": "same models; Space Missions mode, the same mission paused at the same progress, speed 4"
+    },
+    {
+      "layer": "rocket-launches",
+      "engine": "navara",
+      "claim": "the launch list and each TLE group read exactly once",
+      "detail": {
+        "/api/celestrak/stations": 1,
+        "/api/celestrak/visual": 1,
+        "/api/celestrak/gps-ops": 1,
+        "/api/celestrak/glo-ops": 1,
+        "/api/celestrak/galileo": 1,
+        "/api/celestrak/geo": 1,
+        "/api/celestrak/starlink": 1,
+        "/api/celestrak/active": 1,
+        "/api/launches": 1
+      }
+    },
+    {
+      "layer": "rocket-launches",
+      "engine": "cesium",
+      "claim": "a running replay keeps advancing through the switch"
+    }
+  ],
+  "network": {
+    "requests": 784,
+    "preview": 146,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 313,
+      "tiles.maps.eox.at": 308
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 633,
+      "fetched": 3,
+      "failed": 0,
+      "cancelled": 20,
+      "fetchedByHost": {
+        "terrain.reearth.land": 3
+      }
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

@@ -1,3 +1,4 @@
 cesium transit 12 mbta:w2-1 1
-navara transit 12 mbta:w2-1 1
+navara transit 12 mbta:w2-1 2
 PASS viewport activation, real pick and original city data across two switches
+STRICT {"scenario":"qa-urban-engine-switch","assertions":9,"coverage":{"transit":{"cesium":3,"navara":6}},"picks":2,"requests":1095,"violations":0}

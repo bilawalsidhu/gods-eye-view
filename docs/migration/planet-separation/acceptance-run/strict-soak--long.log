@@ -1,0 +1,9 @@
+RUN {"run":1,"start":"navara","navara":{"cold":null,"warmP50":62.8,"warmP95":79},"cesium":{"cold":1416.2,"warmP50":113.7,"warmP95":140.9},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
+SOAK {"cesium→navara":{"cold":[],"warmP50":62.8,"warmP95":79,"warmSwitches":250},"navara→cesium":{"cold":[1416.2],"warmP50":113.7,"warmP95":140.9,"warmSwitches":249}}
+PASS {"check":"navara live WebGL objects","slopePerSwap":0,"from":1566,"to":1566,"pass":true}
+PASS {"check":"cesium live WebGL objects","slopePerSwap":-0.001,"from":242,"to":242,"pass":true}
+PASS {"check":"WebGL contexts","from":2,"to":2,"pass":true}
+FAIL {"check":"JS heap KiB per switch","slopePerSwap":55.98,"fromMiB":102.11,"toMiB":128.5,"pass":false}
+PASS {"check":"documents","from":34,"to":34,"pass":true}
+PASS {"check":"context-loss listeners on both canvases","from":{"navara":[3,2],"cesium":[1,0]},"to":{"navara":[3,2],"cesium":[1,0]},"pass":true}
+STRICT {"scenario":"qa-strict-soak","assertions":0,"coverage":{},"picks":500,"requests":1377,"violations":0}

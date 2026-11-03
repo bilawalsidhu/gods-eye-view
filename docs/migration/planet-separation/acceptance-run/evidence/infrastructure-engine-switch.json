@@ -1,0 +1,181 @@
+{
+  "scenario": "qa-infrastructure-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=local-dams,local-datacenters",
+    "--evidence=<output>/evidence/infrastructure-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "local-dams",
+    "local-datacenters"
+  ],
+  "coverage": {
+    "local-dams": {
+      "cesium": 2,
+      "navara": 4
+    },
+    "local-datacenters": {
+      "cesium": 3,
+      "navara": 5
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 13827.300000011921,
+      "idleAt": 14809
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 21326.30000001192,
+      "idleAt": 21475.40000000596
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "local-datacenters",
+      "engine": "navara",
+      "claim": "same model, every bundled record, bounded LOD stems, no file read again",
+      "detail": [
+        4362,
+        716
+      ]
+    },
+    {
+      "layer": "local-dams",
+      "engine": "navara",
+      "claim": "same model, every bundled record, bounded LOD stems, no file read again",
+      "detail": [
+        4362,
+        716
+      ]
+    },
+    {
+      "layer": "local-dams",
+      "engine": "navara",
+      "claim": "a click on a dam selects it"
+    },
+    {
+      "layer": "local-datacenters",
+      "engine": "navara",
+      "claim": "a click on the datacenter selects it"
+    },
+    {
+      "layer": "local-datacenters",
+      "engine": "cesium",
+      "claim": "same model, every bundled record, bounded LOD stems, no file read again",
+      "detail": [
+        4362,
+        716
+      ]
+    },
+    {
+      "layer": "local-dams",
+      "engine": "cesium",
+      "claim": "same model, every bundled record, bounded LOD stems, no file read again",
+      "detail": [
+        4362,
+        716
+      ]
+    },
+    {
+      "layer": "local-datacenters",
+      "engine": "cesium",
+      "claim": "the clicked datacenter stays selected across the switch"
+    },
+    {
+      "layer": "local-dams",
+      "engine": "cesium",
+      "claim": "a click on a dam selects it"
+    },
+    {
+      "layer": "local-datacenters",
+      "engine": "cesium",
+      "claim": "a click on the datacenter selects it"
+    },
+    {
+      "layer": "local-datacenters",
+      "engine": "navara",
+      "claim": "same model, every bundled record, bounded LOD stems, no file read again",
+      "detail": [
+        4362,
+        716
+      ]
+    },
+    {
+      "layer": "local-dams",
+      "engine": "navara",
+      "claim": "same model, every bundled record, bounded LOD stems, no file read again",
+      "detail": [
+        4362,
+        716
+      ]
+    },
+    {
+      "layer": "local-datacenters",
+      "engine": "navara",
+      "claim": "the clicked datacenter stays selected across the switch"
+    },
+    {
+      "layer": "local-dams",
+      "engine": "navara",
+      "claim": "a click on a dam selects it"
+    },
+    {
+      "layer": "local-datacenters",
+      "engine": "navara",
+      "claim": "a click on the datacenter selects it"
+    }
+  ],
+  "network": {
+    "requests": 835,
+    "preview": 149,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 303,
+      "tiles.maps.eox.at": 366
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 684,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

@@ -1,0 +1,108 @@
+{
+  "scenario": "qa-strict-hidden-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=",
+    "--evidence=<output>/evidence/strict-hidden-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [],
+  "coverage": {},
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label"
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label"
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label"
+    }
+  ],
+  "assertions": [],
+  "network": {
+    "requests": 764,
+    "preview": 142,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 297,
+      "tile.openstreetmap.org": 308
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 620,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": [],
+  "contracts": [
+    {
+      "kind": "cesium",
+      "temperature": "cold",
+      "hiddenWhileBusy": true,
+      "settledWhileHidden": true,
+      "settleAfterHideMs": 1756,
+      "frameWhileHidden": false,
+      "firstFrameAfterShownMs": 386,
+      "history": 1
+    },
+    {
+      "kind": "navara",
+      "temperature": "warm",
+      "hiddenWhileBusy": true,
+      "settledWhileHidden": true,
+      "settleAfterHideMs": 128,
+      "frameWhileHidden": false,
+      "firstFrameAfterShownMs": 24,
+      "history": 1
+    },
+    {
+      "kind": "cesium",
+      "temperature": "warm",
+      "hiddenWhileBusy": true,
+      "settledWhileHidden": true,
+      "settleAfterHideMs": 9,
+      "frameWhileHidden": true,
+      "firstFrameAfterShownMs": 28,
+      "history": 1
+    }
+  ]
+}

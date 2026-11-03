@@ -1,0 +1,115 @@
+{
+  "scenario": "qa-nepal-locator-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=bhote-koshi-locator",
+    "--evidence=<output>/evidence/nepal-locator-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "bhote-koshi-locator"
+  ],
+  "coverage": {
+    "bhote-koshi-locator": {
+      "cesium": 1,
+      "navara": 3
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 9393,
+      "idleAt": 9610.90000000596
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 11748,
+      "idleAt": 11790.199999988079
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "bhote-koshi-locator",
+      "engine": "navara",
+      "claim": "same model; the flood path adds more than 50 cyan pixels to the same scene without it",
+      "detail": {
+        "added": 353
+      }
+    },
+    {
+      "layer": "bhote-koshi-locator",
+      "engine": "cesium",
+      "claim": "same model; the flood path adds more than 50 cyan pixels to the same scene without it",
+      "detail": {
+        "added": 413
+      }
+    },
+    {
+      "layer": "bhote-koshi-locator",
+      "engine": "navara",
+      "claim": "same model; the flood path adds more than 50 cyan pixels to the same scene without it",
+      "detail": {
+        "added": 353
+      }
+    },
+    {
+      "layer": "bhote-koshi-locator",
+      "engine": "navara",
+      "claim": "the last of three quick presentation changes is the one applied",
+      "detail": {
+        "presentation": "bhote-koshi-trigger-record",
+        "count": 1
+      }
+    }
+  ],
+  "network": {
+    "requests": 687,
+    "preview": 140,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 242,
+      "tiles.maps.eox.at": 288
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 545,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

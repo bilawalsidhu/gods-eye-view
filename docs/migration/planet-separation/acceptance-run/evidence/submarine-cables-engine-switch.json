@@ -1,0 +1,133 @@
+{
+  "scenario": "qa-submarine-cables-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=telegeography-submarine-cables",
+    "--evidence=<output>/evidence/submarine-cables-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "telegeography-submarine-cables"
+  ],
+  "coverage": {
+    "telegeography-submarine-cables": {
+      "cesium": 2,
+      "navara": 5
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 13231.59999999404,
+      "idleAt": 13973.09999999404
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 19527.30000001192,
+      "idleAt": 19765.69999998808
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "telegeography-submarine-cables",
+      "engine": "navara",
+      "claim": "same model, all 2629 cables and landing points of the bundled files, at most 160 labels",
+      "detail": {
+        "count": 2629,
+        "labels": 112
+      }
+    },
+    {
+      "layer": "telegeography-submarine-cables",
+      "engine": "navara",
+      "claim": "a click on a landing point flies the camera to it"
+    },
+    {
+      "layer": "telegeography-submarine-cables",
+      "engine": "cesium",
+      "claim": "same model, all 2629 cables and landing points of the bundled files, at most 160 labels",
+      "detail": {
+        "count": 2629,
+        "labels": 68
+      }
+    },
+    {
+      "layer": "telegeography-submarine-cables",
+      "engine": "cesium",
+      "claim": "a click on a landing point flies the camera to it"
+    },
+    {
+      "layer": "telegeography-submarine-cables",
+      "engine": "navara",
+      "claim": "same model, all 2629 cables and landing points of the bundled files, at most 160 labels",
+      "detail": {
+        "count": 2629,
+        "labels": 68
+      }
+    },
+    {
+      "layer": "telegeography-submarine-cables",
+      "engine": "navara",
+      "claim": "a click on a landing point flies the camera to it"
+    },
+    {
+      "layer": "telegeography-submarine-cables",
+      "engine": "navara",
+      "claim": "each bundled file read once",
+      "detail": [
+        "/assets/cable-geo-i2PzBJi6.json",
+        "/assets/landing-point-geo-CiAWPhfe.json"
+      ]
+    }
+  ],
+  "network": {
+    "requests": 884,
+    "preview": 149,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 374,
+      "tiles.maps.eox.at": 344
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 733,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 5,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

@@ -1,0 +1,133 @@
+{
+  "scenario": "qa-cctv-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=cctv",
+    "--evidence=<output>/evidence/cctv-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "cctv"
+  ],
+  "coverage": {
+    "cctv": {
+      "cesium": 2,
+      "navara": 2
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 7957,
+      "idleAt": 8265.799999982119
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 9003.299999982119,
+      "idleAt": 9115.90000000596
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "cctv",
+      "engine": "cesium",
+      "claim": "same model and video element decoding new frames; textured projection plane; no catalog read"
+    },
+    {
+      "layer": "cctv",
+      "engine": "cesium",
+      "claim": "calibration patch kept (31 m, 20° pitch); monitor plane visible",
+      "detail": {
+        "show": true,
+        "visible": true,
+        "calibration": {
+          "offsetNorthM": 0,
+          "offsetEastM": 0,
+          "headingDeg": 0,
+          "pitchDeg": 20,
+          "fovDeg": 0,
+          "rangeScale": 1,
+          "heightM": 31
+        }
+      }
+    },
+    {
+      "layer": "cctv",
+      "engine": "navara",
+      "claim": "same model and video element decoding new frames; textured projection plane; no catalog read"
+    },
+    {
+      "layer": "cctv",
+      "engine": "navara",
+      "claim": "calibration patch kept (31 m, 20° pitch); monitor plane visible",
+      "detail": {
+        "show": true,
+        "visible": true,
+        "calibration": {
+          "offsetNorthM": 0,
+          "offsetEastM": 0,
+          "headingDeg": 0,
+          "pitchDeg": 20,
+          "fovDeg": 0,
+          "rangeScale": 1,
+          "heightM": 31
+        }
+      }
+    }
+  ],
+  "network": {
+    "requests": 650,
+    "preview": 129,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/cctv/sources": 1,
+      "/api/terrain/heights": 13,
+      "/api/cctv/health": 1,
+      "/api/cctv/frame": 1,
+      "/api/cctv/media": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 244,
+      "tiles.maps.eox.at": 260
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 519,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 4,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

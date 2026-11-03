@@ -2,3 +2,4 @@ navara 3 3 [ 219, 98, 90 ]
 cesium 3 3 [ 253, 34, 51 ]
 navara 3 3 [ 219, 98, 90 ]
 PASS authored packs, geographic picks, same player, original multi-shot timeline
+STRICT {"scenario":"qa-director-engine-switch","assertions":0,"coverage":{},"picks":4,"requests":719,"violations":0}

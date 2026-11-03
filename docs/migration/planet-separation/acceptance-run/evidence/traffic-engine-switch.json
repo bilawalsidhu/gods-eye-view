@@ -1,0 +1,126 @@
+{
+  "scenario": "qa-traffic-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=traffic",
+    "--evidence=<output>/evidence/traffic-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "traffic"
+  ],
+  "coverage": {
+    "traffic": {
+      "cesium": 1,
+      "navara": 3
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 9059.5,
+      "idleAt": 9293.699999988079
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 9675.199999988079,
+      "idleAt": 9775.59999999404
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "traffic",
+      "engine": "navara",
+      "claim": "same module, parameters and vehicle ids; 1038-1148 vehicles with flow, 33-37 congestion corridors",
+      "detail": {
+        "count": 1093,
+        "corridors": 35
+      }
+    },
+    {
+      "layer": "traffic",
+      "engine": "cesium",
+      "claim": "same module, parameters and vehicle ids; 1038-1148 vehicles with flow, 33-37 congestion corridors",
+      "detail": {
+        "count": 1093,
+        "corridors": 35
+      }
+    },
+    {
+      "layer": "traffic",
+      "engine": "navara",
+      "claim": "same module, parameters and vehicle ids; 1038-1148 vehicles with flow, 33-37 congestion corridors",
+      "detail": {
+        "count": 1093,
+        "corridors": 35
+      }
+    },
+    {
+      "layer": "traffic",
+      "engine": "navara",
+      "claim": "after the round trip the population stays at 80-125% and at least 90% of the vehicles above ground in view are drawn where the layer places them",
+      "detail": {
+        "population": 1093,
+        "settledCount": 1093,
+        "finalCount": 1093,
+        "aboveGround": 218,
+        "drawn": 211
+      }
+    }
+  ],
+  "network": {
+    "requests": 701,
+    "preview": 125,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/tomtom/status": 1,
+      "/api/tomtom/flow": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 269,
+      "tiles.maps.eox.at": 287,
+      "tiles.openfreemap.org": 3
+    },
+    "fixtureResponses": 290,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 284,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 1,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [
+      "https://tiles.maps.eox.at/*",
+      "https://tiles.openfreemap.org/*"
+    ],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

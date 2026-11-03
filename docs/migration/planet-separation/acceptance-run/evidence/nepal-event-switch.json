@@ -1,0 +1,139 @@
+{
+  "scenario": "qa-nepal-event-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=bhote-koshi-2026",
+    "--evidence=<output>/evidence/nepal-event-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "bhote-koshi-2026"
+  ],
+  "coverage": {
+    "bhote-koshi-2026": {
+      "cesium": 2,
+      "navara": 3
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 8117.300000011921,
+      "idleAt": 8314
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 9875.199999988079,
+      "idleAt": 9962.800000011921
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 12393.300000011921,
+      "idleAt": 12485.09999999404
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "bhote-koshi-2026",
+      "engine": "navara",
+      "claim": "same model and media root; paused at 0.52 with split 0.27; the divider changes the imagery",
+      "detail": {
+        "diff": 55.09813333333334
+      }
+    },
+    {
+      "layer": "bhote-koshi-2026",
+      "engine": "cesium",
+      "claim": "same model and media root; paused at 0.52 with split 0.27; the divider changes the imagery",
+      "detail": {
+        "diff": 83.53706666666666
+      }
+    },
+    {
+      "layer": "bhote-koshi-2026",
+      "engine": "navara",
+      "claim": "same model and media root; paused at 0.52 with split 0.27; the divider changes the imagery",
+      "detail": {
+        "diff": 55.1088
+      }
+    },
+    {
+      "layer": "bhote-koshi-2026",
+      "engine": "navara",
+      "claim": "event file and image pair read once over three engine visits"
+    },
+    {
+      "layer": "bhote-koshi-2026",
+      "engine": "cesium",
+      "claim": "playback keeps playing past 0.53 through the switch",
+      "detail": {
+        "enabled": true,
+        "playing": true,
+        "progress": 0.5324655555556881,
+        "split": 0.27
+      }
+    }
+  ],
+  "network": {
+    "requests": 911,
+    "preview": 139,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 236,
+      "terrain.reearth.land": 319,
+      "tiles.maps.eox.at": 203,
+      "www.youtube-nocookie.com": 6,
+      "i.ytimg.com": 5,
+      "www.youtube.com": 1
+    },
+    "fixtureResponses": 11,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {
+      "https://i.ytimg.com/*": 5,
+      "https://www.youtube-nocookie.com/*": 5,
+      "https://www.youtube.com/iframe_api*": 1
+    },
+    "tileCache": {
+      "hits": 757,
+      "fetched": 1,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {
+        "services.arcgisonline.com": 1
+      }
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

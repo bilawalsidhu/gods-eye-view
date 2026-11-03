@@ -1,0 +1,213 @@
+{
+  "scenario": "qa-strict-context-loss",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=",
+    "--evidence=<output>/evidence/strict-context-loss.json"
+  ],
+  "status": "fail",
+  "error": "AssertionError [ERR_ASSERTION]: context-loss cases that broke the contract\n+ actual - expected\n\n+ [\n+   {\n+     back: 'navara',\n+     backDrawn: false,\n+     backEngine: 'cesium',\n+     backError: 'Waiting failed: 30000ms exceeded',\n+     backSessionIntact: true,\n+     case: 'warm navara→cesium, incoming context lost',\n+     drawn: false,\n+     failed: [\n+       'no non-blank frame from the running engine',\n+       'the pick back to navara did not run it',\n+       'no non-blank frame from navara after the pick back',\n+       'the pick back failed: Waiting failed: 30000ms exceeded'\n+     ],\n+     history: 1,\n+     lost: true,\n+     lostKind: 'cesium',\n+     outcome: 'switched',\n+     pageErrors: [],\n+     restoredEvent: false,\n+     sessionIntact: true\n+   }\n+ ]\n- []\n\n    at file://<scratch>/checkout/scripts/qa-strict-context-loss.mjs:230:10\n    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:599:9)\n    at async file://<scratch>/checkout/scripts/qa-strict-context-loss.mjs:35:1",
+  "layers": [],
+  "coverage": {},
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label"
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 10506.700000017881,
+      "idleAt": 11792.90000000596
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 12217,
+      "idleAt": 12242.5
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label"
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 15455.200000017881,
+      "idleAt": 15591.40000000596
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 15781.700000017881,
+      "idleAt": 15811.700000017881
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label"
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 5156.9000000059605,
+      "idleAt": 6650.4000000059605
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 6923.0999999940395,
+      "idleAt": 6959.800000011921
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label"
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 10175.300000011921,
+      "idleAt": 11435.90000000596
+    }
+  ],
+  "assertions": [],
+  "network": {
+    "requests": 2249,
+    "preview": 324,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 2,
+      "/api/openai/hud-summary": 2,
+      "/api/realtime/debug-log": 2,
+      "/api/setup/status": 2,
+      "/api/google/tiles-token": 3
+    },
+    "external": {
+      "fonts.googleapis.com": 4,
+      "services.arcgisonline.com": 64,
+      "terrain.reearth.land": 897,
+      "tile.openstreetmap.org": 960
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 4,
+      "/api/openai/hud-summary/status": 2,
+      "/api/realtime/debug-log": 4,
+      "/api/google/tiles-token": 3
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 1921,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 8,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": [],
+  "contracts": [
+    {
+      "case": "cold navara→cesium, outgoing context lost",
+      "lostKind": "navara",
+      "lost": true,
+      "restoredEvent": true,
+      "outcome": "switched",
+      "sessionIntact": true,
+      "history": 1,
+      "drawn": true,
+      "back": "navara",
+      "backEngine": "navara",
+      "backSessionIntact": true,
+      "backDrawn": true,
+      "backError": null,
+      "pageErrors": [],
+      "failed": []
+    },
+    {
+      "case": "warm cesium→navara, outgoing context lost",
+      "lostKind": "cesium",
+      "lost": true,
+      "restoredEvent": false,
+      "outcome": "switched",
+      "sessionIntact": true,
+      "history": 1,
+      "drawn": true,
+      "back": "cesium",
+      "backEngine": "cesium",
+      "backSessionIntact": true,
+      "backDrawn": true,
+      "backError": null,
+      "pageErrors": [],
+      "failed": []
+    },
+    {
+      "case": "warm navara→cesium, incoming context lost",
+      "lostKind": "cesium",
+      "lost": true,
+      "restoredEvent": false,
+      "outcome": "switched",
+      "sessionIntact": true,
+      "history": 1,
+      "drawn": false,
+      "back": "navara",
+      "backEngine": "cesium",
+      "backSessionIntact": true,
+      "backDrawn": false,
+      "backError": "Waiting failed: 30000ms exceeded",
+      "pageErrors": [],
+      "failed": [
+        "no non-blank frame from the running engine",
+        "the pick back to navara did not run it",
+        "no non-blank frame from navara after the pick back",
+        "the pick back failed: Waiting failed: 30000ms exceeded"
+      ]
+    },
+    {
+      "case": "warm cesium→navara, incoming context lost",
+      "lostKind": "navara",
+      "lost": true,
+      "restoredEvent": false,
+      "outcome": "rolled back",
+      "sessionIntact": true,
+      "history": 0,
+      "drawn": true,
+      "back": "navara",
+      "backEngine": "navara",
+      "backSessionIntact": true,
+      "backDrawn": true,
+      "backError": null,
+      "pageErrors": [],
+      "failed": []
+    }
+  ]
+}

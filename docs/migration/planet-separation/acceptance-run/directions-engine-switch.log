@@ -1,3 +1,4 @@
-cesium moved 60.64041655927927 handoff 0.8283949323250437
-navara moved 61.970130793033945 handoff 3.0115854216361684
+cesium moved 61.149318887446455 handoff 7.644223260172653
+navara moved 62.344496509518116 handoff 9.17796981667924
 PASS route delivery during handoff, A/B clicks, step selection, ongoing FLY, clear and single route request
+STRICT {"scenario":"qa-directions-engine-switch","assertions":8,"coverage":{"directions":{"cesium":3,"navara":5}},"picks":4,"requests":877,"violations":0}

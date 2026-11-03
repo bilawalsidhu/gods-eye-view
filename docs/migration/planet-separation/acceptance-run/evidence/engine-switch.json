@@ -1,0 +1,217 @@
+{
+  "scenario": "qa-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=earthquakes",
+    "--evidence=<output>/evidence/engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "earthquakes"
+  ],
+  "coverage": {
+    "earthquakes": {
+      "cesium": 6,
+      "navara": 8
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 8867.59999999404,
+      "idleAt": 10478
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 14822.199999988079,
+      "idleAt": 14840.09999999404
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 14934.199999988079,
+      "idleAt": 14988.699999988079
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 17497.40000000596,
+      "idleAt": 17519.30000001192
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 24908,
+      "idleAt": 24934.19999998808
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 27505.40000000596,
+      "idleAt": 27585.90000000596
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 30330.59999999404,
+      "idleAt": 30372
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 6177,
+      "idleAt": 6269.4000000059605
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 6415.300000011921,
+      "idleAt": 6488.5
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "earthquakes",
+      "engine": "cesium",
+      "claim": "shallow red footprint drawn",
+      "detail": {
+        "off": 1.6574999999999989,
+        "on": 77.22
+      }
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "navara",
+      "claim": "same layer entry, model and poll timer; no splash; outgoing canvas detached"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "navara",
+      "claim": "parked engine draws no frame; pose, map and layers carried over"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "navara",
+      "claim": "shallow red footprint drawn",
+      "detail": {
+        "off": 7.4375,
+        "on": 81.3375
+      }
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "cesium",
+      "claim": "same layer entry, model and poll timer; no splash; outgoing canvas detached"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "cesium",
+      "claim": "parked engine draws no frame; pose, map and layers carried over"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "navara",
+      "claim": "same layer entry, model and poll timer; no splash; outgoing canvas detached"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "navara",
+      "claim": "parked engine draws no frame; pose, map and layers carried over"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "navara",
+      "claim": "Back restores the enabled layer on the same model"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "cesium",
+      "claim": "Forward restores the disabled layer on the same model"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "cesium",
+      "claim": "same layer entry, model and poll timer; no splash; outgoing canvas detached"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "cesium",
+      "claim": "parked engine draws no frame; pose, map and layers carried over"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "navara",
+      "claim": "same layer entry, model and poll timer; no splash; outgoing canvas detached"
+    },
+    {
+      "layer": "earthquakes",
+      "engine": "navara",
+      "claim": "parked engine draws no frame; pose, map and layers carried over"
+    }
+  ],
+  "network": {
+    "requests": 2259,
+    "preview": 251,
+    "previewApi": {
+      "/api/google/tiles-token": 2,
+      "/api/local-receivers/aircraft": 2,
+      "/api/openai/hud-summary": 2,
+      "/api/realtime/debug-log": 2,
+      "/api/setup/status": 2
+    },
+    "external": {
+      "fonts.googleapis.com": 4,
+      "services.arcgisonline.com": 62,
+      "terrain.reearth.land": 887,
+      "tile.openstreetmap.org": 1005,
+      "tiles.maps.eox.at": 50
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 4,
+      "/api/google/tiles-token": 2,
+      "/api/openai/hud-summary/status": 2,
+      "/api/realtime/debug-log": 2
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 2004,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

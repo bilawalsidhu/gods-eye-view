@@ -1,0 +1,160 @@
+{
+  "scenario": "qa-urban-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--transit",
+    "--layers=transit",
+    "--evidence=<output>/evidence/urban-engine-switch--transit.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "transit"
+  ],
+  "coverage": {
+    "transit": {
+      "cesium": 3,
+      "navara": 6
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 11853,
+      "idleAt": 12165
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 13910.90000000596,
+      "idleAt": 14004.40000000596
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "transit",
+      "engine": "navara",
+      "claim": "outside every feed region: no vehicles, no feed read, asks to move to a covered region",
+      "detail": {
+        "stats": {
+          "count": 0,
+          "lastUpdate": null,
+          "error": null,
+          "source": "GTFS-RT",
+          "status": "zoom-in",
+          "coverage": "No feed here yet · 16 regions available"
+        },
+        "reads": 0
+      }
+    },
+    {
+      "layer": "transit",
+      "engine": "navara",
+      "claim": "approaching Boston from outside turns on the MBTA feed: 12 vehicles",
+      "detail": {
+        "reads": 1
+      }
+    },
+    {
+      "layer": "transit",
+      "engine": "navara",
+      "claim": "a click on a vehicle selects it",
+      "detail": {
+        "x": 460.3586243385769,
+        "y": 496.16891229838575,
+        "id": "mbta:w2-1"
+      }
+    },
+    {
+      "layer": "transit",
+      "engine": "navara",
+      "claim": "12 fresh vehicles (the stale one dropped)",
+      "detail": 12
+    },
+    {
+      "layer": "transit",
+      "engine": "cesium",
+      "claim": "same model, same records, the clicked object still selected, no source read again"
+    },
+    {
+      "layer": "transit",
+      "engine": "cesium",
+      "claim": "12 fresh vehicles (the stale one dropped)",
+      "detail": 12
+    },
+    {
+      "layer": "transit",
+      "engine": "cesium",
+      "claim": "a click on empty ground clears the selection; a click on the object selects it again",
+      "detail": {
+        "x": 460.3717472719567,
+        "y": 502.3427979442785,
+        "id": "mbta:w2-1"
+      }
+    },
+    {
+      "layer": "transit",
+      "engine": "navara",
+      "claim": "same model, same records, the clicked object still selected, no source read again"
+    },
+    {
+      "layer": "transit",
+      "engine": "navara",
+      "claim": "12 fresh vehicles (the stale one dropped)",
+      "detail": 12
+    }
+  ],
+  "network": {
+    "requests": 1095,
+    "preview": 126,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/transit/vehicles": 1,
+      "/api/transit/trail": 2,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 514,
+      "tiles.maps.eox.at": 438
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 956,
+      "fetched": 10,
+      "failed": 0,
+      "cancelled": 19,
+      "fetchedByHost": {
+        "terrain.reearth.land": 9,
+        "tiles.maps.eox.at": 1
+      }
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

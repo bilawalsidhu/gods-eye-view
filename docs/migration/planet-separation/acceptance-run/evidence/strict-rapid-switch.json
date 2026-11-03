@@ -1,0 +1,139 @@
+{
+  "scenario": "qa-strict-rapid-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=",
+    "--evidence=<output>/evidence/strict-rapid-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [],
+  "coverage": {},
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label"
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label"
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label"
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label"
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label"
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": false,
+      "clicked": "label",
+      "at": 10541.5,
+      "idleAt": 10578.5
+    }
+  ],
+  "assertions": [],
+  "network": {
+    "requests": 729,
+    "preview": 116,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 288,
+      "tile.openstreetmap.org": 308
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 611,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": [],
+  "contracts": [
+    {
+      "name": "four back-to-back picks: each adds one history entry, keeps the session, reuses the warm engines and shows one canvas; a click on the busy picker changes nothing",
+      "pass": true,
+      "detail": {
+        "history": 4
+      }
+    },
+    {
+      "name": "Back then Forward before the Cesium entry is ready: Navara runs on the same session, no entry added, one canvas shown",
+      "pass": true,
+      "detail": {
+        "steps": [
+          {
+            "step": "back",
+            "engine": "cesium",
+            "busy": true
+          }
+        ],
+        "history": 0,
+        "warm": true,
+        "known": 2,
+        "shown": 1
+      }
+    },
+    {
+      "name": "a pick superseded by Back before ready: Back’s Cesium entry runs on the same session, the pick adds no entry, one canvas shown",
+      "pass": true,
+      "detail": {
+        "steps": [
+          {
+            "step": "pick",
+            "engine": "cesium",
+            "busy": true
+          }
+        ],
+        "history": 0,
+        "warm": true,
+        "known": 2,
+        "shown": 1
+      }
+    }
+  ]
+}

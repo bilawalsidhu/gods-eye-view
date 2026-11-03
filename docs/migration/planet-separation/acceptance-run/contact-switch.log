@@ -2,3 +2,4 @@ baseline {"context":true,"sites":true,"mode":"flights","subject":"223456789","hi
 handoff cesium {"context":true,"sites":true,"mode":"flights","subject":"223456789","history":["ais-live-vessels:123456789","ais-live-vessels:223456789"],"enabled":["ais-live-vessels","flights","military","military-awareness","military-installations"],"ring":null}
 handoff navara {"context":true,"sites":true,"mode":"flights","subject":"223456789","history":["ais-live-vessels:123456789","ais-live-vessels:223456789"],"enabled":["ais-live-vessels","flights","military","military-awareness","military-installations"],"ring":1}
 PASS Contacts history, dependency ownership and exit restore across both globes
+STRICT {"scenario":"qa-contact-switch","assertions":11,"coverage":{"military-awareness":{"cesium":1,"navara":2},"military-installations":{"cesium":3,"navara":5}},"picks":2,"requests":862,"violations":0}

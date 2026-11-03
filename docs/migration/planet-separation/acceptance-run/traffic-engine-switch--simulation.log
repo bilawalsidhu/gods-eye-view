@@ -1,7 +1,9 @@
-navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 34 }
-cesium sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 12, rebuilds: 0, added: 625, removed: 7, recycled: 35 }
-navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 15, rebuilds: 0, added: 625, removed: 7, recycled: 37 }
-vehicles in view {"aboveGround":150,"drawn":150,"belowTerrain":1,"withinOneMetre":1,"strayChangedPixels":2,"area":250000}
-vehicles below the drawn terrain, hidden by the depth test: 1
-population before the switches 618 settled after the round trip 618 after the comparison 618 below the drawn terrain before the switches 2
+navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 42 }
+cesium sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 48 }
+navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 12, rebuilds: 0, added: 625, removed: 7, recycled: 49 }
+vehicles in view {"aboveGround":144,"drawn":141,"belowTerrain":2,"withinOneMetre":2,"strayChangedPixels":5,"area":250000}
+not drawn [{"id":"VEH-0157","x":808.5297507850859,"y":292.46565996790645,"clearance":2.964248038828373},{"id":"VEH-0199","x":804.4064079114468,"y":222.07155687341555,"clearance":1.870130805298686},{"id":"VEH-0200","x":796.1752744340715,"y":222.0721929967956,"clearance":2.646672885864973}]
+vehicles below the drawn terrain, hidden by the depth test: 2
+population before the switches 618 settled after the round trip 618 after the comparison 618 below the drawn terrain before the switches 1
 PASS kept the traffic module, parameters, flow and vehicle identities across both globes; vehicles in view are drawn where the layer places them
+STRICT {"scenario":"qa-traffic-engine-switch","assertions":4,"coverage":{"traffic":{"cesium":1,"navara":3}},"picks":2,"requests":653,"violations":0}

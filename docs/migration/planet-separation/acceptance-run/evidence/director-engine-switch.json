@@ -1,0 +1,93 @@
+{
+  "scenario": "qa-director-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=",
+    "--evidence=<output>/evidence/director-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [],
+  "coverage": {},
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 13208.90000000596,
+      "idleAt": 13592.700000017881
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 16138.40000000596,
+      "idleAt": 16208.40000000596
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 19919.40000000596,
+      "idleAt": 19947.80000001192
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 23239.30000001192,
+      "idleAt": 23294.40000000596
+    }
+  ],
+  "assertions": [],
+  "network": {
+    "requests": 719,
+    "preview": 142,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 289,
+      "tiles.maps.eox.at": 270,
+      "earthquake.usgs.gov": 1
+    },
+    "fixtureResponses": 1,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 574,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [
+      "https://earthquake.usgs.gov/*"
+    ],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

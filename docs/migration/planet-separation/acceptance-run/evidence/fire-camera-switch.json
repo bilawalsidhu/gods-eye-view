@@ -1,0 +1,122 @@
+{
+  "scenario": "qa-fire-camera-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=alpr-cameras",
+    "--evidence=<output>/evidence/fire-camera-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "alpr-cameras"
+  ],
+  "coverage": {
+    "alpr-cameras": {
+      "cesium": 2,
+      "navara": 2
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 10567.59999999404,
+      "idleAt": 10803.59999999404
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 11796.699999988079,
+      "idleAt": 11847.59999999404
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "alpr-cameras",
+      "engine": "navara",
+      "claim": "a click on a camera selects it",
+      "detail": {
+        "x": 461.38868475017387,
+        "y": 586.9611164172393,
+        "id": "alpr:9000079"
+      }
+    },
+    {
+      "layer": "alpr-cameras",
+      "engine": "cesium",
+      "claim": "same model, 325 records, the clicked record still selected, no source read, same receipt time",
+      "detail": {
+        "count": 325
+      }
+    },
+    {
+      "layer": "alpr-cameras",
+      "engine": "cesium",
+      "claim": "a click on empty ground clears the camera; a click on it selects it again",
+      "detail": {
+        "x": 461.38868475017125,
+        "y": 586.9611164173448,
+        "id": "alpr:9000079"
+      }
+    },
+    {
+      "layer": "alpr-cameras",
+      "engine": "navara",
+      "claim": "same model, 325 records, the clicked record still selected, no source read, same receipt time",
+      "detail": {
+        "count": 325
+      }
+    }
+  ],
+  "network": {
+    "requests": 754,
+    "preview": 129,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/terrain/heights": 5,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 288,
+      "tiles.maps.eox.at": 303,
+      "tiles.dontgetflocked.com": 17
+    },
+    "fixtureResponses": 17,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 606,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 4,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [
+      "https://tiles.dontgetflocked.com/*"
+    ],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

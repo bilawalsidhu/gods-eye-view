@@ -1,0 +1,224 @@
+{
+  "scenario": "qa-w2-imagery",
+  "argv": [
+    "--url",
+    "http://127.0.0.1:4208/?engine=navara",
+    "--report",
+    "<output>/evidence/imagery-report.json",
+    "--switch",
+    "--preview",
+    "--layers=recent-imagery",
+    "--evidence=<output>/evidence/w2-imagery.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "recent-imagery"
+  ],
+  "coverage": {
+    "recent-imagery": {
+      "cesium": 3,
+      "navara": 23
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 14506.59999999404,
+      "idleAt": 14711.200000017881
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 17110,
+      "idleAt": 17151.70000001788
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "image pixels inside selected box"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "geographic clip outside box"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "A/B dates on opposite sides"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "cesium",
+      "claim": "cesium holds both original pins"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "cesium",
+      "claim": "cesium renders both pinned dates"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "cesium",
+      "claim": "cesium reuses the STAC search"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "navara holds both original pins"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "navara renders both pinned dates"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "navara reuses the STAC search"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "swap reverses dates"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "physical divider drag changes rendered split"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "divider Home exposes B"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "divider End exposes A"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "half opacity blends source with basemap"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "basemap comparison clips only A"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "ten toggles restore visible image"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "Navara tile admission stays bounded"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "failed replacement does not leave stale image pixels"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "rapid replacement leaves final date only"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "clear removes both slots"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "physical box drag selects geography without moving camera"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "USE VIEW works on real engine camera"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "oversized view refuses and offers bounded zoom"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "ZOOM IN lands at requested height"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "disable leaves no imagery owners or queued requests"
+    },
+    {
+      "layer": "recent-imagery",
+      "engine": "navara",
+      "claim": "no browser exceptions"
+    }
+  ],
+  "network": {
+    "requests": 970,
+    "preview": 136,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 355,
+      "tile.openstreetmap.org": 369,
+      "cmr.earthdata.nasa.gov": 26,
+      "wvs.earthdata.nasa.gov": 15,
+      "gibs-c.earthdata.nasa.gov": 17,
+      "gibs-a.earthdata.nasa.gov": 18,
+      "gibs-b.earthdata.nasa.gov": 17
+    },
+    "fixtureResponses": 93,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 739,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 7,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [
+      "*://*.earthdata.nasa.gov/*"
+    ],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

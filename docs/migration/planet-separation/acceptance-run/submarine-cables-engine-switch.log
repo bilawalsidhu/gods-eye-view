@@ -3,13 +3,13 @@ navara {
   referenceLabelCount: 112,
   count: 2629,
   loading: false,
-  lastUpdate: 1793709930206,
+  lastUpdate: 1793728556298,
   error: null
 }
 cesium {
   same: true,
   count: 2629,
-  lastUpdate: 1793709930206,
+  lastUpdate: 1793728556298,
   loading: false,
   loadingLabel: '',
   error: null,
@@ -20,7 +20,8 @@ navara {
   referenceLabelCount: 68,
   count: 2629,
   loading: false,
-  lastUpdate: 1793709930206,
+  lastUpdate: 1793728556298,
   error: null
 }
 PASS full bundled cable dataset, bounded labels, landing-point fly-to and one read per file
+STRICT {"scenario":"qa-submarine-cables-engine-switch","assertions":7,"coverage":{"telegeography-submarine-cables":{"cesium":2,"navara":5}},"picks":2,"requests":884,"violations":0}

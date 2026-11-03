@@ -1,0 +1,143 @@
+FAIL {"case":"cold navara→cesium failure","refused":1,"rollbackTarget":"navara","historyAfterFailure":0,"selectionKept":true,"selectionAfterRollback":"a00000","historyAfterRetry":1,"selectionAfterRetry":null,"errors":0,"failed":["the tracked aircraft is lost after the retry"]}
+FAIL {"case":"cold cesium→navara failure","refused":1,"rollbackTarget":"cesium","historyAfterFailure":0,"selectionKept":false,"selectionAfterRollback":null,"historyAfterRetry":1,"selectionAfterRetry":null,"errors":0,"failed":["the tracked aircraft is lost after the rollback","the tracked aircraft is lost after the retry"]}
+FAIL {"case":"warm cesium→navara failure","refused":1,"rollbackTarget":"cesium","historyAfterFailure":0,"selectionKept":false,"selectionAfterRollback":null,"historyAfterRetry":1,"selectionAfterRetry":null,"errors":0,"failed":["the tracked aircraft is lost after the rollback","the tracked aircraft is lost after the retry"]}
+FAIL {"case":"warm navara→cesium failure","refused":1,"rollbackTarget":"navara","historyAfterFailure":0,"selectionKept":true,"selectionAfterRollback":"a00000","historyAfterRetry":1,"selectionAfterRetry":null,"errors":0,"failed":["the tracked aircraft is lost after the retry"]}
+PASS {"case":"cold cesium→navara first frame after 12 s","engine":"navara","history":1,"coverGoneMs":11171,"firstFrameMs":12221,"errors":0}
+PASS {"case":"warm navara→cesium first frame after 12 s","engine":"cesium","history":1,"coverGoneMs":10038,"firstFrameMs":12042,"errors":0}
+STRICT {"scenario":"qa-strict-failure-matrix","assertions":0,"coverage":{},"picks":16,"requests":6609,"violations":0}
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: failure-injection cases that broke the contract
++ actual - expected
+
++ [
++   {
++     case: 'cold navara→cesium failure',
++     errors: 0,
++     failed: [
++       'the tracked aircraft is lost after the retry'
++     ],
++     historyAfterFailure: 0,
++     historyAfterRetry: 1,
++     refused: 1,
++     rollbackTarget: 'navara',
++     selectionAfterRetry: null,
++     selectionAfterRollback: 'a00000',
++     selectionKept: true
++   },
++   {
++     case: 'cold cesium→navara failure',
++     errors: 0,
++     failed: [
++       'the tracked aircraft is lost after the rollback',
++       'the tracked aircraft is lost after the retry'
++     ],
++     historyAfterFailure: 0,
++     historyAfterRetry: 1,
++     refused: 1,
++     rollbackTarget: 'cesium',
++     selectionAfterRetry: null,
++     selectionAfterRollback: null,
++     selectionKept: false
++   },
++   {
++     case: 'warm cesium→navara failure',
++     errors: 0,
++     failed: [
++       'the tracked aircraft is lost after the rollback',
++       'the tracked aircraft is lost after the retry'
++     ],
++     historyAfterFailure: 0,
++     historyAfterRetry: 1,
++     refused: 1,
++     rollbackTarget: 'cesium',
++     selectionAfterRetry: null,
++     selectionAfterRollback: null,
++     selectionKept: false
++   },
++   {
++     case: 'warm navara→cesium failure',
++     errors: 0,
++     failed: [
++       'the tracked aircraft is lost after the retry'
++     ],
++     historyAfterFailure: 0,
++     historyAfterRetry: 1,
++     refused: 1,
++     rollbackTarget: 'navara',
++     selectionAfterRetry: null,
++     selectionAfterRollback: 'a00000',
++     selectionKept: true
++   }
++ ]
+- []
+
+    at file://<scratch>/checkout/scripts/qa-strict-failure-matrix.mjs:278:10
+    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:599:9)
+    at async file://<scratch>/checkout/scripts/qa-strict-failure-matrix.mjs:40:1 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [
+    {
+      case: 'cold navara→cesium failure',
+      refused: 1,
+      rollbackTarget: 'navara',
+      historyAfterFailure: 0,
+      selectionKept: true,
+      selectionAfterRollback: 'a00000',
+      historyAfterRetry: 1,
+      selectionAfterRetry: null,
+      errors: 0,
+      failed: [ 'the tracked aircraft is lost after the retry' ]
+    },
+    {
+      case: 'cold cesium→navara failure',
+      refused: 1,
+      rollbackTarget: 'cesium',
+      historyAfterFailure: 0,
+      selectionKept: false,
+      selectionAfterRollback: null,
+      historyAfterRetry: 1,
+      selectionAfterRetry: null,
+      errors: 0,
+      failed: [
+        'the tracked aircraft is lost after the rollback',
+        'the tracked aircraft is lost after the retry'
+      ]
+    },
+    {
+      case: 'warm cesium→navara failure',
+      refused: 1,
+      rollbackTarget: 'cesium',
+      historyAfterFailure: 0,
+      selectionKept: false,
+      selectionAfterRollback: null,
+      historyAfterRetry: 1,
+      selectionAfterRetry: null,
+      errors: 0,
+      failed: [
+        'the tracked aircraft is lost after the rollback',
+        'the tracked aircraft is lost after the retry'
+      ]
+    },
+    {
+      case: 'warm navara→cesium failure',
+      refused: 1,
+      rollbackTarget: 'navara',
+      historyAfterFailure: 0,
+      selectionKept: true,
+      selectionAfterRollback: 'a00000',
+      historyAfterRetry: 1,
+      selectionAfterRetry: null,
+      errors: 0,
+      failed: [ 'the tracked aircraft is lost after the retry' ]
+    }
+  ],
+  expected: [],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v26.12.0

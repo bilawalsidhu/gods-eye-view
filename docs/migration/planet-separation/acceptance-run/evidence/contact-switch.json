@@ -1,0 +1,233 @@
+{
+  "scenario": "qa-contact-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=military-awareness,military-installations",
+    "--evidence=<output>/evidence/contact-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "military-awareness",
+    "military-installations"
+  ],
+  "coverage": {
+    "military-awareness": {
+      "cesium": 1,
+      "navara": 2
+    },
+    "military-installations": {
+      "cesium": 3,
+      "navara": 5
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 8157.9000000059605,
+      "idleAt": 8422.5
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 9175.700000017881,
+      "idleAt": 9260.40000000596
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "military-installations",
+      "engine": "navara",
+      "claim": "the station zone holds the fixture station, drawn and pickable",
+      "detail": {
+        "drawn": [
+          580,
+          577
+        ],
+        "records": [
+          "QA Harbour Station"
+        ],
+        "coverage": {
+          "kind": "subject",
+          "radiusM": 100000
+        },
+        "count": 1,
+        "reads": 2,
+        "subject": "223456789"
+      }
+    },
+    {
+      "layer": "military-awareness",
+      "engine": "navara",
+      "claim": "Contacts subject, navigation history and awareness rim",
+      "detail": {
+        "context": true,
+        "sites": true,
+        "mode": "flights",
+        "subject": "223456789",
+        "history": [
+          "ais-live-vessels:123456789",
+          "ais-live-vessels:223456789"
+        ],
+        "enabled": [
+          "ais-live-vessels",
+          "flights",
+          "military",
+          "military-awareness",
+          "military-installations"
+        ],
+        "ring": 1
+      }
+    },
+    {
+      "layer": "military-awareness",
+      "engine": "cesium",
+      "claim": "same awareness model, Contacts mode, subject, history and enabled layers"
+    },
+    {
+      "layer": "military-installations",
+      "engine": "cesium",
+      "claim": "same installations model and enabled through the switch"
+    },
+    {
+      "layer": "military-installations",
+      "engine": "cesium",
+      "claim": "the station zone holds the fixture station, drawn and pickable",
+      "detail": {
+        "drawn": [
+          513,
+          213
+        ],
+        "records": [
+          "QA Harbour Station"
+        ],
+        "coverage": {
+          "kind": "subject",
+          "radiusM": 100000
+        },
+        "count": 1,
+        "reads": 2,
+        "subject": "223456789"
+      }
+    },
+    {
+      "layer": "military-installations",
+      "engine": "cesium",
+      "claim": "the switch reads no installation snapshot",
+      "detail": {
+        "before": 2,
+        "after": 2
+      }
+    },
+    {
+      "layer": "military-awareness",
+      "engine": "navara",
+      "claim": "same awareness model, Contacts mode, subject, history and enabled layers"
+    },
+    {
+      "layer": "military-installations",
+      "engine": "navara",
+      "claim": "same installations model and enabled through the switch"
+    },
+    {
+      "layer": "military-installations",
+      "engine": "navara",
+      "claim": "the station zone holds the fixture station, drawn and pickable",
+      "detail": {
+        "drawn": [
+          513,
+          213
+        ],
+        "records": [
+          "QA Harbour Station"
+        ],
+        "coverage": {
+          "kind": "subject",
+          "radiusM": 100000
+        },
+        "count": 1,
+        "reads": 2,
+        "subject": "223456789"
+      }
+    },
+    {
+      "layer": "military-installations",
+      "engine": "navara",
+      "claim": "the switch reads no installation snapshot",
+      "detail": {
+        "before": 2,
+        "after": 2
+      }
+    },
+    {
+      "layer": "military-installations",
+      "engine": "navara",
+      "claim": "the station zone holds the fixture station, drawn and pickable",
+      "detail": {
+        "drawn": [
+          513,
+          213
+        ],
+        "records": [
+          "QA Harbour Station"
+        ],
+        "coverage": {
+          "kind": "subject",
+          "radiusM": 100000
+        },
+        "count": 1,
+        "reads": 2,
+        "subject": "223456789"
+      }
+    }
+  ],
+  "network": {
+    "requests": 862,
+    "preview": 116,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/terrain/heights": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 320,
+      "tiles.maps.eox.at": 409
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 744,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

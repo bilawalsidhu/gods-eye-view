@@ -1,0 +1,172 @@
+{
+  "scenario": "qa-ghostmaps-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=s2-ghostmaps",
+    "--evidence=<output>/evidence/ghostmaps-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "s2-ghostmaps"
+  ],
+  "coverage": {
+    "s2-ghostmaps": {
+      "cesium": 5,
+      "navara": 10
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 10555.300000011921,
+      "idleAt": 10885.600000023842
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 14684.90000000596,
+      "idleAt": 14758
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "same model, three features, one event stream, one KMZ read"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "a click on QA pin draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "a click on QA route draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "a click on QA zone draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "a click in the zone hole clears the selected zone card like empty ground",
+      "detail": {
+        "shown": 5766,
+        "hole": 0,
+        "empty": 0
+      }
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "cesium",
+      "claim": "same model, three features, one event stream, one KMZ read"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "cesium",
+      "claim": "a click on QA pin draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "cesium",
+      "claim": "a click on QA route draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "cesium",
+      "claim": "a click on QA zone draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "cesium",
+      "claim": "a click in the zone hole clears the selected zone card like empty ground",
+      "detail": {
+        "shown": 5766,
+        "hole": 0,
+        "empty": 0
+      }
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "same model, three features, one event stream, one KMZ read"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "a click on QA pin draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "a click on QA route draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "a click on QA zone draws its card text"
+    },
+    {
+      "layer": "s2-ghostmaps",
+      "engine": "navara",
+      "claim": "a click in the zone hole clears the selected zone card like empty ground",
+      "detail": {
+        "shown": 5766,
+        "hole": 0,
+        "empty": 0
+      }
+    }
+  ],
+  "network": {
+    "requests": 631,
+    "preview": 138,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 214,
+      "tiles.maps.eox.at": 262
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 491,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

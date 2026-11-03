@@ -1,0 +1,134 @@
+{
+  "scenario": "qa-space-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=satellites",
+    "--evidence=<output>/evidence/space-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "satellites"
+  ],
+  "coverage": {
+    "satellites": {
+      "cesium": 2,
+      "navara": 3
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 7460.5999999940395,
+      "idleAt": 7741
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 8270.800000011921,
+      "idleAt": 8357.199999988079
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "satellites",
+      "engine": "navara",
+      "claim": "each of the seven TLE groups read exactly once",
+      "detail": {
+        "/api/celestrak/stations": 1,
+        "/api/celestrak/visual": 1,
+        "/api/celestrak/gps-ops": 1,
+        "/api/celestrak/glo-ops": 1,
+        "/api/celestrak/galileo": 1,
+        "/api/celestrak/geo": 1,
+        "/api/celestrak/starlink": 1
+      }
+    },
+    {
+      "layer": "satellites",
+      "engine": "cesium",
+      "claim": "same models; 6 839 objects, the ISS tracked with its ring, same update stamp"
+    },
+    {
+      "layer": "satellites",
+      "engine": "cesium",
+      "claim": "each of the seven TLE groups read exactly once",
+      "detail": {
+        "/api/celestrak/stations": 1,
+        "/api/celestrak/visual": 1,
+        "/api/celestrak/gps-ops": 1,
+        "/api/celestrak/glo-ops": 1,
+        "/api/celestrak/galileo": 1,
+        "/api/celestrak/geo": 1,
+        "/api/celestrak/starlink": 1
+      }
+    },
+    {
+      "layer": "satellites",
+      "engine": "navara",
+      "claim": "same models; 6 839 objects, the ISS tracked with its ring, same update stamp"
+    },
+    {
+      "layer": "satellites",
+      "engine": "navara",
+      "claim": "each of the seven TLE groups read exactly once",
+      "detail": {
+        "/api/celestrak/stations": 1,
+        "/api/celestrak/visual": 1,
+        "/api/celestrak/gps-ops": 1,
+        "/api/celestrak/glo-ops": 1,
+        "/api/celestrak/galileo": 1,
+        "/api/celestrak/geo": 1,
+        "/api/celestrak/starlink": 1
+      }
+    }
+  ],
+  "network": {
+    "requests": 318,
+    "preview": 112,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 88,
+      "tiles.maps.eox.at": 101
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 204,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

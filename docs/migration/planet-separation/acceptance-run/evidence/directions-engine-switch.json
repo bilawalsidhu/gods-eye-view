@@ -1,0 +1,156 @@
+{
+  "scenario": "qa-directions-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=directions",
+    "--evidence=<output>/evidence/directions-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "directions"
+  ],
+  "coverage": {
+    "directions": {
+      "cesium": 3,
+      "navara": 5
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 7733.5,
+      "idleAt": 8008.199999988079
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 8346.799999982119,
+      "idleAt": 8438.90000000596
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 10582.799999982119,
+      "idleAt": 10629.40000000596
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 12316.299999982119,
+      "idleAt": 12423.59999999404
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "directions",
+      "engine": "navara",
+      "claim": "A and B set by clicks on the globe; one route request"
+    },
+    {
+      "layer": "directions",
+      "engine": "cesium",
+      "claim": "the route asked for on Navara arrives on Cesium; a step is selectable"
+    },
+    {
+      "layer": "directions",
+      "engine": "navara",
+      "claim": "same model; the switch requests no route"
+    },
+    {
+      "layer": "directions",
+      "engine": "cesium",
+      "claim": "same model; the switch requests no route"
+    },
+    {
+      "layer": "directions",
+      "engine": "cesium",
+      "claim": "FLY continues with the same motion and advances",
+      "detail": {
+        "moved": 61.149318887446455
+      }
+    },
+    {
+      "layer": "directions",
+      "engine": "navara",
+      "claim": "same model; the switch requests no route"
+    },
+    {
+      "layer": "directions",
+      "engine": "navara",
+      "claim": "FLY continues with the same motion and advances",
+      "detail": {
+        "moved": 62.344496509518116
+      }
+    },
+    {
+      "layer": "directions",
+      "engine": "navara",
+      "claim": "CLEAR removes the route and releases the camera: no route motion, the camera stays put, a wheel zoom moves it and is kept",
+      "detail": {
+        "released": {
+          "motion": null,
+          "fly": false
+        },
+        "drift": 0,
+        "beforeZoom": 301.2158962627868,
+        "zoomed": 72.55225904331878,
+        "kept": 72.55225904331878
+      }
+    }
+  ],
+  "network": {
+    "requests": 877,
+    "preview": 116,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/route": 1,
+      "/api/google/tiles-token": 1,
+      "/api/terrain/heights": 2
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 349,
+      "tiles.maps.eox.at": 395
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 759,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

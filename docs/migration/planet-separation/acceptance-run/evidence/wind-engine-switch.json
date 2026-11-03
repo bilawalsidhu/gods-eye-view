@@ -1,0 +1,257 @@
+{
+  "scenario": "qa-wind-engine-switch",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=wind",
+    "--evidence=<output>/evidence/wind-engine-switch.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "wind"
+  ],
+  "coverage": {
+    "wind": {
+      "cesium": 6,
+      "navara": 13
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 8343,
+      "idleAt": 8689.800000011921
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 10701.300000011921,
+      "idleAt": 10751.40000000596
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "same wind model"
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "paused parameter retained"
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "7200 GPU paths",
+      "detail": 7200
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "point reading 40.0 °C from SW",
+      "detail": {
+        "position": {
+          "x": 852087.5218774015,
+          "y": -4544315.837096558,
+          "z": 4378874.88213674
+        },
+        "speed": 10,
+        "from": "SW",
+        "units": "m/s",
+        "coordinates": "43.64°N · 79.38°W",
+        "wind": "10.0 m/s from SW",
+        "scalarKind": "temperature",
+        "scalarLabel": "Air temperature · 2 m",
+        "scalarValue": "40.0 °C",
+        "model": "GFS",
+        "validTime": "2026-11-02 12:00 UTC",
+        "status": "Model forecast",
+        "explanation": "Interpolated model forecast on an approximately 1° grid. Broad weather patterns, not a street-level measurement."
+      }
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "temperature field visible",
+      "detail": [
+        209.53993055555554,
+        73.38194444444444,
+        61
+      ]
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "no forecast grid read on the switch",
+      "detail": 0
+    },
+    {
+      "layer": "wind",
+      "engine": "cesium",
+      "claim": "same wind model"
+    },
+    {
+      "layer": "wind",
+      "engine": "cesium",
+      "claim": "paused parameter retained"
+    },
+    {
+      "layer": "wind",
+      "engine": "cesium",
+      "claim": "7200 GPU paths",
+      "detail": 7200
+    },
+    {
+      "layer": "wind",
+      "engine": "cesium",
+      "claim": "point reading 40.0 °C from SW",
+      "detail": {
+        "position": {
+          "x": 852087.5218774015,
+          "y": -4544315.837096558,
+          "z": 4378874.88213674
+        },
+        "speed": 10,
+        "from": "SW",
+        "units": "m/s",
+        "coordinates": "43.64°N · 79.38°W",
+        "wind": "10.0 m/s from SW",
+        "scalarKind": "temperature",
+        "scalarLabel": "Air temperature · 2 m",
+        "scalarValue": "40.0 °C",
+        "model": "GFS",
+        "validTime": "2026-11-02 12:00 UTC",
+        "status": "Model forecast",
+        "explanation": "Interpolated model forecast on an approximately 1° grid. Broad weather patterns, not a street-level measurement."
+      }
+    },
+    {
+      "layer": "wind",
+      "engine": "cesium",
+      "claim": "temperature field visible",
+      "detail": [
+        188.11631944444446,
+        63.07465277777778,
+        50.041666666666664
+      ]
+    },
+    {
+      "layer": "wind",
+      "engine": "cesium",
+      "claim": "no forecast grid read on the switch",
+      "detail": 0
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "same wind model"
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "paused parameter retained"
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "7200 GPU paths",
+      "detail": 7200
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "point reading 40.0 °C from SW",
+      "detail": {
+        "position": {
+          "x": 852087.5218774015,
+          "y": -4544315.837096558,
+          "z": 4378874.88213674
+        },
+        "speed": 10,
+        "from": "SW",
+        "units": "m/s",
+        "coordinates": "43.64°N · 79.38°W",
+        "wind": "10.0 m/s from SW",
+        "scalarKind": "temperature",
+        "scalarLabel": "Air temperature · 2 m",
+        "scalarValue": "40.0 °C",
+        "model": "GFS",
+        "validTime": "2026-11-02 12:00 UTC",
+        "status": "Model forecast",
+        "explanation": "Interpolated model forecast on an approximately 1° grid. Broad weather patterns, not a street-level measurement."
+      }
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "temperature field visible",
+      "detail": [
+        209.53993055555554,
+        73.38194444444444,
+        61
+      ]
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "no forecast grid read on the switch",
+      "detail": 0
+    },
+    {
+      "layer": "wind",
+      "engine": "navara",
+      "claim": "pause freezes the particle phase"
+    }
+  ],
+  "network": {
+    "requests": 403,
+    "preview": 138,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/wind/manifest": 1,
+      "/api/wind/grid": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 109,
+      "tiles.maps.eox.at": 139
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 263,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

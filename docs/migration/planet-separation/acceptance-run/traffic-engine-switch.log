@@ -1,7 +1,8 @@
-navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 9, rebuilds: 0, added: 1317, removed: 224, recycled: 61 }
-cesium live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 9, rebuilds: 0, added: 1317, removed: 224, recycled: 65 }
-navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 12, rebuilds: 0, added: 1317, removed: 224, recycled: 70 }
-vehicles in view {"aboveGround":236,"drawn":236,"belowTerrain":1,"withinOneMetre":9,"strayChangedPixels":776,"area":250000}
-vehicles below the drawn terrain, hidden by the depth test: 1
-population before the switches 1093 settled after the round trip 1093 after the comparison 1093 below the drawn terrain before the switches 1
+navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 9, rebuilds: 0, added: 1357, removed: 264, recycled: 48 }
+cesium live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 9, rebuilds: 0, added: 1357, removed: 264, recycled: 52 }
+navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 16, rebuilds: 0, added: 1357, removed: 264, recycled: 59 }
+vehicles in view {"aboveGround":218,"drawn":211,"belowTerrain":0,"withinOneMetre":10,"strayChangedPixels":837,"area":250000}
+not drawn [{"id":"VEH-0337","x":782.7537674038873,"y":292.42637768000077,"clearance":3.4349577026441693},{"id":"VEH-0341","x":798.3392849976005,"y":292.4349426657175,"clearance":3.6508251195773482},{"id":"VEH-0344","x":791.3745550979526,"y":292.43111521423094,"clearance":3.5698301708325744},{"id":"VEH-0366","x":777.5103253236363,"y":222.06686541608556,"clearance":3.0986842904239893},{"id":"VEH-0539","x":783.0048936515882,"y":292.4516851990736,"clearance":2.9755502324551344},{"id":"VEH-1416","x":792.586865447038,"y":222.0724703183909,"clearance":2.856623362749815},{"id":"VEH-1387","x":803.4096319797693,"y":222.07163390693745,"clearance":1.9641676638275385}]
+population before the switches 1093 settled after the round trip 1093 after the comparison 1093 below the drawn terrain before the switches 0
 PASS kept the traffic module, parameters, flow and vehicle identities across both globes; vehicles in view are drawn where the layer places them
+STRICT {"scenario":"qa-traffic-engine-switch","assertions":4,"coverage":{"traffic":{"cesium":1,"navara":3}},"picks":2,"requests":701,"violations":0}

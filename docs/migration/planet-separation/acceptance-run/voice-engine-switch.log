@@ -1,0 +1,48 @@
+{
+  "started": {
+    "getUserMedia": 1,
+    "peerConnections": 1,
+    "peerConnectionsClosed": 0,
+    "channelsClosed": 0,
+    "webSockets": 0,
+    "webSocketsClosed": 0,
+    "tokenRequests": 1,
+    "channelState": "open",
+    "sentCount": 0
+  },
+  "after": {
+    "getUserMedia": 1,
+    "peerConnections": 1,
+    "peerConnectionsClosed": 0,
+    "channelsClosed": 0,
+    "webSockets": 0,
+    "webSocketsClosed": 0,
+    "tokenRequests": 1,
+    "channelState": "open",
+    "sentCount": 22
+  },
+  "ids": {},
+  "counters": {
+    "applications": 1,
+    "attachments": 7,
+    "detaches": 6,
+    "rollbacks": 0
+  },
+  "changes": [
+    "navara",
+    "cesium",
+    "navara",
+    "cesium",
+    "navara",
+    "cesium"
+  ],
+  "voiceState": "listening"
+}
+PASS annotate_map drew a mark on Cesium
+PASS navara: set_layer_visibility ran on navara
+PASS cesium: set_layer_visibility ran on cesium
+PASS navara: set_layer_visibility ran on navara
+PASS a call made during the switch ran on the incoming engine
+PASS a call whose wait ran out was refused with ENGINE_SWITCHING
+PASS the voice session kept its microphone and transport
+PASS stopping voice closes the transport
