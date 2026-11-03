@@ -54,7 +54,7 @@ export async function createApplicationScene({
       signal,
       ...resources,
     });
-  const { viewer, engine, tileset, mapStackController } = rendererCache
+  const { viewer, engine, tileset, mapStackController, packRenderer } = rendererCache
     ? await rendererCache.acquire(options.engineKind, build, defer)
     : await build({ defer });
   if (layerSession) {
@@ -65,7 +65,14 @@ export async function createApplicationScene({
       mapStackController.getActiveId() === 'photoreal',
     );
   }
-  return { viewer, engine, tileset, mapStackController, operations };
+  return {
+    viewer,
+    engine,
+    tileset,
+    mapStackController,
+    operations,
+    packRenderer,
+  };
 }
 
 async function createRenderer({

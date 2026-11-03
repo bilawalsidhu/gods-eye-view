@@ -5,7 +5,7 @@ import { displaySceneTitle, displayShotTitle } from './recipes.js';
 export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
   let timing;
   let travel;
-  return {
+  const phases = {
     async releaseScene(scene, token) {
       const released = await director._releaseSceneLayers(scene, token);
       if (!token || released) director._loadedSceneId = null;
@@ -83,4 +83,18 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
       director._logEvent('scene_run_complete', {});
     },
   };
+  // A shot boundary may fall while neither planet owns a canvas. Start
+  // the next phase on the incoming renderer, or settle immediately on Stop.
+  return Object.fromEntries(
+    Object.entries(phases).map(([key, run]) => [
+      key,
+      async (...args) => {
+        if (director._sceneGate) {
+          const token = args[0]?.token ?? args[1];
+          if (!(await director._waitForScene(token))) return;
+        }
+        return run(...args);
+      },
+    ]),
+  );
 }

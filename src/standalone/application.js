@@ -140,6 +140,7 @@ export function createStandaloneApplication({
     createTools: async (context) => {
       const tools = await createStandaloneTools({
         ...context,
+        layerSession,
         loadingScreen,
         placeSearch,
         voice,
