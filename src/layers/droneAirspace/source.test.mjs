@@ -103,3 +103,17 @@ test('a malformed successful response is never accepted as an empty snapshot', a
     );
   }
 });
+
+test('the snapshot detail carries the proxy staleness and fetch time', async () => {
+  const fetchedAt = Date.UTC(2026, 10, 3, 12);
+  const rows = normalizeDroneAirspaceSnapshot(validPayload);
+  const source = createDroneAirspaceSource({
+    fetchImpl: async () => Response.json({ rows, stale: true, fetchedAt }),
+  });
+  assert.deepEqual(await source.getSnapshotDetail(), {
+    rows,
+    stale: true,
+    fetchedAt,
+  });
+  assert.deepEqual(await source.getSnapshot(), rows);
+});

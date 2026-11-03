@@ -213,3 +213,25 @@ test('a cold upstream failure is 502, not an empty snapshot', async () => {
   assert.equal(res.status, 502);
   assert.equal(res.body.error, 'drone_airspace_unavailable');
 });
+
+test('a stale snapshot is served for at most a day, then refused', async () => {
+  let now = 1_000_000_000;
+  let up = true;
+  const request = install({
+    now: () => now,
+    fetchImpl: async () => {
+      if (!up) throw new Error('FAA unreachable');
+      return Response.json({ features: [feature(7)] });
+    },
+  });
+  const fresh = await request();
+  assert.equal(fresh.status, 200);
+  up = false;
+  now += 23 * 60 * 60 * 1000;
+  const stale = await request();
+  assert.equal(stale.status, 200);
+  assert.equal(stale.body.stale, true);
+  assert.equal(stale.body.fetchedAt, fresh.body.fetchedAt);
+  now += 2 * 60 * 60 * 1000;
+  assert.equal((await request()).status, 502, 'a day-old snapshot is refused');
+});

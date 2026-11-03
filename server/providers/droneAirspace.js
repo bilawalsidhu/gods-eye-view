@@ -34,6 +34,8 @@ const API_URL =
 const MAX_PAGES = 5;
 const MIB = 1024 * 1024;
 const SNAPSHOT_TTL_MS = 3_600_000;
+/** Longest a failed refresh keeps serving the last snapshot, marked stale. */
+const STALE_MAX_MS = 24 * 60 * 60 * 1000;
 
 const exceededTransferLimit = (payload) =>
   payload?.exceededTransferLimit === true ||
@@ -100,7 +102,9 @@ export function droneAirspaceProxy({
       });
       return { value: await promise, stale: false };
     } catch (error) {
-      if (previous) return { value: previous.value, stale: true };
+      // A failed refresh serves the last snapshot, marked stale, for a day.
+      if (previous && now() - previous.savedAt <= STALE_MAX_MS)
+        return { value: previous.value, stale: true };
       throw error;
     }
   }

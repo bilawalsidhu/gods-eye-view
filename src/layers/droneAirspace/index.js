@@ -42,6 +42,7 @@ export function createDroneAirspaceLayer({
   let _count = 0;
   let _lastUpdate = null;
   let _lastError = null;
+  let _stale = false;
   let _enabled = false;
   let _clickHandler = null;
   let _selectedId = null;
@@ -153,6 +154,7 @@ export function createDroneAirspaceLayer({
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _stale = false;
       _enabled = false;
       console.log('[Data:DroneAirspace] Initialized');
     },
@@ -179,9 +181,21 @@ export function createDroneAirspaceLayer({
       const request = new AbortController();
       _request = request;
       try {
-        const rows = await source.getSnapshot({ signal: request.signal });
+        // The source contract is getSnapshot; a source that can also say how
+        // fresh its rows are (the FAA proxy) offers getSnapshotDetail.
+        const snapshot =
+          typeof source.getSnapshotDetail === 'function'
+            ? await source.getSnapshotDetail({ signal: request.signal })
+            : { rows: await source.getSnapshot({ signal: request.signal }) };
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
+        const { rows } = snapshot;
+        _stale = snapshot.stale === true;
+        // A stale snapshot is as old as its fetch, not this poll.
+        const updatedAt =
+          _stale && Number.isFinite(snapshot.fetchedAt)
+            ? snapshot.fetchedAt
+            : Date.now();
 
         const signature = JSON.stringify(
           rows
@@ -190,7 +204,7 @@ export function createDroneAirspaceLayer({
         );
         if (signature === _snapshotSignature) {
           if (_selectedId) publishSelectedCard();
-          _lastUpdate = Date.now();
+          _lastUpdate = updatedAt;
           _lastError = null;
           return true;
         }
@@ -239,7 +253,7 @@ export function createDroneAirspaceLayer({
         _snapshotSignature = signature;
         if (_selectedId) publishSelectedCard();
         _count = rows.length;
-        _lastUpdate = Date.now();
+        _lastUpdate = updatedAt;
         _lastError = null;
         console.log(
           `[Data:DroneAirspace] Updated: ${_count} zones, ${nextEntities.length} polygons`,
@@ -251,6 +265,8 @@ export function createDroneAirspaceLayer({
         console.warn('[Data:DroneAirspace] Fetch error:', e);
         _lastError =
           e?.message || msg('Restricted airspace source unavailable');
+        // A failure now outranks the stale snapshot still drawn.
+        _stale = false;
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -273,6 +289,7 @@ export function createDroneAirspaceLayer({
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _stale = false;
     },
 
     getAnalystRecords(maxCount = 2000) {
@@ -322,6 +339,7 @@ export function createDroneAirspaceLayer({
         count: _count,
         lastUpdate: _lastUpdate,
         error: _lastError,
+        stale: _stale,
       };
     },
   };

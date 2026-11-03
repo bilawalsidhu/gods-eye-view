@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDroneAirspaceLayer } from './index.js';
+import { layerFeedState } from '../../data/feedState.js';
 
 function harness(source, { pick = () => null, cardHit = () => null } = {}) {
   const sources = [];
@@ -158,4 +159,40 @@ test('the row legend names prohibited and restricted with the disclaimer', async
   assert.equal(legend[0].count, 1);
   assert.equal(legend[1].count, 1);
   assert.match(legend[0].blurb, /not a substitute/);
+});
+
+test('a stale snapshot reads STALE, dated by its own fetch, and a fresh one clears it', async () => {
+  const fetchedAt = Date.now() - 3 * 60 * 60 * 1000;
+  let snapshot = { rows: [row], stale: true, fetchedAt };
+  const h = harness({
+    getSnapshot: async () => snapshot.rows,
+    getSnapshotDetail: async () => snapshot,
+  });
+  await h.layer.update(h.viewer);
+  assert.equal(h.layer.getStats().stale, true);
+  assert.equal(h.layer.getStats().lastUpdate, fetchedAt);
+  assert.equal(layerFeedState(h.layer.getStats()), 'stale');
+  snapshot = { rows: [row], stale: false, fetchedAt: Date.now() };
+  await h.layer.update(h.viewer);
+  assert.equal(h.layer.getStats().stale, false);
+  assert.ok(h.layer.getStats().lastUpdate > fetchedAt);
+  assert.equal(layerFeedState(h.layer.getStats()), 'nominal');
+});
+
+test('a failed refresh after a stale snapshot reads as the failure, not stale', async () => {
+  let fail = false;
+  const h = harness({
+    getSnapshot: async () => [row],
+    getSnapshotDetail: async () => {
+      if (fail) throw new Error('FAA SUA HTTP 502');
+      return { rows: [row], stale: true, fetchedAt: Date.now() - 60_000 };
+    },
+  });
+  await h.layer.update(h.viewer);
+  assert.equal(layerFeedState(h.layer.getStats()), 'stale');
+  fail = true;
+  await h.layer.update(h.viewer);
+  assert.equal(h.layer.getStats().stale, false);
+  assert.equal(h.layer.getStats().error, 'FAA SUA HTTP 502');
+  assert.equal(layerFeedState(h.layer.getStats()), 'degraded');
 });
