@@ -40,8 +40,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level, GNSS and air quality (ECCC AQHI) extend the manifest;
     // tracked and analyst aircraft describe broadcasts; globe rotation adds
-    // one motion; S2 GhostMaps, the Utilities panel target and the voice panel
-    // (named targets, timeout) follow; Snow leaves the set_visual_style enum, the Operator HUD layout
+    // one motion; S2 GhostMaps, the Utilities panel target, the voice panel
+    // (named targets, timeout) and the sea-mark and ski-piste overlays follow; Snow leaves the set_visual_style enum, the Operator HUD layout
     // leaves set_hud's layout enum and the layer alias hint leaves out aliases
     // the layer id already spells; show_street_level (map, source, photo) is
     // the only change on top of main.
@@ -63,12 +63,12 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     .digest('hex');
   assert.equal(
     shipped,
-    'dc2bac1be93a503dc88d637beea2f1bc457e1f9167422bd91548b44756a8aca5',
+    '7f113854cdfe3114b9edd69f49995502276c718ce8878320161a68bafb63ebe2',
   );
 });
 
 const SHOW_STREET_LEVEL_PAYLOAD_DIGEST =
-  '2198c1f95cfbc19e89ba8814ad0fd8303a74a7b254703f2e7a4893f5798d9aed';
+  '05d4ad396091ce78a86bb8521e1336b12f3dd11007c53ecf5c76291fbf8af283';
 
 test('descriptions customize wording without changing immutable shared arguments', () => {
   const descriptions = {
