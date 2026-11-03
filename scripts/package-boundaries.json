@@ -149,9 +149,18 @@
       "src/ui/views/panels/GlobeCompass.vue",
       "src/ui/stores/recording.js",
       "src/ui/styleParameters.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/time/worldClock.js",
+      "src/ui/kit/UiIcon.vue",
+      "src/ui/stores/worldTime.js",
+      "src/ui/views/panels/WorldTimeline.vue"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
+  },
+  "time": {
+    "exports": ["./time"],
+    "modules": ["src/time/worldClock.js"],
+    "external": []
   },
   "viewer": {
     "exports": ["./application/viewer"],
@@ -1123,7 +1132,8 @@
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1334,7 +1344,9 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/time/worldClock.js",
+      "src/time/julian.js"
     ],
     "external": ["cesium"]
   },
@@ -1390,7 +1402,9 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/time/worldClock.js",
+      "src/time/julian.js"
     ],
     "external": ["cesium"]
   },
@@ -1575,7 +1589,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -1615,7 +1630,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium"]
   },
@@ -1935,7 +1951,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
   },
@@ -3175,6 +3192,9 @@
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
       "src/ui/i18n.js",
+      "src/time/viewerClock.js",
+      "src/time/worldClock.js",
+      "src/time/julian.js",
       "src/annotations/outlineRungs.js",
       "src/sources/openFreeMapOutlines.js",
       "src/sources/nominatimOutlines.js",
@@ -3782,6 +3802,8 @@
       "src/ui/stores/bhoteKoshiPanel.js",
       "src/hudReadouts.js",
       "src/ui/i18n.js",
+      "src/time/worldClock.js",
+      "src/time/julian.js",
       "src/annotations/outlineRungs.js",
       "src/sources/openFreeMapOutlines.js",
       "src/sources/nominatimOutlines.js",
@@ -3941,7 +3963,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/time/worldClock.js"
     ],
     "external": []
   },
@@ -4460,7 +4483,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -4512,7 +4536,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -4632,7 +4657,8 @@
       "src/data/detectionPolicy.js",
       "src/scopeMaskPolicy.js",
       "src/i18n/marker.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/time/worldClock.js"
     ],
     "external": []
   },

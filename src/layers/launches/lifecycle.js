@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { worldClock } from '../../time/worldClock.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
 
@@ -119,6 +120,21 @@ export function createLifecycle({
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   let hover = null;
+  // While on, the launches loaded span the time from the first to the last,
+  // each one a mark. Registered once; off, the layer has no time to show, and
+  // each step tells the clock once it has settled.
+  worldClock.register({
+    id: 'rocket-launches',
+    coverage: () => {
+      if (!layerState._enabled) return null;
+      const marks = layerState._launches
+        .map((launch) => Date.parse(launch.launchTime))
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b);
+      if (!marks.length) return null;
+      return { start: marks[0], end: marks.at(-1), marks };
+    },
+  });
 
   const methods = {
     init(viewer) {
@@ -194,6 +210,7 @@ export function createLifecycle({
         }
         throw error;
       }
+      layerState.coverageChanged();
     },
 
     async _enableBody() {
@@ -231,6 +248,7 @@ export function createLifecycle({
       parts.overlays.clearMissionOverlaySources();
       await parts.ingestion.restoreSatelliteDependency();
       parts.panel.renderMissionPanel();
+      layerState.coverageChanged();
     },
 
     async destroy(viewer) {

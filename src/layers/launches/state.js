@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -146,6 +147,18 @@ export function createState({ services }) {
   );
 
   state._missionRingDate = new Date(0);
+
+  /** The time the launch window ends at, in epoch ms. */
+
+  state.now = worldTimeFor('rocket-launches');
+
+  /** A launched mission's satellite flies on the satellites layer's time. */
+
+  state.orbitNow = worldTimeFor('satellites');
+
+  /** The launches loaded changed, and with them the time they cover. */
+
+  state.coverageChanged = () => worldClock.coverageChanged();
 
   state._missionOrbitPatternRegistered = false;
 

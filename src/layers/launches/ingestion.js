@@ -222,6 +222,7 @@ export function createIngestion({
       layerState._lastUpdate = Date.now();
       layerState._lastError = null;
       layerState._stale = stale === true;
+      layerState.coverageChanged();
     } catch (error) {
       if (layerState._enabled && token === layerState._lifecycleToken) {
         layerState._lastError = error.message;
