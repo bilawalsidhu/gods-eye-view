@@ -105,6 +105,10 @@ function sectionFeedState(section) {
   // Answered, but some of the feeds or satellites behind it did not.
   if (data.missing_sources?.length || data.unavailable_feeds?.length)
     return 'degraded';
+  if (data.feedState === 'degraded' || data.degraded === true)
+    return 'degraded';
+  if (data.feedState === 'stale') return 'stale';
+  if (data.feedState === 'partial' || data.partial === true) return 'partial';
   return 'nominal';
 }
 
@@ -232,7 +236,7 @@ export const getHudCaption = defineTool({
     const layers = SECTIONS.filter(({ key }) => brief[key]).map(
       ({ key, label }) => ({
         id: key,
-        name: label,
+        name: context.services.summary.localizeLabel?.(label) ?? label,
         enabled: true,
         feedState: sectionFeedState(brief[key]),
       }),
@@ -240,6 +244,7 @@ export const getHudCaption = defineTool({
     const feedProvenance = feedProvenanceEnvelope(layers);
     const response = await context.services.summary.summarize(
       {
+        locale: context.services.summary.getLocale?.() ?? 'en',
         placeLabels: [area.label],
         location: area.label,
         center,

@@ -158,6 +158,22 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
   };
 }
 
+test('camera zoom keeps the rotation-interruption import when display-text changes merge', async () => {
+  // PR #1280 replaces the top-level import in gevActions. A missing
+  // interruptGlobeRotation binding would throw a ReferenceError before the
+  // existing argument validation below can run.
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const runner = createGevActionRunner({
+    viewer, styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  await assert.rejects(
+    runner('adjust_camera_zoom', { direction: 'sideways' }),
+    /adjust_camera_zoom direction must be/,
+  );
+});
+
 test('zoom to globe adopts the shared visible reset route and returns its result', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = {
@@ -3987,7 +4003,7 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
 });
 
-test('set_panel_open accepts the Authoring name for the scene panel', async () => {
+test('set_panel_open accepts Authoring and explicit Utilities requests', async () => {
   const calls = [];
   const runner = createGevActionRunner({
     viewer: {
@@ -4008,6 +4024,12 @@ test('set_panel_open accepts the Authoring name for the scene panel', async () =
     assert.equal(result.panelId, 'scene-panel');
   }
   assert.deepEqual(calls.at(-1), ['scene-panel', false, { explicit: true }]);
+  for (const panel of ['Utilities', 'utilities-panel']) {
+    const result = await runner('set_panel_open', { panelId: panel, open: true });
+    assert.equal(result.ok, true);
+    assert.equal(result.panelId, 'utilities-panel');
+    assert.deepEqual(calls.at(-1), ['utilities-panel', false, { explicit: true }]);
+  }
 });
 
 test('set_panel_open reaches the Utilities panel by its name, Draw or Import', async () => {

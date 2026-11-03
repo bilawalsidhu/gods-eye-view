@@ -1,0 +1,3102 @@
+[
+  {
+    "locale": "ar",
+    "width": 844,
+    "height": 390,
+    "closed": {
+      "mobile": false,
+      "chip": {
+        "left": 723.734375,
+        "top": 348.234375,
+        "right": 829.609375,
+        "bottom": 375.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 101.296875,
+          "right": 239.296875,
+          "top": 286.203125,
+          "bottom": 297.203125
+        },
+        {
+          "left": 101.296875,
+          "right": 101.296875,
+          "top": 282.703125,
+          "bottom": 293.703125
+        },
+        {
+          "left": 12,
+          "right": 101.296875,
+          "top": 282.703125,
+          "bottom": 293.703125
+        }
+      ],
+      "tab": null,
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 442.53125,
+        "top": 310.703125,
+        "right": 484.921875,
+        "bottom": 377.09375,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 353,
+        "top": 197.6875,
+        "right": 491,
+        "bottom": 245.6875,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 450,
+        "top": 204.6875,
+        "right": 484,
+        "bottom": 238.6875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": false,
+      "chip": {
+        "left": 723.734375,
+        "top": 348.234375,
+        "right": 829.609375,
+        "bottom": 375.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 101.296875,
+          "right": 239.296875,
+          "top": 286.203125,
+          "bottom": 297.203125
+        },
+        {
+          "left": 101.296875,
+          "right": 101.296875,
+          "top": 282.703125,
+          "bottom": 293.703125
+        },
+        {
+          "left": 12,
+          "right": 101.296875,
+          "top": 282.703125,
+          "bottom": 293.703125
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 350,
+        "top": 12,
+        "right": 830,
+        "bottom": 254,
+        "width": 480,
+        "height": 242
+      },
+      "input": {
+        "left": 467.59375,
+        "top": 190.53125,
+        "right": 817,
+        "bottom": 220.53125,
+        "width": 349.40625,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 442.53125,
+        "top": 310.703125,
+        "right": 484.921875,
+        "bottom": 377.09375,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": false,
+      "providerHit": false,
+      "provider": {
+        "left": 353,
+        "top": 197.6875,
+        "right": 491,
+        "bottom": 245.6875,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 450,
+        "top": 204.6875,
+        "right": 484,
+        "bottom": 238.6875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 481,
+      "clientWidth": 478
+    },
+    "minimum": {
+      "mobile": false,
+      "chip": {
+        "left": 723.734375,
+        "top": 348.234375,
+        "right": 829.609375,
+        "bottom": 375.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 101.296875,
+          "right": 239.296875,
+          "top": 286.203125,
+          "bottom": 297.203125
+        },
+        {
+          "left": 101.296875,
+          "right": 101.296875,
+          "top": 282.703125,
+          "bottom": 293.703125
+        },
+        {
+          "left": 12,
+          "right": 101.296875,
+          "top": 282.703125,
+          "bottom": 293.703125
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 350,
+        "top": 12,
+        "right": 670,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 467.59375,
+        "top": 168.53125,
+        "right": 657,
+        "bottom": 198.53125,
+        "width": 189.40625,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 442.53125,
+        "top": 310.703125,
+        "right": 484.921875,
+        "bottom": 377.09375,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": false,
+      "providerHit": false,
+      "provider": {
+        "left": 353,
+        "top": 197.6875,
+        "right": 491,
+        "bottom": 245.6875,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 450,
+        "top": 204.6875,
+        "right": 484,
+        "bottom": 238.6875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    }
+  },
+  {
+    "locale": "ar",
+    "width": 932,
+    "height": 430,
+    "closed": {
+      "mobile": false,
+      "chip": {
+        "left": 811.734375,
+        "top": 388.234375,
+        "right": 917.609375,
+        "bottom": 415.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 113.296875,
+          "right": 251.296875,
+          "top": 325.40625,
+          "bottom": 336.40625
+        },
+        {
+          "left": 113.296875,
+          "right": 113.296875,
+          "top": 321.90625,
+          "bottom": 332.90625
+        },
+        {
+          "left": 24,
+          "right": 113.296875,
+          "top": 321.90625,
+          "bottom": 332.90625
+        }
+      ],
+      "tab": null,
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 486.53125,
+        "top": 349.90625,
+        "right": 528.921875,
+        "bottom": 416.296875,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 397,
+        "top": 284.890625,
+        "right": 535,
+        "bottom": 332.890625,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 494,
+        "top": 291.890625,
+        "right": 528,
+        "bottom": 325.890625,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": false,
+      "chip": {
+        "left": 811.734375,
+        "top": 388.234375,
+        "right": 917.609375,
+        "bottom": 415.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 113.296875,
+          "right": 251.296875,
+          "top": 325.40625,
+          "bottom": 336.40625
+        },
+        {
+          "left": 113.296875,
+          "right": 113.296875,
+          "top": 321.90625,
+          "bottom": 332.90625
+        },
+        {
+          "left": 24,
+          "right": 113.296875,
+          "top": 321.90625,
+          "bottom": 332.90625
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 350,
+        "top": 12,
+        "right": 670,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 467.59375,
+        "top": 168.53125,
+        "right": 657,
+        "bottom": 198.53125,
+        "width": 189.40625,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 486.53125,
+        "top": 349.90625,
+        "right": 528.921875,
+        "bottom": 416.296875,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 397,
+        "top": 284.890625,
+        "right": 535,
+        "bottom": 332.890625,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 494,
+        "top": 291.890625,
+        "right": 528,
+        "bottom": 325.890625,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "minimum": {
+      "mobile": false,
+      "chip": {
+        "left": 811.734375,
+        "top": 388.234375,
+        "right": 917.609375,
+        "bottom": 415.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 113.296875,
+          "right": 251.296875,
+          "top": 325.40625,
+          "bottom": 336.40625
+        },
+        {
+          "left": 113.296875,
+          "right": 113.296875,
+          "top": 321.90625,
+          "bottom": 332.90625
+        },
+        {
+          "left": 24,
+          "right": 113.296875,
+          "top": 321.90625,
+          "bottom": 332.90625
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 350,
+        "top": 12,
+        "right": 670,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 467.59375,
+        "top": 168.53125,
+        "right": 657,
+        "bottom": 198.53125,
+        "width": 189.40625,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 486.53125,
+        "top": 349.90625,
+        "right": 528.921875,
+        "bottom": 416.296875,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 397,
+        "top": 284.890625,
+        "right": 535,
+        "bottom": 332.890625,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 494,
+        "top": 291.890625,
+        "right": 528,
+        "bottom": 325.890625,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    }
+  },
+  {
+    "locale": "ar",
+    "width": 390,
+    "height": 844,
+    "closed": {
+      "mobile": true,
+      "chip": {
+        "left": 269.734375,
+        "top": 644.421875,
+        "right": 375.609375,
+        "bottom": 688.421875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 285.53125,
+        "top": 696.421875,
+        "right": 327.921875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": true,
+      "chip": {
+        "left": 269.734375,
+        "top": 644.421875,
+        "right": 375.609375,
+        "bottom": 688.421875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": {
+        "left": 64,
+        "top": 12,
+        "right": 384,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 173.5,
+        "top": 162.53125,
+        "right": 371,
+        "bottom": 198.53125,
+        "width": 197.5,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 285.53125,
+        "top": 696.421875,
+        "right": 327.921875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "minimum": {
+      "mobile": true,
+      "chip": {
+        "left": 269.734375,
+        "top": 644.421875,
+        "right": 375.609375,
+        "bottom": 688.421875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": {
+        "left": 64,
+        "top": 12,
+        "right": 384,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 173.5,
+        "top": 162.53125,
+        "right": 371,
+        "bottom": 198.53125,
+        "width": 197.5,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 285.53125,
+        "top": 696.421875,
+        "right": 327.921875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "safe": {
+      "mobile": true,
+      "chip": {
+        "left": 225.734375,
+        "top": 644.421875,
+        "right": 331.609375,
+        "bottom": 688.421875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": {
+        "left": 50,
+        "top": 12,
+        "right": 340,
+        "bottom": 232,
+        "width": 290,
+        "height": 220
+      },
+      "input": {
+        "left": 153.1875,
+        "top": 162.53125,
+        "right": 327,
+        "bottom": 198.53125,
+        "width": 173.8125,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 285.53125,
+        "top": 696.421875,
+        "right": 327.921875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 291,
+      "clientWidth": 288
+    },
+    "keyboard": {
+      "mobile": true,
+      "chip": {
+        "left": 225.734375,
+        "top": 644.421875,
+        "right": 331.609375,
+        "bottom": 688.421875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": {
+        "left": 50,
+        "top": 26,
+        "right": 340,
+        "bottom": 183,
+        "width": 290,
+        "height": 157
+      },
+      "input": {
+        "left": 153.1875,
+        "top": 142,
+        "right": 327,
+        "bottom": 178,
+        "width": 173.8125,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 285.53125,
+        "top": 696.421875,
+        "right": 327.921875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 291,
+      "clientWidth": 288
+    }
+  },
+  {
+    "locale": "ar",
+    "width": 320,
+    "height": 568,
+    "closed": {
+      "mobile": true,
+      "chip": {
+        "left": 199.734375,
+        "top": 252.046875,
+        "right": 305.609375,
+        "bottom": 296.046875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 238.53125,
+        "top": 420.421875,
+        "right": 280.921875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": true,
+      "chip": {
+        "left": 199.734375,
+        "top": 252.046875,
+        "right": 305.609375,
+        "bottom": 296.046875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 314,
+        "bottom": 232,
+        "width": 308,
+        "height": 220
+      },
+      "input": {
+        "left": 112.96875,
+        "top": 162.53125,
+        "right": 301,
+        "bottom": 198.53125,
+        "width": 188.03125,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 238.53125,
+        "top": 420.421875,
+        "right": 280.921875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 309,
+      "clientWidth": 306
+    },
+    "minimum": {
+      "mobile": true,
+      "chip": {
+        "left": 199.734375,
+        "top": 252.046875,
+        "right": 305.609375,
+        "bottom": 296.046875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 314,
+        "bottom": 232,
+        "width": 308,
+        "height": 220
+      },
+      "input": {
+        "left": 112.96875,
+        "top": 162.53125,
+        "right": 301,
+        "bottom": 198.53125,
+        "width": 188.03125,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 238.53125,
+        "top": 420.421875,
+        "right": 280.921875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 309,
+      "clientWidth": 306
+    },
+    "safe": {
+      "mobile": true,
+      "chip": {
+        "left": 155.734375,
+        "top": 252.046875,
+        "right": 261.609375,
+        "bottom": 296.046875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": {
+        "left": 50,
+        "top": 12,
+        "right": 270,
+        "bottom": 232,
+        "width": 220,
+        "height": 220
+      },
+      "input": {
+        "left": 138.5,
+        "top": 162.53125,
+        "right": 257,
+        "bottom": 198.53125,
+        "width": 118.5,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 238.53125,
+        "top": 420.421875,
+        "right": 280.921875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 221,
+      "clientWidth": 218
+    },
+    "keyboard": {
+      "mobile": true,
+      "chip": {
+        "left": 155.734375,
+        "top": 252.046875,
+        "right": 261.609375,
+        "bottom": 296.046875,
+        "width": 105.875,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 81.4375,
+          "right": 191.83750915527344,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 81.4375,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 10,
+          "right": 81.4375,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": {
+        "left": 50,
+        "top": 26,
+        "right": 270,
+        "bottom": 183,
+        "width": 220,
+        "height": 157
+      },
+      "input": {
+        "left": 138.5,
+        "top": 142,
+        "right": 257,
+        "bottom": 178,
+        "width": 118.5,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 238.53125,
+        "top": 420.421875,
+        "right": 280.921875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 221,
+      "clientWidth": 218
+    }
+  },
+  {
+    "locale": "ar",
+    "width": 1280,
+    "height": 800,
+    "closed": {
+      "mobile": false,
+      "chip": {
+        "left": 1159.734375,
+        "top": 758.234375,
+        "right": 1265.609375,
+        "bottom": 785.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 113.296875,
+          "right": 251.296875,
+          "top": 688,
+          "bottom": 699
+        },
+        {
+          "left": 113.296875,
+          "right": 113.296875,
+          "top": 684.5,
+          "bottom": 695.5
+        },
+        {
+          "left": 24,
+          "right": 113.296875,
+          "top": 684.5,
+          "bottom": 695.5
+        }
+      ],
+      "tab": null,
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 660.53125,
+        "top": 712.5,
+        "right": 702.921875,
+        "bottom": 778.890625,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 571,
+        "top": 647.484375,
+        "right": 709,
+        "bottom": 695.484375,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 668,
+        "top": 654.484375,
+        "right": 702,
+        "bottom": 688.484375,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": false,
+      "chip": {
+        "left": 1159.734375,
+        "top": 758.234375,
+        "right": 1265.609375,
+        "bottom": 785.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 113.296875,
+          "right": 251.296875,
+          "top": 688,
+          "bottom": 699
+        },
+        {
+          "left": 113.296875,
+          "right": 113.296875,
+          "top": 684.5,
+          "bottom": 695.5
+        },
+        {
+          "left": 24,
+          "right": 113.296875,
+          "top": 684.5,
+          "bottom": 695.5
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 123.59375,
+        "top": 168.53125,
+        "right": 313,
+        "bottom": 198.53125,
+        "width": 189.40625,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 660.53125,
+        "top": 712.5,
+        "right": 702.921875,
+        "bottom": 778.890625,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 571,
+        "top": 647.484375,
+        "right": 709,
+        "bottom": 695.484375,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 668,
+        "top": 654.484375,
+        "right": 702,
+        "bottom": 688.484375,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "minimum": {
+      "mobile": false,
+      "chip": {
+        "left": 1159.734375,
+        "top": 758.234375,
+        "right": 1265.609375,
+        "bottom": 785.609375,
+        "width": 105.875,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 113.296875,
+          "right": 251.296875,
+          "top": 688,
+          "bottom": 699
+        },
+        {
+          "left": 113.296875,
+          "right": 113.296875,
+          "top": 684.5,
+          "bottom": 695.5
+        },
+        {
+          "left": 24,
+          "right": 113.296875,
+          "top": 684.5,
+          "bottom": 695.5
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 123.59375,
+        "top": 168.53125,
+        "right": 313,
+        "bottom": 198.53125,
+        "width": 189.40625,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 660.53125,
+        "top": 712.5,
+        "right": 702.921875,
+        "bottom": 778.890625,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 571,
+        "top": 647.484375,
+        "right": 709,
+        "bottom": 695.484375,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 668,
+        "top": 654.484375,
+        "right": 702,
+        "bottom": 688.484375,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    }
+  },
+  {
+    "locale": "en",
+    "width": 844,
+    "height": 390,
+    "closed": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 348.234375,
+        "right": 138.984375,
+        "bottom": 375.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 12,
+          "right": 150,
+          "top": 286.203125,
+          "bottom": 297.203125
+        },
+        {
+          "left": 150,
+          "right": 150,
+          "top": 282.703125,
+          "bottom": 293.703125
+        },
+        {
+          "left": 150,
+          "right": 251.328125,
+          "top": 282.703125,
+          "bottom": 293.703125
+        }
+      ],
+      "tab": null,
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 359.078125,
+        "top": 310.703125,
+        "right": 401.46875,
+        "bottom": 377.09375,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": false,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 353,
+        "top": 197.6875,
+        "right": 491,
+        "bottom": 245.6875,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 450,
+        "top": 204.6875,
+        "right": 484,
+        "bottom": 238.6875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 348.234375,
+        "right": 138.984375,
+        "bottom": 375.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 12,
+          "right": 150,
+          "top": 286.203125,
+          "bottom": 297.203125
+        },
+        {
+          "left": 150,
+          "right": 150,
+          "top": 282.703125,
+          "bottom": 293.703125
+        },
+        {
+          "left": 150,
+          "right": 251.328125,
+          "top": 282.703125,
+          "bottom": 293.703125
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 168.53125,
+        "right": 209.34375,
+        "bottom": 198.53125,
+        "width": 190.34375,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 359.078125,
+        "top": 310.703125,
+        "right": 401.46875,
+        "bottom": 377.09375,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": false,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 353,
+        "top": 197.6875,
+        "right": 491,
+        "bottom": 245.6875,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 450,
+        "top": 204.6875,
+        "right": 484,
+        "bottom": 238.6875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "minimum": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 348.234375,
+        "right": 138.984375,
+        "bottom": 375.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 12,
+          "right": 150,
+          "top": 286.203125,
+          "bottom": 297.203125
+        },
+        {
+          "left": 150,
+          "right": 150,
+          "top": 282.703125,
+          "bottom": 293.703125
+        },
+        {
+          "left": 150,
+          "right": 251.328125,
+          "top": 282.703125,
+          "bottom": 293.703125
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 168.53125,
+        "right": 209.34375,
+        "bottom": 198.53125,
+        "width": 190.34375,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 359.078125,
+        "top": 310.703125,
+        "right": 401.46875,
+        "bottom": 377.09375,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": false,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 353,
+        "top": 197.6875,
+        "right": 491,
+        "bottom": 245.6875,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 450,
+        "top": 204.6875,
+        "right": 484,
+        "bottom": 238.6875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    }
+  },
+  {
+    "locale": "en",
+    "width": 932,
+    "height": 430,
+    "closed": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 388.234375,
+        "right": 138.984375,
+        "bottom": 415.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 24,
+          "right": 162,
+          "top": 325.40625,
+          "bottom": 336.40625
+        },
+        {
+          "left": 162,
+          "right": 162,
+          "top": 321.90625,
+          "bottom": 332.90625
+        },
+        {
+          "left": 162,
+          "right": 263.328125,
+          "top": 321.90625,
+          "bottom": 332.90625
+        }
+      ],
+      "tab": null,
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 403.078125,
+        "top": 349.90625,
+        "right": 445.46875,
+        "bottom": 416.296875,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 397,
+        "top": 284.890625,
+        "right": 535,
+        "bottom": 332.890625,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 494,
+        "top": 291.890625,
+        "right": 528,
+        "bottom": 325.890625,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 388.234375,
+        "right": 138.984375,
+        "bottom": 415.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 24,
+          "right": 162,
+          "top": 325.40625,
+          "bottom": 336.40625
+        },
+        {
+          "left": 162,
+          "right": 162,
+          "top": 321.90625,
+          "bottom": 332.90625
+        },
+        {
+          "left": 162,
+          "right": 263.328125,
+          "top": 321.90625,
+          "bottom": 332.90625
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 168.53125,
+        "right": 209.34375,
+        "bottom": 198.53125,
+        "width": 190.34375,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 403.078125,
+        "top": 349.90625,
+        "right": 445.46875,
+        "bottom": 416.296875,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 397,
+        "top": 284.890625,
+        "right": 535,
+        "bottom": 332.890625,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 494,
+        "top": 291.890625,
+        "right": 528,
+        "bottom": 325.890625,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "minimum": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 388.234375,
+        "right": 138.984375,
+        "bottom": 415.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 24,
+          "right": 162,
+          "top": 325.40625,
+          "bottom": 336.40625
+        },
+        {
+          "left": 162,
+          "right": 162,
+          "top": 321.90625,
+          "bottom": 332.90625
+        },
+        {
+          "left": 162,
+          "right": 263.328125,
+          "top": 321.90625,
+          "bottom": 332.90625
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 168.53125,
+        "right": 209.34375,
+        "bottom": 198.53125,
+        "width": 190.34375,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 403.078125,
+        "top": 349.90625,
+        "right": 445.46875,
+        "bottom": 416.296875,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 397,
+        "top": 284.890625,
+        "right": 535,
+        "bottom": 332.890625,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 494,
+        "top": 291.890625,
+        "right": 528,
+        "bottom": 325.890625,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    }
+  },
+  {
+    "locale": "en",
+    "width": 390,
+    "height": 844,
+    "closed": {
+      "mobile": true,
+      "chip": {
+        "left": 14.390625,
+        "top": 522.53125,
+        "right": 138.984375,
+        "bottom": 566.53125,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 62.078125,
+        "top": 696.421875,
+        "right": 104.46875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": true,
+      "chip": {
+        "left": 14.390625,
+        "top": 522.53125,
+        "right": 138.984375,
+        "bottom": 566.53125,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 162.53125,
+        "right": 217.15625,
+        "bottom": 198.53125,
+        "width": 198.15625,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 62.078125,
+        "top": 696.421875,
+        "right": 104.46875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "minimum": {
+      "mobile": true,
+      "chip": {
+        "left": 14.390625,
+        "top": 522.53125,
+        "right": 138.984375,
+        "bottom": 566.53125,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 162.53125,
+        "right": 217.15625,
+        "bottom": 198.53125,
+        "width": 198.15625,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 62.078125,
+        "top": 696.421875,
+        "right": 104.46875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "safe": {
+      "mobile": true,
+      "chip": {
+        "left": 58.390625,
+        "top": 522.53125,
+        "right": 182.984375,
+        "bottom": 566.53125,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": {
+        "left": 50,
+        "top": 12,
+        "right": 340,
+        "bottom": 232,
+        "width": 290,
+        "height": 220
+      },
+      "input": {
+        "left": 63,
+        "top": 162.53125,
+        "right": 237.359375,
+        "bottom": 198.53125,
+        "width": 174.359375,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 62.078125,
+        "top": 696.421875,
+        "right": 104.46875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 291,
+      "clientWidth": 288
+    },
+    "keyboard": {
+      "mobile": true,
+      "chip": {
+        "left": 58.390625,
+        "top": 522.53125,
+        "right": 182.984375,
+        "bottom": 566.53125,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 667.199951171875,
+          "bottom": 676
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 664.3999633789062,
+          "bottom": 673.199951171875
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 786,
+        "right": 390,
+        "bottom": 844,
+        "width": 390,
+        "height": 58
+      },
+      "dialog": {
+        "left": 50,
+        "top": 26,
+        "right": 340,
+        "bottom": 183,
+        "width": 290,
+        "height": 157
+      },
+      "input": {
+        "left": 63,
+        "top": 142,
+        "right": 237.359375,
+        "bottom": 178,
+        "width": 174.359375,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 62.078125,
+        "top": 696.421875,
+        "right": 104.46875,
+        "bottom": 762.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 56,
+        "top": 574.53125,
+        "right": 334,
+        "bottom": 622.53125,
+        "width": 278,
+        "height": 48
+      },
+      "settings": {
+        "left": 293,
+        "top": 581.53125,
+        "right": 327,
+        "bottom": 615.53125,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 291,
+      "clientWidth": 288
+    }
+  },
+  {
+    "locale": "en",
+    "width": 320,
+    "height": 568,
+    "closed": {
+      "mobile": true,
+      "chip": {
+        "left": 14.390625,
+        "top": 252.046875,
+        "right": 138.984375,
+        "bottom": 296.046875,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 39.078125,
+        "top": 420.421875,
+        "right": 81.46875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": true,
+      "chip": {
+        "left": 14.390625,
+        "top": 252.046875,
+        "right": 138.984375,
+        "bottom": 296.046875,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 314,
+        "bottom": 232,
+        "width": 308,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 162.53125,
+        "right": 207.625,
+        "bottom": 198.53125,
+        "width": 188.625,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 39.078125,
+        "top": 420.421875,
+        "right": 81.46875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 309,
+      "clientWidth": 306
+    },
+    "minimum": {
+      "mobile": true,
+      "chip": {
+        "left": 14.390625,
+        "top": 252.046875,
+        "right": 138.984375,
+        "bottom": 296.046875,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 314,
+        "bottom": 232,
+        "width": 308,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 162.53125,
+        "right": 207.625,
+        "bottom": 198.53125,
+        "width": 188.625,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 39.078125,
+        "top": 420.421875,
+        "right": 81.46875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 309,
+      "clientWidth": 306
+    },
+    "safe": {
+      "mobile": true,
+      "chip": {
+        "left": 58.390625,
+        "top": 252.046875,
+        "right": 182.984375,
+        "bottom": 296.046875,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": {
+        "left": 50,
+        "top": 12,
+        "right": 270,
+        "bottom": 232,
+        "width": 220,
+        "height": 220
+      },
+      "input": {
+        "left": 63,
+        "top": 162.53125,
+        "right": 181.875,
+        "bottom": 198.53125,
+        "width": 118.875,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 39.078125,
+        "top": 420.421875,
+        "right": 81.46875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 221,
+      "clientWidth": 218
+    },
+    "keyboard": {
+      "mobile": true,
+      "chip": {
+        "left": 58.390625,
+        "top": 252.046875,
+        "right": 182.984375,
+        "bottom": 296.046875,
+        "width": 124.59375,
+        "height": 44
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 10,
+          "right": 120.4000015258789,
+          "top": 391.20001220703125,
+          "bottom": 400
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 120.4000015258789,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        },
+        {
+          "left": 120.4000015258789,
+          "right": 201.46250915527344,
+          "top": 388.3999938964844,
+          "bottom": 397.20001220703125
+        }
+      ],
+      "tab": {
+        "left": 0,
+        "top": 510,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 58
+      },
+      "dialog": {
+        "left": 50,
+        "top": 26,
+        "right": 270,
+        "bottom": 183,
+        "width": 220,
+        "height": 157
+      },
+      "input": {
+        "left": 63,
+        "top": 142,
+        "right": 181.875,
+        "bottom": 178,
+        "width": 118.875,
+        "height": 36
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 39.078125,
+        "top": 420.421875,
+        "right": 81.46875,
+        "bottom": 486.8125,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 33,
+        "top": 304.046875,
+        "right": 287,
+        "bottom": 352.046875,
+        "width": 254,
+        "height": 48
+      },
+      "settings": {
+        "left": 246,
+        "top": 311.046875,
+        "right": 280,
+        "bottom": 345.046875,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 221,
+      "clientWidth": 218
+    }
+  },
+  {
+    "locale": "en",
+    "width": 1280,
+    "height": 800,
+    "closed": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 758.234375,
+        "right": 138.984375,
+        "bottom": 785.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 24,
+          "right": 162,
+          "top": 688,
+          "bottom": 699
+        },
+        {
+          "left": 162,
+          "right": 162,
+          "top": 684.5,
+          "bottom": 695.5
+        },
+        {
+          "left": 162,
+          "right": 263.328125,
+          "top": 684.5,
+          "bottom": 695.5
+        }
+      ],
+      "tab": null,
+      "dialog": null,
+      "input": null,
+      "inputHit": false,
+      "closeHit": false,
+      "voice": {
+        "left": 577.078125,
+        "top": 712.5,
+        "right": 619.46875,
+        "bottom": 778.890625,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 571,
+        "top": 647.484375,
+        "right": 709,
+        "bottom": 695.484375,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 668,
+        "top": 654.484375,
+        "right": 702,
+        "bottom": 688.484375,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "openedByPointer": true,
+    "opened": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 758.234375,
+        "right": 138.984375,
+        "bottom": 785.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 24,
+          "right": 162,
+          "top": 688,
+          "bottom": 699
+        },
+        {
+          "left": 162,
+          "right": 162,
+          "top": 684.5,
+          "bottom": 695.5
+        },
+        {
+          "left": 162,
+          "right": 263.328125,
+          "top": 684.5,
+          "bottom": 695.5
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 168.53125,
+        "right": 209.34375,
+        "bottom": 198.53125,
+        "width": 190.34375,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 577.078125,
+        "top": 712.5,
+        "right": 619.46875,
+        "bottom": 778.890625,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 571,
+        "top": 647.484375,
+        "right": 709,
+        "bottom": 695.484375,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 668,
+        "top": 654.484375,
+        "right": 702,
+        "bottom": 688.484375,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    },
+    "minimum": {
+      "mobile": false,
+      "chip": {
+        "left": 14.390625,
+        "top": 758.234375,
+        "right": 138.984375,
+        "bottom": 785.609375,
+        "width": 124.59375,
+        "height": 27.375
+      },
+      "chipHit": true,
+      "credits": [
+        {
+          "left": 24,
+          "right": 162,
+          "top": 688,
+          "bottom": 699
+        },
+        {
+          "left": 162,
+          "right": 162,
+          "top": 684.5,
+          "bottom": 695.5
+        },
+        {
+          "left": 162,
+          "right": 263.328125,
+          "top": 684.5,
+          "bottom": 695.5
+        }
+      ],
+      "tab": null,
+      "dialog": {
+        "left": 6,
+        "top": 12,
+        "right": 326,
+        "bottom": 232,
+        "width": 320,
+        "height": 220
+      },
+      "input": {
+        "left": 19,
+        "top": 168.53125,
+        "right": 209.34375,
+        "bottom": 198.53125,
+        "width": 190.34375,
+        "height": 30
+      },
+      "inputHit": true,
+      "closeHit": true,
+      "voice": {
+        "left": 577.078125,
+        "top": 712.5,
+        "right": 619.46875,
+        "bottom": 778.890625,
+        "width": 42.390625,
+        "height": 66.390625
+      },
+      "voiceHit": true,
+      "settingsHit": true,
+      "providerHit": true,
+      "provider": {
+        "left": 571,
+        "top": 647.484375,
+        "right": 709,
+        "bottom": 695.484375,
+        "width": 138,
+        "height": 48
+      },
+      "settings": {
+        "left": 668,
+        "top": 654.484375,
+        "right": 702,
+        "bottom": 688.484375,
+        "width": 34,
+        "height": 34
+      },
+      "scrollWidth": 321,
+      "clientWidth": 318
+    }
+  }
+]

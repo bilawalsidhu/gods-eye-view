@@ -1,3 +1,4 @@
+import { hudOutcome } from './hudResult.js';
 /**
  * Voice result envelope: what a tool result should SAY and what it should
  * SHOW, composed by code rather than by prompt prose.
@@ -767,6 +768,7 @@ function analystQuery(result) {
 
 /** Default builders by tool name. */
 export const SPEECH_BUILDERS = Object.freeze({
+  set_hud: (result, args) => ({ say: hudOutcome(result, args).content }),
   set_layer_visibility: setLayerVisibility,
   fly_to_location: flyToLocation,
   frame_overhead: frameOverhead,

@@ -30,6 +30,9 @@ import uk from './locales/uk.json' with { type: 'json' };
 import zhCN from './locales/zh-CN.json' with { type: 'json' };
 import zhHant from './locales/zh-Hant.json' with { type: 'json' };
 
+import commandAr from './supplements/command-ar.json' with { type: 'json' };
+Object.assign(ar, commandAr);
+
 const CATALOGS = Object.freeze({
   ar,
   de,

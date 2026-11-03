@@ -49,7 +49,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
     // The layer alias hint leaves out aliases the layer id already spells.
-    '7f113854cdfe3114b9edd69f49995502276c718ce8878320161a68bafb63ebe2',
+    '31d03f9c05bffaab172385a52f3e359dbecf2afbc570b923f7ca016b6c8173cb',
   );
 });
 
@@ -138,6 +138,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
   panels.enum = panels.enum.filter(
     (id) =>
       ![
+        'street-level-panel',
+        'utilities-panel',
         'weather-panel',
         'recent-imagery-panel',
         'voice-settings',

@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import { applicationPinia } from '../vueRuntime.js';
 import { applicationI18n } from '../i18n.js';
+import AgentConsoleView from './AgentConsoleView.vue';
 import WelcomeView from './WelcomeView.vue';
 import ContextView from './ContextView.vue';
 import LayerPanelsView from './LayerPanelsView.vue';
@@ -17,6 +18,7 @@ import IntelHudView from './IntelHudView.vue';
  * where the view's markup belongs.
  */
 export const APPLICATION_VIEWS = Object.freeze({
+  'agent-console': AgentConsoleView,
   'provider-settings': ProviderSettingsView,
   'scene-chrome': SceneChromeView,
   cockpit: CockpitView,

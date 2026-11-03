@@ -108,6 +108,9 @@ const PANEL_ALIASES = new Map([
   ['authoring', 'scene-panel'],
   ['scenes', 'scene-panel'],
   ['scene', 'scene-panel'],
+  ['display', 'pp-toggles'],
+  ['street level', 'street-level-panel'],
+  ['street-level', 'street-level-panel'],
   ['post processing', 'pp-toggles'],
   ['hud controls', 'pp-toggles'],
   ['map stack', 'control-panel'],
@@ -131,6 +134,7 @@ const PANEL_IDS = new Set([
   'utilities-panel',
   'scene-panel',
   'pp-toggles',
+  'street-level-panel',
   'weather-panel',
   'recent-imagery-panel',
   'provider-settings',
@@ -1221,14 +1225,17 @@ export function createGevActionRunner({
 
     if (name === 'set_hud') {
       const out = { ok: true, action: 'set_hud' };
+      const snapshot = () => styleManager.getControlState?.()?.hud;
       if (args.layout != null) {
         const result = styleManager.setHudLayout(args.layout);
-        if (!result.ok) return { ...result, action: 'set_hud' };
+        if (!result.ok)
+          return { ...result, action: 'set_hud', hud: snapshot() };
         Object.assign(out, result);
       }
       if (args.visible != null) {
         const result = styleManager.setHudVisible(args.visible);
-        if (!result.ok) return { ...result, action: 'set_hud' };
+        if (!result.ok)
+          return { ...result, action: 'set_hud', hud: snapshot() };
         Object.assign(out, result);
       }
       return { ...out, hud: styleManager.getControlState().hud };

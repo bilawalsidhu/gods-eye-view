@@ -1,5 +1,7 @@
 /** The standalone tool catalog for voice, loaded the first time voice needs it. */
 
+import { getLocale, t } from '../i18n/index.js';
+
 let pending = null;
 
 export function loadToolCatalog() {
@@ -15,11 +17,13 @@ export function loadToolCatalog() {
         composeCatalog({
           tools: coreTools,
           services: createToolServices({
+            summaryPresentation: { getLocale, localizeLabel: t },
             fetchImpl: (...args) => globalThis.fetch(...args),
             appUrl: new URL(globalThis.document.baseURI).origin,
           }),
         }),
         'voice',
+        { get_hud_caption: { voice: true } },
       ),
   );
   pending.catch(() => {

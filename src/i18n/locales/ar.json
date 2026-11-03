@@ -3224,5 +3224,9 @@
   "Exit cockpit to fly to a drawing": "اخرج من القمرة للانتقال إلى رسم",
   "Directions, drawing and your own files": "الاتجاهات والرسم وملفاتك الخاصة",
   "Sea Marks": "علامات بحرية",
-  "Ski Pistes": "مسارات التزلج"
+  "Ski Pistes": "مسارات التزلج",
+  "Commands and tool results, including map and place context, are sent to OpenAI.": "تُرسل الأوامر ونتائج الأدوات، بما فيها سياق الخريطة والأماكن، إلى OpenAI.",
+  "Commands and tool results, including map and place context, are sent to the configured Ollama server.": "تُرسل الأوامر ونتائج الأدوات، بما فيها سياق الخريطة والأماكن، إلى خادم Ollama المُعدّ.",
+  "HUD captions use the separate summary provider configured for this app.": "تستخدم نصوص HUD مزوّد الملخصات المنفصل المُعدّ لهذا التطبيق.",
+  "Commands and tool results, including map and place context, are sent to OpenRouter (or the configured compatible service) and the selected model provider.": "تُرسل الأوامر ونتائج الأدوات، بما فيها سياق الخريطة والأماكن، إلى OpenRouter (أو الخدمة المتوافقة المُعدّة) ومزوّد النموذج المحدد."
 }

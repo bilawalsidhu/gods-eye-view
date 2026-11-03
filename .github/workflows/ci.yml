@@ -146,5 +146,8 @@ jobs:
       - name: Run focused onboarding tests
         run: node --test src/setupDoctor.test.mjs src/pinokioEnvironment.test.mjs src/pinokioPreflight.test.mjs src/pinokioLauncherContract.test.mjs src/keySetupHardening.test.mjs src/mapStartup.test.mjs src/hudSummaryResponse.test.mjs src/codexOauthRealtime.test.mjs
 
+      - name: Verify native Windows ChatGPT credential storage
+        run: node --test server/providers/common/credential-file.test.mjs server/providers/agent/chatgpt/store.test.mjs
+
       - name: Build production bundle
         run: npm run build
