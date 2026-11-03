@@ -374,6 +374,14 @@ const runs = [
   ['strict-failure-matrix', 'strict-failure-matrix', [], [], 600],
   ['strict-cold-chunks', 'strict-cold-chunks', []],
   ['strict-prod-smoke', 'strict-prod-smoke', []],
+  // Stage 6: the app's visual styles, bloom, contact sonar, cockpit clouds
+  // and annotations drawn on Navara (annotations is a tool, not a catalog
+  // layer: TOOL_IDS).
+  ['navara-visual-styles', 'navara-visual-styles', []],
+  ['navara-bloom', 'navara-bloom', []],
+  ['navara-sonar', 'navara-sonar', []],
+  ['navara-cockpit-clouds', 'navara-cockpit-clouds', []],
+  ['navara-annotations', 'navara-annotations', ['annotations']],
   ['strict-soak', 'strict-soak', [], soakRuns, 1200],
   [
     'strict-soak--long',
@@ -383,7 +391,14 @@ const runs = [
     1800,
   ],
 ];
-const scenarioIds = [...new Set(runs.flatMap(([, , ids]) => ids))].sort();
+// Ids a scenario covers that are tools, not catalog layers: their
+// assertions are recorded, but the catalog comparison leaves them out.
+const TOOL_IDS = new Set(['annotations']);
+const scenarioIds = [
+  ...new Set(
+    runs.flatMap(([, , ids]) => ids).filter((id) => !TOOL_IDS.has(id)),
+  ),
+].sort();
 const directoryIds = APPLICATION_LAYER_DIRECTORY.map((l) => l.id).sort();
 
 // The catalog as the live page has it, on both engines.
