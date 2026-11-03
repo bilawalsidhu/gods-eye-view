@@ -1,8 +1,9 @@
 # CCTV integration workflow
 
 Use this workflow when adding a camera provider or repairing an existing feed.
-The CCTV layer gets its catalog and media through the local server; keep
-provider-specific network access and URL policy on the server side.
+The CCTV catalog comes through the local server; media normally does too. Keep
+provider-specific URL policy on the server, including any validated browser-only
+media URL permitted by the exception below.
 
 ## 1. Check the source before coding
 
@@ -90,11 +91,23 @@ Catalog and media loaders must also:
 - avoid persistent frame storage unless the provider's terms explicitly allow
   it and the design has been reviewed.
 
-For live media, use the existing media proxy and supported feed type (`mjpeg`,
-`mp4`, `webm`, or `hls`) rather than adding a direct browser stream. Validate
-the upstream content type and bound or cancel streams according to the
-existing proxy behavior. Read [SECURITY.md](../SECURITY.md) before changing
-URL validation, redirects, or proxy behavior.
+For live media, prefer the existing proxy and supported feed type (`mjpeg`,
+`mp4`, `webm`, or `hls`). A direct browser-only video is a narrow fallback for
+a source whose terms allow embedding when the browser can play it but the app
+server cannot fetch it. Build its URL from a validated provider ID on the
+server; never accept a browser-supplied media URL. Render it in a native DOM
+`<video>` without `crossOrigin`, and do not read its pixels into canvas, WebGL,
+or a Cesium texture. If a map preview is needed, a second video request may be
+paused as a DOM overlay at the camera location; label it as an approximate
+still and scale it with map distance. If terms disallow embedding, use a source
+link instead. Read [SECURITY.md](../SECURITY.md) before changing URL
+validation, redirects, or proxy behavior.
+
+When an image provider sets a minimum refresh interval, enforce it at the
+server frame boundary as well as in the client. A bounded in-memory cache and
+single-flight request per camera prevent projection, panel, and re-selection
+paths from multiplying upstream requests; do not persist frames unless the
+provider's terms explicitly allow it.
 
 ## 4. Add focused regression coverage
 
@@ -109,8 +122,10 @@ and fixtures. Cover at least:
 - the frame or live-media content type the provider actually serves.
 
 Use `src/data/cctvProxy.test.mjs` for shared proxy/media behavior and
-`src/data/cctvCatalogCap.test.mjs` for shared catalog allocation. Run the
-focused provider and proxy tests, then the standard checks from
+`src/data/cctvCatalogCap.test.mjs` for shared catalog allocation. For a
+browser-only source, verify native playback, denied canvas pixel access, the
+paused second-player overlay, and its cleanup separately from proxy tests. Run
+the focused provider and proxy tests, then the standard checks from
 [CONTRIBUTING.md](../CONTRIBUTING.md) that apply to the change. For runtime
 verification, inspect `/api/cctv/sources`, `/api/cctv/health`, and the camera's
 `/api/cctv/frame/:id` or `/api/cctv/stream/:id` response locally. Confirm a

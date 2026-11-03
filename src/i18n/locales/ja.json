@@ -1,4 +1,9 @@
 {
+  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
+  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
+  "Close camera preview": "カメラのプレビューを閉じる",
+  "Refresh map still": "地図上の静止画を更新",
+  "The map still uses a separate request and may show a different moment.": "地図上の静止画は別のリクエストで取得されるため、異なる時点を表示する場合があります。",
   "Pick a shape, then click the map.": "図形を選んでから、地図をクリックしてください。",
   "Enter to place the pin, Esc to cancel.": "Enterでピンを配置、Escでキャンセル。",
   "Click where the pin goes.": "ピンを置く場所をクリックしてください。",

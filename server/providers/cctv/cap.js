@@ -40,30 +40,53 @@ export function allocateSourceCap(packs, maxCount) {
       owner.set(source.id, { pack: pack.name, source });
     }
   }
-  const lanes = packs.map((pack) => ({
-    name: pack.name,
+  const lanes = packs.map((pack) => {
     // Only the record that WON its id (the last occurrence anywhere, so also
     // the last within this pack) takes a lane slot; earlier duplicates never
     // count against the cap.
-    queue: pack.sources.filter(
+    const queue = pack.sources.filter(
       (source) => source?.id && owner.get(source.id)?.source === source,
-    ),
-    next: 0,
-    kept: 0,
-  }));
+    );
+    return {
+      name: pack.name,
+      queue,
+      reserved: Math.max(
+        0,
+        Math.min(queue.length, Math.floor(Number(pack.reservedCount) || 0)),
+      ),
+      next: 0,
+      kept: 0,
+    };
+  });
   const total = lanes.reduce((sum, lane) => sum + lane.queue.length, 0);
   const limit = Math.min(total, Math.max(0, Math.floor(maxCount)));
 
   const sources = [];
+  const reservedSources = [];
   if (limit >= total) {
     for (const lane of lanes) {
       sources.push(...lane.queue);
       lane.kept = lane.queue.length;
     }
   } else {
-    while (sources.length < limit) {
+    // Some complete regional catalogs are intentionally guaranteed. Consume
+    // their requested slots first, then distribute the remaining catalog
+    // capacity with the existing round-robin policy.
+    while (sources.length + reservedSources.length < limit) {
+      let tookReserved = false;
       for (const lane of lanes) {
-        if (sources.length >= limit) break;
+        if (sources.length + reservedSources.length >= limit) break;
+        if (lane.kept >= lane.reserved) continue;
+        reservedSources.push(lane.queue[lane.next]);
+        lane.next += 1;
+        lane.kept += 1;
+        tookReserved = true;
+      }
+      if (!tookReserved) break;
+    }
+    while (sources.length + reservedSources.length < limit) {
+      for (const lane of lanes) {
+        if (sources.length + reservedSources.length >= limit) break;
         if (lane.next >= lane.queue.length) continue;
         sources.push(lane.queue[lane.next]);
         lane.next += 1;
@@ -72,7 +95,9 @@ export function allocateSourceCap(packs, maxCount) {
     }
   }
   return {
-    sources,
+    // Keep the shared round-robin sequence first so the default active camera
+    // remains in its established region; guaranteed regional rows follow it.
+    sources: [...sources, ...reservedSources],
     packs: lanes.map((lane) => ({
       name: lane.name,
       offered: lane.queue.length,

@@ -5,15 +5,13 @@ export const DEFAULT_AUSTIN_ROWS_URL =
 /** Default cap on Austin cameras after distance-based prioritization. */
 export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
 /**
- * Catalog-wide safety ceiling on served cameras. Each pack already caps
- * itself (nearest-to-anchor first); this bound only matters when the packs
- * together exceed it, and it is then filled round-robin across packs (see
- * cap.js) so no region is silently dropped. The default per-pack caps
- * together can exceed it, so a default install may be thinned evenly here.
+ * Catalog-wide default: preserve 4,000 shared slots and reserve 1,120 Québec
+ * plus 2,396 World image locations. Shared packs still split their slots
+ * round-robin (see cap.js).
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 4000;
+export const DEFAULT_CCTV_MAX_SOURCES = 7516;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
-export const CCTV_MAX_SOURCES_CEILING = 5000;
+export const CCTV_MAX_SOURCES_CEILING = 8000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -197,6 +195,25 @@ export const DRIVEBC_ANCHORS = [
   { lat: 49.2827, lon: -123.1207 }, // Vancouver
   { lat: 48.4284, lon: -123.3656 }, // Victoria
 ];
+/** City of Ottawa traffic cameras: keyless JSON list, city-served JPEG stills. */
+export const OTTAWA_CAMERAS_URL = 'https://traffic.ottawa.ca/map/camera_list';
+/** Frame for one camera; the city serves the still on its own map path. */
+export const OTTAWA_IMAGE_URL = (id) =>
+  `https://traffic.ottawa.ca/map/camera?id=${encodeURIComponent(id)}`;
+/** Pinned frame directory, for redirect containment in the media proxy. */
+export const OTTAWA_IMAGE_ORIGIN = 'https://traffic.ottawa.ca/map/';
+export const DEFAULT_OTTAWA_MAX_SOURCES = 250;
+/** Prioritization anchor: downtown Ottawa (Parliament Hill). */
+export const OTTAWA_ANCHORS = [{ lat: 45.4215, lon: -75.6972 }];
+/** Direct still-image directories from the World cams add-on's eligible packs. */
+export const VEGAGERDIN_IMAGE_ORIGIN =
+  'https://www.vegagerdin.is/vgdata/vefmyndavelar/';
+export const TRIPCHECK_IMAGE_ORIGIN =
+  'https://www.tripcheck.com/roadcams/cams/';
+export const MLIT_RIVER_IMAGE_ORIGIN = 'https://cam.river.go.jp/cam/now/';
+export const DEFAULT_WORLD_CCTV_SOURCE_FILE =
+  'config/cctv_sources.world-image-cameras.json';
+export const WORLD_CCTV_SOURCE_COUNT = 2396;
 /** Tallinn intersection cameras: curated catalog + public stills on ristmikud.tallinn.ee. */
 export const DEFAULT_TALLINN_SOURCE_FILE = 'config/cctv_sources.tallinn.json';
 export const DEFAULT_TALLINN_MAX_SOURCES = 255;

@@ -1,4 +1,9 @@
 {
+  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
+  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
+  "Close camera preview": "Chiudi anteprima della telecamera",
+  "Refresh map still": "Aggiorna immagine fissa sulla mappa",
+  "The map still uses a separate request and may show a different moment.": "L’immagine sulla mappa usa una richiesta separata e può mostrare un momento diverso.",
   "Pick a shape, then click the map.": "Scegli una forma, poi fai clic sulla mappa.",
   "Enter to place the pin, Esc to cancel.": "Premi Enter per posizionare il segnaposto, Esc per annullare.",
   "Click where the pin goes.": "Fai clic dove va il segnaposto.",

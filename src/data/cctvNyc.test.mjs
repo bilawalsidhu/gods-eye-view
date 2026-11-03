@@ -375,8 +375,8 @@ for (const [label, flag] of [
   });
 }
 
-test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+test('the default catalog preserves shared, Québec, and World image slots', () => {
+  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 7516);
   assert.equal(DEFAULT_NYC_MAX_SOURCES, 250);
 });
 

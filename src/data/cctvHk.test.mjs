@@ -396,8 +396,8 @@ test('CCTV_HK_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
   }
 });
 
-test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+test('the default catalog preserves shared, Québec, and World image slots', () => {
+  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 7516);
 });
 
 test('the HK pack default sits above the full TD catalog and anchors the New Territories', () => {

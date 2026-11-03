@@ -1,4 +1,5 @@
 import { createCctvCatalog } from './cctv/catalog.js';
+import { quebec511VideoUrl } from './cctv/quebec.js';
 import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
 import {
   buildSyntheticCctvSvg,
@@ -18,6 +19,7 @@ import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
+import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -43,6 +45,105 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
+  /** Bounded transient image reuse keeps World providers inside their cadence. */
+  const WORLD_FRAME_CACHE_MAX_ENTRIES = 128;
+  const WORLD_FRAME_CACHE_MAX_ENTRY_BYTES = 2 * 1024 * 1024;
+  const WORLD_FRAME_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+  const worldFrameCache = new Map();
+  const worldFrameInflight = new Map();
+  const worldFrameNextAllowedAt = new Map();
+  let worldFrameCacheBytes = 0;
+
+  function getWorldFrameCache(cameraId) {
+    const entry = worldFrameCache.get(cameraId);
+    if (!entry) return null;
+    worldFrameCache.delete(cameraId);
+    worldFrameCache.set(cameraId, entry);
+    return entry;
+  }
+
+  function storeWorldFrame(cameraId, image) {
+    if (
+      !Buffer.isBuffer(image?.body) ||
+      image.body.length > WORLD_FRAME_CACHE_MAX_ENTRY_BYTES
+    )
+      return;
+    const previous = worldFrameCache.get(cameraId);
+    if (previous) worldFrameCacheBytes -= previous.body.length;
+    const entry = {
+      body: image.body,
+      contentType: image.contentType,
+      fetchedAt: Date.now(),
+    };
+    worldFrameCache.delete(cameraId);
+    worldFrameCache.set(cameraId, entry);
+    worldFrameCacheBytes += entry.body.length;
+    while (
+      worldFrameCache.size > WORLD_FRAME_CACHE_MAX_ENTRIES ||
+      worldFrameCacheBytes > WORLD_FRAME_CACHE_MAX_BYTES
+    ) {
+      const oldestId = worldFrameCache.keys().next().value;
+      const oldest = worldFrameCache.get(oldestId);
+      worldFrameCache.delete(oldestId);
+      worldFrameCacheBytes -= oldest.body.length;
+    }
+  }
+
+  async function fetchWorldCameraFrame(source, cameraId, frameUrl) {
+    const cached = getWorldFrameCache(cameraId);
+    const rawRefreshMs = Number(source?.frameRefreshMs);
+    const refreshMs =
+      Number.isFinite(rawRefreshMs) && rawRefreshMs > 0
+        ? rawRefreshMs
+        : 5 * 60 * 1000;
+    const now = Date.now();
+    if (cached && now - cached.fetchedAt < refreshMs) {
+      return { ok: true, ...cached, cached: true };
+    }
+
+    const inflight = worldFrameInflight.get(cameraId);
+    if (inflight) return inflight;
+    const nextAllowedAt = worldFrameNextAllowedAt.get(cameraId) || 0;
+    if (now < nextAllowedAt) {
+      return cached
+        ? {
+            ok: true,
+            body: cached.body,
+            contentType: cached.contentType,
+            stale: true,
+          }
+        : null;
+    }
+    worldFrameNextAllowedAt.delete(cameraId);
+    worldFrameNextAllowedAt.set(cameraId, now + refreshMs);
+    while (worldFrameNextAllowedAt.size > 4096) {
+      worldFrameNextAllowedAt.delete(
+        worldFrameNextAllowedAt.keys().next().value,
+      );
+    }
+    let request;
+    request = fetchCctvImageFromUpstream(frameUrl)
+      .then((image) => {
+        if (image?.ok) {
+          storeWorldFrame(cameraId, image);
+          return image;
+        }
+        return cached
+          ? {
+              ok: true,
+              body: cached.body,
+              contentType: cached.contentType,
+              stale: true,
+            }
+          : image;
+      })
+      .finally(() => {
+        if (worldFrameInflight.get(cameraId) === request)
+          worldFrameInflight.delete(cameraId);
+      });
+    worldFrameInflight.set(cameraId, request);
+    return request;
+  }
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {
@@ -164,6 +265,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               provider: source.provider,
               lat: source.lat,
               lon: source.lon,
+              frameRefreshMs: source.frameRefreshMs,
               headingDeg: source.headingDeg,
               headingConfidence: source.headingConfidence || '',
               pitchDeg: source.pitchDeg,
@@ -174,6 +276,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               feedType: normalizeFeedType(source.feedType),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
+              sourceUrl: source.sourceUrl || '',
+              browserMediaUrl:
+                source.sourceKind === 'quebec-511-browser'
+                  ? quebec511VideoUrl(source.id)
+                  : '',
+              accuracyM: source.accuracyM,
+              positionSource: source.positionSource || '',
               poseSource: source.poseSource,
               model: source.model || '',
               manufacturer: source.manufacturer || '',
@@ -526,15 +635,45 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             : '');
 
         const upstreamImage =
-          source?.sourceKind === 'txdot-its'
-            ? await fetchTxdotSnapshot(upstreamCandidate)
-            : await fetchCctvImageFromUpstream(upstreamCandidate);
+          source?.pack === 'world-cameras'
+            ? await fetchWorldCameraFrame(source, cameraId, upstreamCandidate)
+            : source?.sourceKind === 'txdot-its'
+              ? await fetchTxdotSnapshot(upstreamCandidate)
+              : await fetchCctvImageFromUpstream(upstreamCandidate);
+        if (
+          source?.sourceKind === 'mlit-river' &&
+          isMlitRiverAdjustmentImage(upstreamImage)
+        ) {
+          const svg = buildSyntheticCctvSvg({
+            cameraId,
+            label,
+            city,
+            status: 'CAMERA UNDER ADJUSTMENT',
+          });
+          setHealth(cameraId, {
+            status: 'degraded',
+            sourceKind: 'snapshot',
+            label: source.provider || 'MLIT river cameras',
+            message: 'Provider camera under adjustment',
+          });
+          res.writeHead(200, {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'no-store',
+            'X-CCTV-Source': 'provider-maintenance',
+          });
+          res.end(svg);
+          return;
+        }
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
-            status: 'ok',
+            status: upstreamImage.stale ? 'degraded' : 'ok',
             sourceKind: 'snapshot',
             label: source?.provider || 'Configured source',
-            message: 'Upstream snapshot active',
+            message: upstreamImage.stale
+              ? 'Serving last snapshot; refresh failed'
+              : upstreamImage.cached
+                ? 'Cached snapshot active'
+                : 'Upstream snapshot active',
           });
           res.writeHead(200, {
             'Content-Type': upstreamImage.contentType,

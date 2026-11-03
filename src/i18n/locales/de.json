@@ -1,4 +1,9 @@
 {
+  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
+  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
+  "Close camera preview": "Kameravorschau schließen",
+  "Refresh map still": "Kartenstandbild aktualisieren",
+  "The map still uses a separate request and may show a different moment.": "Das Kartenstandbild wird separat abgerufen und kann einen anderen Moment zeigen.",
   "Flying to Austin, TX...": "Flug nach Austin, TX...",
   "Restoring shared view...": "Geteilte Ansicht wird wiederhergestellt...",
   "Configuring viewer...": "Viewer wird konfiguriert...",

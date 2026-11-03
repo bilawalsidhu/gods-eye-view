@@ -1,4 +1,9 @@
 {
+  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
+  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
+  "Close camera preview": "关闭摄像头预览",
+  "Refresh map still": "刷新地图静止画面",
+  "The map still uses a separate request and may show a different moment.": "地图静止画面通过单独的请求获取，可能显示不同的时刻。",
   "Pick a shape, then click the map.": "先选择形状，再在地图上点击。",
   "Enter to place the pin, Esc to cancel.": "按 Enter 放置图钉，按 Esc 取消。",
   "Click where the pin goes.": "点击图钉的放置位置。",

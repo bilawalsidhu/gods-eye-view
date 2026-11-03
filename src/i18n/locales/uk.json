@@ -1,4 +1,9 @@
 {
+  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
+  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
+  "Close camera preview": "Закрити перегляд камери",
+  "Refresh map still": "Оновити кадр на карті",
+  "The map still uses a separate request and may show a different moment.": "Кадр на карті запитується окремо та може показувати інший момент.",
   "Pick a shape, then click the map.": "Виберіть фігуру й клацніть на карті.",
   "Enter to place the pin, Esc to cancel.": "Enter — поставити мітку, Esc — скасувати.",
   "Click where the pin goes.": "Клацніть там, де має бути мітка.",

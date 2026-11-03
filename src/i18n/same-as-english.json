@@ -31,7 +31,9 @@
     "dB",
     "hPa",
     "{source} HTTP {status}",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "de": [
     "1090 MHz",
@@ -199,7 +201,9 @@
     "{value} KM/S",
     "ΔN",
     "Ⅱ PAUSE",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "es": [
     "1090 MHz",
@@ -327,7 +331,9 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "fr": [
     "1090 MHz",
@@ -508,7 +514,9 @@
     "ΔE",
     "ΔN",
     "Ⅱ PAUSE",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "it": [
     "1090 MHz",
@@ -679,7 +687,9 @@
     "{value} conf",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "ja": [
     "1090 MHz",
@@ -728,7 +738,9 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "pt": [
     "1090 MHz",
@@ -857,7 +869,9 @@
     "{value} KM/H",
     "{value} KM/S",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "ru": [
     "AIS: --",
@@ -875,7 +889,9 @@
     "S2 GhostMaps",
     "S2 · {name}",
     "VS",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "uk": [
     "AIS: --",
@@ -888,7 +904,9 @@
     "NVG",
     "REC",
     "S2 GhostMaps",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -945,7 +963,9 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1002,6 +1022,8 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "MTQ · CC BY 4.0",
+    "OpenStreetMap contributors · ODbL"
   ]
 }
