@@ -49,13 +49,29 @@ function setMedia(video, url) {
   video.load();
 }
 
+/** Treat an interrupted play() (a pause or a new source) as no failure. */
+function onPlayFailure(mark) {
+  return (error) => {
+    if (error?.name !== 'AbortError') mark();
+  };
+}
+
+/**
+ * Québec 511 serves a new clip at the same URL every few minutes, so a refresh
+ * adds a timestamp to get past the browser's media cache.
+ */
 function mediaRefreshUrl(value) {
   const url = new URL(value);
   url.searchParams.set('_', String(Date.now()));
   return url.href;
 }
 
-/** Attach the active Québec source to a floating browser player and map preview. */
+/**
+ * Attach the active Québec source to a floating browser player and map
+ * preview. The browser contacts Québec 511 only after the viewer presses Play
+ * for that camera; selecting it (by click, auto-hop, a scene or voice) only
+ * shows its details and the play control.
+ */
 export function createQuebecCctvOverlay(viewer) {
   if (!viewer?.scene || typeof document === 'undefined') return null;
 
@@ -64,7 +80,7 @@ export function createQuebecCctvOverlay(viewer) {
   const panel = document.createElement('section');
   panel.className = 'qci-panel';
   panel.hidden = true;
-  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('role', 'region');
   panel.setAttribute('aria-label', t('CCTV camera'));
 
   const header = document.createElement('header');
@@ -91,10 +107,14 @@ export function createQuebecCctvOverlay(viewer) {
 
   const actions = document.createElement('div');
   actions.className = 'qci-actions';
+  const play = document.createElement('button');
+  play.type = 'button';
+  play.className = 'qci-play';
+  play.textContent = t('Play');
   const refresh = document.createElement('button');
   refresh.type = 'button';
   refresh.textContent = t('Refresh map still');
-  actions.append(refresh);
+  actions.append(play, refresh);
   const note = document.createElement('p');
   note.className = 'qci-note';
   const sourceLink = document.createElement('a');
@@ -110,7 +130,7 @@ export function createQuebecCctvOverlay(viewer) {
   still.className = 'qci-marker-still';
   still.muted = true;
   still.playsInline = true;
-  still.preload = 'auto';
+  still.preload = 'none';
   still.setAttribute('aria-hidden', 'true');
   const markerLabel = document.createElement('span');
   markerLabel.className = 'qci-marker-label';
@@ -121,7 +141,11 @@ export function createQuebecCctvOverlay(viewer) {
   let selectedPosition = null;
   let closedWindowCameraId = null;
   let selectedMediaUrl = '';
+  /** Camera id the viewer pressed Play for; media loads only for this one. */
+  let playingCameraId = null;
   let mediaRefreshTimer = 0;
+  let removeRender = null;
+  let canvasRect = null;
   let liveUnavailable = false;
   let stillUnavailable = false;
 
@@ -144,8 +168,18 @@ export function createQuebecCctvOverlay(viewer) {
     markerLabel.textContent = t('Source unavailable');
   }
 
+  function startRender() {
+    if (!removeRender)
+      removeRender = viewer.scene.postRender.addEventListener(updateMarker);
+  }
+
+  function stopRender() {
+    removeRender?.();
+    removeRender = null;
+  }
+
   function stopMediaRefresh() {
-    clearInterval(mediaRefreshTimer);
+    window.clearInterval(mediaRefreshTimer);
     mediaRefreshTimer = 0;
   }
 
@@ -156,7 +190,7 @@ export function createQuebecCctvOverlay(viewer) {
       () => {
         if (document.hidden || closedWindowCameraId === selected?.id) return;
         setMedia(live, mediaRefreshUrl(selectedMediaUrl));
-        void live.play().catch(markLiveUnavailable);
+        void live.play().catch(onPlayFailure(markLiveUnavailable));
         refreshStill();
       },
       2 * 60 * 1000,
@@ -164,10 +198,33 @@ export function createQuebecCctvOverlay(viewer) {
   }
 
   function refreshStill() {
-    if (!selectedMediaUrl) return;
+    if (!selectedMediaUrl || playingCameraId !== selected?.id) return;
     setMedia(still, '');
     setMedia(still, mediaRefreshUrl(selectedMediaUrl));
-    void still.play().catch(markStillUnavailable);
+    void still.play().catch(onPlayFailure(markStillUnavailable));
+  }
+
+  /** Load and play the selected camera's media: only from a Play click. */
+  function startPlayback() {
+    if (!selected || !selectedMediaUrl) return;
+    playingCameraId = selected.id;
+    liveUnavailable = false;
+    stillUnavailable = false;
+    play.hidden = true;
+    refresh.hidden = false;
+    live.hidden = false;
+    still.hidden = false;
+    marker.classList.remove('qci-marker-link-only');
+    note.textContent = t(
+      'The map still uses a separate request and may show a different moment.',
+    );
+    note.hidden = false;
+    markerLabel.textContent = markerLabelText(selected, true);
+    setMedia(live, selectedMediaUrl);
+    setMedia(still, selectedMediaUrl);
+    void live.play().catch(onPlayFailure(markLiveUnavailable));
+    void still.play().catch(onPlayFailure(markStillUnavailable));
+    startMediaRefresh();
   }
 
   function setCamera(camera, { reselected = false } = {}) {
@@ -176,9 +233,11 @@ export function createQuebecCctvOverlay(viewer) {
       selectedPosition = null;
       closedWindowCameraId = null;
       selectedMediaUrl = '';
+      playingCameraId = null;
       liveUnavailable = false;
       stillUnavailable = false;
       stopMediaRefresh();
+      stopRender();
       panel.hidden = true;
       marker.hidden = true;
       setMedia(live, '');
@@ -189,6 +248,7 @@ export function createQuebecCctvOverlay(viewer) {
     const changed = selected?.id !== camera.id;
     if (changed || reselected) closedWindowCameraId = null;
     selected = camera;
+    startRender();
     selectedPosition = Cesium.Cartesian3.fromDegrees(
       Number(camera.lon),
       Number(camera.lat),
@@ -205,7 +265,9 @@ export function createQuebecCctvOverlay(viewer) {
     if (changed || mediaUrl !== selectedMediaUrl) {
       liveUnavailable = false;
       stillUnavailable = false;
+      playingCameraId = null;
     }
+    const playing = Boolean(mediaUrl) && playingCameraId === camera.id;
     title.textContent = camera.name || t('CCTV camera');
     coordinates.textContent = [
       `${Number(camera.lat).toFixed(5)}, ${Number(camera.lon).toFixed(5)}`,
@@ -218,16 +280,19 @@ export function createQuebecCctvOverlay(viewer) {
       .join(' · ');
     credit.textContent = camera.credit || camera.provider || '';
     credit.hidden = !credit.textContent;
-    live.hidden = !mediaUrl;
-    refresh.hidden = !mediaUrl;
+    live.hidden = !playing;
+    play.hidden = !mediaUrl || playing;
+    refresh.hidden = !playing;
     actions.hidden = !mediaUrl;
     note.hidden = !mediaUrl;
     note.textContent = mediaUrl
-      ? liveUnavailable
-        ? t('Source unavailable')
-        : t(
-            'The map still uses a separate request and may show a different moment.',
-          )
+      ? !playing
+        ? t('Video plays from Québec 511, which sees your IP address.')
+        : liveUnavailable
+          ? t('Source unavailable')
+          : t(
+              'The map still uses a separate request and may show a different moment.',
+            )
       : sourceUrl
         ? ''
         : t('Source unavailable');
@@ -236,27 +301,24 @@ export function createQuebecCctvOverlay(viewer) {
     sourceLink.hidden = !sourceUrl;
     markerLabel.textContent = stillUnavailable
       ? t('Source unavailable')
-      : markerLabelText(camera, mediaUrl);
-    marker.classList.toggle('qci-marker-link-only', !mediaUrl);
-    still.hidden = !mediaUrl;
+      : markerLabelText(camera, playing);
+    marker.classList.toggle('qci-marker-link-only', !playing);
+    still.hidden = !playing;
     panel.hidden = false;
 
     if (changed || mediaUrl !== selectedMediaUrl) {
       selectedMediaUrl = mediaUrl;
-      setMedia(live, mediaUrl);
-      setMedia(still, mediaUrl);
-      if (mediaUrl) {
-        void live.play().catch(markLiveUnavailable);
-        void still.play().catch(markStillUnavailable);
-        startMediaRefresh();
-      } else {
-        stopMediaRefresh();
-      }
-    } else if (reselected && mediaUrl) {
+      // A new camera never inherits playback: the browser stays off 511
+      // until the viewer presses Play for it.
+      stopMediaRefresh();
+      setMedia(live, '');
+      setMedia(still, '');
+    } else if (reselected && playing) {
       if (live.error || live.networkState === 3 || live.readyState < 2) {
         setMedia(live, mediaRefreshUrl(mediaUrl));
       }
-      if (live.paused) void live.play().catch(markLiveUnavailable);
+      if (live.paused)
+        void live.play().catch(onPlayFailure(markLiveUnavailable));
       startMediaRefresh();
       if (still.error || still.networkState === 3 || still.readyState < 2)
         refreshStill();
@@ -280,7 +342,10 @@ export function createQuebecCctvOverlay(viewer) {
       point.y <= canvas.clientHeight;
     marker.hidden = !visible;
     if (!visible) return;
-    const rect = canvas.getBoundingClientRect();
+    // Measured once per resize or scroll, not every frame, so the per-frame
+    // style writes never force a layout.
+    canvasRect ||= canvas.getBoundingClientRect();
+    const rect = canvasRect;
     marker.style.left = `${rect.left + point.x}px`;
     marker.style.top = `${rect.top + point.y}px`;
     const distance = Cesium.Cartesian3.distance(
@@ -320,6 +385,23 @@ export function createQuebecCctvOverlay(viewer) {
     { signal },
   );
   refresh.addEventListener('click', refreshStill, { signal });
+  play.addEventListener('click', startPlayback, { signal });
+  const resetCanvasRect = () => {
+    canvasRect = null;
+  };
+  window.addEventListener('resize', resetCanvasRect, { signal });
+  window.addEventListener('scroll', resetCanvasRect, {
+    signal,
+    capture: true,
+    passive: true,
+  });
+  panel.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'Escape') close.click();
+    },
+    { signal },
+  );
   close.addEventListener(
     'click',
     () => {
@@ -359,25 +441,24 @@ export function createQuebecCctvOverlay(viewer) {
   document.addEventListener(
     'visibilitychange',
     () => {
-      if (!selectedMediaUrl) return;
+      if (!selectedMediaUrl || playingCameraId !== selected?.id) return;
       if (document.hidden) {
         live.pause();
         still.pause();
       } else if (closedWindowCameraId !== selected?.id) {
-        void live.play().catch(markLiveUnavailable);
+        void live.play().catch(onPlayFailure(markLiveUnavailable));
         refreshStill();
       }
     },
     { signal },
   );
 
-  const removeRender = viewer.scene.postRender.addEventListener(updateMarker);
   return {
     setCamera,
     dispose() {
       controller.abort();
       stopMediaRefresh();
-      removeRender();
+      stopRender();
       setMedia(live, '');
       setMedia(still, '');
       panel.remove();

@@ -1,6 +1,4 @@
 {
-  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
-  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
   "Close camera preview": "關閉攝影機預覽",
   "Refresh map still": "重新整理地圖靜態畫面",
   "The map still uses a separate request and may show a different moment.": "地圖靜態畫面使用獨立請求，顯示的時間可能不同。",
@@ -2878,5 +2876,6 @@
   "Right panels": "右側面板",
   "UTILITIES": "工具",
   "Exit cockpit to fly to a drawing": "請先退出座艙，再飛往繪製位置",
-  "Directions, drawing and your own files": "路線導航、繪製和你自己的文件"
+  "Directions, drawing and your own files": "路線導航、繪製和你自己的文件",
+  "Video plays from Québec 511, which sees your IP address.": "影片從 Québec 511 播放，Québec 511 會看到你的 IP 位址。"
 }

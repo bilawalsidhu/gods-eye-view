@@ -1,6 +1,4 @@
 {
-  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
-  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
   "Close camera preview": "Fermer l’aperçu de la caméra",
   "Refresh map still": "Actualiser l’image fixe sur la carte",
   "The map still uses a separate request and may show a different moment.": "L’image fixe de la carte utilise une requête distincte et peut montrer un autre moment.",
@@ -3018,5 +3016,6 @@
   "Audio": "Audio",
   "UTILITIES": "OUTILS",
   "Exit cockpit to fly to a drawing": "Quittez le cockpit pour rejoindre un dessin",
-  "Directions, drawing and your own files": "Itinéraire, dessin et vos propres fichiers"
+  "Directions, drawing and your own files": "Itinéraire, dessin et vos propres fichiers",
+  "Video plays from Québec 511, which sees your IP address.": "La vidéo est lue depuis Québec 511, qui voit votre adresse IP."
 }

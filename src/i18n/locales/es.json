@@ -1,6 +1,4 @@
 {
-  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
-  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
   "Close camera preview": "Cerrar vista previa de la cámara",
   "Refresh map still": "Actualizar imagen fija del mapa",
   "The map still uses a separate request and may show a different moment.": "La imagen del mapa usa una solicitud independiente y puede mostrar otro momento.",
@@ -3018,5 +3016,6 @@
   "Right panels": "Paneles derechos",
   "UTILITIES": "UTILIDADES",
   "Exit cockpit to fly to a drawing": "Sal de la cabina para volar a un dibujo",
-  "Directions, drawing and your own files": "Indicaciones, dibujo y tus propios archivos"
+  "Directions, drawing and your own files": "Indicaciones, dibujo y tus propios archivos",
+  "Video plays from Québec 511, which sees your IP address.": "El vídeo se reproduce desde Québec 511, que ve tu dirección IP."
 }

@@ -5,9 +5,14 @@ export const DEFAULT_AUSTIN_ROWS_URL =
 /** Default cap on Austin cameras after distance-based prioritization. */
 export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
 /**
- * Catalog-wide default: preserve 4,000 shared slots and reserve 1,120 Québec
- * plus 2,396 World image locations. Shared packs still split their slots
- * round-robin (see cap.js).
+ * Slots every pack shares round-robin before any reservation applies. A
+ * reserved pack (Québec, World) only takes capacity above this floor, so a
+ * cap at or below it thins every region evenly (see cap.js).
+ */
+export const CCTV_SHARED_SOURCE_SLOTS = 4000;
+/**
+ * Catalog-wide default: the 4,000 shared slots plus room reserved for the
+ * 1,120 Québec and 2,396 World image locations.
  */
 export const DEFAULT_CCTV_MAX_SOURCES = 7516;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
@@ -195,16 +200,32 @@ export const DRIVEBC_ANCHORS = [
   { lat: 49.2827, lon: -123.1207 }, // Vancouver
   { lat: 48.4284, lon: -123.3656 }, // Victoria
 ];
-/** City of Ottawa traffic cameras: keyless JSON list, city-served JPEG stills. */
-export const OTTAWA_CAMERAS_URL = 'https://traffic.ottawa.ca/map/camera_list';
-/** Frame for one camera; the city serves the still on its own map path. */
-export const OTTAWA_IMAGE_URL = (id) =>
-  `https://traffic.ottawa.ca/map/camera?id=${encodeURIComponent(id)}`;
+/** City of Ottawa traffic cameras: documented JSON list (keyless). */
+export const OTTAWA_CAMERAS_URL =
+  'https://traffic.ottawa.ca/map/service/camera';
+/**
+ * Keyless canonical frame URL for one camera number. The city's Traffic Camera
+ * Images API needs a certificate (OTTAWA_CAMERA_CERTIFICATE), which the frame
+ * proxy adds at request time so it never appears in a catalog response.
+ */
+export const OTTAWA_IMAGE_URL = (cameraNumber) =>
+  `https://traffic.ottawa.ca/opendata/camera?c=${encodeURIComponent(cameraNumber)}`;
 /** Pinned frame directory, for redirect containment in the media proxy. */
-export const OTTAWA_IMAGE_ORIGIN = 'https://traffic.ottawa.ca/map/';
+export const OTTAWA_IMAGE_ORIGIN = 'https://traffic.ottawa.ca/opendata/';
+/** The API lets one certificate and user id fetch a camera once a minute. */
+export const OTTAWA_FRAME_REFRESH_MS = 60 * 1000;
+/** Alphanumeric user id this server sends with its certificate. */
+export const OTTAWA_API_USER_ID = 'gev';
 export const DEFAULT_OTTAWA_MAX_SOURCES = 250;
 /** Prioritization anchor: downtown Ottawa (Parliament Hill). */
 export const OTTAWA_ANCHORS = [{ lat: 45.4215, lon: -75.6972 }];
+/**
+ * Taiwan Highway Bureau MJPEG servers. Each camera is one root path segment,
+ * so the pin is the host root: a redirect must stay on the same server.
+ */
+export const TAIWAN_HIGHWAY_IMAGE_ORIGINS = Object.freeze(
+  [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `https://cctv-ss0${n}.thb.gov.tw/`),
+);
 /** Direct still-image directories from the World cams add-on's eligible packs. */
 export const VEGAGERDIN_IMAGE_ORIGIN =
   'https://www.vegagerdin.is/vgdata/vefmyndavelar/';

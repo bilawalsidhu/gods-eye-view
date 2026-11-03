@@ -1,6 +1,4 @@
 {
-  "MTQ · CC BY 4.0": "MTQ · CC BY 4.0",
-  "OpenStreetMap contributors · ODbL": "OpenStreetMap contributors · ODbL",
   "Close camera preview": "カメラのプレビューを閉じる",
   "Refresh map still": "地図上の静止画を更新",
   "The map still uses a separate request and may show a different moment.": "地図上の静止画は別のリクエストで取得されるため、異なる時点を表示する場合があります。",
@@ -2878,5 +2876,6 @@
   "Audio": "オーディオ",
   "UTILITIES": "ユーティリティ",
   "Exit cockpit to fly to a drawing": "描画の位置へ移動するにはコックピットを終了してください",
-  "Directions, drawing and your own files": "ルート案内、描画、自分のファイル"
+  "Directions, drawing and your own files": "ルート案内、描画、自分のファイル",
+  "Video plays from Québec 511, which sees your IP address.": "動画は Québec 511 から再生され、Québec 511 にはあなたの IP アドレスが見えます。"
 }

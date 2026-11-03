@@ -1,4 +1,7 @@
-import { CCTV_SOURCE_FETCH_TIMEOUT_MS } from './constants.js';
+import {
+  CCTV_SOURCE_FETCH_TIMEOUT_MS,
+  TAIWAN_HIGHWAY_IMAGE_ORIGINS,
+} from './constants.js';
 import {
   cameraDisplayCode,
   fallbackHeadingFromId,
@@ -37,16 +40,9 @@ const STREAM_TO_FRAME = new Map([
 ]);
 
 const DIRECTIONS = { N: 'N', S: 'S', E: 'E', W: 'W' };
-const TAIWAN_HIGHWAY_CAMERA_HOSTS = new Set([
-  'cctv-ss01.thb.gov.tw',
-  'cctv-ss02.thb.gov.tw',
-  'cctv-ss03.thb.gov.tw',
-  'cctv-ss04.thb.gov.tw',
-  'cctv-ss05.thb.gov.tw',
-  'cctv-ss06.thb.gov.tw',
-  'cctv-ss07.thb.gov.tw',
-  'cctv-ss08.thb.gov.tw',
-]);
+const TAIWAN_HIGHWAY_CAMERA_HOSTS = new Set(
+  TAIWAN_HIGHWAY_IMAGE_ORIGINS.map((origin) => new URL(origin).hostname),
+);
 
 /** Prioritization anchors, north to south, so a cap keeps the whole island
  * rather than only greater Taipei. */

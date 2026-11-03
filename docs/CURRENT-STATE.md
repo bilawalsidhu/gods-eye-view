@@ -1323,9 +1323,10 @@ id-hash fallback at low confidence.
 
 Once enabled, the 250 cameras nearest the five borough cores load.
 `CCTV_NYC_MAX_SOURCES` sets the pack cap (8–400). The default catalog limit is
-7,516: 4,000 shared round-robin slots, 1,120 reserved Québec locations, and
-2,396 reserved World image sources. Lower explicit `CCTV_MAX_SOURCES` values
-are honored.
+7,516: 4,000 shared round-robin slots, plus room above them for the 1,120
+Québec locations and 2,396 World image sources. Lower explicit
+`CCTV_MAX_SOURCES` values are honored; reservations only use the capacity
+above the 4,000 shared slots.
 
 ## City of Toronto RESCU CCTV source pack
 
@@ -5022,8 +5023,9 @@ silently demoting every later lookup for the session.
   covering the whole country, where one _preset_ (a station's fixed view) is one camera — 806
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
   on the main road spine. `CCTV_MAX_SOURCES` defaults to 7,516: 4,000 shared
-  round-robin slots plus 3,516 reserved Québec and World image slots. Lower
-  caps fill reservations first; at 3,516 or less, no shared slots remain.
+  round-robin slots plus 3,516 reserved Québec and World image slots.
+  Reservations only use capacity above the 4,000 shared slots, so at 4,000 or
+  less every pack, Québec and World included, shares the cap round-robin.
   ~1,100 cameras total, all RAW PRIOR poses, stills-first. The catalog lives for 15 minutes; once
   it expires, `/api/cctv` keeps answering from it while one background refresh reloads every
   pack, so only the very first load waits for the slowest pack (a live first load took about
@@ -6578,13 +6580,22 @@ when `CCTV_QUEBEC_ENABLED` is not `0`. The pack contains 1,120 records: 680
 MTQ highway cameras, 426 Montréal OSM camera locations, and 14 scenic webcams.
 The default catalog limit is 7,516: it reserves all 1,120 Québec locations and
 2,396 World image feeds, and keeps 4,000 slots for the existing round-robin
-camera packs. A lower explicit `CCTV_MAX_SOURCES` value is still honored and
-can trim the reserved packs if it is below their combined size.
+camera packs. Reservations only use capacity above those 4,000 slots: a lower
+explicit `CCTV_MAX_SOURCES` thins every pack round-robin, Québec and World
+included, instead of taking the shared slots.
 
-Selecting an MTQ camera opens the official Québec 511 MP4 in a floating native
-browser player and requests a second video for the paused map preview. The
-official feed is a five-second clip refreshed by Québec 511 every 2–4 minutes,
-not continuous live video; the browser player reloads every two minutes. The
+The Québec 511 video is opt-in (`CCTV_QUEBEC_VIDEO_ENABLED=1`) because Québec
+511's terms for embedding its clips on another site are unconfirmed; the camera
+locations themselves are CC BY 4.0. With the flag unset, MTQ cameras show
+their location, credit and a link to the Québec 511 viewer page. With it set,
+selecting an MTQ camera opens a floating panel with a Play button and a notice
+that Québec 511 sees the viewer's IP address; the browser contacts Québec 511
+only after Play, never on selection alone (layer enable, auto-hop, a scene or
+voice), and a different camera starts unplayed. After Play, the panel plays
+the official MP4 in a native browser player and requests a second video for the
+paused map preview. The official feed is a five-second clip refreshed by
+Québec 511 every 2–4 minutes, not continuous live video; the browser player
+reloads every two minutes while the tab is visible. The
 map preview is a DOM overlay attached to the camera's coordinates and scales
 down with camera distance. Neither video is read into a canvas or Cesium texture:
 Québec 511 does not grant localhost pixel access, and its MP4 is not available
@@ -6593,8 +6604,24 @@ locations with per-camera source-page links, but no direct frame URLs; those
 show a location label and open the official/operator page. MTQ positions carry
 CC BY 4.0 attribution, Montréal positions are attributed to OpenStreetMap
 contributors under ODbL, and scenic rows retain their position accuracy and
-provenance. The one-camera `/quebec511-camera-preview.html` page remains for
-source review; Québec cameras now load through the normal CCTV layer.
+provenance. Québec cameras load through the normal CCTV layer.
+
+## City of Ottawa CCTV source pack
+
+The CCTV catalog can add City of Ottawa traffic cameras, including the MTO
+cameras the city carries. Camera images come from the city's Traffic Camera
+Images API (`traffic.ottawa.ca/opendata/camera`), which needs a certificate
+from the city's registration form and lets one certificate and user id fetch a
+camera at most once a minute. Without `OTTAWA_CAMERA_CERTIFICATE` the pack is
+skipped with no request and one log line. The camera list is the documented
+keyless `traffic.ottawa.ca/map/service/camera` JSON. Catalog URLs carry no
+key: the frame proxy adds the certificate and the fixed user id `gev` at fetch
+time, only for a numeric camera number inside the pinned `/opendata/` path,
+and serves each camera from one shared server-side frame per minute. Inside
+that minute a camera with no cached frame gets the placeholder, never the
+Street View fallback. The feed publishes no bearing, so headings use the
+id-hash fallback at low confidence. `CCTV_OTTAWA_MAX_SOURCES` caps the pack
+(default 250, nearest downtown) and `CCTV_OTTAWA_ENABLED=0` turns it off.
 
 ## World camera image feeds
 

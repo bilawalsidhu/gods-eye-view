@@ -12,7 +12,13 @@ import {
   fallbackHeadingFromId,
   pinnedCameraUrl,
 } from '../../server/providers/cctv/normalize.js';
-import { loadOttawaSourcesFromOpenData } from '../../server/providers/cctv/ottawa.js';
+import {
+  _resetOttawaCertificateWarningForTest,
+  loadOttawaSourcesFromOpenData,
+  ottawaAuthorizedFrameUrl,
+} from '../../server/providers/cctv/ottawa.js';
+
+const CERT = { OTTAWA_CAMERA_CERTIFICATE: 'CERT123' };
 
 /** Set (or, for `undefined`, delete) environment variables for one test. */
 function withEnv(t, env) {
@@ -33,35 +39,77 @@ function quiet(t) {
   t.mock.method(console, 'warn', () => {});
 }
 
-/** One `/map/camera_list` row carrying the fields the loader reads. */
-function ottawaRow(id, lat, lon, overrides = {}) {
+/** One documented `/map/service/camera` row carrying the fields the loader reads. */
+function ottawaRow(number, lat, lon, overrides = {}) {
   return {
-    id,
-    number: 2000 + id,
-    description: `Camera ${id}`,
-    descriptionFr: `Caméra ${id}`,
-    type: 'City',
+    id: number + 10000,
+    camera_number: number,
+    name: `Camera ${number}`,
+    name_french: `Caméra ${number}`,
+    cameraOwner: 'CITY',
     latitude: lat,
     longitude: lon,
     ...overrides,
   };
 }
 
-test('Ottawa loader keeps in-city cameras and builds frame URLs from the id', async (t) => {
+/** The feed's envelope around its rows. */
+const ottawaPayload = (rows) => Response.json({ cameras: rows });
+
+test('without OTTAWA_CAMERA_CERTIFICATE the Ottawa pack is skipped with no request, logged once', async (t) => {
+  _resetOttawaCertificateWarningForTest();
+  const lines = [];
+  t.mock.method(console, 'warn', (line) => lines.push(String(line)));
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('no request expected');
+  });
+  assert.deepEqual(await loadOttawaSourcesFromOpenData({}, {}), []);
+  assert.deepEqual(
+    await loadOttawaSourcesFromOpenData({}, { OTTAWA_CAMERA_CERTIFICATE: '  ' }),
+    [],
+  );
+  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /OTTAWA_CAMERA_CERTIFICATE/);
+});
+
+test('Ottawa frame URLs are signed only inside the opendata camera path', () => {
+  assert.equal(
+    ottawaAuthorizedFrameUrl('https://traffic.ottawa.ca/opendata/camera?c=16', CERT),
+    'https://traffic.ottawa.ca/opendata/camera?c=16&certificate=CERT123&id=gev',
+  );
+  assert.equal(
+    ottawaAuthorizedFrameUrl('https://traffic.ottawa.ca/opendata/camera?c=16', {}),
+    '',
+    'no certificate, no signed URL',
+  );
+  for (const url of [
+    'https://traffic.ottawa.ca/opendata/camera?c=16x',
+    'https://traffic.ottawa.ca/opendata/other?c=16',
+    'https://traffic.ottawa.ca/map/camera?id=16',
+    'https://traffic.ottawa.ca.evil.test/opendata/camera?c=16',
+    'http://traffic.ottawa.ca/opendata/camera?c=16',
+  ])
+    assert.equal(ottawaAuthorizedFrameUrl(url, CERT), '', url);
+});
+
+test('Ottawa loader keeps in-city cameras and builds keyless frame URLs from the camera number', async (t) => {
   quiet(t);
   withEnv(t, { CCTV_OTTAWA_MAX_SOURCES: undefined });
   const requested = [];
   t.mock.method(globalThis, 'fetch', async (url) => {
     requested.push(String(url));
-    return Response.json([
-      ottawaRow(309, 45.341343, -75.81467, {
-        description: '(MTO) Hwy 416 NB ramp to Hwy 417 East',
-        type: 'MTO',
+    return ottawaPayload([
+      ottawaRow(2025, 45.341343, -75.81467, {
+        name: '(MTO) Hwy 416 NB ramp to Hwy 417 East',
+        cameraOwner: 'MTO',
       }),
       ottawaRow(1, 45.4215, -75.6972, {
-        description: 'Bank St at Somerset St',
-        type: 'City',
+        name: 'Bank St at Somerset St',
+        camera_owner: 'CITY',
+        cameraOwner: undefined,
       }),
+      ottawaRow(1, 45.4216, -75.6973, { name: 'duplicate number' }),
       ottawaRow(0, 45.4215, -75.6972),
       ottawaRow(-3, 45.4215, -75.6972),
       ottawaRow(7, null, -75.7),
@@ -71,18 +119,21 @@ test('Ottawa loader keeps in-city cameras and builds frame URLs from the id', as
     ]);
   });
 
-  const cameras = await loadOttawaSourcesFromOpenData();
+  const cameras = await loadOttawaSourcesFromOpenData({}, CERT);
 
   assert.deepEqual(requested, [OTTAWA_CAMERAS_URL]);
   assert.deepEqual(cameras.map((camera) => camera.id).sort(), [
     'ottawa-1',
-    'ottawa-309',
+    'ottawa-2025',
   ]);
 
-  const mto = cameras.find((camera) => camera.id === 'ottawa-309');
+  const mto = cameras.find((camera) => camera.id === 'ottawa-2025');
   const city = cameras.find((camera) => camera.id === 'ottawa-1');
-  assert.equal(mto.url, 'https://traffic.ottawa.ca/map/camera?id=309');
+  assert.equal(mto.url, 'https://traffic.ottawa.ca/opendata/camera?c=2025');
+  assert.doesNotMatch(mto.url, /certificate/, 'the catalog URL carries no key');
   assert.equal(mto.snapshotUrl, mto.url);
+  assert.equal(mto.frameRefreshMs, 60000, 'the API allows one fetch a minute');
+  assert.equal(city.name, 'Bank St at Somerset St');
   assert.equal(mto.name, '(MTO) Hwy 416 NB ramp to Hwy 417 East');
   assert.equal(mto.city, 'Ottawa');
   assert.equal(mto.provider, 'City of Ottawa');
@@ -91,7 +142,7 @@ test('Ottawa loader keeps in-city cameras and builds frame URLs from the id', as
   assert.equal(mto.headingConfidence, 'low');
   assert.equal(
     mto.headingDeg,
-    fallbackHeadingFromId('ottawa-309'),
+    fallbackHeadingFromId('ottawa-2025'),
     'the feed publishes no bearing, so the id-hash fallback is deterministic',
   );
   assert.match(mto.license, /City of Ottawa/);
@@ -115,9 +166,9 @@ test('Ottawa loader keeps the cameras nearest downtown under its cap', async (t)
       (lat, i) => ottawaRow(200 + i, lat, -75.7),
     ),
   ];
-  t.mock.method(globalThis, 'fetch', async () => Response.json(rows));
+  t.mock.method(globalThis, 'fetch', async () => ottawaPayload(rows));
 
-  const cameras = await loadOttawaSourcesFromOpenData();
+  const cameras = await loadOttawaSourcesFromOpenData({}, CERT);
 
   assert.equal(cameras.length, 8);
   assert.deepEqual(
@@ -134,15 +185,16 @@ test('Ottawa loader fails soft on HTTP errors, unexpected payloads and network e
   for (respond of [
     async () => new Response('unavailable', { status: 503 }),
     async () => Response.json({ cameras: [] }),
+    async () => Response.json([ottawaRow(1, 45.4215, -75.6972)]),
     async () => {
       throw new TypeError('fetch failed');
     },
   ]) {
-    assert.deepEqual(await loadOttawaSourcesFromOpenData(), []);
+    assert.deepEqual(await loadOttawaSourcesFromOpenData({}, CERT), []);
   }
 });
 
-test('CCTV catalog merges Ottawa cameras and CCTV_OTTAWA_ENABLED=0 skips the request', async (t) => {
+test('CCTV catalog merges Ottawa cameras with a certificate and CCTV_OTTAWA_ENABLED=0 skips the request', async (t) => {
   quiet(t);
   const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-cctv-ottawa-'));
   t.after(() => fs.rmSync(sourceRoot, { recursive: true, force: true }));
@@ -154,13 +206,16 @@ test('CCTV catalog merges Ottawa cameras and CCTV_OTTAWA_ENABLED=0 skips the req
     CCTV_MAX_SOURCES: undefined,
     CCTV_OTTAWA_ENABLED: undefined,
     CCTV_OTTAWA_MAX_SOURCES: undefined,
+    CCTV_QUEBEC_ENABLED: '0',
+    CCTV_WORLD_CAMERAS_ENABLED: '0',
+    OTTAWA_CAMERA_CERTIFICATE: 'CERT123',
   });
   const requested = [];
   t.mock.method(globalThis, 'fetch', async (url) => {
     requested.push(String(url));
     // Every other live pack is down; only Ottawa answers.
     return String(url) === OTTAWA_CAMERAS_URL
-      ? Response.json([ottawaRow(1, 45.4215, -75.6972)])
+      ? ottawaPayload([ottawaRow(1, 45.4215, -75.6972)])
       : new Response('unavailable', { status: 503 });
   });
 
@@ -169,7 +224,7 @@ test('CCTV catalog merges Ottawa cameras and CCTV_OTTAWA_ENABLED=0 skips the req
     sources.map((source) => source.id),
     ['ottawa-1'],
   );
-  assert.equal(sources[0].url, 'https://traffic.ottawa.ca/map/camera?id=1');
+  assert.equal(sources[0].url, 'https://traffic.ottawa.ca/opendata/camera?c=1');
 
   process.env.CCTV_OTTAWA_ENABLED = '0';
   requested.length = 0;
@@ -185,16 +240,16 @@ test('CCTV catalog merges Ottawa cameras and CCTV_OTTAWA_ENABLED=0 skips the req
 test('Ottawa frames stay inside the city image directory', () => {
   assert.ok(
     pinnedCameraUrl(
-      'https://traffic.ottawa.ca/map/camera?id=309',
+      'https://traffic.ottawa.ca/opendata/camera?c=309',
       OTTAWA_IMAGE_ORIGIN,
     ),
   );
   for (const url of [
-    'https://traffic.ottawa.ca.evil.test/map/camera?id=309',
-    'https://traffic.ottawa.ca/other/camera?id=309',
-    'https://user:pass@traffic.ottawa.ca/map/camera?id=309',
-    'https://traffic.ottawa.ca:8443/map/camera?id=309',
-    'http://traffic.ottawa.ca/map/camera?id=309',
+    'https://traffic.ottawa.ca.evil.test/opendata/camera?c=309',
+    'https://traffic.ottawa.ca/map/camera?id=309',
+    'https://user:pass@traffic.ottawa.ca/opendata/camera?c=309',
+    'https://traffic.ottawa.ca:8443/opendata/camera?c=309',
+    'http://traffic.ottawa.ca/opendata/camera?c=309',
   ])
     assert.equal(pinnedCameraUrl(url, OTTAWA_IMAGE_ORIGIN), null, url);
 });

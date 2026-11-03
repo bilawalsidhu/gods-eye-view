@@ -1,5 +1,5 @@
 import { createCctvCatalog } from './cctv/catalog.js';
-import { quebec511VideoUrl } from './cctv/quebec.js';
+import { quebec511VideoUrl, quebecBrowserVideoEnabled } from './cctv/quebec.js';
 import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
 import {
   buildSyntheticCctvSvg,
@@ -20,6 +20,7 @@ import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
+import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -45,8 +46,14 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
-  /** Bounded transient image reuse keeps World providers inside their cadence. */
-  const WORLD_FRAME_CACHE_MAX_ENTRIES = 128;
+  /**
+   * Bounded transient image reuse keeps cadence-limited providers (World
+   * stills, Ottawa's once-a-minute API) inside their refresh floor. The byte
+   * cap is the real bound; the entry cap only limits map overhead.
+   */
+  const WORLD_FRAME_CACHE_MAX_ENTRIES = 1024;
+  /** Retry a failed fetch sooner than a full refresh window, never under a minute. */
+  const THROTTLED_FRAME_FAILURE_BACKOFF_MS = 60 * 1000;
   const WORLD_FRAME_CACHE_MAX_ENTRY_BYTES = 2 * 1024 * 1024;
   const WORLD_FRAME_CACHE_MAX_BYTES = 32 * 1024 * 1024;
   const worldFrameCache = new Map();
@@ -89,7 +96,25 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     }
   }
 
-  async function fetchWorldCameraFrame(source, cameraId, frameUrl) {
+  function setNextAllowedAt(cameraId, at) {
+    worldFrameNextAllowedAt.delete(cameraId);
+    worldFrameNextAllowedAt.set(cameraId, at);
+    while (worldFrameNextAllowedAt.size > 4096) {
+      worldFrameNextAllowedAt.delete(
+        worldFrameNextAllowedAt.keys().next().value,
+      );
+    }
+  }
+
+  /**
+   * Fetch a frame from a provider with a per-camera refresh floor. Inside the
+   * floor the last frame is reused; with no frame to reuse the caller gets
+   * `{ throttled: true }` and serves a placeholder, so a cadence-limited camera
+   * never falls through to the key-bearing Street View fallback. A failed
+   * fetch backs off for a minute (capped at the floor) instead of a full
+   * window.
+   */
+  async function fetchThrottledFrame(source, cameraId, frameUrl) {
     const cached = getWorldFrameCache(cameraId);
     const rawRefreshMs = Number(source?.frameRefreshMs);
     const refreshMs =
@@ -103,24 +128,18 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
 
     const inflight = worldFrameInflight.get(cameraId);
     if (inflight) return inflight;
+    const stale = cached
+      ? {
+          ok: true,
+          body: cached.body,
+          contentType: cached.contentType,
+          stale: true,
+        }
+      : null;
     const nextAllowedAt = worldFrameNextAllowedAt.get(cameraId) || 0;
-    if (now < nextAllowedAt) {
-      return cached
-        ? {
-            ok: true,
-            body: cached.body,
-            contentType: cached.contentType,
-            stale: true,
-          }
-        : null;
-    }
-    worldFrameNextAllowedAt.delete(cameraId);
-    worldFrameNextAllowedAt.set(cameraId, now + refreshMs);
-    while (worldFrameNextAllowedAt.size > 4096) {
-      worldFrameNextAllowedAt.delete(
-        worldFrameNextAllowedAt.keys().next().value,
-      );
-    }
+    if (now < nextAllowedAt) return stale || { ok: false, throttled: true };
+    if (!frameUrl) return stale;
+    setNextAllowedAt(cameraId, now + refreshMs);
     let request;
     request = fetchCctvImageFromUpstream(frameUrl)
       .then((image) => {
@@ -128,14 +147,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           storeWorldFrame(cameraId, image);
           return image;
         }
-        return cached
-          ? {
-              ok: true,
-              body: cached.body,
-              contentType: cached.contentType,
-              stale: true,
-            }
-          : image;
+        setNextAllowedAt(
+          cameraId,
+          Date.now() + Math.min(refreshMs, THROTTLED_FRAME_FAILURE_BACKOFF_MS),
+        );
+        return stale || image;
       })
       .finally(() => {
         if (worldFrameInflight.get(cameraId) === request)
@@ -254,6 +270,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         );
 
         if (url.pathname === '/sources') {
+          const quebecVideo = quebecBrowserVideoEnabled();
           const body = {
             trimmedPacks: getCctvSources.trimmedPacks?.(sources) ?? [],
             sources: sources.map((source) => ({
@@ -278,7 +295,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               sourceUrl: source.sourceUrl || '',
               browserMediaUrl:
-                source.sourceKind === 'quebec-511-browser'
+                quebecVideo && source.sourceKind === 'quebec-511-browser'
                   ? quebec511VideoUrl(source.id)
                   : '',
               accuracyM: source.accuracyM,
@@ -636,10 +653,18 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
 
         const upstreamImage =
           source?.pack === 'world-cameras'
-            ? await fetchWorldCameraFrame(source, cameraId, upstreamCandidate)
-            : source?.sourceKind === 'txdot-its'
-              ? await fetchTxdotSnapshot(upstreamCandidate)
-              : await fetchCctvImageFromUpstream(upstreamCandidate);
+            ? await fetchThrottledFrame(source, cameraId, upstreamCandidate)
+            : source?.sourceKind === 'ottawa-traffic'
+              ? await fetchThrottledFrame(
+                  source,
+                  cameraId,
+                  ottawaAuthorizedFrameUrl(upstreamCandidate),
+                )
+              : source?.sourceKind === 'txdot-its'
+                ? await fetchTxdotSnapshot(upstreamCandidate)
+                : await fetchCctvImageFromUpstream(upstreamCandidate, {
+                    allowMjpeg: source?.sourceKind === 'taiwan-highway-motc',
+                  });
         if (
           source?.sourceKind === 'mlit-river' &&
           isMlitRiverAdjustmentImage(upstreamImage)
@@ -662,6 +687,24 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             'X-CCTV-Source': 'provider-maintenance',
           });
           res.end(svg);
+          return;
+        }
+        if (upstreamImage?.throttled) {
+          // Inside the provider's refresh floor with no frame to reuse: a
+          // placeholder, not Street View, and no health change.
+          res.writeHead(200, {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'no-store',
+            'X-CCTV-Source': 'synthetic',
+          });
+          res.end(
+            buildSyntheticCctvSvg({
+              cameraId,
+              label,
+              city,
+              status: 'WAITING FOR NEXT FRAME',
+            }),
+          );
           return;
         }
         if (upstreamImage?.ok) {

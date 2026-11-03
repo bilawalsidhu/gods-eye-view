@@ -365,6 +365,7 @@ test('CCTV upstream frame fetch extracts only the first JPEG from MJPEG', async 
     const result = await fetchCctvImageFromUpstream(
       'https://cctv-ss02.thb.gov.tw/T62-9K+020',
       {
+        allowMjpeg: true,
         maxBytes: 1024,
         fetchImpl: async () =>
           multipartResponse(
@@ -397,6 +398,7 @@ test('CCTV upstream frame fetch rejects malformed and non-JPEG MJPEG parts', asy
     const result = await fetchCctvImageFromUpstream(
       'https://cctv-ss02.thb.gov.tw/T62-9K+020',
       {
+        allowMjpeg: true,
         fetchImpl: async () =>
           multipartResponse(type, chunks, { onCancel: () => { cancelled = true; } }),
       },
@@ -418,6 +420,7 @@ test('CCTV upstream frame fetch rejects truncated or oversized MJPEG parts', asy
     const result = await fetchCctvImageFromUpstream(
       'https://cctv-ss02.thb.gov.tw/T62-9K+020',
       {
+        allowMjpeg: true,
         maxBytes,
         fetchImpl: async () =>
           multipartResponse(
@@ -456,6 +459,7 @@ test('CCTV upstream frame fetch does not cross into a later part when the first 
   const result = await fetchCctvImageFromUpstream(
     'https://cctv-ss02.thb.gov.tw/T62-9K+020',
     {
+      allowMjpeg: true,
       maxBytes: 1024,
       fetchImpl: async () =>
         multipartResponse(
@@ -468,4 +472,75 @@ test('CCTV upstream frame fetch does not cross into a later part when the first 
 
   assert.equal(result, null);
   assert.equal(cancelled, true);
+});
+test('CCTV upstream frame fetch ignores MJPEG unless the source is registered as MJPEG', async () => {
+  const boundary = 'DIGIEVER';
+  const jpeg = Buffer.from([0xff, 0xd8, 0x11, 0x22, 0xff, 0xd9]);
+  let cancelled = false;
+  const result = await fetchCctvImageFromUpstream(
+    'https://cctv-ss02.thb.gov.tw/T62-9K+020',
+    {
+      fetchImpl: async () =>
+        multipartResponse(
+          'multipart/x-mixed-replace; boundary=' + boundary,
+          [jpegPart(boundary, jpeg)],
+          { onCancel: () => { cancelled = true; } },
+        ),
+    },
+  );
+  assert.equal(result, null);
+  assert.equal(cancelled, true);
+});
+
+test('CCTV upstream frame fetch accepts a CRLF preamble and a boundary that already starts with --', async () => {
+  const jpeg = Buffer.from([0xff, 0xd8, 0x11, 0x22, 0xff, 0xd9]);
+  for (const [type, wire] of [
+    [
+      'multipart/x-mixed-replace; boundary=DIGIEVER',
+      Buffer.concat([Buffer.from('\r\n'), jpegPart('DIGIEVER', jpeg)]),
+    ],
+    [
+      'multipart/x-mixed-replace; boundary=--myboundary',
+      Buffer.concat([
+        Buffer.from(
+          '--myboundary\r\nContent-Type: image/jpeg\r\nContent-Length: ' +
+            jpeg.length +
+            '\r\n\r\n',
+        ),
+        jpeg,
+        Buffer.from('\r\n--myboundary\r\n'),
+      ]),
+    ],
+  ]) {
+    const result = await fetchCctvImageFromUpstream(
+      'https://cctv-ss02.thb.gov.tw/T62-9K+020',
+      {
+        allowMjpeg: true,
+        fetchImpl: async () => multipartResponse(type, [wire]),
+      },
+    );
+    assert.deepEqual(result?.body, jpeg, type);
+  }
+});
+
+test('CCTV MJPEG part without Content-Length ends at the next delimiter, not at an inner JPEG end marker', async () => {
+  const boundary = 'DIGIEVER';
+  // An EXIF thumbnail's own FF D9 sits inside the image.
+  const jpeg = Buffer.from([0xff, 0xd8, 0x01, 0xff, 0xd9, 0x02, 0x03, 0xff, 0xd9]);
+  const wire = Buffer.concat([
+    Buffer.from('--' + boundary + '\r\nContent-Type: image/jpeg\r\n\r\n'),
+    jpeg,
+    Buffer.from('\r\n--' + boundary + '\r\nContent-Type: image/jpeg\r\n\r\n'),
+  ]);
+  // Delivered one byte at a time, as a trickling upstream would.
+  const chunks = [...wire].map((byte) => Buffer.from([byte]));
+  const result = await fetchCctvImageFromUpstream(
+    'https://cctv-ss02.thb.gov.tw/T62-9K+020',
+    {
+      allowMjpeg: true,
+      fetchImpl: async () =>
+        multipartResponse('multipart/x-mixed-replace; boundary=' + boundary, chunks),
+    },
+  );
+  assert.deepEqual(result?.body, jpeg);
 });

@@ -15,8 +15,12 @@ media URL permitted by the exception below.
   restricted.
 - Prefer a public, keyless feed. If credentials are required, keep them in a
   server-only environment variable; never put a secret in browser code or a
-  Vite-exposed variable. If access terms require an agreement or remain
-  unconfirmed, make the pack opt-in and ensure it makes no request by default.
+  Vite-exposed variable. A pack that needs a key is opt-in by that key: with
+  the variable unset it makes no request and logs once (Ontario 511 and
+  Ottawa). Keep the key out of catalog URLs and add it only at fetch time. Use
+  the provider's documented API, not a website endpoint that skips its key. If
+  access terms require an agreement or remain unconfirmed, make the pack
+  opt-in and ensure it makes no request by default.
 - Confirm the feed can be fetched from the app's Node server environment. A URL
   opening in a browser does not prove the server can reach it, and browser CORS
   behavior does not diagnose a server-side fetch.
@@ -94,8 +98,11 @@ Catalog and media loaders must also:
 For live media, prefer the existing proxy and supported feed type (`mjpeg`,
 `mp4`, `webm`, or `hls`). A direct browser-only video is a narrow fallback for
 a source whose terms allow embedding when the browser can play it but the app
-server cannot fetch it. Build its URL from a validated provider ID on the
-server; never accept a browser-supplied media URL. Render it in a native DOM
+server cannot fetch it. Unconfirmed embedding terms make it opt-in like any
+other pack, and the browser loads it only after an explicit play action, never
+on selection, because the provider sees the viewer's IP address. Build its URL
+from a validated provider ID on the server; never accept a browser-supplied
+media URL. Render it in a native DOM
 `<video>` without `crossOrigin`, and do not read its pixels into canvas, WebGL,
 or a Cesium texture. If a map preview is needed, a second video request may be
 paused as a DOM overlay at the camera location; label it as an approximate

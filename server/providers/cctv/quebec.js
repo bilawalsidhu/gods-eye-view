@@ -5,6 +5,16 @@ import { cameraDisplayCode, fallbackHeadingFromId } from './normalize.js';
 const QUEBEC_CATALOG_PATH = 'public/quebec-cameras.json';
 export const QUEBEC_CAMERA_SOURCE_COUNT = 1120;
 
+/**
+ * Whether the operator opted in to the browser-direct Québec 511 video. Off by
+ * default: the camera locations are CC BY 4.0, but whether Québec 511's
+ * service terms allow another site to embed its clips is unconfirmed, so an
+ * unset flag lists the cameras with a link to the 511 viewer page only.
+ */
+export function quebecBrowserVideoEnabled(env = process.env) {
+  return String(env.CCTV_QUEBEC_VIDEO_ENABLED || '').trim() === '1';
+}
+
 /** Build the direct browser-only MP4 URL for one namespaced MTQ camera id. */
 export function quebec511VideoUrl(cameraId) {
   const match = /^qc-511-(\d+)$/.exec(String(cameraId || ''));
@@ -99,8 +109,9 @@ export function loadQuebecSources({ sourceRoot = process.cwd() } = {}) {
       mountHeightM: 8,
       groundElevationM: 0,
       feedType: 'image',
-      // No frame URL is registered: 511 denies the server-side media proxy,
-      // while the browser can play its MP4 in the dedicated DOM overlay.
+      // No frame URL is registered: the server never fetches 511 media. With
+      // CCTV_QUEBEC_VIDEO_ENABLED=1 the browser plays the 511 MP4 in the DOM
+      // overlay after a play click; otherwise the camera links to 511.
       url: '',
       snapshotUrl: '',
       sourceKind,
@@ -110,12 +121,12 @@ export function loadQuebecSources({ sourceRoot = process.cwd() } = {}) {
         : null,
       positionSource: String(camera.positionSource || ''),
       license: isTraffic
-        ? 'Données Québec / MTQ, CC BY 4.0'
+        ? 'Locations: Données Québec / MTQ, CC BY 4.0. Video: hosted by Québec 511 under its terms of use'
         : isMontreal
           ? 'OpenStreetMap contributors, ODbL 1.0'
           : 'Operator terms apply; location provenance shown per camera',
       credit: isTraffic
-        ? 'MTQ · CC BY 4.0'
+        ? 'Locations: MTQ · CC BY 4.0 · Video: Québec 511'
         : isMontreal
           ? 'OpenStreetMap contributors · ODbL'
           : provider,
