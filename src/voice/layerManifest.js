@@ -84,6 +84,18 @@ const layers = [
     noQuery: 'raster tile overlay; no countable records',
   },
   {
+    id: 'wildlife',
+    aliases: [
+      'animal tracks',
+      'animals',
+      'tagged animals',
+      'bird tracks',
+      'movebank',
+    ],
+    context: false,
+    noQuery: 'animal fixes are not loaded for queries',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -558,6 +570,7 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  'wildlife',
 ]);
 
 /** Lower case with spaces and hyphens removed: "Data centers" → "datacenters". */

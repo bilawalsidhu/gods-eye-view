@@ -55,7 +55,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
-    'd0c5ad733670972713a54cb10676c42b7c6e78834bfff52b473c0e8a45e742c3',
+    // Wildlife extends the manifest (toggle only; a self-evident id, no alias hint).
+    'aeebf72379329a6d673bcd2a9099702ffe953a74469e6cc577ef52a03f8ae2ad',
   );
 });
 

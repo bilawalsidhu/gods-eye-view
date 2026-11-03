@@ -1039,10 +1039,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // The Utilities panel adds one set_panel_open target; Sea Marks and Ski
   // Pistes extend the generated layer enums and alias hint; voice geometry
   // adds the analyst area scopes and the osm-places layer.
-  assert.equal(block.length, 31318, 'serialized tool schema length drifted');
+  // Wildlife extends the manifest (toggle only; a self-evident id, no alias hint).
+  assert.equal(block.length, 31340, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'f5b42f41c2f575838f979e88a1dbff615a77ccd85fdf8fcd0a0a47d02f7d3ddc',
+    '804690528558e13dc2cc2ed85aafeabf0f47664100f8edb31189771c62a60622',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

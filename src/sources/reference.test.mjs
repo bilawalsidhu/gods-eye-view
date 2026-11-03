@@ -19,6 +19,7 @@ test('reference factories retain compatibility without starting acquisition or s
     'drone-airspace',
     'cables',
     'gnss-integrity',
+    'wildlife',
   ]);
   assert.notEqual(first.earthquakes, second.earthquakes);
   assert.notEqual(first['air-quality'], second['air-quality']);
@@ -26,11 +27,13 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.notEqual(first['drone-airspace'], second['drone-airspace']);
   assert.notEqual(first.cables, second.cables);
   assert.notEqual(first['gnss-integrity'], second['gnss-integrity']);
+  assert.notEqual(first.wildlife, second.wildlife);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first['air-quality'].getSnapshot, 'function');
   assert.equal(typeof first['fire-perimeters'].getSnapshot, 'function');
   assert.equal(typeof first['drone-airspace'].getSnapshot, 'function');
   assert.equal(typeof first.cables.fetch, 'function');
   assert.equal(typeof first['gnss-integrity'].getSnapshot, 'function');
+  assert.equal(typeof first.wildlife.getSnapshot, 'function');
   assert.equal(requests, 0);
 });
