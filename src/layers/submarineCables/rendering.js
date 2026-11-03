@@ -10,6 +10,7 @@ import {
   selectCableReferenceLabelWinners,
   cableReferencePriority,
 } from './overlay.js';
+import { cablePicks } from './pickState.js';
 
 export function createRendering({ state }) {
   function resetPublishSignature() {
@@ -40,7 +41,6 @@ export function createRendering({ state }) {
     state._referenceDataSource = null;
     state._referenceRecords = [];
     state._surfaceRecords = [];
-    state._pickByEntity = new WeakMap();
     state._referenceLabelCount = 0;
     state._publishScratch.length = 0;
     // The blend pass targets the collections being dropped; the rebuilt
@@ -180,8 +180,7 @@ export function createRendering({ state }) {
       },
     });
 
-    entity.__gevTeleGeography = info;
-    state._pickByEntity.set(entity, info);
+    cablePicks.write(entity).info = info;
     const record = {
       id: entity.id,
       entity,

@@ -2869,9 +2869,12 @@ async function basemapLabelsAt(
   };
 }
 
+/** Viewers that already prewarm view targets on camera settle. */
+const prewarmedViewers = new WeakSet();
+
 function installViewTargetPrewarm(viewer) {
-  if (viewer.__gevViewTargetPrewarmInstalled) return;
-  viewer.__gevViewTargetPrewarmInstalled = true;
+  if (prewarmedViewers.has(viewer)) return;
+  prewarmedViewers.add(viewer);
   let timer = null;
   let reportedPrewarmFailure = false;
   viewer.camera.moveEnd.addEventListener(() => {

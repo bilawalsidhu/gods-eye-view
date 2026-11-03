@@ -22,6 +22,7 @@ import {
   selectCableReferenceLabelWinners,
   updateCableReferenceStem,
 } from './telegeographySubmarineCables.js';
+import { cablePicks } from '../layers/submarineCables/pickState.js';
 
 test('cable reference winners remain nearest-first and hard-capped', () => {
   const records = Array.from({ length: 300 }, (_, index) => ({
@@ -1840,7 +1841,7 @@ test('multipart association accepts frozen provider collections without modifyin
     for (const dataSource of env.dataSources.slice(0, 2)) {
       assert.deepEqual(
         dataSource.entities.values.map(
-          (entity) => entity.__gevTeleGeography?.label,
+          (entity) => cablePicks.read(entity)?.info.label,
         ),
         ['Alpha cable', 'Alpha cable', 'Alpha cable', 'Beta cable'],
       );
@@ -1866,7 +1867,7 @@ test('multipart cables retain their own styling, picking and culling on every se
     assert.equal(entities.length, 4);
     for (const [index, entity] of entities.entries()) {
       const feature = features[index < 3 ? 0 : 1];
-      const info = entity.__gevTeleGeography;
+      const info = cablePicks.read(entity)?.info;
       assert.equal(info?.label, feature.properties.name, entity.id);
       assert.deepEqual(info.reference, {
         lon: feature.properties.coordinates[0],
@@ -1922,7 +1923,7 @@ test('multipart association supports missing and repeated IDs without guessing C
       ['alpha', 'alpha_2', 'alpha_3', 'alpha_2_2', 'cable-2', 'alpha_4'],
     );
     assert.deepEqual(
-      entities.map((entity) => entity.__gevTeleGeography?.label),
+      entities.map((entity) => cablePicks.read(entity)?.info.label),
       [
         'Alpha cable',
         'Alpha cable',
@@ -1934,7 +1935,7 @@ test('multipart association supports missing and repeated IDs without guessing C
     );
     assert.deepEqual(
       env.dataSources[2].entities.values.map(
-        (entity) => entity.__gevTeleGeography.featureId,
+        (entity) => cablePicks.read(entity)?.info.featureId,
       ),
       ['alpha', 'alpha_2', 'cable-2', 'alpha'],
     );
@@ -1951,12 +1952,12 @@ test('multipart landing geometry keeps every pick with one reference per feature
   try {
     const entities = env.dataSources[1].entities.values;
     assert.deepEqual(
-      entities.map((entity) => entity.__gevTeleGeography?.label),
+      entities.map((entity) => cablePicks.read(entity)?.info.label),
       ['Alpha cable', 'Alpha cable', 'Alpha cable', 'Beta cable'],
     );
     assert.ok(
       entities.every(
-        (entity) => entity.__gevTeleGeography.kind === 'landing-point',
+        (entity) => cablePicks.read(entity)?.info.kind === 'landing-point',
       ),
     );
     assert.equal(env.dataSources[2].entities.values.length, 2);
@@ -1989,11 +1990,11 @@ test('every bundled cable segment is associated with its source feature', async 
     for (const [index, entity] of entities.entries()) {
       const feature = expandedFeatures[index];
       assert.equal(
-        entity.__gevTeleGeography?.label,
+        cablePicks.read(entity)?.info.label,
         feature.properties.name,
         entity.id,
       );
-      assert.deepEqual(entity.__gevTeleGeography.reference, {
+      assert.deepEqual(cablePicks.read(entity)?.info.reference, {
         lon: feature.properties.coordinates[0],
         lat: feature.properties.coordinates[1],
       });
