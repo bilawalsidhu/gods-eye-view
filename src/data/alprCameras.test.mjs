@@ -32,6 +32,7 @@ import {
   normalizeAlprNode,
 } from './alprCameras.js';
 import { readEntityRecord } from './entityRecords.js';
+import { alprMarkers } from '../layers/alpr/markerState.js';
 
 test('normalizeAlprNode: maps a full OSM node to a plain record', () => {
   const record = normalizeAlprNode({
@@ -1445,12 +1446,12 @@ test('map-source changes reposition all ALPR entities and saved native appearanc
     await layer.update();
     const entities = [...h.source.entities.values];
     const saved = entities[1];
-    saved.gevAlprNativeAppearance = {
+    alprMarkers.write(saved).nativeAppearance = {
       position: saved.position,
       heightReference: saved.billboard.heightReference,
     };
     saved.position = Cesium.Cartesian3.fromDegrees(-97.7431, 30.26721, 190);
-    saved.gevAlprPickPosition = saved.position;
+    alprMarkers.write(saved).pickPosition = saved.position;
     for (const next of [150, 120, null, 180]) {
       floor = next;
       // Includes a provider switch with the same globe.show value.
@@ -1471,10 +1472,10 @@ test('map-source changes reposition all ALPR entities and saved native appearanc
             ? Cesium.HeightReference.CLAMP_TO_GROUND
             : Cesium.HeightReference.NONE,
         );
-        assert.equal(entity.gevAlprCanvasPosition, null);
+        assert.equal(alprMarkers.read(entity)?.canvasPosition, null);
       }
       assert.equal(
-        saved.gevAlprNativeAppearance,
+        alprMarkers.read(saved)?.nativeAppearance,
         null,
         'saved appearance restores at the new floor',
       );
