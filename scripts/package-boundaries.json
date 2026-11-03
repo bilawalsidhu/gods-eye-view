@@ -871,7 +871,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/data/entityRecords.js"
     ],
     "external": ["cesium"]
   },
@@ -1124,7 +1125,8 @@
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/data/entityRecords.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1335,7 +1337,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/data/entityRecords.js"
     ],
     "external": ["cesium"]
   },
@@ -1391,7 +1394,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/entityRecords.js"
     ],
     "external": ["cesium"]
   },
@@ -1576,7 +1580,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/data/entityRecords.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -1667,7 +1672,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/layers/installations/classLabel.js"
+      "src/layers/installations/classLabel.js",
+      "src/data/entityRecords.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -1713,7 +1719,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/data/entityRecords.js"
     ],
     "external": ["cesium"]
   },
@@ -1973,7 +1980,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/entityRecords.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -3184,7 +3192,8 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/data/entityRecords.js"
     ],
     "external": [
       "hls.js",
@@ -3792,7 +3801,8 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/data/entityRecords.js"
     ],
     "external": [
       "hls.js",
@@ -3890,6 +3900,11 @@
       "mgrs"
     ]
   },
+  "entity-records": {
+    "exports": ["./data/entity-records"],
+    "modules": ["src/data/entityRecords.js"],
+    "external": []
+  },
   "layer-lifecycle": {
     "exports": ["./data/lifecycle"],
     "modules": ["src/data/lifecycle.js", "src/data/cameraArrival.js"],
@@ -3944,7 +3959,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/entityRecords.js"
     ],
     "external": []
   },

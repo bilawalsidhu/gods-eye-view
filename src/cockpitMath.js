@@ -306,7 +306,7 @@ export function relativeBearing(bearing, heading) {
  * Resolve which flight layer owns the cockpit's tracked aircraft.
  *
  * Both layers can briefly describe a tracked aircraft during a cross-layer
- * handoff, so the viewer's normalized tracked identity (`gevTrackedId`) is the
+ * handoff, so the viewer's normalized tracked identity (the entity record's `trackedId`) is the
  * tie-breaker — the same rule `militaryAwareness.currentTrackedFlightSubject`
  * uses. Layer precedence remains the fallback when no normalized identity is
  * available, so tracking paths that never stamp one keep working.

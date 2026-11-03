@@ -84,6 +84,7 @@ import {
   setDetectionTuning,
   setMode as setDetectionMode,
 } from '../data/detection.js';
+import { withEntityRecord } from '../data/entityRecords.js';
 
 /**
  * @module worldOverlayAllocation.worker
@@ -650,16 +651,19 @@ function buildPhase3TrackedWorkload(count) {
     ({ selected }) => selected,
   );
   const selected = vesselRegistration.entries.splice(selectedIndex, 1)[0];
-  const trackedEntity = {
-    gevTrackedId: 'flights:allocation-probe',
-    gevDisplayPosition: selected.position,
-    gevLabelModel: {
-      // i18n-ignore: benchmark fixture
-      title: 'ALLOC01',
-      details: ['FL350 · 451 kts', 'TEST AIR · A320'],
-      accent: '#39d0ff',
+  const trackedEntity = withEntityRecord(
+    {},
+    {
+      trackedId: 'flights:allocation-probe',
+      displayPosition: selected.position,
+      labelModel: {
+        // i18n-ignore: benchmark fixture
+        title: 'ALLOC01',
+        details: ['FL350 · 451 kts', 'TEST AIR · A320'],
+        accent: '#39d0ff',
+      },
     },
-  };
+  );
   const tracked = createTrackedOverlayEntry(trackedEntity);
   tracked.horizonCull = false;
   vesselRegistration.options = {

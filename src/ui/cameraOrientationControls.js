@@ -1,13 +1,14 @@
 import * as Cesium from 'cesium';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { t } from '../i18n/index.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 function trackedTarget(viewer) {
   const entity = viewer.trackedEntity;
   // Read the visual's sample first; sampling a flight CallbackProperty twice
   // can advance dead reckoning ahead of the displayed aircraft.
   return (
-    entity?.gevDisplayPosition?.() ||
+    readEntityRecord(entity)?.displayPosition?.() ||
     entity?.position?.getValue(viewer.clock?.currentTime)
   );
 }

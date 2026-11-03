@@ -701,7 +701,7 @@ async function main() {
         const tracked = manager?.layers?.get('flights')?.module?.getTrackedInfo?.();
         return manager?.isEnabled?.('flights')
           && tracked?.icao24 === 'aaa001'
-          && window.__godsEyeView.viewer.trackedEntity?.gevTrackedId === 'flights:aaa001';
+          && window.__godsEyeView.entityRecords.read(window.__godsEyeView.viewer.trackedEntity)?.trackedId === 'flights:aaa001';
       },
       { timeout: 30000, polling: 100 },
     );
@@ -712,7 +712,7 @@ async function main() {
         flightsEnabled: manager.isEnabled('flights'),
         trackedId: flights.getTrackedInfo()?.icao24 || null,
         durableId: flights.getParams()?.selectedFlightsTrackingId || null,
-        viewerTrackedId: window.__godsEyeView.viewer.trackedEntity?.gevTrackedId || null,
+        viewerTrackedId: window.__godsEyeView.entityRecords.read(window.__godsEyeView.viewer.trackedEntity)?.trackedId || null,
       };
     });
     record(
@@ -742,7 +742,7 @@ async function main() {
         const tracked = manager?.layers?.get('flights')?.module?.getTrackedInfo?.();
         return manager?.isEnabled?.('flights')
           && tracked?.icao24 === 'aaa001'
-          && window.__godsEyeView.viewer.trackedEntity?.gevTrackedId === 'flights:aaa001';
+          && window.__godsEyeView.entityRecords.read(window.__godsEyeView.viewer.trackedEntity)?.trackedId === 'flights:aaa001';
       },
       { timeout: 30000, polling: 100 },
     );
@@ -753,7 +753,7 @@ async function main() {
         flightsEnabled: manager.isEnabled('flights'),
         trackedId: flights.getTrackedInfo()?.icao24 || null,
         durableId: flights.getParams()?.selectedFlightsTrackingId || null,
-        viewerTrackedId: window.__godsEyeView.viewer.trackedEntity?.gevTrackedId || null,
+        viewerTrackedId: window.__godsEyeView.entityRecords.read(window.__godsEyeView.viewer.trackedEntity)?.trackedId || null,
       };
     });
     record(
@@ -815,7 +815,7 @@ async function main() {
     const latchedShare = await evalPage(() => ({
       tracked: window.__godsEyeView.dataManager.layers
         .get('flights').module.getTrackedInfo()?.icao24 || null,
-      viewerTrackedId: window.__godsEyeView.viewer.trackedEntity?.gevTrackedId || null,
+      viewerTrackedId: window.__godsEyeView.entityRecords.read(window.__godsEyeView.viewer.trackedEntity)?.trackedId || null,
     }));
     record(
       'share-v2: the pending subject latches on when it arrives on a later poll',
@@ -1380,7 +1380,7 @@ async function main() {
         if (exactPickModel) return exactPickModel;
         const ent = window.__godsEyeView.viewer.trackedEntity;
         let tracked = null;
-        if (ent && typeof ent.gevDisplayPosition === 'function') tracked = ent.gevDisplayPosition();
+        if (ent && typeof window.__godsEyeView.entityRecords.read(ent)?.displayPosition === 'function') tracked = window.__godsEyeView.entityRecords.read(ent)?.displayPosition();
         if (!tracked) return pool[0];
         let best = null, bestD = Infinity;
         for (const m of pool) {
@@ -1427,7 +1427,7 @@ async function main() {
         const dm = window.__godsEyeView.dataManager;
         const fl = dm.layers.get('flights').module;
         const ent = window.__godsEyeView.viewer.trackedEntity;
-        const disp = ent && typeof ent.gevDisplayPosition === 'function' ? ent.gevDisplayPosition() : null;
+        const disp = ent && typeof window.__godsEyeView.entityRecords.read(ent)?.displayPosition === 'function' ? window.__godsEyeView.entityRecords.read(ent)?.displayPosition() : null;
         const dets = fl.getDetectableObjects({ maxCount: 1000 });
         const me = dets.find((d) => d.id === icao || d.id === (fl.getTrackedInfo() && fl.getTrackedInfo().callsign));
         if (!disp || !me || !me.position) return null;
@@ -1656,7 +1656,7 @@ async function main() {
       const ti = fl.getTrackedInfo();
       if (!ti) return null;
       const ent = v.trackedEntity;
-      const disp = ent && typeof ent.gevDisplayPosition === 'function' ? ent.gevDisplayPosition() : null;
+      const disp = ent && typeof window.__godsEyeView.entityRecords.read(ent)?.displayPosition === 'function' ? window.__godsEyeView.entityRecords.read(ent)?.displayPosition() : null;
       const pos = disp || ti.position;
       if (!pos) return null;
       const center = v.scene.cartesianToCanvasCoordinates(pos);
@@ -1908,7 +1908,7 @@ async function main() {
         // presentation model (entities are asserted native-label-free);
         // the native read stays as a fallback so this probe still fails
         // loudly if BOTH surfaces are ever absent.
-        const model = ent.gevLabelModel;
+        const model = window.__godsEyeView.entityRecords.read(ent)?.labelModel;
         if (model) return [model.title, ...(model.details || [])].filter(Boolean).join('\n');
         if (!ent.label || !ent.label.text) return null;
         const t = ent.label.text;
@@ -2553,7 +2553,7 @@ async function main() {
         }
 
         // WELD (tracked): the tracked CARD anchors to the model you can see.
-        // `gevVisualPosition` is a SEPARATE accessor from `gevDisplayPosition` on
+        // the record's `visualPosition` is a SEPARATE accessor from its `displayPosition` on
         // purpose — the latter carries the follow-camera anti-jitter contract and
         // must keep returning the cached dead-reckoned value the camera settled
         // on. So this asserts both halves: the visual accessor is welded to the
@@ -2580,10 +2580,10 @@ async function main() {
             const at = (p) => (p ? Math.hypot(
               p.x - anchor.x, p.y - anchor.y, p.z - anchor.z,
             ) : null);
-            const visual = typeof ent?.gevVisualPosition === 'function' ? ent.gevVisualPosition() : null;
-            const display = typeof ent?.gevDisplayPosition === 'function' ? ent.gevDisplayPosition() : null;
+            const visual = typeof window.__godsEyeView.entityRecords.read(ent)?.visualPosition === 'function' ? window.__godsEyeView.entityRecords.read(ent)?.visualPosition() : null;
+            const display = typeof window.__godsEyeView.entityRecords.read(ent)?.displayPosition === 'function' ? window.__godsEyeView.entityRecords.read(ent)?.displayPosition() : null;
             return {
-              hasVisualAccessor: typeof ent?.gevVisualPosition === 'function',
+              hasVisualAccessor: typeof window.__godsEyeView.entityRecords.read(ent)?.visualPosition === 'function',
               visualDelta: at(visual),
               displayDelta: at(display),
             };
@@ -2599,7 +2599,7 @@ async function main() {
           // anti-jitter accessor has been repurposed and the follow camera is at
           // risk. Skipped (not failed) when the DR cache is momentarily invalid.
           const displayDelta = trackedWeld.displayDelta;
-          record('weld: gevDisplayPosition still reports the dead-reckoned position (anti-jitter intact)',
+          record('weld: the record displayPosition still reports the dead-reckoned position (anti-jitter intact)',
             !Number.isFinite(displayDelta) || displayDelta > ACCESSOR_SEPARATION_EPSILON_M,
             Number.isFinite(displayDelta)
               ? `displayΔ=${displayDelta.toFixed(3)} m (must stay > ${ACCESSOR_SEPARATION_EPSILON_M} m — the ground-snap split)`

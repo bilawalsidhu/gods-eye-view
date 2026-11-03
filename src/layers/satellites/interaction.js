@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { readEntityRecord } from '../../data/entityRecords.js';
 
 export function createInteraction({
   state: layerState,
@@ -36,8 +37,8 @@ export function createInteraction({
           ) {
             parts.tracking._clearTracking(true, {
               origin:
-                layerState._viewer.trackedEntity?.gevSelectionOrigin ||
-                'programmatic',
+                readEntityRecord(layerState._viewer.trackedEntity)
+                  ?.selectionOrigin || 'programmatic',
             });
           }
         });

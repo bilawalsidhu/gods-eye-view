@@ -4,6 +4,7 @@ import { cockpitEntryAllowed } from '../contextModePolicy.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
 import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 /** Own Cockpit entry/rollback, readouts and the single Display portal. */
 export class CockpitCoordinator {
@@ -90,9 +91,9 @@ export class CockpitCoordinator {
       onEntered: () => this.enterPanels(),
       onExited: () => this.exitPanels(),
       restoreTrackingFrame: (entity) => {
-        const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(
-          ':',
-        );
+        const [layerId, ...idParts] = String(
+          readEntityRecord(entity)?.trackedId || '',
+        ).split(':');
         const trackedId = idParts.join(':');
         if (!trackedId) return false;
         if (layerId === 'flights')

@@ -23,6 +23,7 @@ import { MAP_STACKS } from '../mapStackController.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
 import { attachVoiceResult } from './speech.js';
+import { withEntityRecord } from '../data/entityRecords.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -474,7 +475,7 @@ test('voice Stop Tracking reports exact layers whose active or durable clear fai
     getAll: () => [],
   };
   const viewer = {
-    trackedEntity: { gevTrackedId: 'flights:active' },
+    trackedEntity: withEntityRecord({}, { trackedId: 'flights:active' }),
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       preRender: { addEventListener() {} },

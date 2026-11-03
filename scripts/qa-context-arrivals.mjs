@@ -360,7 +360,9 @@ async function contacts() {
         entities: ds?.entities.values.length ?? 0,
         created,
         tracked:
-          window.__godsEyeView.viewer.trackedEntity?.gevTrackedId ?? null,
+          window.__godsEyeView.entityRecords.read(
+            window.__godsEyeView.viewer.trackedEntity,
+          )?.trackedId ?? null,
         cockpit: document.body.classList.contains('cockpit-mode'),
       });
       if (samples.length > 5000) samples.splice(0, 1000);
@@ -375,8 +377,9 @@ async function contacts() {
   await page
     .waitForFunction(
       () =>
-        window.__godsEyeView.viewer.trackedEntity?.gevTrackedId ===
-        'flights:aaa051',
+        window.__godsEyeView.entityRecords.read(
+          window.__godsEyeView.viewer.trackedEntity,
+        )?.trackedId === 'flights:aaa051',
       { timeout: 60_000 },
     )
     .catch(() => {});

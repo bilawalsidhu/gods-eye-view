@@ -8,6 +8,7 @@ import { t } from '../i18n/index.js';
 import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 /** A label whose detailed outline could not be resolved. */
 function outlineUnavailableLabel(label) {
@@ -424,10 +425,9 @@ export function createScreenAnnotationRenderer(
 
     const ent = viewer.trackedEntity;
     const now = Cesium.JulianDate.now();
+    const displayPosition = readEntityRecord(ent)?.displayPosition;
     const world =
-      typeof ent?.gevDisplayPosition === 'function'
-        ? ent.gevDisplayPosition()
-        : null;
+      typeof displayPosition === 'function' ? displayPosition() : null;
     const win = world
       ? Cesium.SceneTransforms.worldToWindowCoordinates(
           scene,

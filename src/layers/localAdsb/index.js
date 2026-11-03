@@ -35,6 +35,7 @@ import {
   LOCAL_ADSB_UAT_RING_COLOR,
 } from './policy.js';
 import { localAdsbStatus } from './status.js';
+import { entityRecord } from '../../data/entityRecords.js';
 
 export { HEARD_BY_RECEIVER } from './policy.js';
 export { localAdsbCardModel, localAdsbReceiverLine } from './card.js';
@@ -458,14 +459,14 @@ export function createLocalAdsbLayer({
           ),
         },
       });
-      marker.entity.gevTrackedId = id;
-      marker.entity.gevDisplayPosition = () => marker.position;
+      entityRecord(marker.entity).trackedId = id;
+      entityRecord(marker.entity).displayPosition = () => marker.position;
     }
     refreshClass(marker);
     const uat = localAdsbIsUat(record);
     if (uat !== Boolean(marker.entity.point))
       marker.entity.point = uat ? uatRing(marker) : undefined;
-    marker.entity.gevLabelModel = cardModel(marker, at);
+    entityRecord(marker.entity).labelModel = cardModel(marker, at);
     registerEntityContext(marker.entity, contextMetadata(id, marker));
     if (newFix && id === selectedId) refreshTrail();
     return id;
@@ -481,7 +482,7 @@ export function createLocalAdsbLayer({
   function refreshSelectedCard() {
     const marker = selectedId ? markers.get(selectedId) : null;
     if (!marker) return;
-    marker.entity.gevLabelModel = cardModel(marker, now());
+    entityRecord(marker.entity).labelModel = cardModel(marker, now());
     services.overlays?.refreshReadout?.(marker.entity);
   }
 
@@ -567,7 +568,7 @@ export function createLocalAdsbLayer({
     const reselect = id === selectedId && selectedTrail?.id === id;
     selectedId = id;
     enrichment.request(marker.record, { selected: true });
-    marker.entity.gevLabelModel = cardModel(marker, now());
+    entityRecord(marker.entity).labelModel = cardModel(marker, now());
     selectEntityContext(marker.entity);
     if (!reselect) startTrail(marker);
     governorRequestRender('local-adsb-selection');

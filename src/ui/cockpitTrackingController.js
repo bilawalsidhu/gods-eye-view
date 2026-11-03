@@ -5,6 +5,7 @@ import {
   normalizeHeading,
   resolveTrackedAircraftInfo,
 } from '../cockpitMath.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 export function readAircraftInfo() {
   // In cockpit mode the controller takes the entity off `viewer.trackedEntity`
@@ -13,7 +14,7 @@ export function readAircraftInfo() {
   return resolveTrackedAircraftInfo({
     civilian: this.services.flightsLayer.getTrackedInfo?.() || null,
     military: this.services.militaryFlightsLayer.getTrackedInfo?.() || null,
-    trackedId: trackedEntity?.gevTrackedId || '',
+    trackedId: readEntityRecord(trackedEntity)?.trackedId || '',
   });
 }
 

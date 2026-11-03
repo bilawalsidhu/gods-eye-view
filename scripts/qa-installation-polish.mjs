@@ -333,7 +333,7 @@ export async function checkInstallationSelection(
         for (let y = 250; y < 650; y += 75)
           for (let x = 400; x < 850; x += 75) {
             const pick = g.viewer.scene.pick({ x, y });
-            if (!pick?.id?.installationId && !pick?.id?.gevTrackedId)
+            if (!pick?.id?.installationId && !window.__godsEyeView.entityRecords.read(pick?.id)?.trackedId)
               return { x, y };
           }
         throw new Error('No empty map point');

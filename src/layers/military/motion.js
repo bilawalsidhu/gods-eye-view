@@ -370,7 +370,7 @@ export function createMotion({
    * model is actually rendering with when the model owns the visual, otherwise the cached
    * dead-reckoned position. Mirror of flights.js; see that copy for the full rationale.
    * Reads the modelMatrix the tracked-model update already wrote this frame: no sampling,
-   * no `_modelDisplayPosition` from postRender, and `gevDisplayPosition` keeps its
+   * no `_modelDisplayPosition` from postRender, and the entity record's `displayPosition` keeps its
    * follow-camera anti-jitter contract untouched.
    */
 

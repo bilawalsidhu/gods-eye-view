@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { readEntityRecord } from './entityRecords.js';
 
 const MAX_FRAME_ATTEMPTS = 120;
 const MIN_TRACKED_RANGE_M = 150;
@@ -57,7 +58,7 @@ export function trackedModelScaleForPixelCap({
  * @returns {Cesium.Cartesian3|undefined} Camera-frame position.
  */
 export function trackedDisplayPositionForCamera(entity, time, result) {
-  const displayedPosition = entity?.gevDisplayPosition?.();
+  const displayedPosition = readEntityRecord(entity)?.displayPosition?.();
   return displayedPosition
     ? Cesium.Cartesian3.clone(displayedPosition, result)
     : entity?.position?.getValue(time, result);

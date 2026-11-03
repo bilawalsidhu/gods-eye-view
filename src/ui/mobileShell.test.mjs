@@ -10,6 +10,7 @@ import {
   nextSheet,
   sheetForPanelId,
 } from './mobileShell.js';
+import { withEntityRecord } from '../data/entityRecords.js';
 
 function element(tag, document) {
   const node = new EventTarget();
@@ -824,7 +825,7 @@ test('the tab-open callback reports only a successful manual opening', () => {
 test('manual Context opens the existing transaction without disabling the tracked aircraft', async () => {
   const calls = [];
   const tracked = { layerId: 'flights', icao24: 'abc123', callsign: 'EJA225' };
-  const viewer = { trackedEntity: { gevTrackedId: 'flights:abc123' } };
+  const viewer = { trackedEntity: withEntityRecord({}, { trackedId: 'flights:abc123' }) };
   const entity = viewer.trackedEntity;
   const enabled = new Set(['flights', 'weather']);
   const controls = new ContextControls({

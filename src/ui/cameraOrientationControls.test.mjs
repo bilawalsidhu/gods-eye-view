@@ -12,6 +12,7 @@ import {
   toggleCameraTilt,
 } from './cameraOrientationControls.js';
 import { NavigationController } from './navigationController.js';
+import { entityRecord } from '../data/entityRecords.js';
 
 function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
   const calls = [];
@@ -523,7 +524,7 @@ for (const [label, altitude, range] of [
       position: new Cesium.CallbackPositionProperty(() => target, false),
       trackingReferenceFrame: Cesium.TrackingReferenceFrame.ENU,
     });
-    entity.gevDisplayPosition = () => target;
+    entityRecord(entity).displayPosition = () => target;
     viewer.trackedEntity = entity;
     const follow = new Cesium.EntityView(entity, viewer.scene);
     follow.update(viewer.clock.currentTime);

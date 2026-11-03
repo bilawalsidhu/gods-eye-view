@@ -18,6 +18,7 @@ import {
 } from './satellites.js';
 import satellitesLayer from './satellites.js';
 import { createTrackedOverlayEntry } from './trackedReadout.js';
+import { readEntityRecord, withEntityRecord } from './entityRecords.js';
 
 const L1 =
   '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';
@@ -117,7 +118,7 @@ test('selected satellite params survive delayed arrival and yield to newer expli
       satellitesLayer.setParams({ selectedSatTrackingId: 25544 }),
     );
     assert.equal(satellitesLayer.getParams().selectedSatTrackingId, 25544);
-    assert.equal(viewer.trackedEntity?.gevTrackedId, 'satellites:25544');
+    assert.equal(readEntityRecord(viewer.trackedEntity)?.trackedId, 'satellites:25544');
 
     satellitesLayer.stopTracking();
     _removeSatelliteTrackingCandidateForTest(25544);
@@ -194,7 +195,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   // so their ambient labels stack underneath the tracked card. Owner ruling:
   // consolidate them as secondary info on that card, and suppress only those
   // members — never unrelated satellites that merely happen to be nearby.
-  const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
+  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: ['? km'] } });
   const point = { position: new Cesium.Cartesian3() };
   const viewer = { camera: null, scene: { frameState: { frameNumber: 1 } } };
   let nowMs = Date.UTC(2008, 8, 20, 12, 30);
@@ -229,7 +230,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   viewer.scene.frameState.frameNumber = 2;
   _runSatellitePreRenderForTest();
 
-  const details = entity.gevLabelModel.details;
+  const details = readEntityRecord(entity)?.labelModel.details;
   // Class leads the detail block; the altitude line follows it, and the
   // consolidated companions stay last.
   assert.equal(
@@ -252,7 +253,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   assert.doesNotMatch(details[2], /\+2/);
 });
 test('satellite pre-render refreshes the tracked altitude on each propagated frame', () => {
-  const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
+  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: ['? km'] } });
   const point = { position: new Cesium.Cartesian3() };
   const viewer = {
     camera: null,
@@ -271,17 +272,17 @@ test('satellite pre-render refreshes the tracked altitude on each propagated fra
   });
 
   _runSatellitePreRenderForTest();
-  assert.equal(entity.gevLabelModel.title, 'ISS (ZARYA)');
-  assert.equal(entity.gevLabelModel.details[0], 'STATION · ISS');
+  assert.equal(readEntityRecord(entity)?.labelModel.title, 'ISS (ZARYA)');
+  assert.equal(readEntityRecord(entity)?.labelModel.details[0], 'STATION · ISS');
   // formatQuantity keeps the number and its unit together with a no-break space.
-  assert.equal(entity.gevLabelModel.details[1], '353\u00a0km · NORAD 25544');
+  assert.equal(readEntityRecord(entity)?.labelModel.details[1], '353\u00a0km · NORAD 25544');
 
   epochIndex = 1;
   viewer.scene.frameState.frameNumber = 2;
   _runSatellitePreRenderForTest();
-  assert.equal(entity.gevLabelModel.details[1], '366\u00a0km · NORAD 25544');
+  assert.equal(readEntityRecord(entity)?.labelModel.details[1], '366\u00a0km · NORAD 25544');
   assert.equal(
-    entity.gevLabelModel.details[0],
+    readEntityRecord(entity)?.labelModel.details[0],
     'STATION · ISS',
     'the class line survives an altitude-only republish',
   );

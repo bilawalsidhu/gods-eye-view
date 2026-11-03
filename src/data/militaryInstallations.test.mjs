@@ -25,6 +25,7 @@ import {
 } from '../renderGovernor.js';
 import * as Cesium from 'cesium';
 import { registerEntityContext, selectEntityContext, getSelectedEntityContext, clearSelectedEntityContextForLayer } from './contextStore.js';
+import { readEntityRecord } from './entityRecords.js';
 
 test('clicking a selected installation again or empty map clears it through refresh', async () => {
   const run = await runInstallationLoad({ elements: [{ type: 'node', id: 42,
@@ -435,7 +436,7 @@ test('a footprint-less relation just outside the viewport still renders', async 
   });
   try {
     assert.deepEqual(
-      harness.entities().map((entity) => entity.gevLabelModel?.title),
+      harness.entities().map((entity) => readEntityRecord(entity)?.labelModel?.title),
       ['Straddling Range'],
     );
   } finally {
@@ -475,7 +476,7 @@ test('a legacy-shaped payload at the cap fires the exact-viewport retry end to e
     assert.equal(harness.requests.length, 2, 'a legacy entry must not skip the retry');
     assert.equal(harness.requests[1].includes('exact=1'), true);
     assert.deepEqual(
-      harness.entities().map((entity) => entity.gevLabelModel?.title),
+      harness.entities().map((entity) => readEntityRecord(entity)?.labelModel?.title),
       ['Rescued From Legacy'],
     );
   } finally {
@@ -506,7 +507,7 @@ test('off-viewport records from the snapped superset never render or enter conte
     ],
   });
   try {
-    const titles = harness.entities().map((entity) => entity.gevLabelModel?.title);
+    const titles = harness.entities().map((entity) => readEntityRecord(entity)?.labelModel?.title);
     assert.deepEqual(titles, ['In View'], 'only the in-viewport site renders');
     assert.equal(harness.contextLabels().includes('Off View'), false, 'and none enters context');
     assert.equal(harness.stats().count, 1);
@@ -534,7 +535,7 @@ test('a saturated snapped tile refetches the exact viewport before rendering', a
     assert.equal(harness.requests[0].includes('exact=1'), false, 'first ask uses the shared snapped tile');
     assert.equal(harness.requests[1].includes('exact=1'), true, 'retry opts out of the snap');
     assert.deepEqual(
-      harness.entities().map((entity) => entity.gevLabelModel?.title),
+      harness.entities().map((entity) => readEntityRecord(entity)?.labelModel?.title),
       ['Rescued'],
       'the in-viewport site is no longer starved by off-view ones',
     );

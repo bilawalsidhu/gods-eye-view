@@ -9,6 +9,7 @@ import {
   TRACK_VIEW_FROM_HIGH_SCALE,
   TRACK_VIEW_FROM_LEO,
 } from './policy.js';
+import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 
 export function createTracking({ state: layerState, services, parts, source }) {
   const { clearFocusTarget, publishFocusTargetFromCachedPosition } =
@@ -384,7 +385,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
           : t('DOCKED · {name}', { name: companions[0] }),
       );
     }
-    const current = layerState._trackedEntity.gevLabelModel;
+    const current = readEntityRecord(layerState._trackedEntity)?.labelModel;
     // Compare the WHOLE detail array: comparing only `details[0]` swallowed any
     // change confined to the companions line, so the card would never republish.
     const unchanged =
@@ -392,7 +393,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
       current?.details?.length === details.length &&
       details.every((line, index) => current.details[index] === line);
     if (unchanged) return;
-    layerState._trackedEntity.gevLabelModel = {
+    entityRecord(layerState._trackedEntity).labelModel = {
       title,
       details,
       accent: '#ffd84d',
@@ -456,9 +457,10 @@ export function createTracking({ state: layerState, services, parts, source }) {
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     });
-    layerState._trackedEntity.gevSelectionOrigin = origin;
-    layerState._trackedEntity.gevTrackedId = `satellites:${noradId}`;
-    layerState._trackedEntity.gevDisplayPosition = _trackedDisplayCached;
+    entityRecord(layerState._trackedEntity).selectionOrigin = origin;
+    entityRecord(layerState._trackedEntity).trackedId = `satellites:${noradId}`;
+    entityRecord(layerState._trackedEntity).displayPosition =
+      _trackedDisplayCached;
     _updateTrackedSatelliteLabelModel(initialPos?.altitude ?? null);
 
     _emitAwarenessEvent('gev:awareness-subject-selected', {

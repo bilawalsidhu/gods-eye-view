@@ -5,6 +5,7 @@ import {
   enterCockpitWithTracking,
   restoreAircraftTrackingOwner,
 } from './cockpitTracking.js';
+import { readEntityRecord, withEntityRecord } from './data/entityRecords.js';
 
 /**
  * Model the two production stamping seams that sit under this transaction:
@@ -22,7 +23,7 @@ function stampingWorld({ entryAllowed = true } = {}) {
     layerId,
     trackById(id) {
       if (!trackable) return false;
-      world.trackedEntity = { gevTrackedId: `${layerId}:${id}` };
+      world.trackedEntity = withEntityRecord({}, { trackedId: `${layerId}:${id}` });
       stamp('trackedEntityChanged'); // the ui.js listener
       return true;
     },
@@ -80,7 +81,7 @@ test('a refused Cockpit entry still stamps for the tracker it already moved', ()
   // Adoption stamped, and the rollback re-track stamped again.
   assert.deepEqual(world.stamps, ['trackedEntityChanged', 'trackedEntityChanged']);
   assert.equal(world.generation, 2);
-  assert.equal(world.trackedEntity.gevTrackedId, 'military:ae01ce');
+  assert.equal(readEntityRecord(world.trackedEntity)?.trackedId, 'military:ae01ce');
 });
 
 test('a Cockpit entry that mutates nothing takes no camera authority', () => {

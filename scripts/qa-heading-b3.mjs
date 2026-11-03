@@ -169,8 +169,8 @@ async function observeTrackedHostPaint(page, timeoutMs = 5000) {
       const tracked = viewer?.trackedEntity;
       const current = {
         elapsedMs: Math.round(performance.now() - startedAt),
-        entryId: tracked?.gevTrackedId || null,
-        hasPresentationModel: Boolean(tracked?.gevLabelModel?.title),
+        entryId: window.__godsEyeView?.entityRecords?.read(tracked)?.trackedId || null,
+        hasPresentationModel: Boolean(window.__godsEyeView?.entityRecords?.read(tracked)?.labelModel?.title),
         candidateCount: diagnostics.candidateCount || 0,
         projectedCount: diagnostics.projectedCount || 0,
         selectedCount: diagnostics.selectedCount || 0,
@@ -610,7 +610,7 @@ async function main() {
         if (!pool.length) return null;
         const ent = v.trackedEntity;
         let tracked = null;
-        if (ent && typeof ent.gevDisplayPosition === 'function') tracked = ent.gevDisplayPosition();
+        if (ent && typeof window.__godsEyeView.entityRecords.read(ent)?.displayPosition === 'function') tracked = window.__godsEyeView.entityRecords.read(ent)?.displayPosition();
         if (!tracked) return pool[0];
         let best = null, bestD = Infinity;
         for (const m of pool) {
