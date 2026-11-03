@@ -273,7 +273,7 @@ export async function createNavaraScene({
     alignDaylightToRestoredView: globe.alignDaylightToRestoredView,
     MeshDesc: globe.MeshDesc,
     NavaraColor: globe.NavaraColor,
-    EffectDesc: globe.EffectDesc,
+    EffectDesc: globe.LayerEffectDesc,
     NavaraEffect: globe.NavaraEffect,
     DrapedMesh: globe.DrapedMesh,
     setupMaterialForDrape: globe.setupMaterialForDrape,
@@ -441,7 +441,7 @@ export function createViewerlessTools({
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
   // Voice on the engine (phase 3, Task 9): the W1 tools drive the engine;
-  // the viewer-only ones (director, annotations…) refuse.
+  // the Director uses the shared session; viewer-only tools declare availability.
   const voiceCommands = initGevVoiceCommands({
     ...voice,
     annotationResolver: operations.annotationResolver,

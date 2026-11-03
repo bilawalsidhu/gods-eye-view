@@ -1,5 +1,5 @@
-// Only the renderer and its map survive a switch. The outgoing UI, data feeds,
-// tools and their subscriptions are still disposed with their application.
+// This cache owns the parked renderer and its map. The layer session owns
+// feeds, selection, media and the Director across both renderer attachments.
 export function createRendererCache() {
   const idle = new Map();
   let retainKind;

@@ -40,7 +40,7 @@ function createDrapeEffectClass(EffectDesc, NavaraEffect) {
       return new NavaraEffect(this.view.camera.raw, this.effect);
     }
 
-    update() {
+    updateFrame() {
       const mrt = this.find('mrt');
       this.owner.globeNormal.value = mrt?.globeNormalBuffer ?? null;
       this.owner.globeDepth.value = mrt?.globeDepthBuffer ?? null;

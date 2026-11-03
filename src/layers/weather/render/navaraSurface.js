@@ -118,7 +118,7 @@ function weatherPass(engine, { view, EffectDesc, NavaraEffect }) {
       });
       return new NavaraEffect(this.view.camera.raw, this.effect);
     }
-    update() {
+    updateFrame() {
       if (!this.effect) return;
       const camera = this.view.camera.raw,
         u = this.effect.uniforms;

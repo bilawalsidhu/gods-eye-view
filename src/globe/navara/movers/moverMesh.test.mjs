@@ -27,15 +27,19 @@ test('disposing a sprite atlas drops decoded images and detaches pending load ca
   const previous = globalThis.Image;
   let image;
   globalThis.Image = class {
-    constructor() { image = this; }
+    constructor() {
+      image = this;
+    }
   };
   t.after(() => {
     if (previous) globalThis.Image = previous;
     else delete globalThis.Image;
   });
   const options = normalizeMoverSetOptions({
-    ...spriteOptions, sprite: {
-      sizePx: 24, atlas: { url: '/bracket.svg', cells: { a: [0, 0, 1, 1] } },
+    ...spriteOptions,
+    sprite: {
+      sizePx: 24,
+      atlas: { url: '/bracket.svg', cells: { a: [0, 0, 1, 1] } },
     },
   });
   for (const loaded of [false, true]) {
