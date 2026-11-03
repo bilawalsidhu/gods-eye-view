@@ -1345,9 +1345,41 @@ from the payload. There is no heading in the feed, so gizmos use the shared
 id-hash fallback at low confidence.
 
 Once enabled, the 250 cameras nearest the five borough cores load.
-`CCTV_NYC_MAX_SOURCES` sets the pack cap (8–400). The catalog-wide ceiling stays at 4,000 and is shared
+`CCTV_NYC_MAX_SOURCES` sets the pack cap (8–400). The catalog-wide budget defaults to 12,000 (20,000 maximum) and is shared
 round-robin: no region is dropped outright, but when the packs together exceed
 the ceiling, adding a pack trims cameras from the largest packs.
+
+## Pennsylvania 511PA cameras and expanded catalog capacity
+
+The opt-in `511pa` pack (`CCTV_511PA_ENABLED=1`) loads statewide camera metadata, following
+all 100-row pages of the public 511PA catalog. Published WGS84 coordinates locate
+the markers; blocked or hidden views are excluded, and missing video falls back
+to still images. `CCTV_511PA_COUNTIES` can restrict the catalog to one or more
+counties; `all` is the default once enabled. Leave the enabled flag unset to avoid upstream requests. `CCTV_511PA_MAX_SOURCES` defaults to 2,000, above
+the entire available statewide catalog checked on November 3, 2026 (1,445 views).
+Camera availability can change; the catalog flags do not prove every stream is
+working. Traffic direction labels do not establish a PTZ camera's heading.
+
+The shared catalog budget now defaults to 12,000, with a configurable hard
+ceiling of 20,000. The default fits the combined shipped source-pack budgets,
+including full Pennsylvania coverage when enabled, without granting a special
+allocation to one state. Explicit lower `CCTV_MAX_SOURCES` values retain the fair round-robin
+allocation and trim reporting. Metadata capacity is separate from visible
+card and live-video work: ambient cards still top out at 40, and the HLS relay
+still permits two demand-owned sessions with bounded memory and idle expiry.
+
+PennDOT video uses the public player's two-step authorization, origin headers,
+and clear fragmented MP4 HLS; signed URLs stay on the server. Snapshots remain
+available as a fallback, and authorization requests honor upstream rate limits.
+Public viewing does not grant feed-redistribution rights; see the PennDOT
+agreement and attribution details in `DATA_SOURCES.md` before public deployment.
+
+Validation: `node --test src/data/cctv*.test.mjs` checks full default pack budgets,
+large merged catalogs, explicit smaller caps, pagination, token handling and
+both HLS containers. `node scripts/qa-cctv-catalog.mjs` uses a 12,000-camera
+fixture against a running app to verify client completeness, selection of the
+last PA camera, decoded frames and bounded visible-card/frame work. It uses no
+live video tokens; `QA_BASE_URL` selects another dev or preview server.
 
 ## City of Toronto RESCU CCTV source pack
 
@@ -1363,8 +1395,8 @@ cameras return a 200 "Image Unavailable" placeholder frame instead of an error.
 
 By default all ~336 cameras load, nearest downtown first.
 `CCTV_TORONTO_MAX_SOURCES` sets the pack cap (8–500) and
-`CCTV_TORONTO_ENABLED=0` turns the pack off. The pack shares the 4,000
-catalog-wide ceiling round-robin with the other packs.
+`CCTV_TORONTO_ENABLED=0` turns the pack off. The pack shares the 12,000-default
+catalog-wide budget round-robin with the other packs.
 
 ## Lithuania CCTV source pack
 
@@ -5074,7 +5106,7 @@ silently demoting every later lookup for the session.
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
   covering the whole country, where one _preset_ (a station's fixed view) is one camera — 806
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
-  on the main road spine. `CCTV_MAX_SOURCES` is a 4,000 catalog-wide ceiling shared round-robin
+  on the main road spine. `CCTV_MAX_SOURCES` defaults to a 12,000 catalog-wide budget (20,000 maximum), shared round-robin
   across packs, so a lower global cap thins every region instead of starving the last pack.
   ~1,100 cameras total, all RAW PRIOR poses, stills-first. The catalog lives for 15 minutes; once
   it expires, `/api/cctv` keeps answering from it while one background refresh reloads every

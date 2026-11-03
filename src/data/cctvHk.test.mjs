@@ -396,10 +396,6 @@ test('CCTV_HK_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
   }
 });
 
-test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
-});
-
 test('the HK pack default sits above the full TD catalog and anchors the New Territories', () => {
   assert.ok(
     DEFAULT_HK_MAX_SOURCES >= 1013,

@@ -8,7 +8,6 @@ import {
   nycCameraToSource,
 } from '../../server/providers/cctv/sources.js';
 import {
-  DEFAULT_CCTV_MAX_SOURCES,
   DEFAULT_NYC_MAX_SOURCES,
   NYC_CAMERAS_URL,
   NYC_GROUND_ELEVATION_M,
@@ -375,8 +374,7 @@ for (const [label, flag] of [
   });
 }
 
-test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+test('NYC keeps its own default pack budget', () => {
   assert.equal(DEFAULT_NYC_MAX_SOURCES, 250);
 });
 
