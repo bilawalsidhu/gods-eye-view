@@ -1224,6 +1224,7 @@
   "src/voice/imageryActions.test.mjs",
   "src/voice/osmActions.test.mjs",
   "src/voice/realtimeProtocol.test.mjs",
+  "src/layers/awareness/rangeRing.test.mjs",
   "src/voice/voiceMiniPreview.js",
   "src/voice/voiceMiniPreview.test.mjs",
   "src/voice/chatPreferences.test.mjs",
