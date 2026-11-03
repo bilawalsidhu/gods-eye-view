@@ -942,6 +942,7 @@ async function checkEngine(browser, kind) {
       );
   }
   await page.close();
+  return Object.keys(results);
 }
 
 const browser = await puppeteer.launch({
@@ -954,10 +955,10 @@ const browser = await puppeteer.launch({
   ],
 });
 try {
-  for (const kind of ENGINES) await checkEngine(browser, kind);
-  console.log(
-    `PASS ${ONLY.join(', ')} do not paint through a wall on ${ENGINES.join(', ')}`,
-  );
+  const checked = [];
+  for (const kind of ENGINES)
+    checked.push(`${kind} (${(await checkEngine(browser, kind)).join(', ')})`);
+  console.log(`PASS nothing paints through the wall on ${checked.join('; ')}`);
 } finally {
   await browser.close();
 }
