@@ -4,6 +4,7 @@ import {
   AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
   findByDoublingRadius,
   AWARENESS_RADIUS_M,
+  compareAwarenessIds,
 } from '../../data/militaryAwarenessEngine.js';
 import {
   AWARENESS_MAX_EXAMPLES,
@@ -190,7 +191,9 @@ export function createNavigation({
     candidates.sort(
       (a, b) =>
         (a.item.distanceM ?? a.item.distance ?? Infinity) -
-        (b.item.distanceM ?? b.item.distance ?? Infinity),
+          (b.item.distanceM ?? b.item.distance ?? Infinity) ||
+        compareAwarenessIds(a.layerId, b.layerId) ||
+        compareAwarenessIds(a.id, b.id),
     );
     return candidates[0] || null;
   }
