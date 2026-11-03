@@ -27,7 +27,10 @@ import {
   _resetScopeMaskForTest,
 } from './scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
-import { SCOPE_FEATHER_RATIO_MAX, clampScopeFeatherPct } from './scopeMaskPolicy.js';
+import {
+  SCOPE_FEATHER_RATIO_MAX,
+  clampScopeFeatherPct,
+} from './scopeMaskPolicy.js';
 
 beforeEach(() => _resetScopeMaskForTest());
 
@@ -39,7 +42,7 @@ test('geometry anchors the visible edge to the shared keyhole radius', () => {
   assert.equal(geo.centerY, 430);
   // Feather straddles the keyhole edge: inner+outer average = keyhole radius.
   assert.ok(Math.abs((geo.innerR + geo.outerR) / 2 - keyholeR) < 1e-9);
-  assert.ok(Math.abs((geo.outerR - geo.innerR) - keyholeR * 0.4) < 1e-9);
+  assert.ok(Math.abs(geo.outerR - geo.innerR - keyholeR * 0.4) < 1e-9);
 });
 
 test('zero feather produces a hard edge exactly at the keyhole radius', () => {
@@ -72,7 +75,15 @@ test('feather ratio reaches the center at 200% and clamps larger input', () => {
 });
 
 test('UI and share feather percentages share one bounded integer range', () => {
-  for (const [value, expected] of [[0, 0], [11, 11], [175.6, 176], [200, 200], [350, 200], [-4, 0], [Number.NaN, 0]]) {
+  for (const [value, expected] of [
+    [0, 0],
+    [11, 11],
+    [175.6, 176],
+    [200, 200],
+    [350, 200],
+    [-4, 0],
+    [Number.NaN, 0],
+  ]) {
     assert.equal(clampScopeFeatherPct(value), expected);
   }
 });
@@ -99,8 +110,13 @@ test('an omitted feather argument uses the module default, whatever it is', () =
   const wider = scopeMaskGeometry(1200, 900, SCOPE_FEATHER_RATIO_DEFAULT + 0.4);
   assert.notEqual(wider.outerR - wider.innerR, omitted.outerR - omitted.innerR);
   const keyholeR = 900 * 0.5 * KEYHOLE_OUTER_RADIUS;
-  assert.ok(Math.abs((wider.outerR - wider.innerR)
-    - keyholeR * (SCOPE_FEATHER_RATIO_DEFAULT + 0.4)) < 1e-9);
+  assert.ok(
+    Math.abs(
+      wider.outerR -
+        wider.innerR -
+        keyholeR * (SCOPE_FEATHER_RATIO_DEFAULT + 0.4),
+    ) < 1e-9,
+  );
   // The default's VALUE (hidden feather, owner directive 2026-08-22) is pinned
   // with the rest of the first-run batch in reasonableDefaults.test.mjs.
 });
@@ -119,7 +135,11 @@ test('backing-store scale is clamped to 2x and survives junk input', () => {
  * way moving a window between a 1x and a 2x monitor does.
  */
 function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
-  const saved = { window: globalThis.window, document: globalThis.document, ResizeObserver: globalThis.ResizeObserver };
+  const saved = {
+    window: globalThis.window,
+    document: globalThis.document,
+    ResizeObserver: globalThis.ResizeObserver,
+  };
   // Records every fillStyle assignment and gradient stop so the paint's actual
   // colours (not just its call sequence) can be asserted.
   const fillStyles = [];
@@ -127,23 +147,50 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
   // Canvas work actually performed — the disabled scope must do none of it.
   const ops = { resizes: 0, clears: 0, fills: 0 };
   const canvas = {
-    id: '', style: {},
-    _width: 0, _height: 0,
-    set width(value) { ops.resizes += 1; this._width = value; },
-    get width() { return this._width; },
-    set height(value) { this._height = value; },
-    get height() { return this._height; },
-    setAttribute() {}, remove() {},
+    id: '',
+    style: {},
+    _width: 0,
+    _height: 0,
+    set width(value) {
+      ops.resizes += 1;
+      this._width = value;
+    },
+    get width() {
+      return this._width;
+    },
+    set height(value) {
+      this._height = value;
+    },
+    get height() {
+      return this._height;
+    },
+    setAttribute() {},
+    remove() {},
     getContext: () => ({
-      setTransform() {}, beginPath() {}, rect() {}, arc() {},
-      clearRect() { ops.clears += 1; },
-      fill() { ops.fills += 1; },
-      fillRect() { ops.fills += 1; },
+      setTransform() {},
+      beginPath() {},
+      rect() {},
+      arc() {},
+      clearRect() {
+        ops.clears += 1;
+      },
+      fill() {
+        ops.fills += 1;
+      },
+      fillRect() {
+        ops.fills += 1;
+      },
       createRadialGradient: () => ({
-        addColorStop(offset, color) { gradientStops.push({ offset, color }); },
+        addColorStop(offset, color) {
+          gradientStops.push({ offset, color });
+        },
       }),
-      set fillStyle(value) { if (typeof value === 'string') fillStyles.push(value); },
-      get fillStyle() { return fillStyles[fillStyles.length - 1] || ''; },
+      set fillStyle(value) {
+        if (typeof value === 'string') fillStyles.push(value);
+      },
+      get fillStyle() {
+        return fillStyles[fillStyles.length - 1] || '';
+      },
     }),
   };
   const listeners = new Set();
@@ -158,8 +205,15 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
   };
   const documentElement = { dataset: {} };
   globalThis.document = { documentElement, createElement: () => canvas };
-  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
-  const container = { clientWidth: width, clientHeight: height, appendChild() {} };
+  globalThis.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+  };
+  const container = {
+    clientWidth: width,
+    clientHeight: height,
+    appendChild() {},
+  };
   return {
     canvas,
     container,
@@ -189,16 +243,36 @@ test('scope appearance follows direct state changes and install/destroy lifecycl
     assert.equal(dom.documentElement.dataset.scopeMask, 'off');
     delete dom.documentElement.dataset.scopeMask;
     installScopeMask({ container: dom.container });
-    assert.equal(dom.documentElement.dataset.scopeMask, 'off', 'install publishes retained OFF state');
+    assert.equal(
+      dom.documentElement.dataset.scopeMask,
+      'off',
+      'install publishes retained OFF state',
+    );
     destroyScopeMask();
-    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'destroy clears the document marker');
+    assert.equal(
+      dom.documentElement.dataset.scopeMask,
+      undefined,
+      'destroy clears the document marker',
+    );
     installScopeMask({ container: dom.container });
-    assert.equal(dom.documentElement.dataset.scopeMask, 'off', 'reinstall retains the preference');
+    assert.equal(
+      dom.documentElement.dataset.scopeMask,
+      'off',
+      'reinstall retains the preference',
+    );
     setScopeMaskEnabled(true);
-    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'ON uses the original presentation');
+    assert.equal(
+      dom.documentElement.dataset.scopeMask,
+      undefined,
+      'ON uses the original presentation',
+    );
     setScopeMaskEnabled(false);
     _resetScopeMaskForTest();
-    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'test reset clears the marker');
+    assert.equal(
+      dom.documentElement.dataset.scopeMask,
+      undefined,
+      'test reset clears the marker',
+    );
   } finally {
     destroyScopeMask();
     dom.restore();
@@ -216,12 +290,20 @@ test('a DPR change with no resize still repaints the backing store', () => {
     // Window dragged to a 2x monitor. The content box never changed, so the
     // ResizeObserver stays silent — only the DPR watch can catch this.
     dom.setDpr(2);
-    assert.equal(dom.canvas.width, 2000, 'backing store must follow the new DPR');
+    assert.equal(
+      dom.canvas.width,
+      2000,
+      'backing store must follow the new DPR',
+    );
     assert.equal(dom.canvas.height, 1600);
 
     // And back again — the listener must be re-armed after each change.
     dom.setDpr(1);
-    assert.equal(dom.canvas.width, 1000, 'DPR watch must re-arm, not fire once');
+    assert.equal(
+      dom.canvas.width,
+      1000,
+      'DPR watch must re-arm, not fire once',
+    );
     assert.equal(dom.canvas.height, 800);
   } finally {
     destroyScopeMask();
@@ -251,50 +333,99 @@ test('destroy tears the DPR watch down (no redraw after teardown)', () => {
 // FEATHER is untouched (owner locked 35).
 
 test('the terminus band is the owner-approved 10 Mm → 7 Mm fade', () => {
-  assert.equal(SCOPE_TERMINUS_FAR_M, 10_000_000, 'the relaxed corners start above 10 Mm');
+  assert.equal(
+    SCOPE_TERMINUS_FAR_M,
+    10_000_000,
+    'the relaxed corners start above 10 Mm',
+  );
   assert.equal(SCOPE_TERMINUS_NEAR_M, 7_000_000, 'and are gone by 7 Mm');
-  assert.equal(scopeTerminusAlpha(10_500_000), SCOPE_OUTSIDE_ALPHA, 'full-globe view keeps its stars');
-  assert.equal(scopeTerminusAlpha(6_900_000), SCOPE_TERMINUS_ALPHA_NEAR, 'below the band: solid black');
-  assert.equal(scopeTerminusAlpha(400_000), SCOPE_TERMINUS_ALPHA_NEAR, 'orbital view: solid black');
-  assert.equal(scopeTerminusAlpha(1_500), SCOPE_TERMINUS_ALPHA_NEAR, 'city view: solid black');
+  assert.equal(
+    scopeTerminusAlpha(10_500_000),
+    SCOPE_OUTSIDE_ALPHA,
+    'full-globe view keeps its stars',
+  );
+  assert.equal(
+    scopeTerminusAlpha(6_900_000),
+    SCOPE_TERMINUS_ALPHA_NEAR,
+    'below the band: solid black',
+  );
+  assert.equal(
+    scopeTerminusAlpha(400_000),
+    SCOPE_TERMINUS_ALPHA_NEAR,
+    'orbital view: solid black',
+  );
+  assert.equal(
+    scopeTerminusAlpha(1_500),
+    SCOPE_TERMINUS_ALPHA_NEAR,
+    'city view: solid black',
+  );
   // Quick, not gradual: a fifth of the way down the band it is already past halfway.
-  const fifth = SCOPE_TERMINUS_FAR_M - (SCOPE_TERMINUS_FAR_M - SCOPE_TERMINUS_NEAR_M) * 0.5;
-  assert.ok(scopeTerminusAlpha(fifth) > SCOPE_OUTSIDE_ALPHA + 0.02,
-    'the fade must be well underway by mid-band');
+  const fifth =
+    SCOPE_TERMINUS_FAR_M - (SCOPE_TERMINUS_FAR_M - SCOPE_TERMINUS_NEAR_M) * 0.5;
+  assert.ok(
+    scopeTerminusAlpha(fifth) > SCOPE_OUTSIDE_ALPHA + 0.02,
+    'the fade must be well underway by mid-band',
+  );
 });
 
 test('terminus ramp: translucent at globe scale, full black up close', () => {
   assert.equal(scopeTerminusAlpha(SCOPE_TERMINUS_FAR_M), SCOPE_OUTSIDE_ALPHA);
-  assert.equal(scopeTerminusAlpha(SCOPE_TERMINUS_FAR_M + 1_000_000), SCOPE_OUTSIDE_ALPHA);
-  assert.equal(scopeTerminusAlpha(SCOPE_TERMINUS_NEAR_M), SCOPE_TERMINUS_ALPHA_NEAR);
+  assert.equal(
+    scopeTerminusAlpha(SCOPE_TERMINUS_FAR_M + 1_000_000),
+    SCOPE_OUTSIDE_ALPHA,
+  );
+  assert.equal(
+    scopeTerminusAlpha(SCOPE_TERMINUS_NEAR_M),
+    SCOPE_TERMINUS_ALPHA_NEAR,
+  );
   assert.equal(scopeTerminusAlpha(0), SCOPE_TERMINUS_ALPHA_NEAR);
 });
 
 test('terminus ramp is monotonic, bounded, and eased at both ends', () => {
   const mid = (SCOPE_TERMINUS_FAR_M + SCOPE_TERMINUS_NEAR_M) / 2;
-  assert.ok(Math.abs(scopeTerminusAlpha(mid) - (SCOPE_OUTSIDE_ALPHA + 0.06 / 2)) < 1e-9,
-    'smoothstep is symmetric — the midpoint sits halfway');
+  assert.ok(
+    Math.abs(scopeTerminusAlpha(mid) - (SCOPE_OUTSIDE_ALPHA + 0.06 / 2)) < 1e-9,
+    'smoothstep is symmetric — the midpoint sits halfway',
+  );
 
   let previous = -Infinity;
   for (let h = 15_000_000; h >= 0; h -= 100_000) {
     const alpha = scopeTerminusAlpha(h);
-    assert.ok(alpha >= previous, `alpha must never decrease while descending (h=${h})`);
-    assert.ok(alpha >= SCOPE_OUTSIDE_ALPHA && alpha <= 1, `alpha out of range at h=${h}`);
+    assert.ok(
+      alpha >= previous,
+      `alpha must never decrease while descending (h=${h})`,
+    );
+    assert.ok(
+      alpha >= SCOPE_OUTSIDE_ALPHA && alpha <= 1,
+      `alpha out of range at h=${h}`,
+    );
     previous = alpha;
   }
 
   // Eased, not linear: near each end the slope is gentler than the midpoint's.
   const step = 100_000;
-  const nearEnd = scopeTerminusAlpha(SCOPE_TERMINUS_NEAR_M + step) - scopeTerminusAlpha(SCOPE_TERMINUS_NEAR_M);
+  const nearEnd =
+    scopeTerminusAlpha(SCOPE_TERMINUS_NEAR_M + step) -
+    scopeTerminusAlpha(SCOPE_TERMINUS_NEAR_M);
   const middle = scopeTerminusAlpha(mid) - scopeTerminusAlpha(mid + step);
-  assert.ok(Math.abs(nearEnd) < Math.abs(middle), 'the ramp must ease into the near clamp');
+  assert.ok(
+    Math.abs(nearEnd) < Math.abs(middle),
+    'the ramp must ease into the near clamp',
+  );
 });
 
 test('terminus ramp survives junk heights without breaking the paint', () => {
   assert.equal(scopeTerminusAlpha(Number.NaN), SCOPE_OUTSIDE_ALPHA);
   assert.equal(scopeTerminusAlpha(undefined), SCOPE_OUTSIDE_ALPHA);
-  assert.equal(scopeTerminusAlpha(Number.POSITIVE_INFINITY), SCOPE_OUTSIDE_ALPHA);
-  assert.equal(scopeTerminusAlpha(-1000), SCOPE_TERMINUS_ALPHA_NEAR, 'below the datum is still "close"');
+  assert.equal(
+    scopeTerminusAlpha(Number.POSITIVE_INFINITY),
+    SCOPE_OUTSIDE_ALPHA,
+  );
+  assert.equal(
+    scopeTerminusAlpha(-1000),
+    SCOPE_TERMINUS_ALPHA_NEAR,
+    'below the datum is still "close"',
+  );
 });
 
 test('quantization snaps to the repaint grid', () => {
@@ -315,7 +446,11 @@ test('repaint gate: only a QUANTIZED step repaints; hovering costs nothing', () 
     // no repaint — and repeating the identical sample stays free.
     assert.equal(updateScopeTerminusForHeight(14_000_000), false);
     assert.equal(updateScopeTerminusForHeight(14_000_000), false);
-    assert.equal(getScopeTerminusRepaintCount(), base, 'a still camera must never repaint');
+    assert.equal(
+      getScopeTerminusRepaintCount(),
+      base,
+      'a still camera must never repaint',
+    );
 
     // A real step repaints exactly once, then holds.
     assert.equal(updateScopeTerminusForHeight(SCOPE_TERMINUS_NEAR_M), true);
@@ -328,7 +463,11 @@ test('repaint gate: only a QUANTIZED step repaints; hovering costs nothing', () 
     updateScopeTerminusForHeight(8_500_000);
     const afterMid = getScopeTerminusRepaintCount();
     updateScopeTerminusForHeight(8_501_000);
-    assert.equal(getScopeTerminusRepaintCount(), afterMid, 'sub-quantum drift must not repaint');
+    assert.equal(
+      getScopeTerminusRepaintCount(),
+      afterMid,
+      'sub-quantum drift must not repaint',
+    );
   } finally {
     destroyScopeMask();
     dom.restore();
@@ -344,13 +483,24 @@ test('a full zoom-in gesture costs only a handful of repaints', () => {
     // 20 Mm → ground in 10 km steps: ~2000 samples across the whole descent,
     // far denser than the 120 ms sampler could ever produce in a real gesture,
     // and covering the entire retuned band with room on both sides.
-    for (let h = 20_000_000; h >= 0; h -= 10_000) updateScopeTerminusForHeight(h);
+    for (let h = 20_000_000; h >= 0; h -= 10_000)
+      updateScopeTerminusForHeight(h);
     const repaints = getScopeTerminusRepaintCount() - base;
 
     // The ramp spans 0.06 alpha at 0.005 granularity → at most 13 distinct steps.
-    assert.ok(repaints <= 13, `expected ≤13 repaints across the descent, got ${repaints}`);
-    assert.ok(repaints >= 5, `expected a visibly smooth ramp, got only ${repaints}`);
-    assert.equal(getScopeTerminusAlpha(), 1, 'the descent must end fully opaque');
+    assert.ok(
+      repaints <= 13,
+      `expected ≤13 repaints across the descent, got ${repaints}`,
+    );
+    assert.ok(
+      repaints >= 5,
+      `expected a visibly smooth ramp, got only ${repaints}`,
+    );
+    assert.equal(
+      getScopeTerminusAlpha(),
+      1,
+      'the descent must end fully opaque',
+    );
   } finally {
     destroyScopeMask();
     dom.restore();
@@ -371,7 +521,11 @@ test('an override pins the terminus and null restores the ramp', () => {
 
     setScopeTerminusOverride(null);
     assert.equal(getScopeTerminusOverride(), null);
-    assert.equal(updateScopeTerminusForHeight(0), true, 'the ramp is live again');
+    assert.equal(
+      updateScopeTerminusForHeight(0),
+      true,
+      'the ramp is live again',
+    );
     assert.equal(getScopeTerminusAlpha(), 1);
   } finally {
     destroyScopeMask();
@@ -388,12 +542,18 @@ test('the hard-crop (feather 0) path honors the same terminus alpha', () => {
     // The globe-scale seed paint is legitimately in the history, so assert on
     // the LAST fill: what the hard crop is painting right now, zoomed in.
     const beforeDescent = dom.fillStyles().at(-1);
-    assert.equal(beforeDescent, `rgba(5,5,8,${SCOPE_OUTSIDE_ALPHA})`,
-      'at globe scale the hard crop is still the translucent terminus');
+    assert.equal(
+      beforeDescent,
+      `rgba(5,5,8,${SCOPE_OUTSIDE_ALPHA})`,
+      'at globe scale the hard crop is still the translucent terminus',
+    );
 
     updateScopeTerminusForHeight(SCOPE_TERMINUS_NEAR_M);
-    assert.equal(dom.fillStyles().at(-1), 'rgba(5,5,8,1)',
-      'a zoomed-in hard crop must paint fully opaque, not the globe-scale 0.94');
+    assert.equal(
+      dom.fillStyles().at(-1),
+      'rgba(5,5,8,1)',
+      'a zoomed-in hard crop must paint fully opaque, not the globe-scale 0.94',
+    );
   } finally {
     setScopeMaskFeather(SCOPE_FEATHER_RATIO_DEFAULT);
     destroyScopeMask();
@@ -402,8 +562,10 @@ test('the hard-crop (feather 0) path honors the same terminus alpha', () => {
 });
 
 test('one quantum is the smallest step that can repaint', () => {
-  assert.ok(SCOPE_TERMINUS_QUANTUM > 0 && SCOPE_TERMINUS_QUANTUM < 0.06,
-    'the quantum must be finer than the ramp it gates');
+  assert.ok(
+    SCOPE_TERMINUS_QUANTUM > 0 && SCOPE_TERMINUS_QUANTUM < 0.06,
+    'the quantum must be finer than the ramp it gates',
+  );
 });
 
 // ── SCOPE OFF must be the cheapest state (review round 2) ─────────────────────
@@ -425,13 +587,21 @@ function stubScopeViewer(container, heightM) {
     viewer: {
       container,
       scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
-      camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
+      camera: {
+        positionCartographic,
+        moveEnd: { addEventListener: addTo(moveEndListeners) },
+      },
     },
-    setHeight(next) { positionCartographic.height = next; },
+    setHeight(next) {
+      positionCartographic.height = next;
+    },
     raisePreRender(times = 1) {
-      for (let i = 0; i < times; i += 1) for (const fn of [...preRenderListeners]) fn();
+      for (let i = 0; i < times; i += 1)
+        for (const fn of [...preRenderListeners]) fn();
     },
-    raiseMoveEnd() { for (const fn of [...moveEndListeners]) fn(); },
+    raiseMoveEnd() {
+      for (const fn of [...moveEndListeners]) fn();
+    },
   };
 }
 
@@ -447,15 +617,25 @@ test('a disabled scope does no canvas work and samples no camera heights', () =>
     const beforeDisable = { ...dom.ops };
     setScopeMaskEnabled(false);
     const afterDisable = { ...dom.ops };
-    assert.equal(afterDisable.clears, beforeDisable.clears + 1,
-      'the disable transition clears the mask exactly once');
-    assert.equal(afterDisable.resizes, beforeDisable.resizes,
-      'and clears without a backing-store resize');
+    assert.equal(
+      afterDisable.clears,
+      beforeDisable.clears + 1,
+      'the disable transition clears the mask exactly once',
+    );
+    assert.equal(
+      afterDisable.resizes,
+      beforeDisable.resizes,
+      'and clears without a backing-store resize',
+    );
     assert.equal(afterDisable.fills, beforeDisable.fills, 'and paints nothing');
 
     // A second disable is inert — the canvas already holds no ink.
     setScopeMaskEnabled(false);
-    assert.deepEqual(dom.ops, afterDisable, 'a repeated disable must re-clear nothing');
+    assert.deepEqual(
+      dom.ops,
+      afterDisable,
+      'a repeated disable must re-clear nothing',
+    );
 
     // Fly the whole band while OFF: the sampler must not read the camera, and
     // no draw may touch the backing store.
@@ -463,15 +643,29 @@ test('a disabled scope does no canvas work and samples no camera heights', () =>
     rig.raisePreRender(40);
     rig.raiseMoveEnd();
     setScopeMaskFeather(0.5); // any tuning write still routes through draw()
-    assert.deepEqual(dom.ops, afterDisable, 'a disabled scope must do NO canvas work');
-    assert.equal(getScopeTerminusAlpha(), SCOPE_OUTSIDE_ALPHA, 'and must not track the camera');
+    assert.deepEqual(
+      dom.ops,
+      afterDisable,
+      'a disabled scope must do NO canvas work',
+    );
+    assert.equal(
+      getScopeTerminusAlpha(),
+      SCOPE_OUTSIDE_ALPHA,
+      'and must not track the camera',
+    );
 
     // Re-enable: the alpha it skipped is re-synced once, before the first paint.
     const beforeEnable = { ...dom.ops };
     setScopeMaskEnabled(true);
-    assert.equal(getScopeTerminusAlpha(), SCOPE_TERMINUS_ALPHA_NEAR,
-      're-enabling must re-sync the terminus it stopped sampling');
-    assert.ok(dom.ops.resizes > beforeEnable.resizes, 'and repaint at the live altitude');
+    assert.equal(
+      getScopeTerminusAlpha(),
+      SCOPE_TERMINUS_ALPHA_NEAR,
+      're-enabling must re-sync the terminus it stopped sampling',
+    );
+    assert.ok(
+      dom.ops.resizes > beforeEnable.resizes,
+      'and repaint at the live altitude',
+    );
   } finally {
     setScopeMaskFeather(SCOPE_FEATHER_RATIO_DEFAULT);
     destroyScopeMask();
@@ -493,10 +687,26 @@ test('a DPR change that also crosses a terminus step paints once, not twice', ()
     const repaintsBefore = getScopeTerminusRepaintCount();
     dom.setDpr(2);
 
-    assert.equal(dom.ops.resizes - before.resizes, 1, 'both changes must share ONE paint');
-    assert.equal(dom.canvas.width, 2000, 'and it must be at the new backing-store scale');
-    assert.equal(getScopeTerminusAlpha(), 0.97, 'with the stepped terminus already folded in');
-    assert.equal(getScopeTerminusRepaintCount(), repaintsBefore + 1, 'counted as one repaint');
+    assert.equal(
+      dom.ops.resizes - before.resizes,
+      1,
+      'both changes must share ONE paint',
+    );
+    assert.equal(
+      dom.canvas.width,
+      2000,
+      'and it must be at the new backing-store scale',
+    );
+    assert.equal(
+      getScopeTerminusAlpha(),
+      0.97,
+      'with the stepped terminus already folded in',
+    );
+    assert.equal(
+      getScopeTerminusRepaintCount(),
+      repaintsBefore + 1,
+      'counted as one repaint',
+    );
   } finally {
     destroyScopeMask();
     dom.restore();
@@ -510,12 +720,24 @@ test('terminus percents clamp into the supported band; junk is absent, not zero'
   assert.equal(SCOPE_TERMINUS_MAX_PCT, 100);
   assert.equal(clampScopeTerminusPct(97), 97);
   assert.equal(clampScopeTerminusPct(96.6), 97);
-  assert.equal(clampScopeTerminusPct(0), 94, 'a sub-band value is floored, never honoured');
+  assert.equal(
+    clampScopeTerminusPct(0),
+    94,
+    'a sub-band value is floored, never honoured',
+  );
   assert.equal(clampScopeTerminusPct(93), 94);
   assert.equal(clampScopeTerminusPct(-100), 94);
   assert.equal(clampScopeTerminusPct(1000), 100);
-  assert.equal(clampScopeTerminusPct('98'), 98, 'hash values arrive as strings');
-  assert.equal(clampScopeTerminusPct(null), null, 'absent means adaptive, not 0');
+  assert.equal(
+    clampScopeTerminusPct('98'),
+    98,
+    'hash values arrive as strings',
+  );
+  assert.equal(
+    clampScopeTerminusPct(null),
+    null,
+    'absent means adaptive, not 0',
+  );
   assert.equal(clampScopeTerminusPct(undefined), null);
   assert.equal(clampScopeTerminusPct(''), null);
   assert.equal(clampScopeTerminusPct('abc'), null);
@@ -528,12 +750,52 @@ test('a pinned override is floored to the band at every entry point', () => {
   try {
     installScopeMask({ container: dom.container });
     setScopeTerminusOverride(0); // an sce=0 link, or any stale caller
-    assert.equal(getScopeTerminusOverride(), SCOPE_OUTSIDE_ALPHA,
-      'a fully transparent terminus is a hole in the mask, not a scope');
+    assert.equal(
+      getScopeTerminusOverride(),
+      SCOPE_OUTSIDE_ALPHA,
+      'a fully transparent terminus is a hole in the mask, not a scope',
+    );
     assert.equal(getScopeTerminusAlpha(), SCOPE_OUTSIDE_ALPHA);
 
     setScopeTerminusOverride(5);
     assert.equal(getScopeTerminusOverride(), 1, 'and the ceiling still holds');
+  } finally {
+    destroyScopeMask();
+    dom.restore();
+  }
+});
+
+test('on a globe engine (Navara) the mask goes into its host container and follows its camera height', async () => {
+  const { createFakeEngine } = await import('./globe/testing/fakeEngine.js');
+  const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
+  const appended = [];
+  dom.container.appendChild = (child) => appended.push(child);
+  // Globe scale: the translucent terminus.
+  const engine = createFakeEngine({ kind: 'navara', altitude: 14_000_000 });
+  engine.host.container = dom.container;
+  try {
+    installScopeMask(engine);
+    assert.deepEqual(appended, [dom.canvas]);
+    assert.equal(dom.canvas.id, 'scope-mask');
+    assert.equal(getScopeTerminusAlpha(), SCOPE_OUTSIDE_ALPHA);
+    // Down to a city: the engine's moveEnd pins the opaque terminus.
+    engine.fake.setPose({ longitude: 0, latitude: 0, height: 2000 });
+    engine.fake.frames(3);
+    assert.equal(getScopeTerminusAlpha(), SCOPE_TERMINUS_ALPHA_NEAR);
+    assert.ok(
+      dom.fillStyles().some((style) => style.endsWith(',1)')) ||
+        dom.gradientStops().some(({ color }) => color.endsWith(',1)')),
+      'an opaque outside at low altitude',
+    );
+    destroyScopeMask();
+    const repaints = getScopeTerminusRepaintCount();
+    engine.fake.setPose({ longitude: 0, latitude: 0, height: 14_000_000 });
+    engine.fake.frames(3);
+    assert.equal(
+      getScopeTerminusRepaintCount(),
+      repaints,
+      'no engine listener after destroy',
+    );
   } finally {
     destroyScopeMask();
     dom.restore();

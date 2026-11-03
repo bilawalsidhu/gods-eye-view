@@ -22,6 +22,7 @@ import {
   attachNavaraAnnotations,
   attachNavaraDraw,
   attachNavaraGeoImport,
+  attachNavaraScopeMask,
 } from './navaraTools.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 
@@ -495,6 +496,7 @@ export function attachViewerlessTools(
   });
   attachNavaraDraw(tools, { ...context, annotations }, { signal, defer });
   attachNavaraGeoImport(tools, context, { signal, defer });
+  attachNavaraScopeMask(tools, context, { signal, defer });
   // Voice on the engine (phase 3, Task 9): the W1 tools drive the engine;
   // the Director uses the shared session; viewer-only tools declare availability.
   const voiceCommands = attachSessionVoice({

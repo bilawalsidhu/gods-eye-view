@@ -1,4 +1,5 @@
 import { getKeyholeGeometry } from './celestialRing.js';
+import { isGlobeEngine } from './globe/contract.js';
 import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
 
 /**
@@ -86,7 +87,11 @@ const SCOPE_TERMINUS_SAMPLE_MS = 120;
 
 let _canvas = null;
 let _container = null;
-let _viewer = null;
+/**
+ * The globe the mask sits over: { height(), preRender, moveEnd } from a
+ * Cesium viewer or a globe engine (Navara).
+ */
+let _globe = null;
 let _enabled = true;
 let _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
 let _resizeObserver = null;
@@ -421,15 +426,38 @@ function syncScopeMaskAppearance(enabled = _enabled) {
 }
 
 /**
- * Install the scope mask into the viewer container. Idempotent.
- * @param {Cesium.Viewer} viewer
+ * The camera height and frame/camera events of a Cesium viewer or a globe
+ * engine, and the container the mask goes into.
+ */
+function globeOf(target) {
+  if (isGlobeEngine(target))
+    return {
+      container: target.host.container,
+      height: () => target.camera.height(),
+      preRender: target.frames.preRender,
+      moveEnd: target.camera.moveEnd,
+    };
+  return {
+    container: target?.container,
+    height: () => target?.camera?.positionCartographic?.height,
+    preRender: target?.scene?.preRender,
+    moveEnd: target?.camera?.moveEnd,
+  };
+}
+
+/**
+ * Install the scope mask into the globe's container: a Cesium viewer's, or
+ * a globe engine's host container (Navara). Idempotent.
+ * @param {Cesium.Viewer | import('./globe/contract.js').GlobeEngine} target
  * @returns {void}
  */
-export function installScopeMask(viewer) {
-  if (_canvas || !viewer?.container) return;
+export function installScopeMask(target) {
+  if (_canvas) return;
+  const globe = globeOf(target);
+  if (!globe.container) return;
   syncScopeMaskAppearance();
-  _container = viewer.container;
-  _viewer = viewer;
+  _container = globe.container;
+  _globe = globe;
   _canvas = document.createElement('canvas');
   _canvas.id = 'scope-mask';
   _canvas.setAttribute('aria-hidden', 'true');
@@ -437,7 +465,7 @@ export function installScopeMask(viewer) {
   _resizeObserver = new ResizeObserver(() => draw());
   _resizeObserver.observe(_container);
   watchDevicePixelRatio();
-  watchCameraHeight(viewer);
+  watchCameraHeight(globe);
   // Seed from the live camera so the first paint is already correct for the
   // restored/initial altitude instead of flashing the globe-scale terminus.
   _terminusAlpha = currentTerminusTarget();
@@ -446,7 +474,12 @@ export function installScopeMask(viewer) {
 
 /** @returns {number} Live camera height above the ellipsoid, or +Inf if unknown. */
 function currentCameraHeightM() {
-  const height = _viewer?.camera?.positionCartographic?.height;
+  let height;
+  try {
+    height = _globe?.height();
+  } catch {
+    height = undefined;
+  }
   return Number.isFinite(height) ? height : Number.POSITIVE_INFINITY;
 }
 
@@ -456,11 +489,11 @@ function currentCameraHeightM() {
  * warranted. Two cheap compares per rendered frame; under the idle governor a
  * parked camera renders no frames at all, so this costs nothing at rest.
  * moveEnd additionally pins the exact settled value.
- * @param {Cesium.Viewer} viewer
+ * @param {{ preRender?: object, moveEnd?: object }} globe
  * @returns {void}
  */
-function watchCameraHeight(viewer) {
-  const preRender = viewer?.scene?.preRender;
+function watchCameraHeight(globe) {
+  const preRender = globe.preRender;
   if (preRender?.addEventListener) {
     _cameraSampleRemover = preRender.addEventListener(() => {
       // SCOPE OFF paints nothing, so it samples nothing: no height read, no
@@ -474,7 +507,7 @@ function watchCameraHeight(viewer) {
       updateScopeTerminusForHeight(currentCameraHeightM());
     });
   }
-  const moveEnd = viewer?.camera?.moveEnd;
+  const moveEnd = globe.moveEnd;
   if (moveEnd?.addEventListener) {
     _cameraMoveEndRemover = moveEnd.addEventListener(() => {
       if (!_enabled) return;
@@ -550,7 +583,7 @@ export function destroyScopeMask() {
   _canvas?.remove();
   _canvas = null;
   _container = null;
-  _viewer = null;
+  _globe = null;
   _painted = false;
 }
 
@@ -564,7 +597,7 @@ export function _resetScopeMaskForTest() {
   _canvas?.remove();
   _canvas = null;
   _container = null;
-  _viewer = null;
+  _globe = null;
   _enabled = true;
   _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
   _terminusAlpha = SCOPE_OUTSIDE_ALPHA;
