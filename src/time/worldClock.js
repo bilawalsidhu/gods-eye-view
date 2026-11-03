@@ -24,15 +24,21 @@ const MAX_DATE_MS = 8.64e15;
 export const isWorldTime = (ms) =>
   Number.isFinite(ms) && Math.abs(ms) <= MAX_DATE_MS;
 
-/** How often subscribers hear of a continuously playing cursor. */
+/**
+ * How often subscribers hear of a continuously playing cursor with no
+ * animation frames to go by; with them, they hear of it every frame.
+ */
 export const WORLD_CLOCK_TICK_MS = 250;
 
 /**
  * @param {{now?: () => number, monotonicNow?: () => number,
  *   setInterval?: typeof globalThis.setInterval,
  *   clearInterval?: typeof globalThis.clearInterval,
+ *   requestFrame?: typeof globalThis.requestAnimationFrame | null,
+ *   cancelFrame?: typeof globalThis.cancelAnimationFrame | null,
  *   follow?: Iterable<string>}} [options] `follow` lists the layers that
- *   move with the cursor from the start.
+ *   move with the cursor from the start. Playing, the clock tells its
+ *   listeners of the time each animation frame, or each tick without frames.
  */
 export function createWorldClock({
   // Read at each call, so a stand-in for Date.now (a test's, a harness's)
@@ -41,6 +47,8 @@ export function createWorldClock({
   monotonicNow = () => globalThis.performance.now(),
   setInterval = globalThis.setInterval,
   clearInterval = globalThis.clearInterval,
+  requestFrame = globalThis.requestAnimationFrame?.bind(globalThis) ?? null,
+  cancelFrame = globalThis.cancelAnimationFrame?.bind(globalThis) ?? null,
   follow = [],
 } = {}) {
   const listeners = new Set();
@@ -128,11 +136,23 @@ export function createWorldClock({
       }
     }
   };
+  // Playing, the time moves on smoothly: each frame, so the timeline and the
+  // globe move with it and a layer's next frame is met as it comes, or each
+  // tick where there are no frames.
+  const frames = Boolean(requestFrame && cancelFrame);
+  const frame = () => {
+    ticker = requestFrame(frame);
+    notify();
+  };
   const syncTicker = () => {
     if (continuous() && listeners.size) {
-      ticker ??= setInterval(notify, WORLD_CLOCK_TICK_MS);
+      if (ticker === null)
+        ticker = frames
+          ? requestFrame(frame)
+          : setInterval(notify, WORLD_CLOCK_TICK_MS);
     } else if (ticker !== null) {
-      clearInterval(ticker);
+      if (frames) cancelFrame(ticker);
+      else clearInterval(ticker);
       ticker = null;
     }
   };

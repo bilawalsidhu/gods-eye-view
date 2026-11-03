@@ -378,10 +378,6 @@ test('zoomed, a scrub near now stays off live, and the view keeps a still handle
     await nextTick();
   }
   assert.ok(Number(input.max) - Number(input.min) < 6 * 3_600_000, 'lines zoom like pixels');
-  // A sideways swipe leaves the zoom alone.
-  const sideways = new WheelEvent('wheel', { deltaX: 50, deltaY: 1, cancelable: true });
-  track.dispatchEvent(sideways);
-  assert.equal(sideways.defaultPrevented, false);
 
   // Twenty minutes back is near now on a month, not on a few hours.
   input.value = String(now - 20 * 60_000);
@@ -403,7 +399,8 @@ test('zoomed, a scrub near now stays off live, and the view keeps a still handle
   assert.equal(browserZoom.defaultPrevented, false);
 
   // A double-click puts back the time its first press moved.
-  track.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  track.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
+  track.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
   input.value = String(at - 3_600_000);
   input.dispatchEvent(new Event('input'));
   track.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
@@ -439,4 +436,105 @@ test('play held for a layer to load shows a spinner once the hold lasts', async 
   assert.match(bubble().textContent, /UTC$/, 'the time stays');
   release();
   assert.ok(await until(false), 'gone once play goes on');
+});
+
+test('the track drags along, a tap goes to its time, and the handle waits off it', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const start = now - 26 * 86_400_000;
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({ start, end: now, marks: [start] }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const track = bar().querySelector('.world-timeline-track');
+  const input = bar().querySelector('input[type=range]');
+  // A 1000 px track from x = 0.
+  Object.defineProperty(track, 'clientWidth', { value: 1_000 });
+  track.getBoundingClientRect = () => ({ left: 0, width: 1_000, top: 0, height: 24 });
+  const press = (type, clientX, pointerId = 1) =>
+    track.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX, pointerId }));
+  const view = () => ({ min: Number(input.min), max: Number(input.max) });
+
+  // All of it shown, a tap goes to the time under it.
+  press('pointerdown', 500);
+  press('pointerup', 500);
+  await nextTick();
+  const middle = start + (now - start) / 2;
+  assert.ok(Math.abs(worldClock.now() - middle) < 60_000, 'went to the middle');
+
+  // Zoomed to a day around it, dragging right by half the track goes back half a day.
+  for (let i = 0; i < 6; i++) {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
+    await nextTick();
+  }
+  const before = view();
+  const day = before.max - before.min;
+  press('pointerdown', 600, 2);
+  press('pointermove', 700, 2);
+  press('pointermove', 1_100, 2);
+  press('pointerup', 1_100, 2);
+  await nextTick();
+  assert.ok(Math.abs(view().max - (before.max - day / 2)) < 1_000, 'dragged half a view');
+  assert.ok(Math.abs(worldClock.now() - middle) < 60_000, 'a drag leaves the time');
+
+  // Dragged off the handle, it waits unseen at the edge; a sideways swipe drags too.
+  track.dispatchEvent(new WheelEvent('wheel', { deltaX: -2_000, deltaY: 0, cancelable: true }));
+  await nextTick();
+  assert.ok(view().max < worldClock.now(), 'the handle is past the view');
+  assert.equal(input.classList.contains('is-off-view'), true);
+  // Moving the time takes the view back to it.
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp' }));
+  await nextTick();
+  assert.equal(input.classList.contains('is-off-view'), false);
+});
+
+test('a pinch measures from where the fingers are, and a lifted finger ends it', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const start = now - 26 * 86_400_000;
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({ start, end: now, marks: [start] }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const track = bar().querySelector('.world-timeline-track');
+  const input = bar().querySelector('input[type=range]');
+  Object.defineProperty(track, 'clientWidth', { value: 1_000 });
+  track.getBoundingClientRect = () => ({ left: 0, width: 1_000, top: 0, height: 24 });
+  const on = (target, type, clientX, pointerId) =>
+    target.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX, pointerId }));
+  const length = () => Number(input.max) - Number(input.min);
+  for (let i = 0; i < 4; i++) {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
+    await nextTick();
+  }
+  const before = length();
+  // A finger on the handle moves before the second comes down.
+  on(input, 'pointerdown', 300, 1);
+  on(input, 'pointermove', 500, 1);
+  on(track, 'pointerdown', 700, 2);
+  on(input, 'pointermove', 500, 1);
+  await nextTick();
+  assert.ok(Math.abs(length() - before) < 1_000, 'no zoom from a stale finger');
+  on(track, 'pointermove', 900, 2);
+  await nextTick();
+  assert.ok(length() < before, 'spread apart, it zooms in');
+  // One finger up: the other moving does nothing, and throws nothing.
+  const zoomedTo = length();
+  on(track, 'pointerup', 900, 2);
+  on(input, 'pointermove', 100, 1);
+  await nextTick();
+  assert.ok(Math.abs(length() - zoomedTo) < 1_000);
+  on(input, 'pointercancel', 100, 1);
 });

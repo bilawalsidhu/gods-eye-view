@@ -353,3 +353,37 @@ test('a seek still moves a waiting clock', () => {
   assert.equal(clock.now(), t.wall - 60_000);
   release();
 });
+
+test('playing, listeners hear of the time every animation frame', () => {
+  const t = fakeTime();
+  const frames = new Map();
+  let nextFrame = 1;
+  const clock = createWorldClock({
+    ...t.options,
+    requestFrame: (fn) => {
+      frames.set(nextFrame, fn);
+      return nextFrame++;
+    },
+    cancelFrame: (id) => frames.delete(id),
+  });
+  const heard = [];
+  clock.subscribe((state) => heard.push(state.timeMs));
+  const start = t.wall - 60_000;
+  clock.seek(start);
+  clock.play({ rate: 60 });
+  assert.equal(t.timers.size, 0, 'no ticks with frames to go by');
+  assert.equal(frames.size, 1);
+  const runFrame = () => {
+    const [[id, fn]] = frames;
+    frames.delete(id);
+    fn();
+  };
+  heard.length = 0;
+  for (let i = 0; i < 3; i++) {
+    t.advance(16);
+    runFrame();
+  }
+  assert.deepEqual(heard, [start + 960, start + 1_920, start + 2_880]);
+  clock.pause();
+  assert.equal(frames.size, 0);
+});

@@ -6,6 +6,11 @@ export const GLOBAL_INFRARED_MAX_GAP_MS = 3 * 60 * 60_000;
 export const LIGHTNING_MAX_GAP_MS = 30 * 60_000;
 /** The longest play waits on a frame before it goes on without it. */
 export const PLAY_WAIT_MS = 8_000;
+// Playing on its own, the world does not wait on the frame it is at: that
+// frame loads as play goes on. Play holds only at the next frame while the
+// one before it still loads, then goes on to it once it shows, so every frame
+// shows, play stops only for a load that is slow, and a frame loaded ahead
+// costs play nothing.
 
 let clocks = 0;
 
@@ -39,10 +44,12 @@ export function createWeatherClock({
   let pending = null;
   // This clock's name on the world, for its holds and its gate.
   const holdId = `weather:${++clocks}`;
-  // While the world plays, the hold on it as frames for its time load, and
-  // the timer that lets play go on should a frame never come.
+  // While the world plays, the hold on it at the next frame as the one before
+  // it loads, and the timer that lets play go on should that frame never
+  // come; and whether the move to the next frame waits on it.
   let waiting = null;
   let waitTimer = null;
+  let deferred = false;
   const stopWaiting = () => {
     const release = waiting;
     waiting = null;
@@ -56,6 +63,8 @@ export function createWeatherClock({
     waitTimer = setTimeout(() => {
       waitTimer = null;
       stopWaiting();
+      // The frame that never came gives way to the one play is at.
+      if (deferred) void transition();
     }, PLAY_WAIT_MS);
   };
   // Playing on its own, the world waits for frames as they load.
@@ -93,6 +102,9 @@ export function createWeatherClock({
     mode,
     target,
     playing,
+    // Frames come on one after another: this clock replays them, or the world
+    // plays on through them, so the next is worth loading ahead.
+    advancing: playing || worldPlaysOn(),
     timeline: getTimeline(),
     products: [...registry.values()].map(({ product }) => ({
       id: product.id,
@@ -158,13 +170,10 @@ export function createWeatherClock({
     cancelTimer();
     const owner = ++generation;
     if (!canPlay()) stopPlaying();
-    // Playing, the world waits for new frames; a later move takes over the
-    // wait, and a scrub (not playing) drops what loads and moves on. A refresh
-    // that shows the same frames does not hold play.
-    const framesChange = selections() !== applied;
+    // A scrub drops what loads and moves on; play goes on as this loads.
     applied = selections();
+    deferred = false;
     stopWaiting();
-    if (framesChange && worldPlaysOn()) startWaiting();
     for (const entry of registry.values()) entry.controller?.abort();
     // Start all products together; a rejection must not skip the settle barrier.
     const tasks = [...registry.values()].map((entry) => {
@@ -183,6 +192,8 @@ export function createWeatherClock({
       if (!canPlay()) stopPlaying();
       notify();
       schedule();
+      // Play held at the next frame for this one goes on to it.
+      if (deferred) void transition();
       return true;
     });
     pending = result;
@@ -346,22 +357,43 @@ export function createWeatherClock({
   function followWorld(state) {
     if (destroyed) return;
     gateNext(state);
-    // Play pressed while a frame still loads waits for it too.
+    // Play starting or stopping changes whether the next frame loads ahead.
     const playsOn = worldPlaysOn(state);
-    if (playsOn && !playedOn && pending) startWaiting();
+    const playChanged = playsOn !== playedOn;
     playedOn = playsOn;
     const nextMode = state.live ? 'latest' : 'history';
     const nextTarget = state.live
       ? null
       : new Date(Math.floor(state.timeMs)).toISOString();
     const key = nextTarget ?? 'latest';
-    if (key === seen) return;
+    if (key === seen) {
+      if (playChanged) notify();
+      return;
+    }
     seen = key;
     const modeChanged = nextMode !== mode;
     mode = nextMode;
     target = nextTarget;
-    if (moving || modeChanged || selections() !== applied) void transition();
-    else notify();
+    if (!moving && !modeChanged && selections() === applied) {
+      // Back at the frame that loads, play need not hold for it.
+      if (deferred) {
+        deferred = false;
+        stopWaiting();
+      }
+      // Played through, the time moves each frame with nothing new to show:
+      // listeners hear of the frames as they change.
+      if (!playsOn || playChanged) notify();
+      return;
+    }
+    // Playing on into the next frame while the one before it loads, the
+    // world holds here until that one shows.
+    if (!moving && !modeChanged && pending && playsOn) {
+      deferred = true;
+      startWaiting();
+      notify();
+      return;
+    }
+    void transition();
   }
   // Playing on its own, the world stops at each next frame to load it rather
   // than run past frames between its ticks.

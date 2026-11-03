@@ -495,48 +495,6 @@ test('a clock destroyed while it registers a product lets go of it', (t) => {
   assert.equal(world.getState().supported, false);
 });
 
-test('playing, the world waits for each frame; a scrub drops it and moves on', async (t) => {
-  const { clock, world, tick } = harness(t);
-  const radar = product('radar', [0, 10, 20]);
-  const loads = [];
-  radar.apply = (selected, { signal }) =>
-    new Promise((resolve) => {
-      loads.push({ selected, signal, done: () => resolve(true) });
-    });
-  clock.register(radar);
-  world.seek(Date.parse(time(9)));
-  await flush();
-  loads.at(-1).done();
-  await flush();
-  world.play({ rate: 60, continuous: true });
-  tick(2_000);
-  // Into the next frame (the page's ticker tells of it): the world holds
-  // there while it loads.
-  world.coverageChanged();
-  await flush();
-  assert.equal(loads.at(-1).selected, time(10));
-  assert.equal(world.getState().buffering, true);
-  const held = world.now();
-  tick(5_000);
-  assert.equal(world.now(), held, 'held while the frame loads');
-  loads.at(-1).done();
-  await flush();
-  assert.equal(world.getState().buffering, false);
-  tick(1_000);
-  assert.equal(world.now(), held + 60_000, 'and plays on once it shows');
-
-  // A scrub aborts what loads and loads where the hand is, with no wait.
-  world.pause();
-  world.seek(Date.parse(time(20)));
-  await flush();
-  const scrubbed = loads.at(-1);
-  world.seek(Date.parse(time(0)));
-  await flush();
-  assert.equal(scrubbed.signal.aborted, true);
-  assert.equal(loads.at(-1).selected, time(0));
-  assert.equal(world.getState().buffering, false);
-});
-
 // A radar whose frames load only when the test says.
 function slowRadar(minutes) {
   const radar = product('radar', minutes);
@@ -573,6 +531,61 @@ test('play stops at the next frame, not past it, until it shows', async (t) => {
   );
 });
 
+test('playing, a frame loads as play goes on, and play holds at the next until it shows', async (t) => {
+  const { clock, world, tick } = harness(t);
+  const radar = slowRadar([0, 10, 20, 30]);
+  clock.register(radar);
+  world.seek(Date.parse(time(9)));
+  await flush();
+  radar.loads.at(-1).done();
+  await flush();
+  world.play({ rate: 60, continuous: true });
+  // Into the next frame (the page's frames tell of it): it loads as play goes on.
+  tick(2_000);
+  world.coverageChanged();
+  await flush();
+  assert.equal(radar.loads.at(-1).selected, time(10));
+  assert.equal(
+    world.getState().buffering,
+    false,
+    'no hold for the frame play is at',
+  );
+  // At the frame after while that one still loads, play holds there.
+  tick(10_000);
+  world.coverageChanged();
+  await flush();
+  assert.equal(world.now(), Date.parse(time(20)));
+  assert.equal(world.getState().buffering, true);
+  assert.equal(
+    radar.loads.at(-1).selected,
+    time(10),
+    'the frame before still loads',
+  );
+  tick(5_000);
+  assert.equal(world.now(), Date.parse(time(20)), 'held while it loads');
+  radar.loads.at(-1).done();
+  await flush();
+  assert.equal(
+    radar.loads.at(-1).selected,
+    time(20),
+    'and on to the next once it shows',
+  );
+  assert.equal(world.getState().buffering, false);
+  tick(1_000);
+  assert.equal(world.now(), Date.parse(time(20)) + 60_000);
+
+  // A scrub aborts what loads and loads where the hand is, with no wait.
+  world.pause();
+  world.seek(Date.parse(time(30)));
+  await flush();
+  const scrubbed = radar.loads.at(-1);
+  world.seek(Date.parse(time(0)));
+  await flush();
+  assert.equal(scrubbed.signal.aborted, true);
+  assert.equal(radar.loads.at(-1).selected, time(0));
+  assert.equal(world.getState().buffering, false);
+});
+
 test('a frame that never comes holds play only so long', async (t) => {
   const { clock, world, tick } = harness(t);
   const radar = slowRadar([0, 10, 20]);
@@ -585,26 +598,58 @@ test('a frame that never comes holds play only so long', async (t) => {
   tick(2_000);
   world.coverageChanged();
   await flush();
+  tick(10_000);
+  world.coverageChanged();
+  await flush();
   assert.equal(world.getState().buffering, true);
+  const stuck = radar.loads.at(-1);
   tick(PLAY_WAIT_MS);
+  await flush();
   assert.equal(world.getState().buffering, false, 'play goes on without it');
+  assert.equal(stuck.signal.aborted, true);
+  assert.equal(radar.loads.at(-1).selected, time(20), 'loading where play is');
 });
 
-test('play pressed while a frame loads waits for it; a refresh does not', async (t) => {
+test('held at the next frame, a scrub back to the one loading lets play go', async (t) => {
+  const { clock, world, tick } = harness(t);
+  const radar = slowRadar([0, 10, 20]);
+  clock.register(radar);
+  world.seek(Date.parse(time(9)));
+  await flush();
+  radar.loads.at(-1).done();
+  await flush();
+  world.play({ rate: 60, continuous: true });
+  tick(2_000);
+  world.coverageChanged();
+  await flush();
+  tick(10_000);
+  world.coverageChanged();
+  await flush();
+  assert.equal(world.getState().buffering, true);
+  world.pause();
+  world.seek(Date.parse(time(11)));
+  await flush();
+  world.play({ rate: 60, continuous: true });
+  assert.equal(
+    world.getState().buffering,
+    false,
+    'no hold for the frame it is at',
+  );
+  const at = world.now();
+  tick(1_000);
+  assert.equal(world.now(), at + 60_000);
+});
+
+test('a frame in flight as play starts loads as it goes on; a refresh does not hold', async (t) => {
   const { clock, world } = harness(t);
   const radar = slowRadar([0, 10, 20]);
   clock.register(radar);
   world.seek(Date.parse(time(5)));
   await flush();
   world.play({ continuous: true });
-  assert.equal(
-    world.getState().buffering,
-    true,
-    'waits for the frame in flight',
-  );
+  assert.equal(world.getState().buffering, false);
   radar.loads.at(-1).done();
   await flush();
-  assert.equal(world.getState().buffering, false);
   void clock.refresh();
   await flush();
   assert.equal(world.getState().buffering, false, 'the same frames, no hold');
@@ -639,4 +684,26 @@ test('weather clocks sharing a world gate it each on their own', async (t) => {
     Date.parse(time(10)),
     'the other clock’s gate stays',
   );
+});
+
+test('played through, listeners hear of frames as they change, and of play stopping', async (t) => {
+  const { clock, world, tick } = harness(t);
+  const radar = product('radar', [0, 10, 20]);
+  clock.register(radar);
+  world.seek(Date.parse(time(1)));
+  await flush();
+  world.play({ rate: 60, continuous: true });
+  await flush();
+  const heard = [];
+  clock.subscribe((state) => heard.push(state));
+  // Seconds of world time within one frame: nothing new to show.
+  for (let i = 0; i < 5; i++) {
+    tick(100);
+    world.coverageChanged();
+  }
+  await flush();
+  assert.equal(heard.length, 0);
+  world.pause();
+  await flush();
+  assert.equal(heard.at(-1)?.advancing, false, 'heard play stop');
 });

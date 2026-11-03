@@ -142,6 +142,7 @@ body.cockpit-mode #world-timeline {
   /* Two fingers pinch the track, not the page. */
   touch-action: none;
   flex: 1 1 auto;
+  cursor: pointer;
   min-width: 80px;
   height: 24px;
 }
@@ -193,6 +194,17 @@ body.cockpit-mode #world-timeline {
   pointer-events: none;
 }
 
+/* Zoomed, the track drags along. */
+#world-timeline .world-timeline-track.is-zoomed {
+  cursor: grab;
+}
+
+#world-timeline .world-timeline-track.is-zoomed:active {
+  cursor: grabbing;
+}
+
+/* Only the handle takes the pointer as a slider; the track around it takes
+   taps, drags and pinches itself. */
 #world-timeline .world-timeline-scrub {
   position: absolute;
   inset: 0;
@@ -200,8 +212,29 @@ body.cockpit-mode #world-timeline {
   height: 100%;
   margin: 0;
   background: transparent;
-  cursor: pointer;
   appearance: none;
+  pointer-events: none;
+}
+
+#world-timeline .world-timeline-scrub::-webkit-slider-thumb {
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+#world-timeline .world-timeline-scrub::-moz-range-thumb {
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+/* The time dragged off the track: the handle waits at its edge, unseen. */
+#world-timeline .world-timeline-scrub.is-off-view::-webkit-slider-thumb {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#world-timeline .world-timeline-scrub.is-off-view::-moz-range-thumb {
+  opacity: 0;
+  pointer-events: none;
 }
 
 #world-timeline .world-timeline-scrub::-webkit-slider-runnable-track {
@@ -230,6 +263,20 @@ body.cockpit-mode #world-timeline {
   border: 2px solid var(--accent);
   border-radius: 50%;
   background: #031018;
+}
+
+/* A finger needs a bigger handle. */
+@media (pointer: coarse) {
+  #world-timeline .world-timeline-scrub::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+  }
+
+  #world-timeline .world-timeline-scrub::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 #world-timeline .world-timeline-scrub:focus-visible {

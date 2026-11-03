@@ -109,7 +109,8 @@ export function createWeatherLayer({
   const notify = () => listener?.();
   const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time);
   const unsubscribeClock = clock?.subscribe(() => {
-    if (!clock.getState().playing || suspended()) rendering?.cancelPrefetch?.();
+    if (!clock.getState().advancing || suspended())
+      rendering?.cancelPrefetch?.();
     notify();
   });
   const observationDelayed = () =>
@@ -211,7 +212,7 @@ export function createWeatherLayer({
     if (
       !enabled ||
       suspended() ||
-      !(clock ? clock.getState().playing : playing)
+      !(clock ? clock.getState().advancing : playing)
     )
       return;
     const times = manifest?.times ?? [];
