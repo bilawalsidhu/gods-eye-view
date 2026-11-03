@@ -166,7 +166,12 @@ export function createVoiceCommands({
   const reticle = pointer ? createReticle(pointer) : null;
   const updatePointer = session.subscribe((event) => {
     reticle?.handle(event);
-    if (event.type === 'state' && ['idle', 'error'].includes(event.state)) {
+    // A failed typed turn ends only that reply; its conversation continues.
+    if (
+      event.type === 'state' &&
+      (event.state === 'idle' ||
+        (event.state === 'error' && !adapter.getStartOptions?.().textOnly))
+    ) {
       pointer?.clear();
       referents?.clear();
       // Conversation memory ("those", "the last answer") ends with the

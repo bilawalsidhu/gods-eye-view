@@ -2943,5 +2943,7 @@
   "That request needed too many steps. Changes already made to the map stay in place.": "此請求所需步驟過多。已對地圖做出的變更會保留。",
   "That request needed too many steps. Try a simpler request.": "此請求所需步驟過多。請嘗試更簡單的請求。",
   "The provider rejected the API key. Check it in Provider Settings.": "供應商拒絕了 API 金鑰。請在供應商設定中檢查。",
-  "Too many chat requests. Try again in {seconds} s.": "聊天請求過多。請在 {seconds} 秒後重試。"
+  "Too many chat requests. Try again in {seconds} s.": "聊天請求過多。請在 {seconds} 秒後重試。",
+  "The provider refused access for this key. Check the key's project, region or permissions.": "供應商拒絕了此金鑰的存取。請檢查該金鑰的專案、地區或權限。",
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "供應商帳戶餘額不足。請檢查帳單，或在設定中選擇其他 AI 供應商。"
 }

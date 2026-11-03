@@ -20,6 +20,7 @@ const HISTORY_BYTES = 180000;
 const REQUEST_BYTES = 512 * 1024;
 // Results from earlier turns keep their outcome and say line, not their records.
 const COMPACT_RESULT_BYTES = 1500;
+const NOT_RUN = { ok: false, skipped: true, reason: 'reply-stopped' };
 const PARTIAL_NOTE =
   'This reply stopped before it finished. The map actions above already ran.';
 
@@ -159,15 +160,29 @@ export function createTextChat({
     // A turn that stops after some map actions ran keeps them, closed by a
     // note, so the next message knows they happened.
     let settled = 0;
+    // The round in progress: its calls, and the results of those that ran.
+    let openRound = null;
     partial = {
       owner,
       keep() {
-        if (settled)
-          history = [
-            ...past,
-            ...contents.slice(0, settled),
-            protocol.note(PARTIAL_NOTE),
-          ];
+        const ran = openRound?.pairs.length ? contents.length : settled;
+        if (!ran) return;
+        // Calls that never ran are answered as skipped, so every call in the
+        // kept history stays paired with a result.
+        const closing = openRound?.pairs.length
+          ? protocol.results(
+              openRound.calls.map(
+                (call, index) =>
+                  openRound.pairs[index] ?? { call, result: NOT_RUN },
+              ),
+            )
+          : [];
+        history = [
+          ...past,
+          ...contents.slice(0, ran),
+          ...closing,
+          protocol.note(PARTIAL_NOTE),
+        ];
       },
     };
     const encode = () =>
@@ -279,6 +294,7 @@ export function createTextChat({
         totalCalls += calls.length;
         if (totalCalls > 16) throw tooManySteps('Tool limit');
         const pairs = [];
+        openRound = { calls, pairs };
         const invalid = new Map(
           (data.invalidCalls || []).map((item) => [item.index, item.error]),
         );
@@ -387,6 +403,7 @@ export function createTextChat({
         }
         contents.push(...protocol.results(pairs));
         settled = contents.length;
+        openRound = null;
       }
       throw tooManySteps('Round limit');
     } catch (error) {
@@ -404,23 +421,31 @@ export function createTextChat({
               ? t(
                   'The provider rejected the API key. Check it in Provider Settings.',
                 )
-              : error?.code === 'RATE_LIMITED' || error?.status === 429
-                ? t('Too many chat requests. Try again in {seconds} s.', {
-                    seconds: Math.min(error.retryAfter || 60, 3600),
-                  })
-                : error?.status === 504 || owner.signal.aborted
-                  ? t('Connection timed out. Try again.')
-                  : error?.incomplete
-                    ? t('Reply interrupted. You can try again.')
-                    : error?.tooManySteps
-                      ? applied
-                        ? t(
-                            'That request needed too many steps. Changes already made to the map stay in place.',
-                          )
-                        : t(
-                            'That request needed too many steps. Try a simpler request.',
-                          )
-                      : t('Could not connect. Try again.'),
+              : error?.code === 'ACCESS_DENIED'
+                ? t(
+                    "The provider refused access for this key. Check the key's project, region or permissions.",
+                  )
+                : error?.code === 'QUOTA_EXCEEDED'
+                  ? t(
+                      'The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.',
+                    )
+                  : error?.code === 'RATE_LIMITED' || error?.status === 429
+                    ? t('Too many chat requests. Try again in {seconds} s.', {
+                        seconds: Math.min(error.retryAfter || 60, 3600),
+                      })
+                    : error?.status === 504 || owner.signal.aborted
+                      ? t('Connection timed out. Try again.')
+                      : error?.incomplete
+                        ? t('Reply interrupted. You can try again.')
+                        : error?.tooManySteps
+                          ? applied
+                            ? t(
+                                'That request needed too many steps. Changes already made to the map stay in place.',
+                              )
+                            : t(
+                                'That request needed too many steps. Try a simpler request.',
+                              )
+                          : t('Could not connect. Try again.'),
       );
     } finally {
       recordUsage(null);

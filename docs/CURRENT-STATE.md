@@ -703,9 +703,13 @@ The chat routes answer a missing key with `503` and code `API_KEY_MISSING`.
 OpenAI chat can only bill `OPENAI_API_KEY`, so while `GEV_PREFER_CODEX_OAUTH`
 pins OpenAI to ChatGPT OAuth it answers `503` with code `CODEX_OAUTH_REQUIRED`
 instead; Gemini chat is unaffected. An upstream `429` or `503` keeps its status
-and passes on a `Retry-After` given in seconds, capped at an hour. After an
-upstream `401` or `403`, the route answers `502` without calling the provider
-for a minute, unless the configured key changes.
+and passes on a `Retry-After` given in seconds, capped at an hour; the chat
+names the wait, and a throttled reply carries code `RATE_LIMITED`. A refused
+key or account stops reaching the provider for a minute, unless the configured
+key changes: `API_KEY_REJECTED` for a `401` or Gemini's `400` with reason
+`API_KEY_INVALID`, `ACCESS_DENIED` for a `403`, and `QUOTA_EXCEEDED` for
+OpenAI's `429` `insufficient_quota`. Each refusal answers `502` with its code,
+and the chat shows a matching message.
 
 Chat and the voice panel sit above the dock or dock into the right rail's lane,
 which hides the rail until the panel minimizes or closes, or a rail panel opens.

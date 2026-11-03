@@ -472,6 +472,24 @@ test('native connecting phases retain output observation; idle starts before fir
   assert.equal(adapter.stops, 1);
 });
 
+test('a failed typed turn keeps follow-up memory; a stop or voice error clears it', async (t) => {
+  let resets = 0;
+  const runner = async () => ({ ok: true });
+  runner.resetConversation = () => resets++;
+  const f = mounted(t, { runner });
+  const adapter = f.instances[0];
+  adapter.getStartOptions = () => ({ textOnly: true });
+  await f.commands.session.start({ textOnly: true });
+  adapter.hooks.emit({ type: 'state', state: 'error', detail: 'Busy' });
+  assert.equal(resets, 0, 'the typed conversation continues');
+  f.commands.session.stop();
+  assert.equal(resets, 1);
+  adapter.getStartOptions = () => ({});
+  await f.commands.session.start();
+  adapter.hooks.emit({ type: 'state', state: 'error', detail: 'Lost' });
+  assert.equal(resets, 2);
+});
+
 test('the voice inactivity timeout never ends a typed chat session', async (t) => {
   const f = mounted(t, { native: true });
   const adapter = f.instances[0];

@@ -3293,5 +3293,7 @@
   "That request needed too many steps. Changes already made to the map stay in place.": "تطلّب هذا الطلب خطوات كثيرة جدًا. تبقى التغييرات التي أُجريت على الخريطة كما هي.",
   "That request needed too many steps. Try a simpler request.": "تطلّب هذا الطلب خطوات كثيرة جدًا. جرّب طلبًا أبسط.",
   "The provider rejected the API key. Check it in Provider Settings.": "رفض المزوّد مفتاح API. تحقّق منه في إعدادات المزوّد.",
-  "Too many chat requests. Try again in {seconds} s.": "طلبات دردشة كثيرة جدًا. حاول مجددًا بعد {seconds} ث."
+  "Too many chat requests. Try again in {seconds} s.": "طلبات دردشة كثيرة جدًا. حاول مجددًا بعد {seconds} ث.",
+  "The provider refused access for this key. Check the key's project, region or permissions.": "رفض المزوّد الوصول لهذا المفتاح. تحقّق من مشروع المفتاح أو منطقته أو أذوناته.",
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "نفد رصيد حساب المزوّد. تحقّق من الفوترة، أو اختر مزوّد ذكاء اصطناعي آخر في الإعدادات."
 }

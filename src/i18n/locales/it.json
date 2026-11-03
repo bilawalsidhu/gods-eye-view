@@ -3083,5 +3083,7 @@
   "That request needed too many steps. Changes already made to the map stay in place.": "Questa richiesta ha richiesto troppi passaggi. Le modifiche già fatte alla mappa restano.",
   "That request needed too many steps. Try a simpler request.": "Questa richiesta ha richiesto troppi passaggi. Prova una richiesta più semplice.",
   "The provider rejected the API key. Check it in Provider Settings.": "Il provider ha rifiutato la chiave API. Controllala nelle impostazioni del provider.",
-  "Too many chat requests. Try again in {seconds} s.": "Troppe richieste di chat. Riprova tra {seconds} s."
+  "Too many chat requests. Try again in {seconds} s.": "Troppe richieste di chat. Riprova tra {seconds} s.",
+  "The provider refused access for this key. Check the key's project, region or permissions.": "Il provider ha negato l’accesso per questa chiave. Controlla progetto, regione o autorizzazioni della chiave.",
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "L’account del provider ha esaurito il credito. Controlla la fatturazione o scegli un altro provider IA nelle impostazioni."
 }

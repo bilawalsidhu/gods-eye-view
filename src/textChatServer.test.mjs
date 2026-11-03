@@ -442,6 +442,43 @@ for (const [name, provider] of Object.entries(providers)) {
     await plain.send();
     assert.equal(upstream, 3);
   });
+  test(`${name} a 403 or an out-of-credit 429 cools down with its own code`, async (t) => {
+    for (const [status, body, code] of [
+      [
+        403,
+        { error: { code: 'unsupported_country_region_territory' } },
+        'ACCESS_DENIED',
+      ],
+      [429, { error: { code: 'insufficient_quota' } }, 'QUOTA_EXCEEDED'],
+    ]) {
+      let upstream = 0;
+      const f = await fixture(t, provider, async () => {
+        upstream++;
+        return Response.json(body, { status });
+      });
+      const first = await f.send();
+      assert.equal(first.status, 502);
+      assert.equal((await first.json()).code, code);
+      const cooling = await f.send();
+      assert.equal((await cooling.json()).code, code);
+      assert.equal(upstream, 1, `${code} is not retried at once`);
+    }
+  });
+  test(`${name} only an exact invalid-key reason marks a 400 as a rejected key`, async (t) => {
+    let upstream = 0;
+    const f = await fixture(t, provider, async () => {
+      upstream++;
+      return Response.json(
+        { error: { code: 400, message: 'Field API_KEY_INVALID is unknown' } },
+        { status: 400 },
+      );
+    });
+    const reply = await f.send();
+    assert.equal(reply.status, 502);
+    assert.equal((await reply.json()).code, undefined);
+    await f.send();
+    assert.equal(upstream, 2);
+  });
   test(`${name} throttled replies say they are rate limited`, async (t) => {
     const local = await fixture(t, provider, undefined, {
       resolveRateLimit: () => '1',

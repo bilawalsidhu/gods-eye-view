@@ -14,17 +14,31 @@ const FAILURE = 'Could not connect. Try again.';
 // A rejected key is not retried upstream for this long, unless the key changes.
 const REJECTED_KEY_COOLDOWN_MS = 60_000;
 
-// Gemini answers an invalid key with 400 and this reason, not 401 or 403.
-const KEY_REJECTED_REASON = 'API_KEY_INVALID';
-async function rejectsKey(response, signal) {
-  if ([401, 403].includes(response.status)) return true;
-  if (response.status !== 400) return false;
+// What an upstream failure says about the key or the account. Gemini answers
+// an invalid key with 400 and an ErrorInfo reason, not 401; OpenAI answers an
+// account without credit with 429 insufficient_quota, which waiting won't fix.
+// A 403 is the key's project, region or permissions, so it cools down too but
+// does not blame the key. Only small error bodies are read.
+async function upstreamRefusal(response, signal) {
+  const { status } = response;
+  if (status === 401) return 'API_KEY_REJECTED';
+  if (status === 403) return 'ACCESS_DENIED';
+  if (![400, 429].includes(status)) return null;
+  let error;
   try {
-    const body = await readResponseJsonCapped(response, 16 * 1024, signal);
-    return JSON.stringify(body).includes(KEY_REJECTED_REASON);
+    error = (await readResponseJsonCapped(response, 16 * 1024, signal))?.error;
   } catch {
-    return false;
+    return null;
   }
+  if (
+    status === 400 &&
+    Array.isArray(error?.details) &&
+    error.details.some((detail) => detail?.reason === 'API_KEY_INVALID')
+  )
+    return 'API_KEY_REJECTED';
+  if (status === 429 && error?.code === 'insufficient_quota')
+    return 'QUOTA_EXCEEDED';
+  return null;
 }
 
 // Pass through only a delay in whole seconds, capped at an hour.
@@ -106,7 +120,7 @@ export function createTextChatHandler({
           'Retry-After',
           String(Math.max(1, Math.ceil((rejected.until - now()) / 1000))),
         );
-        return reply(502, FAILURE, 'API_KEY_REJECTED');
+        return reply(502, FAILURE, rejected.code);
       }
       if (limiter === undefined)
         limiter = makeCostRateLimiter(
@@ -156,10 +170,15 @@ export function createTextChatHandler({
       if (response.redirected || (response.url && response.url !== endpoint))
         throw new Error('Unexpected destination');
       if (!response.ok) {
-        if (await rejectsKey(response, lifetime.signal)) {
+        const refusal = await upstreamRefusal(response, lifetime.signal);
+        if (refusal) {
           void response.body?.cancel().catch(() => {});
-          rejected = { key: apiKey, until: now() + REJECTED_KEY_COOLDOWN_MS };
-          return reply(502, FAILURE, 'API_KEY_REJECTED');
+          rejected = {
+            key: apiKey,
+            code: refusal,
+            until: now() + REJECTED_KEY_COOLDOWN_MS,
+          };
+          return reply(502, FAILURE, refusal);
         }
         void response.body?.cancel().catch(() => {});
         if (![429, 503].includes(response.status)) return reply(502, FAILURE);

@@ -3153,5 +3153,7 @@
   "That request needed too many steps. Changes already made to the map stay in place.": "Цей запит потребував забагато кроків. Уже внесені зміни на мапі залишаються.",
   "That request needed too many steps. Try a simpler request.": "Цей запит потребував забагато кроків. Спробуйте простіший запит.",
   "The provider rejected the API key. Check it in Provider Settings.": "Провайдер відхилив ключ API. Перевірте його в налаштуваннях провайдера.",
-  "Too many chat requests. Try again in {seconds} s.": "Забагато запитів до чату. Спробуйте ще раз через {seconds} с."
+  "Too many chat requests. Try again in {seconds} s.": "Забагато запитів до чату. Спробуйте ще раз через {seconds} с.",
+  "The provider refused access for this key. Check the key's project, region or permissions.": "Провайдер заборонив доступ для цього ключа. Перевірте проєкт, регіон або дозволи ключа.",
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На рахунку провайдера закінчилися кошти. Перевірте оплату або виберіть іншого провайдера ШІ в налаштуваннях."
 }

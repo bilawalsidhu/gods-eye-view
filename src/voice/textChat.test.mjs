@@ -136,6 +136,45 @@ for (const provider of ['openai', 'gemini']) {
     h.chat.stop();
   });
 
+  test(`${provider}: Stop during the second action keeps the first, pairing the rest as skipped`, async () => {
+    let runs = 0;
+    const h = harness(
+      provider,
+      (n) => (n === 1 ? w.calls(2) : w.final('Done')),
+      {
+        runAction: () => (++runs === 1 ? { ok: true } : new Promise(() => {})),
+      },
+    );
+    h.chat.start();
+    h.chat.sendText('Do both');
+    await settle();
+    assert.equal(runs, 2);
+    assert.equal(h.chat.cancelTurn(), true);
+    h.chat.sendText('Continue');
+    await settle();
+    const items = w.items(h.requests[1]);
+    assert.deepEqual(w.userTexts(items), ['Do both', 'Continue']);
+    const results =
+      provider === 'openai'
+        ? items
+            .filter((item) => item.role === 'tool')
+            .map((item) => JSON.parse(item.content))
+        : items.flatMap((item) =>
+            item.parts
+              .filter((part) => part.functionResponse)
+              .map((part) => part.functionResponse.response),
+          );
+    assert.equal(results.length, 2);
+    assert.equal(results[0].ok, true);
+    assert.equal(results[1].skipped, true);
+    const note = items.at(-2);
+    assert.match(
+      provider === 'openai' ? note.content : note.parts[0].text,
+      /map actions above already ran/,
+    );
+    h.chat.stop();
+  });
+
   test(`${provider}: cancelTurn aborts only the reply in progress`, async () => {
     let toolSignal;
     const h = harness(
@@ -209,6 +248,24 @@ for (const provider of ['openai', 'gemini']) {
       {},
       () =>
         t('The provider rejected the API key. Check it in Provider Settings.'),
+    ],
+    [
+      502,
+      { error: 'Refused', code: 'ACCESS_DENIED' },
+      {},
+      () =>
+        t(
+          "The provider refused access for this key. Check the key's project, region or permissions.",
+        ),
+    ],
+    [
+      502,
+      { error: 'Refused', code: 'QUOTA_EXCEEDED' },
+      {},
+      () =>
+        t(
+          'The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.',
+        ),
     ],
     [
       429,
