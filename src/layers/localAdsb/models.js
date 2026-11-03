@@ -16,6 +16,7 @@ import {
 } from '../flights/policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 import { aircraftVisuals } from '../aircraft/visualState.js';
+import { setModel } from '../../data/modelMirror.js';
 
 const specKey = (spec) => `${spec.url}@${spec.scale}`;
 
@@ -56,6 +57,7 @@ export function createLocalAdsbModels({
   let lastEligibilityAt = 0;
   let eligible = new Set();
   const scratchHpr = new Cesium.HeadingPitchRoll();
+  const scratchMatrix = new Cesium.Matrix4();
   const scratchSphere = new Cesium.BoundingSphere(Cesium.Cartesian3.ZERO, 1);
   const scratchCarto = new Cesium.Cartographic();
   const scratchGround = new Cesium.Cartesian3();
@@ -118,7 +120,7 @@ export function createLocalAdsbModels({
     visual.specKey = key;
     visual.bellyM = spec.bellyM;
     // Admitted, not yet the visual: placement turns it on.
-    model.show = false;
+    setModel(model, 'show', false);
     collection.add(model);
     models.set(id, model);
   }
@@ -224,7 +226,7 @@ export function createLocalAdsbModels({
         if (!model || !marker.position) continue;
         const position = placement(id, marker);
         if (!position || !occluder.isPointVisible(marker.position)) {
-          model.show = false;
+          setModel(model, 'show', false);
           continue;
         }
         scratchHpr.heading = Cesium.Math.toRadians(
@@ -232,18 +234,22 @@ export function createLocalAdsbModels({
         );
         scratchHpr.pitch = 0;
         scratchHpr.roll = 0;
-        Cesium.Transforms.headingPitchRollToFixedFrame(
-          position,
-          scratchHpr,
-          Cesium.Ellipsoid.WGS84,
-          undefined,
-          model.modelMatrix,
+        setModel(
+          model,
+          'modelMatrix',
+          Cesium.Transforms.headingPitchRollToFixedFrame(
+            position,
+            scratchHpr,
+            Cesium.Ellipsoid.WGS84,
+            undefined,
+            scratchMatrix,
+          ),
         );
         if (!model.ready) {
-          model.show = false;
+          setModel(model, 'show', false);
           continue;
         }
-        model.show = true;
+        setModel(model, 'show', true);
         marker.modelOwnsVisual = true;
       }
       for (const id of [...models.keys()]) if (!markers.has(id)) release(id);
