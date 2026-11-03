@@ -54,8 +54,10 @@ Above 300 km, outward movement from the controller's configured zoom bindings
 down towards 8° below the Earth's limb. Large steps reach the limb immediately;
 the remaining margin eases into place, including after zooming stops or reaches
 the ceiling. Continuous outward inertia remains guarded without a time cutoff.
-Parallel two-finger tilts, modifier-specific tilts and other camera gestures
-cancel the correction. Explicit navigation handoffs, including toolbar tilt,
+Two-finger tilts, modifier-specific tilts and other camera gestures cancel the
+correction. A two-finger gesture counts as a pinch zoom only while the finger
+spacing changes more than the fingers move up or down, so spacing drift during
+a tilt is ignored. Explicit navigation handoffs, including toolbar tilt,
 cancel it before animation begins. Zooming in, disabled zoom/input, non-3D modes, tracked
 transforms and flights also cancel it; external pose changes cancel stationary
 settling. Oblique views below 300 km are left alone.

@@ -245,6 +245,33 @@ test('parallel two-finger tilt is not mistaken for pinch zoom', () => {
   assert.equal(f.camera.views.length, 0);
 });
 
+test('two-finger tilt with finger-spacing drift is left to Cesium', () => {
+  for (const [spacing, tilt] of [
+    [-0.01, 3],
+    [-2, 3],
+    [-3, -3],
+  ]) {
+    const f = guardFixture();
+    f.frame(500_000);
+    f.movement(PINCH, spacing, { tiltDeltaY: tilt });
+    // Real Cesium's two-finger tilt climbs and picks its own pitch.
+    f.camera.pitch = Cesium.Math.toRadians(-26.07746);
+    f.frame(529_406);
+    assert.equal(f.camera.views.length, 0, `${spacing}, ${tilt}`);
+    f.dispose();
+  }
+});
+
+test('a pinch that closes the fingers more than it moves them still zooms out', () => {
+  // One finger still, the other sliding towards it: the midpoint moves half as far.
+  const f = guardFixture();
+  f.frame(500_000);
+  f.movement(PINCH, -10, { tiltDeltaY: -5 });
+  f.frame(700_000);
+  assert.equal(f.camera.views.length, 1);
+  f.dispose();
+});
+
 test('unconfigured wheel modifiers and one-finger drag do not enable the guard', () => {
   for (const [type, modifier] of [[WHEEL, SHIFT], [WHEEL, ALT], [LEFT_DRAG]]) {
     const f = guardFixture();

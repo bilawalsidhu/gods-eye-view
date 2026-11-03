@@ -47,10 +47,20 @@ function readInput(aggregator, bindings) {
   for (const { type, modifier } of INPUT_BINDINGS) {
     if (!aggregator.isMoving(type, modifier)) continue;
     const movement = aggregator.getMovement(type, modifier);
-    const distance =
-      type === Cesium.CameraEventType.PINCH ? movement.distance : movement;
+    const pinch = type === Cesium.CameraEventType.PINCH;
+    const distance = pinch ? movement.distance : movement;
     const delta = distance.endPosition.y - distance.startPosition.y;
-    if (matchesZoomBinding(bindings, type, modifier) && delta !== 0) {
+    // Cesium tilts by the fingers' midpoint while zooming by their spacing,
+    // both in the same quarter-pixel units. Fingers rarely keep a perfectly
+    // even spacing, so the larger of the two movements decides the gesture.
+    const tilt = pinch
+      ? movement.angleAndHeight.endPosition.y -
+        movement.angleAndHeight.startPosition.y
+      : 0;
+    if (
+      matchesZoomBinding(bindings, type, modifier) &&
+      Math.abs(delta) > Math.abs(tilt)
+    ) {
       outward ||= delta < 0;
       cancel ||= delta > 0;
     } else {
