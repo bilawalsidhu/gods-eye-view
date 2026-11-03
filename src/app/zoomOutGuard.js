@@ -1,18 +1,24 @@
 import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 
-/** Whole-Earth view. Programmatic flights ignore it; only user input stops here. */
+/** Whole-Earth input limit; explicit camera destinations can go farther. */
 export const MAXIMUM_ZOOM_DISTANCE_M = 40_000_000;
 /** Below this, oblique browsing is left alone. */
 export const PITCH_CLAMP_MIN_HEIGHT_M = 300_000;
 /** Look this far below the Earth's limb, so the globe stays on screen. */
 export const LIMB_MARGIN_RAD = Cesium.Math.toRadians(8);
-/** How long after the last zoom input the camera still counts as user-zoomed. */
-export const USER_ZOOM_WINDOW_MS = 500;
-/** Fraction of the remaining pitch error closed per frame. */
 const PITCH_EASE = 0.35;
 const PITCH_SNAP_RAD = Cesium.Math.toRadians(0.1);
+const HEIGHT_EPSILON_M = 0.0001;
 const EARTH_RADIUS_M = 6_371_000;
+const INPUT_BINDINGS = Object.values(Cesium.CameraEventType).flatMap((type) =>
+  [undefined, ...Object.values(Cesium.KeyboardEventModifier)].map(
+    (modifier) => ({
+      type,
+      modifier,
+    }),
+  ),
+);
 
 /**
  * The shallowest pitch (radians, negative is down) that still keeps the Earth
@@ -25,82 +31,164 @@ export function maxPitchForHeight(h) {
   return -Math.min(limb + LIMB_MARGIN_RAD, Cesium.Math.PI_OVER_TWO);
 }
 
-function isUserZoomInput(event) {
-  if (event.type === 'wheel') return true;
-  if (event.type === 'touchmove') return (event.touches?.length ?? 0) >= 2;
-  // Cesium's default zoom bindings also include a right-button drag.
-  return event.type === 'pointermove' && (event.buttons & 2) === 2;
+function matchesZoomBinding(bindings, type, modifier) {
+  if (Array.isArray(bindings))
+    return bindings.some((binding) =>
+      matchesZoomBinding(binding, type, modifier),
+    );
+  return typeof bindings === 'number'
+    ? bindings === type && modifier === undefined
+    : bindings?.eventType === type && bindings?.modifier === modifier;
+}
+
+function readInput(aggregator, bindings) {
+  let outward = false;
+  let cancel = false;
+  for (const { type, modifier } of INPUT_BINDINGS) {
+    if (!aggregator.isMoving(type, modifier)) continue;
+    const movement = aggregator.getMovement(type, modifier);
+    const distance =
+      type === Cesium.CameraEventType.PINCH ? movement.distance : movement;
+    const delta = distance.endPosition.y - distance.startPosition.y;
+    if (matchesZoomBinding(bindings, type, modifier) && delta !== 0) {
+      outward ||= delta < 0;
+      cancel ||= delta > 0;
+    } else {
+      // Includes modifier-specific tilts and parallel two-finger movement.
+      cancel = true;
+    }
+  }
+  aggregator.reset();
+  return { outward, cancel };
 }
 
 /**
- * Stop a tilted wheel/pinch zoom-out from flying the camera off into space.
- *
- * Cesium zooms a shallow view out by backing along the cursor ray with the
- * pitch held fixed, and with no ceiling. The limb drops below a fixed pitch
- * by ~700 km, then the steps grow with height and never stop. This caps the
- * zoom distance and, only while the user is zooming out, pitches the view
- * down to keep the globe framed. Returns its disposer.
+ * Keep outward user zooms bounded and framed, without taking camera ownership
+ * from tilts, tracked entities or flights. Returns an idempotent disposer.
  */
 export function installZoomOutGuard(
   viewer,
-  { now = () => performance.now(), requestRender = governorRequestRender } = {},
+  {
+    requestRender = governorRequestRender,
+    subscribeCameraHandoff,
+    createAggregator = (canvas) => new Cesium.CameraEventAggregator(canvas),
+  } = {},
 ) {
   const scene = viewer?.scene;
   const controller = scene?.screenSpaceCameraController;
   const camera = viewer?.camera;
-  const container = viewer?.container;
-  if (!controller || !camera || !container || !scene.preRender)
+  const canvas = viewer?.canvas;
+  if (!controller || !camera || !canvas || !scene.preRender)
     throw new TypeError('A complete Cesium viewer is required');
 
+  const aggregator = createAggregator(canvas);
   const originalMaximumZoomDistance = controller.maximumZoomDistance;
-  controller.maximumZoomDistance = MAXIMUM_ZOOM_DISTANCE_M;
+  const maximumZoomDistance = Math.min(
+    originalMaximumZoomDistance,
+    MAXIMUM_ZOOM_DISTANCE_M,
+  );
+  controller.maximumZoomDistance = maximumZoomDistance;
 
-  let lastUserZoomAt = -Infinity;
-  const markInput = (event) => {
-    if (isUserZoomInput(event)) lastUserZoomAt = now();
+  let lastHeight = camera.positionCartographic?.height;
+  let lastPosition = Cesium.Cartesian3.clone(camera.position);
+  let lastHeading = camera.heading;
+  let lastPitch = camera.pitch;
+  let lastRoll = camera.roll;
+  let zoomingOut = false;
+  let settling = false;
+  const cancel = () => {
+    zoomingOut = false;
+    settling = false;
   };
-  const inputTypes = ['wheel', 'touchmove', 'pointermove'];
-  for (const type of inputTypes)
-    container.addEventListener(type, markInput, {
-      capture: true,
-      passive: true,
-    });
-
-  let lastHeight = NaN;
   const guard = () => {
+    const input = readInput(aggregator, controller.zoomEventTypes);
     const height = camera.positionCartographic?.height;
-    const previousHeight = lastHeight;
-    lastHeight = height;
-    if (!(height > previousHeight)) return; // Zoom-out only.
-    if (now() - lastUserZoomAt > USER_ZOOM_WINDOW_MS) return;
-    if (controller.enableInputs === false) return;
-    if (!Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY))
-      return;
-    // Cesium keeps no public flag for a running flyTo; never fight one.
-    if (camera._currentFlight) return;
-    const maxPitch = maxPitchForHeight(height);
-    if (maxPitch === null || !(camera.pitch > maxPitch)) return;
-    const error = maxPitch - camera.pitch;
-    const pitch =
-      Math.abs(error) <= PITCH_SNAP_RAD
-        ? maxPitch
-        : camera.pitch + error * PITCH_EASE;
-    camera.setView({
-      orientation: { heading: camera.heading, pitch, roll: camera.roll },
-    });
-    lastHeight = camera.positionCartographic?.height;
-    requestRender('zoom-out-guard');
+    const climbing = height > lastHeight + HEIGHT_EPSILON_M;
+    const descending = height < lastHeight - HEIGHT_EPSILON_M;
+    try {
+      if (
+        scene.mode !== Cesium.SceneMode.SCENE3D ||
+        controller.enableInputs === false ||
+        controller.enableZoom === false ||
+        !Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY) ||
+        // Cesium has no public running-flight flag.
+        camera._currentFlight ||
+        input.cancel ||
+        (descending && !settling)
+      ) {
+        cancel();
+        return;
+      }
+      if (input.outward) {
+        zoomingOut = true;
+        // A genuine outward gesture can be blocked by the controller's ceiling.
+        settling = true;
+      }
+      if (climbing) {
+        if (!zoomingOut) return;
+        settling = true;
+      } else {
+        zoomingOut = false;
+        // Outward inertia can lower altitude when Cesium clamps slant range at
+        // the ceiling. Finish that correction; fresh inward input cancels above.
+        // A stationary correction owns only the pose it last produced.
+        if (
+          !input.outward &&
+          ((!descending &&
+            !Cesium.Cartesian3.equals(camera.position, lastPosition)) ||
+            Math.abs(Cesium.Math.negativePiToPi(camera.heading - lastHeading)) >
+              1e-10 ||
+            Math.abs(camera.pitch - lastPitch) > 1e-10 ||
+            Math.abs(Cesium.Math.negativePiToPi(camera.roll - lastRoll)) >
+              1e-10)
+        )
+          settling = false;
+        if (!settling) return;
+      }
+      const maxPitch = maxPitchForHeight(height);
+      if (maxPitch === null || !(camera.pitch > maxPitch)) {
+        settling = false;
+      } else {
+        const error = maxPitch - camera.pitch;
+        const easedPitch =
+          Math.abs(error) <= PITCH_SNAP_RAD
+            ? maxPitch
+            : camera.pitch + error * PITCH_EASE;
+        // A large wheel step must not leave the view above the limb while easing.
+        const limbPitch = -Math.acos(
+          EARTH_RADIUS_M / (EARTH_RADIUS_M + height),
+        );
+        const pitch = Math.min(easedPitch, limbPitch);
+        camera.setView({
+          orientation: { heading: camera.heading, pitch, roll: camera.roll },
+        });
+        settling = pitch > maxPitch;
+      }
+      // Observe the end of inertia too; no arbitrary timeout cuts off a long zoom.
+      if (zoomingOut || settling) requestRender('zoom-out-guard');
+    } finally {
+      lastHeight = camera.positionCartographic?.height;
+      lastPosition = Cesium.Cartesian3.clone(camera.position, lastPosition);
+      lastHeading = camera.heading;
+      lastPitch = camera.pitch;
+      lastRoll = camera.roll;
+    }
   };
   const removePreRender = scene.preRender.addEventListener(guard);
+  const removeCameraHandoff = subscribeCameraHandoff?.(() => {
+    cancel();
+    // Discard input queued before an explicit navigation action took ownership.
+    aggregator.reset();
+  });
 
   let active = true;
   return () => {
     if (!active) return;
     active = false;
+    removeCameraHandoff?.();
     removePreRender?.();
-    for (const type of inputTypes)
-      container.removeEventListener(type, markInput, true);
-    if (controller.maximumZoomDistance === MAXIMUM_ZOOM_DISTANCE_M)
+    aggregator.destroy();
+    if (controller.maximumZoomDistance === maximumZoomDistance)
       controller.maximumZoomDistance = originalMaximumZoomDistance;
   };
 }

@@ -4,7 +4,6 @@ import {
   createApplicationViewer,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
-import { installZoomOutGuard } from './zoomOutGuard.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -59,7 +58,6 @@ export async function createApplicationScene({
     if (!viewer.isDestroyed()) viewer.destroy();
   });
   defer(installTrackpadPinchZoom(viewer));
-  defer(installZoomOutGuard(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));

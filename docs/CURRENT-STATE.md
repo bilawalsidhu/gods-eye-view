@@ -44,13 +44,22 @@ pinching traverses globe and street scales with fewer gestures. Cesium retains
 its distance-aware zoom, collision handling and minimum/maximum distance limits.
 Fine-pointer desktop mouse and trackpad sensitivity is unchanged.
 
-User zoom stops at 40,000 km above the surface, a whole-Earth view; camera
-flights, share links and story views are not limited. Above 300 km, a
-wheel, pinch or right-drag zoom-out from a shallow, tilted view pitches the
-camera down as it climbs, keeping the view at least 8° below the Earth's limb,
-so the globe stays on screen instead of sliding off into space. Oblique views
-below 300 km, zooming in, tilting by drag, tracked entities, cockpit tracking
-and camera flights are left alone.
+User zoom is capped at 40,000 km (or a stricter host limit). Explicit camera
+flight, share-link and story destinations can go farther; Cesium can still use
+the limit when it computes an automatic bounding-sphere framing distance.
+Above 300 km, outward movement from the controller's configured zoom bindings
+(wheel, pinch distance and unmodified right-drag by default) pitches the camera
+down towards 8° below the Earth's limb. Large steps reach the limb immediately;
+the remaining margin eases into place, including after zooming stops or reaches
+the ceiling. Continuous outward inertia remains guarded without a time cutoff.
+Parallel two-finger tilts, modifier-specific tilts and other camera gestures
+cancel the correction. Explicit navigation handoffs, including toolbar tilt,
+cancel it before animation begins. Zooming in, disabled zoom/input, non-3D modes, tracked
+transforms and flights also cancel it; external pose changes cancel stationary
+settling. Oblique views below 300 km are left alone.
+
+`QA_BASE_URL=http://localhost:4173 node scripts/qa-zoom-out-guard.mjs` exercises
+the real browser controller at desktop and phone widths with keyless fixtures.
 
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
