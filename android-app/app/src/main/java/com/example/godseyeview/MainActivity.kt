@@ -1,6 +1,8 @@
 package com.example.godseyeview
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -15,6 +17,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -23,10 +26,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import com.example.godseyeview.theme.GodsEyeViewTheme
 
 class MainActivity : ComponentActivity() {
     private var webView: WebView? = null
+
+    // The page's getUserMedia() only works once the app itself holds
+    // RECORD_AUDIO, so ask for it when the page first wants the microphone.
+    private var onMicResult: ((Boolean) -> Unit)? = null
+    private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        onMicResult?.invoke(granted)
+        onMicResult = null
+    }
+
+    private fun ensureMicPermission(onResult: (Boolean) -> Unit) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            onResult(true)
+            return
+        }
+        onMicResult = onResult
+        micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,7 +72,12 @@ class MainActivity : ComponentActivity() {
                 // The page draws its own dark chrome, so keep it clear of the
                 // status bar, navigation bar and camera cutout.
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
-                    GodsEyeWebView(startUrl(), Modifier.safeDrawingPadding(), onCreated = { webView = it })
+                    GodsEyeWebView(
+                        startUrl(),
+                        Modifier.safeDrawingPadding(),
+                        onCreated = { webView = it },
+                        requestMic = ::ensureMicPermission,
+                    )
                 }
             }
         }
@@ -75,7 +101,12 @@ private fun startUrl(): String {
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun GodsEyeWebView(url: String, modifier: Modifier = Modifier, onCreated: (WebView) -> Unit) {
+fun GodsEyeWebView(
+    url: String,
+    modifier: Modifier = Modifier,
+    onCreated: (WebView) -> Unit,
+    requestMic: ((Boolean) -> Unit) -> Unit = { it(false) },
+) {
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
@@ -95,7 +126,13 @@ fun GodsEyeWebView(url: String, modifier: Modifier = Modifier, onCreated: (WebVi
                 webViewClient = WebViewClient()
                 webChromeClient = object : WebChromeClient() {
                     override fun onPermissionRequest(request: PermissionRequest) {
-                        request.grant(request.resources)
+                        if (PermissionRequest.RESOURCE_AUDIO_CAPTURE !in request.resources) {
+                            request.grant(request.resources)
+                            return
+                        }
+                        requestMic { granted ->
+                            if (granted) request.grant(request.resources) else request.deny()
+                        }
                     }
 
                     // Page console output shows in Logcat under the GEV tag.
