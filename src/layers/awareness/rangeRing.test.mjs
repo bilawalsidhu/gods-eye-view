@@ -133,10 +133,15 @@ function ringRendering(t, { reducedMotion = false, legacyQuery = false } = {}) {
  * postRender) on the next millisecond, as Cesium's request-render mode does.
  * `draw()` draws a frame someone else asked for.
  */
-function frameLoop(t, ring) {
+function frameLoop(t, ring, { date = false } = {}) {
   let clock = 1_000_000;
   t.mock.method(performance, 'now', () => clock);
-  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  t.mock.timers.enable({
+    apis: date
+      ? ['setTimeout', 'setInterval', 'Date']
+      : ['setTimeout', 'setInterval'],
+    now: clock,
+  });
   let drawn = 0;
   const draw = () => {
     drawn = ring.reasons.length;
@@ -166,6 +171,15 @@ function pulsePrimitives(scene) {
   );
   const discs = all.filter((p) => p instanceof Cesium.Primitive && p !== ring);
   return { ring, disc: discs[0], count: discs.length };
+}
+
+/** Where a disc built around `built` sits after its model matrix. */
+function discCenter(disc, built) {
+  return Cesium.Matrix4.multiplyByPoint(
+    disc.modelMatrix,
+    built,
+    new Cesium.Cartesian3(),
+  );
 }
 
 /** The ring's material uniforms as the next drawn frame sets them. */
@@ -239,13 +253,15 @@ test('the ring core and halo contrast on light and dark ground', () => {
 });
 
 test('renderVisual draws one haloed polyline ring, not an ellipse outline', (t) => {
-  const { entities, scene, state, rendering } = ringRendering(t);
+  const ring = ringRendering(t);
+  const { entities, scene, state, rendering } = ring;
+  frameLoop(t, ring); // freeze the clock: the pulses have not faded in yet
   rendering.renderVisual(flight(3));
   // A polyline primitive, never an entity or an ellipse outline.
   assert.equal(entities.values.length, 0);
-  const { ring } = pulsePrimitives(scene);
-  assert.ok(ring);
-  const geometry = ring.geometryInstances.geometry;
+  const ringPrimitive = pulsePrimitives(scene).ring;
+  assert.ok(ringPrimitive);
+  const geometry = ringPrimitive.geometryInstances.geometry;
   assert.ok(geometry instanceof Cesium.PolylineGeometry);
   // 4 px wide, straight chords between surface-following positions, as the
   // entity ring was drawn.
@@ -258,16 +274,17 @@ test('renderVisual draws one haloed polyline ring, not an ellipse outline', (t) 
     options.vertexFormat,
     Cesium.PolylineMaterialAppearance.VERTEX_FORMAT,
   );
-  const { material } = ring.appearance;
+  const { material } = ringPrimitive.appearance;
   assert.equal(material.type, 'PolylineOutline');
-  // The ring's hue is fixed; its opacity flashes with arriving pulses.
+  // The ring's hue is fixed; its opacity flashes with arriving pulses, and
+  // at the moment it appears, before the pulses fade in, it is at full.
   const core = Cesium.Color.fromCssColorString(
     AWARENESS_RANGE_RING_STYLE.color,
   );
   const { color, outlineWidth } = ringColors(scene);
   assert.equal(color.red, core.red);
   assert.equal(color.blue, core.blue);
-  assert.ok(color.alpha >= 0 && color.alpha <= core.alpha + 1e-9);
+  assert.ok(Math.abs(color.alpha - core.alpha) < 1e-9, `${color.alpha}`);
   assert.equal(outlineWidth, AWARENESS_RANGE_RING_STYLE.outlineWidth);
   const ground = Cesium.Cartesian3.fromDegrees(3, 27, 0);
   for (const distance of surfaceDistances(ground, state.visual.ringPositions))
@@ -305,9 +322,15 @@ test('the ring and pulses follow the subject past 250 m and ignore smaller drift
   ))
     assert.ok(Math.abs(distance - AWARENESS_RADIUS_M) < 100);
   assert.equal(renders(), rendersAfterAdd + 1);
-  // The pulses are drawn on a disc, rebuilt around the NEW centre a
-  // kilometre on, so they stay concentric with the ring.
-  assert.notEqual(pulsePrimitives(scene).disc, discBefore);
+  // The pulses are drawn on a disc that follows to the NEW centre by its
+  // model matrix, so they stay concentric with the ring without a rebuild.
+  assert.equal(pulsePrimitives(scene).disc, discBefore);
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      discCenter(discBefore, Cesium.Cartesian3.fromDegrees(3, 27, 0)),
+      Cesium.Cartesian3.fromDegrees(3.01, 27, 0),
+    ) < 1,
+  );
 
   rendering.clearVisual();
   assert.equal(scene.primitives.length, 0);
@@ -393,12 +416,18 @@ test('a parked view stops asking for frames once the pulses rest', (t) => {
   const { scene, rendering, pulseFrames } = ring;
   const loop = frameLoop(t, ring);
   const { activeMs, count, periodMs } = AWARENESS_RANGE_PULSE;
-  // Long enough for three ring flashes, then quiet.
+  // Long enough for three ring flashes, then quiet, and short: a burst is
+  // seconds, not minutes.
   assert.ok(activeMs >= 3 * (periodMs / count));
+  assert.ok(activeMs <= 15_000, `${activeMs} ms burst`);
   rendering.renderVisual(flight(3));
   loop.advance(activeMs + 500);
   const frames = pulseFrames();
   assert.ok(frames >= activeMs / CYBER_SONAR_RENDER_INTERVAL_MS - 2);
+  assert.ok(
+    frames <= activeMs / CYBER_SONAR_RENDER_INTERVAL_MS + 2,
+    `${frames} frames in one burst`,
+  );
   // Parked: a minute later not one more request.
   loop.advance(60_000);
   assert.equal(pulseFrames(), frames, 'render requests stop after the bound');
@@ -440,9 +469,12 @@ test('a camera move wakes resting pulses for another bounded run', (t) => {
 test('a camera move seen by the lifecycle wakes resting pulses; a parked camera does not', (t) => {
   const ring = ringRendering(t);
   const { state, rendering, pulseFrames } = ring;
-  const loop = frameLoop(t, ring);
-  const { activeMs } = AWARENESS_RANGE_PULSE;
+  const loop = frameLoop(t, ring, { date: true });
+  const { activeMs, inputWakeMs } = AWARENESS_RANGE_PULSE;
   state.enabled = true;
+  state.viewer.canvas = new EventTarget();
+  const touch = () =>
+    state.viewer.canvas.dispatchEvent(new Event('pointerdown'));
   state.viewer.camera = {
     positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
     heading: 0,
@@ -471,7 +503,9 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
   loop.draw();
   loop.advance(activeMs);
   assert.equal(pulseFrames(), rested);
-  // The camera pans 50 km: the next frame wakes them for another run.
+  // The user drags the camera 50 km: the next frame wakes them for another
+  // run.
+  touch();
   state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
     3.5,
     20,
@@ -485,6 +519,115 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
   const woke = pulseFrames();
   loop.advance(60_000);
   assert.equal(pulseFrames(), woke, 'and rest again once it parks');
+  // The app moving the camera, with no hand on it, does not wake them: a
+  // tracking follow, the cockpit view, an orbit or a fly-to all move it on
+  // every frame.
+  const follow = (lon) => {
+    state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+      lon,
+      20,
+      800_000,
+    );
+    loop.draw();
+    loop.advance(500);
+  };
+  for (let lon = 3.6; lon < 5.6; lon += 0.1) follow(lon);
+  assert.equal(pulseFrames(), woke, 'app camera moves do not wake them');
+  // Input long past (beyond `inputWakeMs`) does not count either; a hover
+  // without a button pressed is not handling the camera.
+  touch();
+  loop.advance(inputWakeMs + 100);
+  state.viewer.canvas.dispatchEvent(
+    Object.assign(new Event('pointermove'), { buttons: 0 }),
+  );
+  follow(5.7);
+  assert.equal(pulseFrames(), woke, 'stale input does not wake them');
+  // Each way of handling the map counts: a wheel, a touch, a drag; keys
+  // typed anywhere in the window do not.
+  const panWith = (handle, lon) => {
+    loop.advance(activeMs + 500);
+    const before = pulseFrames();
+    handle();
+    follow(lon);
+    loop.advance(activeMs);
+    return pulseFrames() > before;
+  };
+  const onCanvas = (event) => () => state.viewer.canvas.dispatchEvent(event);
+  assert.equal(panWith(onCanvas(new Event('wheel')), 5.8), true, 'wheel');
+  assert.equal(panWith(onCanvas(new Event('touchstart')), 5.9), true, 'touch');
+  assert.equal(
+    panWith(
+      onCanvas(Object.assign(new Event('pointermove'), { buttons: 1 })),
+      6.0,
+    ),
+    true,
+    'drag',
+  );
+  assert.equal(
+    panWith(() => window.dispatchEvent(new Event('keydown')), 6.1),
+    false,
+    'keys do not count',
+  );
+  // Detached, the canvas listeners are gone.
+  lifecycle.detachRuntimeListeners();
+  touch();
+  assert.equal(state.lastCameraInputMs < Date.now() - inputWakeMs, true);
+});
+
+test('disabling the layer tears the pulses down completely', (t) => {
+  const ring = ringRendering(t);
+  const { state, scene, rendering, motion, pulseFrames } = ring;
+  const loop = frameLoop(t, ring);
+  state.viewer.camera = {
+    positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
+    heading: 0,
+    pitch: -1,
+    roll: 0,
+  };
+  const lifecycle = createLifecycle({
+    state,
+    services: {
+      render: { holdContinuousRender() {}, releaseContinuousRender() {} },
+    },
+    parts: {
+      rendering,
+      model: {
+        awarenessRefreshDecision: () => ({ moving: false, refresh: false }),
+        awarenessNeedsContinuousRender: () => false,
+      },
+      panel: {
+        startAwarenessPageRotation() {},
+        stopAwarenessPageRotation() {},
+        ensurePanel() {},
+        hidePanel() {},
+      },
+      dependencies: {
+        activateOperationalContext: () => true,
+        releaseOwnedDependencies: () => true,
+      },
+    },
+  });
+  state.passive = true;
+  lifecycle.methods.enable();
+  state.subject = flight(3);
+  rendering.renderVisual(state.subject);
+  loop.advance(1000);
+  assert.ok(pulseFrames() > 0);
+  assert.equal(scene.primitives.length, 2);
+  lifecycle.methods.disable();
+  assert.equal(scene.primitives.length, 0, 'ring and disc removed');
+  assert.equal(scene.preRender.numberOfListeners, 0);
+  assert.equal(scene.postRender.numberOfListeners, 0);
+  assert.equal(motion.listeners(), 0, 'no media-query listener');
+  assert.equal(getAwarenessEchoField(), null);
+  assert.equal(state.visual, null);
+  const frames = pulseFrames();
+  loop.advance(60_000);
+  assert.equal(
+    pulseFrames(),
+    frames,
+    'no awareness-pulse requests after disable',
+  );
 });
 
 test('pulse requests wait 80 ms after any frame, so they cannot beat the Cyber sonar', (t) => {
@@ -602,14 +745,23 @@ test('a gradient disc behind the pulses fades inward and follows the subject', (
     0,
   );
 
-  // The disc is rebuilt only past `gradientRebuildM`, not on every 250 m
-  // step the ring takes, and keeps its material.
-  rendering.renderVisual(flight(3.001));
-  assert.equal(pulsePrimitives(scene).disc, disc);
-  rendering.renderVisual(flight(3.004)); // ~400 m: the ring moves, the disc stays
-  assert.equal(pulsePrimitives(scene).disc, disc);
-  assert.ok(!disc.isDestroyed());
-  rendering.renderVisual(flight(3.01)); // ~1 km from the disc's centre
+  // The disc follows by its model matrix and is rebuilt only past
+  // `gradientRebuildM` (20 km), keeping its material.
+  const built = Cesium.Cartesian3.fromDegrees(3, 27, 0);
+  for (const lon of [3.001, 3.01, 3.1, 3.19]) {
+    rendering.renderVisual(flight(lon));
+    assert.equal(pulsePrimitives(scene).disc, disc, `${lon}`);
+    assert.ok(!disc.isDestroyed());
+    // Concentric with the ring wherever the subject went, within a metre
+    // across the ground; the ellipsoid curves away from the rotation's
+    // sphere by tens of metres in height at most.
+    const at = Cesium.Cartographic.fromCartesian(discCenter(disc, built));
+    const want = Cesium.Cartographic.fromCartesian(ring.state.visual.center);
+    const across = new Cesium.EllipsoidGeodesic(at, want).surfaceDistance;
+    assert.ok(across < 1, `${across} m off at ${lon}`);
+    assert.ok(Math.abs(at.height) < 50, `${at.height} m off the ground`);
+  }
+  rendering.renderVisual(flight(3.25)); // ~25 km from where it was built
   assert.equal(pulsePrimitives(scene).count, 1);
   const moved = pulsePrimitives(scene).disc;
   assert.notEqual(moved, disc);
@@ -629,12 +781,15 @@ test('a resting pulse disc is not rebuilt as the subject moves, and catches up o
   rendering.renderVisual(flight(3));
   loop.advance(AWARENESS_RANGE_PULSE.activeMs + 500);
   const resting = pulsePrimitives(scene).disc;
-  // A flying subject keeps moving while the pulses rest: no rebuilds.
-  for (let lon = 3.01; lon < 3.1; lon += 0.01)
+  const restingMatrix = Cesium.Matrix4.clone(resting.modelMatrix);
+  // A flying subject keeps moving while the pulses rest: the hidden disc is
+  // neither moved nor rebuilt, even well past the rebuild distance.
+  for (let lon = 3.01; lon < 3.4; lon += 0.01)
     rendering.renderVisual(flight(lon));
   assert.equal(pulsePrimitives(scene).disc, resting);
   assert.ok(!resting.isDestroyed());
-  // Woken, the disc moves to the subject at once.
+  assert.ok(Cesium.Matrix4.equals(resting.modelMatrix, restingMatrix));
+  // Woken, the disc catches up at once: rebuilt around the subject.
   rendering.wakePulses();
   const woken = pulsePrimitives(scene).disc;
   assert.notEqual(woken, resting);
@@ -673,6 +828,17 @@ test('a camera below the rim height hides the pulse disc instead of sweeping the
   };
   assert.equal(cameraAt(CONTEXT_RIM_HEIGHT_M + 500), true);
   assert.equal(cameraAt(CONTEXT_RIM_HEIGHT_M - 500), false, 'cockpit view');
+  // Below the disc the pulses rest with it: the ring is steady at full, no
+  // echo lights and no frame is asked for.
+  const core = Cesium.Color.fromCssColorString(
+    AWARENESS_RANGE_RING_STYLE.color,
+  );
+  assert.ok(Math.abs(ringColors(scene).color.alpha - core.alpha) < 1e-9);
+  assert.equal(getAwarenessEchoField().level(loop.now()), 0);
+  const frames = ring.pulseFrames();
+  loop.draw();
+  loop.advance(2000);
+  assert.equal(ring.pulseFrames(), frames, 'no requests below the rim');
   assert.equal(cameraAt(800_000), true);
 });
 

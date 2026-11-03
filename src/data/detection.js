@@ -1456,7 +1456,7 @@ function _drawOverlay(frame) {
           obj._layerId,
           obj.position,
           now,
-          admissionAlpha,
+          bracketAlpha,
           ECHO_ALPHA_STEPS,
         );
         if (echo)

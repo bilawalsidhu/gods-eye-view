@@ -1,4 +1,5 @@
 import { cameraPoseSignature } from '../../data/iconOrientation.js';
+import { AWARENESS_RANGE_PULSE } from './policy.js';
 
 export function createLifecycle({
   state: layerState,
@@ -7,6 +8,26 @@ export function createLifecycle({
   source,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
+
+  /**
+   * Note the user handling the map's camera (pointer, wheel or touch on the
+   * Cesium canvas, where its camera controller listens), so a camera move the
+   * user made can wake the range pulses and one the app made (tracking,
+   * cockpit, orbit, a fly-to) does not. Keys are left out: Cesium's camera
+   * controller reads none, and typing elsewhere must not count.
+   */
+  function noteCameraInput(event) {
+    if (event?.type === 'pointermove' && !event.buttons) return;
+    layerState.lastCameraInputMs = Date.now();
+  }
+
+  const CAMERA_INPUT_EVENTS = [
+    'pointerdown',
+    'pointermove',
+    'pointerup',
+    'wheel',
+    'touchstart',
+  ];
 
   /**
    * Quantized camera-pose signature, or '' when the camera cannot report a full
@@ -50,6 +71,10 @@ export function createLifecycle({
       'gev:awareness-subject-cleared',
       layerState.subjectClearListener,
     );
+    const input = layerState.viewer.canvas ?? layerState.viewer.scene?.canvas;
+    for (const type of CAMERA_INPUT_EVENTS)
+      input?.addEventListener?.(type, noteCameraInput, { passive: true });
+    layerState.cameraInputTarget = input ?? null;
     layerState.preRenderRemover =
       layerState.viewer.scene.preRender.addEventListener(() => {
         if (!layerState.enabled) return;
@@ -62,8 +87,14 @@ export function createLifecycle({
         if (poseSig !== layerState.lastCameraPoseSig) {
           layerState.lastCameraPoseSig = poseSig;
           layerState.lastCameraPoseChangeMs = now;
-          // A camera move runs the range pulses again; parked, they rest.
-          parts.rendering.wakePulses();
+          // A camera move the user made runs the range pulses again; parked,
+          // or moved by the app (tracking, cockpit, orbit, a fly-to), they
+          // rest.
+          if (
+            now - layerState.lastCameraInputMs <
+            AWARENESS_RANGE_PULSE.inputWakeMs
+          )
+            parts.rendering.wakePulses();
         }
         const decision = parts.model.awarenessRefreshDecision({
           nowMs: now,
@@ -110,6 +141,12 @@ export function createLifecycle({
         'gev:awareness-subject-cleared',
         layerState.subjectClearListener,
       );
+      for (const type of CAMERA_INPUT_EVENTS)
+        layerState.cameraInputTarget?.removeEventListener?.(
+          type,
+          noteCameraInput,
+        );
+      layerState.cameraInputTarget = null;
     }
     layerState.preRenderRemover?.();
     layerState.preRenderRemover = null;

@@ -81,18 +81,20 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
  *  `gradientDepthFraction` of the radius, at most
  *  `gradientOpacity` strong. One unpickable disc draws the lines and the
  *  gradient, so pulses never catch a click meant for a contact; its shader
- *  takes at most four pulses. The disc is rebuilt only after the subject
- *  moves `gradientRebuildM`, so the pulses sit at most that far off the ring's
- *  centre, about a pixel when the ring fills the screen; while the pulses
- *  rest the hidden disc is left alone and catches up when they wake. The
+ *  takes at most four pulses. The disc follows the subject by a model-matrix
+ *  rotation, so it stays concentric with the ring, and is rebuilt only after
+ *  the subject moves `gradientRebuildM` from where it was built; while the
+ *  pulses rest the hidden disc is left alone and catches up when they wake. The
  *  disc is hidden while the camera is below its height, where it would sweep
  *  the sky.
  *  The pulses run for `activeMs` (three ring flashes) after a selection or
  *  a camera move, fading in and out over `settleMs`, then rest: the ring
  *  stays on screen, static, and nothing asks for frames, so a parked view
- *  goes quiet again. A moving subject does not wake them, since a flying
- *  subject moves on every refresh, but a camera that follows it does; the
- *  follow already renders every frame. While they run they never hold
+ *  goes quiet again. Only a camera move within `inputWakeMs` of the user
+ *  handling the map (pointer, wheel or touch on the canvas, which covers a
+ *  drag's inertia) wakes them; a moving subject and the app's own camera moves
+ *  (tracking, cockpit, orbit, a fly-to) do not. Below the disc's height they
+ *  rest too. While they run they never hold
  *  continuous rendering; each drawn frame arms one more request after the
  *  Cyber sonar's 80 ms cadence, so the two never beat. When something else
  *  already renders continuously they update every frame. Skipped under
@@ -110,9 +112,10 @@ export const AWARENESS_RANGE_PULSE = Object.freeze({
   gradientDepthFraction: 0.35,
   gradientOpacity: 0.22,
   gradientGranularityDeg: 0.25,
-  gradientRebuildM: 500,
+  gradientRebuildM: 20000,
   activeMs: 9000,
   settleMs: 1200,
+  inputWakeMs: 1500,
 });
 
 /** @constant Sonar echoes on contact brackets. When a pulse front reaches a

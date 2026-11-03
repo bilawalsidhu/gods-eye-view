@@ -308,6 +308,34 @@ function createRingPrimitive(positions, material) {
   });
 }
 
+/**
+ * The rotation about the Earth's centre that carries `from` onto `to`, as a
+ * model matrix, so a disc built around `from` sits around `to`.
+ * @param {Cesium.Cartesian3} from Where the disc was built.
+ * @param {Cesium.Cartesian3} to Where it should be.
+ * @param {Cesium.Matrix4} [result]
+ * @returns {Cesium.Matrix4}
+ */
+export function discFollowMatrix(from, to, result = new Cesium.Matrix4()) {
+  const a = Cesium.Cartesian3.normalize(from, new Cesium.Cartesian3());
+  const b = Cesium.Cartesian3.normalize(to, new Cesium.Cartesian3());
+  const axis = Cesium.Cartesian3.cross(a, b, new Cesium.Cartesian3());
+  const sin = Cesium.Cartesian3.magnitude(axis);
+  if (sin < 1e-12) return Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY, result);
+  const angle = Math.atan2(sin, Cesium.Cartesian3.dot(a, b));
+  const rotation = Cesium.Matrix3.fromQuaternion(
+    Cesium.Quaternion.fromAxisAngle(
+      Cesium.Cartesian3.divideByScalar(axis, sin, axis),
+      angle,
+    ),
+  );
+  return Cesium.Matrix4.fromRotationTranslation(
+    rotation,
+    Cesium.Cartesian3.ZERO,
+    result,
+  );
+}
+
 /** Camera height above the ellipsoid, or NaN when the scene cannot say. */
 function cameraHeightM(scene) {
   return scene.camera?.positionCartographic?.height ?? Number.NaN;
@@ -584,18 +612,27 @@ export function createRendering({
   }
 
   /**
-   * Rebuild the pulse disc around the subject once it is `gradientRebuildM`
-   * from the disc's centre. A build costs a few milliseconds, so a subject
-   * that moves less keeps the disc it has.
+   * Keep the pulse disc centred on the subject. Within `gradientRebuildM` of
+   * where it was built, the disc is rotated about the Earth's centre onto
+   * the subject by its model matrix, which keeps it concentric with the ring
+   * at no build cost; the ellipsoid curves a little differently from that
+   * sphere, a few tens of metres in height at 20 km. Further away it is
+   * rebuilt, which costs a few milliseconds.
    */
   function followPulseDisc() {
     const { gradient, gradientCenter, center } = layerState.visual;
+    if (!gradient) return;
     if (
-      !gradient ||
       Cesium.Cartesian3.distance(gradientCenter, center) <
-        AWARENESS_RANGE_PULSE.gradientRebuildM
-    )
+      AWARENESS_RANGE_PULSE.gradientRebuildM
+    ) {
+      gradient.modelMatrix = discFollowMatrix(
+        gradientCenter,
+        center,
+        gradient.modelMatrix,
+      );
       return;
+    }
     const primitives = layerState.viewer.scene.primitives;
     layerState.visual.gradient = primitives.add(
       createPulseGradient(center, gradient.appearance.material),
@@ -655,8 +692,8 @@ export function createRendering({
           CONTEXT_RIM_HEIGHT_M,
         );
         // The echo field reads `visual.center` in place and follows on its
-        // own. The pulse disc is geometry, so it is rebuilt, but only every
-        // `gradientRebuildM`: a build costs a few milliseconds.
+        // own. The pulse disc follows by its model matrix and is rebuilt only
+        // every `gradientRebuildM`: a build costs a few milliseconds.
         layerState.visual.ringPositions = positions;
         const { ringPrimitive } = layerState.visual;
         if (ringPrimitive) {
@@ -695,7 +732,12 @@ export function createRendering({
           performance.now(),
         )
       : null;
-    const levelAt = (nowMs) => (wake ? awarenessPulseLevel(nowMs, wake) : 0);
+    // From a camera below the rim height the disc would sweep across the sky,
+    // so it is hidden there, and the pulses rest with it: no flash, no
+    // echoes, no frames.
+    const belowRim = () => cameraHeightM(scene) < CONTEXT_RIM_HEIGHT_M;
+    const levelAt = (nowMs) =>
+      wake && !belowRim() ? awarenessPulseLevel(nowMs, wake) : 0;
 
     // A polyline, not an ellipse outline: WebGL draws ellipse outlines at
     // 1 px whatever `outlineWidth` says, and the ring needs a halo.
@@ -777,13 +819,9 @@ export function createRendering({
         const alpha = ringAlpha(nowMs);
         ringMaterial.uniforms.color.alpha = core.alpha * alpha;
         ringMaterial.uniforms.outlineColor.alpha = halo.alpha * alpha;
-        // The disc is looked up each frame: a subject move swaps it. From a
-        // camera below the rim height it would sweep across the sky, so it
-        // is hidden there.
+        // The disc is looked up each frame: a subject move swaps it.
         const disc = layerState.visual?.gradient;
-        if (disc)
-          disc.show =
-            level > 0 && !(cameraHeightM(scene) < CONTEXT_RIM_HEIGHT_M);
+        if (disc) disc.show = level > 0;
         for (let index = 0; index < count; index++) {
           const state = awarenessPulseState(nowMs, index);
           radii[index] = state.radiusM / AWARENESS_RADIUS_M;
@@ -800,7 +838,7 @@ export function createRendering({
       const removePostRender = scene.postRender.addEventListener(() => {
         globalThis.clearTimeout(timer);
         timer = null;
-        if (performance.now() < wake.untilMs)
+        if (performance.now() < wake.untilMs && !belowRim())
           timer = globalThis.setTimeout(() => {
             timer = null;
             governorRequestRender('awareness-pulse');
