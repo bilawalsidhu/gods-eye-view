@@ -3608,6 +3608,7 @@
       "src/app/navaraMode.js",
       "src/app/navaraTools.js",
       "src/annotations/navaraAnnotationRenderer.js",
+      "src/annotations/drawInputNavara.js",
       "src/data/render/cesiumProjection.js",
       "src/data/render/cesiumConstants.js",
       "src/data/render/cesiumTrailRenderer.js",
