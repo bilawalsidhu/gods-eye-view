@@ -111,7 +111,12 @@ export function installZoomOutGuard(
   const followCeiling = () => {
     if (!ownsCeiling || controller.maximumZoomDistance !== maximumZoomDistance)
       return;
-    const height = camera.positionCartographic?.height;
+    // While tracking, Cesium measures zoom from the target, not the Earth, so
+    // the camera's altitude would lift the ceiling with every outward step.
+    const untracked =
+      scene.mode === Cesium.SceneMode.SCENE3D &&
+      Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY);
+    const height = untracked ? camera.positionCartographic?.height : undefined;
     maximumZoomDistance =
       height > MAXIMUM_ZOOM_DISTANCE_M ? height : MAXIMUM_ZOOM_DISTANCE_M;
     controller.maximumZoomDistance = maximumZoomDistance;

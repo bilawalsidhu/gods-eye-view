@@ -741,3 +741,24 @@ test('a share-link view restored above the ceiling is honoured by later frames',
     s.dispose();
   }
 });
+
+test('a tracked camera cannot climb past the ceiling from its target', () => {
+  const s = realControllerScene(1_000_000);
+  try {
+    s.frame();
+    // In look-at mode Cesium measures zoom from the target, not the Earth.
+    s.camera.lookAt(
+      Cesium.Cartesian3.fromDegrees(0, 0, 35_786_000),
+      new Cesium.HeadingPitchRange(0, -0.5, 5_000_000),
+    );
+    for (let i = 0; i < 20; i++) {
+      s.wheel(100);
+      s.frame();
+    }
+    const range = Cesium.Cartesian3.magnitude(s.camera.position);
+    assert.ok(range <= MAXIMUM_ZOOM_DISTANCE_M + 1_000, `${range} m`);
+    assert.equal(s.controller.maximumZoomDistance, MAXIMUM_ZOOM_DISTANCE_M);
+  } finally {
+    s.dispose();
+  }
+});
