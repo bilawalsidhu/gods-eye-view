@@ -43,7 +43,14 @@ import {
   setCyberSonarEnabled,
 } from '../cyberSonar.js';
 import { cyberVisualDefaultsForHudTransition } from '../hudLayouts.js';
+import {
+  applyDisplayAccentTheme,
+  normalizeDisplayAccent,
+  readDisplayAccentPreferences,
+} from './displayAccentSettings.js';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
+const CYBER_ACCENT_STORAGE_KEY = 'gev:cyber-accent:v1';
+const DISPLAY_ACCENT_STORAGE_KEY = 'gev:display-accents:v1';
 
 /** Own visual preferences, detection overrides and display-control state. */
 export class VisualSettings {
@@ -238,6 +245,16 @@ export class VisualSettings {
     this._detectionAllocationPreference = normalizeAllocationStrategy(
       storedDetectionAllocation,
     );
+    this._displayAccents = readDisplayAccentPreferences(null);
+    try {
+      this._displayAccents = readDisplayAccentPreferences(
+        localStorage.getItem(DISPLAY_ACCENT_STORAGE_KEY),
+        localStorage.getItem(CYBER_ACCENT_STORAGE_KEY),
+      );
+    } catch {
+      /* unavailable storage */
+    }
+    this._applyDisplayAccent();
   }
   get hud() {
     return this.readHud();
@@ -474,7 +491,11 @@ export class VisualSettings {
       bloom: { active: this.bloomEnabled, intensity: this.bloomIntensityPct },
       sharpen: { active: this.sharpenEnabled, intensity: this._sharpenPct },
       detection: this._presentDetection(),
-      hud: { visible: this._hudVisibleShown, variant: this._hudVariantShown },
+      hud: {
+        visible: this._hudVisibleShown,
+        variant: this._hudVariantShown,
+        accent: this._presentDisplayAccent(),
+      },
       sonar: this._sonarShown,
       scope: {
         enabled: this._scopeEnabledShown,
@@ -536,6 +557,62 @@ export class VisualSettings {
 
   _publishDisplay() {
     this.store.publish(this._presentDisplay());
+  }
+
+  /** The active template's accent choices shown in Display. */
+  _presentDisplayAccent() {
+    const layout = this._hudVariantShown || 'tactical';
+    const accent = normalizeDisplayAccent(
+      this._displayAccents?.[layout],
+      layout,
+    );
+    return {
+      selected: accent.id,
+      customColor: accent.customColor,
+    };
+  }
+
+  /**
+   * Set the active template's locally persisted accent. This is a browser preference, not
+   * a shared-view setting: a link still opens with the recipient's own accent.
+   */
+  _setDisplayAccent(id, customColor) {
+    const layout = this._hudVariantShown || 'tactical';
+    const previous = normalizeDisplayAccent(
+      this._displayAccents?.[layout],
+      layout,
+    );
+    const next = normalizeDisplayAccent(
+      {
+        id,
+        customColor: customColor ?? previous.customColor,
+      },
+      layout,
+    );
+    this._displayAccents = {
+      ...readDisplayAccentPreferences(null),
+      ...this._displayAccents,
+      [layout]: next,
+    };
+    this._applyDisplayAccent();
+    try {
+      localStorage.setItem(
+        DISPLAY_ACCENT_STORAGE_KEY,
+        JSON.stringify(this._displayAccents),
+      );
+    } catch {
+      /* best effort */
+    }
+    this._publishDisplay();
+    return next;
+  }
+
+  _applyDisplayAccent() {
+    const layout = this._hudVariantShown || 'tactical';
+    applyDisplayAccentTheme(
+      document.documentElement,
+      normalizeDisplayAccent(this._displayAccents?.[layout], layout),
+    );
   }
 
   _getBloomIntensity() {
@@ -689,6 +766,7 @@ export class VisualSettings {
       this._cyberStyleUserSelected = false;
     }
     this._hudVariantShown = nextVariant;
+    this._applyDisplayAccent();
     this._publishDisplay();
     const visualDefaults = cyberVisualDefaultsForHudTransition(
       previousVariant,
@@ -1587,6 +1665,7 @@ export class VisualSettings {
   _syncHudControls() {
     this._hudVisibleShown = Boolean(this.hud.visible);
     this._hudVariantShown = this.hud.getVariant();
+    this._applyDisplayAccent();
     this._publishDisplay();
     this._scheduleAdaptivePanelLayout({ settle: true });
   }

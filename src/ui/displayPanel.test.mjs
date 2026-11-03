@@ -108,7 +108,11 @@ test('bloom and sharpen render their state, slider and readout', async (t) => {
   await nextTick();
   assert.equal($('bloom-toggle').classList.contains('active'), false);
   assert.equal($('bloom-slider-row').classList.contains('visible'), false);
-  assert.equal($('bloom-intensity-value').textContent, '140%', 'the amount stays');
+  assert.equal(
+    $('bloom-intensity-value').textContent,
+    '140%',
+    'the amount stays',
+  );
 });
 
 test('a publish never rewrites a slider the user is dragging', async (t) => {
@@ -249,6 +253,46 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
   assert.equal($('hud-toggle').classList.contains('active'), false);
   assert.equal($('hud-layout-row').classList.contains('visible'), false);
 
+  owner._displayAccents = {
+    cyber: {
+      id: 'red',
+      color: '#c45454',
+      customColor: '#123456',
+    },
+  };
+  owner._hudVariantShown = 'cyber';
+  owner._publishDisplay();
+  await nextTick();
+  assert.equal(
+    document.querySelector('[data-accent="red"]').className,
+    'display-accent-swatch active',
+  );
+  assert.equal(
+    document.querySelector('[data-accent="cyan"]').className,
+    'display-accent-swatch',
+  );
+  assert.equal($('display-accent-custom').value, '#123456');
+
+  owner._setDisplayAccent('custom', '#654321');
+  await nextTick();
+  assert.equal(
+    document.querySelector('[data-accent="purple"]').className,
+    'display-accent-swatch',
+  );
+  assert.equal(
+    document.documentElement.style.getPropertyValue('--cyber-accent'),
+    '#654321',
+  );
+  assert.equal(
+    $('display-accent-custom').className,
+    'display-accent-picker active',
+  );
+  assert.deepEqual(
+    JSON.parse(localStorage.getItem('gev:display-accents:v1')).cyber,
+    { id: 'custom', color: '#654321', customColor: '#654321' },
+  );
+  localStorage.removeItem('gev:display-accents:v1');
+
   owner._sonarShown = {
     enabled: false,
     rings: 5,
@@ -331,7 +375,10 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   assert.equal(coreClasses(button), 'pp-toggle-btn active');
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.equal(row.classList.contains('visible'), true);
-  assert.equal($('models3d-mode-proximity').getAttribute('aria-checked'), 'true');
+  assert.equal(
+    $('models3d-mode-proximity').getAttribute('aria-checked'),
+    'true',
+  );
 
   // The button leaves the row to its own sync.
   owner._setModels3dEnabled(false);
@@ -347,7 +394,10 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   await nextTick();
   assert.equal(all.classList.contains('active'), true);
   assert.equal(all.getAttribute('aria-checked'), 'true');
-  assert.equal($('models3d-mode-proximity').classList.contains('active'), false);
+  assert.equal(
+    $('models3d-mode-proximity').classList.contains('active'),
+    false,
+  );
   assert.deepEqual(params.at(-1), ['military', { models3dMode: 'all' }]);
 
   owner._syncModels3dFromLayerState({
@@ -376,12 +426,18 @@ test('the Draw controls render what the draw tool publishes', async (t) => {
   assert.equal(segment('area').getAttribute('aria-label'), 'Area');
   assert.equal(segment('area').title, 'Area');
   assert.equal(segment('area').textContent, 'pentagon');
-  const swatch = (color) => document.querySelector(`#draw-colors [data-color="${color}"]`);
+  const swatch = (color) =>
+    document.querySelector(`#draw-colors [data-color="${color}"]`);
   assert.equal(swatch('primary').getAttribute('aria-checked'), 'true');
   assert.equal(swatch('amber').getAttribute('aria-label'), 'Amber');
   assert.equal($('draw-hint').textContent, '');
 
-  store.publishDraw({ active: true, shape: 'line', color: 'amber', hint: 'Click to add points.' });
+  store.publishDraw({
+    active: true,
+    shape: 'line',
+    color: 'amber',
+    hint: 'Click to add points.',
+  });
   await nextTick();
   assert.equal(swatch('amber').getAttribute('aria-checked'), 'true');
   assert.equal(swatch('primary').classList.contains('active'), false);
@@ -477,7 +533,10 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(document.activeElement === button(first, 'toggle'), true);
   assert.equal(button(first, 'toggle').getAttribute('aria-pressed'), 'true');
   assert.equal(button(first, 'fly').title, 'Fly to <b>a</b>.geojson');
-  assert.equal(button(first, 'remove').getAttribute('aria-label'), 'Remove <b>a</b>.geojson');
+  assert.equal(
+    button(first, 'remove').getAttribute('aria-label'),
+    'Remove <b>a</b>.geojson',
+  );
 
   await press(button(first, 'remove'));
   assert.equal(rowsNow().length, 1);
@@ -593,7 +652,11 @@ test('VisualSettings publishes a styleâ€™s parameters and writes a moved sliderâ
   assert.equal(store.parameters, null, 'the sliders go with their owner');
   assert.equal($('param-slider-panel').classList.contains('active'), false);
   assert.equal(store.act('setStyleParameter', 'grainAmt', 0.2), undefined);
-  assert.equal(owner.stages.noir.uniforms.grainAmt, 0.3, 'a stopped owner no longer answers');
+  assert.equal(
+    owner.stages.noir.uniforms.grainAmt,
+    0.3,
+    'a stopped owner no longer answers',
+  );
   // An older owner's stop leaves a newer owner's rows.
   const newer = { style: 'noir', rows: [] };
   owner._parameters = { style: 'noir', rows: [] };
@@ -605,10 +668,16 @@ test('VisualSettings publishes a styleâ€™s parameters and writes a moved sliderâ
 test('the four Cockpit groups teleport to the published slots and back to their places', async (t) => {
   const { store, $ } = fixture(t);
   const groupOf = (id) => $(id).closest('.pp-toggle-group') ?? $(id);
-  const ids = ['hud-toggle', 'detection-toggle', 'param-slider-panel', 'models3d-toggle'];
+  const ids = [
+    'hud-toggle',
+    'detection-toggle',
+    'param-slider-panel',
+    'models3d-toggle',
+  ];
   const body = $('pp-toggles').querySelector('.pp-panel-body');
   const order = () =>
-    [...body.children].filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
+    [...body.children]
+      .filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
       .map((el) => el.id || el.querySelector('[id]')?.id);
   const home = order();
   const popover = document.body.appendChild(document.createElement('div'));

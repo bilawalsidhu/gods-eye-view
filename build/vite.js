@@ -184,6 +184,22 @@ export function createBrowserViteConfig({
       // Next, so no provider route answers a Host the server does not allow.
       hostCheckPlugin(),
       cesium(),
+      // PanelLayoutController relocates Display outside its Vue mount host,
+      // and shell owners retain its element references. A component HMR remount
+      // leaves the old panel behind and creates a second, disconnected one.
+      {
+        name: 'reload-relocated-display',
+        enforce: 'pre',
+        handleHotUpdate({ file, server }) {
+          if (
+            file === `${REPO_ROOT}/src/ui/views/panels/DisplayPanel.vue` ||
+            file === `${REPO_ROOT}/src/ui/views/DisplayControlsView.vue`
+          ) {
+            server.ws.send({ type: 'full-reload' });
+            return [];
+          }
+        },
+      },
       // Application views are Vue single-file components.
       vue(VUE_PLUGIN_OPTIONS),
       ...plugins,

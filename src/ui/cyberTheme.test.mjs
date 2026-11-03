@@ -1,4 +1,9 @@
-import { getScopeMaskFeather, isScopeMaskEnabled, setScopeMaskEnabled, setScopeMaskFeather } from '../scopeMask.js';
+import {
+  getScopeMaskFeather,
+  isScopeMaskEnabled,
+  setScopeMaskEnabled,
+  setScopeMaskFeather,
+} from '../scopeMask.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -9,6 +14,11 @@ import {
   HUD_LAYOUTS,
   normalizeHudLayout,
 } from '../hudLayouts.js';
+import {
+  applyDisplayAccentTheme,
+  DISPLAY_ACCENTS,
+  normalizeDisplayAccent,
+} from './displayAccentSettings.js';
 import { GEV_ACTION_SCHEMAS } from '../voice/actionSchemas.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { StyleManager } from './applicationShell.js';
@@ -32,7 +42,7 @@ test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () 
       // The header is RailPanel's; the body is its first content.
       markup.indexOf('<RailPanel ') > -1 &&
         markup.indexOf('<RailPanel ') <
-        markup.indexOf('class="cyber-panel-body ui-scroll"'),
+          markup.indexOf('class="cyber-panel-body ui-scroll"'),
     );
   }
   const shared = readFileSync(
@@ -276,8 +286,14 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
 
 test('scope choice and expanded feather survive every HUD layout and both restore paths', async (t) => {
   const { owner } = styleOwner(t, 'tactical');
-  const previous = { enabled: isScopeMaskEnabled(), feather: getScopeMaskFeather() };
-  t.after(() => { setScopeMaskEnabled(previous.enabled); setScopeMaskFeather(previous.feather); });
+  const previous = {
+    enabled: isScopeMaskEnabled(),
+    feather: getScopeMaskFeather(),
+  };
+  t.after(() => {
+    setScopeMaskEnabled(previous.enabled);
+    setScopeMaskFeather(previous.feather);
+  });
   Object.assign(owner.services, { setScopeMaskEnabled, setScopeMaskFeather });
   let shown = null;
   owner.store = { publish: (view) => (shown = view.scope) };
@@ -375,7 +391,7 @@ test('Cyber setup uses a compact toolbar icon and highlights the north-up letter
   assert.match(css, /#key-setup-chip\[hidden\]\s*\{\s*display: none;/);
   assert.match(
     css,
-    /#north-up-view\[data-north-up='true'\]\s+\.camera-compass-n\s*\{[^}]*color: var\(--cyber-red-bright\)/,
+    /#north-up-view\[data-north-up='true'\]\s+\.camera-compass-n\s*\{[^}]*color: var\(--cyber-accent-bright\)/,
   );
 });
 const cyberStyles = read('./styles/cyber.css');
@@ -481,11 +497,11 @@ test('shared panel hooks affect only opted-in rail surfaces without overriding d
 test('Cyber clipped expand controls retain an inset keyboard-focus outline in map and cockpit', () => {
   assert.match(
     cyberStyles,
-    /:root\[data-ui-theme='cyber'\]\s+:is\(\s*\.panel-collapse-btn,\s*body\.cockpit-mode \.cockpit-utility-glyph\s*\):focus-visible\s*\{[^}]*outline: 2px solid var\(--cyber-red-bright\) !important;[^}]*outline-offset: -3px;[^}]*box-shadow: none;/,
+    /:root\[data-ui-theme='cyber'\]\s+:is\(\s*\.panel-collapse-btn,\s*body\.cockpit-mode \.cockpit-utility-glyph\s*\):focus-visible\s*\{[^}]*outline: 2px solid var\(--cyber-accent-bright\) !important;[^}]*outline-offset: -3px;[^}]*box-shadow: none;/,
   );
   assert.match(
     cyberStyles,
-    /:root\[data-ui-theme='cyber'\]\s+:is\(\.panel-collapse-btn, body\.cockpit-mode \.cockpit-utility-glyph\):is\(\s*:hover,\s*:focus-visible\s*\)\s*\{[^}]*border-color: var\(--cyber-red-bright\);/,
+    /:root\[data-ui-theme='cyber'\]\s+:is\(\.panel-collapse-btn, body\.cockpit-mode \.cockpit-utility-glyph\):is\(\s*:hover,\s*:focus-visible\s*\)\s*\{[^}]*border-color: var\(--cyber-accent-bright\);/,
   );
 });
 
@@ -531,7 +547,7 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
   assert.match(
     cyberStyles,
-    /\.cockpit-utility-control\.is-expanded::after \{[\s\S]*?width: 36px;[\s\S]*?border-top: 1px solid rgba\(225, 102, 102, 0\.84\);/,
+    /\.cockpit-utility-control\.is-expanded::after \{[\s\S]*?width: 36px;[\s\S]*?border-top: 1px solid rgba\(var\(--cyber-accent-bright-rgb\), 0\.84\);/,
   );
   assert.match(
     cyberStyles,
@@ -573,6 +589,40 @@ test('Cyber is a canonical HUD layout with a safe Tactical fallback', () => {
   assert.equal(normalizeHudLayout('CYBER'), 'cyber');
   assert.equal(normalizeHudLayout('operator'), 'tactical');
   assert.equal(normalizeHudLayout('unknown'), 'tactical');
+});
+
+test('Cyber accent settings normalize schemes and publish derived CSS variables', () => {
+  assert.deepEqual(
+    DISPLAY_ACCENTS.map((accent) => [accent.id, accent.color, accent.label]),
+    [
+      ['purple', '#7d4fae', 'Purple'],
+      ['red', '#c45454', 'Red'],
+      ['cyan', '#69cbd1', 'Cyan'],
+      ['amber', '#e89d4e', 'Amber'],
+      ['green', '#4ec98a', 'Green'],
+    ],
+  );
+  assert.deepEqual(normalizeDisplayAccent('red'), {
+    id: 'red',
+    color: '#c45454',
+    customColor: '#7d4fae',
+  });
+  assert.deepEqual(normalizeDisplayAccent({ id: 'custom', color: '#123456' }), {
+    id: 'custom',
+    color: '#123456',
+    customColor: '#123456',
+  });
+
+  const properties = new Map();
+  const root = {
+    style: { setProperty: (name, value) => properties.set(name, value) },
+  };
+  applyDisplayAccentTheme(root, { id: 'custom', color: '#123456' });
+  assert.equal(properties.get('--cyber-accent'), '#123456');
+  assert.equal(properties.get('--cyber-accent-rgb'), '18, 52, 86');
+  assert.equal(properties.get('--cyber-accent-bright'), '#1162b3');
+  assert.equal(properties.get('--cyber-accent-bright-rgb'), '17, 98, 179');
+  assert.equal(properties.get('--cyber-accent-surface-rgb'), '18, 46, 73');
 });
 
 test('the Cyber HUD owns the global shell skin and leaving it restores defaults', () => {
@@ -654,7 +704,10 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   const militaryRendering = read('../layers/military/rendering.js');
   const setHud = GEV_ACTION_SCHEMAS.find((schema) => schema.name === 'set_hud');
 
-  assert.match(display, /<option value="cyber">\{\{ t\('Cyber'\) \}\}<\/option>/);
+  assert.match(
+    display,
+    /<option value="cyber">\{\{ t\('Cyber'\) \}\}<\/option>/,
+  );
   assert.match(display, /id="cyber-sonar-toggle"/);
   assert.match(
     display,
@@ -710,7 +763,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(
     cyberStyles,
-    /#title-bar \.title-logo #globe \{[\s\S]*?fill: var\(--cyber-red\);[\s\S]*?stroke: var\(--cyber-red-bright\);/,
+    /#title-bar \.title-logo #globe \{[\s\S]*?fill: var\(--cyber-accent\);[\s\S]*?stroke: var\(--cyber-accent-bright\);/,
   );
   assert.match(cyberStyles, /#title-bar \.title-logo #globe_cage/);
   assert.match(
@@ -783,7 +836,10 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
     cyberStyles,
     /inset-inline-start: calc\(54px \+ var\(--panel-rail-clearance\)\);/,
   );
-  assert.match(cyberStyles, /right: calc\(51px \+ var\(--panel-rail-clearance\)\);/);
+  assert.match(
+    cyberStyles,
+    /right: calc\(51px \+ var\(--panel-rail-clearance\)\);/,
+  );
   // Each side's edge line shows only beside an open panel.
   assert.match(
     cyberStyles,
@@ -895,10 +951,10 @@ test('Cyber keeps Sonar on/off without the removed CSS effect switch or dimmer',
   assert.doesNotMatch(cyberStyles, /cyber-scene-dimmer|data-cyber-sonar-mode/);
 });
 
-test('Cyber Display uses a red title without a panel-specific center tab', () => {
+test('Cyber Display uses a purple title without a panel-specific center tab', () => {
   assert.match(
     cyberStyles,
-    /#pp-toggles \.pp-header-label\s*\{\s*color: var\(--cyber-red-bright\);/,
+    /#pp-toggles \.pp-header-label\s*\{\s*color: var\(--cyber-accent-bright\);/,
   );
   assert.doesNotMatch(cyberStyles, /#pp-toggles[^,{]*::after\s*\{/);
   assert.match(cyberStyles, /isolation: isolate;\s*clip-path: none;/);
