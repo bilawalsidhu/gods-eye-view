@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
+import { entityRecord } from '../../data/entityRecords.js';
 import {
   FRUSTUM_GROUND_CLEARANCE_M,
   PROBE_MIN_RANGE_M,
@@ -564,8 +565,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       record.frustumPositions,
       color,
     );
-    // QA tag: the harness counts viewshed volumes by this marker.
-    primitive._gevViewshed = record.camera.id;
+    // QA tag: the harness counts viewshed volumes by this record field.
+    entityRecord(primitive).viewshedCameraId = record.camera.id;
     record.viewshedPrimitive =
       layerState._viewer.scene.primitives.add(primitive);
     record.viewshedActiveTint = !!isActive;

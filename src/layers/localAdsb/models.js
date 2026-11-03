@@ -15,6 +15,7 @@ import {
   MODEL_PROX_KEEP_M,
 } from '../flights/policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
+import { aircraftVisuals } from '../aircraft/visualState.js';
 
 const specKey = (spec) => `${spec.url}@${spec.scale}`;
 
@@ -78,7 +79,7 @@ export function createLocalAdsbModels({
     const spec = civilAircraftModelSpec(marker.klass);
     const key = specKey(spec);
     const current = models.get(id);
-    if (current && current._gevSpecKey === key) return;
+    if (current && aircraftVisuals.read(current)?.specKey === key) return;
     if (current) release(id);
     if (pending.has(id) || models.size + pending.size >= cap) return;
     const loadGeneration = generation;
@@ -113,8 +114,9 @@ export function createLocalAdsbModels({
       return;
     }
     model.id = id;
-    model._gevSpecKey = key;
-    model._gevBellyM = spec.bellyM;
+    const visual = aircraftVisuals.write(model);
+    visual.specKey = key;
+    visual.bellyM = spec.bellyM;
     // Admitted, not yet the visual: placement turns it on.
     model.show = false;
     collection.add(model);
@@ -182,7 +184,7 @@ export function createLocalAdsbModels({
     return Cesium.Cartesian3.fromRadians(
       carto.longitude,
       carto.latitude,
-      height + (model?._gevBellyM || 0),
+      height + (aircraftVisuals.read(model)?.bellyM || 0),
       Cesium.Ellipsoid.WGS84,
       scratchGround,
     );

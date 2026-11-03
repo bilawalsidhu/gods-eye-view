@@ -97,7 +97,7 @@ for (const fixture of LAYERS) {
     // The handoff state: the fleet tick hid the sprite and showed the model.
     fixture.seed({
       billboardShow: false,
-      models: [[ICAO, { ready: true, show: true, _gevPlacementReady: true }]],
+      models: [[ICAO, { ready: true, show: true }]],
     });
     assert.ok(
       nearbyIcaos(fixture.layer).includes(ICAO),
@@ -136,7 +136,6 @@ for (const fixture of LAYERS) {
         ready: false,
         show: true,
         scale: 0,
-        _gevPlacementReady: false,
       }]],
     });
     assert.ok(
@@ -160,7 +159,6 @@ for (const fixture of LAYERS) {
       models: [[ICAO, {
         ready: true,
         show: true,
-        _gevPlacementReady: true,
         modelMatrix,
         computedScale: COMPUTED_SCALE,
       }]],
@@ -191,7 +189,6 @@ for (const fixture of LAYERS) {
         ready: false,
         show: true,
         scale: 0,
-        _gevPlacementReady: false,
         modelMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
       }]],
     });
