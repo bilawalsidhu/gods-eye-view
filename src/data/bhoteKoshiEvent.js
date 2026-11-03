@@ -903,13 +903,19 @@ function focusView(viewer, viewpoint, engine) {
   );
   if (engine) {
     engine.camera.cancelFlight();
-    engine.camera.flyToSphere({center: target, radius: 80}, {
-      heading:offset.heading, pitch:offset.pitch, range:offset.range, duration:2.2,
-      complete: () => {
-        engine.camera.lookAt(target, offset);
-        engine.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    engine.camera.flyToSphere(
+      { center: target, radius: 80 },
+      {
+        heading: offset.heading,
+        pitch: offset.pitch,
+        range: offset.range,
+        duration: 2.2,
+        complete: () => {
+          engine.camera.lookAt(target, offset);
+          engine.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        },
       },
-    });
+    );
     return;
   }
   viewer.camera.cancelFlight?.();
@@ -1190,7 +1196,10 @@ export function createBhoteKoshiEventLayer({
     ]));
     if (!_enabled) return;
     if (_native) {
-      await _native.loadImages(event.imagery.rectangle, [beforeProvider, afterProvider]);
+      await _native.loadImages(event.imagery.rectangle, [
+        beforeProvider,
+        afterProvider,
+      ]);
       setSplit(_split);
       return;
     }
@@ -1210,11 +1219,14 @@ export function createBhoteKoshiEventLayer({
       : [];
     let sampled = null;
     try {
-      sampled = _engine && !_viewer
-        ? observations.map(({lon,lat}) => ({
-            height: _engine.surface.terrainHeight(Cesium.Cartographic.fromDegrees(lon,lat)),
-          }))
-        : await terrainSampler(_viewer, observations, { signal });
+      sampled =
+        _engine && !_viewer
+          ? observations.map(({ lon, lat }) => ({
+              height: _engine.surface.terrainHeight(
+                Cesium.Cartographic.fromDegrees(lon, lat),
+              ),
+            }))
+          : await terrainSampler(_viewer, observations, { signal });
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
       console.warn(
@@ -1601,13 +1613,17 @@ export function createBhoteKoshiEventLayer({
       if (_sceneControls.evidencePathElevation !== 'source') {
         // Sample once while preparing the shot, never from an animation frame.
         try {
-          height = _engine?.surface?.sampleHeight?.(position) ?? _viewer?.scene?.sampleHeight?.(
-            position,
-            [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
-          );
+          height =
+            _engine?.surface?.sampleHeight?.(position) ??
+            _viewer?.scene?.sampleHeight?.(
+              position,
+              [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
+            );
         } catch {}
         if (!Number.isFinite(height))
-          height = _engine?.surface?.terrainHeight(position) ?? _viewer?.scene?.globe?.getHeight?.(position);
+          height =
+            _engine?.surface?.terrainHeight(position) ??
+            _viewer?.scene?.globe?.getHeight?.(position);
       }
       if (!Number.isFinite(height)) height = point.fallbackElevationM;
       return Cesium.Cartesian3.fromDegrees(point.lon, point.lat, height + 8);
@@ -2615,7 +2631,12 @@ export function createBhoteKoshiEventLayer({
 
   function syncFloodSurfaceMode() {
     const nextMode = usesPhotorealFloodSurface() ? 'tiles' : 'terrain';
-    if ((!_viewer && !_native) || !_floodDataSource || _floodSurfaceMode === nextMode) return;
+    if (
+      (!_viewer && !_native) ||
+      !_floodDataSource ||
+      _floodSurfaceMode === nextMode
+    )
+      return;
     _nativeFlood?.destroy();
     _nativeFlood = null;
     _viewer?.dataSources.remove(_floodDataSource, true);
@@ -3483,7 +3504,8 @@ export function createBhoteKoshiEventLayer({
     _embeddedEvidenceIndex = -1;
     _embeddedMedia?.hide?.();
     setSplit(0.5);
-    if (cameraForScene()) focusView(_viewer, _event.viewpoints.corridor, _engine);
+    if (cameraForScene())
+      focusView(_viewer, _event.viewpoints.corridor, _engine);
   }
 
   function removeImagery() {
@@ -3494,17 +3516,20 @@ export function createBhoteKoshiEventLayer({
     _imageryLayerCollection = null;
   }
 
-  async function attachRenderer(viewer, {engine = null} = {}) {
+  async function attachRenderer(viewer, { engine = null } = {}) {
     _viewer = viewer;
     _engine = engine;
     if (!_viewer && _engine) _native = createNativeRenderer(engine);
-    _embeddedMedia?.attachScene?.(viewer,engine);
+    _embeddedMedia?.attachScene?.(viewer, engine);
     if (!_enabled) return;
     // The catalog has rebound the incoming map controller before this call.
     if (_mapStackController) {
       _comparisonLease = acquireImageryComparison(_mapStackController, {
         owner: BHOTE_KOSHI_LAYER_ID,
-        switchPolicy: _presentation === BHOTE_KOSHI_SCENE_PRESENTATION ? 'preserve' : 'esri',
+        switchPolicy:
+          _presentation === BHOTE_KOSHI_SCENE_PRESENTATION
+            ? 'preserve'
+            : 'esri',
       });
       await _comparisonLease.ready;
     }
@@ -3530,11 +3555,12 @@ export function createBhoteKoshiEventLayer({
     detachEvidenceCardActivation();
     _splitControl?.destroy();
     _splitControl = null;
-    _embeddedMedia?.attachScene?.(null,null);
+    _embeddedMedia?.attachScene?.(null, null);
     removeImagery();
     _nativeFlood?.destroy();
     _nativeFlood = null;
-    if (_floodDataSource && _viewer) _viewer.dataSources.remove(_floodDataSource,false);
+    if (_floodDataSource && _viewer)
+      _viewer.dataSources.remove(_floodDataSource, false);
     _native?.destroy();
     _native = null;
     _engine = _viewer = null;
@@ -3545,7 +3571,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function init(viewer, options) {
-    await attachRenderer(viewer,options);
+    await attachRenderer(viewer, options);
     _embeddedMedia = embeddedMediaFactory({ viewer, engine: _engine });
     await loadEvent();
     console.log('[Data:BhoteKoshi] Event pack ready');
@@ -3704,7 +3730,8 @@ export function createBhoteKoshiEventLayer({
     _nativeFlood = null;
     _native?.clear();
     _providers = null;
-    if (_floodDataSource && _viewer) _viewer.dataSources.remove(_floodDataSource, true);
+    if (_floodDataSource && _viewer)
+      _viewer.dataSources.remove(_floodDataSource, true);
     _floodDataSource = null;
     _floodSurfaceMode = null;
     _floodHalo = null;
