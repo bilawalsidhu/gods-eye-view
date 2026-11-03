@@ -146,7 +146,7 @@ test('a street comes from tiles before the configured ladder, as merged ribbons'
   );
   assert.ok(result.ring.length > 6);
   assert.equal(result.polygons.length, 1);
-  assert.equal('outlineSource' in result, false);
+  assert.equal(result.outlineSource, 'openfreemap');
   assert.equal(run.calls.base, 0, 'the ladder is not consulted');
   assert.deepEqual(run.calls.finished, ['street']);
   assert.deepEqual(credits, ['tiles']);
@@ -416,6 +416,7 @@ test('a city with no configured Overpass is outlined by Nominatim', async () => 
   );
   assert.deepEqual(result.ring, ring);
   assert.equal(result.outlineCredit, 'osm');
+  assert.equal(result.outlineSource, 'nominatim');
   assert.deepEqual(nominatim.asks[0], {
     query: 'Toulouse',
     kind: 'city',
