@@ -18,6 +18,11 @@ import {
 } from '../renderGovernor.js';
 import { attachSessionVoice } from './sessionVoice.js';
 import { initNavaraImageryBoxTool } from '../ui/imageryBoxNavara.js';
+import {
+  attachNavaraAnnotations,
+  attachNavaraDraw,
+  attachNavaraGeoImport,
+} from './navaraTools.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 
 // Native mesh capability stays at the composition boundary.
@@ -461,6 +466,16 @@ export function attachViewerlessTools(
   });
   // The notice is this engine's: it goes when the engine does.
   defer(() => styleManager._clearPersistentStatusNotice?.());
+  // The page session's annotation board, Draw and Import on this engine
+  // (src/app/navaraTools.js).
+  const tools = { engine, view: navaraViews.get(engine) };
+  const context = { operations, placeSearch, layerSession, styleManager };
+  const annotations = attachNavaraAnnotations(tools, context, {
+    signal,
+    defer,
+  });
+  attachNavaraDraw(tools, { ...context, annotations }, { signal, defer });
+  attachNavaraGeoImport(tools, context, { signal, defer });
   // Voice on the engine (phase 3, Task 9): the W1 tools drive the engine;
   // the Director uses the shared session; viewer-only tools declare availability.
   const voiceCommands = attachSessionVoice({
@@ -474,10 +489,10 @@ export function attachViewerlessTools(
       engine,
       styleManager,
       sceneDirector,
-      annotations: null,
+      annotations,
     },
     signal,
     defer,
   });
-  return { annotations: null, voiceCommands };
+  return { annotations, voiceCommands };
 }

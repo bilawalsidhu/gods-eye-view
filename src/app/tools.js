@@ -1,12 +1,12 @@
 import { SceneDirector } from '../scenes/director.js';
-import { createSessionAnnotations } from '../annotations/index.js';
-import { createSessionDrawTool } from '../annotations/drawTool.js';
-import { createGeoFileImport } from '../ui/geoFileImport.js';
-import { useDisplayStore } from '../ui/stores/display.js';
-import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { attachSessionVoice } from './sessionVoice.js';
+import {
+  sessionAnnotations,
+  sessionDrawTool,
+  sessionGeoImport,
+} from './sessionTools.js';
 import {
   attachScenePart,
   currentSceneOf,
@@ -22,60 +22,6 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
-
-/**
- * The annotation board: the page session's when there is one (created once,
- * destroyed with the page), else this application's.
- */
-export function sessionAnnotations({
-  layerSession,
-  placeSearch,
-  resolver,
-  defer,
-}) {
-  const create = () => createSessionAnnotations({ placeSearch, resolver });
-  if (!layerSession) {
-    const annotations = create();
-    defer(() => destroyAnnotations(annotations));
-    return annotations;
-  }
-  if (!layerSession.annotations) {
-    const annotations = (layerSession.annotations = create());
-    layerSession.lifetime.signal.addEventListener(
-      'abort',
-      () => destroyAnnotations(annotations),
-      { once: true },
-    );
-  }
-  return layerSession.annotations;
-}
-
-/**
- * A tool of the page session (created once, destroyed with the page) when
- * there is one, else of this application. `create()` may return null.
- */
-function sessionTool(layerSession, name, defer, create) {
-  if (!layerSession) {
-    const tool = create();
-    defer(() => tool?.destroy());
-    return tool;
-  }
-  const tools = (layerSession.tools ??= {});
-  if (!(name in tools)) {
-    const tool = (tools[name] = create());
-    layerSession.lifetime.signal.addEventListener(
-      'abort',
-      () => tool?.destroy(),
-      { once: true },
-    );
-  }
-  return tools[name];
-}
-
-function destroyAnnotations(annotations) {
-  if (window.__gevAnnotations === annotations) delete window.__gevAnnotations;
-  annotations.destroy();
-}
 
 /**
  * Attach scene tools, rendering listeners and the application debug handle.
@@ -305,39 +251,24 @@ function attachViewerTools(
   });
   annotations.attachScene({ viewer, tileset });
   defer(() => annotations.detachScene());
-  const displayStore = useDisplayStore(applicationPinia());
-  // The Display panel's controls answer through the store; returns the
-  // disconnect.
-  const connectDisplay = (actions) => {
-    const token = displayStore.connect(actions);
-    return () => displayStore.detach(token);
-  };
-  // UTILITIES ▸ Draw: the same whiteboard, drawn by hand. The marks and the
-  // chosen shape belong to the page session; the tool claims this viewer's
-  // pointer while a sketch is open, so an engine switch ends the sketch. A
-  // row's fly-to goes through the shell's navigation policy, as Import's does.
-  const drawTool = sessionTool(layerSession, 'draw', defer, () =>
-    createSessionDrawTool({
-      annotations,
-      navigation: styleManager,
-      publish: (view) => displayStore.publishDraw(view),
-      connect: connectDisplay,
-    }),
-  );
+  // UTILITIES ▸ Draw on this viewer (src/app/sessionTools.js): the tool
+  // claims this viewer's pointer while a sketch is open.
+  const drawTool = sessionDrawTool({
+    layerSession,
+    annotations,
+    styleManager,
+    defer,
+  });
   drawTool?.attachScene({ viewer, navigation: styleManager });
   defer(() => drawTool?.detachScene());
-  // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
-  // own data source. They live for the page session: an engine switch takes
-  // them off this viewer, and the next Cesium viewer reads them again. The
-  // drop listeners belong to this viewer.
-  const geoFileImport = sessionTool(layerSession, 'geoImport', defer, () =>
-    createGeoFileImport({
-      navigation: styleManager,
-      ground: operations.surface?.groundFloor,
-      publish: (view) => displayStore.publishGeoImport(view),
-      connect: connectDisplay,
-    }),
-  );
+  // UTILITIES ▸ Import on this viewer: the next Cesium viewer reads the
+  // session's files again. The drop listeners belong to this viewer.
+  const geoFileImport = sessionGeoImport({
+    layerSession,
+    styleManager,
+    operations,
+    defer,
+  });
   geoFileImport?.attachScene({
     viewer,
     navigation: styleManager,

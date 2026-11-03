@@ -21,18 +21,24 @@ const tool = () => read('src/annotations/drawTool.js');
 
 test('the application composition wires the draw tool and owns its teardown', () => {
   const tools = read('src/app/tools.js');
+  const session = read('src/app/sessionTools.js');
   const engineAt = tools.indexOf('const annotations = sessionAnnotations({');
   const drawAt = tools.indexOf(
-    "const drawTool = sessionTool(layerSession, 'draw', defer, () =>\n    createSessionDrawTool({\n      annotations,\n      navigation: styleManager,\n      publish: (view) => displayStore.publishDraw(view),",
+    'const drawTool = sessionDrawTool({\n    layerSession,\n    annotations,',
   );
   assert.ok(engineAt >= 0, 'the session annotation board is missing');
   assert.ok(
     drawAt > engineAt,
     'the draw tool must follow the annotation board and receive it',
   );
+  // The page session owns the tool; its rows answer through the store.
   assert.match(
-    tools,
+    session,
     /import \{ createSessionDrawTool \} from '\.\.\/annotations\/drawTool\.js';/,
+  );
+  assert.match(
+    session,
+    /sessionTool\(layerSession, 'draw', defer, \(\) =>\s*createSessionDrawTool\(\{\s*annotations,\s*navigation: styleManager,\s*publish: \(view\) => displayStore\.publishDraw\(view\),/,
   );
   // The tool holds a pointer claim, DOM listeners and a data source on the
   // viewer, so the viewer's attachment ends it — not whoever last pressed the

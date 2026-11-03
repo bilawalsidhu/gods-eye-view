@@ -328,16 +328,16 @@ test('the application composition wires the import and owns its teardown', () =>
     new URL('../app/tools.js', import.meta.url),
     'utf8',
   );
-  const drawAt = tools.indexOf(
-    "const drawTool = sessionTool(layerSession, 'draw'",
+  const session = fs.readFileSync(
+    new URL('../app/sessionTools.js', import.meta.url),
+    'utf8',
   );
-  const importAt = tools.indexOf(
-    "const geoFileImport = sessionTool(layerSession, 'geoImport', defer, () =>",
-  );
+  const drawAt = tools.indexOf('const drawTool = sessionDrawTool({');
+  const importAt = tools.indexOf('const geoFileImport = sessionGeoImport({');
   assert.ok(importAt > drawAt && drawAt >= 0);
   // Fly-to goes through the application shell's navigation policy.
   assert.match(
-    tools.slice(importAt, importAt + 200),
+    tools.slice(importAt, importAt + 400),
     /navigation: styleManager/,
   );
   // The session owns the files; this viewer only their drawing.
@@ -345,9 +345,13 @@ test('the application composition wires the import and owns its teardown', () =>
     tools.indexOf('defer(() => geoFileImport?.detachScene());') > importAt,
   );
   // The list renders from the store and its controls answer through it.
+  const sessionAt = session.indexOf(
+    "sessionTool(layerSession, 'geoImport', defer, () =>",
+  );
+  assert.ok(sessionAt >= 0);
   assert.match(
-    tools.slice(importAt, importAt + 400),
-    /publish: \(view\) => displayStore\.publishGeoImport\(view\),\s*connect: connectDisplay,/,
+    session.slice(sessionAt, sessionAt + 400),
+    /navigation: styleManager,[\s\S]*publish: \(view\) => displayStore\.publishGeoImport\(view\),\s*connect: connectDisplay,/,
   );
   const markup = fs.readFileSync(
     new URL('./views/panels/GeoImport.vue', import.meta.url),
