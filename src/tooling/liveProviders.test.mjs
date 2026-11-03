@@ -584,6 +584,69 @@ test('track backfill proxy returns 502 on an oversized upstream body and caches 
   assert.equal(callCount, 1);
 });
 
+test('OpenSky Basic mode no longer sends username and password: it asks anonymously and warns once', async (t) => {
+  environment(t, {
+    OPENSKY_CLIENT_ID: undefined,
+    OPENSKY_CLIENT_SECRET: undefined,
+    OPENSKY_CREDENTIALS_FILE: undefined,
+    OPENSKY_AUTH_MODE: 'basic',
+    OPENSKY_USERNAME: 'fixture-user',
+    OPENSKY_PASSWORD: 'fixture-password',
+  });
+  const warnings = [];
+  t.mock.method(console, 'warn', (message) => warnings.push(message));
+  const authorizations = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url.includes('/states/')) {
+      authorizations.push(options.headers.Authorization);
+      return Response.json({ time: Math.floor(Date.now() / 1000), states: [] });
+    }
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?basic=${Math.random()}`
+  );
+  const flights = install(fresh.openSkyProxy());
+  const first = await flights('/api/flights');
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.headers['x-opensky-auth'], 'anon');
+  assert.equal(first.headers['x-opensky-auth-reason'], 'basic_retired');
+  assert.deepEqual(authorizations, [undefined]);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /retired username\/password sign-in/);
+  assert.ok(!warnings[0].includes('fixture-password'));
+});
+
+test('OpenSky auto mode never falls back to Basic, even when OAuth is rejected', async (t) => {
+  environment(t, {
+    OPENSKY_CLIENT_ID: 'fixture-client',
+    OPENSKY_CLIENT_SECRET: 'fixture-secret',
+    OPENSKY_CREDENTIALS_FILE: undefined,
+    OPENSKY_AUTH_MODE: 'auto',
+    OPENSKY_USERNAME: 'fixture-user',
+    OPENSKY_PASSWORD: 'fixture-password',
+  });
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'error', () => {});
+  const authorizations = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url.includes('/token'))
+      return Response.json({ access_token: 'fixture-token', expires_in: 1800 });
+    if (url.includes('/states/')) {
+      authorizations.push(options.headers.Authorization);
+      return new Response('', { status: 401 });
+    }
+    if (url.includes('/lat/')) return regionalFallback();
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?auto=${Math.random()}`
+  );
+  await install(fresh.openSkyProxy())('/api/flights', '?lat=30&lon=-97');
+  assert.deepEqual(authorizations, ['Bearer fixture-token']);
+});
+
 test('retired military history refuses without upstream I/O while validating identifiers', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
     assert.fail('retired history must not contact the upstream');

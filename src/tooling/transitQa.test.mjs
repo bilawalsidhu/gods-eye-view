@@ -1,13 +1,16 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { getTransitFeed } from '../data/transitFeeds.js';
 import {
   chooseLiveCities,
   selectStyle,
   detectOn,
 } from '../../scripts/qa-transit-controls.mjs';
 import { createStyleParameters } from '../ui/styleParameters.js';
-import { bindDisplayControls } from '../ui/displayControls.js';
+import { createPinia } from 'pinia';
+import { useDisplayStore } from '../ui/stores/display.js';
 import { thermalShader } from '../styles/thermal.js';
 import {
   cycleMode,
@@ -17,6 +20,9 @@ import {
 } from '../data/detection.js';
 
 const pause = async () => {};
+// The page fixture swaps the globals for stand-ins; generated rows render
+// into a real element, so keep the registered document.
+const realDocument = globalThis.document;
 class Element extends EventTarget {
   constructor() {
     super();
@@ -66,8 +72,7 @@ function pageFixture(t) {
       const label = selector.match(/aria-label="([^"]+)"/)[1];
       return elements
         .get('param-sliders')
-        .children.flatMap((row) => row.children)
-        .find((el) => el.getAttribute('aria-label') === label);
+        .querySelector(`input.param-slider[aria-label="${label}"]`);
     }
     return elements.get(selector.slice(1));
   };
@@ -101,6 +106,18 @@ test('live visual cities follow local operating hours in summer and winter', () 
     const cities = chooseLiveCities(now);
     assert.ok(cities.length >= 1);
     for (const city of cities) {
+      const feed = getTransitFeed(city.feedId);
+      assert.ok(feed, `${city.id} has a registered feed`);
+      const distanceKm =
+        111.32 *
+        Math.hypot(
+          feed.center.lat - city.lat,
+          (feed.center.lon - city.lon) * Math.cos((city.lat * Math.PI) / 180),
+        );
+      assert.ok(
+        distanceKm < feed.loadRadiusKm,
+        `${city.id} is inside its feed's admission region`,
+      );
       const local = Number(
         new Intl.DateTimeFormat('en', {
           timeZone: city.zone,
@@ -115,8 +132,7 @@ test('live visual cities follow local operating hours in summer and winter', () 
 
 test('thermal controls wait for activation and use the real generated parameter rows', async (t) => {
   const { page, document, elements } = pageFixture(t);
-  const container = new Element();
-  container.ownerDocument = document;
+  const container = realDocument.createElement('div');
   elements.set('param-sliders', container);
   const parameters = createStyleParameters({ container });
   t.after(() => parameters.destroy());
@@ -146,9 +162,7 @@ test('thermal controls wait for activation and use the real generated parameter 
   page.$eval = async (selector, fn, ...args) => {
     if (selector.startsWith('.style-btn')) return fn(new Element(), ...args);
     const label = selector.match(/aria-label="([^"]+)"/)[1];
-    const slider = container.children
-      .flatMap((row) => row.children)
-      .find((el) => el.getAttribute('aria-label') === label);
+    const slider = container.querySelector(`[aria-label="${label}"]`);
     assert.ok(slider);
     return fn(slider, ...args);
   };
@@ -176,26 +190,32 @@ test('DETECT uses the real OFF/restore button and density input to reach DENSE',
   setMode('BALANCED');
   setMode('OFF');
   const modes = [];
-  const controls = bindDisplayControls({
-    elements: { detectionButton: button, densitySlider: slider },
-    actions: {
-      cycleDetection() {
-        cycleMode();
-        modes.push(getMode());
-      },
-      setDensity(value) {
-        setDetectionTuning({ densityPct: Number(value) });
-      },
+  // As DisplayPanel does: the toggle and the slider call the Display
+  // controls' actions through the display store.
+  const store = useDisplayStore(createPinia());
+  const token = store.connect({
+    cycleDetection() {
+      cycleMode();
+      modes.push(getMode());
+    },
+    setDensity(value) {
+      setDetectionTuning({ densityPct: Number(value) });
     },
   });
+  const onClick = () => store.act('cycleDetection');
+  const onInput = () => store.act('setDensity', slider.value);
+  button.addEventListener('click', onClick);
+  slider.addEventListener('input', onInput);
   t.after(() => {
-    controls.destroy();
+    button.removeEventListener('click', onClick);
+    slider.removeEventListener('input', onInput);
+    store.detach(token);
     setMode('OFF');
   });
   assert.equal(await detectOn(page, pause), 'DENSE');
   assert.deepEqual(modes, ['BALANCED', 'OFF', 'DENSE']);
   const template = readFileSync(
-    new URL('../ui/templates/display-controls.html', import.meta.url),
+    new URL('../ui/views/panels/DisplayPanel.vue', import.meta.url),
     'utf8',
   );
   assert.match(template, /id="detection-density-slider"/);
