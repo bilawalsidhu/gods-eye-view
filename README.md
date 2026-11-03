@@ -1,5 +1,7 @@
 # 🌐 God's Eye View - Edição Brasileira (pt-BR) 🇧🇷
 
+> **Integração prioritária deste fork — Habblaud:** um painel opcional abre o laboratório de agentes do Habblaud. O Habblaud consulta ferramentas públicas por MCP local; a comunicação ponta a ponta está em homologação. Leia [manual de integração e responsabilidades](docs/HABBLAUD-INTEGRACAO.md) e [Geo Mission cinematográfica](docs/HABBLAUD-GEO-MISSION.md). O acesso a cada fonte depende de autorização, termos, cotas e leis aplicáveis; o usuário responde por seu uso, sem excluir as obrigações dos desenvolvedores e operadores.
+
 Este é o meu fork do projeto original [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view), um simulador de satélite espião que roda no navegador com dados reais e open-source.
 
 ## O que eu mudei/adicionei neste fork:

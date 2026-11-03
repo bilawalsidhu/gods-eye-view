@@ -47,6 +47,39 @@
 
   <!-- gev:template hud-loading -->
 
+  <!-- Habblaud integration: optional local companion; no credentials or geodata are sent by this link. -->
+  <aside id="habblaud-geo-launcher" aria-label="Integração Habblaud" style="position:fixed;left:185px;bottom:14px;z-index:9999;background:#102a37ee;border:1px solid #52c9a7;border-radius:12px;padding:8px 11px;font:12px system-ui;color:#e9ffff;box-shadow:0 8px 24px #0008;max-width:230px;touch-action:none">
+    <div id="habblaud-drag" style="cursor:grab;user-select:none;touch-action:none;display:flex;justify-content:space-between;gap:8px"><strong>⠿ 🤖 Habblaud</strong><button id="habblaud-collapse" type="button" aria-label="Recolher painel" style="background:#275369;border:0;color:white;cursor:pointer">−</button></div><div id="habblaud-body">
+    <div style="font-size:11px;opacity:.85">Agentes e relatórios (serviço local opcional)</div>
+    <a href="http://127.0.0.1:4747/geo-mission" target="_blank" rel="noopener noreferrer" style="color:#83f2d0">Abrir central de agentes</a>
+    <details style="margin-top:4px"><summary style="cursor:pointer">Outra porta do Habblaud?</summary><label style="display:block">Porta local <input id="habblaud-geo-port" type="number" min="1" max="65535" value="4747" style="width:80px;background:#091a25;color:white;border:1px solid #658a92"></label><button type="button" id="habblaud-geo-open" style="cursor:pointer;background:#3bb99b;border:0;padding:5px 8px;border-radius:4px">Abrir</button></details></div>
+  </aside>
+  <script>
+    const box=document.getElementById('habblaud-geo-launcher'),handle=document.getElementById('habblaud-drag'),body=document.getElementById('habblaud-body');
+    document.getElementById('habblaud-collapse').addEventListener('click',function(){body.hidden=!body.hidden;this.textContent=body.hidden?'+':'−';});
+    let drag=null;
+    handle.addEventListener('pointerdown',function(e){if(e.target.closest('button'))return;const r=box.getBoundingClientRect();drag={x:e.clientX,y:e.clientY,left:r.left,top:r.top};handle.setPointerCapture(e.pointerId);});
+    handle.addEventListener('pointermove',function(e){if(!drag)return;box.style.left=Math.max(0,Math.min(innerWidth-box.offsetWidth,drag.left+e.clientX-drag.x))+'px';box.style.top=Math.max(0,Math.min(innerHeight-box.offsetHeight,drag.top+e.clientY-drag.y))+'px';box.style.right='auto';box.style.bottom='auto';});
+    handle.addEventListener('pointerup',function(){drag=null;try{localStorage.setItem('habblaud-geo-position',JSON.stringify({left:box.style.left,top:box.style.top}))}catch{}});
+    try{const saved=JSON.parse(localStorage.getItem('habblaud-geo-position')||'null');if(saved&&/^\d+px$/.test(saved.left)&&/^\d+px$/.test(saved.top)){box.style.left=saved.left;box.style.top=saved.top;box.style.bottom='auto';}}catch{}
+    document.getElementById('habblaud-geo-open').addEventListener('click',function(){
+      const port=Number(document.getElementById('habblaud-geo-port').value);
+      if(!Number.isInteger(port)||port<1||port>65535)return;
+      window.open('http://127.0.0.1:'+port+'/geo-mission','_blank','noopener,noreferrer');
+    });
+  </script>
+  <style>
+    body.ui-embed.geo-controls #left-panel-stack,
+    body.ui-embed.geo-controls #command-dock,
+    body.ui-embed.geo-controls #right-context-rail,
+    body.ui-embed.geo-controls #corner-actions,
+    body.ui-embed.geo-controls #view-switcher {display: revert !important;}
+    body.ui-embed.geo-controls #habblaud-geo-launcher {display:none !important;}
+  </style>
+  <script>
+    if(new URLSearchParams(location.search).get('geoControls')==='1')document.documentElement.classList.add('geo-controls');
+    document.addEventListener('DOMContentLoaded',()=>{if(new URLSearchParams(location.search).get('geoControls')==='1')document.body.classList.add('geo-controls')});
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
