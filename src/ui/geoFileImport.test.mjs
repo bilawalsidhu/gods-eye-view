@@ -328,7 +328,9 @@ test('the application composition wires the import and owns its teardown', () =>
     new URL('../app/tools.js', import.meta.url),
     'utf8',
   );
-  const drawAt = tools.indexOf('const drawTool = initDrawTool({');
+  const drawAt = tools.indexOf(
+    "const drawTool = sessionTool(layerSession, 'draw'",
+  );
   const importAt = tools.indexOf(
     "const geoFileImport = sessionTool(layerSession, 'geoImport', defer, () =>",
   );

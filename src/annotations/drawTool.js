@@ -76,6 +76,8 @@ export function initDrawTool({
   navigation = null,
   publish = () => {},
   connect = () => () => {},
+  initialShape = 'area',
+  initialColor = 'primary',
 }) {
   // A page without the Draw controls (the Display controls view omitted) has
   // no draw tool.
@@ -85,8 +87,8 @@ export function initDrawTool({
   let active = false;
   let destroyed = false;
   let session = null;
-  let shape = 'area';
-  let color = 'primary';
+  let shape = normalizeShape(initialShape);
+  let color = DRAW_COLORS.includes(initialColor) ? initialColor : 'primary';
   let hint = '';
   let handler = null;
   let lease = null;
@@ -494,6 +496,9 @@ export function initDrawTool({
     get shape() {
       return shape;
     },
+    get color() {
+      return color;
+    },
     get session() {
       return session;
     },
@@ -585,6 +590,110 @@ export function initDrawTool({
   };
   window.__gevDrawTool = api;
   return api;
+}
+
+/**
+ * The Draw control for the page session. The marks live on the annotation
+ * board and the chosen shape and colour here; the drawing tool itself (its
+ * preview, click handler and Escape/Enter keys) belongs to the attached
+ * Cesium viewer. `attachScene({ viewer, navigation })` starts the tool on a
+ * viewer with the shape and colour last chosen; `detachScene()` ends it, an
+ * open shape included. Without a viewer the controls answer nothing, as on
+ * an engine without Draw. Same handle as initDrawTool's
+ * (`window.__gevDrawTool`), kept across switches.
+ */
+export function createSessionDrawTool({
+  annotations,
+  navigation = null,
+  publish = () => {},
+  connect = () => () => {},
+}) {
+  if (!annotations || !document.getElementById('draw-toggle')) return null;
+  let inner = null;
+  let shape = 'area';
+  let color = 'primary';
+  let destroyed = false;
+  let settled = Promise.resolve();
+  const detachScene = () => {
+    if (!inner) return settled;
+    shape = inner.shape;
+    color = inner.color;
+    const previous = inner;
+    inner = null;
+    settled = previous.destroy();
+    if (window.__gevDrawTool === previous) window.__gevDrawTool = wrapper;
+    return settled;
+  };
+  const wrapper = {
+    get active() {
+      return inner?.active ?? false;
+    },
+    get shape() {
+      return inner?.shape ?? shape;
+    },
+    get color() {
+      return inner?.color ?? color;
+    },
+    get session() {
+      return inner?.session ?? null;
+    },
+    get attached() {
+      return Boolean(inner);
+    },
+    setActive: (next) => inner?.setActive(next) ?? false,
+    setShape(next) {
+      shape = normalizeShape(next);
+      inner?.setShape(next);
+    },
+    setColor(next) {
+      color = DRAW_COLORS.includes(next) ? next : 'primary';
+      inner?.setColor(next);
+    },
+    marks: () => presentDrawMarks(annotations.list?.() || []),
+    flyToMark: (id) => inner?.flyToMark(id) ?? false,
+    addVertex: (...args) => inner?.addVertex(...args) ?? false,
+    finish: () => inner?.finish() ?? Promise.resolve(null),
+    cancel: () => inner?.cancel(),
+    clearAll: () => (inner ? inner.clearAll() : annotations.clear?.()),
+    shapes: DRAW_SHAPES,
+    diagnostics: () =>
+      inner?.diagnostics() ?? {
+        active: false,
+        destroyed,
+        sceneHandler: false,
+        domListeners: 0,
+        previewDataSources: 0,
+        previewEntities: 0,
+        pointerOwner: pointerOwner(),
+      },
+    whenSettled: () => inner?.whenSettled() ?? settled,
+    attachScene({ viewer = null, navigation: next = navigation } = {}) {
+      if (destroyed) return;
+      detachScene();
+      navigation = next;
+      if (!viewer) return;
+      inner = initDrawTool({
+        viewer,
+        annotations,
+        navigation,
+        publish,
+        connect,
+        initialShape: shape,
+        initialColor: color,
+      });
+      window.__gevDrawTool = wrapper;
+    },
+    detachScene,
+    destroy() {
+      if (destroyed) return settled;
+      const done = detachScene();
+      destroyed = true;
+      if (window.__gevDrawTool === wrapper) delete window.__gevDrawTool;
+      return done;
+    },
+  };
+  window.__gevDrawTool = wrapper;
+  return wrapper;
 }
 
 /** How many draw previews are attached — more than one means a leaked tool. */
