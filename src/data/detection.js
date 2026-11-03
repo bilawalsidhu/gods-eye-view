@@ -53,7 +53,11 @@ import {
   isCyberContactSonarActive as isCyberSonarActive,
   isCyberContactThemeActive as isCyberMapThemeActive,
 } from '../cyberSonar.js';
-import { awarenessEchoAt, getAwarenessEchoField } from '../awarenessEcho.js';
+import {
+  awarenessEchoBracket,
+  awarenessEchoColor,
+  getAwarenessEchoField,
+} from '../awarenessEcho.js';
 
 /**
  * @module detection
@@ -1445,22 +1449,22 @@ function _drawOverlay(frame) {
       );
       visibleCount++;
       if (echoPaths) {
-        const echo = awarenessEchoAt(obj._layerId, obj.position, now);
-        if (echo > 0.01) {
-          // Starts on the contact's bracket and spreads outward as it fades.
-          const band = Math.max(
-            1,
-            Math.ceil(echo * admissionAlpha * ECHO_ALPHA_STEPS),
-          );
-          const spread = echoField.echo.spreadPx * (1 - echo);
+        // Starts on the contact's bracket and spreads outward as it fades.
+        const echo = awarenessEchoBracket(
+          obj._layerId,
+          obj.position,
+          now,
+          admissionAlpha,
+          ECHO_ALPHA_STEPS,
+        );
+        if (echo)
           appendCornerBracket(
-            (echoPaths[band] ??= new Path2D()),
+            (echoPaths[echo.band] ??= new Path2D()),
             sx,
             sy,
-            halfW + spread,
-            halfH + spread,
+            halfW + echo.spreadPx,
+            halfH + echo.spreadPx,
           );
-        }
       }
       if (obj.type === 'AIR')
         aircraftBracketSectors[detectionHorizontalSector(sx, width)]++;
@@ -1603,7 +1607,10 @@ function _drawOverlay(frame) {
   }
   if (echoPaths) {
     _ctx.lineWidth = echoField.echo.lineWidth;
-    _ctx.strokeStyle = echoField.echo.color;
+    _ctx.strokeStyle = awarenessEchoColor(
+      _theme.line,
+      _theme === THEME_MAP._default,
+    );
     for (let band = 1; band <= ECHO_ALPHA_STEPS; band++) {
       if (!echoPaths[band]) continue;
       _ctx.globalAlpha =

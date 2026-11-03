@@ -34,7 +34,6 @@ import {
  * @param {number} radiusM Surface radius in metres.
  * @param {number} heightM Height of the ring above the ellipsoid.
  * @param {number} [segments] Chords around the ring.
- * @param {Cesium.Cartesian3[]} [result] Array whose Cartesians are reused.
  * @returns {Cesium.Cartesian3[]} `segments + 1` positions; the last repeats the first.
  */
 export function awarenessRangeRingPositions(
@@ -42,7 +41,6 @@ export function awarenessRangeRingPositions(
   radiusM,
   heightM,
   segments = AWARENESS_RANGE_RING_STYLE.segments,
-  result = [],
 ) {
   const { latitude, longitude } =
     Cesium.Cartographic.fromCartesian(groundCenter);
@@ -53,8 +51,7 @@ export function awarenessRangeRingPositions(
   const w = 1 - e2 * sinLat * sinLat;
   const meridional = (a * (1 - e2)) / (w * Math.sqrt(w));
   const primeVertical = a / Math.sqrt(w);
-  const positions = result;
-  positions.length = segments + 1;
+  const positions = new Array(segments + 1);
   for (let i = 0; i <= segments; i++) {
     const bearing = ((i % segments) / segments) * Cesium.Math.TWO_PI;
     const cosB = Math.cos(bearing);
@@ -75,7 +72,6 @@ export function awarenessRangeRingPositions(
       lat,
       heightM,
       Cesium.Ellipsoid.WGS84,
-      positions[i],
     );
   }
   return positions;
@@ -177,37 +173,69 @@ export function awarenessRingFlash(nowMs) {
   );
 }
 
-/** Most pulses the gradient shader draws; its uniforms are vec4s. */
+/** Most pulses the pulse shader draws; its uniforms are vec4s. */
 export const AWARENESS_PULSE_GRADIENT_MAX = 4;
 
 // Ellipse texture coordinates put the centre at (0.5, 0.5) and the rim at
-// distance 0.5, so `r` is the fraction of the range. Behind each pulse line
-// the band is strongest at the line and fades to nothing `depth` inward.
+// distance 0.5, so `r` is the fraction of the range. Each pulse is a line
+// `lineWidth` CSS pixels wide whose outer `haloWidth` is a dark halo, half
+// on each side, as Cesium's polyline outline material draws it, with a band
+// behind it that is strongest at the line and fades to nothing `depth`
+// inward. Widths come from the screen-space gradient of `r`, as Cesium's
+// contour material measures its lines; without derivatives the lines are
+// left out and only the band shows.
 const PULSE_GRADIENT_SOURCE = `
 uniform vec4 color;
+uniform vec4 lineColor;
+uniform vec4 haloColor;
 uniform vec4 radii;
 uniform vec4 alphas;
 uniform float depth;
+uniform float lineWidth;
+uniform float haloWidth;
+vec4 over(vec4 top, vec4 under) {
+  float a = top.a + under.a * (1.0 - top.a);
+  if (a <= 0.0) return vec4(0.0);
+  return vec4((top.rgb * top.a + under.rgb * under.a * (1.0 - top.a)) / a, a);
+}
 czm_material czm_getMaterial(czm_materialInput materialInput) {
   czm_material material = czm_getDefaultMaterial(materialInput);
   float r = length(materialInput.st - vec2(0.5)) * 2.0;
-  float alpha = 0.0;
+  float band = 0.0;
   for (int i = 0; i < 4; i++) {
     float inside = radii[i] - r;
     if (inside >= 0.0 && inside <= depth) {
       float t = 1.0 - inside / depth;
-      alpha += alphas[i] * t * t;
+      band += alphas[i] * t * t;
     }
   }
-  material.diffuse = color.rgb;
-  material.alpha = clamp(alpha * color.a, 0.0, 1.0);
+  vec4 result = vec4(color.rgb, clamp(band * color.a, 0.0, 1.0));
+#if (__VERSION__ == 300 || defined(GL_OES_standard_derivatives))
+  // Change in r per CSS pixel: the gradient's length per device pixel,
+  // times the device pixels in one CSS pixel.
+  float cssPx = max(length(vec2(dFdx(r), dFdy(r))), 1e-7) * czm_pixelRatio;
+  float outerHalf = lineWidth * 0.5;
+  float coreHalf = max(lineWidth - haloWidth, 0.0) * 0.5;
+  for (int i = 0; i < 4; i++) {
+    float d = abs(radii[i] - r) / cssPx;
+    float cover = clamp(outerHalf + 0.5 - d, 0.0, 1.0);
+    if (cover <= 0.0) continue;
+    float core = clamp(coreHalf + 0.5 - d, 0.0, 1.0);
+    vec4 pulse = mix(haloColor, lineColor, core);
+    result = over(vec4(pulse.rgb, pulse.a * cover * alphas[i]), result);
+  }
+#endif
+  material.diffuse = result.rgb;
+  material.alpha = result.a;
   return material;
 }
 `;
 
 /**
- * The pulse gradient: one flat, translucent, unpickable disc the size of the
- * range ring whose shader draws a band behind each pulse. Moving pulses only
+ * The pulses: one flat, translucent, unpickable disc the size of the range
+ * ring whose shader draws each pulse line and the band behind it. Drawing
+ * them here rather than as entities keeps them out of picking, so clicks and
+ * taps near a pulse still reach the contact underneath. Moving pulses only
  * change its uniforms; the disc is rebuilt only when the subject moves.
  * @param {Cesium.Cartesian3} groundCenter Disc centre on the ellipsoid.
  * @param {Cesium.Material} material Shared pulse-gradient material.
@@ -237,6 +265,11 @@ function createPulseGradient(groundCenter, material) {
     asynchronous: false,
     allowPicking: false,
   });
+}
+
+/** Camera height above the ellipsoid, or NaN when the scene cannot say. */
+function cameraHeightM(scene) {
+  return scene.camera?.positionCartographic?.height ?? Number.NaN;
 }
 
 export function createRendering({
@@ -504,7 +537,32 @@ export function createRendering({
    */
   function wakePulses() {
     const wake = layerState.visual?.wake;
-    if (wake) wakeAwarenessPulses(wake, performance.now());
+    if (!wake) return;
+    wakeAwarenessPulses(wake, performance.now());
+    followPulseDisc();
+  }
+
+  /**
+   * Rebuild the pulse disc around the subject once it is `gradientRebuildM`
+   * from the disc's centre. A build costs a few milliseconds, so a subject
+   * that moves less keeps the disc it has.
+   */
+  function followPulseDisc() {
+    const { gradient, gradientCenter, center } = layerState.visual;
+    if (
+      !gradient ||
+      Cesium.Cartesian3.distance(gradientCenter, center) <
+        AWARENESS_RANGE_PULSE.gradientRebuildM
+    )
+      return;
+    const primitives = layerState.viewer.scene.primitives;
+    layerState.visual.gradient = primitives.add(
+      createPulseGradient(center, gradient.appearance.material),
+    );
+    // Primitive.destroy leaves the material alone, so the new disc keeps
+    // sharing it.
+    primitives.remove(gradient);
+    Cesium.Cartesian3.clone(center, gradientCenter);
   }
 
   function clearVisual() {
@@ -549,26 +607,14 @@ export function createRendering({
           AWARENESS_RADIUS_M,
           CONTEXT_RIM_HEIGHT_M,
         );
-        // Pulse lines read `visual.center` every frame and follow on their
-        // own. The gradient disc is geometry, so it is rebuilt, but only
-        // every `gradientRebuildM`: a build costs a few milliseconds.
+        // The echo field reads `visual.center` in place and follows on its
+        // own. The pulse disc is geometry, so it is rebuilt, but only every
+        // `gradientRebuildM`: a build costs a few milliseconds.
         layerState.visual.ring.polyline.positions.setValue(positions);
         Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
-        const { gradient, gradientCenter } = layerState.visual;
-        if (
-          gradient &&
-          Cesium.Cartesian3.distance(gradientCenter, groundCenter) >=
-            AWARENESS_RANGE_PULSE.gradientRebuildM
-        ) {
-          const primitives = layerState.viewer.scene.primitives;
-          layerState.visual.gradient = primitives.add(
-            createPulseGradient(groundCenter, gradient.appearance.material),
-          );
-          // Primitive.destroy leaves the material alone, so the new disc
-          // keeps sharing it.
-          primitives.remove(gradient);
-          Cesium.Cartesian3.clone(groundCenter, gradientCenter);
-        }
+        // A resting disc is hidden, so it catches up when the pulses wake.
+        if (performance.now() < layerState.visual.wake?.untilMs)
+          followPulseDisc();
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
       }
@@ -637,57 +683,16 @@ export function createRendering({
     let stopPulses = null;
     if (animate) {
       const pulse = AWARENESS_RANGE_PULSE;
-      for (let index = 0; index < pulse.count; index++) {
-        const positions = [];
-        const coreColor = core.clone();
-        const haloColor = halo.clone();
-        const stateAt = () => {
-          const nowMs = performance.now();
-          const state = awarenessPulseState(nowMs, index);
-          state.alpha *= levelAt(nowMs);
-          return state;
-        };
-        entities.push(
-          layerState.viewer.entities.add({
-            polyline: {
-              show: new Cesium.CallbackProperty(
-                () => levelAt(performance.now()) > 0,
-                false,
-              ),
-              positions: new Cesium.CallbackProperty(
-                () =>
-                  awarenessRangeRingPositions(
-                    center,
-                    stateAt().radiusM,
-                    CONTEXT_RIM_HEIGHT_M,
-                    pulse.segments,
-                    positions,
-                  ),
-                false,
-              ),
-              width: pulse.width,
-              arcType: Cesium.ArcType.NONE,
-              material: new Cesium.PolylineOutlineMaterialProperty({
-                color: new Cesium.CallbackProperty(() => {
-                  coreColor.alpha = core.alpha * stateAt().alpha;
-                  return coreColor;
-                }, false),
-                outlineColor: new Cesium.CallbackProperty(() => {
-                  haloColor.alpha = halo.alpha * stateAt().alpha;
-                  return haloColor;
-                }, false),
-                outlineWidth: pulse.outlineWidth,
-              }),
-            },
-          }),
-        );
-      }
       const count = Math.min(pulse.count, AWARENESS_PULSE_GRADIENT_MAX);
       const uniforms = {
         color: core.clone(),
+        lineColor: core.clone(),
+        haloColor: halo.clone(),
         radii: new Cesium.Cartesian4(),
         alphas: new Cesium.Cartesian4(),
         depth: pulse.gradientDepthFraction,
+        lineWidth: pulse.width,
+        haloWidth: pulse.outlineWidth,
       };
       uniforms.color.alpha = pulse.gradientOpacity;
       const material = new Cesium.Material({
@@ -702,9 +707,13 @@ export function createRendering({
       const removePreRender = scene.preRender.addEventListener(() => {
         const nowMs = performance.now();
         const level = levelAt(nowMs);
-        // The disc is looked up each frame: a subject move swaps it.
+        // The disc is looked up each frame: a subject move swaps it. From a
+        // camera below the rim height it would sweep across the sky, so it
+        // is hidden there.
         const disc = layerState.visual?.gradient;
-        if (disc) disc.show = level > 0;
+        if (disc)
+          disc.show =
+            level > 0 && !(cameraHeightM(scene) < CONTEXT_RIM_HEIGHT_M);
         for (let index = 0; index < count; index++) {
           const state = awarenessPulseState(nowMs, index);
           radii[index] = state.radiusM / AWARENESS_RADIUS_M;

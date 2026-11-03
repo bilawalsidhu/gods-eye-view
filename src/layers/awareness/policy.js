@@ -72,11 +72,17 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
  *  `periodMs / count`. Each starts at `startFraction` of the radius, fades in
  *  over `fadeInFraction` of its travel, then fades as (1 - travel) to the
  *  `fadeOutPower` down to `endOpacityFraction` of `peakOpacity`, so a pulse
- *  is dim but still visible when it reaches the ring and the ring flashes. Behind each line a radial gradient in the same blue fades
- *  inward over `gradientDepthFraction` of the radius, at most
- *  `gradientOpacity` strong. The gradient disc is rebuilt only after the
- *  subject moves `gradientRebuildM`, since a soft band 2 km off centre on a
- *  250 km disc does not show. The gradient shader takes at most four pulses.
+ *  is dim but still visible when it reaches the ring and the ring flashes.
+ *  Each line is `width` CSS pixels wide, its outer `outlineWidth` a dark
+ *  halo, in the ring's colours, as Cesium's polyline outline material draws. Behind each line a radial gradient in the same blue
+ *  fades inward over `gradientDepthFraction` of the radius, at most
+ *  `gradientOpacity` strong. One unpickable disc draws the lines and the
+ *  gradient, so pulses never catch a click meant for a contact; its shader
+ *  takes at most four pulses. The disc is rebuilt only after the subject
+ *  moves `gradientRebuildM`, so the pulses sit at most that far off the ring's
+ *  centre, about a pixel when the ring fills the screen; while the pulses
+ *  rest the hidden disc is left alone and catches up when they wake. The disc is hidden
+ *  while the camera is below its height, where it would sweep the sky.
  *  The pulses run for `activeMs` (three ring flashes) after a selection or
  *  a camera move, fading in and out over `settleMs`, then rest: the ring
  *  stays on screen, static, and nothing asks for frames, so a parked view
@@ -98,11 +104,10 @@ export const AWARENESS_RANGE_PULSE = Object.freeze({
   peakOpacity: 0.6,
   width: 3,
   outlineWidth: 1,
-  segments: 96,
   gradientDepthFraction: 0.35,
   gradientOpacity: 0.22,
   gradientGranularityDeg: 0.25,
-  gradientRebuildM: 2000,
+  gradientRebuildM: 500,
   activeMs: 9000,
   settleMs: 1200,
 });

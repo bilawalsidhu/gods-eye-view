@@ -109,3 +109,44 @@ export function awarenessEchoAt(layerId, position, nowMs) {
     )
   );
 }
+
+/**
+ * The echo bracket the detection overlay draws around one contact, or null
+ * when it has no echo. `band` is the alpha band, 1 to `steps`, scaled by the
+ * contact's own keyhole `admissionAlpha`; `spreadPx` is how far the echo
+ * sits outside the contact's bracket, 0 as the front arrives, growing to the
+ * field's `spreadPx` as it fades.
+ * @param {string} layerId Owning layer of the contact.
+ * @param {Cesium.Cartesian3} position Contact's world position.
+ * @param {number} nowMs Monotonic clock in milliseconds.
+ * @param {number} admissionAlpha The contact bracket's own fade, 0 to 1.
+ * @param {number} steps Alpha bands the overlay batches by.
+ * @returns {{band: number, spreadPx: number}|null}
+ */
+export function awarenessEchoBracket(
+  layerId,
+  position,
+  nowMs,
+  admissionAlpha,
+  steps,
+) {
+  const echo = awarenessEchoAt(layerId, position, nowMs);
+  if (!(echo > 0.01)) return null;
+  return {
+    band: Math.max(1, Math.ceil(echo * admissionAlpha * steps)),
+    spreadPx: field.echo.spreadPx * (1 - echo),
+  };
+}
+
+/**
+ * The echo's stroke colour: the field's own colour on the default detection
+ * style, and the style's line colour under the others (NVG, FLIR, CRT), so
+ * an echo never stands out of a monochrome palette.
+ * @param {string} styleLine The active detection style's line colour.
+ * @param {boolean} defaultStyle Whether the default detection style is active.
+ * @returns {string|null} Null when no field is set.
+ */
+export function awarenessEchoColor(styleLine, defaultStyle) {
+  if (!field) return null;
+  return defaultStyle ? field.echo.color : styleLine;
+}
