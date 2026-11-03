@@ -4,6 +4,8 @@
   stills synthesized from each numeric camera id on `www.houstontranstar.org`,
   so a catalog field cannot steer the proxy off-host. Cameras without a
   snapshot id, and cameras outside Greater Houston, are dropped. TranStar's
+  `dir` field (the side of the freeway the camera sits on) seeds a
+  low-confidence heading along the nearest lanes' travel direction. TranStar's
   disclaimer prohibits redistribution and external framing without TxDOT's
   written permission, so the pack is off unless `CCTV_HOUSTON_ENABLED=1`.
   Opting in loads the 250 cameras nearest downtown, Uptown, the Medical

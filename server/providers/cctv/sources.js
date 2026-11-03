@@ -3796,13 +3796,30 @@ export function houstonCameraName(record, cameraId) {
 }
 
 /**
+ * TranStar `dir` (the camera's side of the freeway) -> the travel direction
+ * of the nearest lanes, as TranStar's map script `translateCameraDirection`
+ * reads it. Only these four values are mapped; anything else is unknown.
+ */
+const HOUSTON_TRAVEL_HEADING_BY_SIDE = Object.freeze({
+  south: 90,
+  north: 270,
+  west: 180,
+  east: 0,
+});
+
+/**
  * One Houston TranStar camera row -> one catalog source, or null.
  *
  * Frame URLs are synthesized from a validated numeric id on the pinned
  * snapshot origin. The payload's `url` is a `showWin(...)` viewer helper
  * and is ignored so a catalog edit cannot steer the frame proxy off-host.
- * Dedicated `dir` values (North/South/East/West) become high-confidence
- * headings; `None`/blank fall back to the shared id-hash heading.
+ * TranStar's `dir` is the side of the freeway the camera sits on, not the
+ * way it faces: TranStar's own map labels it "Traffic closest to the camera
+ * is traveling …" (South→Eastbound, North→Westbound, West→Southbound,
+ * East→Northbound). That travel direction is only a low-confidence prior
+ * for the view, so the heading stays estimated with the low-confidence
+ * pose; `None`, blank or unknown values fall back to the shared id-hash
+ * heading.
  *
  * @param {object} record - Raw TranStar camera row.
  * @returns {?object}
@@ -3819,8 +3836,12 @@ export function houstonCameraToSource(record) {
   const cameraId = `houston-${rawId}`;
   const imageUrl = HOUSTON_IMAGE_URL(rawId);
   const name = houstonCameraName(record, cameraId);
-  const extractedHeading = directionToHeading(record.dir, true);
-  const hasHeading = Number.isFinite(extractedHeading);
+  const travelHeading =
+    HOUSTON_TRAVEL_HEADING_BY_SIDE[
+      String(record.dir ?? '')
+        .trim()
+        .toLowerCase()
+    ];
 
   return {
     id: cameraId,
@@ -3830,12 +3851,14 @@ export function houstonCameraToSource(record) {
     provider: 'Houston TranStar',
     lat,
     lon,
-    headingDeg: hasHeading ? extractedHeading : fallbackHeadingFromId(cameraId),
-    headingConfidence: hasHeading ? 'high' : 'low',
-    pitchDeg: hasHeading ? -24 : -18,
-    fovDeg: hasHeading ? 56 : 44,
-    rangeM: hasHeading ? 210 : 145,
-    mountHeightM: hasHeading ? 10 : 8,
+    headingDeg: Number.isFinite(travelHeading)
+      ? travelHeading
+      : fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
     groundElevationM: HOUSTON_GROUND_ELEVATION_M,
     feedType: 'image',
     url: imageUrl,

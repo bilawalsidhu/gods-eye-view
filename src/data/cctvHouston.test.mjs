@@ -20,7 +20,6 @@ import {
   isLikelyHoustonCoordinate,
 } from '../../server/providers/cctv/normalize.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
-import { directionToHeading } from './directionText.js';
 
 /**
  * A response whose body is a live stream, plus a flag that flips when the
@@ -75,8 +74,9 @@ test('a Houston row maps to a source on the pinned HTTPS frame host', () => {
   assert.equal(source.url, HOUSTON_IMAGE_URL(DOWNTOWN_ID));
   assert.equal(source.url, source.snapshotUrl);
   assert.ok(source.url.startsWith(HOUSTON_IMAGE_ORIGIN));
-  assert.equal(source.headingConfidence, 'high');
-  assert.equal(source.headingDeg, 180);
+  // dir South = the camera sits south of I-10; the nearest lanes run east.
+  assert.equal(source.headingConfidence, 'low');
+  assert.equal(source.headingDeg, 90);
 });
 
 test('frame URLs are synthesized from the numeric id; the payload URL is ignored', () => {
@@ -105,13 +105,19 @@ test('zero ids, off-city geometry and unusable ids are dropped', () => {
   assert.equal(houstonCameraToSource(row({ id: '13711' })).id, 'houston-13711');
 });
 
-test('bare cardinal dirs are high-confidence; None uses the id-hash fallback', () => {
-  assert.equal(directionToHeading('South', true), 180);
-  assert.equal(directionToHeading('None', true), NaN);
-
-  const south = houstonCameraToSource(row({ dir: 'South' }));
-  assert.equal(south.headingConfidence, 'high');
-  assert.equal(south.headingDeg, 180);
+test('dir is the side of the road: it gives a low-confidence travel heading', () => {
+  // TranStar's map reads dir as "Traffic closest to the camera is traveling":
+  // South -> Eastbound, North -> Westbound, West -> Southbound, East -> Northbound.
+  const expected = { South: 90, North: 270, West: 180, East: 0, south: 90 };
+  for (const [dir, heading] of Object.entries(expected)) {
+    const source = houstonCameraToSource(row({ dir }));
+    assert.equal(source.headingDeg, heading, `dir ${dir}`);
+    assert.equal(source.headingConfidence, 'low', `dir ${dir}`);
+    assert.equal(source.pitchDeg, -18, `dir ${dir}`);
+    assert.equal(source.fovDeg, 44, `dir ${dir}`);
+    assert.equal(source.rangeM, 145, `dir ${dir}`);
+    assert.equal(source.mountHeightM, 8, `dir ${dir}`);
+  }
 
   const none = houstonCameraToSource(row({ dir: 'None' }));
   assert.equal(none.headingConfidence, 'low');
@@ -120,6 +126,13 @@ test('bare cardinal dirs are high-confidence; None uses the id-hash fallback', (
     none.headingDeg,
     houstonCameraToSource(row({ dir: '' })).headingDeg,
   );
+  for (const dir of ['Northeast', 'constructor', '__proto__', undefined]) {
+    assert.equal(
+      houstonCameraToSource(row({ dir })).headingDeg,
+      none.headingDeg,
+      `dir ${dir} falls back to the id hash`,
+    );
+  }
 });
 
 test('a nameless row still gets a label', () => {

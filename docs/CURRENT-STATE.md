@@ -1448,8 +1448,13 @@ alongside the other live packs. The server reads the keyless camera list at
 keeps cameras with a numeric snapshot id inside the metro bounding box. Frame
 URLs are built from each camera id under
 `https://www.houstontranstar.org/snapshots/cctv/<id>.jpg`; they are never taken
-from the payload. Dedicated `dir` values become high-confidence headings;
-`None` uses the shared id-hash fallback at low confidence.
+from the payload. TranStar's `dir` is the side of the freeway the camera sits
+on, not the way it faces; TranStar's own map reads it as the direction of the
+nearest traffic (South → eastbound, North → westbound, West → southbound,
+East → northbound). That travel direction seeds a low-confidence heading with
+the low-confidence pose, and `None` or an unknown value uses the shared id-hash
+fallback; both stay marked as estimated.
+Gate: `src/data/cctvHouston.test.mjs`.
 
 TranStar's disclaimer prohibits redistribution and external framing of specific
 images without TxDOT's written permission, so the pack is off unless
