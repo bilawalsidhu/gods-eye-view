@@ -19,10 +19,11 @@ Open http://localhost:4173. The globe needs internet access to retrieve map imag
 
 ## Backend status
 
-The dedicated Supabase project has not been provisioned: the account reached its
-active free-project limit. No existing database has been modified. See
-[the backend integration plan](docs/MZANSI_BACKEND.md) for the next stage.
-This release does not claim cloud authentication or cloud-synced bookmarks.
+The dedicated Supabase project now exists in WestKamo’s Org. Core PostGIS/RLS
+migrations and three reference anchors are deployed. Local account, cloud persistence
+and import-review additions require further verification.
+No working frontend preview is claimed. See [backend status](docs/MZANSI_BACKEND.md)
+and [the contribution record](docs/Phindile_v1.md) for exact evidence and remaining work.
 
 ## Upstream documentation
 

@@ -1,3 +1,4 @@
+import { hosted } from './mzansi/hosted.js';
 import { createStandaloneCatalog } from './catalog.js';
 import { createStandalonePlaceSearch } from './placeSearch.js';
 import { CITY_POIS } from '../cityPois.js';
@@ -70,7 +71,7 @@ export function createStandaloneApplication({
         googleApiKey,
         // Without a key, Google 3D can still load with tokens from the
         // app's server when it offers them.
-        googleTokens: googleApiKey ? null : createGoogleTokenSource(),
+        googleTokens: googleApiKey || hosted ? null : createGoogleTokenSource(),
         cesiumToken,
         loaderStatus,
       });

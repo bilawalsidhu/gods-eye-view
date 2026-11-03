@@ -276,3 +276,71 @@ body.cockpit-mode .mz-panel {
     top: 95px;
   }
 }
+.mz-tabs,
+.mz-account-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.mz-tabs button,
+.mz-account button,
+.mz-panel > div > button {
+  min-height: 44px;
+  padding: 8px 12px;
+  background: #233f34;
+  color: #ecf3ee;
+  border: 1px solid #6b8f7a;
+  border-radius: 8px;
+}
+.mz-account {
+  margin: 16px 0;
+  padding: 12px 0;
+  border-top: 1px solid #476454;
+}
+.mz-account label {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+}
+.mz-account input {
+  min-height: 44px;
+  width: 100%;
+  padding: 10px;
+  background: #172e26;
+  color: #fff;
+  border: 1px solid #6b8f7a;
+  border-radius: 8px;
+}
+.mz-account article {
+  padding: 12px 0;
+  border-bottom: 1px solid #476454;
+}
+.mz-account li {
+  margin: 8px 0;
+}
+.mz-panel button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.mz-panel :focus-visible,
+.mz-ribbon :focus-visible {
+  outline: 3px solid #f6d491;
+  outline-offset: 3px;
+}
+.mz-summary {
+  font-size: 12px;
+  margin: 16px 0;
+}
+.mz-summary meter {
+  width: 100px;
+  accent-color: #66dfb7;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mz-panel *,
+  .mz-ribbon * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
