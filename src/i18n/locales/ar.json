@@ -2230,6 +2230,7 @@
     "other": "تعذّرت إضافة {count} ملف ({name}: {error})"
   },
   "Some KML content was left out.": "أُغفل جزء من محتوى KML.",
+  "Map objects this engine leaves out of {name}: {count}.": "عناصر الخريطة من {name} التي لا يعرضها هذا المحرك: {count}.",
   "Press on the ground, not the sky": "اضغط على الأرض لا على السماء",
   "Drag to size the box": "اسحب لتحديد حجم المنطقة",
   "light {source} to use your {name} key": "فعّل {source} لاستخدام مفتاح {name} الخاص بك",

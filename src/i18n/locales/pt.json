@@ -1790,6 +1790,7 @@
     "other": "Não foi possível adicionar {count} arquivos ({name}: {error})"
   },
   "Some KML content was left out.": "Parte do conteúdo KML foi deixada de fora.",
+  "Map objects this engine leaves out of {name}: {count}.": "Objetos do mapa de {name} que este motor não mostra: {count}.",
   "Press on the ground, not the sky": "Pressione no chão, não no céu",
   "Drag to size the box": "Arraste para definir o tamanho da área",
   "light {source} to use your {name} key": "ative {source} para usar sua chave do {name}",

@@ -1262,3 +1262,65 @@ test('KML namespace repair ignores declaration text inside quoted attribute valu
     /note="xmlns:xsi='x'" xmlns:xsi="http:\/\/www.w3.org\/2001\/XMLSchema-instance">/,
   );
 });
+
+test('on a globe engine without a viewer the pins stay entities on the engine terrain', async () => {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const previous = Cesium.PinBuilder.prototype.fromColor;
+  Cesium.PinBuilder.prototype.fromColor = () => ({
+    toDataURL: () => 'data:image/png;base64,local',
+    tagName: 'CANVAS',
+  });
+  try {
+    const engine = createFakeEngine({ kind: 'navara' });
+    engine.fake.script('terrainHeight', 321);
+    const object = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { name: 'Pin' },
+          geometry: { type: 'Point', coordinates: [1, 2] },
+        },
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [1, 2],
+              [2, 3],
+            ],
+          },
+        },
+      ],
+    };
+    const loaded = await loadGeoFile(
+      new File([JSON.stringify(object)], 'pins.geojson'),
+      { engine },
+    );
+    const entities = loaded.dataSource.entities.values;
+    assert.equal(entities.length, 2, 'no Cesium billboard collection');
+    assert.equal(loaded.dataSource.importedBillboards, undefined);
+    const [pin] = entities.filter((entity) => entity.billboard);
+    assert.ok(
+      Math.abs(
+        Cesium.Cartographic.fromCartesian(
+          pin.position.getValue(Cesium.JulianDate.now()),
+        ).height - 321,
+      ) < 1e-3,
+    );
+    // A later ground refresh reads the engine again.
+    engine.fake.script('terrainHeight', 50);
+    await loaded.refreshGround();
+    assert.ok(
+      Math.abs(
+        Cesium.Cartographic.fromCartesian(
+          pin.position.getValue(Cesium.JulianDate.now()),
+        ).height - 50,
+      ) < 1e-3,
+    );
+    loaded.mount();
+    loaded.revoke();
+  } finally {
+    Cesium.PinBuilder.prototype.fromColor = previous;
+  }
+});

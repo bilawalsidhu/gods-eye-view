@@ -2196,6 +2196,7 @@
     "other": "No se pudieron añadir {count} archivos ({name}: {error})"
   },
   "Some KML content was left out.": "Se omitió parte del contenido KML.",
+  "Map objects this engine leaves out of {name}: {count}.": "Objetos del mapa de {name} que este motor no muestra: {count}.",
   "GNSS Integrity": "Integridad GNSS",
   "Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). File bytes stay on this device; overlays can appear in map screenshots shared with voice.": "Muestra en el globo tus propios archivos GeoJSON, KML, KMZ o GPX (o suéltalos sobre él). Los archivos no salen de este dispositivo; las capas pueden aparecer en capturas del mapa compartidas con la voz.",
   "Import": "Importar",
