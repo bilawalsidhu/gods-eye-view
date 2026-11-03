@@ -379,15 +379,23 @@ function drawMoonHaze(ctx, cx, cy, radius, angle) {
   ctx.restore();
 }
 
+// Keys each ring's overlay, so a new ring never reuses an old one's canvases.
+let rings = 0;
+
 /**
  * Screen-space ring and celestial direction overlay for the full-globe view.
+ * The overlay is presented to the celestial ring store, whose view renders it
+ * inside the viewer's container and hands back the two canvases this paints.
  */
 export class CelestialRing {
   /**
    * @param {Cesium.Viewer} viewer
-   * @param {{enabled?:boolean,onAutoDisable?:Function}} [options]
+   * @param {{enabled?:boolean,onAutoDisable?:Function,store:object}} options
+   *   `store` is the celestial ring store (src/ui/stores/celestialRing.js);
+   *   the keyhole helpers here stay free of Vue for the packages that use
+   *   them.
    */
-  constructor(viewer, { enabled = true, onAutoDisable = null } = {}) {
+  constructor(viewer, { enabled = true, onAutoDisable = null, store }) {
     this.viewer = viewer;
     this.enabled = !!enabled;
     this.visible = false;
@@ -406,6 +414,10 @@ export class CelestialRing {
     this._sunRenderKey = '';
     this._moonRenderKey = '';
     this._outlineRenderKey = '';
+    this._sunCanvas = null;
+    this._sunCtx = null;
+    this._moonCanvas = null;
+    this._moonCtx = null;
 
     this._sunInertial = new Cesium.Cartesian3();
     this._moonInertial = new Cesium.Cartesian3();
@@ -415,7 +427,7 @@ export class CelestialRing {
     this._screenCenter = new Cesium.Cartesian2();
     this._fixedMatrix = new Cesium.Matrix3();
 
-    this._buildDOM();
+    this._initView(store);
     this._removePostRender = viewer.scene.postRender.addEventListener(() =>
       this._draw(),
     );
@@ -436,48 +448,68 @@ export class CelestialRing {
     this.setEnabled(this.enabled);
   }
 
-  /** Construct cached effect layers and Material Symbols celestial markers. */
-  _buildDOM() {
-    this._root = document.createElement('div');
-    this._root.id = 'celestial-ring-overlay';
-    this._root.className = 'celestial-ring-overlay';
-    this._root.setAttribute('aria-hidden', 'true');
-
-    this._ringOutline = document.createElement('div');
-    this._ringOutline.className = 'celestial-ring-outline';
-
-    this._sunCanvas = document.createElement('canvas');
-    this._sunCanvas.className = 'celestial-ring-canvas celestial-sun-canvas';
-    this._sunCtx = this._sunCanvas.getContext('2d', {
-      alpha: true,
-      desynchronized: true,
+  /** Present the overlay and take the canvases its view hands back. */
+  _initView(store) {
+    const owner = {};
+    this._store = store;
+    this._owner = owner;
+    this._view = {
+      id: ++rings,
+      owner,
+      container: this.viewer.container,
+      enabled: this.enabled,
+      visible: false,
+      globeVisible: null,
+      ephemerisUpdates: null,
+      size: null,
+      outline: null,
+      sun: null,
+      moon: null,
+      sunMarker: null,
+      moonMarker: null,
+    };
+    this._viewKey = '';
+    store.publish(this._view);
+    store.connect({
+      attach: (from, kind, canvas) => {
+        if (from === owner && this._shown()) this._attach(kind, canvas);
+      },
     });
+  }
 
-    this._moonCanvas = document.createElement('canvas');
-    this._moonCanvas.className = 'celestial-ring-canvas celestial-moon-canvas';
-    this._moonCtx = this._moonCanvas.getContext('2d', {
-      alpha: true,
-      desynchronized: true,
-    });
+  /** Whether the store still shows this ring's overlay. */
+  _shown() {
+    return this._store.ring?.owner === this._owner;
+  }
 
-    this._sunMarker = document.createElement('span');
-    this._sunMarker.className =
-      'celestial-marker celestial-sun material-symbols-outlined';
-    this._sunMarker.textContent = 'light_mode';
-
-    this._moonMarker = document.createElement('span');
-    this._moonMarker.className =
-      'celestial-marker celestial-moon material-symbols-outlined';
-    this._moonMarker.textContent = 'dark_mode';
-
-    this._root.append(
-      this._ringOutline,
-      this._sunCanvas,
-      this._moonCanvas,
-      this._sunMarker,
-      this._moonMarker,
+  /** Publish a change to the overlay, skipping one that changes nothing. */
+  _present(patch) {
+    if (!this._shown()) return;
+    const next = { ...this._view, ...patch };
+    const key = JSON.stringify(next, (name, value) =>
+      name === 'owner' || name === 'container' ? undefined : value,
     );
-    this.viewer.container.appendChild(this._root);
+    if (key === this._viewKey) return;
+    this._view = next;
+    this._viewKey = key;
+    this._store.publish(next);
+  }
+
+  /** Take (or, with null, drop) the canvas the view rendered for one layer. */
+  _attach(kind, canvas) {
+    const ctx =
+      canvas?.getContext('2d', { alpha: true, desynchronized: true }) ?? null;
+    // A new canvas starts blank, so the next frame repaints its layer.
+    if (kind === 'sun') {
+      this._sunCanvas = canvas;
+      this._sunCtx = ctx;
+      this._sunRenderKey = '';
+    } else if (kind === 'moon') {
+      this._moonCanvas = canvas;
+      this._moonCtx = ctx;
+      this._moonRenderKey = '';
+    } else return;
+    if (canvas && this.enabled) governorRequestRender('celestial-ring');
   }
 
   /** Enable or disable the user preference for the effect. */
@@ -491,12 +523,14 @@ export class CelestialRing {
     // all. Camera motion covers every later repaint; the 60 s ephemeris
     // timer requests its own. (perf wave 2 fix — owner playtest finding)
     if (this.enabled !== wasEnabled) governorRequestRender('celestial-ring');
-    this._root.classList.toggle('disabled', !this.enabled);
     if (!this.enabled) {
       this.visible = false;
-      this._root.classList.remove('visible');
       this._clear();
     }
+    this._present({
+      enabled: this.enabled,
+      ...(!this.enabled && { visible: false }),
+    });
   }
 
   /** Whether the current camera already frames the complete globe inside the keyhole. */
@@ -577,7 +611,7 @@ export class CelestialRing {
     ]) {
       if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
-    this._ringOutline?.style.setProperty('display', 'none');
+    this._present({ outline: { ...this._view.outline, hidden: true } });
     this._sunRenderKey = '';
     this._moonRenderKey = '';
     this._outlineRenderKey = '';
@@ -607,10 +641,9 @@ export class CelestialRing {
         canvas.width = bw;
         canvas.height = bh;
       }
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
+    this._present({ size: { width, height } });
     this._renderScale = dpr;
   }
 
@@ -665,8 +698,8 @@ export class CelestialRing {
     );
   }
 
-  /** Position one icon-library marker along the keyhole circumference. */
-  _positionMarker(marker, cx, cy, radius, angle, opacity) {
+  /** Where one icon-library marker sits along the keyhole circumference. */
+  _markerPosition(cx, cy, radius, angle, opacity) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const margin = 14;
@@ -679,20 +712,26 @@ export class CelestialRing {
         ? (cy - margin) / Math.abs(sin)
         : Number.POSITIVE_INFINITY;
     const markerRadius = Math.min(radius, maxRadiusX, maxRadiusY);
-    marker.style.left = `${cx + cos * markerRadius}px`;
-    marker.style.top = `${cy + sin * markerRadius}px`;
-    marker.style.opacity = String(opacity);
+    return {
+      left: cx + cos * markerRadius,
+      top: cy + sin * markerRadius,
+      opacity: String(opacity),
+    };
   }
 
   /** Update the cached effect geometry only when camera distance or viewport changes. */
   _renderEffectLayers(cx, cy, radius, rayInnerRadius) {
     const outlineKey = `${cx}:${cy}:${radius}`;
     if (outlineKey !== this._outlineRenderKey) {
-      this._ringOutline.style.display = '';
-      this._ringOutline.style.left = `${cx - radius}px`;
-      this._ringOutline.style.top = `${cy - radius}px`;
-      this._ringOutline.style.width = `${radius * 2}px`;
-      this._ringOutline.style.height = `${radius * 2}px`;
+      this._present({
+        outline: {
+          hidden: false,
+          left: cx - radius,
+          top: cy - radius,
+          width: radius * 2,
+          height: radius * 2,
+        },
+      });
       this._outlineRenderKey = outlineKey;
     }
 
@@ -724,7 +763,11 @@ export class CelestialRing {
 
   /** Per-frame camera projection with GPU-composited cached effect layers. */
   _draw() {
-    if (!this.enabled || !this._sunCtx || !this._moonCtx) return;
+    // A ring the store no longer shows has handed its overlay to a later one.
+    if (!this.enabled || !this._shown()) return;
+    // Without its canvases (no view rendered them) the ring still tracks
+    // whether the globe is framed, so it turns itself off as before.
+    const painted = !!(this._sunCtx && this._moonCtx);
     const now = performance.now();
     if (now < this._nextDrawAt) return;
     this._nextDrawAt = now + 1000 / CELESTIAL_MAX_FRAME_RATE;
@@ -732,7 +775,7 @@ export class CelestialRing {
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     if (!(width > 0 && height > 0)) return;
-    this._resize(width, height);
+    if (painted) this._resize(width, height);
 
     const disc = this._projectedEarthDisc(width, height);
     const wasVisible = this.visible;
@@ -740,9 +783,11 @@ export class CelestialRing {
       ? isFullGlobeInsideKeyhole(disc, wasVisible)
       : false;
     this.visible = nextVisible;
-    this._root.classList.toggle('visible', nextVisible);
-    this._root.dataset.globeVisible = String(nextVisible);
-    this._root.dataset.ephemerisUpdates = String(this._ephemerisUpdateCount);
+    this._present({
+      visible: nextVisible,
+      globeVisible: String(nextVisible),
+      ephemerisUpdates: String(this._ephemerisUpdateCount),
+    });
     if (!nextVisible || !disc) {
       this._clear();
       this._debug = { enabled: true, visible: false, disc };
@@ -751,10 +796,14 @@ export class CelestialRing {
     }
 
     if (!wasVisible) this._ephemerisDirty = true;
+    if (!painted) {
+      this._debug = { enabled: true, visible: true, disc };
+      return;
+    }
 
     const time = Cesium.JulianDate.now();
     if (!this._updateEphemeris(time)) return;
-    this._root.dataset.ephemerisUpdates = String(this._ephemerisUpdateCount);
+    this._present({ ephemerisUpdates: String(this._ephemerisUpdateCount) });
     const camera = this.viewer.camera;
     const sunProjection = celestialScreenAngle(
       Cesium.Cartesian3.dot(this._sunFixed, camera.rightWC),
@@ -779,10 +828,6 @@ export class CelestialRing {
       disc.earthRadius + Math.max(38, radius * 0.065),
     );
     this._renderEffectLayers(cx, cy, radius, rayInnerRadius);
-    this._sunCanvas.style.transform = `rotate(${this._sunAngle}rad)`;
-    this._sunCanvas.style.opacity = String(this._sunOpacity);
-    this._moonCanvas.style.transform = `rotate(${this._moonAngle}rad)`;
-    this._moonCanvas.style.opacity = String(this._moonOpacity);
 
     // Markers sit inside the illuminated band rather than straddling its outer
     // stroke. Near conjunction (such as a new moon), keep the true bearings but
@@ -791,22 +836,30 @@ export class CelestialRing {
     const markersCollide =
       circularAngleDistance(this._sunAngle, this._moonAngle) <
       MARKER_COLLISION_ANGLE;
-    this._positionMarker(
-      this._sunMarker,
-      cx,
-      cy,
-      markerRadius,
-      this._sunAngle,
-      this._sunOpacity,
-    );
-    this._positionMarker(
-      this._moonMarker,
-      cx,
-      cy,
-      markerRadius - (markersCollide ? COLLIDING_MARKER_EXTRA_INSET_PX : 0),
-      this._moonAngle,
-      this._moonOpacity,
-    );
+    this._present({
+      sun: {
+        transform: `rotate(${this._sunAngle}rad)`,
+        opacity: String(this._sunOpacity),
+      },
+      moon: {
+        transform: `rotate(${this._moonAngle}rad)`,
+        opacity: String(this._moonOpacity),
+      },
+      sunMarker: this._markerPosition(
+        cx,
+        cy,
+        markerRadius,
+        this._sunAngle,
+        this._sunOpacity,
+      ),
+      moonMarker: this._markerPosition(
+        cx,
+        cy,
+        markerRadius - (markersCollide ? COLLIDING_MARKER_EXTRA_INSET_PX : 0),
+        this._moonAngle,
+        this._moonOpacity,
+      ),
+    });
     this._debug = {
       enabled: true,
       visible: true,
@@ -831,7 +884,7 @@ export class CelestialRing {
       : null;
   }
 
-  /** Detach the render hook and remove all overlay DOM. */
+  /** Detach the render hook and withdraw the overlay. */
   destroy() {
     if (this._ephemerisTimer) {
       clearInterval(this._ephemerisTimer);
@@ -839,6 +892,10 @@ export class CelestialRing {
     }
     if (this._removePostRender) this._removePostRender();
     this._removePostRender = null;
-    this._root?.remove();
+    if (this._shown()) {
+      this._store.connect(null);
+      this._store.publish(null);
+    }
+    this._sunCanvas = this._sunCtx = this._moonCanvas = this._moonCtx = null;
   }
 }

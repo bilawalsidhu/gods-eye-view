@@ -168,6 +168,20 @@ export function createThumbnailLoader({
       const existing = entries.get(key);
       if (existing) {
         touch(existing);
+        if (existing.loading && existing.controller?.signal.aborted) {
+          // A known-present re-fetch keeps its metadata when cancelled. If
+          // that day is wanted again before cancellation settles, give the
+          // new request its own entry so the old run cannot discard it.
+          const renewed = {
+            ...existing,
+            priority,
+            loading: false,
+            controller: null,
+          };
+          entries.set(key, renewed);
+          enqueue(renewed);
+          return;
+        }
         if (existing.loading) return;
         if (existing.status === 'unknown') {
           existing.priority = priority;

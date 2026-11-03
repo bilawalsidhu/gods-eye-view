@@ -545,16 +545,19 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     getStats() {
+      const stale = Boolean(layerState._coreStale || layerState._denseStale);
       return {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
-        stale: false,
+        stale,
         status:
           layerState._lastError === 'CelesTrak unreachable'
             ? 'unavailable'
             : layerState._lastError
               ? 'degraded'
-              : 'nominal',
+              : stale
+                ? 'stale'
+                : 'nominal',
         error: layerState._lastError,
       };
     },

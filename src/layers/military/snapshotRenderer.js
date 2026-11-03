@@ -187,7 +187,6 @@ export function createMilitarySnapshotRenderer({
       // If this is the tracked aircraft, update label text
       // (position updates automatically via dead-reckoning CallbackProperty)
       if (isTracked && flightState._trackedEntity) {
-        const info = flightState.records.data.get(icao24);
         tracking._updateTrackedLabelModel(icao24);
       }
     }
@@ -260,6 +259,7 @@ export function createMilitarySnapshotRenderer({
       if (currentIcaos.has(icao24)) continue;
       const absence = records.absence(icao24, {
         complete: snapshot.complete,
+        retainIds: snapshot.retainIds,
         likelyLanded: queries._likelyLanded(icao24),
       });
       if (absence === 'retain') continue;

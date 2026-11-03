@@ -152,6 +152,124 @@ test('regionFramingPlan: E-W elongated region looks along the east axis', () => 
   assert.equal(plan.headingDeg, 90);
 });
 
+// Compatibility guard for inherited geocode authority, not a newly fixed bug.
+test('search retains main geocode authority for Gold Coast, Australia', async () => {
+  const viewer = stubViewer();
+  const result = await runSearch(viewer, {}, {
+    query: 'Gold Coast',
+    result: {
+      formatted_address: 'Gold Coast, Queensland, Australia',
+      types: ['locality', 'political'],
+      geometry: {
+        location: { lat: -28, lng: 153.4 },
+        viewport: boxOf(-28.2, 153.2, -27.8, 153.6),
+      },
+    },
+  });
+  assert.equal(result.label, 'Gold Coast, Queensland, Australia');
+  assert.equal(result.navigationMode, 'city-overview');
+  assert.equal(viewer.flights.length, 1);
+  const flown = flownRectangleDegrees(viewer);
+  assert.ok(Math.abs((flown.south + flown.north) / 2 + 28) < 0.000001);
+  assert.ok(Math.abs((flown.west + flown.east) / 2 - 153.4) < 0.000001);
+});
+
+function alpsViewer() {
+  const viewer = stubViewer();
+  Object.assign(viewer.camera.positionCartographic, {
+    latitude: Cesium.Math.toRadians(46.5),
+    longitude: Cesium.Math.toRadians(10),
+    height: 248_000,
+  });
+  return viewer;
+}
+
+test('a successful nearby recovery resolves after a geocoder miss', async () => {
+  const viewer = alpsViewer();
+  const result = await searchAndFlyTo(viewer, 'the Alps', {
+    placeSearch: { async geocode() { return { place: null, answered: true }; } },
+    recoverNearView: async () => ({
+      lat: 46.6,
+      lon: 10.1,
+      label: 'The Alps local landmark',
+      types: ['locality', 'political'],
+      viewport: { low: { latitude: 46.5, longitude: 10 }, high: { latitude: 46.7, longitude: 10.2 } },
+    }),
+  });
+  assert.equal(result.label, 'The Alps local landmark');
+  assert.equal(result.navigationMode, 'city-overview');
+  assert.equal(viewer.flights.length, 1);
+});
+
+test('a geocoder miss returns null even over a namesake region', async () => {
+  for (const answered of [true, false]) {
+    const viewer = alpsViewer();
+    const result = await searchAndFlyTo(viewer, 'the Alps', {
+      placeSearch: { async geocode() { return { place: null, answered }; } },
+      recoverNearView: async () => null,
+    });
+    assert.equal(result, null);
+    assert.equal(viewer.flights.length, 0);
+  }
+});
+
+test('a geocoder rejection propagates without nearby recovery or a flight', async () => {
+  const viewer = alpsViewer();
+  const failure = new Error('geocoder failed');
+  let recoveries = 0;
+  await assert.rejects(searchAndFlyTo(viewer, 'the Alps', {
+    placeSearch: { async geocode() { throw failure; } },
+    recoverNearView: async () => { recoveries += 1; return null; },
+  }), (error) => error === failure);
+  assert.equal(recoveries, 0);
+  assert.equal(viewer.flights.length, 0);
+});
+
+test('search cancellation before or during geocoding cannot issue a flight', async () => {
+  for (const preAborted of [true, false]) {
+    const viewer = alpsViewer();
+    const controller = new AbortController();
+    if (preAborted) controller.abort();
+    let geocodes = 0;
+    let recoveries = 0;
+    await assert.rejects(searchAndFlyTo(viewer, 'the Alps', {
+      signal: controller.signal,
+      placeSearch: {
+        async geocode(_query, { signal }) {
+          geocodes += 1;
+          assert.equal(signal, controller.signal);
+          controller.abort();
+          return { place: null, answered: true };
+        },
+      },
+      recoverNearView: async () => { recoveries += 1; return null; },
+    }), { name: 'AbortError' });
+    assert.equal(geocodes, preAborted ? 0 : 1);
+    assert.equal(recoveries, 0);
+    assert.equal(viewer.flights.length, 0);
+  }
+});
+
+test('cancellation during nearby recovery cannot issue a flight', async () => {
+  const viewer = alpsViewer();
+  const controller = new AbortController();
+  let authorityChecks = 0;
+  await assert.rejects(searchAndFlyTo(viewer, 'the Alps', {
+    signal: controller.signal,
+    placeSearch: { async geocode() { return { place: null, answered: true }; } },
+    recoverNearView: async () => {
+      controller.abort();
+      return {
+        lat: 46.6, lon: 10.1, label: 'Alpine landmark',
+        types: ['locality'],
+      };
+    },
+    beforeFly: () => { authorityChecks += 1; return true; },
+  }), { name: 'AbortError' });
+  assert.equal(authorityChecks, 0);
+  assert.equal(viewer.flights.length, 0);
+});
+
 test('regionFramingPlan: park- and lake-scale viewports keep full framing', () => {
   // Zilker Park (~3 km).
   assert.equal(regionFramingPlan({

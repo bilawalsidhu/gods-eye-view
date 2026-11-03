@@ -400,3 +400,38 @@ test('repeat retain counts an aborted known-present re-fetch once', async () => 
   await settle();
   assert.equal(loader.get(stale.key).status, 'present');
 });
+
+for (const cancelRenewed of [false, true]) {
+  test(`a known-present day requested during abort settlement ${cancelRenewed ? 'can be cancelled again' : 'restarts without another intent change'}`, async (t) => {
+    const { loader, fetch } = fixture({ maxInFlight: 1, maxDecoded: 1 });
+    t.after(() => loader.destroy());
+    const day = candidate('S30', '2026-09-10');
+    const other = candidate('S30', '2026-09-11');
+    loader.request(day, BOX);
+    fetch.respond(0);
+    await settle();
+    const acquisitionTime = loader.get(day.key).acquisitionTime;
+    loader.request(other, BOX);
+    fetch.respond(1);
+    await settle();
+    assert.equal(loader.get(day.key).objectUrl, null);
+
+    loader.request(day, BOX);
+    loader.retain([]);
+    assert.equal(fetch.calls[2].signal.aborted, true);
+    // Deliberately do not await: the old run still owns its in-flight slot.
+    loader.request(day, BOX);
+    loader.retain(cancelRenewed ? [] : [day.key]);
+    assert.equal(fetch.calls.length, 3, 'renewal respects the concurrency cap');
+    await settle();
+    assert.equal(loader.get(day.key).acquisitionTime, acquisitionTime);
+    assert.equal(fetch.calls.length, cancelRenewed ? 3 : 4);
+    if (!cancelRenewed) {
+      assert.equal(fetch.calls[3].signal.aborted, false);
+      fetch.respond(3);
+      await settle();
+      assert.ok(loader.get(day.key).objectUrl);
+      assert.equal(loader.get(day.key).loading, false);
+    }
+  });
+}
