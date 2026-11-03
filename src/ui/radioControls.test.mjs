@@ -47,7 +47,9 @@ function fixture() {
     publishTuner() {},
   };
   const calls = [];
+  const cycleOptions = [];
   const subscribers = [];
+  const uiState = { audioState: 'stopped' };
   const radio = {
     subscribe(callback) {
       subscribers.push(callback);
@@ -57,10 +59,12 @@ function fixture() {
     endTuning() {
       calls.push('endTuning');
     },
-    cycleStation(direction) {
+    cycleStation(direction, options) {
       calls.push(['cycle', direction]);
+      cycleOptions.push(options);
       return true;
     },
+    getUIState: () => uiState,
   };
   const actions = {
     isRegistered: () => true,
@@ -90,6 +94,8 @@ function fixture() {
     store,
     actions,
     calls,
+    cycleOptions,
+    uiState,
     subscribers,
     document,
     cleanup() {
@@ -173,6 +179,34 @@ test('destruction releases an active tuner pointer after revoking listeners', ()
     assert.deepEqual(released, [7]);
     assert.equal(f.controls._radioTunerDragging, false);
     assert.equal(f.controls._radioTunerPointerId, null);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('Next and Previous play only while a stream is active', () => {
+  const f = fixture();
+  try {
+    f.controls.connect();
+    for (const audioState of ['stopped', 'paused', 'error']) {
+      f.uiState.audioState = audioState;
+      f.store.act('cycleRadio', 1);
+      f.store.act('cycleRadio', -1);
+    }
+    assert.deepEqual(
+      f.cycleOptions.map((options) => options.autoplay),
+      [false, false, false, false, false, false],
+    );
+    f.cycleOptions.length = 0;
+    for (const audioState of ['loading', 'buffering', 'playing']) {
+      f.uiState.audioState = audioState;
+      f.store.act('cycleRadio', 1);
+      f.store.act('cycleRadio', -1);
+    }
+    assert.deepEqual(
+      f.cycleOptions.map((options) => options.autoplay),
+      [true, true, true, true, true, true],
+    );
   } finally {
     f.cleanup();
   }
