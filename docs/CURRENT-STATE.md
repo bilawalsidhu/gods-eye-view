@@ -1060,6 +1060,11 @@ keeps one camera per ground cell sized to the view, preferring a healthy feed,
 and the cells are anchored to the ground so a pan keeps the same cameras. The
 active camera always shows. Ground placement and coverage geometry load only
 for the cameras in view, with at most two attempts per camera and view regime.
+Marker spacing grows above 25 km viewer altitude, with overview caps of 160,
+80, 40 and 20 cameras at 25 km, 100 km, 500 km and 2,000 km respectively.
+A screen-space spacing pass also prevents overlapping markers in tilted views.
+Ambient thumbnails drop to eight at 50 km and hide at 100 km; zooming back in
+restores city detail. The full catalog and selected feed remain available.
 The view pass reruns while the camera moves, paced by its own cost. The camera
 picker lists the cameras in view, active camera first, and closes with the
 count of cameras outside the view.

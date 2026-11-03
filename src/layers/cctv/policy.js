@@ -71,6 +71,18 @@ export const VIEW_CELL_PX = 40;
 
 export const VIEW_MIN_CELL_M = 60;
 
+/** Wider views progressively trade camera detail for a readable overview. */
+export function cctvViewDensity(heightM) {
+  const height = Number.isFinite(heightM) ? Math.max(0, heightM) : 0;
+  if (height >= 2_000_000)
+    return { cellPx: 240, separationPx: 152, maxIcons: 20 };
+  if (height >= 500_000)
+    return { cellPx: 176, separationPx: 112, maxIcons: 40 };
+  if (height >= 100_000) return { cellPx: 120, separationPx: 80, maxIcons: 80 };
+  if (height >= 25_000) return { cellPx: 80, separationPx: 48, maxIcons: 160 };
+  return { cellPx: VIEW_CELL_PX, separationPx: 0, maxIcons: Infinity };
+}
+
 // Icons this far past the screen edge (fraction of its size) still show, so
 // a pan does not reveal empty ground before the next view pass.
 

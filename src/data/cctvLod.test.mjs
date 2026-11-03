@@ -52,6 +52,33 @@ test('selectCctvLod caps ambient cards at the 40 hard cap regardless of catalog 
   assert.equal(selected.budgets.cardLimit, CCTV_AMBIENT_CARD_MAX);
 });
 
+test('regional zoom reduces thumbnails, removes graced cards, and restores detail on zoom in', () => {
+  const input = candidates(100);
+  assert.equal(
+    selectCctvLod(input, { cameraHeightM: 50_000 }).cardIds.length,
+    8,
+  );
+  for (const viewport of [{}, { viewW: 1440, viewH: 900 }]) {
+    const regional = selectCctvLod(input, {
+      cameraHeightM: 100_000,
+      ...viewport,
+    });
+    assert.deepEqual(regional.cardIds, []);
+    assert.deepEqual(
+      applyEvictionGrace({
+        selectedIds: regional.cardIds,
+        builtIds: ['cam-001'],
+        cardLimit: regional.budgets.cardLimit,
+      }).keepIds,
+      [],
+    );
+  }
+  assert.equal(
+    selectCctvLod(input, { cameraHeightM: 8_000 }).cardIds.length,
+    CCTV_AMBIENT_CARD_MID,
+  );
+});
+
 test('selectCctvLod uses only in-view cameras and orders by viewer distance', () => {
   const input = candidates(20, { hiddenAt: 0 }).reverse();
   const selected = selectCctvLod(input, { cameraHeightM: 500 });

@@ -193,6 +193,83 @@ test('a disabled layer skips the view pass', () => {
   assert.deepEqual(_viewRecordIdsForTest(), []);
 });
 
+test('zooming out reduces dense camera markers and zooming back in restores them', () => {
+  const { records, screenByPosition } = recordsAt(
+    Array.from({ length: 400 }, (_, i) => [
+      (i % 20) * 0.0001,
+      Math.floor(i / 20) * 0.0001,
+    ]),
+    (i) => ({ x: 40 + (i % 20) * 35, y: 40 + Math.floor(i / 20) * 25 }),
+  );
+  _setCctvCoverageStateForTest({
+    viewer: viewerAt(300, screenByPosition),
+    records,
+  });
+  refreshHorizonCulling();
+  const close = shownIds(records);
+  assert.equal(close.length, records.length);
+  _setCctvCoverageStateForTest({
+    viewer: viewerAt(500_000, screenByPosition),
+    records,
+    activeCameraId: 'cam-399',
+  });
+  refreshHorizonCulling();
+  assert.ok(shownIds(records).length <= 40);
+  assert.ok(
+    records[399].billboard.show,
+    'the selected camera survives zoom thinning',
+  );
+  assert.equal(
+    cctvLayer.getUIState().cameras.length,
+    400,
+    'zoom does not remove sources from the catalog',
+  );
+  _setCctvCoverageStateForTest({
+    viewer: viewerAt(300, screenByPosition),
+    records,
+  });
+  refreshHorizonCulling();
+  assert.deepEqual(shownIds(records), close);
+});
+
+test('wide views have a hard marker budget even when ground cells are distinct', () => {
+  const { records, screenByPosition } = recordsAt(
+    Array.from({ length: 100 }, (_, i) => [
+      (i % 10) * 0.2,
+      Math.floor(i / 10) * 0.2,
+    ]),
+    (i) => ({ x: 50 + (i % 10) * 180, y: 50 + Math.floor(i / 10) * 180 }),
+  );
+  const viewer = viewerAt(2_000_000, screenByPosition);
+  viewer.camera.frustum.fovy = 0.01;
+  viewer.scene.canvas = { clientWidth: 3000, clientHeight: 2000 };
+  _setCctvCoverageStateForTest({ viewer, records, activeCameraId: 'cam-99' });
+  refreshHorizonCulling();
+  assert.equal(shownIds(records).length, 20);
+  assert.ok(records[99].billboard.show);
+  assert.equal(
+    refreshHorizonCulling(),
+    false,
+    'the same view keeps its winners',
+  );
+});
+
+test('wide-view screen spacing removes overlaps between different ground cells', () => {
+  const { records, screenByPosition } = recordsAt(
+    [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ],
+    (i) => ({ x: 300 + i * 5, y: 300 }),
+  );
+  const viewer = viewerAt(100_000, screenByPosition);
+  viewer.camera.frustum.fovy = 0.01;
+  _setCctvCoverageStateForTest({ viewer, records, activeCameraId: 'cam-2' });
+  refreshHorizonCulling();
+  assert.deepEqual(shownIds(records), ['cam-2']);
+});
+
 test('UI state builds the full camera list only when it is read', () => {
   const { records, screenByPosition } = recordsAt(CLUSTER.slice(0, 2));
   _setCctvCoverageStateForTest({

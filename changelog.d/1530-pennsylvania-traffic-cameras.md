@@ -4,5 +4,7 @@
   Keep video authorization server-side with rate-limit backoff and bounded
   initialization/segment caches. Expand the shared camera catalog budget to
   12,000 by default (20,000 maximum) so the statewide feed can coexist with
-  the other source packs; visible-card and live-session limits stay bounded
+  the other source packs. Reduce marker density and ambient thumbnails as the
+  map zooms out, restoring detail on zoom in while keeping the selected feed
+  available; live-session limits stay bounded
   (Dylan Maniatakes, @dylanmaniatakes, #1530).
