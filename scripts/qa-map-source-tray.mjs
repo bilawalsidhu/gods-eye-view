@@ -338,12 +338,16 @@ try {
     while (!document.body.innerText.includes('Powered by Esri') && performance.now() < creditDeadline) {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    const provider = controller._activeImageryProvider;
+    // The base imagery the controller draws now (it is handed to the globe
+    // engine, src/maps/controller.js).
+    const liveProvider = () =>
+      controller._liveBaseProvider?.() ?? controller._activeImageryProvider;
+    const provider = liveProvider();
     const before = {
       activeId: controller.getActiveId(),
       creditVisible: document.body.innerText.includes('Powered by Esri'),
       globeShown: styleManager.viewer.scene.globe.show,
-      hasLayer: Boolean(controller._imageryLayer),
+      hasLayer: Boolean(liveProvider() ?? controller._imageryLayer),
     };
     provider?.errorEvent?.raiseEvent?.({ timesRetried: 0 });
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -370,7 +374,7 @@ try {
       lastError: controller.getState().lastError,
       creditVisible: document.body.innerText.includes('Powered by Esri'),
       globeShown: styleManager.viewer.scene.globe.show,
-      hasLayer: Boolean(controller._imageryLayer),
+      hasLayer: Boolean(liveProvider() ?? controller._imageryLayer),
       active: [...document.querySelectorAll('.map-stack-chip')]
         .filter((chip) => chip.getAttribute('aria-pressed') === 'true')
         .map((chip) => chip.dataset.stackId),
@@ -564,9 +568,16 @@ try {
   await page.keyboard.press('Enter');
   await waitTray('true', keyboardSource);
 
-  // Visual Styles precede the five Map Source tiles. Keep the existing opening
-  // handoff to selected OSM, then use the user's real Shift+Tab path into styles.
-  await pressTabs(5, true);
+  // Visual Styles precede the Map Source section: its globe-engine picker
+  // and tiles (OSM is the last). Keep the existing opening handoff to
+  // selected OSM, then use the user's real Shift+Tab path into styles: one
+  // press per control of that section.
+  const mapSourceControls = await page.evaluate(
+    () =>
+      document.querySelectorAll('.map-stack-chip').length +
+      (document.getElementById('globe-engine') ? 1 : 0),
+  );
+  await pressTabs(mapSourceControls, true);
   const noirFocus = await styleFocusMetrics();
   check('Shift+Tab reaches Noir with a visible ring while Normal and OSM stay selected',
     hasVisibleStyleFocus(noirFocus, 'noir') && !noirFocus.selected

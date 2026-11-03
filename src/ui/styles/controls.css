@@ -815,7 +815,9 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 
 .map-stack-chip-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* One row, whatever the number of sources (six with Sentinel-2). */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 4px;
 }
 
@@ -854,6 +856,7 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 
 @media (max-width: 620px) {
   .map-stack-chip-row {
+    grid-auto-flow: row;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
