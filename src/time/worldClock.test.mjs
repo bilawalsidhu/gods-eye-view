@@ -305,3 +305,85 @@ test('a coverage that throws counts as none', (t) => {
   assert.equal(clock.getState().supported, false);
   assert.equal(clock.coverage(), null);
 });
+
+test('continuous play runs past every driver, and live resets the rate', () => {
+  const t = fakeTime();
+  const clock = createWorldClock(t.options);
+  const calls = [];
+  clock.attachDriver({ play: () => calls.push('play'), pause() {} });
+  clock.seek(t.wall - 60_000);
+  clock.play({ rate: 30, continuous: true });
+  assert.deepEqual(calls, []);
+  t.advance(1_000);
+  assert.equal(clock.now(), t.wall - 61_000 + 30_000);
+  clock.goLive();
+  assert.equal(clock.getRate(), 1);
+});
+
+test('continuous play holds while a layer waits, and goes on from there', () => {
+  const t = fakeTime();
+  const clock = createWorldClock(t.options);
+  const start = t.wall - 600_000;
+  clock.seek(start);
+  clock.play({ rate: 60, continuous: true });
+  t.advance(1_000);
+  assert.equal(clock.now(), start + 60_000);
+  const release = clock.wait('radar');
+  const other = clock.wait('clouds');
+  assert.equal(clock.getState().buffering, true);
+  t.advance(5_000);
+  assert.equal(clock.now(), start + 60_000, 'held while loading');
+  release();
+  release();
+  t.advance(1_000);
+  assert.equal(clock.now(), start + 60_000, 'held until every layer is ready');
+  other();
+  assert.equal(clock.getState().buffering, false);
+  t.advance(1_000);
+  assert.equal(clock.now(), start + 120_000, 'on from where it held');
+});
+
+test('a seek still moves a waiting clock', () => {
+  const t = fakeTime();
+  const clock = createWorldClock(t.options);
+  clock.seek(t.wall - 600_000);
+  clock.play({ continuous: true });
+  const release = clock.wait('radar');
+  clock.seek(t.wall - 60_000);
+  assert.equal(clock.now(), t.wall - 60_000);
+  release();
+});
+
+test('playing, listeners hear of the time every animation frame', () => {
+  const t = fakeTime();
+  const frames = new Map();
+  let nextFrame = 1;
+  const clock = createWorldClock({
+    ...t.options,
+    requestFrame: (fn) => {
+      frames.set(nextFrame, fn);
+      return nextFrame++;
+    },
+    cancelFrame: (id) => frames.delete(id),
+  });
+  const heard = [];
+  clock.subscribe((state) => heard.push(state.timeMs));
+  const start = t.wall - 60_000;
+  clock.seek(start);
+  clock.play({ rate: 60 });
+  assert.equal(t.timers.size, 0, 'no ticks with frames to go by');
+  assert.equal(frames.size, 1);
+  const runFrame = () => {
+    const [[id, fn]] = frames;
+    frames.delete(id);
+    fn();
+  };
+  heard.length = 0;
+  for (let i = 0; i < 3; i++) {
+    t.advance(16);
+    runFrame();
+  }
+  assert.deepEqual(heard, [start + 960, start + 1_920, start + 2_880]);
+  clock.pause();
+  assert.equal(frames.size, 0);
+});

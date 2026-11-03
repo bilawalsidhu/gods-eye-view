@@ -3226,5 +3226,11 @@
   "Directions, drawing and your own files": "الاتجاهات والرسم وملفاتك الخاصة",
   "World time": "وقت العالم",
   "Back to live": "العودة إلى البث المباشر",
-  "Live": "مباشر"
+  "Live": "مباشر",
+  "1 h/s": "ساعة/ث",
+  "1 d/s": "يوم/ث",
+  "1 wk/s": "أسبوع/ث",
+  "Play speed": "سرعة التشغيل",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
+  "1 min/s": "دقيقة/ث"
 }
