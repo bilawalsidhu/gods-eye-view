@@ -9,6 +9,22 @@ const props = defineProps({
 });
 const root = ref(null);
 
+// Paged lists number from their first item, not from 1 on every page: the
+// CSS counter and the <ol> start both follow the first ordinal.
+const firstOrdinal = () => {
+  const ordinal = props.list?.items?.[0]?.ordinal;
+  return Number.isInteger(ordinal) ? ordinal : 1;
+};
+// Lists that start at 1 keep the default start and counter: no attribute.
+const startAttribute = () => {
+  const first = firstOrdinal();
+  return first === 1 ? undefined : first;
+};
+const counterStyle = () => {
+  const first = firstOrdinal();
+  return first === 1 ? undefined : { counterReset: `gev-step ${first - 1}` };
+};
+
 const rowClass = (item) =>
   `data-row-list-item${item.disabled ? ' note' : ''}${item.active ? ' active' : ''}${item.current ? ' current' : ''}`;
 
@@ -38,6 +54,8 @@ onUpdated(followCurrent);
     class="data-row-list ui-scroll"
     :data-block-id="blockId"
     :hidden="!list?.items?.length"
+    :start="startAttribute()"
+    :style="counterStyle()"
     :aria-label="list?.ariaLabel || ''"
     ><li
       v-for="item in list?.items ?? []"
