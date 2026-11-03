@@ -32,21 +32,11 @@ function defaultProviders(sources) {
  * including when the list is empty.
  */
 export function createApplicationStreetLevel({
-  surface,
   sources = {},
   providers = defaultProviders(sources),
 }) {
   return createStreetLevelLayer({
     providers,
-    services: {
-      sprites,
-      picking,
-      input,
-      scenePick,
-      render,
-      ground: surface?.groundFloor ?? null,
-      meshFloor: surface?.meshFloor ?? null,
-      terrain: surface?.terrain ?? null,
-    },
+    services: { sprites, picking, input, scenePick, render },
   });
 }

@@ -58,6 +58,32 @@ const layers = [
     noQuery: 'navigation-integrity cells; no countable analyst records',
   },
   {
+    id: 's2-ghostmaps',
+    aliases: [
+      's2 ghostmaps',
+      'ghost maps',
+      'ghostmaps',
+      's2 underground',
+      's2 intel',
+      'intel picture',
+      'common intelligence picture',
+    ],
+    context: false,
+    noQuery: 'published third-party intel placemarks; not analyst records',
+  },
+  {
+    id: 'sea-marks',
+    aliases: ['seamarks', 'nautical charts', 'buoys', 'openseamap'],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
+    id: 'ski-pistes',
+    aliases: ['ski slopes', 'ski runs', 'snow map', 'opensnowmap'],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -393,6 +419,23 @@ const layers = [
     noQuery: 'cable records are not loaded for queries',
   },
   {
+    // Results of the last osm_query ("hospitals in Kathmandu").
+    id: 'osm-places',
+    aliases: ['osm places', 'map search results', 'search results'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        kind: ['t'],
+        operator: ['t'],
+        emergency: ['t'],
+        wheelchair: ['t'],
+        openingHours: ['t'],
+        city: ['t'],
+      },
+    },
+  },
+  {
     // Global Context owns this layer; voice reaches it through
     // set_context_mode, never a bare toggle.
     id: 'military-awareness',
@@ -513,19 +556,30 @@ const SELF_EVIDENT_IDS = new Set([
   'directions',
 ]);
 
+/** Lower case with spaces and hyphens removed: "Data centers" → "datacenters". */
+const spelled = (text) => text.toLowerCase().replace(/[\s-]+/g, '');
+
 /**
  * Compact model-facing alias hint: "alias/alias→id; …" for toggleable layers
  * whose id is not already the spoken word. At most two aliases per layer keep
- * the tool JSON small; the runner accepts the full alias list.
+ * the tool JSON small; the runner accepts the full alias list. Of those two,
+ * an alias the id already spells ("dams"→local-dams, "weather radar"→
+ * weather-radar) is left out, and a layer with neither left gets no hint.
  * @returns {string} One line for the layerId description.
  */
 export function voiceLayerAliasHint() {
   return VOICE_LAYER_MANIFEST.filter(
-    (entry) =>
-      entry.toggle && entry.aliases.length && !SELF_EVIDENT_IDS.has(entry.id),
+    (entry) => entry.toggle && !SELF_EVIDENT_IDS.has(entry.id),
   )
-    .map((entry) => `${entry.aliases.slice(0, 2).join('/')}→${entry.id}`)
-    .join('; ');
+    .map((entry) => ({
+      id: entry.id,
+      aliases: entry.aliases
+        .slice(0, 2)
+        .filter((alias) => !spelled(entry.id).includes(spelled(alias))),
+    }))
+    .filter((entry) => entry.aliases.length)
+    .map((entry) => `${entry.aliases.join('/')}→${entry.id}`)
+    .join(';');
 }
 
 /** Field names that already carry their unit (altitudeM, speedKts, …). */

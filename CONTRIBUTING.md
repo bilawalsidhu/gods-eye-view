@@ -4,13 +4,15 @@ Thanks for being here. God's Eye View is an open foundation for live spatial int
 
 ## Getting set up
 
-Use Node.js 24.14.x or 26.x (also enforced by `package.json`).
+Use Node.js 24 (24.14.0 or later) or 26.x (also enforced by `package.json`).
+Prefer 24.22.1 or later: earlier releases lack the October 21, 2026 security
+fixes, including CVE-2026-111497 (a Brotli decoder flaw).
 
 ```bash
 git clone https://github.com/bilawalsidhu/gods-eye-view.git
 cd gods-eye-view
-nvm install 24.14.0
-nvm use 24.14.0
+nvm install 24.22.2
+nvm use 24.22.2
 npm install
 npm run doctor
 ./scripts/dev-fresh.sh        # or: npm run dev (keys are optional)
@@ -26,6 +28,25 @@ People who only want to run the app can instead install the repository directly
 through Pinokio; the terminal path above remains the contributor path.
 
 Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
+
+### Test prerequisites
+
+- **`npm test`** — unit tests. Runs standalone; no dev server or credentials
+  required. Exit code is the gate.
+- **`npm run test:track`** — the 3D flight-tracking regression harness. It
+  drives the **real app** in headless Chromium, so it **requires a running
+  dev server** (default `http://localhost:4173`). To target another instance,
+  run `npm run test:track -- --url <app-url>` (or
+  `node scripts/track-regression.mjs --url <app-url>`). It does not depend on
+  live OpenSky / adsb.lol / AISStream (those are optional or rate-limited
+  locally); it installs a persistent `fetch` shim that returns synthetic
+  aircraft in the exact upstream payload shapes the layers parse.
+- **`npm run build`** — production Vite build. No server or credentials
+  required; it validates that the client bundle compiles cleanly.
+
+Each feature also has its own headless gate; see
+[Feature regression gates](#feature-regression-gates) below. Docs and changelog
+rules are under [Pull requests](#pull-requests).
 
 ## Checking a built app locally
 
@@ -54,9 +75,8 @@ head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run i
 Runnable gate entrypoints document what they assert and how to invoke them.
 Most need a dev server; some also need a specific provider key or port. Follow
 the entrypoint's header rather than assuming every matching file accepts the
-same arguments. Five have an `npm run` alias: `qa:map-source-tray`,
-`qa:panel-resize`, `qa:street-level`, `qa:street-level:fixtures` and
-`qa:transit`.
+same arguments. Four have an `npm run` alias: `qa:map-source-tray`,
+`qa:street-level`, `qa:street-level:fixtures` and `qa:transit`.
 
 If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
 for the feature: it names the gate for many of them, and it's the authoritative
@@ -66,11 +86,10 @@ gate for the feature you changed.
 
 > **CI covers only two of these for you.** The workflow runs the setup policy
 > checks, the formatting and package-boundary checks, the unit suite and the
-> production build, plus a Windows onboarding job, and against the built preview
-> it runs `qa:street-level:fixtures` and `qa:panel-resize`. It does not run
-> `npm run test:track` or any other `qa-*.mjs` gate — those need a live dev
-> server and a browser. Include the applicable local run in your PR's
-> validation evidence.
+> production build, plus a Windows onboarding job. It runs neither
+> `npm run test:track` nor any `qa-*.mjs` gate except the Street Level fixture
+> gate (`street-level-browser` job) — they need a live dev server and a
+> browser. Include the applicable local run in your PR's validation evidence.
 
 ## Share-link layer tokens
 
@@ -110,15 +129,15 @@ prints anything; never fix that by renaming or deleting PR A's published token.
 The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs — never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
-- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
+- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template, and see [Adding a new layer](#adding-a-new-layer) for what the PR needs.
 - **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
 - **🐛 Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
 ## Architecture in one minute
 
-- **No framework.** Vanilla JS + [CesiumJS](https://cesium.com/platform/cesiumjs/) + [Vite](https://vitejs.dev/).
-- **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/ui.js` and `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
+- **Vue 3 + Pinia for the interface,** [CesiumJS](https://cesium.com/platform/cesiumjs/) for the globe and [Vite](https://vitejs.dev/) to build. See [Building UI](#building-ui).
+- **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
 - Sources acquire records; renderers own Cesium resources. Import `gods-eye-view/layers/<family>/source` when only a source factory is needed. Common voice controls consume the session interface; protocol adapters own connection details.
 - **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
@@ -128,8 +147,64 @@ The highest-leverage places to jump in:
 - ES modules, **2-space indent, single quotes, semicolons.**
 - JSDoc on exported/public functions.
 - Match the surrounding code — comment density, naming, and idiom.
-- User-visible text goes through `t()`, `tn()` or `msg()`, or a `data-i18n*` attribute in markup, and `npm run i18n` must pass. See [docs/I18N.md](docs/I18N.md).
+- User-visible text goes through `t()` or `tn()`, with `msg()` marking English that is stored and translated later. Components call `t()` in their templates, so their text follows the locale; `data-i18n*` attributes are only for static page markup such as the loading screen, and `npm run i18n` rejects them in a template. `npm run i18n` must pass. See [docs/I18N.md](docs/I18N.md).
 - Prefer small, reviewable commits. Conventional-commit-style prefixes (`feat:`, `fix:`, `perf:`, `docs:`) are appreciated but not required.
+
+## Building UI
+
+New UX elements are Vue components whose state lives in a Pinia store, and so
+are existing ones when a change converts them:
+
+- **Views are Vue components.** Application views live in `src/ui/views/` and
+  the components they place in `src/ui/views/panels/`; a component that
+  belongs to one feature sits beside its owner (`src/ui/rail/`,
+  `src/ui/weather/`). A view renders what its store holds and forwards
+  clicks and input to the store; it holds no application logic.
+- **State lives in a Pinia store** in `src/ui/stores/`. The owner presents a
+  plain view object and publishes it to the store; the view renders it. User
+  actions return to the owner through handlers it connects to the store,
+  which replace an earlier owner's. Where several owners answer different
+  actions of one store, use `createOwners()` from `src/ui/stores/owners.js`:
+  `act(name, ...args)` calls the newest connected owner that handles `name`,
+  and the owner calls `detach(token)` when it stops.
+- **Portable owners stay framework-free.** An owner in a portable export
+  imports neither Vue nor Pinia: it takes a `publish` option or offers a
+  `subscribe…()`, and the application shell connects it to the store.
+  `npm run check:boundaries` enforces this.
+- **Reuse the kit first.** `src/ui/kit/` has one component per control:
+  `UiButton` (including pressed toggles and pressable chips), `UiSelect`,
+  `UiSlider`, `UiSegmented`, `UiChip` (a label, not a control), `UiBadge`,
+  `UiEmpty`, `UiIcon`, `UiTooltip`, `UiPanel` and `UiRail`. Use these before
+  writing a control. When the kit lacks something, extend a kit component or
+  add one that follows the kit's names, props, events and class names (see
+  [Component kit](docs/VUE-MIGRATION.md#component-kit)), rather than
+  building a one-off.
+- **No hand-written DOM binding.** Don't build elements or write text,
+  classes or attributes from a controller to show UI state; render it from
+  the store. New controls take input through the store rather than through
+  listeners the owner adds. To render outside the view's host (the body, the
+  globe container, or a slot another surface opens), use `<Teleport>` to
+  `body`, a fixed id or a container the owner publishes; don't move nodes by
+  hand. What stays imperative: classes on `<body>` and `<head>`, which sit
+  outside Vue (`cockpit-mode`, `ui-clean-view`); focus moves; positions a
+  layout pass measures in the same task that writes them; and surfaces an
+  owner paints or plays, such as the Cesium canvas, overlay canvases and live
+  video. A few existing surfaces keep listeners or bindings that
+  [docs/VUE-MIGRATION.md](docs/VUE-MIGRATION.md) records; keep those
+  contracts when you change them, and don't copy them into new UI.
+- **Text** goes through `t()` or `tn()` where the template renders it.
+  English kept in a constant or a store is marked with `msg()` and passed to
+  `t()` when it renders, since a `t()` at module load would fix the English.
+- **Test components, not markup strings.** Mount the component over
+  happy-dom with `@vue/test-utils` or `createApp` and assert what it renders
+  from its store (see `src/testSupport/vueDom.mjs`, `src/ui/kit/*.test.mjs`
+  and `src/ui/views/intelHudView.test.mjs`). Run one such file with
+  `node --import=./build/registerVue.js --test <file>`. Don't pass happy-dom
+  nodes to `assert.equal`/`deepEqual`; compare them with `assertSameNode()`
+  from `src/testSupport/domAssert.mjs`.
+
+[docs/VUE-MIGRATION.md](docs/VUE-MIGRATION.md) records how each surface moved
+and what stays imperative, and why.
 
 ## Formatting and reusable components
 
@@ -155,6 +230,34 @@ ownership and adoption process.
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` in the same PR, and add your changelog entry as `changelog.d/<pr-number>-<slug>.md` instead of editing `CHANGELOG.md` — see [changelog.d/README.md](changelog.d/README.md). Distinct filenames don't conflict; a release assembles the directory into `CHANGELOG.md`. A documentation claim that needs a regression test should assert against `docs/CURRENT-STATE.md` or `README.md`, which a PR still edits directly.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
+6. If you add a new layer, fill in the new-layer section of the PR template. See [Adding a new layer](#adding-a-new-layer).
+
+## Adding a new layer
+
+A new layer changes what everyone sees on the globe, so maintainers need to see
+it working and know where its data comes from before reviewing the code. PRs
+that add a layer must include all four of these in the description. The PR
+template has a section for them.
+
+1. **Screenshots.** At least one of the layer on the globe, plus its info card
+   or panel if it has one.
+2. **A screen recording**, preferably 15 to 30 seconds: turn the layer on, move
+   around, and open a record. Drag an `.mp4` or `.mov` into the PR description.
+   GitHub accepts videos up to 10 MB on free accounts, so link to a larger file
+   instead of attaching it.
+3. **The proposed category.** Say which layer-panel group the layer belongs in.
+   The groups are defined in `PANEL_GROUPS` in `src/ui/layerPanel.js` (today:
+   Movement, Cameras, Infrastructure, Events, Weather and Audio, plus Utilities,
+   whose rows render in the separate UTILITIES panel). A layer that isn't
+   listed there falls under "Other layers". If none of the groups
+   fits, propose a new one and explain why.
+4. **The data source and licence.** Name the provider and endpoint, link its
+   licence or terms, give the attribution shown in the app, and say whether it
+   needs a key and whether the data is fetched at runtime or bundled. Add the
+   same details to [DATA_SOURCES.md](DATA_SOURCES.md) and register the credit
+   in `src/data/dataCredits.js`.
+
+Maintainers may hold a layer PR until all four are there.
 
 ## Maintainers
 

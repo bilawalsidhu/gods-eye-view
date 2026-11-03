@@ -1,5 +1,5 @@
 // Inspect encoded headers before allowing the browser to decode local images.
-export const MAX_IMPORT_IMAGE_PIXELS = 16 * 1024 * 1024;
+const MAX_IMPORT_IMAGE_PIXELS = 16 * 1024 * 1024;
 const MAX_SIDE = 8192;
 
 /** Width and height from a supported raster header; no image is decoded. */

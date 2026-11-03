@@ -128,3 +128,16 @@ test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
   assert.match(credit.html, /make no representation as to the accuracy/);
   assert.match(credit.html, /observe posted signage/);
 });
+
+test('every Street Level imagery source is in the attribution lightbox', () => {
+  for (const key of [
+    'mapillary',
+    'google-street-view',
+    'kartaview',
+    'panoramax',
+  ])
+    assert.ok(
+      DATA_CREDITS.some((entry) => entry.key === key),
+      `${key} has no credit`,
+    );
+});

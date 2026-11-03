@@ -1,16 +1,18 @@
 import { createAirQualityLayer } from '../../layers/airQuality/index.js';
 import { overlayHost } from './overlayHost.js';
+import { useProviderSettingsStore } from '../../ui/stores/providerSettings.js';
+import { applicationPinia } from '../../ui/vueRuntime.js';
 /** Wire air-quality readings to the application overlay host. */
 export function createApplicationAirQuality(options) {
   return createAirQualityLayer({
     overlayHost,
-    canManageConnection: () =>
-      Boolean(globalThis.document?.getElementById('key-setup')),
+    canManageConnection: () => {
+      const store = useProviderSettingsStore(applicationPinia());
+      return Boolean(store.view?.ready && store.controls);
+    },
     onManageConnection: () =>
-      globalThis.document?.dispatchEvent(
-        new CustomEvent('gev:connection-setup', {
-          detail: { providerId: 'data-gov-in' },
-        }),
+      useProviderSettingsStore(applicationPinia()).controls?.open(
+        'data-gov-in',
       ),
     ...options,
   });

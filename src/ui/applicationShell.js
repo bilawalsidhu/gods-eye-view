@@ -1,14 +1,15 @@
+import { nextTick } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
+import { initMobileShell } from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
 import { DisplayBindings } from './displayBindings.js';
 import { createStateChannel } from '../app/stateChannel.js';
-import { setSplitFlapText } from '../splitFlap.js';
 import { UiLifetime } from './uiLifetime.js';
 import { RecordingControls } from './recordingControls.js';
 import { readShellElements } from './shellElements.js';
@@ -19,7 +20,6 @@ import { StreetLevelControls } from './streetLevelControls.js';
 import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
-import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
@@ -34,18 +34,35 @@ import * as Cesium from 'cesium';
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
 import { ShellFeedback } from './shellFeedback.js';
+import {
+  applyShareFollowOffset,
+  readShareFollowSubject,
+} from './shareFollow.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
 import {
-  describeUnsavedWork,
   getLocale,
-  msg,
-  persistLocaleAndReload,
-  registerUnsavedWork,
+  onLocaleChange,
+  persistLocale,
+  setLocale,
   t,
 } from '../i18n/index.js';
-import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
+import { applyLocaleChoice } from './localePicker.js';
+import { PanelNavigation } from './panelNavigation.js';
+import { applicationPinia, createUiRuntime } from './vueRuntime.js';
+import { useContextStore } from './stores/context.js';
+import { useMissionReplayStore } from './stores/missionReplay.js';
+import { useCelestialRingStore } from './stores/celestialRing.js';
+import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
+import { useAwarenessDirectionStore } from './stores/awarenessDirection.js';
+import { useHudStore } from './stores/hud.js';
+import { useDisplayStore } from './stores/display.js';
+import { useLocaleStore } from './stores/locale.js';
+import { useLocationStore } from './stores/location.js';
+import { useCockpitStore } from './stores/cockpit.js';
+import { useGlobeActionsStore } from './stores/globeActions.js';
+import { useRecordingStore } from './stores/recording.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -53,8 +70,7 @@ import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
  * Responsibilities:
  * - Visual controls and presets backed by the VisualEffects controller.
  * - Bloom and sharpen post-processing toggle/intensity control.
- * - Draggable/collapsible panel system with localStorage persistence,
- *   z-order stacking, and viewport-clamped positioning.
+ * - Collapsible rail panels with their collapsed state kept in localStorage.
  * - CCTV panel: camera selection, coverage toggle, projection, calibration
  *   sliders, auto-hop, and summary typewriter effect.
  * - Location bar with city/POI preset pills, QWERTY key navigation,
@@ -71,18 +87,30 @@ export class StyleManager extends ShellFacade {
   /**
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options]
+   * @param {boolean} [options.localePicker=true] - false removes the language
+   *   picker, for a host that does not initialize Core's locale.
    */
   constructor(
     viewer,
-    { mapStackController = null, placeSearch, services, requestServices } = {},
+    {
+      mapStackController = null,
+      placeSearch,
+      services,
+      requestServices,
+      initialShareCode = null,
+      localePicker = true,
+    } = {},
   ) {
     super();
+    this._localePickerEnabled = localePicker;
     const {
       IntelHUD,
       ShareLinkManager,
       CelestialRing,
       initTrackedReadout,
       initWorldOverlay,
+      subscribeWorldOverlayActions,
+      activateWorldOverlayAction,
       initDetection,
       setDetectionStyle,
       trafficLayer,
@@ -100,24 +128,21 @@ export class StyleManager extends ShellFacade {
     this._lifetime = new UiLifetime();
     this._recording = new RecordingControls({
       syncShareState: () => this._syncShareState(),
+      syncHudControls: () => this._visualSettings._syncHudControls(),
+      publishSafeFrame: (frame) =>
+        useRecordingStore(applicationPinia()).publishSafeFrame(frame),
     });
     Object.assign(this, readShellElements());
     this._panelChrome = new PanelChrome({
       elements: {
-        _contextRadioDetailsBtn: this._contextRadioDetailsBtn,
-        _contextRadioDock: this._contextRadioDock,
         _leftPanelStack: this._leftPanelStack,
-        _locationSearch: this._locationSearch,
         _ppToggles: this._ppToggles,
         _rightPanelStack: this._rightPanelStack,
       },
       operations: {
-        _setRadioDisclosure: (...args) => this._setRadioDisclosure(...args),
+        _closeLocationSearch: () => this._locationNavigation?.closeSearch(),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
-        _onPanelResized: (...args) => this._onPanelResized(...args),
-        _syncContextRadioLauncherState: (...args) =>
-          this._syncContextRadioLauncherState(...args),
         _showToast: (...args) => this._showToast(...args),
       },
       readHud: () => this.hud,
@@ -126,7 +151,11 @@ export class StyleManager extends ShellFacade {
       readInitialShare: () => this._initialShareState,
       readScrollRestoreOwner: () => this._displayPortalScrollRestoreOwner,
       readDisplayScrollTop: () => this._standardDisplayScrollTop,
+      readSharedCollapsed: (panelId) =>
+        this._mobileShell?.sharedCollapsed(panelId),
     });
+    // Vue views share this runtime and its stores; dispose unmounts them.
+    this._ui = createUiRuntime({ pinia: applicationPinia() });
     this._feedback = new ShellFeedback({
       readLayers: () => this._dataManager?.getAll?.() || [],
     });
@@ -144,8 +173,10 @@ export class StyleManager extends ShellFacade {
         militaryAwarenessLayer,
         rocketLaunchesLayer: services.rocketLaunchesLayer,
       },
-      searchInput: this._locationSearch,
+      settleSearch: (options) =>
+        this._locationNavigation?.settleSearch(options),
       interruptCameraMotion: services.interruptCameraMotion,
+      interruptGlobeRotation: services.interruptGlobeRotation,
       isCockpitActive: () => !!this.cockpitView?.active,
       clearLocation: () => this.clearSearchedLocation(),
       cancelShareSelection: () => this._shareRestoration.cancelSelection(),
@@ -163,6 +194,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
+      applyFollowOffset: (entity, offset) =>
+        applyShareFollowOffset(viewer, entity, offset),
     });
 
     this._visualSettings = new VisualSettings({
@@ -190,49 +223,8 @@ export class StyleManager extends ShellFacade {
         setScopeMaskFeather: services.setScopeMaskFeather,
       },
       elements: {
-        _bloomBtn: this._bloomBtn,
-        _bloomSlider: this._bloomSlider,
-        _bloomSliderRow: this._bloomSliderRow,
-        _bloomSliderValue: this._bloomSliderValue,
-        _celestialBtn: this._celestialBtn,
-        _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
-        _detectionAllocationRow: this._detectionAllocationRow,
-        _detectionBtn: this._detectionBtn,
-        _detectionDensitySlider: this._detectionDensitySlider,
-        _detectionDensityValue: this._detectionDensityValue,
-        _detectionFadeRow: this._detectionFadeRow,
-        _detectionFadeSlider: this._detectionFadeSlider,
-        _detectionFadeValue: this._detectionFadeValue,
-        _detectionOpacityRow: this._detectionOpacityRow,
-        _detectionOpacitySlider: this._detectionOpacitySlider,
-        _detectionOpacityValue: this._detectionOpacityValue,
-        _detectionSliderRow: this._detectionSliderRow,
-        _hudBtn: this._hudBtn,
-        _cyberSonarBtn: this._cyberSonarBtn,
-        _cyberSonarRings: this._cyberSonarRings,
-        _cyberSonarRingsValue: this._cyberSonarRingsValue,
-        _cyberSonarRange: this._cyberSonarRange,
-        _cyberSonarRangeValue: this._cyberSonarRangeValue,
-        _cyberSonarIntensity: this._cyberSonarIntensity,
-        _cyberSonarIntensityValue: this._cyberSonarIntensityValue,
-        _cyberSonarOpacity: this._cyberSonarOpacity,
-        _cyberSonarOpacityValue: this._cyberSonarOpacityValue,
-        _cyberSonarSector: this._cyberSonarSector,
-        _cyberSonarSectorValue: this._cyberSonarSectorValue,
-        _hudLayoutRow: this._hudLayoutRow,
-        _hudLayoutSelect: this._hudLayoutSelect,
         _ppToggles: this._ppToggles,
-        _scopeBtn: this._scopeBtn,
-        _scopeFeatherSlider: this._scopeFeatherSlider,
-        _scopeFeatherValue: this._scopeFeatherValue,
-        _sharpenBtn: this._sharpenBtn,
-        _sharpenSlider: this._sharpenSlider,
-        _sharpenSliderRow: this._sharpenSliderRow,
-        _sharpenSliderValue: this._sharpenSliderValue,
-        _sliderContainer: this._sliderContainer,
         _sliderPanel: this._sliderPanel,
-        _styleIndicator: this._styleIndicator,
-        _styleMiniValue: this._styleMiniValue,
       },
       operations: {
         _restorePanelState: (...args) => this._restorePanelState(...args),
@@ -242,9 +234,9 @@ export class StyleManager extends ShellFacade {
         _scheduleRightPanelLayout: (...args) =>
           this._scheduleRightPanelLayout(...args),
         _setCockpitDisclosure: (...args) => this._setCockpitDisclosure(...args),
+        _cockpitDisclosureOpen: (kind) => this._cockpitDisclosureOpen(kind),
         _setMapStack: (...args) => this._setMapStack(...args),
-        _syncPanelCollapseButton: (...args) =>
-          this._syncPanelCollapseButton(...args),
+        _presentPanel: (...args) => this._presentPanel(...args),
         _syncShareState: (...args) => this._syncShareState(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
       },
@@ -275,6 +267,7 @@ export class StyleManager extends ShellFacade {
         _contextControls: this._contextControls,
         _cctvControls: this._cctvControls,
         _radioControls: this._radioControls,
+        _streetLevelControls: this._streetLevelControls,
       }),
       operations: {
         _updateTrafficSyncChip: (...args) =>
@@ -320,6 +313,7 @@ export class StyleManager extends ShellFacade {
         GLOBE_VIEW: services.GLOBE_VIEW,
         flyToGlobeView: services.flyToGlobeView,
         interruptCameraMotion: services.interruptCameraMotion,
+        interruptGlobeRotation: services.interruptGlobeRotation,
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
         satellitesLayer: services.satellitesLayer,
@@ -328,17 +322,15 @@ export class StyleManager extends ShellFacade {
         rocketLaunchesLayer: services.rocketLaunchesLayer,
       },
       elements: {
-        _locationPills: this._locationPills,
-        _poiRow: this._poiRow,
-        _locationBarDivider: this._locationBarDivider,
         _locationSearch: this._locationSearch,
-        _searchToggle: this._searchToggle,
-        _resetGlobeBtn: this._resetGlobeBtn,
-        _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
-        _locationMiniCity: this._locationMiniCity,
-        _locationMiniPoi: this._locationMiniPoi,
       },
       operations: {
+        _publishLocation: (view) =>
+          useLocationStore(applicationPinia()).publish(view),
+        _connectLocation: (controls) =>
+          useLocationStore(applicationPinia()).connect(controls),
+        _connectGlobeReset: (controls) => this._connectGlobeReset(controls),
+        _publishGlobeResetting: (busy) => this._publishGlobeResetting(busy),
         _beginDeferredNavigation: (...args) =>
           this._beginDeferredNavigation(...args),
         _reassertNavigationHandoff: (...args) =>
@@ -356,9 +348,11 @@ export class StyleManager extends ShellFacade {
     this._lastTrafficChipUpdateAt = 0;
 
     // Intel HUD
+    const hudStore = useHudStore(applicationPinia());
     this.hud = new IntelHUD(viewer, {
       placeSearch,
       summaryService: requestServices?.summary,
+      publish: (view) => hudStore.publish(view),
     });
     this._recording.hud = this.hud;
     this._cockpitCoordinator = new CockpitCoordinator({
@@ -390,6 +384,26 @@ export class StyleManager extends ShellFacade {
         _models3dBtn: this._models3dBtn,
       },
       operations: {
+        publishCockpit: {
+          presence: (view) =>
+            useCockpitStore(applicationPinia()).publishPresence(view),
+          brief: (view) =>
+            useCockpitStore(applicationPinia()).publishBrief(view),
+          context: (view) =>
+            useCockpitStore(applicationPinia()).publishContext(view),
+          instruments: (view) =>
+            useCockpitStore(applicationPinia()).publishInstruments(view),
+          route: (view) =>
+            useCockpitStore(applicationPinia()).publishRoute(view),
+          vision: (view) =>
+            useCockpitStore(applicationPinia()).publishVision(view),
+          signals: (rows) =>
+            useCockpitStore(applicationPinia()).publishSignals(rows),
+          utilityLayout: (layout) =>
+            useCockpitStore(applicationPinia()).publishUtilityLayout(layout),
+        },
+        publishCockpitPortal: (slots) =>
+          useDisplayStore(applicationPinia()).publishCockpitPortal(slots),
         _layoutRightPanels: (...args) => this._layoutRightPanels(...args),
         _setCockpitVision: (...args) => this._setCockpitVision(...args),
         _stampNavigation: (...args) => this._stampNavigation(...args),
@@ -397,12 +411,13 @@ export class StyleManager extends ShellFacade {
           this.getAircraftTrackingTarget(...args),
         _scheduleRightPanelLayout: (...args) =>
           this._scheduleRightPanelLayout(...args),
-        _syncContextRadioLauncherState: (...args) =>
-          this._syncContextRadioLauncherState(...args),
       },
       readDataManager: () => this._dataManager,
       readContext: () => this.getContextModeState(),
       readActiveStyle: () => this.activeStyle,
+      readUtilityDisclosureOpen: () =>
+        this._cockpitDisclosureOpen('display') ||
+        this._cockpitDisclosureOpen('radio'),
       enterPanels: () => this._panelChrome.enterCockpit(),
       exitPanels: () => this._panelChrome.exitCockpit(),
     });
@@ -411,6 +426,7 @@ export class StyleManager extends ShellFacade {
     // Cesium canvas but below the HUD/detection/readout z ladder.
     this.celestialRing = new CelestialRing(viewer, {
       enabled: false,
+      store: useCelestialRingStore(applicationPinia()),
       onAutoDisable: () =>
         this.setCelestialRingEnabled(false, {
           syncShare: !!this.shareLinkManager,
@@ -426,7 +442,12 @@ export class StyleManager extends ShellFacade {
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
       cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      // A host may open a share code without a `/share/<code>` address.
+      initialShareCode,
     });
+    this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
+      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+    );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
     );
@@ -460,7 +481,6 @@ export class StyleManager extends ShellFacade {
     this._aircraftDisplay = new AircraftDisplay({
       elements: {
         _models3dBtn: this._models3dBtn,
-        _models3dModeRow: this._models3dModeRow,
       },
       readDataManager: () => this._dataManager,
       layout: () => this._layoutRightPanels(),
@@ -470,6 +490,13 @@ export class StyleManager extends ShellFacade {
     // detection and tracked-readout initialize. It stays transparent until a
     // production source explicitly registers entries.
     initWorldOverlay(viewer);
+    // Its focusable mirror of the painted cards, which the scene chrome
+    // renders.
+    const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
+    overlayActionsStore.connect({ activate: activateWorldOverlayAction });
+    this._overlayActionsUnsubscribe = subscribeWorldOverlayActions((view) =>
+      overlayActionsStore.publish(view),
+    );
 
     // Initialize detection overlay BEFORE style stages so the composite
     // stage is first in the post-process pipeline
@@ -492,7 +519,7 @@ export class StyleManager extends ShellFacade {
     );
     initTrackedReadout(viewer);
     setDetectionStyle(this.activeStyle);
-    this._applyDetectionDensityFromUi();
+    this._setDetectionDensity();
 
     this._initStages();
     this._initBloomSharpen();
@@ -500,39 +527,14 @@ export class StyleManager extends ShellFacade {
       viewer,
       services: {
         cycleDetectionMode: services.cycleDetectionMode,
-        setScopeMaskEnabled: services.setScopeMaskEnabled,
         isScopeMaskEnabled: services.isScopeMaskEnabled,
-        setScopeMaskFeather: services.setScopeMaskFeather,
       },
       elements: {
         _locationSearch: this._locationSearch,
-        _bloomBtn: this._bloomBtn,
-        _bloomSlider: this._bloomSlider,
-        _sharpenBtn: this._sharpenBtn,
-        _sharpenSlider: this._sharpenSlider,
-        _scopeBtn: this._scopeBtn,
-        _scopeFeatherSlider: this._scopeFeatherSlider,
-        _hudLayoutSelect: this._hudLayoutSelect,
-        _hudBtn: this._hudBtn,
-        _cyberSonarBtn: this._cyberSonarBtn,
-        _cyberSonarRings: this._cyberSonarRings,
-        _cyberSonarRange: this._cyberSonarRange,
-        _cyberSonarIntensity: this._cyberSonarIntensity,
-        _cyberSonarOpacity: this._cyberSonarOpacity,
-        _cyberSonarSector: this._cyberSonarSector,
-        _cleanViewBtn: this._cleanViewBtn,
-        _cleanViewExitBtn: this._cleanViewExitBtn,
-        _detectionDensitySlider: this._detectionDensitySlider,
-        _detectionBtn: this._detectionBtn,
-        _detectionFadeSlider: this._detectionFadeSlider,
-        _detectionOpacitySlider: this._detectionOpacitySlider,
-        _celestialBtn: this._celestialBtn,
-        _models3dBtn: this._models3dBtn,
-        _scopeFeatherValue: this._scopeFeatherValue,
-        _sharpenSliderValue: this._sharpenSliderValue,
-        _detectionDensityValue: this._detectionDensityValue,
       },
       operations: {
+        _closeLocationSearch: (options) =>
+          this._locationNavigation?.closeSearch(options),
         setStyle: (...args) => this.setStyle(...args),
         _updateHudButtonState: (...args) => this._updateHudButtonState(...args),
         _syncShareState: (...args) => this._syncShareState(...args),
@@ -542,17 +544,15 @@ export class StyleManager extends ShellFacade {
         _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
         _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
         _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
-        _applySharpenIntensity: (...args) =>
-          this._applySharpenIntensity(...args),
+        _setSharpenIntensity: (...args) => this._setSharpenIntensity(...args),
         _setHudVariant: (...args) => this._setHudVariant(...args),
         _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
         _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
-        _applyDetectionDensityFromUi: (...args) =>
-          this._applyDetectionDensityFromUi(...args),
+        _setDetectionDensity: (...args) => this._setDetectionDensity(...args),
         _setDetectionAllocation: (...args) =>
           this._setDetectionAllocation(...args),
-        _applyDetectionFadeFromUi: (...args) =>
-          this._applyDetectionFadeFromUi(...args),
+        _setDetectionFade: (...args) => this._setDetectionFade(...args),
+        _setScope: (...args) => this._visualSettings._setScope(...args),
         setCelestialRingEnabled: (...args) =>
           this.setCelestialRingEnabled(...args),
         _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
@@ -567,8 +567,6 @@ export class StyleManager extends ShellFacade {
         celestialRing: this.celestialRing,
         celestialRingEnabled: this.celestialRingEnabled,
         _models3dEnabled: this._models3dEnabled,
-        _models3dModeBtns: this._models3dModeBtns,
-        _detectionAllocationBtns: this._detectionAllocationBtns,
       }),
       claimDetection: () => {
         this._visualSettings._detectionUserOverridden = true;
@@ -576,9 +574,14 @@ export class StyleManager extends ShellFacade {
     });
     this._initUI();
     this._initMapStackControl();
-    // Headers first: panel chrome builds its toggle labels from them.
-    this._applyRuntimeStaticHeaderText();
     this._initPanelChrome();
+    this._panelNavigation = new PanelNavigation({
+      ui: this._ui,
+      stacks: { left: this._leftPanelStack, right: this._rightPanelStack },
+      setPanelCollapsed: (...args) =>
+        this._panelChrome.setPanelCollapsed(...args),
+    });
+    this._panelNavigation.init();
     this._initLocaleSelector();
     this._sizeDisplayLabelColumn();
     this._initLeftPanelAdaptiveLayout();
@@ -588,6 +591,7 @@ export class StyleManager extends ShellFacade {
     this._initStreetLevelPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
+    this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
@@ -598,7 +602,7 @@ export class StyleManager extends ShellFacade {
     this._initRecordingOverlay();
     this._startAnimationLoop();
     this._startTrafficChipTicker();
-    this._updateStyleMiniStatus();
+    this._publishActiveStyle();
     this._updateLocationMiniStatus();
 
     this._shareRestoration.start();
@@ -715,62 +719,49 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Mounts the language picker (src/ui/localePicker.js). A choice reloads the
-   * page; _confirmLocaleReload asks first when that would lose work.
+   * Publishes the language picker, which ProviderSettingsView renders. A
+   * choice switches the page's language in place and is kept for the next
+   * visit; the Display panel's label column is sized again for it.
    * @returns {void}
    */
   _initLocaleSelector() {
-    // Work this shell can see that a reload drops. Other modules register
-    // their own (registerUnsavedWork in src/i18n/index.js).
-    this._unsavedWorkChecks = [
-      registerUnsavedWork(() =>
-        this.services?.cctvLayer
-          ?.getUIState?.()
-          ?.cameras?.some((camera) => camera.calDirty)
-          ? msg('unsaved CCTV calibration')
-          : null,
-      ),
-      registerUnsavedWork(() =>
-        this.cockpitView?.active ? msg('the open cockpit') : null,
-      ),
-    ];
-    const root = globalThis.document?.getElementById?.('locale-picker');
-    if (!root) return;
-    this._localePicker = mountLocalePicker({
-      root,
+    this._lifetime.own(
+      onLocaleChange(() => nextTick(() => this._sizeDisplayLabelColumn())),
+    );
+    // A host that does not initialize Core's locale shows no picker.
+    if (this._localePickerEnabled === false) return;
+    this._publishLocalePicker();
+  }
+
+  /**
+   * @param {{focus?: boolean}} [options] Focus the picker's button, as after
+   *   a choice: the picker is drawn again for the new language.
+   */
+  _publishLocalePicker({ focus = false } = {}) {
+    useLocaleStore(applicationPinia()).publishPicker({
       current: getLocale(),
       onSelect: (locale) => this._chooseLocale(locale),
+      focus,
     });
   }
 
   /**
    * Switch to `locale`: nothing for the active language, otherwise store it
-   * and reload once _confirmLocaleReload agrees.
+   * and apply it to the page.
    * @param {string} locale
-   * @returns {'unchanged'|'declined'|'switched'}
+   * @returns {'unchanged'|'switched'}
    */
   _chooseLocale(locale) {
     return applyLocaleChoice(locale, {
       current: getLocale(),
-      confirmSwitch: () => this._confirmLocaleReload(),
-      switchLocale: (next) => persistLocaleAndReload(next),
+      switchLocale: (next) => {
+        setLocale(persistLocale(next));
+        // Focus once, as the redrawn picker mounts; a later remount leaves
+        // focus where it is.
+        this._publishLocalePicker({ focus: true });
+        void nextTick(() => this._publishLocalePicker());
+      },
     });
-  }
-
-  /**
-   * Switching language reloads the page. While that would lose work the page
-   * cannot restore, ask first.
-   * @returns {boolean} true to switch.
-   */
-  _confirmLocaleReload() {
-    const lost = describeUnsavedWork();
-    if (!lost.length || typeof globalThis.confirm !== 'function') return true;
-    return globalThis.confirm(
-      t(
-        'Switching language reloads the page. This will be lost: {items}. Switch anyway?',
-        { items: lost.join(', ') },
-      ),
-    );
   }
 
   /**
@@ -796,57 +787,51 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Rewrites a header's last text node, keeping the leading icon span that a
-   * textContent write would destroy.
-   * @param {Element|null} element
-   * @param {string} text
+   * Phone layout: a bottom tab bar presenting one panel sheet at a time
+   * (src/ui/mobileShell.js). Inactive above 720px.
    * @returns {void}
    */
-  _setHeaderText(element, text) {
-    if (!element) return;
-    const textNode = Array.from(element.childNodes)
-      .reverse()
-      .find(
-        (node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim(),
-      );
-    if (textNode) textNode.nodeValue = text;
-    else element.textContent = text;
+  _initMobileShell() {
+    this._mobileShell = initMobileShell({
+      setPanelCollapsed: (panelId, collapsed, options) =>
+        this._panelChrome.setPanelCollapsed(panelId, collapsed, options),
+      readPanel: (panel) => this._panelChrome._shownPanel(panel),
+      onSheetsClosed: () => this._syncShareState(),
+      onTabOpened: (sheet) => {
+        void this._onMobileTabOpened(sheet);
+      },
+      publish: (view) =>
+        useDisplayStore(applicationPinia()).publishPhoneShell(view),
+      afterPublish: (callback) => {
+        void nextTick(callback);
+      },
+    });
   }
 
-  /**
-   * Translates at boot the header texts that share their element with an
-   * icon or a <br> (data-i18n-runtime in the templates).
-   * @returns {void}
-   */
-  _applyRuntimeStaticHeaderText() {
-    this._setHeaderText(
-      document.querySelector('#control-panel .panel-title'),
-      t('VISUAL PRESETS'),
-    );
-    this._setHeaderText(
-      document.querySelector('#location-bar .location-toolbar-label'),
-      t('LOCATION'),
-    );
-    // One span holds both mode descriptions around a <br>; keep the <br>.
-    const standbyDescription = document.querySelector(
-      '#context-mode-standby span',
-    );
-    if (standbyDescription) {
-      standbyDescription.replaceChildren(
-        document.createTextNode(
-          t('CONTACTS — nearest planes · vessels · sites'),
-        ),
-        document.createElement('br'),
-        document.createTextNode(
-          t('SPACE MISSIONS — launches & orbital assets'),
-        ),
-      );
+  /** Reveal a tracked aircraft through Contacts when its phone tab is opened. */
+  async _onMobileTabOpened(sheet) {
+    const context = this.getContextModeState();
+    if (
+      sheet !== 'context' ||
+      this._disposed ||
+      !context ||
+      context.mode ||
+      context.changing ||
+      context.entering ||
+      !this.getAircraftTrackingTarget()
+    )
+      return false;
+    try {
+      const result = await this.setContextMode('contacts');
+      if (result?.ok) return true;
+      if (result?.cancelled || this._disposed) return false;
+    } catch {
+      if (this._disposed) return false;
     }
-    // Leading space after the live dot, as showBriefPage writes it.
-    const briefKicker = document.querySelector('#cockpit-brief-kicker');
-    if (briefKicker) {
-      this._setHeaderText(briefKicker, ` ${t('LIVE SIGNALS')}`);
-    }
+    this._showToast(
+      t('Contacts could not complete the requested transition; try again'),
+    );
+    return false;
   }
 
   /**
@@ -858,11 +843,12 @@ export class StyleManager extends ShellFacade {
   _initMapStackControl() {
     if (!this.mapStackController) return;
 
+    const displayStore = useDisplayStore(applicationPinia());
     this._mapSourceControls?.destroy();
+    displayStore.publishMapSource(null);
     this._mapSourceControls = createMapSourceControls({
-      container: this._mapStackChips,
-      statusElement: this._mapStackStatus,
       controller: this.mapStackController,
+      publish: (view) => displayStore.publishMapSource(view),
       subscribe: (onChange) => {
         window.addEventListener('gev:map-stack-changed', onChange);
         return () =>
@@ -872,6 +858,7 @@ export class StyleManager extends ShellFacade {
       onStateChanged: () => this._syncShareState(),
       onError: (message) => this._showToast(message),
     });
+    displayStore.connectMapSource(this._mapSourceControls);
   }
 
   /**
@@ -939,18 +926,21 @@ export class StyleManager extends ShellFacade {
   }
 
   _initGlobalContextPanel() {
-    const { radioLayer, militaryInstallationsLayer } = this.services;
+    const {
+      radioLayer,
+      militaryInstallationsLayer,
+      militaryAwarenessLayer,
+      rocketLaunchesLayer,
+    } = this.services;
+    const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
       elements: {
-        _globalContextPanel: document.getElementById('global-context-panel'),
         _globalContextFlightsBtn: this._globalContextFlightsBtn,
         _globalContextMissionsBtn: this._globalContextMissionsBtn,
-        _contextModeStandby: this._contextModeStandby,
-        _contextFlightsView: this._contextFlightsView,
-        _contextMissionsView: this._contextMissionsView,
         _installationsSearchBtn: this._installationsSearchBtn,
       },
       installations: militaryInstallationsLayer,
+      publish: (view) => contextStore.publish(view),
       actions: {
         getCockpit: () => this.cockpitView,
         refreshRadio: () => this._renderRadioState(radioLayer.getUIState()),
@@ -962,11 +952,41 @@ export class StyleManager extends ShellFacade {
         showToast: (message) => {
           if (!this._disposed) this._showToast(message);
         },
-        setClearBusy: (busy) => {
-          if (!this._disposed) this._clearLayersControl?.setBusy(busy);
-        },
+        setClearBusy: (busy) => this._publishClearBusy(busy),
       },
     });
+    // The Contacts layer publishes its panel; the view calls its navigation.
+    contextStore.connectAwareness(militaryAwarenessLayer);
+    // A panel left by an earlier shell must not outlive its layer.
+    this._awarenessPanelUnsubscribe?.();
+    contextStore.publishAwareness(null);
+    this._awarenessPanelUnsubscribe = militaryAwarenessLayer?.subscribePanel?.(
+      (view) => contextStore.publishAwareness(view),
+    );
+    // And its compass and contact bearings, which the scene chrome renders.
+    const awarenessDirectionStore =
+      useAwarenessDirectionStore(applicationPinia());
+    this._awarenessDirectionUnsubscribe?.();
+    awarenessDirectionStore.publish(null);
+    this._awarenessDirectionUnsubscribe =
+      militaryAwarenessLayer?.subscribeDirectionOverlay?.((view) =>
+        awarenessDirectionStore.publish(view),
+      );
+    // The Space Missions layer publishes its roster and selected mission.
+    contextStore.connectMissions(rocketLaunchesLayer);
+    this._missionsPanelUnsubscribe?.();
+    contextStore.publishMissions(null);
+    this._missionsPanelUnsubscribe = rocketLaunchesLayer?.subscribePanel?.(
+      (view) => contextStore.publishMissions(view),
+    );
+    // And its replay vehicle overlay, which the scene chrome renders.
+    const missionReplayStore = useMissionReplayStore(applicationPinia());
+    this._missionReplayUnsubscribe?.();
+    missionReplayStore.publish(null);
+    this._missionReplayUnsubscribe =
+      rocketLaunchesLayer?.subscribeReplayOverlay?.((view) =>
+        missionReplayStore.publish(view),
+      );
   }
 
   /** Wire the independent Radio companion controls. */
@@ -975,49 +995,19 @@ export class StyleManager extends ShellFacade {
     this._radioControls?.destroy();
     this._radioControls = new RadioControls({
       elements: {
-        _cockpitDisplayPanel: this._cockpitDisplayPanel,
         _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
         _cockpitRadioEnableBtn: this._cockpitRadioEnableBtn,
-        _cockpitRadioNextBtn: this._cockpitRadioNextBtn,
-        _cockpitRadioPanel: this._cockpitRadioPanel,
-        _cockpitRadioPlayBtn: this._cockpitRadioPlayBtn,
-        _cockpitRadioPrevBtn: this._cockpitRadioPrevBtn,
-        _cockpitRadioStation: this._cockpitRadioStation,
         _cockpitRadioToggleBtn: this._cockpitRadioToggleBtn,
-        _cockpitRadioVolume: this._cockpitRadioVolume,
-        _cockpitRadioVolumeValue: this._cockpitRadioVolumeValue,
         _cockpitUtilityControls: this._cockpitUtilityControls,
-        _contextRadioDetailsBtn: this._contextRadioDetailsBtn,
-        _contextRadioDock: this._contextRadioDock,
-        _contextRadioMini: this._contextRadioMini,
-        _contextRadioMiniCloseBtn: this._contextRadioMiniCloseBtn,
-        _contextRadioMiniEnableBtn: this._contextRadioMiniEnableBtn,
-        _contextRadioMiniNextBtn: this._contextRadioMiniNextBtn,
-        _contextRadioMiniPlayBtn: this._contextRadioMiniPlayBtn,
-        _contextRadioMiniPrevBtn: this._contextRadioMiniPrevBtn,
-        _contextRadioMiniStation: this._contextRadioMiniStation,
-        _contextRadioMiniVolume: this._contextRadioMiniVolume,
-        _contextRadioMiniVolumeValue: this._contextRadioMiniVolumeValue,
-        _contextRadioToggleBtn: this._contextRadioToggleBtn,
         _radioEnableBtn: this._radioEnableBtn,
-        _radioFilter: this._radioFilter,
         _radioLayerState: this._radioLayerState,
-        _radioNextBtn: this._radioNextBtn,
         _radioPanel: this._radioPanel,
-        _radioPlayBtn: this._radioPlayBtn,
         _radioPlaybackState: this._radioPlaybackState,
-        _radioPrevBtn: this._radioPrevBtn,
         _radioStationHomepage: this._radioStationHomepage,
         _radioStationMeta: this._radioStationMeta,
         _radioStationName: this._radioStationName,
         _radioStationTags: this._radioStationTags,
-        _radioStopBtn: this._radioStopBtn,
-        _radioTuner: this._radioTuner,
-        _radioTunerBandLabel: this._radioTunerBandLabel,
-        _radioTunerNeedle: this._radioTunerNeedle,
         _radioTunerSlider: this._radioTunerSlider,
-        _radioTunerStation: this._radioTunerStation,
-        _radioTunerValue: this._radioTunerValue,
         _radioVolume: this._radioVolume,
         _radioVolumeValue: this._radioVolumeValue,
       },
@@ -1089,13 +1079,11 @@ export class StyleManager extends ShellFacade {
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
     if (!this._streetLevelPanel || !streetLevelLayer) return;
-    // Photo framing and FOLLOW release tracking like any explicit flight.
+    // Photo framing yields to newer navigation and releases tracking like
+    // any deferred flight.
     streetLevelLayer.attachNavigation?.({
-      run: (noun, move) => this._runExplicitNavigation(noun, move),
       begin: (noun) => this._beginDeferredNavigation(noun),
       reassert: (generation) => this._reassertNavigationHandoff(generation),
-      subscribeHandoff: (listener) =>
-        this._navigation.subscribeCameraHandoff(listener),
     });
     this._streetLevelControls = new StreetLevelControls({
       root: this._streetLevelPanel,
@@ -1110,7 +1098,6 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
-        dockPanel: () => this._panelChrome.dockPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1150,9 +1137,6 @@ export class StyleManager extends ShellFacade {
         _cctvSelect: this._cctvSelect,
         _cctvSourceBadge: this._cctvSourceBadge,
         _cctvSummary: this._cctvSummary,
-        _cctvSyncChip: this._cctvSyncChip,
-        _cctvSyncLabel: this._cctvSyncLabel,
-        _cctvSyncProgress: this._cctvSyncProgress,
       },
       cctv: cctvLayer,
       actions: {
@@ -1164,7 +1148,6 @@ export class StyleManager extends ShellFacade {
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
-        setSplitFlapText,
       },
     });
   }
@@ -1206,19 +1189,6 @@ export class StyleManager extends ShellFacade {
     });
     return true;
   }
-
-  /**
-   * Makes a panel draggable via its handle element. Implements:
-   * - Z-order promotion: each pointerdown increments the global z-counter
-   *   so the clicked panel floats above siblings.
-   * - Viewport clamping: drag moves are clamped to a 6px inset from all edges.
-   * - Right-rail pinning: pp-toggles panel is re-anchored right after drag.
-   * - CCTV viewport sync: cctv-panel recalculates scroll height after drag.
-   * @param {string} panelId - DOM id of the panel.
-   * @param {HTMLElement} panelEl - The panel DOM element.
-   * @param {HTMLElement} handleEl - The drag handle element within the panel.
-   * @returns {void}
-   */
 
   /**
    * Programmatically collapses or expands a panel, persists the state,
@@ -1288,7 +1258,7 @@ export class StyleManager extends ShellFacade {
 
   /**
    * Switches the HUD layout variant.
-   * @param {'tactical'|'operator'|'minimal'|'cyber'} variantName - Layout variant.
+   * @param {'tactical'|'minimal'|'cyber'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
    */
   setHudLayout(variantName) {
@@ -1430,20 +1400,18 @@ export class StyleManager extends ShellFacade {
       hud: {
         visible: !!this.hud?.visible,
         layout: this.hud?.getVariant?.() || null,
-        sonar: getCyberSonarControlState(),
+        sonar: getCyberSonarControlState(globalThis.document, {
+          hudActive: this.hud ? !!this.hud.visible : undefined,
+        }),
       },
       detection: this.getDetectionState(),
       bloom: {
         enabled: !!this.bloomEnabled,
-        intensityPct: this._bloomSlider
-          ? parseInt(this._bloomSlider.value, 10)
-          : null,
+        intensityPct: this._visualSettings.bloomIntensityPct,
       },
       sharpen: {
         enabled: !!this.sharpenEnabled,
-        intensityPct: this._sharpenSlider
-          ? parseInt(this._sharpenSlider.value, 10)
-          : null,
+        intensityPct: this._visualSettings.sharpenIntensityPct,
       },
       celestialRing: {
         enabled: this.celestialRingEnabled,
@@ -1549,7 +1517,7 @@ export class StyleManager extends ShellFacade {
    * 2. Crossfades the new shader stage intensity to 1.
    * 3. Applies style preset defaults (bloom/sharpen/HUD) if applyPreset is true.
    * 4. Updates button highlights, style indicator, slider panel, HUD, and detection overlay.
-   * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir'|'snow').
+   * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
    * @param {boolean} [options.userInitiated=false] - Whether a direct user preset choice owns the Cyber exit style.
@@ -1593,43 +1561,146 @@ export class StyleManager extends ShellFacade {
     return this._releaseFollowCamera({ preserveVesselSelection: false });
   }
 
-  /** Wire the top-center action that clears only manager-owned data layers. */
+  /**
+   * Answer the top-center action that clears only manager-owned data layers;
+   * the caller owns its transaction, and the button stays focusable while it
+   * runs.
+   */
   _initClearSelectedLayersButton() {
-    if (!this._clearSelectedLayersBtn) return;
-    this._clearLayersControl?.destroy();
-    this._clearLayersControl = bindClearLayersControl(
-      this._clearSelectedLayersBtn,
-      () => this.clearSelectedLayers(),
-    );
+    const store = useGlobeActionsStore(applicationPinia());
+    if (this._clearLayersToken) store.detach(this._clearLayersToken);
+    this._clearLayersToken = store.connect({
+      clear: () => {
+        if (!this._disposed) void this.clearSelectedLayers();
+      },
+    });
+    // A clear under way as the shell connects again stays on the button.
+    if (this._clearBusy != null)
+      store.publishClearBusy(this._clearLayersToken, this._clearBusy);
+  }
+
+  /**
+   * Publish this shell's clear under way; the button shows it while this
+   * shell answers the clear.
+   */
+  _publishClearBusy(busy) {
+    if (this._disposed) return;
+    this._clearBusy = Boolean(busy);
+    if (this._clearLayersToken)
+      useGlobeActionsStore(applicationPinia()).publishClearBusy(
+        this._clearLayersToken,
+        busy,
+      );
+  }
+
+  /**
+   * Answer the globe and cockpit reset buttons through the location controls,
+   * or stop answering them (null).
+   */
+  _connectGlobeReset(controls) {
+    const store = useGlobeActionsStore(applicationPinia());
+    if (this._resetToken) store.detach(this._resetToken);
+    this._resetToken = controls
+      ? store.connect({ reset: () => controls.reset() })
+      : null;
+    // A reset under way as the controls are replaced stays on the buttons.
+    if (this._resetToken && this._globeResetting != null)
+      store.publishResetting(this._resetToken, this._globeResetting);
+  }
+
+  /** Publish a reset to the full globe view under way. */
+  _publishGlobeResetting(busy) {
+    if (this._disposed) return;
+    this._globeResetting = Boolean(busy);
+    if (this._resetToken)
+      useGlobeActionsStore(applicationPinia()).publishResetting(
+        this._resetToken,
+        busy,
+      );
+  }
+
+  /**
+   * Stop answering the globe actions. Its clear under way goes with its
+   * owner, and its camera state too; a newer shell's stays.
+   */
+  _releaseGlobeActions() {
+    const store = useGlobeActionsStore(applicationPinia());
+    if (store.owns(this._orientationToken, 'tilt')) store.publishCamera(null);
+    if (this._clearLayersToken) store.detach(this._clearLayersToken);
+    if (this._shareToken) store.detach(this._shareToken);
+    if (this._orientationToken) store.detach(this._orientationToken);
+    if (this._resetToken) store.detach(this._resetToken);
+    this._clearLayersToken = this._shareToken = this._orientationToken = null;
+    this._resetToken = null;
   }
 
   /** Wire Google Maps-style tilt and north-up camera actions. */
   _initCameraOrientationControls() {
+    const store = useGlobeActionsStore(applicationPinia());
     this._cameraOrientationControls?.destroy();
-    this._cameraOrientationControls = bindCameraOrientationControls({
+    if (this._orientationToken) store.detach(this._orientationToken);
+    const token = store.connect({
+      tilt: () => controls.tilt(),
+      northUp: () => controls.northUp(),
+    });
+    this._orientationToken = token;
+    // A newer shell's controls own what the buttons show.
+    const controls = bindCameraOrientationControls({
       viewer: this.viewer,
-      elements: {
-        tiltButton: this._tiltMapBtn,
-        northButton: this._northUpBtn,
+      // Every drawn frame publishes: a state the store already shows stops
+      // here, before the store's actions run.
+      publish: (state) => {
+        const shown = store.camera;
+        if (shown?.tilted === state.tilted && shown.heading === state.heading)
+          return;
+        if (store.owns(token, 'tilt')) store.publishCamera(state);
       },
       runNavigation: (noun, navigate) =>
         this._navigation.runOrientation(noun, navigate),
       showToast: (message) => this._showToast(message),
     });
+    this._cameraOrientationControls = controls;
   }
 
   // ── Share Button ─────────────────────────────
 
   /**
-   * Wires the share button click to copy the current share link to the clipboard.
+   * Wires the share button. By default it copies the current share link to the
+   * clipboard; a host may pass `services.shareLink(url)` to share it another way
+   * (a system share sheet, for example). It resolves to 'shared', 'copied',
+   * 'cancelled' (no toast) or false (failed).
    * @returns {void}
    */
   _initShareButton() {
-    this._lifetime.listen(this._shareBtn, 'click', async () => {
-      const success = await this.shareLinkManager.copyLink();
-      if (!this._disposed)
-        this._showToast(success ? t('Link copied!') : t('Copy failed'));
-    });
+    const store = useGlobeActionsStore(applicationPinia());
+    if (this._shareToken) store.detach(this._shareToken);
+    this._shareToken = store.connect({ share: () => this._share() });
+  }
+
+  /** Share or copy the current link, then say how it went. */
+  async _share() {
+    if (this._disposed) return;
+    const share = this.services.shareLink;
+    let result;
+    if (typeof share === 'function') {
+      // A host's hook may return a plain value or throw; both are answers.
+      result = await Promise.resolve()
+        .then(() => {
+          const href = this.shareLinkManager.buildLink();
+          return href ? share(href) : false;
+        })
+        .catch(() => false);
+    } else {
+      result = (await this.shareLinkManager.copyLink()) ? 'copied' : false;
+    }
+    if (this._disposed || result === 'cancelled') return;
+    this._showToast(
+      result === 'shared'
+        ? t('Link shared')
+        : result === 'copied'
+          ? t('Link copied!')
+          : t('Copy failed'),
+    );
   }
 
   // ── HUD Toggle ───────────────────────────────
@@ -1651,26 +1722,17 @@ export class StyleManager extends ShellFacade {
    */
 
   _initHUDToggle() {
-    if (this._hudLayoutSelect) {
-      this._hudLayoutSelect.value = 'tactical';
-    }
     this._setHudVariant('tactical');
     this.hud.setMode('on');
     this._updateHudButtonState();
 
     this._lifetime.listen(this._cockpitDisplayToggleBtn, 'click', () => {
-      const open =
-        this._cockpitDisplayToggleBtn.getAttribute('aria-expanded') === 'true';
-      this._setCockpitDisclosure?.('display', !open);
+      this._setCockpitDisclosure?.(
+        'display',
+        !this._cockpitDisclosureOpen('display'),
+      );
     });
     this._initCockpitDisplayPortal();
-  }
-
-  /** A portable panel was resized or docked: refit any viewport inside it. */
-  _onPanelResized(panelId) {
-    if (panelId === 'cctv-panel') this._syncCctvPanelViewport();
-    if (panelId === 'street-level-panel')
-      this._streetLevelControls?.onPanelResized();
   }
 
   /**
@@ -1719,30 +1781,46 @@ export class StyleManager extends ShellFacade {
       this.services;
     if (this._disposed) return;
     this._shareRestoration.destroy();
-    this._feedback._globalStatusNotice = null;
-    if (this._globalLoadingStatus) this._globalLoadingStatus.hidden = true;
+    this._feedback.clearLoadingStatus();
     this._disposed = true;
     this._navigation.stop();
     this._shareState.destroy();
     this._locationNavigation.destroy();
     this._lifetime.destroy();
-    for (const unregister of this._unsavedWorkChecks?.splice(0) ?? [])
-      unregister();
-    this._localePicker?.destroy();
-    this._localePicker = null;
+    useLocaleStore(applicationPinia()).publishPicker(null);
     this._recording.destroy();
+    this._mobileShell?.destroy();
+    this._panelNavigation?.destroy();
+    this._ui.destroy();
     this._panelChrome.destroy();
     this._feedback.destroy();
 
     this._displayBindings.destroy();
     this._mapSourceControls?.destroy();
+    useDisplayStore(applicationPinia()).connectMapSource(null);
+    useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
-    this._clearLayersControl?.destroy();
+    this._releaseGlobeActions();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();
     this._radioControls?.destroy();
     this._localSdrControls?.destroy();
+    this._awarenessPanelUnsubscribe?.();
+    this._awarenessPanelUnsubscribe = null;
+    this._awarenessDirectionUnsubscribe?.();
+    this._awarenessDirectionUnsubscribe = null;
+    useAwarenessDirectionStore(applicationPinia()).publish(null);
+    this._missionsPanelUnsubscribe?.();
+    this._missionsPanelUnsubscribe = null;
+    this._missionReplayUnsubscribe?.();
+    this._missionReplayUnsubscribe = null;
+    useMissionReplayStore(applicationPinia()).publish(null);
+    const contextStore = useContextStore(applicationPinia());
+    contextStore.connectAwareness(null);
+    contextStore.publishAwareness(null);
+    contextStore.connectMissions(null);
+    contextStore.publishMissions(null);
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();
@@ -1772,7 +1850,12 @@ export class StyleManager extends ShellFacade {
     }
     destroyTrackedReadout();
     destroyDetection();
+    this._overlayActionsUnsubscribe?.();
+    this._overlayActionsUnsubscribe = null;
     destroyWorldOverlay();
+    const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
+    overlayActionsStore.connect(null);
+    overlayActionsStore.publish(null);
     this.celestialRing?.destroy();
     this._visualSettings.destroy();
   }

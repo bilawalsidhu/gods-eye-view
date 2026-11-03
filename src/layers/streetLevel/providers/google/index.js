@@ -1,4 +1,4 @@
-import { FOLLOW_MAP_STACK_ID } from '../../policy.js';
+import { GOOGLE_3D_MAP_STACK_ID } from '../../policy.js';
 import { createMapsLoader } from './mapsLoader.js';
 import { getLocale } from '../../../../i18n/index.js';
 import { createGoogleViewer } from './viewer.js';
@@ -64,7 +64,7 @@ export function createGoogleProvider({
     credit: Object.freeze({ html: GOOGLE_CREDIT_HTML }),
     groundClick: true,
     // Google's terms forbid Street View beside non-Google maps.
-    requiresMapStack: FOLLOW_MAP_STACK_ID,
+    requiresMapStack: GOOGLE_3D_MAP_STACK_ID,
     // Every panorama is billed to the Maps key.
     defaultOn: false,
     // All 360°, and no coverage for a date filter to thin.
@@ -114,8 +114,6 @@ export function createGoogleProvider({
           stopAuthWatch();
         },
 
-        refreshCoverage() {},
-
         /** No filter applies to Street View (see `filters`). */
         setFilter() {},
 
@@ -123,8 +121,6 @@ export function createGoogleProvider({
           const keyRejected = loader.authFailed();
           return {
             count: 0,
-            zoom: null,
-            kind: null,
             loading: false,
             hint:
               !active || keyRequired || keyRejected ? '' : GROUND_CLICK_HINT,

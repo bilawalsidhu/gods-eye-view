@@ -37,7 +37,14 @@ function setup(t) {
       visibleRoadsForAltitude: (roads) => roads,
     },
   };
-  const ctx = { state, services: {}, parts, source: {} };
+  const ctx = {
+    state,
+    services: {
+      render: { holdContinuousRender() {}, releaseContinuousRender() {} },
+    },
+    parts,
+    source: {},
+  };
   parts.style = createStyle(ctx);
   parts.model = createModel(ctx);
   parts.animation = createAnimation(ctx);
@@ -556,6 +563,37 @@ test('provisional opposite-direction heights cannot overwrite a measured sibling
     'measured slope survives provisional sibling selection',
   );
   assert.notEqual(forward.waypoints, reverse.waypoints);
+});
+
+test('a closure that empties the population mid-correction settles heights and clears loading before release', (t) => {
+  const h = setup(t);
+  h.parts.retention.reconcile(h.roads(), 450, true);
+  h.settle();
+  assert.equal(h.state._renderHeld, true);
+  const road = h.state._roads[0];
+  // Republishing the sole road starts a height correction.
+  const corrected = h.roads(0, 120);
+  h.parts.retention.reconcile(corrected, 450, true);
+  assert.equal(h.state._heightPending, true);
+  assert.equal(road.heightMoving, true);
+  // The closure arrives before the next population pass, which then removes
+  // the final points after their fade, long before the correction finishes.
+  corrected[0].flow = { level: 0, closure: true };
+  for (let i = 0; i < 20 && h.state._dots.length; i++) h.frame();
+  assert.equal(h.state._dots.length, 0);
+  assert.equal(h.state._heatJamPrim, null);
+  assert.equal(h.state._renderHeld, false);
+  assert.equal(h.state._heightPending, false);
+  assert.equal(h.state._populationPending, false);
+  assert.equal(road.heightMoving, false);
+  assert.ok(
+    Math.abs(C.Cartographic.fromCartesian(road.waypoints[0]).height - 120) <
+      0.01,
+  );
+  // Frames driven by other layers stay idle and cannot revive the work.
+  h.frame();
+  assert.equal(h.state._heightPending, false);
+  assert.equal(h.state._renderHeld, false);
 });
 
 test('large height corrections obey a screen-pixel bound and reuse projection scratch objects', (t) => {

@@ -1,4 +1,4 @@
-import { createLineCoverage } from '../../lineCoverage.js';
+import { createLineCoverage, freshCoverage } from '../../lineCoverage.js';
 import { createLru, createTileCache } from '../../tileCache.js';
 
 export { createTileCache } from '../../tileCache.js';
@@ -49,10 +49,7 @@ const PAGE_CACHE_SIZE = 12;
 /** z14 near the street, z13 a little higher, nothing above. */
 export function kartaViewZoomFor(heightM) {
   if (!Number.isFinite(heightM) || heightM > COVERAGE_MAX_HEIGHT_M) return null;
-  return {
-    zoom: heightM > COVERAGE_STREET_ZOOM_BELOW_M ? 13 : 14,
-    kind: 'sequence',
-  };
+  return heightM > COVERAGE_STREET_ZOOM_BELOW_M ? 13 : 14;
 }
 
 /** The 1-based page of a sequence that holds `index`, if no photo is missing. */
@@ -88,8 +85,6 @@ export function createKartaViewProvider({
     filters: Object.freeze(['pano', 'since']),
     // SINCE is the upload date for KartaView: the panel notes it.
     sinceBasis: 'upload',
-    // Its lines are streets, not sequences: a selected drive shows as cones.
-    highlightsSequence: false,
     coverageLabel: Object.freeze({
       noun: COVERAGE_NOUN,
       action: LINE_CLICK_HINT,
@@ -100,30 +95,13 @@ export function createKartaViewProvider({
         context,
         services: context.services,
         viewer: null,
-        keyRequired: false,
-        keyRejected: false,
-        statusKnown: true,
-        coverage: {
-          zoom: null,
-          tiles: new Map(),
-          stale: new Map(),
-          staleTimer: null,
-          pending: new Map(),
-          lastError: null,
-          holdUntil: 0,
-          holdTimer: null,
-          debounceTimer: null,
-          removeCameraListener: null,
-          terrainReady: null,
-          hint: '',
-          kind: null,
-        },
+        coverage: freshCoverage({ keyless: true }),
         sequence: {
           selectedId: null,
           images: [],
-          cache: new Map(),
           collection: null,
           loading: false,
+          error: null,
           abort: null,
         },
       };
@@ -349,6 +327,8 @@ export function createKartaViewProvider({
         // Filtered on the way in (fetchTile): a line has no date to test.
         passes: () => true,
       });
+      // Its lines are streets, not drives: a selected drive shows as cones
+      // only, so the coverage is never highlighted.
 
       const cones = createSequenceCones({
         state,
@@ -480,7 +460,7 @@ export function createKartaViewProvider({
         deactivate() {
           coverage.detach();
           coverage.clear();
-          coverage.resetErrors();
+          coverage.unblock();
           cones.clearSelection();
           cones.setVisible(false);
           drawnPage = null;
@@ -492,17 +472,15 @@ export function createKartaViewProvider({
         destroy(cesiumViewer) {
           coverage.detach();
           coverage.clear();
-          coverage.resetErrors();
+          coverage.unblock();
           cones.destroy(cesiumViewer);
           tiles.clear();
           masks.clear();
         },
 
-        refreshCoverage: () => coverage.refresh(),
-
         /**
          * The filter changed: the lines come from KartaView again under it
-         * (the old ones show meanwhile), the cones are drawn again.
+         * (cleared until they come), the cones are drawn again.
          */
         setFilter() {
           const query = tileFilterQuery(context.getFilter());
@@ -513,29 +491,17 @@ export function createKartaViewProvider({
           cones.rerender();
         },
 
-        setSurface() {
-          coverage.setSurface();
-          cones.rerender();
-        },
-
+        /** Keyless; an empty view that has loaded says there is nothing here. */
         coverageStats() {
-          const { hint } = state.coverage;
-          const count = coverage.sequenceCount();
-          const loading = state.coverage.pending.size > 0;
+          const stats = coverage.stats();
           const empty =
             state.coverage.zoom !== null &&
-            !loading &&
-            count === 0 &&
-            !state.coverage.lastError;
+            !stats.loading &&
+            stats.count === 0 &&
+            !stats.error;
           return {
-            count,
-            zoom: state.coverage.zoom,
-            kind: state.coverage.kind,
-            loading,
-            hint: hint || (empty ? NO_COVERAGE_HINT : ''),
-            error: state.coverage.lastError,
-            keyRequired: false,
-            keyRejected: false,
+            ...stats,
+            hint: stats.hint || (empty ? NO_COVERAGE_HINT : ''),
           };
         },
 
@@ -553,7 +519,7 @@ export function createKartaViewProvider({
           return false;
         },
 
-        // Never from the cache: it is keyed by sequence, the cones by page.
+        // Always loaded afresh: the cones show the page of the photo open now.
         selectSequence: (sequenceId) =>
           cones.select(sequenceId, { force: true }),
         clearSequence: () => {
@@ -567,6 +533,7 @@ export function createKartaViewProvider({
             counts.get(state.sequence.selectedId) ??
             state.sequence.images.length,
           loading: state.sequence.loading,
+          error: state.sequence.error,
         }),
 
         /**
