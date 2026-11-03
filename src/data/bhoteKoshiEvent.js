@@ -1177,7 +1177,7 @@ export function createBhoteKoshiEventLayer({
     return _event;
   }
 
-  async function createImagery(event) {
+  async function createImagery(event, current = () => true) {
     const rectangle = Cesium.Rectangle.fromDegrees(
       event.imagery.rectangle.west,
       event.imagery.rectangle.south,
@@ -1194,13 +1194,13 @@ export function createBhoteKoshiEventLayer({
         credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
       }),
     ]));
-    if (!_enabled) return;
+    if (!_enabled || !current()) return;
     if (_native) {
       await _native.loadImages(event.imagery.rectangle, [
         beforeProvider,
         afterProvider,
       ]);
-      setSplit(_split);
+      if (current()) setSplit(_split);
       return;
     }
     _imageryLayerCollection = _viewer.imageryLayers;
@@ -3516,7 +3516,15 @@ export function createBhoteKoshiEventLayer({
     _imageryLayerCollection = null;
   }
 
-  async function attachRenderer(viewer, { engine = null } = {}) {
+  // Each attachment and release advances this. An attachment that resumes
+  // after a release, or after its scene signal aborted, stops right there;
+  // the release that follows it owns whatever it had already created.
+  let _attachGeneration = 0;
+
+  async function attachRenderer(viewer, { engine = null, signal = null } = {}) {
+    const generation = ++_attachGeneration;
+    const current = () =>
+      generation === _attachGeneration && signal?.aborted !== true;
     _viewer = viewer;
     _engine = engine;
     if (!_viewer && _engine) _native = createNativeRenderer(engine);
@@ -3532,16 +3540,20 @@ export function createBhoteKoshiEventLayer({
             : 'esri',
       });
       await _comparisonLease.ready;
+      if (!current()) return;
     }
-    await createImagery(_event);
+    await createImagery(_event, current);
+    if (!current()) return;
     if (_floodDataSource) {
       if (_native) _nativeFlood = _native.draw(_floodDataSource);
       else await _viewer.dataSources.add(_floodDataSource);
+      if (!current()) return;
     }
     registerDynamicCredit(engine ?? viewer, BHOTE_KOSHI_CREDIT);
     _scenePathPositionCache.clear();
     _lastCinematicProgress = null;
     await syncTerrainComparison();
+    if (!current()) return;
     createSplitControl(_event);
     syncPresentationMode();
     attachCameraInputRelease();
@@ -3551,6 +3563,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function detachRenderer() {
+    ++_attachGeneration;
     detachCameraInputRelease();
     detachEvidenceCardActivation();
     _splitControl?.destroy();
