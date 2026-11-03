@@ -103,7 +103,7 @@ test('every emitted area candidate round-trips through the production schema', a
       true,
     );
   }
-  assert.equal(ambiguous.candidates[0].candidateId.length, 41);
+  assert.equal(ambiguous.candidates[0].candidateId.length, 44);
   const grammar = new RegExp(candidateSchema.pattern, 'u');
   for (const malformed of [
     'ne:state:bad slug',

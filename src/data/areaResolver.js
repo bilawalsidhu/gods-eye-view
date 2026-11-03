@@ -150,10 +150,11 @@ function stableCandidateHash(value) {
 
 function candidateIdOf(admin) {
   const prefix = `ne:${admin.kind}:`;
-  const slug = normalizeAreaQuery(`${admin.country} ${admin.name}`).replace(
-    / /g,
-    '-',
-  );
+  // The region code keeps same-named units apart: "Washington" is both WA
+  // and DC, which would otherwise share one candidate and one stored area.
+  const slug = normalizeAreaQuery(
+    `${admin.country} ${admin.name} ${admin.regionCode || ''}`,
+  ).replace(/ /g, '-');
   const full = `${prefix}${slug}`;
   if (full.length <= MAX_AREA_CANDIDATE_ID_LENGTH) return full;
   const suffix = `-${stableCandidateHash(slug)}`;
@@ -175,6 +176,10 @@ function describeCandidate(admin) {
     candidateId: candidateIdOf(admin),
     name: admin.name,
     level: ADMIN_LEVEL[admin.kind] || null,
+    // Tells same-named units apart when spoken: Washington WA vs DC.
+    ...(admin.regionCode && admin.kind !== 'country'
+      ? { region: String(admin.regionCode) }
+      : {}),
     ...(admin.country && admin.kind !== 'country'
       ? { country: admin.country }
       : {}),
@@ -275,12 +280,24 @@ export function createAreaResolver({
   async function lookup({ query, level, within }, { signal }) {
     const { level: levelHint } = splitLevelWord(query);
     const searchText = within ? `${query}, ${within}` : query;
+    let bundledRefusal = null;
     // Offline first: a named natural region, unless an admin level or a
     // country/state qualifier was given (the pack cannot check `within`).
     if ((!level || level === 'natural') && !within) {
       const ne = await findNaturalRegion(query, { signal }).catch(() => null);
       signal?.throwIfAborted?.();
-      if (ne?.polygons?.length) {
+      // A region named like a country or state ("India" the peninsula,
+      // "Punjab" the desert) never hides it; asked for by level, it answers.
+      // Only a unit that really has this name counts: "Great Britain" finds
+      // the United Kingdom by alias, which is not a Great Britain.
+      const shadowsAdmin =
+        ne?.polygons?.length &&
+        level !== 'natural' &&
+        (await findAdminCandidates(query, { signal }).catch(() => [])).some(
+          (admin) => !bundledAdminIdentityRefusal(admin, query, null),
+        );
+      signal?.throwIfAborted?.();
+      if (ne?.polygons?.length && !shadowsAdmin) {
         const record = store.put({
           geometry: ne.polygons.map((ring) => [ring]),
           name: ne.name,
@@ -314,8 +331,14 @@ export function createAreaResolver({
       places = checked
         .filter(({ refused }) => !refused)
         .map(({ admin }) => admin);
-      if (!places.length && checked.length)
-        return checked.find(({ refused }) => refused)?.refused;
+      if (!places.length && checked.length) {
+        const refused = checked.find((entry) => entry.refused)?.refused;
+        // A retired or unverifiable unit is final. A different unit that
+        // merely shares the name ("Azad Kashmir" for "Kashmir") is not an
+        // answer, so the outline ladder still gets to look.
+        if (refused?.code !== 'AREA_IDENTITY_MISMATCH') return refused;
+        bundledRefusal = refused;
+      }
       if (places.length === 1) {
         return storeAdmin(places[0], 0.95, identity);
       }
@@ -354,11 +377,13 @@ export function createAreaResolver({
     });
     signal?.throwIfAborted?.();
     if (!outline?.ok)
-      return {
-        ok: false,
-        code: outline?.code || 'AREA_NOT_FOUND',
-        error: outline?.error || `No boundary found for "${query}".`,
-      };
+      return (
+        bundledRefusal || {
+          ok: false,
+          code: outline?.code || 'AREA_NOT_FOUND',
+          error: outline?.error || `No boundary found for "${query}".`,
+        }
+      );
     const record = store.put({
       geometry: outline.polygons,
       name: outline.name || query,

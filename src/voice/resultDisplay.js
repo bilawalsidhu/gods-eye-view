@@ -80,7 +80,9 @@ function candidateLines(candidates) {
         ? t(LEVEL_WORDS[candidate.level])
         : candidate.level
       : null;
-    const detail = [level, candidate?.country].filter(Boolean).join(', ');
+    const detail = [level, candidate?.region, candidate?.country]
+      .filter(Boolean)
+      .join(', ');
     return `${i + 1} · ${spokenLabel(candidate?.name || 'Unnamed', 40)}${detail ? ` — ${detail}` : ''}`;
   });
 }

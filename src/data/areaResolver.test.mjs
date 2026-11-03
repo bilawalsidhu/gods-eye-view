@@ -623,3 +623,105 @@ test('a name that normalizes to nothing is never cached or shared', async () => 
   await resolver.resolve({ query: '???' });
   assert.equal(calls, 2, 'two punctuation-only asks are two lookups');
 });
+
+test('a natural region never hides a country or state of the same name', async () => {
+  const desert = {
+    name: 'Punjab',
+    kind: 'natural',
+    polygons: [square(70, 28, 76, 33)],
+  };
+  const { resolver } = makeResolver({
+    findNaturalRegion: async (q) => (/^punjab$/i.test(q) ? desert : null),
+  });
+  const bare = await resolver.resolve({ query: 'Punjab' });
+  assert.equal(bare.ok, false);
+  assert.equal(bare.code, 'AMBIGUOUS_AREA', 'the two states are asked about');
+  const natural = await resolver.resolve({ query: 'Punjab', level: 'natural' });
+  assert.equal(natural.ok, true);
+  assert.equal(natural.record.level, 'natural', 'asked for, the region wins');
+});
+
+test('same-named states in one country get their own candidate and area', async () => {
+  const wa = admin(
+    'state',
+    'Washington',
+    'United States of America',
+    [-124, 45.5, -117, 49],
+    { regionCode: 'WA' },
+  );
+  const dc = admin(
+    'state',
+    'Washington',
+    'United States of America',
+    [-77.2, 38.8, -76.9, 39],
+    { regionCode: 'DC' },
+  );
+  const { resolver } = makeResolver({
+    findAdminCandidates: async (q) => (/^washington$/i.test(q) ? [wa, dc] : []),
+  });
+  const asked = await resolver.resolve({ query: 'Washington' });
+  assert.equal(asked.code, 'AMBIGUOUS_AREA');
+  const ids = asked.candidates.map((c) => c.candidateId);
+  assert.equal(new Set(ids).size, 2, `distinct ids: ${ids.join(', ')}`);
+  assert.deepEqual(
+    asked.candidates.map((c) => c.region),
+    ['WA', 'DC'],
+    'the choices can be told apart',
+  );
+  const picked = await Promise.all(
+    ids.map((candidateId) => resolver.resolve({ candidateId })),
+  );
+  assert.ok(picked.every((p) => p.ok));
+  assert.notEqual(
+    picked[0].record.areaId,
+    picked[1].record.areaId,
+    'two areas, not one overwritten',
+  );
+  assert.equal(
+    pointInPreparedArea(picked[0].record.prepared, 47, -120),
+    true,
+    'Washington State',
+  );
+  assert.equal(
+    pointInPreparedArea(picked[1].record.prepared, 38.9, -77),
+    true,
+    'District of Columbia',
+  );
+});
+
+test('a bundled name mismatch falls through to the outline ladder', async () => {
+  const azad = admin('state', 'Azad Kashmir', 'Pakistan', [73, 33, 75, 35.5]);
+  const kashmir = {
+    ok: true,
+    name: 'Kashmir',
+    polygons: [[square(73, 32, 80, 37)]],
+    source: 'osm',
+    rung: 'nominatim',
+  };
+  let outlineOk = true;
+  const { resolver } = makeResolver({
+    findAdminCandidates: async (q) => (/^kashmir$/i.test(q) ? [azad] : []),
+    resolveNamedOutline: async () =>
+      outlineOk
+        ? kashmir
+        : { ok: false, code: 'AREA_NOT_FOUND', error: 'none' },
+  });
+  const found = await resolver.resolve({ query: 'Kashmir' });
+  assert.equal(found.ok, true, found.error);
+  assert.equal(found.record.name, 'Kashmir');
+  outlineOk = false;
+  const { resolver: offline } = makeResolver({
+    findAdminCandidates: async () => [azad],
+    resolveNamedOutline: async () => ({
+      ok: false,
+      code: 'AREA_NOT_FOUND',
+      error: 'none',
+    }),
+  });
+  const refused = await offline.resolve({ query: 'Kashmir' });
+  assert.equal(
+    refused.code,
+    'AREA_IDENTITY_MISMATCH',
+    'the bundled refusal is kept',
+  );
+});
