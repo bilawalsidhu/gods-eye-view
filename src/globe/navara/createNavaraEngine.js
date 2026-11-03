@@ -9,8 +9,10 @@
 import * as geo from '../../geo/index.js';
 import {
   SHARPEN_INITIAL,
+  STYLE_INITIAL,
   createEngineEvent,
   mergeSharpen,
+  mergeStyle,
 } from '../contract.js';
 import { cesiumFovy } from './cameraMath.js';
 import { createCameraModel } from './cameraModel.js';
@@ -88,9 +90,12 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   clock?: object,
  *   appClock?: import('../../time/clock.js').AppClock,
  *   sharpen?: { set: (state: { enabled: boolean, amount: number }) => void, destroy: () => void },
+ *   styles?: { names: readonly string[], uniformNames: (name: string) => string[], defaults: (name: string) => Record<string, number>, set: (name: string, state: { intensity: number, uniforms: Record<string, number> }) => void, destroy: () => void },
  * }} options `hooks` are internals.js; `container` defaults to the
  *   canvas's parent; `sharpen` draws render.setSharpen (sharpen.js; without
  *   it the engine only keeps the state) and the engine destroys it;
+ *   `styles` draws render.setStyle (stylePasses.js; without it the engine
+ *   has no visualStyles capability) and the engine destroys it;
  *   `appClock` (the engine clock's time) defaults to the page's app clock;
  *   `movers` is engine.movers on the view's three runtime (movers/index.js;
  *   without it createSet throws), `lines` engine.lines (lines/index.js;
@@ -109,6 +114,7 @@ export function createNavaraEngine(
     movers: moversPort = null,
     lines: linesPort = null,
     sharpen: sharpenPort = null,
+    styles: stylesPort = null,
   } = {},
 ) {
   if (!view?.camera?.raw)
@@ -263,6 +269,47 @@ export function createNavaraEngine(
 
   let sharpen = { ...SHARPEN_INITIAL };
   let destroyed = false;
+  // render.visualStyles/setStyle/style, with a styles port only.
+  const styleStates = new Map(
+    (stylesPort?.names ?? []).map((name) => [
+      name,
+      { ...STYLE_INITIAL, uniforms: stylesPort.defaults(name) },
+    ]),
+  );
+  const knownStyle = (name) => {
+    if (!styleStates.has(name))
+      throw new TypeError(`Unknown visual style: ${name}`);
+    return styleStates.get(name);
+  };
+  const styleRender = stylesPort
+    ? {
+        visualStyles: Object.freeze([...stylesPort.names]),
+        setStyle(name, options) {
+          const current = knownStyle(name);
+          const next = mergeStyle(
+            current,
+            options,
+            stylesPort.uniformNames(name),
+          );
+          const changed =
+            next.intensity !== current.intensity ||
+            Object.entries(next.uniforms).some(
+              ([key, value]) => current.uniforms[key] !== value,
+            );
+          styleStates.set(name, next);
+          if (!changed || destroyed) return;
+          stylesPort.set(name, {
+            intensity: next.intensity,
+            uniforms: { ...next.uniforms },
+          });
+          view.forceUpdate();
+        },
+        style(name) {
+          const { intensity, uniforms } = knownStyle(name);
+          return { intensity, uniforms: { ...uniforms } };
+        },
+      }
+    : {};
   return {
     kind: 'navara',
     host: { container: container ?? canvas.parentElement, canvas, size },
@@ -291,6 +338,7 @@ export function createNavaraEngine(
         view.forceUpdate();
       },
       sharpen: () => ({ ...sharpen }),
+      ...styleRender,
     },
     surface,
     input: input.input,
@@ -311,10 +359,14 @@ export function createNavaraEngine(
       credits.destroy();
       maps.destroy();
       sharpenPort?.destroy();
+      stylesPort?.destroy();
       moversPort?.destroy();
       linesPort?.destroy();
     },
     isDestroyed: () => destroyed,
+    // Navara only, not contract: the post pipeline as QA reads it (the
+    // passes in draw order, whether the styles pass shows).
+    pipeline: () => stylesPort?.diagnostics?.() ?? null,
     // Navara only, not contract: the ground the floor last sampled under
     // the camera and the margin it keeps above it (QA measures against it).
     groundFloor: {

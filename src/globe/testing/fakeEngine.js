@@ -23,8 +23,10 @@ import {
   MODIFIERS,
   normalizeInputOptions,
   SHARPEN_INITIAL,
+  STYLE_INITIAL,
   createEngineEvent,
   mergeSharpen,
+  mergeStyle,
 } from '../contract.js';
 import { createAppClock } from '../../time/clock.js';
 import { createLineRegistry } from '../lines.js';
@@ -227,17 +229,50 @@ function rectangleFromCartographics(points) {
   return { west, south, east, north };
 }
 
+// render.visualStyles/setStyle/style for `visualStyles` ({ name: uniform
+// names }); nothing without it.
+function fakeStyles(visualStyles, record) {
+  if (!visualStyles) return {};
+  const states = new Map(
+    Object.entries(visualStyles).map(([name, uniforms]) => [
+      name,
+      {
+        ...STYLE_INITIAL,
+        uniforms: Object.fromEntries(uniforms.map((uniform) => [uniform, 0])),
+      },
+    ]),
+  );
+  const known = (name) => {
+    if (!states.has(name)) throw new TypeError(`Unknown visual style: ${name}`);
+    return states.get(name);
+  };
+  return {
+    visualStyles: Object.freeze(Object.keys(visualStyles)),
+    setStyle(name, options) {
+      record('render.setStyle', [name, options]);
+      states.set(name, mergeStyle(known(name), options, visualStyles[name]));
+    },
+    style(name) {
+      const { intensity, uniforms } = known(name);
+      return { intensity, uniforms: { ...uniforms } };
+    },
+  };
+}
+
 /**
  * @param {{ kind?: 'cesium'|'navara', width?: number, height?: number, fovy?: number,
  *   longitude?: number, latitude?: number, altitude?: number,
  *   container?: object, canvas?: object, nowMs?: number,
- *   appClock?: import('../../time/clock.js').AppClock }} [options]
+ *   appClock?: import('../../time/clock.js').AppClock,
+ *   visualStyles?: Record<string, string[]> }} [options]
  *   Canvas size in CSS px, angles in radians; `container`/`canvas` stand in
  *   for the host elements (DOM mocks for shell tests). The initial pose looks straight
  *   down from `altitude` metres (10 000 km). The engine clock reads
  *   `appClock`, by default an app clock on a fake wall clock that starts at
  *   `nowMs` (2026-01-01T00:00Z) and moves only with `fake.frame(dt)` and
  *   `fake.advanceTime(ms)` (a given appClock keeps its own wall clock).
+ *   `visualStyles` ({ style: its uniform names }) adds the optional
+ *   visualStyles capability (render.setStyle), each uniform starting at 0.
  * @returns {import('../contract.js').GlobeEngine & { fake: object }}
  */
 export function createFakeEngine(options = {}) {
@@ -923,6 +958,7 @@ export function createFakeEngine(options = {}) {
         sharpen = mergeSharpen(sharpen, options);
       },
       sharpen: () => ({ ...sharpen }),
+      ...fakeStyles(options.visualStyles, record),
     },
     surface: {
       sampleHeight(position, exclude) {

@@ -22,6 +22,12 @@ import {
 } from './internals.js';
 import { buildNavaraLook } from './look.js';
 import { createNavaraSharpen } from './sharpen.js';
+import { createNavaraStyles } from './stylePasses.js';
+import { retroShader } from '../../styles/retro.js';
+import { nightVisionShader } from '../../styles/surveillance.js';
+import { thermalShader } from '../../styles/thermal.js';
+import { animeShader } from '../../styles/anime.js';
+import { noirShader } from '../../styles/noir.js';
 import { createNavaraMovers } from './movers/index.js';
 import { createNavaraLines } from './lines/index.js';
 import { createNavaraOverlay } from './overlay.js';
@@ -50,6 +56,16 @@ function preservedCanvas(container) {
   }
   return canvas;
 }
+
+// The app's styles by their names, in Cesium's stage order
+// (src/ui/visualPresets.js STYLES).
+const STYLE_SHADERS = Object.freeze({
+  retro: retroShader,
+  surveillance: nightVisionShader,
+  thermal: thermalShader,
+  anime: animeShader,
+  noir: noirShader,
+});
 
 // The camera's place for the look, refreshed in place each frame (no
 // allocation): degrees for the sun's elevation, and the height.
@@ -141,6 +157,10 @@ export async function createNavaraGlobe({
       container,
       ...(appClock ? { appClock } : {}),
       sharpen: createNavaraSharpen(view),
+      styles: createNavaraStyles(view, {
+        shaders: STYLE_SHADERS,
+        onStarsDimmed: (amount) => look.setStarsDimmed(amount),
+      }),
       movers: createNavaraMovers(view, {
         overlay,
         // Model colour follows the display-space stage, after the look's ACES.

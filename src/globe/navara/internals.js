@@ -162,3 +162,14 @@ export const navaraHooks = (view) => ({
   tileRoots: () => tileRoots(view),
   isIdle: () => isIdle(view),
 });
+
+/**
+ * Stage 6 (QA diagnostics only): the names of the passes in the view's
+ * post-processing pipeline, in draw order, or null when the path is gone.
+ * Private: ctx.renderPassOrchestrator.passMap.list ({ name, pass }).
+ * Upstream ask: a public read of the pipeline order.
+ */
+export function pipelinePassNames(ctx) {
+  const list = ctx?.renderPassOrchestrator?.passMap?.list;
+  return Array.isArray(list) ? list.map((entry) => entry.name) : null;
+}
