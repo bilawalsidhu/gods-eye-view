@@ -2,12 +2,35 @@
 // Navara engine (src/app/sessionTools.js holds the tools themselves). Loaded
 // with src/app/navaraMode.js, so the Cesium-mode bundle carries none of it.
 
+import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
+import { sessionAnnotations } from './sessionTools.js';
+
 /**
- * The annotation board drawn on this Navara scene. Returns the board, or
- * null while the engine draws no annotations.
+ * The annotation board drawn on this Navara scene: draped areas and routes
+ * on the engine, every other mark on the shared screen board. The board
+ * belongs to the page session; an engine switch takes only its drawing off
+ * this engine. Returns the board (null without the Navara view).
+ * @param {{ engine: object, views: object }} scene `views`: the Navara view
+ *   and its classes (src/app/navaraMode.js).
  */
-export function attachNavaraAnnotations() {
-  return null;
+export function attachNavaraAnnotations(
+  { engine, views },
+  { layerSession, placeSearch, operations },
+  { defer },
+) {
+  if (!views?.view) return null;
+  const annotations = sessionAnnotations({
+    layerSession,
+    placeSearch,
+    resolver: operations.annotationResolver,
+    defer,
+  });
+  annotations.attachScene({
+    engine,
+    renderer: createNavaraAnnotationRenderer(engine, views),
+  });
+  defer(() => annotations.detachScene());
+  return annotations;
 }
 
 /** UTILITIES ▸ Draw on this Navara scene; null while it has none. */

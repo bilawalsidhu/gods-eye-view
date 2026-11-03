@@ -2,6 +2,7 @@ import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
+import { isGlobeEngine } from '../globe/contract.js';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
@@ -1713,12 +1714,9 @@ export function createAnnotationEngine({
         geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
       );
       const sphere = Cesium.BoundingSphere.fromPoints(cart);
-      viewer.camera.flyToBoundingSphere(sphere, {
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          geo.math.toRadians(-35),
-          Math.max(900, sphere.radius * 2.6),
-        ),
+      flyToSphere(sphere.center, sphere.radius, {
+        pitch: geo.math.toRadians(-35),
+        range: Math.max(900, sphere.radius * 2.6),
         duration: 1.6,
       });
     } catch {
@@ -1730,8 +1728,9 @@ export function createAnnotationEngine({
    *  globe. On any API hiccup, report visible — bad data must never move the camera. */
   function isPointOnScreen(p) {
     try {
-      const camera = viewer.camera;
       const pos = geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
+      if (isGlobeEngine(viewer)) return engineSeesPoint(viewer, pos);
+      const camera = viewer.camera;
       const cv = camera.frustum.computeCullingVolume(
         camera.position,
         camera.direction,
@@ -1770,27 +1769,44 @@ export function createAnnotationEngine({
               : anno.ring,
           )
         : viewportRange(anno.viewport) || 600;
-      viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          geo.cartesian3.fromDegrees(
-            target.lon,
-            target.lat,
-            anno.anchor.height || 0,
-          ),
-          range,
+      flyToSphere(
+        geo.cartesian3.fromDegrees(
+          target.lon,
+          target.lat,
+          anno.anchor.height || 0,
         ),
-        {
-          offset: new Cesium.HeadingPitchRange(
-            viewer.camera.heading,
-            geo.math.toRadians(-35),
-            range * 2.4,
-          ),
-          duration: 1.8,
-        },
+        range,
+        { pitch: geo.math.toRadians(-35), range: range * 2.4, duration: 1.8 },
       );
     } catch {
       /* framing is best-effort */
     }
+  }
+
+  /**
+   * Fly to a sphere keeping the camera's heading: Cesium's
+   * flyToBoundingSphere on a viewer, the contract's flyToSphere on a globe
+   * engine (the same offset semantics).
+   */
+  function flyToSphere(center, radius, { pitch, range, duration }) {
+    if (isGlobeEngine(viewer)) {
+      viewer.camera.flyToSphere(
+        { center, radius },
+        { heading: viewer.camera.pose().heading, pitch, range, duration },
+      );
+      return;
+    }
+    viewer.camera.flyToBoundingSphere(
+      new Cesium.BoundingSphere(center, radius),
+      {
+        offset: new Cesium.HeadingPitchRange(
+          viewer.camera.heading,
+          pitch,
+          range,
+        ),
+        duration,
+      },
+    );
   }
 
   const engine = {
@@ -2045,7 +2061,7 @@ export function createAnnotationEngine({
   }) {
     if (destroyed) return;
     try {
-      viewer.camera.flyTo({
+      viewer?.camera.flyTo({
         destination: geo.cartesian3.fromDegrees(lon, lat, height),
         orientation: {
           heading: geo.math.toRadians(heading),
@@ -2407,4 +2423,17 @@ function appendDistance(baseLabel, distM) {
   const dist = formatDistance(distM);
   if (!dist) return baseLabel;
   return baseLabel ? `${baseLabel} — ${dist}` : dist;
+}
+
+/**
+ * Whether a globe engine shows a world point: in front of the camera, inside
+ * the canvas and on the near side of the globe (what the Cesium path's
+ * culling volume and ellipsoid occluder answer).
+ */
+function engineSeesPoint(engine, position) {
+  if (!engine.projector.horizonVisible(position)) return false;
+  const win = engine.projector.worldToWindow(position);
+  if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y)) return false;
+  const { width, height } = engine.host.size();
+  return win.x >= 0 && win.x <= width && win.y >= 0 && win.y <= height;
 }
