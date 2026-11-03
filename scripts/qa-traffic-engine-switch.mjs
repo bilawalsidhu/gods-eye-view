@@ -113,59 +113,8 @@ try {
     }
   };
   await waitTraffic();
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-  const ids = await p.evaluate(() =>
-    window.qaTraffic.getDetectableObjects().map((p) => p.id),
-  );
-  const first = await p.evaluate(
-    () => window.qaTraffic.getStats().motion.rebuilds,
-  );
-  const population = await p.evaluate(() => window.qaTraffic.getStats().count);
-  for (const kind of ['navara', 'cesium', 'navara']) {
-    if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await p.select('#globe-engine', kind);
-      await ready(kind);
-    }
-    await waitTraffic();
-    const check = await p.evaluate(() => {
-      const { dataManager } = window.__godsEyeView;
-      const mod = dataManager.layers.get('traffic').module;
-      return {
-        same: mod === window.qaTraffic,
-        ...mod.getStats(),
-        params: mod.getParams(),
-        ids: mod.getDetectableObjects().map((p) => p.id),
-      };
-    });
-    console.log(
-      kind,
-      check.mode,
-      check.count,
-      check.flowBuckets,
-      check.heatLines,
-      check.motion,
-    );
-    assert.equal(check.same, true);
-    assert.equal(check.params.jamViz, 'both');
-    assert.equal(check.error, null);
-    assert.equal(
-      check.motion.rebuilds,
-      first,
-      'traffic population was cleared',
-    );
-    assert.ok(
-      check.ids.some((id) => ids.includes(id)),
-      'original moving vehicles survived',
-    );
-    if (!keyless)
-      assert.ok(check.heatLines > 0, 'congestion corridors are published');
-    if (keyless) assert.equal(check.flowBuckets.sim, check.count);
-    else assert.ok(check.flowBuckets.slow + check.flowBuckets.jam > 0);
-  }
-  if (keyless)
-    assert.ok(![...reads.keys()].some((u) => u.includes('/tomtom/flow/')));
-  // Compare the same view with the layer shown and hidden, vehicle by
-  // vehicle. Only a central window free of panels and status toasts counts.
+  // The view compared before and after the switches: a central window free of
+  // panels and status toasts.
   const region = { left: 310, top: 160, right: 810, bottom: 660 };
   // Each vehicle in the window with its window position and its height above
   // the terrain Navara draws there. A vehicle below that terrain is hidden by
@@ -221,21 +170,81 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   };
+  // The population once roads, heights and dots have settled. Source counts
+  // can be ready before the renderer has drawn terrain, so the camera and the
+  // attached road heights get the same delay before and after the switches.
+  const settledPopulation = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 2200));
+    await settled();
+    return p.evaluate(() => window.qaTraffic.getStats().count);
+  };
+  const population = await settledPopulation();
+  const buriedBefore = (await vehiclesInView()).filter(
+    (v) => v.clearance != null && v.clearance <= -1,
+  ).length;
+  const ids = await p.evaluate(() =>
+    window.qaTraffic.getDetectableObjects().map((p) => p.id),
+  );
+  const first = await p.evaluate(
+    () => window.qaTraffic.getStats().motion.rebuilds,
+  );
+  for (const kind of ['navara', 'cesium', 'navara']) {
+    if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
+      await p.select('#globe-engine', kind);
+      await ready(kind);
+    }
+    await waitTraffic();
+    const check = await p.evaluate(() => {
+      const { dataManager } = window.__godsEyeView;
+      const mod = dataManager.layers.get('traffic').module;
+      return {
+        same: mod === window.qaTraffic,
+        ...mod.getStats(),
+        params: mod.getParams(),
+        ids: mod.getDetectableObjects().map((p) => p.id),
+      };
+    });
+    console.log(
+      kind,
+      check.mode,
+      check.count,
+      check.flowBuckets,
+      check.heatLines,
+      check.motion,
+    );
+    assert.equal(check.same, true);
+    assert.equal(check.params.jamViz, 'both');
+    assert.equal(check.error, null);
+    assert.equal(
+      check.motion.rebuilds,
+      first,
+      'traffic population was cleared',
+    );
+    assert.ok(
+      check.ids.some((id) => ids.includes(id)),
+      'original moving vehicles survived',
+    );
+    if (!keyless)
+      assert.ok(check.heatLines > 0, 'congestion corridors are published');
+    if (keyless) assert.equal(check.flowBuckets.sim, check.count);
+    else assert.ok(check.flowBuckets.slow + check.flowBuckets.jam > 0);
+  }
+  if (keyless)
+    assert.ok(![...reads.keys()].some((u) => u.includes('/tomtom/flow/')));
+  // Compare the same view with the layer shown and hidden, vehicle by
+  // vehicle.
   const raw = async () =>
     sharp(await p.screenshot())
       .removeAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
-  // Source counts can be ready before the incoming renderer has drawn terrain.
-  // Let the camera and the newly attached road heights settle before comparison.
-  await new Promise((resolve) => setTimeout(resolve, 2200));
-  await settled();
-  const settledCount = await p.evaluate(
-    () => window.qaTraffic.getStats().count,
-  );
+  const settledCount = await settledPopulation();
   const before = await vehiclesInView();
   const shown = await raw();
   const after = new Map((await vehiclesInView()).map((v) => [v.id, v]));
+  // Read again once the comparison is taken: the population used to fall
+  // seconds after the return, once the incoming globe republished the roads.
+  const finalCount = await p.evaluate(() => window.qaTraffic.getStats().count);
   await p.evaluate(() =>
     window.__godsEyeView.dataManager.setEnabled('traffic', false, {
       origin: 'user',
@@ -307,16 +316,21 @@ try {
       buried,
     );
   // The checks after each switch run before the incoming globe republishes
-  // the roads. Report what the population settles to; it is not asserted yet.
+  // the roads; these compare what the population settles to.
   console.log(
     'population before the switches',
     population,
     'settled after the round trip',
     settledCount,
+    'after the comparison',
+    finalCount,
+    'below the drawn terrain before the switches',
+    buriedBefore,
   );
-  if (settledCount < 0.8 * population)
-    console.log(
-      'known defect: the traffic population shrinks after returning to Navara',
+  for (const count of [settledCount, finalCount])
+    assert.ok(
+      count >= 0.8 * population && count <= 1.25 * population,
+      `the population after the round trip (${count}) stays within 80-125% of the ${population} before it`,
     );
   assert.ok(aboveGround >= 12, 'at least 12 vehicles above ground in view');
   assert.ok(
