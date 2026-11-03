@@ -47,8 +47,8 @@
   --panel-surface-detail: var(--cyber-panel-surface-detail);
   --panel-surface-frame: var(--cyber-panel-frame);
   --panel-surface-shadow: var(--cyber-panel-shadow);
-  --panel-surface-title: var(--cyber-red-bright);
-  --panel-surface-error: var(--cyber-red-bright);
+  --panel-surface-title: var(--cyber-accent-bright);
+  --panel-surface-error: var(--cyber-warning-bright);
   --panel-surface-width: var(--cyber-panel-width);
   --panel-surface-collapsed-width: var(--cyber-panel-collapsed-width);
 }

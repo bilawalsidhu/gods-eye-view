@@ -43,7 +43,13 @@ import {
   setCyberSonarEnabled,
 } from '../cyberSonar.js';
 import { cyberVisualDefaultsForHudTransition } from '../hudLayouts.js';
+import {
+  applyCyberAccentTheme,
+  normalizeCyberAccent,
+  readCyberAccentPreference,
+} from './cyberAccentSettings.js';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
+const CYBER_ACCENT_STORAGE_KEY = 'gev:cyber-accent:v1';
 
 /** Own visual preferences, detection overrides and display-control state. */
 export class VisualSettings {
@@ -238,6 +244,15 @@ export class VisualSettings {
     this._detectionAllocationPreference = normalizeAllocationStrategy(
       storedDetectionAllocation,
     );
+    this._cyberAccent = readCyberAccentPreference(null);
+    try {
+      this._cyberAccent = readCyberAccentPreference(
+        localStorage.getItem(CYBER_ACCENT_STORAGE_KEY),
+      );
+    } catch {
+      /* unavailable storage */
+    }
+    applyCyberAccentTheme(document.documentElement, this._cyberAccent);
   }
   get hud() {
     return this.readHud();
@@ -474,7 +489,11 @@ export class VisualSettings {
       bloom: { active: this.bloomEnabled, intensity: this.bloomIntensityPct },
       sharpen: { active: this.sharpenEnabled, intensity: this._sharpenPct },
       detection: this._presentDetection(),
-      hud: { visible: this._hudVisibleShown, variant: this._hudVariantShown },
+      hud: {
+        visible: this._hudVisibleShown,
+        variant: this._hudVariantShown,
+        accent: this._presentCyberAccent(),
+      },
       sonar: this._sonarShown,
       scope: {
         enabled: this._scopeEnabledShown,
@@ -536,6 +555,36 @@ export class VisualSettings {
 
   _publishDisplay() {
     this.store.publish(this._presentDisplay());
+  }
+
+  /** The Cyber accent choices shown in Display; the theme owner applies the CSS. */
+  _presentCyberAccent() {
+    const accent = normalizeCyberAccent(this._cyberAccent);
+    return {
+      selected: accent.id,
+      customColor: accent.customColor,
+    };
+  }
+
+  /**
+   * Set the locally persisted Cyber accent. This is a browser preference, not
+   * a shared-view setting: a link still opens with the recipient's own accent.
+   */
+  _setCyberAccent(id, customColor) {
+    const previous = normalizeCyberAccent(this._cyberAccent);
+    const next = normalizeCyberAccent({
+      id,
+      customColor: customColor ?? previous.customColor,
+    });
+    this._cyberAccent = next;
+    applyCyberAccentTheme(document.documentElement, next);
+    try {
+      localStorage.setItem(CYBER_ACCENT_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* best effort */
+    }
+    this._publishDisplay();
+    return next;
   }
 
   _getBloomIntensity() {
