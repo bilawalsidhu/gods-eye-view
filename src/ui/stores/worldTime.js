@@ -11,6 +11,7 @@ const LIVE_EDGE_MS = 5000;
 /** The speeds play offers, in world ms per real ms. */
 export const WORLD_TIME_SPEEDS = Object.freeze({
   real: 1,
+  minute: 60,
   hour: 3_600,
   day: 86_400,
   week: 604_800,

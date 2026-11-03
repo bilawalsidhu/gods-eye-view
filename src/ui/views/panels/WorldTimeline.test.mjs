@@ -232,6 +232,10 @@ test('the speed chosen sets how fast play runs, at once while playing', async (t
   await nextTick();
   const select = bar().querySelector('select.world-timeline-speed');
   assert.equal(select.value, 'real');
+  assert.deepEqual(
+    [...select.options].map((option) => option.value),
+    ['real', 'minute', 'hour', 'day', 'week'],
+  );
   select.value = 'week';
   select.dispatchEvent(new Event('change'));
   await nextTick();
@@ -242,6 +246,10 @@ test('the speed chosen sets how fast play runs, at once while playing', async (t
   await nextTick();
   assert.equal(worldClock.isPlaying(), true);
   assert.equal(worldClock.getRate(), 3_600, 'changed while playing');
+  select.value = 'minute';
+  select.dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.equal(worldClock.getRate(), 60, 'a minute a second');
   select.value = 'real';
   select.dispatchEvent(new Event('change'));
   await nextTick();
