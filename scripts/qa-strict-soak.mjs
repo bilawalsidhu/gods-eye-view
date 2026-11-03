@@ -17,7 +17,11 @@
 // With --assert (the long run), after the warm-up (switch 20): live WebGL
 // objects per engine context grow by at most 0.1 per switch (least-squares
 // slope over the checkpoints) and by at most 64 overall; no new WebGL
-// context; JS heap slope at most 10 KiB per switch; no new document; the
+// context; JS heap slope at most 10 KiB per switch over the second half of
+// the run (the first half is reported too: V8's compiled code and the
+// layers' caches grow for about 250 switches under this workload, then the
+// heap is flat, while a retained object per switch keeps growing); no new
+// document; the
 // webglcontextlost/restored listener counts on both engine canvases stay as
 // they were (each canvas keeps its webglcontextlost listener).
 //
@@ -345,12 +349,17 @@ if (strictMode) {
       pass: last.webgl.length === first.webgl.length,
     });
     const heap = late.map((c) => [c.swap, c.heapMiB * 1024]);
+    const steady = heap.filter(([swap]) => swap >= swaps / 2);
+    assert.ok(steady.length >= 2, 'enough checkpoints in the second half');
     checks.push({
-      check: 'JS heap KiB per switch',
-      slopePerSwap: Math.round(slope(heap) * 100) / 100,
-      fromMiB: first.heapMiB,
+      check: 'JS heap KiB per switch, second half',
+      slopePerSwap: Math.round(slope(steady) * 100) / 100,
+      fromSwitch: steady[0][0],
+      fromMiB: Math.round((steady[0][1] / 1024) * 100) / 100,
       toMiB: last.heapMiB,
-      pass: slope(heap) <= 10,
+      warmUpSlopePerSwap: Math.round(slope(heap) * 100) / 100,
+      warmUpFromMiB: first.heapMiB,
+      pass: slope(steady) <= 10,
     });
     checks.push({
       check: 'documents',
