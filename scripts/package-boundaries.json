@@ -88,6 +88,10 @@
       "src/ui/rail/RailChips.vue",
       "src/ui/views/panels/DisplayPanel.vue",
       "src/ui/views/panels/GeoImport.vue",
+      "src/ui/views/panels/DrawControls.vue",
+      "src/ui/views/panels/DrawMarkList.vue",
+      "src/ui/views/panels/DrawSwatches.vue",
+      "src/annotations/drawMarks.js",
       "src/ui/stores/display.js",
       "src/ui/localSdrPresentation.js",
       "src/ui/unitLabels.js",
@@ -179,6 +183,7 @@
     "runtime": "node",
     "exports": ["./server/providers/live"],
     "modules": [
+      "src/sources/adsbFields.js",
       "server/providers/live.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
@@ -198,7 +203,7 @@
   },
   "adsb-lol-source": {
     "exports": ["./sources/adsb-lol"],
-    "modules": ["src/data/adsbLolFallback.js"],
+    "modules": ["src/data/adsbLolFallback.js", "src/sources/adsbFields.js"],
     "external": []
   },
   "place-providers": {
@@ -431,7 +436,9 @@
       "server/providers/overpass/transport.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
@@ -460,7 +467,16 @@
       "src/data/local_data/natural_earth/regions.json",
       "src/data/naturalEarthRegions.js",
       "src/data/bundledJson.js",
-      "src/data/retryableLoad.js"
+      "src/data/retryableLoad.js",
+      "server/providers/common/same-site.js",
+      "server/providers/common/source-root.js",
+      "server/providers/regional/nominatimGate.js",
+      "server/providers/regional/nominatimCache.js",
+      "server/providers/regional/outlineSelect.js",
+      "src/localRequestGate.mjs",
+      "src/data/adminBoundaries.js",
+      "src/data/placeNames.js",
+      "src/sources/featureGeometry.js"
     ],
     "external": []
   },
@@ -522,6 +538,7 @@
       "src/search/geospatial.js",
       "src/search/http.js",
       "src/search/defaults.js",
+      "src/sources/nominatimStatus.js",
       "src/search/alpsGeocoder.js",
       "src/search/coordinateGeocoder.js",
       "src/search/coordinateParser.js",
@@ -1248,6 +1265,7 @@
   "live-observations": {
     "exports": ["./sources/live"],
     "modules": [
+      "src/sources/adsbFields.js",
       "src/i18n/marker.js",
       "src/data/aircraftEmergency.js",
       "src/sources/live/aircraft.js",
@@ -2204,6 +2222,7 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/ui/placeNames.js",
@@ -2824,6 +2843,7 @@
       "src/layers/vessels/recordPolicy.js",
       "src/layers/vessels/snapshotRenderer.js",
       "src/data/inputOwnership.js",
+      "src/annotations/drawMarks.js",
       "src/annotations/drawMode.js",
       "src/annotations/drawTool.js",
       "src/data/geoFileImport.js",
@@ -3155,7 +3175,15 @@
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/annotations/outlineRungs.js",
+      "src/sources/openFreeMapOutlines.js",
+      "src/sources/nominatimOutlines.js",
+      "src/sources/nominatimStatus.js",
+      "src/data/placeBoundaries.js",
+      "src/data/placeNames.js",
+      "src/data/local_data/us_census_places/files.js",
+      "src/data/local_data/wof_neighborhoods/files.js"
     ],
     "external": [
       "hls.js",
@@ -3180,6 +3208,7 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/cyberSonar.js",
@@ -3753,7 +3782,15 @@
       "src/layers/wind/inspectionMarker.js",
       "src/ui/stores/bhoteKoshiPanel.js",
       "src/hudReadouts.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/annotations/outlineRungs.js",
+      "src/sources/openFreeMapOutlines.js",
+      "src/sources/nominatimOutlines.js",
+      "src/sources/nominatimStatus.js",
+      "src/data/placeBoundaries.js",
+      "src/data/placeNames.js",
+      "src/data/local_data/us_census_places/files.js",
+      "src/data/local_data/wof_neighborhoods/files.js"
     ],
     "external": [
       "hls.js",
@@ -3826,7 +3863,21 @@
       "src/sources/featureSource.js",
       "src/sources/capability.js",
       "src/data/cameraArrival.js",
-      "src/data/cameraFraming.js"
+      "src/data/cameraFraming.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/data/tomtomTiles.js",
+      "src/data/installationNames.js",
+      "src/annotations/outlineRungs.js",
+      "src/sources/openFreeMapOutlines.js",
+      "src/sources/nominatimOutlines.js",
+      "src/sources/nominatimStatus.js",
+      "src/data/placeBoundaries.js",
+      "src/data/placeNames.js",
+      "src/data/local_data/us_census_places/files.js",
+      "src/data/local_data/wof_neighborhoods/files.js"
     ],
     "external": [
       "cesium",
@@ -4722,6 +4773,7 @@
   "tools-services": {
     "exports": ["./tools/services"],
     "modules": [
+      "src/sources/adsbFields.js",
       "src/tools/services.js",
       "src/layers/bikeshare/registry.js",
       "src/layers/bikeshare/source.js",

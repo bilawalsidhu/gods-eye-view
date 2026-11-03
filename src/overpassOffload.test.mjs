@@ -54,14 +54,22 @@ async function call(handlers, url, init = {}) {
   Object.assign(req, {
     method: init.method || 'GET',
     url: parsed.pathname.slice(mount.length) + parsed.search || '/',
-    headers: {},
+    headers: init.headers || {},
     socket: { remoteAddress: '127.0.0.1' },
   });
-  let status, headers, body;
+  let status, body;
+  let headers = {};
   await handlers.get(mount)(req, {
+    // The cross-site gate answers through statusCode/setHeader, not writeHead.
+    set statusCode(s) {
+      status = s;
+    },
+    setHeader(name, value) {
+      headers[name] = value;
+    },
     writeHead(s, h) {
       status = s;
-      headers = h;
+      headers = { ...headers, ...h };
     },
     end(b) {
       body = b;
@@ -164,6 +172,36 @@ test('zero egress: every Overpass consumer reaches real default handlers, and re
     seen.every((url) => !/overpass|nominatim/i.test(new URL(url).hostname)),
     JSON.stringify(seen),
   );
+});
+
+test('the installations proxy refuses cross-site and forwarded requests before any Overpass work', async (t) => {
+  env(t);
+  t.mock.method(globalThis, 'fetch', () =>
+    assert.fail('unexpected upstream fetch'),
+  );
+  const handlers = routes(militaryInstallationsProxy());
+  const url =
+    '/api/military-installations?south=48.8&west=2.2&north=48.9&east=2.4';
+  for (const headers of [
+    { 'sec-fetch-site': 'cross-site' },
+    { 'sec-fetch-site': 'same-site' },
+    { origin: 'https://foreign.example' },
+    { origin: 'null' },
+    { 'sec-fetch-site': 'same-origin', 'x-forwarded-for': '203.0.113.9' },
+  ]) {
+    const response = await call(handlers, url, { headers });
+    assert.equal(response.status, 403, JSON.stringify(headers));
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+  }
+  for (const headers of [
+    {},
+    { origin: 'http://localhost:4173', 'sec-fetch-site': 'same-origin' },
+  ]) {
+    const response = await call(handlers, url, {
+      headers: { host: 'localhost:4173', ...headers },
+    });
+    assert.notEqual(response.status, 403, JSON.stringify(headers));
+  }
 });
 
 test('an unconfigured server is probed once and never sent a feature query', async (t) => {

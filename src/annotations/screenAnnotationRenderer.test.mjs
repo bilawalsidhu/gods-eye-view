@@ -390,3 +390,188 @@ test("an earlier renderer leaves a later renderer's board alone", async (t) => {
   assert.equal(groups().length, 1);
   assert.equal(groups()[0].querySelector('text').textContent, 'Kept');
 });
+
+test('a multipart area with holes draws every visible part and keeps holes open', async (t) => {
+  const { store, svg } = board(t);
+  // A fixed projection: 0.001 degrees spans 100 px.
+  projectTo(t, (_scene, world) => {
+    const c = Cesium.Cartographic.fromCartesian(world);
+    return {
+      x: 100 + Cesium.Math.toDegrees(c.longitude) * 1e5,
+      y: 100 + Cesium.Math.toDegrees(c.latitude) * 1e5,
+    };
+  });
+  const camera = cameraOver(0, 0);
+  const renderer = createScreenAnnotationRenderer(
+    { scene: sceneFor(camera), camera, trackedEntity: null },
+    { store, activeTrackedReadoutId: () => null },
+  );
+  t.after(() => renderer.destroy());
+  const outer = [[0, 0], [0.001, 0], [0.001, 0.001], [0, 0.001], [0, 0]];
+  const hole = [[0.0002, 0.0002], [0.0004, 0.0002], [0.0004, 0.0004], [0.0002, 0.0004], [0.0002, 0.0002]];
+  const island = outer.map(([lon, lat]) => [lon + 0.002, lat]);
+  const anno = {
+    id: 'anno-multipart-screen',
+    label: 'Multipart',
+    type: 'area',
+    color: 'primary',
+    alpha: 1,
+    anchor: { lon: 0, lat: 0, height: 0 },
+    ring: outer,
+    polygons: [[outer, hole], [island]],
+    synthesized: false,
+  };
+  renderer.add(anno);
+  await settle();
+  const area = () => svg().querySelector('.gev-anno-area');
+  const subpaths = () => (area().getAttribute('d').match(/M /g) || []).length;
+  assert.equal(area().tagName.toLowerCase(), 'path');
+  assert.equal(area().getAttribute('fill-rule'), 'evenodd');
+  assert.equal(subpaths(), 3, 'screen fill retains both parts and the hole');
+
+  // The first part is behind the globe: the label centres on the next part.
+  anno.polygons = [[island.map(([lon, lat]) => [lon + 180, lat])], [outer, hole]];
+  renderer.sync();
+  await settle();
+  assert.equal(subpaths(), 2, 'an island behind the globe cannot hide the visible part and its hole');
+  assert.notEqual(area().parentNode.style.display, 'none');
+  assert.doesNotMatch(
+    area().parentNode.querySelector('.gev-anno-callout').getAttribute('transform'),
+    /NaN/,
+  );
+
+  anno.polygons = [[outer, hole]];
+  projectTo(t, (_scene, world) => {
+    const lon = Cesium.Math.toDegrees(Cesium.Cartographic.fromCartesian(world).longitude);
+    return { x: lon > 0.0009 ? 2401 : 0, y: 0 };
+  });
+  renderer.sync();
+  await settle();
+  assert.equal(subpaths(), 2, 'finite offscreen shell coordinates cannot hide a visible holed part');
+  assert.notEqual(area().parentNode.style.display, 'none');
+
+  anno.polygons = [[outer, hole], [island]];
+  projectTo(t, (_scene, world) => {
+    const lon = Cesium.Math.toDegrees(Cesium.Cartographic.fromCartesian(world).longitude);
+    return Math.abs(lon - 0.0002) < 1e-7 ? undefined : { x: 0, y: 0 };
+  });
+  renderer.sync();
+  await settle();
+  assert.equal(subpaths(), 1, 'an unprojectable hole omits its entire part, not the independently visible island');
+  assert.notEqual(area().parentNode.style.display, 'none');
+});
+
+test('Preview avoids the map callout without moving its world anchor', async (t) => {
+  const { store, svg, groups } = board(t);
+  projectTo(t, (_scene, world) => {
+    const lon = Cesium.Math.toDegrees(Cesium.Cartographic.fromCartesian(world).longitude);
+    return { x: 400, y: lon > 0.0005 ? 166 : 200 };
+  });
+  const camera = cameraOver(0, 0);
+  const scene = sceneFor(camera, {
+    canvas: { clientWidth: 1280, clientHeight: 720, width: 1280, height: 720 },
+  });
+  const panel = document.body.appendChild(document.createElement('section'));
+  panel.id = 'gev-voice-panel';
+  panel.dataset.view = 'preview';
+  panel.hidden = true;
+  let panelRect = { left: 210, top: 120, width: 100, height: 120 };
+  let panelVisible = true;
+  panel.getBoundingClientRect = () => panelRect;
+  panel.checkVisibility = () => panelVisible;
+  const renderer = createScreenAnnotationRenderer(
+    { scene, camera, trackedEntity: null },
+    { store, activeTrackedReadoutId: () => null },
+  );
+  t.after(() => renderer.destroy());
+  const anno = { id: 'preview-label', type: 'label', color: 'primary', label: 'Texas', alpha: 1, anchor: { lon: 0, lat: 0, height: 0 } };
+  renderer.add(anno);
+  await settle();
+  // Non-unit, independent axis scales and a nonzero client offset: the
+  // overlay uses preserveAspectRatio="none", not letterboxing.
+  svg().getBoundingClientRect = () => ({ left: 10, top: 20, width: 640, height: 400 });
+  renderer.sync();
+  await settle();
+  const [group] = groups();
+  const callout = () => group.querySelector('.gev-anno-callout');
+  const leader = group.querySelector('.gev-anno-leader');
+  const dot = group.querySelector('.gev-anno-dot');
+  const natural = callout().getAttribute('transform');
+  const anchor = structuredClone(anno.anchor);
+  panel.hidden = false;
+  renderer.sync();
+  await settle();
+  assert.equal(callout().getAttribute('transform'), 'translate(418.0, 146.0)');
+  assert.equal(leader.getAttribute('x2'), '418.0');
+  assert.equal(leader.getAttribute('y2'), '172.0');
+  assert.equal(leader.getAttribute('x1'), '400.0');
+  assert.equal(leader.getAttribute('y1'), '200.0');
+  assert.equal(dot.getAttribute('cx'), '400.0');
+  assert.equal(dot.getAttribute('cy'), '200.0');
+  assert.deepEqual(anno.anchor, anchor);
+  assert.ok(groups()[0] === group, 'the group is kept, not replaced');
+  panel.hidden = true;
+  renderer.sync();
+  await settle();
+  assert.equal(callout().getAttribute('transform'), natural, 'closing Preview restores natural placement');
+  for (const variant of ['settings', 'invisible', 'no-overlap', 'no-room', 'collision']) {
+    panel.hidden = false;
+    panel.dataset.view = variant === 'settings' ? 'settings' : 'preview';
+    panelVisible = variant !== 'invisible';
+    panelRect = variant === 'no-overlap'
+      ? { left: 510, top: 120, width: 100, height: 120 }
+      : variant === 'no-room'
+        ? { left: 210, top: 25, width: 100, height: 180 }
+        : { left: 210, top: 120, width: 100, height: 120 };
+    if (variant === 'collision') renderer.add({ ...anno, id: 'above-slot', anchor: { lon: 0.001, lat: 0, height: 0 } });
+    renderer.sync();
+    await settle();
+    assert.equal(callout().getAttribute('transform'), natural, variant);
+  }
+});
+
+test('a mark hidden from Draw is not drawn or placed, and comes back when shown', async (t) => {
+  // happy-dom measures every SVG box the same, so callout spreading cannot
+  // settle here; a hidden mark simply has to stay out of drawing and
+  // placement, which is what keeps it from pushing a visible callout aside.
+  const { store, svg } = board(t);
+  projectTo(t, { x: 200, y: 300 });
+  const camera = cameraOver(0, 0);
+  let project = null;
+  const renderer = createScreenAnnotationRenderer(
+    {
+      scene: sceneFor(camera, {
+        postRender: {
+          addEventListener: (listener) => (project = listener),
+          removeEventListener() {},
+        },
+      }),
+      camera,
+      trackedEntity: null,
+    },
+    { store, activeTrackedReadoutId: () => null },
+  );
+  t.after(() => renderer.destroy());
+  const camp = {
+    id: 'camp',
+    type: 'pin',
+    color: 'amber',
+    label: 'Camp',
+    alpha: 1,
+    hidden: true,
+    anchor: { lon: 0, lat: 0, height: 0 },
+  };
+  renderer.add(camp);
+  project();
+  await settle();
+  const drawn = () =>
+    [...svg().querySelectorAll('g.gev-anno')].some(
+      (group) =>
+        group.textContent.includes('Camp') && group.style.display !== 'none',
+    );
+  assert.equal(drawn(), false, 'the hidden mark is not drawn');
+  camp.hidden = false;
+  project();
+  await settle();
+  assert.equal(drawn(), true, 'shown again, it is drawn');
+});
