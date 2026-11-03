@@ -5,22 +5,20 @@ import { t } from '../../../i18n/index.js';
 import { vPanelState } from '../../rail/panelState.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
-import { vRangeValue } from '../../rail/rangeValue.js';
 import UiSegmented from '../../kit/UiSegmented.vue';
 import UiSlider from '../../kit/UiSlider.js';
-import GeoImport from './GeoImport.vue';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import { StyleParameterRows } from '../../styleParameters.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
-// Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group and
-// the draw tool its controls, and each publishes them; until they do, the
-// panel shows its initial markup. GeoImport renders the file import.
+// Celestial, detection, bloom and sharpen and AircraftDisplay the 3D group,
+// and each publishes them; until they do, the panel shows its initial markup.
+// Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
-const { view, models3d, draw, parameters, cockpitPortal } = storeToRefs(display);
-// A control's change goes to its owner (DisplayBindings or the draw tool).
+const { view, models3d, parameters, cockpitPortal } = storeToRefs(display);
+// A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
 const hud = computed(() => view.value?.hud ?? null);
@@ -42,12 +40,6 @@ const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
 const modelsOptions = computed(() => [
   { value: 'proximity', label: t('Proximity'), attrs: { id: 'models3d-mode-proximity', 'data-mode': 'proximity' } },
   { value: 'all', label: t('All'), attrs: { id: 'models3d-mode-all', 'data-mode': 'all' } },
-]);
-const drawShape = computed(() => draw.value?.shape ?? 'area');
-const drawShapeOptions = computed(() => [
-  { value: 'area', label: t('Area'), attrs: { 'data-shape': 'area' } },
-  { value: 'line', label: t('Line'), attrs: { 'data-shape': 'line' } },
-  { value: 'pin', label: t('Pin'), attrs: { 'data-shape': 'pin' } },
 ]);
 const allocationOptions = computed(() => [
   { value: 'ELASTIC', label: t('Elastic'), attrs: { id: 'detection-allocation-elastic', 'data-allocation': 'ELASTIC' } },
@@ -177,29 +169,6 @@ const allocationOptions = computed(() => [
       <span class="pp-slider-value" id="scope-feather-value">{{ pct(scopeFeather) }}</span>
     </div>
   </div>
-  <div class="pp-toggle-group">
-    <UiButton class="pp-toggle-btn" :pressed="draw?.active ?? false" pressed-class="active" id="draw-toggle" @click="act('toggleDraw')" :title="t('Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel')">
-      <span class="pp-icon material-symbols-outlined" aria-hidden="true">draw</span>
-      <span class="pp-label">{{ t('Draw') }}</span>
-    </UiButton>
-    <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-mode-row">
-      <span class="pp-slider-mini-label">{{ t('Shape') }}</span>
-      <UiSegmented class="pp-mode-seg" item-class="pp-mode-btn" keyboard="none" :label="t('Shape to draw')" :options="drawShapeOptions" :model-value="drawShape" @update:model-value="act('setDrawShape', $event)" />
-    </div>
-    <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-label-row">
-      <input type="text" class="pp-text-input" id="draw-label-input" v-range-value="draw?.label ?? ''" @input="act('setDrawLabel', $event.target.value)" maxlength="120" :placeholder="t('Label (optional)')" :aria-label="t('Label for the drawn shape')" autocomplete="off" spellcheck="false">
-      <UiSelect class="pp-select draw-color-select gev-field gev-field--compact" id="draw-color-select" :model-value="draw?.color ?? 'primary'" @update:model-value="act('setDrawColor', $event)" :aria-label="t('Colour of the drawn shape')">
-        <option value="primary">{{ t('Primary') }}</option>
-        <option value="amber">{{ t('Amber') }}</option>
-        <option value="cyan">{{ t('Cyan') }}</option>
-        <option value="green">{{ t('Green') }}</option>
-        <option value="red">{{ t('Red') }}</option>
-      </UiSelect>
-      <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" @click="act('clearDraw')" :title="t('Remove every mark from the board')">{{ t('Clear') }}</button>
-      <span class="draw-hint" id="draw-hint" aria-live="polite">{{ draw?.hint ?? '' }}</span>
-    </div>
-  </div>
-  <GeoImport />
   <div class="pp-toggle-group">
     <UiButton class="pp-toggle-btn" :pressed="celestial?.active ?? false" pressed-class="active" id="celestial-toggle" @click="act('toggleCelestial')" :title="celestialTitle" :disabled="celestial ? !celestial.supported : undefined" :aria-disabled="celestial ? String(!celestial.supported) : undefined">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>

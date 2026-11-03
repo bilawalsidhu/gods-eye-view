@@ -126,6 +126,14 @@ try {
       'ordinary layer rows return after reassembly',
       container.querySelectorAll('.data-toggle-row').length > 10,
     ]);
+    result.push([
+      'Directions returns to the Utilities list after reassembly',
+      Boolean(
+        document.querySelector(
+          '#utilities-toggles [data-layer-id="directions"]',
+        ) && !container.querySelector('[data-layer-id="directions"]'),
+      ),
+    ]);
     return result;
   });
   for (const [name, passed] of results) check(name, passed);
