@@ -43,8 +43,8 @@ export function initGeoFileImport({
   publish = () => {},
   connect = () => () => {},
 }) {
-  // A page without the Import control (the Display controls view omitted)
-  // has no file import.
+  // A page without the Import control (the Utilities panel omitted, in
+  // LayerPanelsView) has no file import.
   if (!viewer || !doc?.getElementById('geo-import-button')) return null;
 
   const imports = [];

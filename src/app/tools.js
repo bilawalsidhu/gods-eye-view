@@ -62,17 +62,19 @@ export function createApplicationTools({
     const token = displayStore.connect(actions);
     return () => displayStore.detach(token);
   };
-  // DISPLAY ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
+  // UTILITIES ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
   // while a session is open, so its teardown belongs to the application
-  // lifetime rather than to whoever last pressed the button.
+  // lifetime rather than to whoever last pressed the button. A row's fly-to
+  // goes through the shell's navigation policy, as Import's does.
   const drawTool = initDrawTool({
     viewer,
     annotations,
+    navigation: styleManager,
     publish: (view) => displayStore.publishDraw(view),
     connect: connectDisplay,
   });
   defer(() => drawTool?.destroy());
-  // DISPLAY ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
+  // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
   // own data source. They live for the page session, so the application
   // lifetime removes them and the drop listeners on the viewer container.
   const geoFileImport = initGeoFileImport({
