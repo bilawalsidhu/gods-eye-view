@@ -3,7 +3,12 @@
 // with src/app/navaraMode.js, so the Cesium-mode bundle carries none of it.
 
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
-import { sessionAnnotations, sessionGeoImport } from './sessionTools.js';
+import { navaraDrawSurface } from '../annotations/drawInputNavara.js';
+import {
+  sessionAnnotations,
+  sessionDrawTool,
+  sessionGeoImport,
+} from './sessionTools.js';
 
 /**
  * The annotation board drawn on this Navara scene: draped areas and routes
@@ -33,9 +38,30 @@ export function attachNavaraAnnotations(
   return annotations;
 }
 
-/** UTILITIES ▸ Draw on this Navara scene; null while it has none. */
-export function attachNavaraDraw() {
-  return null;
+/**
+ * UTILITIES ▸ Draw on this Navara scene: the session's tool on the engine's
+ * input and preview (src/annotations/drawInputNavara.js). A switch ends an
+ * open sketch and keeps the chosen shape and colour. Returns the tool (null
+ * on a page without it or without the board).
+ */
+export function attachNavaraDraw(
+  { engine },
+  { layerSession, annotations, styleManager },
+  { defer },
+) {
+  if (!annotations) return null;
+  const drawTool = sessionDrawTool({
+    layerSession,
+    annotations,
+    styleManager,
+    defer,
+  });
+  drawTool?.attachScene({
+    surface: navaraDrawSurface(engine),
+    navigation: styleManager,
+  });
+  defer(() => drawTool?.detachScene());
+  return drawTool;
 }
 
 /**

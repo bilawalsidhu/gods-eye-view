@@ -2294,6 +2294,19 @@ export function createAnnotationResolver({
     };
   }
 
+  /**
+   * Whether a depth pick landed on the camera itself: something drawn into
+   * the depth buffer at the near plane (Navara's screen-space preview lines
+   * and sprites) reads back as a point a metre or so from the camera. Such a
+   * pick is a miss; the ray's globe hit answers instead.
+   */
+  function depthAtCamera(engine, screen, hit) {
+    const camera = engine.camera.livePosition;
+    const ground = engine.camera.pickEllipsoid(screen);
+    const reference = ground ? geo.cartesian3.distance(ground, camera) : 0;
+    return geo.cartesian3.distance(hit, camera) < Math.max(2, 0.01 * reference);
+  }
+
   /** pickWorldFromScreen through a globe engine: the same cascade. */
   function enginePickWorldFromScreen(engine, nx, ny) {
     const { width: w, height: h } = engine.host.size();
@@ -2303,10 +2316,11 @@ export function createAnnotationResolver({
       y: Math.max(0, Math.min(1, ny)) * h,
     };
     const stages = [
-      () =>
-        engine.picker.pickPositionSupported
-          ? engine.picker.pickPosition(screen)
-          : undefined,
+      () => {
+        if (!engine.picker.pickPositionSupported) return undefined;
+        const hit = engine.picker.pickPosition(screen);
+        return hit && !depthAtCamera(engine, screen, hit) ? hit : undefined;
+      },
       () => engine.camera.pickEllipsoid(screen),
       () => engine.picker.pickGlobe(screen),
     ];
