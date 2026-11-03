@@ -284,6 +284,24 @@ that names Operator restores the default Tactical layout. Operator was the
 only layout that showed the HUD's top banner bar, so its markup and styles are
 removed too.
 
+### Display template personalization
+
+Display exposes Accent controls for Tactical, Minimal and Cyber: five presets,
+a custom color picker, and Default. Each template remembers its own choice in
+this browser. Tactical and Minimal retain their existing style-aware colors
+until a preset or custom color is selected; Default restores that behavior.
+Cyber defaults to dark purple. A chosen accent updates the template's HUD,
+active controls and shared shell accents without changing its geometry or
+warning colors. Color choices survive template switches and reloads and remain
+local preferences rather than shared-link/scene settings. Older Cyber-only
+preferences migrate to Cyber without changing Tactical or Minimal.
+
+`QA_BASE_URL=http://localhost:4173 node scripts/qa-display-accents.mjs` exercises
+all three templates, independent persistence, Default restoration, actual
+painted HUD colors, Sonar and panel placement/closing. `QA_ARTIFACT_DIR` saves a
+screenshot of each template. Run `node scripts/qa-display-hmr.mjs` separately
+against the same checkout's dev server to exercise source-edit reload behavior.
+
 ## Cyber HUD — September 30, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
@@ -291,11 +309,8 @@ action and shared visual state. An explicit first transition into Cyber selects
 FLIR with Ironbow 0.42. An explicit switch back to another HUD layout restores
 the visual preset used before Cyber; restored links and scenes remain
 authoritative. The skin uses shared purple/slate panel treatments in map and cockpit,
-with compact 200px collapsed controls and wider expanded panels. Display also
-offers a local Cyber accent choice: five preset swatches plus a custom color
-picker. The selection derives the theme's active, bright and surface tones,
-persists in this browser, and is not part of a shared link. Other HUD layouts
-retain their existing presentation.
+with compact 200px collapsed controls and wider expanded panels. The Accent
+selection described above derives its active, bright and surface tones.
 Chamfered panel expand/collapse controls use an inset keyboard-focus outline and
 accent-colored hover border in both map and cockpit, so clipping does not hide the highlight.
 

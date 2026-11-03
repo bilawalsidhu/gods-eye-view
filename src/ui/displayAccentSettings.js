@@ -1,7 +1,7 @@
 import { msg } from '../i18n/index.js';
 
-/** Built-in Cyber accent schemes, shown in Display alongside the custom picker. */
-export const CYBER_ACCENTS = Object.freeze(
+/** Accent presets available to every HUD template in Display. */
+export const DISPLAY_ACCENTS = Object.freeze(
   [
     { id: 'purple', color: '#7d4fae', label: msg('Purple') },
     { id: 'red', color: '#c45454', label: msg('Red') },
@@ -11,14 +11,14 @@ export const CYBER_ACCENTS = Object.freeze(
   ].map((accent) => Object.freeze(accent)),
 );
 
-export const DEFAULT_CYBER_ACCENT = Object.freeze({
+export const DEFAULT_DISPLAY_ACCENT = Object.freeze({
   id: 'purple',
   color: '#7d4fae',
   customColor: '#7d4fae',
 });
 
-const CYBER_ACCENT_BY_ID = new Map(
-  CYBER_ACCENTS.map((accent) => [accent.id, accent]),
+const DISPLAY_ACCENT_BY_ID = new Map(
+  DISPLAY_ACCENTS.map((accent) => [accent.id, accent]),
 );
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
@@ -31,30 +31,53 @@ function normalizeHexColor(value) {
 /**
  * Accept either a preset id or `{ id, customColor }`, retaining the last custom
  * color so the picker remains useful after a preset is selected.
- * Invalid input falls back to the default purple scheme.
+ * Invalid input uses the template default: automatic colors or Cyber purple.
  * @param {unknown} value
+ * @param {'tactical'|'minimal'|'cyber'} [layout]
  */
-export function normalizeCyberAccent(value) {
+export function normalizeDisplayAccent(value, layout = 'cyber') {
   const rawId = String(value?.id ?? value ?? '')
     .trim()
     .toLowerCase();
-  const preset = CYBER_ACCENT_BY_ID.get(rawId);
+  const preset = DISPLAY_ACCENT_BY_ID.get(rawId);
   const customColor =
-    normalizeHexColor(value?.customColor) ?? DEFAULT_CYBER_ACCENT.customColor;
+    normalizeHexColor(value?.customColor) ?? DEFAULT_DISPLAY_ACCENT.customColor;
   if (preset)
     return Object.freeze({ id: preset.id, color: preset.color, customColor });
-  if (rawId !== 'custom') return DEFAULT_CYBER_ACCENT;
+  if (rawId !== 'custom') {
+    return layout === 'cyber'
+      ? DEFAULT_DISPLAY_ACCENT
+      : Object.freeze({ id: 'auto', color: null, customColor });
+  }
   const custom = normalizeHexColor(value?.color) ?? customColor;
   return Object.freeze({ id: 'custom', color: custom, customColor: custom });
 }
 
-/** Parse a persisted accent preference without inventing one on malformed storage. */
-export function readCyberAccentPreference(raw) {
+/** Read per-template preferences, migrating the former Cyber-only setting. */
+export function readDisplayAccentPreferences(raw, legacyCyberRaw = null) {
+  let stored = null;
   try {
-    return normalizeCyberAccent(JSON.parse(raw || 'null'));
+    stored = JSON.parse(raw || 'null');
   } catch {
-    return DEFAULT_CYBER_ACCENT;
+    /* invalid storage uses the template defaults */
   }
+  let legacy = null;
+  if (!raw) {
+    try {
+      legacy = JSON.parse(legacyCyberRaw || 'null');
+    } catch {
+      /* invalid legacy storage uses Cyber's default */
+    }
+  }
+  return Object.fromEntries(
+    ['tactical', 'minimal', 'cyber'].map((layout) => [
+      layout,
+      normalizeDisplayAccent(
+        stored?.[layout] ?? (layout === 'cyber' ? legacy : null),
+        layout,
+      ),
+    ]),
+  );
 }
 
 function hexToRgb(hex) {
@@ -111,7 +134,7 @@ function rgbToHex([r, g, b]) {
 }
 
 /** A brighter companion for titles, focus rings and active borders. */
-export function brightCyberAccent(hex) {
+export function brightDisplayAccent(hex) {
   const [, saturation, lightness] = rgbToHsl(hexToRgb(hex));
   const nextSaturation =
     saturation < 0.05 ? saturation : Math.min(0.84, saturation + 0.17);
@@ -121,7 +144,7 @@ export function brightCyberAccent(hex) {
 }
 
 /** A dark tint for active controls, derived from the same hue as the accent. */
-export function cyberAccentSurface(hex) {
+export function displayAccentSurface(hex) {
   const [hue, saturation] = rgbToHsl(hexToRgb(hex));
   const nextSaturation =
     saturation < 0.05 ? saturation : Math.min(0.6, saturation);
@@ -129,25 +152,46 @@ export function cyberAccentSurface(hex) {
 }
 
 /**
- * Publish the selected Cyber accent as CSS custom properties. The variables are
- * harmless outside Cyber because its selectors do not use them there.
+ * Publish the current template's accent. Automatic Tactical/Minimal colors
+ * release the override so IntelHUD's existing style-aware colors take over.
  * @param {{style?: {setProperty(name: string, value: string): void}}|null|undefined} root
  * @param {unknown} accent
  */
-export function applyCyberAccentTheme(root, accent) {
-  const setting = normalizeCyberAccent(accent);
+export function applyDisplayAccentTheme(root, accent) {
+  const setting = normalizeDisplayAccent(
+    accent,
+    accent?.id === 'auto' ? 'tactical' : 'cyber',
+  );
   const style = root?.style;
   if (!style?.setProperty) return setting;
+  if (!setting.color) {
+    if (root.dataset) delete root.dataset.displayAccent;
+    for (const prefix of ['display', 'cyber']) {
+      for (const suffix of [
+        '',
+        '-bright',
+        '-rgb',
+        '-bright-rgb',
+        '-surface-rgb',
+      ]) {
+        style.removeProperty?.(`--${prefix}-accent${suffix}`);
+      }
+    }
+    return setting;
+  }
+  if (root.dataset) root.dataset.displayAccent = setting.id;
   const rgb = hexToRgb(setting.color);
-  const bright = brightCyberAccent(setting.color);
+  const bright = brightDisplayAccent(setting.color);
   const brightRgb = hexToRgb(bright);
-  style.setProperty('--cyber-accent', setting.color);
-  style.setProperty('--cyber-accent-bright', bright);
-  style.setProperty('--cyber-accent-rgb', rgb.join(', '));
-  style.setProperty('--cyber-accent-bright-rgb', brightRgb.join(', '));
-  style.setProperty(
-    '--cyber-accent-surface-rgb',
-    hexToRgb(cyberAccentSurface(setting.color)).join(', '),
-  );
+  for (const prefix of ['display', 'cyber']) {
+    style.setProperty(`--${prefix}-accent`, setting.color);
+    style.setProperty(`--${prefix}-accent-bright`, bright);
+    style.setProperty(`--${prefix}-accent-rgb`, rgb.join(', '));
+    style.setProperty(`--${prefix}-accent-bright-rgb`, brightRgb.join(', '));
+    style.setProperty(
+      `--${prefix}-accent-surface-rgb`,
+      hexToRgb(displayAccentSurface(setting.color)).join(', '),
+    );
+  }
   return setting;
 }

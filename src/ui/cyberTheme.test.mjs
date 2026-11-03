@@ -15,10 +15,10 @@ import {
   normalizeHudLayout,
 } from '../hudLayouts.js';
 import {
-  applyCyberAccentTheme,
-  CYBER_ACCENTS,
-  normalizeCyberAccent,
-} from './cyberAccentSettings.js';
+  applyDisplayAccentTheme,
+  DISPLAY_ACCENTS,
+  normalizeDisplayAccent,
+} from './displayAccentSettings.js';
 import { GEV_ACTION_SCHEMAS } from '../voice/actionSchemas.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { StyleManager } from './applicationShell.js';
@@ -593,7 +593,7 @@ test('Cyber is a canonical HUD layout with a safe Tactical fallback', () => {
 
 test('Cyber accent settings normalize schemes and publish derived CSS variables', () => {
   assert.deepEqual(
-    CYBER_ACCENTS.map((accent) => [accent.id, accent.color, accent.label]),
+    DISPLAY_ACCENTS.map((accent) => [accent.id, accent.color, accent.label]),
     [
       ['purple', '#7d4fae', 'Purple'],
       ['red', '#c45454', 'Red'],
@@ -602,12 +602,12 @@ test('Cyber accent settings normalize schemes and publish derived CSS variables'
       ['green', '#4ec98a', 'Green'],
     ],
   );
-  assert.deepEqual(normalizeCyberAccent('red'), {
+  assert.deepEqual(normalizeDisplayAccent('red'), {
     id: 'red',
     color: '#c45454',
     customColor: '#7d4fae',
   });
-  assert.deepEqual(normalizeCyberAccent({ id: 'custom', color: '#123456' }), {
+  assert.deepEqual(normalizeDisplayAccent({ id: 'custom', color: '#123456' }), {
     id: 'custom',
     color: '#123456',
     customColor: '#123456',
@@ -617,7 +617,7 @@ test('Cyber accent settings normalize schemes and publish derived CSS variables'
   const root = {
     style: { setProperty: (name, value) => properties.set(name, value) },
   };
-  applyCyberAccentTheme(root, { id: 'custom', color: '#123456' });
+  applyDisplayAccentTheme(root, { id: 'custom', color: '#123456' });
   assert.equal(properties.get('--cyber-accent'), '#123456');
   assert.equal(properties.get('--cyber-accent-rgb'), '18, 52, 86');
   assert.equal(properties.get('--cyber-accent-bright'), '#1162b3');

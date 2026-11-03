@@ -59,8 +59,9 @@ test('buttons, sliders, the layout select and the Scope checkbox call their acti
   ])
     $(id).click();
   input($('hud-layout-select'), 'minimal', 'change');
-  document.querySelector('#cyber-accent-row [data-accent="red"]').click();
-  input($('cyber-accent-custom'), '#123456');
+  document.querySelector('#display-accent-row [data-accent="red"]').click();
+  input($('display-accent-custom'), '#123456');
+  document.querySelector('[data-accent="default"]').click();
   input($('cyber-sonar-rings'), 5);
   input($('cyber-sonar-range'), 90);
   input($('cyber-sonar-intensity'), 40);
@@ -85,8 +86,9 @@ test('buttons, sliders, the layout select and the Scope checkbox call their acti
     ['toggleSharpen'],
     ['exitCleanView'],
     ['setHudLayout', 'minimal'],
-    ['setCyberAccent', 'red'],
-    ['setCyberAccent', 'custom', '#123456'],
+    ['setDisplayAccent', 'red'],
+    ['setDisplayAccent', 'custom', '#123456'],
+    ['setDisplayAccent', 'default'],
     ['setSonarRings', 5],
     ['setSonarRange', 90],
     ['setSonarIntensity', 40],

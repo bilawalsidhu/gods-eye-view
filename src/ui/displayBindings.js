@@ -113,8 +113,8 @@ export class DisplayBindings {
         this.shareLinkManager?.claimRestoreLane?.('visual');
         this._setHudVariant(value, { applyVisualDefaults: true });
       },
-      setCyberAccent: (id, customColor) =>
-        this._setCyberAccent(id, customColor),
+      setDisplayAccent: (id, customColor) =>
+        this._setDisplayAccent(id, customColor),
       toggleCleanView: () => this.toggleCleanView(),
       exitCleanView: () => this.toggleCleanView(false),
       setDensity: (value) => {

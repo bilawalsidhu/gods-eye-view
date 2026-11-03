@@ -253,43 +253,45 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
   assert.equal($('hud-toggle').classList.contains('active'), false);
   assert.equal($('hud-layout-row').classList.contains('visible'), false);
 
-  owner._cyberAccent = {
-    id: 'red',
-    color: '#c45454',
-    customColor: '#123456',
+  owner._displayAccents = {
+    cyber: {
+      id: 'red',
+      color: '#c45454',
+      customColor: '#123456',
+    },
   };
   owner._hudVariantShown = 'cyber';
   owner._publishDisplay();
   await nextTick();
   assert.equal(
     document.querySelector('[data-accent="red"]').className,
-    'cyber-accent-swatch active',
+    'display-accent-swatch active',
   );
   assert.equal(
     document.querySelector('[data-accent="cyan"]').className,
-    'cyber-accent-swatch',
+    'display-accent-swatch',
   );
-  assert.equal($('cyber-accent-custom').value, '#123456');
+  assert.equal($('display-accent-custom').value, '#123456');
 
-  owner._setCyberAccent('custom', '#654321');
+  owner._setDisplayAccent('custom', '#654321');
   await nextTick();
   assert.equal(
     document.querySelector('[data-accent="purple"]').className,
-    'cyber-accent-swatch',
+    'display-accent-swatch',
   );
   assert.equal(
     document.documentElement.style.getPropertyValue('--cyber-accent'),
     '#654321',
   );
   assert.equal(
-    $('cyber-accent-custom').className,
-    'cyber-accent-picker active',
+    $('display-accent-custom').className,
+    'display-accent-picker active',
   );
-  assert.equal(
-    localStorage.getItem('gev:cyber-accent:v1'),
-    '{"id":"custom","color":"#654321","customColor":"#654321"}',
+  assert.deepEqual(
+    JSON.parse(localStorage.getItem('gev:display-accents:v1')).cyber,
+    { id: 'custom', color: '#654321', customColor: '#654321' },
   );
-  localStorage.removeItem('gev:cyber-accent:v1');
+  localStorage.removeItem('gev:display-accents:v1');
 
   owner._sonarShown = {
     enabled: false,
