@@ -185,9 +185,8 @@ export function createSelection({
     // Refreshed every registration: the anchor re-grounds onto the DEM when
     // its floor cell warms, and voice targeting must project the same point
     // the sprite renders at.
-    fire.contextEntity.__localBaseCartesian =
-      components.model.firePosition(fire);
     registerEntityContext(fire.contextEntity, {
+      targetPosition: components.model.firePosition(fire),
       id: recordId,
       layerId: id,
       layerName: name,

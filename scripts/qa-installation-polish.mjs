@@ -17,9 +17,11 @@ export async function checkInstallationPan(page, dir) {
       'military-installations',
     ).module;
     const centerIds = [];
+    // Core registers each local feature's context as `<layer id>:<feature id>`.
     for (let i = 0; i < g.viewer.dataSources.length; i++)
       for (const e of g.viewer.dataSources.get(i).entities.values)
-        if (e.__localLayerId === 'local-datacenters') centerIds.push(e.id);
+        if (g.entityRecords.read(e)?.contextId?.startsWith('local-datacenters:'))
+          centerIds.push(e.id);
     window.__polishPanFrames = [];
     window.__stopPolishPan = g.viewer.scene.postRender.addEventListener(() => {
       const sites = [],
@@ -333,7 +335,8 @@ export async function checkInstallationSelection(
         for (let y = 250; y < 650; y += 75)
           for (let x = 400; x < 850; x += 75) {
             const pick = g.viewer.scene.pick({ x, y });
-            if (!pick?.id?.installationId && !window.__godsEyeView.entityRecords.read(pick?.id)?.trackedId)
+            // Nothing picked: no installation marker, outline or tracked contact.
+            if (!pick?.id)
               return { x, y };
           }
         throw new Error('No empty map point');

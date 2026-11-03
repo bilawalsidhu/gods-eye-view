@@ -128,6 +128,7 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
       const marker = markers.get(alias);
       markers.delete(alias);
       marker.point.id = { installationId: record.id };
+      marker.recordId = record.id;
       marker.entry.id = record.id;
       markers.set(record.id, marker);
     }
@@ -148,10 +149,12 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
       );
       let marker = markers.get(record.id);
       if (!marker) {
-        const id = { installationId: record.id };
         marker = {
+          recordId: record.id,
           point: points.add({
-            id,
+            // Core's own pick payload. An object, not the bare record id, so the
+            // shared pick registry keeps treating a point click as it always has.
+            id: { installationId: record.id },
             position,
             pixelSize: 7,
             color: parts.model.colorFor(record),
@@ -197,7 +200,7 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
     visit(visitor) {
       for (let i = 0; i < ordered.length; i++) {
         const marker = ordered[i];
-        visitor(marker.point.id.installationId, marker.point);
+        visitor(marker.recordId, marker.point);
       }
     },
     refresh,

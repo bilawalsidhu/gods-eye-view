@@ -1277,8 +1277,9 @@ try {
         outlines = 0;
       for (let i = 0; i < viewer.dataSources.length; i++)
         for (const entity of viewer.dataSources.get(i).entities.values) {
-          if (!ids.has(entity.installationId || entity.id) || !entity.show)
-            continue;
+          // Outline entities are `<record id>:outline:<ring>`.
+          const recordId = String(entity.id).replace(/:outline:\d+$/, '');
+          if (!ids.has(recordId) || !entity.show) continue;
           if (entity.billboard || entity.point) markers++;
           if (entity.polyline) outlines++;
         }

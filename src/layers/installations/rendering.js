@@ -84,7 +84,7 @@ export function createRendering({
           classificationType,
         },
       });
-      fill.installationId = record.id;
+      installationMarkers.write(fill).recordId = record.id;
       selectedFillIds.push(fill.id);
     }
     governorRequestRender('installation-selection-fill');
@@ -267,7 +267,7 @@ export function createRendering({
             classificationType: Cesium.ClassificationType.BOTH,
           },
         });
-        outline.installationId = record.id;
+        installationMarkers.write(outline).recordId = record.id;
         entityIds.push(outline.id);
       }
       Object.assign(installationMarkers.write(entity), {

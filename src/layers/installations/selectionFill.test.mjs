@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as C from 'cesium';
 import { createRendering } from './rendering.js';
 import { createLifecycle } from './lifecycle.js';
+import { installationMarkers } from './markerState.js';
 
 function harness() {
   const ring = [[-97, 30], [-96.99, 30], [-96.99, 30.01], [-97, 30]];
@@ -23,7 +24,7 @@ test('selected multipart footprints classify Google tiles with one constant tran
   const fills = h.state.dataSource.entities.values.slice();
   assert.equal(fills.length, 2);
   for (const fill of fills) {
-    assert.equal(fill.installationId, 'base');
+    assert.equal(installationMarkers.read(fill)?.recordId, 'base');
     assert.equal(fill.polygon.classificationType.getValue(), C.ClassificationType.CESIUM_3D_TILE);
     assert.equal(fill.polygon.height, undefined);
     assert.equal(fill.polygon.extrudedHeight, undefined);

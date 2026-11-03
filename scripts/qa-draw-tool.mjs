@@ -941,6 +941,11 @@ async function findClickableTarget() {
   const site = await page
     .evaluate(async () => {
       const viewer = window.__godsEyeView.viewer;
+      // Core registers each local feature's context as `<layer id>:<feature id>`.
+      const isDataCentre = (entity) =>
+        window.__godsEyeView.entityRecords
+          .read(entity)
+          ?.contextId?.startsWith('local-datacenters:');
       await window.__godsEyeView.dataManager.setEnabled(
         'local-datacenters',
         true,
@@ -960,7 +965,7 @@ async function findClickableTarget() {
       for (let attempt = 0; attempt < 40; attempt += 1) {
         for (let i = 0; i < viewer.dataSources.length; i += 1) {
           for (const entity of viewer.dataSources.get(i).entities.values) {
-            if (entity.__localLayerId !== 'local-datacenters') continue;
+            if (!isDataCentre(entity)) continue;
             const point = centreOf(entity);
             if (!point) continue;
             const carto = window.Cesium
@@ -993,8 +998,10 @@ async function findClickableTarget() {
     viewer.scene.requestRender();
   }, site);
   await wait(4000);
-  const spot = await onScreen(
-    (entity) => entity.__localLayerId === 'local-datacenters',
+  const spot = await onScreen((entity) =>
+    window.__godsEyeView.entityRecords
+      .read(entity)
+      ?.contextId?.startsWith('local-datacenters:'),
   );
   return spot ? { ...spot, layer: 'data centre' } : null;
 }

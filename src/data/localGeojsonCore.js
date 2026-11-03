@@ -327,6 +327,8 @@ export function createLocalGeoJsonLayer(
   },
 ) {
   let _dataSource = null;
+  // The entities this layer loaded, so its click and teardown recognise them.
+  const _ownEntities = new WeakSet();
   let _enabled = false;
   let _clickHandler = null;
   let _count = 0;
@@ -464,7 +466,7 @@ export function createLocalGeoJsonLayer(
     releaseDataSource(viewer);
     _overlayPublisher.hide();
     clearSelectedEntityContextForLayer(id);
-    if (viewer?.selectedEntity?.__localLayerId === id) {
+    if (_ownEntities.has(viewer?.selectedEntity)) {
       viewer.selectedEntity = undefined;
     }
     if (_preRenderRemover) {
@@ -641,7 +643,7 @@ export function createLocalGeoJsonLayer(
 
               for (let i = 0; i < entities.length; i++) {
                 const feature = entities[i];
-                feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
+                _ownEntities.add(feature);
 
                 let pos = feature.position?.getValue(Cesium.JulianDate.now());
 
@@ -686,9 +688,6 @@ export function createLocalGeoJsonLayer(
                 const properties = propertyObject(feature);
                 const recordId = String(feature.id ?? i);
 
-                // Store references for bounded stem scaling and native picking.
-                feature.__localBaseCarto = carto;
-                feature.__localBaseCartesian = base;
                 registerEntityContext(feature, {
                   id: `${id}:${recordId}`,
                   layerId: id,
@@ -703,6 +702,9 @@ export function createLocalGeoJsonLayer(
                   longitude: Number(
                     Cesium.Math.toDegrees(carto.longitude).toFixed(6),
                   ),
+                  // The surface base voice targeting projects. Ground sampling
+                  // re-grounds it in place, so this stays current.
+                  targetPosition: base,
                 });
 
                 // Constant properties are refreshed on the existing 450 ms source
@@ -792,7 +794,7 @@ export function createLocalGeoJsonLayer(
                 if (!_enabled) return;
                 const picked = viewer.scene.pick(click.position);
 
-                if (picked && picked.id && picked.id.__localLayerId === id) {
+                if (picked && _ownEntities.has(picked.id)) {
                   const entity = picked.id;
                   viewer.selectedEntity = entity;
                   selectEntityContext(entity);
@@ -1174,7 +1176,6 @@ function setLocalGroundHeight(record, height) {
     Cesium.Ellipsoid.WGS84,
     record.base,
   );
-  record.entity.__localBaseCartesian = record.base;
 }
 
 function updateLocalStemGeometry(viewer, record, now, knownDistance = null) {

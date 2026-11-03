@@ -218,9 +218,11 @@ try {
       const gev = window.__godsEyeView;
       const snap = () => infraIds.map((id) => {
         const visibleIds = [];
+        // Core registers each local feature's context as `<layer id>:<feature id>`.
         for (let i = 0; i < gev.viewer.dataSources.length; i++) {
           for (const entity of gev.viewer.dataSources.get(i).entities.values) {
-            if (entity.__localLayerId === id && entity.show) visibleIds.push(String(entity.id));
+            const contextId = gev.entityRecords.read(entity)?.contextId;
+            if (contextId?.startsWith(`${id}:`) && entity.show) visibleIds.push(String(entity.id));
           }
         }
         return visibleIds.sort();
