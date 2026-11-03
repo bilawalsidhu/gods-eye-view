@@ -29,6 +29,8 @@ test('normalizeVesselType preserves text and degrades unknown codes', () => {
   assert.equal(normalizeVesselType('Crude Oil Tanker'), 'Crude Oil Tanker');
   assert.equal(normalizeVesselType('0'), '');
   assert.equal(normalizeVesselType('25'), 'OTHER');
+  assert.equal(normalizeVesselType('100'), '');
+  assert.equal(normalizeVesselType('255'), '');
   assert.equal(normalizeVesselType(undefined), '');
 });
 

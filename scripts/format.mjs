@@ -39,7 +39,7 @@ export async function discoverRuntimeFormatFiles(root) {
   const files = [];
   for (const name of new Set(candidates)) {
     if (
-      !/\.[cm]?js$/.test(name) ||
+      !/\.([cm]?js|vue)$/.test(name) ||
       /\.test\.[cm]?js$/.test(name) ||
       !existsSync(path.join(root, name))
     )

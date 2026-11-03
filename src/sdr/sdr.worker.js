@@ -14,6 +14,9 @@ let sampleRate = 2_048_000;
 let receiverLocation = null;
 let demodulator = null;
 let blockCount = 0;
+let tune = 0;
+// True while handling a block the controller stamped for diagnostics.
+let timedBlock = false;
 const aircraft = new Map();
 // Positions refused by the decoder's speed check since the last clear.
 const decoderStats = { positionsRejected: 0 };
@@ -85,9 +88,49 @@ function publicAircraft() {
   return records;
 }
 
+/**
+ * Every samples message the controller numbered is acknowledged once, after
+ * any decoder output, whatever this worker did with it (FM, ADS-B, nothing,
+ * or an error, which still reaches onerror). The controller bounds unacked
+ * work, so an acknowledgement must never depend on producing output.
+ */
 self.onmessage = (event) => {
   const message = event.data || {};
+  if (message.type !== 'samples' || !Number.isSafeInteger(message.id)) {
+    handleMessage(message);
+    return;
+  }
+  // Diagnostic mode only: the controller stamped the block, so time it here.
+  const timed = Number.isFinite(message.postedAt);
+  const receivedAt = timed ? absoluteNow() : 0;
+  const started = timed ? performance.now() : 0;
+  timedBlock = timed;
+  try {
+    handleMessage(message);
+  } finally {
+    timedBlock = false;
+    self.postMessage(
+      timed
+        ? {
+            type: 'ack',
+            id: message.id,
+            receivedAt,
+            computeMs: performance.now() - started,
+            ackPostedAt: absoluteNow(),
+          }
+        : { type: 'ack', id: message.id },
+    );
+  }
+};
+
+/** Wall-aligned milliseconds comparable across the page and its workers. */
+function absoluteNow() {
+  return performance.timeOrigin + performance.now();
+}
+
+function handleMessage(message) {
   if (message.type === 'configure') {
+    if (Number.isSafeInteger(message.tune)) tune = message.tune;
     configure(message.mode, message.sampleRate, message.location);
     return;
   }
@@ -97,6 +140,7 @@ self.onmessage = (event) => {
   }
   if (message.type === 'reset') {
     blockCount = 0;
+    tune = message.tune;
     adsbStream.reset();
     if (message.clearAircraft) {
       aircraft.clear();
@@ -110,7 +154,11 @@ self.onmessage = (event) => {
 
   blockCount += 1;
   if (mode === 'fm') {
-    const bins = blockCount % 3 === 0 ? analyzeSpectrum(message.buffer) : null;
+    // Only seek reads spectra: skip the FFT and its transfer otherwise.
+    const bins =
+      message.spectrum === true && blockCount % 3 === 0
+        ? analyzeSpectrum(message.buffer)
+        : null;
     const { i, q, iqLevelDbfs } = normalizedIq(message.buffer);
     const decoded = demodulator.demodulate(i, q, 0);
     // The demodulator owns pooled output arrays. Transfer a copy so detaching
@@ -119,8 +167,10 @@ self.onmessage = (event) => {
     self.postMessage(
       {
         type: 'fm',
+        ...(timedBlock ? { workerPostedAt: absoluteNow() } : {}),
         samples,
         bins,
+        tune,
         snr:
           Number.isFinite(decoded.snr) && decoded.snr > 0
             ? 10 * Math.log10(decoded.snr)
@@ -151,6 +201,7 @@ self.onmessage = (event) => {
   if (decodedCount || removed || blockCount % 30 === 0) {
     self.postMessage({
       type: 'adsb',
+      tune,
       aircraft: publicAircraft(),
       decodedCount,
       positionsRejected: decoderStats.positionsRejected,
@@ -163,6 +214,8 @@ self.onmessage = (event) => {
           : null,
     });
   }
-};
+}
 
 configure(mode, sampleRate, receiverLocation);
+// Module loaded and configured: the controller may start sending blocks.
+self.postMessage({ type: 'ready' });

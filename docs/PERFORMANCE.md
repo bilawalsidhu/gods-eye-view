@@ -97,7 +97,8 @@ operational sample contained 3,909 observations and two selected labels, but its
 live aircraft and traffic rows were empty, so it remains a limited stress case.
 
 Snow, Noir, dense detection, and text-heavy combined layers are the clearest
-controlled comparison points for later optimization work.
+controlled comparison points for later optimization work. Snow has since been
+retired as a visual preset; its row records the measurement as taken.
 
 ## Keyed live sources
 
@@ -128,6 +129,12 @@ Use the same controls before attributing a difference to the application:
 6. Record live object counts before attributing a difference to the client.
 7. Treat a live-source outage as missing coverage, not as evidence of low client
    rendering cost.
+8. Record whether the app is running in Pinokio's embedded view or in an
+   external browser. One Pinokio 8.2.0 user reported severe stutter in the
+   embedded view that went away when the same local URL was opened in a normal
+   browser ([#365](https://github.com/bilawalsidhu/gods-eye-view/issues/365)).
+   Do not compare embedded-view and external-browser measurements directly;
+   compare the reported GPU renderer and matched scene settings first.
 
 ## What is not established yet
 

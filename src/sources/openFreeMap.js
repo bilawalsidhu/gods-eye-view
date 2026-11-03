@@ -1,0 +1,388 @@
+import { PbfReader } from 'pbf';
+import { VectorTile } from '@mapbox/vector-tile';
+import {
+  createSharedDecodedTileCache,
+  createVectorTileSource,
+} from './vectorTiles.js';
+import { clipTileRing, militaryOutlineLines } from './militaryTileGeometry.js';
+import { tileToBBox } from '../data/tomtomTiles.js';
+// Kept English in data; the map card and Contacts translate it.
+import { UNNAMED_MILITARY_AREA } from '../data/installationNames.js';
+
+/** Name of a military polygon the names pack has not named. */
+export { UNNAMED_MILITARY_AREA };
+
+const ROAD_TYPES = Object.freeze({
+  motorway: 'motorway',
+  trunk: 'trunk',
+  primary: 'primary',
+  secondary: 'secondary',
+  tertiary: 'tertiary',
+  minor: 'residential',
+});
+
+const SHARED_DECODED_TILES = createSharedDecodedTileCache({
+  maxEntries: 192,
+  maxCacheBytes: 32 * 1024 * 1024,
+});
+const TILE_PROJECTIONS = new Map();
+const MAX_PROJECTED_NUMBERS = 500_000;
+
+/** Conservative, deterministic retained-size estimate with a hard geometry cap. */
+export function estimateOpenFreeMapProjectionBytes(value) {
+  const seen = new Set();
+  const stack = [value];
+  let bytes = 0;
+  let numbers = 0;
+  while (stack.length) {
+    const item = stack.pop();
+    if (item == null) continue;
+    if (typeof item === 'number') {
+      numbers += 1;
+      if (numbers > MAX_PROJECTED_NUMBERS)
+        throw new Error('Vector tile projection coordinate limit exceeded');
+      bytes += 8;
+    } else if (typeof item === 'string') {
+      bytes += 16 + item.length * 2;
+    } else if (typeof item === 'boolean') {
+      bytes += 4;
+    } else if (typeof item === 'object') {
+      if (seen.has(item)) continue;
+      seen.add(item);
+      if (Array.isArray(item)) {
+        bytes += 24 + item.length * 8;
+        for (let i = 0; i < item.length; i += 1) stack.push(item[i]);
+      } else {
+        const entries = Object.entries(item);
+        bytes += 48 + entries.length * 16;
+        for (const [key, child] of entries) {
+          bytes += key.length * 2;
+          stack.push(child);
+        }
+      }
+    }
+  }
+  return bytes;
+}
+
+/** Register one consumer view over the parsed OpenFreeMap tile. */
+export function registerOpenFreeMapProjection(name, project) {
+  if (!name || typeof project !== 'function')
+    throw new TypeError('Invalid OpenFreeMap tile projection');
+  const current = TILE_PROJECTIONS.get(name);
+  if (current && current !== project)
+    throw new Error(`OpenFreeMap tile projection already registered: ${name}`);
+  TILE_PROJECTIONS.set(name, project);
+}
+
+/** Explicit test/runtime reset; individual consumers never evict each other. */
+export function clearSharedOpenFreeMapTiles() {
+  SHARED_DECODED_TILES.clear();
+}
+
+/**
+ * Surface traffic uses public motor-road classes only. Untyped service ways
+ * include car parks and grounds access, so none are used as through traffic.
+ * OpenMapTiles folds private access into `no`. Tunnels cannot be placed on
+ * the surface above them; ramps/bridges remain valid only on a motor road.
+ */
+function isDrivableOpenMapRoad(properties = {}) {
+  return (
+    Object.hasOwn(ROAD_TYPES, properties.class) &&
+    !properties.subclass &&
+    !properties.service &&
+    ![
+      'no',
+      'private',
+      'destination',
+      'customers',
+      'delivery',
+      'agricultural',
+      'forestry',
+    ].includes(properties.access) &&
+    properties.brunnel !== 'tunnel' &&
+    !properties.indoor
+  );
+}
+
+/** Translate public motor roads; reverse negative one-way geometry. */
+export function openMapRoad(coordinates, properties = {}) {
+  const type = ROAD_TYPES[properties.class];
+  if (!isDrivableOpenMapRoad(properties) || coordinates.length < 2) return null;
+  const reverse = Number(properties.oneway) === -1;
+  return {
+    coordinates: reverse ? coordinates.slice().reverse() : coordinates,
+    type,
+    drivable: true,
+    roadClass: properties.class,
+    roadProperties: { ...properties },
+    oneway: reverse || Number(properties.oneway) === 1 ? 1 : 0,
+    ramp: properties.ramp === 1,
+    brunnel: properties.brunnel || null,
+  };
+}
+
+/** Area-weighted centroid in tile-scale longitude/latitude coordinates. */
+export function polygonCentroid(ring) {
+  if (!ring?.length) return null;
+  const [ox, oy] = ring[0];
+  let area = 0,
+    x = 0,
+    y = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const ax = ring[j][0] - ox,
+      ay = ring[j][1] - oy;
+    const bx = ring[i][0] - ox,
+      by = ring[i][1] - oy;
+    const cross = ax * by - bx * ay;
+    area += cross;
+    x += (ax + bx) * cross;
+    y += (ay + by) * cross;
+  }
+  return Math.abs(area) > 1e-15
+    ? [ox + x / (3 * area), oy + y / (3 * area)]
+    : ring[0];
+}
+
+/** Clip a line to its tile core so buffered copies never animate duplicate dots. */
+export function clipTileLine(coords, box) {
+  const lines = [];
+  let line = [];
+  for (let i = 1; i < coords.length; i++) {
+    const a = coords[i - 1],
+      b = coords[i];
+    const dx = b[0] - a[0],
+      dy = b[1] - a[1];
+    let lo = 0,
+      hi = 1;
+    const p = [-dx, dx, -dy, dy],
+      q = [
+        a[0] - box.west,
+        box.east - a[0],
+        a[1] - box.south,
+        box.north - a[1],
+      ];
+    for (let k = 0; k < 4; k++) {
+      if (p[k] === 0) {
+        if (q[k] < 0) hi = -1;
+      } else if (p[k] < 0) lo = Math.max(lo, q[k] / p[k]);
+      else hi = Math.min(hi, q[k] / p[k]);
+    }
+    if (lo > hi) {
+      if (line.length > 1) lines.push(line);
+      line = [];
+      continue;
+    }
+    const start = [a[0] + lo * dx, a[1] + lo * dy],
+      end = [a[0] + hi * dx, a[1] + hi * dy];
+    const last = line.at(-1);
+    if (
+      !last ||
+      Math.abs(last[0] - start[0]) + Math.abs(last[1] - start[1]) > 1e-10
+    ) {
+      if (line.length > 1) lines.push(line);
+      line = [start];
+    }
+    line.push(end);
+  }
+  if (line.length > 1) lines.push(line);
+  return lines.filter((points) => {
+    let metres = 0;
+    for (let i = 1; i < points.length; i++)
+      metres +=
+        Math.hypot(
+          (points[i][0] - points[i - 1][0]) *
+            Math.cos((points[i][1] * Math.PI) / 180),
+          points[i][1] - points[i - 1][1],
+        ) * 111320;
+    return metres >= 12;
+  });
+}
+
+/** Decode road lines and unnamed military polygons from an OpenMapTiles tile. */
+export function decodeOpenFreeMapTile(bytes, z, x, y) {
+  return decodeLayers(bytes, z, x, y, ['transportation', 'landuse']);
+}
+
+/** Decode only the unnamed military polygons; installations never use roads. */
+export function decodeOpenFreeMapMilitaryTile(bytes, z, x, y) {
+  return decodeLayers(bytes, z, x, y, ['landuse']);
+}
+
+function decodeLayers(bytes, z, x, y, layerNames, parsedTile = null) {
+  const tile = parsedTile || new VectorTile(new PbfReader(bytes));
+  const roads = [],
+    military = [];
+  const box = tileToBBox(z, x, y);
+  for (const name of layerNames) {
+    const layer = tile.layers[name];
+    if (!layer) continue;
+    if (layer.length > 40_000)
+      throw new Error('Vector tile feature limit exceeded');
+    for (let i = 0; i < layer.length; i++) {
+      const feature = layer.feature(i),
+        props = feature.properties;
+      if (
+        name === 'transportation'
+          ? !isDrivableOpenMapRoad(props)
+          : props.class !== 'military'
+      )
+        continue;
+      const geometry = feature.toGeoJSON(x, y, z).geometry;
+      if (name === 'transportation') {
+        const lines =
+          geometry.type === 'LineString'
+            ? [geometry.coordinates]
+            : geometry.type === 'MultiLineString'
+              ? geometry.coordinates
+              : [];
+        for (const coords of lines)
+          for (const clipped of clipTileLine(coords, box))
+            roads.push(openMapRoad(clipped, props));
+      } else {
+        const polygons =
+          geometry.type === 'Polygon'
+            ? [geometry.coordinates]
+            : geometry.type === 'MultiPolygon'
+              ? geometry.coordinates
+              : [];
+        for (let p = 0; p < polygons.length; p++) {
+          const rings = polygons[p]
+            .map((r) => clipTileRing(r, box))
+            .filter((r) => r.length >= 4);
+          const ring = rings[0],
+            centroid = polygonCentroid(ring);
+          if (!centroid || ring.length < 4) continue;
+          const [longitude, latitude] = centroid;
+          military.push({
+            id: `ofm:${z}/${x}/${y}:${feature.id ?? i}:${p}`,
+            kind: 'installation',
+            class: 'military_land',
+            name: UNNAMED_MILITARY_AREA,
+            latitude,
+            longitude,
+            footprint: ring,
+            rings,
+            featureKey:
+              feature.id == null
+                ? `tile:${z}/${x}/${y}:${i}`
+                : String(feature.id),
+            tileEpsilon: (box.east - box.west) / feature.extent,
+            tileBounds: box,
+            tileZoom: z,
+            outlineLines: rings.flatMap((r) => militaryOutlineLines(r, box)),
+            validation: 'unreviewed',
+            sources: [{ name: 'OpenStreetMap', id: `tile:${z}/${x}/${y}` }],
+          });
+        }
+      }
+    }
+  }
+  return { roads, military };
+}
+
+function decodeSharedOpenFreeMapTile(bytes, z, x, y) {
+  const tile = new VectorTile(new PbfReader(bytes));
+  // Each layer is decoded when a consumer first selects it, so installations
+  // never pay for roads, nor outlines for either.
+  let roads = null;
+  let military = null;
+  const projections = new Map();
+  let baseBytes = 0;
+  let projectionBytes = 0;
+  let resizeCacheEntry = null;
+  const project = (name) => {
+    if (projections.has(name)) return projections.get(name);
+    const projector = TILE_PROJECTIONS.get(name);
+    if (!projector)
+      throw new Error(`Unknown OpenFreeMap tile projection: ${name}`);
+    const value = projector(bytes, z, x, y, tile);
+    const retainedBytes = estimateOpenFreeMapProjectionBytes(value);
+    projections.set(name, value);
+    projectionBytes += retainedBytes;
+    resizeCacheEntry?.(baseBytes + projectionBytes);
+    return value;
+  };
+
+  return {
+    get roads() {
+      return (roads ??= decodeLayers(
+        bytes,
+        z,
+        x,
+        y,
+        ['transportation'],
+        tile,
+      ).roads);
+    },
+    get military() {
+      return (military ??= decodeLayers(
+        bytes,
+        z,
+        x,
+        y,
+        ['landuse'],
+        tile,
+      ).military);
+    },
+    project,
+    bindSharedCacheEntry(resize, initialBytes) {
+      resizeCacheEntry = resize;
+      baseBytes = initialBytes;
+      resizeCacheEntry(baseBytes + projectionBytes);
+    },
+    releaseSharedCacheEntry() {
+      projections.clear();
+      baseBytes = 0;
+      projectionBytes = 0;
+      resizeCacheEntry = null;
+    },
+  };
+}
+
+/**
+ * Construct an immutable-version road/military tile source without starting I/O.
+ *
+ * `allowedOrigin` is deliberately not set here: `createVectorTileSource`
+ * derives it from whichever `tileJsonUrl` is in effect, so a caller that
+ * repoints only `tileJsonUrl` gets tiles from that host or a named error —
+ * never a silent fall back to the default host (#933). Passing
+ * `allowedOrigin` explicitly still overrides both.
+ */
+export function createOpenFreeMapSource(options = {}) {
+  const {
+    projection = null,
+    decode,
+    sharedDecodedCache,
+    selectDecoded,
+    ...sourceOptions
+  } = options;
+  const shared = !decode;
+  // Shared consumers hold only their slice of each tile. The shared decode
+  // (32 MiB) plus traffic and installations (12 MiB each) and outlines
+  // (8 MiB) are charged 64 MiB together, the budget of the single OpenFreeMap
+  // source traffic and installations shared before; charges are estimates.
+  return createVectorTileSource({
+    tileJsonUrl: 'https://tiles.openfreemap.org/planet',
+    decode: shared
+      ? decodeSharedOpenFreeMapTile
+      : decode || decodeOpenFreeMapTile,
+    ...(shared
+      ? {
+          sharedDecodedCache: sharedDecodedCache || SHARED_DECODED_TILES,
+          selectedSize: estimateOpenFreeMapProjectionBytes,
+          selectDecoded:
+            selectDecoded ||
+            (projection
+              ? (value) => value.project(projection)
+              : ({ roads, military }) => ({ roads, military })),
+        }
+      : {
+          ...(sharedDecodedCache ? { sharedDecodedCache } : {}),
+          ...(selectDecoded ? { selectDecoded } : {}),
+        }),
+    maxEntries: 192,
+    maxCacheBytes: (shared ? 12 : 64) * 1024 * 1024,
+    ...sourceOptions,
+  });
+}

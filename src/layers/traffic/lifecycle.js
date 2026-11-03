@@ -1,3 +1,4 @@
+import { observeTrafficSurface } from './surface.js';
 import * as Cesium from 'cesium';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
 import {
@@ -11,7 +12,6 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { resetFlowTileCache } = source;
 
   const methods = {
@@ -40,8 +40,10 @@ export function createLifecycle({
       layerState._densityScale = 1.0;
       layerState._speedScale = 1.0;
       layerState._lastViewCenter = null;
-      layerState._flowCoveragePct = 0;
+      layerState._flowRoads = null;
       layerState._flowError = null;
+      layerState._flowStale = false;
+      layerState._flowOldestTileAt = null;
       if (TRAFFIC_TIMING_ENABLED) {
         layerState._trafficTimingCurrentAnchor = null;
         layerState._trafficTimingSequence = 0;
@@ -76,13 +78,13 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     enable(viewer) {
+      if (layerState._enabled) return;
       layerState._enabled = true;
-      holdContinuousRender('traffic'); // per-frame animator (perf wave 2)
+      layerState._surfaceFrameRemover = observeTrafficSurface(viewer.scene);
+      if (layerState._roadMode !== 'tomtom') source.prefetch?.();
+      parts.animation.syncRenderDemand();
       layerState._lastAnimTime = 0;
       layerState._pointCollection.show = true;
-
-      // One status check per session decides sim vs live-TomTom mode.
-      parts.flow.ensureFlowStatus();
 
       layerState._preRenderRemover = viewer.scene.preRender.addEventListener(
         parts.animation.animate,
@@ -101,13 +103,13 @@ export function createLifecycle({
       viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
       // Always inspect the final view, even when the last flight step is below
       // camera.changed's movement threshold.
-      layerState._arrivalRemover = viewer.camera.moveEnd.addEventListener(
-        parts.viewport.onCameraChanged,
+      layerState._arrivalRemover = viewer.camera.moveEnd.addEventListener(() =>
+        parts.viewport.onCameraChanged({ immediate: true }),
       );
       claimCameraSensitivity(viewer.camera, 'traffic', 0.05);
 
-      // Kick off initial viewport check
-      parts.viewport.onCameraChanged();
+      // Enabling is explicit intent, not a camera gesture that needs settling.
+      parts.viewport.onCameraChanged({ immediate: true });
 
       // Boot-order guard (field-test round 1: layer sat empty until the user
       // moved): when the persisted layer state re-enables traffic during the
@@ -117,7 +119,12 @@ export function createLifecycle({
       // failed first fetch left the viewport unloaded while parked.
       clearInterval(layerState._enableKickTimer);
       layerState._enableKickTimer = setInterval(() => {
-        if (!layerState._enabled || layerState._lastUpdate) {
+        if (
+          !layerState._enabled ||
+          layerState._lastUpdate ||
+          layerState._roadRetryStopped ||
+          layerState._retryAttempts >= 3
+        ) {
           clearInterval(layerState._enableKickTimer);
           layerState._enableKickTimer = null;
           return;
@@ -135,7 +142,8 @@ export function createLifecycle({
      */
     disable(viewer) {
       layerState._enabled = false;
-      releaseContinuousRender('traffic');
+      services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
+      parts.animation.syncRenderDemand();
       clearTimeout(layerState._fetchTimeout);
       clearInterval(layerState._enableKickTimer);
       layerState._enableKickTimer = null;
@@ -148,11 +156,16 @@ export function createLifecycle({
       layerState._flowPending = 0;
       layerState._roadError = null;
       parts.animation.clearDots();
+      layerState._lastBounds = null;
       layerState._lastViewCenter = null;
       // A stale outage from the last session would misreport a fresh enable —
       // the next load re-derives feed health from real evidence.
       layerState._flowError = null;
+      layerState._flowStale = false;
+      layerState._flowOldestTileAt = null;
 
+      layerState._surfaceFrameRemover?.();
+      layerState._surfaceFrameRemover = null;
       if (layerState._preRenderRemover) {
         layerState._preRenderRemover();
         layerState._preRenderRemover = null;

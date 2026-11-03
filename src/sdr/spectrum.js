@@ -91,6 +91,7 @@ export function findDirectionalFmPeak(
     minFrequency = 87_500_000,
     maxFrequency = 108_000_000,
     thresholdDb = 6,
+    skipFrequency = NaN,
   } = {},
 ) {
   if (
@@ -124,6 +125,7 @@ export function findDirectionalFmPeak(
   ) {
     if (direction > 0 && frequency <= afterFrequency + 75_000) continue;
     if (direction < 0 && frequency >= afterFrequency - 75_000) continue;
+    if (Math.abs(frequency - skipFrequency) <= 75_000) continue;
     const index = Math.round(
       (frequency - centerFrequency) / binWidth + bins.length / 2,
     );

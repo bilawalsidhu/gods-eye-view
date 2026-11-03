@@ -1,4 +1,10 @@
 import * as Cesium from 'cesium';
+import {
+  layerTitle,
+  mapAnalystRecord,
+  parseGeojsonLines,
+} from '../sources/infrastructureData.js';
+import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
 import { isPointerFree } from './inputOwnership.js';
 import {
   selectInfraLod,
@@ -14,10 +20,6 @@ const VISIBILITY_UPDATE_MS = 450;
 export const LOCAL_OVERLAY_COHORT_LIMIT = 160;
 const LOCAL_OVERLAY_COLLISION_CAPACITY = 96;
 const LOCAL_OVERLAY_CELL_SURPLUS = 2;
-const LOCAL_OVERLAY_MAX_DISTANCE_M = 14000000;
-const LOCAL_OVERLAY_FADE_START_M = 250000;
-const LOCAL_OVERLAY_FADE_START_RATIO =
-  LOCAL_OVERLAY_FADE_START_M / LOCAL_OVERLAY_MAX_DISTANCE_M;
 // Stems are anchored at ellipsoid height 0, but high-elevation features
 // (e.g. dams in river canyons) sit hundreds of meters above the ellipsoid,
 // burying the short close-in stem inside the photoreal mesh. Once the
@@ -90,78 +92,6 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
 }
 
 /**
- * Map one local infrastructure feature to a JSON-safe analyst record
- * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
- * fields are null, never NaN/undefined. Layer-specific fields that do not
- * apply (river/output on datacenters, capacity on dams) stay null so a
- * shared compact payload can copy them without inventing values.
- * Names are unclamped — overlay cards shorten for paint; queries need the
- * full source string ("Usina Hidrelétrica de Itaipu").
- * @param {Object|null|undefined} raw - {id, lat, lon, properties}.
- * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams`).
- * @returns {{id: string, name: string|null, lat: number|null, lon: number|null,
- *   operator: string|null, capacity: string|null, river: string|null,
- *   output: string|null}}
- */
-export function mapAnalystRecord(raw, layerId = '') {
-  const num = (v) => (Number.isFinite(v) ? v : null);
-  const text = (v) => {
-    const t = String(v ?? '').trim();
-    return t && t !== 'undefined' && t !== 'null' ? t : null;
-  };
-  const props =
-    raw?.properties &&
-    typeof raw.properties === 'object' &&
-    !Array.isArray(raw.properties)
-      ? raw.properties
-      : {};
-  const tags =
-    props.tags && typeof props.tags === 'object' && !Array.isArray(props.tags)
-      ? props.tags
-      : {};
-  const name =
-    text(props.name) ||
-    text(tags.name) ||
-    text(tags['name:en']) ||
-    text(tags.official_name) ||
-    null;
-  const operator =
-    text(tags.operator) ||
-    text(props.operator) ||
-    text(tags['operator:short']) ||
-    null;
-  const capacity =
-    layerId === 'local-datacenters'
-      ? text(tags['capacity:it_load']) ||
-        text(tags.it_load) ||
-        text(tags.capacity) ||
-        text(props.capacity)
-      : null;
-  const river =
-    layerId === 'local-dams'
-      ? text(tags.associated_river) ||
-        text(props.associated_river) ||
-        text(tags.river) ||
-        text(props.river) ||
-        text(tags['river:name'])
-      : null;
-  const output =
-    layerId === 'local-dams'
-      ? text(props.output) || text(tags['plant:output:electricity'])
-      : null;
-  return {
-    id: name || text(raw?.id) || layerTitle(layerId),
-    name,
-    lat: num(raw?.lat),
-    lon: num(raw?.lon),
-    operator,
-    capacity,
-    river,
-    output,
-  };
-}
-
-/**
  * Produce one normalized-contract input owned by a local infrastructure layer.
  * The host revalidates the authoritative `source` value while normalizing it.
  * @param {object} options
@@ -182,33 +112,15 @@ export function createLocalInfrastructureOverlayEntry({
   accent,
 }) {
   const copy = localInfrastructureOverlayCopy(properties, layerId);
-  return {
-    id: String(id),
+  return createInfrastructureOverlayEntry({
+    id,
     source: layerId,
     position,
-    variant: 'card',
     title: copy.title,
     details: copy.details,
     accent,
     priority,
-    collisionGroup: 'ambient-card',
-    zIndex: 30,
-    interactive: false,
-    minDistance: 0,
-    maxDistance: LOCAL_OVERLAY_MAX_DISTANCE_M,
-    distanceFadeStartRatio: LOCAL_OVERLAY_FADE_START_RATIO,
-    distanceScale: {
-      near: 250000,
-      nearValue: 1,
-      far: 9000000,
-      farValue: 0.62,
-    },
-    edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-    gapPx: 15,
-    placement: 'above',
-  };
+  });
 }
 
 /**
@@ -394,6 +306,7 @@ export function createLocalGeoJsonLayer(
     color,
     icon = '📍',
     source = 'Local JSONL',
+    osmDerived = false,
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
@@ -409,6 +322,8 @@ export function createLocalGeoJsonLayer(
     clearSelectedEntityContextForLayer,
     removeEntityContextsForLayer,
     governorRequestRender,
+    showOsmCredit,
+    hideOsmCredit,
   },
 ) {
   let _dataSource = null;
@@ -538,6 +453,7 @@ export function createLocalGeoJsonLayer(
   };
 
   const disableLayer = (viewer) => {
+    hideOsmCredit?.(viewer, id);
     _enabled = false;
     clearGroundRetryRender();
     _activeLodIds = new Set();
@@ -681,11 +597,7 @@ export function createLocalGeoJsonLayer(
                 }
                 const text = await response.text();
                 if (_destroyed) return;
-                const lines = text
-                  .split('\n')
-                  .filter((l) => l.trim().length > 0);
-
-                features = lines.map((line) => JSON.parse(line));
+                features = parseGeojsonLines(text);
                 _cachedFeatures = features;
               }
 
@@ -942,6 +854,7 @@ export function createLocalGeoJsonLayer(
       }
 
       if (_destroyed) return;
+      if (_enabled && _count > 0 && osmDerived) showOsmCredit?.(viewer, id);
       // 3. Add an incredibly fast pre-render occluder to hide points behind the globe
       if (_enabled && !_preRenderRemover) {
         _preRenderRemover = viewer.scene.preRender.addEventListener(() => {
@@ -1376,8 +1289,4 @@ function clampCardLine(value) {
   return text.length > 48 ? `${text.slice(0, 45)}...` : text;
 }
 
-function layerTitle(layerId) {
-  if (layerId === 'local-datacenters') return 'Datacenter';
-  if (layerId === 'local-dams') return 'Dam';
-  return 'Feature';
-}
+export { mapAnalystRecord };
