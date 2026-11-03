@@ -36,6 +36,7 @@ import {
   DISPLAY_CORRIDOR_FAIR_SHARE,
 } from './policy.js';
 import { billboardState, setBillboard } from '../../data/billboardMirror.js';
+import { modelState } from '../../data/modelMirror.js';
 
 export function createMotion({
   flightState,
@@ -530,7 +531,7 @@ export function createMotion({
         flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       return modelVisualAnchor(
-        flightState._trackedModel.modelMatrix,
+        modelState(flightState._trackedModel).modelMatrix,
         spec.visualCenterNative,
         Number.isFinite(flightState._trackedModel.computedScale)
           ? flightState._trackedModel.computedScale
@@ -559,7 +560,7 @@ export function createMotion({
     )
       return null;
     return Cesium.Matrix4.getTranslation(
-      flightState._trackedModel.modelMatrix,
+      modelState(flightState._trackedModel).modelMatrix,
       flightState._scratchTrailClip,
     );
   }

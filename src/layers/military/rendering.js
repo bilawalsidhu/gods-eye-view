@@ -56,6 +56,7 @@ import {
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 import { aircraftVisuals } from '../aircraft/visualState.js';
 import { billboardState, setBillboard } from '../../data/billboardMirror.js';
+import { modelState, setModel } from '../../data/modelMirror.js';
 
 export function createRendering({
   flightState,
@@ -253,9 +254,9 @@ export function createRendering({
   }
 
   /** World model matrix from a position + course heading (pitch/roll 0; ENU frame). Writes into
-   *  `result` and returns it — pass each model's OWN `.modelMatrix` so models never share one mutable
-   *  matrix object (see flights.js for the full rationale: sharing one scratch stacked every model on
-   *  the last-written transform, and the per-frame tracked write made it flicker). */
+   *  `result` (a shared scratch by default) and returns it. Push it with `setModel`, which copies
+   *  it into Core's mirror and the model's own matrix, so models never share one mutable matrix
+   *  object (see flights.js for the full rationale). */
 
   function _modelMatrix(
     pos,
@@ -340,26 +341,31 @@ export function createRendering({
       flightState._scratchGroundPos,
     );
     if (!displayPos) {
-      model.show = false; // no ground evidence → nothing safe to place a depth-tested model at
+      setModel(model, 'show', false); // no ground evidence → nothing safe to place a depth-tested model at
       setBillboard(bb, 'show', true);
       return false;
     }
     // The matrix is written BEFORE the readiness test on purpose: a model can flip
     // `ready` during scene update after this tick, and a first rendered frame on a
     // stale load-start matrix is the one-frame jump this ordering prevents.
-    _modelMatrix(
-      displayPos,
-      course,
-      model.modelMatrix,
-      _modelSpec(flightState.records.data.get(icao24)?.klass).headingOffsetDeg,
+    setModel(
+      model,
+      'modelMatrix',
+      _modelMatrix(
+        displayPos,
+        course,
+        undefined,
+        _modelSpec(flightState.records.data.get(icao24)?.klass)
+          .headingOffsetDeg,
+      ),
     );
     if (!model.ready) {
-      model.show = false; // not loaded yet → keep the 2D icon, no half-model flash
+      setModel(model, 'show', false); // not loaded yet → keep the 2D icon, no half-model flash
       setBillboard(bb, 'show', true);
       return false;
     }
     beforeShow?.();
-    if (!model.show) model.show = true;
+    if (!modelState(model).show) setModel(model, 'show', true);
     if (billboardState(bb).show) setBillboard(bb, 'show', false); // hand off ONLY once the model renders
     return true;
   }
@@ -383,7 +389,7 @@ export function createRendering({
    *  a regime exit — only ever clears it. Mirror of flights.js. */
 
   function _modelIsRendering(model) {
-    return !!model && model.ready === true && model.show === true;
+    return !!model && model.ready === true && modelState(model)?.show === true;
   }
 
   /** Spec identity for a LOADED model — mirror of flights.js: URL and scale
@@ -551,7 +557,7 @@ export function createRendering({
     // an unplaced primitive claim ownership from the billboard for the frames
     // between admission and the next fleet tick (and draw at the identity matrix,
     // i.e. the Earth's centre). The handoff turns it on once it has a matrix.
-    model.show = false;
+    setModel(model, 'show', false);
     flightState._modelCollection.add(model);
     flightState._models.set(icao24, model);
     flightState._planeModelLoaded = true; // GLB is cached now — the tracked entity's model can fade in its billboard
@@ -656,7 +662,8 @@ export function createRendering({
       flightState._modelCollection &&
       !flightState._modelCollection.isDestroyed();
     if (!active) {
-      if (flightState._trackedModel) flightState._trackedModel.show = false;
+      if (flightState._trackedModel)
+        setModel(flightState._trackedModel, 'show', false);
       return;
     }
     // Ask the frame-cached source directly. If the entity callback already ran,
@@ -668,7 +675,8 @@ export function createRendering({
       billboardState(flightState._billboards.get(flightState._trackedIcao))
         ?.position;
     if (!pos) {
-      if (flightState._trackedModel) flightState._trackedModel.show = false;
+      if (flightState._trackedModel)
+        setModel(flightState._trackedModel, 'show', false);
       return;
     }
     if (
@@ -736,7 +744,7 @@ export function createRendering({
           // standalone primitive always exposes the tracked aircraft pick id.
           m.id = flightState._trackedIcao;
           aircraftVisuals.write(m).specKey = trackedKey; // class-change sync compares against this
-          m.show = false; // admitted, not yet the visual — the driver shows it once placed
+          setModel(m, 'show', false); // admitted, not yet the visual — the driver shows it once placed
           // Seed the world transform before the primitive enters the scene. A model
           // can become ready+shown between render phases; leaving Cesium's identity
           // default here produces a one-frame jump to the Earth's center.
@@ -752,11 +760,15 @@ export function createRendering({
               flightState._scratchGroundPos,
             );
             if (displayPos) {
-              _modelMatrix(
-                displayPos,
-                parts.motion._trackedDisplayCourse(),
-                m.modelMatrix,
-                trackedSpec.headingOffsetDeg,
+              setModel(
+                m,
+                'modelMatrix',
+                _modelMatrix(
+                  displayPos,
+                  parts.motion._trackedDisplayCourse(),
+                  undefined,
+                  trackedSpec.headingOffsetDeg,
+                ),
               );
             }
           }
@@ -787,17 +799,21 @@ export function createRendering({
         flightState._scratchGroundPos,
       );
       if (!displayPos) {
-        flightState._trackedModel.show = false; // no ground evidence → the billboard carries it
+        setModel(flightState._trackedModel, 'show', false); // no ground evidence → the billboard carries it
         return;
       }
       const spec = _modelSpec(
         flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
-      _modelMatrix(
-        displayPos,
-        parts.motion._trackedDisplayCourse(),
-        flightState._trackedModel.modelMatrix,
-        spec.headingOffsetDeg,
+      setModel(
+        flightState._trackedModel,
+        'modelMatrix',
+        _modelMatrix(
+          displayPos,
+          parts.motion._trackedDisplayCourse(),
+          undefined,
+          spec.headingOffsetDeg,
+        ),
       );
       if (!flightState._trackedModel.ready) return;
       flightState._trackedModel.scale = trackedModelScaleForPixelCap({
@@ -811,7 +827,7 @@ export function createRendering({
         fovyRad: flightState._viewer.camera.frustum.fovy,
         maximumPixelSize: TRACKED_MODEL_MAX_PX,
       });
-      flightState._trackedModel.show = true;
+      setModel(flightState._trackedModel, 'show', true);
     }
   }
 
@@ -962,7 +978,7 @@ export function createRendering({
         // Also hide any 3D model — otherwise a model that crossed the limb would keep
         // rendering through the hidden globe at its last matrix.
         const m = flightState._models.get(icao24);
-        if (m && m.show) m.show = false;
+        if (m && modelState(m)?.show) setModel(m, 'show', false);
         continue;
       }
 

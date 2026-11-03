@@ -17,6 +17,7 @@ import {
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 import { billboardState, setBillboard } from '../../data/billboardMirror.js';
+import { modelState } from '../../data/modelMirror.js';
 
 export function createQueries({
   flightState,
@@ -483,7 +484,7 @@ export function createQueries({
           ? parts.motion._trackedVisualCached() || billboardState(bb).position
           : modelOwnsVisual
             ? modelVisualAnchor(
-                model.modelMatrix,
+                modelState(model).modelMatrix,
                 spec.visualCenterNative,
                 Number.isFinite(model.computedScale)
                   ? model.computedScale

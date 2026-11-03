@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { modelState } from './modelMirror.js';
 /**
  * Model-space visual centres measured from the shipped GLBs' scene-space AABBs.
  *
@@ -112,7 +113,8 @@ const _chainScratch = new Cesium.Matrix4();
  * @returns {{x:number,y:number,z:number}|null} World position of the anchor.
  */
 export function modelAnchorWorld(model, nativeAnchor, result) {
-  if (!model || !model.modelMatrix || !nativeAnchor || !result) return null;
+  const modelMatrix = modelState(model)?.modelMatrix;
+  if (!modelMatrix || !nativeAnchor || !result) return null;
   const scale = Number.isFinite(model.computedScale) ? model.computedScale : 1;
   _anchorScratch.x = (nativeAnchor[0] || 0) * scale;
   _anchorScratch.y = (nativeAnchor[1] || 0) * scale;
@@ -122,7 +124,7 @@ export function modelAnchorWorld(model, nativeAnchor, result) {
   // baked root transform is carried too.
   const components = model?.sceneGraph?.components?.transform;
   Cesium.Matrix4.multiplyTransformation(
-    model.modelMatrix,
+    modelMatrix,
     components || Cesium.Matrix4.IDENTITY,
     _chainScratch,
   );
