@@ -4,8 +4,7 @@ import {
   horizonOccluder,
 } from '../../../data/render/cesiumProjection.js';
 
-// Cesium ScreenSpaceEventType.LEFT_CLICK; available before the SDK loads.
-export const FIRMS_LEFT_CLICK = 2;
+export const FIRMS_LEFT_CLICK = Cesium.ScreenSpaceEventType.LEFT_CLICK;
 export const projectFirmsWindow = worldToWindowCoordinates;
 export const firmsHorizonOccluder = horizonOccluder;
 

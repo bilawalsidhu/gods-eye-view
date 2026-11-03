@@ -9,7 +9,14 @@ export const CYBER_SONAR_CESIUM_VERSION = '1.138.0';
 // Follow every public DrawCommand setter, including pick/shadow/culling flags.
 // Copying native.dirty would keep derived pipelines dirty forever: the scene
 // consumes our command, so it never clears that flag on the native command.
-let commandProperties;
+const commandProperties = Object.entries(
+  Object.getOwnPropertyDescriptors(Cesium.DrawCommand.prototype),
+)
+  .filter(
+    ([key, descriptor]) =>
+      descriptor.set && key !== 'shaderProgram' && key !== 'uniformMap',
+  )
+  .map(([key]) => key);
 
 export function syncCyberSonarCommand(
   native,
@@ -18,14 +25,6 @@ export function syncCyberSonarCommand(
   uniforms,
   labelBackground,
 ) {
-  commandProperties ??= Object.entries(
-    Object.getOwnPropertyDescriptors(Cesium.DrawCommand.prototype),
-  )
-    .filter(
-      ([key, descriptor]) =>
-        descriptor.set && key !== 'shaderProgram' && key !== 'uniformMap',
-    )
-    .map(([key]) => key);
   if (!record.command) {
     record.command = new Cesium.DrawCommand();
     record.uniformMap = {

@@ -1,4 +1,5 @@
 import { normalizeRoadMode } from './roadModes.js';
+import * as Cesium from 'cesium';
 import { FLOW_BUCKET_COLORS } from './policy.js';
 
 export function createState({ services }) {
@@ -293,7 +294,7 @@ export function createState({ services }) {
 
   /** Reusable scratch Cartesian3 to avoid per-frame allocation / GC pressure */
 
-  layerState._scratchLerp = { x: 0, y: 0, z: 0 };
+  layerState._scratchLerp = new Cesium.Cartesian3();
 
   // ─── Animation ─────────────────────────────────────────────
 

@@ -9,11 +9,11 @@ import { toCesium2, toCesium3, toGeo3 } from './convert.js';
 import { createCesiumFollow } from './follow.js';
 
 const { math } = geo;
-const easings = () => ({
+const EASINGS = {
   cubicInOut: Cesium.EasingFunction.CUBIC_IN_OUT,
   sinusoidalInOut: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
   linear: Cesium.EasingFunction.LINEAR_NONE,
-});
+};
 
 // Cesium reports heading and roll in [0, 2π]; the contract wants [0, 2π).
 function wrapAngle(angle) {
@@ -43,7 +43,7 @@ const cesiumDestination = (destination) =>
       )
     : toCesium3(destination);
 
-const cesiumEasing = (easing) => (easing ? easings()[easing] : undefined);
+const cesiumEasing = (easing) => (easing ? EASINGS[easing] : undefined);
 
 // A HeadingPitchRange or a Cartesian offset, as Cesium's lookAt takes them.
 const cesiumOffset = (offset) =>

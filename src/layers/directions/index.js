@@ -68,11 +68,10 @@ export function presentRoutingFailure(error) {
 
 /** Route colour — the annotation palette's cyan, so voice routes and Directions match. */
 export const DIRECTIONS_ROUTE_COLOR = '#39d0ff';
-const MARKER_A_COLOR = () => Cesium.Color.fromCssColorString('#5dff9f');
-const MARKER_B_COLOR = () => Cesium.Color.fromCssColorString('#ff6b6b');
-const STEP_COLOR = () => Cesium.Color.WHITE.withAlpha(0.95);
-const STEP_OUTLINE = () =>
-  Cesium.Color.fromCssColorString(DIRECTIONS_ROUTE_COLOR);
+const MARKER_A_COLOR = Cesium.Color.fromCssColorString('#5dff9f');
+const MARKER_B_COLOR = Cesium.Color.fromCssColorString('#ff6b6b');
+const STEP_COLOR = Cesium.Color.WHITE.withAlpha(0.95);
+const STEP_OUTLINE = Cesium.Color.fromCssColorString(DIRECTIONS_ROUTE_COLOR);
 const STEP_PIXEL_SIZE = 8;
 const STEP_SELECTED_PIXEL_SIZE = 13;
 /** Route request timeout (ms) — the proxy itself gives OSRM 12 s. */
@@ -1027,10 +1026,10 @@ export function createDirectionsLayer({
     if (!_viewer && !_native) return;
     if (letter === 'a') {
       removeEntity(_markerA);
-      _markerA = markerEntity('A', point, MARKER_A_COLOR());
+      _markerA = markerEntity('A', point, MARKER_A_COLOR);
     } else {
       removeEntity(_markerB);
-      _markerB = markerEntity('B', point, MARKER_B_COLOR());
+      _markerB = markerEntity('B', point, MARKER_B_COLOR);
     }
   }
 
@@ -1137,9 +1136,9 @@ export function createDirectionsLayer({
       _stepPoints.add({
         id: `directions:step:${index}`,
         position: Cesium.Cartesian3.fromDegrees(step.lon, step.lat, 0),
-        color: STEP_COLOR(),
+        color: STEP_COLOR,
         pixelSize: STEP_PIXEL_SIZE,
-        outlineColor: STEP_OUTLINE(),
+        outlineColor: STEP_OUTLINE,
         outlineWidth: 2,
         show: false,
         // The shared ground floor is a coarse cell, and on the photoreal stack
