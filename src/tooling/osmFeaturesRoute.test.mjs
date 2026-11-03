@@ -380,6 +380,14 @@ test('a cross-site page cannot spend the operator Overpass', async () => {
     'sec-fetch-site': 'same-origin',
   });
   assert.equal(own.status, 200);
+  // Like /api/overpass, it works behind a reverse proxy: forwarding headers
+  // alone are not a refusal.
+  const proxied = await request('preset=school&bbox=0,0,2,2', undefined, {
+    host: 'localhost:5173',
+    'sec-fetch-site': 'same-origin',
+    'x-forwarded-for': '203.0.113.7',
+  });
+  assert.equal(proxied.status, 200);
 });
 
 test('an upstream refusal is not an empty answer', async () => {
