@@ -28,11 +28,12 @@ import {
   parseCandidateKey,
   quantizeBox,
   rankLatest,
-  shortDay,
   utcDay,
   validateBox,
   viewTooLargeMessage,
 } from './model.js';
+import { msg, t } from '../../i18n/index.js';
+import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -46,10 +47,11 @@ export const SPLIT_PUBLISH_MS = 400;
 /** The three modes, in share-link order (`m` = index). */
 export const MODES = Object.freeze(['image', 'basemap', 'ab']);
 
-const COMPARISON_IN_USE = 'Comparison in use by another scene';
-const COMPARISON_UNAVAILABLE = 'Esri map unavailable · no swipe';
-const COMPARISON_NEEDS_GLOBE = 'Swipe needs a globe map';
-const ESRI_KEPT = 'Imagery stays on Esri · CLEAR to use Google 3D';
+// Kept English in the snapshot (AI tools read it); the card translates them.
+const COMPARISON_IN_USE = msg('Comparison in use by another scene');
+const COMPARISON_UNAVAILABLE = msg('Esri map unavailable · no swipe');
+const COMPARISON_NEEDS_GLOBE = msg('Swipe needs a globe map');
+const ESRI_KEPT = msg('Imagery stays on Esri · CLEAR to use Google 3D');
 /** ZOOM IN's flight time, in seconds. */
 const ZOOM_FIT_SECONDS = 1.2;
 const DEFAULT_SPLIT = 0.5;
@@ -630,7 +632,7 @@ export function createRecentImageryLayer({
     } catch (error) {
       if (abort.signal.aborted) return;
       resetCatalog();
-      _catalogError = error?.message || 'Imagery catalog unavailable';
+      _catalogError = error?.message || msg('Imagery catalog unavailable');
     } finally {
       if (_searchAbort === abort) {
         _searchAbort = null;
@@ -748,15 +750,21 @@ export function createRecentImageryLayer({
 
   function notes() {
     const out = [];
-    if (_truncated) out.push('Catalog truncated · a newer clear day may exist');
+    if (_truncated)
+      out.push(t('Catalog truncated · a newer clear day may exist'));
     for (const error of _catalogErrors) {
       const label = PRODUCTS[error.product]?.label || error.product;
-      out.push(`${label} catalog unavailable · ${error.message}`);
+      out.push(
+        t('{label} catalog unavailable · {detail}', {
+          label,
+          detail: error.message,
+        }),
+      );
     }
     const today = utcDay(now());
     const viirsToday = candidateFor(`VIIRS:${today}`);
     if (viirsToday?.availability === 'unknown' && _sources.viirs)
-      out.push('Daily overview for today may still be empty until the pass');
+      out.push(t('Daily overview for today may still be empty until the pass'));
     return out;
   }
 
@@ -767,7 +775,7 @@ export function createRecentImageryLayer({
       key: key || null,
       candidate: candidateFor(key),
       label: parsed
-        ? `${shortDay(parsed.day)} · ${PRODUCTS[parsed.product].name} · ${PRODUCTS[parsed.product].resolutionM} m`
+        ? `${displayDay(parsed.day)} · ${t(PRODUCTS[parsed.product].name)} · ${displayMetres(PRODUCTS[parsed.product].resolutionM)}`
         : null,
       sourceOff,
       drapable: drapable(candidateFor(key)),
@@ -1227,7 +1235,7 @@ export function createRecentImageryLayer({
         _alpha = 1;
         for (const slotId of SLOT_IDS) renderer.setAlpha(slotId, 1);
       }
-      _notice = 'Box and images cleared';
+      _notice = msg('Box and images cleared');
       syncRender();
       publish([...BOX_EDGES, 'a', 'b', 'split']);
       notify();
@@ -1276,7 +1284,9 @@ export function createRecentImageryLayer({
         candidates,
         focusIndex,
         focus,
-        readout: focus ? formatCandidateReadout(focus, now()) : '',
+        readout: focus
+          ? formatCandidateReadout(focus, now(), READOUT_WORDS)
+          : '',
         recommended: ranked.candidate
           ? { key: ranked.candidate.key, reason: ranked.reason }
           : null,
@@ -1329,17 +1339,18 @@ export function createRecentImageryLayer({
         chips: [
           {
             id: 'hls',
-            label: 'MORE DETAIL · 30 m',
+            label: t('MORE DETAIL · 30 m'),
             active: _sources.hls,
-            title: 'Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days',
+            title: t('Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days'),
             params: { hls: !_sources.hls },
           },
           {
             id: 'viirs',
-            label: 'DAILY OVERVIEW · 250 m',
+            label: t('DAILY OVERVIEW · 250 m'),
             active: _sources.viirs,
-            title:
+            title: t(
               'VIIRS daily mosaic, 250 m, follows broad changes; little detail under 25 km',
+            ),
             params: { viirs: !_sources.viirs },
           },
         ],

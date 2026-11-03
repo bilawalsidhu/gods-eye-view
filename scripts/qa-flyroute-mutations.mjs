@@ -35,17 +35,17 @@ const MUTATIONS = [
   },
   {
     defect: 'heading lerps in Cartesian space and cannot cross a U-turn',
-    from: '    const turned = Cesium.Matrix3.multiplyByVector(rotation, state.headingDir, _frameDir);',
+    from: '    const turned = Cesium.Matrix3.multiplyByVector(\n      rotation,\n      state.headingDir,\n      _frameDir,\n    );',
     to: '    const turned = Cesium.Cartesian3.lerp(state.headingDir, gaze, k, _frameDir);',
   },
   {
     defect: 'the exact-180° bank direction becomes a floating-point coin toss',
-    from: '  if (cosTurn <= -1 + ANTIPODAL_EPS && Math.abs(sinLeft) < ANTIPODAL_EPS) return Math.PI;',
+    from: '  if (cosTurn <= -1 + ANTIPODAL_EPS && Math.abs(sinLeft) < ANTIPODAL_EPS)\n    return Math.PI;',
     to: '  // branch removed',
   },
   {
     defect: 'a cold cell is read as sea level (the 1.3 km underground bug)',
-    from: '    state.floorM = Number.isFinite(state.floorM) ? state.floorM : state.coldSeedFloorM;',
+    from: '    state.floorM = Number.isFinite(state.floorM)\n      ? state.floorM\n      : state.coldSeedFloorM;',
     to: '    state.floorM = carto.height;',
   },
   {
@@ -55,12 +55,12 @@ const MUTATIONS = [
   },
   {
     defect: 'the dolly races the fire-and-forget warm instead of arming for it',
-    from: '  if (canAnswer && !state.floorKnown && !state.departed && state.armS < ROUTE_ARM_S) {',
+    from: '  if (\n    canAnswer &&\n    !state.floorKnown &&\n    !state.departed &&\n    state.armS < ROUTE_ARM_S\n  ) {',
     to: '  if (false) {',
   },
   {
     defect: 'no mesh probe, so a permanently cold DEM is flown blind',
-    from: '  if (cold.length && !state.meshProbeSpent && typeof state.probeFn === \'function\') {',
+    from: '  if (\n    cold.length &&\n    !state.meshProbeSpent &&\n    typeof state.probeFn === \'function\'\n  ) {',
     to: '  if (false) {',
   },
   {
@@ -90,8 +90,8 @@ const MUTATIONS = [
   },
   {
     defect: 'the mesh probe fires every arming frame instead of once per route',
-    from: '  if (cold.length && !state.meshProbeSpent && typeof state.probeFn === \'function\') {\n    state.meshProbeSpent = true;',
-    to: '  if (cold.length && typeof state.probeFn === \'function\') {\n    state.meshProbeSpent = true;',
+    from: '    cold.length &&\n    !state.meshProbeSpent &&\n    typeof state.probeFn === \'function\'\n  ) {\n    state.meshProbeSpent = true;',
+    to: '    cold.length &&\n    typeof state.probeFn === \'function\'\n  ) {\n    state.meshProbeSpent = true;',
   },
   {
     defect: 'one warm cell resolves a corridor whose other cells are unknown',
@@ -105,13 +105,13 @@ const MUTATIONS = [
   },
   {
     defect: 'the hard clearance clamp reads the SMOOTHED floor, not the raw sample',
-    from: '    (Number.isFinite(sampledFloor) ? sampledFloor : state.floorM) + ROUTE_MIN_CLEARANCE_M,',
+    from: '    (Number.isFinite(sampledFloor) ? sampledFloor : state.floorM) +\n      ROUTE_MIN_CLEARANCE_M,',
     to: '    state.floorM + ROUTE_MIN_CLEARANCE_M,',
   },
   {
     defect: 'levelling also RE-FRAMES the camera (destination passed with the HPR)',
-    from: '    cam.setView({ orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 } });',
-    to: '    cam.setView({ destination: Cesium.Cartesian3.fromDegrees(0, 0, 5000), orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 } });',
+    from: '    cam.setView({\n      orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },\n    });',
+    to: '    cam.setView({\n      destination: Cesium.Cartesian3.fromDegrees(0, 0, 5000),\n      orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },\n    });',
   },
   {
     defect: 'the OS reduced-motion preference is never consulted',

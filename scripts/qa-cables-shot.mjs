@@ -6,6 +6,7 @@
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const argv = process.argv;
 const url = argv.includes('--url') ? argv[argv.indexOf('--url') + 1] : 'http://localhost:4214';
@@ -65,7 +66,9 @@ try {
       requestAnimationFrame(tick);
     }));
     await new Promise((r) => setTimeout(r, 1_000));
-    const path = new URL(`../qa-shots/cables-${tag}-${view.name}.png`, import.meta.url).pathname;
+    const path = fileURLToPath(
+      new URL(`../qa-shots/cables-${tag}-${view.name}.png`, import.meta.url),
+    );
     await page.screenshot({ path });
     console.log(`saved ${path}`);
   }

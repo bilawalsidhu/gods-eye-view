@@ -647,6 +647,11 @@
   white-space: nowrap;
 }
 
+/* The ru/es push-to-talk hint is longer than the tray: wrap it instead of clipping. */
+html:not([lang='en']) #gev-voice-control .gev-voice-help-detail {
+  white-space: normal;
+}
+
 #gev-voice-control:not([data-status='error']):hover .gev-voice-help-tray,
 #gev-voice-control:not([data-status='error'])
   #gev-voice-button:focus-visible

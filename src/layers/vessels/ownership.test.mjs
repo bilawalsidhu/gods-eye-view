@@ -29,7 +29,11 @@ function services() {
       forgetSpriteFocus: noop,
     },
     worldFocus: {},
-    render: { releaseContinuousRender: noop },
+    render: {
+      holdContinuousRender: noop,
+      releaseContinuousRender: noop,
+      governorRequestRender: noop,
+    },
   };
 }
 function setup(source, options = {}) {
@@ -360,4 +364,48 @@ test('partial vessel snapshots preserve freshness and recover after a complete u
   assert.equal(layer.getStats().partial, true);
   layer.destroy();
   assert.equal(layer.getStats().partial, false);
+});
+
+test('authoritative empty coverage clears old contacts without declaring an outage', async () => {
+  let current = snapshot([observation('111')]);
+  const { layer } = setup({
+    async getSnapshot() {
+      return current;
+    },
+  });
+  await layer.update();
+  current = snapshot([], { observedAtMs: null, lastMessageAt: 500 });
+  await layer.update();
+  assert.ok(!layer.hasContact('111'));
+  assert.equal(layer.getStats().count, 0);
+  assert.equal(layer.getStats().error, null);
+  assert.equal(layer.getStats().stale, false);
+  assert.equal(layer.getStats().lastUpdate, null);
+});
+
+test('empty coverage cannot hide stale, incomplete or rejected source data', async () => {
+  for (const patch of [
+    { freshness: 'unknown' },
+    { freshness: 'stale' },
+    { complete: false },
+    { rawRowCount: 1 },
+    { transportStatus: 'stale' },
+    { lastMessageAt: null },
+  ]) {
+    let current = snapshot([observation('111')]);
+    const { layer } = setup({
+      async getSnapshot() {
+        return current;
+      },
+    });
+    await layer.update();
+    current = snapshot([], {
+      observedAtMs: null,
+      lastMessageAt: 500,
+      ...patch,
+    });
+    await layer.update();
+    assert.equal(layer.hasContact('111'), true, JSON.stringify(patch));
+    assert.ok(layer.getStats().error, JSON.stringify(patch));
+  }
 });

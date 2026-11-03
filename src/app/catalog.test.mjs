@@ -65,18 +65,62 @@ test('data setup seals the caller catalog before controls can restore and drains
         },
       },
     },
-    catalog: createLayerCatalog(layers, metadata(layers)),
+    catalog: {
+      ...createLayerCatalog(layers, metadata(layers)),
+      getSourceAvailability: (id) =>
+        id === 'one'
+          ? {
+              available: false,
+              reason: 'One: data source not configured',
+            }
+          : undefined,
+    },
     defer: (release) => releases.push(release),
     onData: (manager) => {
       observed = manager;
     },
   });
   assert.equal(observed, dataManager);
+  assert.equal(await dataManager.setEnabled('one', true), false);
+  assert.equal(dataManager.layers.get('one').initialized, false);
+  assert.equal(
+    dataManager.getAll().find(({ id }) => id === 'one').stats.error,
+    'One: data source not configured',
+  );
   assert.deepEqual(attached, [['one', 'two']]);
   assert.deepEqual([...dataManager.layers.keys()], ['one', 'two']);
   assert.throws(() => dataManager.register({ id: 'late' }), /finalized/);
   for (const release of releases.reverse()) await release();
   assert.equal(dataManager.layers.size, 0);
+});
+
+test('data setup keeps layers polling in an inline panel its host reports hidden', async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = {
+    hidden: true,
+    visibilityState: 'hidden',
+    getElementById: () => null,
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  t.after(() => {
+    delete globalThis.GEV_EMBED_INLINE;
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  const releases = [];
+  const { dataManager } = createApplicationData({
+    scene: { viewer: {} },
+    controls: { styleManager: { attachDataManager() {} } },
+    catalog: createLayerCatalog([], []),
+    defer: (release) => releases.push(release),
+  });
+  const visibility = dataManager._visibilityTarget;
+  assert.equal(visibility.hidden, true, 'a hidden page pauses outside a panel');
+  globalThis.GEV_EMBED_INLINE = true;
+  assert.equal(visibility.hidden, false);
+  assert.equal(visibility.visibilityState, 'visible');
+  for (const release of releases.reverse()) await release();
 });
 
 test('controls bind catalog instances rather than similarly named defaults', () => {
@@ -93,6 +137,7 @@ test('controls bind catalog instances rather than similarly named defaults', () 
     'military-awareness',
     'military-installations',
     'rocket-launches',
+    'street-level',
     'local-adsb',
   ];
   const layers = ids.map((id) => ({ id }));
@@ -101,7 +146,7 @@ test('controls bind catalog instances rather than similarly named defaults', () 
   assert.equal(services.flightsLayer, layers[1]);
   assert.equal(services.transitLayer, layers[7]);
   assert.equal(services.aisLiveVesselsLayer, layers[8]);
-  assert.equal(services.localAdsbLayer, layers[12]);
+  assert.equal(services.localAdsbLayer, layers[13]);
   assert.equal(new Set(Object.values(services)).size, layers.length);
   assert.throws(
     () => catalogControlServices(createLayerCatalog([], [])),
