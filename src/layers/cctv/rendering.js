@@ -311,6 +311,7 @@ export function createRendering({
   /** Applies coverage visibility/style state and lazily builds eligible sets. */
 
   function refreshCoverageStyles() {
+    if (!parts.renderer?.ready) return;
     const activeRecord = parts.selection.getActiveRecord();
     parts.geometry.ensureActiveCoverageEntities(activeRecord);
     const activeId = activeRecord?.camera.id || null;

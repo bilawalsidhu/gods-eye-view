@@ -237,7 +237,6 @@ export const VIEWER_ONLY_ACTIONS = Object.freeze([
   'fly_route',
   'move_camera',
   'set_context_mode',
-  'control_cctv',
 ]);
 /** The refusal code of a viewer-only tool on an engine without a viewer. */
 export const UNAVAILABLE_ON_ENGINE = 'UNAVAILABLE_ON_ENGINE';

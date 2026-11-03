@@ -246,7 +246,7 @@ export function createApplicationCatalog({
           source: sources.traffic, surface, nativeRenderer: engine => rendererFor('traffic',engine),
         })),
       ],
-      ['cctv', () => createApplicationCctv({ surface, source: sources.cctv })],
+      ['cctv', () => sessionModel('cctv', () => createApplicationCctv({ surface, source: sources.cctv }))],
       [
         'radio',
         () => sessionModel('radio', () => createApplicationRadio({ surface, source: sources.radio })),
