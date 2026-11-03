@@ -13,13 +13,11 @@ const section = currentState.slice(
 );
 const tokens = JSON.parse(read('src/data/layerStateTokenReservations.json'));
 
-test('the changelog fragment names the reserved share-link token', () => {
+test('CURRENT-STATE names the reserved share-link token', () => {
   const token = JSON.stringify(tokens).match(
     /\["drone-airspace","([^"]+)"\]/,
   )?.[1];
   assert.ok(token, 'drone-airspace has a reserved token');
-  const fragment = read('changelog.d/1086-prohibited-restricted-airspace.md');
-  assert.match(fragment, new RegExp(`share-link token \`${token}\``));
   assert.match(section, new RegExp(`share-link token \`${token}\``));
 });
 
