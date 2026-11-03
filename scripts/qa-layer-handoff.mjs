@@ -27,66 +27,91 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewport({ width: 1280, height: 720 });
-  await page.evaluateOnNewDocument((layerId, aircraftId) => {
-    window.__qaAircraft = {layerId, aircraftId};
-    const fetch = window.fetch.bind(window);
-    window.__flightPolls = 0;
-    const interval = window.setInterval.bind(window);
-    window.setInterval = function (callback, delay, ...args) {
-      if (typeof callback !== 'function') return interval(callback, delay, ...args);
-      const id = interval(function (...values) {
-        if (window.__handoff?.timer === id) window.__handoff.ticks++;
-        return callback.apply(this, values);
-      }, delay, ...args);
-      return id;
-    };
-    window.fetch = (input, options) => {
-      const path = new URL(input.url ?? input, document.baseURI).pathname;
-      const now = Math.floor(Date.now() / 1000);
-      if (path === '/api/flights') {
-        if (layerId === 'flights') window.__flightPolls++;
-        return Promise.resolve(
-          Response.json({
-            time: now,
-            states: [
-              [
-                '71be26',
-                'GEV123',
-                'QA',
-                now,
-                now,
-                -125.5779,
-                40.2539,
-                9700,
-                false,
-                200,
-                45,
-                0,
-                null,
-                9700,
-                null,
-                false,
-                0,
-              ],
-            ],
-          }),
+  await page.evaluateOnNewDocument(
+    (layerId, aircraftId) => {
+      window.__qaAircraft = { layerId, aircraftId };
+      const fetch = window.fetch.bind(window);
+      window.__flightPolls = 0;
+      const interval = window.setInterval.bind(window);
+      window.setInterval = function (callback, delay, ...args) {
+        if (typeof callback !== 'function')
+          return interval(callback, delay, ...args);
+        const id = interval(
+          function (...values) {
+            if (window.__handoff?.timer === id) window.__handoff.ticks++;
+            return callback.apply(this, values);
+          },
+          delay,
+          ...args,
         );
-      }
-      if (path === '/api/military') {
-        if (layerId === 'military') window.__flightPolls++;
-        return Promise.resolve(Response.json({now: Date.now(), ac: [{
-          hex: 'aaa052', flight: 'GEVMIL', lon: -125.5779, lat: 40.2539,
-          alt_geom: 31825, alt_baro: 31825, gs: 389, track: 45,
-          seen: 0, seen_pos: 0, dbFlags: 1, type: 'adsb_icao',
-        }]}));
-      }
-      if (path === '/api/flights/track')
-        return Promise.resolve(Response.json({ path: [] }));
-      if (path.startsWith('/api/flights/') || path.startsWith('/api/openai/'))
-        return Promise.resolve(Response.json({}));
-      return fetch(input, options);
-    };
-  }, layerId, aircraftId);
+        return id;
+      };
+      window.fetch = (input, options) => {
+        const path = new URL(input.url ?? input, document.baseURI).pathname;
+        const now = Math.floor(Date.now() / 1000);
+        if (path === '/api/flights') {
+          if (layerId === 'flights') window.__flightPolls++;
+          return Promise.resolve(
+            Response.json({
+              time: now,
+              states: [
+                [
+                  '71be26',
+                  'GEV123',
+                  'QA',
+                  now,
+                  now,
+                  -125.5779,
+                  40.2539,
+                  9700,
+                  false,
+                  200,
+                  45,
+                  0,
+                  null,
+                  9700,
+                  null,
+                  false,
+                  0,
+                ],
+              ],
+            }),
+          );
+        }
+        if (path === '/api/military') {
+          if (layerId === 'military') window.__flightPolls++;
+          return Promise.resolve(
+            Response.json({
+              now: Date.now(),
+              ac: [
+                {
+                  hex: 'aaa052',
+                  flight: 'GEVMIL',
+                  lon: -125.5779,
+                  lat: 40.2539,
+                  alt_geom: 31825,
+                  alt_baro: 31825,
+                  gs: 389,
+                  track: 45,
+                  seen: 0,
+                  seen_pos: 0,
+                  dbFlags: 1,
+                  type: 'adsb_icao',
+                },
+              ],
+            }),
+          );
+        }
+        if (path === '/api/flights/track')
+          return Promise.resolve(Response.json({ path: [] }));
+        if (path.startsWith('/api/flights/') || path.startsWith('/api/openai/'))
+          return Promise.resolve(Response.json({}));
+        return fetch(input, options);
+      };
+    },
+    layerId,
+    aircraftId,
+  );
   await page.goto(url.href, { waitUntil: 'domcontentloaded' });
   const ready = (kind) =>
     page.waitForFunction(
@@ -116,7 +141,9 @@ try {
     window.__handoff = {
       dataManager,
       entry,
-      row: document.querySelector(`[data-layer-id="${window.__qaAircraft.layerId}"] .data-toggle-btn`),
+      row: document.querySelector(
+        `[data-layer-id="${window.__qaAircraft.layerId}"] .data-toggle-btn`,
+      ),
       timer: entry.intervalId,
       ticks: 0,
       model: entry.module,
@@ -139,19 +166,40 @@ try {
       HTMLCanvasElement.prototype.getContext = original;
     };
   });
+  const historyLength = await page.evaluate(() => history.length);
   await page.select('#globe-engine', 'cesium');
   await page.waitForFunction(() => window.__refusedContext === true);
   await ready('navara');
-  assert.ok(await page.evaluate(() => {
-    window.__restoreContext();
-    const {dataManager, styleManager} = window.__godsEyeView;
-    return new URL(location.href).searchParams.get('engine') === 'navara' &&
-      dataManager === window.__handoff.dataManager &&
-      dataManager.layers.get(window.__qaAircraft.layerId) === window.__handoff.entry &&
-      styleManager.getCockpitState().active &&
-      styleManager.getAircraftTrackingTarget()?.id === window.__qaAircraft.aircraftId;
-  }), 'a failed scene must leave the live session usable');
-  console.log('PASS failed renderer rolled back to the same flight and cockpit');
+  // A failed switch leaves the session usable on the engine that worked and
+  // adds no history entry.
+  const survived = (kind) =>
+    page.evaluate(
+      (kind, length) => {
+        const { dataManager, engine, styleManager } = window.__godsEyeView;
+        return (
+          engine.kind === kind &&
+          new URL(location.href).searchParams.get('engine') === kind &&
+          history.length === length &&
+          dataManager === window.__handoff.dataManager &&
+          dataManager.layers.get(window.__qaAircraft.layerId) ===
+            window.__handoff.entry &&
+          styleManager.getCockpitState().active &&
+          styleManager.getCockpitState().visionMode === 'thermal' &&
+          styleManager.getAircraftTrackingTarget()?.id ===
+            window.__qaAircraft.aircraftId
+        );
+      },
+      kind,
+      historyLength,
+    );
+  await page.evaluate(() => window.__restoreContext());
+  assert.ok(
+    await survived('navara'),
+    'a failed scene must leave the live session usable',
+  );
+  console.log(
+    'PASS cold Cesium failure rolled back to Navara with the same flight, cockpit and history',
+  );
 
   for (const kind of ['cesium', 'navara']) {
     await page.select('#globe-engine', kind);
@@ -166,8 +214,12 @@ try {
           before.dataManager === dataManager &&
           before.entry === entry &&
           before.model === entry.module,
-        sameRow: Boolean(before.row) &&
-          before.row === document.querySelector(`[data-layer-id="${window.__qaAircraft.layerId}"] .data-toggle-btn`),
+        sameRow:
+          Boolean(before.row) &&
+          before.row ===
+            document.querySelector(
+              `[data-layer-id="${window.__qaAircraft.layerId}"] .data-toggle-btn`,
+            ),
         sameTimer:
           before.timer === entry.intervalId && entry.intervalId != null,
         sourcePolls: window.__flightPolls - before.pollCount,
@@ -178,7 +230,9 @@ try {
         active: cockpit.active,
         mode: cockpit.visionMode,
         hud: !document.querySelector('#cockpit-hud').hidden,
-        drawn: entry.module.qaDrawn().some((row) => row.id === window.__qaAircraft.aircraftId),
+        drawn: entry.module
+          .qaDrawn()
+          .some((row) => row.id === window.__qaAircraft.aircraftId),
         height: engine.camera.height(),
       };
     });
@@ -193,7 +247,10 @@ try {
     );
     assert.equal(result.id, aircraftId);
     assert.equal(result.mode, 'thermal');
-    assert.ok(result.sourcePolls <= result.timerTicks, 'switch must not add a source request');
+    assert.ok(
+      result.sourcePolls <= result.timerTicks,
+      'switch must not add a source request',
+    );
     if (result.timerTicks === 0) {
       assert.equal(result.stamp, result.initialStamp);
     }
@@ -204,6 +261,60 @@ try {
       `PASS ${kind} cockpit, aircraft, HUD, manager and timer (${result.sourcePolls} polls since entry)`,
     );
   }
+  // The other direction, warm: the parked Navara renderer fails to resume on
+  // the way back from Cesium. The session rolls back to Cesium, then an
+  // ordinary retry starts Navara cold.
+  await page.evaluate(() => {
+    window.__parkedNavara = window.__godsEyeView.engine;
+  });
+  await page.select('#globe-engine', 'cesium');
+  await ready('cesium');
+  const lengthOnCesium = await page.evaluate(() => {
+    const request = window.__parkedNavara.render.request;
+    window.__parkedNavara.render.request = function (...args) {
+      window.__parkedNavara.render.request = request;
+      window.__refusedResume = true;
+      throw new Error('QA parked renderer failure');
+    };
+    return history.length;
+  });
+  await page.select('#globe-engine', 'navara');
+  await page.waitForFunction(() => window.__refusedResume === true);
+  await ready('cesium');
+  assert.ok(
+    (await page.evaluate(
+      (length) => history.length === length,
+      lengthOnCesium,
+    )) &&
+      (await page.evaluate(() => {
+        const { styleManager } = window.__godsEyeView;
+        return (
+          styleManager.getCockpitState().active &&
+          styleManager.getAircraftTrackingTarget()?.id ===
+            window.__qaAircraft.aircraftId &&
+          new URL(location.href).searchParams.get('engine') === 'cesium'
+        );
+      })),
+    'a failed warm Navara resume must leave Cesium usable without a history entry',
+  );
+  console.log(
+    'PASS warm Navara failure rolled back to Cesium with the same flight and cockpit',
+  );
+  await page.select('#globe-engine', 'navara');
+  await ready('navara');
+  assert.ok(
+    await page.evaluate(() => {
+      const { engine, styleManager } = window.__godsEyeView;
+      return (
+        engine !== window.__parkedNavara &&
+        styleManager.getCockpitState().active &&
+        styleManager.getAircraftTrackingTarget()?.id ===
+          window.__qaAircraft.aircraftId
+      );
+    }),
+    'the retry starts a new Navara renderer on the same session',
+  );
+  console.log('PASS retry after the warm failure started Navara cold');
   await page.evaluate(() =>
     window.__godsEyeView.styleManager.controlCockpit('exit'),
   );

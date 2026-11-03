@@ -4,6 +4,13 @@ import {
 } from './standalone/application.js';
 import { createRendererCache } from './standalone/rendererCache.js';
 import { describeError } from './standalone/errors.js';
+import {
+  createEngineAddress,
+  createEngineSwitch,
+  handOffSession,
+  resumeSession,
+  waitForFirstFrame,
+} from './standalone/engineSwitch.js';
 import { ENGINE_STORAGE_KEY } from './app/engineChoice.js';
 import { useDisplayStore } from './ui/stores/display.js';
 import { applicationPinia } from './ui/vueRuntime.js';
@@ -11,37 +18,90 @@ import { t } from './i18n/index.js';
 
 const display = useDisplayStore(applicationPinia());
 const loading = document.getElementById('loading-screen');
-let kind = pageEngineKind();
 let application;
-let busy = false;
+let engineSwitch = null;
+let cover = null;
+let cockpit = null;
 const renderers = createRendererCache();
 const layerSession = { lifetime: new AbortController() };
+const { signal } = layerSession.lifetime;
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   layerSession.lifetime.abort();
-  void application?.destroy().catch(report).finally(() => renderers.clear());
+  void application
+    ?.destroy()
+    .catch(report)
+    .finally(() => renderers.clear());
 });
 
-async function start(next, engineSwitch = false, cockpit = null) {
-  kind = next;
+// Registered before any engine starts, so these run ahead of the running
+// session's own share-link listeners. A history visit that changes the
+// engine belongs to the switch: the outgoing engine must not start restoring
+// that entry's share (and release the followed subject) just before it hands
+// the session off. The incoming engine reads the entry's view as it starts.
+let swallowedHash = null;
+window.addEventListener('popstate', (event) => {
+  if (!engineSwitch) return;
+  swallowedHash = null;
+  if (pageEngineKind() !== engineSwitch.state().engine) {
+    event.stopImmediatePropagation();
+    swallowedHash = location.hash;
+  }
+  void engineSwitch.reconcile();
+});
+window.addEventListener('hashchange', (event) => {
+  // Back/Forward fires hashchange after popstate for the same entry.
+  if (swallowedHash !== null && location.hash === swallowedHash)
+    event.stopImmediatePropagation();
+  swallowedHash = null;
+});
+
+function createApplication(kind, engineSwitch) {
   layerSession.restoringView = engineSwitch;
   application = createStandaloneApplication({
     googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
     allowQaRegistration: import.meta.env.DEV,
-    engineKind: next,
+    engineKind: kind,
     rendererCache: renderers,
     layerSession,
     engineSwitch,
   });
-  const { scene, controls } = await application.start();
-  if (engineSwitch) {
+  return application;
+}
+
+function liveComponents() {
+  return application?.getState().status === 'ready'
+    ? application.getComponents()
+    : null;
+}
+
+// Hand the session off and release the running engine. Its renderer is
+// parked for a later switch back.
+async function leave(from) {
+  const components = liveComponents();
+  if (components) {
+    cover ??= keepGlobeFrame(components.scene.engine);
+    cockpit = components.controls.styleManager.getCockpitState();
+    handOffSession(layerSession);
+    renderers.retain(from);
+  }
+  await application?.destroy();
+}
+
+// Start an engine on the retained session. Success means the engine runs
+// with the session attached and the address's view restored; its first frame
+// only decides when the cover goes (settle).
+async function enter(kind) {
+  const app = createApplication(kind, true);
+  try {
+    const { controls } = await app.start();
+    signal.throwIfAborted();
     const style = controls.styleManager;
     await style.initialRestorePromise;
+    signal.throwIfAborted();
     layerSession.restoringView = false;
-    for (const {module} of layerSession.manager.layers.values()) module.resumeViewport?.();
-    if (layerSession.handoffLayers) layerSession.manager.layers.get('directions')?.module.resumeCamera?.();
-    layerSession.director?.resumeScene();
+    resumeSession(layerSession);
     // Only resume the aircraft that actually survived the handoff. A history
     // entry may select a different subject, and a stale track may disappear.
     const target = style.getAircraftTrackingTarget();
@@ -54,11 +114,32 @@ async function start(next, engineSwitch = false, cockpit = null) {
     ) {
       style.cockpitView.setVisionMode(cockpit.visionMode);
     }
-    await waitForGlobeFrame(scene.engine);
+  } catch (error) {
+    // pagehide owns the teardown once the lifetime is aborted.
+    if (!signal.aborted)
+      await app
+        .destroy()
+        .catch((cleanupError) =>
+          console.error('A failed globe could not be released:', cleanupError),
+        );
+    throw error;
   }
 }
 
+async function settle() {
+  const engine = liveComponents()?.scene.engine;
+  if (cover && engine) await waitForFirstFrame(engine);
+  // A page left without an engine keeps the last handoff for the next try.
+  if (engine) {
+    layerSession.handoffLayers = null;
+    cockpit = null;
+  }
+  cover?.remove();
+  cover = null;
+}
+
 function present() {
+  const { kind, busy } = engineSwitch.state();
   display.presentGlobeEngine({ kind, busy, select });
 }
 
@@ -71,14 +152,7 @@ function report(error) {
 }
 
 function select(next) {
-  if (busy || kind === next || !['cesium', 'navara'].includes(next)) return;
-  application.getComponents().controls.styleManager.shareLinkManager.flush();
-  const url = new URL(location.href);
-  url.searchParams.set('engine', kind);
-  history.replaceState(history.state, '', url);
-  url.searchParams.set('engine', next);
-  history.pushState(null, '', url);
-  void reconcile(true);
+  void engineSwitch?.select(next);
 }
 
 // Keep the last visible frame while the first visit initializes the other renderer.
@@ -97,94 +171,40 @@ function keepGlobeFrame(engine) {
   return frame;
 }
 
-// Hand off the visible globe only after the new camera has actually drawn.
-function waitForGlobeFrame(engine) {
-  if (document.hidden) return;
-  return new Promise((resolve, reject) => {
-    const finish = () => {
-      remove();
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', done);
-    };
-    const remove = engine.frames.postRender.addEventListener(done);
-    const timer = setTimeout(() => {
-      finish();
-      reject(new Error('The globe did not draw a frame'));
-    }, 8000);
-    function done() {
-      finish();
-      resolve();
-    }
-    document.addEventListener('visibilitychange', done, { once: true });
-    engine.render.request('engine-switch');
-  });
-}
-
-// popstate can arrive again while an engine is starting. After teardown and
-// after startup, read the actual address so the latest history entry wins.
-async function reconcile(remember = false) {
-  if (busy) return;
-  busy = true;
-  present();
-  const previous = kind;
-  let cover;
-  let cockpit;
-  const handoffHash = remember ? location.hash : null;
-  try {
-    while (pageEngineKind() !== kind) {
-      cover ??= keepGlobeFrame(application.getComponents().scene.engine);
-      cockpit = application
-        .getComponents()
-        .controls.styleManager.getCockpitState();
-      const manager = application.getComponents().data.dataManager;
-      layerSession.handoffLayers = location.hash === handoffHash
-        ? new Map([...manager.layers].map(([id, entry]) => [
-            id, { entry: entry.module.attachRenderer ? entry : null, enabled: manager.isEffectivelyEnabled(id) },
-          ]))
-        : null;
-      if (layerSession.handoffLayers) {
-        manager.layers.get('directions')?.module.suspendCamera?.();
-        manager.layers.get('satellites')?.module.suspendCamera?.();
-        layerSession.director?.suspendScene();
-      }
-      renderers.retain(kind);
-      await application.destroy();
-      await start(pageEngineKind(), true, cockpit);
-    }
-    if (remember) {
-      try {
-        localStorage.setItem(ENGINE_STORAGE_KEY, kind);
-      } catch {
-        // The current URL still carries the choice when storage is blocked.
-      }
-    }
-  } catch (error) {
-    // Keep a failed renderer from stranding a previously working session.
-    const url = new URL(location.href);
-    url.searchParams.set('engine', previous);
-    history.replaceState(history.state, '', url);
-    try {
-      await application.destroy();
-      await start(previous, true, cockpit);
-      application
-        .getComponents()
-        .controls.styleManager._showToast(describeError(error));
-    } catch (recoveryError) {
-      report(recoveryError);
-    }
-  } finally {
-    layerSession.handoffLayers = null;
-    cover?.remove();
-    busy = false;
-    present();
-  }
-}
-
-start(kind)
+const initialKind = pageEngineKind();
+createApplication(initialKind, false)
+  .start()
   .then(() => {
+    engineSwitch = createEngineSwitch({
+      kind: initialKind,
+      requested: pageEngineKind,
+      signal,
+      leave,
+      enter,
+      settle,
+      address: createEngineAddress({
+        location,
+        history,
+        flush: () =>
+          liveComponents()?.controls.styleManager.shareLinkManager?.flush(),
+      }),
+      remember(kind) {
+        try {
+          localStorage.setItem(ENGINE_STORAGE_KEY, kind);
+        } catch {
+          // The current URL still carries the choice when storage is blocked.
+        }
+      },
+      onChange: present,
+      onFailure(error, { recovered }) {
+        const style = recovered && liveComponents()?.controls.styleManager;
+        if (style) style._showToast(describeError(error));
+        else report(error);
+      },
+    });
     present();
-    window.addEventListener('popstate', () => void reconcile());
-    void reconcile();
+    // A history visit made while the first engine started.
+    void engineSwitch.reconcile();
   })
   .catch(report);
 

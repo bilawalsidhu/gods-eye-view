@@ -27,19 +27,49 @@ try {
   await page.evaluateOnNewDocument(() => {
     localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
     const fetch = window.fetch.bind(window);
-    window.fetch = (url, options) =>
-      String(url).startsWith('https://earthquake.usgs.gov/earthquakes/feed/')
-        ? Promise.resolve(
-            Response.json({
-              type: 'FeatureCollection',
-              features: [{
-                type: 'Feature', id: 'qa-boston',
-                geometry: { type: 'Point', coordinates: [-71.0605, 42.3554, 8] },
+    // Two Boston vessels for the Contacts session; empty air and site feeds.
+    const fixtures = {
+      '/api/vessels': () => ({
+        status: 'live',
+        rows: ['123456789', '223456789'].map((mmsi, i) => ({
+          mmsi,
+          name: 'Boston ' + i,
+          lat: 42.3554,
+          lon: -71.0605 + i * 0.05,
+          last_position_epoch: Date.now() / 1000,
+        })),
+      }),
+      '/api/vessels/track': () => ({ samples: [] }),
+      '/api/flights': () => ({ time: Date.now() / 1000, states: [] }),
+      '/api/military': () => ({ now: Date.now(), ac: [] }),
+      '/api/military-installations': () => ({ elements: [], status: 'ok' }),
+    };
+    window.fetch = (url, options) => {
+      if (
+        String(url).startsWith('https://earthquake.usgs.gov/earthquakes/feed/')
+      )
+        return Promise.resolve(
+          Response.json({
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                id: 'qa-boston',
+                geometry: {
+                  type: 'Point',
+                  coordinates: [-71.0605, 42.3554, 8],
+                },
                 properties: { mag: 4, time: Date.now(), place: 'QA Boston' },
-              }],
-            }),
-          )
+              },
+            ],
+          }),
+        );
+      const fixture =
+        fixtures[new URL(url.url ?? url, document.baseURI).pathname];
+      return fixture
+        ? Promise.resolve(Response.json(fixture()))
         : fetch(url, options);
+    };
   });
   await page.setViewport({ width: 1280, height: 800 });
   const errors = [];
@@ -65,19 +95,43 @@ try {
     const meanRed = async (enabled) => {
       await page.evaluate(async (enabled) => {
         const a = window.__godsEyeView;
-        await a.dataManager.setEnabled('earthquakes', enabled, { origin: 'user' });
+        await a.dataManager.setEnabled('earthquakes', enabled, {
+          origin: 'user',
+        });
         a.engine.render.request('qa-quake-surface');
       }, enabled);
-      if (enabled) await page.waitForFunction(() =>
-        window.__godsEyeView.dataManager.layers.get('earthquakes').module.getAnalystRecords().length === 1);
-      await new Promise(resolve => setTimeout(resolve, 1800));
-      const bytes = await page.screenshot({ clip: { x: 675, y: 403, width: 20, height: 20 } });
+      if (enabled)
+        await page.waitForFunction(
+          () =>
+            window.__godsEyeView.dataManager.layers
+              .get('earthquakes')
+              .module.getAnalystRecords().length === 1,
+        );
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      const bytes = await page.screenshot({
+        clip: { x: 675, y: 403, width: 20, height: 20 },
+      });
       const { channels } = await sharp(bytes).stats();
       return channels[0].mean - channels[1].mean;
     };
-    const off = await meanRed(false), on = await meanRed(true);
-    assert.ok(on > off + 8, kind + ' must draw the shallow red earthquake footprint: ' + off + ' -> ' + on);
-    console.log('PASS', kind, 'earthquake footprint red minus green:', off, '->', on);
+    const off = await meanRed(false),
+      on = await meanRed(true);
+    assert.ok(
+      on > off + 8,
+      kind +
+        ' must draw the shallow red earthquake footprint: ' +
+        off +
+        ' -> ' +
+        on,
+    );
+    console.log(
+      'PASS',
+      kind,
+      'earthquake footprint red minus green:',
+      off,
+      '->',
+      on,
+    );
   }
   const stored = () => page.evaluate(() => localStorage.getItem('gev.engine'));
   async function switchTo(kind) {
@@ -93,7 +147,8 @@ try {
     await page.waitForSelector('#globe-engine', { visible: true });
     await page.evaluate(() => {
       window.__switchDocument = document;
-      window.__quakeEntry = window.__godsEyeView.dataManager.layers.get('earthquakes');
+      window.__quakeEntry =
+        window.__godsEyeView.dataManager.layers.get('earthquakes');
       window.__quakeTimer = window.__quakeEntry.intervalId;
       window.__renderers ??= new Map();
       window.__renderers.set(
@@ -121,7 +176,8 @@ try {
         const previous = window.__renderers.get(engine.kind);
         return (
           !window.__switchSplash &&
-          window.__quakeEntry === window.__godsEyeView.dataManager.layers.get('earthquakes') &&
+          window.__quakeEntry ===
+            window.__godsEyeView.dataManager.layers.get('earthquakes') &&
           window.__quakeTimer === window.__quakeEntry.intervalId &&
           (!previous || previous === engine) &&
           !window.__outgoingEngine.isDestroyed() &&
@@ -199,12 +255,80 @@ try {
     ),
   );
   assert.equal(await stored(), 'navara');
+  // Back/Forward must hand the session off like the picker: the Contacts
+  // subject and its navigation history, the layers it owns and the Director
+  // survive, although the earlier entry carries an older view.
+  await page.evaluate(async () => {
+    const { dataManager, styleManager, sceneDirector } = window.__godsEyeView;
+    window.qaLayersBefore = [...dataManager.getEnabledLayerIds()].sort();
+    await dataManager.setEnabled('ais-live-vessels', true, { origin: 'user' });
+    const outcome = await styleManager.setContextMode('contacts');
+    if (!outcome.ok) throw Error(JSON.stringify(outcome));
+    window.qaSession = {
+      director: sceneDirector,
+      context: dataManager.layers.get('military-awareness').module,
+      vessels: dataManager.layers.get('ais-live-vessels'),
+    };
+    if (!window.qaSession.vessels.module.selectById('123456789'))
+      throw Error('Missing first vessel');
+    if (
+      !window.qaSession.context.navigateNext({
+        targetLayer: 'ais-live-vessels',
+      })
+    )
+      throw Error('Cannot navigate to the second vessel');
+  });
+  const session = () =>
+    page.evaluate(() => {
+      const { dataManager, styleManager, sceneDirector } = window.__godsEyeView;
+      const { director, context, vessels } = window.qaSession;
+      return {
+        director: director === sceneDirector && !director._destroyed,
+        owners:
+          context === dataManager.layers.get('military-awareness').module &&
+          vessels === dataManager.layers.get('ais-live-vessels'),
+        mode: styleManager.getContextModeState().mode,
+        subject: context.getContextSnapshot()?.subject?.id,
+        history: context._getAwarenessNavigationStateForTest().historyKeys,
+        enabled: [...dataManager.getEnabledLayerIds()].sort(),
+      };
+    });
+  const live = await session();
+  assert.equal(live.mode, 'flights');
+  assert.equal(live.subject, '223456789');
+  assert.ok(live.history.includes('ais-live-vessels:123456789'));
   await page.goBack({ waitUntil: 'domcontentloaded' });
   await ready('cesium');
+  await page.waitForFunction(
+    () => !document.querySelector('.engine-switch-frame'),
+  );
   assert.equal((await sharpen()).intensityPct, 49);
+  assert.deepEqual(await session(), live, 'Back keeps the session');
   await page.goForward();
   await ready('navara');
+  await page.waitForFunction(
+    () => !document.querySelector('.engine-switch-frame'),
+  );
   assert.equal((await sharpen()).intensityPct, 80);
+  assert.deepEqual(await session(), live, 'Forward keeps the session');
+  assert.ok(
+    await page.evaluate(async () => {
+      const { dataManager, styleManager } = window.__godsEyeView;
+      const result = await styleManager.setContextMode('off');
+      await dataManager.setEnabled('ais-live-vessels', false, {
+        origin: 'user',
+      });
+      return (
+        result.ok &&
+        JSON.stringify([...dataManager.getEnabledLayerIds()].sort()) ===
+          JSON.stringify(window.qaLayersBefore)
+      );
+    }),
+    'leaving Contacts after Back/Forward restores the layers it took',
+  );
+  console.log(
+    'PASS Back/Forward keep Contacts subject, history, layers and Director',
+  );
   await page.evaluate(() =>
     window.__godsEyeView.styleManager.setSharpen({
       enabled: false,
