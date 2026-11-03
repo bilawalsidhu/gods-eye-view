@@ -94,7 +94,7 @@ const PANEL_GROUPS = [
   // needs no heading there.
   {
     label: msg('Utilities'),
-    ids: ['directions'],
+    ids: ['directions', 'osm-places'],
     containerId: 'utilities-toggles',
   },
   {
