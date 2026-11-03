@@ -21,6 +21,8 @@ import {
   getRenderGovernorDiagnostics,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+import { getContextStore } from './contextStore.js';
+import { readEntityRecord } from './entityRecords.js';
 
 /** The catalog's services, with the overlay host each test supplies. */
 const createLocalGeoJsonLayer = (options) =>
@@ -486,7 +488,7 @@ for (const [heightM, minStemM, maxStemM] of [[500, 45, 90], [10000, 1100, 1400]]
     const env = await createRealLocalLayerHarness();
     t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
     const entity = env.dataSources[0].entities.values[0];
-    const carto = entity.__localBaseCarto;
+    const carto = Cesium.Cartographic.fromCartesian(targetPositionOf(entity));
     env.viewer.camera.positionWC = Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, heightM);
     env.preRender.raise(env.viewer.scene, Cesium.JulianDate.now());
     const positions = entity.polyline.positions.getValue(Cesium.JulianDate.now());
@@ -894,10 +896,16 @@ function runArmedRetryChain(env, t, clock, cycles) {
   }
 }
 
+/** The stem base an entity registered for voice targeting. */
+function targetPositionOf(entity) {
+  const contextId = readEntityRecord(entity)?.contextId;
+  return getContextStore().entities.get(contextId)?.targetPosition;
+}
+
 /** Height of the (mutated-in-place) stem base — 0 until a sample lands. */
 function baseHeightM(env) {
   const entity = env.dataSources[0].entities.values[0];
-  return Cesium.Cartographic.fromCartesian(entity.__localBaseCartesian).height;
+  return Cesium.Cartographic.fromCartesian(targetPositionOf(entity)).height;
 }
 
 /**

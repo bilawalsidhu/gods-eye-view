@@ -3983,7 +3983,7 @@ function visibleEntityContexts(
 
   const candidates = [];
   for (const { record } of nearbyRecords) {
-    const position = record.entity?.__localBaseCartesian;
+    const position = record.targetPosition;
     if (!position) continue;
     const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
       viewer.scene,

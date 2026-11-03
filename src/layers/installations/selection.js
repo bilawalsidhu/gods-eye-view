@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { LAYER_ID } from './policy.js';
+import { installationMarkers } from './markerState.js';
 
 export function createSelection({
   state: layerState,
@@ -58,9 +59,11 @@ export function createSelection({
       if (!isPointerFree()) return;
       if (!layerState.enabled) return;
       const picked = viewer.scene.pick(click.position);
+      const target = picked?.id;
       const id =
-        picked?.id?.installationId ||
-        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
+        target?.installationId ||
+        installationMarkers.read(target)?.recordId ||
+        (typeof target?.id === 'string' ? target.id : null);
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
         selectRecord(id);
       } else if (layerState.selectedId) {
