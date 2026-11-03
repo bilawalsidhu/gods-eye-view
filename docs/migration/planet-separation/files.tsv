@@ -414,6 +414,7 @@ scripts/qa-director-sharing.mjs	VERIFY			Зафиксировать исходн
 scripts/qa-director-timing.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-draw-tool.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-edge-cctv-occlusion.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-edge-occlusion.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-emergency-squawk.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-engine-bench.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-engine-notice.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -1976,6 +1977,8 @@ src/layers/shared/render/navaraGroundOrder.test.mjs	LAYER			Сохранить �
 src/layers/shared/render/navaraGroundPicks.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/shared/render/navaraGroundSurface.js	LAYER		three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/shared/render/navaraPolygons.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/shared/render/navaraSceneDepth.js	LAYER		three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/shared/render/navaraSceneDepth.test.mjs	LAYER		three	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/shared/render/navaraStems.js	LAYER		three/addons/lines/LineMaterial.js,three/addons/lines/LineSegments2.js,three/addons/lines/LineSegmentsGeometry.js	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/shared/render/navaraStory.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/streetLevel/cameraFraming.js	LAYER	street-level	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	street-level-layer

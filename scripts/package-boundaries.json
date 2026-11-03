@@ -3706,6 +3706,7 @@
       "src/layers/awareness/render/navara.js",
       "src/layers/infrastructure/render/navara.js",
       "src/layers/shared/render/navaraStems.js",
+      "src/layers/shared/render/navaraSceneDepth.js",
       "src/layers/submarineCables/render/navara.js",
       "src/layers/directions/render/navara.js",
       "src/layers/traffic/render/navara.js",

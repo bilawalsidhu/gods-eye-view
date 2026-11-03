@@ -71,7 +71,11 @@ const renderedLayer = (file) =>
   RENDERED_LAYER_DIRS.some((dir) => file.startsWith(dir));
 const cesiumLayerRenderer = (file) =>
   /\/render\/cesium(?:[^/]*|\/[^/]+)\.js$/.test(file);
-const navaraLayerRenderer = (file) => /\/render\/navara[^/]*\.js$/.test(file);
+// Navara renderers outside a layer's render/ directory: like those, they
+// reach the app only through the Navara mode's import().
+const NAVARA_SCENE_RENDERERS = new Set(['src/scenes/dataPacks/navara.js']);
+const navaraLayerRenderer = (file) =>
+  /\/render\/navara[^/]*\.js$/.test(file) || NAVARA_SCENE_RENDERERS.has(file);
 const renderer = (file) =>
   /^src\/(?:ui|app|standalone|overlays)\//.test(file) ||
   /^src\/layers\/[^/]+\/(?:index|rendering|snapshotRenderer|overlay|presentation|cards|controls)\.js$/.test(
