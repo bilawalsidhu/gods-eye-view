@@ -16,6 +16,8 @@ import {
 import { mountApplicationViews } from '../ui/views/index.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
 import { resolveEngineKind } from '../app/engineChoice.js';
+import { createSceneHost } from '../app/sceneHost.js';
+import { attachScenePart } from '../app/sceneParts.js';
 
 // Only one engine may own the page at a time.
 let owner = null;
@@ -36,7 +38,14 @@ function sessionChrome(layerSession) {
   return (layerSession.chrome ??= {});
 }
 
-/** Compose one engine session. Destroy it before starting another. */
+/**
+ * Compose the page's application, created once per page. Its first globe is
+ * `engineKind`; `attachScene(kind)` and `detachScene()` switch engines by
+ * detaching and attaching only the engine-bound parts (src/app/sceneHost.js)
+ * while the shell, stores, voice, tools and layer models stay. Destroy it
+ * before creating another (the legacy route, ?switch=legacy, still builds
+ * one per engine).
+ */
 export function createStandaloneApplication({
   googleApiKey,
   cesiumToken,
@@ -66,9 +75,119 @@ export function createStandaloneApplication({
   const loadingScreen = document.getElementById('loading-screen');
   const loaderStatus = loadingScreen.querySelector('.loader-status');
   let placeSearch;
-  let catalog;
+  let qaSources = {};
+  // The engine-bound parts of every phase attach through this host.
+  const sceneHost = createSceneHost({
+    onError: (error, part) =>
+      console.error(`The ${part} scene part failed:`, error),
+  });
+  // The attached globe (one renderer attachment with its catalog), or null
+  // between engines.
+  let current = null;
+  let lifetime = null;
+  let sessionContext = null;
+
+  /** Acquire `kind`'s renderer and build its catalog: one attachment. */
+  async function openScene(kind) {
+    const controller = new AbortController();
+    const releases = [];
+    const release = async () => {
+      controller.abort();
+      const errors = [];
+      while (releases.length) {
+        try {
+          await releases.pop()();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length)
+        throw new AggregateError(errors, 'The globe could not be released');
+    };
+    const signal = AbortSignal.any([controller.signal, lifetime]);
+    try {
+      const scene = await createStandaloneScene({
+        ...sessionContext,
+        signal,
+        defer: (cleanup) => releases.push(cleanup),
+        googleApiKey,
+        // Without a key, Google 3D can still load with tokens from the
+        // app's server when it offers them.
+        googleTokens: googleApiKey ? null : createGoogleTokenSource(),
+        cesiumToken,
+        loaderStatus,
+        engineKind: kind,
+        rendererCache,
+        layerSession,
+      });
+      signal.throwIfAborted();
+      // The catalog of this engine: on Navara only the layers with a Navara
+      // renderer (src/app/layers/renderers.js), the others' state kept for
+      // links. The layer models are the session's (layerSession.models).
+      const sceneCatalog = createStandaloneCatalog({
+        engineKind: kind,
+        layerSession,
+        sources: { ...sources, ...qaSources },
+        streetLevelProviders,
+        nepalBoundaryResolver: (resolverSignal) =>
+          scene.operations.annotationResolver.resolveRegionRingForQuery(
+            'Nepal',
+            resolverSignal,
+            placeSearch,
+            // The locator draws the border whenever it arrives.
+            { budgetMs: Infinity },
+          ),
+        signal,
+        surface: scene.operations.surface,
+      });
+      return Object.freeze({
+        ...scene,
+        kind,
+        catalog: sceneCatalog,
+        release,
+      });
+    } catch (error) {
+      await release().catch((cleanupError) =>
+        console.error('A failed globe could not be released:', cleanupError),
+      );
+      throw error;
+    }
+  }
+
+  // What the phases and the page read as `scene`: the attached globe's
+  // handles (null between engines), the session's operations and the host.
+  const sceneView = Object.freeze({
+    get kind() {
+      return current?.kind ?? null;
+    },
+    get viewer() {
+      return current?.viewer ?? null;
+    },
+    get engine() {
+      return current?.engine ?? null;
+    },
+    get tileset() {
+      return current?.tileset ?? null;
+    },
+    get mapStackController() {
+      return current?.mapStackController ?? null;
+    },
+    get packRenderer() {
+      return current?.packRenderer ?? null;
+    },
+    get catalog() {
+      return current?.catalog ?? null;
+    },
+    get operations() {
+      return layerSession?.operations ?? current?.operations ?? null;
+    },
+    current: () => current,
+    sceneHost,
+  });
+
   const application = createApplication({
     createScene: async (context) => {
+      lifetime = context.signal;
       // The page's language listener and place search belong to the page
       // session when there is one (an engine switch keeps them), else to
       // this application.
@@ -101,26 +220,11 @@ export function createStandaloneApplication({
             layerSession.lifetime.signal,
           ))
         : createPlaceSearch(context.signal);
-      const scene = await createStandaloneScene({
-        ...context,
-        googleApiKey,
-        // Without a key, Google 3D can still load with tokens from the
-        // app's server when it offers them.
-        googleTokens: googleApiKey ? null : createGoogleTokenSource(),
-        cesiumToken,
-        loaderStatus,
-        engineKind,
-        rendererCache,
-        layerSession,
-      });
-      // The catalog of this engine: on Navara only the layers with a Navara
-      // renderer (src/app/layers/renderers.js; none yet), the others' state
-      // kept for links.
       // QA fixture sources (?qaFeed=…) on the dev server only.
       const search = globalThis.location?.search ?? '';
       // import.meta.env.DEV at the import site, so production builds drop
       // the chunk instead of shipping it unreachable.
-      const qaSources =
+      qaSources =
         import.meta.env?.DEV &&
         allowQaRegistration &&
         /[?&]qaFeed=/.test(search)
@@ -129,23 +233,26 @@ export function createStandaloneApplication({
                 createQaSources(parseQaFeed(search)),
             )
           : {};
-      catalog = createStandaloneCatalog({
-        engineKind,
-        layerSession,
-        sources: { ...sources, ...qaSources },
-        streetLevelProviders,
-        nepalBoundaryResolver: (signal) =>
-          scene.operations.annotationResolver.resolveRegionRingForQuery(
-            'Nepal',
-            signal,
-            placeSearch,
-            // The locator draws the border whenever it arrives.
-            { budgetMs: Infinity },
+      // The session's own defer (its logo gaze and key when no layer
+      // session holds them) outlives every globe.
+      sessionContext = { defer: context.defer };
+      current = await openScene(engineKind);
+      // The first globe: the phases build on it and register their parts.
+      await sceneHost.attach(current);
+      // After every part detached (the tools phase detaches them first),
+      // the globe's renderer is parked or released.
+      context.defer(async () => {
+        await sceneHost.detach({
+          handoff: Boolean(
+            layerSession?.handoffLayers &&
+            !layerSession.lifetime.signal.aborted,
           ),
-        signal: context.signal,
-        surface: scene.operations.surface,
+        });
+        const scene = current;
+        current = null;
+        await scene?.release();
       });
-      return scene;
+      return sceneView;
     },
     createControls: (context) =>
       createStandaloneControls({
@@ -154,13 +261,13 @@ export function createStandaloneApplication({
         layerSession,
         loaderStatus,
         placeSearch,
-        catalog,
+        catalog: current.catalog,
       }),
     createData: (context) =>
       createStandaloneData({
         ...context,
         allowQaRegistration,
-        catalog,
+        catalog: current.catalog,
         layerSession,
       }),
     createTools: async (context) => {
@@ -173,20 +280,29 @@ export function createStandaloneApplication({
       });
       // The engine-neutral QA probe on the debug handle (src/app/qaProbe.js),
       // on the dev server only: import.meta.env.DEV at the import site, so
-      // production builds drop it.
+      // production builds drop it. It reads one engine: a part.
       const debug = globalThis.window?.__godsEyeView;
       if (import.meta.env?.DEV && debug) {
         const { createQaProbe } = await import('../app/qaProbe.js');
-        const probe = createQaProbe({
-          engine: context.scene.engine,
-          dataManager: context.data.dataManager,
-          availability: catalog.availability,
-        });
-        debug.layers = probe;
-        context.defer(() => {
-          probe.destroy();
-          if (debug.layers === probe) delete debug.layers;
-        });
+        await attachScenePart(
+          context.scene,
+          {
+            name: 'qa-probe',
+            attachScene(next, { defer }) {
+              const probe = createQaProbe({
+                engine: next.engine,
+                dataManager: context.data.dataManager,
+                availability: next.catalog.availability,
+              });
+              debug.layers = probe;
+              defer(() => {
+                probe.destroy();
+                if (debug.layers === probe) delete debug.layers;
+              });
+            },
+          },
+          { defer: context.defer },
+        );
       }
       return tools;
     },
@@ -199,5 +315,47 @@ export function createStandaloneApplication({
     )
       owner = null;
   });
-  return application;
+
+  /**
+   * Switch to `kind`: acquire its renderer and attach every part. A failure
+   * detaches what attached and releases the candidate; the session stays as
+   * it was, ready for the working engine to attach again.
+   */
+  async function attachScene(kind) {
+    if (application.getState().status !== 'ready')
+      throw new Error('The application is not running');
+    if (current) throw new Error('A globe is attached; detach it first');
+    const next = await openScene(kind);
+    try {
+      await sceneHost.attach(next);
+    } catch (error) {
+      await next
+        .release()
+        .catch((cleanupError) =>
+          console.error('A failed globe could not be released:', cleanupError),
+        );
+      throw error;
+    }
+    current = next;
+    return sceneView;
+  }
+
+  /** Detach every part from the attached globe and park or release it. */
+  async function detachScene(options = {}) {
+    const scene = current;
+    if (!scene) return;
+    try {
+      await sceneHost.detach(options);
+    } finally {
+      current = null;
+      await scene.release();
+    }
+  }
+
+  return Object.freeze({
+    ...application,
+    sceneHost,
+    attachScene,
+    detachScene,
+  });
 }

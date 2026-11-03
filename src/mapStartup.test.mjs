@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createSceneHost } from './app/sceneHost.js';
+import { attachScenePart } from './app/sceneParts.js';
 import vm from 'node:vm';
 import { createGoogleTokenSource } from './maps/googleTokens.js';
 import {
@@ -85,11 +87,20 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
       ...(await loadPhotorealisticTileset(Cesium, options)),
       operations: {},
     }),
+    createSceneHost,
+    attachScenePart,
+    AbortController,
+    AbortSignal,
   });
   vm.runInContext(source, context);
   const app = context.createStandaloneApplication(credentials);
-  // The application passes each constructor its signal and defer(cleanup).
-  return app.createScene({ signal: new AbortController().signal, defer() {} });
+  // The application passes each constructor its signal and defer(cleanup);
+  // the scene it returns reads the attached globe.
+  const scene = await app.createScene({
+    signal: new AbortController().signal,
+    defer() {},
+  });
+  return scene.current();
 }
 
 test('standalone falls back to ion when the server token route is unavailable', async () => {

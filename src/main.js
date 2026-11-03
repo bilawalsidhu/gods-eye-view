@@ -97,11 +97,19 @@ function liveComponents() {
     : null;
 }
 
+// The page's application is created once; a switch detaches and attaches
+// only its engine-bound parts. `?switch=legacy` keeps the previous route, one
+// application per engine, for one release.
+const legacySwitch =
+  new URLSearchParams(globalThis.location?.search ?? '').get('switch') ===
+  'legacy';
+
 // Hand the session off and release the running engine. Its renderer is
 // parked for a later switch back.
 async function leave(from) {
   const components = liveComponents();
-  if (components) {
+  const attached = Boolean(components?.scene.engine);
+  if (attached) {
     cover ??= keepGlobeFrame(components.scene.engine);
     cockpit = components.controls.styleManager.getCockpitState();
     handOffSession(layerSession, {
@@ -111,36 +119,68 @@ async function leave(from) {
     });
     renderers.retain(from);
   }
-  await application?.destroy();
+  if (legacySwitch) await application?.destroy();
+  else if (attached) await application.detachScene({ handoff: true });
   session.count('detaches');
 }
 
 // Start an engine on the retained session. Success means the engine runs
 // with the session attached and the address's view restored; its first frame
 // only decides when the cover goes (settle).
-async function enter(kind) {
+async function enter(kind, { recovery = false } = {}) {
+  if (legacySwitch) return enterLegacy(kind);
+  if (!application || application.getState().status !== 'ready') {
+    // The first engine never started: there is no application to attach to.
+    return enterLegacy(kind);
+  }
+  layerSession.restoringView = true;
+  try {
+    await application.attachScene(kind);
+    signal.throwIfAborted();
+    await resume(application.getComponents().controls.styleManager);
+    if (recovery) session.count('rollbacks');
+  } catch (error) {
+    // pagehide owns the teardown once the lifetime is aborted. A failed
+    // candidate is detached; the session stays for the working engine.
+    if (!signal.aborted)
+      await application
+        .detachScene({ handoff: true })
+        .catch((cleanupError) =>
+          console.error('A failed globe could not be released:', cleanupError),
+        );
+    throw error;
+  }
+}
+
+// The session continues on the engine that attached: the view is restored,
+// parked work resumes and Cockpit re-enters on the aircraft it had.
+async function resume(style) {
+  await style.initialRestorePromise;
+  signal.throwIfAborted();
+  layerSession.restoringView = false;
+  session.count('attachments');
+  resumeSession(layerSession);
+  // Only resume the aircraft that actually survived the handoff. A history
+  // entry may select a different subject, and a stale track may disappear.
+  const target = style.getAircraftTrackingTarget();
+  if (
+    cockpit?.active &&
+    target &&
+    target?.id === cockpit.subject?.id &&
+    target?.layerId === cockpit.subject?.layerId &&
+    style.controlCockpit('enter').ok
+  ) {
+    style.cockpitView.setVisionMode(cockpit.visionMode);
+  }
+}
+
+// The legacy route: a new application on the retained session.
+async function enterLegacy(kind) {
   const app = createApplication(kind, true);
   try {
     const { controls } = await app.start();
     signal.throwIfAborted();
-    const style = controls.styleManager;
-    await style.initialRestorePromise;
-    signal.throwIfAborted();
-    layerSession.restoringView = false;
-    session.count('attachments');
-    resumeSession(layerSession);
-    // Only resume the aircraft that actually survived the handoff. A history
-    // entry may select a different subject, and a stale track may disappear.
-    const target = style.getAircraftTrackingTarget();
-    if (
-      cockpit?.active &&
-      target &&
-      target?.id === cockpit.subject?.id &&
-      target?.layerId === cockpit.subject?.layerId &&
-      style.controlCockpit('enter').ok
-    ) {
-      style.cockpitView.setVisionMode(cockpit.visionMode);
-    }
+    await resume(controls.styleManager);
   } catch (error) {
     // pagehide owns the teardown once the lifetime is aborted.
     if (!signal.aborted)

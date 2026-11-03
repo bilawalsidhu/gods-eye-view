@@ -288,10 +288,22 @@ export function readSession(page) {
   }));
 }
 
-/** Live listeners on window and document, counted per event type. */
-export async function listenerCounts(page) {
+/**
+ * Live listeners on window and document, counted per event type. With
+ * `bySource`, each key also names the script that added the listener (its
+ * file name), so a listener held by the parked renderer can be told apart
+ * from one the session leaked.
+ */
+export async function listenerCounts(page, { bySource = false } = {}) {
   const client = await page.createCDPSession();
   try {
+    const scripts = new Map();
+    if (bySource) {
+      client.on('Debugger.scriptParsed', ({ scriptId, url }) =>
+        scripts.set(scriptId, url),
+      );
+      await client.send('Debugger.enable');
+    }
     const counts = {};
     for (const name of ['window', 'document']) {
       const { result } = await client.send('Runtime.evaluate', {
@@ -301,13 +313,20 @@ export async function listenerCounts(page) {
         objectId: result.objectId,
       });
       for (const listener of listeners) {
-        const key = `${name}:${listener.type}`;
+        const source = bySource
+          ? `@${(scripts.get(listener.scriptId) ?? '')
+              .split('/')
+              .pop()
+              .replace(/-[\w-]{8}\.js$/, '.js')}`
+          : '';
+        const key = `${name}:${listener.type}${source}`;
         counts[key] = (counts[key] ?? 0) + 1;
       }
       await client.send('Runtime.releaseObject', {
         objectId: result.objectId,
       });
     }
+    if (bySource) await client.send('Debugger.disable');
     return counts;
   } finally {
     await client.detach();
