@@ -193,9 +193,8 @@ export function createSelection({
       layerName: name,
       source: 'NASA FIRMS',
       dataSource: layerState._dataSource,
-      label: t('Fire · FRP {frp} MW', {
-        frp: components.model.formatFrp(fire.frp),
-      }),
+      // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
+      label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
       latitude: fire.lat,
       longitude: fire.lon,
       properties: {

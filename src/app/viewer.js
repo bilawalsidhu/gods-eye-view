@@ -164,9 +164,8 @@ export function clampResolutionToTextureLimits(
 }
 
 /**
- * Install a resize and fullscreen listener that continuously guarantees the
- * drawing buffer fits within the GPU's texture and renderbuffer limits. Returns
- * a disposer.
+ * Clamp before Cesium's drawing-buffer resize, with resize notifications for
+ * eager updates. Returns a disposer that restores the original resize method.
  */
 export function installTextureLimitGuard(
   viewer,
@@ -183,7 +182,9 @@ export function installTextureLimitGuard(
         : null,
   } = {},
 ) {
+  let active = true;
   const enforce = () => {
+    if (!active) return;
     clampResolutionToTextureLimits(viewer, {
       getLimit,
       getRenderbufferLimit,
@@ -192,26 +193,51 @@ export function installTextureLimitGuard(
   };
   enforce();
 
+  // Cesium's default animation loop calls CesiumWidget.resize directly,
+  // before rendering and before the browser delivers ResizeObserver. Guard
+  // that public method so layout, DPR and scale changes are safe on that frame.
+  const resizeOwner = viewer?.cesiumWidget || viewer;
+  const originalResize = resizeOwner?.resize;
+  const resizeDescriptor =
+    resizeOwner && Object.getOwnPropertyDescriptor(resizeOwner, 'resize');
+  let guardedResize = null;
+  if (typeof originalResize === 'function') {
+    guardedResize = function (...args) {
+      enforce();
+      return originalResize.apply(this, args);
+    };
+    resizeOwner.resize = guardedResize;
+  }
+
   let unlistenResize = null;
-  if (windowTarget?.addEventListener) {
-    windowTarget.addEventListener('resize', enforce);
-    unlistenResize = () => windowTarget.removeEventListener('resize', enforce);
-  }
-
   let resizeObserver = null;
-  if (viewer?.canvas && createResizeObserver) {
-    resizeObserver = createResizeObserver(enforce);
-    resizeObserver?.observe(viewer.canvas);
-  }
-
-  let active = true;
-  return () => {
+  const dispose = () => {
     if (!active) return;
     active = false;
     unlistenResize?.();
     resizeObserver?.disconnect();
+    if (guardedResize && resizeOwner.resize === guardedResize) {
+      if (resizeDescriptor)
+        Object.defineProperty(resizeOwner, 'resize', resizeDescriptor);
+      else delete resizeOwner.resize;
+    }
     if (viewer) resolutionScaleStates.delete(viewer);
   };
+  try {
+    if (windowTarget?.addEventListener) {
+      windowTarget.addEventListener('resize', enforce);
+      unlistenResize = () =>
+        windowTarget.removeEventListener('resize', enforce);
+    }
+    if (viewer?.canvas && createResizeObserver) {
+      resizeObserver = createResizeObserver(enforce);
+      resizeObserver?.observe(viewer.canvas);
+    }
+  } catch (error) {
+    dispose();
+    throw error;
+  }
+  return dispose;
 }
 
 /** Cesium.Viewer options of the standard globe viewer. */
@@ -248,6 +274,11 @@ export function createApplicationViewer({ container, creditContainer }) {
   );
   try {
     viewer.targetFrameRate = 60;
+    // A phone pinch spans fewer screen pixels than desktop zoom gestures.
+    // Keep Cesium's distance-aware zoom and collision limits, with less travel
+    // required on touch-first screens. Mouse/trackpad sensitivity stays native.
+    if (globalThis.matchMedia?.('(pointer: coarse)').matches)
+      viewer.scene.screenSpaceCameraController.zoomFactor *= 3;
     // Before any tile builds a draw command: Cesium's per-vertex model
     // atmosphere fails to LINK on Apple's Metal backend and kills the
     // render loop. See app/atmosphereCompat.js.

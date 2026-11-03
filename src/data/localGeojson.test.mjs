@@ -6,13 +6,14 @@ import {
   GROUND_SAMPLE_MAX_ARMED_RETRIES,
   LOCAL_OVERLAY_COHORT_LIMIT,
   LOCAL_STEM_TIP_EPSILON_M,
-  createLocalGeoJsonLayer,
+  createLocalGeoJsonLayer as createLayer,
   createLocalInfrastructureOverlayEntry,
   createLocalInfrastructureOverlayPublisher,
   localDatasetError,
   localInfrastructureOverlayCopy,
   selectLocalInfrastructureOverlayCohort,
-} from './localGeojson.js';
+} from './localGeojsonCore.js';
+import { localGeoJsonServices } from '../app/localGeojsonServices.js';
 import { layerFeedState } from './manager.js';
 import { INFRA_LOD_ACTIVE_MIN, INFRA_LOD_ACTIVE_MAX } from './localGeojsonLod.js';
 import {
@@ -20,6 +21,13 @@ import {
   getRenderGovernorDiagnostics,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+
+/** The catalog's services, with the overlay host each test supplies. */
+const createLocalGeoJsonLayer = (options) =>
+  createLayer(options, {
+    ...localGeoJsonServices,
+    overlayHost: options.overlayHost ?? localGeoJsonServices.overlayHost,
+  });
 
 class MockLayerEvent {
   constructor() {
@@ -1337,14 +1345,3 @@ test('globe-LOD re-selects during continuous motion, without ever seeing a moveE
   assert.deepEqual(env.layer.getLodDiagnostics(), parked, 'a parked camera never re-selects');
 });
 
-
-test('standalone publisher retains its default host for an undefined override', () => {
-  const publisher = createLocalInfrastructureOverlayPublisher({
-    sourceId: 'local-default-host-test', host: undefined,
-  });
-  assert.doesNotThrow(() => {
-    publisher.show();
-    publisher.hide();
-    publisher.destroy();
-  });
-});

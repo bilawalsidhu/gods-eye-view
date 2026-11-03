@@ -35,6 +35,8 @@ test('importing and constructing the package is inactive without browser globals
   const result = spawnSync(
     process.execPath,
     [
+      // Views are single-file components; Node needs the loader hosts use.
+      '--import=gods-eye-view/build/register-vue',
       '--input-type=module',
       '-e',
       `
@@ -456,7 +458,7 @@ test('installTextureLimitGuard clamps before resize and cleans up its listeners'
   assert.equal(Object.hasOwn(viewer, 'setResolutionScale'), false);
   assert.equal(Object.hasOwn(viewer, 'getRequestedResolutionScale'), false);
 
-  // ResizeObserver runs after layout changes but before Cesium's resize/render frame.
+  // Notifications still update the scale eagerly between drawing-buffer resizes.
   viewer.canvas.clientWidth = 2560;
   resizeObserverCallback([{ target: viewer.canvas }]);
   viewer.resize();
@@ -471,4 +473,92 @@ test('installTextureLimitGuard clamps before resize and cleans up its listeners'
   uninstall();
   assert.equal(resizeHandler, null);
   assert.equal(observerDisconnected, true);
+});
+
+test('the widget resize is safe before observer delivery and restores its inherited method', () => {
+  let pixelRatio = 1;
+  const canvas = { clientWidth: 1920, clientHeight: 1080 };
+  const viewer = {
+    canvas,
+    resolutionScale: 1,
+    useBrowserRecommendedResolution: false,
+  };
+  const prototype = {
+    resize(marker) {
+      assert.equal(this, viewer.cesiumWidget);
+      const width = Math.round(
+        canvas.clientWidth * pixelRatio * viewer.resolutionScale,
+      );
+      assert.ok(
+        width <= 2048,
+        `drawing buffer would exceed GPU limit: ${width}`,
+      );
+      return marker;
+    },
+  };
+  viewer.cesiumWidget = Object.create(prototype);
+  const original = viewer.cesiumWidget.resize;
+  const dispose = installTextureLimitGuard(viewer, {
+    getLimit: () => 4096,
+    getRenderbufferLimit: () => 2048,
+    getPixelRatio: () => pixelRatio,
+    windowTarget: null,
+    createResizeObserver: null,
+  });
+  // The default RAF calls the widget directly before ResizeObserver runs.
+  canvas.clientWidth = 2560;
+  assert.equal(viewer.cesiumWidget.resize('frame'), 'frame');
+  assert.equal(viewer.resolutionScale, 2048 / 2560);
+  // DPR can change without a CSS canvas resize; scale changes also need a guard.
+  pixelRatio = 2;
+  viewer.cesiumWidget.resize();
+  assert.equal(viewer.resolutionScale, 2048 / 5120);
+  viewer.resolutionScale = 0.75;
+  viewer.cesiumWidget.resize();
+  assert.equal(viewer.resolutionScale, 2048 / 5120);
+  canvas.clientWidth = 1000;
+  viewer.cesiumWidget.resize();
+  assert.equal(viewer.resolutionScale, 0.75);
+  dispose();
+  dispose();
+  assert.equal(viewer.cesiumWidget.resize, original);
+  assert.equal(Object.hasOwn(viewer.cesiumWidget, 'resize'), false);
+});
+
+test('guard setup failure restores resize and removes its installed listener', () => {
+  let handler = null;
+  let disconnected = false;
+  const viewer = {
+    canvas: { clientWidth: 1000, clientHeight: 600 },
+    resolutionScale: 1,
+    resize() {},
+  };
+  const original = viewer.resize;
+  assert.throws(
+    () =>
+      installTextureLimitGuard(viewer, {
+        getLimit: () => 2048,
+        windowTarget: {
+          addEventListener(type, callback) {
+            handler = callback;
+          },
+          removeEventListener(type, callback) {
+            assert.equal(handler, callback);
+            handler = null;
+          },
+        },
+        createResizeObserver: () => ({
+          observe() {
+            throw new Error('observe failed');
+          },
+          disconnect() {
+            disconnected = true;
+          },
+        }),
+      }),
+    /observe failed/,
+  );
+  assert.equal(viewer.resize, original);
+  assert.equal(handler, null);
+  assert.equal(disconnected, true);
 });
