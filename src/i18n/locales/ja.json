@@ -2872,5 +2872,64 @@
   "Audio": "オーディオ",
   "UTILITIES": "ユーティリティ",
   "Exit cockpit to fly to a drawing": "描画の位置へ移動するにはコックピットを終了してください",
-  "Directions, drawing and your own files": "ルート案内、描画、自分のファイル"
+  "Directions, drawing and your own files": "ルート案内、描画、自分のファイル",
+  "Voice place search (needs an Overpass server)": "音声による場所検索（Overpassサーバーが必要）",
+  "OSM Places": "OSMの場所",
+  "state or province": "州・省",
+  "county or district": "郡・地区",
+  "neighbourhood": "近隣地区",
+  "natural region": "自然地域",
+  "Which {place}?": "どの{place}ですか？",
+  "Which place?": "どの場所ですか？",
+  "Not drawn: {parts}": "未描画：{parts}",
+  "approximate": "概算",
+  "{pct}% cloud": "雲量{pct}%",
+  "Over {area}": "{area}上空",
+  "{count} of {total} acquisitions match": {
+    "other": "一致した画像：{count}/{total}件"
+  },
+  "{n} acquisitions searched": {
+    "other": "検索した画像：{n}件"
+  },
+  "No matching imagery": "一致する画像はありません",
+  "Unknown number of {kind}": "{kind}：件数不明",
+  "About {count} {kind}": "{kind}：約{count}件",
+  "At least {count} {kind}": "{kind}：{count}件以上",
+  "{count} {kind}": "{kind}：{count}件",
+  "In {area}": "{area}内",
+  "Area around {place}": "{place}周辺のエリア",
+  "Area around landmark": "ランドマーク周辺のエリア",
+  "Outline {place}": "{place}の輪郭を描く",
+  "Outline area": "エリアの輪郭を描く",
+  "Find {place}": "{place}を検索",
+  "Find area": "エリアを検索",
+  "Find recent imagery": "最近の衛星画像を検索",
+  "Find {what}": "{what}を検索",
+  "Find places": "場所を検索",
+  "Drawing outline": "輪郭を作図中",
+  "Searching imagery catalog": "画像カタログを検索中",
+  "Loading imagery": "画像を読み込み中",
+  "Searching OpenStreetMap": "OpenStreetMapを検索中",
+  "voice area|Area": "エリア",
+  "buffer sized to the place": "場所の大きさに合わせたバッファ",
+  "enclosing mapped area": "周囲の地図上のエリア",
+  "the map was cleared while looking it up": "検索中に地図がクリアされました",
+  "OpenStreetMap coverage varies by place": "OpenStreetMap の網羅度は場所によって異なります",
+  "the catalog covers the last 30 days": "カタログは過去 30 日分です",
+  "there are more": "ほかにもあります",
+  "{radius} m around the landmark": "ランドマークの周囲 {radius} m",
+  "{count} parts": {
+    "other": "パーツ数: {count}"
+  },
+  "{drawn} of {total} parts drawn": {
+    "other": "描画したパーツ: {drawn}/{total}"
+  },
+  "{count} duplicate mappings merged": {
+    "other": "統合した重複: {count}"
+  },
+  "listed the first {limit}": "最初の {limit} 件を表示",
+  "counted over the bounding box of {area}, not its outline": "外接矩形 ({area}) で数えた結果で、輪郭ではありません",
+  "Search cancelled": "検索をキャンセルしました",
+  "Sea Marks": "航路標識",
+  "Ski Pistes": "スキーゲレンデ"
 }
