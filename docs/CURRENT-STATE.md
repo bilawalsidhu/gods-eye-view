@@ -98,6 +98,27 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Prohibited & Restricted Airspace — FAA special-use airspace
+
+The Infrastructure group includes **Prohibited & Restricted Airspace** (`drone-airspace`,
+share-link token `8`), off by default. `/api/drone-airspace` pages the public
+FAA Special Use Airspace FeatureServer for `TYPE_CODE` P (prohibited) and R
+(restricted), simplifies geometry, caches for an hour, and serves the last
+good snapshot as stale when a refresh fails. The globe draws ground-clamped
+outlines with a translucent fill: red for prohibited, orange for restricted.
+Selecting a zone shows name, an altitude range built from the
+`LOWER_*`/`UPPER_*` value, unit and reference fields (for example `SFC to
+5,000 ft MSL` or `20,000 ft MSL to Unlimited`), times of use and controlling
+agency,
+plus a notice that the layer is informational only and not a substitute for
+official UAS flight-planning tools. Pick ownership is unregistered so sibling
+layer cards still work over a zone. Voice is off for this layer for now
+(`VOICE_OFF_LAYERS`: the Realtime prompt has no room), so neither voice nor the
+analyst can toggle or query it. The layer covers FAA prohibited and restricted
+special-use airspace only, not the UAS Facility Map / LAANC grids, National
+Security UAS Flight Restrictions or TFRs; the label and legend say so.
+See the live-layers table below.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
@@ -1442,6 +1463,33 @@ By default the 250 cameras nearest downtown Vancouver and Victoria load.
 900 to 1,050, the sum of the default pack caps, so no default camera is dropped.
 The Open Government Licence – British Columbia attribution is registered in the
 Data attribution popover.
+
+## Houston TranStar CCTV source pack
+
+The CCTV catalog adds Greater Houston traffic cameras from Houston TranStar
+alongside the other live packs. The server reads the keyless camera list at
+`https://traffic.houstontranstar.org/data/layers/cctvSnapshots_json.js` and
+keeps cameras with a numeric snapshot id inside the metro bounding box. Frame
+URLs are built from each camera id under
+`https://www.houstontranstar.org/snapshots/cctv/<id>.jpg`; they are never taken
+from the payload. TranStar's `dir` is the side of the freeway the camera sits
+on, not the way it faces; TranStar's own map reads it as the direction of the
+nearest traffic (South → eastbound, North → westbound, West → southbound,
+East → northbound). That travel direction seeds a low-confidence heading with
+the low-confidence pose, and `None` or an unknown value uses the shared id-hash
+fallback; both stay marked as estimated.
+Gate: `src/data/cctvHouston.test.mjs`.
+
+TranStar's Content Usage terms (https://traffic.houstontranstar.org/disclaimer.aspx)
+prohibit copying, distribution and external framing of specific images without
+TxDOT's prior written permission. The pack is off by default; operators should
+set `CCTV_HOUSTON_ENABLED=1` only if they hold that permission. Frames are
+fetched and relayed on demand, buffered only transiently per request, sent with
+`Cache-Control: no-store`, and not archived. Once enabled, it loads the 250
+cameras nearest downtown, Uptown, the Medical Center, IAH and Galveston.
+`CCTV_HOUSTON_MAX_SOURCES` sets the pack cap (8–400). Snapshots update about
+every 3 minutes. The catalog-wide ceiling stays at 4,000 and is shared
+round-robin, so adding this pack does not silently drop another region.
 
 ## Location control ownership
 
@@ -4058,7 +4106,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + MET Norway (NO weather webcams, opt-in) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + MET Norway (NO weather webcams, opt-in) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Houston TranStar (opt-in) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
@@ -4074,6 +4122,7 @@ its criteria cannot be silently ignored.
 | Sea Marks ⚓ (`sea-marks`) | OpenSeaMap seamark raster tiles (keyless; CC BY-SA 2.0 tiles, OSM data ODbL) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Ski Pistes ⛷ (`ski-pistes`) | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| Prohibited & Restricted Airspace 🚫 | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry) | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js` | `/api/drone-airspace` | 1 h (server cache 1 h; stale-on-error) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -4100,6 +4149,20 @@ anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+
+Prohibited & Restricted Airspace is off by default (share-link token `8`) and sits in
+Infrastructure. The proxy pages `TYPE_CODE IN ('P','R')` from the FAA SUA
+FeatureServer, caps the body, and reuses a one-hour snapshot, serving the last
+good payload as stale for at most 24 hours when a refresh fails; the layer row
+then reads STALE, dated by that snapshot's fetch. An answer with no valid zone, or
+paging that ends while the service still flags more records, counts as a
+failed refresh. Client-supplied URLs are ignored. The route uses the keyless
+same-site checks: a cross-site browser request gets `403` before it spends the
+per-client quota or starts a refresh, and the app still works behind a reverse
+proxy.
+Polygons keep holes; pick ownership is deliberately unregistered so sibling
+cards still work over a zone. The row legend and selected card state that the
+layer is informational only and not a substitute for B4UFLY / LAANC.
 
 Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
 layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts
