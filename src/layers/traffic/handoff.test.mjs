@@ -6,6 +6,7 @@ import { createState } from './state.js';
 import { createFlow } from './flow.js';
 import { createLifecycle } from './lifecycle.js';
 import { DOT_HEIGHT_OFFSET } from './policy.js';
+import { nextTask } from '../../sources/vectorTiles.js';
 
 const LON = -97.744;
 const LAT = 30.267;
@@ -105,7 +106,12 @@ function fixture(surface) {
 }
 
 const height = (point) => C.Cartographic.fromCartesian(point).height;
-const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+// The refinement runs in tasks the flow yields between (nextTask). Wait for
+// its outcome task by task instead of for a fixed time, which a loaded test
+// runner can outlast.
+const settle = async (done) => {
+  for (let task = 0; task < 500 && !done(); task++) await nextTask();
+};
 
 test('a republish weights roads by distance to the local ground, not by heights another globe sampled', async () => {
   const offsets = [0.004, 0.012, 0.02];
@@ -156,7 +162,7 @@ test('the handoff pass on a loading globe refines once its surface is ready', as
   assert.equal(paints.at(-1).label, 'Handoff', 'not ready: no refinement yet');
   surface.ready = true;
   surface.frame();
-  await settle();
+  await settle(() => paints.at(-1)?.label === 'Handoff refined');
   assert.equal(paints.at(-1).label, 'Handoff refined');
   for (const r of roads)
     assert.ok(
