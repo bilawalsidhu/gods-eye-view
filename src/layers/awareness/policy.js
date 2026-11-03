@@ -50,6 +50,8 @@ export const CONTEXT_RIM_HEIGHT_M = 2500;
  *  luminance contrast on light and dark ground alike, and luminance is what
  *  the monochrome styles keep. The core is the Context panel's blue; the halo
  *  is the map-card ink. Widths are screen pixels; `outlineWidth` is per side.
+ *  It is drawn as an unpickable primitive, so clicks on its edge reach the
+ *  contacts underneath.
  *  While the sonar pulses run, the ring dims to `restOpacity` and flashes
  *  to full as each pulse reaches it, fading over `flashMs`. `restOpacity`
  *  keeps the 250 km edge readable between flashes, in screenshots and for

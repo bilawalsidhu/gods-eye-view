@@ -267,6 +267,47 @@ function createPulseGradient(groundCenter, material) {
   });
 }
 
+/**
+ * The ring's polyline geometry: `AWARENESS_RANGE_RING_STYLE.width` screen
+ * pixels, straight chords between the given positions (they already follow
+ * the surface), in the material appearance's vertex format.
+ * @param {Cesium.Cartesian3[]} positions Ring positions.
+ * @returns {object} PolylineGeometry options.
+ */
+export function awarenessRingGeometryOptions(positions) {
+  return {
+    positions,
+    width: AWARENESS_RANGE_RING_STYLE.width,
+    arcType: Cesium.ArcType.NONE,
+    vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT,
+  };
+}
+
+/**
+ * The 250 km ring as an unpickable polyline primitive in the ring's outline
+ * material, so a click or tap on its edge reaches the contact underneath.
+ * Its positions are geometry, so a moved subject rebuilds it; the material
+ * is shared between builds so a flash keeps going.
+ * @param {Cesium.Cartesian3[]} positions Ring positions.
+ * @param {Cesium.Material} material Shared PolylineOutline material.
+ * @returns {Cesium.Primitive}
+ */
+function createRingPrimitive(positions, material) {
+  return new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: new Cesium.PolylineGeometry(
+        awarenessRingGeometryOptions(positions),
+      ),
+    }),
+    appearance: new Cesium.PolylineMaterialAppearance({
+      material,
+      translucent: true,
+    }),
+    asynchronous: false,
+    allowPicking: false,
+  });
+}
+
 /** Camera height above the ellipsoid, or NaN when the scene cannot say. */
 function cameraHeightM(scene) {
   return scene.camera?.positionCartographic?.height ?? Number.NaN;
@@ -570,6 +611,12 @@ export function createRendering({
     layerState.visual?.removeMotionListener?.();
     if (layerState.visual?.gradient && layerState.viewer)
       layerState.viewer.scene.primitives.remove(layerState.visual.gradient);
+    if (layerState.visual?.ringPrimitive && layerState.viewer) {
+      layerState.viewer.scene.primitives.remove?.(
+        layerState.visual.ringPrimitive,
+      );
+      governorRequestRender('awareness-visual');
+    }
     clearAwarenessEchoField();
     if (layerState.visual?.entities && layerState.viewer) {
       for (const entity of layerState.visual.entities)
@@ -610,7 +657,15 @@ export function createRendering({
         // The echo field reads `visual.center` in place and follows on its
         // own. The pulse disc is geometry, so it is rebuilt, but only every
         // `gradientRebuildM`: a build costs a few milliseconds.
-        layerState.visual.ring.polyline.positions.setValue(positions);
+        layerState.visual.ringPositions = positions;
+        const { ringPrimitive } = layerState.visual;
+        if (ringPrimitive) {
+          const primitives = layerState.viewer.scene.primitives;
+          layerState.visual.ringPrimitive = primitives.add(
+            createRingPrimitive(positions, ringPrimitive.appearance.material),
+          );
+          primitives.remove(ringPrimitive);
+        } else layerState.visual.ring.polyline.positions.setValue(positions);
         Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
         // A resting disc is hidden, so it catches up when the pulses wake.
         if (performance.now() < layerState.visual.wake?.untilMs)
@@ -647,36 +702,48 @@ export function createRendering({
     const ring = AWARENESS_RANGE_RING_STYLE;
     const core = Cesium.Color.fromCssColorString(ring.color);
     const halo = Cesium.Color.fromCssColorString(ring.outlineColor);
+    const ringPositions = awarenessRangeRingPositions(
+      groundCenter,
+      AWARENESS_RADIUS_M,
+      CONTEXT_RIM_HEIGHT_M,
+    );
     // While pulses run, the ring flashes as each one arrives and otherwise
     // dims to `restOpacity`; as they settle it returns to full and stays.
-    const flashing = (base) => {
-      const color = base.clone();
-      return new Cesium.CallbackProperty(() => {
-        const nowMs = performance.now();
-        const pulsed = Math.max(ring.restOpacity, awarenessRingFlash(nowMs));
-        color.alpha = base.alpha * (1 - levelAt(nowMs) * (1 - pulsed));
-        return color;
-      }, false);
+    const ringAlpha = (nowMs) => {
+      const pulsed = Math.max(ring.restOpacity, awarenessRingFlash(nowMs));
+      return 1 - levelAt(nowMs) * (1 - pulsed);
     };
-    const ringEntity = layerState.viewer.entities.add({
-      polyline: {
-        positions: new Cesium.ConstantProperty(
-          awarenessRangeRingPositions(
-            groundCenter,
-            AWARENESS_RADIUS_M,
-            CONTEXT_RIM_HEIGHT_M,
-          ),
-        ),
-        width: ring.width,
-        arcType: Cesium.ArcType.NONE,
-        material: new Cesium.PolylineOutlineMaterialProperty({
-          color: animate ? flashing(core) : core,
-          outlineColor: animate ? flashing(halo) : halo,
-          outlineWidth: ring.outlineWidth,
-        }),
-      },
-    });
-    entities.push(ringEntity);
+    let ringEntity = null;
+    let ringMaterial = null;
+    let ringPrimitive = null;
+    if (scene?.primitives?.add) {
+      ringMaterial = Cesium.Material.fromType('PolylineOutline', {
+        color: core.clone(),
+        outlineColor: halo.clone(),
+        outlineWidth: ring.outlineWidth,
+      });
+      ringPrimitive =
+        scene.primitives.add(
+          createRingPrimitive(ringPositions, ringMaterial),
+        ) ?? null;
+    }
+    if (!ringPrimitive) {
+      // Headless tools and partial stubs have no primitive collection; they
+      // get the static ring as an entity.
+      ringEntity = layerState.viewer.entities.add({
+        polyline: {
+          positions: new Cesium.ConstantProperty(ringPositions),
+          width: ring.width,
+          arcType: Cesium.ArcType.NONE,
+          material: new Cesium.PolylineOutlineMaterialProperty({
+            color: core,
+            outlineColor: halo,
+            outlineWidth: ring.outlineWidth,
+          }),
+        },
+      });
+      entities.push(ringEntity);
+    }
 
     const center = Cesium.Cartesian3.clone(groundCenter);
     let gradient = null;
@@ -707,6 +774,9 @@ export function createRendering({
       const removePreRender = scene.preRender.addEventListener(() => {
         const nowMs = performance.now();
         const level = levelAt(nowMs);
+        const alpha = ringAlpha(nowMs);
+        ringMaterial.uniforms.color.alpha = core.alpha * alpha;
+        ringMaterial.uniforms.outlineColor.alpha = halo.alpha * alpha;
         // The disc is looked up each frame: a subject move swaps it. From a
         // camera below the rim height it would sweep across the sky, so it
         // is hidden there.
@@ -767,6 +837,8 @@ export function createRendering({
       key,
       entities,
       ring: ringEntity,
+      ringPrimitive,
+      ringPositions,
       center,
       gradient,
       gradientCenter: Cesium.Cartesian3.clone(groundCenter),
