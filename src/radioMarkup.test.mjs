@@ -25,11 +25,14 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 31-tool inventory', () => {
+test('Realtime schema exposes the authoritative 34-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 31);
+  assert.equal(tools.length, 34);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 31, 'tool names are unique');
+  assert.equal(new Set(names).size, 34, 'tool names are unique');
+  assert.ok(names.includes('resolve_area'));
+  assert.ok(names.includes('find_imagery'));
+  assert.ok(names.includes('osm_query'));
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('set_voice_inactivity_timeout'));
@@ -199,6 +202,10 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'track_entity',
     // Point-and-ask: 'pointer' sentinels and referent arguments.
     'annotate_map',
+    // Voice geometry: new tools.
+    'resolve_area',
+    'find_imagery',
+    'osm_query',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))

@@ -374,6 +374,17 @@ test('a zoom out during a far orbit never pulls the camera in', (t) => {
   assert.ok(pivotRange(h) >= before - 1, `range fell to ${pivotRange(h)} m`);
 });
 
+test('an out-of-range pitchDeg is clamped to the tilt limits', (t) => {
+  // The schema carries no range; 120 reads as 120° below the horizon.
+  const h = harness(t, { pitch: -45 });
+  assert.equal(moveCamera({ motion: 'tilt', pitchDeg: 120 }).ok, true);
+  h.finish();
+  assert.ok(
+    Math.abs(pitchDeg(h.camera) - -89) < 0.5,
+    `pitch ${pitchDeg(h.camera)}`,
+  );
+});
+
 test('a zoom in during a pivot tilt stops at the clearance', (t) => {
   // 400 m of range at -40°, then "zoom in a lot" twice: unfloored, that left
   // the camera about 107 m up, then at the 80 m zoom floor.

@@ -44,6 +44,27 @@ pinching traverses globe and street scales with fewer gestures. Cesium retains
 its distance-aware zoom, collision handling and minimum/maximum distance limits.
 Fine-pointer desktop mouse and trackpad sensitivity is unchanged.
 
+User zoom is capped at 40,000 km (or a stricter host limit). Explicit camera
+flight, share-link and story destinations can go farther; from there, user zoom
+can't climb any higher and zooms in gradually from the current height, with no
+jump to the cap. Cesium can still use the limit when it computes an automatic
+bounding-sphere framing distance.
+Above 300 km, outward movement from the controller's configured zoom bindings
+(wheel, pinch distance and unmodified right-drag by default) pitches the camera
+down towards 8° below the Earth's limb. Large steps reach the limb immediately;
+the remaining margin eases into place, including after zooming stops or reaches
+the ceiling. Continuous outward inertia remains guarded without a time cutoff.
+Two-finger tilts, modifier-specific tilts and other camera gestures cancel the
+correction. A two-finger gesture counts as a pinch zoom only while the finger
+spacing changes more than the fingers move up or down, so spacing drift during
+a tilt is ignored. Explicit navigation handoffs, including toolbar tilt,
+cancel it before animation begins. Zooming in, disabled zoom/input, non-3D modes, tracked
+transforms and flights also cancel it; external pose changes cancel stationary
+settling. Oblique views below 300 km are left alone.
+
+`QA_BASE_URL=http://localhost:4173 node scripts/qa-zoom-out-guard.mjs` exercises
+the real browser controller at desktop and phone widths with keyless fixtures.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
@@ -697,8 +718,9 @@ ordinary tool-card limits are unchanged.
 Voice speech: `src/voice/speech.js` adds `{ say, display, referents?, schedule? }`
 to layer toggles, fly_to_location, frame_overhead, select_nearest_aircraft,
 get_entity_context, annotate_map and analyst_query. Analyst speech and the card
-share one deterministic count/scope headline; lower bounds use "At least" and
-partial answers name the unanswered layers. `get_current_view_state` lists enabled layers only.
+share one bounded, lossless count/scope headline; combined flight, military and
+local ADS-B answers use the shared noun "aircraft"; lower bounds use "At least"
+and partial answers name the unanswered layers. `get_current_view_state` lists enabled layers only.
 FIRMS and ALPR entity labels remain English in shared context and tool data;
 voice-card titles and pointer presentation translate those known labels at display
 time, while arbitrary names and callsigns remain unchanged.
@@ -828,7 +850,9 @@ Voice controls bind to a protocol-independent session factory. The default WebRT
 
 The standalone app offers OpenAI and Gemini Live through an explicit provider chooser. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
-Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 30 tools using separate description-only metadata. Description customization cannot replace argument types, enum values or required fields.
+Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 33 tools using separate description-only metadata; a session is offered 32 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
+
+Voice areas live in a store owned by the action runner for the page (`src/data/areaStore.js`); the model gets an `areaId`, a rounded bounding box and a summary, never geometry. `resolve_area` (`src/voice/areaActions.js`, `src/data/areaResolver.js`) checks the store, bundled Natural Earth regions, then bundled countries and states by name — a name several prominent units share returns up to four candidates unless the view is inside exactly one — and then the annotation outline ladder (`resolveAnnotationTarget`: bundled counties, Census places and neighborhoods, the guarded `/api/geocode/outline`, and Overpass only when configured). Administrative geometry is stored only when its source identity agrees with the requested unit, by name or by a form the bundled matcher reads as that unit at its level ("State of Texas", "Province of Bagmati", "USA", "UK"; not "Great Britain" or "Korea"); stale, mismatched, synthesized or otherwise unverified administrative boundaries are refused rather than relabelled. Clarification IDs use the bounded `ne:<kind>:<slug>` grammar and are accepted only from the current resolver's candidate memory. A lookup past 8 s answers `AREA_TIMEOUT` and keeps filling the caches. `around=true` asks the same ladder for the grounds enclosing a landmark (Nominatim, then the OpenFreeMap area holding it) and otherwise stores a 250 m buffer marked approximate. `analyst_query` scopes add `area`, `drawn` (newest draw-tool outline) and `annotation` (newest or named outline); region scopes use the same resolver within 3 s. Drawn outlines are a simplified copy (≤1,200 vertices); counting reads the stored geometry (`src/data/areaGeometry.js`). `find_imagery` (`src/voice/imageryActions.js`) sets the Recent Imagery box from an area, the view or the turn's pointer snapshot and pins the best acquisition; any hand change to the panel or explicit layer OFF while it searches ends the request (`DISPLACED`) without pinning or success narration. `osm_query` asks `/api/osm/features` for one curated preset in a bounded box; the route answers `OVERPASS_NOT_CONFIGURED` without an operator Overpass. Results go to the session-only `osm-places` layer and become the analyst's last answer; a list capped at its limit stays incomplete in follow-ups, which keep its "listed the first N" caveat and report counts as floors. An explicit OSM Places OFF while the provider is pending aborts the work and prevents re-enable, result, credit and follow-up-memory commits. The voice answer deadline also aborts the client provider request, so the caller does not leave a timed-out request without a cancellation owner. The server's whole search (22 s across every configured endpoint, with Overpass told 20 s) ends before that 25 s deadline, because a browser that stops waiting cancels the upstream query and leaves nothing cached for a retry.
 
 `createGevActionRunner` routes `control_cctv` enable/disable through the shared
 layer visibility lifecycle. Results distinguish successful changes from
@@ -896,10 +920,9 @@ voice disposes the runner.
 Analyst result memory is committed only after any Contacts-window projection
 finishes and the call is still current. Cancelled or superseded queries cannot
 return success or replace follow-up memory; Contacts follow-ups filter the same
-cohort that was shown, and partial/unanswered coverage remains attached when a
-remembered result is narrowed.
-The narrowed answer retains the remembered scope label and detail, including
-the Contacts-window attribution, unless the follow-up supplies a new scope.
+cohort that was shown and retain its displayed scope and loaded-data note unless
+the follow-up supplies a new scope. Partial/unanswered coverage remains attached
+when a remembered result is narrowed.
 
 Application startup constructs fresh layer instances from explicit source objects.
 Standalone composition selects the existing providers. Controls, launch orbit
