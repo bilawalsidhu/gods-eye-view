@@ -12,6 +12,8 @@
  * - `visualPosition()`: where a 3D model is actually drawn, for the tracked card.
  * - `labelModel`: the tracked card's `{ title, details, accent, … }`.
  * - `selectionOrigin`: what started the selection (`'user'`, …).
+ * - `sprite`: a tracked billboard's pushed `{ width, height, scale, scaleByDistance }`, for
+ *   the close-range camera guard and the screen annotations' tracked footprint.
  *
  * A layer's private per-entity state goes in its own store ({@link createEntityStore}).
  */

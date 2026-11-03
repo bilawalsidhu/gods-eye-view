@@ -3,6 +3,7 @@ import {
   isTrackingClickGesture,
 } from '../../data/trackingClickGesture.js';
 import * as Cesium from 'cesium';
+import { cctvPicks } from './pickState.js';
 
 export function createSelection({
   state: layerState,
@@ -207,7 +208,7 @@ export function createSelection({
 
   /**
    * Extracts a camera ID from a Cesium pick result by checking billboard IDs,
-   * primitive IDs, and entity cctvCameraId properties.
+   * primitive IDs, and the camera ids the layer keeps for its coverage entities.
    * @param {Object|null} picked - Result from scene.pick().
    * @returns {string|null} Camera ID, or null if the pick is not a CCTV entity.
    */
@@ -215,17 +216,13 @@ export function createSelection({
   function extractPickedCameraId(picked) {
     if (!picked) return null;
 
-    const entity = picked.id?.properties
+    const entity = cctvPicks.read(picked.id)
       ? picked.id
-      : picked.primitive?.id?.properties
+      : cctvPicks.read(picked.primitive?.id)
         ? picked.primitive.id
         : null;
-    const maybeProp = entity?.properties?.cctvCameraId;
-    if (maybeProp) {
-      const value =
-        typeof maybeProp.getValue === 'function'
-          ? maybeProp.getValue(Cesium.JulianDate.now())
-          : maybeProp;
+    const value = cctvPicks.read(entity)?.cameraId;
+    if (value !== undefined) {
       const record =
         typeof value === 'string' ? layerState._recordById.get(value) : null;
       const ownsCoverageEntity = Boolean(

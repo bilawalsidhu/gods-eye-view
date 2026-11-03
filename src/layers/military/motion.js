@@ -25,6 +25,7 @@ import {
   COURSE_MAX_DPS,
 } from './policy.js';
 import { modelState } from '../../data/modelMirror.js';
+import { readEntityRecord } from '../../data/entityRecords.js';
 
 export function createMotion({
   flightState,
@@ -250,17 +251,15 @@ export function createMotion({
       );
     }
 
-    const billboard = flightState._trackedEntity?.billboard;
-    const time = flightState._viewer.clock.currentTime;
-    const width = billboard?.width?.getValue(time) ?? 28;
-    const height = billboard?.height?.getValue(time) ?? 28;
+    const sprite = readEntityRecord(flightState._trackedEntity)?.sprite;
+    const width = sprite?.width ?? 28;
+    const height = sprite?.height ?? 28;
     const scale =
-      billboard?.scale?.getValue(time) ??
+      sprite?.scale ??
       BILLBOARD_SCALE *
         (CLASS_SCALE_2D[flightState.records.data.get(icao24)?.klass] || 1);
     const scaleByDistance =
-      billboard?.scaleByDistance?.getValue(time) ??
-      TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
+      sprite?.scaleByDistance ?? TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
     const distanceScale = nearFarScalarValueAtDistance(scaleByDistance, rangeM);
     return Math.max(width, height) * scale * distanceScale;
   }

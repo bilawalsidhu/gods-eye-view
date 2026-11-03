@@ -80,6 +80,7 @@ import {
   LIVE_CAMERA_COLOR,
 } from '../layers/cctv/policy.js';
 import { mirrorBillboard } from './billboardMirror.js';
+import { cctvPicks } from '../layers/cctv/pickState.js';
 
 const ASPECT = 16 / 9;
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -1130,10 +1131,10 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
 
 test('CCTV camera extraction requires layer ownership, not a colliding sibling ID', () => {
   const billboard = { id: 'shared-id' };
-  const ownedCoverageEntity = {
-    id: 'cctv-shared-id-cap',
-    properties: { cctvCameraId: 'shared-id' },
-  };
+  const ownedCoverageEntity = { id: 'cctv-shared-id-cap' };
+  cctvPicks.write(ownedCoverageEntity).cameraId = 'shared-id';
+  const strayEntity = { id: 'cctv-shared-id-stray' };
+  cctvPicks.write(strayEntity).cameraId = 'shared-id';
   const record = {
     ...makeDeselectRecord('shared-id'),
     billboard,
@@ -1175,6 +1176,11 @@ test('CCTV camera extraction requires layer ownership, not a colliding sibling I
       }),
       null,
       'a sibling cannot impersonate CCTV by copying its property shape',
+    );
+    assert.equal(
+      _extractPickedCameraIdForTest({ id: strayEntity }),
+      null,
+      'a camera id alone is not ownership: the record must hold the entity',
     );
   } finally {
     _setCctvCoverageStateForTest({ enabled: false });

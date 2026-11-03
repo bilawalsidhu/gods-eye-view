@@ -88,3 +88,38 @@ test('USGS body completion honors cancellation even with an uncooperative transp
     name: 'AbortError',
   });
 });
+test('analyst records come from the events the layer drew, and only while it is on', async () => {
+  const h = harness({
+    getSnapshot: async () => [
+      row,
+      { ...row, stableId: 'event-b', usgsId: 'event-b', mag: 5.5 },
+    ],
+  });
+  await h.layer.update(h.viewer);
+  assert.deepEqual(h.layer.getAnalystRecords(), [
+    {
+      id: 'event-a',
+      magnitude: 4,
+      depthKm: 3,
+      lat: 20,
+      lon: 30,
+      timeMs: 1000,
+      place: 'Fixture',
+    },
+    {
+      id: 'event-b',
+      magnitude: 5.5,
+      depthKm: 3,
+      lat: 20,
+      lon: 30,
+      timeMs: 1000,
+      place: 'Fixture',
+    },
+  ]);
+  assert.equal(h.layer.getAnalystRecords(1).length, 1);
+  const [entity] = h.sources[0].entities.values;
+  assert.equal(entity.properties, undefined, 'the entity carries drawing only');
+  h.layer.disable(h.viewer);
+  assert.deepEqual(h.layer.getAnalystRecords(), []);
+  h.layer.destroy(h.viewer);
+});

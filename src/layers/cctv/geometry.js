@@ -17,6 +17,7 @@ import {
   requiredPlaneLift,
 } from '../../data/cctvFootprint.js';
 import { setBillboard } from '../../data/billboardMirror.js';
+import { cctvPicks } from './pickState.js';
 
 export function createGeometry({ state: layerState, services, parts, source }) {
   const { warmGroundFloor, cachedGroundFloor } = services.ground;
@@ -700,16 +701,18 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       record.position = positions.mount;
     }
 
-    const addPolyline = (role, linePositions) =>
-      layerState._viewer.entities.add({
+    const addPolyline = (role, linePositions) => {
+      const entity = layerState._viewer.entities.add({
         id: `cctv-${camera.id}-${role}`,
-        properties: { cctvCameraId: camera.id },
         polyline: {
           positions: linePositions,
           width: 1.2,
           material: IDLE_COVERAGE_COLOR,
         },
       });
+      cctvPicks.write(entity).cameraId = camera.id;
+      return entity;
+    };
 
     const entities = [
       addPolyline('ray-tl', [positions.mount, positions.tl]),
