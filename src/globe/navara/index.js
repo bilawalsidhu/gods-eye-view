@@ -114,6 +114,8 @@ export async function createNavaraGlobe({
   let look;
   let removeLook = null;
   let removePostSampling = null;
+  // Parked for a switch back: its render loop is off (setRenderLoop).
+  let parked = false;
   try {
     view = new ThreeView(navaraViewOptions({ container, canvas, pixelRatio }));
     const plugin = new DefaultPlugin();
@@ -165,7 +167,9 @@ export async function createNavaraGlobe({
       camera.moveEnd.addEventListener(() => {
         moving = false;
         readGround();
-        engine.render.request('navara-look');
+        // A parked globe (setRenderLoop(false)) draws nothing: its camera
+        // settling asks for no frame.
+        if (!parked) engine.render.request('navara-look');
       }),
       // After the engine's camera sync: before the first frame the camera
       // has no position yet (camera.height() throws).
@@ -188,7 +192,8 @@ export async function createNavaraGlobe({
             ground,
             placed ? lookPlace : null,
             landscape,
-          )
+          ) &&
+          !parked
         )
           engine.render.request('navara-look');
       }),
@@ -219,7 +224,10 @@ export async function createNavaraGlobe({
       look.resetDaylight();
       engine.render.request('restored-daylight');
     },
-    setRenderLoop: (enabled) => setRenderLoopEnabled(view, enabled),
+    setRenderLoop: (enabled) => {
+      parked = !enabled;
+      setRenderLoopEnabled(view, enabled);
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;

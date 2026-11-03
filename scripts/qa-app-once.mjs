@@ -166,9 +166,51 @@ try {
   report.uiBefore = uiBefore;
 
   const sequence = ['navara', 'cesium', 'navara', 'cesium', 'navara', 'cesium'];
+  // Dev guard: once an engine is parked, nothing may move its camera or
+  // ask it to draw until it is attached again (its own resume aside).
+  await page.evaluate(() => {
+    window.__qaParkedCalls = [];
+    window.__qaWatchParked = (engine) => {
+      if (!engine || engine.__qaWatched) return;
+      engine.__qaWatched = true;
+      const watch = (owner, names, label) => {
+        for (const name of names) {
+          const original = owner[name];
+          if (typeof original !== 'function') continue;
+          owner[name] = function (...args) {
+            const parked = window.__godsEyeView?.engine !== engine;
+            const resume = name === 'request' && args[0] === 'engine-resume';
+            if (parked && !resume && !window.__qaSwitching)
+              window.__qaParkedCalls.push({
+                call: `${engine.kind}.${label}.${name}`,
+                reason: typeof args[0] === 'string' ? args[0] : null,
+                stack: new Error().stack.split('\n').slice(2, 6).join(' | '),
+              });
+            return original.apply(this, args);
+          };
+        }
+      };
+      watch(
+        engine.camera,
+        ['setView', 'flyTo', 'lookAt', 'flyToBoundingSphere', 'release'],
+        'camera',
+      );
+      watch(engine.render, ['request', 'setContinuous'], 'render');
+    };
+    window.__qaWatchParked(window.__godsEyeView.engine);
+  });
   for (const kind of sequence) {
     const started = Date.now();
+    // The switch itself parks and resumes engines; only the time an engine
+    // sits parked is watched.
+    await page.evaluate(() => {
+      window.__qaSwitching = true;
+    });
     await switchEngine(page, kind);
+    await page.evaluate(() => {
+      window.__qaSwitching = false;
+      window.__qaWatchParked(window.__godsEyeView.engine);
+    });
     const state = await readSession(page);
     const ui = await readUi(page);
     if (kind === 'navara')
@@ -250,6 +292,12 @@ try {
       after.counters?.detaches === sequence.length,
     'each switch detaches once and attaches once',
     after.counters,
+  );
+  report.parkedEngineCalls = await page.evaluate(() => window.__qaParkedCalls);
+  check(
+    report.parkedEngineCalls.length === 0,
+    'a parked engine had its camera moved or a frame requested',
+    report.parkedEngineCalls,
   );
   check(
     after.counters?.applications === 1,
