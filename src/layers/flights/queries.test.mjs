@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createQueries } from './queries.js';
 import { createRendering } from './rendering.js';
+import {
+  billboardState,
+  mirrorBillboard,
+  setBillboard,
+} from '../../data/billboardMirror.js';
 
 function fixture() {
   const info = {
@@ -10,7 +15,10 @@ function fixture() {
     registration: ' N123 ',
     altitude: 1000,
   };
-  const bb = { show: true, position: new Cesium.Cartesian3(1, 2, 3) };
+  const bb = mirrorBillboard({
+    show: true,
+    position: new Cesium.Cartesian3(1, 2, 3),
+  });
   const flightState = {
     feed: {},
     _billboardCollection: { show: true },
@@ -48,9 +56,10 @@ test('candidate text follows in-place enrichment without freezing identity or po
   const [first] = f.queries.getDetectableObjects();
   assert.equal(first.id, 'TEST123');
   assert.equal(first.sourceId, 'abc123');
-  f.bb.position = new Cesium.Cartesian3(4, 5, 6);
+  setBillboard(f.bb, 'position', new Cesium.Cartesian3(4, 5, 6));
   assert.equal(f.queries.getDetectableObjects()[0], first);
-  assert.equal(first.position, f.bb.position);
+  assert.equal(first.position, billboardState(f.bb).position);
+  assert.deepEqual(first.position, new Cesium.Cartesian3(4, 5, 6));
   assert.equal(f.formats(), 1);
   f.info.callsign = ' NEW456 ';
   assert.equal(f.queries.getDetectableObjects()[0].id, 'NEW456');
@@ -97,7 +106,7 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
     scale: 1,
   });
   f.flightState._models.set('abc123', model);
-  f.bb.show = false;
+  setBillboard(f.bb, 'show', false);
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   model.ready = true;
   assert.equal(f.queries.getDetectableObjects()[0], candidate);
@@ -111,8 +120,11 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   assert.deepEqual(candidate.position, new Cesium.Cartesian3(40, 50, 60));
   model.show = false;
   assert.deepEqual(f.queries.getDetectableObjects(), []);
-  f.bb.show = true;
-  assert.equal(f.queries.getDetectableObjects()[0].position, f.bb.position);
+  setBillboard(f.bb, 'show', true);
+  assert.equal(
+    f.queries.getDetectableObjects()[0].position,
+    billboardState(f.bb).position,
+  );
   assert.equal(get.mock.callCount(), 6);
   model.show = true;
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123'), true);

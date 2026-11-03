@@ -27,6 +27,7 @@ import {
 } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
+import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 
 export function createTracking({
   flightState,
@@ -64,7 +65,7 @@ export function createTracking({
   function _publishTrackedSelection(icao24, origin = 'programmatic') {
     const bb = flightState._billboards.get(icao24);
     const info = flightState.records.data.get(icao24);
-    if (!bb?.position || !info) return false;
+    if (!billboardState(bb)?.position || !info) return false;
     if (flightState._trackedEntity)
       entityRecord(flightState._trackedEntity).selectionOrigin = origin;
     _emitAwarenessEvent('gev:awareness-subject-selected', {
@@ -74,7 +75,7 @@ export function createTracking({
         parts.queries._toCleanText(info.callsign) ||
         parts.queries._toCleanText(info.registration) ||
         icao24,
-      position: Cesium.Cartesian3.clone(bb.position),
+      position: Cesium.Cartesian3.clone(billboardState(bb).position),
       origin,
     });
     selectTrackedSubjectContext(_contextSubjectMetadata(icao24));
@@ -151,12 +152,13 @@ export function createTracking({
     const previous = flightState._cockpitNearContacts;
     const distancesSquared = [];
     for (const [icao24, bb] of flightState._billboards) {
-      if (icao24 === flightState._trackedIcao || !bb?.position) continue;
+      const position = billboardState(bb)?.position;
+      if (icao24 === flightState._trackedIcao || !position) continue;
       distancesSquared.push([
         icao24,
         Cesium.Cartesian3.distanceSquared(
           flightState._viewer.camera.positionWC,
-          bb.position,
+          position,
         ),
       ]);
     }
@@ -295,7 +297,8 @@ export function createTracking({
       if (flightState._models.has(id) || flightState._modelPending.has(id))
         parts.rendering._releaseModel(id);
       const modelled = flightState._billboards.get(id);
-      if (modelled && id !== flightState._trackedIcao) modelled.show = true; // horizon cull re-asserts next tick
+      if (modelled && id !== flightState._trackedIcao)
+        setBillboard(modelled, 'show', true); // horizon cull re-asserts next tick
       if (id === flightState._trackedIcao) {
         parts.rendering._releaseTrackedModel();
         _syncTracked2dRotation();
@@ -411,7 +414,8 @@ export function createTracking({
     if (!flightState._trackedIcao || !flightState._viewer) return;
     const pos =
       parts.motion._trackedDisplayCached() ||
-      flightState._billboards.get(flightState._trackedIcao)?.position;
+      billboardState(flightState._billboards.get(flightState._trackedIcao))
+        ?.position;
     if (!pos) return;
     const projected = screenProjectedRotation(
       flightState._viewer.scene,
@@ -780,21 +784,24 @@ export function createTracking({
     if (flightState._billboards.has(flightState._trackedIcao)) {
       const bb = flightState._billboards.get(flightState._trackedIcao);
       const meta = flightState.records.data.get(flightState._trackedIcao);
-      bb.show = true;
-      bb.width = 20;
-      bb.height = 20;
+      setBillboard(bb, 'show', true);
+      setBillboard(bb, 'width', 20);
+      setBillboard(bb, 'height', 20);
       // Ground-aware restore (a plane untracked while taxiing comes back at
       // ground scale; the fleet tint is amber, or red while broadcasting an
       // emergency, on the ground and in the air).
-      bb.scale =
+      setBillboard(
+        bb,
+        'scale',
         BILLBOARD_SCALE *
-        (CLASS_SCALE_2D[meta?.klass] || 1) *
-        (meta?.onGround ? GROUND_SCALE : 1);
+          (CLASS_SCALE_2D[meta?.klass] || 1) *
+          (meta?.onGround ? GROUND_SCALE : 1),
+      );
       bb.color = parts.rendering._fleetBillboardColor(
         flightState._trackedIcao,
         meta,
       );
-      bb.rotation = flightState._lastTrackedRotation;
+      setBillboard(bb, 'rotation', flightState._lastTrackedRotation);
     }
     flightState._lastCamPoseSig = ''; // force a fleet rotation pass on the next tick
 
@@ -869,21 +876,22 @@ export function createTracking({
     flightState._trackedIcao = icao24;
     _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling, full load-retry budget
     flightState._cachedDRFrame = -1;
-    flightState._lastTrackedRotation = bb.rotation || 0;
+    flightState._lastTrackedRotation = billboardState(bb).rotation || 0;
     // Drop any fleet 3D model for this aircraft — the tracked entity now owns its visual (its
     // own billboard + model graphic), and the fleet tick skips the tracked icao, so a leftover
     // fleet model would be orphaned + double-rendered.
     parts.rendering._releaseModel(icao24);
 
     // Hide the billboard -- the tracked entity replaces it visually
-    bb.show = false;
+    setBillboard(bb, 'show', false);
 
     // Helper: smoothed, per-frame-cached tracked position (see _trackedDisplayPosition —
     // one computation shared by the position/rotation/trail-head callbacks, with
     // discontinuity reconciliation). Falls back to the last billboard position when the
     // aircraft has no fix.
     const getTrackedPosition = () =>
-      parts.motion._trackedDisplayPosition(icao24) || bb.position;
+      parts.motion._trackedDisplayPosition(icao24) ||
+      billboardState(bb).position;
 
     // Dead-reckoning position property evaluated every render frame.
     // isConstant = false so CesiumJS re-evaluates each frame.

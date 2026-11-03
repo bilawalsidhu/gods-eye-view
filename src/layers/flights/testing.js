@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { CYAN_TRANSPARENT } from './policy.js';
+import { mirrorBillboard } from '../../data/billboardMirror.js';
 
 export function createTesting({
   flightState,
@@ -68,7 +69,7 @@ export function createTesting({
     flightState._viewer = viewer;
     flightState._modelCollection = modelCollection;
     flightState._billboardCollection = billboardCollection;
-    flightState._billboards = new Map([[icao24, billboard]]);
+    flightState._billboards = new Map([[icao24, mirrorBillboard(billboard)]]);
     flightState._cullPositions.clear();
     flightState._models.clear();
     for (const [key, model] of models) flightState._models.set(key, model);
@@ -117,7 +118,7 @@ export function createTesting({
     billboard,
     history = [],
   }) {
-    flightState._billboards.set(icao24, billboard);
+    flightState._billboards.set(icao24, mirrorBillboard(billboard));
     flightState.records.data.set(icao24, meta);
     flightState._positionHistory.set(icao24, history);
   }

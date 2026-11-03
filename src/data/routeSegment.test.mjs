@@ -3,6 +3,7 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { routePlausible } from './routePlausible.js';
 import { createTracking } from '../layers/flights/tracking.js';
+import { addBillboard } from './billboardMirror.js';
 
 const SFO = { lat: 37.6188, lon: -122.3754, code: 'SFO' };
 const LAX = { lat: 33.9416, lon: -118.4085, code: 'LAX' };
@@ -156,8 +157,10 @@ test('the actual native tracked label hides the wrong leg and keeps a healthy ro
     });
     flightState._billboards.set(
       id,
-      collection.add({
+      addBillboard(collection, {
         id,
+        width: 20,
+        height: 20,
         position: Cesium.Cartesian3.fromDegrees(
           position.lon,
           position.lat,

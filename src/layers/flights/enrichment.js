@@ -9,6 +9,7 @@ import {
   ENRICH_AMBIENT_REFILL_WINDOW_MS,
   ENRICH_AMBIENT_PER_SWEEP,
 } from './policy.js';
+import { billboardState } from '../../data/billboardMirror.js';
 
 export function createEnrichment({
   flightState,
@@ -199,11 +200,9 @@ export function createEnrichment({
         if (flightState._enrichSeen.has(`t:${icao24}`)) continue; // answered / queued / negative this session
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
-        if (!bb.position || !occluder.isPointVisible(bb.position)) continue; // beyond the limb
-        Cesium.Cartesian3.clone(
-          bb.position,
-          flightState._scratchModelBS.center,
-        );
+        const { position } = billboardState(bb);
+        if (!position || !occluder.isPointVisible(position)) continue; // beyond the limb
+        Cesium.Cartesian3.clone(position, flightState._scratchModelBS.center);
         if (
           cull.computeVisibility(flightState._scratchModelBS) ===
           Cesium.Intersect.OUTSIDE
@@ -211,7 +210,7 @@ export function createEnrichment({
           continue; // off-screen
         cand.push([
           icao24,
-          Cesium.Cartesian3.distanceSquared(camPos, bb.position),
+          Cesium.Cartesian3.distanceSquared(camPos, position),
         ]);
       }
       cand.sort((a, b) => a[1] - b[1]); // nearest first — what the user is looking at resolves first

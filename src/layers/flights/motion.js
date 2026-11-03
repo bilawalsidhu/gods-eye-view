@@ -35,6 +35,7 @@ import {
   DISPLAY_CORRIDOR_CELL_BUDGET,
   DISPLAY_CORRIDOR_FAIR_SHARE,
 } from './policy.js';
+import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 
 export function createMotion({
   flightState,
@@ -109,7 +110,7 @@ export function createMotion({
       if (newest)
         newest.position = Cesium.Cartesian3.clone(position, newest.position);
       const bb = flightState._billboards.get(icao24);
-      if (bb) bb.position = position;
+      if (bb) setBillboard(bb, 'position', position);
     }
   }
 
@@ -131,7 +132,9 @@ export function createMotion({
   function _deadReckon(icao24, result, sampledRenderTime) {
     const info = flightState.records.data.get(icao24);
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
-      const position = flightState._billboards.get(icao24)?.position;
+      const position = billboardState(
+        flightState._billboards.get(icao24),
+      )?.position;
       flightState._drCourseDeg = info?.true_track || 0;
       flightState._drSpeedMps = info?.velocity || 0;
       flightState._drCourseHold =

@@ -1,6 +1,11 @@
 import * as Cesium from 'cesium';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
+import {
+  addBillboard,
+  billboardState,
+  setBillboard,
+} from '../../data/billboardMirror.js';
 
 export function createEvidence({
   flightState,
@@ -83,7 +88,7 @@ export function createEvidence({
       flightState.records.data.set(id, meta);
       flightState._cullPositions.delete(id);
       flightState._focusEvidenceIds.add(id);
-      const bb = flightState._billboardCollection.add({
+      const bb = addBillboard(flightState._billboardCollection, {
         position,
         image: aircraftIcon(parts.rendering._iconKind(id, klass)),
         width: 20,
@@ -119,7 +124,7 @@ export function createEvidence({
       const position = _focusEvidencePosition(record);
       const bb = flightState._billboards.get(id);
       if (!position || !bb) continue;
-      bb.position = position;
+      setBillboard(bb, 'position', position);
       const meta = flightState.records.data.get(id);
       if (meta) {
         if (Number.isFinite(record.trackDeg)) meta.true_track = record.trackDeg;
@@ -139,23 +144,23 @@ export function createEvidence({
     if (!FOCUS_EVIDENCE_DEV || !flightState._viewer) return [];
     return [...flightState._focusEvidenceIds].map((id) => {
       const bb = flightState._billboards.get(id);
-      const screen = bb?.position
+      const screen = billboardState(bb)?.position
         ? Cesium.SceneTransforms.worldToWindowCoordinates(
             flightState._viewer.scene,
-            bb.position,
+            billboardState(bb).position,
           )
         : null;
       return {
         id,
-        show: bb?.show === true,
-        scale: bb?.scale ?? null,
+        show: billboardState(bb)?.show === true,
+        scale: billboardState(bb)?.scale ?? null,
         alpha: bb?.color?.alpha ?? null,
         x: screen?.x ?? null,
         y: screen?.y ?? null,
-        cameraDistanceM: bb?.position
+        cameraDistanceM: billboardState(bb)?.position
           ? Cesium.Cartesian3.distance(
               flightState._viewer.camera.positionWC,
-              bb.position,
+              billboardState(bb).position,
             )
           : null,
       };

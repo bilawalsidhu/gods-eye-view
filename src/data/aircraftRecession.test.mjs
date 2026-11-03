@@ -7,6 +7,7 @@ import {
   applyAircraftModelTreatment,
   cameraLimbDistanceM,
 } from './aircraftRecession.js';
+import { mirrorBillboard } from './billboardMirror.js';
 
 const params = { ...DEFAULT_AIRCRAFT_RECESSION_PARAMS };
 const cameraHeightM = 1_000_000;
@@ -68,7 +69,7 @@ test('globe-view transition eases to identity without a threshold pop', () => {
 
 test('aircraft billboard wire writes scale and alpha only for the far treatment', () => {
   const color = { withAlpha: (alpha) => ({ alpha }) };
-  const near = { scale: 1.2, color: { alpha: 0.8 } };
+  const near = mirrorBillboard({ scale: 1.2, color: { alpha: 0.8 } });
   const nearResult = applyAircraftBillboardTreatment({
     billboard: near,
     baseScale: 1.2,
@@ -82,7 +83,7 @@ test('aircraft billboard wire writes scale and alpha only for the far treatment'
   assert.equal(nearResult.scaleWrites, 0);
   assert.equal(nearResult.alphaWrites, 0);
 
-  const far = { scale: 1.2, color: { alpha: 0.8 } };
+  const far = mirrorBillboard({ scale: 1.2, color: { alpha: 0.8 } });
   const farResult = applyAircraftBillboardTreatment({
     billboard: far,
     baseScale: 1.2,
@@ -101,7 +102,7 @@ test('aircraft billboard wire writes scale and alpha only for the far treatment'
 
 test('combined focus and haze product is clamped at the composed alpha floor', () => {
   const color = { withAlpha: (alpha) => ({ alpha }) };
-  const billboard = { scale: 0.45, color: { alpha: 1 } };
+  const billboard = mirrorBillboard({ scale: 0.45, color: { alpha: 1 } });
   const result = applyAircraftBillboardTreatment({
     billboard,
     baseScale: 1,
@@ -118,7 +119,7 @@ test('combined focus and haze product is clamped at the composed alpha floor', (
 
 test('applyAircraftBillboardTreatment returns its documented module singleton', () => {
   const color = { withAlpha: (alpha) => ({ alpha }) };
-  const billboard = { scale: 1, color: { alpha: 1 } };
+  const billboard = mirrorBillboard({ scale: 1, color: { alpha: 1 } });
   const input = {
     billboard,
     baseAlpha: 1,

@@ -90,11 +90,11 @@ for (const layer of LAYERS) {
     // operator explicitly converted into a TR-3B.
     assert.match(source, /bb\.image\s*=\s*aircraftIcon\(\s*_iconKind\(\s*icao24,\s*meta\?\.klass,?\s*\)(,\s*aircraftVisuals\.read\(bb\)\?\.iconLarge\s*\?\s*TRACKED_ICON_PX\s*:\s*undefined)?,?\s*\)/,
       'near contacts and model fallbacks retain the class-derived aircraft silhouette');
-    assert.match(source, /bb\.rotation\s*=\s*0;/,
+    assert.match(source, /setBillboard\(\s*bb,\s*'rotation',\s*0\s*\);/,
       'far dots are reset to a rotation-free presentation');
     assert.match(source, /\(\s*!(?:flightState\.)?_cockpitContactMode\s*\|\|\s*isCockpitNear,?\s*\)\s*&&\s*\(\s*doRotations\s*\|\|\s*revealed,?\s*\)/,
       'near 2D silhouettes continue to receive projected course');
-    assert.match(source, /if\s*\(\s*bb\.show,?\s*\)\s*bb\.show\s*=\s*false;\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders/,
+    assert.match(source, /if\s*\(\s*billboardState\(bb\)\.show,?\s*\)\s*setBillboard\(\s*bb,\s*'show',\s*false\s*\);\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders/,
       'the gap-proof billboard-to-model handoff remains intact');
   });
 
