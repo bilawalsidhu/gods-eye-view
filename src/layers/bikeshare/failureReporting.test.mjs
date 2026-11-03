@@ -375,3 +375,42 @@ test('every status poll failing over cached points reads STALE, not fresh', asyn
   assert.equal(stats.stale, true);
   assert.equal(stats.lastUpdate, loadedAt, 'a failed poll advanced freshness');
 });
+
+test('a city that leaves range and comes back during a status outage keeps its last stations, STALE', async () => {
+  const layer = makeLiveLayer();
+  await layer.moveTo(TORONTO_ONLY);
+  await layer.enable();
+  const loadedAt = layer.stats().lastUpdate;
+  assert.equal(layer.stats().count, 1);
+
+  layer.source.deadStatus.add(TORONTO);
+  await layer.moveTo(BUFFALO_ONLY);
+  const beforeReturn = layer.stats().lastUpdate;
+  await layer.moveTo(TORONTO_ONLY);
+
+  const stats = layer.stats();
+  assert.equal(stats.count, 1, 'the last known stations stay drawn');
+  assert.equal(stats.error, undefined);
+  assert.equal(stats.stale, true, 'they are marked stale');
+  assert.equal(stats.lastUpdate, beforeReturn, 'the outage advanced freshness');
+  assert.ok(layer.state._activeCityIds.has(TORONTO), 'the city stays active');
+  const [station] = layer.state._stationRenderMap.values();
+  assert.equal(station.cityId, TORONTO);
+  assert.equal(station.bikesAvailable, 3, 'the last known status stays');
+
+  // The next poll that reaches the source clears the outage.
+  layer.source.deadStatus.delete(TORONTO);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await layer.poll();
+  assert.equal(layer.stats().stale, undefined);
+  assert.ok(layer.stats().lastUpdate > loadedAt);
+});
+
+test('a city whose status never loaded is still removed when its status fails', async () => {
+  const layer = makeLiveLayer();
+  layer.source.deadStatus.add(TORONTO);
+  await layer.moveTo(TORONTO_ONLY);
+  await layer.enable();
+  assert.equal(layer.stats().count, 0, 'no status ever seen: nothing to keep');
+  assert.equal(layer.stats().error, 'GBFS fetch error');
+});

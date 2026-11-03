@@ -94,6 +94,8 @@ export function createViewport({ state: layerState, services, parts, camera }) {
   async function activateCity(cityId, generation) {
     if (!layerState._enabled || !layerState._activeCityIds.has(cityId)) return;
 
+    // Set once the city's last known stations and status are back on the map.
+    let showingLastKnown = false;
     try {
       const stationMap = await parts.ingestion.loadCityStationInfo(
         cityId,
@@ -113,6 +115,7 @@ export function createViewport({ state: layerState, services, parts, camera }) {
       const cachedStatus = layerState._statusCache.get(cityId)?.statusMap;
       if (cachedStatus) {
         parts.rendering?.applyStatusToPoints(cityId, cachedStatus);
+        showingLastKnown = layerState._cityRuntime.has(cityId);
       }
 
       const statusMap = await parts.ingestion.loadCityStationStatus(
@@ -137,6 +140,9 @@ export function createViewport({ state: layerState, services, parts, camera }) {
         return;
       console.warn(`[Data:Bikeshare] ${cityId} activate error:`, error);
       layerState._failedCityIds.add(cityId);
+      // During a source outage a city coming back into range keeps its last
+      // known stations and status, marked stale; the status poll retries it.
+      if (showingLastKnown) return;
       deactivateCity(cityId);
       layerState._activeCityIds.delete(cityId);
     } finally {
