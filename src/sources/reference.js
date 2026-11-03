@@ -4,6 +4,7 @@ import { createWfigsPerimeterSource } from '../layers/perimeters/source.js';
 import { createDroneAirspaceSource } from '../layers/droneAirspace/source.js';
 import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
 import { createAdsbGnssSource } from '../layers/gnss/source.js';
+import { createGdacsSource } from '../layers/gdacs/source.js';
 
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
@@ -14,5 +15,6 @@ export function createReferenceSources() {
     'drone-airspace': createDroneAirspaceSource(),
     cables: createBundledCableSource(),
     'gnss-integrity': createAdsbGnssSource(),
+    'gdacs-alerts': createGdacsSource(),
   };
 }

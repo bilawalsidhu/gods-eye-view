@@ -457,6 +457,7 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   // query for this layer wait until there is room.
   'drone-airspace':
     'informational airspace layer; no room in the prompt budget',
+  'gdacs-alerts': 'Realtime prompt budget is full (pointAndAsk.test.mjs)',
 });
 
 const TYPE_NAMES = Object.freeze({
