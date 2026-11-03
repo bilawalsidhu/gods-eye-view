@@ -1,6 +1,10 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 import { StarrySky } from '../sky/starrySky.js';
+import {
+  FREE_LOOK_MAX_HEIGHT_METERS,
+  globeOutOfFrame,
+} from '../globeInView.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
@@ -100,6 +104,174 @@ export function installTrackpadPinchZoom(
       controller.zoomEventTypes === configuredZoomEventTypes
     )
       controller.zoomEventTypes = originalZoomEventTypes;
+  };
+}
+
+/**
+ * Allow Cesium's free look only below `maxHeight` and return its disposer.
+ * Orbit, tilt and zoom stay available at every height. `enableLook` gates the
+ * Shift+drag binding only; a drag that starts on the stars below Cesium's
+ * trackball height still turns the camera in place, which
+ * `installGlobeInViewRecovery` catches.
+ */
+export function installFreeLookHeightLimit(
+  viewer,
+  maxHeight = FREE_LOOK_MAX_HEIGHT_METERS,
+) {
+  const scene = viewer?.scene;
+  const controller = scene?.screenSpaceCameraController;
+  const camera = viewer?.camera;
+  if (!controller || !camera || !scene?.preUpdate)
+    throw new TypeError('A complete Cesium viewer is required');
+
+  const originalEnableLook = controller.enableLook;
+  const sync = () => {
+    const height = camera.positionCartographic?.height;
+    controller.enableLook =
+      originalEnableLook && !(Number.isFinite(height) && height > maxHeight);
+  };
+  sync();
+  const removeListener = scene.preUpdate.addEventListener(sync);
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    removeListener();
+    controller.enableLook = originalEnableLook;
+  };
+}
+
+// How often a moving camera is sampled to see whether it has come to rest, how
+// far a pose may drift between samples and still count as at rest, and how
+// long after the camera last moved the check gives up if Cesium never raises
+// moveEnd.
+const SETTLE_SAMPLE_MS = 250;
+const SETTLE_POSITION_TOLERANCE_M = 1e-3;
+const SETTLE_DIRECTION_TOLERANCE = 1e-9;
+const SETTLE_GIVE_UP_MS = 5 * 60_000;
+
+/**
+ * Turn the camera back to the planet when a move ends above `minHeight` with
+ * no surface on screen (`globeOutOfFrame`: limb glow and slivers up to about
+ * one sample cell thick can count as none), and return the disposer. Views with
+ * more surface, such as an oblique orbital shot, are left as they are. This
+ * catches a saved or shared view that looked away, and a drag that Cesium turns
+ * into an in-place look below its trackball height whatever `enableLook` says.
+ * Heading and position are kept. Tracked cameras, locked ones (non-identity
+ * transform) and the 2D and Columbus modes are left alone. `keyholeRadius`
+ * returns the radius of the visible circle when a scope mask hides the rest of
+ * the frame (see `globeFrameShare`), or 0; it is read at every check.
+ *
+ * Cesium's `moveEnd` alone is not enough: Cesium compares the camera with the
+ * last frame's to the last rounding error, and at some of these poses the
+ * camera drifts by a rounding error every frame, so Cesium never sees it stop.
+ * So each `moveStart` also starts a check of its own that samples the pose
+ * every 250 ms, with a tolerance for that drift, and once the pose has held
+ * for half a second after moving runs the same recovery. It keeps watching
+ * until Cesium raises `moveEnd`, since under that drift Cesium raises no new
+ * `moveStart` for a later move, and gives up five minutes after the camera
+ * last moved.
+ * `setTimeout` and `clearTimeout` can be injected for tests.
+ */
+export function installGlobeInViewRecovery(
+  viewer,
+  {
+    minHeight = FREE_LOOK_MAX_HEIGHT_METERS,
+    keyholeRadius = () => 0,
+    setTimeout: schedule = globalThis.setTimeout,
+    clearTimeout: unschedule = globalThis.clearTimeout,
+  } = {},
+) {
+  const scene = viewer?.scene;
+  const camera = viewer?.camera;
+  if (!scene || !camera?.moveEnd || !camera?.moveStart)
+    throw new TypeError('A complete Cesium viewer is required');
+
+  const recover = () => {
+    if (scene.mode !== Cesium.SceneMode.SCENE3D || viewer.trackedEntity) return;
+    if (!Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY))
+      return;
+    const height = camera.positionCartographic?.height;
+    if (
+      !(height > minHeight) ||
+      !globeOutOfFrame(camera, { keyholeRadius: keyholeRadius() })
+    )
+      return;
+    camera.setView({
+      orientation: {
+        heading: camera.heading,
+        pitch: -Cesium.Math.PI_OVER_TWO,
+        roll: 0,
+      },
+    });
+    scene.requestRender?.();
+  };
+
+  const lastPosition = new Cesium.Cartesian3();
+  const lastDirection = new Cesium.Cartesian3();
+  let settleTimer = null;
+  let settleElapsed = 0;
+  let restingSamples = 0;
+  let movedSinceCheck = false;
+  const stopSettling = () => {
+    if (settleTimer !== null) unschedule(settleTimer);
+    settleTimer = null;
+  };
+  const sample = () => {
+    settleTimer = null;
+    settleElapsed += SETTLE_SAMPLE_MS;
+    const atRest =
+      Cesium.Cartesian3.equalsEpsilon(
+        camera.positionWC,
+        lastPosition,
+        0,
+        SETTLE_POSITION_TOLERANCE_M,
+      ) &&
+      Cesium.Cartesian3.equalsEpsilon(
+        camera.directionWC,
+        lastDirection,
+        0,
+        SETTLE_DIRECTION_TOLERANCE,
+      );
+    restingSamples = atRest ? restingSamples + 1 : 0;
+    if (!atRest) {
+      movedSinceCheck = true;
+      settleElapsed = 0;
+    }
+    // Two quiet samples in a row after a move: at rest for half a second, as
+    // for moveEnd.
+    if (restingSamples >= 2 && movedSinceCheck) {
+      movedSinceCheck = false;
+      recover();
+    }
+    if (settleElapsed >= SETTLE_GIVE_UP_MS) return;
+    Cesium.Cartesian3.clone(camera.positionWC, lastPosition);
+    Cesium.Cartesian3.clone(camera.directionWC, lastDirection);
+    settleTimer = schedule(sample, SETTLE_SAMPLE_MS);
+  };
+  const startSettling = () => {
+    stopSettling();
+    settleElapsed = 0;
+    restingSamples = 0;
+    movedSinceCheck = true;
+    Cesium.Cartesian3.clone(camera.positionWC, lastPosition);
+    Cesium.Cartesian3.clone(camera.directionWC, lastDirection);
+    settleTimer = schedule(sample, SETTLE_SAMPLE_MS);
+  };
+  const removeMoveEnd = camera.moveEnd.addEventListener(() => {
+    stopSettling();
+    recover();
+  });
+  const removeMoveStart = camera.moveStart.addEventListener(startSettling);
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    stopSettling();
+    removeMoveEnd();
+    removeMoveStart();
   };
 }
 

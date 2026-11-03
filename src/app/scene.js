@@ -2,9 +2,13 @@ import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
 import {
   createApplicationViewer,
+  installFreeLookHeightLimit,
+  installGlobeInViewRecovery,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
+import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
+import { isScopeMaskEnabled } from '../scopeMask.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
 import { loadPhotorealisticTileset } from '../mapStartup.js';
@@ -58,6 +62,13 @@ export async function createApplicationScene({
     if (!viewer.isDestroyed()) viewer.destroy();
   });
   defer(installTrackpadPinchZoom(viewer));
+  defer(installFreeLookHeightLimit(viewer));
+  defer(
+    installGlobeInViewRecovery(viewer, {
+      // The scope mask hides everything outside its keyhole.
+      keyholeRadius: () => (isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0),
+    }),
+  );
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));

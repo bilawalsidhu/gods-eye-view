@@ -21,10 +21,17 @@
 import * as Cesium from 'cesium';
 import { GLOBE_VIEW } from './locations.js';
 import {
+  globeFrameShare,
+  lookAngleWithinFrame,
+  lookStepLosesGlobe,
+} from './globeInView.js';
+import {
   projectEarthDiscToViewport,
   earthDiscScreenRadius,
   getKeyholeGeometry,
+  KEYHOLE_OUTER_RADIUS,
 } from './celestialRing.js';
+import { isScopeMaskEnabled } from './scopeMask.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -1008,6 +1015,137 @@ export function interruptCameraMotionIfActive(
   return interruptCameraMotion(reason);
 }
 
+/**
+ * A free globe camera: 3D, not tracking, not locked to a frame. The frame
+ * limit for in-place turns applies to it alone, as the move-end recovery does.
+ */
+function isFreeGlobeCamera(cam) {
+  return (
+    _viewer.scene.mode === Cesium.SceneMode.SCENE3D &&
+    !_viewer.trackedEntity &&
+    Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY)
+  );
+}
+
+// The frame share that in-place voice turns measure their limit against, with
+// the pose the last voice turn left the camera in. A turn that starts where
+// the last one left off keeps that baseline (raised if the planet now fills
+// more of the frame), so repeating a request cannot take a little more each
+// time. Once anything else has moved or turned the camera, a turn starts over
+// from what is on screen.
+let _lookBaseline = null;
+
+// The pre-check's proof that a half-degree turn from this pose keeps the planet
+// in view: which way, from which direction. A motion that starts from that
+// pose turns at least that far, so a request reported as done really moves
+// even when a smaller first step lands in a dip of the sampled share.
+const PROVEN_TURN_RAD = Cesium.Math.toRadians(0.5);
+let _provenLook = null;
+
+/** The part of the frame a viewer can see: the scope keyhole when it is on. */
+function visibleFrame() {
+  return { keyholeRadius: isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0 };
+}
+
+/** The frame share an in-place turn from `cam`'s pose is limited against. */
+function lookBaselineShare(cam) {
+  const share = globeFrameShare(cam, visibleFrame());
+  const continues =
+    _lookBaseline &&
+    Cesium.Cartesian3.equalsEpsilon(
+      _lookBaseline.position,
+      cam.positionWC,
+      0,
+      1,
+    ) &&
+    Cesium.Cartesian3.equalsEpsilon(
+      _lookBaseline.direction,
+      cam.directionWC,
+      0,
+      1e-9,
+    );
+  _lookBaseline = {
+    position: Cesium.Cartesian3.clone(cam.positionWC),
+    direction: Cesium.Cartesian3.clone(cam.directionWC),
+    share: continues ? Math.max(_lookBaseline.share, share) : share,
+  };
+  return _lookBaseline.share;
+}
+
+/**
+ * One in-place look step of motion `m`. From orbit a free globe camera turns
+ * only as far as keeps the planet in frame, measured against the baseline the
+ * turn started from, then the motion ends there.
+ */
+function lookWithinFrame(cam, m, look, angle) {
+  let allowed = angle;
+  if (isFreeGlobeCamera(cam)) {
+    if (m.globeShareAtStart === undefined) {
+      m.globeShareAtStart = lookBaselineShare(cam);
+      m.provenTurnRad = lookProven(cam, look) ? PROVEN_TURN_RAD : 0;
+      m.turnedRad = 0;
+    }
+    _provenLook = null;
+    allowed = lookAngleWithinFrame(cam, look, angle, {
+      ...visibleFrame(),
+      startShare: m.globeShareAtStart,
+    });
+    const owed = Math.min(angle, m.provenTurnRad - m.turnedRad);
+    if (allowed < owed) allowed = owed;
+    m.turnedRad += allowed;
+  }
+  if (allowed > 0) cam[look](allowed);
+  // The pose this turn leaves, for a turn that continues from it.
+  if (_lookBaseline)
+    Cesium.Cartesian3.clone(cam.directionWC, _lookBaseline.direction);
+  if (allowed < angle) interruptCameraMotion('globe-out-of-frame');
+}
+
+/** True when the pre-check proved a half-degree `look` from `cam`'s pose. */
+function lookProven(cam, look) {
+  return (
+    _provenLook?.look === look &&
+    Cesium.Cartesian3.equalsEpsilon(
+      _provenLook.direction,
+      cam.directionWC,
+      0,
+      1e-9,
+    )
+  );
+}
+
+/**
+ * The check a voice in-place turn (`look`: 'lookUp', 'lookDown', 'lookLeft'
+ * or 'lookRight') must pass from orbit: refused when even half a degree would
+ * cross the frame limit, otherwise proven for that half degree from this pose.
+ * With `released`, the turn runs through a navigation that first releases a
+ * tracked or locked camera and keeps its world pose. The frame measure and the
+ * turn are the same in any reference frame, so such a camera is judged as it
+ * is, before the release, and a refusal leaves tracking as it was. Otherwise a
+ * camera that is not a free globe camera is not checked. Returns the refusal,
+ * or null.
+ */
+function checkLookFromOrbit(look, { released = false } = {}) {
+  _provenLook = null;
+  if (_viewer.scene.mode !== Cesium.SceneMode.SCENE3D) return null;
+  const cam = _viewer.camera;
+  if (!released && !isFreeGlobeCamera(cam)) return null;
+  if (
+    lookStepLosesGlobe(cam, look, PROVEN_TURN_RAD, {
+      ...visibleFrame(),
+      startShare: lookBaselineShare(cam),
+    })
+  )
+    return {
+      ok: false,
+      action: 'move_camera',
+      error:
+        'From this height that would turn the globe out of view — zoom in first, or turn the other way.',
+    };
+  _provenLook = { look, direction: Cesium.Cartesian3.clone(cam.directionWC) };
+  return null;
+}
+
 function clearLookAt() {
   try {
     _viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
@@ -1226,10 +1364,15 @@ function onTick() {
           interruptCameraMotion('tilt-clamp');
           return;
         }
-        if (up) cam.lookUp(stepRad);
-        else cam.lookDown(stepRad);
-      } else if (m.direction === 'left') cam.lookLeft(stepRad);
-      else cam.lookRight(stepRad);
+        lookWithinFrame(cam, m, up ? 'lookUp' : 'lookDown', stepRad);
+      } else {
+        lookWithinFrame(
+          cam,
+          m,
+          m.direction === 'left' ? 'lookLeft' : 'lookRight',
+          stepRad,
+        );
+      }
     } else if (m.kind === 'route') {
       // The dolly's shaping lives in advanceRouteFlight(); the tick only
       // applies the pose and honours the same completion path as before.
@@ -1413,6 +1556,7 @@ export function initCameraVerbs(
   _isCockpitActive =
     typeof isCockpitActive === 'function' ? isCockpitActive : null;
   _viewer = viewer;
+  _lookBaseline = null;
   if (_tickRemover) _tickRemover();
   _tickRemover = viewer.clock.onTick.addEventListener(onTick);
   if (_trackingRemover) _trackingRemover();
@@ -1524,6 +1668,27 @@ export function moveCamera(args = {}, runNavigation = null) {
       };
     }
   }
+  const look =
+    motion === 'tilt' || motion === 'rotate'
+      ? {
+          up: 'lookUp',
+          down: 'lookDown',
+          left: 'lookLeft',
+          right: 'lookRight',
+        }[direction]
+      : null;
+  // Honest limits from orbit too: a stopped turn rests within 0.05° of its
+  // limit, so one that cannot go half a degree further is refused rather than
+  // run and reported as done, and one that can is then turned at least that
+  // far. Near the limit the sampled share wobbles as the planet's edge crosses
+  // the grid, so a turn that would keep the planet can occasionally be refused
+  // too.
+  // A camera that is tracked or locked now is judged as the navigation that
+  // runs the turn will release it, so a refusal keeps the tracking.
+  const lookRefusal =
+    look &&
+    checkLookFromOrbit(look, { released: typeof runNavigation === 'function' });
+  if (lookRefusal) return lookRefusal;
   if (
     (motion === 'rotate_globe' ||
       (motion === 'orbit' && typeof runNavigation !== 'function')) &&
@@ -1609,6 +1774,12 @@ export function moveCamera(args = {}, runNavigation = null) {
   }
   const start = () => {
     interruptCameraMotion('replaced');
+    // Checked again only if the release left the camera somewhere other than
+    // where the check above expected it.
+    if (look && !lookProven(_viewer.camera, look)) {
+      const refusal = checkLookFromOrbit(look);
+      if (refusal) return refusal;
+    }
     const state = {
       kind: motion,
       direction: direction || 'right',

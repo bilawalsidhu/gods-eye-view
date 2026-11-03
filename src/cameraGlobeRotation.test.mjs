@@ -13,6 +13,9 @@ import {
   moveCamera,
 } from './cameraVerbs.js';
 import { getRenderGovernorDiagnostics } from './renderGovernor.js';
+import { MIN_GLOBE_FRAME_SHARE, globeFrameShare } from './globeInView.js';
+import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
+import { setScopeMaskEnabled } from './scopeMask.js';
 
 const radians = Cesium.Math.toRadians;
 const clone = (value) => Cesium.Cartesian3.clone(value);
@@ -1346,4 +1349,492 @@ test('close-up ultrawide refusal does not offer an unfit reset or move the camer
   assert.equal(handoffs, 0);
   samePose(h.camera, before);
   assert.equal(hasRenderHold(), false);
+});
+
+/**
+ * An oracle independent of the code under test: the share of an 80×45 grid of
+ * Cesium pick rays across the canvas that hit the ellipsoid surface. With
+ * `keyhole`, only the pixels inside the scope's visible circle count.
+ */
+function surfacePixelShare(camera, width, height, { keyhole = false } = {}) {
+  const radius = (KEYHOLE_OUTER_RADIUS * height) / 2;
+  let hits = 0;
+  let counted = 0;
+  for (let row = 0; row < 45; row += 1) {
+    for (let column = 0; column < 80; column += 1) {
+      const x = ((column + 0.5) * width) / 80;
+      const y = ((row + 0.5) * height) / 45;
+      if (keyhole && Math.hypot(x - width / 2, y - height / 2) > radius)
+        continue;
+      counted += 1;
+      const ray = camera.getPickRay(new Cesium.Cartesian2(x, y));
+      if (Cesium.IntersectionTests.rayEllipsoid(ray, Cesium.Ellipsoid.WGS84))
+        hits += 1;
+    }
+  }
+  return hits / counted;
+}
+
+/** Run a test with the scope mask on or off, restoring the default after. */
+function withScope(t, enabled) {
+  setScopeMaskEnabled(enabled);
+  t.after(() => setScopeMaskEnabled(true));
+}
+
+// The frame limit is measured on a coarser grid than the oracle.
+const SHARE_SLACK = 0.02;
+// Far-out poses, height in metres and pitch in degrees, where a few tilts up
+// are accepted before the limit refuses the next one.
+const FAR_OUT_POSES = [
+  [35_884_000, -86.26],
+  [35_884_000, -89],
+  [30_000_000, -86],
+  [25_000_000, -80],
+  [40_000_000, -88],
+];
+
+test('voice tilt from orbit stops with the planet still on screen and then says so', (t) => {
+  withScope(t, false); // the whole frame is visible
+  // Slightly off nadir: from straight down a tilt is clamped before it moves.
+  const { camera, finishOnce } = harness(t, {
+    pitch: -80,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  const results = [];
+  for (let i = 0; i < 4; i += 1) {
+    const result = moveCamera({
+      motion: 'tilt',
+      direction: 'up',
+      mode: 'once',
+    });
+    results.push(result);
+    if (result.ok) finishOnce();
+    assert.ok(
+      surfacePixelShare(camera, 1600, 900) >=
+        MIN_GLOBE_FRAME_SHARE - SHARE_SLACK,
+      `after tilt ${i + 1}`,
+    );
+  }
+  // From 18,000 km a 16:9 frame keeps a tenth of its area on the planet down
+  // to about -67°: the first tilt stops there, and later ones are refused.
+  assert.deepEqual(
+    results.map((result) => result.ok),
+    [true, false, false, false],
+  );
+  assert.match(results[1].error, /globe out of view/);
+  assert.ok(camera.pitch > radians(-68.5) && camera.pitch < radians(-66));
+});
+
+test('voice turn in place from orbit stops with the planet still on screen', (t) => {
+  withScope(t, false); // the whole frame is visible
+  const { camera, tick } = harness(t, { pitch: -75 });
+  assert.equal(
+    moveCamera({ motion: 'rotate', direction: 'left', mode: 'continuous' }).ok,
+    true,
+  );
+  const heading = camera.heading;
+  for (let i = 0; i < 400 && getActiveCameraMotion(); i += 1) {
+    tick();
+    assert.ok(
+      surfacePixelShare(camera, 1280, 800) >=
+        MIN_GLOBE_FRAME_SHARE - SHARE_SLACK,
+      `tick ${i + 1}`,
+    );
+  }
+  assert.equal(getActiveCameraMotion(), null, 'the turn stops at the limit');
+  assert.notEqual(camera.heading, heading, 'the turn moved before stopping');
+});
+
+test('a long voice turn below the limit keeps the share it started with', (t) => {
+  withScope(t, false); // the whole frame is visible
+  // About 2% of a 16:9 frame on the planet: the limit is that share, less two
+  // grid cells of sampling noise, for the whole motion rather than per step.
+  const { camera, tick } = harness(t, {
+    pitch: -60,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  const start = globeFrameShare(camera);
+  assert.ok(start > 0 && start < MIN_GLOBE_FRAME_SHARE);
+  assert.equal(
+    moveCamera({ motion: 'rotate', direction: 'left', mode: 'continuous' }).ok,
+    true,
+  );
+  for (let i = 0; i < 400 && getActiveCameraMotion(); i += 1) {
+    tick();
+    assert.ok(
+      globeFrameShare(camera) >= start - 2 / (32 * 18) - 1e-9,
+      `tick ${i + 1}`,
+    );
+  }
+  assert.equal(getActiveCameraMotion(), null, 'the turn stops at the limit');
+  assert.ok(surfacePixelShare(camera, 1600, 900) > 0);
+});
+
+test('repeated voice turns from one spot cannot each take a little more', (t) => {
+  withScope(t, false); // the whole frame is visible
+  // About 2% of a 16:9 frame on the planet. Every turn from this position is
+  // measured against the same baseline, so asking again stops being allowed.
+  const { camera, finishOnce, tick } = harness(t, {
+    pitch: -60,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  const start = globeFrameShare(camera);
+  const floor = start - 2 / (32 * 18) - 1e-9;
+  const results = [];
+  for (const mode of ['once', 'once', 'continuous', 'once', 'continuous']) {
+    for (let i = 0; i < 4; i += 1) {
+      const result = moveCamera({ motion: 'rotate', direction: 'left', mode });
+      results.push(result.ok);
+      if (!result.ok) continue;
+      if (mode === 'once') finishOnce();
+      else for (let j = 0; j < 400 && getActiveCameraMotion(); j += 1) tick();
+      assert.ok(globeFrameShare(camera) >= floor, `${mode} turn ${i + 1}`);
+    }
+  }
+  assert.ok(results.includes(false), 'a turn at the limit is refused');
+  assert.equal(results.at(-1), false);
+  assert.ok(surfacePixelShare(camera, 1600, 900) > 0);
+});
+
+test('a voice turn after something else turned the camera starts over', (t) => {
+  withScope(t, false); // the whole frame is visible
+  // The same spot, first framed straight down, then turned to about 2% of the
+  // frame by something other than voice: a turn left is measured from there.
+  const { camera, finishOnce } = harness(t, {
+    pitch: -90,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  assert.equal(
+    moveCamera({ motion: 'rotate', direction: 'left', mode: 'once' }).ok,
+    true,
+  );
+  finishOnce();
+  camera.setView({
+    orientation: { heading: 0, pitch: radians(-60), roll: 0 },
+  });
+  const start = globeFrameShare(camera);
+  assert.ok(start > 0 && start < MIN_GLOBE_FRAME_SHARE);
+  assert.equal(
+    moveCamera({ motion: 'rotate', direction: 'left', mode: 'once' }).ok,
+    true,
+  );
+  finishOnce();
+  assert.ok(globeFrameShare(camera) >= start - 2 / (32 * 18) - 1e-9);
+});
+
+test('nudging the camera between voice turns cannot slide the planet away', (t) => {
+  withScope(t, false); // the whole frame is visible
+  // A wheel notch or an orbit drag between requests starts each turn afresh;
+  // the 1% floor still holds, and below it a turn may only keep what it has.
+  for (const [nudge, pitch] of [
+    [(camera) => camera.moveBackward(2), -60],
+    [(camera) => camera.rotateRight(radians(0.2)), -60],
+    [(camera) => camera.moveBackward(2), -58],
+  ]) {
+    const { camera, tick } = harness(t, {
+      pitch,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    const start = globeFrameShare(camera);
+    const floor = Math.min(0.01, start) - 1e-9;
+    for (let i = 0; i < 12; i += 1) {
+      nudge(camera);
+      if (
+        moveCamera({ motion: 'rotate', direction: 'left', mode: 'continuous' })
+          .ok
+      )
+        for (let j = 0; j < 400 && getActiveCameraMotion(); j += 1) tick();
+      assert.ok(
+        globeFrameShare(camera) >= floor,
+        `start ${start}, turn ${i + 1}`,
+      );
+    }
+    assert.ok(surfacePixelShare(camera, 1600, 900) > 0);
+  }
+});
+
+test('after the frame changes size, a voice turn toward the planet is allowed', (t) => {
+  withScope(t, false); // the whole frame is visible
+  // A tilt stops at its limit; then the window widens at the same pose, so the
+  // frame shows less than the carried limit. Toward the planet must still go.
+  const { camera, canvas, viewer, finishOnce } = harness(t, {
+    pitch: -80,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  assert.equal(
+    moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' }).ok,
+    true,
+  );
+  finishOnce();
+  canvas.clientWidth = canvas.width = viewer.scene.drawingBufferWidth = 3200;
+  camera.frustum.aspectRatio = 3200 / 900;
+  const narrowed = globeFrameShare(camera);
+  assert.ok(narrowed < MIN_GLOBE_FRAME_SHARE, `frame now shows ${narrowed}`);
+
+  const down = moveCamera({ motion: 'tilt', direction: 'down', mode: 'once' });
+  assert.equal(down.ok, true, down.error);
+  finishOnce();
+  assert.ok(globeFrameShare(camera) > narrowed);
+  assert.equal(
+    moveCamera({ motion: 'tilt', direction: 'down', mode: 'once' }).ok,
+    true,
+  );
+  finishOnce();
+  const up = moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' });
+  if (up.ok) finishOnce();
+  assert.ok(surfacePixelShare(camera, 3200, 900) > 0);
+});
+
+test('with the scope on, a voice tilt stops while the keyhole still shows the planet', (t) => {
+  withScope(t, true);
+  const { camera, finishOnce } = harness(t, {
+    pitch: -80,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  const results = [];
+  for (let i = 0; i < 4; i += 1) {
+    const result = moveCamera({
+      motion: 'tilt',
+      direction: 'up',
+      mode: 'once',
+    });
+    results.push(result.ok);
+    if (result.ok) finishOnce();
+    assert.ok(
+      surfacePixelShare(camera, 1600, 900, { keyhole: true }) >=
+        MIN_GLOBE_FRAME_SHARE - SHARE_SLACK,
+      `after tilt ${i + 1}`,
+    );
+  }
+  assert.equal(results[0], true);
+  assert.equal(results.at(-1), false, 'a tilt past the limit is refused');
+});
+
+test('with the scope on, a voice turn cannot leave the planet only in the masked corners', (t) => {
+  // An oblique orbit view: turning in place swings the planet toward a corner,
+  // where the full frame still shows it but the scope mask hides it.
+  for (const [height, pitch] of [
+    [5_000_000, -70],
+    [3_000_000, -75],
+    [18_000_000, -80],
+  ]) {
+    withScope(t, true);
+    const { camera, tick } = harness(t, {
+      height,
+      pitch,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    assert.equal(
+      moveCamera({ motion: 'rotate', direction: 'left', mode: 'continuous' })
+        .ok,
+      true,
+    );
+    for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) tick();
+    assert.equal(getActiveCameraMotion(), null, 'the turn stops at the limit');
+    assert.ok(
+      surfacePixelShare(camera, 1600, 900, { keyhole: true }) >=
+        MIN_GLOBE_FRAME_SHARE - SHARE_SLACK,
+      `${height / 1000} km at ${pitch}°`,
+    );
+  }
+});
+
+test('far out, a voice tilt is either refused or really moves, at display frame rates', (t) => {
+  // A small planet disc: its sampled share wobbles as it crosses the grid.
+  // Whatever the limit decides, "done" must mean the camera turned, and some
+  // of these tilts must be accepted for that to be checked at all.
+  let accepted = 0;
+  for (const [height, pitch] of FAR_OUT_POSES) {
+    withScope(t, true);
+    const { camera, tick } = harness(t, {
+      latitude: 45.37,
+      longitudeDeg: -33.33,
+      height,
+      heading: 89.9,
+      pitch,
+      viewportWidth: 1280,
+      viewportHeight: 1024,
+    });
+    for (let i = 0; i < 4; i += 1) {
+      const before = camera.pitch;
+      const result = moveCamera({
+        motion: 'tilt',
+        direction: 'up',
+        mode: 'once',
+      });
+      if (!result.ok) {
+        assert.match(result.error, /zoom in first/);
+        continue;
+      }
+      accepted += 1;
+      for (let j = 0; j < 600 && getActiveCameraMotion(); j += 1) tick(1 / 60);
+      assert.ok(
+        camera.pitch - before > radians(0.5) - 1e-9,
+        `${height / 1000} km at ${pitch}°: tilt ${i + 1} reported done but moved ${Cesium.Math.toDegrees(camera.pitch - before)}°`,
+      );
+    }
+    assert.ok(surfacePixelShare(camera, 1280, 1024, { keyhole: true }) > 0);
+  }
+  assert.ok(accepted > 0, 'no far-out tilt was accepted');
+});
+
+test('a voice turn reported as done turns at least the half degree its check proved', (t) => {
+  // A grazing sliver: the first frame's small step lands in a dip of the
+  // sampled share, which used to stop the turn before it moved at all.
+  for (const scope of [true, false]) {
+    withScope(t, scope);
+    const { camera, tick } = harness(t, {
+      latitude: 20,
+      longitudeDeg: 10,
+      height: 18_000_000,
+      pitch: -58,
+      heading: 37,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    const before = Cesium.Cartesian3.clone(camera.directionWC);
+    const result = moveCamera({
+      motion: 'rotate',
+      direction: 'left',
+      mode: 'once',
+    });
+    if (!result.ok) {
+      assert.match(result.error, /globe out of view/);
+      continue;
+    }
+    for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) tick(1 / 60);
+    const turned = Cesium.Cartesian3.angleBetween(before, camera.directionWC);
+    assert.ok(
+      turned >= radians(0.5) - 1e-9,
+      `scope ${scope ? 'on' : 'off'}: turned ${Cesium.Math.toDegrees(turned)}°`,
+    );
+    assert.ok(surfacePixelShare(camera, 1600, 900, { keyhole: scope }) > 0);
+  }
+});
+
+/** Track an entity below `camera`, locking it into that entity's frame. */
+function trackFrom(viewer, camera) {
+  viewer.trackedEntity = { id: 'high-satellite' };
+  const below = Cesium.Cartesian3.fromDegrees(10, 20, 400_000);
+  camera.lookAtTransform(Cesium.Transforms.eastNorthUpToFixedFrame(below));
+}
+
+test('a voice turn that releases a tracked camera is checked as released', (t) => {
+  // Voice releases the follow camera inside the navigation that runs the
+  // motion, so the request is judged by the pose the release will leave.
+  let accepted = 0;
+  for (const [scope, direction, motion] of [
+    [true, 'up', 'tilt'],
+    [false, 'up', 'tilt'],
+    [false, 'left', 'rotate'],
+  ]) {
+    withScope(t, scope);
+    const { camera, viewer, tick } = harness(t, {
+      latitude: 20,
+      longitudeDeg: 10,
+      height: 18_000_000,
+      pitch: -58,
+      heading: 37,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    trackFrom(viewer, camera);
+    const releaseThenRun = (start) => {
+      viewer.trackedEntity = undefined;
+      camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      return start();
+    };
+    const before = Cesium.Cartesian3.clone(camera.directionWC);
+    const result = moveCamera(
+      { motion, direction, mode: 'once' },
+      releaseThenRun,
+    );
+    const label = `${motion} ${direction}, scope ${scope ? 'on' : 'off'}`;
+    if (!result.ok) {
+      assert.match(result.error, /globe out of view/, label);
+      continue;
+    }
+    accepted += 1;
+    for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) tick(1 / 60);
+    const turned = Cesium.Cartesian3.angleBetween(before, camera.directionWC);
+    assert.ok(turned >= radians(0.5) - 1e-9, `${label}: turned ${turned}`);
+    assert.ok(
+      surfacePixelShare(camera, 1600, 900, { keyhole: scope }) > 0,
+      `${label}: the planet stays on screen`,
+    );
+  }
+  assert.ok(accepted > 0, 'no released turn was accepted');
+});
+
+test('a refused voice turn leaves a tracked camera tracking', (t) => {
+  for (const scope of [true, false]) {
+    withScope(t, scope);
+    const { camera, viewer, tick } = harness(t, {
+      pitch: -80,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    // Tilt up to the limit untracked, then track from there.
+    for (let i = 0; i < 40; i += 1) {
+      if (!moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' }).ok)
+        break;
+      for (let j = 0; j < 600 && getActiveCameraMotion(); j += 1) tick(1 / 60);
+    }
+    trackFrom(viewer, camera);
+    const tracked = viewer.trackedEntity;
+    const transform = Cesium.Matrix4.clone(camera.transform);
+    let released = false;
+    const result = moveCamera(
+      { motion: 'tilt', direction: 'up', mode: 'once' },
+      (start) => {
+        released = true;
+        viewer.trackedEntity = undefined;
+        camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        return start();
+      },
+    );
+    const label = `scope ${scope ? 'on' : 'off'}`;
+    assert.equal(result.ok, false, label);
+    assert.match(result.error, /globe out of view/, label);
+    assert.equal(released, false, label);
+    assert.equal(viewer.trackedEntity, tracked, label);
+    assert.ok(Cesium.Matrix4.equals(camera.transform, transform), label);
+  }
+});
+
+test('the voice frame limit leaves Columbus view alone', (t) => {
+  // At its limit in 3D a further tilt up is refused; the same tilt in Columbus
+  // view is not limited by the frame.
+  withScope(t, false);
+  const { viewer, finishOnce } = harness(t, {
+    pitch: -80,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  assert.equal(
+    moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' }).ok,
+    true,
+  );
+  finishOnce();
+  const refused = moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' });
+  assert.match(refused.error || '', /globe out of view/);
+  viewer.scene.mode = Cesium.SceneMode.COLUMBUS_VIEW;
+  const result = moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' });
+  assert.doesNotMatch(result.error || '', /globe out of view/);
+});
+
+test('voice tilt below the free-look height is not limited by the frame', (t) => {
+  const { camera, finishOnce } = harness(t, { height: 500_000, pitch: -60 });
+  const result = moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' });
+  assert.equal(result.ok, true);
+  finishOnce();
+  near(camera.pitch, radians(-45), 1e-6, 'full 15° tilt');
 });
