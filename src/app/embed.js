@@ -255,14 +255,39 @@ export function installViews({
     if (peer && (peer !== windowRef || isEmbeddedInline()))
       peer.postMessage(message, origin);
   };
+  // Etiquetas OSM são entidades temporárias, separadas dos objetos do projeto.
+  const labelEntities = [];
+  const clearGeoLabels = () => { for(const entity of labelEntities) viewer.entities.remove(entity); labelEntities.length=0; };
+  const cameraSnapshot = () => {
+    const c=viewer.camera,pos=c.positionCartographic;
+    if(!pos)return null;
+    const canvas=viewer.scene.canvas;
+    const ray=c.getPickRay(new Cesium.Cartesian2(canvas.clientWidth/2,canvas.clientHeight/2));
+    const hit=ray && viewer.scene.globe?.pick(ray,viewer.scene);
+    const center=hit ? Cesium.Cartographic.fromCartesian(hit) : pos;
+    return {lat:Cesium.Math.toDegrees(center.latitude),lon:Cesium.Math.toDegrees(center.longitude),alt:pos.height,heading:Cesium.Math.toDegrees(c.heading),pitch:Cesium.Math.toDegrees(c.pitch)};
+  };
   // Views apply one at a time, in the order they arrive.
   let queue = ready;
   const onMessage = (event) => {
     if (event.source !== peer) return;
+    if (event.data?.type === 'gev:geo-labels') {
+      clearGeoLabels();
+      const items=Array.isArray(event.data.items)?event.data.items.slice(0,45):[];
+      for(const item of items){
+        const lat=Number(item.lat),lon=Number(item.lon),name=String(item.name||'').slice(0,90);
+        if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180||!name)continue;
+        labelEntities.push(viewer.entities.add({
+          position:Cesium.Cartesian3.fromDegrees(lon,lat,15),
+          label:{text:name,font:'13px sans-serif',fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:3,style:Cesium.LabelStyle.FILL_AND_OUTLINE,showBackground:true,backgroundColor:Cesium.Color.fromCssColorString('#082130').withAlpha(0.8),pixelOffset:new Cesium.Cartesian2(0,-12),disableDepthTestDistance:Number.POSITIVE_INFINITY,distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,16000)},
+          point:{pixelSize:5,color:Cesium.Color.CYAN,disableDepthTestDistance:Number.POSITIVE_INFINITY}
+        }));
+      }
+      return;
+    }
     if (event.data?.type === 'gev:camera-request') {
-      const c = viewer.camera;
-      const pos = c.positionCartographic;
-      if (pos) post({type:'gev:camera-response', id:event.data.id ?? null, camera:{lat:Cesium.Math.toDegrees(pos.latitude),lon:Cesium.Math.toDegrees(pos.longitude),alt:pos.height,heading:Cesium.Math.toDegrees(c.heading),pitch:Cesium.Math.toDegrees(c.pitch)}}, event.origin && event.origin !== 'null' ? event.origin : '*');
+      const camera=cameraSnapshot();
+      if (camera) post({type:'gev:camera-response', id:event.data.id ?? null, camera}, event.origin && event.origin !== 'null' ? event.origin : '*');
       return;
     }
     if (event.data?.type === 'gev:cinema-fly') {
