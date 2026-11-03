@@ -130,9 +130,13 @@ function guardFixture({ maximumZoomDistance = Infinity } = {}) {
       requestRender: (reason) => renders.push(reason),
     },
   );
+  // A frame Cesium skips drawing in request-render mode: no preRender.
+  const idleFrame = () => {
+    for (const handler of postUpdate) handler();
+  };
   const frame = (height = camera.height) => {
     camera.height = height;
-    for (const handler of postUpdate) handler();
+    idleFrame();
     for (const handler of preRender) handler();
   };
   const movement = (type, deltaY, { modifier, tiltDeltaY = 0 } = {}) => {
@@ -179,6 +183,7 @@ function guardFixture({ maximumZoomDistance = Infinity } = {}) {
     renders,
     dispose,
     frame,
+    idleFrame,
     movement,
   };
 }
@@ -451,6 +456,20 @@ test('outward input at the ceiling reframes a deliberately tilted camera', () =>
     Math.abs(f.camera.pitch - maxPitchForHeight(MAXIMUM_ZOOM_DISTANCE_M)) <
       1e-10,
   );
+  f.dispose();
+});
+
+test('input that leaves the camera still requests a frame to read it', () => {
+  const f = guardFixture();
+  f.frame(MAXIMUM_ZOOM_DISTANCE_M);
+  f.idleFrame();
+  assert.deepEqual(f.renders, [], 'an idle scene stays idle');
+  // At the ceiling Cesium doesn't move the camera, so nothing would draw.
+  f.movement(WHEEL, -10);
+  f.idleFrame();
+  assert.deepEqual(f.renders, ['zoom-out-guard']);
+  f.frame();
+  assert.ok(f.camera.pitch < Cesium.Math.toRadians(-25), 'read that frame');
   f.dispose();
 });
 

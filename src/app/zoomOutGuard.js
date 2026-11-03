@@ -194,8 +194,18 @@ export function installZoomOutGuard(
     }
   };
   const removePreRender = scene.preRender.addEventListener(guard);
-  // Fires every frame, after Cesium has applied this frame's input.
-  const removePostUpdate = scene.postUpdate.addEventListener(followCeiling);
+  // Fires every frame, after Cesium has applied this frame's input, while
+  // preRender fires only on frames that draw. Input that didn't move the camera
+  // (such as wheel at the ceiling) would otherwise wait for an unrelated frame.
+  const removePostUpdate = scene.postUpdate.addEventListener(() => {
+    followCeiling();
+    if (
+      INPUT_BINDINGS.some(({ type, modifier }) =>
+        aggregator.isMoving(type, modifier),
+      )
+    )
+      requestRender('zoom-out-guard');
+  });
   const removeCameraHandoff = subscribeCameraHandoff?.(() => {
     cancel();
     // Discard input queued before an explicit navigation action took ownership.
