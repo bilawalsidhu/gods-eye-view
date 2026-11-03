@@ -34,26 +34,19 @@ window.addEventListener('pagehide', (event) => {
     .finally(() => renderers.clear());
 });
 
-// Registered before any engine starts, so these run ahead of the running
-// session's own share-link listeners. A history visit that changes the
-// engine belongs to the switch: the outgoing engine must not start restoring
-// that entry's share (and release the followed subject) just before it hands
-// the session off. The incoming engine reads the entry's view as it starts.
-let swallowedHash = null;
-window.addEventListener('popstate', (event) => {
+// Registered before any engine starts, so it runs ahead of the session's own
+// share-link listeners. A history visit that changes the engine belongs to
+// the switch: the outgoing engine's share link neither restores that entry
+// (releasing the followed subject just before the handoff) nor writes its
+// own view onto it. The incoming engine reads the entry as it starts, and
+// settle() hands the address back to whichever engine then runs.
+window.addEventListener('popstate', () => {
   if (!engineSwitch) return;
-  swallowedHash = null;
-  if (pageEngineKind() !== engineSwitch.state().engine) {
-    event.stopImmediatePropagation();
-    swallowedHash = location.hash;
-  }
+  if (pageEngineKind() !== engineSwitch.state().engine)
+    application
+      ?.getComponents()
+      .controls?.styleManager?.shareLinkManager?.holdNavigation?.();
   void engineSwitch.reconcile();
-});
-window.addEventListener('hashchange', (event) => {
-  // Back/Forward fires hashchange after popstate for the same entry.
-  if (swallowedHash !== null && location.hash === swallowedHash)
-    event.stopImmediatePropagation();
-  swallowedHash = null;
 });
 
 function createApplication(kind, engineSwitch) {
@@ -83,7 +76,11 @@ async function leave(from) {
   if (components) {
     cover ??= keepGlobeFrame(components.scene.engine);
     cockpit = components.controls.styleManager.getCockpitState();
-    handOffSession(layerSession);
+    handOffSession(layerSession, {
+      addressLayerIds:
+        components.controls.styleManager.shareLinkManager?.currentLayerState?.()
+          ?.enabledLayerIds,
+    });
     renderers.retain(from);
   }
   await application?.destroy();
@@ -127,20 +124,56 @@ async function enter(kind) {
 }
 
 async function settle() {
-  const engine = liveComponents()?.scene.engine;
-  if (cover && engine) await waitForFirstFrame(engine);
-  // A page left without an engine keeps the last handoff for the next try.
-  if (engine) {
-    layerSession.handoffLayers = null;
-    cockpit = null;
+  const components = liveComponents();
+  try {
+    if (cover && components) await waitForFirstFrame(components.scene.engine);
+  } finally {
+    cover?.remove();
+    cover = null;
   }
-  cover?.remove();
-  cover = null;
+  // A page left without an engine keeps the last handoff for the next try.
+  if (!components) return;
+  layerSession.handoffLayers = null;
+  cockpit = null;
+  withdrawEngineRetry();
+  // The running engine owns the address again, including an entry visited
+  // before its share link listened or while it was held.
+  components.controls.styleManager.shareLinkManager?.resumeNavigation?.();
 }
 
 function present() {
   const { kind, busy } = engineSwitch.state();
   display.presentGlobeEngine({ kind, busy, select });
+  for (const button of loading.querySelectorAll('.engine-switch-retry button'))
+    button.disabled = busy;
+}
+
+// No engine runs after a failed recovery. The error stays on the loading
+// screen with an engine picker, so a new attempt needs no reload.
+function offerEngineRetry() {
+  const content = loading.querySelector('.loader-content') ?? loading;
+  if (content.querySelector('.engine-switch-retry')) return;
+  const group = document.createElement('div');
+  group.className = 'engine-switch-retry';
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', t('Globe Engine'));
+  for (const [kind, name] of [
+    ['cesium', 'Cesium'],
+    ['navara', 'Navara'],
+  ]) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.engine = kind;
+    button.textContent = name;
+    button.setAttribute('translate', 'no');
+    button.addEventListener('click', () => select(kind));
+    group.append(button);
+  }
+  content.append(group);
+}
+
+function withdrawEngineRetry() {
+  loading.querySelector('.engine-switch-retry')?.remove();
 }
 
 function report(error) {
@@ -198,8 +231,9 @@ createApplication(initialKind, false)
       onChange: present,
       onFailure(error, { recovered }) {
         const style = recovered && liveComponents()?.controls.styleManager;
-        if (style) style._showToast(describeError(error));
-        else report(error);
+        if (style) return style._showToast(describeError(error));
+        report(error);
+        offerEngineRetry();
       },
     });
     present();
