@@ -75,7 +75,8 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
       state._viewer = state._engine = null;
       renderer = null;
       initialized = false;
-      for (const key of ['rendering', 'selection', 'viewport', 'lifecycle']) delete parts[key];
+      for (const key of ['rendering', 'selection', 'viewport', 'lifecycle'])
+        delete parts[key];
     },
     enable(...args) {
       return renderer?.lifecycle.methods.enable(...args);

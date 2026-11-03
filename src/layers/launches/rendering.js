@@ -100,7 +100,7 @@ export function createRendering({
       : satelliteTrack?.orbitPath?.length > 1
         ? satelliteTrack.orbitPath
         : parts.paths.approximateOrbitPath(launch);
-    const solution = {activeTleText, satelliteTrack, orbitPath};
+    const solution = { activeTleText, satelliteTrack, orbitPath };
     orbitSolutions.set(launch, solution);
     return solution;
   }
@@ -117,7 +117,11 @@ export function createRendering({
     const orbitAllowed = parts.policyHelpers.launchStatusAllowsOrbit(
       launch.status,
     );
-    const { satelliteTrack, orbitPath } = orbitForLaunch(launch, activeTleText, orbitAllowed);
+    const { satelliteTrack, orbitPath } = orbitForLaunch(
+      launch,
+      activeTleText,
+      orbitAllowed,
+    );
     launch.recoveryStages.forEach((stage) => {
       stage.endpoint = parts.paths.landingEndpoint(
         stage,

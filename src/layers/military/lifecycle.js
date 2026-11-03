@@ -15,7 +15,10 @@ export function createLifecycle({
   const { setMilitaryLayerActive } = services.militaryRegistry;
 
   const binding = createAircraftSceneBinding({
-    id: 'military', flightState, services, parts,
+    id: 'military',
+    flightState,
+    services,
+    parts,
     resolveModel: () => resolveAsset(JET_MODEL_URL),
     enable: () => methods.enable(),
   });

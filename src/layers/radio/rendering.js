@@ -46,7 +46,10 @@ export function createRendering({
 
   function publishRadioOverlayEntries() {
     layerState._overlayPublishTimer = null;
-    if (!parts.renderer?.ready || !parts.interaction.radioPresentationAllowed()) {
+    if (
+      !parts.renderer?.ready ||
+      !parts.interaction.radioPresentationAllowed()
+    ) {
       parts.clustering.resetRadioClusterOverlayIdentities();
       layerState._overlayDiagnostics =
         parts.clustering.emptyRadioOverlayDiagnostics();

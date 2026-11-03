@@ -110,7 +110,12 @@ export function createCyclonesLayer({
   function installSelection() {
     const canvas = engine?.host.canvas ?? viewer?.scene?.canvas;
     const native = engine?.kind === 'navara';
-    if (clickHandler || !canvas || (!native && typeof cesium.ScreenSpaceEventHandler !== 'function')) return;
+    if (
+      clickHandler ||
+      !canvas ||
+      (!native && typeof cesium.ScreenSpaceEventHandler !== 'function')
+    )
+      return;
     const owner = native ? {} : new cesium.ScreenSpaceEventHandler(canvas);
     clickHandler = owner;
     let capturedHit = null;
@@ -185,7 +190,8 @@ export function createCyclonesLayer({
       if (id) layer.setParams({ stormId: id });
       else if (isSurfacePick(picked)) layer.setParams({ clear: true });
     };
-    if (native) owner.destroy = engine.input.on('click', onClick, { pick: true });
+    if (native)
+      owner.destroy = engine.input.on('click', onClick, { pick: true });
     else owner.setInputAction(onClick, cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
   function removeSelection() {
@@ -202,14 +208,16 @@ export function createCyclonesLayer({
     source: 'NOAA NHC / CPHC',
     updateInterval: 300_000,
     init(nextViewer, options = {}) {
-      if (nextViewer || options.engine) return layer.attachRenderer(nextViewer, options);
+      if (nextViewer || options.engine)
+        return layer.attachRenderer(nextViewer, options);
     },
     attachRenderer(nextViewer, options = {}) {
       viewer = nextViewer;
       engine = options.engine ?? null;
-      rendering = engine?.kind === 'navara'
-        ? createNativeRendering(engine, { overlayHost })
-        : createRendering({ viewer, cesium, overlayHost });
+      rendering =
+        engine?.kind === 'navara'
+          ? createNativeRendering(engine, { overlayHost })
+          : createRendering({ viewer, cesium, overlayHost });
       if (!enabled) return;
       installSelection();
       if (snapshot && !snapshot.unavailable) {
@@ -287,8 +295,15 @@ export function createCyclonesLayer({
         let display;
         do {
           display = rendering;
-          applied = display ? await display.setSnapshot(next, { signal: controller.signal }) : true;
-        } while (display !== rendering && enabled && !controller.signal.aborted && request === controller);
+          applied = display
+            ? await display.setSnapshot(next, { signal: controller.signal })
+            : true;
+        } while (
+          display !== rendering &&
+          enabled &&
+          !controller.signal.aborted &&
+          request === controller
+        );
         if (
           !applied ||
           !enabled ||
@@ -351,8 +366,9 @@ export function createCyclonesLayer({
               selectedId !== storm.id
             )
               return;
-            const fly = engine ? engine.camera.flyToSphere.bind(engine.camera) :
-              viewer.camera.flyToBoundingSphere.bind(viewer.camera);
+            const fly = engine
+              ? engine.camera.flyToSphere.bind(engine.camera)
+              : viewer.camera.flyToBoundingSphere.bind(viewer.camera);
             return fly(sphere, {
               duration: matchMedia?.('(prefers-reduced-motion: reduce)')
                 ?.matches

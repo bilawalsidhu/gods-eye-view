@@ -142,7 +142,8 @@ export function createSequenceCones({
    * reloads a selected one (a provider that loads part of a sequence moved on).
    */
   async function select(sequenceId, { force = false } = {}) {
-    if (!sequenceId || (!state.viewer && !state.context.waitingForView?.())) return;
+    if (!sequenceId || (!state.viewer && !state.context.waitingForView?.()))
+      return;
     // Already on screen, or already on its way.
     if (
       !force &&

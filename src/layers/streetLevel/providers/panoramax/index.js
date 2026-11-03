@@ -256,7 +256,9 @@ export function createPanoramaxProvider({
        * from high up the click may land tens of metres off the line.
        */
       function lineClickRadius() {
-        const height = state.viewer?.engine?.camera.pose().cartographic.height ?? state.viewer?.camera?.positionCartographic?.height;
+        const height =
+          state.viewer?.engine?.camera.pose().cartographic.height ??
+          state.viewer?.camera?.positionCartographic?.height;
         if (!Number.isFinite(height)) return NEAREST_RADIUS_M;
         return Math.min(
           LINE_CLICK_RADIUS_MAX_M,

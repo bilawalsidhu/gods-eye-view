@@ -51,43 +51,42 @@ export function createLifecycle({
       'gev:awareness-subject-cleared',
       layerState.subjectClearListener,
     );
-    layerState.preRenderRemover =
-      layerState.display.onFrame(() => {
-        if (!layerState.enabled) return;
-        const now = Date.now();
-        // "Did the camera move" uses the SAME quantized pose signature the fleet
-        // rotation pass gates on (iconOrientation.cameraPoseSignature) rather than
-        // camera.changed, whose granularity is globally degraded by other layers
-        // mutating camera.percentageChanged.
-        const poseSig = cameraMotionSignature(layerState.display.camera);
-        if (poseSig !== layerState.lastCameraPoseSig) {
-          layerState.lastCameraPoseSig = poseSig;
-          layerState.lastCameraPoseChangeMs = now;
-        }
-        const decision = parts.model.awarenessRefreshDecision({
-          nowMs: now,
-          lastRefreshMs: layerState.lastSubjectRefreshMs,
-          lastPoseChangeMs: layerState.lastCameraPoseChangeMs,
-          wasMoving: layerState.cameraMoving,
-        });
-        layerState.cameraMoving = decision.moving;
-        syncAwarenessRenderHold();
-        if (!decision.refresh) return;
-        layerState.lastSubjectRefreshMs = now;
-        if (
-          layerState.subject &&
-          ['flights', 'military', 'ais-live-vessels'].includes(
-            layerState.subject.layerId,
-          )
-        ) {
-          parts.subject.refreshSelectedSubject();
-        } else if (!layerState.passive && layerState.autoFocusRetryPending) {
-          layerState.autoFocusRetryPending = false;
-          parts.focus.focusAttentionTarget();
-        } else {
-          parts.rendering.scheduleDirectionOverlayUpdate();
-        }
+    layerState.preRenderRemover = layerState.display.onFrame(() => {
+      if (!layerState.enabled) return;
+      const now = Date.now();
+      // "Did the camera move" uses the SAME quantized pose signature the fleet
+      // rotation pass gates on (iconOrientation.cameraPoseSignature) rather than
+      // camera.changed, whose granularity is globally degraded by other layers
+      // mutating camera.percentageChanged.
+      const poseSig = cameraMotionSignature(layerState.display.camera);
+      if (poseSig !== layerState.lastCameraPoseSig) {
+        layerState.lastCameraPoseSig = poseSig;
+        layerState.lastCameraPoseChangeMs = now;
+      }
+      const decision = parts.model.awarenessRefreshDecision({
+        nowMs: now,
+        lastRefreshMs: layerState.lastSubjectRefreshMs,
+        lastPoseChangeMs: layerState.lastCameraPoseChangeMs,
+        wasMoving: layerState.cameraMoving,
       });
+      layerState.cameraMoving = decision.moving;
+      syncAwarenessRenderHold();
+      if (!decision.refresh) return;
+      layerState.lastSubjectRefreshMs = now;
+      if (
+        layerState.subject &&
+        ['flights', 'military', 'ais-live-vessels'].includes(
+          layerState.subject.layerId,
+        )
+      ) {
+        parts.subject.refreshSelectedSubject();
+      } else if (!layerState.passive && layerState.autoFocusRetryPending) {
+        layerState.autoFocusRetryPending = false;
+        parts.focus.focusAttentionTarget();
+      } else {
+        parts.rendering.scheduleDirectionOverlayUpdate();
+      }
+    });
     layerState.runtimeListenersAttached = true;
   }
 
@@ -184,10 +183,11 @@ export function createLifecycle({
       layerState.display?.destroy?.();
       layerState.display = viewer
         ? createAwarenessCesiumRenderer(viewer)
-        : services.renderer?.(engine) ?? null;
+        : (services.renderer?.(engine) ?? null);
       if (layerState.enabled) {
         attachRuntimeListeners();
-        if (layerState.subject) parts.rendering.renderVisual(layerState.subject);
+        if (layerState.subject)
+          parts.rendering.renderVisual(layerState.subject);
         parts.rendering.scheduleDirectionOverlayUpdate(true);
       }
     },

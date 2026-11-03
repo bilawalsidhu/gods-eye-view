@@ -21,7 +21,10 @@ export function createViewport({ state: layerState, services, parts, source }) {
     }
     if (viewer || layerState.engine)
       layerState.lastViewBox = viewportBox(viewer);
-    return { box: layerState.lastViewBox ?? null, coverage: { kind: 'viewport' } };
+    return {
+      box: layerState.lastViewBox ?? null,
+      coverage: { kind: 'viewport' },
+    };
   }
 
   function viewportBox(viewer) {

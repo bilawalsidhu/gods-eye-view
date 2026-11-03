@@ -25,7 +25,11 @@ const STATION_MARKER_RADIUS_M = 6_000;
 const READOUT_LIMIT = 5;
 
 /** Own one air-quality display, its refresh lifecycle, and its readout card. */
-export function createAirQualityLayer({ source, overlayHost, createRenderer = createAirQualityCesiumRenderer } = {}) {
+export function createAirQualityLayer({
+  source,
+  overlayHost,
+  createRenderer = createAirQualityCesiumRenderer,
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
@@ -61,7 +65,8 @@ export function createAirQualityLayer({ source, overlayHost, createRenderer = cr
     updateInterval: 1_200_000,
 
     init(viewer, { engine = null } = {}) {
-      if (initialized) throw new Error('Air quality layer is already initialized');
+      if (initialized)
+        throw new Error('Air quality layer is already initialized');
       initialized = true;
       try {
         if (viewer || engine) this.attachRenderer(viewer, { engine });
@@ -72,7 +77,8 @@ export function createAirQualityLayer({ source, overlayHost, createRenderer = cr
     },
 
     attachRenderer(viewer, { engine = null } = {}) {
-      if (!initialized || renderer) throw new Error('Invalid air quality scene attachment');
+      if (!initialized || renderer)
+        throw new Error('Invalid air quality scene attachment');
       renderer = createRenderer({ viewer, engine });
       renderer.setVisible(_enabled);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, _enabled);

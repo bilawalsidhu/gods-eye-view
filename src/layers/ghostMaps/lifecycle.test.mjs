@@ -157,10 +157,17 @@ test('cancellation during parsing releases every packed-image URL', async (t) =>
 
 test('a KMZ delivered between planets is reused by the new scene and releases its icon on disable', async (t) => {
   let layer;
-  const h = fixture(t, { beforeFileReturns() { layer.detachRenderer(); } });
+  const h = fixture(t, {
+    beforeFileReturns() {
+      layer.detachRenderer();
+    },
+  });
   layer = h.layer;
   await layer.update();
-  assert.deepEqual(layer.getAnalystRecords().map(r => r.name), ['Test report']);
+  assert.deepEqual(
+    layer.getAnalystRecords().map((r) => r.name),
+    ['Test report'],
+  );
   assert.equal(h.mounted.size, 0);
   await layer.attachRenderer(h.viewer);
   assert.equal(h.mounted.size, 1);

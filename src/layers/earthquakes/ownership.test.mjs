@@ -94,11 +94,16 @@ test('USGS body completion honors cancellation even with an uncooperative transp
 });
 
 test('an observation received between scenes is queryable and draws without a second fetch', async () => {
-  let resolve, polls = 0;
-  const h = harness({ getSnapshot() {
-    polls++;
-    return new Promise(done => { resolve = done; });
-  } });
+  let resolve,
+    polls = 0;
+  const h = harness({
+    getSnapshot() {
+      polls++;
+      return new Promise((done) => {
+        resolve = done;
+      });
+    },
+  });
   try {
     const pending = h.layer.update();
     h.layer.detachRenderer();

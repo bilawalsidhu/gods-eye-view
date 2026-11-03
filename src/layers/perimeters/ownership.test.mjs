@@ -590,22 +590,38 @@ test('a selected fire retains its card and changed polygon through a scene hando
   const fire = { ...row, stableId: 'incident:one' };
   let geometry = fire.polygons;
   let polls = 0;
-  const h = harness({getSnapshot: async () => { polls++; return [{...fire, polygons: geometry}]; }}, {
-    pick: () => ({id: 'fire-perimeter:incident:one:0'}),
-  });
+  const h = harness(
+    {
+      getSnapshot: async () => {
+        polls++;
+        return [{ ...fire, polygons: geometry }];
+      },
+    },
+    {
+      pick: () => ({ id: 'fire-perimeter:incident:one:0' }),
+    },
+  );
   try {
     await h.layer.update();
-    h.clicks.handler({position: {x: 0, y: 0}});
-    assert.equal(h.overlay.entries.get('fire-perimeters')[0].id, 'fire-perimeter-card:incident:one');
+    h.clicks.handler({ position: { x: 0, y: 0 } });
+    assert.equal(
+      h.overlay.entries.get('fire-perimeters')[0].id,
+      'fire-perimeter-card:incident:one',
+    );
     h.layer.detachRenderer();
     assert.equal(h.sources.length, 0);
-    geometry = [[ring.map(([lon, lat]) => [lon+0.1,lat])]];
+    geometry = [[ring.map(([lon, lat]) => [lon + 0.1, lat])]];
     assert.equal(await h.layer.update(), true);
     const record = h.layer.getAnalystRecords()[0];
     assert.equal(record.id, 'incident:one');
     h.layer.attachRenderer(h.viewer);
     assert.equal(h.sources[0].entities.values.length, 1);
-    assert.equal(h.overlay.entries.get('fire-perimeters')[0].id, 'fire-perimeter-card:incident:one');
+    assert.equal(
+      h.overlay.entries.get('fire-perimeters')[0].id,
+      'fire-perimeter-card:incident:one',
+    );
     assert.equal(polls, 2);
-  } finally { h.layer.destroy(); }
+  } finally {
+    h.layer.destroy();
+  }
 });

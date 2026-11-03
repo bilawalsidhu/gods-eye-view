@@ -171,8 +171,12 @@ export function createGnssIntegrityLayer({
       if (!initialized || renderer)
         throw new Error('Invalid GNSS scene attachment');
       renderer = createRenderer({ viewer, engine, viewAnchor });
-      _removeCameraEnd = renderer.camera?.moveEnd?.addEventListener(scheduleCameraRefresh);
-      _removeCameraChanged = renderer.camera?.changed?.addEventListener(scheduleCameraRefresh);
+      _removeCameraEnd = renderer.camera?.moveEnd?.addEventListener(
+        scheduleCameraRefresh,
+      );
+      _removeCameraChanged = renderer.camera?.changed?.addEventListener(
+        scheduleCameraRefresh,
+      );
       _signature = null;
       if (_enabled) expire();
       renderer.setVisible(_enabled);

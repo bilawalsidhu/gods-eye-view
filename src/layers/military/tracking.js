@@ -840,7 +840,10 @@ export function createTracking({
    * @param {string} icao24 - ICAO hex identifier of the aircraft to track
    */
 
-  function _trackFlight(icao24, { origin = 'programmatic', resume = false, follow = true } = {}) {
+  function _trackFlight(
+    icao24,
+    { origin = 'programmatic', resume = false, follow = true } = {},
+  ) {
     if (!resume) _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
     const bb = flightState._billboards.get(icao24);

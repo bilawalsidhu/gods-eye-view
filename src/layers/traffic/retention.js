@@ -217,7 +217,8 @@ export function createRetention({ state, parts }) {
     const blend = Math.min(1, dt * 12);
     const scene = state._trafficScene?.() ?? state._viewer?.scene;
     const canProject =
-      scene?.canvas?.clientHeight && (scene.project || (scene.camera && scene.frameState));
+      scene?.canvas?.clientHeight &&
+      (scene.project || (scene.camera && scene.frameState));
     state._heightPending = false;
     for (let r = 0; r < state._roads.length; r++) {
       const road = state._roads[r];
@@ -300,5 +301,13 @@ export function createRetention({ state, parts }) {
     state._populationPending = false;
     state._heightPending = false;
   }
-  return { reconcile, retarget, easeHeights, finishHeights, clear, refreshCounts, resume: schedule };
+  return {
+    reconcile,
+    retarget,
+    easeHeights,
+    finishHeights,
+    clear,
+    refreshCounts,
+    resume: schedule,
+  };
 }

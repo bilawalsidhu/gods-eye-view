@@ -53,7 +53,8 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
     updateInterval: 60000,
 
     init(viewer, { engine = null } = {}) {
-      if (initialized) throw new Error('Earthquake layer is already initialized');
+      if (initialized)
+        throw new Error('Earthquake layer is already initialized');
       initialized = true;
       try {
         if (viewer || engine) this.attachRenderer(viewer, { engine });
@@ -65,7 +66,8 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
     },
 
     attachRenderer(viewer, { engine = null } = {}) {
-      if (!initialized || _renderer) throw new Error('Invalid earthquake scene attachment');
+      if (!initialized || _renderer)
+        throw new Error('Invalid earthquake scene attachment');
       _renderer = renderer.create({ viewer, engine });
       if (!_renderer) throw new Error('Earthquake renderer unavailable');
       _renderer.setVisible(_enabled);
@@ -208,9 +210,14 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
-      return observations.slice(0, limit).map((row, index) =>
-        mapAnalystRecord({ ...row, id: row.usgsId, depth: row.depthKm }, index),
-      );
+      return observations
+        .slice(0, limit)
+        .map((row, index) =>
+          mapAnalystRecord(
+            { ...row, id: row.usgsId, depth: row.depthKm },
+            index,
+          ),
+        );
     },
 
     getStats() {

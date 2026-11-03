@@ -103,7 +103,8 @@ export function createProjection({
   function setPlaneVisible(runtime, visible) {
     if (!runtime) return;
     runtime.planeVisible = !!visible;
-    if (runtime.planeEntity) parts.renderer?.setPlaneVisible(runtime, !!visible);
+    if (runtime.planeEntity)
+      parts.renderer?.setPlaneVisible(runtime, !!visible);
     if (visible && runtime.overlayEntry && runtime.cameraId) {
       if (layerState._projectionOverlayOwnerId !== runtime.cameraId) {
         layerState._cctvOverlayHost.setEntries(
@@ -256,7 +257,8 @@ export function createProjection({
               runtime.imageLoading = false;
               runtime.imageReady = false;
             };
-            if (runtime.planeMaterial) parts.renderer?.setPlaneImage(runtime, runtime.canvas);
+            if (runtime.planeMaterial)
+              parts.renderer?.setPlaneImage(runtime, runtime.canvas);
             parts.frames.refreshProjectionImage(record, true);
             parts.presentation.notifyListeners();
           },
@@ -314,11 +316,21 @@ export function createProjection({
     if (record.projection && !record.projection.disposed) {
       const runtime = record.projection;
       if (runtime.needsPlane && parts.renderer?.ready) {
-        const geometry = record.frustumGeometry || parts.geometry.computeFrustumGeometry(record.camera, parts.ground.groundAltFor(record), record.probeClampRangeM);
-        const positions = record.frustumPositions || parts.geometry.frustumCartesians(geometry);
-        runtime.planeMaterial = parts.renderer.createPlaneMaterial(runtime.canvas);
+        const geometry =
+          record.frustumGeometry ||
+          parts.geometry.computeFrustumGeometry(
+            record.camera,
+            parts.ground.groundAltFor(record),
+            record.probeClampRangeM,
+          );
+        const positions =
+          record.frustumPositions || parts.geometry.frustumCartesians(geometry);
+        runtime.planeMaterial = parts.renderer.createPlaneMaterial(
+          runtime.canvas,
+        );
         createProjectionPlane(record, runtime, geometry, positions);
-        if (runtime.video?.videoWidth) parts.renderer.setPlaneImage(runtime, runtime.video);
+        if (runtime.video?.videoWidth)
+          parts.renderer.setPlaneImage(runtime, runtime.video);
         runtime.needsPlane = false;
         runtime.lastSwappedCanvasStamp = -1;
       }

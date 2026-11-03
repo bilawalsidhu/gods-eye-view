@@ -276,10 +276,12 @@ test('a failed refresh over good readings reports degraded, not nominal', async 
 
 test('station data stays queryable and attaches to a fresh scene without polling', async () => {
   let polls = 0;
-  const h = harness({ getSnapshot: async () => {
-    polls++;
-    return [reading('Toronto', 7)];
-  } });
+  const h = harness({
+    getSnapshot: async () => {
+      polls++;
+      return [reading('Toronto', 7)];
+    },
+  });
   try {
     h.layer.detachRenderer();
     assert.equal(h.sources.length, 0);

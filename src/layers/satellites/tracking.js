@@ -412,7 +412,10 @@ export function createTracking({
     refreshTrackedReadout(layerState._trackedEntity);
   }
 
-  function _trackSatellite(noradId, { origin = 'programmatic', resuming = false } = {}) {
+  function _trackSatellite(
+    noradId,
+    { origin = 'programmatic', resuming = false } = {},
+  ) {
     if (!resuming) _clearTracking(false, { origin });
 
     const point = layerState._points.get(noradId);

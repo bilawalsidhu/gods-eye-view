@@ -50,7 +50,7 @@ export function observeTrafficSurface(scene) {
 }
 
 function currentRenderedFrame(scene) {
-  if (scene.engine) return {ready:scene.ready};
+  if (scene.engine) return { ready: scene.ready };
   if (!scene.postRender?.addEventListener || !scene.camera?.viewMatrix)
     return { ready: surfaceTilesReady(scene) };
   const frame = renderedFrames.get(scene);
@@ -280,7 +280,9 @@ export async function prepareRoadSurfaces(
     cache = { surface, heights: new Map() };
     sceneCaches.set(scene, cache);
   }
-  const cameraCarto = scene.engine?.camera.pose().cartographic ?? scene.camera?.positionCartographic;
+  const cameraCarto =
+    scene.engine?.camera.pose().cartographic ??
+    scene.camera?.positionCartographic;
   const cameraLon = cameraCarto
     ? Cesium.Math.toDegrees(cameraCarto.longitude)
     : 0;
@@ -345,7 +347,8 @@ export async function prepareRoadSurfaces(
           if (validHeight(sampled)) metrics.depthHits++;
         }
         if (
-          !scene.engine && !scene.globe?.show &&
+          !scene.engine &&
+          !scene.globe?.show &&
           !validHeight(sampled) &&
           scene.sampleHeightSupported
         ) {

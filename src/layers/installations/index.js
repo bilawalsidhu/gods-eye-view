@@ -28,7 +28,8 @@ export function createInstallationsLayer({
   let renderer = null;
   const lifecycle = {
     init(viewer, options = {}) {
-      if (viewer || options.engine) return lifecycle.attachRenderer(viewer, options);
+      if (viewer || options.engine)
+        return lifecycle.attachRenderer(viewer, options);
     },
     attachRenderer(viewer, options = {}) {
       if (renderer)
@@ -41,7 +42,9 @@ export function createInstallationsLayer({
       const ready = renderer.lifecycle.methods.init(viewer, options);
       if (state.enabled) {
         renderer.lifecycle.methods.enable();
-        renderer.rendering.renderRecords({ claimSelection: Boolean(state.selectedId) });
+        renderer.rendering.renderRecords({
+          claimSelection: Boolean(state.selectedId),
+        });
       }
       return ready;
     },
@@ -63,7 +66,9 @@ export function createInstallationsLayer({
       state.coverage = { kind: 'viewport' };
       clearTimeout(state.timer);
       parts.viewport.clearUnavailableRetry();
-      services.context.clearSelectedEntityContextForLayer('military-installations');
+      services.context.clearSelectedEntityContextForLayer(
+        'military-installations',
+      );
       parts.ingestion.setInstallationStatus('idle');
     },
     detachRenderer(viewer) {

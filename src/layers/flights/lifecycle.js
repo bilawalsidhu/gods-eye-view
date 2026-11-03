@@ -15,7 +15,10 @@ export function createLifecycle({
   const { registerPickOwner } = services.picking;
 
   const binding = createAircraftSceneBinding({
-    id: 'flights', flightState, services, parts,
+    id: 'flights',
+    flightState,
+    services,
+    parts,
     resolveModel: () => resolveAsset(PLANE_MODEL_URL),
     enable: () => methods.enable(),
   });
@@ -44,7 +47,8 @@ export function createLifecycle({
      * @param {{ engine?: object }} [context] - LayerLifecycle's context.
      */
     init(viewer, { engine = null } = {}) {
-      if (flightState.initialized) throw new Error('Flight layer is already initialized');
+      if (flightState.initialized)
+        throw new Error('Flight layer is already initialized');
       if (typeof flightState.feed._source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
       if (flightState.lifetime.signal.aborted)

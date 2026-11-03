@@ -2,7 +2,8 @@ import * as Cesium from 'cesium';
 import { wrapLon } from './tileMath.js';
 
 export const cameraLocation = (view) =>
-  view?.engine?.camera.pose().cartographic ?? view?.camera?.positionCartographic;
+  view?.engine?.camera.pose().cartographic ??
+  view?.camera?.positionCartographic;
 const canvasOf = (view) => view?.engine?.host.canvas ?? view?.scene?.canvas;
 /** Equirectangular metres between {lon, lat} points, the short way round ±180°; street scale. */
 export function metresBetween(a, b) {
@@ -70,7 +71,9 @@ function raisedEllipsoid(ellipsoid, height) {
 function groundHit(camera, point, ellipsoid, maxRange, engine) {
   let cartesian = null;
   try {
-    cartesian = engine ? engine.picker.pickGlobe(point) : camera.pickEllipsoid(point, ellipsoid);
+    cartesian = engine
+      ? engine.picker.pickGlobe(point)
+      : camera.pickEllipsoid(point, ellipsoid);
   } catch {
     cartesian = null;
   }
@@ -78,10 +81,18 @@ function groundHit(camera, point, ellipsoid, maxRange, engine) {
   if (
     Number.isFinite(maxRange) &&
     (engine?.camera.livePosition || camera.positionWC) &&
-    Cesium.Cartesian3.distance(cartesian, engine?.camera.livePosition ?? camera.positionWC) > maxRange
+    Cesium.Cartesian3.distance(
+      cartesian,
+      engine?.camera.livePosition ?? camera.positionWC,
+    ) > maxRange
   )
     return null;
-  return Cesium.Cartographic.fromCartesian(cartesian, engine ? Cesium.Ellipsoid.WGS84 : ellipsoid) || null;
+  return (
+    Cesium.Cartographic.fromCartesian(
+      cartesian,
+      engine ? Cesium.Ellipsoid.WGS84 : ellipsoid,
+    ) || null
+  );
 }
 
 /** Camera height (m) above the ground under it. */
@@ -120,7 +131,13 @@ export function visibleBbox(
       for (let j = 0; j <= BBOX_GRID; j++) {
         point.x = (width * i) / BBOX_GRID;
         point.y = (height * j) / BBOX_GRID;
-        const carto = groundHit(camera, point, ellipsoid, maxRange, viewer.engine);
+        const carto = groundHit(
+          camera,
+          point,
+          ellipsoid,
+          maxRange,
+          viewer.engine,
+        );
         if (carto) hits.push(carto);
       }
     }

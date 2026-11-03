@@ -304,21 +304,36 @@ test('a pending AIS poll and selected trail survive replacement of the planet', 
   const injected = services(recorders[0].renderer);
   const restored = [];
   injected.sprites.restoreSpriteOrderOnEnable = (id) => restored.push(id);
-  injected.renderer.create = ({ engine }) => recorders[engines.indexOf(engine)].renderer;
+  injected.renderer.create = ({ engine }) =>
+    recorders[engines.indexOf(engine)].renderer;
   const previousDocument = globalThis.document;
-  globalThis.document = Object.assign(new EventTarget(), { getElementById: () => null });
-  t.after(() => { globalThis.document = previousDocument; });
-  let polls = 0, histories = 0, deliver;
+  globalThis.document = Object.assign(new EventTarget(), {
+    getElementById: () => null,
+  });
+  t.after(() => {
+    globalThis.document = previousDocument;
+  });
+  let polls = 0,
+    histories = 0,
+    deliver;
   const snapshot = (records) => ({
-    records, source: 'AIS fixture', complete: true, transportStatus: 'live',
-    rawRowCount: records.length, observedAtMs: 500, freshness: 'current',
+    records,
+    source: 'AIS fixture',
+    complete: true,
+    transportStatus: 'live',
+    rawRowCount: records.length,
+    observedAtMs: 500,
+    freshness: 'current',
   });
   const layer = createVesselLayer({
     services: injected,
     source: {
-      getSnapshot: () => ++polls === 1
-        ? snapshot([row('111', 40.6, -73.9)])
-        : new Promise((resolve) => { deliver = resolve; }),
+      getSnapshot: () =>
+        ++polls === 1
+          ? snapshot([row('111', 40.6, -73.9)])
+          : new Promise((resolve) => {
+              deliver = resolve;
+            }),
       getTrack: async () => {
         histories++;
         return { records: [{ latitude: 40.59, longitude: -73.92 }] };

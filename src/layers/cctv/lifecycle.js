@@ -133,8 +133,7 @@ export function createLifecycle({
     // swaps (bing→osm) no-op.
     layerState._lastAppliedRegime = parts.ground.currentSurfaceRegime();
     if (!layerState._mapStackListener && typeof window !== 'undefined') {
-      layerState._mapStackListener = () =>
-        parts.ground.handleMapStackChanged();
+      layerState._mapStackListener = () => parts.ground.handleMapStackChanged();
       window.addEventListener(
         'gev:map-stack-changed',
         layerState._mapStackListener,
@@ -222,7 +221,6 @@ export function createLifecycle({
           parts.hover.handleHoverMove(movement?.endPosition),
       },
     );
-
   }
   function createRenderer(viewer, options) {
     if (parts.renderer) throw new Error('CCTV layer is already initialized');
@@ -431,13 +429,17 @@ export function createLifecycle({
       layerState._restoringViewport = Boolean(options.waitForCameraRestore);
       renderer.createMarkers();
       for (const record of layerState._records) {
-        record.billboard = renderer.createMarker(record.camera, record.position);
+        record.billboard = renderer.createMarker(
+          record.camera,
+          record.position,
+        );
         record.groundResolved = {};
         record.groundSamples = {};
         record.probeClampRangeM = null;
       }
       bindScene(viewer, options);
-      if (!layerState._restoringViewport && layerState._enabled) this.resumeDisplay();
+      if (!layerState._restoringViewport && layerState._enabled)
+        this.resumeDisplay();
     },
 
     resumeViewport() {
@@ -462,7 +464,10 @@ export function createLifecycle({
       parts.renderer.hideCredit();
       unregisterPickOwner('cctv');
       if (layerState._mapStackListener) {
-        window.removeEventListener('gev:map-stack-changed', layerState._mapStackListener);
+        window.removeEventListener(
+          'gev:map-stack-changed',
+          layerState._mapStackListener,
+        );
         layerState._mapStackListener = null;
       }
       layerState._viewResizeObserver?.disconnect();
@@ -470,7 +475,10 @@ export function createLifecycle({
       layerState._horizonCullListener?.();
       layerState._moveStartListener?.();
       layerState._removeFocusAppearListener?.();
-      layerState._horizonCullListener = layerState._moveStartListener = layerState._removeFocusAppearListener = null;
+      layerState._horizonCullListener =
+        layerState._moveStartListener =
+        layerState._removeFocusAppearListener =
+          null;
       layerState._gizmo?.destroy();
       layerState._gizmo = null;
       releaseContinuousRender('cctv-adjust');
@@ -483,7 +491,7 @@ export function createLifecycle({
       parts.hover.clearHoverCard();
       parts.projection.clearProjectionOverlay();
       layerState._cctvOverlayHost.clearSource(CCTV_OVERLAY_SOURCE_ID);
-      parts.geometry.destroyCoverageEntities({retainMedia:true});
+      parts.geometry.destroyCoverageEntities({ retainMedia: true });
       for (const record of layerState._records) {
         record.billboard = null;
         record.coverageEntities = [];
@@ -536,7 +544,8 @@ export function createLifecycle({
       const activeRecord = parts.selection.getActiveRecord();
       if (activeRecord) {
         parts.projection.ensureProjectionRuntime(activeRecord);
-        if (refreshImage) parts.frames.refreshProjectionImage(activeRecord, true);
+        if (refreshImage)
+          parts.frames.refreshProjectionImage(activeRecord, true);
       }
       parts.rendering.refreshHorizonCulling();
       // Re-enabled mid-flight: moveStart has already fired.

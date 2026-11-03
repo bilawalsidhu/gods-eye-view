@@ -15,7 +15,10 @@ export function createLifecycle({
     init(viewer, options) {
       this.attachRenderer(viewer, options);
     },
-    attachRenderer(viewer, { engine = null, waitForCameraRestore = false } = {}) {
+    attachRenderer(
+      viewer,
+      { engine = null, waitForCameraRestore = false } = {},
+    ) {
       if (layerState._destroyed) return;
       if (layerState._renderer) return;
       layerState._renderer = config.renderer.create({
@@ -87,7 +90,8 @@ export function createLifecycle({
       this.showRenderer();
       if (!layerState._fires.length && !layerState._loading)
         await components.ingestion.loadHeatmap();
-      if (layerState._enabled && layerState._renderer === renderer) renderer.onEnable();
+      if (layerState._enabled && layerState._renderer === renderer)
+        renderer.onEnable();
     },
 
     disable() {

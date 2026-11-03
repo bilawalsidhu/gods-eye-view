@@ -47,7 +47,8 @@ const SCENE_PATH_RENDER_HOLD = 'bhote-koshi-scene-path-travel';
 const SCENE_MEDIA_MIN_PLAYBACK_SECONDS = 6;
 const SCENE_MEDIA_EXIT_SECONDS = 0.65;
 const BHOTE_EVENT_ACCENT = WORLD_OVERLAY_STYLE.accent;
-const FLOOD_COLOR = () => Cesium.Color.fromCssColorString('#d8954e').withAlpha(0.68);
+const FLOOD_COLOR = () =>
+  Cesium.Color.fromCssColorString('#d8954e').withAlpha(0.68);
 const SURGE_COLOR = () => Cesium.Color.fromCssColorString('#e8b47c');
 const CINEMATIC_INPUT_EVENTS = Object.freeze(['pointerdown', 'wheel']);
 const CINEMATIC_VIEW_SPECS = Object.freeze([

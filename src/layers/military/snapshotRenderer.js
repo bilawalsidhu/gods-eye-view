@@ -93,7 +93,11 @@ export function createMilitarySnapshotRenderer({
 
   function presentRecords() {
     for (const [id, meta] of records.data) {
-      const position = geo.cartesian3.fromDegrees(meta.rawLon, meta.rawLat, meta.renderAltitudeM);
+      const position = geo.cartesian3.fromDegrees(
+        meta.rawLon,
+        meta.rawLat,
+        meta.renderAltitudeM,
+      );
       presentContact(id, meta, position, null, false);
     }
   }
@@ -195,7 +199,8 @@ export function createMilitarySnapshotRenderer({
         }
       }
 
-      if (flightState._renderer) presentContact(icao24, meta, position, prevMeta, groundFlipped);
+      if (flightState._renderer)
+        presentContact(icao24, meta, position, prevMeta, groundFlipped);
       // Takeoff while TRACKED: ground traffic drew no trail, so start one
       // from the fresh airborne history (touchdown needs no action — the
       // append gate above simply freezes the existing trail).

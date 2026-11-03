@@ -71,7 +71,8 @@ export const DIRECTIONS_ROUTE_COLOR = '#39d0ff';
 const MARKER_A_COLOR = () => Cesium.Color.fromCssColorString('#5dff9f');
 const MARKER_B_COLOR = () => Cesium.Color.fromCssColorString('#ff6b6b');
 const STEP_COLOR = () => Cesium.Color.WHITE.withAlpha(0.95);
-const STEP_OUTLINE = () => Cesium.Color.fromCssColorString(DIRECTIONS_ROUTE_COLOR);
+const STEP_OUTLINE = () =>
+  Cesium.Color.fromCssColorString(DIRECTIONS_ROUTE_COLOR);
 const STEP_PIXEL_SIZE = 8;
 const STEP_SELECTED_PIXEL_SIZE = 13;
 /** Route request timeout (ms) — the proxy itself gives OSRM 12 s. */
@@ -859,7 +860,11 @@ export function normalizeRoutePayload(payload, mode) {
  * @param {{services: object, source: {getRoute: Function}}} options
  * @returns {object} The layer module the data manager registers.
  */
-export function createDirectionsLayer({ services, source, createNativeRenderer }) {
+export function createDirectionsLayer({
+  services,
+  source,
+  createNativeRenderer,
+}) {
   if (typeof source?.getRoute !== 'function')
     throw new TypeError('Directions require a route source');
   /**
@@ -970,10 +975,9 @@ export function createDirectionsLayer({ services, source, createNativeRenderer }
   }
 
   function pickGround(screenPosition) {
-    const cartesian = _native ? _engine.picker.pickGlobe(screenPosition) : services.scenePick.pickGroundPosition(
-      _viewer,
-      screenPosition,
-    );
+    const cartesian = _native
+      ? _engine.picker.pickGlobe(screenPosition)
+      : services.scenePick.pickGroundPosition(_viewer, screenPosition);
     if (!cartesian) return null;
     const carto = Cesium.Cartographic.fromCartesian(cartesian);
     if (!carto) return null;
@@ -1011,7 +1015,10 @@ export function createDirectionsLayer({ services, source, createNativeRenderer }
   }
 
   function removeEntity(entity) {
-    if (_native) { entity?.destroy(); return; }
+    if (_native) {
+      entity?.destroy();
+      return;
+    }
     if (entity && _viewer && !_viewer.isDestroyed?.())
       _viewer.entities.remove(entity);
   }
@@ -1099,10 +1106,13 @@ export function createDirectionsLayer({ services, source, createNativeRenderer }
   function drawRoute(route) {
     clearRouteGraphics();
     if (!_viewer && !_native) return;
-    if (_native) _routeEntity = _native.route(route.geometry, DIRECTIONS_ROUTE_COLOR);
+    if (_native)
+      _routeEntity = _native.route(route.geometry, DIRECTIONS_ROUTE_COLOR);
     else {
       services.annotations.ensureFlowFabricRegistered();
-      const positions = Cesium.Cartesian3.fromDegreesArray(route.geometry.flat());
+      const positions = Cesium.Cartesian3.fromDegreesArray(
+        route.geometry.flat(),
+      );
       _routeEntity = _viewer.entities.add({
         id: 'directions:route',
         polyline: {
@@ -1563,11 +1573,18 @@ export function createDirectionsLayer({ services, source, createNativeRenderer }
       if (_selectedStep !== null) _clearStepSelection();
     };
     if (_native) {
-      const off = _engine.input.on('click', event => handle({ position: event.position, picked: event.picked }), { pick: true });
+      const off = _engine.input.on(
+        'click',
+        (event) => handle({ position: event.position, picked: event.picked }),
+        { pick: true },
+      );
       _clickHandler = { destroy: off };
     } else {
       _clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      _clickHandler.setInputAction(handle, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      _clickHandler.setInputAction(
+        handle,
+        Cesium.ScreenSpaceEventType.LEFT_CLICK,
+      );
     }
     if (typeof document !== 'undefined')
       document.addEventListener('keydown', _onKeyDown);
@@ -1768,8 +1785,12 @@ export function createDirectionsLayer({ services, source, createNativeRenderer }
       if (_shellSeams && _suspendedFlight && _engine) {
         _suspendedFlight.floorFn = _shellSeams.floorFn;
         _suspendedFlight.warmFn = _shellSeams.warmFn;
-        if (services.camera.resumeRouteFlight(_suspendedFlight, _engine)) trackFlightProgress();
-        else { _flightId = 0; _flightStep = null; }
+        if (services.camera.resumeRouteFlight(_suspendedFlight, _engine))
+          trackFlightProgress();
+        else {
+          _flightId = 0;
+          _flightStep = null;
+        }
         _suspendedFlight = null;
       }
     },

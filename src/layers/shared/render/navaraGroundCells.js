@@ -2,15 +2,8 @@
 import { Effect, EffectAttribute } from 'postprocessing';
 import { Matrix4, Uniform } from 'three';
 import { rectangleFrame } from './navaraCellGeometry.js';
-import {
-  viewFrame,
-  groundClipBounds,
-} from './navaraGroundGeometry.js';
-import {
-  createGroundGrid,
-  GRID_COLS,
-  GRID_ROWS,
-} from './navaraGroundGrid.js';
+import { viewFrame, groundClipBounds } from './navaraGroundGeometry.js';
+import { createGroundGrid, GRID_COLS, GRID_ROWS } from './navaraGroundGrid.js';
 import {
   createGroundTexture,
   createGroundStorage,
@@ -269,26 +262,39 @@ function groundEffectClass(EffectDesc, NavaraEffect) {
 // The SDK allows one active effect per key. Compose enabled datasets in
 // catalog order so both can be drawn without replacing one another.
 const views = new WeakMap();
-export function createGroundCellDisplay(engine, { view, EffectDesc, NavaraEffect }, order) {
+export function createGroundCellDisplay(
+  engine,
+  { view, EffectDesc, NavaraEffect },
+  order,
+) {
   if (!registeredViews.has(view)) {
     view.registerEffect(KEY, groundEffectClass(EffectDesc, NavaraEffect));
     registeredViews.add(view);
   }
   let pass = views.get(view);
   if (!pass) {
-    pass = { inputs: new Set(), owner: { state: buildState([]) }, handle: null };
+    pass = {
+      inputs: new Set(),
+      owner: { state: buildState([]) },
+      handle: null,
+    };
     views.set(view, pass);
   }
   const input = { cells: [], visible: false, order };
   pass.inputs.add(input);
   function sync() {
-    const cells = [...pass.inputs].filter(item => item.visible)
-      .sort((a,b) => a.order - b.order).flatMap(item => item.cells);
+    const cells = [...pass.inputs]
+      .filter((item) => item.visible)
+      .sort((a, b) => a.order - b.order)
+      .flatMap((item) => item.cells);
     const previous = pass.owner.state;
     pass.owner.state = buildState(cells);
     try {
       if (!pass.handle && cells.length) {
-        pass.handle = view.addEffect({ [KEY]: { owner: pass.owner }, visible: true });
+        pass.handle = view.addEffect({
+          [KEY]: { owner: pass.owner },
+          visible: true,
+        });
       } else {
         pass.handle?.update({ visible: cells.length > 0 });
       }

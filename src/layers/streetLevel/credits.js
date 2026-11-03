@@ -11,7 +11,10 @@ export function createCredits() {
   function show(viewer, def) {
     if (shown.has(def.id)) return;
     if (viewer?.engine) {
-      shown.set(def.id, viewer.engine.credits.addStatic(def.credit.html, { onScreen: true }));
+      shown.set(
+        def.id,
+        viewer.engine.credits.addStatic(def.credit.html, { onScreen: true }),
+      );
       return;
     }
     if (!viewer?.creditDisplay) return;

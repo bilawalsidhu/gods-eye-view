@@ -266,7 +266,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         !layerState._points.has(id)
       )
         return false;
-      if (layerState._restoringViewport && layerState._trackedNorad === id) return true;
+      if (layerState._restoringViewport && layerState._trackedNorad === id)
+        return true;
       parts.tracking._cancelPendingTrackingRestore();
       parts.tracking._trackSatellite(id, { origin });
       return layerState._trackedNorad === id;

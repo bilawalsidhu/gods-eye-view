@@ -108,10 +108,17 @@ export function createWeatherLayer({
     clock ? clock.getState().mode === 'latest' : followLatest;
   const getHost = () =>
     sceneEngine?.kind === 'navara'
-      ? { kind: sceneEngine.maps.photorealActive() ? 'tileset' : 'globe', collection: sceneEngine }
-      : imageryHost?.() ?? { collection: viewer?.imageryLayers, kind: 'globe' };
+      ? {
+          kind: sceneEngine.maps.photorealActive() ? 'tileset' : 'globe',
+          collection: sceneEngine,
+        }
+      : (imageryHost?.() ?? {
+          collection: viewer?.imageryLayers,
+          kind: 'globe',
+        });
   const notify = () => listener?.();
-  const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time ?? lastShown);
+  const shownTime = () =>
+    noFrame ? null : (rendering?.getDiagnostics().time ?? lastShown);
   const unsubscribeClock = clock?.subscribe(() => {
     if (!clock.getState().playing || suspended()) rendering?.cancelPrefetch?.();
     notify();
@@ -298,23 +305,32 @@ export function createWeatherLayer({
       motion = matchMedia?.('(prefers-reduced-motion: reduce)');
       motion?.addEventListener?.('change', onVisibility);
       documentRef?.addEventListener?.('visibilitychange', onVisibility);
-      if (nextViewer || options.engine) layer.attachRenderer(nextViewer, options);
+      if (nextViewer || options.engine)
+        layer.attachRenderer(nextViewer, options);
     },
     attachRenderer(nextViewer, { engine = null } = {}) {
       viewer = nextViewer;
       sceneEngine = engine;
       const options = { viewer, cesium, getHost, onChange: notify };
-      rendering = engine?.kind === 'navara'
-        ? createNativeRendering(engine, options)
-        : createRendering(options);
+      rendering =
+        engine?.kind === 'navara'
+          ? createNativeRendering(engine, options)
+          : createRendering(options);
       checkHost(false);
-      eventTarget?.addEventListener?.('gev:map-stack-changed', onMapStackChanged);
+      eventTarget?.addEventListener?.(
+        'gev:map-stack-changed',
+        onMapStackChanged,
+      );
       rendering.setAlpha(opacity === 'light' ? 0.4 : satellite ? 0.7 : 0.8);
       if (!enabled) return;
       watchCamera();
       if (!manifest) return;
-      const time = clock && !isLatest() ? clock.selectFor(id, clock.getState().target) :
-        (followLatest ? manifest.latest : lastShown);
+      const time =
+        clock && !isLatest()
+          ? clock.selectFor(id, clock.getState().target)
+          : followLatest
+            ? manifest.latest
+            : lastShown;
       if (time) void show(time);
       else rendering.setHidden(true);
     },
@@ -326,7 +342,10 @@ export function createWeatherLayer({
       timer = null;
       removeCamera?.();
       removeCamera = null;
-      eventTarget?.removeEventListener?.('gev:map-stack-changed', onMapStackChanged);
+      eventTarget?.removeEventListener?.(
+        'gev:map-stack-changed',
+        onMapStackChanged,
+      );
       rendering?.clear();
       rendering = null;
       hostCollection = null;
@@ -622,7 +641,10 @@ export function createWeatherLayer({
           viewer?.scene?.globe?.ellipsoid,
         );
       const camera = point
-        ? cesium.Cartographic.fromCartesian(point, viewer?.scene?.globe?.ellipsoid)
+        ? cesium.Cartographic.fromCartesian(
+            point,
+            viewer?.scene?.globe?.ellipsoid,
+          )
         : null;
       const lon = camera ? cesium.Math.toDegrees(camera.longitude) : 0;
       const lat = camera ? cesium.Math.toDegrees(camera.latitude) : 0;

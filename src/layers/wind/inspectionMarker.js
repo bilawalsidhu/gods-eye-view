@@ -44,10 +44,12 @@ export function createWindInspectionMarker({
       )
         return;
       present({ owner, container, visible: false, left: 0, top: 0 });
-      const occluder = !engine && new cesium.EllipsoidalOccluder(
-        scene.globe?.ellipsoid || cesium.Ellipsoid.WGS84,
-        viewer.camera.positionWC,
-      );
+      const occluder =
+        !engine &&
+        new cesium.EllipsoidalOccluder(
+          scene.globe?.ellipsoid || cesium.Ellipsoid.WGS84,
+          viewer.camera.positionWC,
+        );
       const render = () => {
         if (!shown()) return;
         if (occluder) occluder.cameraPosition = viewer.camera.positionWC;
@@ -60,8 +62,10 @@ export function createWindInspectionMarker({
           point.y >= 0 &&
           point.x <= canvas.clientWidth &&
           point.y <= canvas.clientHeight &&
-          (engine ? engine.projector.horizonVisible(position) :
-            scene.mode !== cesium.SceneMode.SCENE3D || occluder.isPointVisible(position));
+          (engine
+            ? engine.projector.horizonVisible(position)
+            : scene.mode !== cesium.SceneMode.SCENE3D ||
+              occluder.isPointVisible(position));
         if (!visible) {
           // A hidden marker keeps its last place, as the element did.
           if (marker.visible) present({ visible: false });

@@ -355,7 +355,8 @@ export function createRendering({
     if (!cold.length) return;
     const owner = layerState.dataSource;
     warmFireAnchorFloors(cold).then(() => {
-      if (!layerState.enabled || !owner || layerState.dataSource !== owner) return;
+      if (!layerState.enabled || !owner || layerState.dataSource !== owner)
+        return;
       if (
         !cold.some((point) => cachedGroundFloor(point.lat, point.lon) != null)
       )

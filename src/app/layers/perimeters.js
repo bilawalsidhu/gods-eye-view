@@ -24,9 +24,16 @@ export function createApplicationFirePerimeters(options) {
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     screenSpaceEventHandlerFactory: (viewer) =>
       new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
-    createRenderer: ({viewer, engine, screenSpaceEventHandlerFactory}) => engine
-      ? rendererFor('fire-perimeters', engine, {viewer, screenSpaceEventHandlerFactory})
-      : createPerimetersCesiumRenderer({viewer, screenSpaceEventHandlerFactory}),
+    createRenderer: ({ viewer, engine, screenSpaceEventHandlerFactory }) =>
+      engine
+        ? rendererFor('fire-perimeters', engine, {
+            viewer,
+            screenSpaceEventHandlerFactory,
+          })
+        : createPerimetersCesiumRenderer({
+            viewer,
+            screenSpaceEventHandlerFactory,
+          }),
     picking,
     pointer: { isPointerFree },
     ...options,

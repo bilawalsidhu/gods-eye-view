@@ -30,10 +30,7 @@ export function createPackPresentations(
   let key,
     cards = [];
   function present() {
-    store.publish(
-      owner,
-      cards.length ? { key, container, cards } : null,
-    );
+    store.publish(owner, cards.length ? { key, container, cards } : null);
   }
   function addCard(pack) {
     if (!cards.length) key = ++panelKeys;
@@ -205,27 +202,35 @@ export function createPackPresentations(
       signal.throwIfAborted();
       if (image.naturalWidth * image.naturalHeight > 16 * 1024 * 1024)
         throw new Error('Image dimensions exceed limit');
-      handle.display(native => native ? native.image(pack,image,handle) : handle.primitive(
-        new Cesium.Primitive({
-          asynchronous: false,
-          geometryInstances: new Cesium.GeometryInstance({
-            id: { packId: pack.id },
-            geometry: new Cesium.RectangleGeometry({
-              rectangle: Cesium.Rectangle.fromDegrees(...pack.placement.bounds),
-              height: pack.placement.height,
-              vertexFormat:
-                Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
-            }),
-          }),
-          appearance: new Cesium.MaterialAppearance({
-            material: Cesium.Material.fromType('Image', { image }),
-            materialSupport: Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
-            flat: true,
-            faceForward: true,
-            translucent: true,
-          }),
-        }),
-      ));
+      handle.display((native) =>
+        native
+          ? native.image(pack, image, handle)
+          : handle.primitive(
+              new Cesium.Primitive({
+                asynchronous: false,
+                geometryInstances: new Cesium.GeometryInstance({
+                  id: { packId: pack.id },
+                  geometry: new Cesium.RectangleGeometry({
+                    rectangle: Cesium.Rectangle.fromDegrees(
+                      ...pack.placement.bounds,
+                    ),
+                    height: pack.placement.height,
+                    vertexFormat:
+                      Cesium.MaterialAppearance.MaterialSupport.TEXTURED
+                        .vertexFormat,
+                  }),
+                }),
+                appearance: new Cesium.MaterialAppearance({
+                  material: Cesium.Material.fromType('Image', { image }),
+                  materialSupport:
+                    Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
+                  flat: true,
+                  faceForward: true,
+                  translucent: true,
+                }),
+              }),
+            ),
+      );
     }),
     media: guarded(({ asset, pack, anchors }, handle) => {
       if (
@@ -243,16 +248,20 @@ export function createPackPresentations(
         (item) => item.id === pack.placement.anchorId,
       );
       if (!anchor) throw new Error('Missing media anchor');
-      handle.display(native => native ? native.media(pack,anchor,handle) : handle.add({
-        name: pack.id,
-        position: xyz([anchor.lon, anchor.lat, anchor.alt]),
-        point: { pixelSize: 16, color: Cesium.Color.YELLOW },
-        label: {
-          text: pack.id,
-          font: '14px sans-serif',
-          pixelOffset: new Cesium.Cartesian2(0, -24),
-        },
-      }));
+      handle.display((native) =>
+        native
+          ? native.media(pack, anchor, handle)
+          : handle.add({
+              name: pack.id,
+              position: xyz([anchor.lon, anchor.lat, anchor.alt]),
+              point: { pixelSize: 16, color: Cesium.Color.YELLOW },
+              label: {
+                text: pack.id,
+                font: '14px sans-serif',
+                pixelOffset: new Cesium.Cartesian2(0, -24),
+              },
+            }),
+      );
       handle.media({
         kind: asset.mimeType.startsWith('video/') ? 'video' : 'audio',
         src: handle.url(new Blob([asset.bytes], { type: asset.mimeType })),

@@ -102,7 +102,9 @@ export function createReticleFootprint() {
           dlon -= 360 * Math.round(dlon / 360);
           dx = dlon * 111.195 * Math.cos(nadir.latitude);
         } else {
-          const picked = engine ? camera.pickRay(p) : camera.getPickRay(p, (ray ??= new Cesium.Ray())) || ray;
+          const picked = engine
+            ? camera.pickRay(p)
+            : camera.getPickRay(p, (ray ??= new Cesium.Ray())) || ray;
           if (!picked) continue;
           const d = picked.direction;
           dx =

@@ -24,7 +24,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getCameraAltitude() {
-    const carto = layerState._engine?.camera.pose().cartographic ?? layerState._viewer?.camera.positionCartographic;
+    const carto =
+      layerState._engine?.camera.pose().cartographic ??
+      layerState._viewer?.camera.positionCartographic;
     return carto ? carto.height : Infinity;
   }
 
@@ -35,7 +37,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getViewBounds() {
-    const rect = layerState._engine?.camera.viewRectangle() ?? layerState._viewer?.camera.computeViewRectangle();
+    const rect =
+      layerState._engine?.camera.viewRectangle() ??
+      layerState._viewer?.camera.computeViewRectangle();
     if (!rect) return null;
     return {
       south: geo.math.toDegrees(rect.south),
@@ -60,18 +64,23 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getFetchCenter() {
-    const carto = layerState._engine?.camera.pose().cartographic ?? layerState._viewer?.camera.positionCartographic;
+    const carto =
+      layerState._engine?.camera.pose().cartographic ??
+      layerState._viewer?.camera.positionCartographic;
     if (!carto) return null;
     const nadirLat = geo.math.toDegrees(carto.latitude);
     const nadirLon = geo.math.toDegrees(carto.longitude);
 
     let hitLat;
     let hitLon;
-    const canvas = layerState._engine?.host.canvas ?? layerState._viewer.scene.canvas;
+    const canvas =
+      layerState._engine?.host.canvas ?? layerState._viewer.scene.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     if (width > 0 && height > 0) {
-      const hit = (layerState._engine?.camera ?? layerState._viewer.camera).pickEllipsoid(
+      const hit = (
+        layerState._engine?.camera ?? layerState._viewer.camera
+      ).pickEllipsoid(
         geo.cartesian2.create(width / 2, height / 2),
         Cesium.Ellipsoid.WGS84,
       );
@@ -174,7 +183,12 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
   /** Debounce camera events and sample the actual settled view, including final flight steps. */
   function onCameraChanged(options) {
-    if (!layerState._enabled || layerState._waitForScene || layerState._restoringViewport) return;
+    if (
+      !layerState._enabled ||
+      layerState._waitForScene ||
+      layerState._restoringViewport
+    )
+      return;
     clearTimeout(layerState._fetchTimeout);
     if (getCameraAltitude() > ACTIVATION_ALTITUDE) {
       clearTimeout(layerState._retryTimer);
@@ -197,10 +211,19 @@ export function createViewport({ state: layerState, services, parts, source }) {
       : null;
     layerState._fetchTimeout = setTimeout(
       () => {
-        if (!layerState._enabled || layerState._waitForScene || layerState._restoringViewport) return;
+        if (
+          !layerState._enabled ||
+          layerState._waitForScene ||
+          layerState._restoringViewport
+        )
+          return;
         const alt = getCameraAltitude();
         if (alt > ACTIVATION_ALTITUDE) return onCameraChanged();
-        const footprint = reticleFootprint(layerState._viewer, alt, layerState._engine);
+        const footprint = reticleFootprint(
+          layerState._viewer,
+          alt,
+          layerState._engine,
+        );
         const bounds = footprint || getViewBounds();
         if (!bounds) return;
         const center = footprint ? null : getFetchCenter();

@@ -680,10 +680,18 @@ test('advisories delivered between scenes keep a deliberate selection without an
   let reads = 0;
   const drawn = [];
   const layer = createCyclonesLayer({
-    feed: { getSnapshot: () => ++reads === 1 ? snapshot([storm()]) : pending.promise },
+    feed: {
+      getSnapshot: () =>
+        ++reads === 1 ? snapshot([storm()]) : pending.promise,
+    },
     createRendering: () => ({
-      setSnapshot(next) { drawn.push(next.storms.map(s=>s.advisoryNumber)); return true; },
-      setSelection() {}, clear() {}, destroy() {},
+      setSnapshot(next) {
+        drawn.push(next.storms.map((s) => s.advisoryNumber));
+        return true;
+      },
+      setSelection() {},
+      clear() {},
+      destroy() {},
     }),
   });
   layer.init({});
@@ -692,11 +700,11 @@ test('advisories delivered between scenes keep a deliberate selection without an
   layer.setParams({ stormId: 'ep152026' });
   const refresh = layer.update();
   layer.detachRenderer();
-  pending.resolve(snapshot([{...storm(), advisoryNumber: '11'}]));
+  pending.resolve(snapshot([{ ...storm(), advisoryNumber: '11' }]));
   await refresh;
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
   await layer.attachRenderer({});
-  assert.deepEqual(drawn, [['10'],['11']]);
+  assert.deepEqual(drawn, [['10'], ['11']]);
   assert.equal(reads, 2);
   layer.destroy();
 });

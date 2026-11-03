@@ -144,8 +144,7 @@ export const HEAT_JAM_COLOR = rgbaFromCss('#e05252');
 
 /** @const {Cesium.Color} Slow corridor color (bucket amber, faint + static). */
 
-export const HEAT_SLOW_COLOR =
-  rgbaFromCss('#f0b23e').withAlpha(0.2);
+export const HEAT_SLOW_COLOR = rgbaFromCss('#f0b23e').withAlpha(0.2);
 
 /** @const {number} Far-distance scale floor for jam dots (shipped: 0.3). */
 

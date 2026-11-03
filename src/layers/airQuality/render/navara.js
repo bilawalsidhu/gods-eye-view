@@ -35,8 +35,17 @@ function stationFeature(reading, radius) {
 /** One native GeoJSON layer per AQHI colour, independent of station count. */
 export function createAirQualityNavaraRenderer(engine, { view }) {
   const display = createNavaraPolygonDisplay(engine, view, (color, show) => ({
-    polygon: {color, show, transparent: true, opacity: 0.35, clampToGround: true,
-      outline: true, outlineShow: true, outlineColor: color, outlineWidth: 2},
+    polygon: {
+      color,
+      show,
+      transparent: true,
+      opacity: 0.35,
+      clampToGround: true,
+      outline: true,
+      outlineShow: true,
+      outlineColor: color,
+      outlineWidth: 2,
+    },
   }));
   return {
     viewRectangle: () => engine.camera.viewRectangle(),

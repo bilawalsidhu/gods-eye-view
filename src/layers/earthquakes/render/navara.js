@@ -199,7 +199,12 @@ function buildState(discs) {
 function groundEffectClass(EffectDesc, NavaraEffect) {
   return class GroundEffectDesc extends EffectDesc {
     static key = KEY;
-    static insertAfter = ['gevObservedWeather', 'gevNepalEvent', 'gevRecentImagery', 'toneMapping'];
+    static insertAfter = [
+      'gevObservedWeather',
+      'gevNepalEvent',
+      'gevRecentImagery',
+      'toneMapping',
+    ];
     static insertBefore = [
       'gevFirmsGround',
       'gevPreSharpenOverlay',
