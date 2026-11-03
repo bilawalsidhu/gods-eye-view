@@ -1456,13 +1456,16 @@ the low-confidence pose, and `None` or an unknown value uses the shared id-hash
 fallback; both stay marked as estimated.
 Gate: `src/data/cctvHouston.test.mjs`.
 
-TranStar's disclaimer prohibits redistribution and external framing of specific
-images without TxDOT's written permission, so the pack is off unless
-`CCTV_HOUSTON_ENABLED=1`. Opting in loads the 250 cameras nearest downtown,
-Uptown, the Medical Center, IAH and Galveston. `CCTV_HOUSTON_MAX_SOURCES` sets
-the pack cap (8–400). Snapshots update about every 3 minutes. The catalog-wide
-ceiling stays at 4,000 and is shared round-robin, so adding this pack does not
-silently drop another region.
+TranStar's Content Usage terms (https://traffic.houstontranstar.org/disclaimer.aspx)
+prohibit copying, distribution and external framing of specific images without
+TxDOT's prior written permission. The pack is off by default; operators should
+set `CCTV_HOUSTON_ENABLED=1` only if they hold that permission. Frames are
+fetched and relayed on demand, buffered only transiently per request, sent with
+`Cache-Control: no-store`, and not archived. Once enabled, it loads the 250
+cameras nearest downtown, Uptown, the Medical Center, IAH and Galveston.
+`CCTV_HOUSTON_MAX_SOURCES` sets the pack cap (8–400). Snapshots update about
+every 3 minutes. The catalog-wide ceiling stays at 4,000 and is shared
+round-robin, so adding this pack does not silently drop another region.
 
 ## Location control ownership
 

@@ -321,8 +321,10 @@ export const DATA_CREDITS = [
   {
     key: 'houston-cctv',
     html:
-      'CCTV cameras &amp; frames (Houston): ' +
-      '<a href="https://traffic.houstontranstar.org/cctv/transtar/" target="_blank" rel="noopener">Houston TranStar</a>',
+      'CCTV cameras &amp; frames (Houston, when enabled): ' +
+      '<a href="https://traffic.houstontranstar.org/cctv/transtar/" target="_blank" rel="noopener">Houston TranStar</a>. ' +
+      "Copying, distributing or framing its images needs TxDOT's written permission under the " +
+      '<a href="https://traffic.houstontranstar.org/disclaimer.aspx" target="_blank" rel="noopener">TranStar Content Usage terms</a>',
   },
   {
     key: 'hk-cctv',
