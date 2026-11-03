@@ -44,6 +44,14 @@ pinching traverses globe and street scales with fewer gestures. Cesium retains
 its distance-aware zoom, collision handling and minimum/maximum distance limits.
 Fine-pointer desktop mouse and trackpad sensitivity is unchanged.
 
+User zoom stops at 40,000 km above the surface, a whole-Earth view; camera
+flights, share links and story views are not limited. Above 300 km, a
+wheel, pinch or right-drag zoom-out from a shallow, tilted view pitches the
+camera down as it climbs, keeping the view at least 8° below the Earth's limb,
+so the globe stays on screen instead of sliding off into space. Oblique views
+below 300 km, zooming in, tilting by drag, tracked entities, cockpit tracking
+and camera flights are left alone.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for

@@ -2274,6 +2274,7 @@
       "src/app/layers/traffic.js",
       "src/app/operations.js",
       "src/app/scene.js",
+      "src/app/zoomOutGuard.js",
       "src/sources/sourceSlot.js",
       "src/app/sources.js",
       "src/app/startupChrome.js",
