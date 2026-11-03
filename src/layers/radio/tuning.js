@@ -214,7 +214,7 @@ export function createTuning({ state: layerState, services, parts, source }) {
     layerState._playFallbackFocus = null;
     layerState._playFallbackOrigin = 'programmatic';
     layerState._playFallbackAttemptId = null;
-    // Static covers only a connecting stream; a silent release frees the noise graph.
+    // Muting alone would leave the noise graph running after a silent release.
     if (autoplay) parts.tuningNoise.syncTuningNoiseGain();
     else parts.tuningNoise.clearRadioTuningNoise({ emit: false });
     parts.presentation.emitState();

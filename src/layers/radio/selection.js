@@ -181,7 +181,7 @@ export function createSelection({
       current < 0
         ? 0
         : (current + (direction < 0 ? -1 : 1) + ranked.length) % ranked.length;
-    // Voice defers playback, so its silent step needs a fallback; UI steps do not.
+    // Voice defers playback, so its silent step keeps a fallback; silent UI steps do not.
     const fallbackId =
       fallback && ranked.length > 1
         ? ranked[(nextIndex + 1) % ranked.length].id

@@ -272,7 +272,10 @@ test('a dial release plays only if a stream was active when the drag began', asy
   });
 });
 
-// Records the tuner noise graph so a test can see whether it was released.
+// Like Chrome, resume() flips `state` only once the device starts, and suspend()
+// on a context that is still suspended resolves at once without effect.
+const RESUME_MS = 5;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function withFakeAudioContext(body) {
   const log = { contexts: [], sources: [] };
   const node = () => ({ connect() {}, disconnect() {} });
@@ -281,8 +284,17 @@ function withFakeAudioContext(body) {
       Object.assign(this, { state: 'suspended', sampleRate: 8000, currentTime: 0, destination: {} });
       log.contexts.push(this);
     }
-    resume() { this.state = 'running'; return Promise.resolve(); }
-    suspend() { this.state = 'suspended'; return Promise.resolve(); }
+    resume() {
+      if (this.state === 'running') return Promise.resolve();
+      return new Promise((resolve) => setTimeout(() => {
+        if (this.state !== 'closed') this.state = 'running';
+        resolve();
+      }, RESUME_MS));
+    }
+    suspend() {
+      if (this.state === 'running') this.state = 'suspended';
+      return Promise.resolve();
+    }
     close() { this.state = 'closed'; return Promise.resolve(); }
     createBuffer(_channels, length) { return { getChannelData: () => new Float32Array(length) }; }
     createBufferSource() {
@@ -303,18 +315,103 @@ function withFakeAudioContext(body) {
   });
 }
 
-test('a silent dial release stops the tuner noise and suspends its audio context', async () => {
+test('a silent dial release stops the tuner noise and suspends its audio context, even before resume() settles', async () => {
   await withFakeAudioContext(async ({ contexts, sources }) => {
     await withLayer([], async ({ playUrls }) => {
       radioLayer.selectStation(ids[0], { autoplay: false });
       assert.equal(radioLayer.beginTuning(), true);
       radioLayer.previewTuningStation(ids[1], { rotate: false });
       assert.equal(radioLayer.commitTuningStation(ids[1], { origin: 'user' }).ok, true);
-      await settle();
+      await sleep(RESUME_MS * 4);
       assert.deepEqual(playUrls, []);
       assert.equal(sources[0].started, true);
       assert.equal(sources[0].stopped, true, 'noise source still looping');
       assert.equal(contexts[0].state, 'suspended', 'audio context still running');
     });
+  });
+});
+
+test('a second gesture before the first resume() settles keeps its noise graph', async () => {
+  await withFakeAudioContext(async ({ contexts, sources }) => {
+    await withLayer([], async () => {
+      radioLayer.selectStation(ids[0], { autoplay: false });
+      radioLayer.beginTuning();
+      radioLayer.commitTuningStation(ids[0], { origin: 'user' });
+      assert.equal(radioLayer.beginTuning(), true);
+      await sleep(RESUME_MS * 4);
+      assert.equal(contexts[0].state, 'running', 'second gesture lost its context');
+      assert.equal(sources.at(-1).stopped, false, 'second gesture lost its source');
+      radioLayer.commitTuningStation(ids[1], { origin: 'user' });
+      await sleep(RESUME_MS * 4);
+      assert.equal(sources.at(-1).stopped, true);
+      assert.equal(contexts[0].state, 'suspended');
+    });
+  });
+});
+
+test('a dial release from a paused stream only selects, without static', async () => {
+  await withFakeAudioContext(async ({ contexts }) => {
+    await withLayer([], async ({ playUrls }) => {
+      radioLayer.selectStation(ids[0], { autoplay: true, origin: 'user' });
+      await settle();
+      await radioLayer.togglePlayback({ origin: 'user' });
+      assert.equal(radioLayer.getUIState().audioState, 'paused');
+      assert.equal(radioLayer.beginTuning(), true);
+      await sleep(RESUME_MS * 4);
+      radioLayer.previewTuningStation(ids[1], { rotate: false });
+      radioLayer.commitTuningStation(ids[1], { origin: 'user' });
+      await sleep(RESUME_MS * 4);
+      const state = radioLayer.getUIState();
+      assert.deepEqual(playUrls, [stations[0].streamUrl]);
+      assert.equal(state.selected?.id, ids[1]);
+      assert.equal(state.audioState, 'stopped');
+      assert.equal(state.tuningStatic, false);
+      assert.equal(state.tuningAwaitingStationId, null);
+      assert.equal(contexts[0].state, 'suspended');
+    });
+  });
+});
+
+test('a dial release while a stream is still connecting plays the new station', async () => {
+  await withLayer([], async ({ playUrls }) => {
+    radioLayer.selectStation(ids[0], { autoplay: true, origin: 'user' });
+    assert.equal(radioLayer.getUIState().audioState, 'loading');
+    assert.equal(radioLayer.beginTuning(), true);
+    radioLayer.previewTuningStation(ids[1], { rotate: false });
+    radioLayer.commitTuningStation(ids[1], { origin: 'user' });
+    await settle();
+    const state = radioLayer.getUIState();
+    assert.equal(playUrls.at(-1), stations[1].streamUrl);
+    assert.equal(state.audioState, 'playing');
+    assert.equal(state.playingStationId, ids[1]);
+  });
+});
+
+test('a silent user step drops the fallback a voice step left behind', async () => {
+  await withLayer(stations.map(({ streamUrl }) => streamUrl), async ({ playUrls }) => {
+    radioLayer.selectStation(ids[0], { autoplay: false });
+    // Voice steps to B and keeps C as its fallback; the user steps back to A.
+    radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, fallback: true, origin: 'voice' });
+    radioLayer.cycleStation(-1, { stationIds: ids, autoplay: false, origin: 'user' });
+    await radioLayer.play({ origin: 'voice' });
+    await settle();
+    await settle();
+    assert.deepEqual(playUrls, [stations[0].streamUrl]);
+    assert.equal(radioLayer.getUIState().audioState, 'error');
+  });
+});
+
+test('a silent dial release drops the fallback a voice step left behind', async () => {
+  await withLayer(stations.map(({ streamUrl }) => streamUrl), async ({ playUrls }) => {
+    radioLayer.selectStation(ids[0], { autoplay: false });
+    radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, fallback: true, origin: 'voice' });
+    assert.equal(radioLayer.beginTuning(), true);
+    radioLayer.previewTuningStation(ids[0], { rotate: false });
+    radioLayer.commitTuningStation(ids[0], { origin: 'user' });
+    await radioLayer.play({ origin: 'voice' });
+    await settle();
+    await settle();
+    assert.deepEqual(playUrls, [stations[0].streamUrl]);
+    assert.equal(radioLayer.getUIState().audioState, 'error');
   });
 });

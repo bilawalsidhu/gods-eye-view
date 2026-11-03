@@ -4703,11 +4703,11 @@ ownership tokens plus the session boundary keep late callbacks from a retired
 session inert.
 A tuner drag resolves previews against the single accepted snapshot captured at
 pointer-down, even while a newer catalog is admitted. Like Previous/Next,
-release starts playback only if a stream was active when the drag began, and
-only when the current same-ID record still exactly matches the frozen
-presentation and stream metadata; otherwise it just selects the station. Removal
-or replacement reports the channel as unavailable and never silently retargets
-the drag. A cold degraded fallback may
+release starts playback only if a stream was active when the drag began;
+otherwise it just selects the station. It commits only when the current same-ID
+record still exactly matches the frozen presentation and stream metadata.
+Removal or replacement reports the channel as unavailable and never silently
+retargets the drag. A cold degraded fallback may
 still populate the directory and globe, but its null accepted generation cannot
 populate or begin the tuner.
 
