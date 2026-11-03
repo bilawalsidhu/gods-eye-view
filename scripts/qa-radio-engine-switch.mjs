@@ -5,6 +5,11 @@ import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { switchGlobe } from './qa-switch-globe.mjs';
 const url = new URL(process.argv[2]);
 const soak = process.argv.includes('--soak');
+const requested = process.argv.find((arg) => arg.startsWith('--swaps='));
+const swaps = requested ? Number(requested.slice(8)) : soak ? 50 : 2;
+if (requested && (!soak || !Number.isInteger(swaps) || swaps % 2 || swaps < 4 || swaps > 1000))
+  throw Error('Use --soak --swaps=N with an even count from 4 to 1000');
+
 if (
   !['localhost', '127.0.0.1'].includes(url.hostname) ||
   ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
@@ -78,7 +83,7 @@ try {
     window.qaModels = new Map([...dataManager.layers].map(([id, entry]) => [id, entry.module]));
     window.qaEngines = new Map([[engine.kind, engine]]);
   });
-  const swaps = soak ? 50 : 2, measurements = [], memory = [];
+  const measurements = [], memory = [];
   let contextListeners;
   for (let i = 1; i <= swaps; i++) {
     const kind = i % 2 ? 'cesium' : 'navara';
@@ -96,7 +101,7 @@ try {
           window.qaModels.size === 33 && window.qaQuakeReads >= 1 &&
           dataManager.getEnabledLayerIds().has('earthquakes');
       }));
-      if ([2, 10, 50].includes(i)) {
+      if ([2, 10, 50, 100, 250, swaps].includes(i)) {
         const { result } = await client.send('Runtime.evaluate', {
           includeCommandLineAPI: true,
           returnByValue: true,

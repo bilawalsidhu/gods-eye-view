@@ -266,14 +266,41 @@ try {
     await manager.setEnabled('weather-cyclones', true, {origin:'user'});
     window.qaStorm = manager.layers.get('weather-cyclones').module;
   },ids);
-  const click = async (lon,lat) => {
-    const at = await p.evaluate(position => {
-      const {engine} = window.__godsEyeView;
-      const xy = engine.projector.worldToWindow(position,{});
-      const rect = engine.host.canvas.getBoundingClientRect();
-      return [rect.left+xy.x,rect.top+xy.y];
-    },fromDegrees(lon,lat));
-    await p.mouse.click(...at);
+  const click = async (lon, lat, insideCone) => {
+    const hit = await p.waitForFunction(
+      ({ lon, lat, base, insideCone }) => {
+        const { engine } = window.__godsEyeView;
+        const longitude = (lon * Math.PI) / 180,
+          latitude = (lat * Math.PI) / 180;
+        const height =
+          engine.surface.terrainHeight({ longitude, latitude, height: 0 }) ?? 0;
+        const xy = engine.projector.worldToWindow(
+          {
+            x: base.x + height * Math.cos(latitude) * Math.cos(longitude),
+            y: base.y + height * Math.cos(latitude) * Math.sin(longitude),
+            z: base.z + height * Math.sin(latitude),
+          },
+          {},
+        );
+        if (!xy) return false;
+        const canvas = engine.host.canvas,
+          rect = canvas.getBoundingClientRect();
+        const x = rect.left + xy.x,
+          y = rect.top + xy.y;
+        if (document.elementFromPoint(x, y) !== canvas) return false;
+        const id = engine.picker.pick(xy)?.id;
+        if (
+          String(id?.id ?? id).startsWith('cyclone:al012026:cone:') !==
+          insideCone
+        )
+          return false;
+        return [x, y];
+      },
+      { timeout: 30000 },
+      { lon, lat, base: fromDegrees(lon, lat), insideCone },
+    );
+    await p.mouse.click(...(await hit.jsonValue()));
+    await hit.dispose();
   };
   const before = cycloneReads;
   for (const kind of ['navara','cesium','navara']) {
@@ -285,10 +312,9 @@ try {
       window.qaStorm.getDiagnostics().selectedId === 'al012026');
     const d = await p.evaluate(()=>window.qaStorm.getDiagnostics());
     assert.deepEqual([d.storms,d.tracks,d.cones,d.forecastPoints],[1,1,1,1],kind);
-    await new Promise(r => setTimeout(r,1200));
-    await click(-79.43,43.59);
+    await click(-79.43,43.59,false);
     await p.waitForFunction(()=>window.qaStorm.getDiagnostics().selectedId === null);
-    await click(-79.30,43.643);
+    await click(-79.30,43.643,true);
     await p.waitForFunction(()=>window.qaStorm.getDiagnostics().selectedId === 'al012026');
     assert.equal(cycloneReads,before);
     console.log('PASS',kind,'pick advisory cone and retain selected storm');
