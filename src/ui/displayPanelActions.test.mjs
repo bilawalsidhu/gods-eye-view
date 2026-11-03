@@ -10,13 +10,15 @@ import { useDisplayStore } from './stores/display.js';
 import { DisplayBindings } from './displayBindings.js';
 import CommandDockView from './views/CommandDockView.vue';
 import DisplayControlsView from './views/DisplayControlsView.vue';
+import DrawControls from './views/panels/DrawControls.vue';
 
 function mount(t) {
   document.body.replaceChildren();
   const pinia = createPinia();
   const store = useDisplayStore(pinia);
   const app = createApp({
-    render: () => [h(DisplayControlsView), h(CommandDockView)],
+    // Draw sits in UTILITIES now; it answers through the same store.
+    render: () => [h(DisplayControlsView), h(CommandDockView), h(DrawControls)],
   }).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
   t.after(() => app.unmount());
@@ -102,13 +104,11 @@ test('the Draw controls call the draw tool and show what it publishes', async (t
   const { calls } = recorder(store);
   $('draw-toggle').click();
   document.querySelector('[data-shape="pin"]').click();
-  input($('draw-label-input'), 'Camp');
-  input($('draw-color-select'), 'red', 'change');
+  document.querySelector('#draw-colors [data-color="red"]').click();
   $('draw-clear').click();
   assert.deepEqual(calls, [
     ['toggleDraw'],
     ['setDrawShape', 'pin'],
-    ['setDrawLabel', 'Camp'],
     ['setDrawColor', 'red'],
     ['clearDraw'],
   ]);
@@ -116,15 +116,16 @@ test('the Draw controls call the draw tool and show what it publishes', async (t
     active: true,
     shape: 'line',
     color: 'green',
-    label: '',
     hint: 'Click to add points.',
+    marks: [],
   });
   await nextTick();
   const line = document.querySelector('[data-shape="line"]');
   assert.equal(line.getAttribute('aria-checked'), 'true');
   assert.ok(line.classList.contains('active'));
-  assert.equal($('draw-color-select').value, 'green');
-  assert.equal($('draw-label-input').value, '', 'a finished shape empties it');
+  const green = document.querySelector('#draw-colors [data-color="green"]');
+  assert.equal(green.getAttribute('aria-checked'), 'true');
+  assert.ok(green.classList.contains('active'));
   assert.equal($('draw-hint').textContent, 'Click to add points.');
   assert.equal($('draw-toggle').getAttribute('aria-pressed'), 'true');
 });

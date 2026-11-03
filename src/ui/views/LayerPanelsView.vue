@@ -11,6 +11,8 @@ import SceneOptions from './SceneOptions.vue';
 import SceneShotList from './SceneShotList.vue';
 import CctvPanel from './panels/CctvPanel.vue';
 import StreetLevelPanel from './panels/StreetLevelPanel.vue';
+import DrawControls from './panels/DrawControls.vue';
+import GeoImport from './panels/GeoImport.vue';
 import UiSelect from '../kit/UiSelect.js';
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
@@ -41,6 +43,12 @@ async function importChosen(event) {
   <!-- Data Layer Toggle Panel -->
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
     <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
+  </RailPanel>
+
+  <!-- Utilities: Directions (LayerPanel renders its row here), Draw, Import -->
+  <RailPanel id="utilities-panel" start-collapsed :title="t('UTILITIES')" :hint="t('Directions, drawing and your own files')" scroll>
+    <div id="utilities-toggles" class="data-toggle-list utilities-list"></div>
+    <div class="utilities-tools"><DrawControls /><GeoImport /></div>
   </RailPanel>
 
   <!-- CCTV Coverage Panel -->
