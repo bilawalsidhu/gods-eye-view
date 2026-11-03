@@ -1,26 +1,16 @@
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=43.6500&lon=-79.3800&alt=2000000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
-});
-try {
+// The fixture field is uniform, so the GPU seeds a fixed particle count.
+const WIND_PATHS = 7200;
+const strict = createStrict({ origin: base.origin, layers: ['wind'] });
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -83,7 +73,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -113,7 +103,7 @@ try {
   const baseline = reads.length;
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await p.select('#globe-engine', kind);
+      await strict.pick(p, kind);
       await ready(kind);
     }
     await p.waitForFunction(
@@ -133,11 +123,27 @@ try {
         reading: mod.getRowControls().summary.reading,
       };
     });
-    assert.equal(check.same, true);
-    assert.equal(check.params.paused, true);
-    assert.ok(check.gpu > 1000);
-    assert.equal(check.reading.scalarValue, '40.0 °C');
-    assert.equal(check.reading.from, 'SW');
+    await strict.check(p, 'wind', 'same wind model', check.same === true);
+    await strict.check(
+      p,
+      'wind',
+      'paused parameter retained',
+      check.params.paused === true,
+    );
+    await strict.check(
+      p,
+      'wind',
+      `${WIND_PATHS} GPU paths`,
+      check.gpu === WIND_PATHS,
+      check.gpu,
+    );
+    await strict.check(
+      p,
+      'wind',
+      'point reading 40.0 °C from SW',
+      check.reading.scalarValue === '40.0 °C' && check.reading.from === 'SW',
+      check.reading,
+    );
     const sample = await sharp(await p.screenshot())
       .extract({ left: 530, top: 390, width: 24, height: 24 })
       .removeAlpha()
@@ -149,22 +155,40 @@ try {
       return sum / (sample.length / 3);
     });
     console.log(kind, check.gpu, check.reading.wind, [r, g, b]);
-    assert.ok(
+    await strict.check(
+      p,
+      'wind',
+      'temperature field visible',
       r > g * 1.35 && r > b * 1.35,
-      kind + ' temperature field visible',
+      [r, g, b],
     );
-    assert.equal(reads.length, baseline);
+    await strict.check(
+      p,
+      'wind',
+      'no forecast grid read on the switch',
+      reads.length === baseline,
+      reads.length - baseline,
+    );
   }
   await p.evaluate(() => window.qaWind.setParams({ paused: false }));
-  await p.waitForFunction(() => window.qaWind.getDiagnostics().gpu.phaseSeconds > 0.2);
+  await p.waitForFunction(
+    () => window.qaWind.getDiagnostics().gpu.phaseSeconds > 0.2,
+  );
   await p.evaluate(() => window.qaWind.setParams({ paused: true }));
-  const frozen = await p.evaluate(() => window.qaWind.getDiagnostics().gpu.phaseSeconds);
+  const frozen = await p.evaluate(
+    () => window.qaWind.getDiagnostics().gpu.phaseSeconds,
+  );
   await new Promise((resolve) => setTimeout(resolve, 250));
-  assert.equal(await p.evaluate(() => window.qaWind.getDiagnostics().gpu.phaseSeconds), frozen);
+  await strict.check(
+    p,
+    'wind',
+    'pause freezes the particle phase',
+    (await p.evaluate(
+      () => window.qaWind.getDiagnostics().gpu.phaseSeconds,
+    )) === frozen,
+  );
   assert.deepEqual(errors, []);
   console.log(
     'PASS retained forecast grid, pause, temperature field and sampled wind on both engines',
   );
-} finally {
-  await b.close();
-}
+});

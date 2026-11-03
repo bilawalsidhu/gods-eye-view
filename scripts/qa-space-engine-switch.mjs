@@ -1,30 +1,21 @@
 import assert from 'node:assert/strict';
-import puppeteer from 'puppeteer';
 import { launchFixture } from '../src/bench/launchFixture.js';
 import {
   satelliteFixture,
   SATELLITE_FIXTURE_EPOCH,
 } from '../src/bench/satelliteFixture.js';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
-import { switchGlobe } from './qa-switch-globe.mjs';
-const url = new URL(process.argv[2]),
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
+const url = localPreview(process.argv[2]),
   missions = process.argv.includes('--missions');
-if (
-  !['localhost', '127.0.0.1'].includes(url.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    url.port,
-  )
-)
-  throw Error('Supply local keyless preview URL');
 url.search = '?engine=navara&welcome=0';
 url.hash = 'v=2&lat=5&lon=5&alt=18000000&pitch=-90&heading=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+const layer = missions ? 'rocket-launches' : 'satellites';
+const strict = createStrict({
+  origin: url.origin,
+  layers: [missions ? 'rocket-launches' : 'satellites'],
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   const errors = [];
   p.on('pageerror', (e) => {
     errors.push(e.message);
@@ -68,7 +59,7 @@ try {
   await p.goto(url.href);
   await p.waitForFunction(
     () =>
-      window.__godsEyeView?.engine.kind === 'navara' &&
+      window.__godsEyeView?.engine?.kind === 'navara' &&
       document.querySelector('#loading-screen.hidden'),
   );
   await p.evaluate(async (missions) => {
@@ -127,8 +118,28 @@ try {
     before.mission,
     before.replay?.active,
   );
+  // Each source read exactly once: the seven TLE groups of the dense
+  // catalog; in Space Missions the launch list and every TLE group the
+  // mission view asks for.
+  const groupPaths = Object.keys(groups).map((g) => '/api/celestrak/' + g);
+  const readsOnce = async () => {
+    const reads = await p.evaluate(() => ({ ...window.spaceReads }));
+    await strict.check(
+      p,
+      layer,
+      missions
+        ? 'the launch list and each TLE group read exactly once'
+        : 'each of the seven TLE groups read exactly once',
+      Object.values(reads).every((n) => n === 1) &&
+        (missions
+          ? reads['/api/launches'] === 1
+          : Object.keys(reads).sort().join() === [...groupPaths].sort().join()),
+      reads,
+    );
+  };
+  await readsOnce();
   for (const kind of ['cesium', 'navara']) {
-    await switchGlobe(p, kind);
+    await strict.switchTo(p, kind);
     const state = await p.evaluate(() => {
       const { dataManager, engine, styleManager } = window.__godsEyeView;
       return {
@@ -174,6 +185,14 @@ try {
       assert.ok(state.follow && state.ring > 0);
       assert.equal(state.sat.lastUpdate, before.stamp);
     }
+    await strict.passed(
+      p,
+      layer,
+      missions
+        ? 'same models; Space Missions mode, the same mission paused at the same progress, speed 4'
+        : 'same models; 6 839 objects, the ISS tracked with its ring, same update stamp',
+    );
+    await readsOnce();
   }
   if (missions) {
     await p.evaluate(() => window.la.toggleReplayPause());
@@ -183,9 +202,12 @@ try {
       {},
       before.replay.phaseProgress,
     );
-    await switchGlobe(p, 'cesium');
+    await strict.switchTo(p, 'cesium');
     const moving = await p.evaluate(() => window.la.qaDrawn());
-    assert.ok(
+    await strict.check(
+      p,
+      layer,
+      'a running replay keeps advancing through the switch',
       moving.replay?.active &&
         !moving.paused &&
         moving.replay.phaseProgress > before.replay.phaseProgress,
@@ -203,6 +225,4 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log('PASS retained space data and active camera across both planets');
-} finally {
-  await b.close();
-}
+});

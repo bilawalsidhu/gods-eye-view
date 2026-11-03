@@ -1,25 +1,13 @@
-import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=41.5340&lon=-90.5070&alt=20000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
-});
-try {
+const strict = createStrict({ origin: base.origin, layers: ['local-adsb'] });
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -32,6 +20,8 @@ try {
       const url = new URL(input?.url ?? input, location.href);
       if (url.pathname === '/api/local-receivers/aircraft') {
         const at = Date.now();
+        // Each poll reports the aircraft a little further north.
+        const n = (window.qaAdsbPolls = (window.qaAdsbPolls ?? 0) + 1);
         return Promise.resolve(
           Response.json({
             configured: true,
@@ -40,14 +30,14 @@ try {
               {
                 icao: 'abc123',
                 callsign: 'LOCAL1',
-                lat: 41.534,
+                lat: 41.534 + 0.0002 * n,
                 lon: -90.507,
                 altitudeFt: 11000,
                 groundSpeedKt: 180,
                 trackDeg: 5,
                 lastPositionAt: at,
                 lastMessageAt: at,
-                messageCount: 12,
+                messageCount: 12 + n,
                 band: '1090',
                 source: 'decoder',
               },
@@ -66,7 +56,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -112,7 +102,7 @@ try {
     await p.evaluate(() => {
       window.qaSelections = [];
     });
-    await p.select('#globe-engine', kind);
+    await strict.pick(p, kind);
     await ready(kind);
     await p.waitForFunction(() =>
       window.qaSelections.includes('local-adsb:abc123'),
@@ -133,11 +123,34 @@ try {
       ];
     });
     assert.deepEqual(result, [true, true, true, true, 'abc123', 1, 0, 0]);
+    await strict.passed(
+      p,
+      'local-adsb',
+      'same decoder, receiver and feeds, one feed start, selection republished',
+    );
+    // Updates continue on the new engine: further polls move the aircraft.
+    const before = await p.evaluate(() => ({
+      polls: window.qaAdsbPolls,
+      lat: window.qaAdsb.mod.getAnalystRecords()[0]?.lat,
+      stamp: window.qaAdsb.mod.getStats().lastUpdate,
+    }));
+    await p.waitForFunction(
+      (before) =>
+        window.qaAdsbPolls >= before.polls + 2 &&
+        window.qaAdsb.mod.getAnalystRecords()[0]?.lat > before.lat &&
+        window.qaAdsb.mod.getStats().lastUpdate > before.stamp,
+      { timeout: 15000 },
+      before,
+    );
+    await strict.passed(
+      p,
+      'local-adsb',
+      'receiver polls continue and move the selected aircraft',
+      before,
+    );
   }
   assert.deepEqual(errors, []);
   console.log(
     'PASS retained local decoder, receiver, marker and selection in both scenes',
   );
-} finally {
-  await b.close();
-}
+});

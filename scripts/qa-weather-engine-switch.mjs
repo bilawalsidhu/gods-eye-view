@@ -1,27 +1,23 @@
-import {fromDegrees} from '../src/geo/cartesian3.js';
-import puppeteer from 'puppeteer';
+import { fromDegrees } from '../src/geo/cartesian3.js';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=43.6500&lon=-79.3800&alt=46000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+const strict = createStrict({
+  origin: base.origin,
+  layers: [
+    'weather-radar',
+    'weather-satellite',
+    'weather-lightning',
+    'weather-cyclones',
+  ],
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -32,27 +28,81 @@ try {
   const ids = ['weather-radar', 'weather-satellite', 'weather-lightning'];
   const images = new Map(),
     reads = new Map();
-  let bulletin = '10', cycloneReads = 0;
+  let bulletin = '10',
+    cycloneReads = 0;
   function advisory() {
     const forecast = bulletin === '10';
     const storm = {
-      id:'al012026', name:'QA storm', basin:'AL', classification:'TS', position:{longitude:-79.38, latitude:43.65},
-      advisoryNumber:bulletin, issuedAt:times[1], positionAt:times[1], windKt:40, pressureHpa:1000,
-      movement:{directionDegrees:45,speedKt:10}, advisoryUrl:null,outlookUrl:null,
-      geometryStatus:forecast?'current':'pending', geometryAdvisoryNumber:forecast?bulletin:null,
-      track:forecast?{type:'LineString',coordinates:[[-79.38,43.65],[-79.31,43.68]]}:null,
-      cone:forecast?{type:'Polygon',coordinates:[[[-79.35,43.63],[-79.28,43.63],[-79.28,43.70],[-79.35,43.63]]]}:null,
-      forecastPoints:forecast?[{tauHours:24,position:{longitude:-79.31,latitude:43.68},windKt:50,gustKt:60}]:[],
+      id: 'al012026',
+      name: 'QA storm',
+      basin: 'AL',
+      classification: 'TS',
+      position: { longitude: -79.38, latitude: 43.65 },
+      advisoryNumber: bulletin,
+      issuedAt: times[1],
+      positionAt: times[1],
+      windKt: 40,
+      pressureHpa: 1000,
+      movement: { directionDegrees: 45, speedKt: 10 },
+      advisoryUrl: null,
+      outlookUrl: null,
+      geometryStatus: forecast ? 'current' : 'pending',
+      geometryAdvisoryNumber: forecast ? bulletin : null,
+      track: forecast
+        ? {
+            type: 'LineString',
+            coordinates: [
+              [-79.38, 43.65],
+              [-79.31, 43.68],
+            ],
+          }
+        : null,
+      cone: forecast
+        ? {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-79.35, 43.63],
+                [-79.28, 43.63],
+                [-79.28, 43.7],
+                [-79.35, 43.63],
+              ],
+            ],
+          }
+        : null,
+      forecastPoints: forecast
+        ? [
+            {
+              tauHours: 24,
+              position: { longitude: -79.31, latitude: 43.68 },
+              windKt: 50,
+              gustKt: 60,
+            },
+          ]
+        : [],
     };
-    return {schemaVersion:1,source:'QA NOAA',attribution:'NOAA fixture',coverage:'Atlantic',fetchedAt:Date.parse(times[1]),
-      stale:false,unavailable:false,reason:null,storms:[storm]};
+    return {
+      schemaVersion: 1,
+      source: 'QA NOAA',
+      attribution: 'NOAA fixture',
+      coverage: 'Atlantic',
+      fetchedAt: Date.parse(times[1]),
+      stale: false,
+      unavailable: false,
+      reason: null,
+      storms: [storm],
+    };
   }
   await p.setRequestInterception(true);
   p.on('request', async (req) => {
     const url = new URL(req.url());
     if (url.pathname === '/api/cyclones') {
       cycloneReads++;
-      return req.respond({status:200,contentType:'application/json',body:JSON.stringify(advisory())});
+      return req.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(advisory()),
+      });
     }
     if (!url.pathname.startsWith('/api/weather/')) return req.continue();
     const product = url.searchParams.get('product');
@@ -121,7 +171,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -188,6 +238,7 @@ try {
         latest[2] > latest[0] + 50,
         'lightning must paint cyan over radar',
       );
+    await strict.passed(p, id, 'latest frame paints in stacking order', latest);
     console.log('latest', id, latest);
   }
   await p.evaluate((ids) => {
@@ -200,7 +251,7 @@ try {
   const polls = [...reads.entries()];
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await p.select('#globe-engine', kind);
+      await strict.pick(p, kind);
       await ready(kind);
     }
     await waitTime(ids, times[0]);
@@ -238,6 +289,12 @@ try {
       polls,
       'A globe change must not refetch the observation manifest',
     );
+    await strict.passed(
+      p,
+      ids,
+      'same entry, shared history clock on the earlier frame, no manifest refetch, lightning above radar',
+      rgb,
+    );
     console.log(
       'PASS',
       kind,
@@ -262,10 +319,11 @@ try {
   await p.evaluate(() => window.qaRestoreSurface());
   await p.evaluate(async (ids) => {
     const manager = window.__godsEyeView.dataManager;
-    for (const id of ids) await manager.setEnabled(id, false, {origin:'user'});
-    await manager.setEnabled('weather-cyclones', true, {origin:'user'});
+    for (const id of ids)
+      await manager.setEnabled(id, false, { origin: 'user' });
+    await manager.setEnabled('weather-cyclones', true, { origin: 'user' });
     window.qaStorm = manager.layers.get('weather-cyclones').module;
-  },ids);
+  }, ids);
   const click = async (lon, lat, insideCone) => {
     const hit = await p.waitForFunction(
       ({ lon, lat, base, insideCone }) => {
@@ -303,30 +361,56 @@ try {
     await hit.dispose();
   };
   const before = cycloneReads;
-  for (const kind of ['navara','cesium','navara']) {
-    if (await p.evaluate(()=>window.__godsEyeView.engine.kind) !== kind) {
-      await p.select('#globe-engine',kind);
+  for (const kind of ['navara', 'cesium', 'navara']) {
+    if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
+      await p.select('#globe-engine', kind);
       await ready(kind);
     }
-    await p.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('weather-cyclones').module === window.qaStorm &&
-      window.qaStorm.getDiagnostics().selectedId === 'al012026');
-    const d = await p.evaluate(()=>window.qaStorm.getDiagnostics());
-    assert.deepEqual([d.storms,d.tracks,d.cones,d.forecastPoints],[1,1,1,1],kind);
-    await click(-79.43,43.59,false);
-    await p.waitForFunction(()=>window.qaStorm.getDiagnostics().selectedId === null);
-    await click(-79.30,43.643,true);
-    await p.waitForFunction(()=>window.qaStorm.getDiagnostics().selectedId === 'al012026');
-    assert.equal(cycloneReads,before);
-    console.log('PASS',kind,'pick advisory cone and retain selected storm');
+    await p.waitForFunction(
+      () =>
+        window.__godsEyeView.dataManager.layers.get('weather-cyclones')
+          .module === window.qaStorm &&
+        window.qaStorm.getDiagnostics().selectedId === 'al012026',
+    );
+    const d = await p.evaluate(() => window.qaStorm.getDiagnostics());
+    assert.deepEqual(
+      [d.storms, d.tracks, d.cones, d.forecastPoints],
+      [1, 1, 1, 1],
+      kind,
+    );
+    await click(-79.43, 43.59, false);
+    await p.waitForFunction(
+      () => window.qaStorm.getDiagnostics().selectedId === null,
+    );
+    await click(-79.3, 43.643, true);
+    await p.waitForFunction(
+      () => window.qaStorm.getDiagnostics().selectedId === 'al012026',
+    );
+    assert.equal(cycloneReads, before);
+    await strict.passed(
+      p,
+      'weather-cyclones',
+      'storm, track, cone and forecast point; clicks outside and inside the cone deselect and select; no refetch',
+    );
+    console.log('PASS', kind, 'pick advisory cone and retain selected storm');
   }
   bulletin = '11';
   const next = await p.evaluate(async () => {
     await window.qaStorm.update();
     return window.qaStorm.getDiagnostics();
   });
-  assert.deepEqual([next.storms,next.tracks,next.cones,next.forecastPoints,next.selectedId],[1,0,0,0,'al012026']);
-  console.log('PASS advisory 11 removes expired geometry while retaining the storm');
+  assert.deepEqual(
+    [
+      next.storms,
+      next.tracks,
+      next.cones,
+      next.forecastPoints,
+      next.selectedId,
+    ],
+    [1, 0, 0, 0, 'al012026'],
+  );
+  console.log(
+    'PASS advisory 11 removes expired geometry while retaining the storm',
+  );
   assert.deepEqual(errors, []);
-} finally {
-  await b.close();
-}
+});

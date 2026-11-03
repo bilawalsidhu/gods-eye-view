@@ -1,27 +1,18 @@
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import sharp from 'sharp';
-import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=28.3326&lon=85.4848&alt=18000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+const strict = createStrict({
+  origin: base.origin,
+  layers: ['bhote-koshi-locator'],
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -36,7 +27,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -60,7 +51,7 @@ try {
   });
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await p.select('#globe-engine', kind);
+      await strict.pick(p, kind);
       await ready(kind);
     }
     const { same, stats, params, at } = await p.evaluate(
@@ -114,9 +105,12 @@ try {
       added,
       at,
     );
-    assert.ok(
+    await strict.check(
+      p,
+      'bhote-koshi-locator',
+      'same model; the flood path adds more than 50 cyan pixels to the same scene without it',
       added > 50,
-      'visible river differs from the same scene without a path',
+      { added },
     );
     await p.evaluate(() =>
       window.qaLocator.setParams({ presentation: 'bhote-koshi-path-overview' }),
@@ -130,7 +124,21 @@ try {
       preview: true,
     });
   });
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  // The last of three quick presentation changes is the one that stays.
+  const last = await p.evaluate(() => ({
+    params: window.qaLocator.getParams(),
+    stats: window.qaLocator.getStats(),
+  }));
+  await strict.check(
+    p,
+    'bhote-koshi-locator',
+    'the last of three quick presentation changes is the one applied',
+    last.params.presentation === 'bhote-koshi-trigger-record' &&
+      last.stats.count === 1 &&
+      !last.stats.error,
+    { presentation: last.params.presentation, count: last.stats.count },
+  );
   await p.evaluate(() =>
     window.__godsEyeView.dataManager.setEnabled('bhote-koshi-locator', false, {
       origin: 'user',
@@ -140,6 +148,4 @@ try {
   console.log(
     'PASS Nepal locator flood path and presentation retained, trigger and places update; both engines',
   );
-} finally {
-  await b.close();
-}
+});

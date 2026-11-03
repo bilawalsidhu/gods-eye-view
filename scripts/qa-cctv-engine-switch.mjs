@@ -1,18 +1,9 @@
 import assert from 'node:assert/strict';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
-import puppeteer from 'puppeteer';
 import { installCctvFixture } from './fixtures/w2/cctv.mjs';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
-import { switchGlobe } from './qa-switch-globe.mjs';
-const url = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(url.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    url.port,
-  )
-)
-  throw Error('Supply local keyless preview URL');
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
+const url = localPreview(process.argv[2]);
 url.search = '?engine=navara&welcome=0';
 url.hash =
   'v=2&lat=30.2718&lon=-97.744&alt=900&pitch=-70&heading=0&map=sentinel2&l=';
@@ -45,13 +36,9 @@ const { stdout: video } = await promisify(execFile)(
   ],
   { encoding: 'buffer', maxBuffer: 16000000 },
 );
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
-});
-try {
+const strict = createStrict({ origin: url.origin, layers: ['cctv'] });
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   const errors = [];
   p.on('pageerror', (e) => {
     errors.push(e.message);
@@ -65,7 +52,7 @@ try {
   await p.goto(url.href);
   await p.waitForFunction(
     () =>
-      window.__godsEyeView?.engine.kind === 'navara' &&
+      window.__godsEyeView?.engine?.kind === 'navara' &&
       document.querySelector('#loading-screen.hidden'),
   );
   await p.evaluate(async () => {
@@ -95,7 +82,7 @@ try {
   let previous = first;
   const count = catalogs;
   for (const kind of ['cesium', 'navara']) {
-    await switchGlobe(p, kind);
+    await strict.switchTo(p, kind);
     await p.waitForFunction(
       (n) =>
         window.qaCctv.getActiveVideoElement()?.getVideoPlaybackQuality()
@@ -114,6 +101,16 @@ try {
       plane: !!window.qaCctv
         ._cctvRecordsForTest()
         .find((r) => r.camera.id === 'w2-cctv-video').projection?.planeEntity,
+      projection: (() => {
+        const r = window.qaCctv
+          ._cctvRecordsForTest()
+          .find((r) => r.camera.id === 'w2-cctv-video');
+        return {
+          show: r.projection?.planeEntity?.show === true,
+          visible: r.projection?.planeVisible === true,
+          calibration: r.camera.calibration,
+        };
+      })(),
     }));
     console.log(
       kind,
@@ -128,10 +125,28 @@ try {
     assert.equal(v.params.selectedCameraId, 'w2-cctv-video');
     assert.equal(v.params.coverageMode, 'viewshed');
     assert.equal(catalogs, count);
+    await strict.passed(
+      p,
+      'cctv',
+      'same model and video element decoding new frames; textured projection plane; no catalog read',
+    );
+    // The calibration patch (31 m mount, 20° pitch) and the plane's
+    // visibility are kept on the new engine.
+    const { calibration } = v.projection;
+    await strict.check(
+      p,
+      'cctv',
+      'calibration patch kept (31 m, 20° pitch); monitor plane visible',
+      v.projection.show &&
+        v.projection.visible &&
+        calibration?.heightM === 31 &&
+        calibration?.pitchDeg === 20 &&
+        v.params.calibration?.values?.heightM === 31 &&
+        v.params.calibration?.values?.pitchDeg === 20,
+      v.projection,
+    );
     previous = v.frames;
   }
   assert.deepEqual(errors, []);
   console.log('PASS retained CCTV catalog, decoder and textured projection');
-} finally {
-  await b.close();
-}
+});

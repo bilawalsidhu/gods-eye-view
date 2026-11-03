@@ -1,26 +1,45 @@
 import sharp from 'sharp';
-import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=28.2110&lon=85.3380&alt=9000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+// The media panel embeds YouTube players with their thumbnails: a plain
+// thumbnail and an inert player page stand in for them.
+const thumbnail = await sharp({
+  create: { width: 480, height: 360, channels: 3, background: '#40506a' },
+})
+  .jpeg()
+  .toBuffer();
+const strict = createStrict({
+  origin: base.origin,
+  layers: ['bhote-koshi-2026'],
+  routes: [
+    {
+      pattern: 'https://i.ytimg.com/*',
+      respond: () => ({ contentType: 'image/jpeg', body: thumbnail }),
+    },
+    {
+      // The player API script: an inert stub (the app keeps its own controls).
+      pattern: 'https://www.youtube.com/iframe_api*',
+      respond: () => ({
+        contentType: 'text/javascript',
+        body: '/* QA: YouTube iframe API withheld */',
+      }),
+    },
+    {
+      pattern: 'https://www.youtube-nocookie.com/*',
+      respond: () => ({
+        contentType: 'text/html',
+        body: '<!doctype html><title>QA player</title><body style="background:#111"></body>',
+      }),
+    },
+  ],
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -45,7 +64,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -59,7 +78,8 @@ try {
   await ready('navara');
   await p.evaluate(async () => {
     const { tileset, dataManager, sceneDirector } = window.__godsEyeView;
-    if (!sceneDirector?.listScenes().length) throw Error('No scenes available on Navara');
+    if (!sceneDirector?.listScenes().length)
+      throw Error('No scenes available on Navara');
     if (tileset || window.__GOOGLE_MAPS_API_KEY__)
       throw Error('Keyless preview required');
     const mod = dataManager.layers.get('bhote-koshi-2026').module;
@@ -82,7 +102,7 @@ try {
   };
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await p.select('#globe-engine', kind);
+      await strict.pick(p, kind);
       await ready(kind);
     }
     const state = await p.evaluate(() => {
@@ -107,7 +127,10 @@ try {
       );
       window.qaEvent.setParams({ split: 0.75 });
     });
-    assert.ok(await p.evaluate(()=>Boolean(window.qaPlayer)), 'persistent embedded media root');
+    assert.ok(
+      await p.evaluate(() => Boolean(window.qaPlayer)),
+      'persistent embedded media root',
+    );
     const before = await sample();
     await p.evaluate(() => window.qaEvent.setParams({ split: 0.27 }));
     const after = await sample();
@@ -115,6 +138,12 @@ try {
       before.reduce((n, v, i) => n + Math.abs(v - after[i]), 0) / before.length;
     console.log(kind, state.state, 'imagery difference', diff);
     assert.ok(diff > 6, 'divider changes the actual imagery in the viewport');
+    await strict.passed(
+      p,
+      'bhote-koshi-2026',
+      'same model and media root; paused at 0.52 with split 0.27; the divider changes the imagery',
+      { diff },
+    );
     assert.equal(
       await p.evaluate(
         () =>
@@ -130,14 +159,25 @@ try {
       1,
       JSON.stringify(assets),
     );
+  await strict.passed(
+    p,
+    'bhote-koshi-2026',
+    'event file and image pair read once over three engine visits',
+  );
   await p.evaluate(() => window.qaEvent.setParams({ autoPlay: true }));
   await p.waitForFunction(
     () => window.qaEvent.getPlaybackState().progress > 0.53,
   );
-  await p.select('#globe-engine', 'cesium');
+  await strict.pick(p, 'cesium');
   await ready('cesium');
   const live = await p.evaluate(() => window.qaEvent.getPlaybackState());
-  assert.ok(live.playing && live.progress > 0.53);
+  await strict.check(
+    p,
+    'bhote-koshi-2026',
+    'playback keeps playing past 0.53 through the switch',
+    live.playing && live.progress > 0.53,
+    live,
+  );
   await p.evaluate(() =>
     window.__godsEyeView.dataManager.setEnabled('bhote-koshi-2026', false, {
       origin: 'user',
@@ -147,6 +187,4 @@ try {
   console.log(
     'PASS event timeline, paused and playing handoff, image pair, divider, player host and single asset acquisition',
   );
-} finally {
-  await b.close();
-}
+});

@@ -1,27 +1,15 @@
 import { fromDegrees } from '../src/geo/cartesian3.js';
-import puppeteer from 'puppeteer';
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=43.6500&lon=-79.3800&alt=46000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
-});
-try {
+const strict = createStrict({ origin: base.origin, layers: ['s2-ghostmaps'] });
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -78,7 +66,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -108,12 +96,22 @@ try {
     );
     await p.mouse.click(x, y);
   };
+  const overlay = () =>
+    p.evaluate(() => {
+      const canvas = document.getElementById('world-overlay-canvas');
+      const data = canvas
+        .getContext('2d')
+        .getImageData(0, 0, canvas.width, canvas.height).data;
+      let pixels = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i]) pixels++;
+      return pixels;
+    });
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
       await p.evaluate(() => {
         window.ghostStats.titles = [];
       });
-      await p.select('#globe-engine', kind);
+      await strict.pick(p, kind);
       await ready(kind);
       await p.waitForFunction(() =>
         window.ghostStats.titles.some((v) => /QA zone/i.test(v)),
@@ -133,6 +131,11 @@ try {
       streams: 1,
       reads: 1,
     });
+    await strict.passed(
+      p,
+      's2-ghostmaps',
+      'same model, three features, one event stream, one KMZ read',
+    );
     await new Promise((resolve) => setTimeout(resolve, 2200));
     for (const [name, lon, lat] of [
       ['QA pin', -79.38, 43.65],
@@ -148,19 +151,51 @@ try {
         { timeout: 12000 },
         name,
       );
+      await strict.passed(
+        p,
+        's2-ghostmaps',
+        `a click on ${name} draws its card text`,
+      );
       console.log('PASS', kind, name, 'pointer hit');
     }
+    // Not vacuous: the zone's card is up, so the overlay only clears when
+    // the click in the hole is handled as a click on empty ground. The
+    // overlay without any card is measured with a click far from every
+    // feature.
+    const shown = await overlay();
     await click(-79.316, 43.61);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    await p.evaluate(() => {
-      window.ghostStats.titles = [];
-      window.__godsEyeView.engine.render.request('qa-hole');
-    });
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    assert.equal(
-      await p.evaluate(() => window.ghostStats.titles.length),
-      0,
-      kind + ' polygon hole',
+    await p.waitForFunction(
+      (shown) => {
+        const canvas = document.getElementById('world-overlay-canvas');
+        const data = canvas
+          .getContext('2d')
+          .getImageData(0, 0, canvas.width, canvas.height).data;
+        let pixels = 0;
+        for (let i = 3; i < data.length; i += 4) if (data[i]) pixels++;
+        return pixels < shown - 100;
+      },
+      { timeout: 10000 },
+      shown,
+    );
+    const hole = await overlay();
+    await click(-79.45, 43.55);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const empty = await overlay();
+    console.log(
+      kind,
+      'overlay pixels: zone card',
+      shown,
+      'hole',
+      hole,
+      'empty ground',
+      empty,
+    );
+    await strict.check(
+      p,
+      's2-ghostmaps',
+      'a click in the zone hole clears the selected zone card like empty ground',
+      shown > empty + 100 && Math.abs(hole - empty) <= 0.02 * shown,
+      { shown, hole, empty },
     );
     await click(-79.28, 43.61);
     await p.waitForFunction(() =>
@@ -168,6 +203,4 @@ try {
     );
   }
   assert.deepEqual(errors, []);
-} finally {
-  await b.close();
-}
+});
