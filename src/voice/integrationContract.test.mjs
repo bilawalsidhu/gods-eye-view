@@ -695,6 +695,11 @@ test('boundaries route to resolve_area; annotate_map is for marks', () => {
 test('without an operator Overpass the prompt never offers place search', () => {
   const plain = realtimeInstructions();
   assert.doesNotMatch(plain, /osm_query/);
+  assert.doesNotMatch(
+    JSON.stringify(realtimeTools()),
+    /osm_query/,
+    'no other tool description points at it either',
+  );
   assert.equal(
     realtimeTools().some((tool) => tool.name === 'osm_query'),
     false,

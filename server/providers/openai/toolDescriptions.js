@@ -549,7 +549,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   resolve_area: {
     description:
-      'Named place → reusable areaId. draw=true outlines it ("outline Bagmati province"); around=true is "an area around <landmark>" — its enclosing mapped area, else a buffer marked approximate. Pass the areaId to analyst_query scope {kind:area}, find_imagery or osm_query. needsClarification: ask which, then call again with its candidateId. AREA_TIMEOUT: say you are still looking and retry once.',
+      'Named place → reusable areaId for analyst_query scope {kind:area} and other area tools. draw=true outlines it ("outline Bagmati province"); around=true is "an area around <landmark>": its enclosing mapped area, else a buffer marked approximate. needsClarification: ask which, then call again with its candidateId. AREA_TIMEOUT: retry once.',
     $position: 1,
     parameters: {
       properties: {
@@ -570,7 +570,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   find_imagery: {
     description:
-      'Recent satellite imagery (Sentinel-2/Landsat 30 m, VIIRS daily; last 30 days): pins the best acquisition in the Recent Imagery panel. areaId from resolve_area; area=pointer for "this spot"; omit for the view. BOX_REFUSED: offer to zoom in. DISPLACED: the user changed the panel, leave it.',
+      'Recent satellite imagery (Sentinel-2/Landsat 30 m, VIIRS daily; last 30 days): pins the best acquisition in the Recent Imagery panel. areaId from resolve_area; area=pointer for "this spot"; omit for the view. BOX_REFUSED: offer to zoom in. DISPLACED: leave it.',
     $position: 1,
     parameters: {
       properties: {

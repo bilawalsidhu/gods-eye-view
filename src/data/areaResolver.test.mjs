@@ -725,3 +725,139 @@ test('a bundled name mismatch falls through to the outline ladder', async () => 
     'the bundled refusal is kept',
   );
 });
+
+test('a view-picked outline answer is not reused for the same name elsewhere', async () => {
+  let view = { lat: 39.8, lon: -89.6 }; // Springfield, Illinois
+  const springfield = (center) => ({
+    ok: true,
+    name:
+      center.lon < -80 ? 'Springfield, Illinois' : 'Springfield, Massachusetts',
+    polygons: [
+      [
+        square(
+          center.lon - 0.1,
+          center.lat - 0.1,
+          center.lon + 0.1,
+          center.lat + 0.1,
+        ),
+      ],
+    ],
+    source: 'osm',
+    rung: 'nominatim',
+  });
+  const { resolver } = makeResolver({
+    viewCenter: () => view,
+    resolveNamedOutline: async () => springfield(view),
+  });
+  const illinois = await resolver.resolve({ query: 'Springfield' });
+  assert.equal(illinois.record.name, 'Springfield, Illinois');
+  const again = await resolver.resolve({ query: 'Springfield' });
+  assert.equal(again.cached, true, 'the same view still reuses it');
+  view = { lat: 42.1, lon: -72.6 }; // Springfield, Massachusetts
+  const massachusetts = await resolver.resolve({ query: 'Springfield' });
+  assert.equal(massachusetts.cached, false);
+  assert.equal(massachusetts.record.name, 'Springfield, Massachusetts');
+});
+
+test('a name spoken without accents matches its accented unit, Latin letters only', async () => {
+  const quebec = admin('state', 'Québec', 'Canada', [-79.8, 45, -57.1, 62.6]);
+  const cordobaAr = admin(
+    'state',
+    'Córdoba',
+    'Argentina',
+    [-65.8, -35, -61.8, -29.5],
+  );
+  const cordobaEs = admin('state', 'Córdoba', 'Spain', [-5.6, 37.2, -4, 38.7]);
+  const thai = admin('state', 'ป่าย', 'Thailand', [98, 19, 99, 20]);
+  const { resolver } = makeResolver({
+    findAdminCandidates: async (q) =>
+      /^quebec$/i.test(q)
+        ? [quebec]
+        : /^cordoba$/i.test(q)
+          ? [cordobaAr, cordobaEs]
+          : q === 'ปาย'
+            ? [thai]
+            : [],
+  });
+  const qc = await resolver.resolve({ query: 'Quebec' });
+  assert.equal(qc.ok, true, qc.error);
+  assert.equal(qc.record.name, 'Québec');
+  const cordoba = await resolver.resolve({ query: 'Cordoba' });
+  assert.equal(cordoba.code, 'AMBIGUOUS_AREA', 'both Córdobas are asked about');
+  assert.equal(cordoba.candidates.length, 2);
+  const tone = await resolver.resolve({ query: 'ปาย' });
+  assert.equal(tone.ok, false, 'a Thai tone mark still tells names apart');
+});
+
+test('a natural name for two distant places is asked about, and the choice resolves', async () => {
+  const azores = {
+    name: 'Flores',
+    featurecla: 'Island',
+    polygons: [square(-31.3, 39.4, -31.1, 39.5)],
+    areaKm2: 140,
+    center: { lat: 39.45, lon: -31.2 },
+  };
+  const indonesia = {
+    name: 'Flores',
+    featurecla: 'Island',
+    polygons: [square(119.8, -8.9, 123, -8.1)],
+    areaKm2: 14000,
+    center: { lat: -8.5, lon: 121.4 },
+  };
+  const { resolver } = makeResolver({
+    findNaturalRegion: async (q) =>
+      /^flores$/i.test(q)
+        ? {
+            name: 'Flores',
+            kind: 'natural',
+            polygons: indonesia.polygons,
+            places: [indonesia, azores],
+          }
+        : null,
+  });
+  const asked = await resolver.resolve({ query: 'Flores' });
+  assert.equal(asked.code, 'AMBIGUOUS_AREA');
+  assert.equal(asked.candidates.length, 2);
+  assert.ok(asked.candidates.every((c) => c.level === 'natural' && c.region));
+  const picked = await resolver.resolve({
+    candidateId: asked.candidates[1].candidateId,
+  });
+  assert.equal(picked.ok, true, picked.error);
+  assert.equal(picked.record.level, 'natural');
+  assert.equal(
+    pointInPreparedArea(picked.record.prepared, 39.45, -31.2),
+    true,
+    'the Azores Flores',
+  );
+});
+
+test('a natural feature in several parts is stored whole', async () => {
+  const north = square(33.7, 2.4, 44.2, 15.4);
+  const south = square(28.9, -15.6, 35.8, 2.4);
+  const { resolver } = makeResolver({
+    findNaturalRegion: async (q) =>
+      /rift/i.test(q)
+        ? {
+            name: 'Great Rift Valley',
+            kind: 'natural',
+            polygons: [north],
+            places: [
+              {
+                name: 'Great Rift Valley',
+                featurecla: 'Valley',
+                polygons: [north, south],
+                areaKm2: 2,
+                center: { lat: 0, lon: 36 },
+              },
+            ],
+          }
+        : null,
+  });
+  const rift = await resolver.resolve({ query: 'Great Rift Valley' });
+  assert.equal(rift.ok, true);
+  assert.equal(
+    pointInPreparedArea(rift.record.prepared, -10, 33),
+    true,
+    'the southern part counts',
+  );
+});

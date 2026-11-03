@@ -84,7 +84,28 @@ const ADMIN_LEVEL = Object.freeze({
   country: 'country',
   state: 'admin1',
   county: 'admin2',
+  natural: 'natural',
 });
+
+/**
+ * One of several same-name natural places as a clarification choice, located
+ * by its rough centre ("39 N 31 W") since it has no country.
+ */
+function naturalCandidate(place, kind) {
+  const { lat, lon } = place.center || {};
+  const locator = Number.isFinite(lat)
+    ? `${Math.abs(Math.round(lat))} ${lat >= 0 ? 'N' : 'S'} ${Math.abs(Math.round(lon))} ${lon >= 0 ? 'E' : 'W'}`
+    : '';
+  return {
+    kind: 'natural',
+    name: place.name,
+    country: '',
+    regionCode: locator,
+    polygons: place.polygons.map((ring) => [ring]),
+    source: 'natural-earth',
+    meta: { kind },
+  };
+}
 
 const ADMIN_NAME_LEVEL = Object.freeze({
   country: 'country',
@@ -101,6 +122,18 @@ const ADMIN_NAME_LEVEL = Object.freeze({
   department: 'admin2',
 });
 
+/**
+ * Drop accents from Latin letters only, for comparing names: speech often
+ * loses them ("Quebec" for "Québec"), while a Thai or Devanagari mark changes
+ * the name and is kept.
+ */
+export function foldLatinMarks(text) {
+  return String(text || '')
+    .normalize('NFD')
+    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
+    .normalize('NFC');
+}
+
 function explicitAdminName(text) {
   const normalized = normalizeAreaQuery(String(text).split(',')[0]);
   const match = normalized.match(
@@ -108,7 +141,9 @@ function explicitAdminName(text) {
   );
   return {
     normalized,
-    bare: match ? normalized.slice(0, -match[0].length).trim() : normalized,
+    bare: foldLatinMarks(
+      match ? normalized.slice(0, -match[0].length).trim() : normalized,
+    ),
     word: match?.[1] || null,
     level: match ? ADMIN_NAME_LEVEL[match[1]] || null : null,
   };
@@ -191,6 +226,13 @@ function describeCandidate(admin) {
  * itself stands for its same-named state ("Mexico" is the country, not the
  * State of Mexico); across countries each name is its own place.
  */
+/** A coarse ~2° cell of the view, or "none", for keying view-picked answers. */
+function viewCell(center) {
+  if (!Number.isFinite(center?.lat) || !Number.isFinite(center?.lon))
+    return 'none';
+  return `${Math.floor(center.lat / 2)},${Math.floor(center.lon / 2)}`;
+}
+
 export function distinctAdminPlaces(candidates) {
   const byCountry = new Map();
   for (const admin of candidates) {
@@ -290,16 +332,37 @@ export function createAreaResolver({
       // "Punjab" the desert) never hides it; asked for by level, it answers.
       // Only a unit that really has this name counts: "Great Britain" finds
       // the United Kingdom by alias, which is not a Great Britain.
+      // A feature split into parts is one place with every part; distant
+      // namesakes (Flores in the Azores and Indonesia) are asked about.
+      const places = ne?.places?.length
+        ? ne.places
+        : ne?.polygons?.length
+          ? [{ name: ne.name, polygons: ne.polygons }]
+          : [];
       const shadowsAdmin =
-        ne?.polygons?.length &&
+        places.length > 0 &&
         level !== 'natural' &&
         (await findAdminCandidates(query, { signal }).catch(() => [])).some(
           (admin) => !bundledAdminIdentityRefusal(admin, query, null),
         );
       signal?.throwIfAborted?.();
-      if (ne?.polygons?.length && !shadowsAdmin) {
+      if (places.length > 1 && !shadowsAdmin) {
+        const offered = places
+          .slice(0, MAX_AREA_CANDIDATES)
+          .map((place) => naturalCandidate(place, ne.kind));
+        const identity = { query, wantedLevel: 'natural' };
+        offered.forEach((admin) => remember(admin, identity));
+        return {
+          ok: false,
+          needsClarification: true,
+          code: 'AMBIGUOUS_AREA',
+          candidates: offered.map(describeCandidate),
+          error: `"${query}" names ${offered.length} places — ask which one.`,
+        };
+      }
+      if (places.length === 1 && !shadowsAdmin) {
         const record = store.put({
-          geometry: ne.polygons.map((ring) => [ring]),
+          geometry: places[0].polygons.map((ring) => [ring]),
           name: ne.name,
           level: 'natural',
           source: 'natural-earth',
@@ -472,9 +535,11 @@ export function createAreaResolver({
         error: 'Name a place to resolve.',
       });
     const nameKey = normalizeAreaQuery(query);
-    // A name that normalizes to nothing is never cached or shared.
+    // The outline ladder and geocoder pick by the view ("Springfield" over
+    // Illinois), so an answer is reused or shared only within the same
+    // ~2° view cell. A name that normalizes to nothing is never cached.
     const key = nameKey
-      ? `${nameKey}|${level || ''}|${normalizeAreaQuery(within)}`
+      ? `${nameKey}|${level || ''}|${normalizeAreaQuery(within)}|${viewCell(viewCenter())}`
       : null;
     const recalled = key ? store.recallQuery(key) : null;
     if (recalled)

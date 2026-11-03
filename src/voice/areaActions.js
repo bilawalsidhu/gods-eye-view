@@ -18,7 +18,7 @@
  */
 
 import { createAreaStore, summarizeArea } from '../data/areaStore.js';
-import { createAreaResolver } from '../data/areaResolver.js';
+import { createAreaResolver, foldLatinMarks } from '../data/areaResolver.js';
 import { circleRing, displayParts } from '../data/areaGeometry.js';
 import { findNaturalRegion } from '../data/naturalEarthRegions.js';
 import { findAdminCandidates as findBundledAdminCandidates } from '../data/adminBoundaries.js';
@@ -91,7 +91,10 @@ function administrativeIdentity(value) {
     /\b(country|nation|province|state|region|zone|oblast|prefecture|canton|governorate|county|district|department)$/,
   );
   return {
-    name: match ? normalized.slice(0, -match[0].length).trim() : normalized,
+    // Compared, never shown: "Quebec" as spoken names "Québec".
+    name: foldLatinMarks(
+      match ? normalized.slice(0, -match[0].length).trim() : normalized,
+    ),
     level: match ? ADMIN_IDENTITY_LEVEL[match[1]] || null : null,
   };
 }

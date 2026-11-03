@@ -5,10 +5,10 @@ export const MAX_AREA_CANDIDATE_ID_LENGTH = 80;
 
 /** JSON Schema-compatible grammar for bundled candidate handles. */
 export const AREA_CANDIDATE_ID_PATTERN =
-  '^ne:(?:country|state|county):[\\p{L}\\p{M}\\p{N}]+(?:-[\\p{L}\\p{M}\\p{N}]+)*$';
+  '^ne:(?:country|state|county|natural):[\\p{L}\\p{M}\\p{N}]+(?:-[\\p{L}\\p{M}\\p{N}]+)*$';
 
 const AREA_CANDIDATE_ID_RE =
-  /^ne:(?:country|state|county):[\p{L}\p{M}\p{N}]+(?:-[\p{L}\p{M}\p{N}]+)*$/u;
+  /^ne:(?:country|state|county|natural):[\p{L}\p{M}\p{N}]+(?:-[\p{L}\p{M}\p{N}]+)*$/u;
 
 export function isAreaCandidateId(value) {
   const candidateId = String(value || '');

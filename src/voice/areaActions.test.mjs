@@ -412,6 +412,27 @@ test('a current Zone the source verified is not refused as retired', async () =>
   assert.equal(gamo.areas.store.size, 1);
 });
 
+test('an outline named with accents is accepted for the same name spoken without them', async () => {
+  const quebec = makeAreas({
+    annotationResolver: fakeLadder({
+      label: 'Québec',
+      match: /quebec/i,
+      outline: {
+        ring: BAGMATI_POLYGONS[0][0],
+        polygons: BAGMATI_POLYGONS,
+        adminArea: 'Québec',
+        adminLevel: 'admin1',
+        synthesized: false,
+        outlineSource: 'nominatim',
+      },
+    }),
+  });
+  const result = await quebec.areas.resolveAreaAction({
+    query: 'Quebec province',
+  });
+  assert.equal(result.ok, true, result.error);
+});
+
 test('a place no outline source can trace is refused, not guessed', async () => {
   const miss = makeAreas({
     annotationResolver: fakeLadder({ outline: null }),

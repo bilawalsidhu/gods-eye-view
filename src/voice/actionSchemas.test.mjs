@@ -53,8 +53,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The Operator HUD layout leaves set_hud's layout enum.
     // The layer alias hint leaves out aliases the layer id already spells.
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
-    // area scopes and the osm-places layer.
-    '6a60cb849fe6835295354b0a6711c9d2b6428114f66d14690430f1732070b59c',
+    // area scopes and the osm-places layer; natural-region candidates and the
+    // tightened area tool wording follow review.
+    '1e07573229f7901148a8e2d30d5111dc359ed35156aa7878afac8f0d940badd8',
   );
 });
 
