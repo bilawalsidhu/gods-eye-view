@@ -1,3 +1,4 @@
+import { waitForSignal } from '../../sources/requestDeadline.js';
 /** The dataset is acquired once per activation, independently of scene attachment. */
 export function createCableSessionLayer({
   source,
@@ -75,7 +76,7 @@ export function createCableSessionLayer({
     init(viewer, ctx) {
       return this.attachRenderer(viewer, ctx);
     },
-    attachRenderer(viewer, { engine } = {}) {
+    attachRenderer(viewer, { engine, signal = null } = {}) {
       if (viewer) {
         const legacy = createCesium({ label: source.label, fetch: read });
         legacy.init(viewer);
@@ -95,7 +96,13 @@ export function createCableSessionLayer({
           stats: () => legacy.getStats(),
         };
       } else display = createNavara(engine);
-      if (enabled) return show();
+      // The cable data load belongs to the session and keeps running; only
+      // this scene's wait for it ends when the scene is released. show()
+      // draws nothing into a display that was released meanwhile.
+      if (enabled)
+        return waitForSignal(show(), signal).catch((error) => {
+          if (!signal?.aborted) throw error;
+        });
     },
     detachRenderer() {
       const owner = display;

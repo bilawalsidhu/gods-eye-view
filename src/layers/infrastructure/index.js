@@ -1,3 +1,4 @@
+import { waitForSignal } from '../../sources/requestDeadline.js';
 import * as geo from '../../geo/index.js';
 import {
   mapAnalystRecord,
@@ -131,7 +132,7 @@ export function createInfrastructureSessionLayer(
     init(viewer, options = {}) {
       if (viewer || options.engine) return this.attachRenderer(viewer, options);
     },
-    attachRenderer(viewer, { engine = null } = {}) {
+    attachRenderer(viewer, { engine = null, signal = null } = {}) {
       if (display) throw Error('Infrastructure display already attached');
       if (viewer) {
         const legacy = createLocalGeoJsonLayer(
@@ -149,7 +150,13 @@ export function createInfrastructureSessionLayer(
           lod: legacy.getLodDiagnostics,
         };
       } else display = nativeFactory(engine, config, services);
-      if (enabled) return show();
+      // The dataset load belongs to the session and keeps running; only this
+      // scene's wait for it ends when the scene is released. A released
+      // display is destroyed and ignores what arrives later.
+      if (enabled)
+        return waitForSignal(show(), signal).catch((error) => {
+          if (!signal?.aborted) throw error;
+        });
     },
     detachRenderer() {
       if (!display) return;
