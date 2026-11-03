@@ -4,7 +4,8 @@
 Downloads a dated Geofabrik Norway extract, verifies its MD5, filters
 telecom=data_center / building=data_center with osmium, and merges the result
 into datacenters.geojsonl: features inside the Geofabrik Norway boundary are
-added, updated or removed; every other line is kept byte-for-byte.
+added, updated or removed once no longer tagged; every other line is kept
+byte-for-byte.
 
 Geofabrik keeps only its newest dated extract, so --extract defaults to the
 current one and a recorded extract can be re-verified only while it is listed.
@@ -16,6 +17,7 @@ import math
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -95,10 +97,15 @@ def osm_key(feature):
 
 
 def export(osmium, pbf, cache, extract):
+    """Exported features by key, and the keys of every tagged object in the extract."""
     filtered = cache / (extract + '-datacenters.osm.pbf')
+    listed = cache / (extract + '-datacenters.opl')
     exported = cache / (extract + '-datacenters.geojsonseq')
     subprocess.run([osmium, 'tags-filter', '-O', '-o', str(filtered), str(pbf),
                     'nwr/telecom=data_center', 'nwr/building=data_center'], check=True)
+    subprocess.run([osmium, 'tags-filter', '-O', '-R', '-f', 'opl', '-o', str(listed), str(filtered),
+                    'nwr/telecom=data_center', 'nwr/building=data_center'], check=True)
+    tagged = {line.split(' ', 1)[0] for line in listed.read_text(encoding='utf-8').splitlines() if line}
     subprocess.run([osmium, 'export', '-O', '-f', 'geojsonseq', '--add-unique-id=type_id',
                     '-o', str(exported), str(filtered)], check=True)
     fresh = {}
@@ -122,22 +129,48 @@ def export(osmium, pbf, cache, extract):
         elif key in fresh or geometry['type'] == 'LineString':
             continue  # closed ways are taken from their area export
         fresh[key] = {'geometry': geometry, 'tags': tags}
-    return fresh
+    return fresh, tagged
 
 
 def same_geometry(old, new):
-    """Same type and vertex set within tolerance; ring start and winding may differ."""
+    """Same type and rings within tolerance; ring start, winding and part or hole order may differ."""
     if old['type'] != new['type']:
-        return False
-    a, b = points(old['coordinates']), points(new['coordinates'])
-    if len(a) != len(b):
         return False
 
     def meters(p, q):
         dx = (p[0] - q[0]) * 111320 * math.cos(math.radians(p[1]))
         return math.hypot(dx, (p[1] - q[1]) * 110540)
-    return all(min(meters(p, q) for q in b) <= SAME_GEOMETRY_METERS for p in a) and \
-        all(min(meters(q, p) for p in a) <= SAME_GEOMETRY_METERS for q in b)
+
+    def same_line(a, b):
+        return len(a) == len(b) and all(meters(p, q) <= SAME_GEOMETRY_METERS for p, q in zip(a, b))
+
+    def same_ring(a, b):
+        a, b = a[:-1], b[:-1]  # closed rings repeat their first vertex
+        return len(a) == len(b) and \
+            any(same_line(a[i:] + a[:i], c) for c in (b, b[::-1]) for i in range(len(a)))
+
+    def same_parts(a, b, same):
+        rest = list(b)
+        for part in a:
+            match = next((i for i, other in enumerate(rest) if same(part, other)), None)
+            if match is None:
+                return False
+            rest.pop(match)
+        return not rest
+
+    def same_polygon(a, b):
+        return same_ring(a[0], b[0]) and same_parts(a[1:], b[1:], same_ring)
+
+    a, b = old['coordinates'], new['coordinates']
+    if old['type'] == 'Point':
+        return same_line([a], [b])
+    if old['type'] == 'LineString':
+        return same_line(a, b)
+    if old['type'] == 'Polygon':
+        return same_polygon(a, b)
+    if old['type'] == 'MultiPolygon':
+        return same_parts(a, b, same_polygon)
+    return a == b
 
 
 def feature_line(key, sequence, fresh):
@@ -148,9 +181,9 @@ def feature_line(key, sequence, fresh):
     return json.dumps(feature, separators=(',', ':'), ensure_ascii=False)
 
 
-def merge(lines, fresh, rings):
+def merge(lines, fresh, rings, tagged):
     out, seen, sequence = [], set(), 0
-    report = {'kept': 0, 'updated': [], 'removed': [], 'added': []}
+    report = {'kept': 0, 'updated': [], 'removed': [], 'added': [], 'unexported': []}
     for line in lines:
         feature = json.loads(line)
         sequence = max(sequence, feature['properties']['id'])
@@ -164,6 +197,10 @@ def merge(lines, fresh, rings):
             else:
                 out.append(feature_line(key, feature['properties']['id'], fresh[key]))
                 report['updated'].append(key)
+            continue
+        if key in tagged:  # still tagged, but osmium built no usable geometry: keep the old line
+            report['unexported'].append(key)
+            out.append(line)
             continue
         lon, lat = points(feature['geometry']['coordinates'])[0][:2]
         if inside(rings, lon, lat):
@@ -196,9 +233,12 @@ def main():
     if actual != expected:
         raise RuntimeError('MD5 mismatch for %s: %s != %s' % (pbf.name, actual, expected))
     rings = read_poly(fetch(GEOFABRIK + 'norway.poly', args.cache / 'norway.poly'))
-    fresh = export(args.osmium, pbf, args.cache, extract)
+    fresh, tagged = export(args.osmium, pbf, args.cache, extract)
     current = [line for line in DATASET.read_text(encoding='utf-8').splitlines() if line.strip()]
-    merged, report = merge(current, fresh, rings)
+    merged, report = merge(current, fresh, rings, tagged)
+    if report['unexported']:
+        print('warning: kept the old line of tagged features osmium did not export: %s'
+              % ', '.join(report['unexported']), file=sys.stderr)
     payload = '\n'.join(merged) + '\n'
     if args.verify:
         if payload != DATASET.read_text(encoding='utf-8'):

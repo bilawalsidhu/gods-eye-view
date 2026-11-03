@@ -27,7 +27,9 @@ reflects OSM as of the extract below, everything else the original snapshot.
   2026-10-05T20:21:35Z, MD5 `1d2cfdeb98980fce11b8891d0f9146c0`
 - Filter: `osmium tags-filter nwr/telecom=data_center nwr/building=data_center`
 - Contact tags are dropped as above; unchanged features keep their original
-  line, so geometry is only rewritten when tags or vertices actually changed.
+  line, so geometry is only rewritten when tags or rings actually changed.
+  A feature is removed only once it is no longer tagged; one still tagged but
+  without an exportable geometry keeps its line and is reported as unexported.
 - Refresh: `python3 scripts/build-datacenters-norway.py --cache <dir>` uses
   Geofabrik's current Norway extract and prints the dated name it used; record
   that name, its OSM timestamp and MD5 here. Requires `osmium-tool`.
