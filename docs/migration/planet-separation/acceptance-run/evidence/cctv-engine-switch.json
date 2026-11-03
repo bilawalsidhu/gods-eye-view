@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7957,
-      "idleAt": 8265.799999982119
+      "at": 6829.600000023842,
+      "idleAt": 7017.100000023842
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9003.299999982119,
-      "idleAt": 9115.90000000596
+      "at": 7341,
+      "idleAt": 7417.300000011921
     }
   ],
   "assertions": [
@@ -84,15 +84,15 @@
     }
   ],
   "network": {
-    "requests": 650,
-    "preview": 129,
+    "requests": 713,
+    "preview": 127,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
       "/api/realtime/debug-log": 1,
       "/api/setup/status": 1,
       "/api/cctv/sources": 1,
-      "/api/terrain/heights": 13,
+      "/api/terrain/heights": 11,
       "/api/cctv/health": 1,
       "/api/cctv/frame": 1,
       "/api/cctv/media": 1,
@@ -101,8 +101,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 244,
-      "tiles.maps.eox.at": 260
+      "terrain.reearth.land": 298,
+      "tiles.maps.eox.at": 271
     },
     "fixtureResponses": 0,
     "probes": {
@@ -113,10 +113,10 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 519,
+      "hits": 577,
       "fetched": 0,
       "failed": 0,
-      "cancelled": 4,
+      "cancelled": 1,
       "fetchedByHost": {}
     },
     "violations": [],

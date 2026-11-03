@@ -24,16 +24,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8909.699999988079,
-      "idleAt": 9099.40000000596
+      "at": 8796.40000000596,
+      "idleAt": 9002.299999982119
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9282.199999988079,
-      "idleAt": 9358.40000000596
+      "at": 9140.699999988079,
+      "idleAt": 9206.40000000596
     }
   ],
   "assertions": [
@@ -72,13 +72,13 @@
         "population": 618,
         "settledCount": 618,
         "finalCount": 618,
-        "aboveGround": 144,
-        "drawn": 141
+        "aboveGround": 149,
+        "drawn": 144
       }
     }
   ],
   "network": {
-    "requests": 653,
+    "requests": 661,
     "preview": 113,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -91,11 +91,11 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 268,
-      "tiles.maps.eox.at": 252,
+      "terrain.reearth.land": 282,
+      "tiles.maps.eox.at": 246,
       "tiles.openfreemap.org": 3
     },
-    "fixtureResponses": 255,
+    "fixtureResponses": 249,
     "probes": {
       "https://fonts.googleapis.com/css2*": 2,
       "/api/openai/hud-summary/status": 1,
@@ -104,7 +104,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 283,
+      "hits": 297,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,

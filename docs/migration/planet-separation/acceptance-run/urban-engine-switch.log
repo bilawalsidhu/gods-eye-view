@@ -1,4 +1,4 @@
 cesium bikeshare 200 boston-bluebikes:w2-bike-94 1
 navara bikeshare 200 boston-bluebikes:w2-bike-94 1
 PASS viewport activation, real pick and original city data across two switches
-STRICT {"scenario":"qa-urban-engine-switch","assertions":7,"coverage":{"bikeshare":{"cesium":3,"navara":4}},"picks":2,"requests":906,"violations":0}
+STRICT {"scenario":"qa-urban-engine-switch","assertions":7,"coverage":{"bikeshare":{"cesium":3,"navara":4}},"picks":2,"requests":962,"violations":0}

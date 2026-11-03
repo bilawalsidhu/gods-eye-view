@@ -24,4 +24,4 @@ PASS oversized view refuses and offers bounded zoom
 PASS ZOOM IN lands at requested height
 PASS disable leaves no imagery owners or queued requests
 PASS no browser exceptions
-STRICT {"scenario":"qa-w2-imagery","assertions":26,"coverage":{"recent-imagery":{"cesium":3,"navara":23}},"picks":2,"requests":970,"violations":0}
+STRICT {"scenario":"qa-w2-imagery","assertions":26,"coverage":{"recent-imagery":{"cesium":3,"navara":23}},"picks":2,"requests":991,"violations":0}

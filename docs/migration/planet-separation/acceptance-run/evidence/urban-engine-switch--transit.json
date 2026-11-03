@@ -24,16 +24,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 11853,
-      "idleAt": 12165
+      "at": 10703.59999999404,
+      "idleAt": 10854.5
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 13910.90000000596,
-      "idleAt": 14004.40000000596
+      "at": 12334.699999988079,
+      "idleAt": 12397.90000000596
     }
   ],
   "assertions": [
@@ -93,8 +93,8 @@
       "engine": "cesium",
       "claim": "a click on empty ground clears the selection; a click on the object selects it again",
       "detail": {
-        "x": 460.3717472719567,
-        "y": 502.3427979442785,
+        "x": 460.3715437011355,
+        "y": 502.6716732208958,
         "id": "mbta:w2-1"
       }
     },
@@ -111,7 +111,7 @@
     }
   ],
   "network": {
-    "requests": 1095,
+    "requests": 1110,
     "preview": 126,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -125,8 +125,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 514,
-      "tiles.maps.eox.at": 438
+      "terrain.reearth.land": 548,
+      "tiles.maps.eox.at": 419
     },
     "fixtureResponses": 0,
     "probes": {
@@ -137,13 +137,12 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 956,
-      "fetched": 10,
+      "hits": 971,
+      "fetched": 3,
       "failed": 0,
-      "cancelled": 19,
+      "cancelled": 3,
       "fetchedByHost": {
-        "terrain.reearth.land": 9,
-        "tiles.maps.eox.at": 1
+        "terrain.reearth.land": 3
       }
     },
     "violations": [],

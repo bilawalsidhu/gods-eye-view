@@ -1,9 +1,8 @@
-navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 42 }
-cesium sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 48 }
-navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 12, rebuilds: 0, added: 625, removed: 7, recycled: 49 }
-vehicles in view {"aboveGround":144,"drawn":141,"belowTerrain":2,"withinOneMetre":2,"strayChangedPixels":5,"area":250000}
-not drawn [{"id":"VEH-0157","x":808.5297507850859,"y":292.46565996790645,"clearance":2.964248038828373},{"id":"VEH-0199","x":804.4064079114468,"y":222.07155687341555,"clearance":1.870130805298686},{"id":"VEH-0200","x":796.1752744340715,"y":222.0721929967956,"clearance":2.646672885864973}]
-vehicles below the drawn terrain, hidden by the depth test: 2
-population before the switches 618 settled after the round trip 618 after the comparison 618 below the drawn terrain before the switches 1
+navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 39 }
+cesium sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 42 }
+navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 12, rebuilds: 0, added: 625, removed: 7, recycled: 44 }
+vehicles in view {"aboveGround":149,"drawn":144,"belowTerrain":0,"withinOneMetre":1,"strayChangedPixels":13,"area":250000}
+not drawn [{"id":"VEH-0047","x":773.4299423602943,"y":292.43003461145986,"clearance":3.213708887808025},{"id":"VEH-0673","x":762.2165379207331,"y":222.0275593717447,"clearance":3.7442701682448387},{"id":"VEH-0657","x":800.6946242378447,"y":222.07184372954606,"clearance":2.220303127542138},{"id":"VEH-0709","x":780.8276881589874,"y":222.0733790984519,"clearance":2.9913039542734623},{"id":"VEH-0668","x":792.9551517698053,"y":222.07244185650296,"clearance":2.8524104366078973}]
+population before the switches 618 settled after the round trip 618 after the comparison 618 below the drawn terrain before the switches 0
 PASS kept the traffic module, parameters, flow and vehicle identities across both globes; vehicles in view are drawn where the layer places them
-STRICT {"scenario":"qa-traffic-engine-switch","assertions":4,"coverage":{"traffic":{"cesium":1,"navara":3}},"picks":2,"requests":653,"violations":0}
+STRICT {"scenario":"qa-traffic-engine-switch","assertions":4,"coverage":{"traffic":{"cesium":1,"navara":3}},"picks":2,"requests":661,"violations":0}

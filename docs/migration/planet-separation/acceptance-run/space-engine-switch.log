@@ -12,4 +12,4 @@ before switch {
 cesium [ true, true ] 6839 25544 true null undefined undefined
 navara [ true, true ] 6839 25544 true null undefined undefined
 PASS retained space data and active camera across both planets
-STRICT {"scenario":"qa-space-engine-switch","assertions":5,"coverage":{"satellites":{"cesium":2,"navara":3}},"picks":2,"requests":318,"violations":0}
+STRICT {"scenario":"qa-space-engine-switch","assertions":5,"coverage":{"satellites":{"cesium":2,"navara":3}},"picks":2,"requests":313,"violations":0}

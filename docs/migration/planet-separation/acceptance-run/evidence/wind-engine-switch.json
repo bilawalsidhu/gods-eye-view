@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8343,
-      "idleAt": 8689.800000011921
+      "at": 7483.5,
+      "idleAt": 7754.5
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10701.300000011921,
-      "idleAt": 10751.40000000596
+      "at": 9489.40000000596,
+      "idleAt": 9530.5
     }
   ],
   "assertions": [
@@ -211,8 +211,8 @@
     }
   ],
   "network": {
-    "requests": 403,
-    "preview": 138,
+    "requests": 401,
+    "preview": 136,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,

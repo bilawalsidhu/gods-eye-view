@@ -19,7 +19,7 @@
     "webSocketsClosed": 0,
     "tokenRequests": 1,
     "channelState": "open",
-    "sentCount": 22
+    "sentCount": 24
   },
   "ids": {},
   "counters": {
@@ -39,8 +39,11 @@
   "voiceState": "listening"
 }
 PASS annotate_map drew a mark on Cesium
+PASS navara: annotate_map drew a mark
 PASS navara: set_layer_visibility ran on navara
+PASS cesium: annotate_map drew a mark
 PASS cesium: set_layer_visibility ran on cesium
+PASS navara: annotate_map drew a mark
 PASS navara: set_layer_visibility ran on navara
 PASS a call made during the switch ran on the incoming engine
 PASS a call whose wait ran out was refused with ENGINE_SWITCHING

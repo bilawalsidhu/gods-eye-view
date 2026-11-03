@@ -9,7 +9,7 @@ before switch {
   '/api/celestrak/active': 1,
   '/api/launches': 1
 } qa-iss true
-cesium [ true, true ] 6839 null false space-missions qa-iss 0.006012460372871723
-navara [ true, true ] 6839 null false space-missions qa-iss 0.006012460372871723
+cesium [ true, true ] 6839 null false space-missions qa-iss 0.004546112340266581
+navara [ true, true ] 6839 null false space-missions qa-iss 0.004546112340266581
 PASS retained space data and active camera across both planets
-STRICT {"scenario":"qa-space-engine-switch","assertions":6,"coverage":{"rocket-launches":{"cesium":3,"navara":3}},"picks":3,"requests":784,"violations":0}
+STRICT {"scenario":"qa-space-engine-switch","assertions":6,"coverage":{"rocket-launches":{"cesium":3,"navara":3}},"picks":3,"requests":703,"violations":0}

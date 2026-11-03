@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7799.0999999940395,
-      "idleAt": 8172.5999999940395
+      "at": 6560.5,
+      "idleAt": 6840.9000000059605
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8544.699999988079,
-      "idleAt": 8622.799999982119
+      "at": 7084.0999999940395,
+      "idleAt": 7157.699999988079
     }
   ],
   "assertions": [
@@ -41,8 +41,8 @@
       "engine": "navara",
       "claim": "a click on a station selects it",
       "detail": {
-        "x": 463.89260327214583,
-        "y": 551.7483086089477,
+        "x": 463.717981600156,
+        "y": 551.8492002373855,
         "id": "boston-bluebikes:w2-bike-94"
       }
     },
@@ -110,7 +110,7 @@
     }
   ],
   "network": {
-    "requests": 906,
+    "requests": 962,
     "preview": 114,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -124,8 +124,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 409,
-      "tiles.maps.eox.at": 366
+      "terrain.reearth.land": 432,
+      "tiles.maps.eox.at": 399
     },
     "fixtureResponses": 0,
     "probes": {
@@ -136,12 +136,12 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 786,
-      "fetched": 4,
+      "hits": 845,
+      "fetched": 1,
       "failed": 0,
-      "cancelled": 6,
+      "cancelled": 0,
       "fetchedByHost": {
-        "tiles.maps.eox.at": 4
+        "tiles.maps.eox.at": 1
       }
     },
     "violations": [],

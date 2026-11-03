@@ -58,8 +58,8 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 128726,
-      "idleAt": 130125.90000000596
+      "at": 125565.20000001788,
+      "idleAt": 126751.90000000596
     }
   ],
   "assertions": [
@@ -78,14 +78,14 @@
         "sameTimer": true,
         "sourcePolls": 0,
         "timerTicks": 0,
-        "stamp": 1793728150000,
-        "initialStamp": 1793728150000,
+        "stamp": 1793739741000,
+        "initialStamp": 1793739741000,
         "id": "71be26",
         "active": true,
         "mode": "thermal",
         "hud": true,
         "drawn": true,
-        "height": 9703.899042852501
+        "height": 9704.424224714106
       }
     },
     {
@@ -110,8 +110,8 @@
         "sameTimer": true,
         "sourcePolls": 2,
         "timerTicks": 2,
-        "stamp": 1793728206000,
-        "initialStamp": 1793728150000,
+        "stamp": 1793739797000,
+        "initialStamp": 1793739741000,
         "id": "71be26",
         "active": true,
         "mode": "thermal",
@@ -156,8 +156,8 @@
     }
   ],
   "network": {
-    "requests": 2188,
-    "preview": 258,
+    "requests": 1909,
+    "preview": 274,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
@@ -171,8 +171,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 17,
-      "terrain.reearth.land": 865,
-      "tiles.maps.eox.at": 1046
+      "terrain.reearth.land": 746,
+      "tiles.maps.eox.at": 870
     },
     "fixtureResponses": 0,
     "probes": {
@@ -183,10 +183,10 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 1928,
+      "hits": 1633,
       "fetched": 0,
       "failed": 0,
-      "cancelled": 6,
+      "cancelled": 0,
       "fetchedByHost": {}
     },
     "violations": [],

@@ -11,4 +11,4 @@ PASS navara pick advisory cone and retain selected storm
 PASS cesium pick advisory cone and retain selected storm
 PASS navara pick advisory cone and retain selected storm
 PASS advisory 11 removes expired geometry while retaining the storm
-STRICT {"scenario":"qa-weather-engine-switch","assertions":15,"coverage":{"weather-radar":{"cesium":1,"navara":3},"weather-satellite":{"cesium":1,"navara":3},"weather-lightning":{"cesium":1,"navara":3},"weather-cyclones":{"cesium":1,"navara":2}},"picks":2,"requests":674,"violations":0}
+STRICT {"scenario":"qa-weather-engine-switch","assertions":15,"coverage":{"weather-radar":{"cesium":1,"navara":3},"weather-satellite":{"cesium":1,"navara":3},"weather-lightning":{"cesium":1,"navara":3},"weather-cyclones":{"cesium":1,"navara":2}},"picks":2,"requests":675,"violations":0}

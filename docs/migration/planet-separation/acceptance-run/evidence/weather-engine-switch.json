@@ -38,16 +38,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10497.299999982119,
-      "idleAt": 10725.59999999404
+      "at": 9464.59999999404,
+      "idleAt": 9606.799999982119
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 12236.09999999404,
-      "idleAt": 12277.09999999404
+      "at": 10625.899999976158,
+      "idleAt": 10667.299999982119
     }
   ],
   "assertions": [
@@ -188,7 +188,7 @@
     }
   ],
   "network": {
-    "requests": 674,
+    "requests": 675,
     "preview": 182,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -205,7 +205,7 @@
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
       "terrain.reearth.land": 214,
-      "tiles.maps.eox.at": 261
+      "tiles.maps.eox.at": 262
     },
     "fixtureResponses": 0,
     "probes": {
@@ -216,7 +216,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 490,
+      "hits": 491,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,

@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7951.5999999940395,
-      "idleAt": 8267.700000017881
+      "at": 6488.699999988079,
+      "idleAt": 6646.5
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 11703.200000017881,
-      "idleAt": 11778.200000017881
+      "at": 18605.69999998808,
+      "idleAt": 18662.5
     }
   ],
   "assertions": [
@@ -47,8 +47,8 @@
       "claim": "receiver polls continue and move the selected aircraft",
       "detail": {
         "polls": 2,
-        "lat": 41.535927394692926,
-        "stamp": 1793728445536
+        "lat": 41.5375628786354,
+        "stamp": 1793740028803
       }
     },
     {
@@ -61,14 +61,14 @@
       "engine": "navara",
       "claim": "receiver polls continue and move the selected aircraft",
       "detail": {
-        "polls": 6,
-        "lat": 41.53605553963349,
-        "stamp": 1793728449547
+        "polls": 14,
+        "lat": 41.53762366740927,
+        "stamp": 1793740040821
       }
     }
   ],
   "network": {
-    "requests": 635,
+    "requests": 643,
     "preview": 136,
     "previewApi": {
       "/api/openai/hud-summary": 1,
@@ -80,7 +80,7 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 204,
+      "terrain.reearth.land": 212,
       "tiles.maps.eox.at": 278
     },
     "fixtureResponses": 0,
@@ -92,7 +92,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 497,
+      "hits": 505,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,

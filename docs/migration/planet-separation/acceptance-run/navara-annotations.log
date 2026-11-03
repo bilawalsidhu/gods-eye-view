@@ -1,0 +1,8 @@
+navara board {"shown":["QA Area","QA Near"],"hidden":["QA Far"]}
+navara amber pixels { bare: 1229, amber: 8907 }
+cesium board {"shown":["QA Area","QA Near"],"hidden":["QA Far"]}
+cesium amber pixels { bare: 4751, amber: 8657 }
+navara board {"shown":["QA Area","QA Near"],"hidden":["QA Far"]}
+navara amber pixels { bare: 1223, amber: 9850 }
+PASS annotations drawn, culled and kept across engine switches
+STRICT {"scenario":"qa-navara-annotations","assertions":12,"coverage":{"annotations":{"cesium":3,"navara":9}},"picks":2,"requests":1000,"violations":0}

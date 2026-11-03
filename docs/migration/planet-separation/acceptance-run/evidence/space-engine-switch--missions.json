@@ -24,24 +24,24 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 22247.100000023842,
-      "idleAt": 22494.70000001788
+      "at": 21675.40000000596,
+      "idleAt": 21881.59999999404
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 23383.80000001192,
-      "idleAt": 23457.5
+      "at": 22106.80000001192,
+      "idleAt": 22162.5
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 23597.5,
-      "idleAt": 23641.70000001788
+      "at": 22283.59999999404,
+      "idleAt": 22328.59999999404
     }
   ],
   "assertions": [
@@ -110,8 +110,8 @@
     }
   ],
   "network": {
-    "requests": 784,
-    "preview": 146,
+    "requests": 703,
+    "preview": 148,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
@@ -122,8 +122,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 313,
-      "tiles.maps.eox.at": 308
+      "terrain.reearth.land": 274,
+      "tiles.maps.eox.at": 264
     },
     "fixtureResponses": 0,
     "probes": {
@@ -134,13 +134,11 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 633,
-      "fetched": 3,
+      "hits": 553,
+      "fetched": 0,
       "failed": 0,
-      "cancelled": 20,
-      "fetchedByHost": {
-        "terrain.reearth.land": 3
-      }
+      "cancelled": 0,
+      "fetchedByHost": {}
     },
     "violations": [],
     "setupErrors": [],

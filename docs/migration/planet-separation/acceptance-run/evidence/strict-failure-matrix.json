@@ -5,8 +5,8 @@
     "--layers=",
     "--evidence=<output>/evidence/strict-failure-matrix.json"
   ],
-  "status": "fail",
-  "error": "AssertionError [ERR_ASSERTION]: failure-injection cases that broke the contract\n+ actual - expected\n\n+ [\n+   {\n+     case: 'cold navara→cesium failure',\n+     errors: 0,\n+     failed: [\n+       'the tracked aircraft is lost after the retry'\n+     ],\n+     historyAfterFailure: 0,\n+     historyAfterRetry: 1,\n+     refused: 1,\n+     rollbackTarget: 'navara',\n+     selectionAfterRetry: null,\n+     selectionAfterRollback: 'a00000',\n+     selectionKept: true\n+   },\n+   {\n+     case: 'cold cesium→navara failure',\n+     errors: 0,\n+     failed: [\n+       'the tracked aircraft is lost after the rollback',\n+       'the tracked aircraft is lost after the retry'\n+     ],\n+     historyAfterFailure: 0,\n+     historyAfterRetry: 1,\n+     refused: 1,\n+     rollbackTarget: 'cesium',\n+     selectionAfterRetry: null,\n+     selectionAfterRollback: null,\n+     selectionKept: false\n+   },\n+   {\n+     case: 'warm cesium→navara failure',\n+     errors: 0,\n+     failed: [\n+       'the tracked aircraft is lost after the rollback',\n+       'the tracked aircraft is lost after the retry'\n+     ],\n+     historyAfterFailure: 0,\n+     historyAfterRetry: 1,\n+     refused: 1,\n+     rollbackTarget: 'cesium',\n+     selectionAfterRetry: null,\n+     selectionAfterRollback: null,\n+     selectionKept: false\n+   },\n+   {\n+     case: 'warm navara→cesium failure',\n+     errors: 0,\n+     failed: [\n+       'the tracked aircraft is lost after the retry'\n+     ],\n+     historyAfterFailure: 0,\n+     historyAfterRetry: 1,\n+     refused: 1,\n+     rollbackTarget: 'navara',\n+     selectionAfterRetry: null,\n+     selectionAfterRollback: 'a00000',\n+     selectionKept: true\n+   }\n+ ]\n- []\n\n    at file://<scratch>/checkout/scripts/qa-strict-failure-matrix.mjs:278:10\n    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:599:9)\n    a",
+  "status": "pass",
+  "error": null,
   "layers": [],
   "coverage": {},
   "missing": [],
@@ -16,96 +16,96 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6831.799999982119,
-      "idleAt": 6890.9000000059605
+      "at": 6657.9000000059605,
+      "idleAt": 6727.9000000059605
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7041.699999988079,
-      "idleAt": 7164.699999988079
+      "at": 6858.700000017881,
+      "idleAt": 7012.100000023842
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 5258,
-      "idleAt": 5379.799999982119
+      "at": 5165.800000011921,
+      "idleAt": 5281.100000023842
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 15522.799999982119,
-      "idleAt": 16998.79999998212
+      "at": 5402.800000011921,
+      "idleAt": 6812.200000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 4957.699999988079,
-      "idleAt": 6489.699999988079
+      "at": 4928.4000000059605,
+      "idleAt": 6376.300000011921
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6951,
-      "idleAt": 6996.699999988079
+      "at": 6752,
+      "idleAt": 6812.0999999940395
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7129.800000011921,
-      "idleAt": 7191.699999988079
+      "at": 6939.300000011921,
+      "idleAt": 7005.9000000059605
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 17258.09999999404,
-      "idleAt": 18543.30000001192
+      "at": 7102.5999999940395,
+      "idleAt": 8299.59999999404
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6565,
-      "idleAt": 6772
+      "at": 6311.200000017881,
+      "idleAt": 6425.700000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7149.9000000059605,
-      "idleAt": 7196.9000000059605
+      "at": 6663.700000017881,
+      "idleAt": 6758.800000011921
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7402.5,
-      "idleAt": 7480.0999999940395
+      "at": 6895,
+      "idleAt": 6945.9000000059605
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7686.5,
-      "idleAt": 7829
+      "at": 7098.9000000059605,
+      "idleAt": 7217.800000011921
     },
     {
       "to": "navara",
@@ -118,16 +118,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6504.600000023842,
-      "idleAt": 6641.300000011921
+      "at": 6333.100000023842,
+      "idleAt": 6493.700000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6850.300000011921,
-      "idleAt": 6916.5
+      "at": 6669.700000017881,
+      "idleAt": 6750.5
     },
     {
       "to": "cesium",
@@ -138,21 +138,21 @@
   ],
   "assertions": [],
   "network": {
-    "requests": 6609,
-    "preview": 982,
+    "requests": 6026,
+    "preview": 864,
     "previewApi": {
       "/api/local-receivers/aircraft": 6,
       "/api/openai/hud-summary": 6,
       "/api/realtime/debug-log": 6,
       "/api/setup/status": 6,
-      "/api/adsbdb/type": 111,
+      "/api/adsbdb/type": 91,
       "/api/google/tiles-token": 7
     },
     "external": {
       "fonts.googleapis.com": 12,
       "services.arcgisonline.com": 175,
-      "terrain.reearth.land": 2503,
-      "tile.openstreetmap.org": 2937
+      "terrain.reearth.land": 2313,
+      "tile.openstreetmap.org": 2662
     },
     "fixtureResponses": 0,
     "probes": {
@@ -163,11 +163,13 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 5615,
-      "fetched": 0,
+      "hits": 5145,
+      "fetched": 5,
       "failed": 0,
       "cancelled": 5,
-      "fetchedByHost": {}
+      "fetchedByHost": {
+        "tile.openstreetmap.org": 5
+      }
     },
     "violations": [],
     "setupErrors": [],
@@ -189,41 +191,33 @@
       "selectionKept": true,
       "selectionAfterRollback": "a00000",
       "historyAfterRetry": 1,
-      "selectionAfterRetry": null,
+      "selectionAfterRetry": "a00000",
       "errors": 0,
-      "failed": [
-        "the tracked aircraft is lost after the retry"
-      ]
+      "failed": []
     },
     {
       "case": "cold cesium→navara failure",
       "refused": 1,
       "rollbackTarget": "cesium",
       "historyAfterFailure": 0,
-      "selectionKept": false,
-      "selectionAfterRollback": null,
+      "selectionKept": true,
+      "selectionAfterRollback": "a00000",
       "historyAfterRetry": 1,
-      "selectionAfterRetry": null,
+      "selectionAfterRetry": "a00000",
       "errors": 0,
-      "failed": [
-        "the tracked aircraft is lost after the rollback",
-        "the tracked aircraft is lost after the retry"
-      ]
+      "failed": []
     },
     {
       "case": "warm cesium→navara failure",
       "refused": 1,
       "rollbackTarget": "cesium",
       "historyAfterFailure": 0,
-      "selectionKept": false,
-      "selectionAfterRollback": null,
+      "selectionKept": true,
+      "selectionAfterRollback": "a00000",
       "historyAfterRetry": 1,
-      "selectionAfterRetry": null,
+      "selectionAfterRetry": "a00000",
       "errors": 0,
-      "failed": [
-        "the tracked aircraft is lost after the rollback",
-        "the tracked aircraft is lost after the retry"
-      ]
+      "failed": []
     },
     {
       "case": "warm navara→cesium failure",
@@ -233,26 +227,24 @@
       "selectionKept": true,
       "selectionAfterRollback": "a00000",
       "historyAfterRetry": 1,
-      "selectionAfterRetry": null,
+      "selectionAfterRetry": "a00000",
       "errors": 0,
-      "failed": [
-        "the tracked aircraft is lost after the retry"
-      ]
+      "failed": []
     },
     {
       "case": "cold cesium→navara first frame after 12 s",
       "engine": "navara",
       "history": 1,
-      "coverGoneMs": 11171,
-      "firstFrameMs": 12221,
+      "coverGoneMs": 11136,
+      "firstFrameMs": 12218,
       "errors": 0
     },
     {
       "case": "warm navara→cesium first frame after 12 s",
       "engine": "cesium",
       "history": 1,
-      "coverGoneMs": 10038,
-      "firstFrameMs": 12042,
+      "coverGoneMs": 10024,
+      "firstFrameMs": 12033,
       "errors": 0
     }
   ]

@@ -1,0 +1,217 @@
+{
+  "scenario": "qa-navara-annotations",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=annotations",
+    "--evidence=<output>/evidence/navara-annotations.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [
+    "annotations"
+  ],
+  "coverage": {
+    "annotations": {
+      "cesium": 3,
+      "navara": 9
+    }
+  },
+  "missing": [],
+  "picks": [
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 10825.699999988079,
+      "idleAt": 10974.40000000596
+    },
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 15671.699999988079,
+      "idleAt": 15720.09999999404
+    }
+  ],
+  "assertions": [
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "the board draws three marks on the attached engine and is the debug handle",
+      "detail": {
+        "drawn": 3,
+        "attached": true,
+        "handle": true
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "the same session board keeps its three marks and draws on this engine",
+      "detail": {
+        "same": true,
+        "count": 3,
+        "attached": true,
+        "handle": true
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "the near callouts show and the far pin is culled at the horizon",
+      "detail": {
+        "shown": [
+          "QA Area",
+          "QA Near"
+        ],
+        "hidden": [
+          "QA Far"
+        ]
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "the draped area paints amber on the globe canvas",
+      "detail": {
+        "bare": 1229,
+        "amber": 8907
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "cesium",
+      "claim": "the same session board keeps its three marks and draws on this engine",
+      "detail": {
+        "same": true,
+        "count": 3,
+        "attached": true,
+        "handle": true
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "cesium",
+      "claim": "the near callouts show and the far pin is culled at the horizon",
+      "detail": {
+        "shown": [
+          "QA Area",
+          "QA Near"
+        ],
+        "hidden": [
+          "QA Far"
+        ]
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "cesium",
+      "claim": "the draped area paints amber on the globe canvas",
+      "detail": {
+        "bare": 4751,
+        "amber": 8657
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "the same session board keeps its three marks and draws on this engine",
+      "detail": {
+        "same": true,
+        "count": 3,
+        "attached": true,
+        "handle": true
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "the near callouts show and the far pin is culled at the horizon",
+      "detail": {
+        "shown": [
+          "QA Area",
+          "QA Near"
+        ],
+        "hidden": [
+          "QA Far"
+        ]
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "the draped area paints amber on the globe canvas",
+      "detail": {
+        "bare": 1223,
+        "amber": 9850
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "framing a mark flies the Navara camera to it",
+      "detail": {
+        "ok": true,
+        "before": 6999.999999999762,
+        "after": 2788.478198552327
+      }
+    },
+    {
+      "layer": "annotations",
+      "engine": "navara",
+      "claim": "hidden marks leave the board",
+      "detail": {
+        "shown": [],
+        "hidden": [
+          "QA Area",
+          "QA Far",
+          "QA Near"
+        ]
+      }
+    }
+  ],
+  "network": {
+    "requests": 1000,
+    "preview": 137,
+    "previewApi": {
+      "/api/local-receivers/aircraft": 1,
+      "/api/openai/hud-summary": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/setup/status": 1,
+      "/api/google/tiles-token": 1
+    },
+    "external": {
+      "fonts.googleapis.com": 2,
+      "services.arcgisonline.com": 15,
+      "terrain.reearth.land": 397,
+      "tile.openstreetmap.org": 449
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 2,
+      "/api/openai/hud-summary/status": 1,
+      "/api/realtime/debug-log": 1,
+      "/api/google/tiles-token": 1
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 861,
+      "fetched": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {}
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": []
+}

@@ -1,4 +1,4 @@
-cesium true true 20 true w2-cctv-video viewshed
-navara true true 26 true w2-cctv-video viewshed
+cesium true true 10 true w2-cctv-video viewshed
+navara true true 14 true w2-cctv-video viewshed
 PASS retained CCTV catalog, decoder and textured projection
-STRICT {"scenario":"qa-cctv-engine-switch","assertions":4,"coverage":{"cctv":{"cesium":2,"navara":2}},"picks":2,"requests":650,"violations":0}
+STRICT {"scenario":"qa-cctv-engine-switch","assertions":4,"coverage":{"cctv":{"cesium":2,"navara":2}},"picks":2,"requests":713,"violations":0}

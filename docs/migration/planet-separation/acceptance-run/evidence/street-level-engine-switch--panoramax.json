@@ -24,24 +24,24 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7198.299999982119,
-      "idleAt": 7420.399999976158
+      "at": 6916.200000017881,
+      "idleAt": 7128.800000011921
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7661.699999988079,
-      "idleAt": 7795.199999988079
+      "at": 7316.100000023842,
+      "idleAt": 7417.100000023842
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8373.09999999404,
-      "idleAt": 8436.59999999404
+      "at": 7804.600000023842,
+      "idleAt": 7855.700000017881
     }
   ],
   "assertions": [
@@ -82,7 +82,7 @@
     }
   ],
   "network": {
-    "requests": 744,
+    "requests": 760,
     "preview": 115,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -95,12 +95,12 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 280,
-      "tiles.maps.eox.at": 316,
-      "api.panoramax.xyz": 14,
+      "terrain.reearth.land": 268,
+      "tiles.maps.eox.at": 345,
+      "api.panoramax.xyz": 13,
       "panoramax.openstreetmap.fr": 2
     },
-    "fixtureResponses": 16,
+    "fixtureResponses": 14,
     "probes": {
       "https://fonts.googleapis.com/css2*": 2,
       "/api/openai/hud-summary/status": 1,
@@ -109,11 +109,13 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 563,
-      "fetched": 0,
+      "hits": 624,
+      "fetched": 4,
       "failed": 0,
-      "cancelled": 2,
-      "fetchedByHost": {}
+      "cancelled": 0,
+      "fetchedByHost": {
+        "terrain.reearth.land": 4
+      }
     },
     "violations": [],
     "setupErrors": [],

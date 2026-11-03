@@ -1,0 +1,47 @@
+PASS Navara draws every app style itself {"styles":["retro","surveillance","thermal","anime","noir"],"pipeline":{"shown":false,"bloomShown":false,"passes":null}}
+PASS no style pass shows on Normal {"shown":false,"bloomShown":false,"passes":null}
+PASS Normal is a still frame to compare against {"mean":0,"changedShare":0}
+PASS retro: the crossfade completes {"ms":511.40000000596046,"pending":0}
+PASS retro: the engine fades it in over several frames {"frames":30,"between":25}
+PASS retro: alone at full intensity once settled {"retro":1,"surveillance":0,"thermal":0,"anime":0,"noir":0}
+PASS retro: the style pass shows, last before the final copy and after the overlays {"shown":true,"bloomShown":false,"passes":["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevStyles","final"]}
+PASS retro: the frame changes against Normal {"mean":67.01770833333343,"changedShare":0.9668125,"histogramShift":0.8729374999999999}
+PASS retro: the style's own look {"normal":{"r":217.373125,"g":214.2653125,"b":207.5005625,"saturation":12.891125,"vignette":0.989592162618405},"styled":{"r":150.953375,"g":148.174125,"b":139.10875,"saturation":14.4780625,"vignette":0.5438149308896535},"histogramShift":0.8729374999999999}
+PASS surveillance: the crossfade completes {"ms":511.5,"pending":0}
+PASS surveillance: the engine fades it in over several frames {"frames":31,"between":24}
+PASS surveillance: retro and surveillance draw together mid-crossfade {"both":20}
+PASS surveillance: alone at full intensity once settled {"retro":0,"surveillance":1,"thermal":0,"anime":0,"noir":0}
+PASS surveillance: the style pass shows, last before the final copy and after the overlays {"shown":true,"bloomShown":false,"passes":["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevStyles","final"]}
+PASS surveillance: the frame changes against Normal {"mean":181.92854166666493,"changedShare":1,"histogramShift":0.9978125000000002}
+PASS surveillance: the style's own look {"normal":{"r":217.373125,"g":214.2653125,"b":207.5005625,"saturation":12.891125,"vignette":0.989592162618405},"styled":{"r":13.661625,"g":78.4804375,"b":18.7643125,"saturation":64.8188125,"vignette":0},"histogramShift":0.9978125000000002}
+PASS thermal: the crossfade completes {"ms":512.1999999880791,"pending":0}
+PASS thermal: the engine fades it in over several frames {"frames":31,"between":24}
+PASS thermal: surveillance and thermal draw together mid-crossfade {"both":20}
+PASS thermal: alone at full intensity once settled {"retro":0,"surveillance":0,"thermal":1,"anime":0,"noir":0}
+PASS thermal: the style pass shows, last before the final copy and after the overlays {"shown":true,"bloomShown":false,"passes":["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevStyles","final"]}
+PASS thermal: the frame changes against Normal {"mean":150.46002083333505,"changedShare":0.9795625,"histogramShift":0.8893125}
+PASS thermal: the style's own look {"normal":{"r":217.373125,"g":214.2653125,"b":207.5005625,"saturation":12.891125,"vignette":0.989592162618405},"styled":{"r":73.5348125,"g":73.5348125,"b":73.5348125,"saturation":0,"vignette":0},"histogramShift":0.8893125}
+PASS anime: the crossfade completes {"ms":515.9000000059605,"pending":0}
+PASS anime: the engine fades it in over several frames {"frames":31,"between":24}
+PASS anime: thermal and anime draw together mid-crossfade {"both":21}
+PASS anime: alone at full intensity once settled {"retro":0,"surveillance":0,"thermal":0,"anime":1,"noir":0}
+PASS anime: the style pass shows, last before the final copy and after the overlays {"shown":true,"bloomShown":false,"passes":["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevStyles","final"]}
+PASS anime: the frame changes against Normal {"mean":22.577291666666767,"changedShare":0.8750625,"histogramShift":0.6419375}
+PASS anime: the style's own look {"normal":{"r":217.373125,"g":214.2653125,"b":207.5005625,"saturation":12.891125,"vignette":0.989592162618405},"styled":{"r":204.6248125,"g":196.9360625,"b":177.405375,"saturation":30.4220625,"vignette":1.0679170151815272},"histogramShift":0.6419375}
+PASS noir: the crossfade completes {"ms":500.80000001192093,"pending":0}
+PASS noir: the engine fades it in over several frames {"frames":30,"between":23}
+PASS noir: anime and noir draw together mid-crossfade {"both":21}
+PASS noir: alone at full intensity once settled {"retro":0,"surveillance":0,"thermal":0,"anime":0,"noir":1}
+PASS noir: the style pass shows, last before the final copy and after the overlays {"shown":true,"bloomShown":false,"passes":["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevStyles","final"]}
+PASS noir: the frame changes against Normal {"mean":64.54074999999956,"changedShare":0.912875,"histogramShift":0.7558750000000001}
+PASS noir: the style's own look {"normal":{"r":217.373125,"g":214.2653125,"b":207.5005625,"saturation":12.891125,"vignette":0.989592162618405},"styled":{"r":164.823125,"g":161.6665,"b":155.593125,"saturation":9.23,"vignette":0.17398658359010366},"histogramShift":0.7558750000000001}
+PASS FLIR Ironbow reaches the engine and colours the frame {"grey":0,"ironbow":31.114375}
+PASS Normal: every style back at 0 and the pass hidden {"ms":515.5999999940395,"pending":0,"samples":[[0.9979004799953651,0],[0.9917052799907875,0],[0.981568,0],[0.967232,0],[0.9464700799843979,0],[0.9222243200094032,0],[0.8943839199890423,0],[0.8610300799748611,0],[0.8233443200141717,0],[0.7816716799527359,0],[0.7413756799657059,0],[0.6838284799620818,0],[0.6232880000000001,0],[0.5671779200221825,0],[0.5047884799525452,0],[0.44556799999999996,0],[0.3801920000000001,0],[0.32449568001920703,0],[0.2758759199645806,0],[0.225792,0],[0.18458888001448637,0],[0.14644871996129039,0],[0.1125276799886894,0],[0.0822556800096702,0],[0.057800000000000074,0],[0.03688328000647545,0],[0.020321280004806486,0],[0.00803911999395368,0],[0.0025920000000000387,0],[0.00001799999999996249,0],[0,0]],"active":"normal","intensities":{"retro":0,"surveillance":0,"thermal":0,"anime":0,"noir":0},"pipeline":{"shown":false,"bloomShown":false,"passes":["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevStyles","final"]}}
+PASS Normal restores the frame {"mean":0,"changedShare":0}
+PASS style=snow opens on Normal {"active":"normal","intensities":[0,0,0,0,0]}
+PASS a FLIR link opens filtered on Navara 
+PASS Cesium: FLIR is its own post stage, the engine draws none {"setStyle":"undefined","stageName":"godsEyeView_thermal","enabled":true,"intensity":1,"inScene":true}
+PASS Cesium: FLIR changes its frame {"mean":145.9637499999997,"changedShare":0.968375}
+PASS Cesium: Normal restores its frame {"mean":0,"changedShare":0}
+PASS no page errors []
+STRICT {"scenario":"qa-navara-visual-styles","assertions":0,"coverage":{},"picks":1,"requests":752,"violations":0}

@@ -1,0 +1,12 @@
+PASS Navara treats contacts itself; the sonar starts off {"missing":0,"sonar":{"enabled":false,"active":false,"angleDeg":282.35769230769233,"range":100,"opacity":84,"sector":24}}
+PASS the Cyber HUD runs with the contact adapter {"theme":"cyber","gpu":"supported","hud":true}
+PASS the sweep at 295° lights the contacts it passes, the rest sit at the floor {"spread":62.7931111111111,"angle":295.2069230765104,"lit":1,"litLuma":234.67100000000002,"dimLuma":192.5901505376344,"brightest":27,"expectedBrightest":27,"sonar":{"enabled":true,"active":true,"angleDeg":295.2069230765104,"range":100,"opacity":35,"sector":24}}
+PASS the sweep at 29° lights the contacts it passes, the rest sit at the floor {"spread":62.7931111111111,"angle":28.578461537223596,"lit":1,"litLuma":234.67100000000002,"dimLuma":192.89441935483873,"brightest":3,"expectedBrightest":3,"sonar":{"enabled":true,"active":true,"angleDeg":28.578461537223596,"range":100,"opacity":35,"sector":24}}
+PASS the sweep at 122° lights the contacts it passes, the rest sit at the floor {"spread":62.7931111111111,"angle":121.99153846112581,"lit":2,"litLuma":234.67100000000002,"dimLuma":193.09170609318997,"brightest":11,"expectedBrightest":11,"sonar":{"enabled":true,"active":true,"angleDeg":121.99153846112581,"range":100,"opacity":35,"sector":24}}
+PASS the sweep turns: another contact is lit [{"angle":295.2069230765104,"brightest":27,"expectedBrightest":27},{"angle":28.578461537223596,"brightest":3,"expectedBrightest":3},{"angle":121.99153846112581,"brightest":11,"expectedBrightest":11}]
+PASS a parked scene draws at the fleet cadence while the sweep runs over contacts {"frames":16}
+PASS with the sweep off every contact takes the neutral factor and the scene rests {"spread":16.080000000000013,"sweeping":[62.7931111111111,62.7931111111111,62.7931111111111],"frames":0}
+PASS leaving the Cyber HUD gives the contacts back unchanged {"drift":0}
+PASS Cesium: the command adapter treats contacts, the engine none {"setContactSonar":"undefined","gpu":"supported"}
+PASS no page errors []
+STRICT {"scenario":"qa-navara-sonar","assertions":0,"coverage":{},"picks":1,"requests":665,"violations":0}

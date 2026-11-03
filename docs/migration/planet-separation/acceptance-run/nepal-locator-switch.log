@@ -1,5 +1,5 @@
 navara Bhote Koshi · Path overview cyan pixels added by the path 353 { x: 472.8058473626226, y: 381.65403648978895 }
-cesium Bhote Koshi · Path overview cyan pixels added by the path 413 { x: 472.8058473626274, y: 381.6540364897882 }
+cesium Bhote Koshi · Path overview cyan pixels added by the path 413 { x: 472.80584736262733, y: 381.6540364898134 }
 navara Bhote Koshi · Path overview cyan pixels added by the path 353 { x: 472.8058473626226, y: 381.65403648978895 }
 PASS Nepal locator flood path and presentation retained, trigger and places update; both engines
-STRICT {"scenario":"qa-nepal-locator-switch","assertions":4,"coverage":{"bhote-koshi-locator":{"cesium":1,"navara":3}},"picks":2,"requests":687,"violations":0}
+STRICT {"scenario":"qa-nepal-locator-switch","assertions":4,"coverage":{"bhote-koshi-locator":{"cesium":1,"navara":3}},"picks":2,"requests":691,"violations":0}

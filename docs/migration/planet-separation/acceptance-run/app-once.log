@@ -1,16 +1,336 @@
-node:internal/modules/run_main:111
-    triggerUncaughtException(
-    ^
-
-AssertionError [ERR_ASSERTION]: the session tools changed on the switch to navara {"toolsBefore":{"marks":1,"marksDrawn":true,"files":1,"filesDrawn":1,"drawShape":"line"},"tools":{"marks":1,"marksDrawn":true,"files":1,"filesDrawn":1,"drawShape":"line"}}
-    at check (file://<scratch>/checkout/scripts/qa-app-once.mjs:32:12)
-    at file://<scratch>/checkout/scripts/qa-app-once.mjs:230:5 {
-  generatedMessage: false,
-  code: 'ERR_ASSERTION',
-  actual: undefined,
-  expected: undefined,
-  operator: 'fail',
-  diff: 'simple'
+{
+  "switches": [
+    {
+      "kind": "navara",
+      "ms": 1701,
+      "ids": {},
+      "counters": {
+        "applications": 1,
+        "attachments": 2,
+        "detaches": 1,
+        "rollbacks": 0
+      },
+      "ui": {
+        "value": "Reykjav",
+        "focused": "location-search",
+        "panelOpen": true
+      },
+      "tools": {
+        "marks": 1,
+        "marksDrawn": true,
+        "files": 1,
+        "filesDrawn": 1,
+        "drawShape": "line"
+      }
+    },
+    {
+      "kind": "cesium",
+      "ms": 2220,
+      "ids": {},
+      "counters": {
+        "applications": 1,
+        "attachments": 3,
+        "detaches": 2,
+        "rollbacks": 0
+      },
+      "ui": {
+        "value": "Reykjav",
+        "focused": "location-search",
+        "panelOpen": true
+      },
+      "tools": {
+        "marks": 1,
+        "marksDrawn": true,
+        "files": 1,
+        "filesDrawn": 1,
+        "drawShape": "line"
+      }
+    },
+    {
+      "kind": "navara",
+      "ms": 243,
+      "ids": {},
+      "counters": {
+        "applications": 1,
+        "attachments": 4,
+        "detaches": 3,
+        "rollbacks": 0
+      },
+      "ui": {
+        "value": "Reykjav",
+        "focused": "location-search",
+        "panelOpen": true
+      },
+      "tools": {
+        "marks": 1,
+        "marksDrawn": true,
+        "files": 1,
+        "filesDrawn": 1,
+        "drawShape": "line"
+      }
+    },
+    {
+      "kind": "cesium",
+      "ms": 56,
+      "ids": {},
+      "counters": {
+        "applications": 1,
+        "attachments": 5,
+        "detaches": 4,
+        "rollbacks": 0
+      },
+      "ui": {
+        "value": "Reykjav",
+        "focused": "location-search",
+        "panelOpen": true
+      },
+      "tools": {
+        "marks": 1,
+        "marksDrawn": true,
+        "files": 1,
+        "filesDrawn": 1,
+        "drawShape": "line"
+      }
+    },
+    {
+      "kind": "navara",
+      "ms": 211,
+      "ids": {},
+      "counters": {
+        "applications": 1,
+        "attachments": 6,
+        "detaches": 5,
+        "rollbacks": 0
+      },
+      "ui": {
+        "value": "Reykjav",
+        "focused": "location-search",
+        "panelOpen": true
+      },
+      "tools": {
+        "marks": 1,
+        "marksDrawn": true,
+        "files": 1,
+        "filesDrawn": 1,
+        "drawShape": "line"
+      }
+    },
+    {
+      "kind": "cesium",
+      "ms": 54,
+      "ids": {},
+      "counters": {
+        "applications": 1,
+        "attachments": 7,
+        "detaches": 6,
+        "rollbacks": 0
+      },
+      "ui": {
+        "value": "Reykjav",
+        "focused": "location-search",
+        "panelOpen": true
+      },
+      "tools": {
+        "marks": 1,
+        "marksDrawn": true,
+        "files": 1,
+        "filesDrawn": 1,
+        "drawShape": "line"
+      }
+    }
+  ],
+  "failures": [],
+  "boot": {
+    "ids": {
+      "application": 1,
+      "shell": 2,
+      "shareLink": 3,
+      "hud": 4,
+      "navigation": 5,
+      "placeSearch": 6,
+      "dataManager": 7,
+      "voice": 8,
+      "annotations": 9,
+      "geoImport": 10,
+      "drawTool": 11
+    },
+    "counters": {
+      "applications": 1,
+      "attachments": 1,
+      "detaches": 0,
+      "rollbacks": 0
+    }
+  },
+  "toolsPrepared": {
+    "annotated": 1,
+    "imported": true
+  },
+  "toolsBefore": {
+    "marks": 1,
+    "marksDrawn": true,
+    "files": 1,
+    "filesDrawn": 1,
+    "drawShape": "line"
+  },
+  "escapeBefore": {
+    "before": {
+      "value": "Reykjav",
+      "focused": "location-search",
+      "panelOpen": true
+    },
+    "after": {
+      "value": "",
+      "focused": "location-bar-toggle",
+      "panelOpen": true
+    }
+  },
+  "uiBefore": {
+    "value": "Reykjav",
+    "focused": "location-search",
+    "panelOpen": true
+  },
+  "firstRoundTrip": {
+    "window:pagehide@index.js": 1,
+    "window:popstate@index.js": 2,
+    "window:gev:map-stack-changed@index.js": 2,
+    "window:pointermove@index.js": 1,
+    "window:blur@index.js": 2,
+    "window:blur@navara-engine.js": 1,
+    "window:resize@index.js": 4,
+    "window:resize@navara-engine.js": 1,
+    "window:gev:cockpit-mode-changed@index.js": 7,
+    "window:gev:cockpit-signal-expanded@index.js": 1,
+    "window:gev:cockpit-context-expanded@index.js": 1,
+    "window:gev:cockpit-weather-state@index.js": 1,
+    "window:gev:entity-selected@index.js": 1,
+    "window:gev:entity-selection-cleared@index.js": 1,
+    "window:gev:awareness-subject-selected@index.js": 2,
+    "window:hashchange@index.js": 1,
+    "window:gev:cctv-request-focus@index.js": 1,
+    "window:gev:world-request-focus@index.js": 1,
+    "window:gev:navigation-authority-taken@index.js": 1,
+    "window:gev:cockpit-weather-toggle@index.js": 1,
+    "window:gev:awareness-subject-cleared@index.js": 1,
+    "document:keydown@index.js": 7,
+    "document:keyup@index.js": 1,
+    "document:keydown@navara-engine.js": 2,
+    "document:keyup@navara-engine.js": 1,
+    "document:visibilitychange@index.js": 6,
+    "document:visibilitychange@navara-engine.js": 1,
+    "document:pointerdown@index.js": 1,
+    "document:gev:radio-selected@index.js": 1,
+    "document:fullscreenchange@index.js": 1,
+    "document:click@index.js": 1,
+    "document:touchstart@index.js": 1,
+    "document:touchmove@index.js": 1,
+    "document:touchend@index.js": 1,
+    "document:touchcancel@index.js": 1,
+    "document:dragover@index.js": 1,
+    "document:drop@index.js": 1
+  },
+  "after": {
+    "ids": {
+      "application": 1,
+      "shell": 2,
+      "shareLink": 3,
+      "hud": 4,
+      "navigation": 5,
+      "placeSearch": 6,
+      "dataManager": 7,
+      "voice": 8,
+      "annotations": 9,
+      "geoImport": 10,
+      "drawTool": 11
+    },
+    "counters": {
+      "applications": 1,
+      "attachments": 7,
+      "detaches": 6,
+      "rollbacks": 0
+    }
+  },
+  "listeners": {
+    "window:blur@navara-engine.js": {
+      "before": 0,
+      "after": 1
+    },
+    "window:resize@navara-engine.js": {
+      "before": 0,
+      "after": 1
+    },
+    "document:keydown@navara-engine.js": {
+      "before": 0,
+      "after": 2
+    },
+    "document:keyup@navara-engine.js": {
+      "before": 0,
+      "after": 1
+    },
+    "document:visibilitychange@navara-engine.js": {
+      "before": 0,
+      "after": 1
+    }
+  },
+  "listenersSinceFirstRoundTrip": {},
+  "parkedEngineCalls": [],
+  "escapeAfter": {
+    "before": {
+      "value": "Reykjav",
+      "focused": "location-search",
+      "panelOpen": true
+    },
+    "after": {
+      "value": "",
+      "focused": "location-bar-toggle",
+      "panelOpen": true
+    }
+  },
+  "rollback": {
+    "ids": {},
+    "counters": {
+      "applications": 1,
+      "attachments": 8,
+      "detaches": 7,
+      "rollbacks": 1
+    },
+    "ui": {
+      "value": "Reykjav",
+      "focused": "location-search",
+      "panelOpen": true
+    },
+    "history": 0
+  },
+  "dataFailure": {
+    "ids": {},
+    "counters": {
+      "applications": 1,
+      "attachments": 11,
+      "detaches": 10,
+      "rollbacks": 2
+    },
+    "history": 0
+  },
+  "errors": [],
+  "legacy": {
+    "ids": {
+      "application": 1,
+      "shell": 2,
+      "shareLink": 3,
+      "hud": 4,
+      "navigation": 5,
+      "placeSearch": 6,
+      "dataManager": 7,
+      "voice": 8,
+      "annotations": 9,
+      "geoImport": 10,
+      "drawTool": 11
+    },
+    "counters": {
+      "applications": 3,
+      "attachments": 3,
+      "detaches": 2,
+      "rollbacks": 0
+    }
+  }
 }
-
-Node.js v26.12.0
+PASS application created once; session kept

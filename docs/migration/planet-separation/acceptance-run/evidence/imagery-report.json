@@ -306,12 +306,24 @@
       "path": "/search/granules.umm_json"
     },
     {
-      "host": "cmr.earthdata.nasa.gov",
-      "path": "/search/granules.umm_json"
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
     },
     {
-      "host": "cmr.earthdata.nasa.gov",
-      "path": "/search/granules.umm_json"
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
+    },
+    {
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
+    },
+    {
+      "host": "gibs-c.earthdata.nasa.gov",
+      "path": "/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/2026-10-28/GoogleMapsCompatible_Level12/12/1686/935.png"
+    },
+    {
+      "host": "gibs-a.earthdata.nasa.gov",
+      "path": "/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/2026-10-28/GoogleMapsCompatible_Level12/12/1686/936.png"
     },
     {
       "host": "cmr.earthdata.nasa.gov",
@@ -380,6 +392,34 @@
     {
       "host": "cmr.earthdata.nasa.gov",
       "path": "/search/granules.umm_json"
+    },
+    {
+      "host": "cmr.earthdata.nasa.gov",
+      "path": "/search/granules.umm_json"
+    },
+    {
+      "host": "cmr.earthdata.nasa.gov",
+      "path": "/search/granules.umm_json"
+    },
+    {
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
+    },
+    {
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
+    },
+    {
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
+    },
+    {
+      "host": "gibs-c.earthdata.nasa.gov",
+      "path": "/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/2026-10-28/GoogleMapsCompatible_Level12/12/1686/935.png"
+    },
+    {
+      "host": "gibs-a.earthdata.nasa.gov",
+      "path": "/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/2026-10-28/GoogleMapsCompatible_Level12/12/1686/936.png"
     },
     {
       "host": "cmr.earthdata.nasa.gov",
@@ -446,6 +486,26 @@
       "path": "/search/granules.umm_json"
     },
     {
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
+    },
+    {
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
+    },
+    {
+      "host": "wvs.earthdata.nasa.gov",
+      "path": "/api/v1/snapshot"
+    },
+    {
+      "host": "gibs-c.earthdata.nasa.gov",
+      "path": "/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/2026-10-28/GoogleMapsCompatible_Level12/12/1686/935.png"
+    },
+    {
+      "host": "gibs-a.earthdata.nasa.gov",
+      "path": "/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/2026-10-28/GoogleMapsCompatible_Level12/12/1686/936.png"
+    },
+    {
       "host": "cmr.earthdata.nasa.gov",
       "path": "/search/granules.umm_json"
     },
@@ -498,9 +558,9 @@
       56
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "ab": {
@@ -515,9 +575,9 @@
       105
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "switch-cesium": {
@@ -549,9 +609,9 @@
       105
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "swap": {
@@ -566,9 +626,9 @@
       56
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "divider": {
@@ -583,9 +643,9 @@
       56
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "home": {
@@ -600,9 +660,9 @@
       105
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "end": {
@@ -617,43 +677,43 @@
       56
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "transparent": {
     "left": [
-      227,
-      223,
-      204
+      213,
+      207,
+      182
     ],
     "right": [
-      230,
-      225,
-      223
+      218,
+      211,
+      209
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "half": {
     "left": [
-      232,
-      140,
-      130
+      225,
+      132,
+      119
     ],
     "right": [
-      234,
-      141,
-      140
+      228,
+      133,
+      133
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "basemap": {
@@ -663,14 +723,14 @@
       56
     ],
     "right": [
-      230,
-      225,
-      223
+      218,
+      211,
+      209
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "beforeToggle": {
@@ -714,14 +774,14 @@
       56
     ],
     "right": [
-      230,
-      225,
-      223
+      218,
+      211,
+      209
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "afterToggle": {
@@ -760,19 +820,19 @@
   },
   "source-failure": {
     "left": [
-      227,
-      223,
-      204
+      213,
+      207,
+      182
     ],
     "right": [
-      230,
-      225,
-      223
+      218,
+      211,
+      209
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "failedTiles": 2,
@@ -788,26 +848,26 @@
       105
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "box-drag": {
     "left": [
-      216,
-      224,
-      210
+      204,
+      210,
+      191
     ],
     "right": [
-      219,
-      226,
-      227
+      209,
+      214,
+      215
     ],
     "outside": [
-      217,
-      221,
-      200
+      197,
+      201,
+      174
     ]
   },
   "fit": {

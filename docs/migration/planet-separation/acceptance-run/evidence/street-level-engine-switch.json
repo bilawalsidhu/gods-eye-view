@@ -23,24 +23,24 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7781.899999976158,
-      "idleAt": 7984.199999988079
+      "at": 7644.700000017881,
+      "idleAt": 7765.300000011921
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8218.09999999404,
-      "idleAt": 8309.59999999404
+      "at": 7917,
+      "idleAt": 8024.4000000059605
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8739.299999982119,
-      "idleAt": 8767
+      "at": 8310.200000017881,
+      "idleAt": 8355
     }
   ],
   "assertions": [
@@ -81,7 +81,7 @@
     }
   ],
   "network": {
-    "requests": 890,
+    "requests": 959,
     "preview": 115,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -94,13 +94,13 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 355,
-      "tiles.maps.eox.at": 390,
-      "api.kartaview.org": 7,
+      "terrain.reearth.land": 423,
+      "tiles.maps.eox.at": 389,
+      "api.kartaview.org": 9,
       "storage2.openstreetcam.org": 5,
       "cdn.kartaview.org": 1
     },
-    "fixtureResponses": 13,
+    "fixtureResponses": 15,
     "probes": {
       "https://fonts.googleapis.com/css2*": 2,
       "/api/openai/hud-summary/status": 1,
@@ -109,13 +109,13 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 743,
-      "fetched": 17,
+      "hits": 814,
+      "fetched": 11,
       "failed": 0,
-      "cancelled": 13,
+      "cancelled": 5,
       "fetchedByHost": {
-        "terrain.reearth.land": 10,
-        "tiles.maps.eox.at": 7
+        "tiles.maps.eox.at": 8,
+        "terrain.reearth.land": 3
       }
     },
     "violations": [],

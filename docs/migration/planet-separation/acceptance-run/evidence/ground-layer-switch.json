@@ -38,48 +38,48 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 17001.09999999404,
-      "idleAt": 17219.69999998808
+      "at": 14504.600000023842,
+      "idleAt": 14646.200000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 25085.69999998808,
-      "idleAt": 25179.69999998808
+      "at": 21964.70000001788,
+      "idleAt": 22029.80000001192
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 34321,
-      "idleAt": 34344.69999998808
+      "at": 30219.70000001788,
+      "idleAt": 30244.600000023842
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 34656.19999998808,
-      "idleAt": 34720.19999998808
+      "at": 30400,
+      "idleAt": 30468.80000001192
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 37158.5,
-      "idleAt": 37226.09999999404
+      "at": 32325.100000023842,
+      "idleAt": 32364.20000001788
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 38155.89999997616,
-      "idleAt": 38268.29999998212
+      "at": 33105.40000000596,
+      "idleAt": 33178
     }
   ],
   "assertions": [
@@ -244,8 +244,8 @@
     }
   ],
   "network": {
-    "requests": 649,
-    "preview": 177,
+    "requests": 654,
+    "preview": 161,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
@@ -256,8 +256,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 210,
-      "tiles.maps.eox.at": 245
+      "terrain.reearth.land": 214,
+      "tiles.maps.eox.at": 262
     },
     "fixtureResponses": 0,
     "probes": {
@@ -268,7 +268,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 470,
+      "hits": 491,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,

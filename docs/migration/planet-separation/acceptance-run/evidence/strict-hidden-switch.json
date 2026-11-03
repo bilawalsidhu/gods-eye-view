@@ -32,8 +32,8 @@
   ],
   "assertions": [],
   "network": {
-    "requests": 764,
-    "preview": 142,
+    "requests": 751,
+    "preview": 138,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
@@ -44,7 +44,7 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 297,
+      "terrain.reearth.land": 288,
       "tile.openstreetmap.org": 308
     },
     "fixtureResponses": 0,
@@ -56,7 +56,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 620,
+      "hits": 611,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -79,9 +79,9 @@
       "temperature": "cold",
       "hiddenWhileBusy": true,
       "settledWhileHidden": true,
-      "settleAfterHideMs": 1756,
+      "settleAfterHideMs": 928,
       "frameWhileHidden": false,
-      "firstFrameAfterShownMs": 386,
+      "firstFrameAfterShownMs": 202,
       "history": 1
     },
     {
@@ -89,9 +89,9 @@
       "temperature": "warm",
       "hiddenWhileBusy": true,
       "settledWhileHidden": true,
-      "settleAfterHideMs": 128,
+      "settleAfterHideMs": 71,
       "frameWhileHidden": false,
-      "firstFrameAfterShownMs": 24,
+      "firstFrameAfterShownMs": 19,
       "history": 1
     },
     {
@@ -99,9 +99,9 @@
       "temperature": "warm",
       "hiddenWhileBusy": true,
       "settledWhileHidden": true,
-      "settleAfterHideMs": 9,
+      "settleAfterHideMs": 4,
       "frameWhileHidden": true,
-      "firstFrameAfterShownMs": 28,
+      "firstFrameAfterShownMs": 27,
       "history": 1
     }
   ]

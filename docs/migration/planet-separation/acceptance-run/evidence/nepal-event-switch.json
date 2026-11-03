@@ -23,24 +23,24 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8117.300000011921,
-      "idleAt": 8314
+      "at": 8011.300000011921,
+      "idleAt": 8198.90000000596
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9875.199999988079,
-      "idleAt": 9962.800000011921
+      "at": 9740.5,
+      "idleAt": 9845.90000000596
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 12393.300000011921,
-      "idleAt": 12485.09999999404
+      "at": 12210.09999999404,
+      "idleAt": 12267.40000000596
     }
   ],
   "assertions": [
@@ -49,7 +49,7 @@
       "engine": "navara",
       "claim": "same model and media root; paused at 0.52 with split 0.27; the divider changes the imagery",
       "detail": {
-        "diff": 55.09813333333334
+        "diff": 55.136
       }
     },
     {
@@ -65,7 +65,7 @@
       "engine": "navara",
       "claim": "same model and media root; paused at 0.52 with split 0.27; the divider changes the imagery",
       "detail": {
-        "diff": 55.1088
+        "diff": 55.10346666666667
       }
     },
     {
@@ -80,13 +80,13 @@
       "detail": {
         "enabled": true,
         "playing": true,
-        "progress": 0.5324655555556881,
+        "progress": 0.5314933333333995,
         "split": 0.27
       }
     }
   ],
   "network": {
-    "requests": 911,
+    "requests": 930,
     "preview": 139,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -97,9 +97,9 @@
     },
     "external": {
       "fonts.googleapis.com": 2,
-      "services.arcgisonline.com": 236,
-      "terrain.reearth.land": 319,
-      "tiles.maps.eox.at": 203,
+      "services.arcgisonline.com": 239,
+      "terrain.reearth.land": 331,
+      "tiles.maps.eox.at": 207,
       "www.youtube-nocookie.com": 6,
       "i.ytimg.com": 5,
       "www.youtube.com": 1
@@ -117,7 +117,7 @@
       "https://www.youtube.com/iframe_api*": 1
     },
     "tileCache": {
-      "hits": 757,
+      "hits": 776,
       "fetched": 1,
       "failed": 0,
       "cancelled": 0,

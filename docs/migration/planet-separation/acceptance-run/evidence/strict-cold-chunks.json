@@ -5,8 +5,8 @@
     "--layers=",
     "--evidence=<output>/evidence/strict-cold-chunks.json"
   ],
-  "status": "fail",
-  "error": "AssertionError [ERR_ASSERTION]: a cold start loaded the other engine\n+ actual - expected\n\n+ [\n+   {\n+     loadedAfterPick: 4,\n+     loadedAtColdStart: [\n+       '/cesium/Widgets/widgets.css',\n+       '/cesium/Cesium.js'\n+     ],\n+     otherEngine: 'cesium',\n+     start: 'navara'\n+   }\n+ ]\n- []\n\n    at file://<scratch>/checkout/scripts/qa-strict-cold-chunks.mjs:90:10\n    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:599:9)\n    at async file://<scratch>/checkout/scripts/qa-strict-cold-chunks.mjs:44:1",
+  "status": "pass",
+  "error": null,
   "layers": [],
   "coverage": {},
   "missing": [],
@@ -16,21 +16,21 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 11604.09999999404,
-      "idleAt": 11742.59999999404
+      "at": 11414.800000011921,
+      "idleAt": 11555.800000011921
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10057.799999982119,
-      "idleAt": 11490.299999982119
+      "at": 10008.300000011921,
+      "idleAt": 11419
     }
   ],
   "assertions": [],
   "network": {
-    "requests": 1739,
+    "requests": 1637,
     "preview": 247,
     "previewApi": {
       "/api/local-receivers/aircraft": 2,
@@ -42,8 +42,8 @@
     "external": {
       "fonts.googleapis.com": 4,
       "services.arcgisonline.com": 62,
-      "terrain.reearth.land": 683,
-      "tile.openstreetmap.org": 743
+      "terrain.reearth.land": 634,
+      "tile.openstreetmap.org": 690
     },
     "fixtureResponses": 0,
     "probes": {
@@ -54,7 +54,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 1488,
+      "hits": 1386,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -75,7 +75,8 @@
     {
       "start": "navara",
       "otherEngine": "cesium",
-      "loadedAtColdStart": [
+      "loadedAtColdStart": [],
+      "knownGap": [
         "/cesium/Widgets/widgets.css",
         "/cesium/Cesium.js"
       ],
@@ -85,6 +86,7 @@
       "start": "cesium",
       "otherEngine": "navara",
       "loadedAtColdStart": [],
+      "knownGap": [],
       "loadedAfterPick": 6
     }
   ]

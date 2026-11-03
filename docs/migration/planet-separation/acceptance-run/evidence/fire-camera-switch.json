@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10567.59999999404,
-      "idleAt": 10803.59999999404
+      "at": 9629.800000011921,
+      "idleAt": 9796
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 11796.699999988079,
-      "idleAt": 11847.59999999404
+      "at": 10114.200000017881,
+      "idleAt": 10155.90000000596
     }
   ],
   "assertions": [
@@ -59,8 +59,8 @@
       "engine": "cesium",
       "claim": "a click on empty ground clears the camera; a click on it selects it again",
       "detail": {
-        "x": 461.38868475017125,
-        "y": 586.9611164173448,
+        "x": 461.3886847501786,
+        "y": 586.961116417321,
         "id": "alpr:9000079"
       }
     },
@@ -74,8 +74,8 @@
     }
   ],
   "network": {
-    "requests": 754,
-    "preview": 129,
+    "requests": 826,
+    "preview": 126,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
@@ -87,8 +87,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 288,
-      "tiles.maps.eox.at": 303,
+      "terrain.reearth.land": 316,
+      "tiles.maps.eox.at": 350,
       "tiles.dontgetflocked.com": 17
     },
     "fixtureResponses": 17,
@@ -100,10 +100,10 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 606,
+      "hits": 681,
       "fetched": 0,
       "failed": 0,
-      "cancelled": 4,
+      "cancelled": 0,
       "fetchedByHost": {}
     },
     "violations": [],

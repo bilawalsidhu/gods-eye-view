@@ -23,32 +23,32 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7733.5,
-      "idleAt": 8008.199999988079
+      "at": 7364.700000017881,
+      "idleAt": 7558.700000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8346.799999982119,
-      "idleAt": 8438.90000000596
+      "at": 7742.300000011921,
+      "idleAt": 7805.9000000059605
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10582.799999982119,
-      "idleAt": 10629.40000000596
+      "at": 9740.700000017881,
+      "idleAt": 9794.700000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 12316.299999982119,
-      "idleAt": 12423.59999999404
+      "at": 11409.5,
+      "idleAt": 11500
     }
   ],
   "assertions": [
@@ -77,7 +77,7 @@
       "engine": "cesium",
       "claim": "FLY continues with the same motion and advances",
       "detail": {
-        "moved": 61.149318887446455
+        "moved": 60.58952285372943
       }
     },
     {
@@ -90,7 +90,7 @@
       "engine": "navara",
       "claim": "FLY continues with the same motion and advances",
       "detail": {
-        "moved": 62.344496509518116
+        "moved": 61.94914488502644
       }
     },
     {
@@ -103,14 +103,14 @@
           "fly": false
         },
         "drift": 0,
-        "beforeZoom": 301.2158962627868,
-        "zoomed": 72.55225904331878,
-        "kept": 72.55225904331878
+        "beforeZoom": 300.5882149508535,
+        "zoomed": 72.5669364604369,
+        "kept": 72.5669364604369
       }
     }
   ],
   "network": {
-    "requests": 877,
+    "requests": 878,
     "preview": 116,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -124,8 +124,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 349,
-      "tiles.maps.eox.at": 395
+      "terrain.reearth.land": 348,
+      "tiles.maps.eox.at": 397
     },
     "fixtureResponses": 0,
     "probes": {
@@ -136,7 +136,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 759,
+      "hits": 760,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,

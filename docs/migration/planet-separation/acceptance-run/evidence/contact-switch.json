@@ -28,16 +28,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8157.9000000059605,
-      "idleAt": 8422.5
+      "at": 6901.799999982119,
+      "idleAt": 7081
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9175.700000017881,
-      "idleAt": 9260.40000000596
+      "at": 7223.0999999940395,
+      "idleAt": 7314.799999982119
     }
   ],
   "assertions": [
@@ -47,8 +47,8 @@
       "claim": "the station zone holds the fixture station, drawn and pickable",
       "detail": {
         "drawn": [
-          580,
-          577
+          579,
+          583
         ],
         "records": [
           "QA Harbour Station"
@@ -101,8 +101,8 @@
       "claim": "the station zone holds the fixture station, drawn and pickable",
       "detail": {
         "drawn": [
-          513,
-          213
+          571,
+          570
         ],
         "records": [
           "QA Harbour Station"
@@ -141,8 +141,8 @@
       "claim": "the station zone holds the fixture station, drawn and pickable",
       "detail": {
         "drawn": [
-          513,
-          213
+          571,
+          570
         ],
         "records": [
           "QA Harbour Station"
@@ -171,8 +171,8 @@
       "claim": "the station zone holds the fixture station, drawn and pickable",
       "detail": {
         "drawn": [
-          513,
-          213
+          571,
+          570
         ],
         "records": [
           "QA Harbour Station"
@@ -188,21 +188,21 @@
     }
   ],
   "network": {
-    "requests": 862,
-    "preview": 116,
+    "requests": 621,
+    "preview": 117,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
       "/api/realtime/debug-log": 1,
       "/api/setup/status": 1,
-      "/api/terrain/heights": 1,
+      "/api/terrain/heights": 2,
       "/api/google/tiles-token": 1
     },
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 320,
-      "tiles.maps.eox.at": 409
+      "terrain.reearth.land": 233,
+      "tiles.maps.eox.at": 254
     },
     "fixtureResponses": 0,
     "probes": {
@@ -213,7 +213,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 744,
+      "hits": 502,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,

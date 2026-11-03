@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6730.5999999940395,
-      "idleAt": 6948.299999982119
+      "at": 6597.5999999940395,
+      "idleAt": 6791.799999982119
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7039.5999999940395,
-      "idleAt": 7083.199999988079
+      "at": 6882.5999999940395,
+      "idleAt": 6954.0999999940395
     }
   ],
   "assertions": [

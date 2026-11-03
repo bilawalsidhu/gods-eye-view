@@ -24,16 +24,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10017.800000011921,
-      "idleAt": 10217.40000000596
+      "at": 9188.40000000596,
+      "idleAt": 9335.90000000596
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10995.199999988079,
-      "idleAt": 11040.199999988079
+      "at": 9619.800000011921,
+      "idleAt": 9677.600000023842
     }
   ],
   "assertions": [
@@ -60,8 +60,8 @@
       "engine": "cesium",
       "claim": "a click on empty ground clears the fire; a click on it selects it again",
       "detail": {
-        "x": 640.0000000003446,
-        "y": 451.286823562058,
+        "x": 640.0000000001679,
+        "y": 491.4158610802833,
         "id": "FIRE-00060"
       }
     },
@@ -75,21 +75,21 @@
     }
   ],
   "network": {
-    "requests": 1015,
-    "preview": 114,
+    "requests": 995,
+    "preview": 115,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
       "/api/realtime/debug-log": 1,
       "/api/setup/status": 1,
-      "/api/terrain/heights": 2,
+      "/api/terrain/heights": 3,
       "/api/google/tiles-token": 1
     },
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 440,
-      "tiles.maps.eox.at": 444
+      "terrain.reearth.land": 424,
+      "tiles.maps.eox.at": 439
     },
     "fixtureResponses": 0,
     "probes": {
@@ -100,7 +100,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 899,
+      "hits": 878,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,

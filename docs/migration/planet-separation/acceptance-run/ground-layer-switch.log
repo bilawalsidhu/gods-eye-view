@@ -10,4 +10,4 @@ PASS navara select fire under GNSS, exclude hole, retain incident card
 PASS navara retained selected AIS vessel, chevron, card and single track request
 PASS cesium retained selected AIS vessel, chevron, card and single track request
 PASS navara retained selected AIS vessel, chevron, card and single track request
-STRICT {"scenario":"qa-ground-layer-switch","assertions":27,"coverage":{"ais-live-vessels":{"cesium":2,"navara":4},"air-quality":{"cesium":2,"navara":3},"gnss-integrity":{"cesium":2,"navara":3},"fire-perimeters":{"cesium":4,"navara":7}},"picks":6,"requests":649,"violations":0}
+STRICT {"scenario":"qa-ground-layer-switch","assertions":27,"coverage":{"ais-live-vessels":{"cesium":2,"navara":4},"air-quality":{"cesium":2,"navara":3},"gnss-integrity":{"cesium":2,"navara":3},"fire-perimeters":{"cesium":4,"navara":7}},"picks":6,"requests":654,"violations":0}

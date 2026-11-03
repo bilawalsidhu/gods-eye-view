@@ -1,0 +1,93 @@
+{
+  "scenario": "qa-strict-prod-smoke",
+  "argv": [
+    "http://127.0.0.1:4208",
+    "--layers=",
+    "--evidence=<output>/evidence/strict-prod-smoke.json"
+  ],
+  "status": "pass",
+  "error": null,
+  "layers": [],
+  "coverage": {},
+  "missing": [],
+  "picks": [
+    {
+      "to": "navara",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 4747.299999982119,
+      "idleAt": 6234.699999988079
+    },
+    {
+      "to": "cesium",
+      "via": "pointer+keyboard",
+      "opened": true,
+      "clicked": "label",
+      "at": 5963.5,
+      "idleAt": 6066.5
+    }
+  ],
+  "assertions": [],
+  "network": {
+    "requests": 1761,
+    "preview": 223,
+    "previewApi": {
+      "/api/google/tiles-token": 2,
+      "/api/local-receivers/aircraft": 2,
+      "/api/openai/hud-summary": 2,
+      "/api/realtime/debug-log": 2,
+      "/api/setup/status": 2
+    },
+    "external": {
+      "fonts.googleapis.com": 4,
+      "services.arcgisonline.com": 972,
+      "terrain.reearth.land": 562
+    },
+    "fixtureResponses": 0,
+    "probes": {
+      "https://fonts.googleapis.com/css2*": 4,
+      "/api/google/tiles-token": 2,
+      "/api/openai/hud-summary/status": 2,
+      "/api/realtime/debug-log": 6
+    },
+    "routes": {},
+    "tileCache": {
+      "hits": 1523,
+      "fetched": 11,
+      "failed": 0,
+      "cancelled": 0,
+      "fetchedByHost": {
+        "services.arcgisonline.com": 11
+      }
+    },
+    "violations": [],
+    "setupErrors": [],
+    "fixtures": [],
+    "tileHosts": [
+      "tile.openstreetmap.org",
+      "terrain.reearth.land",
+      "tiles.maps.eox.at",
+      "services.arcgisonline.com"
+    ]
+  },
+  "timings": [],
+  "contracts": [
+    {
+      "start": "cesium",
+      "switchedTo": "navara",
+      "entry": [
+        "/assets/index-DrEr7bk-.js"
+      ],
+      "errors": []
+    },
+    {
+      "start": "navara",
+      "switchedTo": "cesium",
+      "entry": [
+        "/assets/index-DrEr7bk-.js"
+      ],
+      "errors": []
+    }
+  ]
+}
