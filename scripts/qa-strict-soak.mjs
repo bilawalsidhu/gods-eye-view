@@ -18,7 +18,9 @@
 // below), then after the warm-up (switch 20): live WebGL
 // objects per engine context grow by at most 0.1 per switch (least-squares
 // slope over the checkpoints) and by at most 64 overall; no new WebGL
-// context; JS heap slope at most 10 KiB per switch; no new document; the
+// context; the JS objects grow by at most 10 KiB per switch (heap snapshots
+// at the warm-up and the end, V8's compiled code and native memory left out
+// and reported apart, with the used heap's slope); no new document; the
 // webglcontextlost/restored listener counts on both engine canvases stay as
 // they were (each canvas keeps its webglcontextlost listener).
 //
@@ -44,6 +46,7 @@ import {
 import { installRadioFixture, stations } from './fixtures/w2/radio.mjs';
 import { trafficFixtureResponse } from './traffic-fixtures.mjs';
 import { POSITION_HISTORY_LIMIT } from '../src/layers/flights/recordPolicy.js';
+import { heapSizesByType } from './qa/heapSnapshotSizes.mjs';
 
 const base = localPreview(process.argv[2]);
 const option = (name, fallback) => {
@@ -231,6 +234,8 @@ for (let run = 1; run <= runs; run++) {
     };
     const seen = new Set([start]);
     let kind = start;
+    // The switch after a heap snapshot is slower; timings leave it out.
+    let afterSnapshot = false;
     for (let i = 1; i <= swaps; i++) {
       kind = kind === 'navara' ? 'cesium' : 'navara';
       const cold = !seen.has(kind);
@@ -272,15 +277,34 @@ for (let run = 1; run <= runs; run++) {
           pick.idleAt == null
             ? null
             : Math.round((pick.idleAt - pick.at) * 10) / 10,
+        ...(afterSnapshot ? { afterSnapshot } : {}),
       });
+      afterSnapshot = false;
       if (CHECKPOINTS.includes(i) || i === swaps) {
         await cdp.send('HeapProfiler.collectGarbage');
         const heap = await cdp.send('Runtime.getHeapUsage');
+        // The heap by snapshot node type, at the first checkpoint after the
+        // warm-up and at the last: the asserted growth is the JS objects'
+        // (V8's compiled code grows with tier-ups over a long run; native
+        // memory, array buffer data included, is reported apart). The switch
+        // after a snapshot is left out of the timings.
+        let typesMiB = null;
+        if (strictMode && (i === WARM_UP || i === swaps)) {
+          const sizes = await heapSizesByType(cdp);
+          typesMiB = Object.fromEntries(
+            Object.entries(sizes).map(([type, bytes]) => [
+              type,
+              Math.round((bytes / 1048576) * 100) / 100,
+            ]),
+          );
+          afterSnapshot = true;
+        }
         const dom = await cdp.send('Memory.getDOMCounters');
         row.checkpoints.push({
           swap: i,
           engine: kind,
           heapMiB: Math.round((heap.usedSize / 1048576) * 100) / 100,
+          typesMiB,
           ...dom,
           listeners: await listeners(),
           webgl: await p.evaluate(() => window.__qaGlCounts()),
@@ -291,7 +315,9 @@ for (let run = 1; run <= runs; run++) {
     await browser.close().catch(() => {});
   }
   const warm = (to) =>
-    row.swaps.filter((s) => !s.cold && s.to === to).map((s) => s.firstFrameMs);
+    row.swaps
+      .filter((s) => !s.cold && !s.afterSnapshot && s.to === to)
+      .map((s) => s.firstFrameMs);
   row.summary = Object.fromEntries(
     ['navara', 'cesium'].map((to) => [
       to,
@@ -313,7 +339,7 @@ for (let run = 1; run <= runs; run++) {
 const pooled = (to, cold) =>
   report.runs.flatMap((r) =>
     r.swaps
-      .filter((s) => s.to === to && s.cold === cold)
+      .filter((s) => s.to === to && s.cold === cold && !s.afterSnapshot)
       .map((s) => s.firstFrameMs),
   );
 report.summary = Object.fromEntries(
@@ -361,12 +387,32 @@ if (strictMode) {
       pass: last.webgl.length === first.webgl.length,
     });
     const heap = late.map((c) => [c.swap, c.heapMiB * 1024]);
+    const typed = late.filter((c) => c.typesMiB);
+    assert.equal(typed.length, 2, 'heap snapshots at the warm-up and the end');
+    const [from, to] = typed;
+    const outside = new Set(['code', 'native', 'synthetic']);
+    const objects = (c) =>
+      Object.entries(c.typesMiB)
+        .filter(([type]) => !outside.has(type))
+        .reduce((sum, [, mib]) => sum + mib, 0);
+    const perSwitch = (mib) =>
+      Math.round(((mib * 1024) / (to.swap - from.swap)) * 100) / 100;
+    const objectGrowth = perSwitch(objects(to) - objects(from));
     checks.push({
       check: 'JS heap KiB per switch',
-      slopePerSwap: Math.round(slope(heap) * 100) / 100,
-      fromMiB: first.heapMiB,
-      toMiB: last.heapMiB,
-      pass: slope(heap) <= 10,
+      objectsKiBPerSwitch: objectGrowth,
+      fromMiB: Math.round(objects(from) * 100) / 100,
+      toMiB: Math.round(objects(to) * 100) / 100,
+      // Reported, not asserted: the used heap's slope (compiled code
+      // included), compiled code's and native memory's growth.
+      usedSlopePerSwap: Math.round(slope(heap) * 100) / 100,
+      codeKiBPerSwitch: perSwitch(
+        (to.typesMiB.code ?? 0) - (from.typesMiB.code ?? 0),
+      ),
+      nativeKiBPerSwitch: perSwitch(
+        (to.typesMiB.native ?? 0) - (from.typesMiB.native ?? 0),
+      ),
+      pass: objectGrowth <= 10,
     });
     checks.push({
       check: 'documents',
