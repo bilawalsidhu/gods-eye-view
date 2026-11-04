@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { CYAN_TRANSPARENT } from './policy.js';
-import { mirrorModel } from '../../data/modelMirror.js';
+import { createModelRecord } from '../../data/modelRecord.js';
 import { createIconSet } from '../../data/iconSet.js';
 import { aircraftIconTestSeams } from '../../data/aircraftIconLayer.js';
 
@@ -49,9 +49,9 @@ export function createTesting({
    * @param {string} state.icao24
    * @param {object} state.entity
    * @param {object} state.meta
-   * @param {{position?: Cesium.Cartesian3, show?: boolean}} [state.billboard]
+   * @param {{position?: Cesium.Cartesian3, show?: boolean}} [state.icon]
    *   Where the contact's icon is held, and whether it is shown.
-   * @param {{show?: boolean}} [state.billboardCollection] Layer visibility.
+   * @param {{show?: boolean}} [state.iconLayer] Layer visibility.
    * @param {object} state.viewer
    * @param {Array<Object>} [state.history=[]]
    * @param {boolean} [state.tracked=true]
@@ -63,8 +63,8 @@ export function createTesting({
     icao24,
     entity,
     meta,
-    billboard,
-    billboardCollection,
+    icon,
+    iconLayer,
     viewer,
     history = [],
     tracked = true,
@@ -76,13 +76,13 @@ export function createTesting({
     flightState._icons = createIconSet({
       epoch: parts.icons._displayTime(new Cesium.JulianDate()),
     });
-    flightState._icons.show = billboardCollection?.show ?? true;
+    flightState._icons.show = iconLayer?.show ?? true;
     flightState._grounded.clear();
     flightState._floorPinned.clear();
-    _seedIconForTest(icao24, billboard, tracked);
+    _seedIconForTest(icao24, icon, tracked);
     flightState._models.clear();
     for (const [key, model] of models)
-      flightState._models.set(key, mirrorModel(model));
+      flightState._models.set(key, createModelRecord(model));
     flightState._detectionObjects = new Map();
     flightState.records.data = new Map([[icao24, meta]]);
     flightState._positionHistory = new Map([[icao24, history]]);
@@ -125,10 +125,10 @@ export function createTesting({
   function _addFlightTrackingCandidateForTest({
     icao24,
     meta,
-    billboard,
+    icon,
     history = [],
   }) {
-    _seedIconForTest(icao24, billboard, false);
+    _seedIconForTest(icao24, icon, false);
     flightState.records.data.set(icao24, meta);
     flightState._positionHistory.set(icao24, history);
   }
@@ -205,7 +205,7 @@ export function createTesting({
 
   async function _ensureFleetModelForTest(icao24) {
     await parts.rendering._ensureModel(icao24);
-    return flightState._models.get(icao24) || null;
+    return flightState._models.get(icao24)?.model ?? null;
   }
   /** Run the fleet tick's grounded floor pass once, at `renderTime`. */
 

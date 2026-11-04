@@ -149,8 +149,8 @@ test('nonempty adsb.lol payload with zero usable rows cannot prove share target 
   _setTrackedMilitaryRefreshStateForTest({
     icao24: 'ae1234',
     entity: withEntityRecord({}, { labelModel: { title: 'WARM', details: [] } }),
-    billboard: { show: false },
-    billboardCollection: { show: true, remove() {} },
+    icon: { show: false },
+    iconLayer: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     meta: { rawLat: 31, rawLon: -97, onGround: false },
   });
@@ -190,13 +190,13 @@ test('military poll refreshes tracked callsign/altitude/kts and marks a missed p
     color: Cesium.Color.WHITE,
     show: false,
   };
-  const billboardCollection = { show: false, remove() {} };
+  const iconLayer = { show: false, remove() {} };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedMilitaryRefreshStateForTest({
     icao24,
     entity,
-    billboard,
-    billboardCollection,
+    icon: billboard,
+    iconLayer,
     viewer,
     meta: {
       callsign: 'OLD2',
@@ -266,11 +266,11 @@ test('cached military snapshots retain their observation time and expose stale f
   _setTrackedMilitaryRefreshStateForTest({
     icao24: 'ae01ce',
     entity: withEntityRecord({}, { labelModel: { title: 'RCH451', details: [] } }),
-    billboard: {
+    icon: {
       position: Cesium.Cartesian3.fromDegrees(-97, 31, 8000),
       show: false,
     },
-    billboardCollection: { show: false, remove() {} },
+    iconLayer: { show: false, remove() {} },
     viewer,
     history,
     meta: { rawLat: 31, rawLon: -97, onGround: false },
@@ -408,8 +408,8 @@ test('real military track path creates no native label and publishes every cache
     _setTrackedMilitaryRefreshStateForTest({
       icao24,
       entity: null,
-      billboard,
-      billboardCollection: { show: true, remove() {} },
+      icon: billboard,
+      iconLayer: { show: true, remove() {} },
       viewer,
       tracked: false,
       history: [
@@ -528,7 +528,7 @@ test('real military track path creates no native label and publishes every cache
     );
     _addMilitaryTrackingCandidateForTest({
       icao24: 'late001',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-96.9, 31.1, 8_000),
       },
@@ -555,7 +555,7 @@ test('real military track path creates no native label and publishes every cache
     );
     _addMilitaryTrackingCandidateForTest({
       icao24: 'late002',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-96.8, 31.2, 7_000),
       },
@@ -581,7 +581,7 @@ test('real military track path creates no native label and publishes every cache
     );
     _addMilitaryTrackingCandidateForTest({
       icao24: 'late003',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.3, 30.6, 7_000),
       },
@@ -601,7 +601,7 @@ test('real military track path creates no native label and publishes every cache
     assert.equal(_pendingMilitaryTrackingRestoreForTest(), 'late004');
     _addMilitaryTrackingCandidateForTest({
       icao24: 'late004',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.2, 30.7, 6_000),
       },
@@ -629,7 +629,7 @@ test('real military track path creates no native label and publishes every cache
     );
     _addMilitaryTrackingCandidateForTest({
       icao24: 'late005',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-96.6, 31.4, 5_000),
       },
@@ -676,7 +676,7 @@ test('a callsign-less contact is findable by the tail number the app displays', 
       rawLat: 40.71,
       rawLon: -74.01,
     },
-    billboard: {
+    icon: {
       position: Cesium.Cartesian3.fromDegrees(-74.01, 40.71, 167),
       color: Cesium.Color.WHITE,
       show: true,
@@ -756,7 +756,7 @@ test('a registration never outranks another contact’s exact callsign', () => {
       rawLat: 31.0,
       rawLon: -97.0,
     },
-    billboard: billboardAt(-97.0, 31.0),
+    icon: billboardAt(-97.0, 31.0),
   });
   _addMilitaryTrackingCandidateForTest({
     icao24: 'ae0bb2',
@@ -767,7 +767,7 @@ test('a registration never outranks another contact’s exact callsign', () => {
       rawLat: 31.2,
       rawLon: -97.2,
     },
-    billboard: billboardAt(-97.2, 31.2),
+    icon: billboardAt(-97.2, 31.2),
   });
 
   assert.equal(
@@ -808,7 +808,7 @@ test('two contacts matching at the same strength resolve deterministically', () 
       rawLat: 32.0,
       rawLon: -98.0,
     },
-    billboard: billboardAt(-98.0, 32.0),
+    icon: billboardAt(-98.0, 32.0),
   });
   _addMilitaryTrackingCandidateForTest({
     icao24: 'aef001',
@@ -819,7 +819,7 @@ test('two contacts matching at the same strength resolve deterministically', () 
       rawLat: 32.1,
       rawLon: -98.1,
     },
-    billboard: billboardAt(-98.1, 32.1),
+    icon: billboardAt(-98.1, 32.1),
   });
 
   const first = militaryFlightsLayer.findByQuery('QQ7')?.icao24;
@@ -847,12 +847,12 @@ test('the military tracked descriptor publishes the reported vertical rate', () 
     _setTrackedMilitaryRefreshStateForTest({
       icao24: 'ae7f01',
       entity: withEntityRecord({}, { labelModel: { title: 'TEST', details: [] } }),
-      billboard: {
+      icon: {
         position: Cesium.Cartesian3.fromDegrees(-97.0, 31.0, 8_000),
         color: Cesium.Color.WHITE,
         show: true,
       },
-      billboardCollection: { show: true, remove() {} },
+      iconLayer: { show: true, remove() {} },
       viewer: { camera: { positionCartographic: null }, scene: {} },
       meta: {
         callsign: 'RCH512',

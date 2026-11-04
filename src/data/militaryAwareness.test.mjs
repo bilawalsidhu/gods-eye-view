@@ -889,8 +889,8 @@ test('Contacts activation adopts the production military tracked-subject descrip
     _setTrackedMilitaryRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {
         callsign: 'RCH451 ',
@@ -971,8 +971,8 @@ test('Contacts activation adopts the production military tracked-subject descrip
     _setTrackedMilitaryRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,
@@ -998,8 +998,8 @@ test('production military tracked-subject label falls back to registration befor
     _setTrackedMilitaryRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {
         callsign: '   ',
@@ -1051,8 +1051,8 @@ test('production military tracked-subject label falls back to registration befor
     _setTrackedMilitaryRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,
@@ -1097,8 +1097,8 @@ test('a cached Context subject re-reads its label when enrichment lands after se
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, color: Cesium.Color.WHITE, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, color: Cesium.Color.WHITE, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta,
     });
@@ -1185,8 +1185,8 @@ test('a cached Context subject re-reads its label when enrichment lands after se
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: false, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: false, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,
@@ -1207,8 +1207,8 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {
         callsign: 'DAL123 ',
@@ -1296,8 +1296,8 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,

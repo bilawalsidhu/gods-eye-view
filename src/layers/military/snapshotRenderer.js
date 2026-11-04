@@ -186,8 +186,8 @@ export function createMilitarySnapshotRenderer({
       sampleMeshFloorCells(flightState._viewer?.scene, _floorWarmPoints, {
         excludeObjects: [
           ...icons._iconIds(),
-          ...flightState._models.values(),
-          flightState._trackedModel,
+          ...[...flightState._models.values()].map((record) => record.model),
+          flightState._trackedModel?.model,
         ].filter(Boolean),
         viewerLat: viewerCarto
           ? Cesium.Math.toDegrees(viewerCarto.latitude)

@@ -239,8 +239,8 @@ export function createFlightSnapshotRenderer({
     sampleMeshFloorCells(flightState._viewer?.scene, floorWarmPoints, {
       excludeObjects: [
         ...icons._iconIds(),
-        ...flightState._models.values(),
-        flightState._trackedModel,
+        ...[...flightState._models.values()].map((record) => record.model),
+        flightState._trackedModel?.model,
       ].filter(Boolean),
       viewerLat: viewerLatDeg,
       viewerLon: viewerLonDeg,

@@ -11,7 +11,6 @@ import {
 } from '../../data/contactMatch.js';
 import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
-import { modelState } from '../../data/modelMirror.js';
 
 export function createQueries({
   flightState,
@@ -450,7 +449,7 @@ export function createQueries({
         const isTracked = icao24 === flightState._trackedIcao;
         // Keep planes rendered as a 3D model (icon hidden) so the detection box
         // doesn't vanish on the 2D→3D handoff.
-        const model = flightState._models.get(icao24);
+        const record = flightState._models.get(icao24);
         const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
         if (!isTracked && !icons.shown(row) && !modelOwnsVisual) continue;
         const info = flightState.records.data.get(icao24);
@@ -479,10 +478,10 @@ export function createQueries({
             icons.position(row, tau, object._iconPos)
           : modelOwnsVisual
             ? modelVisualAnchor(
-                modelState(model).modelMatrix,
+                record.matrix,
                 spec.visualCenterNative,
-                Number.isFinite(model.computedScale)
-                  ? model.computedScale
+                Number.isFinite(record.model.computedScale)
+                  ? record.model.computedScale
                   : spec.scale,
                 object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
               )

@@ -181,11 +181,11 @@ test('a newly seen military contact appears at its delayed position, not ahead o
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
-    billboard: {
+    icon: {
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection: { show: false },
+    iconLayer: { show: false },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked: false,
   });
@@ -246,8 +246,8 @@ test('a vanished military contact fades while position-less rows keep theirs', a
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
-    billboard: { show: false, position: Cesium.Cartesian3.fromDegrees(0, 0) },
-    billboardCollection: { show: true, add: (options) => ({ ...options }) },
+    icon: { show: false, position: Cesium.Cartesian3.fromDegrees(0, 0) },
+    iconLayer: { show: true, add: (options) => ({ ...options }) },
     viewer,
     tracked: false,
   });

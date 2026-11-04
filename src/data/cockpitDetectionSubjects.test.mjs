@@ -27,8 +27,8 @@ const LAYERS = [
       _setTrackedFlightRefreshStateForTest({
         icao24,
         entity: null,
-        billboard: candidateBillboard(icao24),
-        billboardCollection: { show: true, remove() {} },
+        icon: candidateBillboard(icao24),
+        iconLayer: { show: true, remove() {} },
         viewer: candidateViewer(),
         tracked: false,
         meta: {
@@ -48,8 +48,8 @@ const LAYERS = [
       _setTrackedMilitaryRefreshStateForTest({
         icao24,
         entity: null,
-        billboard: candidateBillboard(icao24),
-        billboardCollection: { show: true, remove() {} },
+        icon: candidateBillboard(icao24),
+        iconLayer: { show: true, remove() {} },
         viewer: candidateViewer(),
         tracked: false,
         meta: {

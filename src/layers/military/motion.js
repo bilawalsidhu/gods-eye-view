@@ -21,7 +21,6 @@ import {
   COURSE_SLEW_DT_MAX_SEC,
   COURSE_MAX_DPS,
 } from './policy.js';
-import { modelState } from '../../data/modelMirror.js';
 import { readEntityRecord } from '../../data/entityRecords.js';
 import {
   aircraftMotionRegime,
@@ -340,10 +339,10 @@ export function createMotion({
         flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       return modelVisualAnchor(
-        modelState(flightState._trackedModel).modelMatrix,
+        flightState._trackedModel.matrix,
         spec.visualCenterNative,
-        Number.isFinite(flightState._trackedModel.computedScale)
-          ? flightState._trackedModel.computedScale
+        Number.isFinite(flightState._trackedModel.model.computedScale)
+          ? flightState._trackedModel.model.computedScale
           : spec.scale,
         flightState._trackedVisualPos,
       );
@@ -367,7 +366,7 @@ export function createMotion({
     )
       return null;
     return Cesium.Matrix4.getTranslation(
-      modelState(flightState._trackedModel).modelMatrix,
+      flightState._trackedModel.matrix,
       flightState._scratchTrailClip,
     );
   }
@@ -382,8 +381,8 @@ export function createMotion({
     const spec = parts.rendering._modelSpec(
       flightState.records.data.get(flightState._trackedIcao)?.klass,
     );
-    const scale = Number.isFinite(flightState._trackedModel.computedScale)
-      ? flightState._trackedModel.computedScale
+    const scale = Number.isFinite(flightState._trackedModel.model.computedScale)
+      ? flightState._trackedModel.model.computedScale
       : spec.scale;
     return spec.nativeRadiusM * scale;
   }
