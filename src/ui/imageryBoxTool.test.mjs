@@ -152,3 +152,32 @@ test('destroy mid-drag restores the camera, releases the claim and detaches the 
   assert.equal(f.tool.start(), false);
   assert.equal(initImageryBoxTool({ viewer: null, onBox() {} }), null);
 });
+
+test('a drag across the dateline is the short box, not a box round the world', async () => {
+  const pickWorld = (_viewer, nx, ny) =>
+    ny < 0.05 ? null : { lon: nx < 0.5 ? 179.99 : -179.99, lat: ny };
+  const f = fixture({ pickWorld });
+  f.tool.start();
+  f.fire('LEFT_DOWN', { position: { x: 100, y: 200 } });
+  f.fire('LEFT_UP', { position: { x: 800, y: 250 } });
+  assert.deepEqual(f.cancels, []);
+  assert.equal(f.boxes.length, 1);
+  const { west, east } = f.boxes[0];
+  assert.ok(west > east, `west ${west} is east of east ${east}`);
+  assert.ok(Math.abs(east + 360 - west - 0.02) < 1e-9, 'a 0.02 degree span');
+  await f.tool.destroy();
+});
+
+test('a drag whose short arc is still over the size limit is refused as too large', async () => {
+  const pickWorld = (_viewer, nx, ny) => ({
+    lon: nx < 0.5 ? 100 : -100,
+    lat: ny,
+  });
+  const f = fixture({ pickWorld });
+  f.tool.start();
+  f.fire('LEFT_DOWN', { position: { x: 100, y: 200 } });
+  f.fire('LEFT_UP', { position: { x: 800, y: 250 } });
+  assert.equal(f.boxes.length, 0);
+  assert.equal(f.cancels.at(-1)[0], 'too-large');
+  await f.tool.destroy();
+});
