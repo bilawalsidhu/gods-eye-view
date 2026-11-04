@@ -78,6 +78,11 @@ function harness(
 }
 
 const pitchDeg = (camera) => degrees(camera.pitch);
+/** Tick until done() holds; a regression fails here instead of hanging. */
+const tickUntil = (h, done, frames = 600) => {
+  for (let i = 0; i < frames && !done(); i += 1) h.tick();
+  assert.ok(done(), `not reached in ${frames} frames`);
+};
 const headingDeg = (camera) =>
   degrees(Cesium.Math.negativePiToPi(camera.heading));
 
@@ -170,6 +175,20 @@ test('a requested angle the camera already holds is a no-op', (t) => {
   assert.equal(result.unchanged, true);
   assert.equal(getActiveCameraMotion(), null);
 });
+
+for (const pitch of [-90, -89]) {
+  test(`a top-down view asked for ${pitch}° stays put`, (t) => {
+    // The tool description calls -89 top-down; the clamp must not tilt a
+    // -90° view up 1° and report it as a move up.
+    const h = harness(t);
+    const before = pitchDeg(h.camera);
+    const result = moveCamera({ motion: 'tilt', pitchDeg: pitch });
+    assert.equal(result.ok, true);
+    assert.equal(result.unchanged, true);
+    assert.equal(getActiveCameraMotion(), null);
+    assert.equal(pitchDeg(h.camera), before);
+  });
+}
 
 test('tilt down from top-down still refuses honestly', (t) => {
   harness(t);
@@ -335,7 +354,7 @@ test('the pitchDeg and direction check uses the pitch the swing starts from', (t
 test('after a zoom in, a pivoting tilt never lowers the camera further', (t) => {
   const h = harness(t, { height: 1000 });
   moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
-  while (pitchDeg(h.camera) < -30) h.tick();
+  tickUntil(h, () => pitchDeg(h.camera) >= -30);
   adjustOrbitRange(1 / 2.4);
   adjustOrbitRange(1 / 2.4);
   h.tick();
@@ -390,7 +409,7 @@ test('a zoom in during a pivot tilt stops at the clearance', (t) => {
   // the camera about 107 m up, then at the 80 m zoom floor.
   const h = harness(t, { height: 400 });
   moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
-  while (pitchDeg(h.camera) < -40) h.tick();
+  tickUntil(h, () => pitchDeg(h.camera) >= -40);
   assert.deepEqual(adjustOrbitRange(1 / 2.4), { kind: 'tilt', changed: true });
   // At -40° the floor is 150 / sin 40° ≈ 233 m, which the first zoom reached.
   assert.deepEqual(adjustOrbitRange(1 / 2.4), { kind: 'tilt', changed: false });

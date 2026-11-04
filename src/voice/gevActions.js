@@ -1302,9 +1302,17 @@ export function createGevActionRunner({
           runOptions.signal,
           deadline,
         );
-        // A later fly-to in the same reply cancels this one: follow it to
-        // where the camera lands, within the same deadline.
-        while (status === 'cancelled' && voiceFlight !== flight && current()) {
+        // A later fly-to in the same reply replaces this one: follow it to
+        // where the camera lands, within the same deadline. Its status does
+        // not matter. A geocode that loses navigation reports failed, and a
+        // flight left flying while the next place is looked up can still
+        // land; running there would take navigation and cancel the newer one.
+        while (
+          voiceFlight !== flight &&
+          status !== 'aborted' &&
+          status !== 'timeout' &&
+          current()
+        ) {
           flight = voiceFlight;
           status = await waitForVoiceFlight(
             flight,

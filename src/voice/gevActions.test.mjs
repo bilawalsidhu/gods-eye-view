@@ -570,6 +570,71 @@ test('a motion follows a later fly-to in the same reply that cancels its flight'
   assert.equal(result.motion, 'orbit');
 });
 
+test('a motion follows a later fly-to whose start cancels its geocode', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager } = tiltAfterFlightHarness();
+  const searches = [];
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+      searches.push({ query, options, resolve });
+    }),
+  });
+  const flyA = runner('fly_to_location', { query: 'Place A' });
+  const moved = runner('move_camera', { motion: 'orbit' });
+  const movedDone = settledYet(moved);
+  const flyB = runner('fly_to_location', { query: 'Place B' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // B takes navigation authority, so A's lookup comes back cancelled.
+  searches[0].resolve({ cancelled: true });
+  assert.equal((await flyA).cancelled, true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(movedDone(), false, 'the orbit must follow B, not drop');
+  searches[1].resolve({ label: 'Place B', navigationMode: 'city-overview' });
+  assert.equal((await flyB).ok, true);
+  searches[1].options.onComplete();
+  const result = await moved;
+  assert.equal(result.ok, true);
+  assert.equal(result.motion, 'orbit');
+});
+
+test('a motion does not run at a flight that lands while the next place is looked up', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, order, flights } = tiltAfterFlightHarness();
+  const searches = [];
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+      searches.push({ query, options, resolve });
+    }),
+  });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  const movedDone = settledYet(moved);
+  const flyB = runner('fly_to_location', { query: 'Place B' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // Deferred navigation leaves A flying while B is looked up, and A lands.
+  const before = order.length;
+  flights[0].complete();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(movedDone(), false, 'the tilt must wait for B');
+  assert.equal(
+    order.slice(before).includes('cancel'),
+    false,
+    'the tilt must not take navigation and cancel B',
+  );
+  searches[0].resolve({ label: 'Place B', navigationMode: 'city-overview' });
+  assert.equal((await flyB).ok, true);
+  searches[0].options.onComplete();
+  const result = await moved;
+  assert.equal(result.ok, true);
+  assert.equal(result.motion, 'tilt');
+});
+
 test('a stale motion does not follow a newer reply\'s fly-to', async () => {
   const { viewer, styleManager, flights } = tiltAfterFlightHarness();
   const runner = createGevActionRunner({

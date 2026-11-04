@@ -1671,7 +1671,13 @@ export function moveCamera(args = {}, runNavigation = null) {
     // Judge from the pitch the motion will start at: the pivot's, which at
     // regional range is a degree or two shallower than the camera's.
     const { from } = tiltStartFrame(_viewer.camera, { releasesTracking });
-    if (Math.abs(tiltToPitch - from) < Cesium.Math.toRadians(0.5)) {
+    // -89 or -90 means top-down, which a -90° view already is: the clamp
+    // must not tilt it up 1°.
+    const atTopDown = tiltToPitch <= PITCH_MIN && from <= PITCH_MIN;
+    if (
+      atTopDown ||
+      Math.abs(tiltToPitch - from) < Cesium.Math.toRadians(0.5)
+    ) {
       return {
         ok: true,
         action: 'move_camera',
