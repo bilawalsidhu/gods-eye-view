@@ -31,7 +31,6 @@ import {
   zoomTransitionState,
 } from '../cockpitOrbital.js';
 import {
-  easeLook,
   lookIsOffset,
   orbitalLookReadoutParts,
   stepOrbitalLook,
@@ -40,6 +39,13 @@ import { cockpitUiUpdateDue } from '../cockpitMath.js';
 import { createPlaceTracker, nearPlaceRadiusKm } from '../data/placeBelow.js';
 import { isPointerFree } from '../data/inputOwnership.js';
 import { zoomableSwathKm } from '../layers/satellites/sensors.js';
+import {
+  easeOrbitalLook,
+  endOrbitalFocus,
+  orbitalFocusReadout,
+  releaseOrbitalFocus,
+  updateOrbitalFocus,
+} from './cockpitOrbitalFocus.js';
 import {
   COCKPIT_CONTEXT_UPDATE_MS,
   COCKPIT_HUD_UPDATE_MS,
@@ -122,6 +128,7 @@ export function endOrbital() {
   // Back to the map the operator had, unless they picked another meanwhile.
   state.imagery?.release?.()?.catch?.(() => {});
   this.publishOrbital(null);
+  endOrbitalFocus.call(this);
 }
 
 /**
@@ -309,12 +316,13 @@ export function updateOrbital(nowMs) {
     this.lastAircraftInfo = info;
     goToZoom.call(this, maxZoom);
   }
-  state.lookView = easeLook(
-    state.lookView,
-    state.lookTarget,
-    nowMs - (state.lookLastMs || nowMs),
-    { immediate: prefersReducedMotion() },
-  );
+  // A ground focus aims the look itself (src/ui/cockpitOrbitalFocus.js).
+  if (!updateOrbitalFocus.call(this, state, nadir, position, nowMs))
+    state.lookView = easeOrbitalLook(
+      state,
+      nowMs - (state.lookLastMs || nowMs),
+      { immediate: prefersReducedMotion() },
+    );
   state.lookLastMs = nowMs;
   const view = offNadirOrientation(nadir, {
     northDeg: state.lookView.pitchDeg,
@@ -551,15 +559,30 @@ function lookTilt(parts) {
 }
 
 /**
+ * Word a ground focus's off-nadir angle, as image metadata gives it:
+ * `OFF-NADIR 23.4°`.
+ */
+function wordFocusOffNadir(focus) {
+  return t('OFF-NADIR {angle}°', {
+    angle: formatNumber(focus.offNadirDeg, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }),
+  });
+}
+
+/**
  * Publish the orbital HUD. The swath is the nadir footprint, so it is left
- * out while the view is tilted off nadir.
+ * out while the view is tilted off nadir. A ground focus reads the single
+ * off-nadir angle to its target and scales the swath by the tilt onto it.
  * @param {object} info Satellite subject (`readSatelliteInfo`).
  * @param {{active: boolean, blurPx: number, lockTick: boolean}} transition
  */
 export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   const state = this.orbital;
   if (!state || !info) return;
-  const offset = lookIsOffset(state.lookTarget, 0);
+  const focus = orbitalFocusReadout.call(this);
+  const offset = Boolean(focus) || lookIsOffset(state.lookTarget, 0);
   const aspect = Number.isFinite(this.viewer.camera?.frustum?.aspectRatio)
     ? this.viewer.camera.frustum.aspectRatio
     : canvasAspect(this.viewer);
@@ -568,9 +591,11 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   const maxZoom = orbitalMaxZoomFor.call(this, info);
   const swathKm = sensorSwathKm(info);
   const trackUp = Number.isFinite(info.groundTrackDeg);
-  const swathScale = offset
-    ? offNadirSwathScale(lookTilt(orbitalLookReadoutParts(state.lookTarget)))
-    : 1;
+  const swathScale = focus
+    ? offNadirSwathScale({ northDeg: focus.pitchDeg, eastDeg: focus.yawDeg })
+    : offset
+      ? offNadirSwathScale(lookTilt(orbitalLookReadoutParts(state.lookTarget)))
+      : 1;
   this.publishOrbital({
     name: info.name,
     classLabel: info.classLabel || '',
@@ -598,7 +623,13 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     transition: { ...transition },
     look: {
       offset,
-      readout: offset ? wordOffNadir(state.lookTarget, { trackUp }) : '',
+      readout: focus
+        ? wordFocusOffNadir(focus)
+        : offset
+          ? wordOffNadir(state.lookTarget, { trackUp })
+          : '',
+      // The mapped point the view is held on, or null.
+      focus: focus ? { key: focus.key, label: focus.label } : null,
       // Off nadir, the ground width at the view's centre, approximated from
       // the nadir footprint (`offNadirSwathScale`); 1 and null at nadir.
       swathScale,
@@ -773,6 +804,8 @@ export function turnOrbitalLook(step) {
     return false;
   if (!step) return false;
   const state = this.orbital;
+  // An arrow takes the view over from a ground focus where it is.
+  releaseOrbitalFocus.call(this, { handOver: true });
   state.lookTarget = stepOrbitalLook(state.lookTarget, step);
   if (prefersReducedMotion()) state.lookView = { ...state.lookTarget };
   presentNow.call(this);
@@ -788,6 +821,8 @@ export function resetOrbitalLook({ immediate = false } = {}) {
   if (!this.active || this.subjectKind !== 'satellite' || !this.orbital)
     return false;
   const state = this.orbital;
+  // Ends a ground focus too, easing back on its clock.
+  releaseOrbitalFocus.call(this);
   state.lookTarget = { ...NADIR_LOOK };
   if (immediate || prefersReducedMotion()) state.lookView = { ...NADIR_LOOK };
   presentNow.call(this);

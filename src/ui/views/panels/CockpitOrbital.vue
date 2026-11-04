@@ -14,6 +14,7 @@ import {
   shownOwnerMark,
 } from '../../ownerFlag.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import CockpitOrbitalReach from './CockpitOrbitalReach.vue';
 
 // The orbital view's HUD: a nadir reticle over the picture, the satellite's
 // identity and orbit, and the optical zoom. The Cockpit controller presents
@@ -254,6 +255,12 @@ watch(
 
 // The off-nadir tilt; an untilted view shows no readout or reset.
 const look = computed(() => orbital.value?.look || { offset: false });
+// A ground focus names its target in a polite live region; the angle,
+// which changes every update, is left out of it.
+const focusText = computed(() => {
+  const label = look.value.focus?.label;
+  return label ? t('FOCUS · {name}', { name: label }) : '';
+});
 
 const transition = computed(() => orbital.value?.transition || {});
 const lensStyle = computed(() => {
@@ -317,9 +324,12 @@ const lensStyle = computed(() => {
         <p class="cockpit-orbital-north">{{ trackUp ? t('TRACK UP') : t('NORTH UP') }}</p>
         <!-- Shown only while the view is tilted off nadir: where it looks and the way back. -->
         <div v-if="look.offset" class="cockpit-orbital-look">
-          <span id="cockpit-orbital-look-readout" class="cockpit-orbital-look-readout" aria-live="polite">{{ look.readout }}</span>
+          <span id="cockpit-orbital-look-readout" class="cockpit-orbital-look-readout" :aria-live="look.focus ? 'off' : 'polite'">{{ look.readout }}</span>
           <button id="cockpit-orbital-nadir" ref="nadirButton" type="button" class="cockpit-orbital-nadir" :aria-label="t('Return the view to nadir')" :title="t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ t('NADIR') }}</button>
         </div>
+        <p id="cockpit-orbital-focus" class="cockpit-orbital-focus" aria-live="polite">{{ focusText }}</p>
+        <!-- The mapped points the view shows or can be turned to, each with FOCUS. -->
+        <CockpitOrbitalReach />
       </div>
       <div class="cockpit-orbital-optics">
         <button id="cockpit-orbital-zoom-out" ref="zoomOutButton" type="button" class="cockpit-orbital-zoom-button" :disabled="atWidest" :aria-label="t('Zoom out')" :title="t('Zoom out (−)')" aria-keyshortcuts="- _">−</button>

@@ -413,6 +413,8 @@ export class StyleManager extends ShellFacade {
             useCockpitStore(applicationPinia()).publishRadar(view),
           orbital: (view) =>
             useCockpitStore(applicationPinia()).publishOrbital(view),
+          orbitalReach: (view) =>
+            useCockpitStore(applicationPinia()).publishOrbitalReach(view),
           utilityLayout: (layout) =>
             useCockpitStore(applicationPinia()).publishUtilityLayout(layout),
         },

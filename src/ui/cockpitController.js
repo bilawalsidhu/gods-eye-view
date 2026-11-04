@@ -28,6 +28,11 @@ import {
   updateOrbitalHud,
 } from './cockpitOrbitalView.js';
 import {
+  onOrbitalClick,
+  routeSceneClick,
+  toggleOrbitalFocus,
+} from './cockpitOrbitalFocus.js';
+import {
   publishInstrumentsView,
   publishRouteView,
   updateHud,
@@ -227,6 +232,7 @@ export class CockpitViewController {
     this.publishUtilityLayout = publish.utilityLayout ?? (() => {});
     this.publishRadar = publish.radar ?? (() => {});
     this.publishOrbital = publish.orbital ?? (() => {});
+    this.publishOrbitalReach = publish.orbitalReach ?? (() => {});
     /** The bridge radar's range in nautical miles; kept across bridges. */
     this.radarRangeNm = DEFAULT_RADAR_RANGE_NM;
     this.presence = {
@@ -291,6 +297,8 @@ export class CockpitViewController {
       true,
     );
     this._listenerRemovers.push(routeSceneDoubleClick.call(this));
+    // In orbit a click on a mapped point keeps the camera on it.
+    this._listenerRemovers.push(routeSceneClick.call(this));
     // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
     // off while the Cockpit holds the camera).
     this._listen(
@@ -349,6 +357,10 @@ export class CockpitViewController {
       else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
       else if (target?.closest?.('#cockpit-orbital-sensor'))
         this.jumpToSensorSwath();
+      else {
+        const focus = target?.closest?.('[data-orbital-focus]');
+        if (focus) this.toggleOrbitalFocus(focus.dataset.orbitalFocus);
+      }
     });
     this._listen(this.signalToggle, 'click', () =>
       this.setSignalCollapsed(!this.signalCollapsed, { user: true }),
@@ -422,6 +434,24 @@ export class CockpitViewController {
   }
   onOrbitalWheel(event) {
     return onOrbitalWheel.call(this, event);
+  }
+  /**
+   * A click on the orbital picture: on a mapped point in reach it keeps the
+   * camera on that point; anywhere else it ends such a focus.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when the click focused a point.
+   */
+  onOrbitalClick(position) {
+    return onOrbitalClick.call(this, position);
+  }
+  /**
+   * FOCUS on the reach list: focus that point, switch to it, or end the
+   * focus held on it.
+   * @param {string} key The point's context id.
+   * @returns {boolean} True when the focus changed.
+   */
+  toggleOrbitalFocus(key) {
+    return toggleOrbitalFocus.call(this, key);
   }
   /**
    * Tilt the orbital view one arrow step off nadir.
