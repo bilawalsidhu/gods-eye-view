@@ -132,6 +132,7 @@ export function initMobileShell({
     .filter(Boolean);
   const dock = element('command-dock');
   const missionsPanel = element('space-missions-panel');
+  const viewSwitcher = element('view-switcher');
   const shown = (node) =>
     node && globalThis.getComputedStyle?.(node).display !== 'none';
 
@@ -156,6 +157,12 @@ export function initMobileShell({
   // and the required map attribution sits above everything the sheet covers.
   const measureSheet = () => {
     if (!body.classList.contains(MOBILE_SHELL_CLASS)) return;
+    // Buttons can appear later or wrap after a locale/font change. Reuse the
+    // shell observer so navigation clears the actual switcher, not a guess.
+    writeVar(
+      '--mobile-view-switcher-height',
+      `${Math.ceil(shown(viewSwitcher) ? viewSwitcher.getBoundingClientRect().height : 0)}px`,
+    );
     const height = Math.max(
       0,
       ...rails.map((rail) =>
@@ -305,7 +312,7 @@ export function initMobileShell({
           'content',
           `${viewportContent || ''}, viewport-fit=cover`,
         );
-      for (const node of [...rails, dock].filter(Boolean))
+      for (const node of [...rails, dock, viewSwitcher].filter(Boolean))
         resize?.observe(node);
       publishChrome();
       measureSheet();
@@ -518,6 +525,7 @@ export function initMobileShell({
       body.removeAttribute(MOBILE_SHEET_ATTR);
       body.style.removeProperty('--mobile-sheet-height');
       body.style.removeProperty('--mobile-sheet-cover');
+      body.style.removeProperty('--mobile-view-switcher-height');
       if (viewport && viewportContent !== null)
         viewport.setAttribute('content', viewportContent);
       publish(null);
