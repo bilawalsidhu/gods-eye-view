@@ -59,10 +59,17 @@ function fakeViewer({ cameraHeightM, surfaceM }) {
     },
     camera: {
       positionCartographic: position,
+      positionWC: Cesium.Cartographic.toCartesian(position),
+      directionWC: new Cesium.Cartesian3(0, 0, -1),
+      upWC: new Cesium.Cartesian3(0, 1, 0),
       heading: 0.5,
       pitch: -0.55,
       roll: 0,
-      flyTo: (options) => flights.push(options),
+      // As Cesium does: a flight is under way until it completes.
+      flyTo(options) {
+        flights.push(options);
+        this._currentFlight = {};
+      },
     },
   };
 }
@@ -122,8 +129,16 @@ function handoffFixture(t) {
   viewer.trackedEntityChanged = new Cesium.Event();
   viewer.camera.cancelFlight = () => {};
   viewer.camera.lookAtTransform = () => {};
-  viewer.camera.flyToBoundingSphere = () => {};
-  viewer.camera.setView = () => {};
+  viewer.camera.flyToBoundingSphere = function () {
+    this._currentFlight = {};
+  };
+  viewer.camera.setView = function () {
+    this.positionWC = Cesium.Cartesian3.add(
+      this.positionWC,
+      new Cesium.Cartesian3(0, 0, 50),
+      new Cesium.Cartesian3(),
+    );
+  };
   const originalFly = viewer.camera.flyTo;
   const navigation = new NavigationController({
     viewer,
@@ -142,6 +157,8 @@ for (const handoff of ['Director', 'tracking', 'follow', 'keyboard', 'UI',
   'flyTo', 'flyToBoundingSphere', 'setView', 'layer-disable', 'layer-destroy', 'app-stop']) {
   test(`arrival guard relinquishes and removes hooks on ${handoff}`, async (t) => {
     const { viewer, navigation, originalFly } = handoffFixture(t);
+    const methods = ['flyTo', 'flyToBoundingSphere', 'setView', 'lookAt', 'cancelFlight']
+      .map((name) => viewer.camera[name]);
     if (handoff === 'Director') {
       SceneDirector.prototype._claimCameraOwnership.call({
         viewer, styleManager: { runImmediateNavigation: (noun, fn) =>
@@ -161,11 +178,50 @@ for (const handoff of ['Director', 'tracking', 'follow', 'keyboard', 'UI',
       if (handoff === 'layer-disable') await lifecycle.setEnabled('test', false);
       else await lifecycle.destroyLayer('test');
     } else viewer.camera[handoff]({});
+    // A direct flyTo is itself one recorded flight; the guard adds none.
     const priorFlights = viewer.flights.length;
     t.mock.timers.tick(10000);
     assert.equal(viewer.flights.length, priorFlights, 'the old probe cannot fly');
-    assert.equal(viewer.camera.flyTo, originalFly, 'direct-call hook is removed');
+    assert.equal(viewer.camera.flyTo, originalFly);
+    assert.deepEqual(
+      ['flyTo', 'flyToBoundingSphere', 'setView', 'lookAt', 'cancelFlight']
+        .map((name) => viewer.camera[name]),
+      methods,
+      'the guard never replaces camera methods',
+    );
     assert.equal(viewer.trackedEntityChanged.numberOfListeners, 0);
     navigation.destroy();
   });
 }
+
+test('the guard yields to a camera moved without any camera method', async () => {
+  const viewer = fakeViewer({ cameraHeightM: 172, surfaceM: 171 });
+  guardCameraAboveGround(viewer, { lat: 30.3125, lon: -97.765 }, { intervalMs: 5 });
+  // A cockpit or follow frame writes the pose directly.
+  viewer.camera.directionWC = new Cesium.Cartesian3(1, 0, 0);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(viewer.flights.length, 0, 'the moved view is not corrected');
+});
+
+test('Cesium lifting a buried eye straight up is not another owner', async () => {
+  const viewer = fakeViewer({ cameraHeightM: 104, surfaceM: 171 });
+  guardCameraAboveGround(viewer, { lat: 30.3125, lon: -97.765 }, { intervalMs: 5 });
+  // Terrain collision raises the eye to just above the loaded ground.
+  const raised = Cesium.Cartographic.fromDegrees(-97.7603, 30.3141, 172);
+  viewer.camera.positionCartographic = raised;
+  viewer.camera.positionWC = Cesium.Cartographic.toCartesian(raised);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(viewer.flights.length, 1, 'the guard still lifts the eye');
+  const lifted = Cesium.Cartographic.fromCartesian(viewer.flights[0].destination);
+  assert.ok(Math.abs(lifted.height - (171 + MIN_EYE_CLEARANCE_M)) < 0.5);
+});
+
+test('another owner lowering the eye is not corrected', async () => {
+  const viewer = fakeViewer({ cameraHeightM: 172, surfaceM: 171 });
+  guardCameraAboveGround(viewer, { lat: 30.3125, lon: -97.765 }, { intervalMs: 5 });
+  const lowered = Cesium.Cartographic.fromDegrees(-97.7603, 30.3141, 150);
+  viewer.camera.positionCartographic = lowered;
+  viewer.camera.positionWC = Cesium.Cartographic.toCartesian(lowered);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(viewer.flights.length, 0);
+});

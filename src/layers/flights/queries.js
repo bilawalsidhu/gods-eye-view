@@ -1,6 +1,7 @@
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import * as Cesium from 'cesium';
+import { closeRenderLoopLatch } from '../../render/cesium/internals.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { modelVisualAnchor } from '../../data/modelVisualAnchor.js';
 import {
@@ -922,8 +923,7 @@ export function createQueries({
               // while manual evidence renders can begin without waiting on VSYNC.
               return new Promise((resolve) =>
                 setTimeout(() => {
-                  if (flightState._viewer?._cesiumWidget)
-                    flightState._viewer._cesiumWidget._renderLoopRunning = false;
+                  closeRenderLoopLatch(flightState._viewer);
                   resolve({ ok: true, nowMs: startMs });
                 }, 0),
               );

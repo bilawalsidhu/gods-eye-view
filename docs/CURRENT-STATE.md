@@ -1414,7 +1414,7 @@ and a Denver coordinate underground. Search now resolves the application's
 ground-floor elevation (bounded wait, same ellipsoidal datum) before framing and
 warms the cell; after landing, `src/cameraGroundGuard.js` samples the rendered
 surface under the target and the camera once tiles stream in and lifts the eye
-to 120 m clearance, holding heading and pitch. Navigation ownership changes (Director, tracking, keyboard/UI controls and direct camera flights), layer/app teardown, and pointer/wheel gestures cancel the check and remove its listeners. `scripts/qa-context-arrivals.mjs` types Camp Mabry
+to 120 m clearance, holding heading and pitch. Navigation ownership changes (Director, tracking, keyboard/UI controls), any other caller moving the camera or starting a flight before a retry, layer/app teardown, and pointer/wheel gestures cancel the check and remove its listeners; the guard compares the pose it started on rather than wrapping camera methods. `scripts/qa-context-arrivals.mjs` types Camp Mabry
 and a Denver coordinate and requires at least 60 m clearance.
 
 ## Layer panel ownership
@@ -2396,9 +2396,9 @@ which embeds the MAP_KEY.
 > so a turned-off layer's entities stayed reachable (Data Centers kept 116
 > MiB). `src/sceneCommandRelease.js`, installed in `src/app/tools.js`,
 > requests one frame through `governorRequestRender` after every layer
-> disable and then trims those arrays. It reads private Cesium fields;
-> `src/sceneCommandRelease.test.mjs` pins them and fails if Cesium renames
-> them or changes which passes it truncates.
+> disable and then trims those arrays. It reads private Cesium fields through
+> `src/render/cesium/internals.js`; `src/sceneCommandRelease.test.mjs` pins
+> them and fails if Cesium renames them or changes which passes it truncates.
 
 > **2026-08-08 — performance waves 1+2:** the app idles via an explicit render
 > governor (`src/renderGovernor.js` — hold/release from every per-frame

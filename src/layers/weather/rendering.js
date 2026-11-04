@@ -2,6 +2,7 @@ import { weatherTileUrl } from './source.js';
 import { orderWeatherImagery } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { createRasterTileProvider } from './rasterTiles.js';
+import { withTileRequestHook } from '../../render/cesium/tileRequests.js';
 import { createWeatherShell } from './shellRendering.js';
 import { weatherDisplay, escapeCreditText } from './display.js';
 import { msg } from '../../i18n/index.js';
@@ -385,7 +386,7 @@ function createGlobeRendering({
         );
         setCredit(frame);
         const credit = frame.credit;
-        const provider = global
+        const source = global
           ? createRasterTileProvider({
               cesium,
               texture,
@@ -408,49 +409,46 @@ function createGlobeRendering({
               enablePickFeatures: false,
               credit,
             });
-        // Cesium reads a provider's credit every frame; a refreshed manifest
-        // can replace it without restaging the imagery.
-        Object.defineProperty(provider, 'credit', {
-          configurable: true,
-          enumerable: true,
-          get: () => frame.credit,
-        });
-        const requestImage = provider.requestImage.bind(provider);
-        provider.requestImage = (x, y, level, request) => {
-          if (frame.closed) return undefined;
-          const result = requestImage(x, y, level, request);
-          const tileKey = `${level}/${x}/${y}`;
-          if (!result) {
-            // Scheduler admission is part of readiness, not a successful tile.
-            frame.deferred.add(tileKey);
-            frame.lastActivity = now();
-            return result;
-          }
-          frame.deferred.delete(tileKey);
-          frame.pending++;
-          frame.lastActivity = now();
-          if (request) frame.requests.add(request);
-          return Promise.resolve(result)
-            .then((image) => {
-              // Cesium decodes tiles as ImageBitmaps already flipped, since WebGL
-              // ignores UNPACK_FLIP_Y for them; a canvas upload flips again.
-              if (!frame.closed && snapshot.product === 'clouds-regional')
-                image = processInfraredImage(image, infrared, createCanvas, {
-                  flipY:
-                    typeof ImageBitmap !== 'undefined' &&
-                    image instanceof ImageBitmap,
-                });
-              frame.retries.delete(tileKey);
-              frame.loaded++;
-              return image;
-            })
-            .finally(() => {
-              frame.pending--;
+        const provider = withTileRequestHook(source, {
+          // Cesium reads a provider's credit every frame; a refreshed manifest
+          // can replace it without restaging the imagery.
+          credit: () => frame.credit,
+          requestImage: ({ x, y, level, request }, issue) => {
+            if (frame.closed) return undefined;
+            const result = issue();
+            const tileKey = `${level}/${x}/${y}`;
+            if (!result) {
+              // Scheduler admission is part of readiness, not a successful tile.
+              frame.deferred.add(tileKey);
               frame.lastActivity = now();
-              frame.requests.delete(request);
-              if (!frame.closed) viewer.scene.requestRender();
-            });
-        };
+              return result;
+            }
+            frame.deferred.delete(tileKey);
+            frame.pending++;
+            frame.lastActivity = now();
+            if (request) frame.requests.add(request);
+            return Promise.resolve(result)
+              .then((image) => {
+                // Cesium decodes tiles as ImageBitmaps already flipped, since WebGL
+                // ignores UNPACK_FLIP_Y for them; a canvas upload flips again.
+                if (!frame.closed && snapshot.product === 'clouds-regional')
+                  image = processInfraredImage(image, infrared, createCanvas, {
+                    flipY:
+                      typeof ImageBitmap !== 'undefined' &&
+                      image instanceof ImageBitmap,
+                  });
+                frame.retries.delete(tileKey);
+                frame.loaded++;
+                return image;
+              })
+              .finally(() => {
+                frame.pending--;
+                frame.lastActivity = now();
+                frame.requests.delete(request);
+                if (!frame.closed) viewer.scene.requestRender();
+              });
+          },
+        });
         frame.offError = provider.errorEvent.addEventListener((error) => {
           if (frame.closed) return;
           const status = error?.error?.statusCode;

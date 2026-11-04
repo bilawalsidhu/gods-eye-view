@@ -1370,7 +1370,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/internals.js"
     ],
     "external": ["cesium"]
   },
@@ -2146,7 +2147,8 @@
       "src/data/scenePick.js",
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/internals.js"
     ],
     "external": ["cesium"]
   },
@@ -3333,7 +3335,9 @@
       "src/data/entityRecords.js",
       "src/input/sensorPick.js",
       "src/input/dispatcher.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/cesium/internals.js",
+      "src/render/cesium/tileRequests.js"
     ],
     "external": [
       "hls.js",
@@ -3959,7 +3963,9 @@
       "src/data/entityRecords.js",
       "src/input/sensorPick.js",
       "src/input/dispatcher.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/cesium/tileRequests.js",
+      "src/render/cesium/internals.js"
     ],
     "external": [
       "hls.js",
@@ -4047,7 +4053,8 @@
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
       "src/data/local_data/wof_neighborhoods/files.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/cesium/internals.js"
     ],
     "external": [
       "cesium",
@@ -4656,7 +4663,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/input/sensorPick.js",
       "src/input/dispatcher.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/cesium/internals.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -4713,7 +4721,8 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/dispatcher.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/cesium/internals.js"
     ],
     "external": ["cesium", "pbf"]
   },

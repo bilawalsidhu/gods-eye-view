@@ -100,16 +100,26 @@ function renderingHarness(options = {}) {
   const providers = [];
   const postRender = event();
   let renderRequests = 0;
+  // `providers` lists what Cesium is handed, in order. The layer may hand it
+  // a hook over this provider, so per-test state lives in one box both see.
   class Provider {
     constructor(options) {
       this.options = options;
       this.tilingScheme = new GeographicTilingScheme();
       this.errorEvent = event();
-      this.response = null;
-      providers.push(this);
+      this.box = { response: null, requestArgs: undefined };
+    }
+    get response() {
+      return this.box.response;
+    }
+    set response(value) {
+      this.box.response = value;
+    }
+    get requestArgs() {
+      return this.box.requestArgs;
     }
     requestImage(...args) {
-      this.requestArgs = args;
+      this.box.requestArgs = args;
       return this.response?.promise;
     }
   }
@@ -2345,7 +2355,7 @@ for (const product of ['radar', 'clouds-regional', 'lightning']) {
       positionCartographic: { height: 60_000 },
     };
     const pending = h.rendering.setFrame({ ...snapshot, product }, times[0]);
-    const options = h.providers[0].options;
+    const options = collection.get(0).imageryProvider.options;
     assert.equal(options.tileWidth, 256);
     assert.equal(options.tileHeight, 256);
     assert.equal(options.maximumLevel, 6);

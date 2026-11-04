@@ -24,6 +24,12 @@
  * tail itself this module can go.
  */
 
+import {
+  commandExtents,
+  defaultView,
+  pickOffscreenView,
+} from './render/cesium/internals.js';
+
 /** Drop command references a view no longer draws. */
 function trimView(view, { keepCurrent }) {
   for (const frustum of view?.frustumCommandsList || []) {
@@ -35,8 +41,7 @@ function trimView(view, { keepCurrent }) {
     }
   }
   if (!keepCurrent)
-    for (const extent of view?._commandExtents || [])
-      extent.command = undefined;
+    for (const extent of commandExtents(view)) extent.command = undefined;
 }
 
 /**
@@ -45,8 +50,8 @@ function trimView(view, { keepCurrent }) {
  * @param {object} scene Cesium Scene, right after a render.
  */
 export function trimStaleSceneCommands(scene) {
-  trimView(scene._defaultView, { keepCurrent: true });
-  trimView(scene._picking?._pickOffscreenView, { keepCurrent: false });
+  trimView(defaultView(scene), { keepCurrent: true });
+  trimView(pickOffscreenView(scene), { keepCurrent: false });
 }
 
 /**
