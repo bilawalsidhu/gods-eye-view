@@ -167,8 +167,6 @@ test('a snapshot fills the card and keeps classes other code sets', async (t) =>
 });
 
 test('each count names the provider its snapshot reports, with its feed state', async (t) => {
-  // HAL-721: the counters named fixed providers while the layer and the
-  // Contacts list named the one that answered.
   const reported = snapshot();
   reported.cohorts[0].source = 'adsb.lol';
   reported.cohorts[0].sourceStatus = 'fallback';
