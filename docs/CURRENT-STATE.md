@@ -6742,8 +6742,9 @@ open the same map cards, and icon selections update the app's active row.
 The county app and Data Layers include synchronized Fire, EMS and Traffic
 category toggles, all on by default. These filter map icons and the app list together, with matching/total
 counts and a distinct no-match state. Traffic covers source traffic reports, not a complete police-call feed. Category changes use the cached snapshot, preserve full feed health/counts,
-and dismiss a selected report when its category is hidden. Filters are session
-state; the existing enabled-only share token and MCP full-feed queries persist.
+and dismiss a selected report when its category is hidden. Filters are saved as browser-local preferences, including entirely unchecked
+groups, and restored when the layer is recreated. The existing enabled-only
+share token and MCP full-feed queries retain their behavior.
 
 County coverage uses checkboxes only in COUNTY EMS. The category filters stay
 synchronized between the app and Data Layers. Eight counties start enabled;
@@ -6791,3 +6792,16 @@ camera target. Adams distinguishes healthy empty from failed monitoring.
 Combined and legacy MCP routes retain their scope, with per-source provenance,
 received/reported/dispatch times and completed/unknown-active labels preserved.
 See docs/COUNTY-EMS.md for source limits, terms and validation coverage.
+
+
+### County EMS filter persistence
+
+County coverage and Fire/EMS/Traffic selections now survive page reloads,
+app/browser restarts and device reboots in the same browser profile and origin.
+The layer loads validated preferences when constructed and saves only explicit
+user/voice/tool filter edits to gev:county-ems:filters:v1. Empty selections stay
+empty. Temporary scene/restore changes cannot overwrite unrelated saved groups;
+selected incidents and source data are never persisted. Blocked storage leaves
+session controls usable. Existing enabled-only share links remain compatible.
+The County EMS browser gate verifies mixed filters after a fresh document and
+all-unchecked filters after closing/relaunching the browser with the same profile.

@@ -2,6 +2,7 @@ import { layerFeedState } from '../../data/feedState.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createChesterCountyEmsLayer } from './index.js';
+import { createCountyFilterPreferences, COUNTY_FILTER_STORAGE_KEY } from './filterPreferences.js';
 
 function setup(source, options = {}) {
   const entries = new Map();
@@ -49,6 +50,24 @@ const snapshot = (rows) => ({
   fetchedAt: Date.now(),
   observedAt: Date.now(),
   stale: false,
+});
+test('explicit filters survive layer recreation; transient changes and incident selection never overwrite saved choices', async () => {
+  const saved = new Map();
+  const storage = () => ({getItem:(key)=>saved.get(key),setItem:(key,value)=>saved.set(key,value)});
+  const boot = () => setup({getSnapshot:async()=>snapshot([row])}, {filterPreferences:createCountyFilterPreferences({storage})}).layer;
+  let layer = boot();
+  layer.setParams({categories:['ems'],counties:['montgomery-pa']},{origin:'user'});
+  layer.setParams({categories:['fire']},{origin:'scene'});
+  layer.setParams({counties:['chester-pa']},{origin:'user'});
+  const beforeSelection = saved.get(COUNTY_FILTER_STORAGE_KEY);
+  await layer.update(); layer.setParams({selectedIncident:row.id},{origin:'user'});
+  assert.equal(saved.get(COUNTY_FILTER_STORAGE_KEY),beforeSelection);
+  layer.disable(); layer.destroy();
+  layer = boot();
+  assert.deepEqual(layer.getParams(),{categories:['ems'],counties:['chester-pa']});
+  assert.equal(layer.getIncidentPanelState().list.items.some(item=>item.active),false);
+  layer.setParams({categories:[],counties:[]},{origin:'tool'}); layer.destroy();
+  layer = boot(); assert.deepEqual(layer.getParams(),{categories:[],counties:[]});layer.destroy();
 });
 test('Pike starts unchecked and list-only public details remain accessible without a map target', async () => {
   const pike = { ...row, id:'pike-pa:fire:2611000001', incidentNumber:'2611000001', countyId:'pike-pa',category:'fire',mapPosition:null,locationStatus:'not-published',reportKind:'completed',timeBasis:'received',detailUrl:'https://webcad.pikepa.org/pages/public/FeedReader.asp' };

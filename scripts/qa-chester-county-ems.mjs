@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import puppeteer from 'puppeteer';
 import { chromeExecutablePath } from './qa-chrome.mjs';
 
 // Synthetic incident records only: no captured medical reports in evidence files.
 const base = process.env.QA_BASE_URL || 'http://localhost:4173';
-const browser = await puppeteer.launch({
+const profile = await mkdtemp(join(tmpdir(), 'gev-county-filters-'));
+const launch = () => puppeteer.launch({
+  userDataDir: profile,
   headless: true,
   executablePath: chromeExecutablePath(),
   args: [
@@ -17,11 +20,12 @@ const browser = await puppeteer.launch({
     '--enable-webgl',
   ],
 });
+let browser = await launch();
 let recorder;
 try {
-  const page = await browser.newPage();
+  let page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 1000 });
-  await page.evaluateOnNewDocument(() => {
+  const installFixtures = () => {
     const original = window.fetch;
     window.__emsPaintedText = new Set();
     const fillText = CanvasRenderingContext2D.prototype.fillText;
@@ -279,7 +283,8 @@ try {
         );
       return original(input, options);
     };
-  });
+  };
+  await page.evaluateOnNewDocument(installFixtures);
   await page.goto(`${base}/?welcome=0`, {
     waitUntil: 'domcontentloaded',
     timeout: 60000,
@@ -604,6 +609,36 @@ try {
   await page.$eval('.county-selection', node => node.scrollIntoView({block:'center'}));
   await page.screenshot({path:'qa-shots/chester-county-ems/list-only.png'});
   assert.equal(await page.$$eval('[data-county-action^="source:"]', buttons => buttons.length), 0);
+  // Real localStorage must survive a new document and a completely new browser process.
+  const mixed = { categories: ['ems'], counties: ['montgomery-pa', 'pike-pa'] };
+  await page.evaluate(async params => {
+    await window.__godsEyeView.dataManager.setLayerParams('chester-county-ems', params, { origin: 'user' });
+  }, mixed);
+  const waitForFilters = expected => page.waitForFunction(expected => {
+    const app = window.__godsEyeView;
+    const params = app?.dataManager?.layers.get('chester-county-ems')?.module?.getParams?.();
+    return app?.dataManager?.isEnabled('chester-county-ems') && JSON.stringify(params) === JSON.stringify(expected);
+  }, {timeout:60000}, expected);
+  await page.goto('about:blank');
+  await page.goto(base + '/?welcome=0', {waitUntil:'domcontentloaded',timeout:60000});
+  await waitForFilters(mixed);
+  assert.deepEqual(await page.$$eval('[data-county-filter]:checked', inputs => inputs.map(input => input.dataset.countyFilter)), mixed.counties);
+  assert.equal(await page.$eval(layerChip('ems'), button => button.getAttribute('aria-pressed')), 'true');
+  assert.equal(await page.$eval(layerChip('fire'), button => button.getAttribute('aria-pressed')), 'false');
+  await page.evaluate(async () => {
+    await window.__godsEyeView.dataManager.setLayerParams('chester-county-ems', {categories:[],counties:[]}, {origin:'user'});
+  });
+  await recorder?.stop(); recorder = null;
+  await browser.close();
+  browser = await launch();
+  page = await browser.newPage();
+  await page.setViewport({width:1440,height:1000});
+  await page.evaluateOnNewDocument(installFixtures);
+  await page.goto(base + '/?welcome=0', {waitUntil:'domcontentloaded',timeout:60000});
+  await waitForFilters({categories:[],counties:[]});
+  assert.equal(await page.$$eval('[data-county-filter]:checked', inputs => inputs.length), 0);
+  assert.equal(await page.$$eval('[data-county-category][aria-pressed="true"]', buttons => buttons.length), 0);
+  assert.equal(await page.$$eval('#chester-county-panel button[data-list-item-id]', rows => rows.length), 0);
   const cleared = await page.evaluate(async () => {
     const manager = window.__godsEyeView.dataManager;
     const layer = manager.layers.get('chester-county-ems').module;
@@ -635,9 +670,10 @@ try {
     () => !document.querySelector('[data-rail-item="chester-county-panel"]'),
   );
   console.log(
-    'PASS: County EMS, nine county checkboxes in app only, synchronized category filters, list-only public units, opt-in Pike completed reports, Lancaster assignments and Delco dispatch provenance, map/list selection, empty refresh, launcher hides on disable and returns on enable',
+    'PASS: County EMS, nine county checkboxes in app only, synchronized category filters, list-only public units, opt-in Pike completed reports, Lancaster assignments and Delco dispatch provenance, map/list selection, empty refresh, launcher hides on disable and returns on enable, mixed/empty filters survive reload and full browser restart',
   );
 } finally {
   await recorder?.stop();
   await browser.close();
+  await rm(profile, {recursive:true,force:true});
 }

@@ -28,7 +28,10 @@ removed. Sources and freshness opens a read-only disclosure of per-county status
 The category filters in Data Layers and the app stay in sync, filtering the map
 and list together. All three categories start on. Traffic includes the source's
 traffic/road reports; it is not a full police-call feed. County and category
-choices apply for the current app session. MCP queries the full combined source
+choices are saved automatically in this browser profile and restored after
+reloads, app restarts and device reboots, including groups with every option
+unchecked. Shared links still carry only the layer on/off state; they do not
+replace these local filter preferences. MCP queries the full combined source
 with its own optional county/category filters. Excluding a selected report closes
 its card and cancels its pending detail lookup. Selecting a report without
 coordinates opens its public details and units inside the app, without moving
@@ -346,3 +349,15 @@ expose independent freshness/failure state, and document source terms. The
 county filter and generic MCP county enum read the shared county catalog.
 
 Supported sources are registered explicitly; adding a public URL alone does not enable an unreviewed source.
+
+
+## Saved filter preferences
+
+County checkboxes and Fire/EMS/Traffic filters use the browser-local key
+gev:county-ems:filters:v1. Only the two filter ID arrays are stored; selections,
+incident records, locations and unit details stay transient. Direct user/voice/tool
+filter changes save only the changed group. Temporary scene or passive restore
+changes do not overwrite saved choices. Existing profiles without saved filters
+start with all categories and all counties except Pike selected. Malformed
+preferences fall back safely. If browser storage is blocked, controls still work
+for the current session. Use the same browser profile and app URL after restarting.

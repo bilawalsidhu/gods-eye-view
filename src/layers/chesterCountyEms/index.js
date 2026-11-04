@@ -1,6 +1,10 @@
 import * as Cesium from 'cesium';
 import { msg, t } from '../../i18n/index.js';
 import { COUNTIES, countyFor, incidentSource } from './counties.js';
+import {
+  createCountyFilterPreferences,
+  INCIDENT_CATEGORIES,
+} from './filterPreferences.js';
 
 const ID = 'chester-county-ems';
 const UNIT_STATUS_CHECKED = msg(
@@ -13,7 +17,7 @@ const ASSIGNMENTS_CHECKED = msg(
   'Assignments checked: {time} (America/New_York)',
 );
 const SELECTED = `${ID}-selected`;
-const CATEGORIES = ['fire', 'ems', 'traffic'];
+const CATEGORIES = INCIDENT_CATEGORIES;
 const STYLES = {
   fire: {
     symbol: '🔥',
@@ -49,6 +53,7 @@ const wrap = (value) =>
 /** Display county incidents at approximate street intersections or address points. */
 export function createChesterCountyEmsLayer({
   source,
+  filterPreferences = createCountyFilterPreferences(),
   overlayHost,
   openExternal,
   screenSpaceEventHandlerFactory,
@@ -61,10 +66,7 @@ export function createChesterCountyEmsLayer({
   let snapshot = null;
   let error = null;
   let selected = null;
-  let categories = [...CATEGORIES];
-  let counties = COUNTIES.filter(
-    (county) => county.defaultEnabled !== false,
-  ).map((county) => county.id);
+  let { categories, counties } = filterPreferences.get();
   const visibleRows = () =>
     (snapshot?.rows || []).filter(
       (row) =>
@@ -700,8 +702,9 @@ export function createChesterCountyEmsLayer({
     getParams() {
       return { categories: [...categories], counties: [...counties] };
     },
-    setParams(params) {
+    setParams(params, { origin } = {}) {
       let changed = false;
+      const filterChanges = {};
       for (const [key, allowed] of [
         ['categories', CATEGORIES],
         ['counties', COUNTIES.map((county) => county.id)],
@@ -714,10 +717,13 @@ export function createChesterCountyEmsLayer({
           const values = allowed.filter((value) => params[key].includes(value));
           if (key === 'categories') categories = values;
           else counties = values;
+          filterChanges[key] = values;
           changed = true;
         }
       }
       if (changed) {
+        if (['user', 'voice', 'tool'].includes(origin))
+          filterPreferences.set(filterChanges);
         if (!visibleRows().some((row) => row.id === selected)) clearSelection();
         render();
       }
