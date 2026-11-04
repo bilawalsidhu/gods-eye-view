@@ -114,7 +114,8 @@ export function createLifecycle({
     state.feed.firstConnectDeadline = null;
     state.feed.firstConnectTimer = null;
     state.feed.abort = null;
-    state.billboardCollection = null;
+    state.icons = null;
+    state.iconPrimitive = null;
     state.records.all = [];
     state.records.byMmsi = new Map();
     state.records.unkeyed = [];
@@ -187,8 +188,7 @@ export function createLifecycle({
             /* grid failed to load — anchors stay at ellipsoid 0 */
           });
       }
-      // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;
-      // the registry resolver reduces it to the record's mmsi (a string key).
+      // Pick-ownership (H2): a vessel icon's pick id is its row id, the MMSI.
       registerPickOwner('ais-live-vessels', (pickedId) =>
         state.records.byMmsi.has(pickedId),
       );
@@ -233,9 +233,13 @@ export function createLifecycle({
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();
-      if (state.billboardCollection && activeViewer?.scene?.primitives) {
-        activeViewer.scene.primitives.remove(state.billboardCollection);
+      if (state.iconPrimitive && activeViewer?.scene?.primitives) {
+        activeViewer.scene.primitives.remove(state.iconPrimitive);
       }
+      // Not in a scene (or no viewer to remove it from): still stop its atlas
+      // listener and free its GPU resources.
+      if (state.iconPrimitive && !state.iconPrimitive.isDestroyed())
+        state.iconPrimitive.destroy();
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
       vesselState._vesselOverlayHost.setVisible(
         VESSEL_OVERLAY_SOURCE_ID,

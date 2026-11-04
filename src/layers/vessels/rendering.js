@@ -7,10 +7,15 @@ import {
   applyVesselOverlayPolicy,
   VESSEL_CARD_FADE_DISTANCE_M,
 } from '../../data/vesselLabels.js';
+import { cameraPoseSignature } from '../../data/iconOrientation.js';
 import {
-  cameraPoseSignature,
-  screenProjectedRotation,
-} from '../../data/iconOrientation.js';
+  createIconSet,
+  ICON_CULL_LIFT,
+  ICON_ROTATES,
+} from '../../data/iconSet.js';
+import { writeHoldSegment } from '../../data/iconSegment.js';
+import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
+import { iconAtlas } from '../../data/iconAtlas.js';
 import {
   VESSEL_LIFT_M,
   DEFAULT_RENDER_ROWS,
@@ -20,11 +25,9 @@ import {
   LABEL_GRID_PX,
   CARD_MIN_SEP_PX,
 } from './policy.js';
-import {
-  addBillboard,
-  billboardState,
-  setBillboard,
-} from '../../data/billboardMirror.js';
+
+/** The ship artwork's own raster size (px). */
+const SHIP_ICON_PX = 32;
 
 export function createRendering({
   vesselState,
@@ -41,16 +44,21 @@ export function createRendering({
     return visualRecords.get(record) || record;
   }
 
-  /** Where a record's icon was drawn, from Core's mirror, else its visual position. */
+  /** Where a record's icon is drawn: its row holds at the visual position. */
   function iconPosition(record) {
-    const visual = getVisual(record);
-    return billboardState(visual.billboard)?.position || visual.position;
+    return getVisual(record).position;
   }
 
   function prepareRecordVisual(record) {
     let visual = visualRecords.get(record);
     if (!visual) {
-      visual = { billboard: record.billboard || null };
+      // Unkeyed records (no MMSI) are rebuilt every poll, so their rows take
+      // a fresh id that no MMSI can collide with.
+      visual = {
+        iconId:
+          record.mmsi || `ais-unkeyed:${++vesselState._unkeyedIconSequence}`,
+        visible: false,
+      };
       visualRecords.set(record, visual);
     }
     const heightM = components.queries.vesselDatumHeightM(
@@ -61,15 +69,6 @@ export function createRendering({
       record.lon,
       record.lat,
       heightM,
-    );
-    visual.surfacePosition = Cesium.Cartesian3.fromDegrees(
-      record.lon,
-      record.lat,
-      0,
-    );
-    visual.normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
-      visual.position,
-      new Cesium.Cartesian3(),
     );
     return visual;
   }
@@ -110,62 +109,95 @@ export function createRendering({
     return Math.min(DEFAULT_ACTIVE_LABELS, renderRowLimit());
   }
 
+  /**
+   * The layer's icon set and its primitive. Vessels hold still between polls,
+   * so each row is a hold segment and the primitive's clock only keeps segment
+   * times small. The set draws depth-test-free on the near plane and culls the
+   * far side on the GPU (locked height-datum principle #2: contacts are ALWAYS
+   * visible; the tile sea mesh ≠ the geoid, so a depth-tested chevron at the
+   * geoid would clip behind local tide/mesh noise).
+   */
   function ensureCollections(viewer) {
-    if (!viewer || state.billboardCollection) return;
-    state.billboardCollection = new Cesium.BillboardCollection({
-      blendOption: Cesium.BlendOption.TRANSLUCENT,
+    if (!viewer || state.icons) return;
+    const epoch = Cesium.JulianDate.now();
+    state.icons = createIconSet({ epoch });
+    state.icons.show = state.feed.enabled;
+    state.iconPrimitive = new IconSetPrimitive({
+      set: state.icons,
+      renderTime: () => epoch,
+      requestRender: () => governorRequestRender('ais-vessels-icons'),
     });
-    state.billboardCollection.show = state.feed.enabled;
-    viewer.scene.primitives.add(state.billboardCollection);
-    registerSpriteCollection('ais', state.billboardCollection);
+    viewer.scene.primitives.add(state.iconPrimitive);
+    registerSpriteCollection('ais', state.iconPrimitive);
   }
 
   /**
-   * Create the billboard primitive for a freshly added vessel record. Map labels
-   * are canvas cards (vesselLabels.js) rebuilt by the declutter pass — no
-   * per-record label primitive exists anymore.
+   * Add a freshly added vessel record's icon row. Map labels are canvas cards
+   * (vesselLabels.js) rebuilt by the declutter pass — no per-record label
+   * primitive exists anymore.
    * @param {Object} record - Normalized vessel record.
    * @param {Cesium.EllipsoidalOccluder|null} occluder - Horizon occluder for initial visibility.
    */
 
   function addRecordPrimitives(record, occluder) {
-    const visible =
-      state.feed.enabled &&
-      isVisible(getVisual(record).surfacePosition, occluder);
-    getVisual(record).billboard = addBillboard(state.billboardCollection, {
-      position: getVisual(record).position,
-      show: visible,
-      image: shipIcon(record, false),
-      // The ship artwork's own size, stated so Core's mirror knows it.
-      width: 32,
-      height: 32,
-      scale: shipScale(record),
-      // Screen-projected rotation lands on the next visibility/rotation pass.
-      rotation: 0,
-      alignedAxis: Cesium.Cartesian3.ZERO,
-      horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-      verticalOrigin: Cesium.VerticalOrigin.CENTER,
-      // Locked height-datum principle #2: contacts are ALWAYS visible —
-      // depth-test-free sprites; the EllipsoidalOccluder handles the far side.
-      // (The tile sea mesh ≠ the geoid exactly, so a depth-tested chevron at
-      // the geoid still clips out behind local tide/mesh noise.)
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      id: record,
+    const visual = getVisual(record);
+    const set = state.icons;
+    const row = set.add(visual.iconId, {
+      layer: 'ais-live-vessels',
+      id: visual.iconId,
     });
+    set.setSize(row, SHIP_ICON_PX, SHIP_ICON_PX);
+    set.setFlag(row, ICON_ROTATES, true);
+    // Sea level sits at geoid N, below the ellipsoid across much of the ocean.
+    set.setFlag(row, ICON_CULL_LIFT, true);
+    set.setShown(row, true);
+    syncRecordIcon(record);
+    visual.visible = isVisible(visual.cullPosition, occluder);
   }
 
   /**
-   * Remove a record's billboard primitive from its collection.
+   * Write a record's row from its visual position, course, tint and selection,
+   * and keep the point the shader judges the horizon at (`cullPosition`) so
+   * the CPU card/focus pass draws the same boundary.
+   * @param {Object} record - Vessel record with a prepared visual.
+   */
+
+  function syncRecordIcon(record) {
+    const visual = getVisual(record);
+    const set = state.icons;
+    const row = set?.row(visual.iconId) ?? -1;
+    if (row < 0 || !visual.position) return;
+    const selected = record === state.selectedRecord;
+    const slot = iconAtlas.slot(shipIcon(record, selected), SHIP_ICON_PX);
+    set.setImage(row, slot, slot);
+    set.setScale(row, shipScale(record) * (selected ? 1.2 : 1));
+    writeHoldSegment(
+      set.segments,
+      row,
+      visual.position,
+      vesselCourseDeg(record),
+    );
+    set.segmentWritten(row);
+    visual.cullPosition = set.cullPoint(
+      row,
+      visual.position,
+      visual.cullPosition,
+    );
+  }
+
+  /**
+   * Remove a record's icon row.
    * @param {Object} record - Vessel record to tear down.
    */
 
   function removeRecordPrimitives(record) {
     if (!record) return;
-    if (getVisual(record).billboard && state.billboardCollection) {
-      forgetSpriteFocus(getVisual(record).billboard);
-      state.billboardCollection.remove(getVisual(record).billboard);
-    }
-    getVisual(record).billboard = null;
+    const set = state.icons;
+    const visual = getVisual(record);
+    const row = set?.row(visual.iconId) ?? -1;
+    if (row < 0) return;
+    forgetSpriteFocus(set.metaAt(row));
+    set.remove(visual.iconId);
   }
 
   function shipScale(record) {
@@ -178,8 +210,7 @@ export function createRendering({
   /**
    * Best available real-world direction of travel for a vessel, degrees
    * clockwise from north (true heading preferred, course-over-ground fallback).
-   * Screen rotation is computed from this by the shared projected-rotation
-   * pass in updateVisibility — never directly from the compass value.
+   * The icon set turns this into its screen rotation on the GPU each frame.
    * @param {Object} record - Vessel record.
    * @returns {number} Course in degrees (0 when unknown).
    */
@@ -191,8 +222,8 @@ export function createRendering({
 
   /**
    * Build (and cache) a chevron/delta-wing SVG data URL tinted for the vessel.
-   * The shape points north (up) so billboard rotation maps directly to heading.
-   * One icon is generated per color+variant and reused across all billboards.
+   * The shape points north (up) so the row's course maps directly to heading.
+   * One icon is generated per color+variant and shares one atlas slot.
    * @param {Object} record - Vessel record (drives per-type tint).
    * @param {boolean} selected - True for the white/brighter selected variant.
    * @returns {string} SVG data URL.
@@ -291,31 +322,15 @@ export function createRendering({
     if (regularPass) {
       // Candidate construction stays on the original 800 ms selector cadence.
       // The 80 ms focus-only pass below never allocates label candidates.
-      const poseSig = camera ? cameraPoseSignature(camera) : '';
-      const doRotations = force || poseSig !== vesselState._lastCamPoseSig;
-      if (doRotations) vesselState._lastCamPoseSig = poseSig;
+      // Icons cull and rotate on the GPU; this pass only picks the cards and
+      // remembers which vessels the horizon leaves in view for focus.
+      if (camera) vesselState._lastCamPoseSig = cameraPoseSignature(camera);
       const occluder = makeOccluder();
       const labelCandidates = [];
       for (const record of state.records.all) {
         const visual = getVisual(record);
-        const visible = isVisible(visual.surfacePosition, occluder);
-        if (visual.billboard) {
-          if (billboardState(visual.billboard).show !== visible)
-            setBillboard(visual.billboard, 'show', visible);
-          if (visible && doRotations && scene) {
-            const { rotation } = billboardState(visual.billboard);
-            const rot = screenProjectedRotation(
-              scene,
-              visual.position,
-              vesselCourseDeg(record),
-              rotation,
-            );
-            if (rot !== null && Math.abs(rot - rotation) > 0.002) {
-              setBillboard(visual.billboard, 'rotation', rot);
-            }
-          }
-        }
-        if (visible) labelCandidates.push(record);
+        visual.visible = isVisible(visual.cullPosition, occluder);
+        if (visual.visible) labelCandidates.push(record);
       }
       updateClusteredLabels(labelCandidates);
     }
@@ -342,14 +357,19 @@ export function createRendering({
   }
 
   /**
-   * Apply focus alpha to vessel sprites. Kept as a production wire seam so the
-   * animation/deadband contract can be tested without constructing WebGL.
+   * Apply focus emphasis to vessel icons through the set's focus column
+   * (narrow always-visible amendment: the ship chevron remains present at the
+   * non-zero floor while it competes with the tracked target). Kept as a
+   * production wire seam so the animation/deadband contract can be tested
+   * without constructing WebGL.
    * @param {object} input
+   * @param {object} [input.icons] The icon set (defaults to the layer's).
    * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
    */
 
   function applyVesselFocusDeemphasis({
     records,
+    icons = state.icons,
     target,
     previousActiveCount = 0,
     nowMs,
@@ -365,43 +385,37 @@ export function createRendering({
     let activeCount = 0;
     for (const record of records || []) {
       const visual = getVisual(record);
-      const bb = visual?.billboard;
-      const icon = billboardState(bb);
-      const position = icon?.position || visual?.position;
-      if (!bb || !position) continue;
-      // Most of a worldwide feed sits behind the horizon. A hidden sprite with
-      // no pending focus state and full alpha would advance to exactly what it
-      // already is, so skip it instead of paying its distance and state work
-      // every 80 ms while anything is tracked.
+      const row = icons?.row(visual?.iconId) ?? -1;
+      const position = visual?.position;
+      if (row < 0 || !position) continue;
+      const sprite = icons.metaAt(row);
+      // Most of a worldwide feed sits behind the horizon. A hidden icon with
+      // no pending focus state at full emphasis would advance to exactly what
+      // it already is, so skip it instead of paying its distance and state
+      // work every 80 ms while anything is tracked.
       if (
-        icon.show === false &&
-        spriteFocusAtRest(bb) &&
-        !focusAlphaNeedsWrite(bb.color?.alpha, 1, params)
+        !visual.visible &&
+        spriteFocusAtRest(sprite) &&
+        !focusAlphaNeedsWrite(icons.focus(row), 1, params)
       )
         continue;
-      const focus = advanceSpriteFocus(bb, {
-        // Hidden/far-side sprites still finish any pending release so the active
+      const focus = advanceSpriteFocus(sprite, {
+        // Hidden/far-side icons still finish any pending release so the active
         // count remains truthful and they cannot reappear with stale dim alpha.
-        screenPosition:
-          icon.show === false ? null : screenPositionFor(position),
+        screenPosition: visual.visible ? screenPositionFor(position) : null,
         cameraDistance: cameraDistanceFor(position),
         nowMs,
         target,
         params,
-        // Vessel artwork is 32 px before billboard scale. Including the
-        // ambient chevron's own rendered extent prevents edge-overlap misses.
-        spriteHalfWidthPx: (icon.width || 32) * (icon.scale || 1) * 0.5,
-        spriteHalfHeightPx: (icon.height || 32) * (icon.scale || 1) * 0.5,
+        // Vessel artwork is 32 px before scale. Including the ambient
+        // chevron's own rendered extent prevents edge-overlap misses.
+        spriteHalfWidthPx: icons.width(row) * icons.scale(row) * 0.5,
+        spriteHalfHeightPx: icons.height(row) * icons.scale(row) * 0.5,
       });
       transitioning ||= focus.transitioning;
       if (focus.active) activeCount += 1;
-      if (focusAlphaNeedsWrite(bb.color?.alpha, focus.factor, params)) {
-        // Narrow always-visible amendment: the ship chevron remains present at
-        // the non-zero floor while it competes with the tracked target. Preserve
-        // the billboard's existing base RGB, matching the other layer patterns,
-        // rather than repainting every chevron from a hard-coded WHITE base.
-        const baseColor = bb.color || Cesium.Color.WHITE;
-        bb.color = baseColor.withAlpha(focus.factor);
+      if (focusAlphaNeedsWrite(icons.focus(row), focus.factor, params)) {
+        icons.setFocus(row, focus.factor);
         writes += 1;
       }
     }
@@ -417,9 +431,9 @@ export function createRendering({
     );
   }
 
-  function isVisible(surfacePosition, occluder) {
-    if (!surfacePosition || !occluder) return true;
-    return occluder.isPointVisible(surfacePosition);
+  function isVisible(cullPosition, occluder) {
+    if (!cullPosition || !occluder) return true;
+    return occluder.isPointVisible(cullPosition);
   }
 
   /**
@@ -569,9 +583,7 @@ export function createRendering({
   }
 
   function setVisible(show) {
-    if (state.billboardCollection) {
-      state.billboardCollection.show = show;
-    }
+    if (state.icons) state.icons.show = show;
     vesselState._vesselOverlayHost.setVisible(VESSEL_OVERLAY_SOURCE_ID, show);
   }
   return {
@@ -583,6 +595,7 @@ export function createRendering({
     labelRowLimit,
     ensureCollections,
     addRecordPrimitives,
+    syncRecordIcon,
     removeRecordPrimitives,
     shipScale,
     vesselCourseDeg,

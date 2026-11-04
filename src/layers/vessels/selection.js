@@ -1,7 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
-import { setBillboard } from '../../data/billboardMirror.js';
 
 export function createSelection({
   vesselState,
@@ -43,11 +42,14 @@ export function createSelection({
         : viewer.scene.pick(click.position);
       const pickedId = resolvePickId(picked);
       let record = pickedId ? state.records.byMmsi.get(pickedId) : null;
-      const rawId = picked?.id ?? picked?.primitive?.id;
+      // A vessel icon's pick id is its row id: the MMSI, or an unkeyed row's.
+      // Removing a row destroys its pick id, so an evicted vessel cannot be
+      // picked at all; a live row whose record is gone stays a no-op below.
+      const rawId = picked?.id;
       const ownRecordPick =
-        rawId && typeof rawId === 'object' && Object.hasOwn(rawId, 'mmsi');
+        typeof rawId === 'string' && state.icons?.has(rawId) === true;
 
-      // An own-layer record without a live map key is a strict no-op (FB-1
+      // An own-layer row without a live map key is a strict no-op (FB-1
       // residual). Trails carry no layer identity and hug their contacts, so any
       // `gev-trail:*` pick is also a no-op. Every other non-vessel pick — sibling
       // unowned scene picks dismiss the current vessel inspection.
@@ -170,15 +172,7 @@ export function createSelection({
     clearSelection({ preserveTrail: reuseTrail });
     state.selectedRecord = record;
     record.missedRefreshes = 0;
-    if (components.rendering.getVisual(record).billboard) {
-      components.rendering.getVisual(record).billboard.image =
-        components.rendering.shipIcon(record, true);
-      setBillboard(
-        components.rendering.getVisual(record).billboard,
-        'scale',
-        components.rendering.shipScale(record) * 1.2,
-      );
-    }
+    components.rendering.syncRecordIcon(record);
     // Rebuild the card set immediately so the full-detail card appears on the
     // click, not up to VISIBILITY_UPDATE_MS later.
     components.rendering.updateVisibility(true);
@@ -229,16 +223,8 @@ export function createSelection({
 
   function clearSelection({ preserveTrail = false, evicted = false } = {}) {
     const record = state.selectedRecord;
-    if (components.rendering.getVisual(record)?.billboard) {
-      components.rendering.getVisual(record).billboard.image =
-        components.rendering.shipIcon(record, false);
-      setBillboard(
-        components.rendering.getVisual(record).billboard,
-        'scale',
-        components.rendering.shipScale(record),
-      );
-    }
     state.selectedRecord = null;
+    if (record) components.rendering.syncRecordIcon(record);
     // Drop the full-detail card right away (no-op when the layer is disabled —
     // disable() clears the entry set itself).
     if (record && state.feed.enabled)

@@ -1,4 +1,5 @@
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
+import { createIconSet } from '../../data/iconSet.js';
 
 export function createTesting({
   vesselState,
@@ -48,7 +49,8 @@ export function createTesting({
         .map((record) => [record.mmsi, record]),
     );
     state.selectedRecord = options.selectedRecord || null;
-    state.billboardCollection = options.billboardCollection || { remove() {} };
+    state.icons = options.icons || createIconSet();
+    state.iconPrimitive = null;
     state.trail = options.trail || null;
     state.trailMmsi = options.trailMmsi || null;
     state.trailPositions = Array.isArray(options.trailPositions)

@@ -39,7 +39,7 @@ import {
   presentSelectedVessel,
   subscribeSelectedVessel,
 } from '../hudReadouts.js';
-import { mirrorBillboard, setBillboard } from './billboardMirror.js';
+import { createIconSet } from './iconSet.js';
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42), null);
@@ -656,17 +656,18 @@ test('disable and destroy make abort-ignoring AIS responses inert', async () => 
   }
 });
 
+/** One vessel row in a fresh set, as the layer adds it, plus its record. */
+function focusFixture() {
+  const icons = createIconSet();
+  const row = icons.add('353136000', { layer: 'ais-live-vessels', id: '353136000' });
+  icons.setSize(row, 32, 32);
+  const record = { iconId: '353136000', position: { x: 1, y: 2, z: 3 }, visible: true };
+  return { icons, records: [record], record, focus: () => icons.focus(icons.row('353136000')) };
+}
+
 test('vessel focus wire animates alpha with deadband and restores after tracking ends', () => {
   let writes = 0;
-  const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
-  let color = makeColor(1);
-  const billboard = mirrorBillboard({
-    position: { x: 1, y: 2, z: 3 },
-    show: true,
-    get color() { return color; },
-    set color(next) { writes += 1; color = next; },
-  });
-  const records = [{ position: billboard.position, billboard }];
+  const { icons, records, focus } = focusFixture();
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
     paddingPx: 0,
@@ -686,6 +687,7 @@ test('vessel focus wire animates alpha with deadband and restores after tracking
   const apply = (nowMs, focusTarget) => {
     const result = applyVesselFocusDeemphasis({
       records,
+      icons,
       target: focusTarget,
       previousActiveCount: activeCount,
       nowMs,
@@ -694,34 +696,30 @@ test('vessel focus wire animates alpha with deadband and restores after tracking
       params,
     });
     activeCount = result.activeCount;
+    writes += result.writes;
     return result;
   };
 
   assert.equal(apply(0, target).writes, 0);
   assert.equal(apply(150, target).writes, 1);
-  assert.ok(color.alpha > 0.25 && color.alpha < 1);
+  assert.ok(focus() > 0.25 && focus() < 1);
   assert.equal(apply(150, target).writes, 0, 'same timestamp stays inside deadband');
   assert.equal(apply(300, target).writes, 1);
-  assert.equal(color.alpha, 0.25);
+  assert.equal(focus(), 0.25);
   assert.equal(apply(300, null).writes, 0, 'release starts continuously from the floor');
   assert.equal(apply(600, null).writes, 1);
-  assert.ok(color.alpha > 0.25 && color.alpha < 1);
+  assert.ok(focus() > 0.25 && focus() < 1);
   assert.equal(apply(900, null).writes, 1);
-  assert.equal(color.alpha, 1);
+  assert.equal(focus(), 1);
   assert.equal(apply(901, null).writes, 0, 'settled restoration causes no churn');
   assert.equal(writes, 4);
 });
 
 test('vessel focus wire performs no alpha writes when nothing has been tracked', () => {
-  let writes = 0;
-  const billboard = mirrorBillboard({
-    position: { x: 0, y: 0, z: 0 },
-    show: true,
-    get color() { return { alpha: 1 }; },
-    set color(_next) { writes += 1; },
-  });
+  const { icons, records, focus } = focusFixture();
   const result = applyVesselFocusDeemphasis({
-    records: [{ position: billboard.position, billboard }],
+    records,
+    icons,
     target: null,
     nowMs: 100,
     screenPositionFor: () => ({ x: 50, y: 50 }),
@@ -733,17 +731,11 @@ test('vessel focus wire performs no alpha writes when nothing has been tracked',
     activeCount: 0,
     ran: false,
   });
-  assert.equal(writes, 0);
+  assert.equal(focus(), 1);
 });
 
 test('vessel focus wire restores a hidden sprite before releasing the active pass', () => {
-  const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
-  const billboard = mirrorBillboard({
-    position: { x: 1, y: 2, z: 3 },
-    show: true,
-    color: makeColor(1),
-  });
-  const records = [{ billboard }];
+  const { icons, records, record, focus } = focusFixture();
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
     paddingPx: 0,
@@ -759,6 +751,7 @@ test('vessel focus wire restores a hidden sprite before releasing the active pas
   };
   const pass = (nowMs, focusTarget, previousActiveCount) => applyVesselFocusDeemphasis({
     records,
+    icons,
     target: focusTarget,
     previousActiveCount,
     nowMs,
@@ -770,15 +763,15 @@ test('vessel focus wire restores a hidden sprite before releasing the active pas
   pass(0, target, 0);
   const dimmed = pass(params.attackMs, target, 0);
   assert.equal(dimmed.activeCount, 1);
-  assert.equal(billboard.color.alpha, params.dimFloor);
+  assert.equal(focus(), params.dimFloor);
 
-  setBillboard(billboard, 'show', false);
+  record.visible = false;
   const releaseStart = pass(params.attackMs, null, dimmed.activeCount);
   const restored = pass(params.attackMs + params.releaseMs, null, releaseStart.activeCount);
   assert.equal(restored.ran, true);
   assert.equal(restored.activeCount, 0);
   assert.equal(restored.writes, 1);
-  assert.equal(billboard.color.alpha, 1);
+  assert.equal(focus(), 1);
 });
 
 // --- Selection gestures (FB-1) ---------------------------------------------
@@ -847,7 +840,6 @@ function makeRecord(overrides = {}) {
     lastPositionUtc: '',
     missedRefreshes: 0,
     position: POS,
-    billboard: null,
     ...overrides,
   };
 }
@@ -1056,18 +1048,9 @@ test('vessel interaction wire: CCTV-owned pick preserves vessel selection', () =
 });
 
 test('vessel interaction wire: own-layer unkeyed record pick does not deselect', () => {
-  const harness = installWireHarness({ id: makeRecord({ mmsi: undefined }) });
-  try {
-    harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
-    assert.equal(harness.trail.clearCalls, 0);
-  } finally {
-    harness.cleanup();
-  }
-});
-
-test('vessel interaction wire: own-shaped evicted record pick does not deselect', () => {
-  const harness = installWireHarness({ id: makeRecord({ mmsi: '999999999' }) });
+  const icons = createIconSet();
+  icons.add('ais-unkeyed:1', { id: 'ais-unkeyed:1' });
+  const harness = installWireHarness({ id: 'ais-unkeyed:1' }, { icons });
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
@@ -1350,11 +1333,9 @@ test('buildVesselCard: unnamed vessels title as MMSI; long names truncate', () =
   assert.ok(long.title.length <= 26, `title too long: ${long.title.length}`);
 });
 
-test('buildVesselCard: anchors to the billboard position when present', () => {
+test('buildVesselCard: anchors to the drawn position', () => {
   const rendered = new Cesium.Cartesian3(9, 9, 9);
-  const card = buildVesselCard(
-    makeRecord({ billboard: mirrorBillboard({ position: rendered }) }),
-  );
+  const card = buildVesselCard(makeRecord({ position: rendered }));
   assert.deepEqual(card.position, rendered);
 });
 
@@ -1452,7 +1433,6 @@ test('vessel real layer lifecycle publishes protected selection and leaves no st
     viewer: { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } },
     records: [record],
     selectedRecord: record,
-    billboardCollection: { show: true, remove() {} },
   });
   try {
     _updateVesselCardsForTest([]);
@@ -1535,7 +1515,7 @@ test('EGM96 N pins the field finding: Rotterdam sea sits ~45 m ABOVE the ellipso
 // camera, whether the camera was free or tracking something else. The layer
 // only announces the click — the UI owns the flight (src/worldFocus.js).
 test('vessel interaction wire: selecting a vessel by click requests a camera transfer', () => {
-  const harness = installWireHarness({ id: makeRecord() }, { selectedRecord: null });
+  const harness = installWireHarness({ id: makeRecord().mmsi }, { selectedRecord: null });
   const requests = [];
   harness.windowTarget.addEventListener(
     WORLD_FOCUS_REQUEST_EVENT,
@@ -1744,19 +1724,13 @@ test('vessel selection passes the opaque source reference to optional history', 
 });
 
 test('vessel focus wire skips hidden sprites at rest while a target is tracked', () => {
-  const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
-  const sprite = (show) =>
-    mirrorBillboard({
-      position: { x: 1, y: 2, z: 3 },
-      show,
-      color: makeColor(1),
-    });
-  const visible = sprite(true);
-  const hidden = Array.from({ length: 50 }, () => sprite(false));
-  const records = [visible, ...hidden].map((billboard) => ({
-    position: billboard.position,
-    billboard,
-  }));
+  const icons = createIconSet();
+  const records = Array.from({ length: 51 }, (_, i) => {
+    const iconId = String(i);
+    icons.setSize(icons.add(iconId, { id: iconId }), 32, 32);
+    return { iconId, position: { x: 1, y: 2, z: 3 }, visible: i === 0 };
+  });
+  const focus = (record) => icons.focus(icons.row(record.iconId));
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
     paddingPx: 0,
@@ -1767,6 +1741,7 @@ test('vessel focus wire skips hidden sprites at rest while a target is tracked',
   const apply = (nowMs) =>
     applyVesselFocusDeemphasis({
       records,
+      icons,
       target,
       nowMs,
       screenPositionFor: () => {
@@ -1786,7 +1761,7 @@ test('vessel focus wire skips hidden sprites at rest while a target is tracked',
   // Only the on-screen sprite pays for projection and distance.
   assert.equal(projected, 2);
   assert.equal(measured, 2);
-  assert.equal(visible.color.alpha, 0.25);
+  assert.equal(focus(records[0]), 0.25);
   assert.equal(result.activeCount, 1);
-  for (const billboard of hidden) assert.equal(billboard.color.alpha, 1);
+  for (const record of records.slice(1)) assert.equal(focus(record), 1);
 });

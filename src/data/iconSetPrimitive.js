@@ -208,13 +208,19 @@ const EARTH_BOUNDS = new Cesium.BoundingSphere(
 );
 
 /**
- * @param {{ set: object, renderTime: () => Cesium.JulianDate }} options `renderTime`
- *   gives the instant to draw at (the layer's delayed clock).
+ * @param {{ set: object, renderTime: () => Cesium.JulianDate,
+ *   requestRender?: () => void }} options `renderTime` gives the instant to draw
+ *   at (the layer's delayed clock). `requestRender` asks for a frame when the
+ *   atlas packs a newly loaded image, for a layer that does not render
+ *   continuously.
  */
 export class IconSetPrimitive {
-  constructor({ set, renderTime }) {
+  constructor({ set, renderTime, requestRender }) {
     this.set = set;
     this.renderTime = renderTime;
+    this._stopAtlasListener = requestRender
+      ? iconAtlas.onChange(requestRender)
+      : null;
     this.show = true;
     this._tau = 0;
     this._generation = -1;
@@ -571,6 +577,7 @@ export class IconSetPrimitive {
   }
 
   destroy() {
+    this._stopAtlasListener?.();
     this._destroyBuffers();
     this._programs?.opaque.destroy();
     this._programs?.translucent.destroy();

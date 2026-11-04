@@ -19,6 +19,7 @@ const MAX_SIZE_PX = 4096;
 function createAtlas() {
   const slotOfKey = new Map();
   const entries = [];
+  const listeners = new Set();
   const atlas = {
     /** Bumped whenever the canvas or a slot rectangle changes. */
     version: 0,
@@ -56,6 +57,17 @@ function createAtlas() {
     /** Whether a slot's image is packed and drawable. */
     ready(slot) {
       return atlas.rects[slot * 4 + 2] > 0;
+    },
+
+    /**
+     * Call `listener` after every repack, so a renderer that draws on demand
+     * can ask for the frame that shows a newly loaded image.
+     * @param {() => void} listener
+     * @returns {() => void} Stops listening.
+     */
+    onChange(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
   };
 
@@ -120,6 +132,7 @@ function createAtlas() {
       atlas.rects[o + 3] = (entry.y + entry.sizePx) / size;
     }
     atlas.version++;
+    for (const listener of listeners) listener();
     return true;
   }
 

@@ -6,7 +6,6 @@ import {
   TRAIL_MAX_POINTS,
   TRAIL_MIN_MOVE_M,
 } from './policy.js';
-import { setBillboard } from '../../data/billboardMirror.js';
 
 export function createTracking({
   vesselState,
@@ -18,6 +17,7 @@ export function createTracking({
   const { state } = vesselState;
   const { geoidHeight } = services.geoid;
   const { createTrail } = services.trails;
+  const { governorRequestRender } = services.render;
 
   /**
    * Geoid undulation N at (lat, lon), or null until the grid has loaded.
@@ -72,9 +72,10 @@ export function createTracking({
         record.lat,
         heightM,
       );
-      if (visual.billboard)
-        setBillboard(visual.billboard, 'position', visual.position);
+      components.rendering.syncRecordIcon(record);
     }
+    // The rows moved with no poll behind them: draw the frame that shows it.
+    governorRequestRender('ais-vessels-refloor');
   }
 
   /**

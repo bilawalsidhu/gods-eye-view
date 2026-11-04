@@ -15,8 +15,7 @@ function setup() {
   const events = [];
   const effects = {
     add: (record) => events.push(['add', record]),
-    beforeUpdate: (record) => record.type,
-    updated: (record, before) => events.push(['update', record, before]),
+    updated: (record) => events.push(['update', record]),
     remove: (record, evicted) =>
       events.push(['remove', record, evicted, store.byMmsi.has(record.mmsi)]),
     removed: (id) => events.push(['removed', id, store.byMmsi.has(id)]),
@@ -46,9 +45,16 @@ test('vessel reconciliation preserves record identity and first duplicate while 
   probe.reconcile([row('111', { lat: 51.94, type: 'Tanker' })]);
   assert.equal(probe.store.byMmsi.get('111'), record);
   assert.equal(record.lat, 51.94);
-  assert.equal(probe.events.find((event) => event[0] === 'update')[2], 'Cargo');
+  assert.equal(probe.events.find((event) => event[0] === 'update')[1], record);
+  assert.equal(record.type, 'Tanker');
   assert.equal(probe.store.byMmsi.has('222'), false);
-  for (const field of ['position', 'surfacePosition', 'normal', 'billboard'])
+  for (const field of [
+    'position',
+    'surfacePosition',
+    'normal',
+    'billboard',
+    'iconId',
+  ])
     assert.equal(Object.hasOwn(record, field), false);
   assert.deepEqual(structuredClone(record), record);
 });

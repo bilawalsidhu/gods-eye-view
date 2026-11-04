@@ -46,12 +46,18 @@ export function createVesselState({ source, services }) {
 
   vesselState.shipIconCache = new Map();
 
+  /** Row ids for unkeyed (no-MMSI) records, which are rebuilt every poll. */
+
+  vesselState._unkeyedIconSequence = 0;
+
   vesselState.state = {
     feed: createVesselFeed(),
     records: new VesselRecords({ now: () => vesselState._aisRuntime.now() }),
     viewer: null,
 
-    billboardCollection: null,
+    /** The vessels' icon set and the primitive that draws it. */
+    icons: null,
+    iconPrimitive: null,
     clickHandler: null,
     /** Exact EventTarget currently holding the Escape listener. */
     keyTarget: null,
