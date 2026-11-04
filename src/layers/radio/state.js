@@ -25,6 +25,7 @@ export function createState({ services }) {
   layerState._stale = false;
 
   layerState._degraded = false;
+  layerState._rejectedStationCount = 0;
 
   layerState._error = null;
 

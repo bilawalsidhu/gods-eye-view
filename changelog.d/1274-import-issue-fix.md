@@ -1,0 +1,1 @@
+- Scan the kml root delimiter in bounded time (asturksever, #1274).

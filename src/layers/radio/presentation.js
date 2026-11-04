@@ -20,6 +20,7 @@ export function createPresentation({
       loading: layerState._loading,
       stale: layerState._stale,
       degraded: layerState._degraded,
+      rejectedStationCount: layerState._rejectedStationCount,
       error: layerState._error,
       updatedAt: layerState._updatedAt,
       filter: layerState._filter,

@@ -1,0 +1,8 @@
+- Hold rendering only for animated content (asturksever, #1281).
+- Exercise current vector road sources and published camera bounds in Traffic fixture QA (asturksever, #1281).
+- Establish browser-level foreground visibility for Traffic QA and reject hidden-page samples (asturksever, #1281).
+- Supply CORS headers on cross-origin traffic fixtures and report browser exceptions without disabling browser security (asturksever, #1281).
+- Isolate the Traffic keyless browser scenario from the keyed page’s workers and intercepted cache (asturksever, #1281).
+- Restore minimized test windows before screenshots so native compositor pauses cannot stall browser acceptance (asturksever, #1281).
+- Intercept only Traffic provider URLs, leaving Cesium worker and module loading untouched (asturksever, #1281).
+- Settle an unfinished Traffic height correction when the last animated point leaves, so the layer stops reporting loading once its render hold is released (asturksever, #1281).

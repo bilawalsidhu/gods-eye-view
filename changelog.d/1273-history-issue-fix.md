@@ -1,0 +1,1 @@
+- Retire unavailable history and keep local trails (asturksever, #1273).

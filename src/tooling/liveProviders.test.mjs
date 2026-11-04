@@ -584,6 +584,24 @@ test('track backfill proxy returns 502 on an oversized upstream body and caches 
   assert.equal(callCount, 1);
 });
 
+test('retired military history refuses without upstream I/O while validating identifiers', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => {
+    assert.fail('retired history must not contact the upstream');
+  });
+  const route = install(providers.trackBackfillProxies());
+  for (const hex of ['abc123', 'abc456']) {
+    const response = await route('/api/military/track', '?hex=' + hex);
+    assert.equal(response.statusCode, 503);
+    assert.equal(JSON.parse(response.body).code, 'history_unavailable');
+    assert.equal(response.headers['retry-after'], '1800');
+    assert.equal(response.headers['cache-control'], 'no-store');
+  }
+  assert.equal(
+    (await route('/api/military/track', '?hex=invalid')).statusCode,
+    400,
+  );
+});
+
 test('global aircraft snapshots coalesce cold and expired callers and clear rejected flights', async (t) => {
   environment(t, { OPENSKY_AUTH_MODE: 'anon' });
   t.mock.method(console, 'warn', () => {});
