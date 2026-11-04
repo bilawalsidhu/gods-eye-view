@@ -3,6 +3,7 @@
 // 1920x1080 projection canvas, instead of being stretched to fill it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as Cesium from 'cesium';
 import { createFrames, fitToProjection } from './frames.js';
 import {
   FRAME_SIGNATURE_W,
@@ -138,4 +139,157 @@ test('same pixels at a new aspect redraw at the new fit', () => {
     ['drawImage', 0, 0, 1920, 1080],
   ]);
   assert.equal(runtime.canvasStamp, 2);
+});
+
+// A camera's monitor plane is fetched only while it can be on screen. The
+// viewer is a Cesium camera description over the real WGS84 globe: it hovers
+// 30 km above a mount at (0, 0) and looks straight down, so the plane is in
+// front of it; turned around, or moved to the far side of the globe, the
+// plane is not.
+const MOUNT = Cesium.Cartesian3.fromDegrees(0, 0, 20);
+const point = (lon, lat, alt = 20) =>
+  Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+
+function planeRecord() {
+  const image = {};
+  return {
+    camera: { id: 'plane' },
+    billboard: { position: MOUNT },
+    frustumPositions: {
+      mount: MOUNT,
+      capCenter: point(0.0005, 0, 20),
+      tl: point(0.0004, 0.0001),
+      tr: point(0.0006, 0.0001),
+      br: point(0.0006, -0.0001),
+      bl: point(0.0004, -0.0001),
+    },
+    projection: {
+      mode: 'image',
+      image,
+      imageLoading: false,
+      imageReady: false,
+      lastImageRefreshAt: 0,
+    },
+  };
+}
+
+function viewerAt(position, direction, up) {
+  return {
+    isDestroyed: () => false,
+    scene: { mode: Cesium.SceneMode.SCENE3D },
+    camera: {
+      positionWC: position,
+      directionWC: direction,
+      upWC: up,
+      frustum: new Cesium.PerspectiveFrustum({
+        fov: Cesium.Math.toRadians(60),
+        aspectRatio: 16 / 9,
+        near: 1,
+        far: 5e6,
+      }),
+    },
+  };
+}
+
+// Above the mount, looking straight down at the ground.
+function lookingDown() {
+  const position = point(0, 0, 30000);
+  return viewerAt(
+    position,
+    Cesium.Cartesian3.negate(Cesium.Cartesian3.UNIT_X, new Cesium.Cartesian3()),
+    Cesium.Cartesian3.UNIT_Z,
+  );
+}
+
+function framesFor(viewer) {
+  const state = {
+    _viewer: viewer,
+    _healthById: new Map(),
+    _activeCameraId: 'plane',
+  };
+  return createFrames({
+    state,
+    services: {},
+    parts: {
+      model: {
+        safeNumber: (value, fallback) =>
+          Number.isFinite(Number(value)) ? Number(value) : fallback,
+      },
+    },
+    source: { getFrameUrl: () => '/api/cctv/frame?id=plane' },
+  });
+}
+
+test('a plane in front of the camera fetches its picture', () => {
+  const frames = framesFor(lookingDown());
+  const record = planeRecord();
+  assert.equal(frames.projectionInView(record), true);
+  frames.refreshProjectionImage(record);
+  assert.match(
+    record.projection.image.src,
+    /^\/api\/cctv\/frame\?id=plane&projTs=/,
+  );
+  assert.equal(record.projection.imageLoading, true);
+});
+
+test('a plane behind the camera is not fetched, but a forced refresh is', () => {
+  const down = lookingDown();
+  const away = viewerAt(
+    down.camera.positionWC,
+    Cesium.Cartesian3.UNIT_X,
+    Cesium.Cartesian3.UNIT_Z,
+  );
+  const frames = framesFor(away);
+  const record = planeRecord();
+  assert.equal(frames.projectionInView(record), false);
+  frames.refreshProjectionImage(record);
+  assert.equal(record.projection.image.src, undefined);
+  assert.equal(record.projection.lastImageRefreshAt, 0);
+  frames.refreshProjectionImage(record, true);
+  assert.match(record.projection.image.src, /projTs=/);
+});
+
+test('a plane below the horizon is not fetched', () => {
+  const far = point(180, 0, 30000);
+  const viewer = viewerAt(
+    far,
+    Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.subtract(MOUNT, far, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    ),
+    Cesium.Cartesian3.UNIT_Z,
+  );
+  const frames = framesFor(viewer);
+  assert.equal(frames.projectionInView(planeRecord()), false);
+});
+
+test('a skipped refresh does not use up the interval: the plane fetches once it is back in view', () => {
+  const record = planeRecord();
+  const frames = framesFor(lookingDown());
+  const away = viewerAt(
+    lookingDown().camera.positionWC,
+    Cesium.Cartesian3.UNIT_X,
+    Cesium.Cartesian3.UNIT_Z,
+  );
+  const awayFrames = framesFor(away);
+  awayFrames.refreshProjectionImage(record);
+  assert.equal(record.projection.image.src, undefined);
+  frames.refreshProjectionImage(record);
+  assert.match(record.projection.image.src, /projTs=/);
+});
+
+test('what cannot be judged counts as visible', () => {
+  const record = planeRecord();
+  assert.equal(framesFor(null).projectionInView(record), true);
+  assert.equal(
+    framesFor({ ...lookingDown(), isDestroyed: () => true }).projectionInView(
+      record,
+    ),
+    true,
+  );
+  const flat = lookingDown();
+  flat.scene.mode = Cesium.SceneMode.SCENE2D;
+  assert.equal(framesFor(flat).projectionInView(record), true);
+  const noGeometry = { camera: { id: 'plane' }, projection: record.projection };
+  assert.equal(framesFor(lookingDown()).projectionInView(noGeometry), true);
 });
