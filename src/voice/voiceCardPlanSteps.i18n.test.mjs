@@ -295,7 +295,7 @@ test('area, imagery and OSM card lines are shown in the UI language', () => {
     notDrawn: 'the map was cleared while looking it up',
   };
   const areaLines = inLocale('de', () => presentResult('resolve_area', area).display.lines);
-  assert.ok(areaLines.includes('250 m um den Ort'), areaLines.join(' | '));
+  assert.ok(areaLines.includes('250\u00a0m um den Ort'), areaLines.join(' | '));
   assert.ok(areaLines.includes('3 Teile'));
   assert.ok(areaLines.includes('2 von 3 Teilen gezeichnet'));
   assert.ok(areaLines.some((line) => line.includes('die Zeichenfläche wurde während der Suche geleert')));

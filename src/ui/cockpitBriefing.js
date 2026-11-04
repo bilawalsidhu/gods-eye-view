@@ -1,5 +1,6 @@
 /** Regional briefing requests, pages and rotation for the Cockpit controller. */
 import { formatNumber, t, msg } from '../i18n/index.js';
+import { convertQuantity, formatMeasure, getUnitSystem } from './unitLabels.js';
 import {
   COCKPIT_BRIEF_ROTATE_MS,
   COCKPIT_REGIONAL_REFRESH_MS,
@@ -7,12 +8,16 @@ import {
   formatCockpitBriefAge,
   formatCockpitCoordinate,
   formatCockpitWindDirection,
+  formatCockpitTemperature,
+  cockpitUnitCase,
 } from './cockpitPresentation.js';
 import {
   COCKPIT_BRIEF_PAGES,
   CYCLE_HELP_KEYS,
   createBriefState,
 } from './cockpitBriefPages.js';
+
+const imperialPrecipitation = () => getUnitSystem() === 'imperial';
 
 // regionalModel.weatherCodeLabel is shared with node code and returns
 // English; translate it here.
@@ -264,22 +269,20 @@ export function renderRegionalBrief(payload, info) {
   this.brief.local = {
     place: placeLabel.toUpperCase(),
     coordinates: localCoordinates(info),
-    temperature: Number.isFinite(weather?.temperatureC)
-      ? `${Math.round(weather.temperatureC)}°C`
-      : '—',
-    wind: Number.isFinite(weather?.windKph)
-      ? t('{value} KM/H', { value: Math.round(weather.windKph) })
-      : '—',
+    temperature: formatCockpitTemperature(weather?.temperatureC),
+    wind: cockpitUnitCase(formatMeasure(weather?.windKph, 'km/h')),
     windDirection: formatCockpitWindDirection(weather?.windDirectionDeg),
     condition: conditionKey ? t(conditionKey) : condition,
     cloud: Number.isFinite(weather?.cloudCoverPct)
       ? t('CLOUD {pct}%', { pct: Math.round(weather.cloudCoverPct) })
       : t('CLOUD UNKNOWN'),
+    // Millimetres to one decimal, or inches to two under imperial units;
+    // the view labels the unit.
     precipitation: Number.isFinite(weather?.precipitationMm)
-      ? formatNumber(weather.precipitationMm, {
+      ? formatNumber(convertQuantity(weather.precipitationMm, 'mm').value, {
           useGrouping: false,
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1,
+          minimumFractionDigits: imperialPrecipitation() ? 2 : 1,
+          maximumFractionDigits: imperialPrecipitation() ? 2 : 1,
         })
       : '—',
   };

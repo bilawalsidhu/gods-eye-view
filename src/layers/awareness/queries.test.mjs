@@ -71,11 +71,11 @@ test('Contacts excludes square corners and measures from the current moving subj
   assert.equal(first.count, 2);
   assert.ok(!first.nearest.some((item) => item.id === 'corner'), '90 km N + 90 km E is outside the disk');
   assert.equal(installations.getStats().count, 2);
-  assert.equal(installations.getStats().statusMessage, '2 mapped sites within 100 km of the contact');
+  assert.equal(installations.getStats().statusMessage, '2 mapped sites within 100\u00a0km of the contact');
   installations.setContextAnchor({ latitude: 0, longitude: 19 / 111.195 });
   const moved = evaluate(19 / 111.195);
   assert.equal(installations.getStats().count, 1);
-  assert.equal(installations.getStats().statusMessage, '1 mapped site within 100 km of the contact');
+  assert.equal(installations.getStats().statusMessage, '1 mapped site within 100\u00a0km of the contact');
   assert.equal(moved.count, 1, 'west site leaves the radius before the fetch anchor refreshes');
   assert.equal(moved.nearest[0].id, 'east');
   assert.equal(moved.reason, 'mapped matches within 100 km of the subject');

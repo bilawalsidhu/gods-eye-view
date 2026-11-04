@@ -11,6 +11,7 @@ import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import { StyleParameterRows } from '../../styleParameters.js';
+import { getUnitSystem } from '../../unitLabels.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
 // Celestial, detection, bloom and sharpen and AircraftDisplay the 3D group,
@@ -40,6 +41,12 @@ const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
 const modelsOptions = computed(() => [
   { value: 'proximity', label: t('Proximity'), attrs: { id: 'models3d-mode-proximity', 'data-mode': 'proximity' } },
   { value: 'all', label: t('All'), attrs: { id: 'models3d-mode-all', 'data-mode': 'all' } },
+]);
+// Measurements shown in metric or imperial units, kept per browser.
+const units = computed(() => view.value?.units ?? getUnitSystem());
+const unitOptions = computed(() => [
+  { value: 'metric', label: t('Metric'), attrs: { id: 'units-metric', 'data-units': 'metric' } },
+  { value: 'imperial', label: t('Imperial'), attrs: { id: 'units-imperial', 'data-units': 'imperial' } },
 ]);
 const allocationOptions = computed(() => [
   { value: 'ELASTIC', label: t('Elastic'), attrs: { id: 'detection-allocation-elastic', 'data-allocation': 'ELASTIC' } },
@@ -197,6 +204,12 @@ const allocationOptions = computed(() => [
     <div class="pp-slider-row" :class="{ visible: view?.sharpen.active }" id="sharpen-slider-row">
       <UiSlider class="pp-slider" id="sharpen-intensity-slider" @update:model-value="act('setSharpenIntensity', $event)" min="0" max="100" :model-value="view?.sharpen.intensity ?? 49" :aria-label="t('Sharpen intensity')" />
       <span class="pp-slider-value" id="sharpen-intensity-value">{{ pct(view?.sharpen.intensity ?? 49) }}</span>
+    </div>
+  </div>
+  <div class="pp-toggle-group">
+    <div class="pp-slider-row visible" id="units-row">
+      <span class="pp-slider-mini-label">{{ t('Units') }}</span>
+      <UiSegmented class="pp-mode-seg" item-class="pp-mode-btn" keyboard="none" :label="t('Measurement units')" :options="unitOptions" :model-value="units" @update:model-value="act('setUnits', $event)" />
     </div>
   </div>
 </div>

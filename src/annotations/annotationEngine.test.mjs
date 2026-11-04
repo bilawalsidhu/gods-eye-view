@@ -1,4 +1,5 @@
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
+import { setUnitSystem } from '../ui/unitLabels.js';
 // Voice-annotation resilience contract tests — pure logic, no network, no browser.
 //
 // Locks the 2026-07-21 field-test fixes:
@@ -1897,4 +1898,44 @@ test('plain recaption keeps the old mark addressable when its removal throws', a
     'the old route is retried on the next clear',
   );
   assert.equal(engine.count(), 0);
+});
+
+// Display → Units: a line's caption reads in the page's unit system and is
+// worded again when it changes; the tool result keeps metres and kilometres.
+test('a drawn line is captioned in the unit system while its tool label stays metric', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => {
+    _resetRenderGovernorForTest();
+    setUnitSystem('metric');
+  });
+  setUnitSystem('imperial');
+  const { renderer, calls } = fakeRenderer();
+  renderer.destroy = () => {};
+  const engine = createAnnotationEngine({
+    viewer: { camera: { heading: 0 } },
+    renderer,
+  });
+  const drawn = await engine.annotate(
+    [{ type: 'route', manual: true, path: [[-97.75, 30.26], [-97.73, 30.27]], label: 'Ridge' }],
+    { persist: true },
+  );
+  const [line] = engine.list();
+  assert.equal(line.label, 'Ridge — 1.4 mi');
+  assert.equal(drawn.results[0].label, 'Ridge — 2.2 km', 'the tool hears kilometres');
+
+  let changes = 0;
+  engine.onChange(() => {
+    changes += 1;
+  });
+  const addsBefore = calls.add;
+  setUnitSystem('metric');
+  assert.equal(line.label, 'Ridge — 2.2 km');
+  assert.equal(calls.add, addsBefore + 1, 'the caption is drawn again');
+  assert.equal(changes, 1);
+  setUnitSystem('metric');
+  assert.equal(calls.add, addsBefore + 1, 'no change, no redraw');
+  engine.destroy();
+  setUnitSystem('imperial');
+  assert.equal(line.label, 'Ridge — 2.2 km', 'a destroyed board stops listening');
 });

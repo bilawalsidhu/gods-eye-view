@@ -9,6 +9,7 @@ import {
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { t } from '../../i18n/index.js';
+import { formatSpeed } from '../../ui/unitLabels.js';
 
 /**
  * Click-to-select one vehicle and a card that follows it.
@@ -62,6 +63,7 @@ export function createSelection({ state, services, parts }) {
       entry.fetchedAt,
       entry,
       t,
+      formatSpeed,
     );
     // The TEXT is what the throttle is for, and it is republished only when
     // it has changed: the anchor is live through its getter, so re-sending

@@ -1,14 +1,15 @@
 import { AWARENESS_RADIUS_M } from '../../data/militaryAwarenessEngine.js';
 
-// The reason stays English for the voice analyst; the Contacts panel shows it
-// in the UI language from `reasonTemplate`.
+// The reason stays English and metric for the voice analyst; the Contacts
+// panel shows it in the UI language and unit system from `reasonTemplate`
+// (its `{distance}` is `km`, its `{survey}` the Contacts window).
 const msg = (text) => text;
 const fillTemplate = (template, values = {}) =>
   template.replace(/\{(\w+)\}/g, (_, name) => String(values[name]));
-const withReason = (summary, template, values) => ({
+const withReason = (summary, template, values, display = template) => ({
   ...summary,
   reason: fillTemplate(template, values),
-  reasonTemplate: template,
+  reasonTemplate: display,
   reasonValues: values,
 });
 import { DEPENDENCIES, AWARENESS_QUERY_LIMIT } from './policy.js';
@@ -132,20 +133,30 @@ export function createQueries({ state: layerState, services, parts, source }) {
     // A subject window is its own bounded area: name it instead of the viewport.
     if (coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)) {
       const km = Math.round(coverage.radiusM / 1000);
-      return withReason(
-        summary,
-        summary.count
-          ? msg('mapped matches within {km} km of the subject')
-          : msg('none mapped within {km} km; not a complete 250 km survey'),
-        { km },
-      );
+      return summary.count
+        ? withReason(
+            summary,
+            'mapped matches within {km} km of the subject',
+            { km },
+            msg('mapped matches within {distance} of the subject'),
+          )
+        : withReason(
+            summary,
+            'none mapped within {km} km; not a complete 250 km survey',
+            { km },
+            msg(
+              'none mapped within {distance}; not a complete {survey} survey',
+            ),
+          );
     }
-    return withReason(
-      summary,
-      summary.count
-        ? msg('mapped matches from the loaded viewport')
-        : msg('viewport feed is not a complete 250 km survey'),
-    );
+    return summary.count
+      ? withReason(summary, msg('mapped matches from the loaded viewport'))
+      : withReason(
+          summary,
+          'viewport feed is not a complete 250 km survey',
+          {},
+          msg('viewport feed is not a complete {survey} survey'),
+        );
   }
 
   /**

@@ -6,6 +6,8 @@ import { createContextState } from '../../cockpitContextState.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import UiButton from '../../kit/UiButton.vue';
+import { AWARENESS_RADIUS_M } from '../../../data/militaryAwarenessEngine.js';
+import { formatDistance } from '../../unitLabels.js';
 
 // The Cockpit Contact card. The Cockpit controller presents its scope,
 // navigation, cohort counts, nearest contact and weather toggle; until it
@@ -21,6 +23,8 @@ const directionStyle = computed(() =>
     : { transform: `rotate(${c.value.direction.angle}deg)` },
 );
 const collapsed = computed(() => !!presence.value?.contextCollapsed);
+// The Contacts window in the active unit system: 250 km, or 155 mi.
+const windowDistance = computed(() => formatDistance(AWARENESS_RADIUS_M));
 const weatherLabel = computed(() =>
   c.value.weather
     ? t('Disable cockpit weather effects')
@@ -36,10 +40,10 @@ const weatherLabel = computed(() =>
         <strong id="cockpit-context-subject">{{ c.subject }}</strong>
       </div>
       <nav class="cockpit-card-actions cockpit-context-actions" :aria-label="t('Contact navigation')">
-        <button id="cockpit-context-previous" type="button" :disabled="!c.canPrevious" :aria-label="t('Previous — prior visited contact in the 250 km window')" :title="t('Previous — prior visited contact in the 250 km window')">
+        <button id="cockpit-context-previous" type="button" :disabled="!c.canPrevious" :aria-label="t('Previous — prior visited contact in the {distance} window', { distance: windowDistance })" :title="t('Previous — prior visited contact in the {distance} window', { distance: windowDistance })">
           <span class="material-symbols-outlined" aria-hidden="true">skip_previous</span>
         </button>
-        <button id="cockpit-context-next" type="button" :disabled="!c.canNext" :aria-label="t('Next — nearest unvisited contact in the 250 km window')" :title="t('Next — nearest unvisited contact in the 250 km window')">
+        <button id="cockpit-context-next" type="button" :disabled="!c.canNext" :aria-label="t('Next — nearest unvisited contact in the {distance} window', { distance: windowDistance })" :title="t('Next — nearest unvisited contact in the {distance} window', { distance: windowDistance })">
           <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
         </button>
         <button id="cockpit-context-toggle" type="button" :aria-label="collapsed ? t('Expand Contact panel') : t('Collapse Contact panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand contact panel') : t('Collapse contact panel')">

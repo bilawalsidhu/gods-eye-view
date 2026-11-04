@@ -37,6 +37,7 @@ import {
   createVisionState,
 } from './cockpitInstrumentState.js';
 import { onLocaleChange } from '../i18n/index.js';
+import { onUnitSystemChange } from './unitLabels.js';
 import {
   publishBriefView,
   showBriefPage,
@@ -202,7 +203,12 @@ export class CockpitViewController {
     this.scratchAnchorCartographic = new Cesium.Cartographic();
     this.scratchCameraCartographic = new Cesium.Cartographic();
     this.scratchTargetCartographic = new Cesium.Cartographic();
-    this._listenerRemovers = [onLocaleChange(() => this.relocalize())];
+    // Text the controller worded itself follows the locale and the unit
+    // system (Display → Units).
+    this._listenerRemovers = [
+      onLocaleChange(() => this.relocalize()),
+      onUnitSystemChange(() => this.relocalize()),
+    ];
 
     // Camera mutations belong before scene update/culling. Changing the camera
     // from preRender makes 3D Tiles discover a new view after traversal and can

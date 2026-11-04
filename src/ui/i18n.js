@@ -1,4 +1,4 @@
-import { watch } from 'vue';
+import { ref, watch } from 'vue';
 import { createI18n } from 'vue-i18n';
 import {
   bindLocale,
@@ -7,6 +7,11 @@ import {
   notifyLocaleChange,
 } from '../i18n/index.js';
 import { DEFAULT_LOCALE, LOCALES } from '../i18n/locale.js';
+import {
+  bindUnitSystem,
+  getUnitSystem,
+  notifyUnitSystemChange,
+} from './unitLabels.js';
 
 let pageI18n = null;
 
@@ -55,5 +60,25 @@ export function applicationI18n() {
     () => notifyLocaleChange(),
     { flush: 'sync' },
   );
+  bindApplicationUnitSystem();
   return pageI18n;
+}
+
+let unitSystemRef = null;
+
+/**
+ * Keep the page's unit system (Display → Units) in a Vue ref, as the locale
+ * is kept in vue-i18n's: a view that formats a measurement while rendering
+ * re-renders when it changes, and code that formatted text itself hears of
+ * it through onUnitSystemChange.
+ */
+function bindApplicationUnitSystem() {
+  if (unitSystemRef) return;
+  unitSystemRef = ref(getUnitSystem());
+  bindUnitSystem(unitSystemRef);
+  watch(
+    () => getUnitSystem(),
+    () => notifyUnitSystemChange(),
+    { flush: 'sync' },
+  );
 }

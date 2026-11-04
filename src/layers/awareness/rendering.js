@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
+import { formatDistance } from '../../ui/unitLabels.js';
 import {
   CYBER_SONAR_RENDER_INTERVAL_MS,
   createCyberSonarSampler,
@@ -7,7 +8,6 @@ import {
 } from '../../cyberSonar.js';
 import {
   formatAwarenessLabel,
-  formatAwarenessDistance,
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
@@ -595,7 +595,7 @@ export function createRendering({
           })}`
         : '';
       marker.caption = {
-        text: `${label} · ${formatAwarenessDistance(item.distanceM)}\n${bearingText}${courseText}`,
+        text: `${label} · ${formatDistance(item.distanceM)}\n${bearingText}${courseText}`,
         style: labelStyle,
       };
       marker.hidden = false;

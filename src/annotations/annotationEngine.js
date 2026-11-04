@@ -19,6 +19,7 @@ import {
   recordWorkSlice,
 } from '../sources/phaseTiming.js';
 import { formatDistanceText } from '../data/distanceFormat.js';
+import { getUnitSystem, onUnitSystemChange } from '../ui/unitLabels.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -1331,7 +1332,7 @@ export function createAnnotationEngine({
       ok: true,
       id,
       type: anno.type,
-      label: anno.label,
+      label: anno.toolLabel ?? anno.label,
       latitude: round5(anno.anchor.lat),
       longitude: round5(anno.anchor.lon),
       resolvedVia: resolved.source,
@@ -1483,15 +1484,21 @@ export function createAnnotationEngine({
         lat: p.lat,
         height: p.height,
       }));
+      const caption = {
+        kind: 'route',
+        base: base.label,
+        distanceM: resolved.distanceM,
+        durationS: resolved.durationS,
+        mode: resolved.mode,
+        fallback: resolved.fallback,
+      };
       return {
         ...base,
-        label: composeRouteLabel(
-          base.label,
-          resolved.distanceM,
-          resolved.durationS,
-          resolved.mode,
-          resolved.fallback,
-        ),
+        // The caption reads in the page's unit system; tool results keep
+        // the metric `toolLabel`.
+        label: captionText(caption, getUnitSystem()),
+        toolLabel: captionText(caption, 'metric'),
+        caption,
         anchor: path[0],
         to: null,
         path,
@@ -1504,9 +1511,16 @@ export function createAnnotationEngine({
     }
 
     if (type === 'arrow') {
+      const caption = {
+        kind: 'arrow',
+        base: base.label,
+        distanceM: resolved.distanceM,
+      };
       return {
         ...base,
-        label: appendDistance(base.label, resolved.distanceM),
+        label: captionText(caption, getUnitSystem()),
+        toolLabel: captionText(caption, 'metric'),
+        caption,
         anchor: {
           lon: resolved.from.lon,
           lat: resolved.from.lat,
@@ -1624,10 +1638,20 @@ export function createAnnotationEngine({
     if (!anno?.manual) return false;
     if (name !== undefined) {
       anno.name = cleanLabel(name) || null;
-      anno.label =
-        anno.type === 'route'
-          ? composeRouteLabel(anno.name, anno.distanceM, null, 'manual', false)
-          : anno.name;
+      if (anno.type === 'route') {
+        anno.caption = {
+          kind: 'route',
+          base: anno.name,
+          distanceM: anno.distanceM,
+          durationS: null,
+          mode: 'manual',
+          fallback: false,
+        };
+        anno.label = captionText(anno.caption, getUnitSystem());
+        anno.toolLabel = captionText(anno.caption, 'metric');
+      } else {
+        anno.label = anno.name;
+      }
     }
     if (color !== undefined && COLORS.has(color)) anno.color = color;
     renderer.remove(anno);
@@ -1646,6 +1670,37 @@ export function createAnnotationEngine({
     notifyChange();
     return true;
   }
+
+  /**
+   * Show route and arrow captions again in the page's unit system. The
+   * renderers build a caption when a mark is added, so a changed mark is
+   * added again, as a restyle does.
+   */
+  function recaption() {
+    if (destroyed) return;
+    let changed = false;
+    for (const anno of [...annotations.values()]) {
+      if (!anno.caption) continue;
+      const label = captionText(anno.caption, getUnitSystem());
+      if (label === anno.label) continue;
+      anno.label = label;
+      changed = true;
+      renderer.remove(anno);
+      try {
+        renderer.add(anno);
+      } catch (error) {
+        console.error('[annotations] caption update failed', error);
+        rollbackRendererState(anno);
+        annotations.delete(anno.id);
+      }
+    }
+    if (!changed) return;
+    renderer.sync(annotations);
+    syncAnnotationHold();
+    ensureTicking();
+    notifyChange();
+  }
+  const offUnitSystem = onUnitSystemChange(recaption);
 
   /** Fly the camera to one mark; a line is framed whole, not by its start. */
   function frame(id) {
@@ -1817,6 +1872,7 @@ export function createAnnotationEngine({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      offUnitSystem();
       try {
         clear();
       } finally {
@@ -2376,12 +2432,26 @@ function greatCircleM(a, b) {
   return greatCircleMeters(a, b);
 }
 
-function formatDistance(m) {
-  return formatDistanceText(m, { metreStep: 10 });
+function formatDistance(m, system = 'metric') {
+  return formatDistanceText(m, { metreStep: 10, system });
 }
 
-function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
-  const dist = formatDistance(distM);
+/** A route's or arrow's caption in `system`, from its stored parts. */
+function captionText(caption, system) {
+  return caption.kind === 'arrow'
+    ? appendDistance(caption.base, caption.distanceM, system)
+    : composeRouteLabel(
+        caption.base,
+        caption.distanceM,
+        caption.durationS,
+        caption.mode,
+        caption.fallback,
+        system,
+      );
+}
+
+function composeRouteLabel(baseLabel, distM, durS, mode, fallback, system) {
+  const dist = formatDistance(distM, system);
   if (!dist) return baseLabel;
   const min = Number.isFinite(durS) ? Math.max(1, Math.round(durS / 60)) : null;
   const word = mode === 'car' ? 'drive' : mode === 'bike' ? 'ride' : 'walk';
@@ -2394,8 +2464,8 @@ function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {
   return baseLabel ? `${baseLabel} — ${metrics}` : metrics;
 }
 
-function appendDistance(baseLabel, distM) {
-  const dist = formatDistance(distM);
+function appendDistance(baseLabel, distM, system) {
+  const dist = formatDistance(distM, system);
   if (!dist) return baseLabel;
   return baseLabel ? `${baseLabel} — ${dist}` : dist;
 }

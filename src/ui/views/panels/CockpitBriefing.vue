@@ -7,6 +7,7 @@ import { useCockpitStore } from '../../stores/cockpit.js';
 import CockpitRoute from './CockpitRoute.vue';
 import CockpitSignalList from './CockpitSignalList.vue';
 import UiButton from '../../kit/UiButton.vue';
+import { getUnitSystem } from '../../unitLabels.js';
 
 // The Cockpit briefing card. The Cockpit controller presents its pages,
 // cycle toggle, regional news and local conditions; until it does, the card
@@ -15,6 +16,10 @@ import UiButton from '../../kit/UiButton.vue';
 const { presence, brief } = storeToRefs(useCockpitStore());
 const initial = createBriefState();
 const b = computed(() => brief.value ?? initial);
+// Precipitation reads in millimetres, or inches under imperial units.
+const precipitationUnit = computed(() =>
+  getUnitSystem() === 'imperial' ? t('IN', { context: 'inches' }) : t('MM'),
+);
 // The card's collapse, which its toggle and data-collapsed show.
 const collapsed = computed(() => !!presence.value?.signalCollapsed);
 // The card's page and the region's answer, as state hooks on the card.
@@ -75,7 +80,7 @@ function leaveSignals() {
           <div><span>{{ t('TEMP') }}</span><strong id="cockpit-local-temperature">{{ b.local.temperature }}</strong><small translate="no">OPEN-METEO</small></div>
           <div><span>{{ t('WIND') }}</span><strong id="cockpit-local-wind">{{ b.local.wind }}</strong><small id="cockpit-local-wind-direction">{{ b.local.windDirection }}</small></div>
           <div><span>{{ t('SKY') }}</span><strong id="cockpit-local-condition">{{ b.local.condition }}</strong><small id="cockpit-local-cloud">{{ b.local.cloud }}</small></div>
-          <div><span>{{ t('PRECIP') }}</span><strong id="cockpit-local-precipitation">{{ b.local.precipitation }}</strong><small>{{ t('MM') }}</small></div>
+          <div><span>{{ t('PRECIP') }}</span><strong id="cockpit-local-precipitation">{{ b.local.precipitation }}</strong><small>{{ precipitationUnit }}</small></div>
         </div>
         <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">{{ t('Weather data by Open-Meteo.com') }}</a>
       </section>

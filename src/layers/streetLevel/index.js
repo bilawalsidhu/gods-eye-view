@@ -17,6 +17,7 @@ import {
 import { groundUnderCamera, viewCentre } from './view.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import { msg, t, translateKnown } from '../../i18n/index.js';
+import { formatDistance } from '../../ui/unitLabels.js';
 import {
   AIM_AT_GROUND_MESSAGE,
   keyStatusLabel,
@@ -697,12 +698,12 @@ export function createStreetLevelLayer({
         state.street.error =
           lastError?.message ||
           (point
-            ? t('No street-level imagery within {radius} m of that point', {
-                radius: NEAREST_RADIUS_M,
+            ? t('No street-level imagery within {distance} of that point', {
+                distance: formatDistance(NEAREST_RADIUS_M),
               })
             : t(
-                'No street-level imagery within {radius} m of the view centre',
-                { radius: NEAREST_RADIUS_M },
+                'No street-level imagery within {distance} of the view centre',
+                { distance: formatDistance(NEAREST_RADIUS_M) },
               ));
       state.street.loading = false;
       notify();

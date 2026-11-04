@@ -66,7 +66,7 @@ test('en: installation feedback keeps its English wording', () => {
       coverage: { kind: 'subject', radiusM: 25000 },
       records: [{ kind: 'installation' }, { kind: 'installation' }],
     }).statusMessage,
-    '2 mapped sites within 25 km of the contact',
+    '2 mapped sites within 25\u00a0km of the contact',
   );
   assert.equal(
     stats({

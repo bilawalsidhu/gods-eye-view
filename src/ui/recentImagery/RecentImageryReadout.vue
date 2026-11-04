@@ -7,6 +7,8 @@ import RailCards from '../rail/RailCards.vue';
 import RecentImageryCard from './RecentImageryCard.vue';
 import UiEmpty from '../kit/UiEmpty.vue';
 import UiSlider from '../kit/UiSlider.js';
+import { MAX_BOX_SIDE_KM } from '../../layers/recentImagery/model.js';
+import { formatMeasure } from '../unitLabels.js';
 
 // Every block exists from the start, in its final order. The owner computes
 // the view and listens on the root; a mode choice calls `onSetMode`.
@@ -16,6 +18,10 @@ const props = defineProps({
   onOpenDetails: { type: Function, default: () => {} },
   onSetMode: { type: Function, default: () => {} },
 });
+// The box limit in the active unit system: 1,000 km, or 621 mi.
+const boxLimit = computed(() =>
+  formatMeasure(MAX_BOX_SIDE_KM, 'km', { useGrouping: true }),
+);
 const modeOptions = computed(() =>
   props.modes.map(([mode, label]) => ({
     value: mode,
@@ -57,7 +63,9 @@ const modeOptions = computed(() =>
           { 'is-reserved': !view.notice.fit },
         ]"
         type="button"
-        :title="t('Fly in until the view fits the 1,000 km limit')"
+        :title="
+          t('Fly in until the view fits the {limit} limit', { limit: boxLimit })
+        "
         :disabled="!view.notice.fit"
         :aria-hidden="String(!view.notice.fit)"
         >{{ t('ZOOM IN') }}</button

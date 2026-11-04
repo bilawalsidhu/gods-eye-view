@@ -14,6 +14,7 @@ import {
   setLocale,
 } from '../i18n/index.js';
 import { mountApplicationViews } from '../ui/views/index.js';
+import { resolveUnitSystem, setUnitSystem } from '../ui/unitLabels.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
 
 // The existing controls and layer catalog contain page-scoped state.
@@ -40,6 +41,9 @@ export function createStandaloneApplication({
   const activeLocale = resolveLocale();
   setLocale(activeLocale);
   applyDocumentLanguage(document, activeLocale);
+  // So is the unit system measurements are shown in (Display → Units): the
+  // browser's stored choice, otherwise metric.
+  setUnitSystem(resolveUnitSystem());
   // Views render the page's markup; wiring reads it.
   mountApplicationViews(document);
   applyDocumentTranslations(document);

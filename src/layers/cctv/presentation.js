@@ -1,5 +1,10 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 import { isolate, msg, t } from '../../i18n/index.js';
+import {
+  formatArea,
+  formatCompactLength,
+  unitCase,
+} from '../../ui/unitLabels.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -121,7 +126,14 @@ export function createPresentation({
       specFovCapabilityToken(active.camera, (span) =>
         t('SPEC FOV {span}° (CAPABILITY)', { span }),
       ),
-      t('COVERAGE {value}km²', { value: area.toFixed(2) }),
+      t('COVERAGE {area}', {
+        area: unitCase(
+          formatArea(area, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
+        ),
+      }),
       overlapCount > 0
         ? t('OVERLAP {count} cams', { count: overlapCount })
         : t('ISOLATED VIEW'),
@@ -137,7 +149,9 @@ export function createPresentation({
       // Identified hardware: append the model's datasheet specs + attribution.
       active.camera.spec
         ? t('{spec} · SPECS: CCTV-DATABASE.COM', {
-            spec: specSummary(active.camera.spec).toUpperCase(),
+            spec: specSummary(active.camera.spec, {
+              lengthText: formatCompactLength,
+            }).toUpperCase(),
           })
         : null,
     ]
