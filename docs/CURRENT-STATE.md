@@ -951,6 +951,9 @@ bounded missing-poll state; ingestion owns cancellation, source freshness and
 backoff. The snapshot renderer owns Cartesian history, billboard/model changes
 and follow transitions. Aviation altitude remains separate from render height;
 partial retention, military suppression and ground-sampling policies are unchanged.
+An airborne contact that never reported a barometric altitude keeps its aviation
+altitude unknown: the readout says "Alt unknown", the Cockpit shows it as
+unavailable, and only the render height uses the 10 km default.
 
 The UI facade composes separate owners for navigation authority, share restoration,
 visual settings and panel chrome. Navigation owns request generations and follow

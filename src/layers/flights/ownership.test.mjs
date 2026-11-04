@@ -146,3 +146,34 @@ test('voice context reads a track that rounds to north as 0°, not 360°', () =>
     '0°',
   );
 });
+
+test('a flight that never reported an altitude reads as unknown, not FL328', () => {
+  const tracking = createTracking({
+    flightState: {
+      feed: { _lastSource: 'Fixture aircraft', _backoff: 0 },
+      records: {
+        data: new Map([['abc123', { altitude: null, velocity: 120 }]]),
+        missingPolls: new Map(),
+      },
+    },
+    services: {
+      ...services(),
+      aircraftPresentation: { isTr3b: () => false },
+    },
+    parts: {
+      queries: {
+        _describeFlight: () => ({ altitudeM: null, onGround: false }),
+        _contactLabel: () => 'AAL1',
+      },
+    },
+    layer: {},
+  });
+  assert.equal(
+    tracking._trackedLabelText('abc123'),
+    'AAL1 · Alt unknown · 233 kts',
+  );
+  assert.equal(
+    tracking._contextSubjectMetadata('abc123').properties.altitude,
+    '',
+  );
+});
