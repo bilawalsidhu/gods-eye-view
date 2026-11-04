@@ -2,7 +2,7 @@
   "switches": [
     {
       "kind": "navara",
-      "ms": 1701,
+      "ms": 1694,
       "ids": {},
       "counters": {
         "applications": 1,
@@ -25,7 +25,7 @@
     },
     {
       "kind": "cesium",
-      "ms": 2220,
+      "ms": 2204,
       "ids": {},
       "counters": {
         "applications": 1,
@@ -48,7 +48,7 @@
     },
     {
       "kind": "navara",
-      "ms": 243,
+      "ms": 211,
       "ids": {},
       "counters": {
         "applications": 1,
@@ -71,7 +71,7 @@
     },
     {
       "kind": "cesium",
-      "ms": 56,
+      "ms": 57,
       "ids": {},
       "counters": {
         "applications": 1,
@@ -94,7 +94,7 @@
     },
     {
       "kind": "navara",
-      "ms": 211,
+      "ms": 165,
       "ids": {},
       "counters": {
         "applications": 1,
@@ -117,7 +117,7 @@
     },
     {
       "kind": "cesium",
-      "ms": 54,
+      "ms": 60,
       "ids": {},
       "counters": {
         "applications": 1,

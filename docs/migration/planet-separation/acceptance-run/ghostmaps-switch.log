@@ -10,4 +10,4 @@ PASS navara QA pin pointer hit
 PASS navara QA route pointer hit
 PASS navara QA zone pointer hit
 navara overlay pixels: zone card 5766 hole 0 empty ground 0
-STRICT {"scenario":"qa-ghostmaps-switch","assertions":15,"coverage":{"s2-ghostmaps":{"cesium":5,"navara":10}},"picks":2,"requests":631,"violations":0}
+STRICT {"scenario":"qa-ghostmaps-switch","assertions":15,"coverage":{"s2-ghostmaps":{"cesium":5,"navara":10}},"picks":2,"requests":631,"violations":0,"cesiumBeforeLoad":0}

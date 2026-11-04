@@ -1,9 +1,9 @@
-navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 9, rebuilds: 0, added: 1317, removed: 224, recycled: 54 }
-cesium live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 14, rebuilds: 0, added: 1317, removed: 224, recycled: 64 }
-navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 17, rebuilds: 0, added: 1317, removed: 224, recycled: 73 }
-vehicles in view {"aboveGround":238,"drawn":230,"belowTerrain":2,"withinOneMetre":5,"strayChangedPixels":510,"area":250000}
-not drawn [{"id":"VEH-0301","x":800.9400436063371,"y":292.43637190655886,"clearance":3.664766545407474},{"id":"VEH-0310","x":762.9992127374124,"y":292.40745398810463,"clearance":2.160351819358766},{"id":"VEH-0326","x":771.0248823502958,"y":222.05019739891142,"clearance":3.3655614517629147},{"id":"VEH-0498","x":808.6297138128218,"y":292.46571469712507,"clearance":2.9610789669677615},{"id":"VEH-1379","x":798.0975997669801,"y":222.0720444344994,"clearance":2.465321971103549},{"id":"VEH-1359","x":808.0895478513362,"y":222.07127223053902,"clearance":1.5226549031212926},{"id":"VEH-0542","x":787.8474280649712,"y":222.0728365946481,"clearance":2.910883850418031},{"id":"VEH-0543","x":791.3371418623167,"y":222.07256690031195,"clearance":2.870942776091397}]
-vehicles below the drawn terrain, hidden by the depth test: 2
+navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 9, rebuilds: 0, added: 1357, removed: 264, recycled: 59 }
+cesium live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 14, rebuilds: 0, added: 1357, removed: 264, recycled: 68 }
+navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 17, rebuilds: 0, added: 1357, removed: 264, recycled: 71 }
+vehicles in view {"aboveGround":233,"drawn":225,"belowTerrain":1,"withinOneMetre":6,"strayChangedPixels":738,"area":250000}
+not drawn [{"id":"VEH-0337","x":762.1177390630364,"y":292.4053330482048,"clearance":1.968713017180562},{"id":"VEH-0341","x":800.0298097200837,"y":292.4358716897732,"clearance":3.662567733787},{"id":"VEH-0352","x":795.477890253841,"y":292.4333701926581,"clearance":3.630949446000159},{"id":"VEH-0353","x":767.6504558808876,"y":292.4180776898693,"clearance":3.0551892649382353},{"id":"VEH-0369","x":763.1523313948765,"y":222.02996442284484,"clearance":3.7040340611711144},{"id":"VEH-1419","x":764.6759313604368,"y":222.0338801755179,"clearance":3.6385352686047554},{"id":"VEH-1444","x":766.8924622335032,"y":222.03957680604435,"clearance":3.543229184113443},{"id":"VEH-1401","x":804.4457718864345,"y":222.07155383127144,"clearance":1.8664088044315577}]
+vehicles below the drawn terrain, hidden by the depth test: 1
 population before the switches 1093 settled after the round trip 1093 after the comparison 1093 below the drawn terrain before the switches 1
 PASS kept the traffic module, parameters, flow and vehicle identities across both globes; vehicles in view are drawn where the layer places them
-STRICT {"scenario":"qa-traffic-engine-switch","assertions":4,"coverage":{"traffic":{"cesium":1,"navara":3}},"picks":2,"requests":728,"violations":0}
+STRICT {"scenario":"qa-traffic-engine-switch","assertions":4,"coverage":{"traffic":{"cesium":1,"navara":3}},"picks":2,"requests":732,"violations":0,"cesiumBeforeLoad":0}

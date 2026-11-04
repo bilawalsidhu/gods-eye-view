@@ -4,4 +4,4 @@ PASS navara cockpit, aircraft, HUD, manager and timer (2 polls since entry)
 PASS warm Navara failure rolled back to Cesium with the same flight and cockpit
 PASS retry after the warm failure started Navara cold
 PASS failed recovery offered the picker; the retry restored the session on Cesium
-STRICT {"scenario":"qa-layer-handoff","assertions":8,"coverage":{"military":{"cesium":4,"navara":4}},"picks":8,"requests":2113,"violations":0}
+STRICT {"scenario":"qa-layer-handoff","assertions":8,"coverage":{"military":{"cesium":4,"navara":4}},"picks":8,"requests":1956,"violations":0,"cesiumBeforeLoad":0}

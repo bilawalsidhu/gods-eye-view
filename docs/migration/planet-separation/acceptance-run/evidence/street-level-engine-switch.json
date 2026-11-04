@@ -23,24 +23,24 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7644.700000017881,
-      "idleAt": 7765.300000011921
+      "at": 7832.5,
+      "idleAt": 8096.5999999940395
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7917,
-      "idleAt": 8024.4000000059605
+      "at": 8184.699999988079,
+      "idleAt": 8274.59999999404
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8310.200000017881,
-      "idleAt": 8355
+      "at": 8609.5,
+      "idleAt": 8678.09999999404
     }
   ],
   "assertions": [
@@ -81,20 +81,21 @@
     }
   ],
   "network": {
-    "requests": 959,
-    "preview": 115,
+    "requests": 958,
+    "preview": 117,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
       "/api/realtime/debug-log": 1,
       "/api/setup/status": 1,
       "/api/mapillary/status": 1,
+      "/api/mapillary/tiles": 2,
       "/api/google/tiles-token": 1
     },
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 423,
+      "terrain.reearth.land": 420,
       "tiles.maps.eox.at": 389,
       "api.kartaview.org": 9,
       "storage2.openstreetcam.org": 5,
@@ -109,17 +110,15 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 814,
-      "fetched": 11,
+      "hits": 824,
+      "fetched": 0,
       "failed": 0,
-      "cancelled": 5,
-      "fetchedByHost": {
-        "tiles.maps.eox.at": 8,
-        "terrain.reearth.land": 3
-      }
+      "cancelled": 12,
+      "fetchedByHost": {}
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [
       "*://*.mapillary.com/*",
       "https://api.kartaview.org/*",

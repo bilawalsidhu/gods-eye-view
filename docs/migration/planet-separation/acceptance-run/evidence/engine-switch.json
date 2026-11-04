@@ -23,72 +23,72 @@
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 8807.90000000596,
-      "idleAt": 10313.40000000596
+      "at": 9040.299999982119,
+      "idleAt": 10546.40000000596
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 14459.200000017881,
-      "idleAt": 14477.300000011921
+      "at": 14769.09999999404,
+      "idleAt": 14792.299999982119
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 14533.90000000596,
-      "idleAt": 14564.300000011921
+      "at": 14881.5,
+      "idleAt": 14912.59999999404
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 17034.40000000596,
-      "idleAt": 17049.70000001788
+      "at": 17398,
+      "idleAt": 17414.59999999404
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 24459.30000001192,
-      "idleAt": 24497.70000001788
+      "at": 24856.90000000596,
+      "idleAt": 24893.90000000596
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 27054.5,
-      "idleAt": 27123.40000000596
+      "at": 27455.79999998212,
+      "idleAt": 27522.90000000596
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 29806.40000000596,
-      "idleAt": 29849.90000000596
+      "at": 30186.29999998212,
+      "idleAt": 30213.79999998212
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 6065.5,
-      "idleAt": 6159.5
+      "at": 6139.299999982119,
+      "idleAt": 6388.5
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 6334.199999988079,
-      "idleAt": 6382.5999999940395
+      "at": 6449.4000000059605,
+      "idleAt": 6497.9000000059605
     }
   ],
   "assertions": [
@@ -116,8 +116,8 @@
       "engine": "navara",
       "claim": "shallow red footprint drawn",
       "detail": {
-        "off": 18.08,
-        "on": 88.6225
+        "off": 7.132500000000022,
+        "on": 81.05000000000001
       }
     },
     {
@@ -172,7 +172,7 @@
     }
   ],
   "network": {
-    "requests": 2320,
+    "requests": 2198,
     "preview": 251,
     "previewApi": {
       "/api/google/tiles-token": 2,
@@ -184,9 +184,8 @@
     "external": {
       "fonts.googleapis.com": 4,
       "services.arcgisonline.com": 62,
-      "terrain.reearth.land": 902,
-      "tile.openstreetmap.org": 1051,
-      "tiles.maps.eox.at": 50
+      "terrain.reearth.land": 876,
+      "tile.openstreetmap.org": 1005
     },
     "fixtureResponses": 0,
     "probes": {
@@ -197,7 +196,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 2065,
+      "hits": 1942,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -205,6 +204,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

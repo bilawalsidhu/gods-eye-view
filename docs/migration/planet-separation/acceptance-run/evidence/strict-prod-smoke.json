@@ -16,21 +16,21 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 4747.299999982119,
-      "idleAt": 6234.699999988079
+      "at": 4795,
+      "idleAt": 6264.5999999940395
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 5963.5,
-      "idleAt": 6066.5
+      "at": 5782.700000017881,
+      "idleAt": 6187.5
     }
   ],
   "assertions": [],
   "network": {
-    "requests": 1761,
+    "requests": 1758,
     "preview": 223,
     "previewApi": {
       "/api/google/tiles-token": 2,
@@ -41,8 +41,8 @@
     },
     "external": {
       "fonts.googleapis.com": 4,
-      "services.arcgisonline.com": 972,
-      "terrain.reearth.land": 562
+      "services.arcgisonline.com": 966,
+      "terrain.reearth.land": 565
     },
     "fixtureResponses": 0,
     "probes": {
@@ -53,16 +53,17 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 1523,
-      "fetched": 11,
+      "hits": 1527,
+      "fetched": 4,
       "failed": 0,
       "cancelled": 0,
       "fetchedByHost": {
-        "services.arcgisonline.com": 11
+        "services.arcgisonline.com": 4
       }
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",
@@ -77,7 +78,7 @@
       "start": "cesium",
       "switchedTo": "navara",
       "entry": [
-        "/assets/index-DrEr7bk-.js"
+        "/assets/index-UXrDYwis.js"
       ],
       "errors": []
     },
@@ -85,7 +86,7 @@
       "start": "navara",
       "switchedTo": "cesium",
       "entry": [
-        "/assets/index-DrEr7bk-.js"
+        "/assets/index-UXrDYwis.js"
       ],
       "errors": []
     }

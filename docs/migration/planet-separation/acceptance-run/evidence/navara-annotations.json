@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10825.699999988079,
-      "idleAt": 10974.40000000596
+      "at": 10722.59999999404,
+      "idleAt": 11208.700000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 15671.699999988079,
-      "idleAt": 15720.09999999404
+      "at": 15704.90000000596,
+      "idleAt": 15751.800000011921
     }
   ],
   "assertions": [
@@ -76,8 +76,8 @@
       "engine": "navara",
       "claim": "the draped area paints amber on the globe canvas",
       "detail": {
-        "bare": 1229,
-        "amber": 8907
+        "bare": 16221,
+        "amber": 31841
       }
     },
     {
@@ -111,7 +111,7 @@
       "claim": "the draped area paints amber on the globe canvas",
       "detail": {
         "bare": 4751,
-        "amber": 8657
+        "amber": 8575
       }
     },
     {
@@ -144,8 +144,8 @@
       "engine": "navara",
       "claim": "the draped area paints amber on the globe canvas",
       "detail": {
-        "bare": 1223,
-        "amber": 9850
+        "bare": 16225,
+        "amber": 52099
       }
     },
     {
@@ -173,7 +173,7 @@
     }
   ],
   "network": {
-    "requests": 1000,
+    "requests": 1076,
     "preview": 137,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -185,7 +185,7 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 397,
+      "terrain.reearth.land": 473,
       "tile.openstreetmap.org": 449
     },
     "fixtureResponses": 0,
@@ -197,7 +197,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 861,
+      "hits": 937,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -205,6 +205,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

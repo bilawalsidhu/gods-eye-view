@@ -1,4 +1,4 @@
-PASS {"kind":"cesium","temperature":"cold","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":928,"frameWhileHidden":false,"firstFrameAfterShownMs":202,"history":1}
-PASS {"kind":"navara","temperature":"warm","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":71,"frameWhileHidden":false,"firstFrameAfterShownMs":19,"history":1}
-PASS {"kind":"cesium","temperature":"warm","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":4,"frameWhileHidden":true,"firstFrameAfterShownMs":27,"history":1}
-STRICT {"scenario":"qa-strict-hidden-switch","assertions":0,"coverage":{},"picks":3,"requests":751,"violations":0}
+PASS {"kind":"cesium","temperature":"cold","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":3364,"frameWhileHidden":false,"firstFrameAfterShownMs":258,"history":1}
+PASS {"kind":"navara","temperature":"warm","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":19,"frameWhileHidden":true,"firstFrameAfterShownMs":24,"history":1}
+PASS {"kind":"cesium","temperature":"warm","hiddenWhileBusy":true,"settledWhileHidden":true,"settleAfterHideMs":5,"frameWhileHidden":false,"firstFrameAfterShownMs":30,"history":1}
+STRICT {"scenario":"qa-strict-hidden-switch","assertions":0,"coverage":{},"picks":3,"requests":751,"violations":0,"cesiumBeforeLoad":0}

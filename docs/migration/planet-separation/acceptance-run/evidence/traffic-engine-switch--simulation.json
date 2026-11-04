@@ -24,16 +24,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8796.40000000596,
-      "idleAt": 9002.299999982119
+      "at": 8956.40000000596,
+      "idleAt": 9151
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9140.699999988079,
-      "idleAt": 9206.40000000596
+      "at": 9237.5,
+      "idleAt": 9289.40000000596
     }
   ],
   "assertions": [
@@ -72,13 +72,13 @@
         "population": 618,
         "settledCount": 618,
         "finalCount": 618,
-        "aboveGround": 149,
-        "drawn": 144
+        "aboveGround": 156,
+        "drawn": 150
       }
     }
   ],
   "network": {
-    "requests": 661,
+    "requests": 643,
     "preview": 113,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -91,7 +91,7 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 282,
+      "terrain.reearth.land": 264,
       "tiles.maps.eox.at": 246,
       "tiles.openfreemap.org": 3
     },
@@ -104,7 +104,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 297,
+      "hits": 279,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -112,6 +112,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [
       "https://tiles.maps.eox.at/*",
       "https://tiles.openfreemap.org/*"

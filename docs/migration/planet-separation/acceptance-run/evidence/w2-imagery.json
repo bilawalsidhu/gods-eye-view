@@ -28,16 +28,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 14340,
-      "idleAt": 14478.700000017881
+      "at": 14276.800000011921,
+      "idleAt": 14728.300000011921
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 16885.30000001192,
-      "idleAt": 16917.70000001788
+      "at": 17142.5,
+      "idleAt": 17176.59999999404
     }
   ],
   "assertions": [
@@ -173,7 +173,7 @@
     }
   ],
   "network": {
-    "requests": 991,
+    "requests": 984,
     "preview": 136,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -185,15 +185,15 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 361,
+      "terrain.reearth.land": 359,
       "tile.openstreetmap.org": 369,
       "cmr.earthdata.nasa.gov": 26,
-      "wvs.earthdata.nasa.gov": 24,
-      "gibs-c.earthdata.nasa.gov": 20,
-      "gibs-a.earthdata.nasa.gov": 21,
+      "wvs.earthdata.nasa.gov": 21,
+      "gibs-c.earthdata.nasa.gov": 19,
+      "gibs-a.earthdata.nasa.gov": 20,
       "gibs-b.earthdata.nasa.gov": 17
     },
-    "fixtureResponses": 107,
+    "fixtureResponses": 103,
     "probes": {
       "https://fonts.googleapis.com/css2*": 2,
       "/api/openai/hud-summary/status": 1,
@@ -202,7 +202,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 745,
+      "hits": 743,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -210,6 +210,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [
       "*://*.earthdata.nasa.gov/*"
     ],

@@ -24,16 +24,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9188.40000000596,
-      "idleAt": 9335.90000000596
+      "at": 9062.800000011921,
+      "idleAt": 9521.200000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9619.800000011921,
-      "idleAt": 9677.600000023842
+      "at": 9748.5,
+      "idleAt": 9811.800000011921
     }
   ],
   "assertions": [
@@ -60,8 +60,8 @@
       "engine": "cesium",
       "claim": "a click on empty ground clears the fire; a click on it selects it again",
       "detail": {
-        "x": 640.0000000001679,
-        "y": 491.4158610802833,
+        "x": 640.000000000166,
+        "y": 507.6355196671449,
         "id": "FIRE-00060"
       }
     },
@@ -75,7 +75,7 @@
     }
   ],
   "network": {
-    "requests": 995,
+    "requests": 939,
     "preview": 115,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -88,8 +88,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 424,
-      "tiles.maps.eox.at": 439
+      "terrain.reearth.land": 406,
+      "tiles.maps.eox.at": 401
     },
     "fixtureResponses": 0,
     "probes": {
@@ -100,7 +100,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 878,
+      "hits": 822,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -108,6 +108,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [
       "https://tiles.dontgetflocked.com/*"
     ],

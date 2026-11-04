@@ -28,16 +28,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6901.799999982119,
-      "idleAt": 7081
+      "at": 6765.5999999940395,
+      "idleAt": 7242.300000011921
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7223.0999999940395,
-      "idleAt": 7314.799999982119
+      "at": 7358.9000000059605,
+      "idleAt": 7447.0999999940395
     }
   ],
   "assertions": [
@@ -47,8 +47,8 @@
       "claim": "the station zone holds the fixture station, drawn and pickable",
       "detail": {
         "drawn": [
-          579,
-          583
+          580,
+          581
         ],
         "records": [
           "QA Harbour Station"
@@ -101,8 +101,8 @@
       "claim": "the station zone holds the fixture station, drawn and pickable",
       "detail": {
         "drawn": [
-          571,
-          570
+          572,
+          585
         ],
         "records": [
           "QA Harbour Station"
@@ -141,8 +141,8 @@
       "claim": "the station zone holds the fixture station, drawn and pickable",
       "detail": {
         "drawn": [
-          571,
-          570
+          572,
+          585
         ],
         "records": [
           "QA Harbour Station"
@@ -171,8 +171,8 @@
       "claim": "the station zone holds the fixture station, drawn and pickable",
       "detail": {
         "drawn": [
-          571,
-          570
+          572,
+          585
         ],
         "records": [
           "QA Harbour Station"
@@ -188,7 +188,7 @@
     }
   ],
   "network": {
-    "requests": 621,
+    "requests": 615,
     "preview": 117,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -201,8 +201,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 233,
-      "tiles.maps.eox.at": 254
+      "terrain.reearth.land": 231,
+      "tiles.maps.eox.at": 250
     },
     "fixtureResponses": 0,
     "probes": {
@@ -213,7 +213,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 502,
+      "hits": 496,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -221,6 +221,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

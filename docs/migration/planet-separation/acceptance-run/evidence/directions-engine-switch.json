@@ -23,32 +23,32 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7364.700000017881,
-      "idleAt": 7558.700000017881
+      "at": 7220.300000011921,
+      "idleAt": 7684.4000000059605
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7742.300000011921,
-      "idleAt": 7805.9000000059605
+      "at": 7887.200000017881,
+      "idleAt": 7945.4000000059605
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9740.700000017881,
-      "idleAt": 9794.700000017881
+      "at": 9921.600000023842,
+      "idleAt": 9986.200000017881
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 11409.5,
-      "idleAt": 11500
+      "at": 11612.40000000596,
+      "idleAt": 11703.700000017881
     }
   ],
   "assertions": [
@@ -77,7 +77,7 @@
       "engine": "cesium",
       "claim": "FLY continues with the same motion and advances",
       "detail": {
-        "moved": 60.58952285372943
+        "moved": 60.60352037740076
       }
     },
     {
@@ -90,7 +90,7 @@
       "engine": "navara",
       "claim": "FLY continues with the same motion and advances",
       "detail": {
-        "moved": 61.94914488502644
+        "moved": 61.3280172655452
       }
     },
     {
@@ -103,14 +103,14 @@
           "fly": false
         },
         "drift": 0,
-        "beforeZoom": 300.5882149508535,
-        "zoomed": 72.5669364604369,
-        "kept": 72.5669364604369
+        "beforeZoom": 300.64500160405396,
+        "zoomed": 72.54679163273448,
+        "kept": 72.54679163273448
       }
     }
   ],
   "network": {
-    "requests": 878,
+    "requests": 877,
     "preview": 116,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -124,8 +124,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 348,
-      "tiles.maps.eox.at": 397
+      "terrain.reearth.land": 346,
+      "tiles.maps.eox.at": 398
     },
     "fixtureResponses": 0,
     "probes": {
@@ -136,7 +136,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 760,
+      "hits": 759,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -144,6 +144,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

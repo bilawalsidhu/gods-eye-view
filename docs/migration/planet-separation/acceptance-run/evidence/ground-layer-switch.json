@@ -5,8 +5,8 @@
     "--layers=ais-live-vessels,air-quality,gnss-integrity,fire-perimeters",
     "--evidence=<output>/evidence/ground-layer-switch.json"
   ],
-  "status": "pass",
-  "error": null,
+  "status": "fail",
+  "error": "TimeoutError: Waiting failed: 30000ms exceeded\n    at new WaitTask (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:46:34)\n    at IsolatedWorld.waitForFunction (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/api/Realm.js:49:26)\n    at CdpFrame.waitForFunction (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:585:43)\n    at CdpFrame.<anonymous> (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:101:27)\n    at CdpPage.waitForFunction (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1542:37)\n    at capture (file://<scratch>/checkout/scripts/qa-ground-layer-switch.mjs:153:8)\n    at async file://<scratch>/checkout/scripts/qa-ground-layer-switch.mjs:262:17\n    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:673:9)\n    at async file://<scratch>/checkout/scripts/qa-ground-layer-switch.mjs:19:1",
   "layers": [
     "ais-live-vessels",
     "air-quality",
@@ -15,71 +15,44 @@
   ],
   "coverage": {
     "ais-live-vessels": {
-      "cesium": 2,
-      "navara": 4
+      "cesium": 0,
+      "navara": 0
     },
     "air-quality": {
       "cesium": 2,
-      "navara": 3
+      "navara": 2
     },
     "gnss-integrity": {
       "cesium": 2,
-      "navara": 3
+      "navara": 2
     },
     "fire-perimeters": {
-      "cesium": 4,
-      "navara": 7
+      "cesium": 0,
+      "navara": 0
     }
   },
-  "missing": [],
+  "missing": [
+    "ais-live-vessels on cesium",
+    "ais-live-vessels on navara",
+    "fire-perimeters on cesium",
+    "fire-perimeters on navara"
+  ],
   "picks": [
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 14504.600000023842,
-      "idleAt": 14646.200000017881
+      "at": 14234,
+      "idleAt": 14685.59999999404
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 21964.70000001788,
-      "idleAt": 22029.80000001192
-    },
-    {
-      "to": "cesium",
-      "via": "pointer+keyboard",
-      "opened": true,
-      "clicked": "label",
-      "at": 30219.70000001788,
-      "idleAt": 30244.600000023842
-    },
-    {
-      "to": "navara",
-      "via": "pointer+keyboard",
-      "opened": true,
-      "clicked": "label",
-      "at": 30400,
-      "idleAt": 30468.80000001192
-    },
-    {
-      "to": "cesium",
-      "via": "pointer+keyboard",
-      "opened": true,
-      "clicked": "label",
-      "at": 32325.100000023842,
-      "idleAt": 32364.20000001788
-    },
-    {
-      "to": "navara",
-      "via": "pointer+keyboard",
-      "opened": true,
-      "clicked": "label",
-      "at": 33105.40000000596,
-      "idleAt": 33178
+      "at": 22092.69999998808,
+      "idleAt": 22149.09999999404
     }
   ],
   "assertions": [
@@ -88,8 +61,8 @@
       "engine": "navara",
       "claim": "AQHI 9 station footprint drawn, one card row",
       "detail": {
-        "off": -45.88636363636364,
-        "on": 58.8080808080808
+        "off": 45.50505050505049,
+        "on": 58.7777777777778
       }
     },
     {
@@ -97,8 +70,8 @@
       "engine": "navara",
       "claim": "one high GNSS cell drawn",
       "detail": {
-        "off": -45.88636363636364,
-        "on": 75.58838383838383
+        "off": -45.898989898989896,
+        "on": 75.61616161616162
       }
     },
     {
@@ -138,114 +111,11 @@
       "layer": "gnss-integrity",
       "engine": "navara",
       "claim": "same layer models after the switch"
-    },
-    {
-      "layer": "air-quality",
-      "engine": "navara",
-      "claim": "AQHI 9 station footprint drawn, one card row",
-      "detail": {
-        "off": -45.88636363636364,
-        "on": 58.8080808080808
-      }
-    },
-    {
-      "layer": "gnss-integrity",
-      "engine": "navara",
-      "claim": "one high GNSS cell drawn",
-      "detail": {
-        "off": -45.88636363636364,
-        "on": 75.58838383838383
-      }
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "navara",
-      "claim": "a click outside the perimeter clears the card"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "navara",
-      "claim": "a click on the ring selects the fire"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "navara",
-      "claim": "a click in the hole deselects the selected fire"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "cesium",
-      "claim": "same model; the incident card survives the switch"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "cesium",
-      "claim": "a click outside the perimeter clears the card"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "cesium",
-      "claim": "a click on the ring selects the fire"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "cesium",
-      "claim": "a click in the hole deselects the selected fire"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "navara",
-      "claim": "same model; the incident card survives the switch"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "navara",
-      "claim": "a click outside the perimeter clears the card"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "navara",
-      "claim": "a click on the ring selects the fire"
-    },
-    {
-      "layer": "fire-perimeters",
-      "engine": "navara",
-      "claim": "a click in the hole deselects the selected fire"
-    },
-    {
-      "layer": "ais-live-vessels",
-      "engine": "navara",
-      "claim": "a click on the chevron selects the vessel"
-    },
-    {
-      "layer": "ais-live-vessels",
-      "engine": "navara",
-      "claim": "same entry; selection, chevron and card kept; no new track request"
-    },
-    {
-      "layer": "ais-live-vessels",
-      "engine": "navara",
-      "claim": "a click on the chevron selects the vessel"
-    },
-    {
-      "layer": "ais-live-vessels",
-      "engine": "cesium",
-      "claim": "same entry; selection, chevron and card kept; no new track request"
-    },
-    {
-      "layer": "ais-live-vessels",
-      "engine": "cesium",
-      "claim": "a click on the chevron selects the vessel"
-    },
-    {
-      "layer": "ais-live-vessels",
-      "engine": "navara",
-      "claim": "same entry; selection, chevron and card kept; no new track request"
     }
   ],
   "network": {
-    "requests": 654,
-    "preview": 161,
+    "requests": 661,
+    "preview": 168,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
@@ -276,6 +146,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

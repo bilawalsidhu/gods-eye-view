@@ -1,8 +1,8 @@
-navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 39 }
-cesium sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 42 }
-navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 12, rebuilds: 0, added: 625, removed: 7, recycled: 44 }
-vehicles in view {"aboveGround":149,"drawn":144,"belowTerrain":0,"withinOneMetre":1,"strayChangedPixels":13,"area":250000}
-not drawn [{"id":"VEH-0047","x":773.4299423602943,"y":292.43003461145986,"clearance":3.213708887808025},{"id":"VEH-0673","x":762.2165379207331,"y":222.0275593717447,"clearance":3.7442701682448387},{"id":"VEH-0657","x":800.6946242378447,"y":222.07184372954606,"clearance":2.220303127542138},{"id":"VEH-0709","x":780.8276881589874,"y":222.0733790984519,"clearance":2.9913039542734623},{"id":"VEH-0668","x":792.9551517698053,"y":222.07244185650296,"clearance":2.8524104366078973}]
+navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 28 }
+cesium sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 31 }
+navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 12, rebuilds: 0, added: 625, removed: 7, recycled: 33 }
+vehicles in view {"aboveGround":156,"drawn":150,"belowTerrain":0,"withinOneMetre":4,"strayChangedPixels":3,"area":250000}
+not drawn [{"id":"VEH-0666","x":764.3348025572622,"y":292.39856955229146,"clearance":2.661664049141109},{"id":"VEH-0072","x":772.720342923696,"y":222.05455484456292,"clearance":3.2926512956619263},{"id":"VEH-0660","x":792.7555293485768,"y":292.45702363761006,"clearance":3.1496358504518867},{"id":"VEH-0153","x":786.4954409107784,"y":292.4535962613838,"clearance":2.9899607142433524},{"id":"VEH-0154","x":791.8181197160809,"y":292.4565104092394,"clearance":3.125729930587113},{"id":"VEH-0157","x":791.2002327142739,"y":292.45617211829546,"clearance":3.109971013851464}]
 population before the switches 618 settled after the round trip 618 after the comparison 618 below the drawn terrain before the switches 0
 PASS kept the traffic module, parameters, flow and vehicle identities across both globes; vehicles in view are drawn where the layer places them
-STRICT {"scenario":"qa-traffic-engine-switch","assertions":4,"coverage":{"traffic":{"cesium":1,"navara":3}},"picks":2,"requests":661,"violations":0}
+STRICT {"scenario":"qa-traffic-engine-switch","assertions":4,"coverage":{"traffic":{"cesium":1,"navara":3}},"picks":2,"requests":643,"violations":0,"cesiumBeforeLoad":0}

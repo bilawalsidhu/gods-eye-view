@@ -64,6 +64,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",
@@ -79,9 +80,9 @@
       "temperature": "cold",
       "hiddenWhileBusy": true,
       "settledWhileHidden": true,
-      "settleAfterHideMs": 928,
+      "settleAfterHideMs": 3364,
       "frameWhileHidden": false,
-      "firstFrameAfterShownMs": 202,
+      "firstFrameAfterShownMs": 258,
       "history": 1
     },
     {
@@ -89,9 +90,9 @@
       "temperature": "warm",
       "hiddenWhileBusy": true,
       "settledWhileHidden": true,
-      "settleAfterHideMs": 71,
-      "frameWhileHidden": false,
-      "firstFrameAfterShownMs": 19,
+      "settleAfterHideMs": 19,
+      "frameWhileHidden": true,
+      "firstFrameAfterShownMs": 24,
       "history": 1
     },
     {
@@ -99,9 +100,9 @@
       "temperature": "warm",
       "hiddenWhileBusy": true,
       "settledWhileHidden": true,
-      "settleAfterHideMs": 4,
-      "frameWhileHidden": true,
-      "firstFrameAfterShownMs": 27,
+      "settleAfterHideMs": 5,
+      "frameWhileHidden": false,
+      "firstFrameAfterShownMs": 30,
       "history": 1
     }
   ]

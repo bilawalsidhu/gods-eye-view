@@ -1,4 +1,4 @@
 cesium alpr-cameras alpr:9000079 325 325
 navara alpr-cameras alpr:9000079 325 325
 PASS retained source, stable clicked record on each planet
-STRICT {"scenario":"qa-fire-camera-switch","assertions":4,"coverage":{"alpr-cameras":{"cesium":2,"navara":2}},"picks":2,"requests":826,"violations":0}
+STRICT {"scenario":"qa-fire-camera-switch","assertions":4,"coverage":{"alpr-cameras":{"cesium":2,"navara":2}},"picks":2,"requests":836,"violations":0,"cesiumBeforeLoad":0}

@@ -1,12 +1,12 @@
 PASS Navara blooms itself and starts with bloom off {"bloom":{"enabled":false,"strength":0.5},"pipeline":{"shown":false,"bloomShown":false,"passes":null}}
 PASS the slider at 200 reaches the engine at full strength {"control":{"enabled":true,"intensityPct":200},"engine":{"enabled":true,"strength":1},"pipeline":{"shown":false,"bloomShown":true,"passes":["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevBloom","final"]}}
 PASS bloom runs after the scene and overlays, just before the final copy ["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevBloom","final"]
-PASS bloom at 200 glows the frame brighter {"mean":26.40539583333321,"changedShare":1,"normalLuma":214.4233598125,"bloomLuma":240.33335943749998}
-PASS a lower slider glows less {"half":5.203750000000062,"full":26.40539583333321}
+PASS bloom at 200 glows the frame brighter {"mean":26.40537499999987,"changedShare":1,"normalLuma":214.4233669375,"bloomLuma":240.333389}
+PASS a lower slider glows less {"half":5.203750000000062,"full":26.40537499999987}
 PASS Cesium's dead zone: the toggle on, nothing glows {"engine":{"enabled":false,"strength":0.05},"diff":{"mean":0,"changedShare":0}}
 PASS bloom runs before the visual styles ["skyEnvMap","gevPostSampling","mrt","aerialPerspective","clouds","lensFlare","transparent","toneMapping","gevSharpen","smaa","gevOverlay","gevBloom","gevStyles","final"]
 PASS turning bloom off restores the frame {"engine":{"enabled":false,"strength":1},"diff":{"mean":0,"changedShare":0}}
 PASS Cesium: its scene's bloom stage glows, the engine draws none {"stage":{"setBloom":"undefined","enabled":true,"contrast":87},"diff":{"mean":29.246833333333843,"changedShare":0.9896875}}
 PASS Cesium: bloom off restores its frame {"mean":0,"changedShare":0}
 PASS no page errors []
-STRICT {"scenario":"qa-navara-bloom","assertions":0,"coverage":{},"picks":1,"requests":755,"violations":0}
+STRICT {"scenario":"qa-navara-bloom","assertions":0,"coverage":{},"picks":1,"requests":755,"violations":0,"cesiumBeforeLoad":0}

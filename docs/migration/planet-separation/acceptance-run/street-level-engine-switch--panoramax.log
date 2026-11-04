@@ -3,4 +3,4 @@ cesium true true a1a1a1a1-0034 73 2
 navara true true a1a1a1a1-0034 73 2
 pick { x: 676, y: 450, id: 'pnx:seq:b2b2b2b2-0000-4000-8000-000000000002' }
 PASS native line pick, same mounted photo and sequence across two switches
-STRICT {"scenario":"qa-street-level-engine-switch","assertions":5,"coverage":{"street-level":{"cesium":2,"navara":3}},"picks":3,"requests":760,"violations":0}
+STRICT {"scenario":"qa-street-level-engine-switch","assertions":5,"coverage":{"street-level":{"cesium":2,"navara":3}},"picks":3,"requests":844,"violations":0,"cesiumBeforeLoad":0}

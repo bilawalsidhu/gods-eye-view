@@ -1,6 +1,6 @@
 PASS cesium earthquake footprint red minus green: 1.6574999999999989 -> 77.22
-PASS navara earthquake footprint red minus green: 18.08 -> 88.6225
+PASS navara earthquake footprint red minus green: 7.132500000000022 -> 81.05000000000001
 PASS Back/Forward restore each entry's layers on the same models
 PASS Back/Forward keep Contacts subject, history, layers and Director
 PASS Cesium default, both switches, same document, warm engine identity, parked canvas, no startup splash, share pose/map/layers, Back/Forward, remembered engine, blocked preference storage
-STRICT {"scenario":"qa-engine-switch","assertions":14,"coverage":{"earthquakes":{"cesium":6,"navara":8}},"picks":9,"requests":2320,"violations":0}
+STRICT {"scenario":"qa-engine-switch","assertions":14,"coverage":{"earthquakes":{"cesium":6,"navara":8}},"picks":9,"requests":2198,"violations":0,"cesiumBeforeLoad":0}

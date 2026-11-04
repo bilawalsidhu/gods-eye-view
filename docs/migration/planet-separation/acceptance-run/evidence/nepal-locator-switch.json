@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8866.800000011921,
-      "idleAt": 8999.09999999404
+      "at": 9026.5,
+      "idleAt": 9235.09999999404
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 11002.800000011921,
-      "idleAt": 11037.90000000596
+      "at": 11323.699999988079,
+      "idleAt": 11354.40000000596
     }
   ],
   "assertions": [
@@ -103,6 +103,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

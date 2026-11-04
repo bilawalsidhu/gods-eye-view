@@ -1,8 +1,8 @@
-RUN {"run":1,"start":"navara","navara":{"cold":null,"warmP50":69.9,"warmP95":85.6},"cesium":{"cold":1553,"warmP50":117.8,"warmP95":134.8},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
-RUN {"run":2,"start":"cesium","navara":{"cold":1832.3,"warmP50":78.1,"warmP95":86.1},"cesium":{"cold":null,"warmP50":117.5,"warmP95":135.8},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
-RUN {"run":3,"start":"navara","navara":{"cold":null,"warmP50":71,"warmP95":82.3},"cesium":{"cold":1394.7,"warmP50":112.7,"warmP95":138.5},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
-RUN {"run":4,"start":"cesium","navara":{"cold":1777.7,"warmP50":77.8,"warmP95":83.5},"cesium":{"cold":null,"warmP50":118.3,"warmP95":137.5},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
-RUN {"run":5,"start":"navara","navara":{"cold":null,"warmP50":68.6,"warmP95":83.4},"cesium":{"cold":1524.9,"warmP50":113,"warmP95":140.4},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
-RUN {"run":6,"start":"cesium","navara":{"cold":1794.9,"warmP50":79,"warmP95":85.7},"cesium":{"cold":null,"warmP50":120.3,"warmP95":141.7},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
-SOAK {"cesium→navara":{"cold":[1832.3,1777.7,1794.9],"warmP50":73.7,"warmP95":85.6,"warmSwitches":147},"navara→cesium":{"cold":[1553,1394.7,1524.9],"warmP50":116.8,"warmP95":140.4,"warmSwitches":147}}
-STRICT {"scenario":"qa-strict-soak","assertions":0,"coverage":{},"picks":300,"requests":6513,"violations":0}
+RUN {"run":1,"start":"navara","navara":{"cold":null,"warmP50":69.7,"warmP95":80.2},"cesium":{"cold":1611.2,"warmP50":122.2,"warmP95":147.6},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
+RUN {"run":2,"start":"cesium","navara":{"cold":1785.1,"warmP50":77.2,"warmP95":88.5},"cesium":{"cold":null,"warmP50":117.8,"warmP95":136.3},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
+RUN {"run":3,"start":"navara","navara":{"cold":null,"warmP50":71.8,"warmP95":82.9},"cesium":{"cold":1595.7,"warmP50":111.1,"warmP95":135.7},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
+RUN {"run":4,"start":"cesium","navara":{"cold":1794,"warmP50":79.6,"warmP95":85.9},"cesium":{"cold":null,"warmP50":117.4,"warmP95":138.7},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
+RUN {"run":5,"start":"navara","navara":{"cold":null,"warmP50":70.2,"warmP95":81.4},"cesium":{"cold":1562,"warmP50":115.6,"warmP95":143.2},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
+RUN {"run":6,"start":"cesium","navara":{"cold":1787.6,"warmP50":76.2,"warmP95":86},"cesium":{"cold":null,"warmP50":115.3,"warmP95":144.6},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
+SOAK {"cesium→navara":{"cold":[1785.1,1794,1787.6],"warmP50":73.7,"warmP95":85.9,"warmSwitches":147},"navara→cesium":{"cold":[1611.2,1595.7,1562],"warmP50":116.2,"warmP95":143.3,"warmSwitches":147}}
+STRICT {"scenario":"qa-strict-soak","assertions":0,"coverage":{},"picks":300,"requests":6533,"violations":0,"cesiumBeforeLoad":0}

@@ -16,21 +16,21 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 11414.800000011921,
-      "idleAt": 11555.800000011921
+      "at": 11248.09999999404,
+      "idleAt": 11707.199999988079
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10008.300000011921,
-      "idleAt": 11419
+      "at": 10043.700000017881,
+      "idleAt": 11411.800000011921
     }
   ],
   "assertions": [],
   "network": {
-    "requests": 1637,
+    "requests": 1627,
     "preview": 247,
     "previewApi": {
       "/api/local-receivers/aircraft": 2,
@@ -42,8 +42,8 @@
     "external": {
       "fonts.googleapis.com": 4,
       "services.arcgisonline.com": 62,
-      "terrain.reearth.land": 634,
-      "tile.openstreetmap.org": 690
+      "terrain.reearth.land": 630,
+      "tile.openstreetmap.org": 684
     },
     "fixtureResponses": 0,
     "probes": {
@@ -54,7 +54,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 1386,
+      "hits": 1376,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -62,6 +62,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",
@@ -76,17 +77,12 @@
       "start": "navara",
       "otherEngine": "cesium",
       "loadedAtColdStart": [],
-      "knownGap": [
-        "/cesium/Widgets/widgets.css",
-        "/cesium/Cesium.js"
-      ],
-      "loadedAfterPick": 4
+      "loadedAfterPick": 6
     },
     {
       "start": "cesium",
       "otherEngine": "navara",
       "loadedAtColdStart": [],
-      "knownGap": [],
       "loadedAfterPick": 6
     }
   ]

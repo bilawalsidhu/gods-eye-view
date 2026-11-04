@@ -1,3 +1,3 @@
-KNOWN GAP {"start":"navara","otherEngine":"cesium","loadedAtColdStart":[],"knownGap":["/cesium/Widgets/widgets.css","/cesium/Cesium.js"],"loadedAfterPick":4}
-PASS {"start":"cesium","otherEngine":"navara","loadedAtColdStart":[],"knownGap":[],"loadedAfterPick":6}
-STRICT {"scenario":"qa-strict-cold-chunks","assertions":0,"coverage":{},"picks":2,"requests":1637,"violations":0}
+PASS {"start":"navara","otherEngine":"cesium","loadedAtColdStart":[],"loadedAfterPick":6}
+PASS {"start":"cesium","otherEngine":"navara","loadedAtColdStart":[],"loadedAfterPick":6}
+STRICT {"scenario":"qa-strict-cold-chunks","assertions":0,"coverage":{},"picks":2,"requests":1627,"violations":0,"cesiumBeforeLoad":0}

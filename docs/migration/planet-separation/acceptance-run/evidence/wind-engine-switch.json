@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7483.5,
-      "idleAt": 7754.5
+      "at": 7347.799999982119,
+      "idleAt": 7904.299999982119
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9489.40000000596,
-      "idleAt": 9530.5
+      "at": 9604.09999999404,
+      "idleAt": 9644.799999982119
     }
   ],
   "assertions": [
@@ -81,8 +81,8 @@
       "engine": "navara",
       "claim": "temperature field visible",
       "detail": [
-        209.53993055555554,
-        73.38194444444444,
+        209.50520833333334,
+        73.36111111111111,
         61
       ]
     },
@@ -193,8 +193,8 @@
       "engine": "navara",
       "claim": "temperature field visible",
       "detail": [
-        209.53993055555554,
-        73.38194444444444,
+        209.50520833333334,
+        73.36111111111111,
         61
       ]
     },
@@ -211,8 +211,8 @@
     }
   ],
   "network": {
-    "requests": 401,
-    "preview": 136,
+    "requests": 403,
+    "preview": 138,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
@@ -245,6 +245,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

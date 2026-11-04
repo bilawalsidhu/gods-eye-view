@@ -1,6 +1,6 @@
-latest weather-satellite [ 226.35416666666666, 227.90277777777777, 230.75 ]
-latest weather-radar [ 249.26388888888889, 45.61805555555556, 46.15277777777778 ]
-latest weather-lightning [ 49.80555555555556, 213.04861111111111, 213.01388888888889 ]
+latest weather-satellite [ 226.20833333333334, 227.8125, 230.67361111111111 ]
+latest weather-radar [ 249.25, 45.61805555555556, 46.13194444444444 ]
+latest weather-lightning [ 49.791666666666664, 213.04861111111111, 213.01388888888889 ]
 navara [ 253.79166666666666, 9.04861111111111, 213.01388888888889 ]
 PASS navara common clock, all three frames, visible lightning
 cesium [ 252.89583333333334, 8.270833333333334, 211.97222222222223 ]
@@ -11,4 +11,4 @@ PASS navara pick advisory cone and retain selected storm
 PASS cesium pick advisory cone and retain selected storm
 PASS navara pick advisory cone and retain selected storm
 PASS advisory 11 removes expired geometry while retaining the storm
-STRICT {"scenario":"qa-weather-engine-switch","assertions":15,"coverage":{"weather-radar":{"cesium":1,"navara":3},"weather-satellite":{"cesium":1,"navara":3},"weather-lightning":{"cesium":1,"navara":3},"weather-cyclones":{"cesium":1,"navara":2}},"picks":2,"requests":675,"violations":0}
+STRICT {"scenario":"qa-weather-engine-switch","assertions":15,"coverage":{"weather-radar":{"cesium":1,"navara":3},"weather-satellite":{"cesium":1,"navara":3},"weather-lightning":{"cesium":1,"navara":3},"weather-cyclones":{"cesium":1,"navara":2}},"picks":2,"requests":675,"violations":0,"cesiumBeforeLoad":0}

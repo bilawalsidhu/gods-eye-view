@@ -1,8 +1,8 @@
 navara board {"shown":["QA Area","QA Near"],"hidden":["QA Far"]}
-navara amber pixels { bare: 1229, amber: 8907 }
+navara amber pixels { bare: 16221, amber: 31841 }
 cesium board {"shown":["QA Area","QA Near"],"hidden":["QA Far"]}
-cesium amber pixels { bare: 4751, amber: 8657 }
+cesium amber pixels { bare: 4751, amber: 8575 }
 navara board {"shown":["QA Area","QA Near"],"hidden":["QA Far"]}
-navara amber pixels { bare: 1223, amber: 9850 }
+navara amber pixels { bare: 16225, amber: 52099 }
 PASS annotations drawn, culled and kept across engine switches
-STRICT {"scenario":"qa-navara-annotations","assertions":12,"coverage":{"annotations":{"cesium":3,"navara":9}},"picks":2,"requests":1000,"violations":0}
+STRICT {"scenario":"qa-navara-annotations","assertions":12,"coverage":{"annotations":{"cesium":3,"navara":9}},"picks":2,"requests":1076,"violations":0,"cesiumBeforeLoad":0}

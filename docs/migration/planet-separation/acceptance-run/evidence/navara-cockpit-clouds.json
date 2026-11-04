@@ -16,8 +16,8 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 20099,
-      "idleAt": 20214.600000023842
+      "at": 19933.30000001192,
+      "idleAt": 20384.30000001192
     }
   ],
   "assertions": [],
@@ -35,8 +35,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 491,
-      "tile.openstreetmap.org": 551
+      "terrain.reearth.land": 489,
+      "tile.openstreetmap.org": 553
     },
     "fixtureResponses": 0,
     "probes": {
@@ -57,6 +57,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

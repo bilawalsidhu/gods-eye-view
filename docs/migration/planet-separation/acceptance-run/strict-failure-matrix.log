@@ -2,6 +2,6 @@ PASS {"case":"cold navara→cesium failure","refused":1,"rollbackTarget":"navara
 PASS {"case":"cold cesium→navara failure","refused":1,"rollbackTarget":"cesium","historyAfterFailure":0,"selectionKept":true,"selectionAfterRollback":"a00000","historyAfterRetry":1,"selectionAfterRetry":"a00000","errors":0,"failed":[]}
 PASS {"case":"warm cesium→navara failure","refused":1,"rollbackTarget":"cesium","historyAfterFailure":0,"selectionKept":true,"selectionAfterRollback":"a00000","historyAfterRetry":1,"selectionAfterRetry":"a00000","errors":0,"failed":[]}
 PASS {"case":"warm navara→cesium failure","refused":1,"rollbackTarget":"navara","historyAfterFailure":0,"selectionKept":true,"selectionAfterRollback":"a00000","historyAfterRetry":1,"selectionAfterRetry":"a00000","errors":0,"failed":[]}
-PASS {"case":"cold cesium→navara first frame after 12 s","engine":"navara","history":1,"coverGoneMs":11136,"firstFrameMs":12218,"errors":0}
-PASS {"case":"warm navara→cesium first frame after 12 s","engine":"cesium","history":1,"coverGoneMs":10024,"firstFrameMs":12033,"errors":0}
-STRICT {"scenario":"qa-strict-failure-matrix","assertions":0,"coverage":{},"picks":16,"requests":6026,"violations":0}
+PASS {"case":"cold cesium→navara first frame after 12 s","engine":"navara","history":1,"coverGoneMs":11098,"firstFrameMs":12218,"errors":0}
+PASS {"case":"warm navara→cesium first frame after 12 s","engine":"cesium","history":1,"coverGoneMs":10025,"firstFrameMs":12032,"errors":0}
+STRICT {"scenario":"qa-strict-failure-matrix","assertions":0,"coverage":{},"picks":16,"requests":5807,"violations":0,"cesiumBeforeLoad":0}

@@ -1,5 +1,5 @@
-navara 7200 10.0 m/s from SW [ 209.53993055555554, 73.38194444444444, 61 ]
+navara 7200 10.0 m/s from SW [ 209.50520833333334, 73.36111111111111, 61 ]
 cesium 7200 10.0 m/s from SW [ 188.11631944444446, 63.07465277777778, 50.041666666666664 ]
-navara 7200 10.0 m/s from SW [ 209.53993055555554, 73.38194444444444, 61 ]
+navara 7200 10.0 m/s from SW [ 209.50520833333334, 73.36111111111111, 61 ]
 PASS retained forecast grid, pause, temperature field and sampled wind on both engines
-STRICT {"scenario":"qa-wind-engine-switch","assertions":19,"coverage":{"wind":{"cesium":6,"navara":13}},"picks":2,"requests":401,"violations":0}
+STRICT {"scenario":"qa-wind-engine-switch","assertions":19,"coverage":{"wind":{"cesium":6,"navara":13}},"picks":2,"requests":403,"violations":0,"cesiumBeforeLoad":0}

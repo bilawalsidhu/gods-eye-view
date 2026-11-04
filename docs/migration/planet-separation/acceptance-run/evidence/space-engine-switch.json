@@ -23,16 +23,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6688.9000000059605,
-      "idleAt": 6858.699999988079
+      "at": 6523.300000011921,
+      "idleAt": 7036.699999988079
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7100.800000011921,
-      "idleAt": 7194.5999999940395
+      "at": 7148.699999988079,
+      "idleAt": 7225.699999988079
     }
   ],
   "assertions": [
@@ -90,7 +90,7 @@
     }
   ],
   "network": {
-    "requests": 313,
+    "requests": 240,
     "preview": 112,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -102,8 +102,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 88,
-      "tiles.maps.eox.at": 96
+      "terrain.reearth.land": 57,
+      "tiles.maps.eox.at": 54
     },
     "fixtureResponses": 0,
     "probes": {
@@ -114,7 +114,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 199,
+      "hits": 126,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -122,6 +122,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

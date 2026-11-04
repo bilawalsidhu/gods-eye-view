@@ -38,16 +38,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9464.59999999404,
-      "idleAt": 9606.799999982119
+      "at": 9349.799999982119,
+      "idleAt": 9787.799999982119
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10625.899999976158,
-      "idleAt": 10667.299999982119
+      "at": 10810.09999999404,
+      "idleAt": 10852.799999982119
     }
   ],
   "assertions": [
@@ -56,9 +56,9 @@
       "engine": "navara",
       "claim": "latest frame paints in stacking order",
       "detail": [
-        226.35416666666666,
-        227.90277777777777,
-        230.75
+        226.20833333333334,
+        227.8125,
+        230.67361111111111
       ]
     },
     {
@@ -66,9 +66,9 @@
       "engine": "navara",
       "claim": "latest frame paints in stacking order",
       "detail": [
-        249.26388888888889,
+        249.25,
         45.61805555555556,
-        46.15277777777778
+        46.13194444444444
       ]
     },
     {
@@ -76,7 +76,7 @@
       "engine": "navara",
       "claim": "latest frame paints in stacking order",
       "detail": [
-        49.80555555555556,
+        49.791666666666664,
         213.04861111111111,
         213.01388888888889
       ]
@@ -224,6 +224,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

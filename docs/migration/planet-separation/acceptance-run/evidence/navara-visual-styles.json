@@ -16,13 +16,13 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 14411.200000017881,
-      "idleAt": 14527.200000017881
+      "at": 14279.299999982119,
+      "idleAt": 14711.299999982119
     }
   ],
   "assertions": [],
   "network": {
-    "requests": 752,
+    "requests": 755,
     "preview": 136,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -34,7 +34,7 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 285,
+      "terrain.reearth.land": 288,
       "tile.openstreetmap.org": 314
     },
     "fixtureResponses": 0,
@@ -46,7 +46,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 614,
+      "hits": 617,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -54,6 +54,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

@@ -24,24 +24,24 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 21675.40000000596,
-      "idleAt": 21881.59999999404
+      "at": 21527.20000001788,
+      "idleAt": 22013
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 22106.80000001192,
-      "idleAt": 22162.5
+      "at": 22234.30000001192,
+      "idleAt": 22289.20000001788
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 22283.59999999404,
-      "idleAt": 22328.59999999404
+      "at": 22405.80000001192,
+      "idleAt": 22444.80000001192
     }
   ],
   "assertions": [
@@ -110,7 +110,7 @@
     }
   ],
   "network": {
-    "requests": 703,
+    "requests": 736,
     "preview": 148,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -122,8 +122,8 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 274,
-      "tiles.maps.eox.at": 264
+      "terrain.reearth.land": 291,
+      "tiles.maps.eox.at": 280
     },
     "fixtureResponses": 0,
     "probes": {
@@ -134,7 +134,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 553,
+      "hits": 586,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -142,6 +142,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

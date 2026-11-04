@@ -306,26 +306,6 @@
       "path": "/search/granules.umm_json"
     },
     {
-      "host": "wvs.earthdata.nasa.gov",
-      "path": "/api/v1/snapshot"
-    },
-    {
-      "host": "wvs.earthdata.nasa.gov",
-      "path": "/api/v1/snapshot"
-    },
-    {
-      "host": "wvs.earthdata.nasa.gov",
-      "path": "/api/v1/snapshot"
-    },
-    {
-      "host": "gibs-c.earthdata.nasa.gov",
-      "path": "/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/2026-10-28/GoogleMapsCompatible_Level12/12/1686/935.png"
-    },
-    {
-      "host": "gibs-a.earthdata.nasa.gov",
-      "path": "/wmts/epsg3857/best/HLS_S30_Nadir_BRDF_Adjusted_Reflectance/default/2026-10-28/GoogleMapsCompatible_Level12/12/1686/936.png"
-    },
-    {
       "host": "cmr.earthdata.nasa.gov",
       "path": "/search/granules.umm_json"
     },
@@ -558,9 +538,9 @@
       56
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "ab": {
@@ -575,9 +555,9 @@
       105
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "switch-cesium": {
@@ -609,9 +589,9 @@
       105
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "swap": {
@@ -626,9 +606,9 @@
       56
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "divider": {
@@ -643,9 +623,9 @@
       56
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "home": {
@@ -660,9 +640,9 @@
       105
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "end": {
@@ -677,43 +657,43 @@
       56
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "transparent": {
     "left": [
-      213,
-      207,
-      182
+      220,
+      215,
+      192
     ],
     "right": [
-      218,
-      211,
-      209
+      223,
+      216,
+      215
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "half": {
     "left": [
-      225,
-      132,
-      119
+      228,
+      135,
+      124
     ],
     "right": [
-      228,
-      133,
-      133
+      230,
+      136,
+      135
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "basemap": {
@@ -723,14 +703,14 @@
       56
     ],
     "right": [
-      218,
-      211,
-      209
+      223,
+      216,
+      215
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "beforeToggle": {
@@ -774,14 +754,14 @@
       56
     ],
     "right": [
-      218,
-      211,
-      209
+      223,
+      216,
+      215
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "afterToggle": {
@@ -820,19 +800,19 @@
   },
   "source-failure": {
     "left": [
-      213,
-      207,
-      182
+      220,
+      215,
+      192
     ],
     "right": [
-      218,
-      211,
-      209
+      223,
+      216,
+      215
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "failedTiles": 2,
@@ -848,26 +828,26 @@
       105
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "box-drag": {
     "left": [
-      204,
       210,
-      191
+      217,
+      200
     ],
     "right": [
-      209,
-      214,
-      215
+      213,
+      218,
+      219
     ],
     "outside": [
-      197,
-      201,
-      174
+      209,
+      213,
+      190
     ]
   },
   "fit": {

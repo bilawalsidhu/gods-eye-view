@@ -4,66 +4,6 @@ after warm cesium→navara, outgoing context lost {"after":{"running":true,"engi
 PASS {"case":"warm cesium→navara, outgoing context lost","lostKind":"cesium","lost":true,"restoredEvent":false,"outcome":"switched","sessionIntact":true,"history":1,"drawn":true,"back":"cesium","backEngine":"cesium","backSessionIntact":true,"backDrawn":true,"backError":null,"pageErrors":[],"failed":[]}
 after warm navara→cesium, incoming context lost {"after":{"running":true,"engine":"cesium","manager":true,"models":true,"enabled":true,"address":"cesium","picker":"cesium","history":9},"loss":{"kind":"cesium","lost":true,"restored":true},"drawn":true} {"toggle":"true","retry":false,"status":"Initializing systems...","loading":"hidden"}
 PASS {"case":"warm navara→cesium, incoming context lost","lostKind":"cesium","lost":true,"restoredEvent":false,"outcome":"switched","sessionIntact":true,"history":1,"drawn":true,"back":"navara","backEngine":"navara","backSessionIntact":true,"backDrawn":true,"backError":null,"pageErrors":[],"failed":[]}
-after warm cesium→navara, incoming context lost {"after":{"running":true,"engine":"navara","manager":true,"models":true,"enabled":true,"address":"navara","picker":"navara","history":12},"loss":{"kind":"navara","lost":true,"restored":true},"drawn":false} {"toggle":"true","retry":false,"status":"Initializing systems...","loading":"hidden"}
-FAIL {"case":"warm cesium→navara, incoming context lost","lostKind":"navara","lost":true,"restoredEvent":false,"outcome":"switched","sessionIntact":true,"history":1,"drawn":false,"back":"cesium","backEngine":"cesium","backSessionIntact":true,"backDrawn":true,"backError":null,"pageErrors":[],"failed":["no non-blank frame from the running engine"]}
-STRICT {"scenario":"qa-strict-context-loss","assertions":0,"coverage":{},"picks":11,"requests":1481,"violations":0}
-node:internal/modules/run_main:111
-    triggerUncaughtException(
-    ^
-
-AssertionError [ERR_ASSERTION]: context-loss cases that broke the contract
-+ actual - expected
-
-+ [
-+   {
-+     back: 'cesium',
-+     backDrawn: true,
-+     backEngine: 'cesium',
-+     backError: null,
-+     backSessionIntact: true,
-+     case: 'warm cesium→navara, incoming context lost',
-+     drawn: false,
-+     failed: [
-+       'no non-blank frame from the running engine'
-+     ],
-+     history: 1,
-+     lost: true,
-+     lostKind: 'navara',
-+     outcome: 'switched',
-+     pageErrors: [],
-+     restoredEvent: false,
-+     sessionIntact: true
-+   }
-+ ]
-- []
-
-    at file://<scratch>/checkout/scripts/qa-strict-context-loss.mjs:230:10
-    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:599:9)
-    at async file://<scratch>/checkout/scripts/qa-strict-context-loss.mjs:35:1 {
-  generatedMessage: false,
-  code: 'ERR_ASSERTION',
-  actual: [
-    {
-      case: 'warm cesium→navara, incoming context lost',
-      lostKind: 'navara',
-      lost: true,
-      restoredEvent: false,
-      outcome: 'switched',
-      sessionIntact: true,
-      history: 1,
-      drawn: false,
-      back: 'cesium',
-      backEngine: 'cesium',
-      backSessionIntact: true,
-      backDrawn: true,
-      backError: null,
-      pageErrors: [],
-      failed: [ 'no non-blank frame from the running engine' ]
-    }
-  ],
-  expected: [],
-  operator: 'deepStrictEqual',
-  diff: 'simple'
-}
-
-Node.js v26.12.0
+after warm cesium→navara, incoming context lost {"after":{"running":true,"engine":"navara","manager":true,"models":true,"enabled":true,"address":"navara","picker":"navara","history":12},"loss":{"kind":"navara","lost":true,"restored":true},"drawn":true} {"toggle":"true","retry":false,"status":"Initializing systems...","loading":"hidden"}
+PASS {"case":"warm cesium→navara, incoming context lost","lostKind":"navara","lost":true,"restoredEvent":false,"outcome":"switched","sessionIntact":true,"history":1,"drawn":true,"back":"cesium","backEngine":"cesium","backSessionIntact":true,"backDrawn":true,"backError":null,"pageErrors":[],"failed":[]}
+STRICT {"scenario":"qa-strict-context-loss","assertions":0,"coverage":{},"picks":11,"requests":1457,"violations":0,"cesiumBeforeLoad":0}

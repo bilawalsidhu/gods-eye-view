@@ -16,96 +16,96 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6657.9000000059605,
-      "idleAt": 6727.9000000059605
+      "at": 6532.4000000059605,
+      "idleAt": 6877.699999988079
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6858.700000017881,
-      "idleAt": 7012.100000023842
+      "at": 7046.199999988079,
+      "idleAt": 7193.5
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 5165.800000011921,
-      "idleAt": 5281.100000023842
+      "at": 5202.0999999940395,
+      "idleAt": 5312.5999999940395
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 5402.800000011921,
-      "idleAt": 6812.200000017881
+      "at": 5429.5999999940395,
+      "idleAt": 6791
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 4928.4000000059605,
-      "idleAt": 6376.300000011921
+      "at": 5009,
+      "idleAt": 6459.699999988079
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6752,
-      "idleAt": 6812.0999999940395
+      "at": 6818.199999988079,
+      "idleAt": 6850.5999999940395
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6939.300000011921,
-      "idleAt": 7005.9000000059605
+      "at": 6992.0999999940395,
+      "idleAt": 7026.800000011921
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7102.5999999940395,
-      "idleAt": 8299.59999999404
+      "at": 7088,
+      "idleAt": 8290.199999988079
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6311.200000017881,
-      "idleAt": 6425.700000017881
+      "at": 6250.9000000059605,
+      "idleAt": 6476.0999999940395
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6663.700000017881,
-      "idleAt": 6758.800000011921
+      "at": 6628,
+      "idleAt": 6688.5999999940395
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6895,
-      "idleAt": 6945.9000000059605
+      "at": 6854.4000000059605,
+      "idleAt": 6902.199999988079
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7098.9000000059605,
-      "idleAt": 7217.800000011921
+      "at": 7043.5,
+      "idleAt": 7158.0999999940395
     },
     {
       "to": "navara",
@@ -118,16 +118,16 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6333.100000023842,
-      "idleAt": 6493.700000017881
+      "at": 6278.699999988079,
+      "idleAt": 6504.9000000059605
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6669.700000017881,
-      "idleAt": 6750.5
+      "at": 6669.699999988079,
+      "idleAt": 6733.699999988079
     },
     {
       "to": "cesium",
@@ -138,8 +138,8 @@
   ],
   "assertions": [],
   "network": {
-    "requests": 6026,
-    "preview": 864,
+    "requests": 5807,
+    "preview": 874,
     "previewApi": {
       "/api/local-receivers/aircraft": 6,
       "/api/openai/hud-summary": 6,
@@ -151,8 +151,8 @@
     "external": {
       "fonts.googleapis.com": 12,
       "services.arcgisonline.com": 175,
-      "terrain.reearth.land": 2313,
-      "tile.openstreetmap.org": 2662
+      "terrain.reearth.land": 2161,
+      "tile.openstreetmap.org": 2585
     },
     "fixtureResponses": 0,
     "probes": {
@@ -163,16 +163,15 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 5145,
-      "fetched": 5,
+      "hits": 4921,
+      "fetched": 0,
       "failed": 0,
-      "cancelled": 5,
-      "fetchedByHost": {
-        "tile.openstreetmap.org": 5
-      }
+      "cancelled": 0,
+      "fetchedByHost": {}
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",
@@ -235,7 +234,7 @@
       "case": "cold cesium→navara first frame after 12 s",
       "engine": "navara",
       "history": 1,
-      "coverGoneMs": 11136,
+      "coverGoneMs": 11098,
       "firstFrameMs": 12218,
       "errors": 0
     },
@@ -243,8 +242,8 @@
       "case": "warm navara→cesium first frame after 12 s",
       "engine": "cesium",
       "history": 1,
-      "coverGoneMs": 10024,
-      "firstFrameMs": 12033,
+      "coverGoneMs": 10025,
+      "firstFrameMs": 12032,
       "errors": 0
     }
   ]

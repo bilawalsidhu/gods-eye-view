@@ -5,8 +5,8 @@
     "--layers=",
     "--evidence=<output>/evidence/strict-context-loss.json"
   ],
-  "status": "fail",
-  "error": "AssertionError [ERR_ASSERTION]: context-loss cases that broke the contract\n+ actual - expected\n\n+ [\n+   {\n+     back: 'cesium',\n+     backDrawn: true,\n+     backEngine: 'cesium',\n+     backError: null,\n+     backSessionIntact: true,\n+     case: 'warm cesium→navara, incoming context lost',\n+     drawn: false,\n+     failed: [\n+       'no non-blank frame from the running engine'\n+     ],\n+     history: 1,\n+     lost: true,\n+     lostKind: 'navara',\n+     outcome: 'switched',\n+     pageErrors: [],\n+     restoredEvent: false,\n+     sessionIntact: true\n+   }\n+ ]\n- []\n\n    at file://<scratch>/checkout/scripts/qa-strict-context-loss.mjs:230:10\n    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:599:9)\n    at async file://<scratch>/checkout/scripts/qa-strict-context-loss.mjs:35:1",
+  "status": "pass",
+  "error": null,
   "layers": [],
   "coverage": {},
   "missing": [],
@@ -22,16 +22,16 @@
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 9772.40000000596,
-      "idleAt": 10969
+      "at": 9904.5,
+      "idleAt": 11091.59999999404
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 11395.59999999404,
-      "idleAt": 11417.799999982119
+      "at": 11385.5,
+      "idleAt": 11427.09999999404
     },
     {
       "to": "navara",
@@ -44,16 +44,16 @@
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 14583.59999999404,
-      "idleAt": 14712.59999999404
+      "at": 14582.299999982119,
+      "idleAt": 14707.5
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 14883.299999982119,
-      "idleAt": 14915.699999988079
+      "at": 14881.699999988079,
+      "idleAt": 14914.59999999404
     },
     {
       "to": "cesium",
@@ -66,16 +66,16 @@
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 18144.09999999404,
-      "idleAt": 18183.79999998212
+      "at": 18141.09999999404,
+      "idleAt": 18214
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 18272.40000000596,
-      "idleAt": 18314.5
+      "at": 18281.69999998808,
+      "idleAt": 18305.19999998808
     },
     {
       "to": "navara",
@@ -88,14 +88,14 @@
       "via": "pointer+keyboard",
       "opened": false,
       "clicked": "label",
-      "at": 37683.40000000596,
-      "idleAt": 37713.19999998808
+      "at": 22772.19999998808,
+      "idleAt": 22798.59999999404
     }
   ],
   "assertions": [],
   "network": {
-    "requests": 1481,
-    "preview": 238,
+    "requests": 1457,
+    "preview": 214,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
@@ -126,6 +126,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",
@@ -195,16 +196,14 @@
       "outcome": "switched",
       "sessionIntact": true,
       "history": 1,
-      "drawn": false,
+      "drawn": true,
       "back": "cesium",
       "backEngine": "cesium",
       "backSessionIntact": true,
       "backDrawn": true,
       "backError": null,
       "pageErrors": [],
-      "failed": [
-        "no non-blank frame from the running engine"
-      ]
+      "failed": []
     }
   ]
 }

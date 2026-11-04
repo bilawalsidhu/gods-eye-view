@@ -16,37 +16,37 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7577,
-      "idleAt": 7774.5
+      "at": 7469.399999976158,
+      "idleAt": 7959.0999999940395
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 8645.699999988079,
-      "idleAt": 8710.899999976158
+      "at": 8814.699999988079,
+      "idleAt": 8867
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 9615.09999999404,
-      "idleAt": 9639.5
+      "at": 9786.799999982119,
+      "idleAt": 9809.09999999404
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 12697.699999988079,
-      "idleAt": 12728.199999988079
+      "at": 12866.299999982119,
+      "idleAt": 12896.299999982119
     }
   ],
   "assertions": [],
   "network": {
-    "requests": 880,
+    "requests": 908,
     "preview": 142,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
@@ -58,7 +58,7 @@
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 365,
+      "terrain.reearth.land": 393,
       "tiles.maps.eox.at": 355,
       "earthquake.usgs.gov": 1
     },
@@ -71,7 +71,7 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 735,
+      "hits": 763,
       "fetched": 0,
       "failed": 0,
       "cancelled": 0,
@@ -79,6 +79,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [
       "https://earthquake.usgs.gov/*"
     ],

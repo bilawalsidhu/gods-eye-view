@@ -24,24 +24,24 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 6916.200000017881,
-      "idleAt": 7128.800000011921
+      "at": 6998.200000017881,
+      "idleAt": 7260.5
     },
     {
       "to": "navara",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7316.100000023842,
-      "idleAt": 7417.100000023842
+      "at": 7409.200000017881,
+      "idleAt": 7509
     },
     {
       "to": "cesium",
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 7804.600000023842,
-      "idleAt": 7855.700000017881
+      "at": 7776.800000011921,
+      "idleAt": 7835.200000017881
     }
   ],
   "assertions": [
@@ -82,25 +82,26 @@
     }
   ],
   "network": {
-    "requests": 760,
-    "preview": 115,
+    "requests": 844,
+    "preview": 117,
     "previewApi": {
       "/api/local-receivers/aircraft": 1,
       "/api/openai/hud-summary": 1,
       "/api/realtime/debug-log": 1,
       "/api/setup/status": 1,
       "/api/mapillary/status": 1,
+      "/api/mapillary/tiles": 2,
       "/api/google/tiles-token": 1
     },
     "external": {
       "fonts.googleapis.com": 2,
       "services.arcgisonline.com": 15,
-      "terrain.reearth.land": 268,
-      "tiles.maps.eox.at": 345,
-      "api.panoramax.xyz": 13,
+      "terrain.reearth.land": 342,
+      "tiles.maps.eox.at": 352,
+      "api.panoramax.xyz": 14,
       "panoramax.openstreetmap.fr": 2
     },
-    "fixtureResponses": 14,
+    "fixtureResponses": 15,
     "probes": {
       "https://fonts.googleapis.com/css2*": 2,
       "/api/openai/hud-summary/status": 1,
@@ -109,16 +110,15 @@
     },
     "routes": {},
     "tileCache": {
-      "hits": 624,
-      "fetched": 4,
+      "hits": 706,
+      "fetched": 0,
       "failed": 0,
-      "cancelled": 0,
-      "fetchedByHost": {
-        "terrain.reearth.land": 4
-      }
+      "cancelled": 6,
+      "fetchedByHost": {}
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [
       "*://*.mapillary.com/*",
       "https://api.kartaview.org/*",

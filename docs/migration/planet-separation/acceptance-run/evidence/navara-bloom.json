@@ -16,8 +16,8 @@
       "via": "pointer+keyboard",
       "opened": true,
       "clicked": "label",
-      "at": 10610.09999999404,
-      "idleAt": 10779.90000000596
+      "at": 10425.699999988079,
+      "idleAt": 10892.899999976158
     }
   ],
   "assertions": [],
@@ -54,6 +54,7 @@
     },
     "violations": [],
     "setupErrors": [],
+    "cesiumBeforeLoad": [],
     "fixtures": [],
     "tileHosts": [
       "tile.openstreetmap.org",

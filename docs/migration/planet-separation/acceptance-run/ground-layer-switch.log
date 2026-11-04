@@ -2,12 +2,21 @@ PASS navara eccc:QA1 AQHI 9
 PASS navara GNSS high cell, view anchor 44 -79
 PASS cesium eccc:QA1 AQHI 9
 PASS cesium GNSS high cell, view anchor 44 -79
-PASS navara eccc:QA1 AQHI 9
-PASS navara GNSS high cell, view anchor 44 -79
-PASS navara select fire under GNSS, exclude hole, retain incident card
-PASS cesium select fire under GNSS, exclude hole, retain incident card
-PASS navara select fire under GNSS, exclude hole, retain incident card
-PASS navara retained selected AIS vessel, chevron, card and single track request
-PASS cesium retained selected AIS vessel, chevron, card and single track request
-PASS navara retained selected AIS vessel, chevron, card and single track request
-STRICT {"scenario":"qa-ground-layer-switch","assertions":27,"coverage":{"ais-live-vessels":{"cesium":2,"navara":4},"air-quality":{"cesium":2,"navara":3},"gnss-integrity":{"cesium":2,"navara":3},"fire-perimeters":{"cesium":4,"navara":7}},"picks":6,"requests":654,"violations":0}
+not settled {"engine":"navara","tiles":false,"records":0,"stats":{"count":1,"lastUpdate":1793808093203,"error":null,"observedAt":1793808093203,"stale":false}}
+STRICT {"scenario":"qa-ground-layer-switch","assertions":8,"coverage":{"ais-live-vessels":{"cesium":0,"navara":0},"air-quality":{"cesium":2,"navara":2},"gnss-integrity":{"cesium":2,"navara":2},"fire-perimeters":{"cesium":0,"navara":0}},"picks":2,"requests":661,"violations":0,"cesiumBeforeLoad":0}
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+TimeoutError: Waiting failed: 30000ms exceeded
+    at new WaitTask (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:46:34)
+    at IsolatedWorld.waitForFunction (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/api/Realm.js:49:26)
+    at CdpFrame.waitForFunction (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:585:43)
+    at CdpFrame.<anonymous> (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:101:27)
+    at CdpPage.waitForFunction (file://<repo>/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1542:37)
+    at capture (file://<scratch>/checkout/scripts/qa-ground-layer-switch.mjs:153:8)
+    at async file://<scratch>/checkout/scripts/qa-ground-layer-switch.mjs:262:17
+    at async Object.run (file://<scratch>/checkout/scripts/qa-strict-harness.mjs:673:9)
+    at async file://<scratch>/checkout/scripts/qa-ground-layer-switch.mjs:19:1
+
+Node.js v26.12.0

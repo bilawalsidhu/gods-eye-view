@@ -1,8 +1,8 @@
 PASS Navara takes the cockpit cloud cover itself, no cloud canvas {"cover":{"coverage":null},"canvas":false,"canvases":7}
 PASS clear weather in the cockpit: no cloud cover {"requests":1}
-PASS overcast weather covers the view with Navara clouds, clear leaves it open {"overcastCover":0.8,"greyed":{"lookOwn":21.9879375,"clear":28.2893125,"overcast":11.644625,"clearToOvercast":30.36152083333329},"requests":2}
+PASS overcast weather covers the view with Navara clouds, clear leaves it open {"overcastCover":0.8,"greyed":{"lookOwn":21.984,"clear":28.2893125,"overcast":11.6039375,"clearToOvercast":30.343958333333255},"requests":2}
 PASS no second canvas or WebGL context in the cockpit {"before":7,"after":{"canvas":false,"canvases":7}}
 PASS leaving the cockpit gives the look its own clouds back 
 PASS Cesium: the cockpit draws its own cloud canvas, the engine none {"setCloudCover":"undefined","strength":1,"cockpit":"true"}
 PASS no page errors []
-STRICT {"scenario":"qa-navara-cockpit-clouds","assertions":0,"coverage":{},"picks":1,"requests":1222,"violations":0}
+STRICT {"scenario":"qa-navara-cockpit-clouds","assertions":0,"coverage":{},"picks":1,"requests":1222,"violations":0,"cesiumBeforeLoad":0}

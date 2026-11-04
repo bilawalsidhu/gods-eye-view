@@ -1,9 +1,9 @@
-RUN {"run":1,"start":"navara","navara":{"cold":null,"warmP50":68.9,"warmP95":73.6},"cesium":{"cold":1505.7,"warmP50":107.6,"warmP95":130.5},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
-SOAK {"cesium→navara":{"cold":[],"warmP50":68.9,"warmP95":73.6,"warmSwitches":250},"navara→cesium":{"cold":[1505.7],"warmP50":107.6,"warmP95":130.5,"warmSwitches":249}}
-PASS {"check":"navara live WebGL objects","slopePerSwap":0,"from":1546,"to":1546,"pass":true}
-PASS {"check":"cesium live WebGL objects","slopePerSwap":0.001,"from":241,"to":242,"pass":true}
+RUN {"run":1,"start":"navara","navara":{"cold":null,"warmP50":69.6,"warmP95":73.9},"cesium":{"cold":1509.8,"warmP50":106.8,"warmP95":127.3},"workload":{"flights":10000,"military":200,"traffic":667,"radio":750,"earthquakes":1}}
+SOAK {"cesium→navara":{"cold":[],"warmP50":69.6,"warmP95":73.9,"warmSwitches":250},"navara→cesium":{"cold":[1509.8],"warmP50":106.8,"warmP95":127.3,"warmSwitches":249}}
+PASS {"check":"navara live WebGL objects","slopePerSwap":-0.001,"from":1542,"to":1542,"pass":true}
+PASS {"check":"cesium live WebGL objects","slopePerSwap":-0.001,"from":234,"to":234,"pass":true}
 PASS {"check":"WebGL contexts","from":2,"to":2,"pass":true}
-FAIL {"check":"JS heap KiB per switch","slopePerSwap":48.59,"fromMiB":102.75,"toMiB":123.78,"pass":false}
-PASS {"check":"documents","from":34,"to":34,"pass":true}
+FAIL {"check":"JS heap KiB per switch","slopePerSwap":10.87,"fromMiB":116.43,"toMiB":122.1,"pass":false}
+PASS {"check":"documents","from":33,"to":33,"pass":true}
 PASS {"check":"context-loss listeners on both canvases","from":{"navara":[3,2],"cesium":[1,0]},"to":{"navara":[3,2],"cesium":[1,0]},"pass":true}
-STRICT {"scenario":"qa-strict-soak","assertions":0,"coverage":{},"picks":500,"requests":1397,"violations":0}
+STRICT {"scenario":"qa-strict-soak","assertions":0,"coverage":{},"picks":500,"requests":1375,"violations":0,"cesiumBeforeLoad":0}
