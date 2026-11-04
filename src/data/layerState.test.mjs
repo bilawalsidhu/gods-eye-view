@@ -202,8 +202,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 35);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 35);
+  assert.equal(REGISTERED_LAYER_IDS.length, 36);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 36);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -245,19 +245,15 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(nextLayerStateToken(), '00');
   assert.equal(
     nextLayerStateToken({
-      ...Object.fromEntries(
-        Object.entries(LAYER_STATE_TOKEN_RESERVATIONS).filter(
-          ([id]) => id !== 'chester-county-ems',
-        ),
-      ),
-      alpha: '8',
-      bravo: '9',
+      ...LAYER_STATE_TOKEN_RESERVATIONS,
+      alpha: '9',
+      bravo: '00',
     }),
-    '00',
+    '01',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries([...'89'].map((digit) => [`prior-${digit}`, digit])),
+    ...Object.fromEntries([...'9'].map((digit) => [`prior-${digit}`, digit])),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
@@ -2702,6 +2698,22 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
   assert.equal(
     parseStoredLayerState(previous).options['recent-imagery'].split,
     50,
+  );
+});
+
+test('drone restrictions uses digit 8 without colliding with fire perimeters', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=8.2'));
+  assert.deepEqual(decoded.enabledLayerIds, [
+    'drone-airspace',
+    'fire-perimeters',
+  ]);
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'drone-airspace').token,
+    '8',
+  );
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
   );
 });
 
