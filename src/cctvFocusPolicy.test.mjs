@@ -115,5 +115,5 @@ test('a disposed UI cannot activate a camera when enabling finishes late', async
   await pending;
   assert.equal(activations, 0);
   const uiSource = readShellSource();
-  assert.match(uiSource, /shouldFocus: \(\) =>\s*!this\._disposed\s*&&\s*this\._dataManager\.isEnabled\('cctv'\)/);
+  assert.match(uiSource, /shouldFocus: \(\) =>\s*!this\._disposed\s*&&\s*cameraIds\.some\(\(id\) => this\._dataManager\.isEnabled\(id\)\)/);
 });

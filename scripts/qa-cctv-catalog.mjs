@@ -109,6 +109,11 @@ try {
     button.click(),
   );
   await page.click('#cctv-enable-btn');
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.setEnabled('penndot-traffic-cams', true, {
+      origin: 'user',
+    }),
+  );
   await page.waitForFunction(
     (count) =>
       window.__godsEyeView.styleManager._cctvControls.cctv.getUIState()

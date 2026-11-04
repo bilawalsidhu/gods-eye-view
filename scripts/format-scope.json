@@ -1269,5 +1269,6 @@
   "src/data/cctvViewThinning.test.mjs",
   "scripts/qa-cctv-zoom.mjs",
   "src/data/cameraLabels.test.mjs",
-  "src/app/layers/cameraCategories.test.mjs"
+  "src/app/layers/cameraCategories.test.mjs",
+  "scripts/qa-penndot-categories.mjs"
 ]

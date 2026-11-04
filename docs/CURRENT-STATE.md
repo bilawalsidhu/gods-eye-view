@@ -1107,7 +1107,8 @@ build hidden in the scene.
 
 The Cameras data group has independent **Cameras** and **PennDOT Traffic Cams**
 switches. The latter contains only the statewide 511PA catalog; curated webcams
-and manually configured webcams remain in Cameras. Either category can be enabled alone or both together. They share one
+and manually configured webcams remain in Cameras. Either category can be enabled
+alone or both together. They share one
 camera viewer, geometry/media owner and playback limits. The picker, cycling,
 nearest-camera action, detection and coverage honor the enabled categories;
 switching off a category releases its active camera without changing the other
