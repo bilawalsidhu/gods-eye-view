@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { IconSetPrimitive } from './data/iconSetPrimitive.js';
 
 // Narrow, version-tested engine adapter. Cesium has no public custom shader
 // option for native point/billboard collections. Do not patch its prototypes or
@@ -64,9 +65,15 @@ export function sonarVertexSource(source, kind) {
     kind === 'point' ? 'positionHighAndSize' : 'positionHighAndScale';
   const lowAttribute =
     kind === 'point' ? 'positionLowAndOutline' : 'positionLowAndRotation';
+  // Icon sets move rows on the GPU, so their shader publishes the anchor itself.
+  const anchorSource =
+    kind === 'icon'
+      ? 'iconAnchorClip'
+      : `czm_modelViewProjectionRelativeToEye * czm_translateRelativeToEye(${attribute}.xyz, ${lowAttribute}.xyz)`;
   if (
-    !text.includes(attribute) ||
-    !text.includes(lowAttribute) ||
+    (kind === 'icon'
+      ? !text.includes('iconAnchorClip')
+      : !text.includes(attribute) || !text.includes(lowAttribute)) ||
     !text.includes('v_color') ||
     !/void\s+main\s*\(\s*\)/.test(text)
   )
@@ -83,7 +90,7 @@ void main() {
     gev_sonar_main();
     // All corners/glyphs share the contact anchor, before native screen offsets.
     // Leave gl_Position untouched so appearance never changes geometry or picks.
-    vec4 anchor = czm_modelViewProjectionRelativeToEye * czm_translateRelativeToEye(${attribute}.xyz, ${lowAttribute}.xyz);
+    vec4 anchor = ${anchorSource};
     if (anchor.w <= 0.0) return;
     vec2 pixel = anchor.xy / anchor.w * u_gevSonarViewport * 0.5;
     float floorValue = u_gevSonar.z;
@@ -108,7 +115,7 @@ void main() {
         v_color.rgb = v_color.rgb * 0.28 + (vec3(0.62, 0.68, 0.72) + vec3(0.38, 0.16, 0.12) * coverage) * 0.72;
     // Apply before native fragment pass classification, never after main().
     v_color.a *= factor;
-    ${kind === 'point' ? 'v_outlineColor.a *= factor;' : '#ifdef SDF\n    v_outlineColor.a *= factor;\n    #endif'}
+    ${kind === 'point' ? 'v_outlineColor.a *= factor;' : kind === 'icon' ? '' : '#ifdef SDF\n    v_outlineColor.a *= factor;\n    #endif'}
 }
 `,
   ];
@@ -208,7 +215,9 @@ export function createCyberSonarGpu(scene, readFrame) {
             ? 'point'
             : native.owner instanceof Cesium.BillboardCollection
               ? 'billboard'
-              : null;
+              : native.owner instanceof IconSetPrimitive
+                ? 'icon'
+                : null;
         if (!kind || !native.shaderProgram || !native.uniformMap) continue;
         const source = native.shaderProgram;
         // Label backgrounds are non-SDF billboard batches. The version-tested
