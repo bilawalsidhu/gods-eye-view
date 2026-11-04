@@ -8,6 +8,7 @@
  * the panel's requests must include.
  */
 
+import { createEcccAirQualitySource } from '../layers/airQuality/source.js';
 import { createAlprTileSource } from '../layers/alpr/source.js';
 import { GBFS_CITY_REGISTRY } from '../layers/bikeshare/registry.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
@@ -48,6 +49,7 @@ export function createToolServices({ fetchImpl, appUrl, panelKey }) {
   const requests = createApplicationRequestServices({ fetchImpl });
   return {
     app: { baseUrl: appUrl, fetch: fetchImpl, panelKey },
+    airQuality: createEcccAirQualitySource({ fetchImpl }),
     earthquakes: createUsgsEarthquakeSource({ fetchImpl }),
     fires: createFirmsSource({ fetchImpl }),
     launches: createLaunchSource({ fetchImpl }),

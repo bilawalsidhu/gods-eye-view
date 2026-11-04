@@ -301,3 +301,14 @@ and the development server's internal routes. See SECURITY.md.
 | `get_hud_caption` | `weather`, `summary` | The app's heads-up display caption for an area |
 | `show_in_gods_eye_view` | `app` | A view in God's Eye View: the live panel in clients with MCP Apps, and a link everywhere; takes another answer's view or an area or camera, layers, style, map, marks and something to follow |
 | `panel_request` | `app` | Panel only: loads a path from the app's server for the God's Eye View panel |
+
+## Canadian air quality
+
+`get_air_quality` is a read-only MCP query (not a voice tool) over the existing
+Environment and Climate Change Canada AQHI source. It accepts the shared
+`area` and `limit` arguments and returns nearest-first station values, scale,
+health-risk bands, observation times, and explicit Canada-only coverage.
+Readings over six hours old and implausibly future-dated readings are excluded;
+when the newest remaining observation is over two hours old, results are marked
+stale. An empty result **does not mean clean air** or global provider coverage.
+It adds no new external feed. GNSS query support from #1213 is a separate slice.
