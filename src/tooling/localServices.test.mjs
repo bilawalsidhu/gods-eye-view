@@ -20,7 +20,11 @@ import {
 import { openAiRealtimeProxy } from 'gods-eye-view/server/providers/openai';
 import { keySetupEndpoint } from 'gods-eye-view/server/standalone/key-setup';
 import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
-import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+import {
+  GEV_REALTIME_TOOLS,
+  offeredTools,
+  realtimeTools,
+} from '../../server/providers/openai/tools.js';
 import { createDebugLogHandler } from '../../server/providers/openai/debug-log.js';
 import { attachVoiceResult } from '../voice/speech.js';
 import { sanitizeDebugValue } from '../voice/realtimeDiagnostics.js';
@@ -164,6 +168,7 @@ test('weather-only requests share upstream work and retain fresh and stale respo
 test('Realtime handler preserves tools and default instructions, isolates supplied annotation guidance, and keeps the upstream key server-side', async (t) => {
   env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
   env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+  env(t, 'OVERPASS_UPSTREAMS', undefined);
   const sent = [];
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     assert.equal(url, 'https://api.openai.com/v1/realtime/client_secrets');
@@ -194,7 +199,7 @@ test('Realtime handler preserves tools and default instructions, isolates suppli
       sent.at(-1).session.instructions,
       realtimeInstructions(guidance),
     );
-    assert.deepEqual(sent.at(-1).session.tools, GEV_REALTIME_TOOLS);
+    assert.deepEqual(sent.at(-1).session.tools, realtimeTools());
   }
   assert.notEqual(sent[0].session.instructions, sent[1].session.instructions);
   assert.equal(sent[0].session.instructions, sent[2].session.instructions);
@@ -580,6 +585,36 @@ test('OAuth login endpoint selects an existing local sign-in without launching C
   assert.equal(response.body.includes('fixture-existing-secret'), false);
 });
 
+test('osm_query is offered only when an operator configured Overpass', async (t) => {
+  env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+  const sent = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    sent.push(JSON.parse(options.body).session);
+    return Response.json({ value: 'fixture-ephemeral' });
+  });
+  const mint = () =>
+    request(install(openAiRealtimeProxy({})).get('/api/realtime/token'), {
+      url: '/',
+    });
+  env(t, 'OVERPASS_UPSTREAMS', undefined);
+  await mint();
+  env(t, 'OVERPASS_UPSTREAMS', 'https://overpass.example/api/interpreter');
+  await mint();
+  const [plain, configured] = sent;
+  const names = (session) => session.tools.map((tool) => tool.name);
+  assert.equal(names(plain).includes('osm_query'), false);
+  assert.doesNotMatch(plain.instructions, /osm_query/);
+  assert.ok(names(plain).includes('resolve_area'));
+  assert.ok(names(plain).includes('find_imagery'));
+  assert.deepEqual(configured.tools, GEV_REALTIME_TOOLS);
+  assert.match(configured.instructions, /osm_query/);
+  assert.equal(
+    configured.instructions,
+    realtimeInstructions(undefined, { overpass: true }),
+  );
+});
+
 test('caption transcription is on by default, reported to the client meter, and can be turned off', async (t) => {
   env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
   env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
@@ -607,6 +642,7 @@ test('caption transcription is on by default, reported to the client meter, and 
 test('Realtime sessions carry supplied tools, and the standalone voice adds the catalog queries', async (t) => {
   env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
   env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+  env(t, 'OVERPASS_UPSTREAMS', undefined);
   const sent = [];
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     sent.push(JSON.parse(options.body));
@@ -619,7 +655,11 @@ test('Realtime sessions carry supplied tools, and the standalone voice adds the 
     ),
   );
   assert.equal(response.status, 200);
-  assert.deepEqual(sent.at(-1).session.tools, tools);
+  // Without an operator Overpass, osm_query is left out of the session.
+  assert.deepEqual(sent.at(-1).session.tools, offeredTools(tools));
+  assert.ok(
+    !sent.at(-1).session.tools.some(({ name }) => name === 'osm_query'),
+  );
   const names = tools.map((tool) => tool.name);
   assert.equal(new Set(names).size, names.length);
   assert.deepEqual(
@@ -707,13 +747,18 @@ test('Realtime service configuration selects compatible endpoint/model without f
         endpoint: 'https://voice.example/client-secrets',
         models: { standard: 'configured-model' },
         resolveApiKey: () => 'server-fixture',
+        // Pinned, so the expected tool list never depends on this machine's env.
+        overpassConfigured: () => false,
         fetchImpl: async (url, options) => {
           assert.equal(url, 'https://voice.example/client-secrets');
           assert.equal(options.redirect, 'error');
           assert.equal(options.headers.Authorization, 'Bearer server-fixture');
           const payload = JSON.parse(options.body);
           assert.equal(payload.session.model, 'configured-model');
-          assert.deepEqual(payload.session.tools, GEV_REALTIME_TOOLS);
+          assert.deepEqual(
+            payload.session.tools,
+            realtimeTools({ overpass: false }),
+          );
           return Response.json({ value: 'short-lived-fixture' });
         },
       },
@@ -727,6 +772,29 @@ test('Realtime service configuration selects compatible endpoint/model without f
   assert.equal(response.headers['x-gev-voice-model'], 'configured-model');
   assert.equal(response.headers['cache-control'], 'no-store');
   assert.doesNotMatch(response.body, /server-fixture|voice\.example/);
+});
+
+test('the HUD summary status says whether a summary is configured, without calling OpenAI', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('the status probe must not reach OpenAI');
+  });
+  const handler = install(openAiRealtimeProxy()).get('/api/openai/hud-summary');
+  for (const [key, configured] of [
+    [undefined, false],
+    ['   ', false],
+    ['fixture-key', true],
+  ]) {
+    env(t, 'OPENAI_API_KEY', key);
+    const response = await request(handler, { url: '/status' });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json(), { configured });
+    assert.equal(response.headers['cache-control'], 'no-store');
+  }
+  assert.equal(
+    (await request(handler, { url: '/' })).status,
+    405,
+    'only the status path answers GET',
+  );
 });
 
 test('OpenAI routes answer generically when the upstream or the request fails', async (t) => {

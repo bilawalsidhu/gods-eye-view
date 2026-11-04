@@ -18,9 +18,8 @@ export function createQueries({
       if (!fire) return null;
       return {
         id: fireDetectionKey(fire),
-        label: t('Fire · FRP {frp} MW', {
-          frp: components.model.formatFrp(fire.frp),
-        }),
+        // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
+        label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
         latitude: fire.lat,
         longitude: fire.lon,
         frp: fire.frp,
@@ -118,9 +117,8 @@ export function createQueries({
         latitude: strongest.lat,
         longitude: strongest.lon,
         frp: strongest.frp,
-        label: t('Fire · FRP {frp} MW', {
-          frp: components.model.formatFrp(strongest.frp),
-        }),
+        // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
+        label: `Fire · FRP ${components.model.formatFrp(strongest.frp)} MW`,
       };
     },
 

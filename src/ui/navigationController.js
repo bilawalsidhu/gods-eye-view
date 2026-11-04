@@ -12,7 +12,7 @@ export class NavigationController {
   constructor({
     viewer,
     tracking,
-    searchInput,
+    settleSearch = () => {},
     interruptCameraMotion,
     interruptGlobeRotation = () => {},
     isCockpitActive,
@@ -26,7 +26,7 @@ export class NavigationController {
     Object.assign(this, {
       viewer,
       tracking,
-      searchInput,
+      settleSearch,
       interruptCameraMotion,
       interruptGlobeRotation,
       isCockpitActive,
@@ -119,12 +119,11 @@ export class NavigationController {
     return this._navigationGeneration;
   }
 
-  _settleLocationSearchUi(generation) {
+  /** A search that found nothing keeps its query and focus so it can be corrected. */
+  _settleLocationSearchUi(generation, { keepQuery = false } = {}) {
     if (this._activeLocationSearchGeneration !== generation) return;
     this._activeLocationSearchGeneration = null;
-    this.searchInput?.classList.remove('searching', 'expanded');
-    if (this.searchInput) this.searchInput.value = '';
-    this.searchInput?.blur();
+    this.settleSearch({ keepQuery });
   }
 
   _releaseFollowCamera({
@@ -241,7 +240,7 @@ export class NavigationController {
     });
   }
 
-  _reassertNavigationHandoff(generation) {
+  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool' } = {}) {
     return reassertNavigationHandoff({
       generation,
       currentGeneration: this._navigationGeneration,
@@ -253,7 +252,7 @@ export class NavigationController {
       // was refused by the cockpit leaves the old readout standing.
       release: () => {
         this.clearLocation();
-        return this._releaseFollowCamera();
+        return this._releaseFollowCamera({ trackingOrigin });
       },
     });
   }
