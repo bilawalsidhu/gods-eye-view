@@ -6,4 +6,4 @@
   fishing with the rule shown. A day with no moonrise or moonset says "none"
   instead of showing the next day's. It is computed in the browser; there is
   no outside data feed and no key. Checked against the US Naval Observatory
-  within 2 minutes (Byrd-IT, #1540).
+  within 2 minutes (Byrd-IT, #1539).
