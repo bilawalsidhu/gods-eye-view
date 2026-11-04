@@ -1,8 +1,11 @@
 import * as Cesium from 'cesium';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
-import { LOD_LEVELS, CONTEXT_TOP_N } from './policy.js';
-import { addBillboard } from '../../data/billboardMirror.js';
+import { LOD_LEVELS, CONTEXT_TOP_N, GLOW_SPRITE_PX } from './policy.js';
+import { createIconSet, ICON_CULL_LIFT } from '../../data/iconSet.js';
+import { writeHoldSegment } from '../../data/iconSegment.js';
+import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
+import { iconAtlas } from '../../data/iconAtlas.js';
 
 export function createRendering({
   layerState,
@@ -20,18 +23,18 @@ export function createRendering({
    * when neither the (hysteresis-damped) LOD band nor the padded view
    * rectangle changed meaningfully.
    * @param {boolean} force - Rebuild even if LOD/view appear unchanged.
-   * @returns {boolean} True when a rebuild actually ran. Callers use this to
-   *   avoid a second horizon walk in the same tick: a rebuild already culls
-   *   its freshly-added sprites, an early-out does not.
+   * @returns {boolean} True when a rebuild actually ran.
    */
 
   function renderCurrentLod(force = false) {
-    if (
-      !layerState._dataSource ||
-      !layerState._fires.length ||
-      !layerState._viewer
-    )
+    if (!layerState._dataSource || !layerState._viewer) return false;
+    if (!layerState._fires.length) {
+      // A refresh that came back empty takes down what the last one drew, so
+      // no sprite or card is left on screen (and clickable) for a fire that is
+      // gone.
+      if (force) clearRendered();
       return false;
+    }
     const lodIndex = components.viewport.selectLodIndex(
       components.viewport.cameraHeight(),
     );
@@ -58,6 +61,16 @@ export function createRendering({
       renderCells(aggregateFires(lod, bounds), lod, bounds);
     }
     return true;
+  }
+
+  function clearRendered() {
+    layerState._dataSource.entities.removeAll();
+    layerState._icons?.clear();
+    layerState._pickIndexById.clear();
+    layerState._cellCount = 0;
+    layerState._labelCandidates = [];
+    components.cards.rebuildAmbientLabels();
+    components.selection.refreshContextRegistrations([]);
   }
 
   /**
@@ -132,9 +145,8 @@ export function createRendering({
   function renderCells(cells, lod, bounds) {
     ensureDetectionCollections();
     layerState._dataSource.entities.removeAll();
-    if (layerState._billboards) layerState._billboards.removeAll();
+    layerState._icons?.clear();
     layerState._pickIndexById.clear();
-    layerState._cullPositions.length = 0;
     layerState._cellCount = cells.length;
     const maxScore = Math.max(1, ...cells.map(components.model.heatScore));
 
@@ -189,7 +201,7 @@ export function createRendering({
 
   /**
    * Render individual detections (local/close bands) as pre-baked
-   * radial-glow sprite billboards sized by FRP, capped per viewport by
+   * radial-glow sprite icons sized by FRP, capped per viewport by
    * highest FRP, depth test disabled. The 3D Tiles mesh is never sampled
    * per point; instead, the CLOSE band (where terrain parallax is actually
    * visible) batch-warms the shared cached DEM floor for its rendered
@@ -205,10 +217,9 @@ export function createRendering({
   function renderDetections(lod, bounds) {
     ensureDetectionCollections();
     layerState._dataSource.entities.removeAll();
-    if (!layerState._billboards) return;
-    layerState._billboards.removeAll();
+    const set = layerState._icons;
+    if (!set) return;
     layerState._pickIndexById.clear();
-    layerState._cullPositions.length = 0;
 
     let candidates;
     if (bounds) {
@@ -231,41 +242,28 @@ export function createRendering({
     layerState._labelCandidates = [];
     layerState._labelLodDistance = lod.labelDistance;
 
+    // Fires keep their rows across rebuilds: a pan that keeps a fire in view
+    // rewrites nothing for it, and only rows that left the view go.
+    const keep = new Set();
     for (const fire of candidates) {
-      const coreSize = components.model.frpPixelSize(fire.frp);
       const position = components.model.firePosition(fire);
-      const cullPosition = components.model.fireCullPosition(fire);
       const pickId = `firms-${fire.index}`;
       layerState._pickIndexById.set(pickId, fire);
-      layerState._cullPositions.push(cullPosition);
-      const corePx = components.model.sizeBucket(coreSize);
-      addBillboard(layerState._billboards, {
-        id: pickId,
-        position,
-        image: components.model.glowSprite(
-          components.model.detectionColorStop(fire),
-          corePx,
-        ),
-        // The glow sprite's own size (see glowSprite), stated for Core's mirror.
-        width: corePx * 2,
-        height: corePx * 2,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      });
+      keep.add(pickId);
+      placeFireIcon(set, pickId, fire, position);
       // FRP-sorted walk: candidate order doubles as label priority.
       layerState._labelCandidates.push({
         position,
-        cullPosition,
+        cullPosition: components.model.fireCullPosition(fire),
         fire,
         cell: null,
       });
     }
+    for (let row = set.count - 1; row >= 0; row -= 1) {
+      const pickId = set.idAt(row);
+      if (!keep.has(pickId)) set.remove(pickId);
+    }
 
-    // Freshly-added sprites default to show=true; cull the far side now so a
-    // rebuild never flashes through-the-planet detections while the camera
-    // sits still (the moveEnd/preRender hooks only fire on camera motion).
-    refreshHorizonCulling();
     components.cards.rebuildAmbientLabels();
     components.selection.refreshContextRegistrations(
       candidates.slice(0, CONTEXT_TOP_N),
@@ -286,30 +284,83 @@ export function createRendering({
     }
   }
 
+  /**
+   * A fire's glow row: drawn depth-test-free at its anchor (a detection is
+   * never swallowed by terrain it sits on), with the far side of the globe
+   * culled on the GPU each frame. The Cesium globe is hidden here (Google 3D
+   * Tiles render the planet), so nothing writes far-side depth, and the cull
+   * is what keeps fires from shining through the planet. The anchor moves
+   * once, when its floor warms.
+   */
+  function placeFireIcon(set, pickId, fire, position) {
+    let row = set.row(pickId);
+    if (row < 0) {
+      row = set.add(pickId, {
+        layer: 'firms',
+        id: pickId,
+        fire: null,
+        position: null,
+      });
+      set.setFlag(row, ICON_CULL_LIFT, true);
+      set.setShown(row, true);
+    }
+    const meta = set.metaAt(row);
+    // A refresh reuses indices, so a kept row can hold a different detection.
+    if (meta.fire !== fire) {
+      meta.fire = fire;
+      const slot = iconAtlas.slot(
+        components.model.glowSprite(components.model.detectionColorStop(fire)),
+        GLOW_SPRITE_PX,
+      );
+      const corePx = components.model.sizeBucket(
+        components.model.frpPixelSize(fire.frp),
+      );
+      set.setImage(row, slot, slot);
+      set.setSize(row, corePx * 2, corePx * 2);
+    }
+    if (meta.position === position) return;
+    meta.position = position;
+    writeHoldSegment(set.segments, row, position, 0);
+    set.segmentWritten(row);
+  }
+
+  /** The scene the icon primitive was added to. */
+  let iconScene = null;
+
   function ensureDetectionCollections() {
-    if (!layerState._viewer || layerState._billboards) return;
-    layerState._billboards = new Cesium.BillboardCollection({
-      scene: layerState._viewer.scene,
-      blendOption: Cesium.BlendOption.TRANSLUCENT,
+    if (!layerState._viewer || layerState._icons) return;
+    const epoch = Cesium.JulianDate.now();
+    layerState._icons = createIconSet({ epoch });
+    layerState._iconPrimitive = new IconSetPrimitive({
+      set: layerState._icons,
+      renderTime: () => epoch,
+      requestRender: () => layerState._viewer?.scene?.requestRender?.(),
     });
-    layerState._billboards.show = layerState._enabled;
-    layerState._viewer.scene.primitives.add(layerState._billboards);
-    registerSpriteCollection('firms', layerState._billboards);
+    layerState._icons.show = layerState._enabled;
+    iconScene = layerState._viewer.scene;
+    iconScene.primitives.add(layerState._iconPrimitive);
+    registerSpriteCollection('firms', layerState._iconPrimitive);
     restoreSpriteOrder(layerState._viewer);
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, layerState._enabled);
   }
 
-  function removeDetectionCollections(viewer) {
-    const scene = viewer?.scene || layerState._viewer?.scene;
-    if (scene && !scene.isDestroyed?.()) {
-      try {
-        if (layerState._billboards)
-          scene.primitives.remove(layerState._billboards);
-      } catch {
-        /* already torn down */
-      }
+  /**
+   * Take the icons out of the scene they were added to, whichever viewer the
+   * caller tears down, and free them: a destroyed primitive left in a live
+   * scene throws on its next frame.
+   */
+  function removeDetectionCollections() {
+    const primitive = layerState._iconPrimitive;
+    try {
+      if (primitive && iconScene && !iconScene.isDestroyed?.())
+        iconScene.primitives.remove(primitive);
+    } catch {
+      /* already torn down */
     }
-    layerState._billboards = null;
+    if (primitive && !primitive.isDestroyed()) primitive.destroy();
+    iconScene = null;
+    layerState._iconPrimitive = null;
+    layerState._icons = null;
     overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
   }
@@ -331,22 +382,6 @@ export function createRendering({
     return horizonOccluder(camera);
   }
 
-  /**
-   * Hide detection sprites that sit beyond the ellipsoid horizon (see
-   * {@link applyHorizonCull}). Runs on the cadences that already exist in this
-   * layer — the throttled LOD preRender watcher (camera-moved only), camera
-   * moveEnd, and each detection rebuild — never as a new per-frame pass.
-   * No-ops in the `cells` bands, where the collection is empty.
-   */
-
-  function refreshHorizonCulling() {
-    if (!layerState._billboards || !layerState._billboards.length) return;
-    components.model.applyHorizonCull(
-      layerState._billboards,
-      fireHorizonOccluder(),
-      layerState._cullPositions,
-    );
-  }
   return {
     renderCurrentLod,
     aggregateFires,
@@ -355,6 +390,5 @@ export function createRendering({
     ensureDetectionCollections,
     removeDetectionCollections,
     fireHorizonOccluder,
-    refreshHorizonCulling,
   };
 }

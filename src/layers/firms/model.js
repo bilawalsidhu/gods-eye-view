@@ -9,11 +9,10 @@ import {
 import {
   VIEW_PADDING,
   DETECTION_COLOR_STOPS,
-  CULL_LIFT_THRESHOLD_M,
-  CULL_LIFT_M,
+  GLOW_SPRITE_PX,
   LABEL_MIN_SEP_PX,
 } from './policy.js';
-import { billboardState, setBillboard } from '../../data/billboardMirror.js';
+import { ICON_CULL_HEIGHT_M } from '../../data/iconSet.js';
 
 export function createModel({
   layerState,
@@ -161,18 +160,17 @@ export function createModel({
   /**
    * Build (and cache) a radial-glow sprite: hot near-white center fading
    * through the stop color to a transparent edge. The glow lives in the
-   * sprite itself because global bloom defaults OFF.
+   * sprite itself because global bloom defaults OFF. One raster per color
+   * (GLOW_SPRITE_PX); each fire draws it at its own size.
    * @param {{name: string, color: Cesium.Color}} stop - Color stop.
-   * @param {number} corePx - Bucketed core size in pixels.
    * @returns {string} PNG data URL.
    */
 
-  function glowSprite(stop, corePx) {
-    const key = `${stop.name}:${corePx}`;
-    const cached = layerState.glowSpriteCache.get(key);
+  function glowSprite(stop) {
+    const cached = layerState.glowSpriteCache.get(stop.name);
     if (cached) return cached;
 
-    const dimension = corePx * 2;
+    const dimension = GLOW_SPRITE_PX;
     const canvas = document.createElement('canvas');
     canvas.width = dimension;
     canvas.height = dimension;
@@ -200,7 +198,7 @@ export function createModel({
     context.fillRect(0, 0, dimension, dimension);
 
     const dataUrl = canvas.toDataURL('image/png');
-    layerState.glowSpriteCache.set(key, dataUrl);
+    layerState.glowSpriteCache.set(stop.name, dataUrl);
     return dataUrl;
   }
 
@@ -231,21 +229,25 @@ export function createModel({
   /**
    * Occlusion-test anchor for one detection. Returns the render position
    * outright for anchors comfortably above the ellipsoid (the common case) and
-   * a lazily-cached lifted point otherwise — see CULL_LIFT_THRESHOLD_M. This
-   * NEVER feeds rendering: the datum-correct anchor from {@link firePosition}
-   * is what the sprite and the card are drawn at.
+   * a lazily-cached lifted point otherwise, the point the icon set's GPU
+   * horizon test judges a fire row at (ICON_CULL_LIFT), so a card shows exactly
+   * when its sprite does. In negative-geoid coastal regions the floored anchor
+   * lands tens of metres BELOW the WGS84 ellipsoid, which the occluder judges
+   * beyond the horizon while true-surface neighbours stay visible. This NEVER
+   * feeds rendering: the datum-correct anchor from {@link firePosition} is what
+   * the sprite and the card are drawn at.
    * @param {Object} fire - Detection record.
    * @returns {Cesium.Cartesian3}
    */
 
   function fireCullPosition(fire) {
     const position = firePosition(fire);
-    if (fire.positionHeight >= CULL_LIFT_THRESHOLD_M) return position;
+    if (fire.positionHeight >= ICON_CULL_HEIGHT_M) return position;
     if (!fire.cullPosition) {
       fire.cullPosition = Cesium.Cartesian3.fromDegrees(
         fire.lon,
         fire.lat,
-        CULL_LIFT_M,
+        ICON_CULL_HEIGHT_M,
       );
     }
     return fire.cullPosition;
@@ -261,48 +263,7 @@ export function createModel({
    */
 
   function cellCullPosition(lon, lat) {
-    return Cesium.Cartesian3.fromDegrees(lon, lat, CULL_LIFT_M);
-  }
-
-  /**
-   * Horizon-cull a billboard collection against an ellipsoid occluder.
-   *
-   * The Cesium globe is hidden in this app (Google 3D Tiles render the planet),
-   * so nothing writes far-side depth — and these sprites are additionally
-   * always-on-top (`disableDepthTestDistance: INFINITY`, so a detection is never
-   * swallowed by terrain it sits on). Without an explicit occluder pass, fires on
-   * the opposite side of the Earth shine through the planet at tilted mid-altitude
-   * views. Same pattern as the flights/CCTV layers' `EllipsoidalOccluder` passes.
-   *
-   * Pure and allocation-free: reads the billboard's mirrored position and show,
-   * and writes `show` only when it actually flips (assigning `show` dirties the
-   * collection's vertex buffer). Accepts any `{length, get(i)}` shape so it is unit-testable without
-   * a WebGL scene.
-   *
-   * @param {?{length: number, get: function(number): (Object|undefined)}} billboards
-   *   Billboard collection (or collection-shaped stub).
-   * @param {?{isPointVisible: function(Object): boolean}} occluder Horizon occluder.
-   * @param {?Array<Cesium.Cartesian3>} [cullPositions=null] Index-aligned lifted
-   *   occlusion-test anchors (see {@link fireCullPosition}); falls back to the
-   *   billboard's own render position wherever an entry is absent.
-   * @returns {number} Count of billboards left visible (0 when nothing to test).
-   */
-
-  function applyHorizonCull(billboards, occluder, cullPositions = null) {
-    if (!billboards || typeof billboards.get !== 'function') return 0;
-    if (typeof occluder?.isPointVisible !== 'function') return 0;
-    const total = Number(billboards.length) || 0;
-    let visibleCount = 0;
-    for (let i = 0; i < total; i += 1) {
-      const billboard = billboards.get(i);
-      if (!billboard) continue;
-      const pushed = billboardState(billboard);
-      const point = (cullPositions && cullPositions[i]) || pushed.position;
-      const visible = occluder.isPointVisible(point) === true;
-      if (pushed.show !== visible) setBillboard(billboard, 'show', visible);
-      if (visible) visibleCount += 1;
-    }
-    return visibleCount;
+    return Cesium.Cartesian3.fromDegrees(lon, lat, ICON_CULL_HEIGHT_M);
   }
 
   /**
@@ -589,7 +550,6 @@ export function createModel({
     firePosition,
     fireCullPosition,
     cellCullPosition,
-    applyHorizonCull,
     screenSeparated,
     buildSelectedFireCard,
     buildFireCard,

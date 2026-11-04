@@ -115,7 +115,7 @@ test('flights, AIS, and FIRMS enable paths are wired through the shared sprite r
   assert.match(firmsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('firms', viewer\)/);
   assert.match(
     createFirmsRendering.toString(),
-    /registerSpriteCollection\('firms', layerState\._billboards\);\s*restoreSpriteOrder\(layerState\._viewer\);/,
+    /registerSpriteCollection\('firms', layerState\._iconPrimitive\);\s*restoreSpriteOrder\(layerState\._viewer\);/,
     'lazy FIRMS registration must restore order immediately',
   );
 });

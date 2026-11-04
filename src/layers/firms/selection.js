@@ -88,8 +88,8 @@ export function createSelection({
 
   /**
    * Resolve a scene pick to one of this layer's fire records, or null.
-   * BillboardCollection picks surface our id either on picked.primitive.id
-   * or directly on picked.id depending on the CesiumJS pick path.
+   * Icon-set picks carry our row id on picked.id and on picked.primitive.id;
+   * either is accepted.
    * @param {*} picked - Result of scene.pick().
    * @returns {?Object} Fire record.
    */

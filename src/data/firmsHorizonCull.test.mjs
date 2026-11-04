@@ -1,11 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import {
-  applyHorizonCull,
-  createFirmsHeatmapLayer,
-  fireCullPosition,
-} from './firmsHeatmap.js';
+import { createFirmsHeatmapLayer, fireCullPosition } from './firmsHeatmap.js';
 import { FIRE_ANCHOR_LIFT_M } from './fireAnchors.js';
 import { FIRMS_AMBIENT_COHORT_LIMIT, FIRMS_OVERLAY_SOURCE_ID } from './firmsLabels.js';
 import {
@@ -15,7 +11,8 @@ import {
 } from './groundFloor.js';
 import { unregisterSpriteCollection } from './spriteOrder.js';
 import { isOverlayPointVisible, normalizeOverlayEntry } from '../overlays/worldOverlay.js';
-import { mirrorBillboard } from './billboardMirror.js';
+import { createIconSet, ICON_CULL_LIFT } from './iconSet.js';
+import { writeHoldSegment } from './iconSegment.js';
 
 const AUSTIN = { lon: -97.7, lat: 30.2 };
 /** Antipode of Austin — as far behind the limb as a point on Earth can be. */
@@ -29,24 +26,26 @@ const REPRO_HEIGHT_M = 1_500_000;
  * at −22 m but visible at +5/+12 m. Measured against Cesium's own occluder.
  */
 const LIMB_DLON = 41.87;
+/** Farther east, where 11 m reads hidden and 12 m visible from the same camera. */
+const LIFT_BAND_DLON = 41.9452;
 
 /**
- * Billboard stub that records every write to `show` so the tests can assert
- * the pass does not dirty the collection's vertex buffer needlessly.
+ * Whether the icon set's GPU pass draws `row` from `occluder`'s camera: the
+ * shader's horizon test on the row's cull point (its CPU twin).
  */
-function billboard(position, show = true) {
-  return mirrorBillboard({
-    position,
-    _show: show,
-    writes: 0,
-    get show() { return this._show; },
-    set show(value) { this._show = value; this.writes += 1; },
-  });
+function gpuShows(set, row, occluder) {
+  const position = set.position(row, 0, new Cesium.Cartesian3());
+  return set.shown(row) && occluder.isPointVisible(set.cullPoint(row, position));
 }
 
-/** Cesium BillboardCollection-shaped stub. */
-function collection(items) {
-  return { length: items.length, get: (i) => items[i] };
+/** A fire-shaped row (shown, CULL_LIFT) held at `position`. */
+function fireRow(set, id, position) {
+  const row = set.add(id, { layer: 'firms', id });
+  set.setFlag(row, ICON_CULL_LIFT, true);
+  set.setShown(row, true);
+  writeHoldSegment(set.segments, row, position, 0);
+  set.segmentWritten(row);
+  return row;
 }
 
 /** Horizon occluder for a camera directly above Austin at `heightM`. */
@@ -58,92 +57,71 @@ function occluderOverAustin(heightM) {
 }
 
 // ---------------------------------------------------------------------------
-// The pure cull predicate
+// The GPU horizon cull a fire row gets
 // ---------------------------------------------------------------------------
 
-test('applyHorizonCull: far-side fires are hidden, near-side fires stay visible', () => {
+test('icon cull: far-side fires are hidden, near-side fires stay visible', () => {
   const occluder = occluderOverAustin(REPRO_HEIGHT_M);
-  const near = billboard(Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, 0));
-  const nearby = billboard(Cesium.Cartesian3.fromDegrees(AUSTIN.lon + 6, AUSTIN.lat + 4, 0));
-  const far = billboard(Cesium.Cartesian3.fromDegrees(ANTIPODE.lon, ANTIPODE.lat, 0));
-  const otherSide = billboard(Cesium.Cartesian3.fromDegrees(TOKYO.lon, TOKYO.lat, 0));
+  const set = createIconSet();
+  const at = (p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0);
+  const near = fireRow(set, 'near', at(AUSTIN));
+  const nearby = fireRow(set, 'nearby', at({ lon: AUSTIN.lon + 6, lat: AUSTIN.lat + 4 }));
+  const far = fireRow(set, 'far', at(ANTIPODE));
+  const otherSide = fireRow(set, 'tokyo', at(TOKYO));
 
-  const visible = applyHorizonCull(collection([near, nearby, far, otherSide]), occluder);
-
-  assert.equal(near.show, true, 'the fire under the camera renders');
-  assert.equal(nearby.show, true, 'a fire well inside the horizon renders');
-  assert.equal(far.show, false, 'the antipodal fire must not shine through the planet');
-  assert.equal(otherSide.show, false, 'Tokyo is beyond the limb from Austin at 1.5 Mm');
-  assert.equal(visible, 2, 'returns the surviving count');
+  assert.equal(gpuShows(set, near, occluder), true, 'the fire under the camera renders');
+  assert.equal(gpuShows(set, nearby, occluder), true, 'a fire well inside the horizon renders');
+  assert.equal(gpuShows(set, far, occluder), false, 'the antipodal fire must not shine through the planet');
+  assert.equal(gpuShows(set, otherSide, occluder), false, 'Tokyo is beyond the limb from Austin at 1.5 Mm');
 });
 
-test('applyHorizonCull: raising the camera reveals fires the low camera hid', () => {
-  const paris = () => billboard(Cesium.Cartesian3.fromDegrees(2.35, 48.86, 0));
-
-  const low = paris();
-  applyHorizonCull(collection([low]), occluderOverAustin(REPRO_HEIGHT_M));
-  assert.equal(low.show, false, 'Paris is over the horizon from a 1.5 Mm Austin camera');
-
-  const high = paris();
-  applyHorizonCull(collection([high]), occluderOverAustin(35_000_000));
-  assert.equal(high.show, true, 'from geostationary height the same fire is in view');
+test('icon cull: raising the camera reveals fires the low camera hid', () => {
+  const set = createIconSet();
+  const paris = fireRow(set, 'paris', Cesium.Cartesian3.fromDegrees(2.35, 48.86, 0));
+  assert.equal(gpuShows(set, paris, occluderOverAustin(REPRO_HEIGHT_M)), false);
+  assert.equal(gpuShows(set, paris, occluderOverAustin(35_000_000)), true, 'in view from geostationary height');
 });
 
-test('applyHorizonCull: a hidden fire is restored when it swings back into view', () => {
-  const revealed = billboard(Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, 0), false);
-  applyHorizonCull(collection([revealed]), occluderOverAustin(REPRO_HEIGHT_M));
-  assert.equal(revealed.show, true, 'the cull un-hides as well as hides');
-  assert.equal(revealed.writes, 1);
-});
-
-test('applyHorizonCull: only flipped billboards are written (vertex-buffer churn)', () => {
+test('icon cull: a sub-ellipsoid anchor is judged lifted, a far-side one still culls', () => {
   const occluder = occluderOverAustin(REPRO_HEIGHT_M);
-  const stays = billboard(Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, 0), true);
-  const flips = billboard(Cesium.Cartesian3.fromDegrees(ANTIPODE.lon, ANTIPODE.lat, 0), true);
+  const set = createIconSet();
+  const sunken = fireRow(set, 'sunken', Cesium.Cartesian3.fromDegrees(AUSTIN.lon + LIMB_DLON, AUSTIN.lat, -22));
+  assert.equal(gpuShows(set, sunken, occluder), true, 'the lifted cull point keeps the near-limb fire on screen');
+  set.setFlag(sunken, ICON_CULL_LIFT, false);
+  assert.equal(gpuShows(set, sunken, occluder), false, 'baseline: the raw anchor false-hides at the limb');
 
-  applyHorizonCull(collection([stays, flips]), occluder);
-  applyHorizonCull(collection([stays, flips]), occluder);
-
-  assert.equal(stays.writes, 0, 'an already-visible billboard is never re-assigned');
-  assert.equal(flips.writes, 1, 'a hidden billboard is written once, not once per pass');
+  const far = fireRow(set, 'far', Cesium.Cartesian3.fromDegrees(ANTIPODE.lon, ANTIPODE.lat, -22));
+  assert.equal(gpuShows(set, far, occluder), false, '12 m of lift must not defeat the actual horizon cull');
 });
 
-test('applyHorizonCull: missing collection/occluder/holes are no-ops, not throws', () => {
-  assert.equal(applyHorizonCull(null, occluderOverAustin(REPRO_HEIGHT_M)), 0);
-  assert.equal(applyHorizonCull({ length: 3 }, occluderOverAustin(REPRO_HEIGHT_M)), 0, 'non-collection shape');
-  const item = billboard(Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, 0));
-  assert.equal(applyHorizonCull(collection([item]), null), 0, 'no occluder → leave the layer alone');
-  assert.equal(applyHorizonCull(collection([item]), {}), 0, 'occluder without isPointVisible');
-  assert.equal(item.writes, 0, 'a skipped pass must not touch show');
-  assert.equal(
-    applyHorizonCull(collection([undefined, item]), occluderOverAustin(REPRO_HEIGHT_M)),
-    1,
-    'sparse slots are skipped, surviving neighbours still counted',
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Sub-ellipsoid anchors: datum-correct render point, lifted CULL point
-// ---------------------------------------------------------------------------
-
-test('applyHorizonCull: an index-aligned cull position overrides the render anchor', () => {
+test('fireCullPosition: a card is judged where its sprite is', () => {
   const occluder = occluderOverAustin(REPRO_HEIGHT_M);
-  const sunken = billboard(Cesium.Cartesian3.fromDegrees(AUSTIN.lon + LIMB_DLON, AUSTIN.lat, -22));
-  const lifted = Cesium.Cartesian3.fromDegrees(AUSTIN.lon + LIMB_DLON, AUSTIN.lat, 12);
-
-  applyHorizonCull(collection([sunken]), occluder);
-  assert.equal(sunken.show, false, 'baseline: the raw sub-ellipsoid anchor false-hides at the limb');
-
-  applyHorizonCull(collection([sunken]), occluder, [lifted]);
-  assert.equal(sunken.show, true, 'the lifted cull point keeps the near-limb fire on screen');
-});
-
-test('applyHorizonCull: a lifted cull point does NOT resurrect a genuinely far-side fire', () => {
-  const occluder = occluderOverAustin(REPRO_HEIGHT_M);
-  const far = billboard(Cesium.Cartesian3.fromDegrees(ANTIPODE.lon, ANTIPODE.lat, -22));
-  const lifted = Cesium.Cartesian3.fromDegrees(ANTIPODE.lon, ANTIPODE.lat, 12);
-  applyHorizonCull(collection([far]), occluder, [lifted]);
-  assert.equal(far.show, false, '12 m of lift must not defeat the actual horizon cull');
+  const set = createIconSet();
+  setMeshFloorPreferred(true);
+  try {
+    // Sunk, an 11 m anchor (floor 6 + lift), and well above: each card must
+    // agree with the GPU test on its own row, at limb points where they can.
+    for (const [i, floor] of [-27, 6, 900].entries()) {
+      _clearMeshFloorCellsForTest(); // a reported cell latches its first floor
+      for (const dLon of [LIMB_DLON, LIFT_BAND_DLON]) {
+        const lat = AUSTIN.lat;
+        const lon = AUSTIN.lon + dLon;
+        reportMeshFloorCell(lat, lon, floor);
+        const fire = { index: i, lat, lon, frp: 10, position: null };
+        const cull = fireCullPosition(fire);
+        assert.equal(fire.positionHeight, floor + FIRE_ANCHOR_LIFT_M);
+        const row = fireRow(set, `${floor}:${dLon}`, fire.position);
+        assert.equal(
+          occluder.isPointVisible(cull),
+          gpuShows(set, row, occluder),
+          `floor ${floor} m at +${dLon}°`,
+        );
+      }
+    }
+  } finally {
+    _clearMeshFloorCellsForTest();
+    setMeshFloorPreferred(false);
+  }
 });
 
 test('fireCullPosition: negative-geoid anchor renders at the datum but culls lifted', () => {
@@ -305,17 +283,21 @@ class MockEvent {
   emit() { for (const listener of [...this.listeners]) listener(); }
 }
 
-/** Canvas stub good enough for the pre-baked glow sprites. */
+/**
+ * Canvas stub good enough for the pre-baked glow sprites. Its data URL names
+ * the gradient's colours, so each colour stop gets its own atlas slot.
+ */
 function canvasStub() {
+  const stops = [];
   return {
     width: 0,
     height: 0,
     getContext: () => ({
-      createRadialGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop: (offset, color) => stops.push(color) }),
       fillStyle: null,
       fillRect() {},
     }),
-    toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=',
+    toDataURL: () => `data:image/png;base64,iVBORw0KGgo=#${stops.join('|')}`,
   };
 }
 
@@ -336,9 +318,8 @@ function rawFire(lat, lon, frp) {
 }
 
 /**
- * Boots the REAL layer against a headless viewer stub with a REAL
- * Cesium.BillboardCollection, so the production hooks (not just the pure
- * predicate) are what the assertions exercise.
+ * Boots the REAL layer against a headless viewer stub; what the GPU would draw
+ * is read off the layer's real icon set (`gpuShows`) from the stub camera.
  */
 function createHarness(rawFires) {
   const originalFetch = globalThis.fetch;
@@ -384,7 +365,13 @@ function createHarness(rawFires) {
       preRender,
       primitives: {
         add: (value) => { primitives.push(value); return value; },
-        remove: () => {},
+        remove: (value) => {
+          const at = primitives.indexOf(value);
+          if (at < 0) return false;
+          primitives.splice(at, 1);
+          value.destroy();
+          return true;
+        },
         contains: () => false,
       },
       frameState: { mode: Cesium.SceneMode.SCENE3D, mapProjection: new Cesium.GeographicProjection() },
@@ -408,15 +395,19 @@ function createHarness(rawFires) {
     viewer,
     preRender,
     moveEnd,
-    /** The real BillboardCollection the layer created. */
-    billboards: () => primitives[0],
+    /** The icon set the layer draws its detections from. */
+    icons: () => primitives[0].set,
+    /** Primitives currently in the stub scene. */
+    primitives,
     /** Latest entry list published to the overlay host. */
     latestEntries: () => entryCalls[entryCalls.length - 1] || [],
-    /** `show` flags keyed by billboard pick id. */
+    /** Whether the GPU draws each row from the current camera, by pick id. */
     showById() {
-      const bb = primitives[0];
+      const set = primitives[0].set;
+      const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, viewer.camera.positionWC);
       const out = new Map();
-      for (let i = 0; i < bb.length; i += 1) out.set(bb.get(i).id, bb.get(i).show);
+      for (let row = 0; row < set.count; row += 1)
+        out.set(set.idAt(row), set.show && gpuShows(set, row, occluder));
       return out;
     },
     moveCameraTo(lon, lat, height = REPRO_HEIGHT_M) {
@@ -434,7 +425,7 @@ function createHarness(rawFires) {
   };
 }
 
-test('layer: a detection rebuild culls its own freshly-added sprites', async () => {
+test('layer: far-side detections are culled from the first frame', async () => {
   const harness = createHarness([
     rawFire(AUSTIN.lat, AUSTIN.lon, 120),
     rawFire(ANTIPODE.lat, ANTIPODE.lon, 900),
@@ -454,7 +445,7 @@ test('layer: a detection rebuild culls its own freshly-added sprites', async () 
   }
 });
 
-test('layer: camera moveEnd re-culls without a rebuild', async () => {
+test('layer: the GPU cull follows the camera with no CPU show pass', async () => {
   const harness = createHarness([
     rawFire(AUSTIN.lat, AUSTIN.lon, 120),
     rawFire(TOKYO.lat, TOKYO.lon, 800),
@@ -467,6 +458,9 @@ test('layer: camera moveEnd re-culls without a rebuild', async () => {
     harness.moveCameraTo(TOKYO.lon, TOKYO.lat);
     harness.moveEnd.emit();
 
+    const set = harness.icons();
+    for (let row = 0; row < set.count; row += 1)
+      assert.equal(set.shown(row), true, `${set.idAt(row)} keeps its row shown; the GPU decides`);
     const show = harness.showById();
     assert.equal(show.get('firms-1'), true, 'Tokyo becomes visible once the camera is over it');
     assert.equal(show.get('firms-0'), false, 'Austin drops behind the limb');
@@ -475,32 +469,33 @@ test('layer: camera moveEnd re-culls without a rebuild', async () => {
   }
 });
 
-test('layer: the throttled preRender watcher re-culls on a camera move', async () => {
-  const harness = createHarness([
-    rawFire(AUSTIN.lat, AUSTIN.lon, 120),
-    rawFire(TOKYO.lat, TOKYO.lon, 800),
-  ]);
+test('layer: a refresh keeps rows and restyles one whose index now holds another fire', async () => {
+  const fires = [rawFire(AUSTIN.lat, AUSTIN.lon, 400), rawFire(TOKYO.lat, TOKYO.lon, 800)];
+  const harness = createHarness(fires);
   try {
     harness.layer.init(harness.viewer);
     await harness.layer.enable(harness.viewer);
-    harness.moveCameraTo(TOKYO.lon, TOKYO.lat);
-    // The watcher is throttled to LOD_CHECK_MS (650 ms) against
-    // performance.now(), whose value at this point depends on process
-    // start-up — so emit, wait out the full throttle window, and emit again.
-    // Whichever tick passes the gate, one of them must run the pass.
-    harness.preRender.emit();
-    await new Promise((resolve) => { setTimeout(resolve, 700); });
-    harness.preRender.emit();
+    const set = harness.icons();
+    const austin = set.row('firms-0');
+    const handle = set.handleAt(austin);
+    const before = set.width(austin);
+    const beforeImage = set.imageFar(austin);
 
-    const show = harness.showById();
-    assert.equal(show.get('firms-1'), true, 'Tokyo revealed by the preRender pass');
-    assert.equal(show.get('firms-0'), false, 'Austin culled by the preRender pass');
+    fires[0] = rawFire(AUSTIN.lat + 0.5, AUSTIN.lon, 1);
+    await harness.layer.update();
+
+    const row = set.row('firms-0');
+    assert.equal(set.handleAt(row), handle, 'the row (and its pick id) survives the rebuild');
+    assert.ok(set.width(row) < before, `restyled for the weaker fire: ${set.width(row)} < ${before}`);
+    assert.notEqual(set.imageFar(row), beforeImage, 'a red glow becomes a yellow one');
+    const carto = Cesium.Cartographic.fromCartesian(set.position(row, 0, new Cesium.Cartesian3()));
+    assert.ok(Math.abs(Cesium.Math.toDegrees(carto.latitude) - (AUSTIN.lat + 0.5)) < 1e-6, 'moved to the new fire');
   } finally {
     harness.cleanup();
   }
 });
 
-test('layer: re-enabling after the camera moved does not expose stale far-side sprites', async () => {
+test('layer: re-enabling after the camera moved shows the icons, culled from the new camera', async () => {
   const harness = createHarness([
     rawFire(AUSTIN.lat, AUSTIN.lon, 120),
     rawFire(TOKYO.lat, TOKYO.lon, 800),
@@ -517,15 +512,56 @@ test('layer: re-enabling after the camera moved does not expose stale far-side s
     await harness.layer.enable(harness.viewer);
 
     // Assert with NO camera event fired and NO refetch (fires are already
-    // loaded, so enable() does not reload): the enable path itself must have
-    // re-culled before the collection went visible.
+    // loaded, so enable() does not reload): the GPU culls from the current
+    // camera on the first frame.
     const show = harness.showById();
-    assert.equal(harness.billboards().show, true, 'the collection is visible again');
+    assert.equal(harness.icons().show, true, 'the icon set is visible again');
     assert.equal(show.get('firms-1'), true, 'the Tokyo fire is revealed at enable time');
     assert.equal(show.get('firms-0'), false, 'the Austin fire is NOT left shining through the planet');
   } finally {
     harness.cleanup();
   }
+});
+
+test('layer: a refresh drops rows whose fires left, and an empty one drops them all', async () => {
+  const fires = [
+    rawFire(AUSTIN.lat, AUSTIN.lon, 120),
+    rawFire(AUSTIN.lat + 1, AUSTIN.lon, 300),
+    rawFire(AUSTIN.lat + 2, AUSTIN.lon, 200),
+  ];
+  const harness = createHarness(fires);
+  try {
+    harness.layer.init(harness.viewer);
+    await harness.layer.enable(harness.viewer);
+    const set = harness.icons();
+    assert.equal(set.count, 3);
+
+    // Index 0 still holds a fire; 1 and 2 are gone, so their rows swap out.
+    fires.splice(1, 2);
+    await harness.layer.update();
+    assert.deepEqual(
+      Array.from({ length: set.count }, (_, row) => set.idAt(row)),
+      ['firms-0'],
+    );
+    assert.equal(set.metaAt(set.row('firms-0')).fire.lat, AUSTIN.lat, 'the kept row holds its own fire');
+
+    fires.length = 0;
+    await harness.layer.update();
+    assert.equal(set.count, 0, 'an empty refresh leaves no sprite behind');
+    assert.equal(harness.latestEntries().length, 0, 'nor any card');
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('layer: destroy takes the icons out of the scene', async () => {
+  const harness = createHarness([rawFire(AUSTIN.lat, AUSTIN.lon, 120)]);
+  harness.layer.init(harness.viewer);
+  await harness.layer.enable(harness.viewer);
+  const primitive = harness.primitives[0];
+  harness.cleanup();
+  assert.equal(harness.primitives.includes(primitive), false);
+  assert.equal(primitive.isDestroyed(), true);
 });
 
 test('layer: a near-limb fire on a sub-ellipsoid anchor is not culled by its datum', async () => {
@@ -543,14 +579,14 @@ test('layer: a near-limb fire on a sub-ellipsoid anchor is not culled by its dat
     harness.layer.init(harness.viewer);
     await harness.layer.enable(harness.viewer);
 
-    const bb = harness.billboards();
-    const sunken = bb.get(1);
-    const carto = Cesium.Cartographic.fromCartesian(sunken.position);
+    const set = harness.icons();
+    const sunken = set.row('firms-1');
+    const carto = Cesium.Cartographic.fromCartesian(set.position(sunken, 0, new Cesium.Cartesian3()));
     assert.ok(
       Math.abs(carto.height - (-27 + FIRE_ANCHOR_LIFT_M)) < 0.5,
       `the sprite still RENDERS at the datum-correct anchor, got ${carto.height}`,
     );
-    assert.equal(sunken.show, true, 'the near-limb fire stays on screen (lifted cull anchor)');
+    assert.equal(harness.showById().get('firms-1'), true, 'the near-limb fire stays on screen (lifted cull anchor)');
     assert.equal(harness.showById().get('firms-0'), true, 'the camera-nadir fire is unaffected');
   } finally {
     harness.cleanup();
