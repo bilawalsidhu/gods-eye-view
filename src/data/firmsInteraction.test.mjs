@@ -15,6 +15,7 @@ import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fakeInput } from '../input/testDoubles.mjs';
 
 const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
@@ -59,7 +60,6 @@ function harness({
   };
 
   const published = [];
-  let handler = null;
   const layer = createFirmsHeatmapLayer({
     ...(feed ? { feed } : {}),
     id: 'firms-test',
@@ -69,10 +69,6 @@ function harness({
       setVisible() {},
       clearSource() {},
       hitTest: () => (cardHit ? { sourceId: 'firms', entryId: cardHit } : null),
-    },
-    screenSpaceEventHandlerFactory: () => {
-      handler = { click: null, setInputAction(cb) { this.click = cb; }, destroy() {} };
-      return handler;
     },
   });
 
@@ -85,6 +81,7 @@ function harness({
     },
     dataSources: { add() {}, remove() {} },
   };
+  const input = fakeInput(viewer);
   // The LOD rebuild (and with it the context-registration sweep) is inert
   // without a data source, so tests that drive a real refresh need one.
   if (withDataSource) layer.init(viewer);
@@ -100,7 +97,7 @@ function harness({
     requests,
     published,
     fires,
-    click: () => handler.click({ position: { x: 400, y: 300 } }),
+    click: () => input.click({ x: 400, y: 300 }),
     cleanup() {
       Cesium.SceneTransforms.worldToWindowCoordinates = priorProjection;
       if (hadWindow) globalThis.window = priorWindow;

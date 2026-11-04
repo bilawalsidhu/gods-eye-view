@@ -18,9 +18,9 @@
  *   exceptions inside each.
  * - Cesium's Viewer binds its OWN left click (select the entity under the
  *   pointer) and double click (track it) on the viewer's handler, outside every
- *   layer and therefore outside the shared claim. Both are borrowed for the
+ *   layer and therefore outside the shared claim. Both are suppressed for the
  *   session and given back on the way out, and `destroy()` gives back every
- *   listener, the Cesium handler, the preview data source and the window
+ *   listener, the pointer subscriptions, the preview data source and the window
  *   handle, so the tool can be turned off or the shell disposed without leaving
  *   anything behind.
  *
@@ -37,6 +37,8 @@ import {
   pointerOwner,
   releasePointer,
 } from '../data/inputOwnership.js';
+import { inputFor } from '../input/dispatcher.js';
+import { sensorPickPosition } from '../input/sensorPick.js';
 import { pointerOwnerName } from '../data/pointerOwnerNames.js';
 import {
   DRAW_SHAPES,
@@ -88,10 +90,8 @@ export function initDrawTool({
   let shape = 'area';
   let color = 'primary';
   let hint = '';
-  let handler = null;
+  let unbindScene = null;
   let lease = null;
-  let savedDoubleClick = null;
-  let savedSingleClick = null;
   let cursor = null; // last mouse position on the canvas, for the rubber band
   // Bumped by anything that supersedes an in-flight finish: cancelling, clearing
   // the board, leaving draw mode, teardown. An `annotate()` that resolves after
@@ -228,7 +228,9 @@ export function initDrawTool({
   };
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
-    const p = worldAt(event.endPosition);
+    // The click's own position is sensor-corrected; the rubber band must
+    // follow the same point the click would place.
+    const p = worldAt(sensorPickPosition(viewer.scene, event.endPosition));
     cursor = p
       ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0)
       : null;
@@ -384,50 +386,29 @@ export function initDrawTool({
   }
 
   function bindSceneHandler() {
-    if (handler) return;
-    handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction(onClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    handler.setInputAction(onMove, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-    handler.setInputAction(() => {
-      void finish();
-    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-    // Cesium's Viewer binds BOTH stock click actions on its own handler: the
-    // single click picks an entity into `viewer.selectedEntity`, the double
-    // click tracks it. Neither goes through a layer, so neither can be fixed by
-    // the shared pointer claim — they have to be borrowed outright for the
-    // session and given back on the way out. Borrowing the single click is what
-    // stops a vertex placed on a contact from also selecting it.
-    const stock = viewer.screenSpaceEventHandler;
-    savedSingleClick =
-      stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null;
-    savedDoubleClick =
-      stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
-      null;
-    stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    if (unbindScene) return;
+    const input = inputFor(viewer);
+    const held = { lease: () => lease };
+    const offs = [
+      input.onPointer('click', onClick, held),
+      input.onPointer('move', onMove, held),
+      input.onPointer('dblclick', () => void finish(), held),
+      // Cesium's Viewer binds BOTH stock click actions on its own handler: the
+      // single click picks an entity into `viewer.selectedEntity`, the double
+      // click tracks it. Neither goes through a layer, so neither yields to the
+      // shared pointer claim — they are suppressed for the session and given
+      // back on the way out. Suppressing the single click is what stops a
+      // vertex placed on a contact from also selecting it.
+      input.suppressStockClicks(),
+    ];
+    unbindScene = () => offs.forEach((off) => off());
     listen(document, 'keydown', onKey, true);
   }
 
   function releaseSceneHandler() {
-    if (handler) {
-      handler.destroy();
-      handler = null;
-    }
-    if (savedSingleClick) {
-      viewer.screenSpaceEventHandler.setInputAction(
-        savedSingleClick,
-        Cesium.ScreenSpaceEventType.LEFT_CLICK,
-      );
-      savedSingleClick = null;
-    }
-    if (savedDoubleClick) {
-      viewer.screenSpaceEventHandler.setInputAction(
-        savedDoubleClick,
-        Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-      );
-      savedDoubleClick = null;
-    }
-    // Drop the keydown listener bound alongside this handler.
+    unbindScene?.();
+    unbindScene = null;
+    // Drop the keydown listener bound alongside the pointer subscriptions.
     for (let i = domListeners.length - 1; i >= 0; i -= 1) {
       const [target, type, listener, options] = domListeners[i];
       if (listener !== onKey) continue;
@@ -523,7 +504,7 @@ export function initDrawTool({
       return {
         active,
         destroyed,
-        sceneHandler: Boolean(handler),
+        sceneHandler: Boolean(unbindScene),
         domListeners: domListeners.length,
         previewDataSources: countPreviewDataSources(viewer),
         previewEntities: destroyed ? 0 : dataSource.entities.values.length,

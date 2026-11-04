@@ -2,8 +2,8 @@
  * Box selection for the Recent Imagery layer: press on the world, drag, and
  * release to hand the layer a degrees box. Follows the draw tool's ownership
  * rules — the pointer is claimed for the session, the viewer's own click
- * actions are borrowed and given back, and `destroy()` returns everything —
- * and freezes the camera only while a drag is in progress.
+ * actions are suppressed and given back, and `destroy()` returns everything —
+ * and holds the camera only while a drag is in progress.
  */
 import * as Cesium from 'cesium';
 import { pickWorldFromScreen } from '../annotations/annotationResolver.js';
@@ -12,6 +12,7 @@ import {
   pointerOwner,
   releasePointer,
 } from '../data/inputOwnership.js';
+import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 import { validateBox } from '../layers/recentImagery/model.js';
 import { msg } from '../i18n/index.js';
 
@@ -20,7 +21,7 @@ export const IMAGERY_BOX_POINTER_OWNER = 'recent-imagery-box';
 
 /**
  * Wire the box tool.
- * @param {{ viewer: object, onBox: (box: object) => void, onCancel?: (reason: string, message?: string, box?: object) => void, onActive?: (active: boolean) => void, onEscape?: () => boolean, cesium?: object, pickWorld?: Function, documentRef?: object }} deps
+ * @param {{ viewer: object, onBox: (box: object) => void, onCancel?: (reason: string, message?: string, box?: object) => void, onActive?: (active: boolean) => void, onEscape?: () => boolean, cesium?: object, inputFor?: Function, pickWorld?: Function, documentRef?: object }} deps
  *   `onEscape` runs before the tool cancels on Escape; returning `true` claims
  *   the key (it is still consumed) and leaves the tool armed.
  * @returns {{ start: () => boolean, cancel: (reason?: string) => void, isActive: () => boolean, destroy: () => Promise<void> } | null}
@@ -32,6 +33,7 @@ export function initImageryBoxTool({
   onActive,
   onEscape,
   cesium = Cesium,
+  inputFor = defaultInputFor,
   pickWorld = pickWorldFromScreen,
   documentRef = globalThis.document,
 } = {}) {
@@ -42,11 +44,9 @@ export function initImageryBoxTool({
   /** Drag corners in degrees; `anchor` is null while no drag is live. */
   let anchor = null;
   let corner = null;
-  let handler = null;
+  let unbindScene = null;
   let lease = null;
-  let savedSingleClick = null;
-  let savedDoubleClick = null;
-  let savedCameraInputs = null;
+  let releaseCamera = null;
 
   const dragBox = () =>
     anchor && {
@@ -125,19 +125,13 @@ export function initImageryBoxTool({
     const lat = Number(point?.lat);
     return Number.isFinite(lon) && Number.isFinite(lat) ? { lon, lat } : null;
   };
-  const cameraController = () => viewer.scene.screenSpaceCameraController;
 
   function freezeCamera() {
-    const controller = cameraController();
-    if (!controller || savedCameraInputs !== null) return;
-    savedCameraInputs = controller.enableInputs;
-    controller.enableInputs = false;
+    releaseCamera ??= inputFor(viewer).suspendCamera('recent-imagery-box');
   }
   function thawCamera() {
-    const controller = cameraController();
-    if (controller && savedCameraInputs !== null)
-      controller.enableInputs = savedCameraInputs;
-    savedCameraInputs = null;
+    releaseCamera?.();
+    releaseCamera = null;
   }
 
   function endDrag() {
@@ -190,45 +184,23 @@ export function initImageryBoxTool({
   };
 
   function bindScene() {
-    if (handler) return;
-    handler = new cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction(onDown, cesium.ScreenSpaceEventType.LEFT_DOWN);
-    handler.setInputAction(onMove, cesium.ScreenSpaceEventType.MOUSE_MOVE);
-    handler.setInputAction(onUp, cesium.ScreenSpaceEventType.LEFT_UP);
-    const stock = viewer.screenSpaceEventHandler;
-    if (stock) {
-      savedSingleClick =
-        stock.getInputAction(cesium.ScreenSpaceEventType.LEFT_CLICK) || null;
-      savedDoubleClick =
-        stock.getInputAction(cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
-        null;
-      stock.removeInputAction(cesium.ScreenSpaceEventType.LEFT_CLICK);
-      stock.removeInputAction(cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-    }
+    if (unbindScene) return;
+    const input = inputFor(viewer);
+    const held = { lease: () => lease };
+    const offs = [
+      input.onPointer('down', onDown, held),
+      input.onPointer('move', onMove, held),
+      input.onPointer('up', onUp, held),
+      input.suppressStockClicks(),
+    ];
+    unbindScene = () => offs.forEach((off) => off());
     documentRef?.addEventListener?.('keydown', onKey, true);
     documentRef?.body?.classList?.add?.('gev-imagery-box');
   }
 
   function releaseScene() {
-    if (handler) {
-      handler.destroy();
-      handler = null;
-    }
-    const stock = viewer.screenSpaceEventHandler;
-    if (stock && savedSingleClick) {
-      stock.setInputAction(
-        savedSingleClick,
-        cesium.ScreenSpaceEventType.LEFT_CLICK,
-      );
-    }
-    if (stock && savedDoubleClick) {
-      stock.setInputAction(
-        savedDoubleClick,
-        cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-      );
-    }
-    savedSingleClick = null;
-    savedDoubleClick = null;
+    unbindScene?.();
+    unbindScene = null;
     documentRef?.removeEventListener?.('keydown', onKey, true);
     documentRef?.body?.classList?.remove?.('gev-imagery-box');
   }

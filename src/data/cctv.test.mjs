@@ -81,27 +81,11 @@ import {
   LIVE_CAMERA_COLOR,
 } from '../layers/cctv/policy.js';
 import { cctvPicks } from '../layers/cctv/pickState.js';
+import { FAKE_EVENT_TYPES, fakeInput } from '../input/testDoubles.mjs';
 
 const ASPECT = 16 / 9;
 const toRad = (deg) => (deg * Math.PI) / 180;
-const GESTURE_TYPES = {
-  LEFT_DOWN: 'left-down',
-  MOUSE_MOVE: 'mouse-move',
-  LEFT_UP: 'left-up',
-  LEFT_CLICK: 'left-click',
-};
-
-function makeGestureHandler() {
-  const actions = new Map();
-  return {
-    setInputAction(callback, type) {
-      actions.set(type, callback);
-    },
-    fire(type, event) {
-      actions.get(type)?.(event);
-    },
-  };
-}
+const GESTURE_TYPES = FAKE_EVENT_TYPES;
 // Same spherical earth radius projectPoint uses (R = 6371 km) so the
 // lat/lon→metres conversion in the assertions matches the module's math.
 const M_PER_DEG = (Math.PI / 180) * 6371000;
@@ -987,7 +971,7 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
   assert.deepEqual(requests, [{ cameraId: 'atx-cam-3' }]);
   assert.match(
     componentFunctionSource(cctvLayer.init),
-    /bindCctvWorldClickGesture\(_clickHandler/,
+    /bindCctvWorldClickGesture\(\s*input,/,
   );
   assert.match(
     componentFunctionSource(cctvLayer.init),
@@ -1407,14 +1391,14 @@ test('active CCTV camera is absent from host by default and protected only when 
 test('CCTV drag-then-release over a camera is inert, while a clean tap activates and dispatches', () => {
   let timeMs = 0;
   let activationCalls = 0;
-  const handler = makeGestureHandler();
+  const { input, handler } = fakeInput({ scene: {} }, { now: () => timeMs });
   const target = new EventTarget();
   const requests = [];
   target.addEventListener(CCTV_FOCUS_REQUEST_EVENT, (event) =>
     requests.push(event.detail),
   );
   bindCctvWorldClickGesture(
-    handler,
+    input,
     () => {
       activateCctvCameraFromWorldClick(
         'atx-cam-3',
@@ -1424,10 +1408,6 @@ test('CCTV drag-then-release over a camera is inert, while a clean tap activates
         },
         target,
       );
-    },
-    {
-      now: () => timeMs,
-      eventTypes: GESTURE_TYPES,
     },
   );
 

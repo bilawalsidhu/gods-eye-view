@@ -1,33 +1,29 @@
 import * as Cesium from 'cesium';
 import { CLICK_PICK_WINDOW_PX, STREET_LEVEL_LAYER_ID } from './policy.js';
+import { inputFor } from '../../input/dispatcher.js';
 
 /** One click handler for every provider's lines and cones, and the marker. */
 export function createSelection({ state, parts }) {
-  const { picking, input } = state.services;
+  const { picking } = state.services;
 
   /** The id carries a provider's prefix: that provider handles the pick. */
-  function onClick(click) {
+  function onClick(event) {
     const viewer = state.viewer;
     if (!viewer || !state.enabled) return;
-    if (input?.isPointerFree && !input.isPointerFree()) return;
-    const picked = viewer.scene.pick(
-      click.position,
-      CLICK_PICK_WINDOW_PX,
-      CLICK_PICK_WINDOW_PX,
-    );
+    const picked = event.pickWindow(CLICK_PICK_WINDOW_PX, CLICK_PICK_WINDOW_PX);
     const id = picking?.resolvePickId
       ? picking.resolvePickId(picked)
       : picked?.id;
     const route = parts.router.resolve(id);
     // Not ours: the ground handler decides whether it is the map itself.
     if (!route) {
-      parts.openAtGround?.(click.position, picked);
+      parts.openAtGround?.(event.position, picked);
       return;
     }
     // The position marker is the core's own: nothing to select.
     if (!route.instance) return;
     route.instance.handlePick(route.id, {
-      groundPoint: () => groundPointAt(viewer, click.position),
+      groundPoint: () => groundPointAt(viewer, event.position),
     });
   }
 
@@ -67,23 +63,17 @@ export function createSelection({ state, parts }) {
   }
 
   function install(viewer) {
-    if (state.clickHandler) return;
-    state.clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    state.clickHandler.setInputAction(
-      onClick,
-      Cesium.ScreenSpaceEventType.LEFT_CLICK,
-    );
+    if (state.clickSubscription) return;
+    state.clickSubscription = inputFor(viewer).onClick(onClick);
     document.addEventListener('keydown', onKeyDown);
     picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, parts.router.ownsPick);
   }
 
   function uninstall() {
     // Nothing to undo for a layer that was never enabled.
-    if (!state.clickHandler) return;
-    if (!state.clickHandler.isDestroyed()) state.clickHandler.destroy();
-    state.clickHandler = null;
+    if (!state.clickSubscription) return;
+    state.clickSubscription();
+    state.clickSubscription = null;
     document.removeEventListener('keydown', onKeyDown);
     picking?.unregisterPickOwner?.(STREET_LEVEL_LAYER_ID);
   }

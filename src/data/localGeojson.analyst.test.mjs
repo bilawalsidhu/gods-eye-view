@@ -186,9 +186,9 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
     color: '#0088ff',
     overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
     projectToWindow: () => ({ x: 400, y: 300 }),
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction() {},
-      destroy() {},
+    inputFor: () => ({
+      onClick: () => () => {},
+      suspendCamera: () => () => {},
     }),
   });
   try {

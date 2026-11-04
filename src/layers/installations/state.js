@@ -29,7 +29,7 @@ export function createState({ services }) {
     retryAt: 0,
     failureReason: null,
     moveEndRemove: null,
-    clickHandler: null,
+    clickSubscription: null,
     timer: null,
     googleSearchRequested: false,
     /** Contacts subject position; when set, it replaces the camera viewport. */

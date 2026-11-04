@@ -5,7 +5,7 @@ import {
   parseGeojsonLines,
 } from '../sources/infrastructureData.js';
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
-import { isPointerFree } from './inputOwnership.js';
+import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 import {
   selectInfraLod,
   applyInfraEvictionGrace,
@@ -310,8 +310,7 @@ export function createLocalGeoJsonLayer(
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
-    screenSpaceEventHandlerFactory = (canvas) =>
-      new Cesium.ScreenSpaceEventHandler(canvas),
+    inputFor = defaultInputFor,
     projectToWindow = (scene, position) =>
       Cesium.SceneTransforms.worldToWindowCoordinates(scene, position),
   },
@@ -330,7 +329,7 @@ export function createLocalGeoJsonLayer(
   // The entities this layer loaded, so its click and teardown recognise them.
   const _ownEntities = new WeakSet();
   let _enabled = false;
-  let _clickHandler = null;
+  let _clickSubscription = null;
   let _count = 0;
   /** @type {number|null} Timestamp of the last successful dataset load. */
   let _lastUpdate = null;
@@ -784,15 +783,11 @@ export function createLocalGeoJsonLayer(
 
             if (_destroyed) return;
             // 2. Install native global click handler
-            if (!_clickHandler) {
-              _clickHandler = screenSpaceEventHandlerFactory(
-                viewer.scene.canvas,
-              );
-              _clickHandler.setInputAction((click) => {
-                // A tool owns the pointer (src/data/inputOwnership.js).
-                if (!isPointerFree()) return;
+            if (!_clickSubscription) {
+              const input = inputFor(viewer);
+              _clickSubscription = input.onClick((event) => {
                 if (!_enabled) return;
-                const picked = viewer.scene.pick(click.position);
+                const picked = event.pick;
 
                 if (picked && _ownEntities.has(picked.id)) {
                   const entity = picked.id;
@@ -825,8 +820,12 @@ export function createLocalGeoJsonLayer(
                   if (targetPos) {
                     const carto = Cesium.Cartographic.fromCartesian(targetPos);
 
-                    // Disable interactions so Cesium doesn't magically cancel the flight
-                    viewer.scene.screenSpaceCameraController.enableInputs = false;
+                    // Hold camera input so Cesium doesn't cancel the flight.
+                    // A hold, not a flag: the flight ending must not hand input
+                    // back under a drag or the cockpit.
+                    const releaseCamera = input.suspendCamera(
+                      'local-geojson-flight',
+                    );
 
                     viewer.camera.flyTo({
                       destination: Cesium.Cartesian3.fromRadians(
@@ -835,16 +834,12 @@ export function createLocalGeoJsonLayer(
                         5000,
                       ),
                       duration: 1.5,
-                      complete: () => {
-                        viewer.scene.screenSpaceCameraController.enableInputs = true;
-                      },
-                      cancel: () => {
-                        viewer.scene.screenSpaceCameraController.enableInputs = true;
-                      },
+                      complete: releaseCamera,
+                      cancel: releaseCamera,
                     });
                   }
                 }
-              }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+              });
             }
           })();
         try {
@@ -1074,10 +1069,8 @@ export function createLocalGeoJsonLayer(
       // torn down even if destroy is called while the layer is enabled.
       disableLayer(viewer);
       removeEntityContextsForLayer(id);
-      if (_clickHandler) {
-        _clickHandler.destroy();
-        _clickHandler = null;
-      }
+      _clickSubscription?.();
+      _clickSubscription = null;
       if (_dataSource && viewer) {
         viewer.dataSources.remove(_dataSource, true);
       }

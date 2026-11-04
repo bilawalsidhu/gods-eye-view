@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
 
@@ -135,15 +136,11 @@ export function createLifecycle({
       layerState._lastError = null;
       layerState._orbitMatches = 0;
       parts.overlays.clearMissionOverlaySources();
-      layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-        viewer.scene.canvas,
-      );
-      layerState._clickHandler.setInputAction((movement) => {
-        // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-        if (!isPointerFree()) return;
+      const input = inputFor(viewer);
+      const unsubscribeClick = input.onClick((event) => {
         if (!layerState._enabled || !layerState._dataSource?.show) return;
-        const entity = viewer.scene
-          .drillPick(movement.position, 12)
+        const entity = event
+          .drill(12)
           .map((picked) => picked?.id)
           .find((candidate) => parts.selection.entityLaunchId(candidate));
         const launchId = parts.selection.entityLaunchId(entity);
@@ -152,19 +149,17 @@ export function createLifecycle({
         parts.selection.focusMission(
           layerState._launches.find((launch) => launch.id === launchId),
         );
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-      layerState._moveHandler = new Cesium.ScreenSpaceEventHandler(
-        viewer.scene.canvas,
-      );
+      });
       hover = createLaunchHover({
         viewer,
         enabled: () => layerState._enabled && layerState._dataSource?.show,
         entityLaunchId: parts.selection.entityLaunchId,
       });
-      layerState._moveHandler.setInputAction(
-        hover.move,
-        Cesium.ScreenSpaceEventType.MOUSE_MOVE,
-      );
+      const unsubscribeHover = input.onPointer('move', hover.move);
+      layerState._inputSubscription = () => {
+        unsubscribeClick();
+        unsubscribeHover();
+      };
       // Apply horizon visibility before Cesium traverses and picks the scene.
       // A postRender write is one frame late and can remain visibly stale when
       // request-on-demand rendering stops after a globe camera move.
@@ -246,10 +241,8 @@ export function createLifecycle({
       parts.replay.stopMissionReplay();
       parts.selection.stopMissionZoomAnchor();
       parts.ingestion.clearPostTleRetry();
-      if (layerState._clickHandler) layerState._clickHandler.destroy();
-      layerState._clickHandler = null;
-      if (layerState._moveHandler) layerState._moveHandler.destroy();
-      layerState._moveHandler = null;
+      layerState._inputSubscription?.();
+      layerState._inputSubscription = null;
       if (layerState._declutterHandler) layerState._declutterHandler();
       layerState._declutterHandler = null;
       parts.launchPad.destroyLaunchPadZonePrimitive();

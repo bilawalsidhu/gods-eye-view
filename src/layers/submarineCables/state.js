@@ -51,7 +51,7 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._surfaceRecords = [];
 
-  state._clickHandler = null;
+  state._clickSubscription = null;
 
   state._preRenderRemover = null;
 

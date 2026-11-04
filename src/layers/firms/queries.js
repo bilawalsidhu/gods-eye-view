@@ -186,7 +186,6 @@ export function createQueries({
       });
       components.cards.rebuildAmbientLabels();
       components.selection.installClickHandler();
-      return layerState._clickHandler;
     },
   };
 

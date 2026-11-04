@@ -122,7 +122,7 @@ export function createState({ services }) {
 
   layerState._playFallbackAttemptId = null;
 
-  layerState._clickHandler = null;
+  layerState._clickSubscription = null;
 
   layerState._horizonTimer = null;
 

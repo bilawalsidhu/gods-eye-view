@@ -23,9 +23,7 @@ export function createState({ services }) {
 
   state._orbitMatches = 0;
 
-  state._clickHandler = null;
-
-  state._moveHandler = null;
+  state._inputSubscription = null;
 
   state._viewer = null;
 

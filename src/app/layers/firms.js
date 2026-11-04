@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { createFirmsHeatmapLayer as createLayer } from '../../layers/firms/index.js';
 import * as render from '../../renderGovernor.js';
 import * as sprites from '../../data/spriteOrder.js';
@@ -29,8 +28,5 @@ export function createApplicationFirms({ surface, ...options }) {
       clearSource: overlays.clearOverlaySource,
       hitTest: overlays.hitTestWorldOverlay,
     },
-    screenSpaceEventHandlerFactory:
-      options.screenSpaceEventHandlerFactory ??
-      ((viewer) => new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)),
   });
 }

@@ -47,8 +47,8 @@ export function createState({ services }) {
   /** @type {(() => void)|null} */
   state._preRenderRemove = null;
   state._renderHeld = false;
-  /** @type {Cesium.ScreenSpaceEventHandler|null} */
-  state._clickHandler = null;
+  /** @type {(() => void)|null} Unsubscribes the vehicle-selection click. */
+  state._clickSubscription = null;
   /**
    * The vehicles currently mid-glide. The per-frame pass walks THIS, not the
    * whole fleet, and the render hold is derived from it together with the

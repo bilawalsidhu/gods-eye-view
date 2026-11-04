@@ -6,7 +6,7 @@ import {
   screenProjectedRotation,
   stabilizeScreenRotation,
 } from '../../data/iconOrientation.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
 import {
@@ -95,8 +95,6 @@ const DEFAULT_DISPLAY = Object.freeze({
  * @param {(url: string) => string} [options.resolveAsset] Model URL resolver.
  * @param {(options: object) => Promise<object>} [options.loadModel] Model
  *   loader, injectable for tests.
- * @param {(canvas: HTMLCanvasElement) => object} [options.createInputHandler]
- *   Click-handler factory, injectable for tests.
  * @returns {object} Data-layer module.
  */
 export function createLocalAdsbLayer({
@@ -106,7 +104,6 @@ export function createLocalAdsbLayer({
   now = Date.now,
   resolveAsset = (url) => url,
   loadModel,
-  createInputHandler = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
 }) {
   if (typeof receiver?.getState !== 'function')
     throw new TypeError('Local ADS-B requires a receiver session');
@@ -135,7 +132,7 @@ export function createLocalAdsbLayer({
   let unsubscribeFeeds = null;
   let tickTimer = null;
   let syncTimer = null;
-  let clickHandler = null;
+  let clickSubscription = null;
   let removePreRender = null;
   let renderHeld = false;
   let selectedId = null;
@@ -599,7 +596,7 @@ export function createLocalAdsbLayer({
   }
 
   /**
-   * What a click at `position` means for this layer: a local aircraft id,
+   * What a click means for this layer: a local aircraft id,
    * `'other'` when a sibling layer's contact is under the pointer, `'trail'`
    * for a trail line, or null for empty map.
    *
@@ -607,15 +604,14 @@ export function createLocalAdsbLayer({
    * photoreal tile, a ring) or a trail line drawn over or through a local
    * aircraft does not hide it: the click looks underneath for the aircraft.
    */
-  function clickTarget(position) {
-    const scene = viewer.scene;
-    const top = pickedId(scene.pick(position));
+  function clickTarget(event) {
+    const top = pickedId(event.pick);
     if (top && markers.has(top)) return top;
     const trail = Boolean(top) && String(top).startsWith(TRAIL_PICK_PREFIX);
     if (ownedElsewhere(top) && !trail) return 'other';
     let hits = [];
     try {
-      hits = scene.drillPick?.(position, CLICK_DRILL_LIMIT) || [];
+      hits = event.drill(CLICK_DRILL_LIMIT);
     } catch {
       hits = [];
     }
@@ -630,12 +626,10 @@ export function createLocalAdsbLayer({
   }
 
   function installInteraction() {
-    if (clickHandler || !viewer?.scene?.canvas) return;
-    clickHandler = createInputHandler(viewer.scene.canvas);
-    clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree() || !enabled) return;
-      const target = clickTarget(click.position);
+    if (clickSubscription || !viewer?.scene?.canvas) return;
+    clickSubscription = inputFor(viewer).onClick((event) => {
+      if (!enabled) return;
+      const target = clickTarget(event);
       // Clicking a local aircraft always (re)selects it and republishes its
       // card, including the one already selected: its card may have been
       // displaced, and a click on a marker must never read as "deselect".
@@ -649,12 +643,12 @@ export function createLocalAdsbLayer({
       // leaving a sibling layer's new selection intact.
       clearSelection();
       governorRequestRender('local-adsb-selection');
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function releaseInteraction() {
-    clickHandler?.destroy();
-    clickHandler = null;
+    clickSubscription?.();
+    clickSubscription = null;
   }
 
   function installFrame() {

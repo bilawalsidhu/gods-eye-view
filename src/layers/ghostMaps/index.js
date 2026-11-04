@@ -17,6 +17,7 @@ import {
 import { createHorizonCull } from '../streetLevel/view.js';
 import { readGhostMapsKml } from './kml.js';
 import { fieldLabel, parseDescriptionFields, wrapCardText } from './records.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 export * from './catalog.js';
 export * from './records.js';
 export { readGhostMapsKml } from './kml.js';
@@ -132,9 +133,8 @@ function anchorOf(geometry) {
 export function createGhostMapsLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
+  inputFor = defaultInputFor,
   picking = null,
-  pointer = null,
   openExternal = null,
   storage = defaultStorage(),
 } = {}) {
@@ -147,7 +147,7 @@ export function createGhostMapsLayer({
   let _unsubscribe = null;
   let _stream = 'closed';
   let _queue = Promise.resolve();
-  let _clickHandler = null;
+  let _clickSubscription = null;
   let _rowListener = null;
   let _selectedKey = null;
   let _selectedCardId = null;
@@ -172,8 +172,7 @@ export function createGhostMapsLayer({
     },
     onChange: render,
   });
-  const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+  const canSelect = () => overlayHost && inputFor && picking;
 
   function wanted(product) {
     return _selection ? _selection.has(product.id) : product.defaultOn;
@@ -496,25 +495,23 @@ export function createGhostMapsLayer({
   }
 
   function installClickHandler() {
-    if (!canSelect() || _clickHandler || !_viewer) return;
+    if (!canSelect() || _clickSubscription || !_viewer) return;
     picking.registerPickOwner?.(
       GHOSTMAPS_LAYER_ID,
       (pickedId) =>
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
-      if (pointer && !pointer.isPointerFree()) return;
+    _clickSubscription = inputFor(_viewer).onClick((event) => {
       const cardHit = overlayHost.hitTest?.(
-        click.position?.x,
-        click.position?.y,
+        event.screenPosition?.x,
+        event.screenPosition?.y,
         { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
       );
       if (cardHit && cardHit.entryId === _selectedCardId) {
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
       }
-      const picked = _viewer.scene.pick(click.position);
+      const picked = event.pick;
       const key = picked ? pickedKey(picked) : null;
       if (key) {
         _selectedKey = key;
@@ -531,12 +528,12 @@ export function createGhostMapsLayer({
         clearSelection();
         render();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    _clickHandler?.destroy();
-    _clickHandler = null;
+    _clickSubscription?.();
+    _clickSubscription = null;
     picking?.unregisterPickOwner?.(GHOSTMAPS_LAYER_ID);
   }
 

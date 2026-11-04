@@ -11,6 +11,7 @@ import {
   isCurrentPublication,
 } from './inciweb.js';
 import { msg, t } from '../../i18n/index.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 export { normalizeFirePerimeterSnapshot } from './records.js';
 export { createWfigsPerimeterSource } from './source.js';
 export * from './cards.js';
@@ -39,9 +40,8 @@ const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
 export function createFirePerimetersLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
+  inputFor = defaultInputFor,
   picking = null,
-  pointer = null,
   inciwebSource = null,
   inciwebPublications = null,
   openExternal = null,
@@ -59,7 +59,7 @@ export function createFirePerimetersLayer({
   let _stale = false;
   let _lastError = null;
   let _enabled = false;
-  let _clickHandler = null;
+  let _clickSubscription = null;
   let _selectedId = null;
   let _selectedLink = null;
   let _selectedCardId = null;
@@ -76,8 +76,7 @@ export function createFirePerimetersLayer({
     _linkRequest = null;
   }
 
-  const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+  const canSelect = () => overlayHost && inputFor && picking;
 
   /**
    * Refresh the InciWeb catalog off the render path: a hanging or failed
@@ -185,27 +184,25 @@ export function createFirePerimetersLayer({
   }
 
   function installClickHandler() {
-    if (!canSelect() || _clickHandler || !_viewer) return;
+    if (!canSelect() || _clickSubscription || !_viewer) return;
     // Deliberately NOT registered in the pick-ownership registry: sibling
     // layers yield to owned picks before their own overlay-card hit-tests,
     // so claiming these large ground polygons would make FIRMS/vessel/CCTV
     // cards inert anywhere over a perimeter. Unowned, our picks read as
     // "empty space" to siblings — the pre-existing behavior for the globe.
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
-      if (pointer && !pointer.isPointerFree()) return;
+    _clickSubscription = inputFor(_viewer).onClick((event) => {
       // A click on the incident card itself opens its InciWeb page (when the
       // incident has one) and never disturbs the selection.
       const cardHit = overlayHost.hitTest?.(
-        click.position?.x,
-        click.position?.y,
+        event.screenPosition?.x,
+        event.screenPosition?.y,
         { sourceId: PERIMETER_OVERLAY_SOURCE_ID },
       );
       if (cardHit && cardHit.entryId === _selectedCardId) {
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
       }
-      const picked = _viewer.scene.pick(click.position);
+      const picked = event.pick;
       const incidentId = picked ? pickedIncidentId(picked) : null;
       if (incidentId) {
         abortLinkVerification();
@@ -224,14 +221,12 @@ export function createFirePerimetersLayer({
         _selectedId = null;
         publishSelectedCard();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    if (_clickHandler) {
-      _clickHandler.destroy();
-      _clickHandler = null;
-    }
+    _clickSubscription?.();
+    _clickSubscription = null;
   }
 
   function clearSelection() {

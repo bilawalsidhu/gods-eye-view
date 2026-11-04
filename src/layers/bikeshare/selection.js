@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
@@ -155,15 +155,10 @@ export function createSelection({
    */
 
   function _installClickHandler(viewer) {
-    if (layerState._clickHandler) return;
+    if (layerState._clickSubscription) return;
 
-    layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    layerState._clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
-      const picked = viewer.scene.pick(click.position);
+    layerState._clickSubscription = inputFor(viewer).onClick((event) => {
+      const picked = event.pick;
 
       if (picked) {
         // Clicking selected entity itself — ignore (don't deselect).
@@ -190,7 +185,7 @@ export function createSelection({
 
       // Clicked empty space — deselect.
       if (layerState._selectedKey) _clearSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
 
     document.addEventListener('keydown', _onKeyDown);
   }

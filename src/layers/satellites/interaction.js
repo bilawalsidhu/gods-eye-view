@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { readEntityRecord } from '../../data/entityRecords.js';
 
 export function createInteraction({
@@ -18,7 +17,7 @@ export function createInteraction({
   }
 
   function _installClickHandler(viewer) {
-    if (layerState._clickHandler) return; // already installed
+    if (layerState._clickSubscription) return; // already installed
 
     // Cross-layer untrack (H2, mirror of flights): if ANOTHER layer (flights,
     // military, …) grabs the follow-camera, drop our tracking so the orbit ring /
@@ -44,14 +43,9 @@ export function createInteraction({
         });
     }
 
-    layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    layerState._clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
+    layerState._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!layerState._enabled) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = event.pick;
 
       if (picked) {
         // Clicking tracked entity itself — ignore
@@ -82,7 +76,7 @@ export function createInteraction({
         parts.tracking._cancelPendingTrackingRestore();
         parts.tracking._clearTracking(false, { origin: 'user' });
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
 
     document.addEventListener('keydown', _onKeyDown);
   }

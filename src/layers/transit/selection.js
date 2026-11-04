@@ -7,7 +7,7 @@ import {
   createTransitSelectedOverlayEntry,
 } from './policy.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { t } from '../../i18n/index.js';
 
 /**
@@ -115,49 +115,12 @@ export function createSelection({ state, services, parts }) {
   }
 
   function installClickHandler(viewer) {
-    if (state._clickHandler) return;
-    state._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    state._clickHandler.setInputAction((click) => {
-      // Ambient selection never competes for a pointer a tool has claimed:
-      // placing a draw vertex on top of a bus must not also select the bus.
-      if (!isPointerFree()) return;
-      const scene = viewer.scene;
-      // Pick buffers precede post-processing. Map a sensor pixel back through
-      // the active shader's barrel distortion and quantization before picking.
-      const position = Cesium.Cartesian2.clone(click.position);
-      const style = state._stylePreset;
-      const stage = scene.postProcessStages?.getStageByName?.(
-        `godsEyeView_${style}`,
-      );
-      if (stage?.enabled && (style === 'thermal' || style === 'surveillance')) {
-        const intensity = stage.uniforms.intensity;
-        const canvas = scene.canvas,
-          w = canvas.clientWidth,
-          h = canvas.clientHeight;
-        let u = position.x / w,
-          v = 1 - position.y / h;
-        if (style === 'surveillance') {
-          const x = u * 2 - 1,
-            y = v * 2 - 1,
-            r2 = x * x + y * y;
-          const d = 1 + r2 * intensity * 0.25 + r2 * r2 * intensity * 0.075;
-          u = (x * d + 1) / 2;
-          v = (y * d + 1) / 2;
-        }
-        const grid = 1 + (stage.uniforms.pixelation - 1) * intensity;
-        u +=
-          ((Math.floor((u * canvas.width) / grid) * grid) / canvas.width - u) *
-          intensity;
-        v +=
-          ((Math.floor((v * canvas.height) / grid) * grid) / canvas.height -
-            v) *
-          intensity;
-        position.x = u * w;
-        position.y = (1 - v) * h;
-      }
-      const picked = scene.pick(position);
+    if (state._clickSubscription) return;
+    // The dispatcher maps a sensor-style click back into the pick buffer
+    // (src/input/sensorPick.js) and skips it while a tool holds the pointer.
+    state._clickSubscription = inputFor(viewer).onClick((event) => {
+      const position = event.position;
+      const picked = event.pick;
       state._lastPickForTest = {
         id: typeof picked?.id === 'string' ? picked.id : null,
         primitiveId:
@@ -188,15 +151,13 @@ export function createSelection({ state, services, parts }) {
         }
       }
       if (state._selectedKey) clearSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
     document.addEventListener('keydown', onKeyDown);
   }
 
   function removeClickHandler() {
-    if (state._clickHandler) {
-      state._clickHandler.destroy();
-      state._clickHandler = null;
-    }
+    state._clickSubscription?.();
+    state._clickSubscription = null;
     document.removeEventListener('keydown', onKeyDown);
   }
 

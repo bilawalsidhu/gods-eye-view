@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CockpitViewController } from './cockpitController.js';
 import { withEntityRecord } from '../data/entityRecords.js';
+import { fakeInput } from '../input/testDoubles.mjs';
 
 function environment() {
   const original = { document: globalThis.document, window: globalThis.window };
@@ -23,7 +24,7 @@ function environment() {
   const viewer = {
     scene: {
       preUpdate: event,
-      screenSpaceCameraController: { enableInputs: false },
+      screenSpaceCameraController: { enableInputs: true },
     },
     trackedEntityChanged: event,
     entities: { contains: () => false },
@@ -62,7 +63,14 @@ test('disposing an active Cockpit releases the supplied render owner without ret
     const owner = new CockpitViewController(env.viewer, {
       services: { releaseContinuousRender: (reason) => released.push(reason) },
     });
+    // Entered: the cockpit holds camera input, as enter() takes it.
+    const { input } = fakeInput(env.viewer);
     owner.active = true;
+    owner.releaseCameraInput = input.suspendCamera('cockpit');
+    assert.equal(
+      env.viewer.scene.screenSpaceCameraController.enableInputs,
+      false,
+    );
     owner.dispose();
     owner.dispose();
     assert.deepEqual(released, ['cockpit']);

@@ -44,7 +44,7 @@ export function createLifecycle({
       layerState._inFlightInfo = new Map();
       layerState._inFlightStatus = new Map();
       layerState._stationRenderMap = new Map();
-      layerState._clickHandler = null;
+      layerState._clickSubscription = null;
       layerState._selectedKey = null;
       layerState._selectedEntity = null;
       layerState._count = 0;
@@ -117,10 +117,8 @@ export function createLifecycle({
         false,
       );
 
-      if (layerState._clickHandler) {
-        layerState._clickHandler.destroy();
-        layerState._clickHandler = null;
-      }
+      layerState._clickSubscription?.();
+      layerState._clickSubscription = null;
       document.removeEventListener('keydown', parts.selection._onKeyDown);
       unregisterPickOwner('bikeshare');
 
@@ -150,10 +148,8 @@ export function createLifecycle({
           BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
           false,
         );
-        if (layerState._clickHandler) {
-          layerState._clickHandler.destroy();
-          layerState._clickHandler = null;
-        }
+        layerState._clickSubscription?.();
+        layerState._clickSubscription = null;
         document.removeEventListener('keydown', parts.selection._onKeyDown);
         unregisterPickOwner('bikeshare');
       }

@@ -74,7 +74,7 @@ test('a session claims the pointer, borrows the stock clicks, freezes the camera
   assert.equal(f.preview(), false);
   assert.equal(f.documentRef.classes.has('gev-imagery-box'), false);
   assert.equal(f.documentRef.listeners.length, 0);
-  assert.equal(f.handler(), null);
+  assert.equal(f.bound(), false);
   assert.deepEqual(f.actives, [true, false]);
   await f.tool.destroy();
 });
@@ -133,7 +133,7 @@ test('a held pointer refuses the session and nothing is borrowed', async () => {
     ['pointer-busy', 'draw is using the pointer — close it first'],
   ]);
   assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
-  assert.equal(f.handler(), null);
+  assert.equal(f.bound(), false);
   releasePointer(lease);
   assert.equal(f.tool.start(), true);
   await f.tool.destroy();

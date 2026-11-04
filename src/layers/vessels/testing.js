@@ -12,16 +12,16 @@ export function createTesting({
   const aisLiveVesselsLayer = layer;
 
   /**
-   * Bind the production interaction callbacks to mockable viewer/handler
-   * surfaces. Test-only seam; behavior is shared with installInteraction().
+   * Bind the production interaction callbacks to a mockable viewer. Clicks
+   * come through the viewer's input dispatcher (src/input/testDoubles.mjs).
+   * Test-only seam; behavior is shared with installInteraction().
    * @param {Object} viewer - Viewer-like object with scene.pick().
-   * @param {Object} handler - Handler-like object with setInputAction().
    * @param {Object} keyTarget - EventTarget-like object with add/removeEventListener().
    * @returns {void}
    */
 
-  function _bindVesselInteractionForTest(viewer, handler, keyTarget) {
-    components.selection.bindVesselInteraction(viewer, handler, keyTarget);
+  function _bindVesselInteractionForTest(viewer, keyTarget) {
+    components.selection.bindVesselInteraction(viewer, keyTarget);
   }
 
   /**
@@ -67,7 +67,6 @@ export function createTesting({
     state.feed.firstConnectPhase = options.firstConnectPhase || 'idle';
     state.feed.firstConnectStartedAt = options.firstConnectStartedAt ?? null;
     state.feed.firstConnectDeadline = options.firstConnectDeadline ?? null;
-    state.interactionHandlerFactory = options.interactionHandlerFactory || null;
     state.interactionKeyTarget = options.interactionKeyTarget || null;
   }
 

@@ -9,6 +9,7 @@ import { createIngestion } from './ingestion.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { layerFeedState } from '../../data/feedState.js';
+import { inputFor } from '../../input/dispatcher.js';
 
 const noop = () => {};
 
@@ -297,17 +298,12 @@ test('destroy followed by actual init starts a clean instance with owned handler
     assert.equal(value.enabled, false);
     assert.equal(f.viewer.dataSources.length, 1);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 1);
-    const click = f.state._clickHandler;
-    const move = f.state._moveHandler;
-    assert.ok(click instanceof Cesium.ScreenSpaceEventHandler);
-    assert.ok(move instanceof Cesium.ScreenSpaceEventHandler);
-    assert.equal(
-      typeof click.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK),
-      'function',
-    );
+    const input = inputFor(f.viewer);
+    const before = input.subscriberCount();
+    assert.equal(typeof f.state._inputSubscription, 'function');
     await f.destroy();
-    assert.equal(click.isDestroyed(), true);
-    assert.equal(move.isDestroyed(), true);
+    assert.equal(f.state._inputSubscription, null);
+    assert.equal(input.subscriberCount(), before - 2, 'click and hover');
     assert.equal(f.viewer.dataSources.length, 0);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 0);
   } finally {

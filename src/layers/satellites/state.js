@@ -84,7 +84,7 @@ export function createState({ services }) {
 
   state._trackedEntity = null;
 
-  state._clickHandler = null;
+  state._clickSubscription = null;
 
   /** @type {Cesium.Event.RemoveCallback|null} trackedEntityChanged listener disposer (cross-layer untrack) */
 

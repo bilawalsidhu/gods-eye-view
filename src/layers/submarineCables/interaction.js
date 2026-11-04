@@ -1,24 +1,19 @@
 import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
 import { cablePicks } from './pickState.js';
 
-export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
+export function createInteraction({ state, inputFor }) {
   function registerPickEntity(entity, info) {
     cablePicks.write(entity).info = info;
   }
 
   function beginInteraction(viewer) {
-    if (state._clickHandler) return;
-    state._clickHandler = screenSpaceEventHandlerFactory(viewer.scene.canvas);
-    state._clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
+    if (state._clickSubscription) return;
+    state._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state._enabled) return;
-      const picked = viewer.scene.pick(click.position);
-      const record = resolvePickRecord(picked);
+      const record = resolvePickRecord(event.pick);
       if (!record?.reference) return;
       flyToReference(viewer, record.reference);
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function resolvePickRecord(picked) {

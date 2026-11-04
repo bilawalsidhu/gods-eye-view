@@ -10,6 +10,10 @@
       "src/data/localGeojsonCore.js",
       "src/data/localGeojsonLod.js",
       "src/data/inputOwnership.js",
+      "src/data/pickRegistry.js",
+      "src/data/scenePick.js",
+      "src/input/dispatcher.js",
+      "src/input/sensorPick.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js"
     ],
@@ -872,7 +876,12 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/data/inputOwnership.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -1126,7 +1135,11 @@
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
       "src/ui/i18n.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/data/inputOwnership.js",
+      "src/data/pickRegistry.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1260,7 +1273,11 @@
       "src/ui/toast.js",
       "src/ui/stores/sceneInteractions.js",
       "src/ui/stores/dataPacks.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1348,7 +1365,11 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -1415,7 +1436,11 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/data/scenePick.js",
+      "src/input/sensorPick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -1495,7 +1520,11 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -1577,7 +1606,11 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -1617,7 +1650,11 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -1657,7 +1694,11 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -1710,7 +1751,11 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/layers/installations/classLabel.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -1851,7 +1896,11 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -1916,7 +1965,11 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -1988,7 +2041,12 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/data/inputOwnership.js",
+      "src/data/scenePick.js",
+      "src/input/sensorPick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
   },
@@ -2027,7 +2085,11 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -2075,7 +2137,11 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/scenePick.js",
+      "src/input/sensorPick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -2107,7 +2173,11 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/scenePick.js",
+      "src/input/sensorPick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -3255,7 +3325,9 @@
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
       "src/data/local_data/wof_neighborhoods/files.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": [
       "hls.js",
@@ -3878,7 +3950,9 @@
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
       "src/data/local_data/wof_neighborhoods/files.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": [
       "hls.js",
@@ -3980,6 +4054,17 @@
     "exports": ["./data/entity-records"],
     "modules": ["src/data/entityRecords.js"],
     "external": []
+  },
+  "input": {
+    "exports": ["./input"],
+    "modules": [
+      "src/input/dispatcher.js",
+      "src/input/sensorPick.js",
+      "src/data/inputOwnership.js",
+      "src/data/pickRegistry.js",
+      "src/data/scenePick.js"
+    ],
+    "external": ["cesium"]
   },
   "layer-lifecycle": {
     "exports": ["./data/lifecycle"],
@@ -4226,7 +4311,12 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/data/inputOwnership.js",
+      "src/data/scenePick.js",
+      "src/input/sensorPick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -4555,7 +4645,9 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -4607,7 +4699,11 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -4668,7 +4764,12 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/data/inputOwnership.js",
+      "src/input/sensorPick.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },
@@ -4763,7 +4864,12 @@
       "src/data/geoImportImages.js",
       "src/data/geoImportPins.js",
       "src/layers/streetLevel/tileMath.js",
-      "src/layers/streetLevel/view.js"
+      "src/layers/streetLevel/view.js",
+      "src/data/inputOwnership.js",
+      "src/data/scenePick.js",
+      "src/input/sensorPick.js",
+      "src/data/pickRegistry.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },

@@ -81,6 +81,56 @@ constructed component objects; the component instances themselves remain mutable
 `ready` means all constructors have returned. Background feed activity and the
 standalone share-restoration result keep their existing separate contracts.
 
+## Pointer input
+
+`gods-eye-view/input` exports `inputFor(viewer)`, the scene's one input
+dispatcher. Every layer and tool takes its pointer input from it, and so can
+the caller: one `ScreenSpaceEventHandler` per scene, and a click picked once
+and handed to every subscriber.
+
+```js
+import { inputFor } from 'gods-eye-view/input';
+
+const input = inputFor(viewer);
+const off = input.onClick((event) => {
+  if (event.ownerId === 'flights') showFlight(event.id);
+});
+// Later:
+off();
+```
+
+`onClick` runs while no tool holds the pointer (the draw tool, the imagery
+box), so a vertex placed on an aircraft is not also a click on it. Its event
+reads lazily; a subscriber that reads nothing costs no pick:
+
+| Member             | What it is                                                           |
+| ------------------ | -------------------------------------------------------------------- |
+| `screenPosition`   | Where the user clicked, in CSS pixels; for DOM and overlay hit-tests |
+| `position`         | Where that lands in the pick buffer (corrected under sensor styles)  |
+| `gesture`          | `{ travelPx, durationMs }` of the press, to tell a click from a drag |
+| `pick`             | `scene.pick` at `position`                                           |
+| `hit`              | `pick`, or on a coarse pointer the contact under a surface pick      |
+| `id`, `ownerId`    | The hit's pick id and the layer that registered it, or `null`        |
+| `meta`             | The hit's own metadata, when its pick carries any                    |
+| `surface`          | Whether the hit is the map itself                                    |
+| `drill(limit)`     | `scene.drillPick`, shared by every subscriber of the click           |
+| `pickWindow(w, h)` | `scene.pick` over a `w`×`h` window around `position`                 |
+| `ground()`         | The world position under the click, or `null` over the sky           |
+
+`onPointer(type, fn, { lease })` subscribes to `down`, `move`, `up`, `click`
+or `dblclick`; with a lease it runs only while that lease is current. A tool
+takes its lease with `claimPointer(ownerId)` from the same export (and gives
+it back with `releasePointer(lease)`), which also keeps every ambient
+subscriber off its clicks; `isPointerFree()` and `pointerOwner()` report who
+holds it. `suspendCamera(reason)` and `suppressStockClicks()` return their
+own release: camera input and the viewer's stock select and double-click-track
+come back when the last hold is released, so two holders cannot undo each
+other. The dispatcher owns the camera controller's `enableInputs`: a direct
+write (Cesium's camera flights make one when they start and end) is kept, but
+reads true only while no hold is out. A caller-supplied `createScene` that creates its own viewer registers
+`defer(() => inputFor(viewer).destroy())` right after it; the standalone scene
+does this and returns the dispatcher as `scene.input`.
+
 ## Standalone wiring
 
 `src/main.js` reads the existing browser configuration and starts

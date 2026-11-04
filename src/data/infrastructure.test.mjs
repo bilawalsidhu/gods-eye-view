@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import { createInfrastructureLayers } from 'gods-eye-view/infrastructure';
 import { createLocalGeoJsonLayer } from 'gods-eye-view/infrastructure/geojson';
+import { fakeInput } from '../input/testDoubles.mjs';
 
 function services() {
   const records = new Map();
@@ -119,7 +120,6 @@ test('two viewers use their supplied contexts and dispose independently', async 
   const hosts = [services(), services()];
   const instances = hosts.map((host) => {
     const sources = new Cesium.DataSourceCollection();
-    let click;
     const layer = createLocalGeoJsonLayer(
       {
         id: 'local-dams',
@@ -127,12 +127,6 @@ test('two viewers use their supplied contexts and dispose independently', async 
         osmDerived: true,
         color: '#0088ff',
         url: '/dams.geojsonl',
-        screenSpaceEventHandlerFactory: () => ({
-          setInputAction(fn) {
-            click = fn;
-          },
-          destroy() {},
-        }),
       },
       host,
     );
@@ -147,7 +141,8 @@ test('two viewers use their supplied contexts and dispose independently', async 
       },
       camera: { moveEnd: new Cesium.Event(), flyTo() {} },
     };
-    return { layer, viewer, click: () => click({ position: {} }) };
+    const input = fakeInput(viewer);
+    return { layer, viewer, click: () => input.click({ x: 0, y: 0 }) };
   });
   t.after(() =>
     instances.forEach(({ layer, viewer }) => layer.destroy(viewer)),
@@ -191,11 +186,16 @@ test('consumer build includes only infrastructure code and resolves assets under
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
+    'dispatcher.js',
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
+    'inputOwnership.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
+    'pickRegistry.js',
+    'scenePick.js',
+    'sensorPick.js',
   ]);
   assert.deepEqual(
     entry.imports,

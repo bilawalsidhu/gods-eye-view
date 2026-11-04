@@ -2,8 +2,7 @@ import {
   FIRMS_OVERLAY_SOURCE_ID,
   fireDetectionKey,
 } from '../../data/firmsLabels.js';
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { CONTEXT_TOP_N } from './policy.js';
 import { t } from '../../i18n/index.js';
 
@@ -22,7 +21,7 @@ export function createSelection({
     getContextStore,
     registerEntityContext,
   } = services.context;
-  const { id, name, overlayHost, screenSpaceEventHandlerFactory } = config;
+  const { id, name, overlayHost } = config;
 
   /**
    * Install the LEFT_CLICK handler for fire selection (enable-time only,
@@ -32,14 +31,10 @@ export function createSelection({
    */
 
   function installClickHandler() {
-    if (layerState._clickHandler || !layerState._viewer) return;
-    layerState._clickHandler = screenSpaceEventHandlerFactory(
-      layerState._viewer,
-    );
-    layerState._clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
-      const picked = layerState._viewer.scene.pick(click.position);
+    if (layerState._clickSubscription || !layerState._viewer) return;
+    const input = inputFor(layerState._viewer);
+    layerState._clickSubscription = input.onClick((event) => {
+      const picked = event.pick;
       const fire = pickedFire(picked);
       if (fire) {
         selectAndFocusFire(fire);
@@ -52,8 +47,8 @@ export function createSelection({
         if (pickedId && isOwnedByOtherLayer(id, pickedId)) return;
       }
       const cardHit = overlayHost.hitTest?.(
-        click.position?.x,
-        click.position?.y,
+        event.screenPosition?.x,
+        event.screenPosition?.y,
         {
           sourceId: FIRMS_OVERLAY_SOURCE_ID,
         },
@@ -64,14 +59,12 @@ export function createSelection({
         return;
       }
       clearFireSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    if (layerState._clickHandler) {
-      layerState._clickHandler.destroy();
-      layerState._clickHandler = null;
-    }
+    layerState._clickSubscription?.();
+    layerState._clickSubscription = null;
   }
 
   /** Select one stable detection and request one UI-owned camera transfer. */

@@ -109,62 +109,49 @@ test('reset reports who was holding it, for teardown', () => {
   assert.equal(isLeaseCurrent(lease), false);
 });
 
-test('every scene click handler consults ownership before it picks', () => {
-  // This is the whole point of a shared contract: a new tool must not have to
-  // find and edit each of these. If a layer grows a click handler it has to
-  // appear here too.
-  const guarded = [
-    ['src/data/trackingClickGesture.js', 'onClick(click, gesture);'],
-    ['src/data/localGeojsonCore.js', 'viewer.scene.pick(click.position)'],
-    ['src/data/cctvGizmo.js', 'pickGizmoPart(event.position)'],
-    ['src/layers/alpr/presentation.js', 'viewer.scene.pick(click.position)'],
-    ['src/layers/bikeshare/selection.js', 'viewer.scene.pick(click.position)'],
-    ['src/layers/firms/selection.js', 'scene.pick(click.position)'],
+test('pointer input, camera holds and the stock clicks go through the one dispatcher', () => {
+  // The dispatcher (src/input/dispatcher.js) applies the pointer claim once
+  // per event for every subscriber, so a new tool does not have to find and
+  // edit each layer. A layer that binds its own handler, writes the camera
+  // flag or takes the stock clicks itself steps around that contract.
+  const DISPATCHER = 'src/input/dispatcher.js';
+  const rules = [
     [
-      'src/layers/installations/selection.js',
-      'viewer.scene.pick(click.position)',
-    ],
-    ['src/layers/launches/lifecycle.js', 'drillPick(movement.position'],
-    ['src/layers/radio/interaction.js', 'pickedRadioStationAt(click.position)'],
-    [
-      'src/layers/satellites/interaction.js',
-      'viewer.scene.pick(click.position)',
+      /new\s+[\w.]*ScreenSpaceEventHandler\(/,
+      'binds its own ScreenSpaceEventHandler',
     ],
     [
-      'src/layers/submarineCables/interaction.js',
-      'viewer.scene.pick(click.position)',
+      /\.enableInputs\s*=(?!=)/,
+      'writes enableInputs instead of suspendCamera()',
     ],
     [
-      'src/layers/vessels/selection.js',
-      'pickContact(viewer.scene, click.position)',
+      /screenSpaceEventHandler\??\.removeInputAction\(/,
+      'removes stock clicks instead of suppressStockClicks()',
     ],
   ];
-  for (const [file, firstPick] of guarded) {
+  const walk = (dir) =>
+    fs
+      .readdirSync(path.join(ROOT, dir), { withFileTypes: true })
+      .flatMap((entry) => {
+        const rel = path.join(dir, entry.name);
+        if (entry.isDirectory()) return walk(rel);
+        return entry.name.endsWith('.js') ? [rel] : [];
+      });
+  const offenders = [];
+  for (const file of walk('src')) {
+    if (file === DISPATCHER) continue;
     const source = read(file);
-    assert.match(
-      source,
-      /import \{ isPointerFree \} from '[^']*inputOwnership\.js';/,
-      `${file} must consult the shared pointer claim`,
-    );
-    const guardAt = source.indexOf('if (!isPointerFree()) return;');
-    const pickAt = source.indexOf(firstPick);
-    assert.ok(guardAt >= 0, `${file} is missing the guard`);
-    assert.ok(
-      pickAt >= 0,
-      `${file}: could not find its pick call (${firstPick})`,
-    );
-    assert.ok(
-      guardAt < pickAt,
-      `${file} must yield before it picks, not after`,
-    );
+    for (const [pattern, what] of rules)
+      if (pattern.test(source)) offenders.push(`${file} ${what}`);
   }
+  assert.deepEqual(offenders, []);
 });
 
 test('ambient selection handlers never claim the pointer themselves', () => {
   // Claiming from a selection handler would deadlock every other layer the
   // moment a user clicked anything. Only tools claim.
   for (const file of [
-    'src/data/trackingClickGesture.js',
+    'src/input/dispatcher.js',
     'src/data/localGeojsonCore.js',
     'src/data/cctvGizmo.js',
     'src/layers/vessels/selection.js',

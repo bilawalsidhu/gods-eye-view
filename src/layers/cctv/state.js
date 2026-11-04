@@ -50,7 +50,7 @@ export function createState({ services }) {
 
   layerState._lastViewContext = '';
 
-  layerState._clickHandler = null;
+  layerState._clickSubscription = null;
 
   layerState._count = 0;
 

@@ -12,6 +12,9 @@ export const SELECTED_LIFT_M = 5;
 
 const RADIO_PICK_TOLERANCE_PX = 8;
 
+/** A click this close to a station picks it: one drill window of this size. */
+export const RADIO_PICK_WINDOW_PX = RADIO_PICK_TOLERANCE_PX * 2 + 1;
+
 export const RADIO_TUNER_DIRECTORY_LIMIT = 750;
 
 export const RADIO_TUNER_STATION_LIMIT = RADIO_TUNER_DIRECTORY_LIMIT;
@@ -50,17 +53,6 @@ export const RADIO_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   collisionCapacity: 96,
   moving: false,
 });
-
-export const RADIO_PICK_OFFSETS = Object.freeze([
-  [0, -RADIO_PICK_TOLERANCE_PX],
-  [RADIO_PICK_TOLERANCE_PX, 0],
-  [0, RADIO_PICK_TOLERANCE_PX],
-  [-RADIO_PICK_TOLERANCE_PX, 0],
-  [6, -6],
-  [6, 6],
-  [-6, 6],
-  [-6, -6],
-]);
 
 export const DEFAULT_RADIO_FILTER = 'all';
 

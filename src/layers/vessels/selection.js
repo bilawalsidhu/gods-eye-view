@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
 export function createSelection({
@@ -10,7 +9,7 @@ export function createSelection({
   options,
 }) {
   const { state } = vesselState;
-  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
+  const { isOwnedByOtherLayer } = services.picking;
   const { requestWorldFocus } = services.worldFocus;
   const {
     selectEntityContext,
@@ -20,27 +19,15 @@ export function createSelection({
   const aisLiveVesselsLayer = layer;
 
   function installInteraction(viewer) {
-    if (state.clickHandler || !viewer) return;
-    const handler = state.interactionHandlerFactory
-      ? state.interactionHandlerFactory(viewer)
-      : new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    bindVesselInteraction(
-      viewer,
-      handler,
-      state.interactionKeyTarget || document,
-    );
+    if (state.clickSubscription || !viewer) return;
+    bindVesselInteraction(viewer, state.interactionKeyTarget || document);
   }
 
-  function bindVesselInteraction(viewer, handler, keyTarget) {
-    state.clickHandler = handler;
-    handler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
+  function bindVesselInteraction(viewer, keyTarget) {
+    state.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state.feed.enabled) return;
-      const picked = pickContact
-        ? pickContact(viewer.scene, click.position)
-        : viewer.scene.pick(click.position);
-      const pickedId = resolvePickId(picked);
+      const picked = event.hit;
+      const pickedId = event.id;
       let record = pickedId ? state.records.byMmsi.get(pickedId) : null;
       // A vessel icon's pick id is its row id: the MMSI, or an unkeyed row's.
       // Removing a row destroys its pick id, so an evicted vessel cannot be
@@ -73,8 +60,8 @@ export function createSelection({
       // actionable hit rectangles before treating the click as empty space.
       const cardHit = !record
         ? vesselState._vesselOverlayHost.hitTest?.(
-            click.position?.x,
-            click.position?.y,
+            event.screenPosition?.x,
+            event.screenPosition?.y,
             {
               ...(cycloneBackground
                 ? {}
@@ -106,7 +93,7 @@ export function createSelection({
         });
         if (transition.action === 'deselect') clearVesselInspection();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
     state.keyTarget = keyTarget;
     state.keydownHandler = onVesselKeyDown;
     keyTarget.addEventListener('keydown', state.keydownHandler);
@@ -140,10 +127,8 @@ export function createSelection({
   }
 
   function removeVesselInteraction() {
-    if (state.clickHandler) {
-      state.clickHandler.destroy();
-      state.clickHandler = null;
-    }
+    state.clickSubscription?.();
+    state.clickSubscription = null;
     if (state.keyTarget && state.keydownHandler) {
       state.keyTarget.removeEventListener('keydown', state.keydownHandler);
     }

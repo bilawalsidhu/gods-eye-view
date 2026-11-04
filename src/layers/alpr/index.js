@@ -63,7 +63,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     moveEndRemove: null,
     postRenderRemove: null,
     lastAnchorSampleAt: 0,
-    clickHandler: null,
+    clickSubscription: null,
     debounceTimer: null,
     /** Snapped box of the last successful query; a view still inside it reuses its records. */
     lastQueryBox: null,
@@ -343,8 +343,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.moveEndRemove = null;
       state.postRenderRemove?.();
       state.postRenderRemove = null;
-      state.clickHandler?.destroy();
-      state.clickHandler = null;
+      state.clickSubscription?.();
+      state.clickSubscription = null;
       clearRendered();
       if (state.dataSource && viewer)
         viewer.dataSources.remove(state.dataSource, true);

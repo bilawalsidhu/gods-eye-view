@@ -58,16 +58,15 @@ export function createVesselState({ source, services }) {
     /** The vessels' icon set and the primitive that draws it. */
     icons: null,
     iconPrimitive: null,
-    clickHandler: null,
+    /** The click subscription's unsubscribe. */
+    clickSubscription: null,
     /** Exact EventTarget currently holding the Escape listener. */
     keyTarget: null,
     /** Exact callback registered on keyTarget. */
     keydownHandler: null,
     /** Cesium trackedEntityChanged listener disposer. */
     trackedEntityRemover: null,
-    /** Test-only factory used to exercise enable-time interaction installation. */
-    interactionHandlerFactory: null,
-    /** Test-only key target paired with interactionHandlerFactory. */
+    /** Test-only key target for enable-time interaction installation. */
     interactionKeyTarget: null,
     preRenderRemover: null,
     /** Pending timer that renders one frame after a cadence-skipped pass. */

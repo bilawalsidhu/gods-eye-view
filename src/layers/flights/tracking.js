@@ -12,10 +12,10 @@ import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import { routePlausible } from '../../data/routePlausible.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
-  bindTrackingClickGesture,
   isTrackingSelectionGesture,
   isTrackingClickGesture,
 } from '../../data/trackingClickGesture.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
   TRACKED_MODEL_MAX_LOAD_FAILS,
   TRACKED_MODEL_RETRY_BACKOFF_MS,
@@ -50,7 +50,7 @@ export function createTracking({
   const { isMilitaryLayerActive, isMilitaryIcao } = services.militaryRegistry;
   const { trackedLabelModelFromText, refreshTrackedReadout } = services.readout;
   const { applyTrackedCameraFrame } = services.camera;
-  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
   const flightsLayer = layer;
 
   function _emitAwarenessEvent(type, detail) {
@@ -1140,7 +1140,7 @@ export function createTracking({
    */
 
   function _installClickHandler(viewer) {
-    if (flightState._clickHandler) return; // already installed
+    if (flightState._clickSubscription) return; // already installed
 
     // Cross-layer untrack: if ANOTHER layer (military, vessels, …) grabs the follow-camera, drop our
     // tracking so its model/entity/update-loop don't orphan — without touching viewer.trackedEntity
@@ -1164,10 +1164,8 @@ export function createTracking({
         });
     }
 
-    flightState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    bindTrackingClickGesture(flightState._clickHandler, (click, gesture) => {
+    flightState._clickSubscription = inputFor(viewer).onClick((event) => {
+      const gesture = event.gesture;
       // Camera drags never select or deselect, even if they finish over a plane.
       // Duration alone is allowed through so a stationary long press can still
       // select/switch contacts; the destructive empty-space branch below applies
@@ -1177,9 +1175,7 @@ export function createTracking({
       // first-person reference. A globe click must not fall through to the
       // normal empty-space deselection path; cockpit has explicit exit controls.
       if (document.body.classList.contains('cockpit-mode')) return;
-      const picked = pickContact
-        ? pickContact(viewer.scene, click.position)
-        : viewer.scene.pick(click.position);
+      const picked = event.hit;
 
       if (picked) {
         // Clicking the tracked entity itself — ignore (don't deselect)

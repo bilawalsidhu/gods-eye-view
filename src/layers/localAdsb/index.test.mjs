@@ -13,6 +13,7 @@ import {
   localAdsbStatus,
 } from './index.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
 
 function fakeReceiver(initial = {}) {
   const state = {
@@ -199,9 +200,6 @@ async function enabledLayer(receiver, clock, feeds = null, options = {}) {
     services: { ...services, ...options.services },
     now: () => clock.now,
     loadModel: options.loadModel,
-    ...(options.createInputHandler
-      ? { createInputHandler: options.createInputHandler }
-      : {}),
   });
   layer.init(viewer);
   await layer.enable();
@@ -1070,20 +1068,13 @@ function clickHarness() {
       return scene.drillResult;
     },
   };
-  const handler = { actions: new Map() };
+  const viewer = { ...base.viewer, scene };
+  const input = fakeInput(viewer);
   return {
     scene,
-    viewer: { ...base, viewer: { ...base.viewer, scene } },
-    createInputHandler: () => ({
-      setInputAction(action, type) {
-        handler.actions.set(type, action);
-      },
-      destroy() {},
-    }),
+    viewer: { ...base, viewer },
     click() {
-      handler.actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK)({
-        position: new Cesium.Cartesian2(10, 10),
-      });
+      input.click(new Cesium.Cartesian2(10, 10));
     },
   };
 }
@@ -1094,7 +1085,6 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   const harness = clickHarness();
   const { layer, calls } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
-    createInputHandler: harness.createInputHandler,
   });
   t.after(() => layer.destroy());
   receiver.set({ aircraft: [record()] });
@@ -1119,7 +1109,6 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   const { resolvePickId } = await import('../../data/pickRegistry.js');
   const { layer, calls } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
-    createInputHandler: harness.createInputHandler,
     services: {
       picking: {
         registerPickOwner: (id, predicate) => owners.set(id, predicate),
