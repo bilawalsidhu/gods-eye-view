@@ -727,6 +727,52 @@ announces the reason.
 
 Automatic Voice Preview uses output from the active mounted provider, including late replies that may answer an older request. Manual panel choices remain until genuine local input rearms automatic presentation. Preview stays off when disabled, remains hidden in Cockpit, and retires on Stop or provider replacement. Display events do not grant command authority.
 
+Typed chat sits beside voice in the dock. Chat replies are silent and never
+request microphone access. The first message connects with the selected
+provider and runs the same map actions as voice through each provider's text
+API: OpenAI uses `OPENAI_CHAT_MODEL` (default `gpt-4.1-mini`) and needs an API
+key; Gemini sends a text-only `generateContent` request with
+`GEMINI_CHAT_MODEL` (default `gemini-3.5-flash-lite`) and never starts Live.
+Only one mode runs at a time: the microphone closes chat, and opening chat
+stops voice. Enter sends, Shift+Enter adds a line, and Up or Down at the start
+of the field recall recent messages and restore the draft. Attachments are up
+to four map-layer references or UTF-8 TXT, Markdown, CSV, JSON and GeoJSON
+files, 10 KB in total, sent only with the message; a layer reference names
+the layer without exporting its records. The conversation and recent commands
+stay in memory for the page.
+
+The chat routes answer a missing key with `503` and code `API_KEY_MISSING`.
+OpenAI chat can only bill `OPENAI_API_KEY`, so while `GEV_PREFER_CODEX_OAUTH`
+pins OpenAI to ChatGPT OAuth it answers `503` with code `CODEX_OAUTH_REQUIRED`
+instead; Gemini chat is unaffected. An upstream `429` or `503` keeps its status
+and passes on a `Retry-After` given in seconds, capped at an hour; the chat
+names the wait, and a throttled reply carries code `RATE_LIMITED`. A refused
+key or account stops reaching the provider for a minute, unless the configured
+key changes: `API_KEY_REJECTED` for a `401` or Gemini's `400` with reason
+`API_KEY_INVALID`, `ACCESS_DENIED` for a `403`, and `QUOTA_EXCEEDED` for
+OpenAI's `429` `insufficient_quota`. Each refusal answers `502` with its code,
+and the chat shows a matching message.
+
+Chat and the voice panel sit above the dock or dock into the right rail's lane,
+which hides the rail until the panel minimizes or closes, or a rail panel opens.
+Minimized panels always sit as a bar centred above the dock; restoring returns a
+docked panel to the lane. A centred panel steps down to its bar when the pointer
+reaches the Location or Visual Presets button and rests above an open tray,
+without moving keyboard focus. Expanded over an open tray, it docks into the
+lane until the trays close; a panel that stepped down expands in the centre
+again once the trays close and the pointer leaves the wings. Panel height animates when one panel replaces the
+other or the voice view changes. Minimized voice shows the last sentence from
+each side, and the empty Voice Preview suggests things to say until voice
+starts. Settings opened from chat keep chat's frame and show the shared AI
+provider, the quick-commands option and then the voice preferences (Voice
+Preview, inactivity timeout and model tier), so they stay in reach while
+Preview is off, with Back to chat; voice Settings show Back to voice. Escape steps back from either Settings view, closes Voice
+Preview, and does nothing in chat. Closing chat ends a typed session, and the
+voice panel's close turns voice off. Asking the assistant from chat to open
+Voice Settings or Voice Preview puts chat away, minimized or not, and shows the
+voice panel; the typed conversation and its running reply carry on, and the
+chat button brings them back.
+
 Contacts nearest-aircraft follow-ups retain the snapshot's distance basis even
 after the camera moves. An explicit new scope replaces that basis. Provider
 instructions require an analyst query for requested lists and use the requested
@@ -869,7 +915,7 @@ Source factories have dedicated `layers/<family>/source` exports. ALPR and earth
 
 Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/progress/result, interruption, completion and turn-metrics events; stopping or replacing a session cancels pending actions. An active session's normal Stop publishes one idle transition, including adapters that emit their own terminal state; a restart triggered by that transition keeps ownership of its new startup state. Alternate adapters can use the same controls and action runner.
 
-The standalone app offers OpenAI and Gemini Live through an explicit provider chooser. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
+The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
 Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 33 tools using separate description-only metadata; a session is offered 32 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
 
@@ -1786,6 +1832,12 @@ unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` ov
 those; exactly `0` disables the limiter, while a value that cannot be read as a
 number falls back to the default rather than to unlimited. Over-limit requests
 receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
+Typed chat (`/api/openai/chat`, `/api/gemini/chat`) counts in its own window,
+set by `GEV_RATELIMIT_OPENAI_CHAT_PER_MIN` and `GEV_RATELIMIT_GEMINI_CHAT_PER_MIN`.
+Left unset, each takes its provider's resolved cap — `GEV_RATELIMIT_OPENAI_PER_MIN`
+or `GEV_RATELIMIT_GEMINI_PER_MIN`, both 30 by default — so lowering a provider
+throttle lowers chat too; an explicit chat value, including `0`, wins. Its
+over-limit reply carries `Retry-After: 60`.
 The client key is the socket peer address only — a forwarded-for header is not
 trusted, so a proxied deployment shares one bucket per upstream hop.
 
@@ -5896,7 +5948,7 @@ apply to `public/` assets or built-preview serving.
 - Panel POSITION keys are versioned `v8` (`godsEyeView.v8.panelPos.<id>`); collapsed-state keys remain `v6`. The one-time position reset clears stale DISPLAY placements that could overlap the Context rail.
 - Map Source lives in the bottom Visual Presets tray. The left accordion contains no MAP STACK panel, and the `k` panel token that addressed it is gone from the share registry, so legacy `ui=k...` state takes the ordinary unknown-token skip.
 - A dock popover (Visual Presets, Location) auto-dismisses on mouse-away unless pinned. Focus inside the tray defers that dismissal only when the browser reports `:focus-visible` — keyboard focus and typed-into fields hold the tray open; a mouse-clicked tile does not, because Chromium focuses a `<button>` on press.
-- GEV MIC control is a glass capsule (var(--glass-bg), blur(24px) saturate(1.4), 999px radius; panel radius in error state).
+- The voice and chat panels share the left panels' glass surface (`--glass-bg`, `--glass-border`, blur(24px) saturate(1.4); `src/ui/styles/ai-chat.css`). The docked voice control draws its own blur on a layer behind it, so the panels inside it still blur the map. Cyber keeps its own surfaces.
 - The desktop right rail (`#right-context-rail`) owns `DISPLAY`, `CCTV`, its active parameter controls, and `GLOBAL CONTEXT` as one fixed responsive stack in that order. Its compact buttons use the same 176 px width as the left accordion and one consistent 50 px height, share the left stack's 52 px edge inset and measured top baseline across HUD variants, then constrain themselves against visible HUD/chrome rectangles and the remaining vertical corridor. `DISPLAY` is no longer draggable and legacy saved coordinates are ignored.
 - The right rail is labeled **DISPLAY** (formerly "MOVE") and groups, in order, HUD, DETECT, Bloom, Sharpen, 3D, Clean-UI (HUD + DETECT promoted to the top). Its expanded controls retain the same compact 176 px width as the right-side tabs instead of growing to the wider Context detail-card width. It starts expanded on first run and respects the user's later `v6` collapse choice. Collapses/expands with directional chevrons (`◀` collapsed, `▶` expanded).
 - Display and Context use matching 330 px expanded widths and matching compact tab dimensions. The parameter panel is part of Display's expanded content. One right-rail panel is open at a time in every HUD layout and collapsed launchers are hidden; the panel rail beside the stack switches between them (see Panel rails). The most recently opened right-rail panel owns the lane even when it appears later in DOM order; passive restoration and automatic disclosure do not replace that explicit owner. When the open panel exceeds the measured corridor, it scrolls internally.
