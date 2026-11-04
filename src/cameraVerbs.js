@@ -29,6 +29,7 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from './renderGovernor.js';
+import { heightsFor } from './queries/heights.js';
 
 let _isCockpitActive = null;
 /** °/s by speed word — orbit; pan uses fractions of view height/s. */
@@ -559,25 +560,18 @@ function acquireCorridorFloor(state, takeWhole) {
 export function probeMeshFloorM(scene, cells) {
   const requested = Array.isArray(cells) ? cells.length : 0;
   const empty = { heightM: Number.NaN, sampled: 0, requested };
-  if (!scene || typeof scene.sampleHeight !== 'function' || !requested)
-    return empty;
+  if (!scene || !requested) return empty;
+  const heights = heightsFor(scene);
   let heightM = Number.NaN;
   let sampled = 0;
   for (const cell of cells) {
-    try {
-      const carto = Cesium.Cartographic.fromDegrees(
-        cell.lon,
-        cell.lat,
-        0,
-        _probeCarto,
-      );
-      const height = scene.sampleHeight(carto);
-      if (!Number.isFinite(height)) continue;
-      sampled += 1;
-      heightM = Number.isFinite(heightM) ? Math.max(heightM, height) : height;
-    } catch {
-      /* tiles not ready for this cell */
-    }
+    // A miss is a cell whose tiles are not ready.
+    const height = heights.now(
+      Cesium.Cartographic.fromDegrees(cell.lon, cell.lat, 0, _probeCarto),
+    );
+    if (height === null) continue;
+    sampled += 1;
+    heightM = Number.isFinite(heightM) ? Math.max(heightM, height) : height;
   }
   return { heightM, sampled, requested };
 }

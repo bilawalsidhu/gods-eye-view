@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { wrapLon } from './tileMath.js';
+import { heightsFor } from '../../queries/heights.js';
 
 /** Equirectangular metres between {lon, lat} points, the short way round ±180°; street scale. */
 export function metresBetween(a, b) {
@@ -21,12 +22,9 @@ export function plausibleSurfaceHeight(height) {
  * underground before tiles load).
  */
 export function sampledSurfaceHeight(scene, carto) {
-  let height = null;
-  try {
-    if (scene?.sampleHeightSupported) height = scene.sampleHeight(carto);
-  } catch {
-    /* not sampleable yet */
-  }
+  const height = scene?.sampleHeightSupported
+    ? heightsFor(scene).now(carto)
+    : null;
   return plausibleSurfaceHeight(height) ? height : null;
 }
 
@@ -41,8 +39,8 @@ export function groundUnderCamera(viewer) {
   if (!carto || !scene) return null;
   const globe = scene.globe;
   if (globe && globe.show !== false) {
-    const ground = globe.getHeight?.(carto);
-    if (Number.isFinite(ground)) return ground;
+    const ground = heightsFor(scene).now(carto, { against: 'terrain' });
+    if (ground !== null) return ground;
   }
   const sampled = sampledSurfaceHeight(scene, carto);
   return sampled !== null && sampled < carto.height ? sampled : null;

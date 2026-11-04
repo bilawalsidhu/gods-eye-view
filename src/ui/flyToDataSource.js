@@ -3,6 +3,7 @@ import * as Cesium from 'cesium';
 import { guardCameraAboveGround } from '../cameraGroundGuard.js';
 import { rangeForBoundingSphere } from '../data/cameraFraming.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
+import { heightsFor } from '../queries/heights.js';
 
 /** All visible positions, path vertices, polygon rings, walls and overlay bounds. */
 export function dataSourcePoints(dataSource, time = Cesium.JulianDate.now()) {
@@ -87,7 +88,9 @@ export function flyToDataSource(
     Cesium.Cartographic.fromDegrees(points[0][0], points[0][1]);
   const lat = Cesium.Math.toDegrees(center.latitude),
     lon = Cesium.Math.toDegrees(center.longitude);
-  const terrain = viewer.scene?.globe?.getHeight?.(center);
+  const terrain = viewer.scene
+    ? heightsFor(viewer.scene).now(center, { against: 'terrain' })
+    : null;
   const cached = ground?.cachedGroundFloor?.(lat, lon);
   const height =
     Number.isFinite(terrain) && terrain > 0

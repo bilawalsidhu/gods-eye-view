@@ -11,6 +11,7 @@ import {
   applyInfraEvictionGrace,
   shouldRecomputeInfraLod,
 } from './localGeojsonLod.js';
+import { heightsFor } from '../queries/heights.js';
 
 const DEFAULT_LABEL_MAX = 900;
 const DEFAULT_LABEL_GRID_PX = 132;
@@ -1114,9 +1115,11 @@ function refreshLocalTerrainFloor(viewer, record) {
   // Camera motion can refine terrain after the first successful depth sample.
   // Reuse the loaded mesh on existing bounded walks; never arm a timer or do
   // another GPU readback just to maintain this floor. Keep roof elevations.
-  const height = globe.getHeight?.(record.carto);
+  const height = heightsFor(viewer.scene).now(record.carto, {
+    against: 'terrain',
+  });
   if (
-    !Number.isFinite(height) ||
+    height === null ||
     Math.abs(height) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M ||
     height <= record.groundHeight
   )
@@ -1131,26 +1134,20 @@ function sampleLocalGroundHeight(viewer, record, now) {
   record.lastGroundSampleMs = now;
   const globe = viewer.scene.globe;
   if (globe?.show && globe.tilesLoaded === false) return false;
-  let sampled;
-  try {
-    sampled = viewer.scene.sampleHeight(record.carto, [record.entity]);
-  } catch {
-    return false; // tiles not ready; retry on a later bounded update
-  }
-  if (
-    !Number.isFinite(sampled) ||
-    Math.abs(sampled) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M
-  )
+  const heights = heightsFor(viewer.scene);
+  // A miss is tiles not ready: retry on a later bounded update.
+  let sampled = heights.now(record.carto, { exclude: [record.entity] });
+  if (sampled === null || Math.abs(sampled) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M)
     return false;
   // A coarse scene-depth sample can lie below the terrain already loaded by
   // the visible globe. Keep that terrain as a floor while allowing roofs and
   // valid below-sea-level elevations. Photoreal scenes hide the globe, so its
   // inactive terrain must not constrain their geometry.
   const terrainHeight = globe?.show
-    ? globe.getHeight?.(record.carto)
-    : undefined;
+    ? heights.now(record.carto, { against: 'terrain' })
+    : null;
   if (
-    Number.isFinite(terrainHeight) &&
+    terrainHeight !== null &&
     Math.abs(terrainHeight) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M
   ) {
     sampled = Math.max(sampled, terrainHeight);

@@ -1,6 +1,7 @@
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import * as Cesium from 'cesium';
 import { DOT_HEIGHT_OFFSET, MAX_WAYPOINTS_PER_ROAD } from './policy.js';
+import { heightsFor } from '../../queries/heights.js';
 
 function surfaceTilesReady(scene) {
   if (scene.globe?.show) return scene.globe.tilesLoaded !== false;
@@ -333,7 +334,8 @@ export async function prepareRoadSurfaces(
         let sampled;
         // sampleHeight reads the locally rendered mesh, not unresolved/offscreen
         // tiles. Global tilesLoaded can stay false while this street is usable.
-        if (scene.globe?.show) sampled = scene.globe.getHeight?.(carto);
+        if (scene.globe?.show)
+          sampled = heightsFor(scene).now(carto, { against: 'terrain' });
         else {
           const estimate = Cesium.Cartographic.fromCartesian(
             road.waypoints[i],
@@ -351,9 +353,8 @@ export async function prepareRoadSurfaces(
           const shown = (excluded || []).filter((p) => p?.show);
           for (const primitive of shown) primitive.show = false;
           try {
-            sampled = scene.sampleHeight(carto, excluded);
-          } catch {
-            /* local mesh missing */
+            // A miss is the local mesh still missing.
+            sampled = heightsFor(scene).now(carto, { exclude: excluded });
           } finally {
             for (const primitive of shown) primitive.show = true;
           }

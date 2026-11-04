@@ -229,6 +229,7 @@
     "./application/operations": "./src/app/operations.js",
     "./data/entity-records": "./src/data/entityRecords.js",
     "./input": "./src/input/dispatcher.js",
+    "./queries/heights": "./src/queries/heights.js",
     "./data/lifecycle": "./src/data/lifecycle.js",
     "./ui/navigation": "./src/ui/navigationController.js",
     "./ui/share-restoration": "./src/ui/shareRestoration.js",

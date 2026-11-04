@@ -2992,3 +2992,43 @@ test('Bhote Koshi corridor remains ordered downstream and inside the imagery rec
     priorChainage = point.chainageM;
   }
 });
+
+test('an evidence point whose terrain sample misses sits at its fallback elevation, not sea level', async () => {
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  installEventDom();
+  globalThis.window = { setTimeout: () => 71, clearTimeout() {} };
+  const viewer = eventViewer();
+  const publications = [];
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imageryProviderFactory: async (url) => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: null })),
+    mediaLoader: async () => {
+      const error = new Error('fixture media intentionally unavailable');
+      error.name = 'AbortError';
+      throw error;
+    },
+    overlayHost: { setEntries(_source, entries) { publications.push(entries); }, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+  });
+  try {
+    layer.setParams({
+      presentation: 'scene-beat',
+      sceneSurface: 'evidence-beat',
+      beatId: 'gyirong-border-gate',
+    }, { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    const card = publications.at(-1).find((entry) => entry.id === 'evidence-card-gyirong-border-gate');
+    const fallback = event.evidenceSpine.find(({ id }) => id === 'gyirong-border-gate').fallbackElevationM;
+    assert.ok(fallback > 100, 'the fixture has a real fallback elevation');
+    const height = Cesium.Cartographic.fromCartesian(card.position()).height;
+    assert.ok(Math.abs(height - (fallback + 18)) < 1, `card at ${height} m`);
+    await layer.disable();
+  } finally {
+    await layer.destroy();
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});

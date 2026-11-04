@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { approxDistanceKm } from '../data/approxDistance.js';
+import { heightsFor } from '../queries/heights.js';
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
@@ -101,7 +102,8 @@ export function createMeshFloorSampler({
     { excludeObjects = [], viewerLat, viewerLon } = {},
   ) {
     if (!meshFloorPreferred()) return;
-    if (!scene || typeof scene.sampleHeight !== 'function') return;
+    // Without depth-texture support every probe throws: nothing to latch.
+    if (!scene || !heightsFor(scene).supported().surface) return;
     if (!Array.isArray(points) || !points.length) return;
     // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):
     // while tiles are MID-STREAM a probe returns coarse-LOD heights — real
@@ -129,20 +131,14 @@ export function createMeshFloorSampler({
       ) {
         continue; // too far: tiles not streamed there, probe would be a guaranteed miss
       }
-      let height;
-      try {
-        const carto = Cesium.Cartographic.fromDegrees(
-          cell.lon,
-          cell.lat,
-          0,
-          _scratchProbe,
-        );
-        height = scene.sampleHeight(carto, excludeObjects);
-        sampled += 1;
-      } catch {
-        continue; // scene mid-teardown — try again next poll
-      }
-      if (!Number.isFinite(height)) continue; // tiles not loaded yet — no negative latch
+      const height = heightsFor(scene).now(
+        Cesium.Cartographic.fromDegrees(cell.lon, cell.lat, 0, _scratchProbe),
+        { exclude: excludeObjects },
+      );
+      // A miss counts against the budget whatever its cause: past the support
+      // gate a probe only throws mid-teardown, when every later cell would too.
+      sampled += 1;
+      if (height === null) continue; // tiles not loaded yet — no negative latch
       // Round 5: a REAL Re:Earth prior is REQUIRED before any sample latches.
       //  - A geoid-fallback prior (cached while the proxy was failing) is a
       //    sea-level poison that rejected legitimate samples at elevated

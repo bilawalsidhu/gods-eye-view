@@ -799,7 +799,11 @@ test('under Google 3D the ground is measured again once its tiles load, without 
   const viewer = fakeViewer();
   // 4 km up the ellipsoid, 2 km over a city whose tiles are still loading.
   let ground;
-  viewer.camera.positionCartographic = { height: 4000 };
+  viewer.camera.positionCartographic = {
+    longitude: 0,
+    latitude: 0,
+    height: 4000,
+  };
   viewer.scene.globe = { show: false };
   viewer.scene.sampleHeightSupported = true;
   viewer.scene.sampleHeight = () => ground;
@@ -823,7 +827,11 @@ test('an unknown ground is measured only a few times, and not after the layer is
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const viewer = fakeViewer();
   let samples = 0;
-  viewer.camera.positionCartographic = { height: 4000 };
+  viewer.camera.positionCartographic = {
+    longitude: 0,
+    latitude: 0,
+    height: 4000,
+  };
   viewer.scene.globe = { show: false };
   viewer.scene.sampleHeightSupported = true;
   viewer.scene.sampleHeight = () => {

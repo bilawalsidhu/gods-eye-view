@@ -55,6 +55,7 @@ function fakeScene(sampleHeight, { cameraHeightM = 900, tilesLoaded = true, show
   Object.defineProperty(tileset, 'tilesLoaded', { value: tilesLoaded, configurable: true });
   Object.defineProperty(tileset, 'show', { value: show, configurable: true });
   return {
+    sampleHeightSupported: true,
     sampleHeight,
     camera: { positionCartographic: { height: cameraHeightM } },
     primitives: { length: 1, get: () => tileset },
@@ -136,4 +137,19 @@ test('sampler: a cell just across the antimeridian is still near the viewer', ()
   sampleMeshFloorCells(scene, [{ lat: -16.8, lon: -179.999 }], { viewerLat: -16.8, viewerLon: 179.999 });
   sampleMeshFloorCells(scene, [{ lat: -16.81, lon: 179.999 }], { viewerLat: -16.81, viewerLon: -179.999 });
   assert.equal(calls, 2, 'about 200 m apart, so both cells are probed');
+});
+
+test('sampler: a scene without depth-texture support is never probed', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  let calls = 0;
+  const scene = fakeScene(() => {
+    calls++;
+    throw new Error('depth textures unsupported');
+  });
+  scene.sampleHeightSupported = false;
+  sampleMeshFloorCells(scene, [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
+  assert.equal(calls, 0);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);
 });

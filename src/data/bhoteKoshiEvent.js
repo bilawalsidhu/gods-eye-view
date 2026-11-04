@@ -28,6 +28,7 @@ import { createImagerySplit } from '../ui/imagerySplit.js';
 import { formatDate, t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { heightsFor } from '../queries/heights.js';
 
 export const BHOTE_KOSHI_LAYER_ID = 'bhote-koshi-2026';
 export const BHOTE_KOSHI_OVERLAY_SOURCE_ID = 'bhote-koshi-witnesses';
@@ -122,20 +123,11 @@ const DEFAULT_EVENT_LOADER = async () => {
 const DEFAULT_IMAGERY_PROVIDER_FACTORY = (url, options) =>
   Cesium.SingleTileImageryProvider.fromUrl(url, options);
 const DEFAULT_TERRAIN_SAMPLER = async (viewer, observations) => {
-  if (
-    !viewer?.terrainProvider ||
-    !viewer.terrainProvider.availability ||
-    typeof Cesium.sampleTerrainMostDetailed !== 'function'
-  ) {
-    return null;
-  }
-  const cartographics = observations.map((observation) =>
-    Cesium.Cartographic.fromDegrees(observation.lon, observation.lat),
-  );
-  return Cesium.sampleTerrainMostDetailed(
-    viewer.terrainProvider,
-    cartographics,
-  );
+  if (!viewer?.scene || !viewer.terrainProvider?.availability) return null;
+  const heights = await heightsFor(viewer.scene).batch(observations, {
+    against: 'terrain',
+  });
+  return heights.map((height) => ({ height }));
 };
 const DEFAULT_MEDIA_LOADER = async (url, { signal } = {}) => {
   if (typeof createImageBitmap !== 'function') {
@@ -1197,7 +1189,8 @@ export function createBhoteKoshiEventLayer({
     }
     throwIfEnableCancelled(signal, _enabled);
     return observations.map((observation, index) => {
-      const sampledHeight = Number(sampled?.[index]?.height);
+      // A miss is null or undefined, never sea level.
+      const sampledHeight = Number(sampled?.[index]?.height ?? Number.NaN);
       const fallbackHeight = Number(observation.fallbackElevationM) || 0;
       return Cesium.Cartesian3.fromDegrees(
         observation.lon,
@@ -1573,14 +1566,12 @@ export function createBhoteKoshiEventLayer({
       // a single high sample can make the front dive backward in screen space.
       if (_sceneControls.evidencePathElevation !== 'source') {
         // Sample once while preparing the shot, never from an animation frame.
-        try {
-          height = _viewer?.scene?.sampleHeight?.(
-            position,
-            [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
-          );
-        } catch {}
+        const heights = _viewer?.scene ? heightsFor(_viewer.scene) : null;
+        height = heights?.now(position, {
+          exclude: [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
+        });
         if (!Number.isFinite(height))
-          height = _viewer?.scene?.globe?.getHeight?.(position);
+          height = heights?.now(position, { against: 'terrain' });
       }
       if (!Number.isFinite(height)) height = point.fallbackElevationM;
       return Cesium.Cartesian3.fromDegrees(point.lon, point.lat, height + 8);

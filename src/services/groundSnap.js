@@ -47,6 +47,7 @@
  */
 
 import * as Cesium from 'cesium';
+import { heightsFor } from '../queries/heights.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a
@@ -347,21 +348,16 @@ export function createGroundSnap({ groundFloor }) {
     };
     if (!_tilesReady(viewer)) return miss();
     windowCount += 1;
-    let sampled;
-    try {
-      const carto = Cesium.Cartographic.fromCartesian(
-        pos,
-        Cesium.Ellipsoid.WGS84,
-        scratchCarto,
-      );
-      // sampleHeight throws when unsupported (no depth textures) — that's a miss.
-      sampled = viewer.scene.sampleHeight(
-        carto,
-        getExclusions ? getExclusions() : undefined,
-      );
-    } catch {
-      sampled = undefined;
-    }
+    const carto = Cesium.Cartographic.fromCartesian(
+      pos,
+      Cesium.Ellipsoid.WGS84,
+      scratchCarto,
+    );
+    const sampled = carto
+      ? heightsFor(viewer.scene).now(carto, {
+          exclude: getExclusions ? getExclusions() : undefined,
+        })
+      : null;
     // Same sanity floor as cctv.js's sampleGroundHeight: a hit far below the
     // ellipsoid is pick garbage, not ground.
     if (!Number.isFinite(sampled) || sampled < -150) return miss();
