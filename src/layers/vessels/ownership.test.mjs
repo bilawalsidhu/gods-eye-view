@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
+import * as Cesium from 'cesium';
+import { createIconSet } from '../../data/iconSet.js';
 
 const noop = () => {};
 function services() {
@@ -13,7 +15,7 @@ function services() {
     trails: {
       createTrail: () => ({ setPositions: noop, clear: noop, destroy: noop }),
     },
-    labels: {},
+    labels: { formatKnots: (knots) => `${knots} kt` },
     picking: { unregisterPickOwner: noop },
     overlay: {
       setOverlayEntries: noop,
@@ -36,20 +38,10 @@ function services() {
     },
   };
 }
-function setup(source, options = {}) {
+function setup(source, options = {}, viewer = {}) {
   const layer = createVesselLayer({ source, services: services(), options });
-  const primitives = new Set();
-  layer.testing._setVesselStateForTest({
-    viewer: {},
-    billboardCollection: {
-      add(options) {
-        const primitive = { ...options };
-        primitives.add(primitive);
-        return primitive;
-      },
-      remove: (primitive) => primitives.delete(primitive),
-    },
-  });
+  const icons = createIconSet();
+  layer.testing._setVesselStateForTest({ viewer, icons });
   let now = 1000;
   layer.testing._setAisRuntimeForTest({
     now: () => now,
@@ -58,7 +50,7 @@ function setup(source, options = {}) {
   });
   return {
     layer,
-    primitives,
+    icons,
     advance: (ms) => {
       now += ms;
     },
@@ -283,27 +275,31 @@ test('partial-feed expiry releases a selected vessel and its pending trail', asy
   assert.equal(layer.testing._getVesselStateForTest().trailPositionCount, 0);
 });
 
-test('refresh keeps pick identity and renderer geometry separate, and eviction releases the primitive', async () => {
+test('refresh keeps the icon row and its pick identity, and eviction releases the row', async () => {
   let current = snapshot([observation('111')]);
-  const { layer, primitives } = setup({ getSnapshot: async () => current });
+  const { layer, icons } = setup({ getSnapshot: async () => current });
   await layer.update();
-  const [primitive] = primitives;
-  const record = primitive.id;
-  for (const key of ['position', 'surfacePosition', 'normal', 'billboard']) {
-    assert.equal(Object.hasOwn(record, key), false);
-  }
-  assert.deepEqual(layer.findByQuery('111').position, primitive.position);
-  const oldPosition = primitive.position;
+  assert.equal(icons.count, 1);
+  assert.equal(icons.idAt(0), '111');
+  const meta = icons.metaAt(0);
+  const drawn = () =>
+    icons.position(icons.row('111'), 0, new Cesium.Cartesian3());
+  const near = (a, b) => Cesium.Cartesian3.distance(a, b) < 0.01;
+  assert.ok(near(layer.findByQuery('111').position, drawn()));
+  const oldPosition = drawn();
   current = snapshot([{ ...observation('111'), longitude: 4.06 }]);
   await layer.update();
-  assert.equal(primitives.size, 1);
-  assert.equal([...primitives][0], primitive);
-  assert.equal(primitive.id, record);
-  assert.notDeepEqual(primitive.position, oldPosition);
-  assert.deepEqual(layer.findByQuery('111').position, primitive.position);
+  assert.equal(icons.count, 1);
+  assert.equal(
+    icons.metaAt(icons.row('111')),
+    meta,
+    'focus identity survives a refresh',
+  );
+  assert.ok(!near(drawn(), oldPosition));
+  assert.ok(near(layer.findByQuery('111').position, drawn()));
   current = snapshot([observation('222')]);
   await layer.update();
-  assert.equal(primitives.has(primitive), false);
+  assert.equal(icons.has('111'), false);
   assert.equal(layer.findByQuery('111'), null);
 });
 
@@ -408,4 +404,44 @@ test('empty coverage cannot hide stale, incomplete or rejected source data', asy
     assert.equal(layer.hasContact('111'), true, JSON.stringify(patch));
     assert.ok(layer.getStats().error, JSON.stringify(patch));
   }
+});
+
+test('cards and detection judge the horizon where the icon shader culls the row', async () => {
+  // A camera over the limb that sees the row's cull point (lifted to 12 m) but
+  // not the drawn position (3 m above the ellipsoid before the geoid loads).
+  const ship = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 3);
+  const lifted = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 12);
+  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, ship);
+  let positionWC = null;
+  for (let lon = 4.05; lon < 40 && !positionWC; lon += 0.0005) {
+    occluder.cameraPosition = Cesium.Cartesian3.fromDegrees(
+      lon,
+      51.93,
+      400_000,
+    );
+    if (occluder.isPointVisible(lifted) && !occluder.isPointVisible(ship))
+      positionWC = occluder.cameraPosition;
+  }
+  assert.ok(positionWC, 'found a camera between the two horizons');
+  const viewer = { camera: { positionWC, heading: 0, pitch: 0, roll: 0 } };
+  const current = snapshot([observation('111')]);
+  const { layer, icons } = setup(
+    { getSnapshot: async () => current },
+    {},
+    viewer,
+  );
+  await layer.update();
+  const row = icons.row('111');
+  occluder.cameraPosition = positionWC;
+  assert.equal(
+    occluder.isPointVisible(
+      icons.cullPoint(row, icons.position(row, 0, new Cesium.Cartesian3())),
+    ),
+    true,
+  );
+  assert.deepEqual(
+    layer.getDetectableObjects().map((entry) => entry.sourceId),
+    ['111'],
+  );
+  layer.testing._setVesselStateForTest({ enabled: false });
 });

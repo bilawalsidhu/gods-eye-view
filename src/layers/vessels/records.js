@@ -62,7 +62,6 @@ export class VesselRecords {
       seen.add(next.mmsi);
       const record = this.byMmsi.get(next.mmsi);
       if (record) {
-        const before = effects.beforeUpdate(record);
         record.reference = next.reference;
         record.receivedAtMs = next.receivedAtMs;
         record.lat = next.lat;
@@ -78,7 +77,7 @@ export class VesselRecords {
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;
 
-        effects.updated(record, before);
+        effects.updated(record);
       } else {
         effects.add(next);
         this.byMmsi.set(next.mmsi, next);

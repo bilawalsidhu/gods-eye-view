@@ -5,6 +5,7 @@ import { applyCctvFocusDeemphasis } from './cctv.js';
 import { applySatellitePointFocusDeemphasis } from './satellites.js';
 import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
 import { mirrorBillboard } from './billboardMirror.js';
+import { createIconSet } from './iconSet.js';
 
 const params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS, paddingPx: 0 };
 const target = {
@@ -52,18 +53,14 @@ function assertResumeGate(name, makePass) {
 }
 
 assertResumeGate('vessel', () => {
-  const billboard = mirrorBillboard({
-    position: { x: 1, y: 2, z: 3 },
-    show: true,
-    width: 32,
-    height: 32,
-    scale: 1,
-    color: color(),
-  });
+  const icons = createIconSet();
+  icons.setSize(icons.add('353136000', { id: '353136000' }), 32, 32);
+  const record = { iconId: '353136000', position: { x: 1, y: 2, z: 3 }, visible: true };
   return {
     pass: ({ nowMs, target: focusTarget, previousActiveCount }) => (
       applyVesselFocusDeemphasis({
-        records: [{ billboard }],
+        records: [record],
+        icons,
         target: focusTarget,
         previousActiveCount,
         nowMs,
@@ -72,7 +69,7 @@ assertResumeGate('vessel', () => {
         params,
       })
     ),
-    readAlpha: () => billboard.color.alpha,
+    readAlpha: () => icons.focus(icons.row('353136000')),
   };
 });
 

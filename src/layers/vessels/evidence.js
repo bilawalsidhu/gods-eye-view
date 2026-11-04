@@ -1,6 +1,5 @@
 import * as Cesium from 'cesium';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
-import { billboardState } from '../../data/billboardMirror.js';
 
 export function createEvidence({
   vesselState,
@@ -14,7 +13,7 @@ export function createEvidence({
   /** Replace live AIS rows through the production reconciliation path (DEV only). */
 
   function _setFocusEvidenceVessels(rows = []) {
-    if (!FOCUS_EVIDENCE_DEV || !state.viewer || !state.billboardCollection) {
+    if (!FOCUS_EVIDENCE_DEV || !state.viewer || !state.icons) {
       return { ok: false, count: 0 };
     }
     components.selection.clearVesselInspection();
@@ -40,18 +39,19 @@ export function createEvidence({
   function _focusEvidenceVesselSnapshot() {
     if (!FOCUS_EVIDENCE_DEV || !state.viewer) return [];
     return state.records.all.map((record) => {
-      const bb = components.rendering.getVisual(record).billboard;
-      const icon = billboardState(bb);
-      const screen = icon?.position
+      const visual = components.rendering.getVisual(record);
+      const row = state.icons?.row(visual.iconId) ?? -1;
+      const position = row >= 0 ? visual.position : null;
+      const screen = position
         ? Cesium.SceneTransforms.worldToWindowCoordinates(
             state.viewer.scene,
-            icon.position,
+            position,
           )
         : null;
       return {
         id: record.mmsi,
-        show: icon?.show === true,
-        alpha: bb?.color?.alpha ?? null,
+        show: row >= 0 && visual.visible === true,
+        alpha: row >= 0 ? state.icons.focus(row) : null,
         x: screen?.x ?? null,
         y: screen?.y ?? null,
       };

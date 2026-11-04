@@ -21,7 +21,6 @@ import {
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
 } from './policy.js';
-import { billboardState } from '../../data/billboardMirror.js';
 
 export function createQueries({
   vesselState,
@@ -469,12 +468,7 @@ export function createQueries({
      * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
      */
     getDetectableObjects(options = {}) {
-      if (
-        !state.feed.enabled ||
-        !state.billboardCollection ||
-        !state.billboardCollection.show
-      )
-        return [];
+      if (!state.feed.enabled || !state.icons?.show) return [];
       const records = state.records.all;
       if (!Array.isArray(records) || !records.length) return [];
 
@@ -492,9 +486,8 @@ export function createQueries({
         if ((idx - start) % stride !== 0) continue;
         const record = records[idx];
         const visual = components.rendering.getVisual(record);
-        const icon = billboardState(visual.billboard);
-        if (icon && !icon.show) continue;
-        const position = icon?.position || visual.position;
+        if (!visual.visible) continue;
+        const position = visual.position;
         if (!position) continue;
         result.push({
           position,

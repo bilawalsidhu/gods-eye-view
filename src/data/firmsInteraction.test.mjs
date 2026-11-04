@@ -274,7 +274,7 @@ test('a click on neither sprite nor card clears without moving the camera', () =
 const SIBLING_PICKS = [
   ['flights', 'a1b2c3', { id: 'a1b2c3' }],
   ['flights', 'a1b2c3', { primitive: { id: 'a1b2c3' } }],
-  ['ais-live-vessels', '353136000', { id: { mmsi: '353136000', name: 'EVER GIVEN' } }],
+  ['ais-live-vessels', '353136000', { id: '353136000' }],
   ['cctv', 'atx-cam-3', { id: { id: 'atx-cam-3', name: 'entity-like' } }],
   ['satellites', '25544', { id: 25544 }],
 ];
