@@ -208,6 +208,28 @@
   }
 }
 
+/* Phone shell: the switcher sits above voice and the safe-area-aware tabs.
+   Its measured height includes every visible button, including wrapped text. */
+body.mobile-shell .gev-nav {
+  bottom: calc(
+    var(--mobile-view-switcher-bottom) +
+      var(--mobile-view-switcher-height, 0px) + 8px
+  );
+}
+
+@media (orientation: landscape) and (max-height: 450px) {
+  body.mobile-shell .gev-nav {
+    /* Keep the short screen's top-right actions reachable as well. */
+    right: 50%;
+    transform: translateX(50%);
+  }
+}
+
+/* Sheets own the touch surface; hide nav below their backdrop. */
+body.mobile-shell[data-mobile-sheet] .gev-nav {
+  display: none !important;
+}
+
 /* The cockpit, scene playback, recording and clean view own the screen. */
 body:is(.cockpit-mode, .scene-playback-mode, .recording-mode, .ui-clean-view)
   .gev-nav {
