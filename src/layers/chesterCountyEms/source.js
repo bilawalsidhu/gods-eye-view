@@ -16,7 +16,9 @@ export function createChesterCountyEmsSource({
       if (!response.ok) throw new Error('Incident details unavailable');
       const details = await readResponseJsonCapped(response, 128000, combined);
       if (
-        details?.incidentNumber !== id.split(':').at(-1) ||
+        (details?.id
+          ? details.id !== id
+          : details?.incidentNumber !== id.split(':').at(-1)) ||
         !Number.isFinite(details?.observedAt) ||
         !Array.isArray(details.units) ||
         details.units.length > 128 ||
@@ -49,7 +51,7 @@ export function createChesterCountyEmsSource({
       );
       if (
         !Array.isArray(snapshot?.rows) ||
-        snapshot.rows.length > 1000 ||
+        snapshot.rows.length > 2000 ||
         !Number.isFinite(snapshot.observedAt) ||
         !Number.isFinite(snapshot.fetchedAt)
       )

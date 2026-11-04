@@ -50,6 +50,23 @@ const snapshot = (rows) => ({
   observedAt: Date.now(),
   stale: false,
 });
+test('Pike starts unchecked and list-only public details remain accessible without a map target', async () => {
+  const pike = { ...row, id:'pike-pa:fire:2611000001', incidentNumber:'2611000001', countyId:'pike-pa',category:'fire',mapPosition:null,locationStatus:'not-published',reportKind:'completed',timeBasis:'received',detailUrl:'https://webcad.pikepa.org/pages/public/FeedReader.asp' };
+  const {layer,entities,entries} = setup({getSnapshot:async()=>snapshot([pike]),getIncidentDetails:async()=>({id:pike.id,incidentNumber:pike.incidentNumber,observedAt:Date.now(),assignmentOnly:true,units:[{unit:'TEST01',status:'Assigned',entered:'',enteredAt:null}]})});
+  await layer.update();
+  assert.equal(layer.getIncidentPanelState().counties.length,9);
+  assert.equal(layer.getIncidentPanelState().counties.find(c=>c.id==='pike-pa').active,false);
+  assert.deepEqual(layer.getRowControls().chips.map(c=>c.id),['fire','ems','traffic']);
+  assert.equal(layer.getIncidentPanelState().list.items.length,0);
+  layer.setParams({counties:['pike-pa'],selectedIncident:pike.id});await settle();
+  assert.equal(entities.values.length,0); assert.equal(entries.has('chester-county-ems-selected'),false);
+  const selection=layer.getIncidentPanelState().selection;
+  assert.match(selection.lines.join(' '),/Completed report; not an active incident/);
+  assert.match(selection.lines.join(' '),/TEST01 · Assigned/);
+  assert.equal(layer.getIncidentPanelState().chips.some(c=>c.id.startsWith('source:')),false);
+  layer.setParams({categories:[]});assert.equal(layer.getIncidentPanelState().selection,null);
+  layer.destroy();
+});
 test('renders individual street markers, selects card, removes expired incidents and tears down', async () => {
   let rows = [row, { ...row, id: 'F26000002' }];
   const { layer, entries, entities } = setup({
@@ -316,13 +333,11 @@ test('category filters affect the map and app list without refetching or droppin
   await layer.update();
   const controls = layer.getRowControls();
   assert.deepEqual(
-    controls.chips
-      .filter((chip) => !chip.id.startsWith('county:'))
-      .map(({ id, label, active }) => ({ id, label, active })),
+    controls.chips.map(({ id, label, active }) => ({ id, label, active })),
     [
       { id: 'fire', label: 'Fire', active: true },
       { id: 'ems', label: 'EMS', active: true },
-      { id: 'traffic', label: 'Police / traffic', active: true },
+      { id: 'traffic', label: 'Traffic', active: true },
     ],
   );
   let rowChanges = 0,
@@ -407,10 +422,7 @@ test('county filters isolate map/list selection and preserve independent county 
   assert.match(card.details.join(' '), /County: Montgomery County, PA/);
   assert.match(card.details.join(' '), /Unit status checked:/);
   assert.equal(card.details.includes('Stale data'), false);
-  layer.setParams(
-    layer.getRowControls().chips.find((c) => c.id === 'county:montgomery-pa')
-      .params,
-  );
+  layer.setParams({ counties: ['chester-pa'] });
   assert.equal(entities.values.length, 1);
   assert.equal(entries.has('chester-county-ems-selected'), false);
   assert.deepEqual(
@@ -427,5 +439,57 @@ test('county filters isolate map/list selection and preserve independent county 
   assert.match(layer.getIncidentPanelState().info, /No matching incidents/);
   layer.setParams({ counties: ['unknown'] });
   assert.deepEqual(layer.getParams().counties, []);
+  layer.destroy();
+});
+
+test('Lancaster public reports and Delco dispatch cards never claim unpublished statuses or expose internal IDs', async () => {
+  const lancaster = {
+    ...row,
+    id: 'lancaster-pa:ems:' + 'a'.repeat(24),
+    countyId: 'lancaster-pa',
+    incidentNumber: null,
+    detailUrl: 'https://www.lcwc911.us/live-incident-list',
+  };
+  const delco = {
+    ...row,
+    id: 'delaware-pa:ems:F26000001',
+    countyId: 'delaware-pa',
+    reportKind: 'dispatch',
+    timeBasis: 'received',
+    sourceName: 'Delco Dispatch',
+    detailUrl: 'https://delcodispat.ch/d/pa/delco',
+  };
+  const { layer, entries, entities } = setup({
+    getSnapshot: async () => snapshot([lancaster, delco]),
+    getIncidentDetails: async (id) => ({
+      id,
+      incidentNumber: id === lancaster.id ? null : row.incidentNumber,
+      observedAt: Date.now(),
+      timestampBasis: 'retrieved',
+      assignmentOnly: true,
+      units: [{ unit: 'AMB01', status: 'Assigned', entered: '' }],
+    }),
+  });
+  await layer.update();
+  layer.setParams({ selectedIncident: delco.id });
+  await settle();
+  let card = entries.get('chester-county-ems-selected')[0];
+  assert.match(
+    card.details.join(' '),
+    /Recent dispatch; active status unknown/,
+  );
+  assert.match(card.details.join(' '), /Community source: Delco Dispatch/);
+  assert.match(card.details.join(' '), /Received:/);
+  assert.match(card.details.join(' '), /Assignments checked:/);
+  assert.match(card.details.join(' '), /AMB01 · Assigned/);
+  assert.doesNotMatch(card.details.join(' '), /Unit status updated:/);
+  layer.setParams({ counties: ['lancaster-pa'] });
+  assert.equal(entities.values.length, 1);
+  assert.equal(entries.has('chester-county-ems-selected'), false);
+  layer.setParams({ selectedIncident: lancaster.id });
+  await settle();
+  card = entries.get('chester-county-ems-selected')[0];
+  assert.match(card.title, /Public report/);
+  assert.equal(card.title.includes('a'.repeat(24)), false);
   layer.destroy();
 });

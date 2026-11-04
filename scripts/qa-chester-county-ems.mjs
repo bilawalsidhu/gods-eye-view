@@ -26,15 +26,55 @@ try {
     window.__emsPaintedText = new Set();
     const fillText = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
-      if (/MEDIC01|MONTCO01|AMB02|Approximate intersection/.test(String(text)))
+      if (
+        /MEDIC01|MONTCO01|LANCASTER01|DELCO01|AMB02|Approximate intersection|Recent dispatch|Community source/.test(
+          String(text),
+        )
+      )
         window.__emsPaintedText.add(String(text));
       return fillText.call(this, text, ...args);
     };
-    let empty = false;
+    let empty = false, extra = false;
+    window.__emsListOnly = () => { extra = true; };
     window.__emsEmpty = () => {
       empty = true;
     };
     window.fetch = (input, options) => {
+      if (String(input).includes('/api/county-ems/details?') && /york-pa|pike-pa/.test(String(input))) {
+        const id = new URL(String(input), location.origin).searchParams.get('incident');
+        return Promise.resolve(Response.json({ id, incidentNumber: id.startsWith('pike-pa:') ? '2611000001' : null,
+          observedAt: Date.now(), fetchedAt: Date.now(), timestampBasis: 'retrieved', assignmentOnly: true, stale: false,
+          units: [{ unit: id.startsWith('pike-pa:') ? 'PIKE01' : 'YORK01', status: 'Assigned', entered: '', enteredAt: null }],
+        }));
+      }
+      if (
+        String(input).includes('/api/county-ems/details?') &&
+        /lancaster-pa|delaware-pa/.test(String(input))
+      ) {
+        const id = new URL(String(input), location.origin).searchParams.get(
+          'incident',
+        );
+        const lancaster = id.startsWith('lancaster-pa:');
+        return Promise.resolve(
+          Response.json({
+            id,
+            incidentNumber: lancaster ? null : 'F26000011',
+            observedAt: Date.now(),
+            fetchedAt: Date.now(),
+            timestampBasis: 'retrieved',
+            assignmentOnly: true,
+            stale: false,
+            units: [
+              {
+                unit: lancaster ? 'LANCASTER01' : 'DELCO01',
+                status: 'Assigned',
+                entered: '',
+                enteredAt: null,
+              },
+            ],
+          }),
+        );
+      }
       if (String(input).includes('/api/county-ems/details?'))
         return Promise.resolve(
           Response.json({
@@ -90,15 +130,38 @@ try {
                   fetchedAt: Date.now(),
                   stale: false,
                 },
+                {
+                  id: 'lancaster-pa',
+                  county: 'Lancaster County, PA',
+                  count: empty ? 0 : 1,
+                  observedAt: Date.now(),
+                  fetchedAt: Date.now(),
+                  stale: false,
+                },
+                {
+                  id: 'delaware-pa',
+                  county: 'Delaware County, PA',
+                  count: empty ? 0 : 1,
+                  observedAt: Date.now(),
+                  fetchedAt: Date.now(),
+                  stale: false,
+                  official: false,
+                  coverageKind: 'recent-dispatches',
+                  limited: true,
+                  timestampBasis: 'retrieved',
+                },
               ],
               locationCoverage: {
-                matched: empty ? 0 : 4,
+                matched: empty ? 0 : 6,
                 unmatched: empty ? 0 : 1,
                 unavailable: 0,
               },
               rows: empty
                 ? []
-                : [
+                : extra ? [
+                  { id: 'york-pa:ems:' + 'b'.repeat(24), incidentNumber: null, countyId:'york-pa', category:'ems',type:'SYNTHETIC YORK TEST',location:'EXAMPLE ST',municipality:'TEST TWP',crossStreets:'ONE ST',nearestIntersection:'TWO ST / THREE ST',box:'01-01',dispatched:'11/3/2026 11:00 PM',timePrecision:'minute',detailUrl:'https://ycdes.org/webcad/Details.aspx?abc+/==',mapPosition:null,locationStatus:'not-published' },
+                  { id: 'pike-pa:fire:2611000001',incidentNumber:'2611000001',countyId:'pike-pa',category:'fire',type:'SYNTHETIC PIKE TEST',location:'EXAMPLE ST',municipality:'TEST TWP',dispatched:'11/3/2026 23:00:00',timeBasis:'received',reportKind:'completed',official:true,detailUrl:'https://webcad.pikepa.org/pages/public/FeedReader.asp',mapPosition:null,locationStatus:'not-published' },
+                ] : [
                     {
                       id: 'ems:F26000001',
                       incidentNumber: 'F26000001',
@@ -149,6 +212,51 @@ try {
                           lat: 39.961,
                           lon: -75.606,
                           kind: 'county-published',
+                          approximate: true,
+                        },
+                      },
+                      {
+                        id: 'lancaster-pa:ems:' + 'a'.repeat(24),
+                        incidentNumber: null,
+                        category: 'ems',
+                        countyId: 'lancaster-pa',
+                        type: 'SYNTHETIC LANCASTER TEST',
+                        location: 'EXAMPLE RD & TEST ST',
+                        municipality: 'Example Township',
+                        station: '01',
+                        dispatched: 'Tue, Nov 3, 2026 10:00',
+                        detailUrl: 'https://www.lcwc911.us/live-incident-list',
+                        mapPosition: {
+                          lat: 39.962,
+                          lon: -75.6065,
+                          kind: 'county-published',
+                          approximate: true,
+                        },
+                      },
+                      {
+                        id: 'delaware-pa:fire:F26000011',
+                        incidentNumber: 'F26000011',
+                        category: 'fire',
+                        countyId: 'delaware-pa',
+                        reportKind: 'dispatch',
+                        official: false,
+                        timeBasis: 'received',
+                        timezoneAssumed: true,
+                        sourceName: 'Delco Dispatch',
+                        type: 'SYNTHETIC DELCO PAGE',
+                        receivedAt: Date.now() - 60000,
+                        dispatched: new Date(Date.now() - 60000).toLocaleString(
+                          'en-US',
+                          { timeZone: 'America/New_York' },
+                        ),
+                        location: 'EXAMPLE RD',
+                        municipality: 'Example Township',
+                        station: 'SYNTHETIC STATION',
+                        detailUrl: 'https://delcodispat.ch/d/pa/delco',
+                        mapPosition: {
+                          lat: 39.963,
+                          lon: -75.607,
+                          kind: 'community-published',
                           approximate: true,
                         },
                       },
@@ -219,10 +327,10 @@ try {
     };
   });
   assert.equal(result.unselected, true);
-  assert.equal(result.count, 5);
+  assert.equal(result.count, 7);
   assert.equal(result.degraded, false);
-  assert.equal(result.list, 5);
-  assert.match(result.info, /4 mapped · 1 unresolved · 0 lookup errors/);
+  assert.equal(result.list, 7);
+  assert.match(result.info, /6 mapped · 1 unresolved · 0 lookup errors/);
   assert.match(result.info, /Locations are approximate/);
   const incidentSelector =
     '#chester-county-panel button[data-list-item-id="ems:F26000001"]';
@@ -273,28 +381,20 @@ try {
     layerChip('ems'),
   );
   await page.waitForSelector(incidentSelector, { visible: true });
-  await page.locator(layerChip('county:montgomery-pa')).click();
-  await page.waitForFunction(
-    () =>
-      document
-        .querySelector('[data-county-filter="montgomery-pa"]')
-        ?.getAttribute('aria-pressed') === 'false',
-  );
-  assert.equal(
-    await page.$$eval(
-      '#chester-county-panel button[data-list-item-id]',
-      (rows) => rows.length,
-    ),
-    4,
-  );
-  await page.locator('[data-county-filter="montgomery-pa"]').click();
-  await page.waitForFunction(
-    (selector) =>
-      document.querySelector(selector)?.getAttribute('aria-pressed') === 'true',
-    {},
-    layerChip('county:montgomery-pa'),
-  );
-
+  assert.equal(await page.$$eval('[data-layer-id="chester-county-ems"] [data-chip-id^="county:"]', nodes => nodes.length), 0);
+  assert.equal(await page.$$eval('[data-county-filter]', nodes => nodes.length), 9);
+  assert.equal(await page.$eval('[data-county-filter="pike-pa"]', input => input.checked), false);
+  assert.match(await page.$eval('.county-coverage', node => node.textContent), /Completed reports only/);
+  for (const county of ['montgomery-pa', 'lancaster-pa', 'delaware-pa']) {
+    await page.locator('[data-county-filter="' + county + '"]').click();
+    await page.waitForFunction(id => !document.querySelector('[data-county-filter="' + id + '"]').checked, {}, county);
+    assert.equal(await page.$$eval('#chester-county-panel button[data-list-item-id]', rows => rows.length), 6);
+    await page.locator('[data-county-filter="' + county + '"]').click();
+    await page.waitForFunction(id => document.querySelector('[data-county-filter="' + id + '"]').checked, {}, county);
+  }
+  await page.locator('.county-source-details summary').click();
+  assert.equal(await page.$$eval('[data-county-action^="source:"]', buttons => buttons.length), 0);
+  await page.locator('.county-source-details summary').click();
   // Toggle each category through the app; both map and list must follow.
   const visibleCounts = () =>
     page.evaluate(() => {
@@ -330,17 +430,19 @@ try {
     assert.deepEqual(
       await visibleCounts(),
       category === 'ems'
-        ? { icons: 2, rows: 2, total: 5 }
-        : { icons: 3, rows: 4, total: 5 },
+        ? { icons: 3, rows: 3, total: 7 }
+        : category === 'fire'
+          ? { icons: 4, rows: 5, total: 7 }
+          : { icons: 5, rows: 6, total: 7 },
     );
     await page.locator(`[data-county-category="${category}"]`).click();
     await page.waitForFunction(
       () =>
         document.querySelectorAll(
           '#chester-county-panel button[data-list-item-id]',
-        ).length === 5,
+        ).length === 7,
     );
-    assert.deepEqual(await visibleCounts(), { icons: 4, rows: 5, total: 5 });
+    assert.deepEqual(await visibleCounts(), { icons: 6, rows: 7, total: 7 });
     assert.equal(
       await page.$eval(layerChip(category), (chip) =>
         chip.getAttribute('aria-pressed'),
@@ -453,6 +555,31 @@ try {
   await page.waitForFunction(() =>
     [...window.__emsPaintedText].some((text) => text.includes('MONTCO01')),
   );
+  await page
+    .locator(
+      '#chester-county-panel button[data-list-item-id="lancaster-pa:ems:' +
+        'a'.repeat(24) +
+        '"]',
+    )
+    .click();
+  await page.waitForFunction(() =>
+    [...window.__emsPaintedText].some((text) => text.includes('LANCASTER01')),
+  );
+  await page
+    .locator(
+      '#chester-county-panel button[data-list-item-id="delaware-pa:fire:F26000011"]',
+    )
+    .click();
+  await page.waitForFunction(() =>
+    [...window.__emsPaintedText].some((text) => text.includes('DELCO01')),
+  );
+  assert.ok(
+    await page.evaluate(() =>
+      [...window.__emsPaintedText].some((text) =>
+        text.includes('Recent dispatch; active status unknown'),
+      ),
+    ),
+  );
   await mkdir('qa-shots/chester-county-ems', { recursive: true });
   await page.evaluate(() => {
     for (const element of document.querySelectorAll(
@@ -462,6 +589,21 @@ try {
   });
   await page.screenshot({ path: 'qa-shots/chester-county-ems/selected.png' });
   if (recorder) await new Promise((resolve) => setTimeout(resolve, 6000));
+  // Sources without coordinates still expose their public units in the app.
+  await page.evaluate(async () => { window.__emsListOnly(); await window.__godsEyeView.dataManager.layers.get('chester-county-ems').module.update(); });
+  assert.equal(await page.$$eval('#chester-county-panel button[data-list-item-id]', rows => rows.length), 1);
+  await page.locator('#chester-county-panel button[data-list-item-id^="york-pa:"]').click();
+  await page.waitForFunction(() => document.querySelector('.county-selection')?.textContent.includes('YORK01'));
+  assert.match(await page.$eval('.county-selection', node => node.textContent), /No published map location/);
+  assert.match(await page.$eval('.county-selection', node => node.textContent), /Nearest intersection: TWO ST/);
+  await page.locator('[data-county-filter="pike-pa"]').click();
+  await page.waitForFunction(() => document.querySelectorAll('#chester-county-panel button[data-list-item-id]').length === 2);
+  await page.locator('#chester-county-panel button[data-list-item-id^="pike-pa:"]').click();
+  await page.waitForFunction(() => document.querySelector('.county-selection')?.textContent.includes('PIKE01'));
+  assert.match(await page.$eval('.county-selection', node => node.textContent), /Completed report; not an active incident/);
+  await page.$eval('.county-selection', node => node.scrollIntoView({block:'center'}));
+  await page.screenshot({path:'qa-shots/chester-county-ems/list-only.png'});
+  assert.equal(await page.$$eval('[data-county-action^="source:"]', buttons => buttons.length), 0);
   const cleared = await page.evaluate(async () => {
     const manager = window.__godsEyeView.dataManager;
     const layer = manager.layers.get('chester-county-ems').module;
@@ -493,7 +635,7 @@ try {
     () => !document.querySelector('[data-rail-item="chester-county-panel"]'),
   );
   console.log(
-    'PASS: County EMS, Chester/Montgomery county and category filters, map/list selection, empty refresh, launcher hides on disable and returns on enable',
+    'PASS: County EMS, nine county checkboxes in app only, synchronized category filters, list-only public units, opt-in Pike completed reports, Lancaster assignments and Delco dispatch provenance, map/list selection, empty refresh, launcher hides on disable and returns on enable',
   );
 } finally {
   await recorder?.stop();

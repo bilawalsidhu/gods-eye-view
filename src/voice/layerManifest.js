@@ -46,6 +46,15 @@ const layers = [
   {
     id: 'chester-county-ems',
     aliases: [
+      'lancaster county ems',
+      'delaware county ems',
+      'delco dispatch',
+      'dauphin county ems',
+      'pike county ems',
+      'york county ems',
+      'adams county ems',
+      'lebanon county ems',
+
       'county ems',
       'county incidents',
       'montgomery county ems',

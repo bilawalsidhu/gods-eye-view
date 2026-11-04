@@ -72,3 +72,30 @@ test('combined source uses county API while legacy Chester calls keep their endp
     '/api/county-ems/details?incident=montgomery-pa%3Aems%3AE2600001',
   ]);
 });
+
+test('assignment-only details verify the exact qualified ID even without a public incident number', async () => {
+  const { createCountyEmsSource } = await import('./source.js');
+  const id = 'lancaster-pa:ems:' + 'a'.repeat(24);
+  const response = {
+    id,
+    incidentNumber: null,
+    observedAt: Date.now(),
+    units: [
+      { unit: 'AMB01', status: 'Assigned', entered: '', enteredAt: null },
+    ],
+    assignmentOnly: true,
+  };
+  const source = createCountyEmsSource({
+    fetchImpl: async () => Response.json(response),
+  });
+  assert.equal((await source.getIncidentDetails(id)).assignmentOnly, true);
+  await assert.rejects(
+    createCountyEmsSource({
+      fetchImpl: async () =>
+        Response.json({
+          ...response,
+          id: 'lancaster-pa:ems:' + 'b'.repeat(24),
+        }),
+    }).getIncidentDetails(id),
+  );
+});

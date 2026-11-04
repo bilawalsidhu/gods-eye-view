@@ -50,7 +50,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The Operator HUD layout leaves set_hud's layout enum.
     // The layer alias hint leaves out aliases the layer id already spells.
     // County EMS adds scoped Chester/Montgomery aliases; dedicated Core tools retain unmapped reports.
-    '16234b379caa190513d2b96f00611e0662b3aee29eb3555b6c58cfc5e008f53c',
+    'f0a057c699f1ae61d198853c14cf81ff647ba6f643321b7d36086f584040ca4e',
   );
 });
 

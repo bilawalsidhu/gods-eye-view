@@ -6739,19 +6739,55 @@ app shares the existing snapshot and selection lifecycle, with no additional req
 empty/stale/error feeds remain accessible while enabled. List selections still
 open the same map cards, and icon selections update the app's active row.
 
-The county app and Data Layers include synchronized Fire, EMS and Police/Traffic
+The county app and Data Layers include synchronized Fire, EMS and Traffic
 category toggles, all on by default. These filter map icons and the app list together, with matching/total
-counts and a distinct no-match state. Police/Traffic uses WebCAD's public Traffic
-table. Category changes use the cached snapshot, preserve full feed health/counts,
+counts and a distinct no-match state. Traffic covers source traffic reports, not a complete police-call feed. Category changes use the cached snapshot, preserve full feed health/counts,
 and dismiss a selected report when its category is hidden. Filters are session
 state; the existing enabled-only share token and MCP full-feed queries persist.
 
-County coverage is selectable in both Data Layers and COUNTY EMS, alongside the
-synchronized category filters. Both counties start enabled. Rows/cards identify
+County coverage uses checkboxes only in COUNTY EMS. The category filters stay
+synchronized between the app and Data Layers. Eight counties start enabled;
+Pike completed reports are opt-in. Rows/cards identify
 their county; Montgomery IDs are county-qualified. Montgomery joins its complete
 public HTML list to its published read-only CAD map by incident, location and
 municipality, preserving unmapped reports. Public unit fragments retain undated
 time text and label retrieval times as checks. Per-county caches and health
 prevent one outage from hiding the other's reports. Generic MCP/voice tools
-get_county_incidents and get_county_incident_details cover both; Chester tools,
+get_county_incidents and get_county_incident_details cover all supported sources; Chester tools,
 the legacy endpoint, internal layer ID and share token remain compatible.
+
+County EMS also supports Lancaster's official LCWC list/public map and Delaware's
+community Delco Dispatch paging source. County filters and generic AI schemas
+read the same nine-source registry. Lancaster retains unmatched public list rows;
+map matches require IsPublic=1, category/type, municipality, intersection and
+dispatch minute. Its cards identify assigned units without invented movement
+statuses/times or synthetic official incident numbers.
+
+Delco reads only the newest 20 public pages within two hours, merges duplicate
+incident/category pages, and labels every report as a recent dispatch with
+unknown active/closed status. It is not an official county active feed. Published
+coordinates remain approximate; received times disclose an Eastern-time
+assumption. Raw paging messages, notes, apartment details, radio metadata and
+private-flagged pages are excluded. Its per-county provenance exposes limited
+coverage, community origin and retrieval timestamps. Each adapter has bounded
+on-demand caching and independent stale/error recovery; neither polls while the
+layer is off unless an AI explicitly queries the feed. Existing Chester routes,
+tool names and share identity stay compatible.
+
+
+### County EMS expanded county coverage and app configuration
+
+County coverage is configured only through nine native checkboxes in the
+right-side app: Chester, Montgomery, Lancaster, Delaware, Dauphin, Pike, York,
+Adams and Lebanon (PA). Data Layers retains the master switch and synchronized
+Fire/EMS/Traffic chips; county chips and WebCAD/source buttons are removed.
+Pike starts unchecked and reads only today's completed public press reports.
+Delaware and Lebanon use recent community pager summaries with unknown active
+status, not official active lists. Lebanon uses the user-provided 717 Alerts
+alternate, filters resolved/redacted rows and omits EMS/municipality-centroid
+pins. Dauphin, Pike, York and Adams remain list-only when coordinates are not
+published; selection opens public fields/units in the app without a guessed
+camera target. Adams distinguishes healthy empty from failed monitoring.
+Combined and legacy MCP routes retain their scope, with per-source provenance,
+received/reported/dispatch times and completed/unknown-active labels preserved.
+See docs/COUNTY-EMS.md for source limits, terms and validation coverage.

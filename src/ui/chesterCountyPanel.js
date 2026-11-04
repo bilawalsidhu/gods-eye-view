@@ -28,12 +28,14 @@ export function createChesterCountyPanel({ store }) {
             counties: model.counties || [],
             total: model.total ?? model.list.items.length,
             info: model.info,
+            feedInfo: model.feedInfo || [],
             chips: model.chips.map(({ id, label, disabled }) => ({
               id,
               label,
               disabled,
             })),
             list: model.list,
+            selection: model.selection || null,
           }
         : null,
     );

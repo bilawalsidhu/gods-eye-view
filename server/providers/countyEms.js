@@ -1,4 +1,19 @@
 import {
+  createDauphinCountyFeed,
+  createPikeCountyFeed,
+  createYorkCountyFeed,
+  createYorkDetails,
+} from './countyEms/listFeeds.js';
+import {
+  createAdamsCountyFeed,
+  createAdamsDetails,
+} from './countyEms/adams.js';
+import { createLebanonCountyFeed } from './countyEms/lebanon.js';
+import { COUNTY_INCIDENT_ID_PATTERN } from '../../src/layers/chesterCountyEms/counties.js';
+import { createLancasterCountyFeed } from './countyEms/lancaster.js';
+import { createDelawareCountyFeed } from './countyEms/delaware.js';
+import { createAssignmentDetails } from './countyEms/publicFeed.js';
+import {
   chesterCountyEmsProxy,
   createChesterCountyFeed,
   createChesterCountyDetails,
@@ -12,6 +27,13 @@ import {
 export function createCountyFeeds(options = {}) {
   const chester = createChesterCountyFeed(options);
   const montgomery = createMontgomeryCountyFeed(options);
+  const lancaster = createLancasterCountyFeed(options);
+  const delaware = createDelawareCountyFeed(options);
+  const dauphin = createDauphinCountyFeed(options);
+  const pike = createPikeCountyFeed(options);
+  const york = createYorkCountyFeed(options);
+  const adams = createAdamsCountyFeed(options);
+  const lebanon = createLebanonCountyFeed(options);
   return [
     {
       id: 'chester-pa',
@@ -31,6 +53,59 @@ export function createCountyFeeds(options = {}) {
         getSnapshot: montgomery,
       }),
     },
+    {
+      id: 'lancaster-pa',
+      name: 'Lancaster County, PA',
+      getSnapshot: lancaster,
+      getDetails: createAssignmentDetails({ getSnapshot: lancaster }),
+    },
+    {
+      id: 'delaware-pa',
+      name: 'Delaware County, PA',
+      official: false,
+      coverageKind: 'recent-dispatches',
+      limited: true,
+      sourceLimit: 20,
+      recentWindowMinutes: 120,
+      getSnapshot: delaware,
+      getDetails: createAssignmentDetails({ getSnapshot: delaware }),
+    },
+    {
+      id: 'dauphin-pa',
+      name: 'Dauphin County, PA',
+      getSnapshot: dauphin,
+      getDetails: createAssignmentDetails({ getSnapshot: dauphin }),
+    },
+    {
+      id: 'pike-pa',
+      name: 'Pike County, PA',
+      coverageKind: 'completed-reports',
+      limited: true,
+      getSnapshot: pike,
+      getDetails: createAssignmentDetails({ getSnapshot: pike }),
+    },
+    {
+      id: 'york-pa',
+      name: 'York County, PA',
+      getSnapshot: york,
+      getDetails: createYorkDetails({ ...options, getSnapshot: york }),
+    },
+    {
+      id: 'adams-pa',
+      name: 'Adams County, PA',
+      getSnapshot: adams,
+      getDetails: createAdamsDetails({ getSnapshot: adams }),
+    },
+    {
+      id: 'lebanon-pa',
+      name: 'Lebanon County, PA',
+      official: false,
+      coverageKind: 'recent-dispatches',
+      limited: true,
+      recentWindowMinutes: 120,
+      getSnapshot: lebanon,
+      getDetails: createAssignmentDetails({ getSnapshot: lebanon }),
+    },
   ];
 }
 /** A source failure never removes another county's available reports. */
@@ -49,6 +124,11 @@ export async function countySnapshot(feeds, now = Date.now) {
         id: county.id,
         county: county.name,
         unavailable: true,
+        official: county.official !== false,
+        coverageKind: county.coverageKind || 'active-incidents',
+        limited: !!county.limited,
+        sourceLimit: county.sourceLimit,
+        recentWindowMinutes: county.recentWindowMinutes,
         stale: true,
         count: 0,
         observedAt: null,
@@ -67,6 +147,13 @@ export async function countySnapshot(feeds, now = Date.now) {
     countyFeeds.push({
       id: county.id,
       county: county.name,
+      timestampBasis: snapshot.timestampBasis || 'source',
+      coverageKind: snapshot.coverageKind || 'active-incidents',
+      official: snapshot.official !== false,
+      limited: !!snapshot.limited,
+      sourceLimit: snapshot.sourceLimit,
+      recentWindowMinutes: snapshot.recentWindowMinutes,
+      excludedCount: snapshot.excludedCount,
       unavailable: false,
       stale: snapshot.stale,
       count: snapshot.rows.length,
@@ -110,9 +197,8 @@ export function countyEmsProxy(options = {}) {
     const id = url.searchParams.get('incident') || '';
     if (
       url.pathname === '/details'
-        ? !/^(?:(?:fire|ems|traffic):[FP]\d{8}|montgomery-pa:(?:fire|ems|traffic):[A-Z]\d{7,9})$/.test(
-            id,
-          ) || [...url.searchParams].length !== 1
+        ? !new RegExp(COUNTY_INCIDENT_ID_PATTERN).test(id) ||
+          [...url.searchParams].length !== 1
         : Boolean(url.search)
     ) {
       res.statusCode = 400;
@@ -122,7 +208,7 @@ export function countyEmsProxy(options = {}) {
       const county = feeds.find(
         (feed) =>
           feed.id ===
-          (id.startsWith('montgomery-pa:') ? 'montgomery-pa' : 'chester-pa'),
+          (id.split(':').length === 3 ? id.split(':')[0] : 'chester-pa'),
       );
       res.end(
         JSON.stringify(

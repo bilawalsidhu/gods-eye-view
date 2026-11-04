@@ -505,3 +505,55 @@ No open redistribution licence was identified; © Montgomery County, PA.
 Records and county map coordinates are fetched at runtime only. No incident or
 GIS dataset is redistributed. Positions are approximate; unit times without
 dates remain undated. Traffic is not a complete police-call feed.
+
+## Lancaster County public incidents (County EMS)
+
+Sources: [LCWC official incident list](https://www.lcwc911.us/live-incident-list)
+and the public incident layers embedded by the
+[official live map](https://www.lcwc911.us/live-incident-map), through its published
+[ArcGIS public map service](https://utility.arcgis.com/usrsvcs/servers/a1f6aa7faab44b1582029509c46dce86/rest/services/Maps/Public_LiveFeeds/MapServer).
+Only public records (IsPublic=1) are read. © County of Lancaster / LCWC;
+no open redistribution licence identified. Assigned units have no published
+movement times/statuses. Unmatched public list reports retain null coordinates.
+Records/geometry load at runtime; repository fixtures are synthetic.
+
+## Delaware County community dispatch pages (County EMS)
+
+Source: [Delco Dispatch](https://delcodispat.ch/d/pa/delco), using the anonymous
+newest-page endpoint called by its public web client. Attribution: Delco Dispatch;
+no open redistribution licence identified. This is community paging, not an
+official active-incident or closed-call feed. Reads are limited to the newest
+20 public pages within two hours, without archive pagination. Private-flagged
+pages, raw messages/notes, apartment details and radio metadata are excluded.
+Public coordinates are approximate. Received timestamps assume Eastern time
+because no zone is published. Assigned units have no movement-status times.
+Only normalized summaries load at runtime; no live archive is bundled.
+
+## Dauphin, Pike, York and Adams County public reports (County EMS)
+
+Sources: [Dauphin WebCAD](https://dpswebcad.dauphincounty.gov/webcad/),
+[Pike public completed-incidents press feed](https://webcad.pikepa.org/pages/public/FeedReader.asp),
+[York active incident list and listed public unit details](https://ycdes.org/webcad/default.aspx),
+and [Adams active incidents](https://incidents.adamscountypa.gov/) (public /api/calls).
+Attribution remains with each county's emergency/public safety department.
+No open redistribution licence identified. Records load at runtime only.
+Pike reads only today's completed reports, is off by default and is never
+represented as active. These sources have no published map coordinates;
+reports stay in the list. Adams unknown natures are excluded and counted,
+and a degraded/offline monitor cannot produce a fresh empty snapshot.
+No raw notes or live records ship in the repository.
+
+## Lebanon County pager via 717 Alerts (County EMS)
+
+Sources: [Lebanon DES pager monitor](https://www.lcdes.org/monitor.html), through
+user-provided alternate [717 Alerts Lebanon](https://717alerts.com/county/lebanon)
+and the public live snapshot invoked by its browser client. No login/key is used.
+Direct DES monitor HTTPS currently has an incomplete certificate chain for Node;
+TLS verification is not bypassed. The alternate is an independent aggregator
+([terms](https://717alerts.com/terms)), not the county. No open redistribution
+licence identified; attribution: Lebanon County DES pager / 717 Alerts.
+Only recent two-hour summaries excluding resolved/redacted reports are retained.
+Active status remains unknown. No raw pager narratives, notes, radio/audio,
+private metadata or municipality-center pins are forwarded; EMS has no map pin.
+Published non-centroid fire/traffic points are approximate. Runtime data only;
+no incident archive or live fixtures are redistributed.

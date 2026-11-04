@@ -179,10 +179,10 @@ test('the right-side launcher exists only when enabled and the real list selects
   const county = document.querySelector('[data-county-filter="montgomery-pa"]');
   county.click();
   await nextTick();
-  assert.equal(county.getAttribute('aria-pressed'), 'false');
+  assert.equal(county.checked, false);
   county.click();
   await nextTick();
-  assert.equal(county.getAttribute('aria-pressed'), 'true');
+  assert.equal(county.checked, true);
   const ems = document.querySelector('[data-county-category="ems"]');
   assert.equal(ems.getAttribute('aria-pressed'), 'true');
   ems.click();

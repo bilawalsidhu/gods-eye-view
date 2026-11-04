@@ -2,7 +2,11 @@
 import { defineTool, ToolError } from '../catalog.js';
 import { capRows, isoTime, LIMIT_SCHEMA } from '../results.js';
 import { suggestView } from '../views.js';
-import { COUNTIES, countyFor } from '../../layers/chesterCountyEms/counties.js';
+import {
+  COUNTIES,
+  countyFor,
+  COUNTY_INCIDENT_ID_PATTERN,
+} from '../../layers/chesterCountyEms/counties.js';
 
 const SOURCE = 'https://www.chesco.org/3963/WebCad-Active-Incidents';
 const CAVEAT =
@@ -55,8 +59,43 @@ function incidentRow(row, generic = false) {
     location: row.location,
     municipality: row.municipality,
     dispatched_at: isoTime(row.dispatchedAt),
-    dispatch_time_local: row.dispatched,
+    ...(row.timeBasis === 'received'
+      ? {
+          received_at: isoTime(row.receivedAt),
+          received_time_local: row.dispatched,
+          timezone_assumed: !!row.timezoneAssumed,
+        }
+      : row.timeBasis === 'reported'
+        ? {
+            reported_at: isoTime(row.reportedAt),
+            reported_time_local: row.dispatched,
+          }
+        : {}),
+    ...(generic
+      ? {
+          report_kind:
+            row.reportKind === 'completed'
+              ? 'completed-report'
+              : row.reportKind === 'dispatch'
+                ? 'recent-dispatch'
+                : 'active-incident',
+          active_status:
+            row.reportKind === 'completed'
+              ? 'completed'
+              : row.reportKind === 'dispatch'
+                ? 'unknown'
+                : 'listed-active',
+          source_official: row.official !== false,
+          ...(row.crossStreets ? { cross_streets: row.crossStreets } : {}),
+          ...(row.nearestIntersection
+            ? { nearest_intersection: row.nearestIntersection }
+            : {}),
+          ...(row.box ? { box: row.box } : {}),
+        }
+      : {}),
+    dispatch_time_local: row.timeBasis ? null : row.dispatched,
     timezone: 'America/New_York',
+    ...(generic ? { time_precision: row.timePrecision || 'second' } : {}),
     ...(row.category === 'traffic' && countyFor(row).id === 'chester-pa'
       ? { agency: row.station }
       : { station: row.station }),
@@ -86,12 +125,19 @@ function provenance(snapshot, generic = false) {
         stale: feed.stale,
         unavailable: !!feed.unavailable,
         count: feed.count,
+        timestamp_basis: feed.timestampBasis || 'source',
+        coverage_kind: feed.coverageKind || 'active-incidents',
+        official: feed.official !== false,
+        limited: !!feed.limited,
+        source_limit: feed.sourceLimit,
+        recent_window_minutes: feed.recentWindowMinutes,
+        excluded_unclassified_count: feed.excludedCount,
       })),
       observed_at: isoTime(snapshot.observedAt),
       fetched_at: isoTime(snapshot.fetchedAt),
       stale: clockStale(snapshot),
       caveat:
-        'Supported Pennsylvania counties only: Chester and Montgomery. Chester GIS matches and Montgomery county-published map coordinates are approximate, not exact scenes. Unmapped reports remain included. Traffic is not a full police-call feed. Montgomery unit times have no published date; checked times are retrieval times. No patient data.',
+        'Supported Pennsylvania sources: Chester, Montgomery, Lancaster, Dauphin, York and Adams active lists; Pike current-day completed press reports; Delaware and Lebanon recent community pager summaries with unknown active status. Delco is limited to newest 20 pages within two hours; Lebanon uses 717 Alerts public live data filtered to recent two hours and excludes resolved reports, with no official active-status claim. Received clocks from community sources assume Eastern. No municipality centroid pins. Unmapped reports remain included. Some sources publish no coordinates or unit movements; these are not lookup failures. Adams natures that cannot be classified are excluded and counted. Traffic is not a full police-call feed. Checked times mean retrieval. No raw notes or patient records.',
     };
   return {
     source: 'Chester County DES WebCAD',
@@ -120,7 +166,7 @@ function createIncidentTools(generic = false) {
       ? 'County EMS public incidents'
       : 'Chester County fire, EMS and traffic incidents',
     description: generic
-      ? 'List current public County EMS reports from Chester and Montgomery counties in Pennsylvania. Filter by county (chester-pa or montgomery-pa), category, municipality or report text. Includes unmapped reports, county identity, per-county freshness and approximate positions. Use get_county_incident_details for public unit status.'
+      ? 'List nine Pennsylvania County EMS sources: Chester, Montgomery, Lancaster, Dauphin, York and Adams active lists; Pike completed reports; Delaware and Lebanon recent community pager summaries with unknown active status. Each row identifies report kind; never describe Pike as active. Filter by county ID, category, municipality or text; preserve unmapped reports and source provenance. Use get_county_incident_details for public units.'
       : 'List current public Chester County, Pennsylvania (Chesco) WebCAD fire, EMS and traffic reports, including unresolved locations. Filter by category, municipality or report text. Returns source times, stale status and approximate GIS positions; not exact scenes or statewide coverage. Use a returned id with get_chester_county_incident_details for public unit status.',
     inputSchema: {
       type: 'object',
@@ -181,7 +227,11 @@ function createIncidentTools(generic = false) {
                   .includes(search),
               )),
         )
-        .toSorted((a, b) => (b.dispatchedAt || 0) - (a.dispatchedAt || 0))
+        .toSorted(
+          (a, b) =>
+            (b.dispatchedAt || b.receivedAt || b.reportedAt || 0) -
+            (a.dispatchedAt || a.receivedAt || a.reportedAt || 0),
+        )
         .map((row) => incidentRow(row, generic));
       const result = capRows(rows, args.limit);
       return {
@@ -213,7 +263,7 @@ function createIncidentTools(generic = false) {
       ? 'County EMS public unit status'
       : 'Chester County incident unit status',
     description: generic
-      ? 'Read public County EMS unit IDs, statuses and reported times for Chester or Montgomery County. Use an ID from get_county_incidents, including its county prefix when present. Montgomery status times omit dates; checked times indicate retrieval. No private dispatch notes or patient data.'
+      ? 'Read public County EMS units for Chester, Montgomery, Lancaster or Delaware. Use an exact ID from get_county_incidents. Lancaster/Delco provide assignments only, without movement times/statuses; Delco active status is unknown. Montgomery times omit dates. No raw paging messages, private dispatch notes or patient data.'
       : 'Read a current Chester County public incident and its public unit IDs, statuses and status-entry timestamps. Use the category-qualified id from get_chester_county_incidents (for example ems:F26000001). Does not fetch private dispatch notes or patient data. Failed unit lookups retain the incident summary with details unavailable.',
     inputSchema: {
       type: 'object',
@@ -221,9 +271,9 @@ function createIncidentTools(generic = false) {
         id: {
           type: 'string',
           pattern: generic
-            ? '^(?:(fire|ems|traffic):[FP][0-9]{8}|montgomery-pa:(fire|ems|traffic):[A-Z][0-9]{7,9})$'
+            ? COUNTY_INCIDENT_ID_PATTERN
             : '^(fire|ems|traffic):[FP][0-9]{8}$',
-          maxLength: generic ? 40 : 18,
+          maxLength: generic ? 80 : 18,
         },
         limit: LIMIT_SCHEMA,
       },
@@ -269,7 +319,8 @@ function createIncidentTools(generic = false) {
         details &&
         (!Array.isArray(details.units) ||
           !Number.isFinite(details.observedAt) ||
-          details.incidentNumber !== sourceRow.incidentNumber)
+          details.incidentNumber !== sourceRow.incidentNumber ||
+          (details.id && details.id !== args.id))
       )
         throw new ToolError(
           'malformed',
@@ -278,7 +329,7 @@ function createIncidentTools(generic = false) {
       const updates = details ? capRows(details.units, args.limit) : null;
       const detailsStale = details ? clockStale(details) : null;
       return {
-        summary: `${incident.incident_number}: ${incident.incident_type}, ${incident.municipality}; ${details ? `${new Set(details.units.map((unit) => unit.unit)).size} public units${detailsStale ? ' (stale unit status)' : ''}` : 'unit status unavailable'}${clockStale(incidentSnapshot) ? '; stale incident feed' : ''}.`,
+        summary: `${incident.incident_number || 'Public report'}: ${incident.incident_type}, ${incident.municipality}; ${details ? `${new Set(details.units.map((unit) => unit.unit)).size} public units${detailsStale ? ' (stale unit status)' : ''}` : 'unit status unavailable'}${clockStale(incidentSnapshot) ? '; stale incident feed' : ''}.`,
         data: {
           ...provenance(incidentSnapshot, generic),
           incident,
@@ -290,13 +341,20 @@ function createIncidentTools(generic = false) {
                 fetched_at: isoTime(details.fetchedAt),
                 stale: detailsStale,
                 ...(generic
-                  ? { timestamp_basis: details.timestampBasis || 'source' }
+                  ? {
+                      timestamp_basis: details.timestampBasis || 'source',
+                      assignment_only: !!details.assignmentOnly,
+                      status_times_available: !details.assignmentOnly,
+                    }
                   : {}),
                 unit_count: new Set(details.units.map((unit) => unit.unit))
                   .size,
                 ...updates,
                 rows: updates.rows.map((unit) => ({
                   unit: unit.unit,
+                  ...(generic && unit.description
+                    ? { description: unit.description }
+                    : {}),
                   status: unit.status,
                   entered_at: isoTime(unit.enteredAt),
                   entered_local: unit.entered,
