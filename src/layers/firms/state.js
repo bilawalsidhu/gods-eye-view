@@ -3,7 +3,7 @@ import * as Cesium from 'cesium';
 export function createFirmsState({ services, config }) {
   const layerState = {};
 
-  /** Pre-baked radial-glow sprites keyed by `<colorStop>:<sizeBucket>`. */
+  /** Pre-baked radial-glow sprites keyed by color stop name. */
 
   layerState.glowSpriteCache = new Map();
 
@@ -19,7 +19,11 @@ export function createFirmsState({ services, config }) {
 
   layerState._dataSource = null;
 
-  layerState._billboards = null;
+  /** Detection glow rows and the primitive that draws them. */
+
+  layerState._icons = null;
+
+  layerState._iconPrimitive = null;
 
   layerState._enabled = false;
 
@@ -82,16 +86,6 @@ export function createFirmsState({ services, config }) {
   /** Actionable card id -> current detection record painted for that id. */
 
   layerState._fireByCardId = new Map();
-
-  /**
-   * Occlusion-test anchors index-aligned with the billboard collection (the
-   * collection is cleared and refilled in one ordered pass per rebuild, and
-   * nothing else adds to it). Lifted where the render anchor sits at/below
-   * the ellipsoid — see {@link fireCullPosition}.
-   * @type {Array<Cesium.Cartesian3>}
-   */
-
-  layerState._cullPositions = [];
 
   /**
    * gridDegrees -> heat-sorted full cell list. The full-grid aggregation is

@@ -24,13 +24,7 @@ export function createViewport({
     if (layerState._moveEndRemover || !layerState._viewer) return;
     layerState._moveEndRemover =
       layerState._viewer.camera.moveEnd.addEventListener(() => {
-        if (!layerState._enabled) return;
-        // Settled-camera exactness for the horizon pass (the throttled preRender
-        // watcher can last have run up to LOD_CHECK_MS before the camera
-        // stopped). Runs ahead of the `_loading` gate on purpose: the sprites on
-        // screen during a refresh are the ones that need culling.
-        components.rendering.refreshHorizonCulling();
-        if (layerState._loading) return;
+        if (!layerState._enabled || layerState._loading) return;
         components.cards.rebuildAmbientLabels();
       });
   }
@@ -177,18 +171,8 @@ export function createViewport({
         Cesium.Cartesian3.clone(camera.positionWC, layerState._camPos);
         Cesium.Cartesian3.clone(camera.directionWC, layerState._camDir);
         layerState._camSnapValid = true;
-        // The camera moved, so the horizon moved. A rebuild culls its own fresh
-        // sprites (renderDetections); an early-out — same LOD band and view
-        // rect, or a refresh in flight — does not, so cull here instead.
-        // Exactly ONE occlusion walk per tick either way, bounded by the
-        // idle-gate + LOD_CHECK_MS throttle above: a parked camera costs
-        // nothing, a moving one pays one ≤maxDetections show-flip walk at
-        // ~1.5 Hz.
-        const rebuilt =
-          layerState._fires.length && !layerState._loading
-            ? components.rendering.renderCurrentLod(false)
-            : false;
-        if (!rebuilt) components.rendering.refreshHorizonCulling();
+        if (layerState._fires.length && !layerState._loading)
+          components.rendering.renderCurrentLod(false);
       });
   }
 

@@ -16,7 +16,6 @@ const helpers = createFirmsHelpers({
 });
 export const mapAnalystRecord = helpers.mapAnalystRecord;
 export const fireCullPosition = helpers.fireCullPosition;
-export const applyHorizonCull = helpers.applyHorizonCull;
 export const buildSelectedFireCard = helpers.buildSelectedFireCard;
 export const buildFireCard = helpers.buildFireCard;
 export const buildCellCard = helpers.buildCellCard;
