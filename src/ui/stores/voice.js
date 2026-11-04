@@ -35,5 +35,25 @@ export const useVoiceStore = defineStore('gev-voice', () => {
     bars.value = next && markRaw(next);
   }
 
-  return { view, publish, controls, connect, bars, publishBars };
+  /**
+   * The chat conversation, apart from the view: a typed reply reveals frame
+   * by frame, and only the message list renders it.
+   */
+  const chat = shallowRef([]);
+
+  /** @param {Array<{id: number, role: string, text: string}>} next */
+  function publishChat(next) {
+    chat.value = markRaw(next ?? []);
+  }
+
+  return {
+    view,
+    publish,
+    controls,
+    connect,
+    bars,
+    publishBars,
+    chat,
+    publishChat,
+  };
 });
