@@ -1631,7 +1631,7 @@ companions, its own orbit ring and its detection bracket, and draws every
 other orbit ring (the ISS ring included) at 30% of its alpha; other
 satellites' points and labels stay. Scene clicks and the layer's Escape are
 ignored by the satellites layer while it is ridden (a click on a mapped
-point focuses it; see below). The optical zoom steps 1×, 2×, 4× and 8× for
+site focuses it; see below). The optical zoom steps 1×, 2×, 4× and 8× for
 every satellite with `+` (or `=`) and `-` (or `_`), the panel's buttons and
 the mouse wheel (one step per notch; trackpad scrolling is summed to a step):
 the 1× frame is 60° vertical in low orbit and fits the Earth's disk with
@@ -1681,42 +1681,72 @@ imagery under the view has loaded (at most 2.5 s, `zoomSettleHolding`), then
 the reticle locks. The look keys and zoom keys keep the bridge's focus
 guards.
 
-A single click on a mapped ground point (a ground point of a layer that is
-on, through the shared context store: Mapped Installations, fires, local
-data packs; aircraft, vessels and satellites are not targets) keeps the
-camera on it (`src/ui/cockpitOrbitalFocus.js`, geometry in
-`src/cockpitOrbitalFocus.js`). The look is aimed each frame from the
-satellite's position to the point's Earth-fixed position in the same
-track-up nadir frame the arrows tilt, so the point stays at the centre as
-the satellite moves; the turn onto it (and between points) eases what is
-left of the swing with the arrows' easing on a slower clock (250 ms time
-constant, about 0.75 s to 95%), then holds the point exactly, and cuts under
-`prefers-reduced-motion`. A click anywhere else, FOCUS on the focused point,
-NADIR, Home or `0` ends the focus and the view eases back to nadir on the
-same clock; an arrow ends it and tilts on from where the view is. The focus
-also ends by itself, easing back, when the point leaves the reach (either
-tilt axis past ±45°, or the point below the satellite's horizon), when its
-layer is turned off or its record is dropped, and with the orbital view. A
-mapped point beyond the reach cannot be focused. While focused the readout
-gives the single off-nadir angle to the point, as image metadata does
+In orbit the briefing's Live Signals page (OBSERVED / MAPPED PINGS) lists
+what is around the satellite, as the aircraft Cockpit lists the contacts
+of its Contacts snapshot (`src/ui/cockpitOrbitalSignals.js`): five rows at
+most, rebuilt once a second with stable keys, so a row keeps its place and
+time. TRACK ACQUIRED stays first. Then:
+
+- **Sites**: the Mapped Installations layer's loaded records around the
+  sub-satellite point (`getNearby`, asked only as far as the reach extends
+  over the ground) that face the satellite and lie within the off-nadir
+  reach, nearest to nadir first, the focused site always among them. A row
+  reads the site's name over its class and off-nadir angle; its button
+  (`Keep the camera on …`) focuses the site, and on the focused site's row,
+  marked as the subject is (`FOCUS · …`, `Release the camera from …`), ends
+  the focus. With Mapped Installations off the layer keeps its records, so
+  nothing is listed then: a SITES STANDBY row says to turn the layer on.
+- **Satellites**: the nearest shown satellites to the ridden one, debris
+  left out (the satellites layer's bounded `getNearestPositions`, measured
+  from the satellite itself), with their bearing from the top of the frame
+  and distance. A row (`Ride …`) rides that satellite. While there is a
+  satellite ridden before this one, a RETURN · *name* row goes back to it; if
+  that satellite has left the catalogue it is dropped and RETURN offers the
+  one before. Riding stays in orbit: the satellites layer tracks the new
+  satellite (`trackById`), the Cockpit takes the camera back at once and
+  marks it as the ridden subject, any ground focus ends with the view easing
+  back to nadir, and the camera hops to the new satellite along the great
+  circle over 1.2 s (cut under reduced motion), keeping the zoom. Until the
+  camera is on the new satellite the page shows only TRACK ACQUIRED and
+  RETURN, then rebuilds at once.
+
+Sites take two rows while satellites fill the rest, more when there are
+fewer satellites. The Contact card stays hidden in orbit.
+
+The focus (`src/ui/cockpitOrbitalFocus.js`, geometry in
+`src/cockpitOrbitalFocus.js`) aims the look each frame from the satellite's
+position to the site's Earth-fixed position in the same track-up nadir
+frame the arrows tilt, so the site stays at the centre as the satellite
+moves. The turn onto it (and between sites) eases what is left of the swing
+with the arrows' easing on a slower clock (250 ms time constant, about
+0.75 s to 95%), then holds the site exactly, and cuts under
+`prefers-reduced-motion`. A single click on a site's marker focuses it too:
+the pick is resolved through the layer's own pick ids (`findByPick`: a named
+marker's `{ installationId }` or a site entity). A click anywhere else, the
+focused site's row, NADIR, Home or `0` ends the focus and the view eases
+back to nadir on the same clock; an arrow ends it (or the ease back) and
+tilts on from where the view is. The layer reloads its thinned view as the
+camera moves (about once a second in orbit), so a site in view can leave
+its records for a moment: while the layer is on, a site seen in the last
+10 s stays a candidate (sites do not move), so the rows hold still and a
+row's site can be focused, and a focused site keeps its last position. The focus ends by
+itself, easing back, when the site leaves the reach (either tilt axis past
+±45°, or the site below the satellite's horizon), when the layer is turned
+off, when another satellite is ridden, and with the orbital view. A site
+beyond the reach cannot be focused. While focused the readout gives the
+single off-nadir angle to the site, as image metadata does
 (`OFF-NADIR 23.4°`, updated on the HUD's beat and not announced), names it
 in a polite live region (`FOCUS · Camp Alpha`), and the swath reads
-approximate as for a tilt, scaled by the tilt onto the point. Clicks still
+approximate as for a tilt, scaled by the tilt onto the site. Clicks still
 reach Cesium's own handler and never untrack the satellite; a click a tool
 owns (drawing) is ignored, and the draw tool still borrows the click while
-it draws. A double-click on a mapped ground point keeps or starts the focus
-on it and never reaches Cesium's double-click, which would track the point
-and end the view (the Cockpit's double-click routing in
-`src/ui/cockpitInput.js`); any other double-click goes on as before. Under the readout, IN REACH · *n* (a disclosure) lists the mapped
-points facing the satellite that are within the reach or in the frame now,
-nearest to nadir first, at most 12 (with NEAREST 12 OF *n* beyond that),
-rebuilt once a second. A row opens the point's details: position, source and
-its OpenStreetMap tags (or its layer's properties); FOCUS on a row focuses
-it, switches to it from another point, or ends the focus held on it, and is
-marked unavailable (`aria-disabled`) for a point in frame but beyond the
-reach. A row that leaves the list hands keyboard focus to the disclosure.
-`src/ui/cockpitOrbitalFocus.test.mjs` covers the easing in and out, the
-reach release, list switching, click handling and the readout.
+it draws. A double-click on a site keeps or starts the focus on it and
+never reaches Cesium's double-click, which would track the site and end the
+view (the Cockpit's double-click routing in `src/ui/cockpitInput.js`); any
+other double-click goes on as before. `src/ui/cockpitOrbitalFocus.test.mjs`
+covers the rows, the easing in and out, the reach release, switching sites
+and satellites, the hop, the layer turned off, click handling and the
+readout, against the layers' method shapes.
 
 The HUD (`#cockpit-hud[data-subject='satellite']`, body class
 `cockpit-orbit`) mounts `CockpitOrbital` over the picture: name, class,
@@ -1745,7 +1775,7 @@ unfolds the two element lines; each row is left out when the satellites layer do
 know it. The
 aircraft and bridge instruments, tapes, compass, radar, look controls,
 position readout, route card and Contact card are hidden; the vision-style
-switcher, briefing card (Local and Regional for the sub-satellite point; the
+switcher, briefing card (Live Signals as above, Local and Regional for the sub-satellite point; the
 regional brief refreshes at most once a minute) and the reset and EXIT ORBIT
 buttons stay, square-cornered like the bridge. Exit (`Escape`, EXIT
 ORBIT) restores the camera's own field of view exactly and returns to the
