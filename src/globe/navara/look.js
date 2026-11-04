@@ -253,50 +253,40 @@ const IRRADIANCE_OFF = Object.freeze({
 const VISIBLE = Object.freeze({ visible: true });
 const HIDDEN = Object.freeze({ visible: false });
 
+// Every luminance vector a scaler has written, with the value it had
+// before: one map for the page, as the vectors are.
+const unscaled = new WeakMap();
+
 /**
  * The atmosphere scale (viewOptions.js ATMOSPHERE_LUMINANCE_SCALE): each
  * luminance factor is set to `scale` times the base value recorded the
- * first time it is seen, so a vector Navara shares between materials, or
- * copies into a rebuilt one, is never scaled twice. A scaled uniform points
- * at this scaler's own vector; the vector Navara built it with is never
- * written. Those are takram's AtmosphereParameters.DEFAULT vectors, one per
- * page: written in place, the next globe on the page (a rebuild after a lost
- * context) recorded a scaled value as its base and drew the atmosphere
- * scale² bright. The stars keep the base value. Returns `apply()`, true
- * when it changed what a uniform holds.
+ * first time it is seen, never multiplied in place, so a vector Navara
+ * shares between materials, or copies into a rebuilt one, is never scaled
+ * twice. The stars keep the base value: when they share the sky's vector,
+ * they get their own. Returns `apply()`, true when it changed a uniform.
+ *
+ * The vectors are takram's AtmosphereParameters.DEFAULT ones, one per page
+ * and read by every globe's materials, so the base of a vector an earlier
+ * globe already scaled is the value it had before that (`unscaled`): a
+ * globe rebuilt on the page after a lost context took the scaled value as
+ * its base and drew the atmosphere scale² bright.
  */
 export function createLuminanceScaler(scale, forEachUniform, handles) {
   if (scale === 1 || !forEachUniform) return () => false;
-  // key -> the vectors uniforms point at, and the values they must hold
-  const bases = new Map();
+  const bases = new Map(); // key -> { base, target }
+  const scaledVectors = new WeakSet();
   let changed = false;
   const entry = (key, value) => {
     let found = bases.get(key);
     if (!found) {
-      const baseValue = value.clone();
-      const targetValue = value.clone().multiplyScalar(scale);
+      const base = unscaled.get(value) ?? value;
       found = {
-        base: baseValue.clone(),
-        target: targetValue.clone(),
-        baseValue,
-        targetValue,
+        base: base.clone(),
+        target: base.clone().multiplyScalar(scale),
       };
       bases.set(key, found);
     }
     return found;
-  };
-  // A material may write into the vector its uniform holds.
-  const restore = () => {
-    for (const { base, target, baseValue, targetValue } of bases.values()) {
-      if (!base.equals(baseValue)) {
-        base.copy(baseValue);
-        changed = true;
-      }
-      if (!target.equals(targetValue)) {
-        target.copy(targetValue);
-        changed = true;
-      }
-    }
   };
   let applyScale = true;
   const record = (key, uniform) => entry(key, uniform.value);
@@ -304,19 +294,21 @@ export function createLuminanceScaler(scale, forEachUniform, handles) {
     if (!scaled) return;
     const { base, target } = entry(key, uniform.value);
     const desired = applyScale ? target : base;
-    if (uniform.value === desired) return;
-    if (!uniform.value.equals(desired)) changed = true;
-    uniform.value = desired;
+    scaledVectors.add(uniform.value);
+    if (uniform.value.equals(desired)) return;
+    if (!unscaled.has(uniform.value))
+      unscaled.set(uniform.value, uniform.value.clone());
+    uniform.value.copy(desired);
+    changed = true;
   };
   const keepBase = (key, uniform, scaled) => {
     if (scaled) return;
-    const { base, target } = entry(key, uniform.value);
-    // Never this scaler's own vectors: they change with the scale.
-    if (uniform.value === target || uniform.value === base) {
-      if (!uniform.value.equals(base)) changed = true;
+    const { base } = entry(key, uniform.value);
+    if (scaledVectors.has(uniform.value)) {
       uniform.value = base.clone();
+      changed = true;
     } else if (!uniform.value.equals(base)) {
-      uniform.value = base.clone();
+      uniform.value.copy(base);
       changed = true;
     }
   };
@@ -325,7 +317,6 @@ export function createLuminanceScaler(scale, forEachUniform, handles) {
     changed = false;
     // Bases first, from the values as Navara built them.
     forEachUniform(handles, record);
-    restore();
     forEachUniform(handles, scaleOne);
     forEachUniform(handles, keepBase);
     return changed;

@@ -568,17 +568,14 @@ test('a second look on the page scales the shared atmosphere vectors from their 
   };
   const first = build();
   near(first.sky[SKY].value.x, 1.5 * k);
-  assert.equal(
-    pageDefault[SKY].value.x,
-    1.5,
-    'the shared vector is not written',
-  );
-  // The first globe's context is lost and a new one is built on the page.
+  // The first globe's context is lost and a new one is built on the page:
+  // its materials hold the vectors the first one scaled.
   const second = build();
   near(second.sky[SKY].value.x, 1.5 * k);
   near(second.clouds[SUN].value.x, 1.3 * k);
+  near(pageDefault[SKY].value.x, 1.5 * k);
   assert.equal(second.stars[SKY].value.x, 1.5);
-  near(first.sky[SKY].value.x, 1.5 * k);
+  assert.equal(second.stars[SUN].value.x, 1.3);
 });
 
 test('a value a material writes into the scaled vector is put back on the next frame', () => {
