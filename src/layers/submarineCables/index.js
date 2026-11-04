@@ -4,10 +4,11 @@ import { defaultSweepClock } from './policy.js';
 import { createRendering } from './rendering.js';
 import { createIngestion } from './ingestion.js';
 import { createInteraction } from './interaction.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 export function createSubmarineCableLayer({
   source,
   overlayHost,
-  screenSpaceEventHandlerFactory,
+  inputFor = defaultInputFor,
   mapStackEventTarget = null,
   sweepClock = defaultSweepClock,
 }) {
@@ -21,7 +22,7 @@ export function createSubmarineCableLayer({
     state,
     parts,
     source,
-    screenSpaceEventHandlerFactory,
+    inputFor,
     mapStackEventTarget,
   };
   parts.rendering = createRendering(context);

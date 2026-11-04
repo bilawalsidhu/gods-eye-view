@@ -1,6 +1,6 @@
 /**
- * Shared pick-ownership registry for layers that install their own
- * ScreenSpaceEventHandler click handlers.
+ * Shared pick-ownership registry for the layers that read globe clicks
+ * (src/input/dispatcher.js).
  *
  * Problem solved: each entity layer (commercial flights, military flights)
  * receives every LEFT_CLICK. When the user clicks a military aircraft while
@@ -109,10 +109,14 @@ export function isOwnedByOtherLayer(layerId, pickedId) {
  *
  * @param {object} scene Cesium scene with pick and optional drillPick.
  * @param {{x: number, y: number}} position Screen position in CSS pixels.
+ * @param {{picked?: object|null, drill?: (limit: number, width: number, height: number) => object[]}} [options]
+ *   The click's own passes when the caller has them, so a click is picked
+ *   once: `picked` is `scene.pick(position)` (a miss is passed as `undefined`
+ *   too, so the key's presence counts), `drill` a shared `scene.drillPick`.
  * @returns {object|null|undefined} Original pick or the first registered touch hit.
  */
-export function pickContact(scene, position) {
-  const picked = scene.pick(position);
+export function pickContact(scene, position, options = {}) {
+  const picked = 'picked' in options ? options.picked : scene.pick(position);
   if (
     !globalThis.matchMedia?.('(pointer: coarse)').matches ||
     findPickOwner(resolvePickId(picked)) ||
@@ -122,7 +126,10 @@ export function pickContact(scene, position) {
     return picked;
   let hits;
   try {
-    hits = scene.drillPick(position, 8, 14, 14) || [];
+    hits =
+      (options.drill
+        ? options.drill(8, 14, 14)
+        : scene.drillPick(position, 8, 14, 14)) || [];
   } catch {
     return picked;
   }

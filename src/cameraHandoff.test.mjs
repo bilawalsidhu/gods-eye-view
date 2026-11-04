@@ -389,7 +389,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   }
   const vesselClick = body(
     vessels,
-    /handler\.setInputAction\(\s*\(click\) => \{([\s\S]*?)\n\s*\},\s*Cesium\.ScreenSpaceEventType\.LEFT_CLICK,?\s*\);/,
+    /inputFor\(viewer\)\.onClick\(\(event\) => \{([\s\S]*?)\n    \}\);/,
     'vessel click',
   );
   ordered(vesselClick, [
@@ -405,7 +405,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   assert.match(vesselFocus, /requestWorldFocus\(\{/);
   const fireClick = body(
     firms,
-    /_clickHandler\.setInputAction\(\(click\) => \{([\s\S]*?)\n    \}, Cesium\.ScreenSpaceEventType\.LEFT_CLICK\);/,
+    /input\.onClick\(\(event\) => \{([\s\S]*?)\n    \}\);/,
     'fire click',
   );
   ordered(fireClick, [

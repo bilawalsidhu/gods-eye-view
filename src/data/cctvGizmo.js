@@ -8,7 +8,7 @@
  *  - Pure drag math (this top section): ray↔axis closest-point, ray↔plane
  *    intersection with a grazing-angle guard, ring angles. All unit-tested
  *    under node:test with zero scene dependencies.
- *  - createCalibrationGizmo (below): the entity + ScreenSpaceEventHandler
+ *  - createCalibrationGizmo (below): the entity + pointer-input
  *    controller that renders grab-able handles on the ACTIVE camera and turns
  *    drags into calibration patches through a narrow callback interface. It
  *    never touches the layer's records/stores directly.
@@ -24,7 +24,7 @@
  * invariant is untouched.
  */
 import * as Cesium from 'cesium';
-import { isPointerFree } from './inputOwnership.js';
+import { inputFor } from '../input/dispatcher.js';
 
 // Grazing guard (spec §5): reject plane intersections when the view ray is
 // nearly parallel to the constraint plane — the hit point races to infinity
@@ -237,7 +237,8 @@ export function createCalibrationGizmo({
   const entities = new Map(); // part -> Entity
 
   const scene = viewer.scene;
-  const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+  const input = inputFor(viewer);
+  let releaseCamera = null;
 
   /** Adds (or re-adds) a gizmo entity, clearing any stale duplicate id. */
   function addEntity(part, options) {
@@ -533,9 +534,7 @@ export function createCalibrationGizmo({
 
     drag = state;
     setCursor('grabbing');
-    if (scene.screenSpaceCameraController) {
-      scene.screenSpaceCameraController.enableInputs = false;
-    }
+    releaseCamera = input.suspendCamera('cctv-gizmo-drag');
     return true;
   }
 
@@ -615,9 +614,8 @@ export function createCalibrationGizmo({
     if (!drag) return;
     const record = drag.record;
     drag = null;
-    if (scene.screenSpaceCameraController) {
-      scene.screenSpaceCameraController.enableInputs = true;
-    }
+    releaseCamera?.();
+    releaseCamera = null;
     setCursor(hoveredId ? 'grab' : '');
     endPatch(record);
   }
@@ -629,18 +627,21 @@ export function createCalibrationGizmo({
     }
   }
 
-  handler.setInputAction((event) => {
-    // A tool owns the pointer (src/data/inputOwnership.js): yield the press.
-    if (!isPointerFree()) return;
+  // An ambient press: the dispatcher withholds it while a tool owns the pointer
+  // (src/data/inputOwnership.js).
+  const offDown = input.onPointer('down', (event) => {
     if (!enabled) return;
+    // A release Cesium never reported (one with a modifier key held) leaves
+    // the last drag open; a new press ends it, hold and patch included.
+    if (drag) endDrag();
     const part = pickGizmoPart(event.position);
     debugLog('LEFT_DOWN', event.position, 'part:', part);
     if (!part) return;
     const started = beginDrag(part, event.position);
     debugLog('beginDrag', part, '→', started);
-  }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+  });
 
-  handler.setInputAction((event) => {
+  const offMove = input.onPointer('move', (event) => {
     if (!enabled) return;
     const now = Date.now();
     if (drag) {
@@ -667,12 +668,12 @@ export function createCalibrationGizmo({
     if (now - lastHoverAt < HOVER_THROTTLE_MS) return;
     lastHoverAt = now;
     setHovered(pickGizmoPart(event.endPosition));
-  }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+  });
 
-  handler.setInputAction(() => {
+  const offUp = input.onPointer('up', () => {
     if (!enabled) return;
     endDrag();
-  }, Cesium.ScreenSpaceEventType.LEFT_UP);
+  });
 
   return {
     setEnabled(value) {
@@ -688,7 +689,9 @@ export function createCalibrationGizmo({
     refresh,
     destroy() {
       if (drag) endDrag();
-      handler.destroy();
+      offDown();
+      offMove();
+      offUp();
       for (const entity of entities.values()) {
         viewer.entities.remove(entity);
       }

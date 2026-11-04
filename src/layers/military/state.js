@@ -140,9 +140,9 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedModelLoading = false;
 
-  /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for selecting aircraft */
+  /** @type {(() => void)|null} Unsubscribes the aircraft-selection click. */
 
-  flightState._clickHandler = null;
+  flightState._clickSubscription = null;
 
   /** @type {Cesium.Viewer|null} Cached viewer reference */
 

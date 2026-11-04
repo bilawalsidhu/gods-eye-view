@@ -56,6 +56,6 @@ export function createState({ services }) {
     groundClickReady: false,
 
     marker: { collection: null, billboard: null, look: null },
-    clickHandler: null,
+    clickSubscription: null,
   };
 }

@@ -3,6 +3,7 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createSelection } from './selection.js';
 import { createPickRouter } from './pickRouter.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
 
 /** The selection installed on a stand-in viewer, with what its clicks reach. */
 function harness({ selected = false, services = {}, providers = [] } = {}) {
@@ -40,7 +41,7 @@ function harness({ selected = false, services = {}, providers = [] } = {}) {
   const state = {
     viewer,
     enabled: true,
-    clickHandler: null,
+    clickSubscription: null,
     services: { picking: null, input: null, ...services },
     providers: new Map([
       [
@@ -71,17 +72,16 @@ function harness({ selected = false, services = {}, providers = [] } = {}) {
       sequences.selected = false;
     },
   };
+  const input = fakeInput(viewer);
   const selection = createSelection({ state, parts });
   selection.install(viewer);
-  const action = (type) =>
-    state.clickHandler.getInputAction(Cesium.ScreenSpaceEventType[type]);
   return {
     state,
     sequences,
     opened,
     groundClicks,
     scene,
-    click: (x = 10) => action('LEFT_CLICK')({ position: { x, y: 10 } }),
+    click: (x = 10) => input.click({ x, y: 10 }),
     /** A keydown reaching the document from `target`; the event as handled. */
     key(key, target, { defaultPrevented = false } = {}) {
       const event = {
@@ -248,7 +248,10 @@ test('a click on a provider line hands it the ground under the click, measured o
     const point = handled[0].click.groundPoint();
     assert.ok(Math.abs(point.lon + 83.0458) < 1e-9);
     assert.ok(Math.abs(point.lat - 42.3314) < 1e-9);
-    assert.deepEqual(groundPicks, [{ x: 40, y: 10 }]);
+    assert.deepEqual(
+      groundPicks.map(({ x, y }) => ({ x, y })),
+      [{ x: 40, y: 10 }],
+    );
   } finally {
     h.restore();
   }

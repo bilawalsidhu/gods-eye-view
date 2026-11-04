@@ -105,10 +105,8 @@ export function createLifecycle({
       parts.tracking._clearTracking();
       parts.labels._syncIssOverlay();
       // Remove click handler + keydown listener + preRender propagation while disabled
-      if (layerState._clickHandler) {
-        layerState._clickHandler.destroy();
-        layerState._clickHandler = null;
-      }
+      layerState._clickSubscription?.();
+      layerState._clickSubscription = null;
       if (layerState._trackedEntityChangedRemove) {
         layerState._trackedEntityChangedRemove();
         layerState._trackedEntityChangedRemove = null;
@@ -127,10 +125,8 @@ export function createLifecycle({
       layerState._enabled = false;
       parts.tracking._clearTracking();
       parts.tracking._cancelPendingTrackingRestore();
-      if (layerState._clickHandler) {
-        layerState._clickHandler.destroy();
-        layerState._clickHandler = null;
-      }
+      layerState._clickSubscription?.();
+      layerState._clickSubscription = null;
       if (layerState._trackedEntityChangedRemove) {
         layerState._trackedEntityChangedRemove();
         layerState._trackedEntityChangedRemove = null;

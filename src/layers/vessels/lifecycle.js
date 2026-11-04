@@ -119,11 +119,10 @@ export function createLifecycle({
     state.records.all = [];
     state.records.byMmsi = new Map();
     state.records.unkeyed = [];
-    state.clickHandler = null;
+    state.clickSubscription = null;
     state.keyTarget = null;
     state.keydownHandler = null;
     state.trackedEntityRemover = null;
-    state.interactionHandlerFactory = null;
     state.interactionKeyTarget = null;
     state.preRenderRemover = null;
     components.rendering.cancelTrailingVisibilityPass();

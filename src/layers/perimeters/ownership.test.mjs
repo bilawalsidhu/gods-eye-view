@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createFirePerimetersLayer } from './index.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
 
 function harness(
   source,
@@ -16,7 +17,6 @@ function harness(
 ) {
   const sources = [];
   const overlay = { entries: new Map(), visible: null };
-  const clicks = { handler: null, destroyed: 0 };
   const owners = new Map();
   const opened = [];
   const viewer = {
@@ -28,6 +28,13 @@ function harness(
       remove(value) {
         sources.splice(sources.indexOf(value), 1);
       },
+    },
+  };
+  const input = fakeInput(viewer);
+  const clicks = {
+    handler: (click) => input.click(click.position),
+    get destroyed() {
+      return input.input.subscriberCount() === 0 ? 1 : 0;
     },
   };
   const layer = createFirePerimetersLayer({
@@ -44,15 +51,7 @@ function harness(
       },
       hitTest: (x, y, options) => cardHit(x, y, options),
     },
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction(callback) {
-        clicks.handler = callback;
-      },
-      destroy() {
-        clicks.destroyed += 1;
-        clicks.handler = null;
-      },
-    }),
+    inputFor: () => input.input,
     picking: {
       resolvePickId: (picked) => picked?.id ?? null,
       isOwnedByOtherLayer: (layerId, pickedId) =>
@@ -60,7 +59,6 @@ function harness(
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
     },
-    pointer: { isPointerFree: () => true },
     inciwebSource: inciwebIndex
       ? { getIndex: async () => inciwebIndex }
       : { getIndex: async () => [] },
@@ -331,7 +329,7 @@ test('a stale or unverifiable publication yields no link', async () => {
   }
 });
 
-test('a hanging InciWeb index fetch never blocks the perimeter refresh', async () => {
+test('a hanging InciWeb index fetch never blocks the perimeter refresh', async (t) => {
   const h = harness({ getSnapshot: async () => [row] }, { inciwebIndex: null });
   // Replace the index source with one that never resolves.
   h.layer.destroy(h.viewer);
@@ -345,6 +343,8 @@ test('a hanging InciWeb index fetch never blocks the perimeter refresh', async (
       remove: (v) => sources.splice(sources.indexOf(v), 1),
     },
   };
+  const input = fakeInput(viewer);
+  t.after(() => input.destroy());
   const layer = createFirePerimetersLayer({
     source: { getSnapshot: async () => [row] },
     overlayHost: {
@@ -377,7 +377,7 @@ test('a hanging InciWeb index fetch never blocks the perimeter refresh', async (
   layer.destroy(viewer);
 });
 
-test('an InciWeb outage never breaks the perimeter refresh', async () => {
+test('an InciWeb outage never breaks the perimeter refresh', async (t) => {
   const h = harness({ getSnapshot: async () => [row] });
   const failing = createFirePerimetersLayer({
     source: { getSnapshot: async () => [row] },
@@ -409,6 +409,8 @@ test('an InciWeb outage never breaks the perimeter refresh', async () => {
     scene: { pick: () => null },
     dataSources: { add() {}, remove() {} },
   };
+  const failingInput = fakeInput(viewer);
+  t.after(() => failingInput.destroy());
   failing.init(viewer);
   failing.enable(viewer);
   assert.equal(await failing.update(viewer), true);

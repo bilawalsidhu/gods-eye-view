@@ -67,7 +67,7 @@ export function createFirmsState({ services, config }) {
 
   layerState._contextIds = new Set();
 
-  layerState._clickHandler = null;
+  layerState._clickSubscription = null;
 
   layerState._moveEndRemover = null;
 

@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
   LAYER_ID,
   MAX_VIEWPORT_DEGREES,
@@ -624,18 +624,14 @@ export function createAlprPresentation({ state, services, source }) {
   }
 
   function installInteraction(viewer) {
-    if (state.clickHandler) return;
-    state.clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    state.clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
+    if (state.clickSubscription) return;
+    state.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state.enabled) return;
-      const picked = viewer.scene.pick(click.position);
+      // The painted overlay answers first; the scene is picked only if not.
+      const pickedId = event.pick?.id?.id;
       const id =
-        overlay.pick(click.position) ||
-        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
+        overlay.pick(event.screenPosition) ||
+        (typeof pickedId === 'string' ? pickedId : null);
       if (
         id &&
         state.recordById.has(id) &&
@@ -643,7 +639,7 @@ export function createAlprPresentation({ state, services, source }) {
       )
         selectRecord(id);
       else if (state.selectedId) clearSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
   return {
     initOverlay: () => overlay.init(),

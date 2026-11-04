@@ -1,6 +1,8 @@
-import * as Cesium from 'cesium';
-import { isPointerFree } from './inputOwnership.js';
-
+/**
+ * Click-gesture classifiers for the tracking layers. The gesture itself
+ * (summed travel and press time) is measured by the input dispatcher and
+ * arrives on every click as `event.gesture` (src/input/dispatcher.js).
+ */
 export const MAX_TRACKING_CLICK_TRAVEL_PX = 6;
 export const MAX_TRACKING_CLICK_DURATION_MS = 400;
 
@@ -32,80 +34,4 @@ export function isTrackingClickGesture(gesture = {}) {
     isTrackingSelectionGesture(gesture) &&
     durationMs <= MAX_TRACKING_CLICK_DURATION_MS
   );
-}
-
-/**
- * Bind LEFT_DOWN/MOUSE_MOVE/LEFT_UP accounting ahead of a scene click.
- * Travel is accumulated segment-by-segment, so an orbit nudge that returns to
- * its starting pixel cannot masquerade as a zero-distance click. Every scene
- * click reaches `onClick` with its gesture metadata; the caller decides whether
- * selection (travel-only) or deselection (travel + duration) is allowed.
- * @param {Cesium.ScreenSpaceEventHandler|Object} handler - Input handler.
- * @param {(click: Object, gesture: {travelPx: number, durationMs: number}) => void} onClick - Scene-click callback.
- * @param {{now?: () => number, eventTypes?: Object, onMouseMove?: (event: Object) => void}} [options] - Test/interop seams.
- * @returns {void}
- */
-export function bindTrackingClickGesture(handler, onClick, options = {}) {
-  const now = options.now || (() => performance.now());
-  const eventTypes = options.eventTypes || Cesium.ScreenSpaceEventType;
-  let pressActive = false;
-  let pressStartedAt = 0;
-  let previousPosition = null;
-  let travelPx = 0;
-  let completedGesture = null;
-
-  const appendTravel = (position) => {
-    if (
-      !pressActive ||
-      !Number.isFinite(position?.x) ||
-      !Number.isFinite(position?.y)
-    )
-      return;
-    if (previousPosition) {
-      travelPx += Math.hypot(
-        position.x - previousPosition.x,
-        position.y - previousPosition.y,
-      );
-    }
-    previousPosition = { x: position.x, y: position.y };
-  };
-
-  const finishPress = (position) => {
-    if (!pressActive) return;
-    appendTravel(position);
-    completedGesture = {
-      travelPx,
-      durationMs: Math.max(0, now() - pressStartedAt),
-    };
-    pressActive = false;
-    previousPosition = null;
-  };
-
-  handler.setInputAction((event) => {
-    pressActive = true;
-    pressStartedAt = now();
-    previousPosition = null;
-    travelPx = 0;
-    completedGesture = null;
-    appendTravel(event?.position);
-  }, eventTypes.LEFT_DOWN);
-
-  handler.setInputAction((event) => {
-    appendTravel(event?.endPosition ?? event?.position);
-    options.onMouseMove?.(event);
-  }, eventTypes.MOUSE_MOVE);
-
-  handler.setInputAction((event) => {
-    finishPress(event?.position);
-  }, eventTypes.LEFT_UP);
-
-  handler.setInputAction((click) => {
-    if (pressActive) finishPress(click?.position);
-    const gesture = completedGesture || { travelPx: 0, durationMs: 0 };
-    completedGesture = null;
-    // A tool owns the pointer: a draw vertex placed over an aircraft is a
-    // vertex, not a track request (src/data/inputOwnership.js).
-    if (!isPointerFree()) return;
-    onClick(click, gesture);
-  }, eventTypes.LEFT_CLICK);
 }

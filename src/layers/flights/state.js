@@ -168,9 +168,9 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedModelLoading = false;
 
-  /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler on the scene canvas */
+  /** @type {(() => void)|null} Unsubscribes the scene click. */
 
-  flightState._clickHandler = null;
+  flightState._clickSubscription = null;
 
   /** @type {Cesium.Viewer|null} Cached viewer reference */
 

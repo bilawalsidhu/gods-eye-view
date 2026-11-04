@@ -6,6 +6,7 @@ import {
   resolveTrackedAircraftInfo,
 } from '../cockpitMath.js';
 import { readEntityRecord } from '../data/entityRecords.js';
+import { inputFor } from '../input/dispatcher.js';
 
 export function readAircraftInfo() {
   // In cockpit mode the controller takes the entity off `viewer.trackedEntity`
@@ -171,7 +172,8 @@ export function enter() {
   // (perf wave 2)
   this.services.holdContinuousRender('cockpit');
   this.viewer.trackedEntity = undefined;
-  this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+  this.releaseCameraInput?.();
+  this.releaseCameraInput = inputFor(this.viewer).suspendCamera('cockpit');
   document.body.classList.add('cockpit-mode');
   // Activation hides the entry and TR-3B chip; clearing the chip's signature
   // lets the exit-path syncEntry publish it again.
@@ -238,7 +240,8 @@ export function exit({ restoreTracking = true } = {}) {
   this.routeView.visible = false;
   this.clearPredictiveRoute();
   this.setVisionMode('optical');
-  this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+  this.releaseCameraInput?.();
+  this.releaseCameraInput = null;
   if (entity && this.viewer.entities.contains(entity))
     entity.show = this.trackedEntityWasShown;
   this.trackedEntityWasShown = true;

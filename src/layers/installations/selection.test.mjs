@@ -88,7 +88,7 @@ function harness(t) {
   selection.installInteraction(state.viewer);
   t.after(() => {
     selection.destroy();
-    state.clickHandler.destroy();
+    state.clickSubscription();
     parts.namedMarkers.destroy();
     parts.rendering.clearRendered();
     if (previousWindow === undefined) delete globalThis.window;

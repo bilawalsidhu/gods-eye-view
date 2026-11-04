@@ -84,6 +84,8 @@ export class CockpitViewController {
     this.destroyed = false;
     this.disposed = false;
     this.active = false;
+    /** Gives camera input back; held from enter to exit. */
+    this.releaseCameraInput = null;
     this.trackedEntity = null;
     this.trackedEntityWasShown = true;
     this.heading = null;

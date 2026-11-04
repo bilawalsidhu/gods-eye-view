@@ -101,10 +101,8 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       // Pinned by the direct-destroy host test: removing this line leaves a
       // visible overlay source with orphan labels.
       state._overlayPublisher.hide();
-      if (state._clickHandler) {
-        state._clickHandler.destroy();
-        state._clickHandler = null;
-      }
+      state._clickSubscription?.();
+      state._clickSubscription = null;
       if (state._preRenderRemover) {
         state._preRenderRemover();
         state._preRenderRemover = null;

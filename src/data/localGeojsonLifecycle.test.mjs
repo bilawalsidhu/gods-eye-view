@@ -46,10 +46,13 @@ function harness(t) {
   const create = () => createLocalGeoJsonLayer({
     id: 'local-dams', name: 'Dams', color: '#0088ff', url: '/dams.geojsonl',
     overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
-    screenSpaceEventHandlerFactory() {
-      handlers++;
-      return { setInputAction() {}, destroy() { handlers--; } };
-    },
+    inputFor: () => ({
+      onClick() {
+        handlers++;
+        return () => { handlers--; };
+      },
+      suspendCamera: () => () => {},
+    }),
   });
   const layer = create();
   return { layer, create, viewer, sources, listeners, handlers: () => handlers };

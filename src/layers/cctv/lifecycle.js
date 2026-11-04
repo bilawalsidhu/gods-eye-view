@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
   CALIBRATION_RANGE_FLOOR_M,
@@ -382,14 +383,12 @@ export function createLifecycle({
       }
       parts.rendering.refreshHorizonCulling();
 
-      layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-        layerState._viewer.scene.canvas,
-      );
-      parts.selection.bindCctvWorldClickGesture(
-        layerState._clickHandler,
-        (click) => {
+      const input = inputFor(layerState._viewer);
+      const unsubscribeClick = parts.selection.bindCctvWorldClickGesture(
+        input,
+        (event) => {
           if (!layerState._enabled) return;
-          const picked = layerState._viewer.scene.pick(click.position);
+          const picked = event.pick;
           const cameraId = parts.selection.extractPickedCameraId(picked);
           if (cameraId) {
             activateCctvCameraFromWorldClick(
@@ -410,8 +409,8 @@ export function createLifecycle({
           // its camera exactly like a click on the icon. Cesium click positions
           // and the recorded rects are both CSS px — direct comparison.
           const cardId = layerState._cctvOverlayHost.hitTest(
-            click.position.x,
-            click.position.y,
+            event.screenPosition.x,
+            event.screenPosition.y,
             { sourceId: CCTV_OVERLAY_SOURCE_ID },
           )?.entryId;
           if (cardId && layerState._recordById.has(cardId)) {
@@ -430,14 +429,15 @@ export function createLifecycle({
             parts.selection.deactivateActiveCamera();
           }
         },
-        {
-          // Item B: hover summons a card on a cardless camera icon. The gesture
-          // classifier owns MOUSE_MOVE too, so chain hover work through its seam
-          // instead of replacing the travel accumulator's handler.
-          onMouseMove: (movement) =>
-            parts.hover.handleHoverMove(movement?.endPosition),
-        },
       );
+      // Item B: hover summons a card on a cardless camera icon.
+      const unsubscribeHover = input.onPointer('move', (movement) =>
+        parts.hover.handleHoverMove(movement?.endPosition),
+      );
+      layerState._clickSubscription = () => {
+        unsubscribeClick();
+        unsubscribeHover();
+      };
 
       await parts.health.syncHealthState(true);
       // Health ranks crowded cells: thin again now that it has arrived (a
@@ -584,13 +584,8 @@ export function createLifecycle({
       }
       layerState._calibrationMode = false;
       releaseContinuousRender('cctv-adjust');
-      if (layerState._clickHandler) {
-        layerState._clickHandler.destroy();
-        layerState._clickHandler = null;
-      }
-      if (teardownViewer?.scene?.screenSpaceCameraController) {
-        teardownViewer.scene.screenSpaceCameraController.enableInputs = true;
-      }
+      layerState._clickSubscription?.();
+      layerState._clickSubscription = null;
       parts.projection.stopProjectionLoop();
       parts.geometryQueue.stopGeometryLoadQueue();
       parts.cards.teardownAmbientCards();

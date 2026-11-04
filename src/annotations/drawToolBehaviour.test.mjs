@@ -13,6 +13,7 @@ import {
   releasePointer,
   resetPointerOwnership,
 } from '../data/inputOwnership.js';
+import { fakeInput } from '../input/testDoubles.mjs';
 
 /* ── DOM doubles ───────────────────────────────────────────────────────── */
 
@@ -227,6 +228,7 @@ function harness({ navigation = null } = {}) {
   resetPointerOwnership();
   const { byId, documentDouble } = fakeDom();
   const viewer = fakeViewer();
+  const input = fakeInput(viewer, { eventTypes: Cesium.ScreenSpaceEventType });
   const annotations = fakeAnnotations();
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
@@ -256,7 +258,9 @@ function harness({ navigation = null } = {}) {
     controls,
     /** A control's change, as the view sends it. */
     act: (name, ...args) => controls.actions?.[name]?.(...args),
+    input,
     restore() {
+      input.destroy();
       resetPointerOwnership();
       if (previousDocument === undefined) delete globalThis.document;
       else globalThis.document = previousDocument;
@@ -468,7 +472,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
     assert.equal(isPointerFree(), true, 'the pointer is free');
     const after = h.tool.diagnostics();
     assert.equal(after.destroyed, true);
-    assert.equal(after.sceneHandler, false, 'the Cesium handler is gone');
+    assert.equal(after.sceneHandler, false, 'the pointer subscriptions are gone');
     assert.equal(after.domListeners, 0, 'every DOM listener came off');
     assert.equal(h.documentDouble.listeners.length, 0, 'including the keydown');
     assert.equal(h.controls.actions, null, 'and the controls are disconnected');

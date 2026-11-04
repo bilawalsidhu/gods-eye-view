@@ -93,8 +93,8 @@ export function createLifecycle({
       layerState.moveEndRemove?.();
       layerState.changedRemove?.();
       parts.selection.destroy?.();
-      layerState.clickHandler?.destroy();
-      layerState.clickHandler = null;
+      layerState.clickSubscription?.();
+      layerState.clickSubscription = null;
       parts.namedMarkers?.destroy();
       parts.rendering.clearRendered();
       if (layerState.dataSource && viewer)

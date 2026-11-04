@@ -178,10 +178,8 @@ export function createLifecycle({
       parts.tracking._destroyTrail();
       // Remove click handler + keydown listener while disabled to avoid
       // intercepting input when the layer is off
-      if (flightState._clickHandler) {
-        flightState._clickHandler.destroy();
-        flightState._clickHandler = null;
-      }
+      flightState._clickSubscription?.();
+      flightState._clickSubscription = null;
       if (flightState._trackedEntityChangedRemove) {
         flightState._trackedEntityChangedRemove();
         flightState._trackedEntityChangedRemove = null;
@@ -216,10 +214,8 @@ export function createLifecycle({
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       parts.tracking._cancelPendingTrackingRestore();
-      if (flightState._clickHandler) {
-        flightState._clickHandler.destroy();
-        flightState._clickHandler = null;
-      }
+      flightState._clickSubscription?.();
+      flightState._clickSubscription = null;
       if (flightState._trackedEntityChangedRemove) {
         flightState._trackedEntityChangedRemove();
         flightState._trackedEntityChangedRemove = null;

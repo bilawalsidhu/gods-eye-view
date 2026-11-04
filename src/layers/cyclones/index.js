@@ -1,7 +1,7 @@
 import * as Cesium from 'cesium';
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
   registerPickOwner,
   unregisterPickOwner,
@@ -82,7 +82,7 @@ export function createCyclonesLayer({
     selectedId = null,
     selectionIntent = 'auto',
     navigationGeneration = 0,
-    clickHandler = null,
+    selectionOwner = null,
     removeClickCapture = null;
   let enabled = false,
     loading = false,
@@ -106,14 +106,9 @@ export function createCyclonesLayer({
         (typeof cesium.Cesium3DTileset === 'function' &&
           picked.primitive instanceof cesium.Cesium3DTileset)));
   function installSelection() {
-    if (
-      clickHandler ||
-      !viewer?.scene?.canvas ||
-      typeof cesium.ScreenSpaceEventHandler !== 'function'
-    )
-      return;
-    const owner = new cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    clickHandler = owner;
+    if (selectionOwner || !viewer?.scene?.canvas) return;
+    const owner = {};
+    selectionOwner = owner;
     // Snapshot before sibling bubble listeners can rebuild the overlay hit
     // rectangles. A vessel selection does that synchronously in the same click.
     const canvas = viewer.scene.canvas;
@@ -154,28 +149,24 @@ export function createCyclonesLayer({
         canvas.removeEventListener?.(type, resetCapture, { capture: true });
       capturedHit = null;
     };
-    owner.setInputAction((click) => {
+    const unsubscribe = inputFor(viewer).onClick((event) => {
       const nativeHit = capturedHit;
       capturedHit = null;
-      // Ambient selection yields to draw tools and Director; it never claims
-      // the pointer, camera, or tracking state.
-      if (
-        !enabled ||
-        destroyed ||
-        clickHandler !== owner ||
-        !isPointerFree() ||
-        !click?.position
-      )
+      // Ambient selection yields to draw tools and Director (the dispatcher
+      // skips a held pointer); it never claims the pointer, camera, or
+      // tracking state.
+      const position = event.screenPosition;
+      if (!enabled || destroyed || selectionOwner !== owner || !position)
         return;
       // AIS cards paint above the globe on a pointer-events:none canvas. The
       // vessel handler resolves this same topmost hit before cyclone geometry.
       const captureMatches =
         nativeHit &&
-        Math.abs(nativeHit.x - click.position.x) < 1 &&
-        Math.abs(nativeHit.y - click.position.y) < 1;
+        Math.abs(nativeHit.x - position.x) < 1 &&
+        Math.abs(nativeHit.y - position.y) < 1;
       const hit = captureMatches
         ? nativeHit
-        : overlayHit(click.position.x, click.position.y);
+        : overlayHit(position.x, position.y);
       if (hit.sourceId === VESSEL_OVERLAY_SOURCE_ID) return;
       // Storm cards and lead-hour labels paint on the same canvas; a click on
       // one selects its storm. An id from a superseded advisory changes nothing.
@@ -184,18 +175,19 @@ export function createCyclonesLayer({
         if (id) layer.setParams({ stormId: id });
         return;
       }
-      const picked = viewer.scene.pick(click.position);
+      const picked = event.pick;
       const id = rendering?.pickStorm(picked);
       if (id) layer.setParams({ stormId: id });
       else if (isSurfacePick(picked)) layer.setParams({ clear: true });
-    }, cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
+    owner.unsubscribe = unsubscribe;
   }
   function removeSelection() {
-    const owner = clickHandler;
-    clickHandler = null;
+    const owner = selectionOwner;
+    selectionOwner = null;
     removeClickCapture?.();
     removeClickCapture = null;
-    if (owner && !owner.isDestroyed?.()) owner.destroy();
+    owner?.unsubscribe?.();
   }
   const layer = {
     id: 'weather-cyclones',
@@ -520,7 +512,7 @@ export function createCyclonesLayer({
         enabled,
         loading,
         requestPending: !!request,
-        selectionActive: clickHandler !== null,
+        selectionActive: selectionOwner !== null,
         selectedId,
         selectionIntent,
         timerActive: false,

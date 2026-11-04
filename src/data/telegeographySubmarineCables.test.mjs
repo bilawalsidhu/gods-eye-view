@@ -849,10 +849,7 @@ function createDeferredCableLayerHarness() {
       setEntries: (...args) => hostCalls.push(['entries', ...args]),
       clearSource: (...args) => hostCalls.push(['clear', ...args]),
     },
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction() {},
-      destroy() {},
-    }),
+    inputFor: () => ({ onClick: () => () => {} }),
   });
   const viewer = makeStubViewer(listeners, dataSources, addCalls, addControl);
   layer.init(viewer);
@@ -1306,10 +1303,7 @@ async function createRealCableLayerHarness({
       setEntries: (...args) => hostCalls.push(['entries', ...args]),
       clearSource: (...args) => hostCalls.push(['clear', ...args]),
     },
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction() {},
-      destroy() {},
-    }),
+    inputFor: () => ({ onClick: () => () => {} }),
     ...(source ? { source } : {}),
     mapStackEventTarget,
     sweepClock: () => clockMs,

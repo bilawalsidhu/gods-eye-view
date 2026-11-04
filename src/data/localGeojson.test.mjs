@@ -133,10 +133,7 @@ async function createRealLocalLayerHarness({
     color: '#0088ff',
     overlayHost,
     projectToWindow: () => ({ x: 400, y: 300 }),
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction() {},
-      destroy() {},
-    }),
+    inputFor: () => ({ onClick: () => () => {}, suspendCamera: () => () => {} }),
   });
   try {
     await layer.enable(viewer);
@@ -533,7 +530,7 @@ async function enableLayerWithFetch(fetchImpl, { dataSources, windowStub } = {})
     name: 'Dams',
     color: '#0088ff',
     overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
-    screenSpaceEventHandlerFactory: () => ({ setInputAction() {}, destroy() {} }),
+    inputFor: () => ({ onClick: () => () => {}, suspendCamera: () => () => {} }),
   });
   const enable = async () => {
     globalThis.fetch = fetchImpl;
@@ -1182,7 +1179,7 @@ async function createMultiFeatureLodHarness({ featureCount = 150, cameraHeightM 
     color: '#00ffff',
     overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
     projectToWindow: () => ({ x: 700, y: 450 }),
-    screenSpaceEventHandlerFactory: () => ({ setInputAction() {}, destroy() {} }),
+    inputFor: () => ({ onClick: () => () => {}, suspendCamera: () => () => {} }),
   });
   try {
     await layer.enable(viewer);

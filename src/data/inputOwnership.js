@@ -1,7 +1,7 @@
 /**
  * Who owns the pointer over the globe.
  *
- * Most layers bind their own `ScreenSpaceEventHandler` to the same canvas and
+ * Most layers read the same globe clicks (src/input/dispatcher.js) and
  * select whatever is under a left click. That is right when nothing else is
  * going on, and wrong the moment a tool needs the pointer for itself: a draw
  * session placing a vertex on top of an aircraft must not also track the
@@ -15,8 +15,8 @@
  *   `releasePointer(lease)` when it turns off. It does not consult anyone;
  *   holding the claim is what makes it the owner.
  * - An AMBIENT SELECTION HANDLER — anything that picks an entity because the
- *   user clicked — early-returns while `isPointerFree()` is false. It never
- *   claims.
+ *   user clicked — is not called while `isPointerFree()` is false: the input
+ *   dispatcher skips it. It never claims.
  *
  * Claims do not stack and are never stolen: while one owner holds the pointer,
  * a second `claimPointer` returns null rather than displacing it — and so does

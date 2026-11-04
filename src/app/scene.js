@@ -9,6 +9,7 @@ import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
 import { loadPhotorealisticTileset } from '../mapStartup.js';
 import { initLogoGaze } from '../logoGaze.js';
+import { inputFor } from '../input/dispatcher.js';
 import {
   uninstallRenderGovernor,
   governorRequestRender,
@@ -57,6 +58,10 @@ export async function createApplicationScene({
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
+  // Before any layer binds a click: every layer and tool shares this one.
+  // Deferred after the viewer, so it is released before the viewer goes.
+  const input = inputFor(viewer);
+  defer(() => input.destroy());
   defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
@@ -128,5 +133,5 @@ export async function createApplicationScene({
   });
 
   signal.throwIfAborted();
-  return { viewer, tileset, mapStackController, operations };
+  return { viewer, tileset, mapStackController, operations, input };
 }

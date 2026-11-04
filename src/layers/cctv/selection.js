@@ -1,7 +1,4 @@
-import {
-  bindTrackingClickGesture,
-  isTrackingClickGesture,
-} from '../../data/trackingClickGesture.js';
+import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
 import * as Cesium from 'cesium';
 import { cctvPicks } from './pickState.js';
 
@@ -35,24 +32,19 @@ export function createSelection({
   }
 
   /**
-   * Bind CCTV activation to clean taps while preserving the layer's hover-move
-   * callback on the shared Cesium handler. Drag-like and long-press gestures do
+   * Bind CCTV activation to clean taps. Drag-like and long-press gestures do
    * not reach camera activation or focus dispatch.
-   * @param {Cesium.ScreenSpaceEventHandler|Object} handler - Input handler.
-   * @param {(click: Object) => void} onClick - Accepted CCTV click callback.
-   * @param {Object} [options] - Gesture test seams and optional onMouseMove hook.
-   * @returns {void}
+   * @param {import('../../input/dispatcher.js').InputDispatcher} input
+   * @param {(event: import('../../input/dispatcher.js').ClickEvent) => void} onClick
+   *   Accepted CCTV click callback.
+   * @returns {() => void} Unsubscribe.
    */
 
-  function bindCctvWorldClickGesture(handler, onClick, options = {}) {
-    bindTrackingClickGesture(
-      handler,
-      (click, gesture) => {
-        if (!isTrackingClickGesture(gesture)) return;
-        onClick(click);
-      },
-      options,
-    );
+  function bindCctvWorldClickGesture(input, onClick) {
+    return input.onClick((event) => {
+      if (!isTrackingClickGesture(event.gesture)) return;
+      onClick(event);
+    });
   }
 
   /**

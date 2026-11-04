@@ -42,6 +42,7 @@ import {
   releaseContinuousRender,
   uninstallRenderGovernor,
 } from '../../renderGovernor.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
 
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
 
@@ -319,9 +320,11 @@ function harness(
     else globalThis.window = originalWindow;
   });
 
+  const input = fakeInput(viewer);
   return {
     layer,
     viewer,
+    input,
     primitives,
     sprites,
     pickOwners,
@@ -3169,11 +3172,7 @@ test('click handler selects a migrated scripted billboard and prepares a valid d
   const entry = app.vehicles()[0];
   assert.equal(entry.markerCollection, app.state()._animatedMarkers);
   app.viewer.scene.pick = () => ({ primitive: entry.marker, id: entry.key });
-  app
-    .state()
-    ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK)({
-    position: new Cesium.Cartesian2(500, 400),
-  });
+  app.input.click(new Cesium.Cartesian2(500, 400));
   assert.equal(app.state()._selectedKey, entry.key);
   const body = app.layer._transitPartsForTest().trails.diagnostics().body;
   assert.ok(body.geometryInstances.length > 0);
@@ -3401,11 +3400,7 @@ test('preset clicks preserve both pick id paths through moving and stationary co
       assert.equal(entry.marker.id, entry.key);
       for (const pick of [{ id: entry.key }, { primitive: entry.marker }]) {
         app.viewer.scene.pick = () => pick;
-        app
-          .state()
-          ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK)(
-          { position: new Cesium.Cartesian2(500, 400) },
-        );
+        app.input.click(new Cesium.Cartesian2(500, 400));
         assert.equal(app.state()._selectedKey, entry.key);
         parts.selection.clearSelection();
       }
@@ -3449,19 +3444,20 @@ test('sensor clicks map displayed pixels into the pre-shader pick buffer', async
     clientHeight: 1080,
   };
   const uniforms = { intensity: 1, pixelation: 1 };
+  let preset = 'surveillance';
   scene.postProcessStages = {
-    getStageByName: () => ({ enabled: true, uniforms }),
+    getStageByName: (name) =>
+      name === `godsEyeView_${preset}`
+        ? { enabled: true, uniforms }
+        : undefined,
   };
-  const click = app
-    .state()
-    ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-  app.layer._transitPartsForTest().rendering.setStylePreset('surveillance');
-  click({ position: new Cesium.Cartesian2(1440, 540) });
+  const click = (position) => app.input.click(position);
+  click(new Cesium.Cartesian2(1440, 540));
   assert.ok(Math.abs(actual.x - 1472) < 1e-6);
   assert.equal(actual.y, 540);
-  app.layer._transitPartsForTest().rendering.setStylePreset('thermal');
+  preset = 'thermal';
   uniforms.pixelation = 1.5;
-  click({ position: new Cesium.Cartesian2(100.9, 200.1) });
+  click(new Cesium.Cartesian2(100.9, 200.1));
   assert.ok(Math.abs(actual.x - 100.5) < 1e-6);
   assert.ok(Math.abs(actual.y - 201) < 1e-6);
   assert.equal(app.state()._selectedKey, entry.key);

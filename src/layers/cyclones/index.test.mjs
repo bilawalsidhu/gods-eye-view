@@ -7,6 +7,35 @@ import {
   isPointerFree,
 } from '../../data/inputOwnership.js';
 import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+
+/** Record each click subscription the layer makes, as the old handler fakes did. */
+function recordHandlers(viewer, handlers) {
+  const fake = fakeInput(viewer);
+  const subscribe = fake.input.onClick;
+  fake.input.onClick = (fn) => {
+    const handler = {
+      destroyed: false,
+      // A live subscription hears clicks through the dispatcher; a removed
+      // one is called directly, as a queued callback would be.
+      click: (click) =>
+        handler.destroyed
+          ? fn({
+              screenPosition: click.position,
+              get pick() {
+                return viewer.scene.pick(click.position);
+              },
+            })
+          : fake.click(click.position),
+    };
+    handlers.push(handler);
+    const off = subscribe(fn);
+    return () => {
+      handler.destroyed = true;
+      off();
+    };
+  };
+}
 
 const time = '2026-09-16T03:00:00.000Z';
 const storm = (id = 'ep152026') => ({
@@ -64,23 +93,6 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   };
   const cesium = {
     ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-    ScreenSpaceEventHandler: class {
-      constructor(canvas) {
-        assert.ok(canvas);
-        handlers.push(this);
-        this.destroyed = false;
-      }
-      setInputAction(callback, type) {
-        assert.equal(type, 'left');
-        this.click = callback;
-      }
-      destroy() {
-        this.destroyed = true;
-      }
-      isDestroyed() {
-        return this.destroyed;
-      }
-    },
   };
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
@@ -108,6 +120,7 @@ test('map selection yields to pointer owners and owns only its enabled handler',
       },
     },
   };
+  recordHandlers(viewer, handlers);
   layer.init(viewer);
   layer.setRowControlsListener(() => notices++);
   assert.equal(handlers.length, 0, 'disabled module installs no handler');
@@ -270,15 +283,6 @@ test('a click on a storm card or lead-hour label selects that storm without pick
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
     cesium: {
       ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-      ScreenSpaceEventHandler: class {
-        constructor() {
-          handlers.push(this);
-        }
-        setInputAction(callback) {
-          this.click = callback;
-        }
-        destroy() {}
-      },
     },
     overlayHost: 'host',
     createRendering: ({ overlayHost }) => {
@@ -297,7 +301,7 @@ test('a click on a storm card or lead-hour label selects that storm without pick
   });
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
-  layer.init({
+  const viewer = {
     scene: {
       canvas,
       pick() {
@@ -305,7 +309,9 @@ test('a click on a storm card or lead-hour label selects that storm without pick
         return { content: {} };
       },
     },
-  });
+  };
+  recordHandlers(viewer, handlers);
+  layer.init(viewer);
   assert.equal(hostArgument, 'host', 'the overlay host reaches the renderer');
   layer.enable();
   await layer.update();

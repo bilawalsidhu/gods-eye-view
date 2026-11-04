@@ -26,6 +26,7 @@ import {
   translateKnown,
 } from '../../i18n/index.js';
 import { pointerOwnerName } from '../../data/pointerOwnerNames.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
   formatQuantity,
   quantitySeparator,
@@ -897,7 +898,7 @@ export function createDirectionsLayer({ services, source }) {
   let _routeEntity = null;
   let _stepPoints = null;
   let _selectedStep = null;
-  let _clickHandler = null;
+  let _clickSubscription = null;
   let _renderHeld = false;
   let _rowControlsListener = null;
   let _dataManager = null;
@@ -1212,12 +1213,12 @@ export function createDirectionsLayer({ services, source }) {
    * Give the pointer back, but only once the click that consumed it has finished
    * being dispatched.
    *
-   * Every layer binds its own handler to the same canvas, and they all run
-   * inside ONE browser event. Releasing the claim the instant this layer places
-   * an endpoint hands the rest of that same click to every ambient handler
-   * registered after this one — placing A on top of a bikeshare station also
-   * deselected the station. A timer, not a microtask: a microtask checkpoint
-   * runs between two DOM listeners, which is exactly the gap this closes.
+   * The input dispatcher decides who hears a click before any subscriber runs,
+   * but DOM listeners on the canvas (evidence cards) still run later inside
+   * the SAME browser event. Releasing the claim the instant this layer places
+   * an endpoint would hand that same click to them. A timer, not a microtask:
+   * a microtask checkpoint runs between two DOM listeners, which is exactly the
+   * gap this closes.
    */
   function releaseClaimAfterDispatch() {
     if (_pointerClaim === null || _releaseTimer) return;
@@ -1243,8 +1244,8 @@ export function createDirectionsLayer({ services, source }) {
    * Place one endpoint at a picked ground point and reroute when both are set.
    *
    * The globe click handler is the only caller in the running app; it is
-   * exported because a ScreenSpaceEventHandler needs a real canvas, and the
-   * ownership timing this function decides is exactly what has to be tested.
+   * exported so the ownership timing this function decides can be tested on
+   * its own.
    * @param {'a'|'b'} which Which endpoint to place.
    * @param {{lat: number, lon: number}} point Ground point in degrees.
    * @returns {boolean} Whether the endpoint was placed.
@@ -1521,25 +1522,28 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function _installClickHandler(viewer) {
-    if (_clickHandler) return;
-    _clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    _clickHandler.setInputAction((click) => {
-      if (!_enabled) return;
-      // Placement acts only while this layer actually HOLDS the pointer, and the
-      // maneuver-dot selection below is an ambient handler like any other: it
-      // yields the moment a tool (this one included) owns the click.
-      // The lease, not the owner name: a superseded instance of this layer must
-      // not act on a click its replacement owns.
-      if (_armed && services.input.isLeaseCurrent(_pointerClaim)) {
-        const point = pickGround(click.position);
+    if (_clickSubscription) return;
+    const input = inputFor(viewer);
+    // Placement acts only while this layer actually HOLDS the pointer. The
+    // lease, not the owner name: a superseded instance of this layer must not
+    // act on a click its replacement owns.
+    const offPlace = input.onPointer(
+      'click',
+      (event) => {
+        if (!_enabled || !_armed) return;
+        const point = pickGround(event.position);
         if (!point) return;
         placeDirectionsEndpoint(_armed, point);
-        return;
-      }
-      if (!services.input.isPointerFree()) return;
+      },
+      { lease: () => _pointerClaim },
+    );
+    // The maneuver-dot selection is an ambient handler like any other: it
+    // yields the moment a tool (this one included) owns the click.
+    const offSelect = input.onClick((event) => {
+      if (!_enabled) return;
       let picked = null;
       try {
-        picked = viewer.scene.pick(click.position);
+        picked = event.pick;
       } catch {
         picked = null;
       }
@@ -1549,16 +1553,18 @@ export function createDirectionsLayer({ services, source }) {
         return;
       }
       if (_selectedStep !== null) _clearStepSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
+    _clickSubscription = () => {
+      offPlace();
+      offSelect();
+    };
     if (typeof document !== 'undefined')
       document.addEventListener('keydown', _onKeyDown);
   }
 
   function _removeClickHandler() {
-    if (_clickHandler) {
-      _clickHandler.destroy();
-      _clickHandler = null;
-    }
+    _clickSubscription?.();
+    _clickSubscription = null;
     // Teardown can outlive the document (page unload, and every headless test).
     if (typeof document !== 'undefined')
       document.removeEventListener('keydown', _onKeyDown);
@@ -1739,9 +1745,8 @@ export function createDirectionsLayer({ services, source }) {
 
     /**
      * Place one endpoint at a picked ground point. The globe click handler is
-     * the only caller in the running app; it is on the instance because a
-     * ScreenSpaceEventHandler needs a real canvas, and the ownership timing
-     * this decides is exactly what has to be tested.
+     * the only caller in the running app; it is on the instance so the
+     * ownership timing this decides can be tested on its own.
      */
     placeEndpoint: placeDirectionsEndpoint,
 

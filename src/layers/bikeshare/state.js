@@ -71,9 +71,9 @@ export function createState({ services }) {
 
   layerState._stationRenderMap = new Map();
 
-  /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for station selection. */
+  /** @type {(() => void)|null} Unsubscribes the station-selection click. */
 
-  layerState._clickHandler = null;
+  layerState._clickSubscription = null;
 
   /** @type {string|null} Key of the currently selected station, or null. */
 

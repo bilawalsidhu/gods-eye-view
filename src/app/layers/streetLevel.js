@@ -5,7 +5,6 @@ import { createKartaViewProvider } from '../../layers/streetLevel/providers/kart
 import { createPanoramaxProvider } from '../../layers/streetLevel/providers/panoramax/index.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as picking from '../../data/pickRegistry.js';
-import * as input from '../../data/inputOwnership.js';
 import * as scenePick from '../../data/scenePick.js';
 import * as render from '../../renderGovernor.js';
 
@@ -37,6 +36,6 @@ export function createApplicationStreetLevel({
 }) {
   return createStreetLevelLayer({
     providers,
-    services: { sprites, picking, input, scenePick, render },
+    services: { sprites, picking, scenePick, render },
   });
 }

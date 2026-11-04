@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
 import { nextTick } from 'vue';
 import { isPointerFree } from '../data/inputOwnership.js';
+import { inputFor } from '../input/dispatcher.js';
 import { createInteractionSession } from '../director/interactions/session.js';
 import { t } from '../i18n/index.js';
 import { useSceneInteractionsStore } from '../ui/stores/sceneInteractions.js';
@@ -23,7 +23,7 @@ export function createSceneInteractions(
   },
 ) {
   let panel = null,
-    handler,
+    unsubscribeClick,
     items = [],
     targets = new Map();
   // Only the owner whose panel the store shows may change or remove it.
@@ -55,8 +55,8 @@ export function createSceneInteractions(
   });
   function clear() {
     session.clear();
-    handler?.destroy();
-    handler = null;
+    unsubscribeClick?.();
+    unsubscribeClick = null;
     if (shown()) {
       store.connect(null);
       store.publish(null);
@@ -117,16 +117,9 @@ export function createSceneInteractions(
         },
       });
       session.activate(items);
-      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      handler.setInputAction((event) => {
-        if (
-          panel?.owner !== owner ||
-          !shown() ||
-          !isPointerFree() ||
-          !available()
-        )
-          return;
-        const picked = viewer.scene.pick(event.position)?.id;
+      unsubscribeClick = inputFor(viewer).onClick((event) => {
+        if (panel?.owner !== owner || !shown() || !available()) return;
+        const picked = event.pick?.id;
         const matches = items.filter(
           (item) =>
             targets.get(
@@ -150,7 +143,7 @@ export function createSceneInteractions(
             )
             ?.focus({ preventScroll: true });
         });
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      });
     },
   };
 }

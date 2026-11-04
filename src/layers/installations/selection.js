@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { LAYER_ID } from './policy.js';
 import { installationMarkers } from './markerState.js';
 
@@ -39,7 +38,7 @@ export function createSelection({
   }
 
   function installInteraction(viewer) {
-    if (layerState.clickHandler) return;
+    if (layerState.clickSubscription) return;
     const events = [
       'gev:entity-selected',
       'gev:entity-selection-cleared',
@@ -51,14 +50,9 @@ export function createSelection({
       for (const event of events)
         globalThis.window?.removeEventListener?.(event, syncContextSelection);
     };
-    layerState.clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    layerState.clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
+    layerState.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!layerState.enabled) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = event.pick;
       const target = picked?.id;
       const id =
         target?.installationId ||
@@ -74,7 +68,7 @@ export function createSelection({
         clearSelectedEntityContextForLayer(LAYER_ID);
         parts.rendering.renderRecords();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
   return {
     selectRecord,
