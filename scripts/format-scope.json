@@ -408,6 +408,7 @@
   "src/layers/firms/cards.js",
   "src/layers/firms/index.js",
   "src/layers/firms/ingestion.js",
+  "src/layers/firms/heatVisibility.test.mjs",
   "src/layers/firms/lifecycle.js",
   "src/layers/firms/model.js",
   "src/layers/firms/policy.js",

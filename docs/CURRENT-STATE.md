@@ -2231,6 +2231,8 @@ view), so the weak fires the heatmap shows stay on screen as markers when it
 fades out; it reads each marker's already-built anchor instead of the ground
 floor cache, which only the close band warms. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
 areas; their accent is the strongest fire's FRP color.
+Re-enabling Active Fires keeps the retained heat imagery hidden when the current
+filtered set is empty, including while a new snapshot is pending.
 
 The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale
 whose track is painted with the ramp and ticked at the same six values (its
