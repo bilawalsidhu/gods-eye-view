@@ -3190,5 +3190,19 @@
   "SETTINGS": "EINSTELLUNGEN",
   "Change how the recorder keeps data": "Ändern, wie der Rekorder Daten aufbewahrt",
   "Dashed settings are also fixed by environment variables, which return after a restart.": "Gestrichelte Einstellungen sind auch durch Umgebungsvariablen festgelegt und kehren nach einem Neustart zurück.",
-  "Open SETTINGS to thin old data.": "Öffne EINSTELLUNGEN, um alte Daten auszudünnen."
+  "Open SETTINGS to thin old data.": "Öffne EINSTELLUNGEN, um alte Daten auszudünnen.",
+  "delivering": "liefert",
+  "empty reply": "leere Antwort",
+  "failing": "gestört",
+  "not asked": "nicht angefragt",
+  "not seen yet": "noch nicht gesehen",
+  "FEEDS": "QUELLEN",
+  "Show whether each data feed is delivering": "Zeigen, ob jede Datenquelle liefert",
+  "{count} feed down": "{count} bei ausgefallener Quelle",
+  "{count} not asked": "{count} ohne Anfrage",
+  "{count} contacts, {ago} ago": "{count} Kontakte, vor {ago}",
+  "Answered with no contacts, {ago} ago": "Ohne Kontakte geantwortet, vor {ago}",
+  "HTTP {status}, since {time}": "HTTP {status}, seit {time}",
+  "Nothing has asked for it for {ago}": "Seit {ago} hat niemand danach gefragt",
+  "Not seen since the server started": "Seit dem Serverstart nicht gesehen"
 }

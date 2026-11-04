@@ -18,6 +18,7 @@ import {
 } from './config.js';
 import { exportPoints, summarizeTrack } from './exporters.js';
 import { createPgStore } from './pgStore.js';
+import { createFeedMonitor } from './feeds.js';
 import { createRecorder } from './recorder.js';
 import { DEFAULT_SAT_GROUPS, createSatelliteSource } from './satellites.js';
 
@@ -97,11 +98,27 @@ export function recorderPlugin(env = process.env) {
     });
     const nowSec = () => Math.floor(Date.now() / 1000);
 
+    // How each feed is doing, and a log of the changes so a quiet stretch in a
+    // recording can later be told apart from a failed feed.
+    const feeds = createFeedMonitor();
+    const noteFeed = (layer, status, count) => {
+      const change = feeds.observe(layer, { status, count, ts: nowSec() });
+      if (change) logFeed([change]);
+    };
+    function logFeed(changes) {
+      Promise.resolve(recorder.store.addFeedEvents(changes)).catch(() => {});
+    }
+    const feedTick = setInterval(() => {
+      const changes = feeds.tick(nowSec());
+      if (changes.length) logFeed(changes);
+    }, 30000);
+    feedTick.unref?.();
+
     // Mounted ahead of the providers so their responses can be observed.
-    for (const [mount, extract] of [
-      ['/api/flights', aircraftPoints],
-      ['/api/military', militaryPoints],
-      ['/api/local-receivers/aircraft', localReceiverPoints],
+    for (const [mount, layer, extract] of [
+      ['/api/flights', 'air', aircraftPoints],
+      ['/api/military', 'mil', militaryPoints],
+      ['/api/local-receivers/aircraft', 'local', localReceiverPoints],
     ]) {
       server.middlewares.use(mount, (req, res, next) => {
         const pathname = new URL(req.url || '/', 'http://localhost').pathname;
@@ -117,10 +134,14 @@ export function recorderPlugin(env = process.env) {
           if (chunk && typeof chunk !== 'function')
             chunks.push(Buffer.from(chunk));
           try {
+            let count = 0;
             if (res.statusCode === 200) {
               const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-              recorder.ingestMany(extract(body, nowSec()));
+              const points = extract(body, nowSec());
+              count = points.length;
+              recorder.ingestMany(points);
             }
+            noteFeed(layer, res.statusCode, count);
           } catch {
             // Recording must never break the feed.
           }
@@ -179,10 +200,11 @@ export function recorderPlugin(env = process.env) {
       satPoll = setInterval(() => {
         try {
           // Whole steps, so timer jitter never makes a sample look too soon.
-          if (recorder.settings().layers?.includes('sat'))
-            recorder.ingestMany(
-              sats.points(Math.round(nowSec() / step) * step),
-            );
+          if (recorder.settings().layers?.includes('sat')) {
+            const points = sats.points(Math.round(nowSec() / step) * step);
+            noteFeed('sat', 200, points.length);
+            recorder.ingestMany(points);
+          }
         } catch {
           // Keep polling.
         }
@@ -192,7 +214,9 @@ export function recorderPlugin(env = process.env) {
 
     const poll = setInterval(() => {
       try {
-        recorder.ingestMany(vesselPoints(aisStreamRows(50000), nowSec()));
+        const points = vesselPoints(aisStreamRows(50000), nowSec());
+        noteFeed('vessel', 200, points.length);
+        recorder.ingestMany(points);
       } catch {
         // Keep polling.
       }
@@ -249,6 +273,7 @@ export function recorderPlugin(env = process.env) {
           return sendJson(res, 200, {
             ...(await recorder.store.range()),
             layer_counts: await recorder.store.layerCounts(),
+            feeds: feeds.snapshot(live.layers ?? [], nowSec()),
             disk_free_bytes: diskFree,
             recording: true,
             retention_days: live.retentionSec / 86400,
@@ -263,6 +288,14 @@ export function recorderPlugin(env = process.env) {
             bytes,
           });
         }
+        if (url.pathname === '/feeds')
+          return sendJson(res, 200, {
+            events: await recorder.store.feedEvents({
+              layer: String(q.get('layer') || ''),
+              from,
+              to,
+            }),
+          });
         if (url.pathname === '/settings' && req.method === 'POST')
           return readJson(req, res, async (body) => {
             const { runtime, file: saved } = cleanSettings(body);
@@ -464,6 +497,7 @@ export function recorderPlugin(env = process.env) {
 
     server.httpServer?.on('close', () => {
       clearInterval(poll);
+      clearInterval(feedTick);
       if (satPoll) clearInterval(satPoll);
       recorder.close();
     });

@@ -175,6 +175,26 @@ and the panel lists the newest events. Press WATCH in the panel and drag a box o
 routes below. Changing fences needs a JSON request from this origin, which stops
 other web pages from editing them.
 
+## Feed health
+
+A stretch with no recorded points can mean three different things, and the
+panel now tells them apart. Under the storage figures, one coloured word per
+recorded layer shows how its feed is doing: green **delivering** (the last
+answer carried contacts), amber **empty reply** (it answered, with none), red
+**failing** (it answered with an HTTP error), grey **not asked** (nothing has
+requested it for five minutes, which usually means the app is closed or the
+layer is off), and grey **not seen yet** (nothing since the server started).
+The FEEDS chip lists each one with its detail, such as "HTTP 429, since 15:13
+UTC" or "328 contacts, 1min ago".
+
+Changes of state are logged, so later they explain gaps. When you search for a
+contact, its summary line says how many of its gaps fell while the feed was
+failing or not being asked, for example "1 gaps (1 feed down)". A gap in an
+empty feed is a real absence and is not labelled. AIS vessels and satellites
+are read by the recorder itself on a timer, so they are never "not asked";
+without an AISStream key the vessel feed simply reports empty. The log is
+kept for the same time as the rest of the history.
+
 ## Settings in the panel, and thinning old data
 
 **SETTINGS** opens a small form for how the recorder keeps data: how long to
@@ -258,6 +278,7 @@ and only announces ones that happen after the page opened.
   contact within 10 minutes before `to`.
 - `POST /api/history/settings` — change retention, size cap, interval or layers (`{ retention, maxMb, interval, layers }`); applied at once and saved. Same-origin JSON only.
 - `POST /api/history/thin` — `{ olderThan, keepEvery, dryRun }`; `dryRun` (the default) only counts. Returns `{ removed, total }`.
+- `GET /api/history/feeds?layer&from&to` — logged feed changes for one layer (ok, empty, failing, idle), oldest first, led by the one in force at `from`. `/status` also carries the current `feeds`.
 - `GET /api/history/density?from&to&cell&bbox&layers` — contacts seen per `cell`-degree square, busiest first (up to 20,000 squares).
 - `GET /api/history/notices?since&limit` — area events and emergency alerts in one list, newest first.
 - `GET /api/history/search?q=` — contacts whose id, callsign or name contains

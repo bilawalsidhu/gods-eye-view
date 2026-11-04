@@ -3115,5 +3115,19 @@
   "SETTINGS": "設定",
   "Change how the recorder keeps data": "變更記錄器保存資料的方式",
   "Dashed settings are also fixed by environment variables, which return after a restart.": "虛線框的設定同時由環境變數決定，重新啟動後會恢復。",
-  "Open SETTINGS to thin old data.": "開啟「設定」以精簡舊資料。"
+  "Open SETTINGS to thin old data.": "開啟「設定」以精簡舊資料。",
+  "delivering": "正在提供資料",
+  "empty reply": "回應為空",
+  "failing": "發生錯誤",
+  "not asked": "無人請求",
+  "not seen yet": "尚未見到",
+  "FEEDS": "資料來源",
+  "Show whether each data feed is delivering": "顯示每個資料來源是否正常提供資料",
+  "{count} feed down": "{count} 個發生在來源故障期間",
+  "{count} not asked": "{count} 個發生在無人請求期間",
+  "{count} contacts, {ago} ago": "{count} 個目標，{ago}前",
+  "Answered with no contacts, {ago} ago": "回應為空，{ago}前",
+  "HTTP {status}, since {time}": "HTTP {status}，自 {time}",
+  "Nothing has asked for it for {ago}": "已有 {ago} 無人請求",
+  "Not seen since the server started": "伺服器啟動後尚未見到"
 }

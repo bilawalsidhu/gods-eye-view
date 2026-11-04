@@ -22,6 +22,13 @@ const LEFT = msg('{contact} left {fence}');
 const EMERGENCY = msg('{contact}: {status} (squawk {squawk})');
 const EMERGENCY_ADSB = msg('{contact}: {status}');
 const EMERGENCY_TITLE = msg('Emergency broadcast');
+const FEED_STATE = {
+  ok: msg('delivering'),
+  empty: msg('empty reply'),
+  failing: msg('failing'),
+  idle: msg('not asked'),
+  unseen: msg('not seen yet'),
+};
 const COULD_NOT_APPLY = msg('Could not apply the settings');
 const COULD_NOT_THIN = msg('Could not thin the data');
 const BLOCKED = msg(
@@ -333,6 +340,15 @@ export function createReplayPanel({ container, controller } = {}) {
     thinRow,
     thinNote,
   );
+  const feedsChip = makeChip(
+    analysisRow,
+    t('FEEDS'),
+    t('Show whether each data feed is delivering'),
+    () => {
+      feedList.hidden = !feedList.hidden;
+      render(controller.state());
+    },
+  );
   const settingsChip = makeChip(
     analysisRow,
     t('SETTINGS'),
@@ -442,12 +458,20 @@ export function createReplayPanel({ container, controller } = {}) {
   storageLayers.className = 'replay-alerts';
   const storageWarn = document.createElement('div');
   storageWarn.className = 'replay-storage-warn';
+  // Feed health: one coloured word per feed, and the detail on request.
+  const feedLine = document.createElement('div');
+  feedLine.className = 'replay-alerts replay-feedline';
+  const feedList = document.createElement('div');
+  feedList.className = 'replay-alerts';
+  feedList.hidden = true;
   storage.append(
     storageHead,
     bar,
     storageNumbers,
     storageNote,
     storageLayers,
+    feedLine,
+    feedList,
     storageWarn,
   );
   const legend = document.createElement('div');
@@ -495,6 +519,13 @@ export function createReplayPanel({ container, controller } = {}) {
     onPlay: () => controller.togglePlay(),
   });
 
+  const gapWhy = (kinds) => {
+    const parts = [];
+    if (kinds?.failing)
+      parts.push(t('{count} feed down', { count: kinds.failing }));
+    if (kinds?.idle) parts.push(t('{count} not asked', { count: kinds.idle }));
+    return parts.length ? ` (${parts.join(', ')})` : '';
+  };
   const stamp = (ms) => new Date(ms).toISOString().slice(0, 16);
   const renderAnalysis = (state) => {
     const to = state.status?.to_ts;
@@ -547,6 +578,62 @@ export function createReplayPanel({ container, controller } = {}) {
       );
     }
     set(compareLine, 'hidden', !c);
+  };
+
+  const feedText = (feed, now) => {
+    const ago = (sec) => formatSpan(Math.max(0, now - sec));
+    if (feed.state === 'ok')
+      return t('{count} contacts, {ago} ago', {
+        count: feed.lastCount.toLocaleString(),
+        ago: ago(feed.lastRequest),
+      });
+    if (feed.state === 'empty')
+      return t('Answered with no contacts, {ago} ago', {
+        ago: ago(feed.lastRequest),
+      });
+    if (feed.state === 'failing')
+      return t('HTTP {status}, since {time}', {
+        status: feed.lastStatus,
+        time: utcClock(new Date(feed.since * 1000).toISOString()),
+      });
+    if (feed.state === 'idle')
+      return t('Nothing has asked for it for {ago}', {
+        ago: formatSpan(feed.idleFor),
+      });
+    return t('Not seen since the server started');
+  };
+  const renderFeeds = (s) => {
+    const feeds = s?.feeds ?? [];
+    set(feedLine, 'hidden', !feeds.length);
+    const now = Math.floor(Date.now() / 1000);
+    const names = Object.fromEntries(
+      LAYER_LABELS.map(([id, label]) => [id, t(label)]),
+    );
+    set(
+      feedsChip,
+      'className',
+      `data-toggle-chip${feedList.hidden ? '' : ' active'}`,
+    );
+    const key = `${feedList.hidden ? 0 : 1}|${feeds.map((f) => `${f.layer}:${f.state}:${f.lastRequest}`).join('|')}`;
+    if (feedLine.dataset.key === key) return;
+    feedLine.dataset.key = key;
+    feedLine.replaceChildren(
+      ...feeds.flatMap((f, i) => {
+        const node = document.createElement('span');
+        node.className = `replay-feed replay-feed-${f.state}`;
+        node.textContent = `● ${names[f.layer] || f.layer}`;
+        node.title = `${names[f.layer] || f.layer}: ${t(FEED_STATE[f.state])}`;
+        return i ? [' ', node] : [node];
+      }),
+    );
+    feedList.replaceChildren(
+      ...feeds.map((f) => {
+        const row = document.createElement('div');
+        row.className = `replay-feed-${f.state}`;
+        row.textContent = `${names[f.layer] || f.layer} ${t(FEED_STATE[f.state])} · ${feedText(f, now)}`;
+        return row;
+      }),
+    );
   };
 
   const renderSettings = (state) => {
@@ -695,6 +782,7 @@ export function createReplayPanel({ container, controller } = {}) {
     renderStorage(state.status);
     renderAnalysis(state);
     renderSettings(state);
+    renderFeeds(state.status);
     set(start, 'disabled', state.loading || !state.range);
     set(fit, 'disabled', !state.active || !state.contacts);
     set(jump, 'disabled', state.loading || !state.range);
@@ -734,7 +822,7 @@ export function createReplayPanel({ container, controller } = {}) {
               part(`● ${t('first')} ${stamp(tr.first)}`, 'replay-track-first'),
               ' · ',
               part(`● ${t('last')} ${stamp(tr.last)}`, 'replay-track-last'),
-              ` · ${t('{count} gaps', { count: tr.gaps.length })}`,
+              ` · ${t('{count} gaps', { count: tr.gaps.length })}${gapWhy(tr.gapKinds)}`,
             ]
           : []),
       );

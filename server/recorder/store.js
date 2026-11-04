@@ -45,7 +45,11 @@ export function openHistoryStore(file) {
       ts INTEGER NOT NULL, code TEXT NOT NULL, severity TEXT NOT NULL,
       id TEXT NOT NULL, layer TEXT NOT NULL, name TEXT NOT NULL,
       lat REAL, lon REAL, detail TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS alerts_ts ON alerts(ts);`);
+    CREATE INDEX IF NOT EXISTS alerts_ts ON alerts(ts);
+    CREATE TABLE IF NOT EXISTS feed_events(
+      ts INTEGER NOT NULL, layer TEXT NOT NULL, state TEXT NOT NULL,
+      detail TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS feed_events_layer_ts ON feed_events(layer, ts);`);
   const insert = db.prepare(
     `INSERT INTO positions(${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
@@ -266,6 +270,34 @@ export function openHistoryStore(file) {
         )
         .all(...[since, ...(fenceId == null ? [] : [fenceId]), limit]);
     },
+    /** Changes in how a feed was doing: failing, empty, idle, or ok again. */
+    addFeedEvents(list) {
+      const stmt = db.prepare(
+        'INSERT INTO feed_events(ts, layer, state, detail) VALUES (?, ?, ?, ?)',
+      );
+      db.exec('BEGIN');
+      try {
+        for (const e of list) stmt.run(e.ts, e.layer, e.state, e.detail ?? '');
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    },
+    /** One layer's feed changes in a period, oldest first, led by the one in force at its start. */
+    feedEvents({ layer, from, to }) {
+      const before = db
+        .prepare(
+          'SELECT * FROM feed_events WHERE layer = ? AND ts < ? ORDER BY ts DESC LIMIT 1',
+        )
+        .all(layer, from);
+      const within = db
+        .prepare(
+          'SELECT * FROM feed_events WHERE layer = ? AND ts BETWEEN ? AND ? ORDER BY ts',
+        )
+        .all(layer, from, to);
+      return [...before, ...within];
+    },
     /** Emergency squawk alerts, newest first. */
     addAlerts(list) {
       const stmt = db.prepare(
@@ -321,6 +353,7 @@ export function openHistoryStore(file) {
     purgeBefore(ts) {
       db.prepare('DELETE FROM fence_events WHERE ts < ?').run(ts);
       db.prepare('DELETE FROM alerts WHERE ts < ?').run(ts);
+      db.prepare('DELETE FROM feed_events WHERE ts < ?').run(ts);
       db.prepare(
         'DELETE FROM contacts WHERE last_seen < ? AND id NOT IN (SELECT id FROM pins)',
       ).run(ts);

@@ -3115,5 +3115,19 @@
   "SETTINGS": "设置",
   "Change how the recorder keeps data": "更改记录器保存数据的方式",
   "Dashed settings are also fixed by environment variables, which return after a restart.": "虚线框的设置同时由环境变量决定，重启后会恢复。",
-  "Open SETTINGS to thin old data.": "打开“设置”以精简旧数据。"
+  "Open SETTINGS to thin old data.": "打开“设置”以精简旧数据。",
+  "delivering": "正在提供数据",
+  "empty reply": "返回为空",
+  "failing": "出错",
+  "not asked": "无人请求",
+  "not seen yet": "尚未见到",
+  "FEEDS": "数据源",
+  "Show whether each data feed is delivering": "显示每个数据源是否正常提供数据",
+  "{count} feed down": "{count} 个发生在数据源故障期间",
+  "{count} not asked": "{count} 个发生在无人请求期间",
+  "{count} contacts, {ago} ago": "{count} 个目标，{ago}前",
+  "Answered with no contacts, {ago} ago": "返回了空结果，{ago}前",
+  "HTTP {status}, since {time}": "HTTP {status}，自 {time}",
+  "Nothing has asked for it for {ago}": "已有 {ago} 无人请求",
+  "Not seen since the server started": "服务器启动以来尚未见到"
 }

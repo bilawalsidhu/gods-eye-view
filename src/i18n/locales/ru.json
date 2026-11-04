@@ -3340,5 +3340,19 @@
   "SETTINGS": "НАСТРОЙКИ",
   "Change how the recorder keeps data": "Изменить, как рекордер хранит данные",
   "Dashed settings are also fixed by environment variables, which return after a restart.": "Настройки с пунктирной рамкой также заданы переменными окружения и вернутся после перезапуска.",
-  "Open SETTINGS to thin old data.": "Откройте НАСТРОЙКИ, чтобы проредить старые данные."
+  "Open SETTINGS to thin old data.": "Откройте НАСТРОЙКИ, чтобы проредить старые данные.",
+  "delivering": "отдаёт данные",
+  "empty reply": "пустой ответ",
+  "failing": "сбой",
+  "not asked": "не запрашивается",
+  "not seen yet": "ещё не виден",
+  "FEEDS": "ИСТОЧНИКИ",
+  "Show whether each data feed is delivering": "Показать, отдаёт ли данные каждый источник",
+  "{count} feed down": "{count} при сбое источника",
+  "{count} not asked": "{count} без запросов",
+  "{count} contacts, {ago} ago": "{count} контактов, {ago} назад",
+  "Answered with no contacts, {ago} ago": "Ответил без контактов, {ago} назад",
+  "HTTP {status}, since {time}": "HTTP {status}, с {time}",
+  "Nothing has asked for it for {ago}": "Его не запрашивали {ago}",
+  "Not seen since the server started": "Не виден с запуска сервера"
 }

@@ -195,3 +195,35 @@ export function formatSpanCompact(seconds) {
     if (s % size === 0) return `${s / size}${unit}`;
   return `${Math.round(s / 86400)}d`;
 }
+
+/**
+ * Periods when a feed was not delivering, from its logged changes (oldest
+ * first): [{ state, from, to }] for failing, idle and empty stretches.
+ */
+export function feedOutages(events, endSec) {
+  const out = [];
+  events.forEach((event, i) => {
+    if (event.state === 'ok') return;
+    out.push({
+      state: event.state,
+      from: event.ts,
+      to: events[i + 1]?.ts ?? endSec,
+    });
+  });
+  return out;
+}
+
+/**
+ * How many gaps in a track fall in a failing feed, and how many in a feed
+ * nothing was asking for. A gap in an empty feed is a real absence, so it
+ * counts as neither. A failing feed wins over an idle one.
+ */
+export function classifyGaps(gaps, outages) {
+  const result = { failing: 0, idle: 0 };
+  for (const gap of gaps) {
+    const hits = outages.filter((o) => o.from < gap.to && o.to > gap.from);
+    if (hits.some((o) => o.state === 'failing')) result.failing += 1;
+    else if (hits.some((o) => o.state === 'idle')) result.idle += 1;
+  }
+  return result;
+}

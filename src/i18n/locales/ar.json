@@ -3490,5 +3490,19 @@
   "SETTINGS": "الإعدادات",
   "Change how the recorder keeps data": "تغيير طريقة حفظ المسجّل للبيانات",
   "Dashed settings are also fixed by environment variables, which return after a restart.": "الإعدادات ذات الحدود المتقطعة تحددها أيضًا متغيرات البيئة وتعود بعد إعادة التشغيل.",
-  "Open SETTINGS to thin old data.": "افتح الإعدادات لتقليل البيانات القديمة."
+  "Open SETTINGS to thin old data.": "افتح الإعدادات لتقليل البيانات القديمة.",
+  "delivering": "يوفّر البيانات",
+  "empty reply": "رد فارغ",
+  "failing": "معطّل",
+  "not asked": "غير مطلوب",
+  "not seen yet": "لم يُرَ بعد",
+  "FEEDS": "المصادر",
+  "Show whether each data feed is delivering": "إظهار ما إذا كان كل مصدر بيانات يوفّر البيانات",
+  "{count} feed down": "{count} أثناء تعطل المصدر",
+  "{count} not asked": "{count} دون طلب",
+  "{count} contacts, {ago} ago": "{count} أهداف، قبل {ago}",
+  "Answered with no contacts, {ago} ago": "ردّ بلا أهداف، قبل {ago}",
+  "HTTP {status}, since {time}": "HTTP {status}، منذ {time}",
+  "Nothing has asked for it for {ago}": "لم يطلبه أحد منذ {ago}",
+  "Not seen since the server started": "لم يُرَ منذ تشغيل الخادم"
 }

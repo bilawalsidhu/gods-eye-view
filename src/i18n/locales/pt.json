@@ -3265,5 +3265,19 @@
   "SETTINGS": "DEFINIÇÕES",
   "Change how the recorder keeps data": "Alterar como o gravador guarda os dados",
   "Dashed settings are also fixed by environment variables, which return after a restart.": "As definições tracejadas também são fixadas por variáveis de ambiente, que voltam após reiniciar.",
-  "Open SETTINGS to thin old data.": "Abra DEFINIÇÕES para reduzir dados antigos."
+  "Open SETTINGS to thin old data.": "Abra DEFINIÇÕES para reduzir dados antigos.",
+  "delivering": "a fornecer dados",
+  "empty reply": "resposta vazia",
+  "failing": "com falha",
+  "not asked": "não pedido",
+  "not seen yet": "ainda não visto",
+  "FEEDS": "FONTES",
+  "Show whether each data feed is delivering": "Mostrar se cada fonte de dados está a fornecer",
+  "{count} feed down": "{count} com a fonte em falha",
+  "{count} not asked": "{count} sem ninguém a pedir",
+  "{count} contacts, {ago} ago": "{count} contactos, há {ago}",
+  "Answered with no contacts, {ago} ago": "Respondeu sem contactos, há {ago}",
+  "HTTP {status}, since {time}": "HTTP {status}, desde {time}",
+  "Nothing has asked for it for {ago}": "Ninguém o pede há {ago}",
+  "Not seen since the server started": "Não visto desde que o servidor arrancou"
 }

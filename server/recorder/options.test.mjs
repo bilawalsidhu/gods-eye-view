@@ -367,3 +367,38 @@ test('thinning keeps one point per contact per bucket, spares pins and can previ
   assert.equal(store.track('b', 0, 9999).length, 10);
   assert.equal(store.track('keep', 0, 9999).length, 60);
 });
+
+test('feed monitor tells ok, empty, failing and idle apart, and logs only changes', async () => {
+  const { createFeedMonitor } = await import('./feeds.js');
+  const { openHistoryStore } = await import('./store.js');
+  const monitor = createFeedMonitor();
+  const log = [];
+  const see = (layer, status, count, ts) => {
+    const change = monitor.observe(layer, { status, count, ts });
+    if (change) log.push(change);
+  };
+  see('air', 200, 50, 1000); // a good start is not news
+  see('air', 200, 40, 1030);
+  see('air', 429, 0, 1060);
+  see('air', 429, 0, 1090); // still failing: no new entry
+  see('air', 200, 0, 1120);
+  see('air', 200, 10, 1150);
+  assert.deepEqual(
+    log.map((e) => `${e.state}${e.detail ? `:${e.detail}` : ''}`),
+    ['failing:429', 'empty', 'ok'],
+  );
+  assert.deepEqual(monitor.tick(1200).length, 0, 'asked a minute ago');
+  const idle = monitor.tick(1150 + 301);
+  assert.deepEqual(idle.map((e) => e.state), ['idle']);
+  assert.equal(monitor.tick(1150 + 900).length, 0, 'idle is logged once');
+  const [air, sea] = monitor.snapshot(['air', 'vessel'], 2200);
+  assert.equal(air.state, 'idle');
+  assert.equal(sea.state, 'unseen');
+  see('air', 200, 3, 2300);
+  assert.equal(log.at(-1).state, 'ok', 'back from idle');
+
+  const store = openHistoryStore(':memory:');
+  store.addFeedEvents(log);
+  const events = store.feedEvents({ layer: 'air', from: 1100, to: 1200 });
+  assert.deepEqual(events.map((e) => e.state), ['failing', 'empty', 'ok'], 'led by the one in force at the start');
+});

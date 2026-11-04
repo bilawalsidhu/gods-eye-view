@@ -4,6 +4,8 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createAnalysis } from './analysis.js';
 import {
   buildTicks,
+  classifyGaps,
+  feedOutages,
   groupTracks,
   nearestDeltaMs,
   OBSERVED_WINDOW_MS,
@@ -327,6 +329,23 @@ export function createReplayController({
     }
   }
 
+  /** Which of a track's gaps fell while its feed was failing or not asked. */
+  async function feedGapKinds(data) {
+    if (!data.gaps.length) return { failing: 0, idle: 0 };
+    try {
+      const layer = data.points[0].layer;
+      const query = new URLSearchParams({
+        layer,
+        from: String(data.first.ts),
+        to: String(data.last.ts),
+      });
+      const { events } = await getJson(`/api/history/feeds?${query}`);
+      return classifyGaps(data.gaps, feedOutages(events, data.last.ts));
+    } catch {
+      return { failing: 0, idle: 0 };
+    }
+  }
+
   async function findTrack(rawId) {
     const typed = String(rawId ?? '').trim();
     track = null;
@@ -345,9 +364,11 @@ export function createReplayController({
         );
         if (data.points.length) {
           trackPoints = data.points;
+          const gapKinds = await feedGapKinds(data);
           track = {
             id,
             name,
+            gapKinds,
             count: data.count,
             first: data.first,
             last: data.last,

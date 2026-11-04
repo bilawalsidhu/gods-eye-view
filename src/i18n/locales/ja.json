@@ -3115,5 +3115,19 @@
   "SETTINGS": "設定",
   "Change how the recorder keeps data": "レコーダーのデータ保持方法を変更",
   "Dashed settings are also fixed by environment variables, which return after a restart.": "破線の設定は環境変数でも固定されており、再起動後に元に戻ります。",
-  "Open SETTINGS to thin old data.": "古いデータを間引くには「設定」を開いてください。"
+  "Open SETTINGS to thin old data.": "古いデータを間引くには「設定」を開いてください。",
+  "delivering": "データ提供中",
+  "empty reply": "空の応答",
+  "failing": "障害",
+  "not asked": "要求なし",
+  "not seen yet": "未確認",
+  "FEEDS": "フィード",
+  "Show whether each data feed is delivering": "各データフィードが提供しているか表示",
+  "{count} feed down": "{count} 件はフィード障害中",
+  "{count} not asked": "{count} 件は要求なし",
+  "{count} contacts, {ago} ago": "{count} 件のコンタクト（{ago}前）",
+  "Answered with no contacts, {ago} ago": "コンタクトなしで応答（{ago}前）",
+  "HTTP {status}, since {time}": "HTTP {status}（{time} から）",
+  "Nothing has asked for it for {ago}": "{ago} の間、要求がありません",
+  "Not seen since the server started": "サーバー起動後まだ確認されていません"
 }

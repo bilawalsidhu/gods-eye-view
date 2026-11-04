@@ -3340,5 +3340,19 @@
   "SETTINGS": "НАЛАШТУВАННЯ",
   "Change how the recorder keeps data": "Змінити, як рекордер зберігає дані",
   "Dashed settings are also fixed by environment variables, which return after a restart.": "Налаштування з пунктирною рамкою також задані змінними середовища й повернуться після перезапуску.",
-  "Open SETTINGS to thin old data.": "Відкрийте НАЛАШТУВАННЯ, щоб проредити старі дані."
+  "Open SETTINGS to thin old data.": "Відкрийте НАЛАШТУВАННЯ, щоб проредити старі дані.",
+  "delivering": "віддає дані",
+  "empty reply": "порожня відповідь",
+  "failing": "збій",
+  "not asked": "не запитується",
+  "not seen yet": "ще не видно",
+  "FEEDS": "ДЖЕРЕЛА",
+  "Show whether each data feed is delivering": "Показати, чи віддає дані кожне джерело",
+  "{count} feed down": "{count} під час збою джерела",
+  "{count} not asked": "{count} без запитів",
+  "{count} contacts, {ago} ago": "Контактів: {count}, {ago} тому",
+  "Answered with no contacts, {ago} ago": "Відповіло без контактів, {ago} тому",
+  "HTTP {status}, since {time}": "HTTP {status}, з {time}",
+  "Nothing has asked for it for {ago}": "Його не запитували {ago}",
+  "Not seen since the server started": "Не видно від запуску сервера"
 }

@@ -156,3 +156,25 @@ test('retention is spelled the way the settings file spells it', async () => {
   assert.equal(formatSpanCompact(10 * 86400), '10d');
   assert.equal(formatSpanCompact(12 * 3600), '12h');
 });
+
+test('gaps are matched to the feed trouble that explains them', async () => {
+  const { feedOutages, classifyGaps } = await import('./model.js');
+  const events = [
+    { ts: 100, state: 'ok' },
+    { ts: 200, state: 'failing' },
+    { ts: 300, state: 'ok' },
+    { ts: 500, state: 'idle' },
+    { ts: 700, state: 'ok' },
+  ];
+  const outages = feedOutages(events, 900);
+  assert.deepEqual(outages.map((o) => [o.state, o.from, o.to]), [
+    ['failing', 200, 300],
+    ['idle', 500, 700],
+  ]);
+  const gaps = [
+    { from: 190, to: 320 }, // overlaps the failure
+    { from: 480, to: 650 }, // overlaps the idle stretch
+    { from: 750, to: 880 }, // a real absence
+  ];
+  assert.deepEqual(classifyGaps(gaps, outages), { failing: 1, idle: 1 });
+});

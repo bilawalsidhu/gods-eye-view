@@ -244,3 +244,19 @@
 .replay-field .replay-input {
   flex: 0 0 auto;
 }
+
+/* Feed health: green delivering, amber answering with nothing, red failing,
+   grey when nothing is asking or it has not been seen. */
+.replay-feed-ok {
+  color: #4dff9a;
+}
+.replay-feed-empty {
+  color: #ffb000;
+}
+.replay-feed-failing {
+  color: #ff5c5c;
+}
+.replay-feed-idle,
+.replay-feed-unseen {
+  color: #8da3ad;
+}

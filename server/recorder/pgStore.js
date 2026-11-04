@@ -58,7 +58,11 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         ts BIGINT NOT NULL, code TEXT NOT NULL, severity TEXT NOT NULL,
         id TEXT NOT NULL, layer TEXT NOT NULL, name TEXT NOT NULL,
         lat DOUBLE PRECISION, lon DOUBLE PRECISION, detail TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS alerts_ts ON alerts(ts);`);
+      CREATE INDEX IF NOT EXISTS alerts_ts ON alerts(ts);
+      CREATE TABLE IF NOT EXISTS feed_events(
+        ts BIGINT NOT NULL, layer TEXT NOT NULL, state TEXT NOT NULL,
+        detail TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS feed_events_layer_ts ON feed_events(layer, ts);`);
     try {
       await pool.query('CREATE EXTENSION IF NOT EXISTS postgis');
       await pool.query(`ALTER TABLE positions ADD COLUMN IF NOT EXISTS geom
@@ -317,6 +321,24 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         f.args,
       );
     },
+    addFeedEvents: (list) =>
+      insertColumns(
+        'feed_events',
+        ['ts', 'layer', 'state', 'detail'],
+        ['bigint', 'text', 'text', 'text'],
+        list.map((e) => ({ ...e, detail: e.detail ?? '' })),
+      ),
+    async feedEvents({ layer, from, to }) {
+      const before = await rows(
+        'SELECT * FROM feed_events WHERE layer = $1 AND ts < $2 ORDER BY ts DESC LIMIT 1',
+        [layer, from],
+      );
+      const within = await rows(
+        'SELECT * FROM feed_events WHERE layer = $1 AND ts BETWEEN $2 AND $3 ORDER BY ts',
+        [layer, from, to],
+      );
+      return [...before, ...within];
+    },
     addAlerts: (list) =>
       insertColumns(
         'alerts',
@@ -379,6 +401,7 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
     async purgeBefore(ts) {
       await query('DELETE FROM fence_events WHERE ts < $1', [ts]);
       await query('DELETE FROM alerts WHERE ts < $1', [ts]);
+      await query('DELETE FROM feed_events WHERE ts < $1', [ts]);
       await query(
         'DELETE FROM contacts WHERE last_seen < $1 AND id NOT IN (SELECT id FROM pins)',
         [ts],
