@@ -161,13 +161,15 @@ export const NEWS_CATEGORIES = Object.freeze({
   },
 });
 
-// Severity 0–3. Lightness falls as severity rises, so the ramp still reads
-// under colour blindness and in greyscale.
+// Severity 0–3, in colours GEV already uses: its dim and primary text, the
+// military layers' amber and the Cockpit's emergency red. They are drawn on
+// a dark disc, so from minor up lightness falls as severity rises and the
+// ramp still reads under colour blindness and in greyscale.
 export const NEWS_SEVERITY = Object.freeze([
-  { label: msg('No physical event'), color: '#8a9aa8' },
-  { label: msg('Minor incident'), color: '#f2d64b' },
-  { label: msg('Significant'), color: '#f28c28' },
-  { label: msg('Major'), color: '#d7301f' },
+  { label: msg('No physical event'), color: '#7c878d' },
+  { label: msg('Minor incident'), color: '#e8eaed' },
+  { label: msg('Significant'), color: '#ffb800' },
+  { label: msg('Major'), color: '#ff4444' },
 ]);
 /** The feed's default floor: significant and major events. */
 export const NEWS_DEFAULT_MIN_SEVERITY = 2;
@@ -309,7 +311,7 @@ export function ageWords(at, now = Date.now()) {
 }
 
 /**
- * How a report's marker looks: fill = severity, icon = category, rim =
+ * How a report's marker looks: colour = severity, icon = category, rim =
  * attestation (`confirmed` solid, `claimed` dashed, else thin), size =
  * sources, opacity = age (fading to 45 % over a day).
  */

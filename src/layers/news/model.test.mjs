@@ -453,7 +453,7 @@ test('feed cards read like Breaking: headline, meta parts, sides and chips', () 
   assert.equal(view.original, 'Удар по Харкову');
   assert.equal(view.placedByModel, true);
   assert.equal(view.severityLabel, 'Major');
-  assert.equal(view.color, '#d7301f');
+  assert.equal(view.color, '#ff4444');
   assert.equal(view.category, 'Strike');
   assert.equal(view.place, 'Kharkiv');
   assert.equal(view.sources, '6 sources');

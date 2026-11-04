@@ -1,5 +1,5 @@
-// Marker sprites for news reports: a disc filled with the severity colour,
-// the category's icon in it, and a rim for attestation. Drawn once per look
+// Marker sprites for news reports: a dark disc with the category's icon and
+// a rim in the severity colour, the rim's form telling attestation. Drawn once per look
 // on a canvas and handed to Cesium as a data URL, so its texture atlas keeps
 // one copy per look however often the layer re-renders.
 
@@ -7,8 +7,7 @@ import { NEWS_CATEGORIES, NEWS_SEVERITY } from './model.js';
 
 const CANVAS = 64;
 const BODY = 52; // disc diameter inside the canvas; the rest is rim and ring
-const INK = '#0a0a0f';
-const RIM = '#ffffff';
+const INK = 'rgba(10, 10, 15, 0.92)';
 const SELECTED = '#00d4ff';
 
 /** Canvas pixels per marker pixel: the billboard is drawn at this ratio. */
@@ -28,30 +27,25 @@ export function paintMarker(ctx, { category, severity, rim }, cx, cy, body) {
   ctx.arc(cx, cy, r + 1.5 * k, 0, 2 * Math.PI);
   ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
   ctx.fill();
+  // GEV's dark glass disc, as its HUD buttons are; severity colours the rim
+  // and the icon rather than filling the disc.
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-  ctx.fillStyle = (NEWS_SEVERITY[severity] || NEWS_SEVERITY[0]).color;
+  ctx.fillStyle = INK;
   ctx.fill();
+  const color = (NEWS_SEVERITY[severity] || NEWS_SEVERITY[0]).color;
 
   // Attestation is the rim's form, never its colour.
-  if (rim === 'confirmed' || rim === 'claimed') {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 3.5 * k, 0, 2 * Math.PI);
-    ctx.setLineDash(rim === 'claimed' ? [7 * k, 5 * k] : []);
-    ctx.lineWidth = 7 * k;
-    ctx.strokeStyle = RIM;
-    ctx.stroke();
-    ctx.setLineDash([]);
-  } else {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 1 * k, 0, 2 * Math.PI);
-    ctx.lineWidth = 2 * k;
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 3 * k, 0, 2 * Math.PI);
+  ctx.setLineDash(rim === 'claimed' ? [7 * k, 5 * k] : []);
+  ctx.lineWidth = (rim === 'thin' ? 2.5 : 6) * k;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.setLineDash([]);
 
   const style = NEWS_CATEGORIES[category] || NEWS_CATEGORIES.other;
-  const icon = body * 0.56;
+  const icon = body * 0.5;
   ctx.save();
   ctx.translate(cx - icon / 2, cy - icon / 2);
   ctx.scale(icon / 16, icon / 16);
@@ -59,9 +53,9 @@ export function paintMarker(ctx, { category, severity, rim }, cx, cy, body) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.lineWidth = 1.7;
-  ctx.strokeStyle = INK;
+  ctx.strokeStyle = color;
   if (style.solid) {
-    ctx.fillStyle = INK;
+    ctx.fillStyle = color;
     ctx.fill(path);
   } else ctx.stroke(path);
   ctx.restore();

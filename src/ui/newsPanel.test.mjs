@@ -136,7 +136,7 @@ test('the panel shows the last 24 h as event cards and opens once', () => {
   );
   assert.equal(
     first.querySelector('.news-card__meta').textContent,
-    'Strike · Kharkiv · 4 sources · 10 min',
+    'Major · Strike · Kharkiv · 4 sources · 10 min',
   );
   assert.equal(
     first.querySelector('.news-card__marker').getAttribute('aria-label'),

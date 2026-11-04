@@ -78,7 +78,10 @@ const meta = () =>
           :title="item.severityLabel"
           ><svg viewBox="0 0 16 16" aria-hidden="true">
             <path :d="item.icon" /></svg></span
-        >{{ meta() }}</span
+        ><span v-if="item.severity >= 2" class="news-card__severity">{{
+          item.severityLabel
+        }}</span
+        >{{ item.severity >= 2 ? ` · ${meta()}` : meta() }}</span
       >
       <span v-if="item.sides" class="news-card__sides">{{ item.sides }}</span>
       <span v-if="item.chips.length" class="news-card__chips"

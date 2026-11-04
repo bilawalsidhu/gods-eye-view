@@ -66,9 +66,11 @@ const FEED_UNAVAILABLE = msg('News feed unavailable');
 const REPORT_PREFIX = `${NEWS_PICK_PREFIX}report:`;
 const HOTSPOT_PREFIX = `${NEWS_PICK_PREFIX}hotspot:`;
 const DEVELOPING_PREFIX = `${NEWS_PICK_PREFIX}developing:`;
-const DEVELOPING_COLOR = '#ffb020';
-// Disputed areas: dotted, in their own colour, apart from ordinary borders.
-const DISPUTED_COLOR = '#f472b6';
+// Outlines in GEV's own colours, apart from the severity ramp: hotspots in
+// the accent, developing places in its lighter tint, disputed areas dotted
+// in the primary text colour.
+const DEVELOPING_COLOR = '#9defff';
+const DISPUTED_COLOR = '#e8eaed';
 const HOTSPOT_COLOR = '#00d4ff';
 // A filtered feed page that shows almost nothing reads the next page by
 // itself, a few times, so a strict severity floor still fills the list.

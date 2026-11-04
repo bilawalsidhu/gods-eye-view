@@ -172,15 +172,16 @@
 
 .news-card {
   border: 1px solid var(--glass-border);
-  border-inline-start: 3px solid var(--news-color, var(--glass-border));
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.02);
 }
 .news-card:hover,
 .news-card.is-open {
   border-color: var(--glass-border-hover);
-  border-inline-start-color: var(--news-color);
   background: rgba(0, 212, 255, 0.06);
+}
+.news-card.is-open {
+  border-color: rgba(0, 212, 255, 0.45);
 }
 .news-card.is-unmapped .news-card__title {
   color: var(--text-secondary);
@@ -254,45 +255,59 @@
   color: var(--text-secondary);
   font: 10px var(--font-mono);
 }
+/* The globe's marker in small: a dark disc, rim and icon in the severity
+   colour (sprites.js). */
 .news-card__marker {
   flex: none;
   display: inline-grid;
   place-items: center;
+  box-sizing: border-box;
   width: 14px;
   height: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.8);
+  border: 1.5px solid var(--news-color);
   border-radius: 50%;
-  background: var(--news-color);
+  background: var(--bg-dark);
 }
 .news-card__marker svg {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   fill: none;
-  stroke: var(--bg-dark);
+  stroke: var(--news-color);
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 .news-card__marker.solid svg {
-  fill: var(--bg-dark);
+  fill: var(--news-color);
   stroke: none;
+}
+.news-card__severity {
+  flex: none;
+  color: var(--news-color);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .news-card__chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
+/* GEV's read-only badge (status-badge.css), neutral unless attested. */
 .news-chip {
-  padding: 1px 6px;
+  padding: 2px 7px;
   border: 1px solid var(--glass-border-hover);
   border-radius: 999px;
   color: var(--text-secondary);
-  font: 9px var(--font-mono);
+  font: 8px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .news-chip--official,
 .news-chip--confirmed {
-  border-color: rgba(0, 212, 255, 0.45);
-  color: var(--text-primary);
+  border-color: rgba(0, 212, 255, 0.32);
+  background: rgba(0, 212, 255, 0.09);
+  color: #9defff;
 }
 .news-chip--claimed {
   border-style: dashed;

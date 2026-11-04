@@ -149,14 +149,11 @@ function paint(canvas, view, look, pic) {
     }
   }
   if (pic?.state !== 'ok') {
-    // No picture: a tile in the severity colour with the category icon.
-    const g = ctx.createLinearGradient(px, PAD, px + pw, PAD + PIC_H);
-    g.addColorStop(0, WORLD_OVERLAY_STYLE.background);
-    g.addColorStop(1, color);
-    ctx.fillStyle = g;
-    ctx.globalAlpha = 0.55;
+    // No picture: a plain glass tile with the event's marker.
+    ctx.fillStyle = WORLD_OVERLAY_STYLE.background;
     ctx.fillRect(px, PAD, pw, PIC_H);
-    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+    ctx.fillRect(px, PAD, pw, PIC_H);
     paintMarker(ctx, look, px + pw / 2, PAD + PIC_H / 2, 34);
   }
   ctx.restore();
