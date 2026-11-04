@@ -3,9 +3,14 @@ import { VectorTile } from '@mapbox/vector-tile';
 import { normalizeAlprNode } from './records.js';
 
 /** Map extract attributes without treating an OSM edit date as a field verification. */
-function normalizeAlprTileFeature(feature) {
+export function normalizeAlprTileFeature(feature) {
   const p = feature?.properties || {};
-  if (feature?.geometry?.type !== 'Point' || p.osmType !== 'node') return null;
+  if (
+    feature?.geometry?.type !== 'Point' ||
+    !['node', 'way'].includes(p.osmType)
+  )
+    return null;
+  if (!Array.isArray(feature.geometry.coordinates)) return null;
   const [lon, lat] = feature.geometry.coordinates;
   const record = normalizeAlprNode({
     type: 'node',
@@ -23,7 +28,14 @@ function normalizeAlprTileFeature(feature) {
       check_date: p.check_date,
     },
   });
-  return record ? { ...record, osmTimestamp: p.osmTimestamp || null } : null;
+  return record
+    ? {
+        ...record,
+        id: p.osmType === 'way' ? `alpr:way:${record.osmId}` : record.id,
+        osmType: p.osmType,
+        osmTimestamp: p.osmTimestamp || null,
+      }
+    : null;
 }
 
 /** Decode detail-level camera points; geometry-only heatmap tiles are not records. */

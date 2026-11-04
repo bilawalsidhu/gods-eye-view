@@ -3089,5 +3089,7 @@
   "The provider rejected the API key. Check it in Provider Settings.": "Der Anbieter hat den API-Schlüssel abgelehnt. Prüfe ihn in den Anbieter-Einstellungen.",
   "Too many chat requests. Try again in {seconds} s.": "Zu viele Chat-Anfragen. In {seconds} s erneut versuchen.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Der Anbieter hat den Zugriff für diesen Schlüssel verweigert. Prüfe Projekt, Region oder Berechtigungen des Schlüssels.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "Das Anbieterkonto hat kein Guthaben mehr. Prüfe die Abrechnung oder wähle in den Einstellungen einen anderen KI-Anbieter."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "Das Anbieterkonto hat kein Guthaben mehr. Prüfe die Abrechnung oder wähle in den Einstellungen einen anderen KI-Anbieter.",
+  "DeFlock + OpenStreetMap · community mapped": "DeFlock + OpenStreetMap · von der Community erfasst",
+  "Some camera sources are unavailable; showing available locations": "Einige Kameraquellen sind nicht verfügbar; verfügbare Standorte werden angezeigt"
 }

@@ -23,6 +23,20 @@ function catalog(sources, t) {
   });
 }
 
+test('standalone ALPR adds DeFlock to the existing feed without background acquisition', (t) => {
+  let requests = 0;
+  t.mock.method(globalThis, 'fetch', () => {
+    requests++;
+    throw new Error('Acquisition must wait until enabled');
+  });
+  const sources = createStandaloneLayerSources();
+  const app = catalog(sources, t);
+  assert.match(sources.alpr.label, /DeFlock/);
+  assert.match(app.get('alpr-cameras').source, /DeFlock/);
+  assert.equal(requests, 0);
+  sources.alpr.destroy();
+});
+
 test('every acquisition source can be omitted without losing catalog membership', (t) => {
   const baseline = catalog(createStandaloneLayerSources(), t);
   for (const name of Object.keys(CATALOG_SOURCE_CONTRACTS)) {

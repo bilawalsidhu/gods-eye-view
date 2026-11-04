@@ -3014,5 +3014,7 @@
   "The provider rejected the API key. Check it in Provider Settings.": "提供商拒绝了 API 密钥。请在提供商设置中检查。",
   "Too many chat requests. Try again in {seconds} s.": "聊天请求过多。请在 {seconds} 秒后重试。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "提供商拒绝了此密钥的访问。请检查该密钥的项目、地区或权限。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "提供商账户余额不足。请检查账单，或在设置中选择其他 AI 提供商。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "提供商账户余额不足。请检查账单，或在设置中选择其他 AI 提供商。",
+  "DeFlock + OpenStreetMap · community mapped": "DeFlock + OpenStreetMap · 社区地图数据",
+  "Some camera sources are unavailable; showing available locations": "部分摄像头数据源不可用；正在显示可用位置"
 }
