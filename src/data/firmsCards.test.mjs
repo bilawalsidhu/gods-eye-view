@@ -14,6 +14,7 @@ import {
   FIRMS_OVERLAY_SOURCE_ID,
 } from './firmsLabels.js';
 import { FIRE_ANCHOR_LIFT_M } from './fireAnchors.js';
+import { getLocale, setLocale } from '../i18n/index.js';
 import { reportMeshFloorCell, setMeshFloorPreferred } from './groundFloor.js';
 
 const NOW = Date.UTC(2026, 6, 17, 4, 0);
@@ -98,6 +99,30 @@ test('buildCellCard: plural noun, max FRP and newest age, accent passthrough', (
   assert.equal(card.title, '14 FIRES');
   assert.equal(card.details[0], 'max 210 MW · new 3h');
   assert.equal(card.accent, accentForSeverity('orange'));
+});
+
+test('buildCellCard: the count picks the plural form of the language', () => {
+  const title = (count) =>
+    buildCellCard(
+      {
+        cell: { count, maxFrp: 10, newestAcqMs: 0 },
+        position: { x: 0, y: 0, z: 0 },
+      },
+      NOW,
+    ).title;
+  const previous = getLocale();
+  try {
+    assert.equal(title(1), '1 FIRE');
+    setLocale('ar');
+    assert.deepEqual(
+      [2, 3, 14].map((count) => title(count).replace(/[\u2068\u2069]/g, '')),
+      ['حريقان (2)', '3 حرائق', '14 حريقًا'],
+    );
+    setLocale('ru');
+    assert.equal(title(14), '14 ПОЖАРОВ');
+  } finally {
+    setLocale(previous);
+  }
 });
 
 // Owner field finding 2026-07-21: anchors must sit on the DEM once the shared

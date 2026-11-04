@@ -7,11 +7,15 @@ import { localProviderPlugins } from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
 import { makeFixtureRoot } from './fixtureRoot.mjs';
 
+const nominatimStorageDir = await makeFixtureRoot('gev-preview-composition-');
+test.after(() => rm(nominatimStorageDir, { recursive: true, force: true }));
+
 test('data providers have both hooks; credential editing stays development-only', () => {
-  const plugins = localProviderPlugins();
+  const plugins = localProviderPlugins({ nominatimStorageDir });
   assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
   assert.ok(plugins.some(({ name }) => name === 'gnss-integrity'));
   assert.ok(plugins.some(({ name }) => name === 'ghostmaps'));
+  assert.ok(plugins.some(({ name }) => name === 'drone-airspace'));
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
@@ -89,7 +93,10 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
   for (const isPreview of [false, true]) {
     const config = {
       ...base,
-      plugins: [...localProviderPlugins(), apiNotFoundPlugin()],
+      plugins: [
+        ...localProviderPlugins({ nominatimStorageDir }),
+        apiNotFoundPlugin(),
+      ],
       server: { host: '127.0.0.1', port: 0, hmr: false },
       preview: { host: '127.0.0.1', port: 0 },
     };

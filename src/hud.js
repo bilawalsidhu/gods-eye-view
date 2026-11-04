@@ -3,10 +3,15 @@ import { applicationServices } from './services/application.js';
  * @module hud
  * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
  *
- * Renders authentic reconnaissance metadata over the Cesium canvas:
- * classification banners, live MGRS/lat-lon coordinates, sensor metrics
- * (GSD, NIIRS, ONA), timestamps, and orbital data — all updating in
- * real-time at configurable cadences.
+ * Renders reconnaissance-styled telemetry over the Cesium canvas. The
+ * MGRS/lat-lon coordinates (the point below the camera), altitude and
+ * off-nadir angle come from the live camera, and the clocks show the current
+ * UTC time. Sun elevation is an approximate estimate from that position and
+ * time. The classification banner, mission and orbit identifiers, the
+ * BAND/BITS/LVL strip and the REC blink are styling, and the GSD/NIIRS
+ * figures are scaled from camera altitude; none of them comes from imagery
+ * metadata, and COLL is the current time, not a capture time. Readouts update
+ * on independent fixed cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
  * selected and supports the layout variants: tactical, minimal, cyber.
@@ -27,19 +32,34 @@ import {
 } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
 import {
-  hudSummaryMatchesProvenance,
+  hasWord,
+  hudSummaryHasEnglish,
+  hudSummaryIsLatin,
   hudSummaryLayerContext,
   hudTelemetryProvenance,
   isHudSummaryUnconfigured,
 } from './hudSummaryResponse.js';
 import {
+  hudSummaryMatchesProvenance,
+  provenanceLine,
+  provenanceTag,
+} from './data/layerSnapshot.js';
+import {
   applyHudUiTheme,
   DEFAULT_HUD_LAYOUT,
   normalizeHudLayout,
 } from './hudLayouts.js';
-import { formatNumber, msg, t } from './i18n/index.js';
+import {
+  formatNumber,
+  getLocale,
+  msg,
+  onLocaleChange,
+  t,
+} from './i18n/index.js';
+import { isRtlLocale } from './i18n/locale.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
+import { subscribeSelectedVessel } from './hudReadouts.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -102,23 +122,58 @@ const FEED_STATE_LABELS = Object.freeze({
   unavailable: msg('UNAVAILABLE'),
 });
 
+/** A summary line with its warning in the active language. */
+function withProvenance(text, provenance) {
+  return provenanceLine(
+    text,
+    provenance,
+    (state) =>
+      FEED_STATE_LABELS[state]
+        ? t(FEED_STATE_LABELS[state])
+        : state.toUpperCase(),
+    (name) => localizeLayerName(name).toUpperCase(),
+  );
+}
+
 /**
- * The summary's feed-state suffix in the active language, e.g.
- * `UNAVAILABLE: LIVE AIS VESSELS`. State ids and layer names stay English in
- * layer data; only this line translates them.
+ * The AI line. In an RTL locale a leading right-to-left mark keeps a reply
+ * that opens with a Latin name (Times Square …) reading right to left.
  */
-function localizedProvenanceTag(provenance) {
-  if (!provenance) return null;
-  const state = FEED_STATE_LABELS[provenance.state]
-    ? t(FEED_STATE_LABELS[provenance.state])
-    : provenance.state.toUpperCase();
-  if (!provenance.names.length) return state;
-  return t('{state} {layers}', {
-    state,
-    layers: provenance.names
-      .map((name) => localizeLayerName(name).toUpperCase())
-      .join('/'),
-  });
+function aiSummaryLine(summary, warning) {
+  const line = withProvenance(summary, warning);
+  return isRtlLocale(getLocale()) ? `\u200f${line}` : line;
+}
+
+/**
+ * What a summary outside English must not carry: feed-state ids, translated
+ * layers' English names and ids, and with every feed healthy the
+ * UNAVAILABLE word. A state word the locale keeps in English (de FALLBACK)
+ * and words of a place label (Radio City, Loading Dock) are fine; so is a
+ * one-word layer name in a Latin-script locale, where it may be a word of
+ * the language (fr transit).
+ */
+function summaryForbiddenWords(context) {
+  const places = [
+    ...(context.placeLabels || []),
+    ...(context.streetLabels || []),
+    ...(context.nearbyPlaceLabels || []),
+  ].join(' ');
+  const latin = hudSummaryIsLatin(context.locale);
+  const overall = context.feedProvenance?.overall;
+  return [
+    ...Object.keys(FEED_STATE_LABELS).filter(
+      (state) =>
+        t(FEED_STATE_LABELS[state]).toLowerCase() !== state &&
+        !hasWord(places, state),
+    ),
+    ...(context.englishLayerWords || []).filter(
+      (word) =>
+        !hasWord(places, word) && (!latin || /[^\p{L}\p{N}]/u.test(word)),
+    ),
+    ...(!overall || overall === 'nominal'
+      ? [t(FEED_STATE_LABELS.unavailable)]
+      : []),
+  ];
 }
 
 /** The name shown for a _viewBand() id. */
@@ -162,10 +217,13 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
 /**
  * Full-screen intelligence HUD overlay rendered on top of the Cesium canvas.
  *
- * Displays classification banners, MGRS/lat-lon readouts, sensor metrics
- * (GSD, NIIRS, off-nadir angle), sun elevation, orbital metadata, and a
- * rolling semantic summary line. All values derive from the live camera
- * position and update on independent timer cadences.
+ * Displays MGRS/lat-lon, altitude and off-nadir readouts from the live
+ * camera, UTC clocks, an approximate sun elevation, the selected vessel and a
+ * semantic summary line built from the view and its data feeds, alongside
+ * styling that is not sensor metadata: the classification banner, generated
+ * mission, sensor and orbit identifiers, the fixed sensor strip, the REC blink
+ * and the altitude-scaled GSD/NIIRS figures. Readouts update on independent
+ * fixed cadences.
  */
 export class IntelHUD {
   /**
@@ -179,8 +237,10 @@ export class IntelHUD {
       summaryPolicy = {},
       basemapContext = {},
       summaryService = applicationServices.summary,
+      publish = () => {},
     } = {},
   ) {
+    this._publish = publish;
     this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
@@ -189,7 +249,9 @@ export class IntelHUD {
     this._visible = false;
     this._autoMode = true; // auto show/hide based on style
     this._currentStyle = 'normal';
-    this._el = null;
+    /** The presented HUD; see {@link IntelHUD#_initView}. */
+    this._view = null;
+    this._viewSignature = '';
     this._variant = DEFAULT_HUD_LAYOUT;
     this._recBlinkState = true;
     this._updateInterval = null;
@@ -208,7 +270,7 @@ export class IntelHUD {
     this._placeLabels = null;
     this._lastSummarySignature = '';
     /** The reply painted for `_lastSummarySignature`, when it was accepted. */
-    this._lastSummaryText = null;
+    this._lastSummaryReply = null;
     this._summaryRevision = 0;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
@@ -237,12 +299,17 @@ export class IntelHUD {
     // the camera has moved to.
     this._onCameraMoveStart = () => {
       this._markSummaryDirty();
-      if (this._summaryRequest || this._summaryTypingInterval) {
+      const typing = Boolean(this._summaryTypingInterval);
+      if (this._summaryRequest || typing) {
         // Cancelled requests and partially typed replies are not reusable answers.
         this._lastSummarySignature = null;
       }
       this._summaryRequest?.abort();
       this._stopSummaryTyping();
+      // A half-typed reply would stay until moveEnd, which a camera that
+      // keeps moving may not send for a long time: show the plain line.
+      if (typing && this._latestMetrics)
+        this._setSummaryText(this._composeSummary(), false);
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
@@ -268,79 +335,83 @@ export class IntelHUD {
     this._orbitNum = 47000 + Math.floor(Math.random() * 1000);
     this._passNum = 100 + Math.floor(Math.random() * 200);
 
-    this._buildDOM();
+    this._initView();
+    this._vesselUnsubscribe = subscribeSelectedVessel((readout) =>
+      this._present({
+        vessel: readout
+          ? { active: true, text: readout.text }
+          : { active: false, text: t('AIS: --') },
+      }),
+    );
     this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
+    this._offLocale = onLocaleChange(() => this._relocalize());
     this._startTimers();
   }
 
+  /** Show the HUD's words in the new locale; drop AI text in the old one. */
+  _relocalize() {
+    this._markSummaryDirty();
+    this._lastSummarySignature = null;
+    this._lastSummaryReply = null;
+    this._summaryRequest?.abort();
+    this._present({
+      mode: MODE_LABELS[this._currentStyle]
+        ? t(MODE_LABELS[this._currentStyle])
+        : this._currentStyle.toUpperCase(),
+      summaryLabel: t('SUMMARY'),
+      rec: t('REC'),
+      ...(this._view.vessel.active
+        ? {}
+        : { vessel: { active: false, text: t('AIS: --') } }),
+    });
+    if (this._visible && this._latestMetrics) this._updateCameraData();
+    this._setSummaryText(this._composeSummary(), false);
+  }
+
   /**
-   * Construct the HUD DOM structure inside the existing `#intel-hud` element.
-   * Populates corner brackets, classification banners, sensor readouts,
-   * edge metadata strips, and the bottom summary bar.
+   * Present the HUD's first view: corner brackets, classification banners,
+   * sensor readouts, edge metadata strips and the bottom summary bar, which
+   * the Intel HUD view renders in `#intel-hud`.
    */
-  _buildDOM() {
-    this._el = document.getElementById('intel-hud');
-    if (!this._el) return;
-
+  _initView() {
     // i18n-ignore: sensor codes and a classification banner; the rest uses t()
-    this._el.innerHTML = `
-      <div class="hud-sonar" aria-hidden="true"></div>
+    this._view = {
+      active: false,
+      variant: this._variant,
+      colors: null,
+      classification: 'TOP SECRET // SI-TK // NOFORN',
+      system: `${this._missionId}  ${this._sensorId}`,
+      mode: t(MODE_LABELS.normal),
+      summaryLabel: t('SUMMARY'),
+      summary: t('Awaiting telemetry...'),
+      rec: t('REC'),
+      recShown: null,
+      timestamp: '2026-01-01 00:00:00Z',
+      orbital: `ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}`,
+      mgrs: 'MGRS: ---',
+      latlon: `--°--'--"N ---°--'--"W`,
+      gsd: 'GSD: --m  NIIRS: --',
+      alt: 'ALT: --m   SUN: --° EL',
+      vessel: { active: false, text: t('AIS: --') },
+      coll: 'COLL: --:--:--Z',
+      ona: 'ONA: --°',
+      sensor: ['BAND: PAN', 'BITS: 11', 'LVL: 1A'],
+      bottom: 'LAT: --  LON: --  MGRS: ---',
+    };
+    this._present({});
+  }
 
-      <div class="hud-corner hud-top-left">
-        <div class="hud-bracket">┌</div>
-        <div class="hud-content">
-          <div class="hud-readout"><div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div></div>
-          <div class="hud-readout"><div class="hud-system">${this._missionId}  ${this._sensorId}</div></div>
-          <div class="hud-readout"><div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div></div>
-          <div class="hud-summary-wrap">
-            <div class="hud-readout"><div class="hud-summary-label">${t('SUMMARY')}</div></div>
-            <div class="hud-readout"><div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="hud-corner hud-top-right">
-        <div class="hud-content" style="text-align:right">
-          <div class="hud-readout"><div class="hud-rec"><span id="hud-rec-dot">●</span> ${t('REC')}  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div></div>
-          <div class="hud-readout"><div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div></div>
-        </div>
-        <div class="hud-bracket">┐</div>
-      </div>
-
-      <div class="hud-corner hud-bottom-left">
-        <div class="hud-bracket">└</div>
-        <div class="hud-content">
-          <div class="hud-readout"><div id="hud-mgrs">MGRS: ---</div></div>
-          <div class="hud-readout"><div id="hud-latlon">--°--'--"N ---°--'--"W</div></div>
-        </div>
-      </div>
-
-      <div class="hud-corner hud-bottom-right">
-        <div class="hud-content" style="text-align:right">
-          <div class="hud-readout"><div id="hud-gsd">GSD: --m  NIIRS: --</div></div>
-          <div class="hud-readout"><div id="hud-alt">ALT: --m   SUN: --° EL</div></div>
-          <div class="hud-readout"><div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div></div>
-        </div>
-        <div class="hud-bracket">┘</div>
-      </div>
-
-      <div class="hud-edge hud-left-edge">
-        <div class="hud-readout"><div id="hud-coll">COLL: --:--:--Z</div></div>
-        <div class="hud-readout"><div id="hud-ona">ONA: --°</div></div>
-      </div>
-
-      <div class="hud-edge hud-right-edge">
-        <div class="hud-readout"><div>BAND: PAN</div></div>
-        <div class="hud-readout"><div>BITS: 11</div></div>
-        <div class="hud-readout"><div>LVL: 1A</div></div>
-      </div>
-
-      <div class="hud-bottom-bar">
-        <span class="hud-readout"><span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span></span>
-      </div>
-    `;
-    this._el.dataset.variant = this._variant;
+  /**
+   * Merge `patch` into the view and publish it when anything changed.
+   * @param {object} patch
+   */
+  _present(patch) {
+    Object.assign(this._view, patch);
+    const signature = JSON.stringify(this._view);
+    if (signature === this._viewSignature) return;
+    this._viewSignature = signature;
+    this._publish(Object.freeze({ ...this._view }));
   }
 
   /**
@@ -351,16 +422,13 @@ export class IntelHUD {
   _startTimers() {
     // Timestamp — every second
     this._timestampInterval = setInterval(() => {
-      const el = document.getElementById('hud-timestamp');
-      if (el) el.textContent = this._formatUTC();
+      this._present({ timestamp: this._formatUTC() });
     }, 1000);
 
     // REC blink — every 800ms
     this._recBlinkInterval = setInterval(() => {
       this._recBlinkState = !this._recBlinkState;
-      const dot = document.getElementById('hud-rec-dot');
-      if (dot)
-        dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
+      this._present({ recShown: this._recBlinkState });
     }, 800);
 
     // Camera-derived data — 4 updates/second (250ms). Skipped in a hidden
@@ -449,70 +517,57 @@ export class IntelHUD {
       // Format: 18SUJ23370716 → 18S UJ 2337 0716
       const formatted = this._formatMGRS(mgrsStr);
       mgrsLabel = formatted;
-      const el = document.getElementById('hud-mgrs');
-      // i18n-ignore: sensor codes
-      if (el) el.textContent = `MGRS: ${formatted}`;
     } catch {
-      const el = document.getElementById('hud-mgrs');
-      // i18n-ignore: sensor codes
-      if (el) el.textContent = 'MGRS: ---';
+      /* the readout keeps its dashes */
     }
+    // i18n-ignore: sensor codes
+    const readouts = { mgrs: `MGRS: ${mgrsLabel}` };
 
     // Lat/Lon DMS
-    const llEl = document.getElementById('hud-latlon');
-    if (llEl) llEl.textContent = `${latDMS} ${lonDMS}`;
-    const bottomEl = document.getElementById('hud-bottom-line');
-    if (bottomEl) {
-      // i18n-ignore: sensor codes
-      bottomEl.textContent = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
-    }
+    readouts.latlon = `${latDMS} ${lonDMS}`;
+    // i18n-ignore: sensor codes
+    readouts.bottom = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
 
-    // GSD (Ground Sample Distance): approximate resolution in meters per pixel
-    // derived from camera altitude. NIIRS (National Imagery Interpretability
-    // Rating Scale): 0-9 quality rating computed via the General Image Quality
-    // Equation (GIQE) simplified form: NIIRS = 10.25 - 3.32 * log10(GSD_inches).
+    // GSD (Ground Sample Distance): an illustrative meters-per-pixel figure
+    // scaled from camera altitude, not a measurement of the displayed imagery.
+    // NIIRS (National Imagery Interpretability Rating Scale) is then computed
+    // from that illustrative GSD with the simplified General Image Quality
+    // Equation (GIQE) form: NIIRS = 10.25 - 3.32 * log10(GSD_inches).
     const gsd = Math.max(0.01, altM * 0.000375);
     const gsdInches = gsd * 39.37;
     const niirs = Math.max(
       0,
       Math.min(9, 10.25 - 3.32 * Math.log10(gsdInches)),
     );
-    const gsdEl = document.getElementById('hud-gsd');
-    if (gsdEl)
-      // i18n-ignore: sensor codes
-      gsdEl.textContent = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
+    // i18n-ignore: sensor codes
+    readouts.gsd = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
 
     // Altitude — reported as height above MEAN SEA LEVEL. `altM` is the raw
     // ellipsoidal camera height, which reads far below zero wherever the geoid
     // sits under the ellipsoid: a cockpit parked on the SFO deck (N ≈ -32 m)
     // showed "ALT: -15m", and JFK "ALT: -18m". Subtracting N restores the
     // number a viewer expects without touching the camera or any render path.
-    const altEl = document.getElementById('hud-alt');
     const geoidN = this._geoidUndulationM(latDeg, lonDeg);
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
-    if (altEl)
-      // i18n-ignore: sensor codes
-      altEl.textContent = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    // i18n-ignore: sensor codes
+    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
 
     // Collection timestamp
-    const collEl = document.getElementById('hud-coll');
-    if (collEl) {
-      const now = new Date();
-      const h = String(now.getUTCHours()).padStart(2, '0');
-      const m = String(now.getUTCMinutes()).padStart(2, '0');
-      const s = String(now.getUTCSeconds()).padStart(2, '0');
-      // i18n-ignore: sensor codes
-      collEl.textContent = `COLL: ${h}:${m}:${s}Z`;
-    }
+    const now = new Date();
+    const h = String(now.getUTCHours()).padStart(2, '0');
+    const m = String(now.getUTCMinutes()).padStart(2, '0');
+    const s = String(now.getUTCSeconds()).padStart(2, '0');
+    // i18n-ignore: sensor codes
+    readouts.coll = `COLL: ${h}:${m}:${s}Z`;
 
     // Off-nadir angle (ONA): camera pitch of -90 deg is nadir (straight down),
     // so ONA = 90 + pitch gives 0 at nadir and increases toward the horizon.
     const pitchDeg = Cesium.Math.toDegrees(camera.pitch);
     const ona = Math.max(0, 90 + pitchDeg);
-    const onaEl = document.getElementById('hud-ona');
     // i18n-ignore: sensor codes
-    if (onaEl) onaEl.textContent = `ONA: ${ona.toFixed(1)}°`;
+    readouts.ona = `ONA: ${ona.toFixed(1)}°`;
+    this._present(readouts);
 
     // `altM` stays the raw ellipsoidal camera height the sensor model reads
     // (GSD/NIIRS, view band). `altMslM` is the ADDITIVE display datum — the
@@ -733,8 +788,7 @@ export class IntelHUD {
     const m = this._latestMetrics;
     if (!m) return t('Awaiting telemetry...');
 
-    const modeEl = document.getElementById('hud-mode');
-    const modeLabel = modeEl?.textContent || t(MODE_LABELS.normal);
+    const modeLabel = this._view.mode || t(MODE_LABELS.normal);
     const region = this._regionLabel(m.latDeg, m.lonDeg);
     const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
@@ -763,8 +817,8 @@ export class IntelHUD {
       LOCALIZED_LOCALITY,
     );
 
-    const provenance = localizedProvenanceTag(
-      hudTelemetryProvenance(this._dataManager?.getAll?.() || []),
+    const provenance = hudTelemetryProvenance(
+      this._dataManager?.getAll?.() || [],
     );
     // ALT, SUN and ONA are sensor codes, as in the corner readouts.
     const line = t(
@@ -781,7 +835,7 @@ export class IntelHUD {
         zone: localTag,
       },
     );
-    return provenance ? `${line} | ${provenance}` : line;
+    return withProvenance(line, provenance);
   }
 
   /** Stop a summary still typing out, leaving what it has typed so far. */
@@ -796,20 +850,18 @@ export class IntelHUD {
    * @param {string} text - Full summary string to type out.
    */
   _typeSummary(text) {
-    const el = document.getElementById('hud-summary');
-    if (!el) return;
     clearInterval(this._summaryTypingInterval);
     let index = 0;
-    el.textContent = '';
+    this._present({ summary: '' });
     this._summaryTypingInterval = setInterval(() => {
       index += 2;
       if (index >= text.length) {
-        el.textContent = text;
+        this._present({ summary: text });
         clearInterval(this._summaryTypingInterval);
         this._summaryTypingInterval = null;
         return;
       }
-      el.textContent = text.slice(0, index);
+      this._present({ summary: text.slice(0, index) });
     }, 24);
   }
 
@@ -856,12 +908,28 @@ export class IntelHUD {
       return;
     }
     if (revision !== this._summaryRevision) return;
+    // Without a place label the model invents a place: show the plain line.
+    const described = [
+      context.placeLabels,
+      context.streetLabels,
+      context.nearbyPlaceLabels,
+    ].some((list) => list?.length);
+    if (!described) {
+      this._summaryDirty = false;
+      this._setSummaryText(fallbackText, false);
+      return;
+    }
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
       this._summaryDirty = false;
       // A settle painted the fallback line over the reply this context
       // already has; reused place labels make that common, so restore it.
-      if (this._lastSummaryText) this._setSummaryText(this._lastSummaryText);
+      // The warning is the current one: layer states are not in a
+      // non-English signature.
+      if (this._lastSummaryReply)
+        this._setSummaryText(
+          aiSummaryLine(this._lastSummaryReply, context.warning),
+        );
       return;
     }
     if (this._summaryRequest) return;
@@ -869,7 +937,7 @@ export class IntelHUD {
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
-    this._lastSummaryText = null;
+    this._lastSummaryReply = null;
     const controller = new AbortController();
     let timedOut = false;
     const timeout = window.setTimeout(() => {
@@ -892,9 +960,23 @@ export class IntelHUD {
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      if (hudSummaryMatchesProvenance(data.summary, context.feedProvenance))
-        this._lastSummaryText = data.summary;
-      this._setSummaryText(this._lastSummaryText || fallbackText, animate);
+      if (
+        hudSummaryMatchesProvenance(data, context.feedProvenance) &&
+        !hudSummaryHasEnglish(
+          data.summary,
+          context.locale,
+          summaryForbiddenWords(context),
+        )
+      ) {
+        this._lastSummaryReply = data.summary;
+      }
+      // The warning is the HUD's own translated state, not the model's words.
+      this._setSummaryText(
+        this._lastSummaryReply
+          ? aiSummaryLine(this._lastSummaryReply, context.warning)
+          : fallbackText,
+        animate,
+      );
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
       // destroy's) is not.
@@ -924,8 +1006,7 @@ export class IntelHUD {
     }
     // A plain paint replaces any reply still typing.
     this._stopSummaryTyping();
-    const el = document.getElementById('hud-summary');
-    if (el) el.textContent = text;
+    this._present({ summary: text });
   }
 
   /**
@@ -953,18 +1034,46 @@ export class IntelHUD {
     // A slower build for a view the camera has left must not replace the
     // newer view's lookup.
     if (revision === this._summaryRevision) this._placeLabels = labels;
-    const enabledLayers =
-      this._dataManager
-        ?.getAll?.()
-        ?.filter((layer) => layer.enabled)
-        .map((layer) => layer.name) || [];
-    return {
+    const locale = getLocale();
+    const layerContext = hudSummaryLayerContext(
+      this._dataManager?.getAll?.() || [],
+    );
+    // Outside English a layer's state id is left out: the model echoes it,
+    // and `overall` already carries the state.
+    const named = ({ feedState, ...layer }) => ({
+      ...layer,
+      name: localizeLayerName(layer.name),
+      ...(locale === 'en' && { feedState }),
+    });
+    const { feedProvenance } = layerContext;
+    const context = {
+      locale,
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
-      enabledLayerLabels: enabledLayers,
-      ...hudSummaryLayerContext(this._dataManager?.getAll?.() || []),
+      // The model sees only the layer names the user sees. The English note
+      // goes too: a small model copies its words. `overall` stays the id.
+      enabledLayerLabels:
+        layerContext.enabledLayerLabels.map(localizeLayerName),
+      enabledLayers: layerContext.enabledLayers.map(named),
+      feedProvenance: {
+        ...feedProvenance,
+        layers: feedProvenance.layers.map(named),
+        note: locale === 'en' ? feedProvenance.note : undefined,
+      },
     };
+    // Not sent and not part of the signature: the line's own warning, taken
+    // before the layer states are left out, and the English names and ids of
+    // translated layers, which a reply in another language must not echo.
+    Object.defineProperties(context, {
+      warning: { value: provenanceTag(feedProvenance) },
+      englishLayerWords: {
+        value: layerContext.enabledLayers
+          .filter(({ name }) => localizeLayerName(name) !== name)
+          .flatMap(({ name, id }) => [name, id].filter(Boolean)),
+      },
+    });
+    return context;
   }
 
   _markSummaryDirty() {
@@ -984,20 +1093,18 @@ export class IntelHUD {
   onStyleChange(styleName) {
     this._currentStyle = styleName;
 
-    // Update mode label
-    const modeEl = document.getElementById('hud-mode');
-    if (modeEl) {
-      modeEl.textContent = MODE_LABELS[styleName]
-        ? t(MODE_LABELS[styleName])
-        : styleName.toUpperCase();
-    }
-    // Update color scheme
+    // Mode label and color scheme
     const colors = HUD_COLORS[styleName] || HUD_COLORS._default;
-    if (this._el) {
-      this._el.style.setProperty('--hud-color', colors.main);
-      this._el.style.setProperty('--hud-glow', colors.glow);
-      this._el.style.setProperty('--hud-border', colors.border);
-    }
+    this._present({
+      mode: MODE_LABELS[styleName]
+        ? t(MODE_LABELS[styleName])
+        : styleName.toUpperCase(),
+      colors: {
+        '--hud-color': colors.main,
+        '--hud-glow': colors.glow,
+        '--hud-border': colors.border,
+      },
+    });
 
     // Auto show/hide
     if (this._autoMode) {
@@ -1012,7 +1119,7 @@ export class IntelHUD {
   /** Make the HUD visible and immediately refresh all readouts. */
   show() {
     this._visible = true;
-    if (this._el) this._el.classList.add('active');
+    this._present({ active: true });
     this._updateCameraData(); // immediate update
     this._markSummaryDirty();
     void this._updateSummary(false, true);
@@ -1021,7 +1128,7 @@ export class IntelHUD {
   /** Hide the HUD overlay. */
   hide() {
     this._visible = false;
-    if (this._el) this._el.classList.remove('active');
+    this._present({ active: false });
   }
 
   /** Toggle HUD visibility and disable auto-mode (user override). */
@@ -1060,9 +1167,7 @@ export class IntelHUD {
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);
-    if (this._el) {
-      this._el.dataset.variant = this._variant;
-    }
+    this._present({ variant: this._variant });
     applyHudUiTheme(document.documentElement, this._variant);
   }
 
@@ -1116,6 +1221,8 @@ export class IntelHUD {
     this.viewer.camera.moveStart.removeEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
     this._dataManagerUnsubscribe?.();
+    this._vesselUnsubscribe?.();
     this._summaryRequest?.abort();
+    this._offLocale();
   }
 }
