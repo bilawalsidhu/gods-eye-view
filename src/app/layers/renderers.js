@@ -1,4 +1,6 @@
 import { createPerimetersCesiumRenderer } from '../../layers/perimeters/render/cesium.js';
+import { createDroneAirspaceCesiumRenderer } from '../../layers/droneAirspace/index.js';
+import { createOsmPlacesCesiumRenderer } from '../../layers/osmPlaces/index.js';
 import { createGnssCesiumRenderer } from '../../layers/gnss/render/cesium.js';
 import { createAirQualityCesiumRenderer } from '../../layers/airQuality/render/cesium.js';
 import { createFirmsCesiumRenderer } from '../../layers/firms/render/cesium.js';
@@ -99,6 +101,9 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   'gnss-integrity': (_engine, options) => createGnssCesiumRenderer(options),
   'fire-perimeters': (_engine, options) =>
     createPerimetersCesiumRenderer(options),
+  'drone-airspace': (_engine, options) =>
+    createDroneAirspaceCesiumRenderer(options),
+  'osm-places': (_engine, options) => createOsmPlacesCesiumRenderer(options),
   'local-firms': createFirmsCesiumRenderer,
   'rocket-launches': createLaunchesCesiumRenderer,
   satellites: createSatellitesCesiumRenderer,

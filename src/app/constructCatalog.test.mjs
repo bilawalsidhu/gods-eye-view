@@ -251,15 +251,7 @@ test('the catalog per engine: Cesium as before, Navara only what it can show', a
   assert.equal(subset.get('military'), undefined);
 });
 
-// Cesium-only layers without attachRenderer: rebuilt for each Cesium catalog.
-const CESIUM_ONLY_LAYERS = [
-  'drone-airspace',
-  'osm-places',
-  'sea-marks',
-  'ski-pistes',
-];
-
-test('both production registries attach to the same 33 session models', async (t) => {
+test('both production registries attach to the same 37 session models', async (t) => {
   const { registerNavaraLayerRenderers } = await import('./navaraMode.js');
   const lifetime = new AbortController();
   t.after(() => lifetime.abort());
@@ -272,20 +264,13 @@ test('both production registries attach to the same 33 session models', async (t
   const cesium = createApplicationCatalog(options);
   await registerNavaraLayerRenderers();
   const navara = createApplicationCatalog({ ...options, engineKind: 'navara' });
-  const shared = cesium.layers.filter(
-    ({ id }) => !CESIUM_ONLY_LAYERS.includes(id),
-  );
-  assert.equal(cesium.layers.length, 33 + CESIUM_ONLY_LAYERS.length);
-  assert.equal(shared.length, 33);
+  assert.equal(cesium.layers.length, 37);
   assert.deepEqual(
     navara.layers.map(({ id }) => id),
-    shared.map(({ id }) => id),
+    cesium.layers.map(({ id }) => id),
   );
-  assert.deepEqual(
-    navara.unavailableMetadata.map(({ id }) => id).sort(),
-    [...CESIUM_ONLY_LAYERS].sort(),
-  );
-  for (const layer of shared) {
+  assert.deepEqual(navara.metadata, cesium.metadata);
+  for (const layer of cesium.layers) {
     assert.equal(navara.get(layer.id), layer, layer.id);
     assert.equal(typeof layer.attachRenderer, 'function', layer.id);
     assert.equal(typeof layer.detachRenderer, 'function', layer.id);

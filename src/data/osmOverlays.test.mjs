@@ -165,3 +165,33 @@ test('destroy removes owned imagery and unsubscribes from the map stack', () => 
   assert.equal(created[0].destroyed, true);
   assert.equal(mapStack.subscribers.size, 0);
 });
+
+test('on Navara an overlay drapes through engine.maps and follows the globe', () => {
+  const added = [];
+  const engineWith = () => ({
+    maps: {
+      addOverlay(options) {
+        const entry = { options, removed: false };
+        added.push(entry);
+        return () => (entry.removed = true);
+      },
+    },
+  });
+  const [seaMarks] = createOsmOverlayLayers();
+  seaMarks.init(null, { engine: engineWith() });
+  assert.equal(added.length, 0, 'nothing until enabled');
+  seaMarks.enable();
+  assert.equal(added.length, 1);
+  assert.equal(added[0].options.url, OSM_OVERLAYS[0].urlTemplate);
+  assert.equal(added[0].options.credit, OSM_OVERLAYS[0].credit);
+  assert.equal(seaMarks.getStats().error, null);
+  // An engine switch: the drape leaves with the old globe, comes back on the next.
+  seaMarks.detachRenderer();
+  assert.equal(added[0].removed, true);
+  seaMarks.attachRenderer(null, { engine: engineWith() });
+  assert.equal(added.length, 2);
+  assert.equal(added[1].removed, false);
+  seaMarks.disable();
+  assert.equal(added[1].removed, true);
+  seaMarks.destroy();
+});

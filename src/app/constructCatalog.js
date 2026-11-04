@@ -254,15 +254,14 @@ export function createApplicationCatalog({
             createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
           ),
       ],
-      // Cesium only, and without attachRenderer: built for each catalog and
-      // destroyed when its globe leaves, so never a session model (as are
-      // osm-places and the OSM overlays).
       [
         'drone-airspace',
         () =>
-          createApplicationDroneAirspace({
-            source: sources['drone-airspace'],
-          }),
+          sessionModel('drone-airspace', () =>
+            createApplicationDroneAirspace({
+              source: sources['drone-airspace'],
+            }),
+          ),
       ],
       [
         'alpr-cameras',
@@ -352,7 +351,10 @@ export function createApplicationCatalog({
             }),
           ),
       ],
-      ['osm-places', () => createApplicationOsmPlaces()],
+      [
+        'osm-places',
+        () => sessionModel('osm-places', () => createApplicationOsmPlaces()),
+      ],
       ['ais-live-vessels', vessels],
       ['military-installations', installations],
       [
@@ -404,7 +406,10 @@ export function createApplicationCatalog({
             }),
           ),
       ],
-      [OSM_OVERLAYS.map(({ id }) => id), () => createOsmOverlayLayers()],
+      [
+        OSM_OVERLAYS.map(({ id }) => id),
+        () => sessionModel('osm-overlays', () => createOsmOverlayLayers()),
+      ],
       [
         ['local-datacenters', 'local-dams'],
         () =>

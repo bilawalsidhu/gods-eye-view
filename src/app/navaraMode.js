@@ -244,6 +244,15 @@ export async function registerNavaraLayerRenderers() {
           ...navaraViews.get(engine),
         });
     },
+    'osm-places': async () =>
+      (await import('../layers/osmPlaces/render/navara.js'))
+        .createOsmPlacesNavaraRenderer,
+    'drone-airspace': async () => {
+      const { createDroneAirspaceNavaraRenderer } =
+        await import('../layers/droneAirspace/render/navara.js');
+      return (engine) =>
+        createDroneAirspaceNavaraRenderer(engine, navaraViews.get(engine));
+    },
     'fire-perimeters': async () => {
       const { createPerimetersNavaraRenderer } =
         await import('../layers/perimeters/render/navara.js');
@@ -295,6 +304,9 @@ export async function registerNavaraLayerRenderers() {
     'ais-live-vessels': async () =>
       (await import('../layers/vessels/render/navara.js'))
         .createVesselsNavaraRenderer,
+    // The open map overlays drape themselves through engine.maps.addOverlay.
+    'sea-marks': async () => () => null,
+    'ski-pistes': async () => () => null,
   };
   const missing = Object.keys(loaders).filter(
     (id) => !layerAvailableOn(id, 'navara'),

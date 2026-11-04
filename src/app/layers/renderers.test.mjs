@@ -62,6 +62,8 @@ test('the aircraft, vessels, satellites, launches and earthquakes have extracted
     'air-quality',
     'gnss-integrity',
     'fire-perimeters',
+    'drone-airspace',
+    'osm-places',
     'local-firms',
     'rocket-launches',
     'satellites',

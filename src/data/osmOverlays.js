@@ -75,6 +75,10 @@ export function createOsmOverlayLayer(
   if (!OSM_OVERLAYS.includes(overlay))
     throw new TypeError(`Unknown open map overlay: ${overlay?.id}`);
   let viewer = null;
+  // A globe engine without a Cesium viewer (Navara) takes the overlay
+  // through engine.maps.addOverlay; its removal while shown.
+  let engine = null;
+  let removeEngineOverlay = null;
   let mapStack = null;
   let unsubscribeMap = null;
   let enabled = false;
@@ -105,7 +109,10 @@ export function createOsmOverlayLayer(
 
   /** Create, move or drop the owned imagery layer to match the state. */
   function sync() {
-    if (!viewer) return;
+    if (!viewer) {
+      syncEngine();
+      return;
+    }
     hostInfo = enabled ? resolveHost() : { collection: null, kind: 'none' };
     if (!enabled) {
       detach(true);
@@ -126,14 +133,47 @@ export function createOsmOverlayLayer(
     viewer.scene?.requestRender?.();
   }
 
+  function syncEngine() {
+    if (!engine) return;
+    if (enabled && !removeEngineOverlay)
+      removeEngineOverlay =
+        engine.maps?.addOverlay?.({
+          url: overlay.urlTemplate,
+          maxZoom: overlay.maximumLevel,
+          credit: overlay.credit,
+        }) ?? null;
+    else if (!enabled && removeEngineOverlay) {
+      removeEngineOverlay();
+      removeEngineOverlay = null;
+    }
+    hostInfo = removeEngineOverlay
+      ? { collection: null, kind: 'globe' }
+      : { collection: null, kind: 'none' };
+  }
+
   return {
     id: overlay.id,
     name: overlay.name,
     icon: overlay.icon,
     source: overlay.source,
     updateInterval: 0,
-    init(nextViewer) {
-      viewer = nextViewer;
+    init(nextViewer, { engine: nextEngine = null } = {}) {
+      this.attachRenderer(nextViewer, { engine: nextEngine });
+    },
+    /** Drape on a globe: the Cesium viewer's imagery, or the engine's. */
+    attachRenderer(nextViewer, { engine: nextEngine = null } = {}) {
+      viewer = nextViewer ?? null;
+      engine = viewer ? null : nextEngine;
+      sync();
+    },
+    /** Leave the globe; the enabled state stays for the next one. */
+    detachRenderer() {
+      detach(true);
+      removeEngineOverlay?.();
+      removeEngineOverlay = null;
+      viewer = null;
+      engine = null;
+      hostInfo = { collection: null, kind: 'none' };
     },
     /** Follow map-stack switches so the drape moves with the surface. */
     attachMapStackController(controller) {
@@ -159,7 +199,7 @@ export function createOsmOverlayLayer(
     getStats() {
       // Without a controller subscription the stats poll doubles as the
       // map-stack watch.
-      if (enabled && !unsubscribeMap) {
+      if (enabled && viewer && !unsubscribeMap) {
         const next = resolveHost();
         if (next.collection !== hostInfo.collection) sync();
       }
@@ -175,6 +215,9 @@ export function createOsmOverlayLayer(
     destroy() {
       enabled = false;
       detach(true);
+      removeEngineOverlay?.();
+      removeEngineOverlay = null;
+      engine = null;
       unsubscribeMap?.();
       unsubscribeMap = null;
       mapStack = null;

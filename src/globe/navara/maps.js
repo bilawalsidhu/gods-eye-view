@@ -111,6 +111,15 @@ export function createNavaraMaps(
     }, SETTLE_EVERY_MS);
   };
   const slots = { imagery: null, terrain: null, photoreal: null };
+  // Transparent tile overlays (sea marks, ski pistes) above the base
+  // imagery: Navara draws raster layers in the order they were added.
+  const overlays = new Set();
+  function restackOverlays() {
+    for (const overlay of overlays) {
+      overlay.layer.delete();
+      overlay.layer = view.addLayer({ type: 'raster', source: overlay.source });
+    }
+  }
   // Base imagery and photoreal tiles share one switch order (display): the
   // call made last decides what shows.
   const generations = { display: 0, terrain: 0 };
@@ -136,6 +145,7 @@ export function createNavaraMaps(
     const previous = slots[name];
     const source = view.addSource(sourceDesc);
     const layer = view.addLayer({ ...layerDesc, source });
+    if (name === 'imagery') restackOverlays();
     const shown = credits.map((credit) =>
       typeof credit === 'function' ? credit(layer) : credit,
     );
@@ -291,6 +301,33 @@ export function createNavaraMaps(
       changed();
     },
     photorealActive: () => slots.photoreal != null,
+    /**
+     * Navara-only extension: a transparent XYZ tile overlay ({z}/{x}/{y}
+     * `url`) above the base imagery, with its credit. Returns its removal.
+     */
+    addOverlay({ url, maxZoom, credit }) {
+      if (destroyed) return () => {};
+      const source = view.addSource({
+        type: 'raster-tile',
+        url,
+        ...(maxZoom && { maxZoom }),
+      });
+      const overlay = {
+        source,
+        layer: view.addLayer({ type: 'raster', source }),
+        credits: credit ? [{ attributionHtml: String(credit) }] : [],
+      };
+      overlays.add(overlay);
+      if (overlay.credits.length) view.attribution?.add(overlay.credits);
+      changed();
+      return () => {
+        if (!overlays.delete(overlay)) return;
+        overlay.layer.delete();
+        overlay.source.delete();
+        if (overlay.credits.length) view.attribution?.remove(overlay.credits);
+        changed();
+      };
+    },
     current: () => ({ baseImagery: currentBase, photoreal: tilesSource }),
   };
 
@@ -300,6 +337,11 @@ export function createNavaraMaps(
       if (destroyed) return;
       destroyed = true;
       stopSettling();
+      for (const overlay of overlays) {
+        overlay.layer.delete();
+        overlay.source.delete();
+      }
+      overlays.clear();
       for (const name of Object.keys(slots)) clear(name);
     },
   };

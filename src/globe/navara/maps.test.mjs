@@ -355,3 +355,40 @@ test('after a map change Navara keeps redrawing while tiles arrive, then stops',
   tick(2000);
   assert.equal(view.frames, atDestroy);
 });
+
+test('a tile overlay stays above the base imagery across map switches and credits its source', async () => {
+  const view = fakeView();
+  const { maps, destroy } = createNavaraMaps(view, {
+    setInterval: () => 1,
+    clearInterval() {},
+  });
+  await maps.setBaseImagery({ kind: 'osm' });
+  const remove = maps.addOverlay({
+    url: 'https://tiles.example/seamark/{z}/{x}/{y}.png',
+    maxZoom: 18,
+    credit: 'Sea marks © example',
+  });
+  const order = () =>
+    view.layers.map(
+      (layer) =>
+        view.sources.find((source) => source === layer.desc.source)?.desc.url,
+    );
+  assert.deepEqual(order(), [
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    'https://tiles.example/seamark/{z}/{x}/{y}.png',
+  ]);
+  assert.ok(
+    view.shown.some((item) => item.attributionHtml === 'Sea marks © example'),
+  );
+  // A new base layer goes in on top; the overlay is put back above it.
+  await maps.setBaseImagery({ kind: 'esri-imagery' });
+  assert.equal(order().at(-1), 'https://tiles.example/seamark/{z}/{x}/{y}.png');
+  assert.equal(order().length, 2);
+  remove();
+  assert.equal(order().length, 1);
+  assert.ok(
+    !view.shown.some((item) => item.attributionHtml === 'Sea marks © example'),
+  );
+  remove();
+  destroy();
+});

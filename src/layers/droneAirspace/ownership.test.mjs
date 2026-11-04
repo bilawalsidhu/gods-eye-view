@@ -216,3 +216,71 @@ test('a boundary change alone redraws the zone; identical geometry does not', as
   );
   assert.ok(h.layer.getAnalystRecords()[0].lon > -76.6);
 });
+
+test('an engine switch keeps the zones and the selected card for the next globe', async () => {
+  const renderers = [];
+  const layer = createDroneAirspaceLayer({
+    source: { getSnapshot: async () => [row] },
+    overlayHost: {
+      entries: new Map(),
+      setEntries(sourceId, entries) {
+        this.entries.set(sourceId, entries);
+      },
+      setVisible() {},
+      clearSource(sourceId) {
+        this.entries.delete(sourceId);
+      },
+      hitTest: () => null,
+    },
+    screenSpaceEventHandlerFactory: () => null,
+    picking: {
+      resolvePickId: (picked) => picked?.id ?? null,
+      isOwnedByOtherLayer: () => false,
+    },
+    pointer: { isPointerFree: () => true },
+    createRenderer({ engine }) {
+      const renderer = {
+        engine,
+        rows: [],
+        visible: false,
+        click: null,
+        destroyed: false,
+        setVisible(show) {
+          renderer.visible = show;
+        },
+        replace(rows) {
+          renderer.rows = rows;
+        },
+        onClick(callback) {
+          renderer.click = callback;
+          return () => (renderer.click = null);
+        },
+        pick: () => ({ id: 'drone-airspace:310:0' }),
+        destroy() {
+          renderer.destroyed = true;
+        },
+      };
+      renderers.push(renderer);
+      return renderer;
+    },
+  });
+  layer.init(null, { engine: 'cesium' });
+  layer.enable();
+  await layer.update();
+  renderers[0].click({ position: { x: 1, y: 1 } });
+  layer.detachRenderer();
+  assert.equal(renderers[0].destroyed, true);
+  layer.attachRenderer(null, { engine: 'navara' });
+  const [, next] = renderers;
+  assert.equal(next.engine, 'navara');
+  assert.equal(next.visible, true);
+  assert.deepEqual(
+    next.rows.map((zone) => zone.stableId),
+    ['310'],
+    'the next globe draws the zones without a refetch',
+  );
+  assert.equal(typeof next.click, 'function', 'and takes clicks');
+  assert.equal(layer.getAnalystRecords().length, 1);
+  layer.destroy();
+  assert.equal(next.destroyed, true);
+});
