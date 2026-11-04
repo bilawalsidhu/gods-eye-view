@@ -37,8 +37,20 @@ const big = report('big', {
     status: 'both-sides',
     lastAt: '2026-10-28T09:50:00.000Z',
     sides: [
-      { side: 'UA', title: 'a', url: 'https://a.test/', publisher: 'A' },
-      { side: 'RU', title: 'b', url: 'https://b.test/', publisher: 'B' },
+      {
+        side: 'UA',
+        title: 'a',
+        url: 'https://a.test/',
+        publisher: 'A',
+        publishedAt: '2026-10-28T09:00:00.000Z',
+      },
+      {
+        side: 'RU',
+        title: 'b',
+        url: 'https://b.test/',
+        publisher: 'B',
+        publishedAt: '2026-10-28T09:40:00.000Z',
+      },
     ],
     image: { url: 'https://a.test/p.jpg', publisher: 'A' },
   },
@@ -219,5 +231,48 @@ test('filters, In view and empty or failed reads', () => {
     panel.querySelector('.news-readout__status').textContent,
     'News feed unavailable',
   );
+  news.destroy();
+});
+
+test('scrolling to the end asks once per page, again after a filter change or a failed read', () => {
+  const { news, calls } = fixture();
+  const body = document.getElementById('news-panel-body');
+  // A scroller at its bottom.
+  Object.defineProperty(body, 'scrollHeight', {
+    value: 1000,
+    configurable: true,
+  });
+  Object.defineProperty(body, 'clientHeight', {
+    value: 400,
+    configurable: true,
+  });
+  body.scrollTop = 600;
+  const loadMores = () => calls.filter(([, p]) => p.loadMore === true).length;
+  const scroll = () => body.dispatchEvent(new Event('scroll'));
+  news.update(view());
+  scroll();
+  scroll();
+  assert.equal(loadMores(), 1);
+  // The page came back with nothing new (as many items): no second request.
+  news.update(view());
+  scroll();
+  assert.equal(loadMores(), 1);
+  // Another hotspot, the same number of rows: the new list can be read on.
+  const hotspot = normalizeFilters({ hotspot: 'ua-ru-war' }, [
+    { id: 'ua-ru-war' },
+  ]);
+  news.update(view({ filters: hotspot }));
+  scroll();
+  assert.equal(loadMores(), 2);
+  // The read fails: the next scroll tries again.
+  news.update(view({ filters: hotspot, error: 'News feed unavailable' }));
+  scroll();
+  assert.equal(loadMores(), 3);
+  // While loading, or with no older page, nothing is asked.
+  news.update(view({ filters: hotspot, loading: true }));
+  scroll();
+  news.update(view({ filters: hotspot, hasMore: false }));
+  scroll();
+  assert.equal(loadMores(), 3);
   news.destroy();
 });

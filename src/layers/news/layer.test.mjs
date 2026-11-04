@@ -38,7 +38,12 @@ const report = (id, extra = {}) => ({
 
 function fixture(
   t,
-  { source: overrides = {}, height = 20_000_000, reduced = false } = {},
+  {
+    source: overrides = {},
+    height = 20_000_000,
+    reduced = false,
+    centre = () => ({ lat: 49, lon: 36 }),
+  } = {},
 ) {
   const calls = { feed: [], hotspots: 0, outline: 0 };
   const reports = [
@@ -98,7 +103,7 @@ function fixture(
     overlayHost,
     now: () => NOW,
     matchMedia: () => ({ matches: reduced }),
-    getViewCentre: () => ({ lat: 49, lon: 36 }),
+    getViewCentre: () => centre(),
   });
   // The context store announces selections on `window`, which Node lacks.
   const originalWindow = globalThis.window;
@@ -178,36 +183,96 @@ test('the card toggle and the severity floor change what is shown, not what is r
   );
 });
 
-test('In view reads again only when the camera settles low in a new cell', async (t) => {
+test('In view places the held reports when the camera settles low, with no new read', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const { layer, camera, calls } = fixture(t, { height: 1_000_000 });
+  let centre = { lat: 49, lon: 36 };
+  const { layer, camera, calls } = fixture(t, {
+    height: 1_000_000,
+    centre: () => centre,
+  });
   layer.enable();
   await layer.update();
-  const reads = () => calls.feed.filter((q) => q.limit === 500).length;
-  const before = reads();
-  camera.moveEnd.raiseEvent();
-  t.mock.timers.tick(799);
-  assert.equal(reads(), before);
-  t.mock.timers.tick(1);
-  await Promise.resolve();
-  await Promise.resolve();
+  const reads = calls.feed.length;
   const view = layer.getRowControls().feed.inView;
   assert.equal(view.active, true);
+  assert.equal(view.loading, false);
   // Gaza is beyond 500 km of the view centre; the old report is past 24 h.
   assert.deepEqual(
     view.items.map((item) => item.id),
     ['major'],
   );
-  // Same cell: no new read.
-  const settled = reads();
+  // Panning to another cell (over Gaza) reads nothing: it reuses the map's
+  // reports, once the camera has settled.
+  centre = { lat: 31.5, lon: 34.4 };
   camera.moveEnd.raiseEvent();
-  t.mock.timers.tick(800);
-  assert.equal(reads(), settled);
+  t.mock.timers.tick(799);
+  assert.deepEqual(
+    layer.getRowControls().feed.inView.items.map((item) => item.id),
+    ['major'],
+  );
+  t.mock.timers.tick(1);
+  await Promise.resolve();
+  assert.deepEqual(
+    layer.getRowControls().feed.inView.items.map((item) => item.id),
+    ['far'],
+  );
+  assert.equal(calls.feed.length, reads);
   // Up above 3,000 km, In view goes away.
   camera.positionCartographic.height = 5_000_000;
   camera.moveEnd.raiseEvent();
   t.mock.timers.tick(800);
   assert.equal(layer.getRowControls().feed.inView.active, false);
+});
+
+test('In view with minor news reads once, not per pan; a failed read shows', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let centre = { lat: 49, lon: 36 };
+  let fail = false;
+  const minorReads = [];
+  const { layer, camera } = fixture(t, {
+    height: 1_000_000,
+    centre: () => centre,
+    source: {
+      getFeed: async (query) => {
+        if (query.relevance === '' && query.limit === 500) {
+          minorReads.push(query);
+          if (fail) throw new Error('boom');
+          return {
+            reports: [report('broad', { severity: 2, relevance: 'minor' })],
+            nextBefore: null,
+          };
+        }
+        return { reports: [], nextBefore: null };
+      },
+    },
+  });
+  layer.enable();
+  await layer.update();
+  camera.moveEnd.raiseEvent();
+  t.mock.timers.tick(800);
+  await Promise.resolve();
+  assert.equal(minorReads.length, 0);
+  layer.setParams({ filters: { includeMinor: true } });
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  assert.equal(minorReads.length, 1);
+  assert.deepEqual(
+    layer.getRowControls().feed.inView.items.map((item) => item.id),
+    ['broad'],
+  );
+  centre = { lat: 47, lon: 33 };
+  camera.moveEnd.raiseEvent();
+  t.mock.timers.tick(800);
+  await Promise.resolve();
+  assert.equal(minorReads.length, 1);
+  // Turned off and on again with the server failing: the error is shown.
+  layer.setParams({ filters: { includeMinor: false } });
+  fail = true;
+  layer.setParams({ filters: { includeMinor: true } });
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  assert.equal(minorReads.length, 2);
+  const view = layer.getRowControls().feed.inView;
+  assert.equal(view.error, 'News feed unavailable');
+  assert.deepEqual(view.items, []);
 });
 
 test('a server without news is unavailable once and is not asked again', async (t) => {

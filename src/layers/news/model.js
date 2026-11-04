@@ -11,6 +11,11 @@ export const NEWS_FEED_PAGE = 60;
 export const NEWS_MAP_LIMIT = 500;
 /** News is real time only: nothing older than a day is shown anywhere. */
 export const NEWS_WINDOW_MS = 24 * 3_600_000;
+// A publish time this far ahead of the clock is skew, not a future story
+// (as data/regionalNewsWindow.js).
+const NEWS_CLOCK_SKEW_MS = 15 * 60_000;
+/** At most this many reports are kept in the feed list, newest first. */
+export const NEWS_FEED_MAX = 600;
 // Above this camera height the layer shows one beacon per hotspot; below it
 // (or once a hotspot is chosen) the outlines and individual reports.
 export const NEWS_DETAIL_MAX_HEIGHT_M = 2_500_000;
@@ -202,11 +207,27 @@ export const severityLabel = (report) => t(severityStyle(report).label);
 const lastHeard = (report) =>
   Date.parse(report?.event?.lastAt || report?.publishedAt || '');
 
+/**
+ * Whether a time is inside the last 24 hours (the only news shown); one more
+ * than 15 minutes ahead of the clock is not.
+ */
+function inWindow(value, now) {
+  const at = Date.parse(value || '');
+  return (
+    Number.isFinite(at) &&
+    now - at <= NEWS_WINDOW_MS &&
+    at - now <= NEWS_CLOCK_SKEW_MS
+  );
+}
+
 /** Whether a report is from the last 24 hours (the only news shown). */
 export function withinNewsWindow(report, now = Date.now()) {
-  const at = Date.parse(report?.publishedAt || '');
-  return Number.isFinite(at) && now - at <= NEWS_WINDOW_MS;
+  return inWindow(report?.publishedAt, now);
 }
+
+/** The event's one-report-per-side list, inside the last 24 hours only. */
+const recentSides = (report, now) =>
+  (report?.event?.sides || []).filter((s) => inWindow(s.publishedAt, now));
 
 /**
  * How a report or its event is attested, as a chip: `claimed` (someone's
@@ -380,15 +401,18 @@ export function cardEvents(reports, now = Date.now(), limit = NEWS_CARD_LIMIT) {
     .slice(0, limit);
 }
 
-/** The distinct sides an event was reported by, lead first, translated. */
-function eventSides(report) {
-  const sides = (report?.event?.sides || []).map((s) => s.side);
+/** The distinct sides an event was reported by in the last day, lead first. */
+function eventSides(report, now) {
+  const sides = recentSides(report, now).map((s) => s.side);
   return [...new Set(sides.length ? sides : [report?.side].filter(Boolean))];
 }
 
-/** "Reported by UA sources · RU sources", or '' when no side is known. */
-export function sidesLine(report) {
-  const sides = eventSides(report).filter((side) => side !== 'unknown');
+/**
+ * "Reported by UA sources · RU sources", or '' when no side is known; an
+ * unattributed side is left out.
+ */
+export function sidesLine(report, now = Date.now()) {
+  const sides = eventSides(report, now).filter((side) => side !== 'unknown');
   if (!sides.length) return '';
   if (sides.length === 1)
     return t(REPORTED_BY_SIDE, { side: sideLabel(sides[0]) });
@@ -409,7 +433,7 @@ export function eventPicture(report) {
 /** What an event's picture card on the globe shows. */
 export function cardView(report, now = Date.now()) {
   const event = report.event;
-  const sides = eventSides(report).map(sideLabel);
+  const sides = eventSides(report, now).map(sideLabel);
   const picture = eventPicture(report);
   return {
     title: report.titleEn || report.title,
@@ -477,7 +501,7 @@ export function feedCardView(report, now = Date.now()) {
     sources: tn(size, '{count} source', '{count} sources'),
     age: ageWords(report.event?.lastAt || report.publishedAt, now),
     publisher: report.publisher,
-    sides: sidesLine(report),
+    sides: sidesLine(report, now),
     sourceLink: sourceLinkLabel(report.url),
     picture: eventPicture(report),
     chips: [
@@ -490,12 +514,14 @@ export function feedCardView(report, now = Date.now()) {
       ...mediaLabels(report).map((label) => ({ kind: 'media', label })),
     ].filter(Boolean),
     // The event's first report from each other side, under the lead.
-    others: (report.event?.sides || []).slice(1).map((s) => ({
-      side: sideLabel(s.side),
-      publisher: s.publisher,
-      title: s.title,
-      url: s.url,
-    })),
+    others: recentSides(report, now)
+      .slice(1)
+      .map((s) => ({
+        side: sideLabel(s.side),
+        publisher: s.publisher,
+        title: s.title,
+        url: s.url,
+      })),
   };
 }
 
@@ -519,11 +545,18 @@ export function reportMarkerPosition(report, pin = 0) {
 }
 
 /**
- * Merge a page into the feed, newest first, one row per report id.
- * `mode` 'head' refreshes the top and keeps the older cursor; 'append' adds an
- * older page and takes its cursor; 'replace' starts over.
+ * Merge a page into the feed, newest first, one row per report id, keeping
+ * only the last 24 hours and at most `max` rows (a long session does not grow
+ * the list). `mode` 'head' refreshes the top and keeps the older cursor;
+ * 'append' adds an older page and takes its cursor; 'replace' starts over.
  */
-export function mergeFeedPage(feed, page, mode) {
+export function mergeFeedPage(
+  feed,
+  page,
+  mode,
+  now = Date.now(),
+  max = NEWS_FEED_MAX,
+) {
   const byId = new Map();
   const items =
     mode === 'replace'
@@ -531,11 +564,13 @@ export function mergeFeedPage(feed, page, mode) {
       : mode === 'append'
         ? [...feed.items, ...page.reports]
         : [...page.reports, ...feed.items];
-  for (const item of items) if (!byId.has(item.id)) byId.set(item.id, item);
+  for (const item of items)
+    if (!byId.has(item.id) && withinNewsWindow(item, now))
+      byId.set(item.id, item);
   return {
-    items: [...byId.values()].sort((a, b) =>
-      b.publishedAt.localeCompare(a.publishedAt),
-    ),
+    items: [...byId.values()]
+      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+      .slice(0, max),
     nextBefore:
       mode === 'head' && feed.items.length ? feed.nextBefore : page.nextBefore,
   };

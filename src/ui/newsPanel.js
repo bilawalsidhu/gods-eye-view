@@ -13,7 +13,8 @@ const set = (node, key, value) => {
  * The News rail panel (`#news-panel`): it renders the `feed` view the news
  * layer publishes through its row controls, shows itself only while the
  * layer is on, and acts only through setLayerParams. Near the bottom of its
- * scroller it asks for the next older page, once per page.
+ * scroller it asks for the next older page, once per page; other filters or a
+ * failed read let it ask again.
  */
 export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
   const document = container?.ownerDocument;
@@ -25,6 +26,7 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
   let view = null;
   let destroyed = false;
   let requestedAt = -1;
+  let shownFilters = '';
 
   function render() {
     if (destroyed) return;
@@ -59,6 +61,12 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
   return {
     /** Show the layer's feed view, or hide the panel with null. */
     update(next) {
+      const filters = JSON.stringify(next?.filters ?? null);
+      // A new list (other filters or hotspot), or a read that failed, may stop
+      // at the same length as the last request: let the next scroll ask.
+      if (filters !== shownFilters || (next?.error && !view?.error))
+        requestedAt = -1;
+      shownFilters = filters;
       view = next || null;
       render();
     },

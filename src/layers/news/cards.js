@@ -22,10 +22,23 @@ const SCALE = 2; // canvas pixels per CSS pixel
 const TITLE_FONT = '600 11px Inter, "Noto Sans Arabic", system-ui, sans-serif';
 const META_FONT = '9px "JetBrains Mono", "Noto Sans Arabic", monospace';
 const CREDIT_FONT = '8px Inter, "Noto Sans Arabic", system-ui, sans-serif';
-const MAX_CARDS = 200;
+// The map shows about ten cards plus the clicked one; a few more stay ready
+// for a pan back. The least recently drawn card goes, and its picture with it.
+export const MAX_CARDS = 24;
 
 const pictures = new Map(); // url → {image, state: 'loading'|'ok'|'failed', waiters}
-const cards = new Map(); // key → canvas
+const cards = new Map(); // event id → {canvas, key, view, look, pic}, oldest first
+
+/** Forget a picture no kept card shows any more. */
+function releasePicture(url) {
+  if (!url || [...cards.values()].some((card) => card.view.image === url))
+    return;
+  const entry = pictures.get(url);
+  if (!entry) return;
+  entry.waiters.clear();
+  entry.image.onload = entry.image.onerror = null;
+  pictures.delete(url);
+}
 
 function picture(url, onLoad) {
   let entry = pictures.get(url);
@@ -176,31 +189,51 @@ function paint(canvas, view, look, pic) {
 }
 
 /**
- * The canvas of an event's card. `onChange` runs when its picture arrives and
- * the canvas has been repainted (ask the scene for a frame).
+ * The canvas of an event's card, one per event: a change in what it shows
+ * (the age in its meta line ticks by the minute) repaints the same canvas.
+ * `onChange` runs when its picture arrives and the canvas has been repainted
+ * (ask the scene for a frame).
  * @returns {HTMLCanvasElement|null} null where there is no canvas
  */
 export function eventCard(id, view, look, onChange) {
-  const key = `${id}|${look.severity}|${look.category}|${look.rim}|${view.image || ''}|${view.title}|${view.meta}`;
-  if (cards.has(key)) return cards.get(key);
-  const canvas = globalThis.document?.createElement?.('canvas');
-  if (
-    !canvas?.getContext?.('2d') ||
-    typeof globalThis.Path2D !== 'function' ||
-    typeof globalThis.Image !== 'function'
-  )
-    return null;
-  canvas.width = CARD_W * SCALE;
-  canvas.height = CARD_H * SCALE;
-  const pic = view.image
+  const key = `${look.severity}|${look.category}|${look.rim}|${view.image || ''}|${view.credit || ''}|${view.title}|${view.meta}`;
+  let card = cards.get(id);
+  if (card) {
+    // Most recently drawn last.
+    cards.delete(id);
+    cards.set(id, card);
+    if (card.key === key) return card.canvas;
+  } else {
+    const canvas = globalThis.document?.createElement?.('canvas');
+    if (
+      !canvas?.getContext?.('2d') ||
+      typeof globalThis.Path2D !== 'function' ||
+      typeof globalThis.Image !== 'function'
+    )
+      return null;
+    canvas.width = CARD_W * SCALE;
+    canvas.height = CARD_H * SCALE;
+    card = { canvas, key: null, view: {}, look, pic: null };
+    cards.set(id, card);
+    while (cards.size > MAX_CARDS) {
+      const [oldest, gone] = cards.entries().next().value;
+      cards.delete(oldest);
+      releasePicture(gone.view.image);
+    }
+  }
+  const previous = card.view.image;
+  card.key = key;
+  card.view = view;
+  card.look = look;
+  const shown = card;
+  card.pic = view.image
     ? picture(view.image, () => {
-        paint(canvas, view, look, pic);
+        if (cards.get(id) !== shown || shown.view.image !== view.image) return;
+        paint(shown.canvas, shown.view, shown.look, shown.pic);
         onChange?.();
       })
     : null;
-  paint(canvas, view, look, pic);
-  // Old cards go once there are many; the newest keys win.
-  if (cards.size >= MAX_CARDS) cards.delete(cards.keys().next().value);
-  cards.set(key, canvas);
-  return canvas;
+  if (previous && previous !== view.image) releasePicture(previous);
+  paint(card.canvas, view, look, card.pic);
+  return card.canvas;
 }

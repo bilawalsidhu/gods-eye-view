@@ -121,9 +121,11 @@
   flex-wrap: wrap;
   gap: 4px;
 }
+/* One select per row: at the rail's width two side by side cut off
+   "Significant and above" (and longer translations). */
 .news-readout__filters {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 .news-filter {

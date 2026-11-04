@@ -80,11 +80,13 @@ const emptyFeed = () => ({
   loading: false,
   error: null,
 });
+// `minor` holds the day's reports with minor news included, read once while
+// that filter is on; otherwise In view uses the map's own reports.
 const emptyInView = () => ({
   active: false,
   cell: null,
   centre: null,
-  reports: [],
+  minor: null,
   loading: false,
   error: null,
 });
@@ -152,7 +154,7 @@ export function createNewsLayer({
   const findReport = (id) =>
     mapReports.find((r) => r.id === id) ||
     feed.items.find((r) => r.id === id) ||
-    inView.reports.find((r) => r.id === id) ||
+    inView.minor?.find((r) => r.id === id) ||
     null;
   const selected = () => (selectedId ? findReport(selectedId) : null);
   const onMap = (report) => visibleOnMap(report, filters, now());
@@ -527,7 +529,7 @@ export function createNewsLayer({
         ]
           .filter(Boolean)
           .join(' · '),
-        sidesLine(report),
+        sidesLine(report, now()),
         attestation(report)?.label || '',
         mediaLabels(report).join(' · '),
         sourceLinkLabel(report.url),
@@ -824,7 +826,7 @@ export function createNewsLayer({
       if (controller.signal.aborted || feedRequest !== controller || !enabled)
         return;
       feed = {
-        ...mergeFeedPage(feed, page, mode),
+        ...mergeFeedPage(feed, page, mode, now()),
         loading: false,
         error: null,
       };
@@ -852,9 +854,10 @@ export function createNewsLayer({
   }
 
   // "In view": below 3,000 km, the reports within 500 km of the view centre,
-  // read again once the camera has settled for 0.8 s in another half-degree
-  // cell. The feed has no area query, so the last day's geocoded reports are
-  // read and kept by distance here.
+  // placed again once the camera has settled for 0.8 s in another half-degree
+  // cell. The feed has no area query: the layer already holds the last day's
+  // geocoded reports (the map's), kept here by distance. Only "Include minor
+  // news" needs its own read, once per refresh, never per pan.
   function scheduleInView() {
     clearTimeout(settleTimer);
     settleTimer = setTimeout(() => {
@@ -878,10 +881,22 @@ export function createNewsLayer({
     if (!centre) return;
     const cell = viewCell(centre);
     if (!force && inView.active && cell === inView.cell) return;
+    inView = { ...inView, active: true, cell, centre };
+    if (!filters.includeMinor) {
+      inViewRequest?.abort();
+      inViewRequest = null;
+      inView = { ...inView, minor: null, loading: false, error: null };
+      notify();
+      return;
+    }
+    if (!force && (inView.minor || inViewRequest)) {
+      notify();
+      return;
+    }
     inViewRequest?.abort();
     const controller = new AbortController();
     inViewRequest = controller;
-    inView = { ...inView, active: true, cell, centre, loading: true };
+    inView = { ...inView, loading: true };
     notify();
     try {
       const page = await source.getFeed(
@@ -890,7 +905,7 @@ export function createNewsLayer({
           geo: true,
           today: true,
           events: true,
-          relevance: filters.includeMinor ? '' : NEWS_RELEVANT,
+          relevance: '',
           limit: NEWS_MAP_LIMIT,
         },
         { signal: controller.signal },
@@ -898,7 +913,7 @@ export function createNewsLayer({
       if (controller.signal.aborted || inViewRequest !== controller) return;
       inView = {
         ...inView,
-        reports: page.reports,
+        minor: page.reports.filter((r) => withinNewsWindow(r, now())),
         loading: false,
         error: null,
       };
@@ -1004,9 +1019,12 @@ export function createNewsLayer({
         active: inView.active,
         loading: inView.loading,
         error: inView.error ? t(FEED_UNAVAILABLE) : null,
-        items: reportsInView(inView.reports, inView.centre, filters, at).map(
-          (r) => feedCardView(r, at),
-        ),
+        items: reportsInView(
+          filters.includeMinor ? inView.minor || [] : mapReports,
+          inView.centre,
+          filters,
+          at,
+        ).map((r) => feedCardView(r, at)),
       },
       selected:
         report && withinNewsWindow(report, at)

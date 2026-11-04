@@ -61,8 +61,20 @@ const event = (extra = {}) => ({
   severity: 3,
   lastAt: '2026-10-28T09:30:00Z',
   sides: [
-    { side: 'UA', title: 'a', url: 'https://a.test/', publisher: 'A' },
-    { side: 'RU', title: 'b', url: 'https://b.test/', publisher: 'B' },
+    {
+      side: 'UA',
+      title: 'a',
+      url: 'https://a.test/',
+      publisher: 'A',
+      publishedAt: '2026-10-28T09:00:00Z',
+    },
+    {
+      side: 'RU',
+      title: 'b',
+      url: 'https://b.test/',
+      publisher: 'B',
+      publishedAt: '2026-10-28T09:20:00Z',
+    },
   ],
   image: { url: 'https://a.test/p.jpg', publisher: 'A' },
   ...extra,
@@ -189,12 +201,18 @@ test('feed pages merge newest first without duplicates', () => {
     { items: [] },
     { reports: [a, b], nextBefore: 'B' },
     'replace',
+    NOW,
   );
   assert.deepEqual(
     [feed.items.map((r) => r.id), feed.nextBefore],
     [['a', 'b'], 'B'],
   );
-  feed = mergeFeedPage(feed, { reports: [b, c], nextBefore: null }, 'append');
+  feed = mergeFeedPage(
+    feed,
+    { reports: [b, c], nextBefore: null },
+    'append',
+    NOW,
+  );
   assert.deepEqual(
     [feed.items.map((r) => r.id), feed.nextBefore],
     [['a', 'b', 'c'], null],
@@ -204,6 +222,7 @@ test('feed pages merge newest first without duplicates', () => {
     { ...feed, nextBefore: 'C' },
     { reports: [newer, a], nextBefore: 'X' },
     'head',
+    NOW + 3_600_000,
   );
   assert.deepEqual(
     [feed.items.map((r) => r.id), feed.nextBefore],
@@ -212,6 +231,46 @@ test('feed pages merge newest first without duplicates', () => {
   assert.deepEqual(
     mergeFeedPage({ items: [] }, { reports: [], nextBefore: null }, 'replace'),
     { items: [], nextBefore: null },
+  );
+});
+
+test('the feed list keeps only the last 24 hours and at most its cap', () => {
+  const fresh = report('f', '2026-10-28T09:00:00Z');
+  const stale = report('s', '2026-10-27T09:00:00Z');
+  const ahead = report('x', '2026-10-28T11:00:00Z');
+  // A long session: yesterday's rows already held fall out on the next merge.
+  const feed = mergeFeedPage(
+    { items: [stale], nextBefore: 'S' },
+    { reports: [fresh, ahead], nextBefore: 'F' },
+    'head',
+    NOW,
+  );
+  assert.deepEqual(
+    feed.items.map((r) => r.id),
+    ['f'],
+  );
+  const many = Array.from({ length: 30 }, (_, i) =>
+    report(`r${i}`, new Date(NOW - (i + 1) * 60_000).toISOString()),
+  );
+  const capped = mergeFeedPage(
+    { items: [] },
+    { reports: many, nextBefore: null },
+    'replace',
+    NOW,
+    10,
+  );
+  assert.equal(capped.items.length, 10);
+  assert.equal(capped.items[0].id, 'r0');
+  assert.equal(capped.items.at(-1).id, 'r9');
+  // Everything outside the window: an empty list, not an error.
+  assert.deepEqual(
+    mergeFeedPage(
+      { items: [] },
+      { reports: [stale], nextBefore: null },
+      'replace',
+      NOW,
+    ).items,
+    [],
   );
 });
 
@@ -252,6 +311,11 @@ test('only the last 24 hours pass, and the severity floor applies', () => {
   assert.equal(withinNewsWindow(fresh, NOW), true);
   assert.equal(withinNewsWindow(old, NOW), false);
   assert.equal(withinNewsWindow({ publishedAt: 'x' }, NOW), false);
+  // Clock skew up to 15 min ahead passes; further ahead is not news yet.
+  const skew = report('k', '2026-10-28T10:14:00Z');
+  const future = report('z', '2026-10-28T10:16:00Z');
+  assert.equal(withinNewsWindow(skew, NOW), true);
+  assert.equal(withinNewsWindow(future, NOW), false);
   assert.deepEqual(
     [fresh, minor, old]
       .filter((r) => passesFilters(r, filters, NOW))
@@ -415,6 +479,62 @@ test('feed cards read like Breaking: headline, meta parts, sides and chips', () 
   assert.equal(single.picture, null);
   assert.equal(single.original, null);
   assert.equal(sidesLine({ side: 'unknown' }), '');
+});
+
+test('event sides older than a day are left out of the card and its sides line', () => {
+  const r = report('w', '2026-10-28T09:00:00Z', {
+    event: event({
+      sides: [
+        {
+          side: 'UA',
+          title: 'a',
+          url: 'https://a.test/',
+          publisher: 'A',
+          publishedAt: '2026-10-28T08:00:00Z',
+        },
+        {
+          side: 'RU',
+          title: 'old',
+          url: 'https://b.test/',
+          publisher: 'B',
+          publishedAt: '2026-10-26T08:00:00Z',
+        },
+        {
+          side: 'unknown',
+          title: 'c',
+          url: 'https://c.test/',
+          publisher: 'C',
+          publishedAt: '2026-10-28T09:10:00Z',
+        },
+        // No date: nothing shows it is recent.
+        { side: 'IL', title: 'd', url: 'https://d.test/', publisher: 'D' },
+      ],
+    }),
+  });
+  const view = feedCardView(r, NOW);
+  assert.deepEqual(
+    view.others.map((o) => [o.side, o.title]),
+    [['Unattributed', 'c']],
+  );
+  // The unattributed side is not named in the sides line.
+  assert.equal(view.sides, 'Reported by UA sources');
+  assert.equal(cardView(r, NOW).meta, '30 min · 6 sources · UA, Unattributed');
+  // All sides outside the window: no others, the report's own side remains.
+  const stale = report('v', '2026-10-28T09:00:00Z', {
+    event: event({
+      sides: [
+        {
+          side: 'RU',
+          title: 'old',
+          url: 'https://b.test/',
+          publisher: 'B',
+          publishedAt: '2026-10-26T08:00:00Z',
+        },
+      ],
+    }),
+  });
+  assert.deepEqual(feedCardView(stale, NOW).others, []);
+  assert.equal(feedCardView(stale, NOW).sides, 'Reported by UA sources');
 });
 
 test('in view: half-degree cells and reports within 500 km of the centre', () => {

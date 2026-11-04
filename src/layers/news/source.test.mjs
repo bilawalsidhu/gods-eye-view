@@ -111,12 +111,20 @@ test('malformed, failed and unconfigured reads reject; a server without news is 
 });
 
 test('reads time out and follow the caller signal', async () => {
+  // AbortSignal.timeout does not hold the event loop open: the hanging fetch
+  // does, until its signal aborts, so the run cannot end before it.
   const hang = (_url, { signal }) =>
-    new Promise((_, reject) =>
-      signal.addEventListener('abort', () => reject(signal.reason), {
-        once: true,
-      }),
-    );
+    new Promise((_, reject) => {
+      const alive = setTimeout(() => {}, 60_000);
+      signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(alive);
+          reject(signal.reason);
+        },
+        { once: true },
+      );
+    });
   const slow = createNewsSource({ fetchImpl: hang, timeoutMs: 20 });
   await assert.rejects(slow.getHotspots(), { name: 'TimeoutError' });
   const caller = new AbortController();

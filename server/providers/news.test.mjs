@@ -124,10 +124,16 @@ test('upstream failures, bad JSON and timeouts become bounded errors', async () 
   const slow = mount({
     origin: () => 'https://news.example',
     timeoutMs: 10,
+    // AbortSignal.timeout does not hold the event loop open: the hanging
+    // fetch does, until its signal aborts, so the run cannot end before it.
     fetchImpl: (_url, { signal }) =>
-      new Promise((_, reject) =>
-        signal.addEventListener('abort', () => reject(signal.reason)),
-      ),
+      new Promise((_, reject) => {
+        const alive = setTimeout(() => {}, 60_000);
+        signal.addEventListener('abort', () => {
+          clearTimeout(alive);
+          reject(signal.reason);
+        });
+      }),
   });
   const timedOut = await slow('/hotspots');
   assert.equal(timedOut.status, 504);
