@@ -275,6 +275,53 @@ test('In view with minor news reads once, not per pan; a failed read shows', asy
   assert.deepEqual(view.items, []);
 });
 
+test('a shorter window narrows the feed and reads the hotspot counts for it', async (t) => {
+  const asked = [];
+  const { layer } = fixture(t, {
+    source: {
+      getHotspots: async ({ hours } = {}) => {
+        asked.push(hours);
+        return {
+          ...hotspotsPayload,
+          windowHours: hours ?? 12,
+          maxWindowHours: 12,
+        };
+      },
+      getFeed: async () => ({
+        reports: [
+          report('recent', { publishedAt: '2026-10-28T09:30:00.000Z' }),
+          report('earlier', { publishedAt: '2026-10-28T05:00:00.000Z' }),
+        ],
+        nextBefore: null,
+      }),
+    },
+  });
+  layer.enable();
+  await layer.update();
+  await settle();
+  let view = layer.getRowControls().feed;
+  assert.deepEqual(view.windowChoices, [12, 6, 3, 1]);
+  assert.equal(view.windowHours, 12);
+  assert.deepEqual(
+    view.items.map((item) => item.id),
+    ['recent', 'earlier'],
+  );
+  layer.setParams({ filters: { hours: 3 } });
+  view = layer.getRowControls().feed;
+  assert.equal(view.windowHours, 3);
+  assert.deepEqual(
+    view.items.map((item) => item.id),
+    ['recent'],
+  );
+  for (let i = 0; i < 3; i++) await settle();
+  assert.deepEqual(asked, [undefined, 3]);
+  // The server's own window still bounds the choices.
+  assert.deepEqual(layer.getRowControls().feed.windowChoices, [12, 6, 3, 1]);
+  // A choice longer than the server serves shows all it serves.
+  layer.setParams({ filters: { hours: 24 } });
+  assert.equal(layer.getRowControls().feed.windowHours, 12);
+});
+
 test('a server without news is unavailable once and is not asked again', async (t) => {
   const failure = Object.assign(
     new Error('News feed not configured on this server'),

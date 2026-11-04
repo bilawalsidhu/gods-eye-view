@@ -8,7 +8,8 @@ import RailChips from '../rail/RailChips.vue';
 import NewsCard from './NewsCard.vue';
 
 // The News panel: the window the server serves only (the last 24 hours, or
-// fewer where the host serves less). Hotspot chips, filters, the chosen
+// fewer where the host serves less), or a shorter one chosen at the
+// top (24/12/6/3/1 h). Hotspot chips, filters, the chosen
 // event, "In view" (reports near the view centre while the camera is low)
 // and a continuous feed, newest first. It renders the `feed` view the news
 // layer publishes and acts only through `onParams`.
@@ -44,6 +45,15 @@ const categoryOptions = computed(() => [
   { value: 'all', label: t('All categories') },
   ...(props.view?.categories ?? []),
 ]);
+const windowOptions = computed(() =>
+  (props.view?.windowChoices ?? []).map((hours) => ({
+    value: String(hours),
+    label: t('Last {hours} h', { hours }),
+  })),
+);
+// The longest choice is the server's whole window, kept as no choice.
+const chooseWindow = (hours) =>
+  setFilter('hours', hours === props.view?.windowChoices?.[0] ? null : hours);
 const selectedId = computed(() => props.view?.selected?.id ?? null);
 // The chosen event leads the panel unless the feed already shows it open.
 const selectedApart = computed(() => {
@@ -78,7 +88,15 @@ const clear = () => props.onParams({ clear: true });
     class="news-readout"
     :aria-label="t('News, last {hours} hours', { hours: view.windowHours })"
   >
-    <p class="news-readout__window ui-mono">{{
+    <UiSelect
+      v-if="windowOptions.length > 1"
+      class="gev-field news-filter news-readout__window-choice"
+      :aria-label="t('Time window')"
+      :model-value="String(view.windowHours)"
+      :options="windowOptions"
+      @update:model-value="chooseWindow(Number($event))"
+    />
+    <p v-else class="news-readout__window ui-mono">{{
       t('Last {hours} h', { hours: view.windowHours })
     }}</p>
     <div class="news-readout__chips" role="group" :aria-label="t('Hotspots')">

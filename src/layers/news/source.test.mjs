@@ -53,6 +53,7 @@ test('reads validated hotspots, feed and outlines from the same-origin routes', 
   );
   assert.deepEqual((await source.getOutline('ua')).polygons, []);
   await source.getCountryOutline('SD');
+  await source.getHotspots({ hours: 6 });
   assert.deepEqual(
     calls.map((c) => c.url),
     [
@@ -60,6 +61,7 @@ test('reads validated hotspots, feed and outlines from the same-origin routes', 
       '/api/news/feed?hotspot=all&limit=60&today=1',
       '/api/news/outline?hotspot=ua&v=4',
       '/api/news/outline?country=SD&v=4',
+      '/api/news/hotspots?hours=6',
     ],
   );
   for (const { url, init } of calls) {
@@ -155,7 +157,12 @@ test('the host allowlist admits the client routes and refuses anything else', ()
     ),
     true,
   );
+  assert.equal(allowed('/api/news/hotspots?hours=6'), true);
   for (const path of [
+    '/api/news/hotspots?hours=0',
+    '/api/news/hotspots?hours=25',
+    '/api/news/hotspots?hours=6&hours=3',
+    '/api/news/hotspots?hours=6&x=1',
     '/api/news/hotspots?x=1',
     '/api/news/feed?limit=501',
     '/api/news/feed?limit=0',

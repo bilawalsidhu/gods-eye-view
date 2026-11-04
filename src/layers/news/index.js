@@ -45,6 +45,7 @@ import {
   markerStyle,
   mediaLabels,
   mergeFeedPage,
+  newsWindowChoices,
   newsWindowMs,
   normalizeFilters,
   passesFilters,
@@ -142,7 +143,9 @@ export function createNewsLayer({
     autoPages = 0;
   let hotspots = [];
   // The window the server serves (newsWindowMs): a host may serve
-  // fewer hours than the day.
+  // fewer hours than the day. `windowMs` is the one shown: that window, or a
+  // shorter one chosen in the panel (filters.hours).
+  let maxWindowMs = NEWS_WINDOW_MS;
   let windowMs = NEWS_WINDOW_MS;
   let mapReports = [];
   let feed = emptyFeed();
@@ -165,6 +168,11 @@ export function createNewsLayer({
     null;
   const selected = () => (selectedId ? findReport(selectedId) : null);
   const onMap = (report) => visibleOnMap(report, filters, now(), windowMs);
+  const shownWindowMs = () =>
+    Math.min(maxWindowMs, (filters.hours ?? Infinity) * 3_600_000);
+  // The hours to ask the hotspot counts for, when shorter than the server's.
+  const askedHours = () =>
+    windowMs < maxWindowMs ? windowMs / 3_600_000 : undefined;
 
   function markerCartesian(report, pin = 0) {
     const { lat, lon } = reportMarkerPosition(report, pin);
@@ -920,7 +928,9 @@ export function createNewsLayer({
       if (controller.signal.aborted || inViewRequest !== controller) return;
       inView = {
         ...inView,
-        minor: page.reports.filter((r) => withinNewsWindow(r, now(), windowMs)),
+        minor: page.reports.filter((r) =>
+          withinNewsWindow(r, now(), maxWindowMs),
+        ),
         loading: false,
         error: null,
       };
@@ -1045,6 +1055,7 @@ export function createNewsLayer({
       error: error || feed.error ? t(error || feed.error) : null,
       lastRunAt,
       windowHours: windowMs / 3_600_000,
+      windowChoices: newsWindowChoices(maxWindowMs / 3_600_000),
     };
   }
 
@@ -1139,7 +1150,10 @@ export function createNewsLayer({
       notify();
       try {
         const [index, todays] = await Promise.all([
-          source.getHotspots({ signal: controller.signal }),
+          source.getHotspots({
+            signal: controller.signal,
+            hours: askedHours(),
+          }),
           source.getFeed(
             {
               hotspot: 'all',
@@ -1157,9 +1171,16 @@ export function createNewsLayer({
         hotspots = index.hotspots;
         loadOutlines();
         lastRunAt = index.lastRunAt;
-        windowMs = newsWindowMs(index.windowHours);
+        // A server that names no limit serves the window its counts cover
+        // when asked for none.
+        maxWindowMs = newsWindowMs(
+          index.maxWindowHours ??
+            (askedHours() ? maxWindowMs / 3_600_000 : index.windowHours),
+        );
+        windowMs = shownWindowMs();
+        // Kept for the server's whole window, so a longer choice needs no read.
         mapReports = todays.reports.filter((r) =>
-          withinNewsWindow(r, now(), windowMs),
+          withinNewsWindow(r, now(), maxWindowMs),
         );
         filters = normalizeFilters({}, hotspots, filters);
         error = null;
@@ -1196,6 +1217,8 @@ export function createNewsLayer({
         const reread = readKey(next) !== readKey(filters);
         const minorChanged = next.includeMinor !== filters.includeMinor;
         filters = next;
+        const previousWindowMs = windowMs;
+        windowMs = shownWindowMs();
         if (
           Object.hasOwn(params.filters, 'hotspot') &&
           next.hotspot !== 'all'
@@ -1208,6 +1231,8 @@ export function createNewsLayer({
         render();
         if (reread) void loadFeed('replace');
         if (minorChanged) void refreshInView({ force: true });
+        // The hotspot counts are the server's, so a new window reads them again.
+        if (windowMs !== previousWindowMs) void layer.update(viewer);
         notify();
       }
       if (params.loadMore === true) void loadFeed('append');

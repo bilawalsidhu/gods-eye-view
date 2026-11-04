@@ -278,6 +278,24 @@ test('scrolling to the end asks once per page, again after a filter change or a 
   news.destroy();
 });
 
+test('the window choice offers shorter windows; the longest is the server window', () => {
+  const { news, panel, calls } = fixture();
+  news.update(view({ windowHours: 12, windowChoices: [12, 6, 3, 1] }));
+  assert.equal(panel.querySelector('.news-readout__window'), null);
+  const choice = panel.querySelector('select[aria-label="Time window"]');
+  assert.deepEqual(
+    [...choice.options].map((option) => option.textContent),
+    ['Last 12 h', 'Last 6 h', 'Last 3 h', 'Last 1 h'],
+  );
+  assert.equal(choice.value, '12');
+  choice.value = '3';
+  choice.dispatchEvent(new Event('change'));
+  assert.deepEqual(calls.at(-1)[1], { filters: { hours: 3 } });
+  choice.value = '12';
+  choice.dispatchEvent(new Event('change'));
+  assert.deepEqual(calls.at(-1)[1], { filters: { hours: null } });
+});
+
 test('the panel names the window the server serves', () => {
   const { news, panel } = fixture();
   news.update(view({ windowHours: 12 }));

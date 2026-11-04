@@ -20,6 +20,7 @@ import {
   isPressing,
   markerStyle,
   mergeFeedPage,
+  newsWindowChoices,
   newsWindowMs,
   normalizeFilters,
   passesFilters,
@@ -287,8 +288,11 @@ test('filters default to significant news and map to a last-24-hours query', () 
     minSeverity: 2,
     includeMinor: false,
     cards: true,
+    hours: null,
   });
   assert.equal(normalizeFilters({ cards: false }, hotspots).cards, false);
+  assert.equal(normalizeFilters({ hours: 6 }, hotspots).hours, 6);
+  assert.equal(normalizeFilters({ hours: 5 }, hotspots).hours, null);
   assert.equal(normalizeFilters({ minSeverity: 0 }, hotspots).minSeverity, 0);
   assert.equal(normalizeFilters({ hotspot: 'gone' }, hotspots).hotspot, 'all');
   assert.equal(
@@ -599,6 +603,21 @@ test('the hotspots answer carries the window it was counted over', () => {
     normalizeHotspotsPayload({ ...base, windowHours: 48 }).windowHours,
     null,
   );
+  const shorter = normalizeHotspotsPayload({
+    ...base,
+    windowHours: 3,
+    maxWindowHours: 12,
+  });
+  assert.deepEqual([shorter.windowHours, shorter.maxWindowHours], [3, 12]);
+  assert.equal(normalizeHotspotsPayload(base).maxWindowHours, null);
+});
+
+test('the window choices stop at the window the server serves', () => {
+  assert.deepEqual(newsWindowChoices(24), [24, 12, 6, 3, 1]);
+  assert.deepEqual(newsWindowChoices(12), [12, 6, 3, 1]);
+  assert.deepEqual(newsWindowChoices(8), [8, 6, 3, 1]);
+  assert.deepEqual(newsWindowChoices(1), [1]);
+  assert.deepEqual(newsWindowChoices(null), [24, 12, 6, 3, 1]);
 });
 
 test('a checked severity keeps saying who set it', () => {

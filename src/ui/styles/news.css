@@ -131,6 +131,11 @@
 .news-filter {
   min-width: 0;
 }
+/* The window choice sits where the window label does, as narrow as its text. */
+.news-readout__window-choice {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+}
 .news-toggle {
   display: flex;
   align-items: center;

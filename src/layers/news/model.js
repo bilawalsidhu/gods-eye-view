@@ -21,6 +21,18 @@ export function newsWindowMs(hours) {
     ? hours * 3_600_000
     : NEWS_WINDOW_MS;
 }
+
+/** The windows the News panel offers, longest first. */
+export const NEWS_WINDOW_CHOICES = Object.freeze([24, 12, 6, 3, 1]);
+
+/**
+ * The windows offered under a server's own window of `maxHours`: that window
+ * itself, then each shorter choice.
+ */
+export function newsWindowChoices(maxHours) {
+  const cap = newsWindowMs(maxHours) / 3_600_000;
+  return [cap, ...NEWS_WINDOW_CHOICES.filter((hours) => hours < cap)];
+}
 // A publish time this far ahead of the clock is skew, not a future story
 // (as data/regionalNewsWindow.js).
 const NEWS_CLOCK_SKEW_MS = 15 * 60_000;
@@ -616,6 +628,8 @@ export function normalizeFilters(next = {}, hotspots = [], previous = {}) {
     includeMinor: merged.includeMinor === true,
     // Event cards on the map; off leaves only the clicked event's card.
     cards: merged.cards !== false,
+    // A shorter window than the server's; null shows all it serves.
+    hours: NEWS_WINDOW_CHOICES.includes(merged.hours) ? merged.hours : null,
   };
 }
 

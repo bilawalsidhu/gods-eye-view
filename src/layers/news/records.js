@@ -95,10 +95,15 @@ function normalizeDeveloping(items) {
   return out;
 }
 
+const hoursOrNull = (hours) =>
+  Number.isInteger(hours) && hours >= 1 && hours <= 24 ? hours : null;
+
 /**
- * `/api/news/hotspots` → `{hotspots, categories, lastRunAt, windowHours}`
- * (`windowHours` null when the server names none), or null when the
- * payload has no hotspot list.
+ * `/api/news/hotspots` → `{hotspots, categories, lastRunAt, windowHours,
+ * maxWindowHours}`, or null when the payload has no hotspot list.
+ * `windowHours` is the window the counts cover and `maxWindowHours` the
+ * longest the server serves this reader; each is null when the server names
+ * none.
  */
 export function normalizeHotspotsPayload(payload) {
   if (!Array.isArray(payload?.hotspots)) return null;
@@ -136,12 +141,8 @@ export function normalizeHotspotsPayload(payload) {
         )
       : [],
     lastRunAt: iso(payload.ingest?.lastRunAt),
-    windowHours:
-      Number.isInteger(payload.windowHours) &&
-      payload.windowHours >= 1 &&
-      payload.windowHours <= 24
-        ? payload.windowHours
-        : null,
+    windowHours: hoursOrNull(payload.windowHours),
+    maxWindowHours: hoursOrNull(payload.maxWindowHours),
   };
 }
 

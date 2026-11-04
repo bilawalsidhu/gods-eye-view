@@ -63,7 +63,15 @@ export function newsFeedQuery(query = {}) {
 export function newsQueryAllowed(url) {
   const params = [...url.searchParams];
   if (new Set(params.map(([key]) => key)).size !== params.length) return false;
-  if (url.pathname === `${BASE_PATH}/hotspots`) return params.length === 0;
+  if (url.pathname === `${BASE_PATH}/hotspots`)
+    return (
+      params.length === 0 ||
+      (params.length === 1 &&
+        params[0][0] === 'hours' &&
+        /^\d{1,2}$/.test(params[0][1]) &&
+        Number(params[0][1]) >= 1 &&
+        Number(params[0][1]) <= 24)
+    );
   if (url.pathname === `${BASE_PATH}/outline`) {
     const keys = params.map(([key]) => key).sort();
     const value = url.searchParams;
@@ -128,9 +136,12 @@ export function createNewsSource({
     return readResponseJsonCapped(response, MAX_BYTES, request);
   }
   return {
-    async getHotspots({ signal } = {}) {
+    // `hours` asks for counts over a shorter window than the server's own.
+    async getHotspots({ signal, hours } = {}) {
       const payload = normalizeHotspotsPayload(
-        await get('/hotspots', { signal }),
+        await get(hours ? `/hotspots?hours=${hours}` : '/hotspots', {
+          signal,
+        }),
       );
       if (!payload) throw new Error(msg('Malformed news hotspots response'));
       return payload;
