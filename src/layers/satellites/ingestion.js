@@ -3,6 +3,14 @@ import * as Cesium from 'cesium';
 import { msg } from '../../i18n/index.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
+import { classifySatellite, parseSatcatCsv } from './classes.js';
+
+/**
+ * How long a catalog rebuild waits for SATCAT before it classifies without
+ * it, ms. SATCAT can hang for the proxy's whole upstream timeout (20 s); the
+ * late answer reclassifies in place.
+ */
+export const SATCAT_WAIT_MS = 3000;
 
 export function createIngestion({
   state: layerState,
@@ -10,6 +18,125 @@ export function createIngestion({
   parts,
   source,
 }) {
+  /**
+   * The local pack the classes are read from: the UCS pack. It is not needed
+   * to render: a failed read leaves the last pack (or none) and
+   * classification falls back to names and groups.
+   */
+  async function _readLocalEvidence() {
+    if (layerState._ucs) return;
+    const pack = await Promise.resolve()
+      .then(() => source.readUcs?.())
+      .then((loaded) => (loaded instanceof Map ? loaded : null))
+      .catch((error) => {
+        console.warn('[Data:Satellites] UCS pack unavailable:', error);
+        return null;
+      });
+    if (pack) layerState._ucs = pack;
+  }
+
+  /**
+   * CelesTrak SATCAT for every core group: type and status, which refine the
+   * classes. A group whose read failed gives null.
+   * @returns {Promise<Array<{records: Map, stale: boolean}|null>>}
+   */
+  function _readSatcat(signal) {
+    if (typeof source.readSatcat !== 'function') return Promise.resolve([]);
+    return Promise.all(
+      CATALOG_GROUPS.map((groupDef) =>
+        source
+          .readSatcat(groupDef.path, { signal })
+          .then((res) =>
+            res?.ok
+              ? { records: parseSatcatCsv(res.text), stale: Boolean(res.stale) }
+              : null,
+          )
+          .catch((error) => {
+            if (signal.aborted || error?.name === 'AbortError') throw error;
+            return null;
+          }),
+      ),
+    );
+  }
+
+  /**
+   * Merge SATCAT reads and say how current they are: 'current', 'stale' (a
+   * group came from the proxy's last copy) or 'unavailable' (a group failed;
+   * its earlier records, if any, stay).
+   */
+  function _mergeSatcat(groups) {
+    let satcatState = 'current';
+    for (const group of groups) {
+      if (!group) {
+        satcatState = 'unavailable';
+        continue;
+      }
+      if (group.stale && satcatState === 'current') satcatState = 'stale';
+      for (const [noradId, record] of group.records)
+        layerState._satcat.set(noradId, record);
+    }
+    if (!groups.length) return;
+    const changed = layerState._satcatState !== satcatState;
+    layerState._satcatState = satcatState;
+    if (satcatState !== 'current')
+      console.warn(`[Data:Satellites] SATCAT ${satcatState}: classes may lag`);
+    // The row's info line says so (getRowControls).
+    if (changed) parts.controls._notifyRowControls();
+  }
+
+  /**
+   * Classify the catalog again once SATCAT lands after it was built: only
+   * entries whose SATCAT record changed are read again; a changed class
+   * restyles its point and refreshes visibility, the legend and the overlay.
+   */
+  function _reclassifyFromSatcat() {
+    let changed = false;
+    for (const [noradId, sat] of layerState._catalog) {
+      if (sat.group === 'dense') continue;
+      const satcat = layerState._satcat.get(noradId) || null;
+      if (satcat === sat.satcat) continue;
+      sat.satcat = satcat;
+      const next = classifySatellite({
+        noradId,
+        name: sat.name,
+        group: sat.group,
+        ucs: sat.ucs,
+        satcat,
+        launchYear: sat.launchYear,
+      });
+      if (next === sat.satelliteClass) continue;
+      sat.satelliteClass = next;
+      changed = true;
+      const point = layerState._points.get(noradId);
+      if (point) {
+        const style = parts.controls._pointStyleFor(noradId, sat.group);
+        point.pixelSize = style.pixelSize;
+        point.color = style.color;
+        point.outlineColor = style.outlineColor;
+        point.outlineWidth = style.outlineWidth;
+      }
+    }
+    if (!changed) return;
+    parts.controls._applyClassVisibility();
+    layerState._catalogRevision++;
+    parts.controls._notifyRowControls();
+  }
+
+  /** Resolve null after `ms`, or at once when `signal` aborts. */
+  function _waitOrAbort(ms, signal) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(resolve, ms, null);
+      signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          resolve(null);
+        },
+        { once: true },
+      );
+    });
+  }
+
   const methods = {
     async update(viewer, { signal = null } = {}) {
       const trackingRefreshEpoch = ++layerState._trackingRefreshEpoch;
@@ -27,6 +154,10 @@ export function createIngestion({
         updateSignal.throwIfAborted();
         // Load all core groups in parallel; a failed/empty group degrades
         // gracefully (parseTLE of an upstream error body yields []).
+        const localEvidence = _readLocalEvidence();
+        const satcat = _readSatcat(updateSignal);
+        // An abort can reject this before the groups settle and it is awaited.
+        satcat.catch(() => {});
         const results = await Promise.all(
           CATALOG_GROUPS.map(async (groupDef) => {
             try {
@@ -49,7 +180,23 @@ export function createIngestion({
             }
           }),
         );
+        await localEvidence;
+        // SATCAT only refines classes: wait a moment for it, then classify
+        // with what is held and let a late answer reclassify in place.
+        const satcatInTime = await Promise.race([
+          satcat.then((groups) => ({ groups })),
+          _waitOrAbort(SATCAT_WAIT_MS, updateSignal),
+        ]).catch(() => null);
         updateSignal.throwIfAborted();
+        if (satcatInTime) _mergeSatcat(satcatInTime.groups);
+        else
+          satcat
+            .then((groups) => {
+              if (updateSignal.aborted || !layerState._enabled) return;
+              _mergeSatcat(groups);
+              _reclassifyFromSatcat();
+            })
+            .catch(() => {});
 
         const failed = results.filter((r) => !r.ok).map((r) => r.path);
         if (failed.length > 0) {
@@ -62,7 +209,7 @@ export function createIngestion({
         );
 
         // CelesTrak outage guard (H3): if EVERY group failed, bail BEFORE clearing.
-        // Wiping the collection + catalog here would blank all 838 satellites while
+        // Wiping the collection + catalog here would blank every satellite while
         // the chip still read "just now". Keep the existing (stale) catalog on
         // screen and surface the outage instead — do NOT stamp _lastUpdate.
         if (results.every((r) => !r.ok)) {
@@ -125,12 +272,27 @@ export function createIngestion({
           seen.add(noradId);
 
           // Store in catalog
+          const launchYear = tleLineLaunchYear(entry.line1);
+          const ucs = layerState._ucs?.get(noradId) || null;
+          const satcat = layerState._satcat.get(noradId) || null;
           layerState._catalog.set(noradId, {
             name: entry.name,
             satrec,
             group: entry.group,
             // satellite.js does not keep the designator the year match reads.
-            launchYear: tleLineLaunchYear(entry.line1),
+            launchYear,
+            line1: entry.line1,
+            line2: entry.line2,
+            satelliteClass: classifySatellite({
+              noradId,
+              name: entry.name,
+              group: entry.group,
+              ucs,
+              satcat,
+              launchYear,
+            }),
+            ucs,
+            satcat,
           });
 
           coreStale ||= entry.stale;
@@ -156,6 +318,8 @@ export function createIngestion({
             scaleByDistance: new Cesium.NearFarScalar(1e6, 1.5, 2e7, 0.6),
             id: noradId,
           });
+          // Hidden classes keep their point, so a toggle needs no rebuild.
+          point.show = parts.controls._classVisible(noradId);
 
           layerState._points.set(noradId, point);
         }

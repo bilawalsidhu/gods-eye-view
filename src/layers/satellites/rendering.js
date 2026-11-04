@@ -138,7 +138,8 @@ export function createRendering({
 
   /**
    * Propagate all CORE satellite positions and update point primitives.
-   * (~840 sats ≈ 1.6 ms/pass — fine at the 1s/200ms cadence.) Dense extras are
+   * (About 1,300 core satellites: ~840 measured at ≈ 1.6 ms/pass, so ≈ 2.5 ms,
+   * fine at the 1s/200ms cadence.) Dense extras are
    * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
    */
 

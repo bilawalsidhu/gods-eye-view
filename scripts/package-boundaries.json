@@ -1658,7 +1658,11 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -3346,7 +3350,9 @@
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js"
     ],
     "external": [
       "hls.js",
@@ -3997,7 +4003,9 @@
       "src/layers/wildlifeSightings/sprites.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js"
     ],
     "external": [
       "hls.js",
@@ -4499,7 +4507,13 @@
   },
   "satellites-source": {
     "exports": ["./layers/satellites/source"],
-    "modules": ["src/layers/satellites/source.js"],
+    "modules": [
+      "src/layers/satellites/source.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js"
+    ],
     "external": []
   },
   "traffic-source-factory": {
@@ -5116,7 +5130,9 @@
       "src/layers/alpr/records.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/infrastructureData.js",
-      "src/sources/eventPacks.js"
+      "src/sources/eventPacks.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
