@@ -96,6 +96,8 @@ export function createIngestion({
       const satcat = layerState._satcat.get(noradId) || null;
       if (satcat === sat.satcat) continue;
       sat.satcat = satcat;
+      // The Cockpit identity (owner, COSPAR id) reads SATCAT too.
+      sat.cockpitIdentity = undefined;
       const next = classifySatellite({
         noradId,
         name: sat.name,

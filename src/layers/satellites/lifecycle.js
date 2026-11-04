@@ -32,6 +32,10 @@ export function createLifecycle({
       layerState._trackedFrameNumber = -1;
       layerState._trackedFrameGeo = null;
       layerState._trackedFrameNowForTest = null;
+      // The new catalog's points and rings carry no hold.
+      layerState._cockpitHiddenPoints = new Set();
+      layerState._cockpitHiddenPath = null;
+      layerState._cockpitHiddenDot = false;
       layerState._lastFocusUpdate = 0;
       layerState._activeFocusCount = 0;
       layerState._enabled = false;

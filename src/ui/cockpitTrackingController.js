@@ -28,15 +28,22 @@ export function readVesselInfo() {
   return this.services.aisLiveVesselsLayer?.getCockpitSubject?.() || null;
 }
 
+/** The tracked satellite the orbital view would ride, or rides; null without one. */
+export function readSatelliteInfo() {
+  return this.services.satellitesLayer?.getCockpitSubject?.() || null;
+}
+
 /**
- * The layer the active view rides: Live AIS Vessels on a bridge, else the
- * aircraft's own layer. It is read from the tracked entity's id once the
- * layer has dropped its tracking, so a layer turned off still names itself.
- * @returns {'flights'|'military'|'ais-live-vessels'|null}
+ * The layer the active view rides: Live AIS Vessels on a bridge, Satellites
+ * in orbit, else the aircraft's own layer. It is read from the tracked
+ * entity's id once the layer has dropped its tracking, so a layer turned off
+ * still names itself.
+ * @returns {'flights'|'military'|'ais-live-vessels'|'satellites'|null}
  */
 export function readSubjectLayerId() {
   if (!this.active) return null;
   if (this.subjectKind === 'vessel') return 'ais-live-vessels';
+  if (this.subjectKind === 'satellite') return 'satellites';
   const layerId = this.readAircraftInfo()?.layerId;
   if (layerId) return layerId;
   const [prefix] = String(this.trackedEntity?.gevTrackedId || '').split(':');
@@ -44,26 +51,29 @@ export function readSubjectLayerId() {
 }
 
 /**
- * The subject entry would take: a Cesium-tracked aircraft first, else the
- * selected vessel. Vessels never take Cesium tracking, so an aircraft and a
- * vessel cannot be live through the same owner.
- * @returns {'aircraft'|'vessel'|null}
+ * The subject entry would take: a Cesium-tracked aircraft first, then the
+ * tracked satellite, else the selected vessel. Vessels never take Cesium
+ * tracking, so an aircraft and a vessel cannot be live through the same owner.
+ * @returns {'aircraft'|'satellite'|'vessel'|null}
  */
 export function resolveEntryKind() {
   if (this.readAircraftInfo() && this.viewer.trackedEntity?.position)
     return 'aircraft';
+  if (this.readSatelliteInfo()) return 'satellite';
   return this.readVesselInfo() ? 'vessel' : null;
 }
 
 export function dispatchCockpitModeChanged(active, info = null) {
   const subjectId = active
-    ? String(info?.icao24 || info?.mmsi || '')
+    ? String(info?.icao24 || info?.mmsi || info?.noradId || '')
         .trim()
         .toLowerCase() || null
     : null;
   const layerId =
     active &&
-    ['flights', 'military', 'ais-live-vessels'].includes(info?.layerId)
+    ['flights', 'military', 'ais-live-vessels', 'satellites'].includes(
+      info?.layerId,
+    )
       ? info.layerId
       : null;
   window.dispatchEvent(
@@ -118,9 +128,13 @@ export function syncEntry() {
   const info = this.readAircraftInfo();
   const trackedContact = !!(info && this.viewer.trackedEntity?.position);
   this.syncTr3bToggle(trackedContact ? info : null);
-  const bridgeContact = !trackedContact && !!this.readVesselInfo();
+  const orbitContact = !trackedContact && !!this.readSatelliteInfo();
+  const bridgeContact =
+    !trackedContact && !orbitContact && !!this.readVesselInfo();
   let entryKind = null;
   if (trackedContact) entryKind = this.isEntryAllowed() ? 'aircraft' : null;
+  else if (orbitContact)
+    entryKind = this.isOrbitEntryAllowed() ? 'satellite' : null;
   else if (bridgeContact)
     entryKind = this.isBridgeEntryAllowed() ? 'vessel' : null;
   const available = entryKind !== null;
@@ -139,8 +153,10 @@ export function syncEntry() {
 
 export function navigateContext(direction, options = {}) {
   if (this.destroyed) return false;
-  // Contact navigation moves between aircraft; a bridge does not jump ship.
-  if (this.subjectKind === 'vessel') return false;
+  // Contact navigation moves between aircraft; a bridge does not jump ship
+  // and an orbital view stays with its satellite.
+  if (this.subjectKind === 'vessel' || this.subjectKind === 'satellite')
+    return false;
   const method = direction < 0 ? 'navigatePrevious' : 'navigateNext';
   const wasActive = this.active;
   if (wasActive) this.contextNavigationDeadlineMs = performance.now() + 1500;
@@ -159,9 +175,10 @@ export function navigateContext(direction, options = {}) {
 }
 
 export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
-  // An aircraft tracked from the bridge ends it (see the vessel camera
-  // update); it is never adopted as the bridge's subject.
-  if (this.subjectKind === 'vessel') return false;
+  // An aircraft tracked from the bridge or from orbit ends that view (see the
+  // vessel and orbital camera updates); it is never adopted as its subject.
+  if (this.subjectKind === 'vessel' || this.subjectKind === 'satellite')
+    return false;
   const nextEntity = this.viewer.trackedEntity;
   if (
     !this.active ||
@@ -192,8 +209,8 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
 
 /**
  * Enter first person on a tracked aircraft or, with none tracked, the
- * selected vessel's bridge.
- * @param {{kind?: 'aircraft'|'vessel'|null}} [options] Restrict
+ * tracked satellite's orbital view or the selected vessel's bridge.
+ * @param {{kind?: 'aircraft'|'satellite'|'vessel'|null}} [options] Restrict
  *   entry to one subject kind; voice entry is aircraft-only.
  * @returns {boolean} True when the view was entered.
  */
@@ -202,12 +219,21 @@ export function enter({ kind = null } = {}) {
   if (this.active) return false;
   const subjectKind = kind ?? this.resolveEntryKind() ?? 'aircraft';
   const vessel = subjectKind === 'vessel';
-  const allowed = vessel ? this.isBridgeEntryAllowed() : this.isEntryAllowed();
+  const satellite = subjectKind === 'satellite';
+  const allowed = vessel
+    ? this.isBridgeEntryAllowed()
+    : satellite
+      ? this.isOrbitEntryAllowed()
+      : this.isEntryAllowed();
   if (!allowed) return false;
-  const info = vessel ? this.readVesselInfo() : this.readAircraftInfo();
+  const info = vessel
+    ? this.readVesselInfo()
+    : satellite
+      ? this.readSatelliteInfo()
+      : this.readAircraftInfo();
   // Only an aircraft is ridden through its Cesium entity.
-  const entity = vessel ? null : this.viewer.trackedEntity;
-  if (!info || (!vessel && !entity?.position)) return false;
+  const entity = vessel || satellite ? null : this.viewer.trackedEntity;
+  if (!info || (!vessel && !satellite && !entity?.position)) return false;
   this.entryFocusOrigin =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -218,11 +244,15 @@ export function enter({ kind = null } = {}) {
   this.subjectKind = subjectKind;
   // Each session reads its own water: never a height left from the last.
   this.vesselWaterline = null;
-  this.subjectId = vessel ? info.mmsi : null;
+  this.subjectId = vessel ? info.mmsi : satellite ? info.noradId : null;
   this.trackedEntity = entity;
   if (entity) {
     this.trackedEntityWasShown = entity.show;
     entity.show = false;
+  } else if (satellite) {
+    // The layer hides the satellite's own marks and dims the other orbits.
+    this.services.satellitesLayer?.setCockpitSubject?.(info.noradId);
+    this.beginOrbital();
   } else {
     this.services.aisLiveVesselsLayer?.setCockpitSubject?.(info.mmsi);
   }
@@ -258,6 +288,7 @@ export function enter({ kind = null } = {}) {
   document.body.classList.add('cockpit-mode');
   // Bridge styling reaches surfaces outside the HUD (exit row, side panels).
   if (vessel) document.body.classList.add('cockpit-bridge');
+  if (satellite) document.body.classList.add('cockpit-orbit');
   // Activation hides the entry and TR-3B chip; clearing the chip's signature
   // lets the exit-path syncEntry publish it again.
   this._tr3bSignature = null;
@@ -276,7 +307,14 @@ export function enter({ kind = null } = {}) {
   this.showBriefPage(0);
   this.startBriefRotation();
   const trackHeading = formatHeadingReadout(info.track ?? 0);
-  if (vessel) {
+  if (satellite) {
+    this.pushCockpitSignal(
+      'track',
+      'track',
+      t('TRACK ACQUIRED'),
+      t('{label} · NADIR VIEW', { label: info.name }),
+    );
+  } else if (vessel) {
     this.pushCockpitSignal(
       'track',
       'track',
@@ -309,7 +347,9 @@ export function enter({ kind = null } = {}) {
     );
   }
   this.updateHud(info, performance.now(), true);
-  this.setVisionMode(this.getInitialVisionMode());
+  // Orbit always opens in the plain optical picture; the vision styles stay
+  // one click away.
+  this.setVisionMode(satellite ? 'optical' : this.getInitialVisionMode());
   this.scheduleContextLayout();
   // The exit button shows when Vue flushes the presence; focus it after.
   Promise.resolve().then(() => {
@@ -326,6 +366,8 @@ export function exit({ restoreTracking = true } = {}) {
   if (!this.active) return false;
   const entity = this.trackedEntity;
   const vesselSubject = this.subjectKind === 'vessel' ? this.subjectId : null;
+  const satelliteSubject =
+    this.subjectKind === 'satellite' ? this.subjectId : null;
   this.active = false;
   this.subjectKind = null;
   this.vesselWaterline = null;
@@ -346,7 +388,13 @@ export function exit({ restoreTracking = true } = {}) {
   this.regionalBriefAbort = null;
   this.regionalBriefRequestToken += 1;
   this.regionalBriefSubjectId = null;
-  document.body.classList.remove('cockpit-mode', 'cockpit-bridge');
+  document.body.classList.remove(
+    'cockpit-mode',
+    'cockpit-bridge',
+    'cockpit-orbit',
+  );
+  // The camera's own field of view returns before any follow resumes.
+  this.endOrbital();
   this.onExited?.();
   this.publishUtilityLayout(null);
   this.presence.active = false;
@@ -362,6 +410,8 @@ export function exit({ restoreTracking = true } = {}) {
   this.trackedEntityWasShown = true;
   if (vesselSubject)
     this.services.aisLiveVesselsLayer?.setCockpitSubject?.(null);
+  if (satelliteSubject !== null)
+    this.services.satellitesLayer?.setCockpitSubject?.(null);
   this.dispatchCockpitModeChanged(false);
   if (restoreTracking && entity && this.viewer.entities.contains(entity)) {
     this.viewer.trackedEntity = entity;
@@ -369,6 +419,9 @@ export function exit({ restoreTracking = true } = {}) {
   } else if (restoreTracking && vesselSubject) {
     // Back to the selected vessel's map view, through the layer's own focus.
     this.services.aisLiveVesselsLayer?.focusSelectedVessel?.();
+  } else if (restoreTracking && satelliteSubject !== null) {
+    // Back to the satellite's follow camera, through the layer's own refocus.
+    this.services.satellitesLayer?.refocusTrackedById?.(satelliteSubject);
   }
   this.syncEntry();
   // Back to whichever entry was used: the Contacts button or the readout's.

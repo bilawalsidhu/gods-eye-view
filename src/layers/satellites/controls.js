@@ -47,11 +47,12 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   /**
    * Show or hide every point by its class. The tracked satellite's point
-   * stays hidden (its entity draws the dot).
+   * stays hidden (its entity draws the dot), as do points a Cockpit hold hid.
    */
   function _applyClassVisibility() {
     for (const [noradId, point] of layerState._points) {
       if (noradId === layerState._trackedNorad) continue;
+      if (layerState._cockpitHiddenPoints?.has(noradId)) continue;
       point.show = _classVisible(noradId);
     }
     layerState._detectionObjects.clear();
@@ -229,6 +230,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         // that card instead. Only members of the tracked cluster are affected —
         // unrelated nearby satellites are never suppressed.
         if (!isTracked && layerState._dockedCompanions.has(noradId)) continue;
+        // The Cockpit camera rides a held subject; a bracket on it would sit
+        // on the lens.
+        if (isTracked && parts.cockpit?._cockpitHeld()) continue;
         const cat = layerState._catalog.get(noradId);
         let object = layerState._detectionObjects.get(noradId);
         if (!object) {

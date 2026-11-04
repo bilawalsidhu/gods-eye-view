@@ -4,6 +4,7 @@ import {
   COCKPIT_AIRCRAFT_LAYER_IDS,
   bridgeEntryAllowed,
   cockpitEntryAllowed,
+  orbitEntryAllowed,
 } from '../contextModePolicy.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
@@ -42,6 +43,7 @@ export class CockpitCoordinator {
       flightsLayer,
       militaryFlightsLayer,
       aisLiveVesselsLayer,
+      satellitesLayer,
       isTr3b,
       toggleTr3b,
       militaryAwarenessLayer,
@@ -56,6 +58,7 @@ export class CockpitCoordinator {
       fetchRegionalBrief,
       regionalDistanceM,
       weatherCodeLabel,
+      acquireOrbitImagery,
     } = services;
     this._cockpitDisplayPortal = null;
     this.cockpitView = new CockpitViewController(viewer, {
@@ -63,6 +66,7 @@ export class CockpitCoordinator {
         flightsLayer,
         militaryFlightsLayer,
         aisLiveVesselsLayer,
+        satellitesLayer,
         isTr3b,
         toggleTr3b,
         militaryAwarenessLayer,
@@ -78,6 +82,7 @@ export class CockpitCoordinator {
         fetchRegionalBrief,
         regionalDistanceM,
         weatherCodeLabel,
+        acquireOrbitImagery,
         // The Contact card and Live Signals say which feeds are off.
         isLayerEnabled: (layerId) => this._isLayerEnabled(layerId),
       },
@@ -100,6 +105,14 @@ export class CockpitCoordinator {
         bridgeEntryAllowed({
           vesselsEnabled: !!this._dataManager?.isEnabled('ais-live-vessels'),
           contextModeChanging: this._contextModeChanging,
+        }),
+      isOrbitEntryAllowed: () =>
+        orbitEntryAllowed({
+          satellitesEnabled: !!this._dataManager?.isEnabled('satellites'),
+          contextModeChanging: this._contextModeChanging,
+          // The layer says whether its class may be ridden.
+          subjectEnterable:
+            satellitesLayer?.getCockpitSubject?.()?.enterable !== false,
         }),
       publish: this.publishCockpit,
       isUtilityDisclosureOpen: () => !!this.readUtilityDisclosureOpen?.(),
@@ -186,6 +199,11 @@ export class CockpitCoordinator {
       active && this.cockpitView?.subjectKind === 'vessel'
         ? this.cockpitView.readVesselInfo?.()
         : null;
+    // Likewise an orbital view in use: its satellite, never an aircraft.
+    const satellite =
+      active && this.cockpitView?.subjectKind === 'satellite'
+        ? this.cockpitView.readSatelliteInfo?.()
+        : null;
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
     // "Could Cockpit be ENTERED right now" — so it is false while already
     // inside, unconditionally. Cockpit takes the entity off
@@ -214,22 +232,30 @@ export class CockpitCoordinator {
               ? 'subject-layer-off'
               : 'no-tracked-aircraft',
       visionMode: this.cockpitView?.visionMode || null,
-      subject: vessel
+      subject: satellite
         ? {
-            kind: 'vessel',
-            id: vessel.mmsi,
-            layerId: vessel.layerId,
+            kind: 'satellite',
+            id: satellite.id,
+            layerId: satellite.layerId,
             callsign: null,
-            name: vessel.name,
+            name: satellite.name,
           }
-        : info
+        : vessel
           ? {
-              kind: 'aircraft',
-              id: info.icao24 || info.id || null,
-              layerId: info.layerId || null,
-              callsign: info.callsign || null,
+              kind: 'vessel',
+              id: vessel.mmsi,
+              layerId: vessel.layerId,
+              callsign: null,
+              name: vessel.name,
             }
-          : null,
+          : info
+            ? {
+                kind: 'aircraft',
+                id: info.icao24 || info.id || null,
+                layerId: info.layerId || null,
+                callsign: info.callsign || null,
+              }
+            : null,
       navigation: snapshot
         ? {
             canPrevious: Boolean(snapshot.navigation?.canPrevious),

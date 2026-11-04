@@ -420,23 +420,33 @@ test("turning off the ridden aircraft's layer ends the cockpit", async (t) => {
   assert.equal(cockpit.active, false);
 });
 
-test('C enters the selected vessel bridge and aircraft-only entry refuses it', async (t) => {
-  const { cockpit } = fixture(t);
+test('BRIDGE enters the selected vessel bridge and aircraft-only entry refuses it', async (t) => {
+  const { $, cockpit } = fixture(t);
   assert.equal(cockpit.enter({ kind: 'aircraft' }), false);
-  const event = {
-    key: 'c',
-    target: document.body,
-    defaultPrevented: false,
-    preventDefault() {
-      this.defaultPrevented = true;
-    },
-    stopImmediatePropagation() {},
-  };
-  cockpit.onKeyDown(event);
+  cockpit.syncEntry();
+  await settle();
+  $('#cockpit-entry').click();
   await settle();
   assert.equal(cockpit.active, true);
   assert.equal(cockpit.subjectKind, 'vessel');
-  assert.equal(event.defaultPrevented, true);
+});
+
+test('C neither enters nor leaves the bridge; it stays the CCTV shortcut', async (t) => {
+  const { cockpit } = fixture(t);
+  const outside = press(cockpit, 'c');
+  await settle();
+  assert.equal(cockpit.active, false, 'C does not enter');
+  assert.equal(outside.defaultPrevented, false);
+  assert.equal(outside.propagationStopped, false);
+  cockpit.enter();
+  await settle();
+  assert.equal(cockpit.subjectKind, 'vessel');
+  for (const key of ['c', 'C']) {
+    const inside = press(cockpit, key);
+    assert.equal(cockpit.active, true, `${key} does not exit`);
+    assert.equal(inside.defaultPrevented, false);
+    assert.equal(inside.propagationStopped, false);
+  }
 });
 
 test('a slow-frame bridge keeps pace with its ship', async (t) => {
@@ -476,10 +486,13 @@ function press(
     repeat,
     target,
     defaultPrevented: false,
+    propagationStopped: false,
     preventDefault() {
       this.defaultPrevented = true;
     },
-    stopImmediatePropagation() {},
+    stopImmediatePropagation() {
+      this.propagationStopped = true;
+    },
   };
   cockpit.onKeyDown(event);
   return event;
@@ -671,11 +684,9 @@ test('a held arrow keeps turning the bridge view', async (t) => {
     assert.equal(event.defaultPrevented, true);
   }
   assert.equal(cockpit.lookTarget.yawDeg, -30);
-  // A held Home or C still acts only once.
+  // A held Home still acts only once.
   press(cockpit, 'Home', { repeat: true });
   assert.equal(cockpit.lookTarget.yawDeg, -30);
-  press(cockpit, 'c', { repeat: true });
-  assert.equal(cockpit.active, true);
 });
 
 test('Home, 0 and LOOK AHEAD bring the bridge view back over the bow', async (t) => {
@@ -816,6 +827,41 @@ test('arrows do nothing new in an aircraft cockpit', async (t) => {
   assert.doesNotMatch(
     document.querySelector('.cockpit-help').textContent,
     /ARROWS LOOK/,
+  );
+});
+
+test('C neither enters nor leaves an aircraft cockpit', async (t) => {
+  const aircraftInfo = {
+    icao24: 'abc123',
+    callsign: 'TEST1',
+    latitude: 54.5,
+    longitude: 10.2,
+    altitudeM: 3000,
+    velocityMps: 200,
+    track: 45,
+    onGround: false,
+  };
+  const { cockpit, viewer, aircraft } = fixture(t, { aircraftInfo });
+  viewer.trackedEntity = aircraft;
+  const outside = press(cockpit, 'c');
+  await settle();
+  assert.equal(cockpit.active, false, 'C does not enter');
+  assert.equal(outside.defaultPrevented, false);
+  assert.equal(outside.propagationStopped, false);
+  assert.equal(cockpit.enter({ kind: 'aircraft' }), true);
+  await settle();
+  const inside = press(cockpit, 'c');
+  assert.equal(cockpit.active, true, 'C does not exit');
+  assert.equal(inside.propagationStopped, false);
+  assert.doesNotMatch(
+    document.querySelector('.cockpit-help').textContent,
+    /C TOGGLE/,
+  );
+  assert.doesNotMatch(
+    document
+      .querySelector('#map-view-switch')
+      .getAttribute('aria-keyshortcuts'),
+    /C/,
   );
 });
 
@@ -1100,6 +1146,10 @@ test('both entries name the subject the same way', async () => {
   assert.deepEqual(cockpitEntryFace('vessel'), {
     icon: 'directions_boat',
     label: 'BRIDGE',
+  });
+  assert.deepEqual(cockpitEntryFace('satellite'), {
+    icon: 'satellite_alt',
+    label: 'ORBIT',
   });
   assert.deepEqual(cockpitEntryFace('aircraft'), {
     icon: 'flight',

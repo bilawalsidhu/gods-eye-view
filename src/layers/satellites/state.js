@@ -170,6 +170,17 @@ export function createState({ services }) {
 
   state._trackedFrameNowForTest = null;
 
+  // Cockpit orbital-view hold (cockpitSubject.js): the NORAD id the Cockpit
+  // camera rides, and what the hold hid so release restores exactly that.
+
+  state._cockpitSubjectNorad = null;
+
+  state._cockpitHiddenPoints = new Set();
+
+  state._cockpitHiddenPath = null;
+
+  state._cockpitHiddenDot = false;
+
   // Scratch variables
 
   state._scratchCartesian = new Cesium.Cartesian3();

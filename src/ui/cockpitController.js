@@ -1,6 +1,7 @@
 /** Coordinate Cockpit lifecycle through supplied aircraft, terrain, rendering and briefing operations. */
 import {
   readAircraftInfo,
+  readSatelliteInfo,
   readVesselInfo,
   readSubjectLayerId,
   resolveEntryKind,
@@ -15,6 +16,15 @@ import {
   exit,
 } from './cockpitTrackingController.js';
 import { update } from './cockpitCamera.js';
+import {
+  beginOrbital,
+  endOrbital,
+  resetOrbitalLook,
+  stepOrbitalZoom,
+  turnOrbitalLook,
+  updateOrbital,
+  updateOrbitalHud,
+} from './cockpitOrbitalView.js';
 import {
   publishInstrumentsView,
   publishRouteView,
@@ -95,6 +105,7 @@ export class CockpitViewController {
       onCameraTakeover = null,
       isEntryAllowed = null,
       isBridgeEntryAllowed = null,
+      isOrbitEntryAllowed = null,
       isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
@@ -108,10 +119,21 @@ export class CockpitViewController {
     this.destroyed = false;
     this.disposed = false;
     this.active = false;
-    /** 'aircraft' or 'vessel' while active; which subject the camera rides. */
+    /**
+     * 'aircraft', 'vessel' or 'satellite' while active; which subject the
+     * camera rides.
+     */
     this.subjectKind = null;
-    /** The vessel subject's MMSI; aircraft are identified by trackedEntity. */
+    /**
+     * The vessel subject's MMSI or the satellite's NORAD id; aircraft are
+     * identified by trackedEntity.
+     */
     this.subjectId = null;
+    /**
+     * The orbital view's zoom, look and saved field of view while a
+     * satellite is ridden (src/ui/cockpitOrbitalView.js); null otherwise.
+     */
+    this.orbital = null;
     this.trackedEntity = null;
     this.trackedEntityWasShown = true;
     this.heading = null;
@@ -162,6 +184,11 @@ export class CockpitViewController {
       typeof isBridgeEntryAllowed === 'function'
         ? isBridgeEntryAllowed
         : () => false;
+    // Nor a satellite layer to ride without one.
+    this.isOrbitEntryAllowed =
+      typeof isOrbitEntryAllowed === 'function'
+        ? isOrbitEntryAllowed
+        : () => false;
     this.isUtilityDisclosureOpen =
       typeof isUtilityDisclosureOpen === 'function'
         ? isUtilityDisclosureOpen
@@ -197,6 +224,7 @@ export class CockpitViewController {
     this.publishSignals = publish.signals ?? (() => {});
     this.publishUtilityLayout = publish.utilityLayout ?? (() => {});
     this.publishRadar = publish.radar ?? (() => {});
+    this.publishOrbital = publish.orbital ?? (() => {});
     /** The bridge radar's range in nautical miles; kept across bridges. */
     this.radarRangeNm = DEFAULT_RADAR_RANGE_NM;
     this.presence = {
@@ -301,6 +329,15 @@ export class CockpitViewController {
     this._listen(document, 'click', (event) => {
       if (event.target?.closest?.('#cockpit-look-ahead')) this.lookAhead();
     });
+    // The orbital HUD mounts only in orbit, so its controls are delegated.
+    this._listen(document, 'click', (event) => {
+      const target = event.target;
+      if (target?.closest?.('#cockpit-orbital-zoom-in'))
+        this.stepOrbitalZoom(1);
+      else if (target?.closest?.('#cockpit-orbital-zoom-out'))
+        this.stepOrbitalZoom(-1);
+      else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
+    });
     this._listen(this.signalToggle, 'click', () =>
       this.setSignalCollapsed(!this.signalCollapsed, { user: true }),
     );
@@ -344,6 +381,49 @@ export class CockpitViewController {
   }
   readVesselInfo() {
     return readVesselInfo.call(this);
+  }
+  readSatelliteInfo() {
+    return readSatelliteInfo.call(this);
+  }
+  beginOrbital() {
+    return beginOrbital.call(this);
+  }
+  endOrbital() {
+    return endOrbital.call(this);
+  }
+  updateOrbital(nowMs) {
+    return updateOrbital.call(this, nowMs);
+  }
+  updateOrbitalHud(info, nowMs) {
+    return updateOrbitalHud.call(this, info, nowMs);
+  }
+  /**
+   * Step the orbital view's optical zoom (the + and − keys and buttons).
+   * @param {number} direction Positive zooms in, negative out.
+   * @returns {boolean} True when the zoom changed.
+   */
+  stepOrbitalZoom(direction) {
+    return stepOrbitalZoom.call(this, direction);
+  }
+  /**
+   * Tilt the orbital view one arrow step off nadir.
+   * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step
+   * @returns {boolean} True in an orbital view.
+   */
+  turnOrbitalLook(step) {
+    return turnOrbitalLook.call(this, step);
+  }
+  /**
+   * The NADIR control and the Home and 0 keys in orbit: back to pure nadir.
+   * Focus leaves the button before it hides.
+   * @returns {boolean} True in an orbital view.
+   */
+  orbitalNadir() {
+    const button = document.getElementById('cockpit-orbital-nadir');
+    const hadFocus = !!button && button.contains(document.activeElement);
+    const reset = resetOrbitalLook.call(this);
+    if (reset && hadFocus) this.mapViewButton?.focus({ preventScroll: true });
+    return reset;
   }
   readSubjectLayerId() {
     return readSubjectLayerId.call(this);

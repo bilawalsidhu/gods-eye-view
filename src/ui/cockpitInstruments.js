@@ -140,6 +140,11 @@ export function updateHud(
     updateVesselHud.call(this, info, nowMs, forceContext);
     return;
   }
+  // The orbital view keeps its own HUD (CockpitOrbital).
+  if (info?.kind === 'satellite') {
+    this.updateOrbitalHud(info, nowMs);
+    return;
+  }
   this.lastAircraftInfo = info;
   const view = this.instruments;
   view.kind = 'aircraft';

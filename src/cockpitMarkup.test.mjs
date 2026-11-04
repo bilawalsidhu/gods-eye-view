@@ -79,7 +79,7 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
   assert.doesNotMatch(html, /id="cockpit-exit"/);
   assert.match(
     html,
-    /id="map-view-switch"[^>]*aria-label="Exit cockpit view"[^>]*aria-keyshortcuts="Escape C"[\s\S]*?close_fullscreen[\s\S]*?EXIT COCKPIT/,
+    /id="map-view-switch"[^>]*aria-label="Exit cockpit view"[^>]*aria-keyshortcuts="Escape"[\s\S]*?close_fullscreen[\s\S]*?EXIT COCKPIT/,
   );
   const topCenterActions = html.match(
     /<nav id="top-center-actions"[\s\S]*?<\/nav>/,
@@ -163,7 +163,8 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
   assert.match(html, /id="cockpit-vision-current-label"[^>]*>NORMAL<\/strong>/);
   assert.match(
     cockpitEnter.toString(),
-    /this\.setVisionMode\(this\.getInitialVisionMode\(\)\)/,
+    // Orbit alone opens optical (src/ui/cockpitOrbitalView.test.mjs).
+    /this\.setVisionMode\(\s*satellite \? 'optical' : this\.getInitialVisionMode\(\)\s*,?\s*\)/,
     'Cockpit must enter on the mode matching the active map preset',
   );
   assert.match(
@@ -232,14 +233,12 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
   );
 });
 
-test('Cockpit shortcut failures do not leak and open utilities own the first Escape', () => {
+test('open utilities own the first Escape and Cockpit leaves C alone', () => {
   const keydown = cockpitKeyDown.toString();
   assert.ok(keydown, 'Cockpit keyboard handler is missing');
   assert.match(keydown, /if \(this\.isUtilityDisclosureOpen\?\.\(\)\) return;/);
-  assert.match(
-    keydown,
-    /const cockpitAttempt = !!\(\s*this\.readAircraftInfo\(\) && this\.viewer\.trackedEntity\?\.position\s*\);[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?!this\.isEntryAllowed\(\)/,
-  );
+  // C is the app-wide CCTV shortcut; Cockpit never claims it.
+  assert.doesNotMatch(keydown, /=== 'c'/);
 });
 
 test('the Contact panel never hides itself out from under its own NEXT button', () => {

@@ -109,7 +109,14 @@ export async function checkPackageBoundaries(root) {
             // template blocks belong to the component file itself.
             if (info.id.startsWith('\0')) return;
             const id = info.id.split('?')[0];
-            if (!allowed.has(id)) {
+            // A declared dependency also owns the asset files it ships (a
+            // flag-icons SVG imported as a URL) that a glob resolves in place.
+            const dependencyAsset = group.external.some((external) =>
+              id.startsWith(
+                `${normalizePath(path.join(root, 'node_modules', external))}/`,
+              ),
+            );
+            if (!allowed.has(id) && !dependencyAsset) {
               throw new Error(
                 `Package boundary ${name} imports an unowned module: ${path.relative(root, id)}`,
               );

@@ -12,6 +12,7 @@ import { useCockpitStore } from '../stores/cockpit.js';
 import { useGlobeActionsStore } from '../stores/globeActions.js';
 import CockpitBriefing from './panels/CockpitBriefing.vue';
 import CockpitContext from './panels/CockpitContext.vue';
+import CockpitOrbital from './panels/CockpitOrbital.vue';
 import CockpitRadar from './panels/CockpitRadar.vue';
 import CockpitRollingValue from './panels/CockpitRollingValue.vue';
 import CockpitUtilityControls from './panels/CockpitUtilityControls.vue';
@@ -26,15 +27,31 @@ const { presence, instruments, route, vision, utilityLayout } =
 const active = computed(() => Boolean(presence.value?.active));
 // A vessel subject swaps the aviation readouts for bridge ones.
 const bridge = computed(() => presence.value?.subjectKind === 'vessel');
-const subject = computed(() => (bridge.value ? 'vessel' : 'aircraft'));
+// A satellite subject keeps only its orbital HUD over the nadir picture.
+const orbital = computed(() => presence.value?.subjectKind === 'satellite');
+const subject = computed(() =>
+  bridge.value ? 'vessel' : orbital.value ? 'satellite' : 'aircraft',
+);
 const hudLabel = computed(() =>
-  bridge.value ? t('Ship bridge view') : t('Aircraft cockpit view'),
+  bridge.value
+    ? t('Ship bridge view')
+    : orbital.value
+      ? t('Satellite orbital view')
+      : t('Aircraft cockpit view'),
 );
 const exitLabel = computed(() =>
-  bridge.value ? t('Exit bridge view') : t('Exit cockpit view'),
+  bridge.value
+    ? t('Exit bridge view')
+    : orbital.value
+      ? t('Exit orbital view')
+      : t('Exit cockpit view'),
 );
 const exitText = computed(() =>
-  bridge.value ? t('EXIT BRIDGE') : t('EXIT COCKPIT'),
+  bridge.value
+    ? t('EXIT BRIDGE')
+    : orbital.value
+      ? t('EXIT ORBIT')
+      : t('EXIT COCKPIT'),
 );
 const globe = useGlobeActionsStore();
 const { resetBusy } = storeToRefs(globe);
@@ -74,8 +91,10 @@ const tickStyle = (tick) =>
 </script>
 
 <template>
-  <!-- Aircraft first-person view or a vessel's bridge. It can be entered from the visible view switcher. -->
-  <section id="cockpit-hud" :aria-label="hudLabel" :hidden="!active" :data-subject="subject" :style="utilityStyle" v-class-toggle="{ 'signals-active': active, 'context-active': Boolean(presence?.context) }" :data-layer="hud.layer ?? undefined">
+  <!-- Aircraft first-person view, a vessel's bridge or a satellite's nadir view. It can be entered from the visible view switcher. -->
+  <section id="cockpit-hud" :aria-label="hudLabel" :hidden="!active" :data-subject="subject" :style="utilityStyle" v-class-toggle="{ 'signals-active': active, 'context-active': Boolean(presence?.context) }" :data-layer="orbital ? 'satellites' : hud.layer ?? undefined">
+    <!-- In orbit the picture keeps only the nadir reticle, readout and zoom. -->
+    <CockpitOrbital v-if="orbital" />
     <!-- One optical coordinate system: every targeting mark shares this center.
          Decorative only; telemetry and interactive panels remain separate.
          A bridge looks out through straight window mullions instead: a header
@@ -87,7 +106,7 @@ const tickStyle = (tick) =>
         <path d="M0 600H324 M876 600H1200"/>
       </g>
     </svg>
-    <svg v-else class="cockpit-frame-lines" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    <svg v-else-if="!orbital" class="cockpit-frame-lines" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-hidden="true" focusable="false">
       <g fill="none" stroke="currentColor">
         <path d="M42 106H234L266 126H334 M866 126H934L966 106H1158 M42 114H226L258 136H318 M882 136H942L974 114H1158"/>
         <path d="M42 616H226L254 598H320 M880 598H946L974 616H1158 M42 624H238L266 606H330 M870 606H934L962 624H1158"/>
@@ -97,7 +116,7 @@ const tickStyle = (tick) =>
       <path class="cockpit-frame-warning" d="M338 645H476L490 654H710L724 645H862" fill="none"/>
       <path class="cockpit-frame-meter" d="M372 642H418 M782 642H828"/>
     </svg>
-    <div v-if="!bridge" class="cockpit-scan-array" aria-hidden="true">
+    <div v-if="!bridge && !orbital" class="cockpit-scan-array" aria-hidden="true">
       <svg class="cockpit-target-geometry" viewBox="0 0 600 600" fill="none" focusable="false">
         <g class="cockpit-target-hairline">
           <circle cx="300" cy="300" r="276"/>
@@ -129,7 +148,7 @@ const tickStyle = (tick) =>
         </g>
       </svg>
     </div>
-    <div class="cockpit-visor-shell" aria-hidden="true">
+    <div v-if="!orbital" class="cockpit-visor-shell" aria-hidden="true">
       <!-- A ship's bridge keeps no roll arc or pitch ladder. -->
       <div v-if="!bridge" class="cockpit-roll-arc">
         <span style="--slot:-3;--depth:3">−30</span>
@@ -158,7 +177,7 @@ const tickStyle = (tick) =>
       <div class="cockpit-visor-status cockpit-visor-status-left">{{ bridge ? t('BRIDGE WINDOW · FWD') : t('OPTICAL PLANE · 01') }}</div>
       <div class="cockpit-visor-status cockpit-visor-status-right">{{ bridge ? (hud.trackSource === 'course' ? t('COURSE HOLD · AIS') : hud.trackSource === 'heading' ? t('HEADING HOLD · AIS') : t('NO HEADING · AIS')) : t('VISOR LOCK · ACTIVE') }}</div>
     </div>
-    <div id="cockpit-speed-rim" class="cockpit-altitude-rim cockpit-speed-rim" v-class-toggle="{ unavailable: hud.speedRim.unavailable }">
+    <div v-if="!orbital" id="cockpit-speed-rim" class="cockpit-altitude-rim cockpit-speed-rim" v-class-toggle="{ unavailable: hud.speedRim.unavailable }">
       <span class="cockpit-altitude-rim-label">{{ bridge ? t('SPEED OVER GROUND · KTS') : t('GROUND SPEED · KTS') }}</span>
       <div class="cockpit-altitude-rim-rail"></div>
       <div class="cockpit-altitude-rim-scale">
@@ -169,7 +188,7 @@ const tickStyle = (tick) =>
         <strong id="cockpit-speed-rim-value">{{ hud.speedRim.value }}</strong>
       </div>
     </div>
-    <div id="cockpit-altitude-rim" class="cockpit-altitude-rim" :hidden="bridge" v-class-toggle="{ unavailable: hud.altitudeRim.unavailable }">
+    <div v-if="!orbital" id="cockpit-altitude-rim" class="cockpit-altitude-rim" :hidden="bridge" v-class-toggle="{ unavailable: hud.altitudeRim.unavailable }">
       <span class="cockpit-altitude-rim-label">{{ t('ALTITUDE · FT') }}</span>
       <div class="cockpit-altitude-rim-rail"></div>
       <div class="cockpit-altitude-rim-scale">
@@ -201,7 +220,7 @@ const tickStyle = (tick) =>
         </button>
       </div>
     </div>
-    <div class="cockpit-reticle material-symbols-outlined" aria-hidden="true">my_location</div>
+    <div v-if="!orbital" class="cockpit-reticle material-symbols-outlined" aria-hidden="true">my_location</div>
     <!-- A bridge view turned off the bow says where it looks and offers the way back. -->
     <div v-if="bridge" class="cockpit-look" :hidden="!look.offset">
       <span id="cockpit-look-readout" class="cockpit-look-readout" aria-live="polite">{{ look.readout }}</span>
@@ -209,7 +228,7 @@ const tickStyle = (tick) =>
         <span>{{ t('LOOK AHEAD') }}</span>
       </button>
     </div>
-    <div class="cockpit-compass" :aria-label="bridge ? t('Current vessel heading') : t('Current aircraft heading')">
+    <div v-if="!orbital" class="cockpit-compass" :aria-label="bridge ? t('Current vessel heading') : t('Current aircraft heading')">
       <div class="cockpit-instrument-row">
         <div class="cockpit-readout cockpit-speed">
           <span class="cockpit-readout-label">{{ bridge ? t('SPEED OVER GROUND') : t('GROUND SPEED') }}</span>
@@ -231,7 +250,7 @@ const tickStyle = (tick) =>
       <span class="cockpit-heading-caret material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
       <div class="cockpit-compass-tape" id="cockpit-compass-tape" aria-hidden="true" :style="bridge ? { '--tape-shift': tapeShift } : undefined"><span v-for="division in hud.compass" :key="division.heading ?? division.slot" :class="(division.active ?? division.slot === 0) ? 'active' : ''" :style="{ '--slot': division.slot, '--depth': Math.abs(division.slot) }">{{ division.label }}</span><template v-if="bridge"><i v-if="hud.compassMarkers?.prograde != null" class="cockpit-compass-marker cockpit-compass-prograde" aria-hidden="true" :style="{ '--slot': hud.compassMarkers.prograde }"></i><i v-if="hud.compassMarkers?.retrograde != null" class="cockpit-compass-marker cockpit-compass-retrograde" aria-hidden="true" :style="{ '--slot': hud.compassMarkers.retrograde }"></i></template></div>
     </div>
-    <div class="cockpit-position-readout">
+    <div v-if="!orbital" class="cockpit-position-readout">
       <span id="cockpit-clock">{{ hud.clock }}</span>
       <span id="cockpit-position">{{ hud.position }}</span>
     </div>
@@ -242,7 +261,7 @@ const tickStyle = (tick) =>
       <CockpitRadar />
     </div>
     <CockpitUtilityControls />
-    <div class="cockpit-help"><bdi>{{ t('ESC EXIT') }}</bdi> <span>·</span> <bdi>{{ t('C TOGGLE') }}</bdi><template v-if="bridge"> <span>·</span> <bdi>{{ t('ARROWS LOOK') }}</bdi> <span>·</span> <bdi>{{ t('HOME RESET') }}</bdi></template></div>
+    <div class="cockpit-help"><bdi>{{ t('ESC EXIT') }}</bdi><template v-if="bridge"> <span>·</span> <bdi>{{ t('ARROWS LOOK') }}</bdi> <span>·</span> <bdi>{{ t('HOME RESET') }}</bdi></template><template v-if="orbital"> <span>·</span> <bdi>{{ t('+/− ZOOM') }}</bdi> <span>·</span> <bdi>{{ t('ARROWS TILT') }}</bdi> <span>·</span> <bdi>{{ t('HOME NADIR') }}</bdi></template></div>
   </section>
 
   <nav id="view-switcher" :aria-label="t('View switcher')">
@@ -250,7 +269,7 @@ const tickStyle = (tick) =>
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
       <span>{{ t('RESET') }}</span>
     </button>
-    <button id="map-view-switch" type="button" :aria-label="exitLabel" aria-keyshortcuts="Escape C" :title="exitLabel" :hidden="!active">
+    <button id="map-view-switch" type="button" :aria-label="exitLabel" aria-keyshortcuts="Escape" :title="exitLabel" :hidden="!active">
       <span class="material-symbols-outlined" aria-hidden="true">close_fullscreen</span>
       <span>{{ exitText }}</span>
     </button>
