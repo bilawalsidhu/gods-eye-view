@@ -4892,7 +4892,7 @@
       "src/sources/adsbFields.js",
       "src/tools/services.js",
       "src/layers/airQuality/source.js",
-    "src/layers/airQuality/model.js",
+      "src/layers/airQuality/model.js",
       "src/layers/gnss/source.js",
       "src/layers/bikeshare/registry.js",
       "src/layers/bikeshare/source.js",
