@@ -3197,7 +3197,8 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/layers/chesterCountyEms/counties.js"
     ],
     "external": [
       "hls.js",
@@ -3808,7 +3809,8 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/layers/chesterCountyEms/counties.js"
     ],
     "external": [
       "hls.js",
@@ -4765,7 +4767,8 @@
       "src/tools/globePanel.js",
       "src/tools/queries/panelRequest.js",
       "src/geoDistance.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/layers/chesterCountyEms/counties.js"
     ],
     "external": ["satellite.js"]
   },

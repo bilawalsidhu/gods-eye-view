@@ -3,14 +3,14 @@ import { readResponseJsonCapped } from '../../sources/httpBody.js';
 /** Read only the local Chester County proxy; never send locations to a geocoder. */
 export function createChesterCountyEmsSource({
   fetchImpl = globalThis.fetch,
+  basePath = '/api/chester-county-ems',
 } = {}) {
   return {
     async getIncidentDetails(id, { signal } = {}) {
       const deadline = AbortSignal.timeout(12000);
       const combined = signal ? AbortSignal.any([signal, deadline]) : deadline;
       const response = await fetchImpl(
-        '/api/chester-county-ems/details?' +
-          new URLSearchParams({ incident: id }),
+        basePath + '/details?' + new URLSearchParams({ incident: id }),
         { signal: combined },
       );
       if (!response.ok) throw new Error('Incident details unavailable');
@@ -33,10 +33,15 @@ export function createChesterCountyEmsSource({
     async getSnapshot({ signal } = {}) {
       const deadline = AbortSignal.timeout(45000);
       const combined = signal ? AbortSignal.any([signal, deadline]) : deadline;
-      const response = await fetchImpl('/api/chester-county-ems', {
+      const response = await fetchImpl(basePath, {
         signal: combined,
       });
-      if (!response.ok) throw new Error('Chester County incidents unavailable');
+      if (!response.ok)
+        throw new Error(
+          basePath === '/api/chester-county-ems'
+            ? 'Chester County incidents unavailable'
+            : 'County incidents unavailable',
+        );
       const snapshot = await readResponseJsonCapped(
         response,
         1024000,
@@ -44,7 +49,7 @@ export function createChesterCountyEmsSource({
       );
       if (
         !Array.isArray(snapshot?.rows) ||
-        snapshot.rows.length > 500 ||
+        snapshot.rows.length > 1000 ||
         !Number.isFinite(snapshot.observedAt) ||
         !Number.isFinite(snapshot.fetchedAt)
       )
@@ -52,4 +57,12 @@ export function createChesterCountyEmsSource({
       return snapshot;
     },
   };
+}
+
+/** Combined public county coverage through the same bounded source contract. */
+export function createCountyEmsSource(options = {}) {
+  return createChesterCountyEmsSource({
+    ...options,
+    basePath: '/api/county-ems',
+  });
 }

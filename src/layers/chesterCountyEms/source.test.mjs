@@ -46,3 +46,29 @@ test('malformed, oversized, mismatched and failed unit replies are refused', asy
       }).getIncidentDetails('ems:F26000001'),
     );
 });
+
+test('combined source uses county API while legacy Chester calls keep their endpoint', async () => {
+  const { createCountyEmsSource } = await import('./source.js');
+  const paths = [];
+  const source = createCountyEmsSource({
+    fetchImpl: async (url) => {
+      paths.push(url);
+      return Response.json(
+        url.includes('/details?')
+          ? { ...details, incidentNumber: 'E2600001' }
+          : {
+              rows: [],
+              observedAt: Date.now(),
+              fetchedAt: Date.now(),
+              countyFeeds: [],
+            },
+      );
+    },
+  });
+  await source.getSnapshot();
+  await source.getIncidentDetails('montgomery-pa:ems:E2600001');
+  assert.deepEqual(paths, [
+    '/api/county-ems',
+    '/api/county-ems/details?incident=montgomery-pa%3Aems%3AE2600001',
+  ]);
+});

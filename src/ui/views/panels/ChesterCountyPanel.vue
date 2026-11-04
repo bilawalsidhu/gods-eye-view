@@ -8,13 +8,16 @@ const incidents = useChesterCountyPanelStore();
 </script>
 
 <template>
-  <RailPanel id="chester-county-panel" :hidden="!incidents.view?.enabled" start-collapsed :title="t('CHESCO INCIDENTS')" sideways rail-scroller>
-    <template #badge><span :aria-label="t('Chester County, PA incidents')">{{ incidents.view?.list?.items?.length || 0 }}</span></template>
+  <RailPanel id="chester-county-panel" :hidden="!incidents.view?.enabled" start-collapsed :title="t('COUNTY EMS')" sideways rail-scroller>
+    <template #badge><span :aria-label="t('County EMS')">{{ incidents.view?.list?.items?.length || 0 }}</span></template>
     <div class="cyber-panel-body ui-scroll county-incidents-body" data-rail-scroller>
       <div class="county-incidents-filters" role="group" :aria-label="t('Incident categories')">
         <UiButton data-county-category="fire" :pressed="incidents.view?.categories.includes('fire')" @click="incidents.act('category', 'fire')">{{ t('Fire') }}</UiButton>
         <UiButton data-county-category="ems" :pressed="incidents.view?.categories.includes('ems')" @click="incidents.act('category', 'ems')">{{ t('EMS') }}</UiButton>
         <UiButton data-county-category="traffic" :title="t('Public WebCAD traffic reports')" :pressed="incidents.view?.categories.includes('traffic')" @click="incidents.act('category', 'traffic')">{{ t('Police / traffic') }}</UiButton>
+      </div>
+      <div class="county-incidents-filters" role="group" :aria-label="t('County coverage')">
+        <UiButton v-for="county in incidents.view?.counties || []" :key="county.id" :data-county-filter="county.id" :pressed="county.active" @click="incidents.act('county', county.id)">{{ county.label }}</UiButton>
       </div>
       <div class="county-incidents-actions">
         <UiButton v-for="chip in incidents.view?.chips || []" :key="chip.id" :data-county-action="chip.id" :disabled="!!chip.disabled" @click="incidents.act('chip', chip.id)">{{ chip.label }}</UiButton>

@@ -1,5 +1,1 @@
-- Add an optional Chester County, Pennsylvania Fire, EMS and Traffic incident layer, with approximate county-GIS locations, icons that open cards on click, public unit status and timestamps, report details, mapping-coverage counts and stale-feed handling. Unresolved reports remain listed without guessed map pins. Data loads only at runtime. Thanks @dylanmaniatakes.
-
-- Expose Chester County public incident lists and unit details to MCP and voice, with scoped visibility aliases, source freshness, approximate GIS provenance and unresolved-report coverage.
-
-- Move the active Chester County list into a dedicated right-side app, with synchronized Fire/EMS/Police-Traffic filters in the app and Data Layers for the list and map, and its launcher hidden whenever the data layer is off.
+- Add optional County EMS coverage for Chester and Montgomery counties, Pennsylvania: public Fire/EMS/Traffic reports, county and category filters synchronized between Data Layers and a dedicated right-side app, approximate map icons with selected public unit cards, independent county health and generic MCP/voice queries. Existing Chester links and tools remain compatible. Sources load at runtime; unresolved reports stay listed. Thanks @dylanmaniatakes.

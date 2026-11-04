@@ -1032,10 +1032,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // The layer alias hint leaves out aliases the layer id already spells.
   // The Utilities panel adds one set_panel_open target; Sea Marks and Ski
   // Pistes extend the generated layer enums and alias hint.
-  assert.equal(block.length, 31026, 'serialized tool schema length drifted');
+  // County EMS adds Montgomery and generic county aliases.
+  assert.equal(block.length, 31104, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '5f5275cd6e320afef4fd224b235f3e0f191ec06599b257ffe1f60b703a255199',
+    '42bf8dfccb9e914881027918098d1bcaac7ca3f67ded935e7870d0574d625fdf',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

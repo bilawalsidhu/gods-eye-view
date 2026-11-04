@@ -6692,11 +6692,12 @@ startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
 
-## Chester County incidents
+## County EMS
 
-The Events group includes an off-by-default **Chester County, PA incidents**
-layer. It reads Fire, EMS and Traffic tables from public WebCAD through the
-`/api/chester-county-ems` endpoint every 60 seconds while enabled.
+The Events group includes an off-by-default **County EMS** layer covering Chester
+and Montgomery counties, Pennsylvania. It reads public Fire, EMS and Traffic
+reports through /api/county-ems. Chester refreshes at most every minute;
+Montgomery refreshes at most every two minutes while enabled.
 County road-centerline junctions resolve reported intersections; county address
 points resolve numbered addresses. Flame, red-cross and siren billboards identify fire, EMS and traffic.
 Only icons show by default; clicking an icon opens a labelled detail card, and
@@ -6705,7 +6706,7 @@ omitted; the layer-level GIS accuracy notice remains. Unresolved or ambiguous re
 without a marker or municipality-center fallback. Successful empty
 snapshots clear reports and failures retain last-good data marked stale.
 All sources load at runtime into memory, with bounded county GIS lookups and
-no incident archive. The layer id is `chester-county-ems` and share token `8` stores only enabled state. See `docs/CHESTER-COUNTY-EMS.md` for matching limits and source terms.
+no incident archive. The layer id is `chester-county-ems` and share token `8` stores only enabled state. See `docs/COUNTY-EMS.md` for matching limits and source terms.
 
 County incident health separates successful unmatched locations from GIS failures.
 Coverage counts expose mapped, unresolved and lookup-error totals; only actual
@@ -6730,7 +6731,7 @@ explicit unavailable result without discarding the report. Voice can toggle
 the layer through scoped Chesco/Chester County aliases. Its spatial analyst
 exclusion now directs the model to these tools rather than hiding the layer.
 
-The active Chester County report list now lives in its own **CHESCO INCIDENTS**
+The active Chester County report list now lives in its own **COUNTY EMS**
 right-side app alongside the other panels. Its launcher and panel are hidden
 while the data layer is off, and return when it is enabled. Data Layers keeps
 the normal visibility toggle/feed count and synchronized category filters. The
@@ -6744,3 +6745,13 @@ counts and a distinct no-match state. Police/Traffic uses WebCAD's public Traffi
 table. Category changes use the cached snapshot, preserve full feed health/counts,
 and dismiss a selected report when its category is hidden. Filters are session
 state; the existing enabled-only share token and MCP full-feed queries persist.
+
+County coverage is selectable in both Data Layers and COUNTY EMS, alongside the
+synchronized category filters. Both counties start enabled. Rows/cards identify
+their county; Montgomery IDs are county-qualified. Montgomery joins its complete
+public HTML list to its published read-only CAD map by incident, location and
+municipality, preserving unmapped reports. Public unit fragments retain undated
+time text and label retrieval times as checks. Per-county caches and health
+prevent one outage from hiding the other's reports. Generic MCP/voice tools
+get_county_incidents and get_county_incident_details cover both; Chester tools,
+the legacy endpoint, internal layer ID and share token remain compatible.

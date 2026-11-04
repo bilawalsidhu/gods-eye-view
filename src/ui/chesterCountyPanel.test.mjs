@@ -12,6 +12,7 @@ import ChesterCountyPanel from './views/panels/ChesterCountyPanel.vue';
 
 function fixture() {
   let categories = ['fire', 'ems', 'traffic'];
+  let counties = ['chester-pa', 'montgomery-pa'];
   let enabled = false,
     count = 2,
     selected = null;
@@ -22,6 +23,11 @@ function fixture() {
     getIncidentPanelState: () => ({
       enabled,
       categories: [...categories],
+      counties: ['chester-pa', 'montgomery-pa'].map((id) => ({
+        id,
+        label: id,
+        active: counties.includes(id),
+      })),
       info: `${count} reports`,
       chips: [
         {
@@ -55,6 +61,7 @@ function fixture() {
     setLayerParams(id, params, options) {
       calls.push({ id, params, options });
       if (params.categories) categories = params.categories;
+      if (params.counties) counties = params.counties;
       if ('selectedIncident' in params) selected = params.selectedIncident;
       for (const fn of listeners) fn();
     },
@@ -169,6 +176,13 @@ test('the right-side launcher exists only when enabled and the real list selects
   navigation.sync();
   await nextTick();
   assert.ok(document.querySelector('[data-rail-item="chester-county-panel"]'));
+  const county = document.querySelector('[data-county-filter="montgomery-pa"]');
+  county.click();
+  await nextTick();
+  assert.equal(county.getAttribute('aria-pressed'), 'false');
+  county.click();
+  await nextTick();
+  assert.equal(county.getAttribute('aria-pressed'), 'true');
   const ems = document.querySelector('[data-county-category="ems"]');
   assert.equal(ems.getAttribute('aria-pressed'), 'true');
   ems.click();

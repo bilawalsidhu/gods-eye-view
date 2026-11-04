@@ -49,8 +49,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
     // The layer alias hint leaves out aliases the layer id already spells.
-    // Chester County adds scoped layer toggles; dedicated Core tools retain unmapped reports.
-    'f6e83753fe495d6423d9cafb7c12aa683c20181ef622a8073e70f25f22ca90c7',
+    // County EMS adds scoped Chester/Montgomery aliases; dedicated Core tools retain unmapped reports.
+    '16234b379caa190513d2b96f00611e0662b3aee29eb3555b6c58cfc5e008f53c',
   );
 });
 

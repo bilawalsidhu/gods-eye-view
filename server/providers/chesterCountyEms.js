@@ -208,11 +208,13 @@ export function createChesterCountyDetails({
 
 /** Install the same fixed endpoint in development and production preview. */
 export function chesterCountyEmsProxy(options) {
-  const acquire = createChesterCountyFeed(options);
-  const details = createChesterCountyDetails({
-    ...options,
-    getSnapshot: acquire,
-  });
+  const acquire = options?.getSnapshot || createChesterCountyFeed(options);
+  const details =
+    options?.getDetails ||
+    createChesterCountyDetails({
+      ...options,
+      getSnapshot: acquire,
+    });
   async function handler(req, res, next) {
     const url = new URL(req.url, 'http://localhost');
     if (!['/', '/details'].includes(url.pathname)) return next();

@@ -11,13 +11,13 @@ export function createChesterCountyPanel({ store }) {
   let token;
   function refresh() {
     if (stopped || !store.owns(token, 'select')) return;
-    const nextLayer = manager?.layers.get(ID)?.module;
+    const nextLayer = manager?.layers?.get?.(ID)?.module;
     if (nextLayer !== layer) {
       unsubscribeLayer?.();
       layer = nextLayer;
       unsubscribeLayer = layer?.subscribeIncidentPanel?.(refresh);
     }
-    const model = manager?.isEnabled(ID)
+    const model = manager?.isEnabled?.(ID)
       ? layer?.getIncidentPanelState?.()
       : null;
     store.publish(
@@ -25,6 +25,7 @@ export function createChesterCountyPanel({ store }) {
         ? {
             enabled: true,
             categories: model.categories || ['fire', 'ems', 'traffic'],
+            counties: model.counties || [],
             total: model.total ?? model.list.items.length,
             info: model.info,
             chips: model.chips.map(({ id, label, disabled }) => ({
@@ -40,7 +41,7 @@ export function createChesterCountyPanel({ store }) {
   token = store.connect({
     category(category) {
       if (
-        !manager?.isEnabled(ID) ||
+        !manager?.isEnabled?.(ID) ||
         !['fire', 'ems', 'traffic'].includes(category)
       )
         return false;
@@ -50,8 +51,25 @@ export function createChesterCountyPanel({ store }) {
         : [...current, category];
       return manager.setLayerParams(ID, { categories }, { origin: 'user' });
     },
+    county(id) {
+      if (!manager?.isEnabled?.(ID)) return false;
+      const options = layer.getIncidentPanelState().counties || [];
+      if (!options.some((county) => county.id === id)) return false;
+      const current = options
+        .filter((county) => county.active)
+        .map((county) => county.id);
+      return manager.setLayerParams(
+        ID,
+        {
+          counties: current.includes(id)
+            ? current.filter((value) => value !== id)
+            : [...current, id],
+        },
+        { origin: 'user' },
+      );
+    },
     select(id) {
-      if (!manager?.isEnabled(ID)) return false;
+      if (!manager?.isEnabled?.(ID)) return false;
       return manager.setLayerParams(
         ID,
         { selectedIncident: id },
@@ -59,7 +77,7 @@ export function createChesterCountyPanel({ store }) {
       );
     },
     chip(id) {
-      if (!manager?.isEnabled(ID)) return false;
+      if (!manager?.isEnabled?.(ID)) return false;
       return layer
         ?.getIncidentPanelState?.()
         .chips.find((chip) => chip.id === id)
@@ -76,8 +94,11 @@ export function createChesterCountyPanel({ store }) {
       unsubscribeLayer?.();
       unsubscribeLayer = null;
       layer = null;
-      manager = next;
-      unsubscribe = manager?.subscribe((change) => {
+      manager =
+        next?.layers?.has(ID) && typeof next.isEnabled === 'function'
+          ? next
+          : null;
+      unsubscribe = manager?.subscribe?.((change) => {
         if (!change?.layerId || change.layerId === ID) refresh();
       });
       refresh();

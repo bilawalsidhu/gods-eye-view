@@ -22,7 +22,7 @@ export const PANEL_RAIL_ITEMS = Object.freeze({
   'pp-toggles': { icon: 'tune', label: msg('DISPLAY') },
   'chester-county-panel': {
     icon: 'local_fire_department',
-    label: msg('CHESCO INCIDENTS'),
+    label: msg('COUNTY EMS'),
   },
   'cctv-panel': { icon: 'videocam', label: msg('CCTV') },
   'weather-panel': { icon: 'partly_cloudy_day', label: msg('WEATHER') },

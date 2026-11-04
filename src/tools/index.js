@@ -27,6 +27,8 @@ import {
 } from './queries/environment.js';
 import {
   getChesterCountyIncidents,
+  getCountyIncidents,
+  getCountyIncidentDetails,
   getChesterCountyIncidentDetails,
 } from './queries/chesterCounty.js';
 import { getBhoteKoshiFlood } from './queries/events.js';
@@ -118,6 +120,8 @@ export const coreTools = Object.freeze([
   findInfrastructure,
   getBhoteKoshiFlood,
   getChesterCountyIncidents,
+  getCountyIncidents,
+  getCountyIncidentDetails,
   getChesterCountyIncidentDetails,
   getRegionalBrief,
   getCyclones,

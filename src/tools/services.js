@@ -11,7 +11,10 @@
 import { createAlprTileSource } from '../layers/alpr/source.js';
 import { GBFS_CITY_REGISTRY } from '../layers/bikeshare/registry.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
-import { createChesterCountyEmsSource } from '../layers/chesterCountyEms/source.js';
+import {
+  createChesterCountyEmsSource,
+  createCountyEmsSource,
+} from '../layers/chesterCountyEms/source.js';
 import { createCctvSource } from '../layers/cctv/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
@@ -61,6 +64,7 @@ export function createToolServices({ fetchImpl, appUrl, panelKey }) {
     satellites: createSatelliteSource({ fetchImpl }),
     cctv: createCctvSource({ fetchImpl }),
     chesterCounty: createChesterCountyEmsSource({ fetchImpl }),
+    countyIncidents: createCountyEmsSource({ fetchImpl }),
     radio: createRadioSource({ fetchImpl }),
     placeSearch: createPlaceSearchService({ fetchImpl }),
     routing: createRouteService({ fetchImpl }),

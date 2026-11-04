@@ -46,6 +46,10 @@ const layers = [
   {
     id: 'chester-county-ems',
     aliases: [
+      'county ems',
+      'county incidents',
+      'montgomery county ems',
+      'montco incidents',
       'chesco ems',
       'chester county incidents',
       'chester county ems',
@@ -53,7 +57,7 @@ const layers = [
     ],
     context: false,
     noQuery:
-      'use get_chester_county_incidents and get_chester_county_incident_details; unresolved public reports have no coordinates',
+      'use get_county_incidents and get_county_incident_details; unresolved public reports have no coordinates',
   },
   {
     id: 'gnss-integrity',

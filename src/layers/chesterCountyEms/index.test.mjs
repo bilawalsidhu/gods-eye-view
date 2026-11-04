@@ -107,7 +107,7 @@ test('failed refresh retains last report as stale; unlocated reports stay in lis
   assert.equal(layer.getStats().stale, true);
   assert.match(
     layer.getIncidentPanelState().info,
-    /Chester County incidents unavailable/,
+    /County incidents unavailable/,
   );
   assert.equal(layer.getStats().count, 1);
   layer.destroy();
@@ -316,7 +316,9 @@ test('category filters affect the map and app list without refetching or droppin
   await layer.update();
   const controls = layer.getRowControls();
   assert.deepEqual(
-    controls.chips.map(({ id, label, active }) => ({ id, label, active })),
+    controls.chips
+      .filter((chip) => !chip.id.startsWith('county:'))
+      .map(({ id, label, active }) => ({ id, label, active })),
     [
       { id: 'fire', label: 'Fire', active: true },
       { id: 'ems', label: 'EMS', active: true },
@@ -362,5 +364,68 @@ test('category filters affect the map and app list without refetching or droppin
   const detachedCounts = [rowChanges, appChanges];
   layer.setParams({ categories: [] });
   assert.deepEqual([rowChanges, appChanges], detachedCounts);
+  layer.destroy();
+});
+
+test('county filters isolate map/list selection and preserve independent county health on cards', async () => {
+  const montgomery = {
+    ...row,
+    id: 'montgomery-pa:ems:E2600001',
+    incidentNumber: 'E2600001',
+    countyId: 'montgomery-pa',
+    county: 'Montgomery County, PA',
+    detailUrl:
+      'https://webapp07.montcopa.org/eoc/cadinfo/livecad-incidents.asp?incident=E2600001',
+  };
+  const { layer, entities, entries } = setup({
+    getSnapshot: async () => ({
+      ...snapshot([row, montgomery]),
+      stale: true,
+      countyFeeds: [
+        {
+          id: 'chester-pa',
+          county: 'Chester County, PA',
+          stale: true,
+          count: 1,
+          observedAt: Date.now(),
+        },
+        {
+          id: 'montgomery-pa',
+          county: 'Montgomery County, PA',
+          stale: false,
+          count: 1,
+          observedAt: Date.now(),
+        },
+      ],
+    }),
+    getIncidentDetails: async () => ({ ...units, timestampBasis: 'retrieved' }),
+  });
+  await layer.update();
+  layer.setParams({ selectedIncident: montgomery.id });
+  await settle();
+  const card = entries.get('chester-county-ems-selected')[0];
+  assert.match(card.details.join(' '), /County: Montgomery County, PA/);
+  assert.match(card.details.join(' '), /Unit status checked:/);
+  assert.equal(card.details.includes('Stale data'), false);
+  layer.setParams(
+    layer.getRowControls().chips.find((c) => c.id === 'county:montgomery-pa')
+      .params,
+  );
+  assert.equal(entities.values.length, 1);
+  assert.equal(entries.has('chester-county-ems-selected'), false);
+  assert.deepEqual(
+    layer.getIncidentPanelState().list.items.map((r) => r.id),
+    [row.id],
+  );
+  assert.equal(
+    layer.getIncidentPanelState().counties.find((c) => c.id === 'montgomery-pa')
+      .active,
+    false,
+  );
+  layer.setParams({ counties: [] });
+  assert.equal(entities.values.length, 0);
+  assert.match(layer.getIncidentPanelState().info, /No matching incidents/);
+  layer.setParams({ counties: ['unknown'] });
+  assert.deepEqual(layer.getParams().counties, []);
   layer.destroy();
 });

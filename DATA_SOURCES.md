@@ -493,3 +493,15 @@ The county incident layer also reads category-specific WebCAD
 `livecadcomments-traffic.asp` links published by that active feed, on selection
 only. Public unit IDs, status text and entry timestamps retain the same county
 copyright terms. No live detail pages or unit records are bundled or archived.
+
+## Montgomery County, Pennsylvania public incidents (County EMS)
+
+The optional County EMS layer also reads Montgomery County's
+[official WebCAD page](https://www.montgomerycountypa.gov/departments/department-public-safety/webcad-active-incidents),
+[public incident/unit list](https://webapp07.montcopa.org/eoc/cadinfo/livecad-incidents.asp),
+and its [read-only active CAD map view](https://gis.montcopa.org/arcgis/rest/services/Hosted/Montgomery_County_Active_CAD_Incidents_View/FeatureServer/0).
+The county [offers its incident RSS for readers and aggregators](https://www.montgomerycountypa.gov/departments/department-public-safety/webcad-active-incidents/webcad-incident-status-rss-feed).
+No open redistribution licence was identified; © Montgomery County, PA.
+Records and county map coordinates are fetched at runtime only. No incident or
+GIS dataset is redistributed. Positions are approximate; unit times without
+dates remain undated. Traffic is not a complete police-call feed.

@@ -281,3 +281,71 @@ test('the real local MCP adapter lists and calls county tools through only the l
     'http://127.0.0.1:5000/api/chester-county-ems/details?incident=ems%3AF26000001',
   ]);
 });
+
+test('generic County EMS tools expose both counties and undated Montgomery units while legacy tools stay Chester-scoped', async () => {
+  const montgomery = {
+    ...mapped,
+    id: 'montgomery-pa:ems:E2600001',
+    incidentNumber: 'E2600001',
+    countyId: 'montgomery-pa',
+    county: 'Montgomery County, PA',
+    detailUrl:
+      'https://webapp07.montcopa.org/eoc/cadinfo/livecad-incidents.asp?incident=E2600001',
+  };
+  const combined = {
+    ...snapshot,
+    rows: [mapped, montgomery],
+    countyFeeds: [
+      { id: 'chester-pa', count: 1, stale: false },
+      { id: 'montgomery-pa', count: 1, stale: false },
+    ],
+  };
+  const services = {
+    app: { baseUrl: 'http://localhost:4173' },
+    chesterCounty: {
+      getSnapshot: async () => ({ ...snapshot, rows: [mapped] }),
+    },
+    countyIncidents: {
+      getSnapshot: async () => combined,
+      getIncidentDetails: async () => ({
+        ...details,
+        incidentNumber: montgomery.incidentNumber,
+        timestampBasis: 'retrieved',
+        units: [
+          {
+            unit: '001-1',
+            status: 'Enroute',
+            entered: '10:05 AM',
+            enteredAt: null,
+          },
+        ],
+      }),
+    },
+  };
+  const tools = composeCatalog({ tools: coreTools, services });
+  for (const surface of ['mcp', 'voice']) {
+    const names = toolsForSurface(coreTools, surface).map((tool) => tool.name);
+    assert.ok(names.includes('get_county_incidents'));
+    assert.ok(names.includes('get_county_incident_details'));
+  }
+  const all = await tools.call('get_county_incidents', {});
+  assert.equal(all.data.rows.length, 2);
+  const county = await tools.call('get_county_incidents', {
+    county: 'montgomery-pa',
+  });
+  assert.equal(county.data.rows.length, 1);
+  assert.equal(county.data.rows[0].county_id, 'montgomery-pa');
+  assert.equal(
+    (await tools.call('get_chester_county_incidents', {})).data.rows.length,
+    1,
+  );
+  const unit = await tools.call('get_county_incident_details', {
+    id: montgomery.id,
+  });
+  assert.equal(unit.data.unit_status.timestamp_basis, 'retrieved');
+  assert.equal(unit.data.unit_status.rows[0].entered_at, null);
+  assert.equal(unit.data.incident.county, 'Montgomery County, PA');
+  await assert.rejects(
+    tools.call('get_county_incidents', { county: 'unknown' }),
+  );
+});
