@@ -1,4 +1,8 @@
 import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+import {
+  AREA_CANDIDATE_ID_PATTERN,
+  MAX_AREA_CANDIDATE_ID_LENGTH,
+} from './areaCandidateContract.js';
 
 // Canonical action arguments. Descriptive wording is supplied separately.
 import {
@@ -174,10 +178,14 @@ const schemas = [
             'cctv-panel',
             'radio-panel',
             'scene-panel',
+            'utilities-panel',
             'pp-toggles',
             'global-context-panel',
             'weather-panel',
             'recent-imagery-panel',
+            'voice-settings',
+            'voice-preview',
+            'provider-settings',
           ],
         },
         open: {
@@ -185,6 +193,15 @@ const schemas = [
         },
       },
       required: ['panelId', 'open'],
+    },
+  },
+  {
+    name: 'set_voice_inactivity_timeout',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { minutes: { type: 'integer', minimum: 0, maximum: 60 } },
+      required: ['minutes'],
     },
   },
   {
@@ -223,6 +240,7 @@ const schemas = [
         aircraftClass: {
           type: 'string',
         },
+        voicePanel: { type: 'string', enum: ['preview', 'settings'] },
       },
       required: ['action'],
     },
@@ -235,15 +253,7 @@ const schemas = [
       properties: {
         style: {
           type: 'string',
-          enum: [
-            'normal',
-            'retro',
-            'surveillance',
-            'thermal',
-            'anime',
-            'noir',
-            'snow',
-          ],
+          enum: ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir'],
         },
       },
       required: ['style'],
@@ -729,7 +739,7 @@ const schemas = [
       properties: {
         motion: {
           type: 'string',
-          enum: ['orbit', 'pan', 'tilt', 'rotate', 'stop'],
+          enum: ['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe', 'stop'],
         },
         direction: {
           type: 'string',
@@ -782,10 +792,27 @@ const schemas = [
           properties: {
             kind: {
               type: 'string',
-              enum: ['view', 'region', 'radius', 'anywhere', 'pointer'],
+              enum: [
+                'view',
+                'region',
+                'radius',
+                'anywhere',
+                'pointer',
+                'area',
+                'drawn',
+                'annotation',
+              ],
             },
             name: {
               type: 'string',
+            },
+            areaId: {
+              type: 'string',
+              maxLength: 120,
+            },
+            id: {
+              type: 'string',
+              maxLength: 60,
             },
             km: {
               type: 'number',
@@ -840,6 +867,75 @@ const schemas = [
         followUp: {
           type: 'boolean',
         },
+      },
+    },
+  },
+  {
+    name: 'resolve_area',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        query: { type: 'string', minLength: 1, maxLength: 200 },
+        level: {
+          type: 'string',
+          enum: [
+            'country',
+            'admin1',
+            'admin2',
+            'city',
+            'district',
+            'natural',
+            'site',
+          ],
+        },
+        within: { type: 'string', maxLength: 120 },
+        candidateId: {
+          type: 'string',
+          minLength: 1,
+          maxLength: MAX_AREA_CANDIDATE_ID_LENGTH,
+          pattern: AREA_CANDIDATE_ID_PATTERN,
+        },
+        draw: { type: 'boolean' },
+        around: { type: 'boolean' },
+        radiusM: { type: 'number', minimum: 50, maximum: 20000 },
+        flyTo: { type: 'boolean' },
+      },
+    },
+  },
+  {
+    name: 'find_imagery',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        areaId: { type: 'string', maxLength: 120 },
+        area: { type: 'string', enum: ['view', 'pointer'] },
+        dateRange: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            from: { type: 'string', maxLength: 30 },
+            to: { type: 'string', maxLength: 30 },
+            days: { type: 'number', minimum: 1, maximum: 30 },
+          },
+        },
+        maxCloudPct: { type: 'number', minimum: 0, maximum: 100 },
+        source: { type: 'string', enum: ['hls', 'viirs', 'any'] },
+      },
+    },
+  },
+  {
+    name: 'osm_query',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['what'],
+      properties: {
+        what: { type: 'string', minLength: 1, maxLength: 80 },
+        areaId: { type: 'string', maxLength: 120 },
+        countOnly: { type: 'boolean' },
+        limit: { type: 'number', minimum: 1, maximum: 1000 },
       },
     },
   },

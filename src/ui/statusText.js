@@ -112,12 +112,46 @@ const FEED_ERROR_PATTERNS = [
   ],
 ];
 
+// Directions route failures (layers/directions/index.js), English data with
+// the route proxy's refusal or an HTTP status in them. Ahead of the feed
+// patterns, which would take "Routing failed: rate limited" for a source.
+// The route proxy's refusal texts (server/providers/places/routes.js) show
+// translated; any other text in {error} shows its catalog entry, or as given.
+const ROUTING_REFUSALS = new Set([
+  msg('rate limited'),
+  msg('routing service is rate limited'),
+  msg('route leg too long'),
+  msg('route too long'),
+  msg('routing busy — too many routes at once'),
+  msg('route proxy error'),
+]);
+const routingRefusal = (text) =>
+  ROUTING_REFUSALS.has(text) ? t(text) : translateKnown(text);
+const ROUTING_ERROR_PATTERNS = [
+  [
+    /^Routing unavailable \(HTTP (\d+)\)$/,
+    ([, status]) => t('Routing unavailable (HTTP {status})', { status }),
+  ],
+  [
+    /^Routing failed: (.+)$/,
+    ([, error]) =>
+      t('Routing failed: {error}', { error: routingRefusal(error) }),
+  ],
+  [
+    /^(.+) — try again in a moment$/,
+    ([, error]) =>
+      t('{error} — try again in a moment', { error: routingRefusal(error) }),
+  ],
+];
+
+const ERROR_PATTERNS = [...ROUTING_ERROR_PATTERNS, ...FEED_ERROR_PATTERNS];
+
 /** One error text in the UI language, or null when nothing matches. */
 function feedErrorText(text) {
   if (FEED_ERRORS.has(text)) return t(text);
   const known = translateKnown(text);
   if (known !== text) return known;
-  for (const [pattern, format] of FEED_ERROR_PATTERNS) {
+  for (const [pattern, format] of ERROR_PATTERNS) {
     const match = pattern.exec(text);
     if (match) return format(match);
   }
