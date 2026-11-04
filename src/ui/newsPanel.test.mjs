@@ -228,6 +228,11 @@ test('filters, the Local section and empty or failed reads', () => {
   assert.equal(panel.querySelector('[data-chip-id="ua-ru-war"]'), null);
   assert.equal(panel.querySelector('select[aria-label="Severity"]'), null);
   assert.equal(panel.querySelector('[aria-label="Latest news"]'), null);
+  assert.equal(document.getElementById('news-panel-count').textContent, '0');
+  news.update(
+    localView({ active: true, items: [feedCardView(report('near'), NOW)] }),
+  );
+  assert.equal(document.getElementById('news-panel-count').textContent, '1');
   news.update(localView({ active: true }));
   assert.match(
     panel.querySelector('[aria-label="Local"]').textContent,

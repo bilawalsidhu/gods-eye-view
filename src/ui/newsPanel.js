@@ -33,7 +33,10 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
     renderVue(h(NewsFeed, { view, onParams }), container);
     const hidden = !view;
     if (panel) set(panel, 'hidden', hidden);
-    if (count) set(count, 'textContent', String(view?.items.length ?? 0));
+    // The count is the shown section's: Local's list, else the feed.
+    const shown =
+      view?.filters?.section === 'local' ? view.inView?.items : view?.items;
+    if (count) set(count, 'textContent', String(shown?.length ?? 0));
     if (!hidden && panel && !appearedPanels.has(panel)) {
       appearedPanels.add(panel);
       // First appearance opens the panel unless a stored or shared collapse
