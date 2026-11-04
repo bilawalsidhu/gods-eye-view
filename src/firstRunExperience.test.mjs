@@ -983,7 +983,13 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
   const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter(
-    (tool) => tool.name !== 'set_cyber_sonar',
+    (tool) =>
+      ![
+        'set_cyber_sonar',
+        'resolve_area',
+        'find_imagery',
+        'osm_query',
+      ].includes(tool.name),
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;
@@ -1030,10 +1036,13 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // preserves the mission mapping and globe-rotation arguments.
   // S2 GhostMaps extends the generated layer enums; both feature contracts remain.
   // The layer alias hint leaves out aliases the layer id already spells.
-  assert.equal(block.length, 30901, 'serialized tool schema length drifted');
+  // The Utilities panel adds one set_panel_open target; Sea Marks and Ski
+  // Pistes extend the generated layer enums and alias hint; voice geometry
+  // adds the analyst area scopes and the osm-places layer.
+  assert.equal(block.length, 31318, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '9e1bd8fde648953c47718ba248758415a95c1484b0da6369df6b89b0505c0de2',
+    'f5b42f41c2f575838f979e88a1dbff615a77ccd85fdf8fcd0a0a47d02f7d3ddc',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
