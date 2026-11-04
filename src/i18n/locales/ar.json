@@ -3473,5 +3473,6 @@
   "Maximum event age: {days}d; undated markers are kept": "الحد الأقصى لعمر الحدث: {days} يوم؛ تُحفظ العلامات غير المؤرخة",
   "event age filter|All": "الكل",
   "Event age": "عمر الحدث",
-  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ"
+  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ",
+  "{name} opacity": "عتامة {name}"
 }

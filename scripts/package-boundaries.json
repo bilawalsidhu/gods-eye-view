@@ -746,7 +746,9 @@
       "src/ui/kit/UiBadge.vue",
       "src/ui/rail/fieldValue.js",
       "src/ui/kit/UiSlider.js",
-      "src/ui/kit/UiSegmented.vue"
+      "src/ui/kit/UiSegmented.vue",
+      "src/data/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue"
     ],
     "external": ["vue"]
   },
@@ -1179,7 +1181,9 @@
       "src/ui/views/panels/WildlifeSightingCard.vue",
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/layers/wildlifeSightings/photoText.js"
+      "src/layers/wildlifeSightings/photoText.js",
+      "src/data/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -3320,7 +3324,11 @@
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/data/layerOpacity.js",
+      "src/ui/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue",
+      "src/layers/sceneOpacity.js"
     ],
     "external": [
       "hls.js",
@@ -3970,7 +3978,8 @@
       "src/layers/wildlifeSightings/sprites.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/sceneOpacity.js"
     ],
     "external": [
       "hls.js",
@@ -4781,7 +4790,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/layers/sceneOpacity.js"
     ],
     "external": ["cesium"]
   },
@@ -4922,7 +4932,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/layers/sceneOpacity.js"
     ],
     "external": ["cesium"]
   },

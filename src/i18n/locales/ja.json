@@ -3098,5 +3098,6 @@
   "Maximum event age: {days}d; undated markers are kept": "イベントの最大経過日数：{days}日。日付のないマーカーは保持",
   "event age filter|All": "すべて",
   "Event age": "経過日数",
-  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持"
+  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持",
+  "{name} opacity": "{name}の不透明度"
 }

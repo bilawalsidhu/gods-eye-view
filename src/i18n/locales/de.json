@@ -3173,5 +3173,6 @@
   "Maximum event age: {days}d; undated markers are kept": "Maximales Ereignisalter: {days} Tage; undatierte Markierungen bleiben",
   "event age filter|All": "Alle",
   "Event age": "Ereignisalter",
-  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben"
+  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben",
+  "{name} opacity": "Deckkraft: {name}"
 }

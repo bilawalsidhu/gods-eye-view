@@ -1,7 +1,9 @@
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { LayerPresentation } from './layerPresentation.js';
+import { LayerOpacity } from '../ui/layerOpacity.js';
+import { governorRequestRender } from '../renderGovernor.js';
 import { createCyberSonarScene } from '../cyberSonarScene.js';
-import { panelAwareVisibility } from './embed.js';
+import { isEmbeddedInline, panelAwareVisibility } from './embed.js';
 /** Register the application layer catalog before allowing state restoration. */
 export function createApplicationData({
   scene: { viewer, mapStackController },
@@ -26,8 +28,18 @@ export function createApplicationData({
         `Data layers could not be destroyed: ${[...dataManager.layers.keys()].join(', ')}`,
       );
   });
+  // The opacity of the layers that can be dimmed; the panel presents it and
+  // the page address carries it (`?lop=`).
+  // An app embedded inline lives in its host's page: it reads the address but
+  // leaves the host's query alone.
+  const opacity = new LayerOpacity(dataManager, {
+    historyRef: isEmbeddedInline() ? null : globalThis.history,
+    requestRender: () => governorRequestRender('layer-opacity'),
+  });
+  defer(() => opacity.destroy());
   const presentation = new LayerPresentation(dataManager, {
     weatherClock: catalog?.weatherClock,
+    opacity,
   });
   defer(() => presentation.destroy());
   onData?.(dataManager);
@@ -39,6 +51,7 @@ export function createApplicationData({
     layer.attachMapStackController?.(mapStackController);
   // Restoration starts only after the caller's complete registry is sealed.
   dataManager.finalizeRegistrations(catalog.metadata);
+  opacity.restore();
   if (allowQaRegistration) {
     window.__gevQaRegisterLayer = (targetManager, layerModule) => {
       if (targetManager !== dataManager)
@@ -63,5 +76,5 @@ export function createApplicationData({
   styleManager.attachDataManager(dataManager);
   defer(createCyberSonarScene(viewer, dataManager));
 
-  return { dataManager, catalog, presentation };
+  return { dataManager, catalog, presentation, opacity };
 }

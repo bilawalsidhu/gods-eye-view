@@ -3248,5 +3248,6 @@
   "Maximum event age: {days}d; undated markers are kept": "Antigüedad máxima: {days} días; se conservan los marcadores sin fecha",
   "event age filter|All": "Todos",
   "Event age": "Antigüedad",
-  "Event age: {days}d · undated kept": "Antigüedad: {days} días · se conservan los marcadores sin fecha"
+  "Event age: {days}d · undated kept": "Antigüedad: {days} días · se conservan los marcadores sin fecha",
+  "{name} opacity": "Opacidad de {name}"
 }
