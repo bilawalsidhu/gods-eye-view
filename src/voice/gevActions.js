@@ -1144,11 +1144,14 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      // Chained fly-tos: a grab during the earlier one counts. The flight
-      // replaced is the last one that moved, past lookups that found nothing.
+      // Chained fly-tos: a grab during an earlier one still flying counts.
+      // The flight replaced is the last one that moved, past lookups that
+      // found nothing.
       const prior = voiceFlightTarget(voiceFlight);
-      const replaced = prior && !prior.done ? prior : null;
-      const flight = trackVoiceFlight(replaced?.inputCount, replaced);
+      const flight = trackVoiceFlight(
+        prior && !prior.done ? prior.inputCount : undefined,
+        prior,
+      );
       voiceFlight = flight;
       const flown = flyToRequestedLocation(viewer, args, {
         onFlightEnd: flight.settle,
@@ -2961,10 +2964,10 @@ let voiceFlightCount = 0;
 
 /**
  * A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once.
- * `replaced` is the last flight that moved, if still pending when this one
- * began (past lookups that found nothing). It is kept only
- * while this one may turn out to have moved nothing (a lookup that found no
- * place), so a queued motion can look past it.
+ * `replaced` is the last flight that moved when this one began (past lookups
+ * that found nothing), landed or not. It is kept only while this one may turn
+ * out to have moved nothing (a lookup that found no place), so a queued
+ * motion can look past it to that flight and its outcome.
  */
 function trackVoiceFlight(
   inputCount = manualCameraInputCount(),
@@ -2996,7 +2999,8 @@ function trackVoiceFlight(
  * actually started. A lookup that found nothing moved nothing, so look past
  * it to the flight it replaced, but never to one older than `start` (a flight
  * from an earlier reply). Null when every later lookup found nothing. With
- * no `start`, the latest flight that started, however old.
+ * no `start`, the latest flight that started, back through lookups that
+ * found nothing.
  */
 function voiceFlightTarget(latest, start = null) {
   let flight = latest;

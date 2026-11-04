@@ -791,6 +791,65 @@ test('two lookups that found nothing in a row still leave the motion waiting for
   assert.equal((await moved).ok, true);
 });
 
+// A flight that already settled is still what a later failed lookup replaced.
+test('a motion acts at a landed flight that a later failed lookup replaced', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const searches = [];
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+      searches.push({ query, options, resolve });
+    }),
+  });
+  const flyA = runner('fly_to_location', { query: 'Slow A' });
+  const moved = runner('move_camera', { motion: 'orbit' });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  flights[0].complete();
+  const flyC = runner('fly_to_location', { query: 'Nowhere C' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // B's start made A's lookup stale; C then finds nothing.
+  searches[0].resolve({ cancelled: true });
+  searches[1].resolve(null);
+  assert.equal((await flyA).cancelled, true);
+  assert.equal((await flyC).ok, false);
+  const result = await moved;
+  assert.equal(result.ok, true, result.error);
+});
+
+test('a motion refuses when the flight a later failed lookup replaced was cancelled', async () => {
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const searches = [];
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+      searches.push({ query, options, resolve });
+    }),
+  });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  const moved = runner('move_camera', { motion: 'orbit' });
+  const flyA = runner('fly_to_location', { query: 'Slow A' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The motion sees Austin land, then follows A's lookup.
+  flights[0].complete();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  flights[1].cancel();
+  const flyC = runner('fly_to_location', { query: 'Nowhere C' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  searches[0].resolve({ cancelled: true });
+  searches[1].resolve(null);
+  assert.equal((await flyA).cancelled, true);
+  assert.equal((await flyC).ok, false);
+  const result = await moved;
+  assert.equal(result.ok, false);
+  assert.match(result.error, /did not arrive/);
+});
+
 test('a stale motion does not follow a newer reply\'s fly-to', async () => {
   const { viewer, styleManager, flights } = tiltAfterFlightHarness();
   const runner = createGevActionRunner({
