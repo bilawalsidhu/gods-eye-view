@@ -104,7 +104,10 @@ test('the daily count survives cache sweeps and a restart of the real compositio
     ...quick,
   });
   const again = mount({ storageDir, gate: second });
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  // The saved count loads asynchronously; wait for it, not for a fixed time
+  // that a busy machine overruns.
+  for (let i = 0; i < 100 && second.stats().usedToday !== 3; i++)
+    await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(second.stats().usedToday, 3, 'the count came back');
   assert.equal((await again('/?q=place-new')).status, 200);
   const capped = await again('/?q=place-over');
