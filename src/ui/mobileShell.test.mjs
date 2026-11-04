@@ -629,10 +629,26 @@ test('the phone shell keeps the required attribution visible', () => {
   const dock = rule('body.mobile-shell #command-dock');
   const voice = rule('body.mobile-shell #command-dock #gev-voice-control');
   assert.match(voice, /height: var\(--mobile-voice-height\);/);
-  const voiceHeightPx =
-    Number(/--mobile-voice-height: ([\d.]+)rem/.exec(css)[1]) * 16;
-  // Idle: the credit line clears the voice bar, which clears the tab bar.
-  assert.ok(lift(idleCredit) > lift(dock) + voiceHeightPx);
+  const voiceHeightRem = Number(
+    /--mobile-voice-height: ([\d.]+)rem/.exec(css)[1],
+  );
+  // Share the rem-aware switcher offset, never the old fixed 106px lift.
+  assert.match(
+    idleCredit,
+    /bottom: var\(--mobile-view-switcher-bottom\) !important;/,
+  );
+  assert.doesNotMatch(idleCredit, /106px/);
+  const offset =
+    /--mobile-view-switcher-bottom: calc\(var\(--mobile-tab-space\) \+ ([\d.]+)px \+ var\(--mobile-voice-height\) \+ ([\d.]+)px\)/.exec(
+      css,
+    );
+  assert.ok(offset, 'offset must track the rem-sized voice height');
+  for (const rootPx of [16, 24]) {
+    const voiceHeightPx = voiceHeightRem * rootPx;
+    const creditLift = Number(offset[1]) + voiceHeightPx + Number(offset[2]);
+    assert.ok(creditLift > lift(dock) + voiceHeightPx);
+    if (rootPx === 16) assert.equal(creditLift, 106);
+  }
   // It must beat the dock's :has() placements, so the offset is !important.
   assert.match(idleCredit, /\) !important;/);
   assert.doesNotMatch(

@@ -395,7 +395,8 @@ body.mobile-shell #command-dock #gev-voice-control {
 body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   #cesium-credits {
   right: auto;
-  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;
+  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;,
+  bottom: var(--mobile-view-switcher-bottom) !important;
   left: 10px;
   /* With the base rule's nowrap the credits run off the right edge, and a
      max-width alone wrapped them into a narrow column: the line needs wrapping
