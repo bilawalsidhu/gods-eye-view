@@ -1,0 +1,444 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  normalizeFeedPayload,
+  normalizeHotspotsPayload,
+  normalizeOutlinePayload,
+} from './records.js';
+import {
+  NEWS_IN_VIEW_RADIUS_KM,
+  ageWords,
+  beaconPixelSize,
+  cardEvents,
+  cardView,
+  distanceKm,
+  eventPixelSize,
+  feedCardView,
+  feedQueryFor,
+  hotspotLabel,
+  hotspotTrend,
+  isPressing,
+  markerStyle,
+  mergeFeedPage,
+  normalizeFilters,
+  passesFilters,
+  reportMarkerPosition,
+  reportSeverity,
+  reportsInView,
+  sidesLine,
+  sourceLinkLabel,
+  viewCell,
+  visibleOnMap,
+  withinNewsWindow,
+} from './model.js';
+import { newsFeedQuery } from './source.js';
+
+const NOW = Date.parse('2026-10-28T10:00:00Z');
+const report = (id, publishedAt, extra = {}) => ({
+  id,
+  title: `Report ${id}`,
+  url: `https://example.com/${id}`,
+  publishedAt,
+  publisher: 'Example',
+  side: 'UA',
+  category: 'strike',
+  hotspotIds: ['ua'],
+  geo: {
+    lat: 50,
+    lon: 36,
+    place: 'Kharkiv',
+    precision: 'city',
+    mappable: true,
+  },
+  pins: [
+    { lat: 50, lon: 36, place: 'Kharkiv', precision: 'city', mappable: true },
+  ],
+  ...extra,
+});
+const event = (extra = {}) => ({
+  status: 'both-sides',
+  size: 6,
+  severity: 3,
+  lastAt: '2026-10-28T09:30:00Z',
+  sides: [
+    { side: 'UA', title: 'a', url: 'https://a.test/', publisher: 'A' },
+    { side: 'RU', title: 'b', url: 'https://b.test/', publisher: 'B' },
+  ],
+  image: { url: 'https://a.test/p.jpg', publisher: 'A' },
+  ...extra,
+});
+
+test('payloads are validated record by record; empty and malformed payloads', () => {
+  const hotspots = normalizeHotspotsPayload({
+    hotspots: [
+      {
+        id: 'ua',
+        name: 'UA',
+        bbox: [22, 44, 42, 56],
+        parties: ['UA', 'RU', '<x>'],
+        counts: { last24h: 3 },
+      },
+      { id: 'bad', name: 'Bad', bbox: [42, 44, 22, 56] },
+      { id: '../x', name: 'Bad id', bbox: [22, 44, 42, 56] },
+    ],
+    ingest: { lastRunAt: '2026-10-28T10:00:00Z' },
+  });
+  assert.deepEqual(
+    hotspots.hotspots.map((h) => [h.id, h.parties, h.last24h]),
+    [['ua', ['UA', 'RU'], 3]],
+  );
+  assert.equal(hotspots.lastRunAt, '2026-10-28T10:00:00.000Z');
+  assert.equal(normalizeHotspotsPayload({}), null);
+  assert.equal(normalizeHotspotsPayload(null), null);
+  assert.deepEqual(normalizeHotspotsPayload({ hotspots: [] }).hotspots, []);
+
+  const feed = normalizeFeedPayload({
+    reports: [
+      {
+        id: 'r_1',
+        title: ' Strike  on Kharkiv ',
+        url: 'https://x.test/a',
+        publishedAt: '2026-10-28T09:00:00Z',
+        geo: { lat: 50, lon: 36, mappable: true },
+        media: ['video', 'video', 'audio'],
+        event: { size: 3, image: { url: 'http://x.test/p.jpg' } },
+      },
+      {
+        id: 'r_2',
+        title: 'Bad link',
+        url: 'javascript:alert(1)',
+        publishedAt: '2026-10-28T09:00:00Z',
+      },
+      {
+        id: 'r_3',
+        title: 'Bad geo',
+        url: 'https://user:pw@x.test/c',
+        publishedAt: '2026-10-28T09:00:00Z',
+      },
+      {
+        id: 'r_4',
+        title: 'Off the globe',
+        url: 'https://x.test/d',
+        publishedAt: '2026-10-28T09:00:00Z',
+        geo: { lat: 200, lon: 36 },
+      },
+    ],
+    nextBefore: '2026-10-28T08:00:00Z',
+  });
+  assert.deepEqual(
+    feed.reports.map((r) => [r.id, r.title, Boolean(r.geo), r.pins.length]),
+    [
+      ['r_1', 'Strike on Kharkiv', true, 1],
+      ['r_4', 'Off the globe', false, 0],
+    ],
+  );
+  assert.deepEqual(feed.reports[0].media, ['video']);
+  // A picture must be HTTPS on the publisher's site.
+  assert.equal(feed.reports[0].event.image, null);
+  assert.equal(feed.nextBefore, '2026-10-28T08:00:00.000Z');
+  assert.equal(normalizeFeedPayload({ reports: 'x' }), null);
+  assert.deepEqual(normalizeFeedPayload({ reports: [] }), {
+    reports: [],
+    nextBefore: null,
+  });
+});
+
+test('outlines keep valid rings, borders and named disputed areas', () => {
+  const ring = [
+    [30, 45],
+    [31, 45],
+    [31, 46],
+  ];
+  const outline = normalizeOutlinePayload({
+    polygons: [{ outer: ring, holes: [[[0, 0]]] }, { outer: [[1, 2]] }],
+    borders: [ring, 'x'],
+    disputed: [
+      {
+        name: 'Crimea',
+        kind: 'held',
+        heldBy: 'RU',
+        claimedBy: 'UA',
+        rings: [ring],
+      },
+      { name: 'No rings', rings: [] },
+      { name: 'Odd kind', kind: 'zzz', heldBy: 'nope', rings: [ring] },
+    ],
+  });
+  assert.equal(outline.polygons.length, 1);
+  assert.deepEqual(outline.polygons[0].holes, []);
+  assert.equal(outline.borders.length, 1);
+  assert.deepEqual(
+    outline.disputed.map((d) => [d.name, d.kind, d.heldBy]),
+    [
+      ['Crimea', 'held', 'RU'],
+      ['Odd kind', 'held', null],
+    ],
+  );
+  assert.deepEqual(normalizeOutlinePayload(null), {
+    polygons: [],
+    borders: [],
+    disputed: [],
+  });
+});
+
+test('feed pages merge newest first without duplicates', () => {
+  const a = report('a', '2026-10-28T10:00:00Z');
+  const b = report('b', '2026-10-28T09:00:00Z');
+  const c = report('c', '2026-10-28T08:00:00Z');
+  let feed = mergeFeedPage(
+    { items: [] },
+    { reports: [a, b], nextBefore: 'B' },
+    'replace',
+  );
+  assert.deepEqual(
+    [feed.items.map((r) => r.id), feed.nextBefore],
+    [['a', 'b'], 'B'],
+  );
+  feed = mergeFeedPage(feed, { reports: [b, c], nextBefore: null }, 'append');
+  assert.deepEqual(
+    [feed.items.map((r) => r.id), feed.nextBefore],
+    [['a', 'b', 'c'], null],
+  );
+  const newer = report('n', '2026-10-28T11:00:00Z');
+  feed = mergeFeedPage(
+    { ...feed, nextBefore: 'C' },
+    { reports: [newer, a], nextBefore: 'X' },
+    'head',
+  );
+  assert.deepEqual(
+    [feed.items.map((r) => r.id), feed.nextBefore],
+    [['n', 'a', 'b', 'c'], 'C'],
+  );
+  assert.deepEqual(
+    mergeFeedPage({ items: [] }, { reports: [], nextBefore: null }, 'replace'),
+    { items: [], nextBefore: null },
+  );
+});
+
+test('filters default to significant news and map to a last-24-hours query', () => {
+  const hotspots = [{ id: 'ua' }, { id: 'me' }];
+  const filters = normalizeFilters(
+    { hotspot: 'ua', category: 'nope', minSeverity: 9 },
+    hotspots,
+  );
+  assert.deepEqual(filters, {
+    hotspot: 'ua',
+    category: 'all',
+    minSeverity: 2,
+    includeMinor: false,
+    cards: true,
+  });
+  assert.equal(normalizeFilters({ cards: false }, hotspots).cards, false);
+  assert.equal(normalizeFilters({ minSeverity: 0 }, hotspots).minSeverity, 0);
+  assert.equal(normalizeFilters({ hotspot: 'gone' }, hotspots).hotspot, 'all');
+  assert.equal(
+    newsFeedQuery(
+      feedQueryFor(filters, { before: '2026-10-28T08:00:00.000Z' }),
+    ),
+    'hotspot=ua&before=2026-10-28T08%3A00%3A00.000Z&limit=60&relevance=core%2Crelated&today=1&events=1',
+  );
+  // "Include minor news" drops the relevance filter.
+  assert.doesNotMatch(
+    newsFeedQuery(feedQueryFor({ ...filters, includeMinor: true })),
+    /relevance/,
+  );
+});
+
+test('only the last 24 hours pass, and the severity floor applies', () => {
+  const filters = normalizeFilters();
+  const fresh = report('f', '2026-10-28T09:00:00Z', { severity: 2 });
+  const minor = report('m', '2026-10-28T09:00:00Z', { severity: 1 });
+  const old = report('o', '2026-10-27T09:00:00Z', { severity: 3 });
+  assert.equal(withinNewsWindow(fresh, NOW), true);
+  assert.equal(withinNewsWindow(old, NOW), false);
+  assert.equal(withinNewsWindow({ publishedAt: 'x' }, NOW), false);
+  assert.deepEqual(
+    [fresh, minor, old]
+      .filter((r) => passesFilters(r, filters, NOW))
+      .map((r) => r.id),
+    ['f'],
+  );
+  assert.equal(visibleOnMap(minor, { ...filters, minSeverity: 0 }, NOW), true);
+  assert.equal(visibleOnMap(fresh, { ...filters, hotspot: 'me' }, NOW), false);
+});
+
+test('ageWords says now, minutes or hours', () => {
+  assert.equal(ageWords('2026-10-28T09:59:30Z', NOW), 'now');
+  assert.equal(ageWords('2026-10-28T09:55:00Z', NOW), '5 min');
+  assert.equal(ageWords('2026-10-28T07:10:00Z', NOW), '2 h');
+  assert.equal(ageWords('2026-10-26T07:10:00Z', NOW), '24 h');
+  assert.equal(ageWords('not a date', NOW), '');
+});
+
+test('markers spread deterministically near their place; source link line', () => {
+  const r = report('r_spread', '2026-10-28T10:00:00Z');
+  const p1 = reportMarkerPosition(r);
+  assert.deepEqual(reportMarkerPosition(r), p1);
+  assert.ok(Math.abs(p1.lat - 50) < 0.02 && Math.abs(p1.lon - 36) < 0.04);
+  assert.notDeepEqual(
+    reportMarkerPosition(report('r_other', r.publishedAt)),
+    p1,
+  );
+  assert.equal(
+    sourceLinkLabel('https://www.reliefweb.int/report/x'),
+    'Source: reliefweb.int ↗',
+  );
+  assert.equal(sourceLinkLabel('not a url'), '');
+});
+
+test('beacons carry a focus, a size by activity and a trend only against a prior day', () => {
+  const { hotspots } = normalizeHotspotsPayload({
+    hotspots: [
+      {
+        id: 'a',
+        name: 'A',
+        bbox: [20, 40, 40, 50],
+        focus: { lat: 45, lon: 30 },
+        counts: { last24h: 120, prev24h: 80 },
+      },
+      {
+        id: 'b',
+        name: 'B',
+        bbox: [20, 40, 40, 50],
+        focus: { lat: 80, lon: 30 },
+      },
+    ],
+  });
+  assert.deepEqual(
+    hotspots.map((h) => h.focus),
+    [
+      { lat: 45, lon: 30 },
+      { lat: 45, lon: 30 },
+    ],
+  );
+  assert.equal(hotspotTrend(120, 80), '▲');
+  assert.equal(hotspotTrend(50, 80), '▼');
+  assert.equal(hotspotTrend(85, 80), '');
+  assert.equal(hotspotTrend(40, 0), '');
+  assert.equal(beaconPixelSize(0), 10);
+  assert.equal(beaconPixelSize(10_000), 26);
+  assert.equal(
+    hotspotLabel({ id: 'ua-ru-war', name: 'Russia–Ukraine war' }),
+    'Ukraine–Russia',
+  );
+  assert.equal(hotspotLabel({ id: 'new-one', name: 'New one' }), 'New one');
+  assert.equal(
+    hotspotLabel({ id: 'x', name: 'X', catchAll: true }),
+    'Elsewhere',
+  );
+});
+
+test('marker style: severity fill, attestation rim, size by sources, fading with age', () => {
+  const r = report('r_style', '2026-10-28T10:00:00Z', {
+    severity: 2,
+    event: event({
+      status: 'claimed',
+      size: 4,
+      lastAt: '2026-10-28T10:00:00Z',
+    }),
+  });
+  const fresh = markerStyle(r, NOW);
+  assert.equal(fresh.severity, 3); // the event's, when higher than the report's
+  assert.equal(fresh.rim, 'claimed');
+  assert.equal(fresh.size, eventPixelSize(4));
+  assert.equal(fresh.alpha, 1);
+  assert.equal(markerStyle(r, NOW + 48 * 3_600_000).alpha, 0.45);
+  assert.equal(reportSeverity({ category: 'political' }), 0);
+  assert.equal(reportSeverity({ category: 'strike' }), 1);
+});
+
+test('picture cards: physical, two or more sources, major or pressing, at most ten', () => {
+  const big = report('big', '2026-10-28T09:30:00Z', { event: event() });
+  const statement = report('st', '2026-10-28T09:30:00Z', {
+    category: 'political',
+    event: event(),
+  });
+  const lone = report('lone', '2026-10-28T09:30:00Z', {
+    event: event({ size: 1 }),
+  });
+  const stale = report('stale', '2026-10-28T01:00:00Z', {
+    event: event({ severity: 2, lastAt: '2026-10-28T01:00:00Z' }),
+  });
+  assert.equal(isPressing(big, NOW), true);
+  assert.deepEqual(
+    cardEvents([statement, lone, stale, big], NOW).map((r) => r.id),
+    ['big'],
+  );
+  const many = Array.from({ length: 14 }, (_, i) =>
+    report(`m${i}`, '2026-10-28T09:30:00Z', { event: event() }),
+  );
+  assert.equal(cardEvents(many, NOW).length, 10);
+  const view = cardView(big, NOW);
+  assert.equal(view.image, 'https://a.test/p.jpg');
+  assert.equal(view.credit, 'A');
+  assert.equal(view.meta, '30 min · 6 sources · UA, RU');
+  assert.equal(cardView(lone, NOW).image, null);
+});
+
+test('feed cards read like Breaking: headline, meta parts, sides and chips', () => {
+  const r = report('fc', '2026-10-28T09:00:00Z', {
+    title: 'Удар по Харкову',
+    titleEn: 'Strike on Kharkiv',
+    affiliation: 'military',
+    media: ['video', 'photo'],
+    geo: { lat: 50, lon: 36, place: 'Kharkiv', mappable: true, byModel: true },
+    event: event({ lastAt: '2026-10-28T09:50:00Z' }),
+  });
+  const view = feedCardView(r, NOW);
+  assert.equal(view.title, 'Strike on Kharkiv');
+  assert.equal(view.original, 'Удар по Харкову');
+  assert.equal(view.placedByModel, true);
+  assert.equal(view.severityLabel, 'Major');
+  assert.equal(view.color, '#d7301f');
+  assert.equal(view.category, 'Strike');
+  assert.equal(view.place, 'Kharkiv');
+  assert.equal(view.sources, '6 sources');
+  assert.equal(view.age, '10 min');
+  assert.equal(view.sides, 'Reported by UA sources · RU sources');
+  assert.deepEqual(view.picture, { url: 'https://a.test/p.jpg', credit: 'A' });
+  assert.deepEqual(
+    view.chips.map((c) => [c.kind, c.label]),
+    [
+      ['official', 'Official'],
+      ['confirmed', 'Reported by both sides'],
+      ['media', 'Video'],
+      ['media', 'Photos'],
+    ],
+  );
+  assert.deepEqual(
+    view.others.map((o) => o.side),
+    ['RU'],
+  );
+  // A lone report: its own side, no picture, one source.
+  const single = feedCardView(report('s', '2026-10-28T09:00:00Z'), NOW);
+  assert.equal(single.sides, 'Reported by UA sources');
+  assert.equal(single.picture, null);
+  assert.equal(single.original, null);
+  assert.equal(sidesLine({ side: 'unknown' }), '');
+});
+
+test('in view: half-degree cells and reports within 500 km of the centre', () => {
+  assert.equal(viewCell({ lat: 50.2, lon: 36.7 }), '100:73');
+  assert.equal(viewCell({ lat: 50.4, lon: 36.9 }), '100:73');
+  assert.notEqual(viewCell({ lat: 50.6, lon: 36.7 }), '100:73');
+  assert.ok(
+    Math.abs(distanceKm({ lat: 0, lon: 0 }, { lat: 0, lon: 1 }) - 111.2) < 0.5,
+  );
+  const filters = normalizeFilters({ minSeverity: 0 });
+  const near = report('near', '2026-10-28T09:00:00Z', { severity: 1 });
+  const major = report('major', '2026-10-28T08:00:00Z', { severity: 3 });
+  const far = report('far', '2026-10-28T09:00:00Z', {
+    pins: [{ lat: 31.5, lon: 34.4, place: 'Gaza', mappable: true }],
+  });
+  const old = report('old', '2026-10-27T08:00:00Z');
+  const centre = { lat: 49, lon: 36 };
+  assert.ok(distanceKm(centre, far.pins[0]) > NEWS_IN_VIEW_RADIUS_KM);
+  assert.deepEqual(
+    reportsInView([near, far, old, major], centre, filters, NOW).map(
+      (r) => r.id,
+    ),
+    ['major', 'near'],
+  );
+  assert.deepEqual(reportsInView([near], null, filters, NOW), []);
+  assert.deepEqual(reportsInView([], centre, filters, NOW), []);
+});

@@ -4817,6 +4817,17 @@
     ],
     "external": []
   },
+  "news-source": {
+    "exports": ["./layers/news/source"],
+    "modules": [
+      "src/layers/news/source.js",
+      "src/layers/news/records.js",
+      "src/sources/httpBody.js",
+      "src/sources/capability.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
   "perimeters-source": {
     "exports": ["./layers/perimeters/source"],
     "modules": [
