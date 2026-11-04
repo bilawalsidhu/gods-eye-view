@@ -54,7 +54,8 @@ export function createLifecycle({
         layerState._billboards.show = true;
       }
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, true);
-      layerState._heatImagery?.setShow(true);
+      // A filter can leave an old raster cached while the current set is empty.
+      layerState._heatImagery?.setShow(layerState._fires.length > 0);
       // The camera can have crossed the hand-off while the layer was off.
       components.rendering.applyHandoffFade(true);
       components.viewport.installLodWatcher();
