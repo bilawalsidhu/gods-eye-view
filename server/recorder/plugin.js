@@ -1,4 +1,4 @@
-import { readFileSync, statSync, statfsSync } from 'node:fs';
+import { readFileSync, statfsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aisStreamRows } from '../providers/vessels/ais-store.js';
@@ -8,7 +8,14 @@ import {
   militaryPoints,
   vesselPoints,
 } from './extract.js';
-import { mergedSettings, recorderConfig } from './config.js';
+import {
+  ALL_LAYERS,
+  cleanSettings,
+  mergedSettings,
+  parseDuration,
+  recorderConfig,
+  saveConfigFile,
+} from './config.js';
 import { exportPoints, summarizeTrack } from './exporters.js';
 import { createPgStore } from './pgStore.js';
 import { createRecorder } from './recorder.js';
@@ -124,7 +131,7 @@ export function recorderPlugin(env = process.env) {
     }
 
     let satPoll = null;
-    if (config.layers.includes('sat')) {
+    {
       const satGroups = config.satGroups.length
         ? config.satGroups
         : DEFAULT_SAT_GROUPS;
@@ -172,7 +179,10 @@ export function recorderPlugin(env = process.env) {
       satPoll = setInterval(() => {
         try {
           // Whole steps, so timer jitter never makes a sample look too soon.
-          recorder.ingestMany(sats.points(Math.round(nowSec() / step) * step));
+          if (recorder.settings().layers?.includes('sat'))
+            recorder.ingestMany(
+              sats.points(Math.round(nowSec() / step) * step),
+            );
         } catch {
           // Keep polling.
         }
@@ -188,6 +198,19 @@ export function recorderPlugin(env = process.env) {
       }
     }, VESSEL_POLL_MS);
     poll.unref?.();
+
+    /** Which settings an environment variable sets, so the panel can say so. */
+    const lockedSettings = () =>
+      Object.entries({
+        retention: ['GEV_HISTORY_RETENTION', 'GEV_HISTORY_DAYS'],
+        maxMb: ['GEV_HISTORY_MAX_MB'],
+        interval: ['GEV_RECORDER_INTERVAL'],
+        layers: ['GEV_RECORDER_LAYERS'],
+      })
+        .filter(([, names]) =>
+          names.some((name) => env[name] !== undefined && env[name] !== ''),
+        )
+        .map(([key]) => key);
 
     server.middlewares.use('/api/history', async (req, res) => {
       // A reverse proxy on this machine makes every request look like loopback,
@@ -205,11 +228,11 @@ export function recorderPlugin(env = process.env) {
         const from = intParam(q.get('from')) ?? 0;
         const to = intParam(q.get('to')) ?? nowSec();
         if (url.pathname === '/status') {
+          const live = recorder.settings();
           let bytes = 0;
           try {
-            bytes = config.databaseUrl
-              ? await recorder.store.usedBytes()
-              : statSync(file).size;
+            // Space in use, so thinning shows at once (the file itself keeps its size).
+            bytes = await recorder.store.usedBytes();
           } catch {
             // The file appears with the first flush.
           }
@@ -228,15 +251,45 @@ export function recorderPlugin(env = process.env) {
             layer_counts: await recorder.store.layerCounts(),
             disk_free_bytes: diskFree,
             recording: true,
-            retention_days: config.retentionSec / 86400,
-            retention_sec: config.retentionSec,
+            retention_days: live.retentionSec / 86400,
+            retention_sec: live.retentionSec,
             backend: config.databaseUrl ? 'postgres' : 'sqlite',
-            layers: config.layers,
-            interval_sec: config.intervalSec,
-            max_bytes: config.maxBytes,
+            layers: live.layers,
+            available_layers: ALL_LAYERS,
+            interval_sec: live.intervalSec,
+            max_bytes: live.maxBytes,
+            // Settings an environment variable fixes: a change lasts until restart.
+            locked: lockedSettings(),
             bytes,
           });
         }
+        if (url.pathname === '/settings' && req.method === 'POST')
+          return readJson(req, res, async (body) => {
+            const { runtime, file: saved } = cleanSettings(body);
+            recorder.configure(runtime);
+            // Applied now; kept in the settings file so a restart keeps it.
+            let kept = true;
+            try {
+              saveConfigFile(root, saved, env);
+            } catch {
+              kept = false;
+            }
+            return sendJson(res, 200, { applied: true, saved: kept });
+          });
+        if (url.pathname === '/thin' && req.method === 'POST')
+          return readJson(req, res, async (body) => {
+            const olderSec = parseDuration(body?.olderThan || '1d');
+            const bucket = Math.floor(Number(body?.keepEvery ?? 60));
+            if (!(olderSec > 0)) throw new TypeError('Pick an age above zero');
+            if (!(bucket >= 1 && bucket <= 86400))
+              throw new TypeError('Keep one point every 1 to 86400 seconds');
+            const result = await recorder.store.thinOld({
+              before: nowSec() - olderSec,
+              bucket,
+              dryRun: body?.dryRun !== false,
+            });
+            return sendJson(res, 200, result);
+          });
         if (url.pathname === '/fences') {
           if (req.method === 'POST')
             return readJson(req, res, async (body) => {

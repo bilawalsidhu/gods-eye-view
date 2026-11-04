@@ -112,6 +112,31 @@ export function openHistoryStore(file) {
           limit,
         );
     },
+    /**
+     * Keeps one position per contact per `bucket` seconds for everything
+     * before `before`; pinned contacts are left alone. With `dryRun` it only
+     * counts what would go. Returns { removed, total }.
+     */
+    thinOld({ before, bucket, dryRun = false }) {
+      const total = db.prepare('SELECT COUNT(*) AS n FROM positions').get().n;
+      const where = `ts < ? AND id NOT IN (SELECT id FROM pins) AND rowid NOT IN (
+        SELECT MIN(rowid) FROM positions WHERE ts < ?
+        GROUP BY layer, id, CAST(ts / CAST(? AS INTEGER) AS INTEGER))`;
+      const args = [before, before, bucket];
+      if (dryRun)
+        return {
+          removed: Number(
+            db
+              .prepare(`SELECT COUNT(*) AS n FROM positions WHERE ${where}`)
+              .get(...args).n,
+          ),
+          total: Number(total),
+        };
+      const removed = db
+        .prepare(`DELETE FROM positions WHERE ${where}`)
+        .run(...args).changes;
+      return { removed: Number(removed), total: Number(total) };
+    },
     /** Number of saved positions per layer. */
     layerCounts() {
       return Object.fromEntries(

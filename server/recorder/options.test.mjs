@@ -311,3 +311,59 @@ test('density counts different contacts per grid square, not saved points', asyn
   });
   assert.equal(west.length, 1);
 });
+
+test('settings from the panel are checked, applied at once and saved', async () => {
+  const { cleanSettings, saveConfigFile, loadConfigFile } = await import('./config.js');
+  const { mkdtempSync, readFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const ok = cleanSettings({ retention: '14d', maxMb: '250', interval: 20, layers: ['air', 'bogus', 'sat'] });
+  assert.equal(ok.runtime.retentionSec, 14 * 86400);
+  assert.equal(ok.runtime.maxBytes, 250 * 1048576);
+  assert.deepEqual(ok.runtime.layers, ['air', 'sat']);
+  assert.throws(() => cleanSettings({ retention: 'soon' }));
+  assert.throws(() => cleanSettings({ maxMb: -1 }));
+  assert.throws(() => cleanSettings({ interval: 0 }));
+  assert.throws(() => cleanSettings({ layers: ['bogus'] }));
+
+  const store = (await import('./store.js')).openHistoryStore(':memory:');
+  const rec = createRecorder({ store, layers: ['air'], intervalSec: 30 });
+  rec.ingest(pt({ id: 'm', layer: 'mil', ts: 100 }));
+  rec.configure(ok.runtime);
+  assert.deepEqual(rec.settings().layers, ['air', 'sat']);
+  assert.equal(rec.settings().intervalSec, 20);
+  rec.ingest(pt({ id: 'a', ts: 100 }));
+  rec.ingest(pt({ id: 'a', ts: 121, lat: 11 })); // 21 s later: now kept
+  await rec.flush();
+  assert.equal(store.range().count, 2, 'the mil point came before layers allowed it');
+  await rec.close();
+
+  const dir = mkdtempSync(path.join(tmpdir(), 'gev-set-'));
+  saveConfigFile(dir, ok.file, {});
+  saveConfigFile(dir, { interval: 45 }, {});
+  const saved = JSON.parse(readFileSync(path.join(dir, 'recorder.config.json'), 'utf8'));
+  assert.equal(saved.retention, '14d');
+  assert.equal(saved.interval, 45, 'a later save keeps earlier values');
+  assert.equal(loadConfigFile(dir, {}).GEV_HISTORY_RETENTION, '14d');
+});
+
+test('thinning keeps one point per contact per bucket, spares pins and can preview', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const store = openHistoryStore(':memory:');
+  const rows = [];
+  for (let t = 0; t < 600; t += 10) {
+    rows.push(pt({ id: 'a', ts: t }), pt({ id: 'b', ts: t }), pt({ id: 'keep', ts: t }));
+  }
+  rows.push(pt({ id: 'a', ts: 5000 }));
+  store.insertMany(rows);
+  store.addPin('keep', 1);
+  const before = store.range().count;
+  const preview = store.thinOld({ before: 1000, bucket: 60, dryRun: true });
+  assert.equal(store.range().count, before, 'a preview deletes nothing');
+  const done = store.thinOld({ before: 1000, bucket: 60 });
+  assert.equal(done.removed, preview.removed);
+  // a and b: 600 s in 60 s buckets leaves 10 each; the recent point and the pinned contact stay.
+  assert.equal(store.track('a', 0, 9999).length, 11);
+  assert.equal(store.track('b', 0, 9999).length, 10);
+  assert.equal(store.track('keep', 0, 9999).length, 60);
+});

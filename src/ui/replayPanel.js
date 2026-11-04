@@ -1,6 +1,11 @@
 import { msg, t, translateKnown } from '../i18n/index.js';
 import { aircraftEmergency } from '../data/aircraftEmergency.js';
-import { formatBytes, formatSpan, storageUse } from '../replay/model.js';
+import {
+  formatBytes,
+  formatSpan,
+  formatSpanCompact,
+  storageUse,
+} from '../replay/model.js';
 import { alertsEnabled, announce, setAlerts } from './replayAlerts.js';
 import { createRailTimeline, utcClock } from './railTimeline.js';
 
@@ -17,6 +22,8 @@ const LEFT = msg('{contact} left {fence}');
 const EMERGENCY = msg('{contact}: {status} (squawk {squawk})');
 const EMERGENCY_ADSB = msg('{contact}: {status}');
 const EMERGENCY_TITLE = msg('Emergency broadcast');
+const COULD_NOT_APPLY = msg('Could not apply the settings');
+const COULD_NOT_THIN = msg('Could not thin the data');
 const BLOCKED = msg(
   'Browser notifications are blocked. Alerts sound and show here only.',
 );
@@ -154,6 +161,188 @@ export function createReplayPanel({ container, controller } = {}) {
   heatLegend.append(heatSwatch, heatText);
   const compareLine = document.createElement('div');
   compareLine.className = 'replay-alerts';
+  // Settings and thinning: changed here, applied at once, and saved to the
+  // settings file so they last.
+  const settingsBlock = document.createElement('div');
+  settingsBlock.className = 'replay-settings';
+  settingsBlock.hidden = true;
+  const field = (label, input) => {
+    const wrap = document.createElement('label');
+    wrap.className = 'replay-field';
+    const text = document.createElement('span');
+    text.textContent = label;
+    wrap.append(text, input);
+    return wrap;
+  };
+  const retentionIn = makeInput(
+    settingsBlock,
+    'text',
+    t('Keep for (6h, 14d, 8w, 3m, 1y)'),
+  );
+  const capIn = makeInput(
+    settingsBlock,
+    'number',
+    t('Size cap in MB (0 for none)'),
+  );
+  const intervalIn = makeInput(
+    settingsBlock,
+    'number',
+    t('Save a point every (seconds)'),
+  );
+  capIn.min = '0';
+  intervalIn.min = '1';
+  intervalIn.max = '3600';
+  const settingsInputs = {
+    retention: retentionIn,
+    maxMb: capIn,
+    interval: intervalIn,
+  };
+  settingsBlock.replaceChildren(
+    field(t('Keep for (6h, 14d, 8w, 3m, 1y)'), retentionIn),
+    field(t('Size cap in MB (0 for none)'), capIn),
+    field(t('Save a point every (seconds)'), intervalIn),
+  );
+  const recordLabel = document.createElement('div');
+  recordLabel.className = 'replay-alerts';
+  recordLabel.textContent = t('Record these layers');
+  const recordRow = document.createElement('div');
+  recordRow.className = 'replay-chips';
+  const recordChosen = new Set();
+  const recordChips = LAYER_LABELS.map(([id, label]) => [
+    id,
+    makeChip(recordRow, t(label), t('Record this layer'), () => {
+      if (recordChosen.has(id)) recordChosen.delete(id);
+      else recordChosen.add(id);
+      settingsDirty = true;
+      render(controller.state());
+    }),
+  ]);
+  const settingsNote = document.createElement('div');
+  settingsNote.className = 'replay-alerts';
+  let settingsMessage = '';
+  let settingsDirty = false;
+  // Typing marks the form as edited, so a refresh does not overwrite it.
+  for (const input of Object.values(settingsInputs))
+    input.addEventListener('input', () => {
+      settingsDirty = true;
+    });
+  const applyRow = document.createElement('div');
+  applyRow.className = 'replay-chips';
+  makeChip(
+    applyRow,
+    t('APPLY'),
+    t('Apply these settings now and save them'),
+    async () => {
+      try {
+        const result = await controller.saveSettings({
+          retention: retentionIn.value,
+          maxMb: capIn.value === '' ? 0 : capIn.value,
+          interval: intervalIn.value,
+          layers: [...recordChosen],
+        });
+        settingsDirty = false;
+        settingsMessage = result.saved
+          ? t('Settings applied')
+          : t(
+              'Settings applied for now, but could not be saved to the settings file',
+            );
+      } catch (error) {
+        settingsMessage = `${t(COULD_NOT_APPLY)}: ${error.message}`;
+      }
+      render(controller.state());
+    },
+  );
+  const thinLabel = document.createElement('div');
+  thinLabel.className = 'replay-alerts';
+  thinLabel.textContent = t('Thin old data');
+  const olderIn = makeInput(
+    settingsBlock,
+    'text',
+    t('Older than (6h, 14d, 8w)'),
+  );
+  const everyIn = makeInput(
+    settingsBlock,
+    'number',
+    t('Keep one point every (seconds)'),
+  );
+  olderIn.value = '1d';
+  everyIn.value = '60';
+  everyIn.min = '1';
+  const thinFields = document.createElement('div');
+  thinFields.className = 'replay-settings';
+  thinFields.append(
+    field(t('Older than (6h, 14d, 8w)'), olderIn),
+    field(t('Keep one point every (seconds)'), everyIn),
+  );
+  const thinRow = document.createElement('div');
+  thinRow.className = 'replay-chips';
+  const thinNote = document.createElement('div');
+  thinNote.className = 'replay-alerts';
+  let previewed = '';
+  const thinParams = () => ({
+    olderThan: olderIn.value,
+    keepEvery: everyIn.value,
+  });
+  const thinNow = makeChip(
+    thinRow,
+    t('THIN NOW'),
+    t('Remove the extra points; pinned contacts are never thinned'),
+    async () => {
+      try {
+        const r = await controller.thin({ ...thinParams(), dryRun: false });
+        thinNote.textContent = t('Removed {removed} of {total} positions', {
+          removed: r.removed.toLocaleString(),
+          total: r.total.toLocaleString(),
+        });
+      } catch (error) {
+        thinNote.textContent = `${t(COULD_NOT_THIN)}: ${error.message}`;
+      }
+      previewed = '';
+      render(controller.state());
+    },
+  );
+  makeChip(
+    thinRow,
+    t('PREVIEW'),
+    t('Count what thinning would remove'),
+    async () => {
+      try {
+        const r = await controller.thin({ ...thinParams(), dryRun: true });
+        previewed = JSON.stringify(thinParams());
+        thinNote.textContent = t(
+          'Would remove {removed} of {total} positions',
+          {
+            removed: r.removed.toLocaleString(),
+            total: r.total.toLocaleString(),
+          },
+        );
+      } catch (error) {
+        previewed = '';
+        thinNote.textContent = `${t(COULD_NOT_THIN)}: ${error.message}`;
+      }
+      render(controller.state());
+    },
+  );
+  settingsBlock.append(
+    recordLabel,
+    recordRow,
+    applyRow,
+    settingsNote,
+    thinLabel,
+    thinFields,
+    thinRow,
+    thinNote,
+  );
+  const settingsChip = makeChip(
+    analysisRow,
+    t('SETTINGS'),
+    t('Change how the recorder keeps data'),
+    () => {
+      settingsBlock.hidden = !settingsBlock.hidden;
+      if (!settingsBlock.hidden) settingsDirty = false;
+      render(controller.state());
+    },
+  );
   const findRow = document.createElement('div');
   findRow.className = 'replay-chips';
   const ident = makeInput(findRow, 'text', t('Identifier'));
@@ -284,6 +473,7 @@ export function createReplayPanel({ container, controller } = {}) {
     analysisRow,
     heatLegend,
     compareLine,
+    settingsBlock,
     findRow,
     trackLine,
     exportRow,
@@ -359,6 +549,51 @@ export function createReplayPanel({ container, controller } = {}) {
     set(compareLine, 'hidden', !c);
   };
 
+  const renderSettings = (state) => {
+    const s = state.status;
+    set(
+      settingsChip,
+      'className',
+      `data-toggle-chip${settingsBlock.hidden ? '' : ' active'}`,
+    );
+    if (!s || settingsBlock.hidden) return;
+    // Show what the recorder uses now, until the viewer starts editing.
+    if (!settingsDirty) {
+      retentionIn.value = s.retention_sec
+        ? formatSpanCompact(s.retention_sec)
+        : '0';
+      capIn.value = s.max_bytes
+        ? String(Math.round(s.max_bytes / 1048576))
+        : '0';
+      intervalIn.value = String(s.interval_sec ?? 30);
+      recordChosen.clear();
+      for (const id of s.layers ?? []) recordChosen.add(id);
+    }
+    const locked = new Set(s.locked ?? []);
+    for (const [key, input] of Object.entries(settingsInputs))
+      input.classList.toggle('replay-locked', locked.has(key));
+    for (const [id, node] of recordChips) {
+      set(node, 'hidden', !(s.available_layers ?? []).includes(id));
+      set(
+        node,
+        'className',
+        `data-toggle-chip${recordChosen.has(id) ? ' active' : ''}`,
+      );
+    }
+    const lockedText = locked.size
+      ? t(
+          'Dashed settings are also fixed by environment variables, which return after a restart.',
+        )
+      : '';
+    set(
+      settingsNote,
+      'textContent',
+      [settingsMessage, lockedText].filter(Boolean).join(' '),
+    );
+    const current = JSON.stringify(thinParams());
+    set(thinNow, 'disabled', previewed !== current);
+  };
+
   const renderStorage = (s) => {
     set(storage, 'hidden', !s);
     if (!s) return;
@@ -423,7 +658,11 @@ export function createReplayPanel({ container, controller } = {}) {
         : use.basis === 'cap'
           ? t('Nearly full. The oldest positions are being dropped.')
           : t('Disk nearly full. Lower retention or set a size cap.');
-    set(storageWarn, 'textContent', warn);
+    set(
+      storageWarn,
+      'textContent',
+      warn ? `${warn} ${t('Open SETTINGS to thin old data.')}` : '',
+    );
     set(storageWarn, 'hidden', !warn);
   };
 
@@ -455,6 +694,7 @@ export function createReplayPanel({ container, controller } = {}) {
     );
     renderStorage(state.status);
     renderAnalysis(state);
+    renderSettings(state);
     set(start, 'disabled', state.loading || !state.range);
     set(fit, 'disabled', !state.active || !state.contacts);
     set(jump, 'disabled', state.loading || !state.range);

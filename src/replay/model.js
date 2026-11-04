@@ -182,3 +182,16 @@ export function diffContacts(before, after) {
     stayed: after.filter((p) => was.has(key(p))),
   };
 }
+
+/** Seconds as the settings file spells them: 12h, 7d, 8w; 0 is forever. */
+export function formatSpanCompact(seconds) {
+  const s = Number(seconds) || 0;
+  if (s <= 0) return '0';
+  for (const [unit, size] of [
+    ['w', 604800],
+    ['d', 86400],
+    ['h', 3600],
+  ])
+    if (s % size === 0) return `${s / size}${unit}`;
+  return `${Math.round(s / 86400)}d`;
+}

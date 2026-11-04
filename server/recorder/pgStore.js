@@ -175,6 +175,27 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         [`%${escaped}%`, term, `${escaped}%`, limit],
       );
     },
+    /** See the SQLite store: one position per contact per `bucket` seconds before `before`. */
+    async thinOld({ before, bucket, dryRun = false }) {
+      const [{ n: total }] = await rows('SELECT COUNT(*) AS n FROM positions');
+      const doomed = `SELECT ctid FROM (
+          SELECT ctid, id, row_number() OVER (
+            PARTITION BY layer, id, (ts / $2::bigint) ORDER BY ts) AS rn
+          FROM positions WHERE ts < $1) d
+        WHERE rn > 1 AND id NOT IN (SELECT id FROM pins)`;
+      if (dryRun) {
+        const [{ n }] = await rows(`SELECT COUNT(*) AS n FROM (${doomed}) x`, [
+          before,
+          bucket,
+        ]);
+        return { removed: Number(n), total: Number(total) };
+      }
+      const res = await query(
+        `DELETE FROM positions WHERE ctid IN (${doomed})`,
+        [before, bucket],
+      );
+      return { removed: res.rowCount, total: Number(total) };
+    },
     async layerCounts() {
       return Object.fromEntries(
         (

@@ -23,7 +23,7 @@ function turnDeg(a, b) {
 export function createThinner({ minGapSec = MIN_GAP_SEC } = {}) {
   /** @type {Map<string,{ts:number,lat:number,lon:number,heading:number|null}>} */
   const last = new Map();
-  return function keep(p) {
+  function keep(p) {
     const key = `${p.layer}:${p.id}`;
     const prev = last.get(key);
     if (
@@ -38,5 +38,9 @@ export function createThinner({ minGapSec = MIN_GAP_SEC } = {}) {
     last.set(key, { ts: p.ts, lat: p.lat, lon: p.lon, heading: p.heading });
     if (last.size > MAX_TRACKED) last.delete(last.keys().next().value);
     return true;
+  }
+  keep.setMinGap = (seconds) => {
+    minGapSec = seconds;
   };
+  return keep;
 }

@@ -175,6 +175,29 @@ and the panel lists the newest events. Press WATCH in the panel and drag a box o
 routes below. Changing fences needs a JSON request from this origin, which stops
 other web pages from editing them.
 
+## Settings in the panel, and thinning old data
+
+**SETTINGS** opens a small form for how the recorder keeps data: how long to
+keep it (6h, 14d, 8w, 3m, 1y; 0 keeps everything), the size cap in MB (0 for
+none), how often to save a point for one contact, and which layers to record.
+APPLY changes them at once, with no restart, and writes them to
+`recorder.config.json` so they last. If the file cannot be written the change
+still applies until the next restart and the panel says so. A setting that an
+environment variable also sets (`GEV_HISTORY_RETENTION` and the others) has a
+dashed box: the environment variable wins again after a restart. The database
+location and the PostgreSQL address are not changeable from the panel.
+Satellite sampling keeps the interval it started with until a restart.
+
+**Thinning** keeps the history but at a coarser grain. Give an age (for
+example `1d`) and a gap in seconds (for example 60): for everything older
+than that, one point per contact per gap is kept and the rest are removed.
+PREVIEW counts what would go, and THIN NOW (enabled only after a preview of the
+same numbers) does it. Pinned contacts are never thinned. Thinning frees space
+inside the database file, so the storage bar drops at once, while the file on
+disk may stay the same size until it is reused. In the red zone the storage
+warning points here. In these boxes `m` means months and there is no minutes
+unit, so use hours (`1h`) for short ages.
+
 ## Heat map and comparing two times
 
 **HEAT** draws where contacts were densest during the period the panel covers
@@ -233,6 +256,8 @@ and only announces ones that happen after the page opened.
 - `GET /api/history/events?since&fence&limit` — enter and exit events, newest first.
 - `GET /api/history/at?to=<epoch s>&bbox&layers` — last position of each
   contact within 10 minutes before `to`.
+- `POST /api/history/settings` — change retention, size cap, interval or layers (`{ retention, maxMb, interval, layers }`); applied at once and saved. Same-origin JSON only.
+- `POST /api/history/thin` — `{ olderThan, keepEvery, dryRun }`; `dryRun` (the default) only counts. Returns `{ removed, total }`.
 - `GET /api/history/density?from&to&cell&bbox&layers` — contacts seen per `cell`-degree square, busiest first (up to 20,000 squares).
 - `GET /api/history/notices?since&limit` — area events and emergency alerts in one list, newest first.
 - `GET /api/history/search?q=` — contacts whose id, callsign or name contains

@@ -26,7 +26,7 @@ export function createRecorder({
   now = () => Date.now(),
 }) {
   const keep = createThinner({ minGapSec: intervalSec });
-  const wanted = layers ? new Set(layers) : null;
+  let wanted = layers ? new Set(layers) : null;
   let buffer = [];
   let eventBuffer = [];
   let nameBuffer = [];
@@ -129,6 +129,23 @@ export function createRecorder({
 
   return {
     store,
+    /** What the recorder is using now. */
+    settings: () => ({
+      retentionSec,
+      maxBytes,
+      intervalSec,
+      layers: wanted ? [...wanted] : null,
+    }),
+    /** Changes settings from now on: { retentionSec, maxBytes, intervalSec, layers }. */
+    configure(patch) {
+      if (patch.retentionSec !== undefined) retentionSec = patch.retentionSec;
+      if (patch.maxBytes !== undefined) maxBytes = patch.maxBytes;
+      if (patch.intervalSec !== undefined) {
+        intervalSec = patch.intervalSec;
+        keep.setMinGap(intervalSec);
+      }
+      if (patch.layers !== undefined) wanted = new Set(patch.layers);
+    },
     /** Accepts one point: { id, layer, lat, lon, alt, heading, speed, ts }. */
     ingest(point) {
       if (wanted && !wanted.has(point.layer)) return;

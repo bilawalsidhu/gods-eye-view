@@ -212,7 +212,15 @@ export function createReplayController({
       ...init,
       headers: { 'Content-Type': 'application/json' },
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+      try {
+        message = (await response.json()).error || message;
+      } catch {
+        // Keep the status line.
+      }
+      throw new Error(message);
+    }
     return response.json();
   }
 
@@ -677,6 +685,24 @@ export function createReplayController({
       await analysis.refreshHeat();
     },
     findTrack,
+    /** Changes how the recorder keeps data; { retention, maxMb, interval, layers }. */
+    async saveSettings(values) {
+      const result = await sendJson('/api/history/settings', {
+        method: 'POST',
+        body: JSON.stringify(values),
+      });
+      await refreshRange();
+      return result;
+    },
+    /** Counts (dryRun) or removes extra old points; { olderThan, keepEvery, dryRun }. */
+    async thin(params) {
+      const result = await sendJson('/api/history/thin', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+      if (!params.dryRun) await refreshRange();
+      return result;
+    },
     /** Shows or hides where contacts were densest in the current period. */
     toggleHeat: () => analysis.showHeat(!analysis.state().heat),
     /** Marks who appeared, went and stayed between two times (epoch ms). */

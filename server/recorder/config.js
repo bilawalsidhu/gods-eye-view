@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const UNITS = { h: 3600, d: 86400, w: 604800, m: 2592000, y: 31536000 };
@@ -52,6 +52,49 @@ export function loadConfigFile(root, env = process.env) {
   set('GEV_HISTORY_DB', raw.database);
   if (raw.file) out.GEV_HISTORY_FILE = path.resolve(root, String(raw.file));
   return out;
+}
+
+/**
+ * Checks settings sent from the panel and returns them in the forms the
+ * recorder and the settings file use, or throws a message the panel can show.
+ */
+export function cleanSettings(input = {}) {
+  const out = { runtime: {}, file: {} };
+  if (input.retention !== undefined) {
+    const text = String(input.retention).trim() || '7d';
+    out.runtime.retentionSec = parseDuration(text);
+    out.file.retention = text;
+  }
+  if (input.maxMb !== undefined) {
+    const mb = Number(input.maxMb);
+    if (!Number.isFinite(mb) || mb < 0 || mb > 1e7)
+      throw new TypeError('The size cap must be 0 (none) or a number of MB');
+    out.runtime.maxBytes = Math.round(mb * 1048576);
+    out.file.maxMb = mb;
+  }
+  if (input.interval !== undefined) {
+    const seconds = Number(input.interval);
+    if (!(seconds >= 1 && seconds <= 3600))
+      throw new TypeError('The interval must be 1 to 3600 seconds');
+    out.runtime.intervalSec = seconds;
+    out.file.interval = seconds;
+  }
+  if (input.layers !== undefined) {
+    const list = [].concat(input.layers).filter((l) => ALL_LAYERS.includes(l));
+    if (!list.length) throw new TypeError('Pick at least one layer');
+    out.runtime.layers = list;
+    out.file.layers = list;
+  }
+  return out;
+}
+
+/** Merges values into the settings file (created if there is none); returns its path. */
+export function saveConfigFile(root, values, env = process.env) {
+  const target = path.resolve(root, env.GEV_RECORDER_CONFIG || CONFIG_FILE);
+  let raw = {};
+  if (existsSync(target)) raw = JSON.parse(readFileSync(target, 'utf8'));
+  writeFileSync(target, `${JSON.stringify({ ...raw, ...values }, null, 2)}\n`);
+  return target;
 }
 
 /** Settings file first, then environment variables on top of it. */

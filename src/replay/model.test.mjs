@@ -148,3 +148,11 @@ test('comparing two times names who appeared, went and stayed', async () => {
   assert.deepEqual(out.gone.map((c) => c.id), ['a', 'x']);
   assert.deepEqual(out.stayed.map((c) => c.id), ['b']);
 });
+
+test('retention is spelled the way the settings file spells it', async () => {
+  const { formatSpanCompact } = await import('./model.js');
+  assert.equal(formatSpanCompact(0), '0');
+  assert.equal(formatSpanCompact(7 * 86400), '1w');
+  assert.equal(formatSpanCompact(10 * 86400), '10d');
+  assert.equal(formatSpanCompact(12 * 3600), '12h');
+});

@@ -219,3 +219,28 @@
     rgba(255, 60, 60, 0.92)
   );
 }
+
+/* Settings: a label above each box, locked ones dashed. */
+.replay-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.replay-settings[hidden] {
+  display: none;
+}
+.replay-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-input.replay-locked {
+  border-style: dashed;
+}
+/* A row input grows sideways; in a labelled field it must keep its height. */
+.replay-field .replay-input {
+  flex: 0 0 auto;
+}
