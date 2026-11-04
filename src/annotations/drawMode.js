@@ -21,7 +21,11 @@ import { t, tn } from '../i18n/index.js';
  */
 
 import { greatCircleMeters } from '../geoDistance.js';
-import { formatDistanceText } from '../data/distanceFormat.js';
+import { formatDistanceText, METRES_PER_FOOT } from '../data/distanceFormat.js';
+import { getUnitSystem } from '../ui/unitLabels.js';
+
+/** Square feet in one acre; 640 acres make a square mile. */
+const SQUARE_FEET_PER_ACRE = 43560;
 
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
@@ -204,11 +208,25 @@ export function ringCentroid(vertices) {
   };
 }
 
-/** Distance or area, formatted for a label suffix. */
+/**
+ * Distance or area, formatted for a label suffix in the page's unit system:
+ * m, ha and km², or ft, acres and mi² under imperial units.
+ */
 export function formatMeasure(session) {
   if (!session) return '';
+  const system = getUnitSystem();
   if (session.shape === 'line') {
-    return formatDistanceText(pathLengthM(session.vertices)) ?? '';
+    return formatDistanceText(pathLengthM(session.vertices), { system }) ?? '';
+  }
+  if (session.shape === 'area' && system === 'imperial') {
+    const ft2 =
+      ringAreaM2(session.vertices) / (METRES_PER_FOOT * METRES_PER_FOOT);
+    // Round before each unit cut, as for metric areas.
+    const whole = Math.round(ft2);
+    const acres = (ft2 / SQUARE_FEET_PER_ACRE).toFixed(1);
+    if (whole < SQUARE_FEET_PER_ACRE) return `${whole} ft²`;
+    if (Number(acres) < 640) return `${acres} ac`;
+    return `${(ft2 / (640 * SQUARE_FEET_PER_ACRE)).toFixed(2)} mi²`;
   }
   if (session.shape === 'area') {
     const m2 = ringAreaM2(session.vertices);

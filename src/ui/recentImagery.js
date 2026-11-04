@@ -25,7 +25,12 @@ import {
   wvsSnapshotUrl,
 } from '../layers/recentImagery/model.js';
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
-import { formatQuantity } from './unitLabels.js';
+import {
+  convertQuantity,
+  formatMeasure,
+  onUnitSystemChange,
+  unitLabel,
+} from './unitLabels.js';
 import { pointerOwnerName } from '../data/pointerOwnerNames.js';
 
 const PANEL_ID = 'recent-imagery-panel';
@@ -76,10 +81,10 @@ export function localizeNotice(text) {
   const tooLarge = TOO_LARGE.exec(text);
   if (!tooLarge) return translateKnown(text);
   const values = {
-    size: formatQuantity(Number(tooLarge[2].replace(/,/g, '')), 'km', {
+    size: formatMeasure(Number(tooLarge[2].replace(/,/g, '')), 'km', {
       useGrouping: true,
     }),
-    limit: formatQuantity(Number(tooLarge[3].replace(/,/g, '')), 'km', {
+    limit: formatMeasure(Number(tooLarge[3].replace(/,/g, '')), 'km', {
       useGrouping: true,
     }),
   };
@@ -126,10 +131,12 @@ const sensorLine = (product) =>
 const utcTime = (iso) => (hhmm(iso) ? `${hhmm(iso)}Z` : '');
 const longerSideKm = (size) =>
   Math.max(Number(size?.width) || 0, Number(size?.height) || 0);
+/** A box side's number in the active unit system: km, or mi under imperial. */
 const kmText = (km) => {
   if (!Number.isFinite(km)) return '?';
-  const digits = km >= 100 ? 0 : 1;
-  return formatNumber(km, {
+  const side = convertQuantity(km, 'km').value;
+  const digits = side >= 100 ? 0 : 1;
+  return formatNumber(side, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
@@ -549,9 +556,10 @@ export function createRecentImageryPanel({
     if (snapshot.box)
       lines.push({
         id: 'box',
-        text: t('Box {width} × {height} km', {
+        text: t('Box {width} × {height} {unit}', {
           width: kmText(snapshot.boxSizeKm?.width),
           height: kmText(snapshot.boxSizeKm?.height),
+          unit: unitLabel(convertQuantity(0, 'km').unit),
         }),
       });
     if (focus) {
@@ -946,6 +954,7 @@ export function createRecentImageryPanel({
   });
   // The readout's text is translated here; show it again in a new locale.
   const offLocale = onLocaleChange(render);
+  const offUnits = onUnitSystemChange(render);
   render();
 
   return {
@@ -956,6 +965,7 @@ export function createRecentImageryPanel({
       destroyed = true;
       unsubscribe();
       offLocale();
+      offUnits();
       layer.setToolHandler?.(null);
       split?.destroy();
       split = null;

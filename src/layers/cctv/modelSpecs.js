@@ -603,15 +603,20 @@ export function specFovCapabilityToken(
 /**
  * One-line spec summary for HUD meta text.
  * @param {Object} spec - A record from this module.
+ * @param {{lengthText?: (meters: number) => string}} [options] Words the
+ *   night-vision range; plain metres when omitted.
  * @returns {string} e.g. 'Axis Q6135-LE · 1080p · IR 250m · PTZ' ('' for null).
  */
-export function specSummary(spec) {
+export function specSummary(
+  spec,
+  { lengthText = (meters) => `${meters}m` } = {},
+) {
   if (!spec) return '';
   const parts = [`${spec.brand} ${spec.model}`];
   if (spec.resolution?.label) parts.push(spec.resolution.label);
   if (spec.night_vision) {
     parts.push(
-      `${spec.night_vision.type.toUpperCase()}${spec.night_vision.range_m ? ` ${spec.night_vision.range_m}m` : ''}`,
+      `${spec.night_vision.type.toUpperCase()}${spec.night_vision.range_m ? ` ${lengthText(spec.night_vision.range_m)}` : ''}`,
     );
   }
   if (spec.ptz) parts.push('PTZ');

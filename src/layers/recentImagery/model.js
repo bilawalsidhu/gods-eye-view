@@ -11,7 +11,7 @@ const msg = (text) => text;
 /** How far back the catalog looks, in UTC days. */
 export const CATALOG_DAYS = 30;
 
-const MAX_BOX_SIDE_KM = 1000;
+export const MAX_BOX_SIDE_KM = 1000;
 /** ZOOM IN lands where the top-down view is this wide, well inside the cap. */
 const FIT_VIEW_KM = 400;
 const FIT_HEIGHT_KM = Object.freeze({ min: 5, max: 400 });

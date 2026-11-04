@@ -24,7 +24,13 @@ import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
 import { composeLocalityTag } from './hudLocality.js';
-import { hudQuantity, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
+import {
+  hudAltitude,
+  hudMeasure,
+  hudReadout,
+  LOCALIZED_LOCALITY,
+} from './hudLocalityFormat.js';
+import { onUnitSystemChange } from './ui/unitLabels.js';
 import {
   ellipsoidalToMslDisplayM,
   ensureGeoidReady,
@@ -346,6 +352,9 @@ export class IntelHUD {
     this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
     this._offLocale = onLocaleChange(() => this._relocalize());
+    // The summary line's altitude, view window and distance follow the unit
+    // system; the AI reply, worded in prose, stays.
+    this._offUnits = onUnitSystemChange(() => this._markSummaryDirty());
     this._startTimers();
   }
 
@@ -540,7 +549,7 @@ export class IntelHUD {
       Math.min(9, 10.25 - 3.32 * Math.log10(gsdInches)),
     );
     // i18n-ignore: sensor codes
-    readouts.gsd = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
+    readouts.gsd = `GSD: ${hudReadout(gsd, 2)}  NIIRS: ${niirs.toFixed(1)}`;
 
     // Altitude — reported as height above MEAN SEA LEVEL. `altM` is the raw
     // ellipsoidal camera height, which reads far below zero wherever the geoid
@@ -551,7 +560,7 @@ export class IntelHUD {
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
     // i18n-ignore: sensor codes
-    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    readouts.alt = `ALT: ${hudReadout(altMslM, 0)}   SUN: ${sunEl.toFixed(1)}° EL`;
 
     // Collection timestamp
     const now = new Date();
@@ -802,12 +811,9 @@ export class IntelHUD {
     const altDisplayM = Number.isFinite(m.altMslM) ? m.altMslM : m.altM;
     // Display only: the AI summary request carries its own context, so this
     // line is built in the active language.
-    const altTag =
-      altDisplayM >= 1000
-        ? hudQuantity(altDisplayM / 1000, 'km', 1)
-        : hudQuantity(Math.round(altDisplayM), 'm');
+    const altTag = hudAltitude(altDisplayM);
     const winTag = window
-      ? `${hudQuantity(Math.max(1, Math.round(window.widthKm)), '')}x${hudQuantity(Math.max(1, Math.round(window.heightKm)), 'km')}`
+      ? `${hudMeasure(window.widthKm, '')}x${hudMeasure(window.heightKm, 'km')}`
       : t('N/A');
     // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon sector.
     const localityTag = composeLocalityTag(
@@ -1224,5 +1230,6 @@ export class IntelHUD {
     this._vesselUnsubscribe?.();
     this._summaryRequest?.abort();
     this._offLocale();
+    this._offUnits();
   }
 }

@@ -9,9 +9,13 @@ import {
   translateKnown,
 } from '../../i18n/index.js';
 import { sourceStatusLabel } from '../../ui/layerNames.js';
-import { formatQuantity } from '../../ui/unitLabels.js';
+import {
+  formatDistance,
+  formatMeasure,
+  onUnitSystemChange,
+} from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
-import { distanceParts } from '../../data/distanceFormat.js';
+import { localizeCoverageLabel } from './coverageLabel.js';
 
 /** Format a cohort total without presenting a retained cap as exact. */
 export function formatAwarenessCount(summary = {}) {
@@ -31,21 +35,26 @@ function presentAwarenessCount(summary = {}) {
     : count;
 }
 
-/** A distance as the panel shows it: 850 m, 4.6 km, 120 km, in the UI language. */
+/**
+ * A distance as the panel shows it: 850 m, 4.6 km, 120 km (or 820 ft, 2.9 mi,
+ * 75 mi under imperial units), in the UI language.
+ */
 export function presentAwarenessDistance(meters) {
-  const parts = distanceParts(meters);
-  if (!parts) return '—';
-  return formatQuantity(parts.value, parts.unit, {
-    minimumFractionDigits: parts.digits,
-    maximumFractionDigits: parts.digits,
-  });
+  return formatDistance(meters);
 }
 
-/** The cohort's reason, kept English in data, shown in the UI language. */
+/**
+ * The cohort's reason, kept English in data, shown in the UI language and
+ * unit system: `km` becomes the `{distance}` it names, and `{survey}` the
+ * Contacts window.
+ */
 function presentAwarenessReason(summary = {}) {
-  return summary.reasonTemplate
-    ? t(summary.reasonTemplate, summary.reasonValues)
-    : translateKnown(summary.reason || '');
+  if (!summary.reasonTemplate) return translateKnown(summary.reason || '');
+  const values = { ...summary.reasonValues };
+  if (Object.hasOwn(values, 'km'))
+    values.distance = formatMeasure(values.km, 'km');
+  values.survey = presentAwarenessDistance(AWARENESS_RADIUS_M);
+  return t(summary.reasonTemplate, values);
 }
 
 /**
@@ -78,12 +87,15 @@ export function createPanel({ state: layerState, parts }) {
   /** The panel shows layer views from the first enable or result onwards. */
   function ensurePanel() {
     layerState.panelShown = true;
-    // A shown view is worded again in a new locale.
-    layerState.offPanelLocale ??= onLocaleChange(() => {
+    // A shown view is worded again in a new locale; its distances in a new
+    // unit system.
+    const reword = () => {
       const kind = layerState.panelView?.kind;
       if (kind === 'results') renderResults();
       else if (kind === 'standby') hidePanel();
-    });
+    };
+    layerState.offPanelLocale ??= onLocaleChange(reword);
+    layerState.offPanelUnits ??= onUnitSystemChange(reword);
   }
 
   function hidePanel() {
@@ -105,6 +117,8 @@ export function createPanel({ state: layerState, parts }) {
     if (layerState.panelShown) publish({ kind: 'empty' });
     layerState.offPanelLocale?.();
     layerState.offPanelLocale = null;
+    layerState.offPanelUnits?.();
+    layerState.offPanelUnits = null;
     layerState.panelShown = false;
     layerState.panelView = null;
     layerState.panelSignature = '';
@@ -145,7 +159,9 @@ export function createPanel({ state: layerState, parts }) {
       pageCount > 1
         ? ` · ${Math.floor(page / AWARENESS_PAGE_SIZE) + 1}/${pageCount}`
         : '';
-    const coverage = cohort.coverage ? ` · ${cohort.coverage}` : '';
+    const coverage = cohort.coverage
+      ? ` · ${localizeCoverageLabel(cohort.coverage)}`
+      : '';
     return {
       id: cohort.id,
       relationship: summary.relationship.toLowerCase(),
@@ -161,13 +177,17 @@ export function createPanel({ state: layerState, parts }) {
       label: t('Global Context navigation'),
       previous: {
         text: t('PREVIOUS'),
-        title: t('Previous — prior visited contact in the 250 km window'),
+        title: t('Previous — prior visited contact in the {distance} window', {
+          distance: presentAwarenessDistance(AWARENESS_RADIUS_M),
+        }),
         disabled: !(layerState.navigationIndex > 0),
       },
       focus: { text: t('FOCUS') },
       next: {
         text: t('NEXT'),
-        title: t('Next — nearest unvisited contact in the 250 km window'),
+        title: t('Next — nearest unvisited contact in the {distance} window', {
+          distance: presentAwarenessDistance(AWARENESS_RADIUS_M),
+        }),
         disabled: !parts.navigation.canNavigateNext(),
       },
     };

@@ -12,19 +12,6 @@ import {
   AWARENESS_PAGE_SIZE,
 } from './policy.js';
 
-// coverageLabel is machine-composed English from installations/controls.js
-// (pinned by src/data/militaryInstallations.test.mjs); translate the known
-// forms here, pass anything else through.
-const WITHIN_KM_RE = /^WITHIN (\d+) KM$/;
-
-function localizeCoverageLabel(label) {
-  if (typeof label !== 'string' || !label) return label;
-  if (label === 'CURRENT VIEWPORT ONLY') return t('CURRENT VIEWPORT ONLY');
-  const within = WITHIN_KM_RE.exec(label);
-  if (within) return t('WITHIN {km} KM', { km: within[1] });
-  return label;
-}
-
 export function createSubject({ state: layerState, services, parts, source }) {
   const aisLiveVesselsLayer = services.vessels;
   const militaryInstallationsLayer = services.installations;
@@ -172,9 +159,10 @@ export function createSubject({ state: layerState, services, parts, source }) {
             installationsState,
             SOURCE_LABEL['military-installations'],
           ),
+          // English as the layer wrote it; the panel and the Cockpit word
+          // it when they present it (coverageLabel.js).
           coverage:
-            localizeCoverageLabel(installationsState.stats.coverageLabel) ||
-            t('CURRENT VIEWPORT ONLY'),
+            installationsState.stats.coverageLabel || 'CURRENT VIEWPORT ONLY',
           summary: parts.queries.summarizeInstallationViewport(
             installations,
             installationsState,

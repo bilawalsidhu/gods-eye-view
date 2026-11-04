@@ -1,4 +1,6 @@
 import { formatNumber, isolate, msg, t } from '../i18n/index.js';
+import { convertQuantity, formatCompactLength } from './unitLabels.js';
+import { METRES_PER_FOOT } from '../data/distanceFormat.js';
 
 /** Shortest-wrap signed degrees, for heading offsets typed as absolute values. */
 const signedNormalizeDeg = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
@@ -66,19 +68,28 @@ const CCTV_CAL_FIELDS = {
   },
 };
 
-/** Chip text for one pose value: locale decimals, translated metre unit. */
+/**
+ * A metre field in the page's unit system: feet under imperial units. The
+ * pose and its calibration offsets stay in metres.
+ */
+const shownLength = (field, metres) =>
+  field.unit === 'm' ? convertQuantity(metres, 'm').value : metres;
+/** A typed metre-field value back in metres. */
+const typedLength = (field, typed) =>
+  field.unit === 'm' && convertQuantity(1, 'm').unit === 'ft'
+    ? typed * METRES_PER_FOOT
+    : typed;
+
+/** Chip text for one pose value: locale decimals, translated length unit. */
 function calValueText(field, value) {
   const options = {
     minimumFractionDigits: field.decimals,
     maximumFractionDigits: field.decimals,
   };
   if (field.unit === 'm') {
-    // English keeps its compact "RANGE 120m"; other languages space the unit.
-    const metres = formatNumber(Number(value), {
-      useGrouping: false,
-      ...options,
-    });
-    return `${t(field.label)} ${isolate(t('{value}m', { value: metres }))}`;
+    // English keeps its compact "RANGE 120m" ("RANGE 394ft"); other
+    // languages space the unit.
+    return `${t(field.label)} ${isolate(formatCompactLength(Number(value), field.decimals))}`;
   }
   const number = formatNumber(Number(value), {
     useGrouping: false,
@@ -118,6 +129,12 @@ export function _beginCctvCalValueEdit(chip) {
   const cameraId = this._activeCctvCameraId();
   const basePose = { ...activeCamera.basePose };
 
+  // What the input starts with. Leaving it as shown commits nothing: in feet
+  // the shown value is rounded, so committing it back would move the pose
+  // (6 m shows as 20 ft, which is 6.096 m) and mark the camera calibrated.
+  const shown = Number(shownLength(field, field.get(activeCamera))).toFixed(
+    field.decimals,
+  );
   let finished = false;
   /**
    * End the edit: commit converts the typed value to a calibration offset
@@ -128,9 +145,10 @@ export function _beginCctvCalValueEdit(chip) {
     finished = true;
     this._calibrationEdit = null;
     this.store.setCalEdit(null);
-    const typed = parseFloat(typedText);
+    const typed = typedLength(field, parseFloat(typedText));
     if (
       commit &&
+      String(typedText).trim() !== shown &&
       !this.destroyed &&
       Number.isFinite(typed) &&
       this._cctvState?.enabled &&
@@ -156,7 +174,7 @@ export function _beginCctvCalValueEdit(chip) {
     label: `${t(field.label)} `,
     ariaLabel: t(field.label),
     step: field.decimals > 0 ? '0.1' : '1',
-    value: Number(field.get(activeCamera)).toFixed(field.decimals),
+    value: shown,
     finish,
   });
 }

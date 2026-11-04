@@ -1,8 +1,9 @@
 /** Contact readouts and nearby-signal presentation for the Cockpit controller. */
 import * as Cesium from 'cesium';
-import { formatNumber, t, tn } from '../i18n/index.js';
+import { t, tn } from '../i18n/index.js';
 import { sourceStatusLabel } from './layerNames.js';
-import { unitLabel } from './unitLabels.js';
+import { formatMeasure } from './unitLabels.js';
+import { localizeCoverageLabel } from '../layers/awareness/coverageLabel.js';
 import {
   bearingBetweenCoordinates,
   formatCockpitContextScope,
@@ -19,10 +20,13 @@ const LOCALIZED_CONTEXT_SCOPE = Object.freeze({
   window: ({ label, radiusKm }) =>
     t('{label} · {radius} AIR/SEA WINDOW', {
       label,
-      radius: `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${cockpitUnitCase(unitLabel('km'))}`,
+      radius: cockpitUnitCase(formatMeasure(radiusKm, 'km')),
     }),
   installations: ({ scope, coverage }) =>
-    t('{scope} · INSTALLATIONS {coverage}', { scope, coverage }),
+    t('{scope} · INSTALLATIONS {coverage}', {
+      scope,
+      coverage: localizeCoverageLabel(coverage),
+    }),
 });
 
 /**

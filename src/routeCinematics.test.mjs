@@ -10,6 +10,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
+import { createAnnotationEngine } from './annotations/annotationEngine.js';
+import { setUnitSystem } from './ui/unitLabels.js';
 
 import {
   ROUTE_CINEMA,
@@ -1094,4 +1096,35 @@ test('a route hidden from Draw is not flown; the newest visible one is', () => {
   assert.equal(started.ok, true);
   assert.match(JSON.stringify(started), /shown walk/, 'the visible route is flown');
   interruptCameraMotion?.('test');
+});
+
+test('fly_route finds a route by the metric label annotate_map gave the model, under imperial units', async (t) => {
+  const priorRaf = globalThis.requestAnimationFrame;
+  const priorCancel = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  setUnitSystem('imperial');
+  t.after(() => {
+    setUnitSystem('metric');
+    globalThis.requestAnimationFrame = priorRaf;
+    globalThis.cancelAnimationFrame = priorCancel;
+  });
+  const renderer = { add() {}, update() {}, remove() {}, sync() {}, destroy() {} };
+  const engine = createAnnotationEngine({ viewer: { camera: { heading: 0 } }, renderer });
+  const drawn = await engine.annotate(
+    [{ type: 'route', manual: true, path: TWO_TURN_ROUTE, label: 'Ridge' }],
+    { persist: true },
+  );
+  const given = drawn.results[0].label;
+  assert.match(given, /^Ridge — [0-9.]+ km$/, 'annotate_map hands the model kilometres');
+  assert.match(engine.list()[0].label, / mi$/, 'the map caption reads in miles');
+
+  const viewer = createTickableViewer();
+  initCameraVerbs(viewer.viewer, () => null);
+  const flown = flyRoute(engine.list(), { label: given });
+  assert.equal(flown.ok, true, flown.error);
+  assert.equal(flown.label, given, 'the result names the route as the model knows it');
+  interruptCameraMotion('test-cleanup');
+  viewer.restore();
+  engine.destroy();
 });

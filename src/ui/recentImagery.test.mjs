@@ -830,7 +830,10 @@ test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice l
     'Box is 2,226\u00a0km wide · limit 1,000\u00a0km',
   );
   assert.equal(f.byId('ri-hint').textContent, 'Zoom in or draw a smaller box');
-  assert.equal(zoom.title, 'Fly in until the view fits the 1,000 km limit');
+  assert.equal(
+    zoom.title,
+    'Fly in until the view fits the 1,000\u00a0km limit',
+  );
   zoom.click();
   assert.equal(flights.length, 1);
   assert.ok(

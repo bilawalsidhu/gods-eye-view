@@ -864,7 +864,7 @@ test('a lookup for the click-to-open providers asks only them and reports "that 
   assert.deepEqual(mapillaryLookups, [], 'Mapillary was not asked');
   assert.equal(
     layer.getUIState().street.error,
-    'No street-level imagery within 50 m of that point',
+    'No street-level imagery within 50\u00a0m of that point',
   );
 });
 

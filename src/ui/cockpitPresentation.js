@@ -1,11 +1,16 @@
 /** Pure formatting and fixed presentation constants used by Cockpit components. */
-import { formatNumber, getLocale, isolate, t, msg } from '../i18n/index.js';
-import { formatQuantity } from './unitLabels.js';
+import { formatNumber, isolate, t, msg } from '../i18n/index.js';
+import {
+  convertQuantity,
+  formatMeasure,
+  getUnitSystem,
+  unitCase,
+} from './unitLabels.js';
 import {
   normalizeHeading,
   roundHeadingDegrees,
 } from '../data/headingDegrees.js';
-import { kilometreDigits } from '../data/distanceFormat.js';
+import { kilometreDigits, mileDigits } from '../data/distanceFormat.js';
 
 export const COCKPIT_HEADING_SLEW_DPS = 28;
 
@@ -118,11 +123,15 @@ export function formatCockpitCoordinate(value, positive, negative) {
 
 /**
  * A contact distance such as `4.2 KM` / `44 KM` in the active language
- * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond.
+ * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond; `2.6 MI` /
+ * `27 MI` under imperial units.
  */
 export function formatCockpitDistance(distanceM) {
-  const digits = kilometreDigits(distanceM);
-  const distance = formatQuantity(distanceM / 1000, 'km', {
+  const digits =
+    getUnitSystem() === 'imperial'
+      ? mileDigits(distanceM)
+      : kilometreDigits(distanceM);
+  const distance = formatMeasure(distanceM / 1000, 'km', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
@@ -130,11 +139,21 @@ export function formatCockpitDistance(distanceM) {
 }
 
 /**
+ * A whole temperature as the local brief prints it: `22°C`, or `72°F` under
+ * imperial units; `—` when unknown.
+ */
+export function formatCockpitTemperature(celsius) {
+  if (!Number.isFinite(celsius)) return '—';
+  const shown = convertQuantity(celsius, '°C');
+  return `${Math.round(shown.value) || 0}${shown.unit}`;
+}
+
+/**
  * Upper-case a cockpit unit the HUD way (`9.5 KM`), except in Chinese and
  * Japanese, which have no case and keep units as the catalog writes them.
  */
 export function cockpitUnitCase(text) {
-  return /^(zh|ja)(-|$)/.test(getLocale()) ? text : text.toUpperCase();
+  return unitCase(text);
 }
 
 export function formatCockpitWindDirection(value) {

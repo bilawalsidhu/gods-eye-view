@@ -5,7 +5,8 @@ import {
   DISTANCE_PREFILTER_MARGIN_M,
   ANCHOR_REFRESH_M,
 } from './policy.js';
-import { formatNumber, t, tn } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
+import { formatMeasure } from '../../ui/unitLabels.js';
 
 // installationFeedback.js is shared with the HUD (src/loadingFeedback.js) and
 // hands back msg()-marked English plus values; getStats translates them here.
@@ -18,14 +19,14 @@ function localizeInstallationFeedback(feedback) {
   }
   const { count, km } = feedback;
   if (km) {
-    const kmText = formatNumber(km);
+    const distance = formatMeasure(km, 'km');
     return count === 0
-      ? t('No mapped sites within {km} km of the contact', { km: kmText })
+      ? t('No mapped sites within {distance} of the contact', { distance })
       : tn(
           count,
-          '{count} mapped site within {km} km of the contact',
-          '{count} mapped sites within {km} km of the contact',
-          { km: kmText },
+          '{count} mapped site within {distance} of the contact',
+          '{count} mapped sites within {distance} of the contact',
+          { distance },
         );
   }
   return count === 0
