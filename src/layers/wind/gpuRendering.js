@@ -11,6 +11,7 @@ import {
   findFrame,
   rendererOf,
 } from '../../render/rendererOf.js';
+import { clampOpacity } from '../sceneOpacity.js';
 
 const WIND_FADE_LOW_METERS = 15000;
 const WIND_FADE_HIGH_METERS = 60000;
@@ -90,6 +91,12 @@ export function createWindGpuRendering({
   });
   let diagnostics = emptyDiagnostics();
   const viewer = () => getViewer?.() ?? null;
+  // The layer-panel opacity (1 = as drawn). It scales the height fade, which
+  // is the streamlines' alpha. The fade is kept apart from `diagnostics`,
+  // which emptyDiagnostics() resets and which reports the camera fade alone.
+  let opacity = 1;
+  // The alpha the field was last asked to draw at.
+  let appliedAlpha = 0;
 
   function supported() {
     const host = viewer();
@@ -124,7 +131,7 @@ export function createWindGpuRendering({
         windStreamlineSpec(field, {
           id: `wind-streamlines:${(fieldIds += 1)}`,
           pathBudget,
-          alpha: heightFade,
+          alpha: heightFade * opacity,
           paused,
         }),
       );
@@ -140,6 +147,7 @@ export function createWindGpuRendering({
       // One more frame, so a still scene shows the layer ready.
       frameOf(viewer())?.requestRender?.('wind');
     });
+    appliedAlpha = heightFade * opacity;
     diagnostics = {
       ...emptyDiagnostics(),
       pathCount: pathBudget,
@@ -153,8 +161,10 @@ export function createWindGpuRendering({
   function updateVisibility() {
     const fade = readFade();
     diagnostics.heightFade = fade;
-    if (handle && fade !== heightFade) handle.update({ alpha: fade });
+    const alpha = fade * opacity;
+    if (handle && alpha !== appliedAlpha) handle.update({ alpha });
     heightFade = fade;
+    appliedAlpha = alpha;
     return Boolean(handle) && fade > 0;
   }
 
@@ -162,6 +172,13 @@ export function createWindGpuRendering({
     supported,
     setField,
     updateVisibility,
+    /** Dim the streamlines; takes effect on the next draw. */
+    setOpacity(value) {
+      opacity = clampOpacity(value);
+      const alpha = heightFade * opacity;
+      if (handle && alpha !== appliedAlpha) handle.update({ alpha });
+      appliedAlpha = alpha;
+    },
     setOptions(options = {}) {
       if (typeof options.paused !== 'boolean' || options.paused === paused)
         return;

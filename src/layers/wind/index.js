@@ -1,4 +1,5 @@
 import { createWindRendering } from './rendering.js';
+import { clampOpacity } from '../sceneOpacity.js';
 import { WIND_FIELDS } from './fields.js';
 import {
   formatWindReading,
@@ -63,6 +64,8 @@ export function createWindLayer({
   let request = null;
   let enabled = false;
   let rendering = null;
+  // The layer-panel opacity (1 = as drawn); applied to each renderer made.
+  let opacity = 1;
   let imageryHost = null;
   let manifest = null;
   let error = null;
@@ -122,6 +125,7 @@ export function createWindLayer({
         onStatusChange: notify,
       });
       rendering.attach();
+      rendering.setOpacity?.(opacity);
       rendering.setOptions?.({ overlay, paused });
       const target = container ?? nextViewer.container;
       inspectionMarker = createWindInspectionMarker({
@@ -135,6 +139,11 @@ export function createWindLayer({
           ? services.imageryHost
           : null;
       rendering?.rehome?.();
+    },
+    /** Dim the flow lines and the scalar field (the layer-panel slider). */
+    setOpacity(fraction) {
+      opacity = clampOpacity(fraction);
+      rendering?.setOpacity?.(opacity);
     },
     enable() {
       enabled = true;

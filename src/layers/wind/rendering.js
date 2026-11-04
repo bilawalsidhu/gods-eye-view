@@ -17,6 +17,7 @@ import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { msg } from '../../i18n/index.js';
 import { createWindGpuRendering } from './gpuRendering.js';
+import { clampOpacity } from '../sceneOpacity.js';
 import { advectParticle, sampleWind } from './model.js';
 import {
   createFieldRaster,
@@ -158,6 +159,8 @@ export function createWindRendering({
   let imageryKind = null;
   let imageryError = null;
   let imageryErrorRemove = null;
+  // The layer-panel opacity (1 = as drawn); kept across clear and re-attach.
+  let opacity = 1;
   let media = null;
   let removers = [];
   let bounds = null;
@@ -353,6 +356,14 @@ export function createWindRendering({
     shell = null;
     imageryKind = null;
   }
+  // Temperature colors carry quantitative meaning; double transparency blends
+  // orange heat into blue ocean and obscures useful gradients.
+  function scalarBaseAlpha(scale = opacity) {
+    return (overlay === 'temperature' ? 1 : 0.85) * scale;
+  }
+  function paintCanvasOpacity() {
+    if (canvas) canvas.style.opacity = opacity < 1 ? String(opacity) : '';
+  }
   function updateImageryFade(height, settled = false) {
     // The tileset shell keeps the quantised move-end fade; globe imagery keeps
     // its smooth per-frame fade.
@@ -370,12 +381,12 @@ export function createWindRendering({
           ? 1
           : Math.log(height / WIND_FIELD_FADE_LOW_METERS) /
             WIND_FIELD_LOG_RANGE;
-    const baseAlpha = overlay === 'temperature' ? 1 : 0.85;
-    const smoothAlpha = baseAlpha * fade;
+    // The move-end quantisation applies to the fade, not to the slider.
+    const fadedAlpha = scalarBaseAlpha(1) * fade;
     const alpha =
-      gpuActive && imageryKind === 'tileset'
-        ? Math.round(smoothAlpha * 10) / 10
-        : smoothAlpha;
+      (gpuActive && imageryKind === 'tileset'
+        ? Math.round(fadedAlpha * 10) / 10
+        : fadedAlpha) * opacity;
     if (shell) {
       shell.setAlpha(alpha);
       shell.setShow(alpha > 0 && getHost().kind !== 'none');
@@ -423,6 +434,7 @@ export function createWindRendering({
           { cameraOf, frameOf },
         );
         imageryKind = kind;
+        shell.setAlpha(scalarBaseAlpha());
         updateImageryFade(heightOf(viewer), true);
         requestRender(viewer);
         return;
@@ -435,9 +447,7 @@ export function createWindRendering({
       });
       imagery.drapeOn = 'surface';
       imageryKind = kind;
-      // Temperature colors carry quantitative meaning; double transparency
-      // blends orange heat into blue ocean and obscures useful gradients.
-      imagery.alpha = overlay === 'temperature' ? 1 : 0.85;
+      imagery.alpha = scalarBaseAlpha();
       if (gpuActive) updateImageryFade(heightOf(viewer), true);
       imageryErrorRemove = imagery.on('tileError', () => {
         imageryError = msg('Globe field image unavailable');
@@ -705,7 +715,17 @@ export function createWindRendering({
       });
       canvas.setAttribute?.('aria-hidden', 'true');
       context = canvas.getContext('2d');
+      paintCanvasOpacity();
       container.appendChild(canvas);
+    },
+    /** Dim the streamlines, the canvas fallback and the scalar field. */
+    setOpacity(value) {
+      opacity = clampOpacity(value);
+      gpu.setOpacity?.(opacity);
+      paintCanvasOpacity();
+      const viewer = viewerReady();
+      updateImageryFade(heightOf(viewer), true);
+      requestRender(viewer);
     },
     setField(next) {
       const nextField = next?.grid
