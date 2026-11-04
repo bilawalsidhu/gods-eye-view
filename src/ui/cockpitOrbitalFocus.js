@@ -168,6 +168,37 @@ export function toggleOrbitalFocus(key) {
   return record ? startFocus.call(this, record) : false;
 }
 
+/** The mapped ground point drawn at a canvas position, or null. */
+function groundRecordAt(controller, position) {
+  let picked = null;
+  try {
+    picked = controller.viewer.scene?.pick?.(position) ?? null;
+  } catch {
+    picked = null;
+  }
+  return pickedGroundRecord(controller, picked);
+}
+
+/**
+ * A double-click on the orbital picture. On a mapped ground point it keeps
+ * or starts the focus on it (as a single click does) and is taken: Cesium's
+ * own double-click would track that point, which ends the view. Any other
+ * double-click, one a tool owns, and every one outside orbit go on.
+ * @param {{x: number, y: number}|null|undefined} position Canvas position.
+ * @returns {boolean} True when it landed on a ground point and was taken.
+ */
+export function onOrbitalDoubleClick(position) {
+  if (!inOrbit(this) || !isPointerFree()) return false;
+  if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
+    return false;
+  const record = groundRecordAt(this, position);
+  if (!record) return false;
+  // A point beyond the reach is not focused, but still never tracked.
+  if (this.orbital.focus?.key !== String(record.id))
+    startFocus.call(this, record);
+  return true;
+}
+
 /**
  * A click on the orbital picture. One on a mapped ground point in reach
  * focuses it; any other click ends a focus. A click a tool owns (drawing)
@@ -179,13 +210,7 @@ export function onOrbitalClick(position) {
   if (!inOrbit(this) || !isPointerFree()) return false;
   if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
     return false;
-  let picked = null;
-  try {
-    picked = this.viewer.scene?.pick?.(position) ?? null;
-  } catch {
-    picked = null;
-  }
-  const record = pickedGroundRecord(this, picked);
+  const record = groundRecordAt(this, position);
   const state = this.orbital;
   if (record) {
     if (state.focus?.key === String(record.id)) return true;

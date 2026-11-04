@@ -29,6 +29,7 @@ import {
 } from './cockpitOrbitalView.js';
 import {
   onOrbitalClick,
+  onOrbitalDoubleClick,
   routeSceneClick,
   toggleOrbitalFocus,
 } from './cockpitOrbitalFocus.js';
@@ -443,6 +444,15 @@ export class CockpitViewController {
    */
   onOrbitalClick(position) {
     return onOrbitalClick.call(this, position);
+  }
+  /**
+   * A double-click on the orbital picture: on a mapped ground point it keeps
+   * or starts the focus there instead of letting Cesium track the point.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when it was taken.
+   */
+  onOrbitalDoubleClick(position) {
+    return onOrbitalDoubleClick.call(this, position);
   }
   /**
    * FOCUS on the reach list: focus that point, switch to it, or end the

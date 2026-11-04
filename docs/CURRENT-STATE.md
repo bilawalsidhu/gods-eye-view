@@ -1704,7 +1704,10 @@ in a polite live region (`FOCUS · Camp Alpha`), and the swath reads
 approximate as for a tilt, scaled by the tilt onto the point. Clicks still
 reach Cesium's own handler and never untrack the satellite; a click a tool
 owns (drawing) is ignored, and the draw tool still borrows the click while
-it draws. Under the readout, IN REACH · *n* (a disclosure) lists the mapped
+it draws. A double-click on a mapped ground point keeps or starts the focus
+on it and never reaches Cesium's double-click, which would track the point
+and end the view (the Cockpit's double-click routing in
+`src/ui/cockpitInput.js`); any other double-click goes on as before. Under the readout, IN REACH · *n* (a disclosure) lists the mapped
 points facing the satellite that are within the reach or in the frame now,
 nearest to nadir first, at most 12 (with NEAREST 12 OF *n* beyond that),
 rebuilt once a second. A row opens the point's details: position, source and

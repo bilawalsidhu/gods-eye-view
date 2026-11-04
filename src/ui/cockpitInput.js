@@ -112,7 +112,8 @@ export function onSceneDoubleClick(position, nowMs = performance.now()) {
  * installs its own (pickAndTrackObject), which untracks whenever the pick is
  * not an Entity: on a followed aircraft's model, a primitive, it would drop
  * the very track the double-click means to ride. A double-click on the
- * followed track is the Cockpit's; any other goes on to Cesium's.
+ * followed track is the Cockpit's, as is one on a mapped ground point in
+ * orbit (a focus); any other goes on to Cesium's.
  * @returns {() => void} Puts Cesium's handler back, unless another owner
  *   (the draw tool borrows it) has replaced ours since.
  */
@@ -123,6 +124,9 @@ export function routeSceneDoubleClick() {
   const stock = handler.getInputAction?.(type) ?? null;
   const routed = (event) => {
     if (this.onSceneDoubleClick(event?.position)) return;
+    // In orbit, a double-click on a mapped ground point is a focus, never a
+    // retarget that would end the view.
+    if (this.onOrbitalDoubleClick?.(event?.position)) return;
     stock?.(event);
   };
   handler.setInputAction(routed, type);
