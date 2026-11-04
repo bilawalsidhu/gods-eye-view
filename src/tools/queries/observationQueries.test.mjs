@@ -29,10 +29,6 @@ test('observation tools are offered on MCP but not voice (prompt budget)', () =>
   for (const name of ['get_air_quality', 'get_gnss_integrity']) {
     assert.ok(catalogForSurface(catalog, 'mcp').get(name));
     assert.equal(catalogForSurface(catalog, 'voice').get(name), undefined);
-Needs formatting: scripts/format.mjs
-Needs formatting: src/tools/queries/observationQueries.test.mjs
-Needs formatting: src/tools/queries/airQuality.js
-Needs formatting: src/tools/queries/gnss.js
   }
 });
 
