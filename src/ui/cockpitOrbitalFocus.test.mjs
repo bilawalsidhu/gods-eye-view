@@ -109,6 +109,18 @@ function fixture(t, { reducedMotion = false } = {}) {
   };
   handler.stock = stockClick;
   actions.set(Cesium.ScreenSpaceEventType.LEFT_CLICK, stockClick);
+  // Its double-click tracks what it picks (pickAndTrackObject): a mapped
+  // point, tracked, would end the orbital view.
+  handler.stockDoubleClicks = 0;
+  const stockDoubleClick = ({ position }) => {
+    handler.stockDoubleClicks += 1;
+    const picked = viewer.scene.pick(position);
+    viewer.trackedEntity = picked?.id
+      ? { ...picked.id, position: { getValue: () => null } }
+      : undefined;
+  };
+  handler.stockDouble = stockDoubleClick;
+  actions.set(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK, stockDoubleClick);
   viewer.screenSpaceEventHandler = handler;
 
   let subject = { ...ISS };
@@ -229,6 +241,12 @@ function fixture(t, { reducedMotion = false } = {}) {
     frame,
     click: (position) =>
       actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK)?.({ position }),
+    /** A double-click as Cesium fires it: two clicks, then the double. */
+    doubleClick(position) {
+      actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK)?.({ position });
+      actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK)?.({ position });
+      actions.get(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK)?.({ position });
+    },
     /** Move the satellite along its track by `deg` of latitude and longitude. */
     move(dLat, dLon) {
       subject = {
@@ -641,4 +659,51 @@ test('stopping the Cockpit hands the single click back to Cesium', async (t) => 
   scene.click(EMPTY_GROUND);
   assert.equal(scene.handler.stockClicks, 1);
   assert.equal(scene.cockpit.orbital, null);
+});
+
+test('a double-click on a mapped point focuses it and keeps the orbital view', async (t) => {
+  const scene = await inOrbit(t);
+  const { cockpit, viewer, handler } = scene;
+  scene.doubleClick(SITES.alpha.at);
+  assert.equal(handler.stockDoubleClicks, 0, 'Cesium does not track the point');
+  assert.equal(viewer.trackedEntity, undefined);
+  scene.frame();
+  assert.equal(cockpit.active, true, 'still in orbit');
+  assert.equal(cockpit.orbital.focus.key, 'site-alpha');
+  run(scene, LAND_FRAMES);
+  assert.ok(missDeg(scene.shots.at(-1), 'alpha') < 1e-5);
+
+  // On the focused point it keeps the focus; on another it switches.
+  scene.doubleClick(SITES.alpha.at);
+  assert.equal(cockpit.orbital.focus.key, 'site-alpha');
+  scene.doubleClick(SITES.bravo.at);
+  assert.equal(cockpit.orbital.focus.key, 'site-bravo');
+  // A mapped point beyond the reach is not focused, but not tracked either.
+  scene.doubleClick(SITES.far.at);
+  assert.equal(handler.stockDoubleClicks, 0);
+  scene.frame();
+  assert.equal(cockpit.active, true);
+
+  // Anywhere else the double-click goes on to Cesium's, as before.
+  scene.doubleClick(EMPTY_GROUND);
+  assert.equal(handler.stockDoubleClicks, 1);
+  assert.equal(cockpit.orbital.focus, null, 'the clicks ended the focus');
+});
+
+test('a double-click a tool owns, or one outside orbit, goes on to Cesium', async (t) => {
+  const scene = fixture(t);
+  const type = Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK;
+  scene.doubleClick(SITES.alpha.at);
+  assert.equal(scene.handler.stockDoubleClicks, 1, 'outside orbit');
+  scene.viewer.trackedEntity = undefined;
+  assert.equal(scene.cockpit.enter(), true);
+  await settle();
+  scene.frame();
+  const lease = claimPointer('draw');
+  t.after(() => releasePointer(lease));
+  scene.doubleClick(SITES.alpha.at);
+  assert.equal(scene.handler.stockDoubleClicks, 2, 'a tool owns it');
+  releasePointer(lease);
+  scene.cockpit.stop();
+  assert.equal(scene.handler.getInputAction(type), scene.handler.stockDouble);
 });
