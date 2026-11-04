@@ -86,6 +86,7 @@ function fixture(
     services: {
       flightsLayer: { getTrackedInfo: trackedFrom('flights') },
       militaryFlightsLayer: { getTrackedInfo: trackedFrom('military') },
+      aisLiveVesselsLayer: { getCockpitSubject: () => null },
       militaryAwarenessLayer: { getContextSnapshot: () => null },
       isTr3b: () => false,
       holdContinuousRender() {},
@@ -120,7 +121,7 @@ function fixture(
   t.after(() => {
     coordinator.stop();
     app.unmount();
-    document.body.classList.remove('cockpit-mode');
+    document.body.classList.remove('cockpit-mode', 'cockpit-bridge');
   });
   /** Turn a layer off and tell the Context owner, as the data manager does. */
   const disable = (layerId) => {
@@ -157,6 +158,7 @@ test('a civilian aircraft enters with Live Flights alone: no Contacts, no Milita
   assert.equal(state.entryAllowed, true);
   assert.equal(state.entryBlockedReason, null);
   assert.equal(cockpit.enter(), true);
+  assert.equal(cockpit.subjectKind, 'aircraft');
 });
 
 test('a military aircraft enters with Military Flights alone', (t) => {
@@ -439,6 +441,22 @@ test('a ride handed to an aircraft on a layer Contacts turned on keeps that laye
   assert.deepEqual(on(manager), ['flights', 'military']);
 });
 
+test('a bridge ride keeps Live AIS Vessels when Contacts had turned it on', async (t) => {
+  const live = await liveFixture(t, {
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  const { manager, controls, coordinator, settle } = live;
+  assert.equal(await controls._selectContextMode('flights'), true);
+  await settle();
+  assert.equal(manager.isEnabled('ais-live-vessels'), true);
+  // The bridge reports its layer on entry (cockpitBridge.test.mjs).
+  coordinator._adoptRiddenLayer('ais-live-vessels');
+  await controls._selectContextMode(null);
+  await settle();
+  assert.equal(controls.getContextModeState().mode, null);
+  assert.deepEqual(on(manager), ['ais-live-vessels']);
+});
+
 test('the ridden layer still ends the Cockpit while Contacts is on', async (t) => {
   const live = await liveFixture(t, {
     tracked: { layerId: 'flights', info: CIVIL },
@@ -464,4 +482,20 @@ test('without a Cockpit, ending Contacts restores the layers it found', async (t
   await settle();
   assert.equal(controls.getContextModeState().mode, null);
   assert.deepEqual(on(manager), [], 'Live Flights goes back off');
+});
+
+test('the readout entry reads BRIDGE for a selected vessel', async (t) => {
+  const { $, store } = fixture(t);
+  store.publishPresence({
+    active: false,
+    entryAvailable: true,
+    entryKind: 'vessel',
+    subjectKind: null,
+    tr3b: null,
+  });
+  await nextTick();
+  const readoutEntry = $('#cockpit-entry-readout');
+  assert.equal(readoutEntry.hidden, false);
+  assert.match(readoutEntry.textContent, /directions_boat/);
+  assert.match(readoutEntry.textContent, /BRIDGE/);
 });
