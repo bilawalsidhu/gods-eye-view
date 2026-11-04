@@ -509,3 +509,132 @@ test('a layer with no feed in view says why instead of "never"', async () => {
     setLocale('en');
   }
 });
+
+test('the opacity slider shows on an enabled layer that can be dimmed and drives its owner', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { LayerOpacity } = await import('./layerOpacity.js');
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const told = [];
+  const dimmable = {
+    layers: new Map([
+      ['perimeters', { module: { setOpacity: (v) => told.push(v) } }],
+      ['flights', { module: {} }],
+    ]),
+  };
+  const opacity = new LayerOpacity(dimmable, {
+    locationRef: null,
+    historyRef: null,
+  });
+  const layers = ['perimeters', 'flights', 'off'].map((id) => ({
+    id,
+    name: id,
+    icon: '*',
+    source: 'Source',
+    enabled: id !== 'off',
+    showInTogglePanel: true,
+    stats: {},
+  }));
+  dimmable.layers.set('off', { module: { setOpacity() {} } });
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    isEnabled: () => true,
+    setEnabled() {},
+    setLayerParams() {},
+    hasRowControls: () => false,
+    subscribeRowControls() {},
+    getRowControls: () => null,
+    opacity,
+  });
+  // Count the panel's live subscriptions to the owner.
+  let live = 0;
+  const subscribe = opacity.subscribe.bind(opacity);
+  opacity.subscribe = (listener) => {
+    live++;
+    const stop = subscribe(listener);
+    return () => {
+      live--;
+      return stop();
+    };
+  };
+  const sliderOf = (id) =>
+    container.querySelector(`[data-layer-id="${id}"] input[type="range"]`);
+  try {
+    panel.mount(container);
+    assert.equal(live, 1);
+    panel.mount(container);
+    assert.equal(live, 1, 'a remount releases the earlier subscription');
+    assert.ok(sliderOf('perimeters'), 'an enabled, dimmable layer has one');
+    assert.equal(sliderOf('flights'), null, 'no setOpacity hook, no slider');
+    assert.equal(sliderOf('off'), null, 'a layer that is off has none');
+    assert.equal(sliderOf('perimeters').value, '100');
+
+    const slider = sliderOf('perimeters');
+    slider.value = '40';
+    slider.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.deepEqual(told, [0.4]);
+    assert.equal(opacity.get('perimeters'), 0.4);
+    assert.equal(
+      container.querySelector(
+        '[data-layer-id="perimeters"] .data-toggle-opacity-value',
+      ).textContent,
+      '40%',
+    );
+    assert.equal(
+      sliderOf('perimeters').getAttribute('aria-label'),
+      'perimeters opacity',
+    );
+
+    // A change from elsewhere moves the handle, even one a drag left focused.
+    sliderOf('perimeters').focus();
+    assert.equal(document.activeElement, sliderOf('perimeters'));
+    opacity.set('perimeters', 0.75);
+    assert.equal(sliderOf('perimeters').value, '75');
+
+    sliderOf('perimeters').dispatchEvent(
+      new window.MouseEvent('dblclick', { bubbles: true }),
+    );
+    assert.equal(opacity.get('perimeters'), 1);
+    assert.equal(sliderOf('perimeters').value, '100');
+  } finally {
+    panel.destroy();
+    document.body.replaceChildren();
+  }
+  assert.equal(live, 0, 'a destroyed panel releases its subscription');
+  // The owner outlives the panel and still works.
+  opacity.set('perimeters', 0.2);
+  assert.equal(told.at(-1), 0.2);
+  opacity.destroy();
+});
+
+test('a panel with no opacity owner shows no sliders', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const panel = new LayerPanel({
+    getLayers: () => [
+      {
+        id: 'perimeters',
+        name: 'p',
+        icon: '*',
+        source: 'S',
+        enabled: true,
+        showInTogglePanel: true,
+        stats: {},
+      },
+    ],
+    isEnabled: () => true,
+    setEnabled() {},
+    setLayerParams() {},
+    hasRowControls: () => false,
+    subscribeRowControls() {},
+    getRowControls: () => null,
+  });
+  try {
+    panel.mount(container);
+    assert.equal(container.querySelector('input[type="range"]'), null);
+  } finally {
+    panel.destroy();
+    document.body.replaceChildren();
+  }
+});

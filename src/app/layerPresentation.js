@@ -8,12 +8,14 @@ export class LayerPresentation {
     manager,
     {
       weatherClock,
+      opacity = null,
       requestRender = governorRequestRender,
       invalidateDetection = markDetectionSourcesChanged,
     } = {},
   ) {
     this.manager = manager;
     this.weatherClock = weatherClock;
+    this.opacity = opacity;
     this._panel = null;
     this.pendingVisible = false;
     this._unsubscribe = manager.subscribeActivity((change) => {
@@ -39,6 +41,7 @@ export class LayerPresentation {
     if (!this._panel)
       this._panel = new LayerPanel({
         weatherClock: this.weatherClock,
+        opacity: this.opacity,
         getLayers: () => this.manager.getAll(),
         isEnabled: (id) => this.manager.isEnabled(id),
         setEnabled: (id, enabled, options) =>

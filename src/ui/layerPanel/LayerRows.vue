@@ -6,6 +6,7 @@ import RowSlider from './RowSlider.vue';
 import RowSwitch from './RowSwitch.vue';
 import RowText from './RowText.vue';
 import UiButton from '../kit/UiButton.vue';
+import LayerOpacityRow from './LayerOpacityRow.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 
 // The data layer rows under their group headings. LayerPanel presents every
@@ -18,6 +19,8 @@ defineProps({
   onListItem: { type: Function, default: () => {} },
   onSlider: { type: Function, default: () => {} },
   onRange: { type: Function, default: () => {} },
+  onOpacity: { type: Function, default: () => {} },
+  onOpacityReset: { type: Function, default: () => {} },
 });
 </script>
 
@@ -99,8 +102,11 @@ defineProps({
           ></div
         ><RailRowList
           :list="item.controls.list"
-          :on-select="
-            (entry) => onListItem(item.id, entry.id)
-          " /></template></div
+          :on-select="(entry) => onListItem(item.id, entry.id)" /></template
+      ><LayerOpacityRow
+        v-if="item.opacity"
+        :opacity="item.opacity"
+        :on-change="(percent) => onOpacity(item.id, percent)"
+        :on-reset="() => onOpacityReset(item.id)" /></div
   ></template>
 </template>
