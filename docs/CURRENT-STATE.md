@@ -5994,6 +5994,20 @@ easier to meet (detection is now on more often), but does not create it.
   above and the DISPLAY-rail entry below (was `OFF`).
 - Style shader starting params: CRT/NVG/FLIR pixelation `1.2` (just above the native `1.0` floor); thermal/FLIR ships an optional Ironbow "Predator" palette (`palette` uniform, default `0` = accurate grayscale).
 
+## Renderer contract
+
+`src/render/contract/` types the renderer contract, version `0`: nine ports
+(frame, globe, draw, camera, query, input, effects, credits and quality),
+plus the renderer itself. `PORTS` lists every member at run time, and
+`contract.test.mjs` keeps that list and the types in step. The application
+does not yet draw through the contract: it still drives Cesium directly.
+`src/render/stub/` is a renderer that draws nothing, with the default
+camera's exact maths. `src/render/conformance/` is the suite: logic checks
+in Node, plus camera traces recorded from Cesium's own `Camera` into
+`goldens/camera.json`. It also holds the reference scenes, whose views are
+checked against `goldens/visual/` on the `/dev/conformance/` page. See
+[RENDERER-CONTRACT.md](RENDERER-CONTRACT.md).
+
 ## Operational Notes
 
 - **Earthquake discs are STATIC geometry.** Every quake is a `CLAMP_TO_GROUND`

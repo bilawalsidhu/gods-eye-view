@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Renderer conformance</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font:
+          13px/1.4 system-ui,
+          sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #0d1117;
+        color: #e6edf3;
+      }
+      header {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid #30363d;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0 12px 0 0;
+      }
+      button,
+      select {
+        font: inherit;
+        padding: 4px 10px;
+      }
+      #stage {
+        width: 640px;
+        height: 360px;
+        position: fixed;
+        left: -10000px;
+        top: 0;
+      }
+      main {
+        padding: 12px 16px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      td,
+      th {
+        border-bottom: 1px solid #21262d;
+        padding: 4px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .pass {
+        color: #3fb950;
+      }
+      .fail {
+        color: #f85149;
+      }
+      .skip {
+        color: #8b949e;
+      }
+      .views {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+      figure {
+        margin: 0;
+        background: #161b22;
+        border: 1px solid #30363d;
+        padding: 6px;
+      }
+      figure img {
+        width: 100%;
+        display: block;
+      }
+      figure .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 4px;
+      }
+      figcaption {
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Renderer conformance</h1>
+      <label
+        >Renderer
+        <select id="renderer">
+          <option value="cesium">cesium (scene renderer)</option>
+        </select></label
+      >
+      <button id="logic">Run logic suite (stub)</button>
+      <button id="check">Check scenes</button>
+      <button id="record">Record references</button>
+      <span id="status"></span>
+    </header>
+    <div id="stage"></div>
+    <main>
+      <section id="logicResults"></section>
+      <section class="views" id="views"></section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

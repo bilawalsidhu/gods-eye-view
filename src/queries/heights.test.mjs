@@ -193,6 +193,9 @@ test('height queries go through the service', () => {
   // A renderer that answers heights from a cache or asynchronously plugs in
   // at src/queries/heights.js; a site that asks Cesium directly bypasses it.
   const SERVICE = 'src/queries/heights.js';
+  // The renderer contract's own height members, and the stub and suite that
+  // implement and call them, are not Cesium.
+  const CONTRACT = /^src\/render\/(contract|stub|conformance)\//;
   const NAMES =
     'sampleHeight|clampToHeight|sampleHeightMostDetailed|clampToHeightMostDetailed|getHeight';
   const direct = new RegExp(
@@ -207,7 +210,8 @@ test('height queries go through the service', () => {
         return /\.(js|vue)$/.test(entry.name) ? [rel] : [];
       });
   const offenders = walk('src').filter((file) => {
-    if (file === SERVICE) return false;
+    if (file === SERVICE || CONTRACT.test(file.split(path.sep).join('/')))
+      return false;
     const code = fs
       .readFileSync(path.join(ROOT, file), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')

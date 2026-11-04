@@ -1,0 +1,20 @@
+{
+  "renderer": "cesium",
+  "size": {
+    "width": 640,
+    "height": 360
+  },
+  "views": [
+    "icons-top.png",
+    "icons-tilted.png",
+    "points-top.png",
+    "lines-top.png",
+    "lines-tilted.png",
+    "shapes-top.png",
+    "shapes-tilted.png",
+    "models-oblique.png",
+    "city-orbit.png",
+    "city-city.png",
+    "city-street.png"
+  ]
+}

@@ -12,6 +12,7 @@ import {
   commandExtents,
   defaultView,
   pickOffscreenView,
+  updateCameraChanged,
   webglContext,
 } from './internals.js';
 
@@ -47,6 +48,8 @@ test('every private field Core reaches is still declared by the installed Cesium
       ),
   );
   assert.deepEqual(missing, []);
+  const camera = fs.readFileSync(path.join(ENGINE, 'Scene/Camera.js'), 'utf8');
+  assert.match(camera, /Camera\.prototype\._updateCameraChanged = function/);
 });
 
 test('the helpers read and write exactly those fields', () => {
@@ -76,6 +79,9 @@ test('the helpers read and write exactly those fields', () => {
   assert.equal(webglContext({ context: { _gl: gl } }), gl);
   assert.equal(cameraFlightActive({ _currentFlight: {} }), true);
   assert.equal(cameraFlightActive({ _currentFlight: undefined }), false);
+  let checked = 0;
+  updateCameraChanged({ _updateCameraChanged: () => (checked += 1) });
+  assert.equal(checked, 1);
 });
 
 test('private Cesium fields are reached only through internals.js', () => {
