@@ -365,7 +365,7 @@ test('the chat gear is named for the settings it opens', async (t) => {
   );
 });
 
-test('a provider switch carries chat Settings or chat itself to the next mount', async (t) => {
+test('a provider switch carries chat Settings to the next mount', async (t) => {
   const mount = () => {
     const ui = createTestVoiceUi({ panel: true });
     const chat = bindChatControl({ ui, session: typedSession() });
@@ -377,21 +377,22 @@ test('a provider switch carries chat Settings or chat itself to the next mount',
   before.ui.emit('chat-button');
   before.ui.update('voicePanel', { hidden: false });
   before.ui.emit('settings-button');
+  before.ui.update('voicePanel', { frameWidth: 320, frameHeight: 480 });
   const settings = before.chat.presentation();
-  assert.equal(settings.view, 'settings');
+  assert.deepEqual(settings, {
+    view: 'settings',
+    frame: { width: 320, height: 480 },
+  });
   const after = mount();
   after.chat.restorePresentation(settings);
   assert.equal(after.ui.state.voicePanel.context, 'chat');
+  assert.equal(after.ui.state.voicePanel.frameWidth, 320);
+  assert.equal(after.ui.state.voicePanel.frameHeight, 480);
   assert.equal(after.ui.state.chat.backVisible, true);
   assert.equal(after.ui.state.root.assistantMode, 'chat');
-  // Open and minimized chat come back as they were, without taking focus.
-  for (const view of ['open', 'minimized']) {
-    const next = mount();
-    next.chat.restorePresentation({ view });
-    assert.equal(next.ui.state.chat.open, true);
-    assert.equal(next.ui.state.chat.minimized, view === 'minimized');
-    assert.equal(next.chat.presentation().view, view);
-  }
-  // Idle chat carries nothing.
+  // Chat itself, or no chat at all, carries nothing.
+  const open = mount();
+  open.ui.emit('chat-button');
+  assert.equal(open.chat.presentation(), null);
   assert.equal(mount().chat.presentation(), null);
 });

@@ -1319,6 +1319,56 @@ test('opening chat or closing the voice panel clears a stale voice error', async
   }
 });
 
+test('switching AI Provider from chat Settings keeps chat Settings on the new mount', async (t) => {
+  const view = mountVoiceView(t);
+  const host = createVoicePanelHost({ storage: null });
+  const instances = [];
+  const commands = createProviderCommands(
+    {
+      runner: async () => ({}),
+      dataManager: { layers: new Map() },
+      supportedProviders: ['openai', 'gemini'],
+    },
+    {
+      bind: (options) =>
+        bind({
+          ...options,
+          panelHost: host,
+          createControl: (control) =>
+            createTestVoiceUi({ ...control, pinia: view.pinia }),
+        }),
+      factories: { openai: factory(instances), gemini: factory(instances) },
+      storage: null,
+    },
+  );
+  t.after(() => {
+    commands.destroy();
+    host.destroy();
+  });
+  await view.settle();
+  $('#gev-chat-button').click();
+  await view.settle();
+  $('#gev-chat-panel').getBoundingClientRect = () => ({
+    width: 320,
+    height: 480,
+  });
+  $('#gev-voice-settings-button').click();
+  await view.settle();
+  const old = commands.ui;
+  assert.equal(old.state.voicePanel.context, 'chat');
+  old.emit('provider-change', 'gemini');
+  await view.settle();
+  const { ui } = commands;
+  assert.notEqual(ui, old);
+  assert.equal(ui.state.voicePanel.context, 'chat');
+  assert.equal(ui.state.voicePanel.frameWidth, 320);
+  assert.equal(ui.state.voicePanel.frameHeight, 480);
+  assert.equal(ui.state.chat.backVisible, true);
+  assert.equal(ui.state.root.assistantMode, 'chat');
+  assert.equal($('#gev-chat-back').hidden, false);
+  assert.equal(active(), 'gev-voice-provider');
+});
+
 test('the voice panel close turns voice off', async (t) => {
   const f = mounted(t, { view: true });
   await f.commands.session.start();

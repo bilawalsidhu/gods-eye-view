@@ -3,7 +3,7 @@ import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
 import { bindChatControl } from './chatControl.js';
 import { bindVoiceMiniPreview } from './voiceMiniPreview.js';
 import { createVoiceControl, voiceStatusLabel } from './control.js';
-import { createVoiceSession } from './session.js';
+import { createVoiceSession, isStoppable } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
@@ -40,7 +40,7 @@ export function createVoiceCommands({
   createReticle = createDefaultReticle,
   panelHost = null,
   nativePanelProvider = null,
-  // Chat's Settings or chat itself, carried across a provider switch.
+  // Chat's Settings, carried across a provider switch.
   presentation = null,
 }) {
   if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
@@ -289,11 +289,7 @@ export function createVoiceCommands({
   // session belongs to chat, which handles its own close.
   const offClose = ui.on('settings-close', () => {
     // A voice error the user closes is over too; stopping returns to idle.
-    if (
-      (!session.isActive() && session.state !== 'error') ||
-      adapter.getStartOptions?.().textOnly
-    )
-      return;
+    if (!isStoppable(session) || adapter.getStartOptions?.().textOnly) return;
     const ticket = panelMount?.stopTicket();
     session.stop();
     panelMount?.closeAfterStop(ticket);

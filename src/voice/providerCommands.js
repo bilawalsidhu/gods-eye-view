@@ -64,7 +64,7 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     const textOnly = Boolean(
       current.session.adapter.getStartOptions?.().textOnly,
     );
-    // The panel stays where the user is: chat's Settings or chat itself.
+    // Settings opened from chat stay chat's Settings.
     const presentation = current.chatPresentation?.() ?? null;
     const generation = ++mountGeneration;
     voiceEnabled = false;
