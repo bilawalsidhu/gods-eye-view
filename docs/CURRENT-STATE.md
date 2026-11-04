@@ -1630,7 +1630,8 @@ and the saved cloud preference stands for the next aircraft or bridge. The layer
 companions, its own orbit ring and its detection bracket, and draws every
 other orbit ring (the ISS ring included) at 30% of its alpha; other
 satellites' points and labels stay. Scene clicks and the layer's Escape are
-ignored while it is ridden. The optical zoom steps 1×, 2×, 4× and 8× for
+ignored by the satellites layer while it is ridden (a click on a mapped
+point focuses it; see below). The optical zoom steps 1×, 2×, 4× and 8× for
 every satellite with `+` (or `=`) and `-` (or `_`), the panel's buttons and
 the mouse wheel (one step per notch; trackpad scrolling is summed to a step):
 the 1× frame is 60° vertical in low orbit and fits the Earth's disk with
@@ -1679,6 +1680,40 @@ footprint without ≈. After a zoom step lands, the focus pull holds until the
 imagery under the view has loaded (at most 2.5 s, `zoomSettleHolding`), then
 the reticle locks. The look keys and zoom keys keep the bridge's focus
 guards.
+
+A single click on a mapped ground point (a ground point of a layer that is
+on, through the shared context store: Mapped Installations, fires, local
+data packs; aircraft, vessels and satellites are not targets) keeps the
+camera on it (`src/ui/cockpitOrbitalFocus.js`, geometry in
+`src/cockpitOrbitalFocus.js`). The look is aimed each frame from the
+satellite's position to the point's Earth-fixed position in the same
+track-up nadir frame the arrows tilt, so the point stays at the centre as
+the satellite moves; the turn onto it (and between points) eases what is
+left of the swing with the arrows' easing on a slower clock (250 ms time
+constant, about 0.75 s to 95%), then holds the point exactly, and cuts under
+`prefers-reduced-motion`. A click anywhere else, FOCUS on the focused point,
+NADIR, Home or `0` ends the focus and the view eases back to nadir on the
+same clock; an arrow ends it and tilts on from where the view is. The focus
+also ends by itself, easing back, when the point leaves the reach (either
+tilt axis past ±45°, or the point below the satellite's horizon), when its
+layer is turned off or its record is dropped, and with the orbital view. A
+mapped point beyond the reach cannot be focused. While focused the readout
+gives the single off-nadir angle to the point, as image metadata does
+(`OFF-NADIR 23.4°`, updated on the HUD's beat and not announced), names it
+in a polite live region (`FOCUS · Camp Alpha`), and the swath reads
+approximate as for a tilt, scaled by the tilt onto the point. Clicks still
+reach Cesium's own handler and never untrack the satellite; a click a tool
+owns (drawing) is ignored, and the draw tool still borrows the click while
+it draws. Under the readout, IN REACH · *n* (a disclosure) lists the mapped
+points facing the satellite that are within the reach or in the frame now,
+nearest to nadir first, at most 12 (with NEAREST 12 OF *n* beyond that),
+rebuilt once a second. A row opens the point's details: position, source and
+its OpenStreetMap tags (or its layer's properties); FOCUS on a row focuses
+it, switches to it from another point, or ends the focus held on it, and is
+marked unavailable (`aria-disabled`) for a point in frame but beyond the
+reach. A row that leaves the list hands keyboard focus to the disclosure.
+`src/ui/cockpitOrbitalFocus.test.mjs` covers the easing in and out, the
+reach release, list switching, click handling and the readout.
 
 The HUD (`#cockpit-hud[data-subject='satellite']`, body class
 `cockpit-orbit`) mounts `CockpitOrbital` over the picture: name, class,
