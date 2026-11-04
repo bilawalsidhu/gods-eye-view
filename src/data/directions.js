@@ -54,6 +54,8 @@ export {
   STEP_ANCHOR_FAST_ATTEMPTS,
   STEP_ANCHOR_RETRY_MS,
   STEP_ANCHOR_SLOW_RETRY_MS,
+  DIRECTIONS_MARKER_OVERLAY_SOURCE_ID,
+  createDirectionsMarkerOverlayEntry,
   createDirectionsStepOverlayEntry,
   directionsRequestUrl,
   directionsRowControls,

@@ -6,6 +6,8 @@ import {
   DIRECTIONS_MODES,
   DIRECTIONS_POINTER_OWNER,
   DIRECTIONS_ROUTE_COLOR,
+  DIRECTIONS_MARKER_OVERLAY_SOURCE_ID,
+  createDirectionsMarkerOverlayEntry,
   createDirectionsStepOverlayEntry,
   directionsRequestUrl,
   directionsRowControls,
@@ -949,4 +951,84 @@ test('the reroute tooltip keeps German mode nouns capitalized', (t) => {
     title('mode-bike'),
     'Fahrrad – Route im Modus „Fahrrad“ neu berechnen',
   );
+});
+
+test('the A and B letters are protected overlay labels in the marker colour', () => {
+  const position = Cesium.Cartesian3.fromDegrees(-122.39, 37.79);
+  const entry = createDirectionsMarkerOverlayEntry('B', position, '#ff6b6b');
+  assert.equal(entry.id, 'directions-marker-b');
+  assert.equal(entry.title, 'B');
+  assert.equal(entry.variant, 'label');
+  assert.equal(entry.accent, '#ff6b6b');
+  assert.equal(entry.protected, true);
+  assert.equal(entry.position, position);
+  assert.equal(entry.placement, 'above');
+});
+
+test('a placed endpoint draws its letter through the overlay, not as entity text', async (t) => {
+  const published = [];
+  const cleared = [];
+  const visibility = [];
+  const entities = [];
+  const markerVisibility = () =>
+    visibility
+      .filter(([source]) => source === DIRECTIONS_MARKER_OVERLAY_SOURCE_ID)
+      .at(-1)?.[1];
+  directionsLayer = createApplicationDirectionsLayer();
+  directionsLayer._setOverlayHostForTest({
+    setEntries: (source, entries) => published.push([source, entries]),
+    setVisible: (source, visible) => visibility.push([source, visible]),
+    clearSource: (source) => cleared.push(source),
+  });
+  resetPointerOwnership();
+  const viewer = {
+    isDestroyed: () => false,
+    entities: {
+      add: (spec) => (entities.push(spec), spec),
+      remove() {},
+    },
+    scene: {
+      requestRender() {},
+      primitives: {
+        add: (primitive) => primitive,
+        remove() {},
+        raiseToTop() {},
+        lowerToBottom() {},
+        contains: () => true,
+        length: 0,
+      },
+    },
+  };
+  t.after(() => {
+    directionsLayer.destroy(viewer);
+    directionsLayer._setOverlayHostForTest(null);
+    resetPointerOwnership();
+  });
+  directionsLayer.init(viewer);
+  assert.equal(markerVisibility(), false, 'hidden until enabled');
+  directionsLayer.placeEndpoint('a', { lat: 37.7955, lon: -122.3937 });
+
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].label, undefined, 'no Cesium label on the marker');
+  assert.ok(entities[0].point, 'the marker keeps its point');
+  const [source, entries] = published.at(-1);
+  assert.equal(source, DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
+  assert.deepEqual(
+    entries.map((entry) => entry.title),
+    ['A'],
+  );
+  // Hidden until the floor cell settles, then anchored (the ellipsoid here,
+  // where the test resolver finds no height).
+  assert.equal(entries[0].position(), null);
+  const started = Date.now();
+  while (!entries[0].position() && Date.now() - started < 5000)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  const anchor = Cesium.Cartographic.fromCartesian(entries[0].position());
+  assert.ok(Math.abs(Cesium.Math.toDegrees(anchor.latitude) - 37.7955) < 1e-9);
+
+  directionsLayer.setParams({ clear: true });
+  assert.ok(cleared.includes(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID));
+  cleared.length = 0;
+  directionsLayer.destroy(viewer);
+  assert.ok(cleared.includes(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID));
 });

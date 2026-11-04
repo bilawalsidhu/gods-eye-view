@@ -3463,8 +3463,14 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   celestial ring, annotations SVG, missions frame tick, and traffic).
 > - **World-label accounting:** All intended label/card migrations use the
 >   shared host. The former native `LabelGraphics` exception for cable reference
->   labels was retired on 2026-08-18; cable text may render over tile geometry,
->   so **zero native world-label creation sites remain**. The mission replay DOM vehicle, awareness
+>   labels was retired on 2026-08-18; cable text may render over tile geometry.
+>   The Directions A/B letters (`directions-markers` source) and data-pack media
+>   labels (a pooled `data-pack-labels:<n>` source per pack resource, through
+>   the pack handle's `label`) moved to the host on 2026-11-04, and
+>   `src/noCesiumLabels.test.mjs` no longer keeps an allow-list, so **zero
+>   native world-label creation sites remain**. A media pack shown without an
+>   `overlayHost` fails to load rather than drawing a native label. The mission
+>   replay DOM vehicle, awareness
 >   compass, annotation SVG callouts, and host-owned detection isolation target
 >   are explicit exceptions; the awareness ring and cockpit contact pips are
 >   non-text out-of-scope surfaces. Annotation callout text, geometry, leaders,

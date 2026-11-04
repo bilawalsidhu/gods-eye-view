@@ -10,6 +10,8 @@ import { useDataPacksStore } from '../../ui/stores/dataPacks.js';
 import DataPacks from '../../ui/views/panels/DataPacks.vue';
 import { createPackPresentations } from './presentation.js';
 
+const overlayHost = { setEntries() {}, clearSource() {} };
+
 const ANCHOR = { id: 'here', lat: 30, lon: -97, alt: 10 };
 const pack = (id, url) => ({
   id,
@@ -29,7 +31,10 @@ function fixture(t) {
     entities: { add: (spec) => spec, remove() {} },
   };
   const store = useDataPacksStore(pinia);
-  const presentations = createPackPresentations(viewer, new Map(), { store });
+  const presentations = createPackPresentations(viewer, new Map(), {
+    store,
+    overlayHost,
+  });
   t.after(() => app.unmount());
   const settle = async () => {
     for (let flush = 0; flush < 4; flush += 1) await nextTick();
@@ -118,7 +123,10 @@ test('each set of presentations keeps its own panel', async (t) => {
   const { presentations, viewer, store, settle, $$ } = fixture(t);
   const one = await media(presentations, 'one');
   await media(presentations, 'two');
-  const later = createPackPresentations(viewer, new Map(), { store });
+  const later = createPackPresentations(viewer, new Map(), {
+    store,
+    overlayHost,
+  });
   const three = await media(later, 'three');
   await settle();
   const cards = () =>

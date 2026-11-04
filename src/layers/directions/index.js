@@ -40,6 +40,13 @@ export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   collisionCapacity: 0,
   moving: false,
 });
+/** The A and B letters above the endpoint markers. */
+export const DIRECTIONS_MARKER_OVERLAY_SOURCE_ID = 'directions-markers';
+export const DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+  cohortLimit: 2,
+  collisionCapacity: 0,
+  moving: false,
+});
 
 /** Travel modes, keyed by the `/api/route` profile name. */
 export const DIRECTIONS_MODES = Object.freeze({
@@ -69,8 +76,10 @@ export function presentRoutingFailure(error) {
 
 /** Route colour — the annotation palette's cyan, so voice routes and Directions match. */
 export const DIRECTIONS_ROUTE_COLOR = '#39d0ff';
-const MARKER_A_COLOR = Cesium.Color.fromCssColorString('#5dff9f');
-const MARKER_B_COLOR = Cesium.Color.fromCssColorString('#ff6b6b');
+const MARKER_A_CSS = '#5dff9f';
+const MARKER_B_CSS = '#ff6b6b';
+const MARKER_A_COLOR = Cesium.Color.fromCssColorString(MARKER_A_CSS);
+const MARKER_B_COLOR = Cesium.Color.fromCssColorString(MARKER_B_CSS);
 const STEP_COLOR = Cesium.Color.WHITE.withAlpha(0.95);
 const STEP_OUTLINE = Cesium.Color.fromCssColorString(DIRECTIONS_ROUTE_COLOR);
 const STEP_PIXEL_SIZE = 8;
@@ -797,6 +806,32 @@ export function createDirectionsStepOverlayEntry(index, position, copy) {
 }
 
 /**
+ * The letter above one endpoint marker, as a world-overlay label. It is
+ * protected, like the step card, so it never yields to ambient labels.
+ * @param {'A'|'B'} letter
+ * @param {Cesium.Cartesian3|(() => Cesium.Cartesian3)} position
+ * @param {string} accent CSS colour of the marker.
+ */
+export function createDirectionsMarkerOverlayEntry(letter, position, accent) {
+  return {
+    id: `directions-marker-${letter.toLowerCase()}`,
+    position,
+    variant: 'label',
+    title: letter,
+    accent,
+    protected: true,
+    priority: Number.MAX_SAFE_INTEGER - 1,
+    interactive: false,
+    gapPx: 13,
+    verticalOnly: true,
+    placement: 'above',
+    edgeFade: 'keyhole',
+    horizonCull: true,
+    terrainOcclusion: false,
+  };
+}
+
+/**
  * Build the `/api/route` URL for two endpoints.
  * @param {string} mode car | foot | bike
  * @param {{lat:number, lon:number}} a
@@ -881,6 +916,10 @@ export function createDirectionsLayer({ services, source }) {
   let _mode = DEFAULT_DIRECTIONS_MODE;
   /** @type {null|'a'|'b'} which endpoint the next globe click places */
   let _armed = null;
+  /** Surface heights of clicked endpoints, by point. */
+  const _surfaceHeights = new WeakMap();
+  /** Endpoints whose floor cell resolve has settled, height or not. */
+  const _floorSettled = new WeakSet();
   /** @type {{lat:number, lon:number}|null} */
   let _a = null;
   /** @type {{lat:number, lon:number}|null} */
@@ -975,10 +1014,14 @@ export function createDirectionsLayer({ services, source }) {
     if (!cartesian) return null;
     const carto = Cesium.Cartographic.fromCartesian(cartesian);
     if (!carto) return null;
-    return {
+    const point = {
       lat: Cesium.Math.toDegrees(carto.latitude),
       lon: Cesium.Math.toDegrees(carto.longitude),
     };
+    // A pick at the ellipsoid itself is the fallback when the drawn surface
+    // gave no position; the floor path places that letter instead.
+    if (Math.abs(carto.height) > 0.01) _surfaceHeights.set(point, carto.height);
+    return point;
   }
 
   function markerEntity(letter, point, color) {
@@ -993,18 +1036,53 @@ export function createDirectionsLayer({ services, source }) {
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
-      label: {
-        text: letter,
-        font: 'bold 13px "JetBrains Mono", "SF Mono", monospace',
-        fillColor: Cesium.Color.WHITE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new Cesium.Cartesian2(0, -20),
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
     });
+  }
+
+  /**
+   * Where a marker's letter hangs: over the surface the user clicked, or for an
+   * endpoint placed without a click, over the shared ground floor once its cell
+   * is known. Until then the letter stays hidden, as the step dots do, rather
+   * than hanging at the ellipsoid far below its point; only a cell that settled
+   * with no height falls back to the ellipsoid. Resolved once.
+   */
+  function markerLabelPosition(point) {
+    let position = null;
+    return () => {
+      if (position) return position;
+      const height =
+        _surfaceHeights.get(point) ??
+        services.ground.cachedGroundFloor(point.lat, point.lon);
+      if (!Number.isFinite(height) && !_floorSettled.has(point)) return null;
+      position = Cesium.Cartesian3.fromDegrees(
+        point.lon,
+        point.lat,
+        Number.isFinite(height) ? height : 0,
+      );
+      return position;
+    };
+  }
+
+  /** Publish the letters for whichever endpoints are placed. */
+  function publishMarkerLabels() {
+    const entries = [];
+    for (const [letter, point, accent] of [
+      ['A', _a, MARKER_A_CSS],
+      ['B', _b, MARKER_B_CSS],
+    ])
+      if (point)
+        entries.push(
+          createDirectionsMarkerOverlayEntry(
+            letter,
+            markerLabelPosition(point),
+            accent,
+          ),
+        );
+    _overlayHost.setEntries(
+      DIRECTIONS_MARKER_OVERLAY_SOURCE_ID,
+      entries,
+      DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS,
+    );
   }
 
   function removeEntity(entity) {
@@ -1021,6 +1099,17 @@ export function createDirectionsLayer({ services, source }) {
       removeEntity(_markerB);
       _markerB = markerEntity('B', point, MARKER_B_COLOR);
     }
+    publishMarkerLabels();
+    if (_surfaceHeights.has(point)) return;
+    // The letter appears when its floor cell lands, even under a still camera.
+    services.ground
+      .resolveGroundFloorCells([{ lat: point.lat, lon: point.lon }])
+      .catch(() => {})
+      .then(() => {
+        _floorSettled.add(point);
+        if (_viewer && (point === _a || point === _b))
+          services.render.governorRequestRender('directions-place');
+      });
   }
 
   function clearRouteGraphics() {
@@ -1326,6 +1415,7 @@ export function createDirectionsLayer({ services, source }) {
     removeEntity(_markerB);
     _markerA = null;
     _markerB = null;
+    _overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
     clearRouteGraphics();
     services.render.governorRequestRender('directions-clear');
   }
@@ -1603,6 +1693,7 @@ export function createDirectionsLayer({ services, source }) {
       _error = null;
       _flightStep = null;
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
+      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
       services.sprites.restoreSpriteOrder(viewer);
       console.log('[Data:Directions] Initialized');
     },
@@ -1616,6 +1707,7 @@ export function createDirectionsLayer({ services, source }) {
       _pointerBlocked = false;
       _stepPoints.show = true;
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
+      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, true);
       _installClickHandler(viewer);
       services.picking.registerPickOwner(
         'directions',
@@ -1634,6 +1726,7 @@ export function createDirectionsLayer({ services, source }) {
       _enabled = false;
       clearAll();
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
+      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
       _removeClickHandler();
       services.picking.unregisterPickOwner('directions');
       if (_stepPoints) _stepPoints.show = false;
@@ -1740,6 +1833,7 @@ export function createDirectionsLayer({ services, source }) {
         _stepPoints = null;
       }
       _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
+      _overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
       _viewer = null;
     },
 

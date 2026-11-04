@@ -5,10 +5,19 @@ import { applicationPinia } from '../../ui/vueRuntime.js';
 
 const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 
+const MEDIA_MARKER_CSS = '#ffff00';
+
 // Key every panel and card on the page, so a new one never reuses an old
 // one's DOM.
 let panelKeys = 0,
   cardKeys = 0;
+
+// Label overlay sources, one per pack resource while it shows text, so two
+// presentations of one pack never share or clear each other's labels. The host
+// keeps a source once made, so a disposed resource returns its id for reuse
+// and the count stays at the most labelled resources ever shown at once.
+let labelSources = 0;
+const freeLabelSources = [];
 
 /**
  * Create rendering adapters; data acquisition and authored placement stay
@@ -18,7 +27,7 @@ let panelKeys = 0,
 export function createPackPresentations(
   viewer,
   targets = new Map(),
-  { store = useDataPacksStore(applicationPinia()) } = {},
+  { store = useDataPacksStore(applicationPinia()), overlayHost = null } = {},
 ) {
   const owner = {};
   let key,
@@ -56,8 +65,10 @@ export function createPackPresentations(
     const entities = [],
       primitives = [],
       materials = [],
-      urls = [];
+      urls = [],
+      labels = [];
     const featureKeys = [];
+    let labelSource = null;
     let card,
       destroyed = false;
     return {
@@ -71,6 +82,21 @@ export function createPackPresentations(
         entities.push(entity);
         viewer.scene.requestRender();
         return entity;
+      },
+      /**
+       * World text for this pack, as a label-overlay entry in the pack's own
+       * source. The application passes the shared host; there is no text
+       * without one, so a pack that needs it fails to load instead.
+       */
+      label(entry) {
+        if (!overlayHost) throw new Error('Pack labels need an overlay host');
+        // A late adapter writing after disposal must not take a source again.
+        if (destroyed) return;
+        labelSource ||=
+          freeLabelSources.pop() ?? `data-pack-labels:${++labelSources}`;
+        labels.push(entry);
+        overlayHost.setEntries(labelSource, labels.slice());
+        viewer.scene.requestRender();
       },
       primitive(value) {
         primitives.push(viewer.scene.primitives.add(value));
@@ -98,6 +124,12 @@ export function createPackPresentations(
         // The view stops a removed card's player as it goes.
         if (card) removeCard(card);
         for (const entity of entities.splice(0)) viewer.entities.remove(entity);
+        if (labelSource) {
+          labels.length = 0;
+          overlayHost.clearSource(labelSource);
+          freeLabelSources.push(labelSource);
+          labelSource = null;
+        }
         for (const primitive of primitives.splice(0))
           viewer.scene.primitives.remove(primitive);
         for (const material of materials.splice(0)) {
@@ -200,15 +232,26 @@ export function createPackPresentations(
         (item) => item.id === pack.placement.anchorId,
       );
       if (!anchor) throw new Error('Missing media anchor');
+      const position = xyz([anchor.lon, anchor.lat, anchor.alt]);
       handle.add({
         name: pack.id,
-        position: xyz([anchor.lon, anchor.lat, anchor.alt]),
-        point: { pixelSize: 16, color: Cesium.Color.YELLOW },
-        label: {
-          text: pack.id,
-          font: '14px sans-serif',
-          pixelOffset: new Cesium.Cartesian2(0, -24),
+        position,
+        point: {
+          pixelSize: 16,
+          color: Cesium.Color.fromCssColorString(MEDIA_MARKER_CSS),
         },
+      });
+      handle.label({
+        id: 'media',
+        position,
+        variant: 'label',
+        title: pack.id,
+        accent: MEDIA_MARKER_CSS,
+        protected: true,
+        interactive: false,
+        gapPx: 15,
+        verticalOnly: true,
+        placement: 'above',
       });
       handle.media({
         kind: asset.mimeType.startsWith('video/') ? 'video' : 'audio',
