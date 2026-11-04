@@ -272,3 +272,66 @@ test('a core row carries no library entry attribute', () => {
   assert.equal(element.hasAttribute('data-library-entry'), false);
   render(null, container);
 });
+
+test('a row with an opacity presentation shows a slider that reports and resets', () => {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const calls = [];
+  const opacity = {
+    label: 'Opacity',
+    ariaLabel: 'Flights opacity',
+    percent: 40,
+    step: 5,
+    valueText: '40%',
+  };
+  render(
+    h(LayerRows, {
+      items: [
+        { ...row(false), opacity },
+        { ...row(false), key: 'b', id: 'b' },
+      ],
+      onOpacity: (id, percent) => calls.push(['set', id, percent]),
+      onOpacityReset: (id) => calls.push(['reset', id]),
+    }),
+    container,
+  );
+  const sliders = container.querySelectorAll('.data-toggle-opacity-slider');
+  assert.equal(sliders.length, 1, 'a row without the presentation has none');
+  const slider = sliders[0];
+  assert.equal(slider.type, 'range');
+  assert.equal(slider.min, '0');
+  assert.equal(slider.max, '100');
+  assert.equal(slider.step, '5');
+  assert.equal(slider.value, '40');
+  assert.equal(slider.getAttribute('aria-label'), 'Flights opacity');
+  assert.equal(slider.getAttribute('aria-valuetext'), '40%');
+  assert.equal(
+    container.querySelector('.data-toggle-opacity-value').textContent,
+    '40%',
+  );
+  assert.equal(
+    container.querySelector('.data-toggle-opacity-label').textContent,
+    'Opacity',
+  );
+
+  slider.value = '65';
+  slider.dispatchEvent(new window.Event('input', { bubbles: true }));
+  slider.dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true }));
+  assert.deepEqual(calls, [
+    ['set', 'flights', 65],
+    ['reset', 'flights'],
+  ]);
+
+  // A presented value moves the handle.
+  render(
+    h(LayerRows, {
+      items: [{ ...row(false), opacity: { ...opacity, percent: 100 } }],
+    }),
+    container,
+  );
+  assert.equal(
+    container.querySelector('.data-toggle-opacity-slider').value,
+    '100',
+  );
+  render(null, container);
+});

@@ -12,6 +12,7 @@ import {
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { createNewsPanel } from './newsPanel.js';
+import { OPACITY_STEP_PERCENT, opacityPercent } from '../data/layerOpacity.js';
 import {
   translateFeedError,
   translateStatusLine,
@@ -281,10 +282,13 @@ export class LayerPanel {
     getRowControls,
     hasRowControls,
     subscribeRowControls,
+    opacity = null,
     onHiddenRefresh = () => {},
     weatherClock,
   }) {
     this.weatherClock = weatherClock;
+    /** Opacity of the layers that can be dimmed (src/ui/layerOpacity.js). */
+    this.opacity = opacity;
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
     this.setEnabled = setEnabled;
@@ -431,6 +435,11 @@ export class LayerPanel {
         info: false,
       });
     }
+    // A change made elsewhere (the address, a reset) moves the handle.
+    const unsubscribeOpacity = this.opacity?.subscribe?.(() =>
+      this._refreshTogglePanel(),
+    );
+    if (unsubscribeOpacity) this._removers.push(unsubscribeOpacity);
     // The rows carry text this panel translates; show it in a new locale.
     this._removers.push(
       onLocaleChange(() => {
@@ -475,6 +484,10 @@ export class LayerPanel {
             this._moveSlider(layerId, sliderId, value, generation),
           onRange: (layerId, rangeId, end, value) =>
             this._pickRangeEnd(layerId, rangeId, end, value, generation),
+          onOpacity: (layerId, percent) =>
+            this._setOpacity(layerId, percent, generation),
+          onOpacityReset: (layerId) =>
+            this._setOpacity(layerId, 100, generation),
         }),
         id === null ? this._toggleContainer : this._groupContainers.get(id),
       );
@@ -501,7 +514,35 @@ export class LayerPanel {
       toggle,
       meta: this._buildMetaText(layer),
       controls: row.controls ? this._presentControls(row, layer) : null,
+      opacity: this._presentOpacity(layer),
     };
+  }
+
+  /**
+   * The opacity slider of a layer that can be dimmed, while it is on; null
+   * for a layer without the control or a layer that is off.
+   */
+  _presentOpacity(layer) {
+    if (!layer.enabled || !this.opacity?.supports?.(layer.id)) return null;
+    const percent = opacityPercent(this.opacity.get(layer.id));
+    const valueText = formatNumber(percent / 100, {
+      style: 'percent',
+      maximumFractionDigits: 0,
+    });
+    return {
+      label: t('Opacity'),
+      ariaLabel: t('{name} opacity', { name: panelLabel(layer) }),
+      percent,
+      step: OPACITY_STEP_PERCENT,
+      valueText,
+    };
+  }
+
+  // The slider reports whole percents; the owner holds the value and repaints
+  // this panel through its subscription.
+  _setOpacity(id, percent, generation = this._generation) {
+    if (this._destroyed || this._generation !== generation) return;
+    this.opacity?.set?.(id, Number(percent) / 100);
   }
 
   /**

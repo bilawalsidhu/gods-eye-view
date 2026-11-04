@@ -3619,5 +3619,6 @@
   "Cable car": "Kabelstraßenbahn",
   "Monorail": "Einschienenbahn",
   "Funicular": "Standseilbahn",
-  "Gondola": "Gondelbahn"
+  "Gondola": "Gondelbahn",
+  "{name} opacity": "Deckkraft: {name}"
 }

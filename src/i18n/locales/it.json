@@ -3706,5 +3706,6 @@
   "Cable car": "Tram a fune",
   "Monorail": "Monorotaia",
   "Funicular": "Funicolare",
-  "Gondola": "Cabinovia"
+  "Gondola": "Cabinovia",
+  "{name} opacity": "Opacità di {name}"
 }

@@ -3532,5 +3532,6 @@
   "Cable car": "ケーブルトラム",
   "Monorail": "モノレール",
   "Funicular": "ケーブルカー",
-  "Gondola": "ゴンドラ"
+  "Gondola": "ゴンドラ",
+  "{name} opacity": "{name}の不透明度"
 }

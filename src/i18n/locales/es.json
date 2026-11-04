@@ -3706,5 +3706,6 @@
   "Cable car": "Tranvía de cable",
   "Monorail": "Monorraíl",
   "Funicular": "Funicular",
-  "Gondola": "Góndola"
+  "Gondola": "Góndola",
+  "{name} opacity": "Opacidad de {name}"
 }
