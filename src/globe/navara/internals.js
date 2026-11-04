@@ -6,6 +6,7 @@
 
 import { ModelMesh } from '@navaramap/three';
 import { patchCascadedLightCopy } from './cascadedLightCopy.js';
+import { dropOrphanFeatureChanges } from './featureQueue.js';
 
 export const NAVARA_INTERNALS_VERSION = '0.2.1';
 
@@ -156,11 +157,35 @@ export function keepCascadedLightIds(view) {
     : null;
 }
 
+/**
+ * The view's queued feature changes, for featureQueue.js, or null. Navara
+ * keeps a change for a feature it does not know in that queue for good, so
+ * a deleted layer's late changes keep the view from going idle. Private:
+ * view._eventManager (stacks, removeAt). Upstream ask: drop a deleted
+ * layer's pending feature events, or skip them in needsUpdate.
+ */
+export function featureChangeQueue(view) {
+  const manager = view._eventManager;
+  const events = manager?.stacks?.renderable_feature_changed;
+  return events
+    ? {
+        events,
+        remove: (index) =>
+          manager.removeAt('renderable_feature_changed', index),
+      }
+    : null;
+}
+
 /** The hooks createNavaraEngine takes. */
 export const navaraHooks = (view) => ({
   retainTileGeometry,
   tileRoots: () => tileRoots(view),
   isIdle: () => isIdle(view),
+  dropOrphanFeatureChanges: () =>
+    dropOrphanFeatureChanges(
+      featureChangeQueue(view),
+      (id) => view.findLayerById(id) != null,
+    ),
 });
 
 /**

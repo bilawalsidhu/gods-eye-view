@@ -90,7 +90,7 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
 /**
  * @param {object} view An initialised Navara ThreeView.
  * @param {{
- *   hooks: { tileRoots: Function, isIdle: Function, retainTileGeometry: Function },
+ *   hooks: { tileRoots: Function, isIdle: Function, retainTileGeometry: Function, dropOrphanFeatureChanges?: Function },
  *   container?: HTMLElement,
  *   fetch?: typeof fetch,
  *   clock?: object,
@@ -196,6 +196,8 @@ export function createNavaraEngine(
   let drawing = false;
   const handlers = {
     preUpdate: (time) => {
+      // Before the view decides whether it is idle (internals.js).
+      hooks.dropOrphanFeatureChanges?.();
       engineClock.beginFrame();
       frames.preUpdate.raiseEvent(time);
     },

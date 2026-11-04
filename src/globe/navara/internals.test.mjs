@@ -44,3 +44,32 @@ test('only internals.js reaches private Navara members', () => {
   );
   assert.deepEqual(offenders, []);
 });
+
+test('feature changes of a deleted vector layer leave the queue; live ones stay', async () => {
+  const { dropOrphanFeatureChanges } = await import('./featureQueue.js');
+  const freed = [];
+  const change = (layerId) => ({
+    layer_id: layerId,
+    free: () => freed.push(layerId),
+  });
+  const events = [change('gone'), change('live'), change('gone'), change(null)];
+  const queue = { events, remove: (index) => events.splice(index, 1) };
+  assert.equal(
+    dropOrphanFeatureChanges(queue, (id) => id === 'live'),
+    2,
+  );
+  assert.deepEqual(
+    events.map((event) => event.layer_id),
+    ['live', null],
+  );
+  assert.deepEqual(freed, ['gone', 'gone']);
+  // No queue, or an empty one, costs nothing.
+  assert.equal(
+    dropOrphanFeatureChanges(null, () => false),
+    0,
+  );
+  assert.equal(
+    dropOrphanFeatureChanges({ events: [], remove() {} }, () => false),
+    0,
+  );
+});
