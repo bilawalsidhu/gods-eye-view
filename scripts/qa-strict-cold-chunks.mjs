@@ -7,13 +7,6 @@
 // Control: after a pick to the other engine, its code is requested, so the
 // detection sees what it is looking for.
 //
-// Known gap: the production build externalizes Cesium to the global its
-// index.html script defines, and engine-neutral modules still read that
-// global when they load, so a cold Navara start loads Cesium.js and its
-// widget styles too. That row is reported as a known gap (its control is
-// that the detection does see Cesium.js) instead of failing the run; any
-// other Cesium request at a cold Navara start still fails it.
-//
 //   node scripts/qa-strict-cold-chunks.mjs http://127.0.0.1:4208
 
 import assert from 'node:assert/strict';
@@ -46,10 +39,6 @@ const navaraCode = async (url) => {
   if (!pathname.endsWith('.js') || pathname.startsWith('/cesium/')) return [];
   return markersOf(url);
 };
-const KNOWN_COLD_NAVARA_CESIUM = new Set([
-  '/cesium/Cesium.js',
-  '/cesium/Widgets/widgets.css',
-]);
 const results = [];
 strict.extra.contracts = results;
 await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
@@ -80,33 +69,23 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
           found.push(new URL(url).pathname);
       return [...new Set(found)];
     };
-    const loaded = await otherCode(before);
-    const known =
-      start === 'navara'
-        ? loaded.filter((path) => KNOWN_COLD_NAVARA_CESIUM.has(path))
-        : [];
     const row = {
       start,
       otherEngine: other,
-      loadedAtColdStart: loaded.filter((path) => !known.includes(path)),
-      knownGap: known,
+      loadedAtColdStart: await otherCode(before),
       loadedAfterPick: (await otherCode(after)).length,
     };
     results.push(row);
     console.log(
-      row.loadedAtColdStart.length
-        ? 'FAIL'
-        : row.knownGap.length
-          ? 'KNOWN GAP'
-          : 'PASS',
+      row.loadedAtColdStart.length ? 'FAIL' : 'PASS',
       JSON.stringify(row),
     );
     await p.close();
   }
   for (const row of results)
     assert.ok(
-      row.loadedAfterPick > 0 || row.knownGap.includes('/cesium/Cesium.js'),
-      `control: ${row.otherEngine} code is detected when it loads`,
+      row.loadedAfterPick > 0,
+      `control: picking ${row.otherEngine} loads its code`,
     );
   assert.deepEqual(
     results.filter((row) => row.loadedAtColdStart.length),
