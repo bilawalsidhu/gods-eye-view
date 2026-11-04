@@ -1,6 +1,6 @@
 {
   "gzipBytes": 1920969,
   "allowanceBytes": 19210,
-  "measuredAt": "a5d78b00, keyless build (GOOGLE_MAPS_API_KEY and CESIUM_ION_TOKEN empty), entry index-CV-avk6m.js, 5 933 796 bytes, gzip level 9",
+  "measuredAt": "b523a0ac, keyless build (GOOGLE_MAPS_API_KEY and CESIUM_ION_TOKEN empty), entry index-CV-avk6m.js, 5 933 796 bytes, gzip level 9",
   "allowance": "1% of the baseline; growth past it fails npm run check:main-chunk until the baseline is raised on purpose"
 }

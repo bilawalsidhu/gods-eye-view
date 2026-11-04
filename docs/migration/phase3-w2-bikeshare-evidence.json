@@ -1,6 +1,6 @@
 {
   "status": "bikeshare implementation checkpoint; W2 remains open",
-  "baseCommit": "ef9a167aa532fc82b86761d1ac6adc8b90829293",
+  "baseCommit": "c5da5d2ce5ab09243f5d56ebfabd94ad1010a181",
   "sourceSha256": {
     "scripts/check-import-directions.mjs": "e20e6a00ac7f867888e36dafb71a7de3c16bf075893339cc3c67e941186f932e",
     "scripts/format-scope.json": "4c239721ec2a6826a5c7471a3f9601630da60022ef0de9099fc29ed4532d2405",

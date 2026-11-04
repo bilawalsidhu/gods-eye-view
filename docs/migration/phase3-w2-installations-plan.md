@@ -2,7 +2,7 @@
 
 ## Current sequencing note
 
-FIRMS correctness, functional, pixel, ground, and legacy preview checks pass. Its full-resolution cache still misses the uncapped close work-ratio gate (latest accepted full series 1.136; limit 1.10), so FIRMS is not accepted and W2 cannot close. FIRMS is locally checkpointed at `35283237`. The close-budget investigation has tried the full-resolution cache, lower target resolutions, bounded composites, transfer polynomials, and a fullscreen triangle without a passing uncapped result. Continue the next independent W2 layer while keeping that exact gate open; do not weaken it or report FIRMS/W2 accepted. Re-run FIRMS and combined W2 performance at closure.
+FIRMS correctness, functional, pixel, ground, and legacy preview checks pass. Its full-resolution cache still misses the uncapped close work-ratio gate (latest accepted full series 1.136; limit 1.10), so FIRMS is not accepted and W2 cannot close. FIRMS is locally checkpointed at `9e64185a`. The close-budget investigation has tried the full-resolution cache, lower target resolutions, bounded composites, transfer polynomials, and a fullscreen triangle without a passing uncapped result. Continue the next independent W2 layer while keeping that exact gate open; do not weaken it or report FIRMS/W2 accepted. Re-run FIRMS and combined W2 performance at closure.
 
 This is a planning update to avoid freezing all remaining W2 work on one unresolved renderer budget. Layer acceptance remains explicit per layer, and W2 exit still requires every layer plus the unchanged combined gates.
 

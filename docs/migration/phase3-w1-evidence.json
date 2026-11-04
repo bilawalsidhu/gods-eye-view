@@ -1,10 +1,10 @@
 {
   "completedAtUtc": "2026-10-26T19:20:09.557510+00:00",
-  "base": "003ecdca",
+  "base": "ac3c4a13",
   "buildIdentity": {
     "revision": "final16-lit-model-display-after-HDR-with-depth-and-GPU-picks",
     "capturedAtUtc": "2026-10-24T01:41:33.101985+00:00",
-    "baseCommit": "003ecdcaa73e2494102084ba6715ad2577a3978b",
+    "baseCommit": "ac3c4a13a69bf951f733ad0d30bd4c97cc8313a0",
     "production": {
       "files": 252,
       "sha256": "5f1ee47511f5f8894506dba2de79ac12a43d2d57cc2926e80ca333638b80b775"
@@ -7654,7 +7654,7 @@
     "sha256": "d6be5d1dd00f5e09f45d5ba9332470555b222041259515c2178854e1d1e49e20"
   },
   "nativeTrailRelocationReview": {
-    "baseCommit": "003ecdcaa73e2494102084ba6715ad2577a3978b",
+    "baseCommit": "ac3c4a13a69bf951f733ad0d30bd4c97cc8313a0",
     "checks": [
       {
         "facade": "src/data/trailRenderer.js",
@@ -27470,7 +27470,7 @@
     "notes": "All six paired images inspected. Aircraft/vessel shapes, palettes and anchors are present; local UAT rings are retained. Satellite Navara capture retains the open attribution panel. Map lighting and engine chrome are not a whole-image parity claim."
   },
   "finalReview": {
-    "baseCommit": "003ecdcaa73e2494102084ba6715ad2577a3978b",
+    "baseCommit": "ac3c4a13a69bf951f733ad0d30bd4c97cc8313a0",
     "branch": "migration/phase3-layers",
     "reviewedFiles": 79,
     "result": "W1 findings resolved and rechecked; known inherited CCTV/environment/style limits documented. No pushes, publication or subagents.",

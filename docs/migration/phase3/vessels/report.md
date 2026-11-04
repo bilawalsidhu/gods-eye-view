@@ -1,8 +1,8 @@
 # T13b — vessels on Navara
 
-Review base: `42c4c41a`; reviewed commits `132a49df..7962c139`. Validation: 2026-10-22, headless Chromium / Metal, local dev server on port 4193. All vessel evidence is synthetic; it does not assert availability of the live AISStream service.
+Review base: `0a5aebe5`; reviewed commits `c18ac136..93b546f7`. Validation: 2026-10-22, headless Chromium / Metal, local dev server on port 4193. All vessel evidence is synthetic; it does not assert availability of the live AISStream service.
 
-**T13b accepted.** Functional parity, all uncapped/vsync performance gates and final browser gates pass. Review fixes are in `cdc7c8d1`; the city performance blocker was resolved by the minimal-look sun-shadow configuration fix in `00ff196a`.
+**T13b accepted.** Functional parity, all uncapped/vsync performance gates and final browser gates pass. Review fixes are in `b2cfd953`; the city performance blocker was resolved by the minimal-look sun-shadow configuration fix in `a20d39f8`.
 
 ## Implementation and review fixes
 
@@ -32,13 +32,13 @@ After the minimal-look fix, its visual comparison also passes **20/20** at all f
 
 ## Gates
 
-- Node 26 at the review fixes and calibrated Node 24.14 (repeated after `00ff196a`): 7106 ordinary tests, 7105 pass, 1 skip, 0 fail. Node 24 allocation probes: 1 focus + 14 overlay tests pass.
+- Node 26 at the review fixes and calibrated Node 24.14 (repeated after `a20d39f8`): 7106 ordinary tests, 7105 pass, 1 skip, 0 fail. Node 24 allocation probes: 1 focus + 14 overlay tests pass.
 - Boundaries and formatting pass; build and panel build pass.
 - Main chunk: 2895623 bytes raw, 898872 gzip; no three/Navara in initial chunks.
-- Cesium engine contract: 73/73. Navara first run 78/79 (tile-sharpen metric); isolated repeat 77/79 (sharpen passes, idle and JFK surface height fail). Final isolated repeat: **79/79 pass**. After `00ff196a`, both contracts were repeated again and passed first attempt: **Cesium 73/73, Navara 79/79**. Earlier failures remain recorded as intermittent contract failures.
-- Engine shell repeated after `00ff196a`: Cesium 23/23, Navara 25/25, cross 4/4. Both share-link directions and the side-by-side camera pose agree to displayed 0 m / 0 degrees.
+- Cesium engine contract: 73/73. Navara first run 78/79 (tile-sharpen metric); isolated repeat 77/79 (sharpen passes, idle and JFK surface height fail). Final isolated repeat: **79/79 pass**. After `a20d39f8`, both contracts were repeated again and passed first attempt: **Cesium 73/73, Navara 79/79**. Earlier failures remain recorded as intermittent contract failures.
+- Engine shell repeated after `a20d39f8`: Cesium 23/23, Navara 25/25, cross 4/4. Both share-link directions and the side-by-side camera pose agree to displayed 0 m / 0 degrees.
 
-## Performance after the minimal-look fix (`00ff196a`)
+## Performance after the minimal-look fix (`a20d39f8`)
 
 Navara's `sun` defaults to `castShadow: true`. The `minimal` look inherited that default, whereas the product's `cinematic` look already disables shadow maps because the Google tiles carry baked sunlight. `minimal` now uses that same no-shadow sun configuration. This is a look configuration fix, not a new threshold or a vessel-only renderer optimization. No tile-detail, resolution, population or timing thresholds changed.
 

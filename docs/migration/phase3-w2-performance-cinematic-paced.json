@@ -4,7 +4,7 @@
   "diagnostic": false,
   "denseQuakes": false,
   "workload": "500 worldwide earthquakes, five near the Boston camera; dense local W2 catalog fixtures",
-  "head": "c637a0485cade113ee3deede1c2e35d101d79640",
+  "head": "e0e593d66ced02cfded9ee834b80d1263ed5ca6c",
   "trackedDiffSha256": "97d54c43c77660b8cb427eb7d54829a4fd03369ded5be881999b67cfdf300ba5",
   "host": {
     "cpu": "Apple M2 Pro",

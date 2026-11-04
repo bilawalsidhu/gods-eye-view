@@ -15,7 +15,7 @@
       "reason": "Google3DTiles HTTP2 protocol failures; cause unresolved"
     }
   ],
-  "baseCommit": "e5f245be8624fe4719848b5f40475abec63e1f99",
+  "baseCommit": "b98608d59f5f9d340729dc898b2e1d58248f8ef5",
   "sourceSha256": {
     "scripts/check-import-directions.mjs": "5e2de878fe5049f66587d881c56387b050e1672bdc9100ce16e4c53114436a7a",
     "scripts/fixtures/w2/alpr.mjs": "abcd249daab3444edd13f8f26e35b4af3651ff16419e36702a405b35a590bd97",

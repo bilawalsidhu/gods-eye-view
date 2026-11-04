@@ -1,6 +1,6 @@
 {
   "status": "W2 in progress; earthquakes accepted on Navara; FIRMS native extraction accepted, Navara next",
-  "baseCommit": "bbc4b5a553fb0710ef5896ff750df8a349eac8be",
+  "baseCommit": "fcdcd7fd43814e6a989546d8a5785ddf40286c73",
   "runtime": "Node 24.14.0; headless Puppeteer Metal; sequential GPU",
   "baseline": {
     "path": "qa-artifacts/w2/baseline-isolated/earthquakes-cesium.json",

@@ -16,7 +16,7 @@ In the current standard modes, the combined scene takes 4.2 ms Cesium/15.7 ms Na
 - The render governor holds both engines continuously active. Empty-scene throughput is not an idle-power measurement; the separate engine contracts verify render-on-demand rest.
 - Work is the interval between engine preRender and postRender listeners: CPU/submission/backpressure, **not GPU timer queries or whole-page CPU**. Frame interval measures actual delivered frames. JS heap is measured after forced GC; it excludes GPU memory. Startup includes fixture/bootstrap/tile readiness and is descriptive, not an isolated cold-start benchmark.
 - The migration bundle still contains both engine paths; this is not a standalone Navara build after Cesium removal. The same machine and only three measured runs limit generalization. Live providers and paid photoreal tiles were not tested; these results cannot predict Google 3D fetching, decoding or GPU-memory cost.
-- Runtime checkpoint: `c637a0485cade113ee3deede1c2e35d101d79640`; QA manifest SHA256: `36be4442a34d4f9ef53d693798aa06bb767f237549241cd729cb3381f2fd8ebf`. Raw captures include tracked diff, driver and fixture hashes.
+- Runtime checkpoint: `e0e593d66ced02cfded9ee834b80d1263ed5ca6c`; QA manifest SHA256: `36be4442a34d4f9ef53d693798aa06bb767f237549241cd729cb3381f2fd8ebf`. Raw captures include tracked diff, driver and fixture hashes.
 
 ## Diagnostic: Navara minimal / Cesium normal
 

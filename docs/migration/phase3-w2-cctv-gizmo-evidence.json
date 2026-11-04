@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "status": "native-gizmo-extracted-idle-regressions-fixed",
-  "parent": "1223f12a30e9cf94f26a7465d9a88b9aa9f2daa1",
+  "parent": "35fbe81f9fc909fcb837cfa45119c4394d7268c8",
   "navaraAccepted": false,
   "waveAccepted": false,
   "sources": {
@@ -52,7 +52,7 @@
     "src/ui/cctvPresentation.js": "dc6986325fed182bcde8ab545813b15fb094b86654875cdcd0847ac810dbb0e2"
   },
   "legacyAndContractSources": {
-    "head": "1223f12a30e9cf94f26a7465d9a88b9aa9f2daa1",
+    "head": "35fbe81f9fc909fcb837cfa45119c4394d7268c8",
     "files": {
       "scripts/fixtures/w2/cctv.mjs": "2fbba9386d2e3ee6305fa96b5a033c37038f8fca9555d210b1fe0bdf0a28ca5f",
       "scripts/format-scope.json": "e3613c5eff07ac9598e07aca24f0570a1a5c89e338a9b132a0bf8e16377215f3",

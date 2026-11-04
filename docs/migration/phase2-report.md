@@ -5,7 +5,7 @@ second engine behind it. `src/globe/` holds the contract, a Cesium engine and
 a Navara engine (`@navaramap/three` 0.2.1). The app boots on Navara with
 `?engine=navara`, with the map, camera, search, HUD and share links working
 and the layers off. Cesium stays the default, and Cesium mode behaves as
-before. Branch `migration/phase2-engine`, base `6193d50c` (the end of phase
+before. Branch `migration/phase2-engine`, base `bed5ccfe` (the end of phase
 1a).
 
 **Choosing the engine:** `?engine=navara` (or `?engine=cesium`) in the URL;
@@ -22,18 +22,18 @@ the Cesium viewer until phase 1c moves them onto the engine.
 
 | Commits | Content |
 |---|---|
-| `b43f0091`, `3a1ed636`, `11bee98f` | the contract (`src/globe/contract.js`), its engine-neutral suite and a fake engine on `src/geo` (Task 1) |
-| `b1cd74eb`, `f645aae6` | the Cesium engine, `src/globe/cesium/` (Task 2) |
-| `a2a5f344` | the app constructs the engine beside the viewer (Task 3) |
-| `283c592f` … `8c5bba5f` | overlays, pick, services, credits and map sources use the engine; map sources become engine-neutral descriptions (Task 4) |
-| `b1d02790`, `95aae465`, `487f74b7`, `8a760d21` | Navara pinned, the Navara engine, hardening, and the members Task 4 added (Tasks 6–7, cherry-picked) |
-| `e0c67478` … `17a11e2a` | camera, navigation, orientation, share links, HUD and director flights on the engine; render holds on Navara (Task 5) |
-| `9395fdc4` … `3f097ea1` | `?engine=navara` in the app, the build, the ground floor, attributions and the shell QA (Task 8) |
+| `c7ffbcac`, `1e9414ec`, `f662f32e` | the contract (`src/globe/contract.js`), its engine-neutral suite and a fake engine on `src/geo` (Task 1) |
+| `640ca5eb`, `c9b83a3a` | the Cesium engine, `src/globe/cesium/` (Task 2) |
+| `25b9aad0` | the app constructs the engine beside the viewer (Task 3) |
+| `2a98d787` … `82d64d79` | overlays, pick, services, credits and map sources use the engine; map sources become engine-neutral descriptions (Task 4) |
+| `ca12201f`, `d5878cc9`, `e34cd44f`, `88adee7d` | Navara pinned, the Navara engine, hardening, and the members Task 4 added (Tasks 6–7, cherry-picked) |
+| `b9d1b7c5` … `a493d6d2` | camera, navigation, orientation, share links, HUD and director flights on the engine; render holds on Navara (Task 5) |
+| `b3d57a6d` … `8be616d3` | `?engine=navara` in the app, the build, the ground floor, attributions and the shell QA (Task 8) |
 | Task 9 commits | shell QA across engines, the timing bench and this report |
 
 Every commit passes `npm test` and `npm run check:boundaries`, with one
-exception: between `95aae465` and `487f74b7` the Navara shape test fails,
-because the members Task 4 added arrive only in `8a760d21`.
+exception: between `d5878cc9` and `e34cd44f` the Navara shape test fails,
+because the members Task 4 added arrive only in `88adee7d`.
 
 ## What works on Navara
 
@@ -189,7 +189,7 @@ providers.
 
 ## Bundle
 
-| | `17a11e2a` (before Navara mode) | now |
+| | `a493d6d2` (before Navara mode) | now |
 |---|---|---|
 | Main chunk (Cesium mode) | 2,844,121 B | 2,849,217 B (+5,096 B, +0.18 %) |
 | Navara-mode app code (lazy) | — | 2,525 B |
@@ -269,7 +269,7 @@ gives the bench scene. The plan is the pure `navaraScenePlan` in
 [`viewOptions.js`](../../src/globe/navara/viewOptions.js), and
 [`look.js`](../../src/globe/navara/look.js) builds it and keeps it
 current. Cesium mode is unchanged: its main chunk is byte-identical to the
-one built from `6ebd3a63` once chunk hashes are masked, at 2,849,217 B.
+one built from `25e00bfb` once chunk hashes are masked, at 2,849,217 B.
 
 **What the cinematic look adds to photoreal:**
 
@@ -611,7 +611,7 @@ After Sharpen on Navara (see that section):
 - `npm test`: 6822 tests, 6821 pass, 1 skip;
 - `check:boundaries`, `format:check` and `build`: clean. The Cesium main
   chunk grew by 324 B (2,849,820 to 2,850,144 B, against a build of
-  `17e4dfd5`): the contract members and the slider's routing. It carries
+  `231e2441`): the contract members and the slider's routing. It carries
   no Navara, three or postprocessing code; the mask is in the
   `navara-engine` chunk;
 - `qa-globe-contract`: Cesium 64/64 (57 contract, 7 engine), Navara 68/68

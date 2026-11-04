@@ -4,7 +4,7 @@ Follow-up: [empty-scene resolve optimization](phase3-w2-empty-renders-performanc
 
 Combined-scene median uncapped work p95 falls from **11.9 to 9.1 ms (23.5%)** against the original stencil path on the same build. Cesium measures **4.0 ms**, giving **2.275×** Navara/Cesium, down from **2.975×** for the control. Installation-only cost falls **27.1%**, from **9.6 to 7.0 ms**. All three optimized samples beat all three control samples in each scene. The original **1.10 budget still FAILS**; this is an optimization checkpoint, not W2 acceptance.
 
-Runtime commit: `e60f668cd5372e9ac759e5b4e351f231bfa5e1b6`. No SDK patches, Dioxus changes, app-default changes, subagents, pushes or publication. Tests and builds used empty Google/Cesium keys; browser policy blocked paid map endpoints before navigation.
+Runtime commit: `5ac5f47a1dba48631221d66fc7c27291cdc027a4`. No SDK patches, Dioxus changes, app-default changes, subagents, pushes or publication. Tests and builds used empty Google/Cesium keys; browser policy blocked paid map endpoints before navigation.
 
 ## Change and quality
 

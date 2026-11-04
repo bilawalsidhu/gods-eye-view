@@ -2,7 +2,7 @@
 
 The next redundant operation is an MSAA resolve caused by rendering an empty MRT scene. Suppressing it reduces combined median work p95 from **8.8 to 8.6 ms (2.3%)** against the original-render control. Fresh Cesium measures **3.6 ms**: the same-series ratio changes **2.444→2.389×**. Empty-scene work changes **5.0→3.9 ms (22.0%)**. The 1.10 combined budget still fails; this does not complete W2 acceptance.
 
-Runtime `e6b87a12f1c7e63cf3a181a8271db419a4d95a89`. Dioxus, SDK files, app defaults and prior optimizations remain unchanged. All browser work was headless, with empty Google/Cesium keys and paid-map interception before navigation. No subagents, pushes or publication.
+Runtime `e8d7ec6ad7ea5317f2315dfe8926ff7598cdc4b9`. Dioxus, SDK files, app defaults and prior optimizations remain unchanged. All browser work was headless, with empty Google/Cesium keys and paid-map interception before navigation. No subagents, pushes or publication.
 
 **The clear win is the base map. The combined-scene change is small and close to the observed run-to-run variation; it is not a substantial closure of the full-load gap.** Combined uncapped frame-interval p95 changes 11.1→10.5 ms (Cesium 6.2 ms).
 

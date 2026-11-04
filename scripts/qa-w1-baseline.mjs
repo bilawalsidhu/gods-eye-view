@@ -529,7 +529,7 @@ async function runLayer(browser, baseUrl, name, outDir) {
           // Event-based: the shared page has the layer on, has asked the
           // layer's own feed, and asks nothing new for 3 s (bounded). The
           // link carries no tracked object (src/sharelink.js has no field
-          // for one, also at 512c5d18), so tracking cannot be what it
+          // for one, also at e3e1c2aa), so tracking cannot be what it
           // restores: sharedOpen.trackedEntity is false on every commit, a
           // known gap recorded as `trackingInLink: false`.
           await shared.page.waitForFunction(

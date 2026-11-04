@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const BASE_COMMIT = '9824bbba0a8f6c8ab6dc7ebd3768ca0cbc4721a1';
+export const BASE_COMMIT = '9aaa634853acf0973a8900c437cffacb3056f259';
 export const REGISTRY_PATH = 'docs/migration/planet-separation/files.tsv';
 export const REGISTRY_HEADER = [
   'путь',

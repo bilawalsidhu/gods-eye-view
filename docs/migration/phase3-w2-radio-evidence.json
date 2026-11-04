@@ -1,6 +1,6 @@
 {
   "status": "radio implementation checkpoint; W2 terrain/color/combined budgets remain open",
-  "baseCommit": "885853e65340f8dc3d20ec548d0d9aed205370c1",
+  "baseCommit": "83dd4956b2a944e1308d09a11f4704b46e8827d6",
   "sourceSha256": {
     "package-lock.json": "36c3225ca6f2954048e8e0e1b2e06bb7640224eb35f2739a21ff1fcfadf8b812",
     "package.json": "285287204e1a57a7174e36f20545eabf8cfb6fa9bfbf1f8c03c40298d57dcab6",

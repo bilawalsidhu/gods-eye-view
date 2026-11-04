@@ -1,6 +1,6 @@
 # Phase 3 — W1 acceptance (T16)
 
-Dates: 2026-10-23–26. Branch: `migration/phase3-layers`, based on phase 2 `45d93750`.
+Dates: 2026-10-23–26. Branch: `migration/phase3-layers`, based on phase 2 `37f94164`.
 **T16 complete with the inherited limits documented below.** All 37 W1 acceptance steps, preview pixel gates, both engine contracts, both shell runs and the four mandatory performance series pass. The 18 Cesium baseline PNGs are byte-identical. The legacy height-datum result retains five pre-existing W2 CCTV failures; live ADS-B/AIS availability is not established.
 
 Local work only; no upstream requests sent, no push or publication. Machine-readable verdicts, measurement details, failure history and content hashes: [W1 evidence](phase3-w1-evidence.json).
@@ -9,7 +9,7 @@ Local work only; no upstream requests sent, no push or publication. Machine-read
 
 W1 consists of exactly six Navara catalog entries: `flights`, `military`, `local-adsb`, `ais-live-vessels`, `satellites`, `rocket-launches`. CelestialRing is included with satellites. W2–W4 and phases 4–6 are separate work.
 
-Review covers the branch diff from `45d93750`, including the clock, movers/lines, input/selection, camera/follow, tile heights, overlay host, voice, catalog and all six renderers. Earlier extraction reviews and their evidence are retained in the SDD journal; this report does not reinterpret old failures as successful runs.
+Review covers the branch diff from `37f94164`, including the clock, movers/lines, input/selection, camera/follow, tile heights, overlay host, voice, catalog and all six renderers. Earlier extraction reviews and their evidence are retained in the SDD journal; this report does not reinterpret old failures as successful runs.
 
 T16 findings:
 
@@ -112,7 +112,7 @@ Final contracts: Cesium **73/73**, Navara **80/80**. Navara's20 sprite GPU click
 
 Both shell runs pass: **Cesium23/23, Navara25/25, cross-engine4/4** on dev and ordinary production preview. They verify the settled idle view, camera/input, layer availability and cross-engine URL restoration. All 24 engine/mode layer runs and twelve comparisons pass with the shared runtime observer: 64 application pages, zero unexpected errors. Production preview is4194, instrumented preview4195, dev4193. Reserved ports and the main checkout are not used.
 
-Final full Node 24.14 run after the review fixes and probe extension: 7172 ordinary tests, 7171 pass, one Windows-only DACL test skipped on macOS, zero failures; all 15 allocation probes pass. Format: 1560 files (including the pixel comparator and late-error CLI regressions); boundaries, production/QA builds and panel build pass. Boundaries pass after explicit ownership updates. Production main: 2905615 bytes raw /906530 gzip (+237 raw bytes versus T15 `003ecdca`), no Navara/three. There is no main-chunk baseline file, so composition is enforced but no size budget is claimed.
+Final full Node 24.14 run after the review fixes and probe extension: 7172 ordinary tests, 7171 pass, one Windows-only DACL test skipped on macOS, zero failures; all 15 allocation probes pass. Format: 1560 files (including the pixel comparator and late-error CLI regressions); boundaries, production/QA builds and panel build pass. Boundaries pass after explicit ownership updates. Production main: 2905615 bytes raw /906530 gzip (+237 raw bytes versus T15 `ac3c4a13`), no Navara/three. There is no main-chunk baseline file, so composition is enforced but no size budget is claimed.
 
 Earlier browser disconnect/RPC-timeout attempts are retained separately and are not counted as successful acceptance. The final contract and shell results above are fresh runs of the current renderer.
 

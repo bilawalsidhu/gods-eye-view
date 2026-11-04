@@ -2,7 +2,7 @@
 
 ## 14a — Cesium extraction
 
-Base: `c69f13b8`. Synthetic QA catalogs: 839 core TLEs (including ISS, MEO and GEO) + 6000 dense Starlink-like TLEs. All TLEs have valid checksums and propagate through unchanged satellite.js. No claim about live CelesTrak availability.
+Base: `89b1e2d7`. Synthetic QA catalogs: 839 core TLEs (including ISS, MEO and GEO) + 6000 dense Starlink-like TLEs. All TLEs have valid checksums and propagate through unchanged satellite.js. No claim about live CelesTrak availability.
 
 Cesium points, synchronous orbit primitives with depth-fail colour, tracked Entity, native click handler and follow are now behind `satellites/render/cesium.js`. Shared logic uses geo and Rgba; physical propagation, ring baking/GMST and orbit lookup use appClock, while catalog/UI throttles keep wall time. CelestialRing screen geometry uses geo/projector; its exact legacy Simon1994/ICRF planetary calculation and bare-viewer fallback are isolated in `celestialRing/render/cesium.js`.
 
