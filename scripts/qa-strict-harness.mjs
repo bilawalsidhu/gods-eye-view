@@ -281,6 +281,7 @@ export async function installStrictNetwork(
     // requests, and a live answer would still show up as a violation.
     if (type === 'page' || type === 'iframe')
       steps.push(intercept(session, type));
+    if (type === 'page') steps.push(trapCesiumGlobal(session, ledger));
     await Promise.all(steps);
   };
   const attach = async (sessionId, info, waiting) => {
@@ -317,6 +318,78 @@ export async function installStrictNetwork(
   return ledger;
 }
 
+/**
+ * The production build reads every `cesium` import from the global that
+ * /cesium/Cesium.js defines, and the page loads that script only when a
+ * Cesium globe first starts. A read of the global before then throws in the
+ * app (a Navara page has no Cesium at all), wherever the app catches it, so
+ * each page gets an accessor in place of the global: reads before the script
+ * has assigned it are logged with their stack in `ledger.cesiumBeforeLoad`
+ * and answer `undefined`, as production would.
+ *
+ * GEV_QA_CESIUM_TRAP=record (a survey, not a check) answers such a read with
+ * the SDK instead, loaded synchronously on the first one, and logs every
+ * distinct read site until the page itself loads Cesium.js, so one run lists
+ * all the Navara paths that still need Cesium.
+ */
+async function trapCesiumGlobal(session, ledger) {
+  const binding = '__gevStrictCesiumRead';
+  const record = process.env.GEV_QA_CESIUM_TRAP === 'record';
+  session.on('Runtime.bindingCalled', (event) => {
+    if (event.name !== binding) return;
+    const stack = String(event.payload).slice(0, 1500);
+    const known = ledger.cesiumBeforeLoad.find((read) => read.stack === stack);
+    if (known) known.count++;
+    else if (ledger.cesiumBeforeLoad.length < (record ? 2000 : 50))
+      ledger.cesiumBeforeLoad.push({ stack, count: 1 });
+  });
+  await session.send('Runtime.enable');
+  await session.send('Runtime.addBinding', { name: binding });
+  await session.send('Page.enable');
+  await session.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `(() => {
+      if (window.top !== window) return;
+      const record = ${record};
+      const seen = new Set();
+      let sdk;
+      let pageLoaded = false;
+      const report = () => {
+        const limit = Error.stackTraceLimit;
+        Error.stackTraceLimit = 12;
+        const stack = String(new Error('Cesium read before it loaded').stack);
+        Error.stackTraceLimit = limit;
+        const site = stack.split('\\n').slice(2, 6).join('\\n');
+        if (seen.has(site)) return;
+        seen.add(site);
+        window.${binding}?.(stack);
+      };
+      Object.defineProperty(window, 'Cesium', {
+        configurable: true,
+        get() {
+          if (!record) {
+            if (sdk === undefined) report();
+            return sdk;
+          }
+          if (!pageLoaded) {
+            pageLoaded = !!document.querySelector('script[src$="/Cesium.js"]');
+            if (!pageLoaded) report();
+          }
+          if (sdk === undefined) {
+            const request = new XMLHttpRequest();
+            request.open('GET', '/cesium/Cesium.js', false);
+            request.send();
+            (0, eval)(request.responseText);
+          }
+          return sdk;
+        },
+        set(value) {
+          sdk = value;
+        },
+      });
+    })();`,
+  });
+}
+
 /** A new, empty network ledger. */
 export function networkLedger() {
   return {
@@ -336,6 +409,7 @@ export function networkLedger() {
     },
     violations: [],
     setupErrors: [],
+    cesiumBeforeLoad: [],
   };
 }
 
@@ -681,6 +755,7 @@ export function createStrict({
         tileCache: ledger.tileCache,
         violations: ledger.violations,
         setupErrors: ledger.setupErrors,
+        cesiumBeforeLoad: ledger.cesiumBeforeLoad,
         fixtures,
         tileHosts: [...tileHosts],
       };
@@ -714,16 +789,24 @@ export function createStrict({
           picks: picks.length,
           requests: ledger.requests,
           violations: ledger.violations.length,
+          cesiumBeforeLoad: ledger.cesiumBeforeLoad.length,
         }),
       );
       for (const v of ledger.violations.slice(0, 20))
         console.log('NETWORK VIOLATION', JSON.stringify(v));
+      for (const read of ledger.cesiumBeforeLoad.slice(0, 10))
+        console.log('CESIUM BEFORE LOAD', JSON.stringify(read));
       if (failed) return;
       assert.equal(
         ledger.violations.length,
         0,
         'network policy violations: ' +
           JSON.stringify(ledger.violations.slice(0, 5)),
+      );
+      assert.deepEqual(
+        ledger.cesiumBeforeLoad,
+        [],
+        'the page read the Cesium global before Cesium.js loaded',
       );
       assert.deepEqual(missing, [], 'layers without an assertion');
       assert.ok(
