@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { billboardCollectionOf } from '../../render/cesium/internals.js';
 import {
   SELECTED_CARD_REFRESH_MS,
   TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
@@ -130,9 +131,9 @@ export function createSelection({ state, services, parts }) {
         x: position.x,
         y: position.y,
         collection:
-          picked?.primitive?._billboardCollection === state._animatedMarkers
+          billboardCollectionOf(picked?.primitive) === state._animatedMarkers
             ? 'animated'
-            : picked?.primitive?._billboardCollection === state._markers
+            : billboardCollectionOf(picked?.primitive) === state._markers
               ? 'stationary'
               : null,
       };

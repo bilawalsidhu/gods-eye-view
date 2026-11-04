@@ -17,6 +17,7 @@
 import * as Cesium from 'cesium';
 import { ownCameraArrival } from './data/cameraArrival.js';
 import { heightsFor } from './queries/heights.js';
+import { cameraFlightActive } from './render/cesium/internals.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
 export const MIN_EYE_CLEARANCE_M = 120;
@@ -25,6 +26,11 @@ const GUARD_ATTEMPTS = 8;
 const GUARD_INTERVAL_MS = 600;
 /** Ignore sub-metre noise rather than nudging the camera forever. */
 const GUARD_EPSILON_M = 2;
+/** Eye travel (m) and turn (cosine) that mean another owner moved the camera. */
+const MOVED_M = 0.01;
+const TURNED_COS = 1 - 1e-9;
+
+const groundScratch = new Cesium.Cartesian3();
 
 const probeScratch = new Cesium.Cartographic();
 
@@ -52,6 +58,46 @@ function sampleSurfaceM(scene, cells) {
   return { heightM, sampled };
 }
 
+/** The eye's ground point (height 0), its height, and which way it looks. */
+function poseOf(camera) {
+  const carto =
+    camera?.positionWC && Cesium.Cartographic.fromCartesian(camera.positionWC);
+  if (!carto || !camera.directionWC || !camera.upWC) return null;
+  return {
+    ground: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude),
+    height: carto.height,
+    direction: Cesium.Cartesian3.clone(camera.directionWC),
+    up: Cesium.Cartesian3.clone(camera.upWC),
+  };
+}
+
+/**
+ * Whether another owner has moved the camera off `pose`: across the ground,
+ * down, or around. A pure rise is not one: Cesium's terrain collision lifts a
+ * buried eye straight up as tiles load, which is the case the guard exists
+ * for, so `pose` follows the highest eye seen and the guard keeps measuring.
+ */
+function moved(camera, pose) {
+  const carto = Cesium.Cartographic.fromCartesian(camera.positionWC);
+  if (!carto) return true;
+  const ground = Cesium.Cartesian3.fromRadians(
+    carto.longitude,
+    carto.latitude,
+    0,
+    undefined,
+    groundScratch,
+  );
+  if (
+    Cesium.Cartesian3.distance(ground, pose.ground) > MOVED_M ||
+    carto.height < pose.height - MOVED_M ||
+    Cesium.Cartesian3.dot(camera.directionWC, pose.direction) < TURNED_COS ||
+    Cesium.Cartesian3.dot(camera.upWC, pose.up) < TURNED_COS
+  )
+    return true;
+  pose.height = Math.max(pose.height, carto.height);
+  return false;
+}
+
 /**
  * How far the camera must rise to clear the ground, given a measured surface.
  * Pure so the policy is testable without a scene.
@@ -75,8 +121,10 @@ export function groundClearanceDeficitM(
  * Watch an arrival and lift the camera once the real surface can be measured.
  *
  * Stops quietly on a clear view, exhausted attempts, the user taking the
- * controls (pointer or wheel on the canvas), or `isStale()` reporting that a
- * newer arrival owns the camera.
+ * controls (pointer or wheel on the canvas), `isStale()` reporting that a
+ * newer arrival owns the camera, or any other caller moving the camera or
+ * starting a flight in the meantime: the guard only ever corrects the pose it
+ * was started on.
  * @param {Cesium.Viewer} viewer Live viewer.
  * @param {{lat: number, lon: number}} at Destination being framed.
  * @param {{clearanceM?: number, attempts?: number, intervalMs?: number,
@@ -93,6 +141,10 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
   } = options;
   if (!viewer?.scene || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
     return () => {};
+
+  // Without a readable pose the guard could not tell a later owner's move.
+  const arrival = poseOf(viewer.camera);
+  if (!arrival) return () => {};
 
   let timer = null;
   let done = false;
@@ -111,30 +163,6 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     release();
   };
   release = ownCameraArrival(viewer, stop);
-  // Direct camera API callers (including duration-zero flights) must yield
-  // before moving the eye. Restore the exact method ownership on completion.
-  for (const name of [
-    'flyTo',
-    'flyToBoundingSphere',
-    'setView',
-    'lookAt',
-    'cancelFlight',
-  ]) {
-    const camera = viewer.camera;
-    const original = camera[name];
-    if (typeof original !== 'function') continue;
-    const descriptor = Object.getOwnPropertyDescriptor(camera, name);
-    const wrapped = function (...args) {
-      stop();
-      return original.apply(this, args);
-    };
-    camera[name] = wrapped;
-    removers.push(() => {
-      if (camera[name] !== wrapped) return;
-      if (descriptor) Object.defineProperty(camera, name, descriptor);
-      else delete camera[name];
-    });
-  }
   const removeTracking = viewer.trackedEntityChanged?.addEventListener(stop);
   if (removeTracking) removers.push(removeTracking);
   documentRef?.addEventListener?.('keydown', stop, true);
@@ -146,8 +174,10 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
   const attempt = () => {
     if (done) return;
     if (isStale() || viewer.isDestroyed?.()) return stop();
-    remaining -= 1;
     const camera = viewer.camera;
+    // Another caller owns the camera now; lifting would undo its move.
+    if (cameraFlightActive(camera) || moved(camera, arrival)) return stop();
+    remaining -= 1;
     const carto = camera.positionCartographic;
     // The eye must clear both the framed target and the ground beneath it.
     const below = {

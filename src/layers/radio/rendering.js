@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { clusterPointCollection as clusterPointsOf } from '../../render/cesium/internals.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import {
   MARKER_LIFT_M,
@@ -81,7 +82,7 @@ export function createRendering({
   }
 
   function clusterPointCollection() {
-    return layerState._dataSource?.clustering?._clusterPointCollection || null;
+    return clusterPointsOf(layerState._dataSource?.clustering);
   }
 
   function publishRadioOverlayEntries() {

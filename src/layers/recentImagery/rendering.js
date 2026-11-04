@@ -7,6 +7,7 @@
  * small semaphore of our own; Cesium's global request limits stay untouched.
  */
 import * as Cesium from 'cesium';
+import { withTileRequestHook } from '../../render/cesium/tileRequests.js';
 import { PRODUCTS, gibsTemplate } from './model.js';
 
 const SLOT_IDS = ['a', 'b'];
@@ -27,7 +28,7 @@ const boxKey = (box) =>
   [box.west, box.south, box.east, box.north].map(Number).join(',');
 
 /**
- * Gate a provider's `requestImage` through the semaphore. Returning
+ * Gate a provider's tile requests through the semaphore. Returning
  * `undefined` tells Cesium to retry on a later frame, but under
  * `requestRenderMode` there is no later frame unless something asks — and a
  * deferral must never ask for one itself: the retried tile would defer again
@@ -37,31 +38,31 @@ const boxKey = (box) =>
  * deferred goes through the one coalesced delayed retry.
  */
 function admitTileRequests(provider, admission, requestRender, retry) {
-  const original = provider.requestImage.bind(provider);
-  provider.requestImage = (x, y, level, request) => {
-    if (admission.inFlight >= admission.limit) return undefined;
-    admission.inFlight += 1;
-    const release = () => {
-      admission.inFlight -= 1;
-    };
-    let promise;
-    try {
-      promise = original(x, y, level, request);
-    } catch (error) {
-      release();
-      throw error;
-    }
-    if (!promise) {
-      release();
-      retry.schedule();
-      return undefined;
-    }
-    return Promise.resolve(promise).finally(() => {
-      release();
-      requestRender(TILE_RENDER_REASON);
-    });
-  };
-  return provider;
+  return withTileRequestHook(provider, {
+    requestImage: (_tile, issue) => {
+      if (admission.inFlight >= admission.limit) return undefined;
+      admission.inFlight += 1;
+      const release = () => {
+        admission.inFlight -= 1;
+      };
+      let promise;
+      try {
+        promise = issue();
+      } catch (error) {
+        release();
+        throw error;
+      }
+      if (!promise) {
+        release();
+        retry.schedule();
+        return undefined;
+      }
+      return Promise.resolve(promise).finally(() => {
+        release();
+        requestRender(TILE_RENDER_REASON);
+      });
+    },
+  });
 }
 
 /**

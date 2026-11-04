@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { webglContext } from '../../render/cesium/internals.js';
 import { recordFix, updatePlayback, attachFloorToPlace } from './movement.js';
 import { seek, setRate, mergeHistory } from '../../data/contactPlayback.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
@@ -166,7 +167,7 @@ export function createTesting({ state, parts }) {
         stride = 12,
         data = new Float64Array(capacity * stride);
       const previousPositions = new Float64Array(state._vehicles.size * 3);
-      const gl = scene.context._gl;
+      const gl = webglContext(scene);
       let active = false,
         upload = 0,
         cpu = 0,

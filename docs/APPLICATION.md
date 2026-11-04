@@ -163,6 +163,18 @@ a Cesium throw for missing depth-texture support, and every caller treats it
 as one. Cesium answers `now()` synchronously from the scene, so it costs what
 the direct call did.
 
+## Cesium internals
+
+Core reaches private Cesium fields only through
+`src/render/cesium/internals.js`, one named helper per field (the main and
+offscreen pick views, a billboard's collection, a cluster's point collection,
+the widget's render-loop latch, the WebGL context and whether a camera flight
+is under way). `internals.test.mjs` fails when the installed Cesium stops
+declaring one of them, and when a private field is reached anywhere else.
+Imagery that rations its tile requests states the policy as a hook with
+`withTileRequestHook(provider, { requestImage, credit })` from
+`src/render/cesium/tileRequests.js`, which leaves the provider untouched.
+
 ## Standalone wiring
 
 `src/main.js` reads the existing browser configuration and starts
