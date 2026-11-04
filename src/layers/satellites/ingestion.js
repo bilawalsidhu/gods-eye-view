@@ -4,6 +4,7 @@ import { msg } from '../../i18n/index.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
 import { classifySatellite, parseSatcatCsv } from './classes.js';
+import { matchImagingSensor } from './sensors.js';
 
 /**
  * How long a catalog rebuild waits for SATCAT before it classifies without
@@ -19,20 +20,38 @@ export function createIngestion({
   source,
 }) {
   /**
-   * The local pack the classes are read from: the UCS pack. It is not needed
-   * to render: a failed read leaves the last pack (or none) and
-   * classification falls back to names and groups.
+   * The local packs the classes and zoom steps are read from: the UCS pack
+   * and the imaging-sensor pack. Neither is needed to render: a failed read
+   * leaves the last pack (or none) and classification falls back to names
+   * and groups.
    */
   async function _readLocalEvidence() {
-    if (layerState._ucs) return;
-    const pack = await Promise.resolve()
-      .then(() => source.readUcs?.())
-      .then((loaded) => (loaded instanceof Map ? loaded : null))
-      .catch((error) => {
-        console.warn('[Data:Satellites] UCS pack unavailable:', error);
-        return null;
-      });
+    const ucs = layerState._ucs
+      ? Promise.resolve(layerState._ucs)
+      : Promise.resolve()
+          .then(() => source.readUcs?.())
+          .then((pack) => (pack instanceof Map ? pack : null))
+          .catch((error) => {
+            console.warn('[Data:Satellites] UCS pack unavailable:', error);
+            return null;
+          });
+    // The sensor pack only adds zoom steps in the orbital view; without it
+    // every satellite keeps the base steps.
+    const sensors = layerState._sensors
+      ? Promise.resolve(layerState._sensors)
+      : Promise.resolve()
+          .then(() => source.readSensors?.())
+          .then((index) => (index?.byNorad instanceof Map ? index : null))
+          .catch((error) => {
+            console.warn(
+              '[Data:Satellites] Imaging sensor pack unavailable:',
+              error,
+            );
+            return null;
+          });
+    const [pack, sensorIndex] = await Promise.all([ucs, sensors]);
     if (pack) layerState._ucs = pack;
+    if (sensorIndex) layerState._sensors = sensorIndex;
   }
 
   /**
@@ -295,6 +314,10 @@ export function createIngestion({
             }),
             ucs,
             satcat,
+            sensor: matchImagingSensor(layerState._sensors, {
+              noradId,
+              name: entry.name,
+            }),
           });
 
           coreStale ||= entry.stale;

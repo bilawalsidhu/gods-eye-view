@@ -5,6 +5,7 @@ import {
   ORBITAL_BASE_FOV_LEO_RAD,
   ORBITAL_EARTH_RADIUS_M,
   ORBITAL_SETTLE_MAX_MS,
+  ORBITAL_WHEEL_COOLDOWN_MS,
   cesiumFrustumFovRad,
   earthAngularRadiusRad,
   footprintWidthKm,
@@ -14,6 +15,12 @@ import {
   nextOrbitalZoom,
   offNadirAngleDeg,
   offNadirSwathScale,
+  orbitalMaxZoom,
+  sensorStripFraction,
+  sensorSwathZoom,
+  viewWidthKm,
+  wheelZoomStep,
+  ORBITAL_WHEEL_GESTURE_GAP_MS,
   offNadirOrientation,
   orbitalBaseFovRad,
   previousOrbitalZoom,
@@ -21,7 +28,16 @@ import {
   zoomTransitionBlurPx,
   zoomTransitionProgress,
   zoomTransitionState,
+  ORBITAL_PREFETCH_ACROSS,
+  ORBITAL_PREFETCH_LEAD_S,
+  ORBITAL_PREFETCH_MAX_TILES,
+  destinationPoint,
+  groundTrackAhead,
+  imageryLevelForView,
+  tilesForPoints,
 } from './cockpitOrbital.js';
+import * as Cesium from 'cesium';
+import { greatCircleKm } from './geoDistance.js';
 
 const RAD = Math.PI / 180;
 const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
@@ -257,6 +273,97 @@ test('a landed zoom step holds for its imagery, but never past the cap', () => {
   assert.equal(zoomSettleHolding(Number.NaN, false), true);
 });
 
+const WIDE = 16 / 9;
+
+test("the zoom ladder climbs to a satellite's own cap and steps off a SENSOR zoom", () => {
+  assert.equal(nextOrbitalZoom(8), 8, 'no sensor: 8x is the top');
+  assert.equal(nextOrbitalZoom(8, 64), 16);
+  assert.equal(nextOrbitalZoom(32, 64), 64);
+  assert.equal(nextOrbitalZoom(64, 64), 64, 'the cap holds');
+  assert.equal(nextOrbitalZoom(5.7, 64), 8, 'between steps: the step above');
+  assert.equal(previousOrbitalZoom(5.7), 4, 'between steps: the step below');
+  assert.equal(previousOrbitalZoom(128), 64);
+  assert.equal(previousOrbitalZoom(1), 1);
+});
+
+test('a sensor caps the zoom at its swath for the live altitude', () => {
+  // WorldView-3 at 617 km, 13.1 km swath: 64x spans ~20 km, 128x ~10 km.
+  assert.ok(viewWidthKm(617e3, 64, WIDE) >= 13.1);
+  assert.ok(viewWidthKm(617e3, 128, WIDE) < 13.1);
+  assert.equal(orbitalMaxZoom(617e3, 13.1, WIDE), 64);
+  // ICEYE spotlight, 5 km at 570 km.
+  assert.equal(orbitalMaxZoom(570e3, 5, WIDE), 128);
+  // PlanetScope SuperDove, 32.5 km: 32x at 525 km but 16x at 470 km.
+  assert.equal(orbitalMaxZoom(525e3, 32.5, WIDE), 32);
+  assert.equal(orbitalMaxZoom(470e3, 32.5, WIDE), 16);
+  // Landsat's 185 km swath fits inside 8x: no extra steps, never fewer.
+  assert.equal(orbitalMaxZoom(705e3, 185, WIDE), 8);
+  assert.equal(orbitalMaxZoom(705e3, 2330, WIDE), 8);
+  // No sensor, or an unusable swath.
+  assert.equal(orbitalMaxZoom(617e3, null, WIDE), 8);
+  assert.equal(orbitalMaxZoom(617e3, 0, WIDE), 8);
+  // A swath exactly as wide as the 16x view allows 16x.
+  assert.equal(orbitalMaxZoom(617e3, viewWidthKm(617e3, 16, WIDE), WIDE), 16);
+});
+
+test('the SENSOR step frames the swath when it lies in range', () => {
+  const landsat = sensorSwathZoom(705e3, 185, WIDE, 8);
+  assert.ok(landsat > 4 && landsat < 8, String(landsat));
+  assert.ok(Math.abs(viewWidthKm(705e3, landsat, WIDE) - 185) < 1);
+  const worldview = sensorSwathZoom(617e3, 13.1, WIDE, 64);
+  assert.equal(worldview, null, 'narrower than the 64x cap allows');
+  assert.equal(sensorSwathZoom(705e3, 2330, WIDE, 8), null, 'wider than 1x');
+  assert.equal(sensorSwathZoom(705e3, null, WIDE, 8), null);
+});
+
+test('the sensor strip spans its share of the view', () => {
+  assert.equal(sensorStripFraction(13, 130), 0.1);
+  assert.equal(sensorStripFraction(500, 131), 1, 'clipped to the view');
+  assert.equal(sensorStripFraction(null, 131), null);
+  assert.equal(sensorStripFraction(13.1, null), null);
+});
+
+test('the wheel steps once per notch and sums a trackpad swipe', () => {
+  // A mouse notch away from the viewer zooms in.
+  let r = wheelZoomStep(null, { deltaY: -100, deltaMode: 0 }, 1000);
+  assert.equal(r.step, 1);
+  // The rest of that notch, inside the cooldown, is absorbed.
+  r = wheelZoomStep(r.accumulator, { deltaY: -100, deltaMode: 0 }, 1050);
+  assert.equal(r.step, 0);
+  // A notch toward the viewer after the cooldown zooms out.
+  r = wheelZoomStep(
+    r.accumulator,
+    { deltaY: 120, deltaMode: 0 },
+    1050 + ORBITAL_WHEEL_COOLDOWN_MS + 1,
+  );
+  assert.equal(r.step, -1);
+  // A trackpad's small deltas add up before they step.
+  let pad = null;
+  const steps = [];
+  for (let i = 0; i < 4; i += 1) {
+    const out = wheelZoomStep(
+      pad,
+      { deltaY: -30, deltaMode: 0 },
+      5000 + i * 16,
+    );
+    pad = out.accumulator;
+    steps.push(out.step);
+  }
+  assert.deepEqual(steps, [0, 0, 0, 1]);
+  // Turning back starts the sum over.
+  const turned = wheelZoomStep(
+    { sum: -90, lastStepMs: -Infinity },
+    { deltaY: 30, deltaMode: 0 },
+    9000,
+  );
+  assert.equal(turned.step, 0);
+  assert.equal(turned.accumulator.sum, 30);
+  // Line-mode wheels (Firefox): three lines make a notch.
+  assert.equal(wheelZoomStep(null, { deltaY: -3, deltaMode: 1 }, 0).step, 0);
+  assert.equal(wheelZoomStep(null, { deltaY: -7, deltaMode: 1 }, 0).step, 1);
+  assert.equal(wheelZoomStep(null, { deltaY: 0 }, 0).step, 0);
+});
+
 test('a heading turns the nadir frame, keeping north to fall back on', () => {
   // Over the equator at 0°E: north is +z, east is +y.
   const position = { x: ORBITAL_EARTH_RADIUS_M + 500_000, y: 0, z: 0 };
@@ -272,6 +379,26 @@ test('a heading turns the nadir frame, keeping north to fall back on', () => {
   assert.ok(
     close(nadirOrientation(position, { headingDeg: 0 }).up, northUp.up),
   );
+});
+
+test('a partial scroll does not carry over into a later gesture', () => {
+  // 90 px: short of a step.
+  let r = wheelZoomStep(null, { deltaY: -90, deltaMode: 0 }, 1000);
+  assert.equal(r.step, 0);
+  // Still the same gesture: 10 px more completes the step.
+  const same = wheelZoomStep(
+    r.accumulator,
+    { deltaY: -10, deltaMode: 0 },
+    1100,
+  );
+  assert.equal(same.step, 1);
+  // Minutes later a 10 px nudge is a new gesture, not the rest of the old.
+  r = wheelZoomStep(
+    r.accumulator,
+    { deltaY: -10, deltaMode: 0 },
+    1000 + ORBITAL_WHEEL_GESTURE_GAP_MS + 60_000,
+  );
+  assert.equal(r.step, 0);
 });
 
 test('the total off-nadir angle combines both tilts', () => {
@@ -299,4 +426,149 @@ test("a tilted view's width grows faster across the frame than along it", () => 
     last = scale;
   }
   assert.equal(offNadirSwathScale({ northDeg: Number.NaN }), 1);
+});
+
+// ── imagery pre-load ahead of the ground track ─────────────────────────
+
+const PASS = Object.freeze({
+  latitude: 30,
+  longitude: -97,
+  groundTrackDeg: 45,
+  velocityMps: 7_600,
+  altitudeM: 500_000,
+});
+
+test('destinationPoint walks a great circle along a bearing', () => {
+  const east = destinationPoint(0, 179.9, 90, 111_195 * 0.2);
+  assert.ok(Math.abs(east.lat) < 1e-9);
+  assert.ok(Math.abs(east.lon - -179.9) < 1e-3, 'wraps the antimeridian');
+  const north = destinationPoint(10, 20, 0, 50_000);
+  assert.ok(Math.abs(greatCircleKm({ lat: 10, lon: 20 }, north) - 50) < 0.1);
+  assert.ok(north.lat > 10 && Math.abs(north.lon - 20) < 1e-9);
+});
+
+test('the points ahead run along the ground track at ground speed', () => {
+  const points = groundTrackAhead(PASS, 20);
+  const across = ORBITAL_PREFETCH_ACROSS.length;
+  assert.equal(points.length, ORBITAL_PREFETCH_LEAD_S.length * across);
+  // Ground speed is the orbital speed scaled to the surface: ~7.0 km/s.
+  const groundKmPerS = (7.6 * 6371) / (6371 + 500);
+  const start = { lat: PASS.latitude, lon: PASS.longitude };
+  ORBITAL_PREFETCH_LEAD_S.forEach((seconds, i) => {
+    const centre = points[i * across];
+    const km = greatCircleKm(start, centre);
+    assert.ok(Math.abs(km - groundKmPerS * seconds) < 0.5, `${seconds} s`);
+    // North-east of the start, on a 45° track.
+    assert.ok(centre.lat > PASS.latitude && centre.lon > PASS.longitude);
+    // The side points sit a third of the view off the centre line.
+    for (const side of points.slice(i * across + 1, (i + 1) * across))
+      assert.ok(Math.abs(greatCircleKm(centre, side) - 20 / 3) < 0.05);
+  });
+  assert.deepEqual(groundTrackAhead({ ...PASS, groundTrackDeg: null }, 20), []);
+  assert.deepEqual(groundTrackAhead(PASS, null), []);
+});
+
+test("the tile level is the one Cesium draws for the view", () => {
+  const mercator = new Cesium.WebMercatorTilingScheme();
+  // Worked case: 10 m per CSS pixel at the equator. Cesium refines the
+  // ellipsoid terrain until a tile's error is at most 2 px, 20 m: level 12,
+  // 78,271.5 m / 2^12 = 19.11 m. The Web Mercator texel nearest that is
+  // level 13's (156,543 m / 2^13 = 19.11 m), about 1.9 px each, where a
+  // one-pixel texel would have asked for level 14.
+  assert.equal(
+    imageryLevelForView(mercator, { metresPerPixel: 10, latitudeDeg: 0 }),
+    13,
+  );
+  // 5 m/px: terrain level 13 (9.55 m), imagery level 14.
+  assert.equal(
+    imageryLevelForView(mercator, { metresPerPixel: 5, latitudeDeg: 0 }),
+    14,
+  );
+  // 7 m/px still takes terrain level 13 (9.55 m <= 14 m): level 14, so a
+  // texel spans 1.4 px.
+  assert.equal(
+    imageryLevelForView(mercator, { metresPerPixel: 7, latitudeDeg: 0 }),
+    14,
+  );
+  // At 60° a Mercator texel covers half the ground: one level coarser.
+  assert.equal(
+    imageryLevelForView(mercator, { metresPerPixel: 10, latitudeDeg: 60 }),
+    12,
+  );
+  // A geographic scheme starts from two root tiles and keeps its texels at
+  // every latitude.
+  const geographic = new Cesium.GeographicTilingScheme();
+  for (const latitudeDeg of [0, 60])
+    assert.equal(
+      imageryLevelForView(geographic, {
+        metresPerPixel: 10,
+        latitudeDeg,
+        geographic: true,
+      }),
+      12,
+      `${latitudeDeg}°`,
+    );
+  // A terrain provider's own errors (Cesium World Terrain: 65-sample tiles)
+  // and a looser screen-space error are honoured.
+  const worldTerrain = (level) =>
+    (6378137 * 2 * Math.PI * 0.25) / (65 * 2) / 2 ** level;
+  assert.equal(
+    imageryLevelForView(mercator, {
+      metresPerPixel: 10,
+      latitudeDeg: 0,
+      terrainLevelErrorM: worldTerrain,
+    }),
+    13,
+  );
+  assert.equal(
+    imageryLevelForView(mercator, {
+      metresPerPixel: 10,
+      latitudeDeg: 0,
+      maximumScreenSpaceError: 4,
+    }),
+    12,
+  );
+  // Clamped to the provider's levels.
+  assert.equal(
+    imageryLevelForView(mercator, {
+      metresPerPixel: 5,
+      latitudeDeg: 0,
+      maximumLevel: 12,
+    }),
+    12,
+  );
+  assert.equal(
+    imageryLevelForView(mercator, { metresPerPixel: 0, latitudeDeg: 0 }),
+    null,
+  );
+});
+
+test('the tiles ahead are the ones the points fall in, bounded and new', () => {
+  const mercator = new Cesium.WebMercatorTilingScheme();
+  const points = groundTrackAhead(PASS, 20);
+  const tiles = tilesForPoints(mercator, points, 13);
+  assert.ok(tiles.length > 0 && tiles.length <= ORBITAL_PREFETCH_MAX_TILES);
+  assert.equal(new Set(tiles.map((tile) => tile.key)).size, tiles.length);
+  // Each tile holds its point: the first is the centre line 5 s ahead.
+  const first = mercator.tileXYToRectangle(tiles[0].x, tiles[0].y, 13);
+  assert.ok(
+    Cesium.Rectangle.contains(
+      first,
+      Cesium.Cartographic.fromDegrees(points[0].lon, points[0].lat),
+    ),
+  );
+  // Ahead along a north-east track: rows north (smaller y), columns east.
+  const here = mercator.positionToTileXY(
+    Cesium.Cartographic.fromDegrees(PASS.longitude, PASS.latitude),
+    13,
+  );
+  assert.ok(tiles.every((tile) => tile.x >= here.x && tile.y <= here.y));
+  // Bounded, and a tile already asked for is skipped.
+  assert.equal(tilesForPoints(mercator, points, 15, { maxTiles: 3 }).length, 3);
+  const asked = new Set(tiles.map((tile) => tile.key));
+  assert.deepEqual(
+    tilesForPoints(mercator, points, 13, { skip: (key) => asked.has(key) }),
+    [],
+  );
+  assert.deepEqual(tilesForPoints({}, points, 13), []);
 });

@@ -214,6 +214,24 @@ test('the readout names the owner, operator and element set', async (t) => {
     f.text('.cockpit-orbital-ident-text'),
     'NORAD 25544 · 1998-067A · EPOCH 2026-11-04 08:12Z',
   );
+  // The element set's age, as the controller reads it on each publish.
+  f.store.publishOrbital({
+    ...f.store.orbital,
+    tleAgeMs: 13.5 * 3_600_000,
+  });
+  await nextTick();
+  assert.equal(
+    f.text('.cockpit-orbital-ident-text'),
+    'NORAD 25544 · 1998-067A · EPOCH 2026-11-04 08:12Z · 13 H OLD',
+  );
+  f.store.publishOrbital({ ...f.store.orbital, tleAgeMs: 50 * 3_600_000 });
+  await nextTick();
+  assert.match(f.text('.cockpit-orbital-ident-text'), / · 2 D OLD$/);
+  f.store.publishOrbital({ ...f.store.orbital, tleAgeMs: 10 * 60_000 });
+  await nextTick();
+  assert.match(f.text('.cockpit-orbital-ident-text'), / · <1 H OLD$/);
+  f.store.publishOrbital({ ...f.store.orbital, tleAgeMs: null });
+  await nextTick();
   const toggle = document.getElementById('cockpit-orbital-tle-toggle');
   const tle = document.getElementById('cockpit-orbital-tle');
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');

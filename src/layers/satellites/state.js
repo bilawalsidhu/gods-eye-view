@@ -114,6 +114,9 @@ export function createState({ services }) {
   /** The UCS pack by NORAD id, once loaded; null until then or if it failed. */
   state._ucs = null;
 
+  /** The imaging-sensor index, once loaded; null until then or if it failed. */
+  state._sensors = null;
+
   state._denseIds = [];
   // norad ids of dense extras, round-robin order
 

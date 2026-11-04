@@ -205,3 +205,23 @@ test('a failed SATCAT read is told on the layer row, not only the console', asyn
   });
   assert.equal(current.methods.getRowControls().info, '');
 });
+
+test('a failed imaging-sensor pack is warned about, as the UCS pack is', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  const warn = t.mock.method(console, 'warn', () => {});
+  const { state, update } = ingestionFor(tleSet('OLD STAGE', '40115'), {
+    source: {
+      readSensors: async () => {
+        throw new Error('chunk failed');
+      },
+    },
+  });
+  await update();
+  assert.ok(
+    warn.mock.calls.some((call) =>
+      /sensor pack unavailable/i.test(call.arguments[0]),
+    ),
+    'the failure is not swallowed',
+  );
+  assert.equal(state._catalog.get(40115).sensor, null, 'base zoom steps');
+});

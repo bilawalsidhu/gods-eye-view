@@ -157,6 +157,22 @@ export function formatTleEpochUtc(epochMs) {
 }
 
 /**
+ * How old a TLE is, in the identifier line's compact units: under an hour,
+ * whole hours under a day, then whole days. A TLE's propagation error grows
+ * with its age, so the age is shown beside the epoch.
+ * @param {number|null|undefined} ageMs Now minus the TLE epoch.
+ * @returns {{unit: 'under-hour'}|{unit: 'hours'|'days', value: number}|null}
+ *   Null without a usable age.
+ */
+export function tleAgeParts(ageMs) {
+  if (!Number.isFinite(ageMs)) return null;
+  const hours = Math.max(0, ageMs) / 3_600_000;
+  if (hours < 1) return { unit: 'under-hour' };
+  if (hours < 24) return { unit: 'hours', value: Math.floor(hours) };
+  return { unit: 'days', value: Math.floor(hours / 24) };
+}
+
+/**
  * The Cockpit entry for each subject it can ride: an aircraft's cockpit, a
  * vessel's bridge or a satellite's orbit. Both entry buttons (Contacts and
  * the Intel HUD readout) show it.

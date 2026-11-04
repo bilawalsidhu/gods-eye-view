@@ -130,6 +130,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             satelliteClass: 'starlink',
             ucs: null,
             satcat: null,
+            sensor: null,
           });
           const point = layerState._pointCollection.add({
             position: Cesium.Cartesian3.fromDegrees(

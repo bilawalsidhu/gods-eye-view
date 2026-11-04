@@ -20,10 +20,17 @@ async function loadBundledUcs() {
   return loadUcsSatellites();
 }
 
+/** The imaging-sensor pack, loaded on first use (see src/data/imagingSensors.js). */
+async function loadBundledSensors() {
+  const { loadImagingSensors } = await import('../../data/imagingSensors.js');
+  return loadImagingSensors();
+}
+
 /** Read catalog text from the existing group endpoint using a supplied transport. */
 export function createSatelliteSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   loadUcs = loadBundledUcs,
+  loadSensors = loadBundledSensors,
 } = {}) {
   return {
     async readGroup(group, { signal } = {}) {
@@ -59,6 +66,11 @@ export function createSatelliteSource({
     /** The UCS Satellite Database pack, keyed by NORAD number. */
     readUcs() {
       return loadUcs();
+    },
+
+    /** The imaging-sensor pack, indexed by NORAD number and name pattern. */
+    readSensors() {
+      return loadSensors();
     },
   };
 }

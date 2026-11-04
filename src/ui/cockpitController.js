@@ -20,6 +20,8 @@ import {
   beginOrbital,
   endOrbital,
   resetOrbitalLook,
+  jumpToSensorSwath,
+  onOrbitalWheel,
   stepOrbitalZoom,
   turnOrbitalLook,
   updateOrbital,
@@ -289,6 +291,14 @@ export class CockpitViewController {
       true,
     );
     this._listenerRemovers.push(routeSceneDoubleClick.call(this));
+    // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
+    // off while the Cockpit holds the camera).
+    this._listen(
+      viewer.scene?.canvas,
+      'wheel',
+      (event) => this.onOrbitalWheel(event),
+      { passive: false },
+    );
     // The readout's entry renders inside the Intel HUD, which may mount after
     // this controller; delegated like the radar's range button.
     this._listen(document, 'click', (event) => {
@@ -337,6 +347,8 @@ export class CockpitViewController {
       else if (target?.closest?.('#cockpit-orbital-zoom-out'))
         this.stepOrbitalZoom(-1);
       else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
+      else if (target?.closest?.('#cockpit-orbital-sensor'))
+        this.jumpToSensorSwath();
     });
     this._listen(this.signalToggle, 'click', () =>
       this.setSignalCollapsed(!this.signalCollapsed, { user: true }),
@@ -404,6 +416,12 @@ export class CockpitViewController {
    */
   stepOrbitalZoom(direction) {
     return stepOrbitalZoom.call(this, direction);
+  }
+  jumpToSensorSwath() {
+    return jumpToSensorSwath.call(this);
+  }
+  onOrbitalWheel(event) {
+    return onOrbitalWheel.call(this, event);
   }
   /**
    * Tilt the orbital view one arrow step off nadir.
