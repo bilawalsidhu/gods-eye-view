@@ -302,6 +302,9 @@ test('the summary reads a sun 0.3° below the horizon as SUN 0°, not -0°', () 
 test('the corner readout reads a sun 0.04° below the horizon as 0.0, not -0.0', () => {
   // (-0.04).toFixed(1) is "-0.0".
   assert.match(readoutsWithSun(-0.04).alt, /SUN: 0\.0° EL$/);
+  // Values that are not -0 keep toFixed's rounding.
+  assert.match(readoutsWithSun(-0.3).alt, /SUN: -0\.3° EL$/);
+  assert.match(readoutsWithSun(-0.25).alt, /SUN: -0\.3° EL$/);
 });
 
 test('a summary asked for one view is dropped once the camera moves', async () => {
