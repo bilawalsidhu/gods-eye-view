@@ -76,6 +76,7 @@ function view(extra = {}) {
     inView: { active: false, loading: false, error: null, items: [] },
     selected: null,
     hasMore: true,
+    windowHours: 24,
     loading: false,
     error: null,
     ...extra,
@@ -275,4 +276,13 @@ test('scrolling to the end asks once per page, again after a filter change or a 
   scroll();
   assert.equal(loadMores(), 3);
   news.destroy();
+});
+
+test('the panel names the window the server serves', () => {
+  const { news, panel } = fixture();
+  news.update(view({ windowHours: 12 }));
+  assert.equal(
+    panel.querySelector('.news-readout__window').textContent,
+    'Last 12 h',
+  );
 });

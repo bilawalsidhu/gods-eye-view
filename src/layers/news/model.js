@@ -11,6 +11,16 @@ export const NEWS_FEED_PAGE = 60;
 export const NEWS_MAP_LIMIT = 500;
 /** News is real time only: nothing older than a day is shown anywhere. */
 export const NEWS_WINDOW_MS = 24 * 3_600_000;
+
+/**
+ * The window a server serves, in ms: its `windowHours` (a whole number of
+ * hours up to 24; a host may serve fewer), else the full day.
+ */
+export function newsWindowMs(hours) {
+  return Number.isInteger(hours) && hours >= 1 && hours <= 24
+    ? hours * 3_600_000
+    : NEWS_WINDOW_MS;
+}
 // A publish time this far ahead of the clock is skew, not a future story
 // (as data/regionalNewsWindow.js).
 const NEWS_CLOCK_SKEW_MS = 15 * 60_000;
@@ -210,21 +220,26 @@ const lastHeard = (report) =>
   Date.parse(report?.event?.lastAt || report?.publishedAt || '');
 
 /**
- * Whether a time is inside the last 24 hours (the only news shown); one more
- * than 15 minutes ahead of the clock is not.
+ * Whether a time is inside the window (the last 24 hours unless the server
+ * serves fewer; the only news shown); one more than 15 minutes ahead of the
+ * clock is not.
  */
-function inWindow(value, now) {
+function inWindow(value, now, windowMs = NEWS_WINDOW_MS) {
   const at = Date.parse(value || '');
   return (
     Number.isFinite(at) &&
-    now - at <= NEWS_WINDOW_MS &&
+    now - at <= windowMs &&
     at - now <= NEWS_CLOCK_SKEW_MS
   );
 }
 
-/** Whether a report is from the last 24 hours (the only news shown). */
-export function withinNewsWindow(report, now = Date.now()) {
-  return inWindow(report?.publishedAt, now);
+/** Whether a report is inside the window (the only news shown). */
+export function withinNewsWindow(
+  report,
+  now = Date.now(),
+  windowMs = NEWS_WINDOW_MS,
+) {
+  return inWindow(report?.publishedAt, now, windowMs);
 }
 
 /** The event's one-report-per-side list, inside the last 24 hours only. */
@@ -548,7 +563,7 @@ export function reportMarkerPosition(report, pin = 0) {
 
 /**
  * Merge a page into the feed, newest first, one row per report id, keeping
- * only the last 24 hours and at most `max` rows (a long session does not grow
+ * only the window and at most `max` rows (a long session does not grow
  * the list). `mode` 'head' refreshes the top and keeps the older cursor;
  * 'append' adds an older page and takes its cursor; 'replace' starts over.
  */
@@ -558,6 +573,7 @@ export function mergeFeedPage(
   mode,
   now = Date.now(),
   max = NEWS_FEED_MAX,
+  windowMs = NEWS_WINDOW_MS,
 ) {
   const byId = new Map();
   const items =
@@ -567,7 +583,7 @@ export function mergeFeedPage(
         ? [...feed.items, ...page.reports]
         : [...page.reports, ...feed.items];
   for (const item of items)
-    if (!byId.has(item.id) && withinNewsWindow(item, now))
+    if (!byId.has(item.id) && withinNewsWindow(item, now, windowMs))
       byId.set(item.id, item);
   return {
     items: [...byId.values()]
@@ -604,24 +620,34 @@ export function normalizeFilters(next = {}, hotspots = [], previous = {}) {
 }
 
 /** Whether a report passes the filters the server does not apply. */
-export function passesFilters(report, filters, now = Date.now()) {
+export function passesFilters(
+  report,
+  filters,
+  now = Date.now(),
+  windowMs = NEWS_WINDOW_MS,
+) {
   return (
-    withinNewsWindow(report, now) &&
+    withinNewsWindow(report, now, windowMs) &&
     reportSeverity(report) >= filters.minSeverity
   );
 }
 
 /** Whether a report belongs on the map under the current filters. */
-export function visibleOnMap(report, filters, now = Date.now()) {
+export function visibleOnMap(
+  report,
+  filters,
+  now = Date.now(),
+  windowMs = NEWS_WINDOW_MS,
+) {
   return (
     (filters.hotspot === 'all' ||
       (report.hotspotIds || [report.hotspotId]).includes(filters.hotspot)) &&
     (filters.category === 'all' || report.category === filters.category) &&
-    passesFilters(report, filters, now)
+    passesFilters(report, filters, now, windowMs)
   );
 }
 
-/** API query for the feed under the current filters: always the last 24 h. */
+/** API query for the feed under the current filters: the window only. */
 export function feedQueryFor(filters, extra = {}) {
   return {
     events: true,
@@ -660,12 +686,13 @@ export function reportsInView(
   filters,
   now = Date.now(),
   limit = NEWS_IN_VIEW_LIMIT,
+  windowMs = NEWS_WINDOW_MS,
 ) {
   if (!centre) return [];
   return reports
     .filter(
       (r) =>
-        passesFilters(r, filters, now) &&
+        passesFilters(r, filters, now, windowMs) &&
         (filters.category === 'all' || r.category === filters.category) &&
         r.pins?.some(
           (pin) => distanceKm(pin, centre) <= NEWS_IN_VIEW_RADIUS_KM,

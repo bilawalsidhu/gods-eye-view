@@ -7,7 +7,8 @@ import UiSelect from '../kit/UiSelect.js';
 import RailChips from '../rail/RailChips.vue';
 import NewsCard from './NewsCard.vue';
 
-// The News panel: the last 24 hours only. Hotspot chips, filters, the chosen
+// The News panel: the window the server serves only (the last 24 hours, or
+// fewer where the host serves less). Hotspot chips, filters, the chosen
 // event, "In view" (reports near the view centre while the camera is low)
 // and a continuous feed, newest first. It renders the `feed` view the news
 // layer publishes and acts only through `onParams`.
@@ -75,9 +76,11 @@ const clear = () => props.onParams({ clear: true });
   <section
     v-if="view"
     class="news-readout"
-    :aria-label="t('News, last 24 hours')"
+    :aria-label="t('News, last {hours} hours', { hours: view.windowHours })"
   >
-    <p class="news-readout__window ui-mono">{{ t('Last 24 h') }}</p>
+    <p class="news-readout__window ui-mono">{{
+      t('Last {hours} h', { hours: view.windowHours })
+    }}</p>
     <div class="news-readout__chips" role="group" :aria-label="t('Hotspots')">
       <RailChips
         :chips="chips"
@@ -136,7 +139,11 @@ const clear = () => props.onParams({ clear: true });
       <UiEmpty
         v-else-if="!view.inView.items.length && !view.inView.loading"
         class="news-readout__empty"
-        :title="t('Nothing reported near here in the last 24 h')"
+        :title="
+          t('Nothing reported near here in the last {hours} h', {
+            hours: view.windowHours,
+          })
+        "
       />
       <ol
         v-else
@@ -173,7 +180,11 @@ const clear = () => props.onParams({ clear: true });
       <UiEmpty
         v-else-if="!view.loading && !view.error"
         class="news-readout__empty"
-        :title="t('No news matches these filters in the last 24 h')"
+        :title="
+          t('No news matches these filters in the last {hours} h', {
+            hours: view.windowHours,
+          })
+        "
       />
       <div class="news-readout__footer">
         <span class="news-readout__status" role="status">{{ status }}</span>

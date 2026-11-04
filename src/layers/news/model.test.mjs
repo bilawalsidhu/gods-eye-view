@@ -20,6 +20,7 @@ import {
   isPressing,
   markerStyle,
   mergeFeedPage,
+  newsWindowMs,
   normalizeFilters,
   passesFilters,
   reportMarkerPosition,
@@ -561,4 +562,41 @@ test('in view: half-degree cells and reports within 500 km of the centre', () =>
   );
   assert.deepEqual(reportsInView([near], null, filters, NOW), []);
   assert.deepEqual(reportsInView([], centre, filters, NOW), []);
+});
+
+test('a server may serve fewer hours than the day, never more', () => {
+  assert.equal(newsWindowMs(12), 12 * 3_600_000);
+  assert.equal(newsWindowMs(24), 24 * 3_600_000);
+  for (const bad of [0, 25, 12.5, '12', null, undefined])
+    assert.equal(newsWindowMs(bad), 24 * 3_600_000);
+  const page = {
+    reports: [
+      report('fresh', '2026-10-28T02:00:00Z'),
+      report('old', '2026-10-27T20:00:00Z'),
+    ],
+    nextBefore: null,
+  };
+  const empty = { items: [], nextBefore: null };
+  const ids = (windowMs) =>
+    mergeFeedPage(empty, page, 'replace', NOW, undefined, windowMs).items.map(
+      (r) => r.id,
+    );
+  assert.deepEqual(ids(newsWindowMs(12)), ['fresh']);
+  assert.deepEqual(ids(newsWindowMs(24)), ['fresh', 'old']);
+});
+
+test('the hotspots answer carries the window it was counted over', () => {
+  const base = {
+    hotspots: [],
+    ingest: { lastRunAt: '2026-10-28T09:00:00Z' },
+  };
+  assert.equal(
+    normalizeHotspotsPayload({ ...base, windowHours: 12 }).windowHours,
+    12,
+  );
+  assert.equal(normalizeHotspotsPayload(base).windowHours, null);
+  assert.equal(
+    normalizeHotspotsPayload({ ...base, windowHours: 48 }).windowHours,
+    null,
+  );
 });

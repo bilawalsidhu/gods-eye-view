@@ -29,6 +29,7 @@ import {
   NEWS_RELEVANT,
   NEWS_SETTLE_MS,
   NEWS_SEVERITY,
+  NEWS_WINDOW_MS,
   ageWords,
   attestation,
   beaconPixelSize,
@@ -44,6 +45,7 @@ import {
   markerStyle,
   mediaLabels,
   mergeFeedPage,
+  newsWindowMs,
   normalizeFilters,
   passesFilters,
   reportMarkerPosition,
@@ -139,6 +141,9 @@ export function createNewsLayer({
     lastRunAt = null,
     autoPages = 0;
   let hotspots = [];
+  // The window the server serves (newsWindowMs): a host may serve
+  // fewer hours than the day.
+  let windowMs = NEWS_WINDOW_MS;
   let mapReports = [];
   let feed = emptyFeed();
   let inView = emptyInView();
@@ -159,7 +164,7 @@ export function createNewsLayer({
     inView.minor?.find((r) => r.id === id) ||
     null;
   const selected = () => (selectedId ? findReport(selectedId) : null);
-  const onMap = (report) => visibleOnMap(report, filters, now());
+  const onMap = (report) => visibleOnMap(report, filters, now(), windowMs);
 
   function markerCartesian(report, pin = 0) {
     const { lat, lon } = reportMarkerPosition(report, pin);
@@ -806,7 +811,7 @@ export function createNewsLayer({
   }
 
   const shownCount = () =>
-    feed.items.filter((r) => passesFilters(r, filters, now())).length;
+    feed.items.filter((r) => passesFilters(r, filters, now(), windowMs)).length;
 
   async function loadFeed(mode) {
     if (!enabled || unavailable) return;
@@ -828,7 +833,7 @@ export function createNewsLayer({
       if (controller.signal.aborted || feedRequest !== controller || !enabled)
         return;
       feed = {
-        ...mergeFeedPage(feed, page, mode, now()),
+        ...mergeFeedPage(feed, page, mode, now(), undefined, windowMs),
         loading: false,
         error: null,
       };
@@ -915,7 +920,7 @@ export function createNewsLayer({
       if (controller.signal.aborted || inViewRequest !== controller) return;
       inView = {
         ...inView,
-        minor: page.reports.filter((r) => withinNewsWindow(r, now())),
+        minor: page.reports.filter((r) => withinNewsWindow(r, now(), windowMs)),
         loading: false,
         error: null,
       };
@@ -1015,7 +1020,7 @@ export function createNewsLayer({
         color: level.color,
       })),
       items: feed.items
-        .filter((r) => passesFilters(r, filters, at))
+        .filter((r) => passesFilters(r, filters, at, windowMs))
         .map((r) => feedCardView(r, at)),
       inView: {
         active: inView.active,
@@ -1026,10 +1031,12 @@ export function createNewsLayer({
           inView.centre,
           filters,
           at,
+          undefined,
+          windowMs,
         ).map((r) => feedCardView(r, at)),
       },
       selected:
-        report && withinNewsWindow(report, at)
+        report && withinNewsWindow(report, at, windowMs)
           ? feedCardView(report, at)
           : null,
       hasMore: Boolean(feed.nextBefore),
@@ -1037,6 +1044,7 @@ export function createNewsLayer({
       // Read failures are English data; the panel shows them translated.
       error: error || feed.error ? t(error || feed.error) : null,
       lastRunAt,
+      windowHours: windowMs / 3_600_000,
     };
   }
 
@@ -1149,7 +1157,10 @@ export function createNewsLayer({
         hotspots = index.hotspots;
         loadOutlines();
         lastRunAt = index.lastRunAt;
-        mapReports = todays.reports.filter((r) => withinNewsWindow(r, now()));
+        windowMs = newsWindowMs(index.windowHours);
+        mapReports = todays.reports.filter((r) =>
+          withinNewsWindow(r, now(), windowMs),
+        );
         filters = normalizeFilters({}, hotspots, filters);
         error = null;
         lastUpdate = now();

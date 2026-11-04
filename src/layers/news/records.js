@@ -96,7 +96,8 @@ function normalizeDeveloping(items) {
 }
 
 /**
- * `/api/news/hotspots` → `{hotspots, categories, lastRunAt}`, or null when the
+ * `/api/news/hotspots` → `{hotspots, categories, lastRunAt, windowHours}`
+ * (`windowHours` null when the server names none), or null when the
  * payload has no hotspot list.
  */
 export function normalizeHotspotsPayload(payload) {
@@ -135,6 +136,12 @@ export function normalizeHotspotsPayload(payload) {
         )
       : [],
     lastRunAt: iso(payload.ingest?.lastRunAt),
+    windowHours:
+      Number.isInteger(payload.windowHours) &&
+      payload.windowHours >= 1 &&
+      payload.windowHours <= 24
+        ? payload.windowHours
+        : null,
   };
 }
 
