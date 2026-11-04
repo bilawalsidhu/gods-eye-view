@@ -628,7 +628,9 @@ test('the phone shell keeps the required attribution visible', () => {
   );
   const dock = rule('body.mobile-shell #command-dock');
   const voice = rule('body.mobile-shell #command-dock #gev-voice-control');
-  const voiceHeightPx = Number(/height: ([\d.]+)rem/.exec(voice)[1]) * 16;
+  assert.match(voice, /height: var\(--mobile-voice-height\);/);
+  const voiceHeightPx =
+    Number(/--mobile-voice-height: ([\d.]+)rem/.exec(css)[1]) * 16;
   // Idle: the credit line clears the voice bar, which clears the tab bar.
   assert.ok(lift(idleCredit) > lift(dock) + voiceHeightPx);
   // It must beat the dock's :has() placements, so the offset is !important.
