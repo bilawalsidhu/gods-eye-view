@@ -49,6 +49,8 @@ export function normalizeWraRegister(rows) {
       river:
         String(row.englishrivername || '').trim() ||
         String(row.rivername || '').trim(),
+      // The river's own name, as OpenStreetMap writes it in Taiwan.
+      riverNative: String(row.rivername || '').trim() || null,
       lat: position.lat,
       lon: position.lon,
       refs: cleanReferences({
@@ -100,6 +102,7 @@ export function normalizeWraReadings(register, rows) {
       name: meta.name,
       nativeName: meta.nativeName,
       river: meta.river,
+      riverNative: meta.riverNative,
       lat: meta.lat,
       lon: meta.lon,
       level,

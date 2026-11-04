@@ -11,6 +11,7 @@ import {
   sparkline,
   trendDirection,
 } from './model.js';
+import { alertLevelsFor } from './alerts.js';
 
 export const RIVER_LEVELS_OVERLAY_SOURCE_ID = 'river-levels';
 export const RIVER_LEVELS_CARD_SOURCE_ID = 'river-levels-card';
@@ -96,7 +97,12 @@ export function selectRiverLabelCohort(
  * @param {number} [now]
  * @returns {object} World-overlay entry without `position`.
  */
-export function buildRiverLevelCard(station, series = null, now = Date.now()) {
+export function buildRiverLevelCard(
+  station,
+  series = null,
+  now = Date.now(),
+  alertLevel = null,
+) {
   const band = riverBandById(station.band);
   const provider = RIVER_LEVEL_PROVIDERS[station.provider];
   const details = [];
@@ -145,6 +151,14 @@ export function buildRiverLevelCard(station, series = null, now = Date.now()) {
   } else if (series === null) {
     details.push(t('Loading recent readings…'));
   }
+
+  // The card is not clickable; the alert itself is set in the Weather panel.
+  if (alertLevel)
+    details.push(
+      t('Alert at {level}', { level: t(riverBandById(alertLevel).label) }),
+    );
+  else if (alertLevelsFor(station).length)
+    details.push(t('Level alert: Weather panel'));
 
   details.push(t('Local gauge zero · not comparable between gauges'));
   details.push(t('Raw data · not quality controlled'));

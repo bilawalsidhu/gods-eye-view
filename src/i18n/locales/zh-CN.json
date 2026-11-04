@@ -3061,5 +3061,22 @@
   "Watch {value}": "关注 {value}",
   "Warning {value}": "警戒 {value}",
   "Flood {value}": "洪水 {value}",
-  "Record high {value}": "历史最高 {value}"
+  "Record high {value}": "历史最高 {value}",
+  "Alert at {level}": "警报：{level}",
+  "Level alert: Weather panel": "水位警报：天气面板",
+  "Up to {count} gauge alerts": "最多 {count} 个测站警报",
+  "Alert off · {name}": "警报已关闭 · {name}",
+  "{name} is already at {level}": "{name} 已处于{level}",
+  "Alert set · {name} · {level}": "警报已设置 · {name} · {level}",
+  "All gauge alerts off": "所有测站警报已关闭",
+  "River alert · {name}": "河流警报 · {name}",
+  "Alert me · {name}": "提醒我 · {name}",
+  "Off": "关闭",
+  "Checked every 10 minutes while the app is open": "应用打开期间每 10 分钟检查一次",
+  "{name} publishes no levels to alert on": "{name} 未公布可用于警报的水位",
+  "Click a gauge to set a level alert": "点击测站以设置水位警报",
+  "Alerts on: {list}": "已开启的警报：{list}",
+  "Turn off all alerts": "关闭所有警报",
+  "Reached: {list}": "已达到：{list}",
+  "Alert": "警报"
 }

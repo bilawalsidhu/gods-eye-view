@@ -35,6 +35,7 @@ export function normalizeRiverStation(row, now = Date.now()) {
     name: String(row.name || '').slice(0, 80) || id,
     nativeName: row.nativeName ? String(row.nativeName).slice(0, 80) : null,
     river: String(row.river || '').slice(0, 80),
+    riverNative: row.riverNative ? String(row.riverNative).slice(0, 80) : null,
     lat: row.lat,
     lon: row.lon,
     level: row.level,

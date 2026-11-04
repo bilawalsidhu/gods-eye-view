@@ -25,6 +25,19 @@ import {
   selectRiverLabelCohort,
   trendGlyph,
 } from './cards.js';
+import {
+  createRiverWaterwaySource,
+  riverStretches,
+  riverTilePlan,
+} from './rivers.js';
+import {
+  RIVER_ALERT_LIMIT,
+  alertLevelsFor,
+  browserAlertStorage,
+  createRiverAlerts,
+  requestAlertPermission,
+  showBrowserAlert,
+} from './alerts.js';
 export * from './model.js';
 export * from './cards.js';
 export { createRiverLevelsSource, normalizeRiverStation } from './source.js';
@@ -49,6 +62,19 @@ const COLUMN_MARKS = Object.freeze([
   ['warning', 'warning'],
   ['flood', 'flood'],
   ['recordHigh', 'major'],
+]);
+/** River lines, drawn on the ground in the colour of their gauge. */
+const RIVER_LINE_WIDTH_PX = 4;
+/** Above this height, dots keep this much screen space between them. */
+const DECLUTTER_MIN_HEIGHT_M = 60_000;
+const DECLUTTER_SPACING_PX = 16;
+/** Gauges without references appear only in a regional view. */
+const GREY_MAX_HEIGHT_M = 400_000;
+/** [camera height below which, labels allowed]; none higher up. */
+const LABEL_BUDGET = Object.freeze([
+  [150_000, RIVER_LEVELS_LABEL_COHORT_LIMIT],
+  [600_000, 12],
+  [2_500_000, 6],
 ]);
 /** Pulses mark water over the flood line; a fixed few, never per gauge. */
 const PULSE_LIMIT = 24;
@@ -144,6 +170,12 @@ export function createRiverLevelsLayer({
   screenSpaceEventHandlerFactory = null,
   picking = null,
   pointer = null,
+  // OpenFreeMap river lines; false turns them off, null builds the default.
+  waterways = null,
+  // Where gauge alerts persist; null keeps them for this page only.
+  alertStorage = browserAlertStorage(),
+  // The browser's Notification API; null keeps alerts in the page.
+  notificationApi = globalThis.Notification ?? null,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('River levels requires a snapshot source');
@@ -157,6 +189,12 @@ export function createRiverLevelsLayer({
   let _pulses = null;
   let _columns = null;
   let _columnSignature = '';
+  let _waterways = waterways;
+  let _rivers = null;
+  let _riverRequest = null;
+  let _riverTileKey = '';
+  let _riverLines = [];
+  let _riverSignature = '';
   let _stations = [];
   /** @type {Map<string, object>} */
   const _byId = new Map();
@@ -174,6 +212,11 @@ export function createRiverLevelsLayer({
   let _removePreRender = null;
   let _removeMoveEnd = null;
   let _lastCullCamera = null;
+  /** Station ids whose dots give way to a more severe neighbour on screen. */
+  const _thinned = new Set();
+  const _alerts = createRiverAlerts({ storage: alertStorage });
+  // The shell's page toast, attached once the UI is up.
+  let _showToast = null;
   let rowControlsListener = null;
 
   const notify = () => rowControlsListener?.();
@@ -209,6 +252,8 @@ export function createRiverLevelsLayer({
       ...buildRiverLevelCard(
         station,
         _seriesFor === station.id ? _series : null,
+        Date.now(),
+        _alerts.get(station.id)?.level ?? null,
       ),
       position: _positions.get(station.id),
     };
@@ -227,6 +272,8 @@ export function createRiverLevelsLayer({
       _seriesFor = null;
     }
     publishCard();
+    // The Weather panel offers the selected gauge's alert levels.
+    notify();
     if (typeof source.getStationSeries !== 'function') return;
     _seriesRequest?.abort();
     const request = new AbortController();
@@ -256,6 +303,153 @@ export function createRiverLevelsLayer({
     _series = null;
     _seriesFor = null;
     overlayHost.clearSource(RIVER_LEVELS_CARD_SOURCE_ID);
+    notify();
+  }
+
+  // ── Gauge alerts ──────────────────────────────────────────────────────
+
+  const alertLabel = (level) => t(riverBandById(level).label);
+  const toast = (text) => _showToast?.(text);
+
+  /** Set or drop the alert of a gauge, from the viewer's click. */
+  function setAlert(stationId, level) {
+    const station = _byId.get(stationId);
+    if (!station) return;
+    const result = _alerts.set(station, level);
+    if (!result) {
+      toast(t('Up to {count} gauge alerts', { count: RIVER_ALERT_LIMIT }));
+    } else if (!level) {
+      toast(t('Alert off · {name}', { name: station.name }));
+    } else {
+      // Still inside the click, where browsers allow the question.
+      requestAlertPermission(notificationApi);
+      toast(
+        result.reached
+          ? t('{name} is already at {level}', {
+              name: station.name,
+              level: alertLabel(level),
+            })
+          : t('Alert set · {name} · {level}', {
+              name: station.name,
+              level: alertLabel(level),
+            }),
+      );
+    }
+    if (_selectedId === stationId) publishCard();
+    notify();
+  }
+
+  function clearAlerts() {
+    _alerts.clear();
+    toast(t('All gauge alerts off'));
+    if (_selectedId) publishCard();
+    notify();
+  }
+
+  /**
+   * Tell the viewer about the gauges that reached their level this refresh:
+   * a system notification when allowed, the page toast, and a line that stays
+   * in the Weather panel while the level holds.
+   */
+  function announceAlerts() {
+    for (const { station } of _alerts.check(_stations)) {
+      const title = t('River alert · {name}', { name: station.name });
+      const body = [
+        t(riverBandById(station.band).label),
+        formatLevel(station.level),
+        station.river,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      toast(`${title} · ${body}`);
+      showBrowserAlert(
+        { title, body, tag: `river-level-alert:${station.id}` },
+        notificationApi,
+      );
+    }
+  }
+
+  /** The Weather-panel part of the readout that sets and lists alerts. */
+  function alertControls() {
+    const selected = _selectedId ? _byId.get(_selectedId) : null;
+    const levels = selected ? alertLevelsFor(selected) : [];
+    const watch = selected ? _alerts.get(selected.id) : null;
+    const watched = _alerts.list();
+    const settings = levels.length
+      ? [
+          {
+            id: 'alert',
+            // The label column is narrow; the gauge is named in a line above.
+            label: t('Alert'),
+            chips: [
+              {
+                id: 'off',
+                label: t('Off'),
+                active: !watch,
+                onClick: () => setAlert(selected.id, null),
+              },
+              ...levels.map((level) => ({
+                id: level,
+                label: alertLabel(level),
+                color: riverBandById(level).color,
+                active: watch?.level === level,
+                title: t('Checked every 10 minutes while the app is open'),
+                onClick: () => setAlert(selected.id, level),
+              })),
+            ],
+          },
+        ]
+      : [];
+    const lines = [];
+    if (levels.length)
+      lines.push({
+        id: 'alert-gauge',
+        text: t('Alert me · {name}', { name: selected.name }),
+      });
+    else if (selected)
+      lines.push({
+        id: 'alert-hint',
+        text: t('{name} publishes no levels to alert on', {
+          name: selected.name,
+        }),
+        muted: true,
+      });
+    else if (!selected && !watched.length)
+      lines.push({
+        id: 'alert-hint',
+        text: t('Click a gauge to set a level alert'),
+        muted: true,
+      });
+    const reached = watched.filter((item) => item.reached);
+    if (reached.length)
+      lines.push({
+        id: 'alerts-reached',
+        text: t('Reached: {list}', {
+          list: reached
+            .map((item) => `${item.name} (${alertLabel(item.level)})`)
+            .join(', '),
+        }),
+      });
+    if (watched.length)
+      lines.push({
+        id: 'alerts',
+        muted: true,
+        text: t('Alerts on: {list}', {
+          list: watched
+            .map((item) => `${item.name} (${alertLabel(item.level)})`)
+            .join(', '),
+        }),
+      });
+    const actions = watched.length
+      ? [
+          {
+            id: 'clear-alerts',
+            label: t('Turn off all alerts'),
+            onClick: clearAlerts,
+          },
+        ]
+      : [];
+    return { settings, lines, actions };
   }
 
   function installClickHandler() {
@@ -313,7 +507,9 @@ export function createRiverLevelsLayer({
     );
     for (let i = 0; i < _dots.length; i++) {
       const dot = _dots.get(i);
-      dot.show = occluder.isPointVisible(dot.position);
+      dot.show =
+        !_thinned.has(_stations[i]?.id) &&
+        occluder.isPointVisible(dot.position);
     }
     for (let i = 0; i < (_pulses?.length ?? 0); i++) {
       const pulse = _pulses.get(i);
@@ -340,7 +536,7 @@ export function createRiverLevelsLayer({
     _dots.removeAll();
     _pulses.removeAll();
     _positions.clear();
-    const scale = new Cesium.NearFarScalar(1.5e5, 1, 8e6, 0.5);
+    const scale = new Cesium.NearFarScalar(1.5e5, 1, 4e6, 0.55);
     for (const station of _stations) {
       const position = Cesium.Cartesian3.fromDegrees(station.lon, station.lat);
       _positions.set(station.id, position);
@@ -376,11 +572,72 @@ export function createRiverLevelsLayer({
     cullHorizon(true);
   }
 
+  /**
+   * From afar, keep one dot per patch of screen — the most severe, so a flood
+   * or a record low is never the one hidden — and drop the grey gauges that
+   * have no references. Close up, every gauge shows. Runs on camera stops.
+   */
+  function declutterDots() {
+    if (!_dots || !_viewer) return;
+    _thinned.clear();
+    const height = _viewer.camera.positionCartographic?.height ?? Infinity;
+    if (height >= DECLUTTER_MIN_HEIGHT_M) {
+      const scene = _viewer.scene;
+      const grid = new Map();
+      const spacing = DECLUTTER_SPACING_PX;
+      const order = _stations
+        .slice()
+        .sort(
+          (a, b) =>
+            (b.id === _selectedId) - (a.id === _selectedId) ||
+            compareSeverity(a, b),
+        );
+      const at = new Cesium.Cartesian2();
+      for (const station of order) {
+        if (station.band === 'unknown' && height >= GREY_MAX_HEIGHT_M) {
+          _thinned.add(station.id);
+          continue;
+        }
+        const position = _positions.get(station.id);
+        if (
+          !position ||
+          !Cesium.SceneTransforms.worldToWindowCoordinates(scene, position, at)
+        )
+          continue;
+        const gx = Math.floor(at.x / spacing);
+        const gy = Math.floor(at.y / spacing);
+        let crowded = false;
+        for (let dx = -1; dx <= 1 && !crowded; dx++)
+          for (let dy = -1; dy <= 1 && !crowded; dy++)
+            crowded = (grid.get(`${gx + dx},${gy + dy}`) || []).some(
+              ([x, y]) => Math.hypot(x - at.x, y - at.y) < spacing,
+            );
+        if (crowded) {
+          _thinned.add(station.id);
+          continue;
+        }
+        const key = `${gx},${gy}`;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push([at.x, at.y]);
+      }
+    }
+    cullHorizon(true);
+  }
+
+  /** Fewer labels the higher the camera, so a country view stays legible. */
+  function labelBudget() {
+    const height = _viewer?.camera.positionCartographic?.height ?? Infinity;
+    for (const [maxHeight, count] of LABEL_BUDGET)
+      if (height < maxHeight) return count;
+    return 0;
+  }
+
   function renderLabels() {
     if (!_enabled) return;
+    const budget = labelBudget();
     const entries = [];
-    for (const station of _stations) {
-      if (station.band === 'unknown') continue;
+    for (const station of budget ? _stations : []) {
+      if (station.band === 'unknown' || _thinned.has(station.id)) continue;
       entries.push({
         ...buildRiverLevelLabel(station),
         position: _positions.get(station.id),
@@ -388,9 +645,9 @@ export function createRiverLevelsLayer({
     }
     overlayHost.setEntries(
       RIVER_LEVELS_OVERLAY_SOURCE_ID,
-      selectRiverLabelCohort(entries),
+      selectRiverLabelCohort(entries, budget),
       {
-        cohortLimit: RIVER_LEVELS_LABEL_COHORT_LIMIT,
+        cohortLimit: Math.max(1, budget),
         collisionCapacity: RIVER_LEVELS_LABEL_COLLISION_CAPACITY,
         moving: false,
       },
@@ -519,8 +776,152 @@ export function createRiverLevelsLayer({
     entities.resumeEvents();
   }
 
+  /** The camera's view in degrees, or null over the antimeridian or sky. */
+  function viewDegrees() {
+    const rect = _viewer.camera.computeViewRectangle(
+      _viewer.scene.globe.ellipsoid,
+    );
+    if (!rect) return null;
+    const deg = Cesium.Math.toDegrees;
+    const view = {
+      west: deg(rect.west),
+      south: deg(rect.south),
+      east: deg(rect.east),
+      north: deg(rect.north),
+    };
+    return view.east > view.west ? view : null;
+  }
+
+  function clearRivers() {
+    _riverRequest?.abort();
+    _riverRequest = null;
+    _riverTileKey = '';
+    _riverLines = [];
+    removeRivers();
+  }
+
+  function removeRivers() {
+    const scene = _viewer?.scene;
+    if (_rivers && scene && !scene.isDestroyed?.())
+      scene.groundPrimitives.remove(_rivers);
+    _rivers = null;
+    _riverSignature = '';
+  }
+
+  /**
+   * Load the river tiles around the referenced gauges in view (detailed
+   * when close, generalized from afar), then colour them. Runs on camera
+   * stops and new readings, never per frame.
+   */
+  function refreshRivers() {
+    if (!_viewer || _waterways === false) return;
+    const height = _viewer.camera.positionCartographic?.height ?? Infinity;
+    const view = _enabled ? viewDegrees() : null;
+    const plan = view ? riverTilePlan(_stations, view, height) : null;
+    const zoom = plan?.zoom;
+    const tiles = plan?.tiles ?? [];
+    const key = tiles.map(({ z, x, y }) => `${z}/${x}/${y}`).join(',');
+    if (key === _riverTileKey) {
+      drawRivers();
+      return;
+    }
+    _riverTileKey = key;
+    _riverRequest?.abort();
+    _riverRequest = null;
+    if (!tiles.length) {
+      _riverLines = [];
+      drawRivers();
+      return;
+    }
+    _waterways ??= createRiverWaterwaySource();
+    const request = new AbortController();
+    _riverRequest = request;
+    _waterways
+      .fetchBounds(view, { zoom, tiles, signal: request.signal })
+      .then((result) => {
+        if (_riverRequest !== request) return;
+        _riverLines = result.tiles.flat();
+        drawRivers();
+      })
+      .catch((error) => {
+        if (request.signal.aborted || _riverRequest !== request) return;
+        // The lines are an aid; the gauges stand without them. The next
+        // camera stop asks again.
+        _riverTileKey = '';
+        console.warn(
+          '[Data:RiverLevels] River lines unavailable:',
+          error?.message,
+        );
+      })
+      .finally(() => {
+        if (_riverRequest === request) _riverRequest = null;
+      });
+  }
+
+  /** One ground primitive for every coloured stretch; rebuilt on change only. */
+  function drawRivers() {
+    if (!_viewer) return;
+    const stretches = _enabled
+      ? riverStretches(_riverLines, _stations).filter(({ coords }) =>
+          coords.some(
+            ([lon, lat]) => lon !== coords[0][0] || lat !== coords[0][1],
+          ),
+        )
+      : [];
+    const late = (id) => {
+      const station = _byId.get(id);
+      return station ? readingIsLate(station) : false;
+    };
+    const signature =
+      _riverTileKey +
+      '#' +
+      stretches
+        .map(
+          (s) =>
+            `${s.stationId}:${s.band}:${late(s.stationId) ? 1 : 0}:${s.coords.length}`,
+        )
+        .join('|');
+    if (signature === _riverSignature) return;
+    removeRivers();
+    _riverSignature = signature;
+    if (
+      !stretches.length ||
+      !Cesium.GroundPolylinePrimitive.isSupported(_viewer.scene)
+    )
+      return;
+    const instances = stretches.map(
+      (stretch) =>
+        new Cesium.GeometryInstance({
+          geometry: new Cesium.GroundPolylineGeometry({
+            positions: Cesium.Cartesian3.fromDegreesArray(
+              stretch.coords.flat(),
+            ),
+            width: RIVER_LINE_WIDTH_PX,
+          }),
+          attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+              Cesium.Color.fromCssColorString(
+                riverBandById(stretch.band).color,
+              ).withAlpha(late(stretch.stationId) ? 0.45 : 0.9),
+            ),
+          },
+        }),
+    );
+    _rivers = _viewer.scene.groundPrimitives.add(
+      new Cesium.GroundPolylinePrimitive({
+        geometryInstances: instances,
+        appearance: new Cesium.PolylineColorAppearance(),
+        allowPicking: false,
+        asynchronous: true,
+      }),
+    );
+  }
+
   function onMoveEnd() {
+    declutterDots();
+    renderLabels();
     refreshColumns();
+    refreshRivers();
     // The readout lists the worst gauges in view, so a pan changes it.
     notify();
   }
@@ -528,9 +929,11 @@ export function createRiverLevelsLayer({
   function render() {
     if (!_dots) return;
     renderDots();
+    declutterDots();
     renderLabels();
     _columnSignature = '';
     refreshColumns();
+    refreshRivers();
     if (_selectedId) publishCard();
   }
 
@@ -589,6 +992,7 @@ export function createRiverLevelsLayer({
       _request = null;
       _enabled = false;
       if (_dots) _dots.show = _pulses.show = _columns.show = false;
+      clearRivers();
       detachSceneListeners();
       removeClickHandler();
       clearSelection();
@@ -617,6 +1021,7 @@ export function createRiverLevelsLayer({
         _byId.clear();
         for (const station of _stations) _byId.set(station.id, station);
         render();
+        announceAlerts();
         _lastUpdate = Date.now();
         _lastError = null;
         notify();
@@ -636,6 +1041,7 @@ export function createRiverLevelsLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
+      clearRivers();
       detachSceneListeners();
       removeClickHandler();
       clearSelection();
@@ -667,9 +1073,11 @@ export function createRiverLevelsLayer({
       const missing = Object.entries(_providers)
         .filter(([, p]) => p && p.available === false)
         .map(([id]) => id);
+      const alerts = alertControls();
       return {
         readout: true,
         summary: {
+          ...alerts,
           label: t('River levels'),
           coverage: t('Germany and Taiwan · official gauges'),
           validTime: newest ? new Date(newest).toISOString() : undefined,
@@ -715,6 +1123,12 @@ export function createRiverLevelsLayer({
 
     setRowControlsListener(listener) {
       rowControlsListener = typeof listener === 'function' ? listener : null;
+    },
+
+    /** The shell's page toast, through which gauge alerts speak. */
+    attachShellServices(services) {
+      _showToast =
+        typeof services?.showToast === 'function' ? services.showToast : null;
     },
 
     getAnalystRecords(maxCount = 500) {

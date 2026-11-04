@@ -3289,5 +3289,22 @@
   "Watch {value}": "Увага {value}",
   "Warning {value}": "Попередження {value}",
   "Flood {value}": "Повінь {value}",
-  "Record high {value}": "Максимум {value}"
+  "Record high {value}": "Максимум {value}",
+  "Alert at {level}": "Сповіщення: {level}",
+  "Level alert: Weather panel": "Сповіщення про рівень: панель «Погода»",
+  "Up to {count} gauge alerts": "Не більше {count} сповіщень за постами",
+  "Alert off · {name}": "Сповіщення вимкнено · {name}",
+  "{name} is already at {level}": "{name}: уже {level}",
+  "Alert set · {name} · {level}": "Сповіщення ввімкнено · {name} · {level}",
+  "All gauge alerts off": "Усі сповіщення за постами вимкнено",
+  "River alert · {name}": "Сповіщення про річку · {name}",
+  "Alert me · {name}": "Сповістити · {name}",
+  "Off": "Вимк.",
+  "Checked every 10 minutes while the app is open": "Перевіряється кожні 10 хвилин, поки застосунок відкритий",
+  "{name} publishes no levels to alert on": "{name} не публікує рівнів для сповіщення",
+  "Click a gauge to set a level alert": "Клацніть пост, щоб налаштувати сповіщення про рівень",
+  "Alerts on: {list}": "Увімкнено сповіщення: {list}",
+  "Turn off all alerts": "Вимкнути всі сповіщення",
+  "Reached: {list}": "Досягнуто: {list}",
+  "Alert": "Сповіщення"
 }

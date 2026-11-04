@@ -111,11 +111,25 @@ gauges; a gauge without references stays grey. From afar each gauge is a dot
 with a rising/falling/steady arrow, flood and record-high gauges pulse (capped
 at 24), and the most severe gauges in view carry labels. Below 150 km the 60
 nearest referenced gauges get a glass column with the water height on the
-gauge's own scale and a ring at the flood line. Selecting a gauge shows level,
+gauge's own scale and a coloured mark at each of its references (mean,
+watch, warning, flood, record high). Each river is drawn on the ground in
+the colour of its nearest gauge, from the OpenStreetMap waterways in the
+OpenFreeMap tiles (detailed close up, generalized from afar). From afar the
+dots keep their distance on screen (the most severe wins), grey gauges
+drop out above 400 km, and labels thin with height. Selecting a gauge shows level,
 trend, references and a 72 h sparkline (PEGELONLINE series; for WRA, what the
 server has seen), with "local gauge zero" and "raw data" caveats. The
 Weather panel readout lists the band legend and the most severe gauges in
-view. Readings older than 3 hours are faded and marked late; older than 3 days
+view. With a gauge selected, the readout also offers a level alert: chips for
+the levels that gauge can reach from its own references (watch, warning,
+flood, above record high, below normal, lowest on record). An alert is said
+once when a fresh reading reaches its level — page toast, plus a system
+notification if the viewer allows them when setting it — and again only after
+the water has left that level; late readings and grey gauges change nothing.
+The check runs on each 10-minute refresh while the app is open with the layer
+on; nothing leaves the browser. Up to 25 alerts persist in `localStorage`
+(`gev:river-level-alerts:v1`, ids validated on load) and work for this page
+only when storage is blocked. Readings older than 3 hours are faded and marked late; older than 3 days
 they are dropped. Voice does not carry the layer (prompt budget). See the
 live-layers table below.
 

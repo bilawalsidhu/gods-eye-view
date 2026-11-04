@@ -3137,5 +3137,22 @@
   "Watch {value}": "Vorwarnung {value}",
   "Warning {value}": "Warnung {value}",
   "Flood {value}": "Hochwasser {value}",
-  "Record high {value}": "Höchststand {value}"
+  "Record high {value}": "Höchststand {value}",
+  "Alert at {level}": "Alarm bei: {level}",
+  "Level alert: Weather panel": "Pegelalarm: Wetter-Bereich",
+  "Up to {count} gauge alerts": "Bis zu {count} Pegelalarme",
+  "Alert off · {name}": "Alarm aus · {name}",
+  "{name} is already at {level}": "{name} ist bereits bei {level}",
+  "Alert set · {name} · {level}": "Alarm gesetzt · {name} · {level}",
+  "All gauge alerts off": "Alle Pegelalarme aus",
+  "River alert · {name}": "Flussalarm · {name}",
+  "Alert me · {name}": "Benachrichtigen · {name}",
+  "Off": "Aus",
+  "Checked every 10 minutes while the app is open": "Alle 10 Minuten geprüft, solange die App geöffnet ist",
+  "{name} publishes no levels to alert on": "{name} veröffentlicht keine Alarmstufen",
+  "Click a gauge to set a level alert": "Pegel anklicken, um einen Pegelalarm zu setzen",
+  "Alerts on: {list}": "Aktive Alarme: {list}",
+  "Turn off all alerts": "Alle Alarme ausschalten",
+  "Reached: {list}": "Erreicht: {list}",
+  "Alert": "Alarm"
 }

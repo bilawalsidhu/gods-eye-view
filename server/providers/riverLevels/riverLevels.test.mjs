@@ -157,6 +157,8 @@ test('WRA readings join the register, in Taiwan time, newest per gauge', () => {
   assert.equal(gauge.level, 1.89);
   assert.equal(gauge.observedMs, Date.parse('2026-11-04T20:40:00Z'));
   assert.equal(gauge.nativeName, '新磺溪橋(即時)');
+  assert.equal(gauge.river, 'Huang River');
+  assert.equal(gauge.riverNative, '磺溪');
   assert.equal(gauge.band, 'normal');
   const [flooding] = normalizeWraReadings(register, [wraReading('6.02')]);
   assert.equal(flooding.band, 'flood');

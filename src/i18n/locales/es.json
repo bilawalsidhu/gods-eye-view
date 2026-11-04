@@ -3213,5 +3213,22 @@
   "Watch {value}": "Vigilancia {value}",
   "Warning {value}": "Alerta {value}",
   "Flood {value}": "Inundación {value}",
-  "Record high {value}": "Máximo histórico {value}"
+  "Record high {value}": "Máximo histórico {value}",
+  "Alert at {level}": "Alerta en: {level}",
+  "Level alert: Weather panel": "Alerta de nivel: panel Clima",
+  "Up to {count} gauge alerts": "Hasta {count} alertas de estación",
+  "Alert off · {name}": "Alerta desactivada · {name}",
+  "{name} is already at {level}": "{name} ya está en {level}",
+  "Alert set · {name} · {level}": "Alerta activada · {name} · {level}",
+  "All gauge alerts off": "Todas las alertas de estación desactivadas",
+  "River alert · {name}": "Alerta de río · {name}",
+  "Alert me · {name}": "Avísame · {name}",
+  "Off": "Desactivada",
+  "Checked every 10 minutes while the app is open": "Se comprueba cada 10 minutos mientras la app está abierta",
+  "{name} publishes no levels to alert on": "{name} no publica niveles para alertar",
+  "Click a gauge to set a level alert": "Haz clic en una estación para crear una alerta de nivel",
+  "Alerts on: {list}": "Alertas activas: {list}",
+  "Turn off all alerts": "Desactivar todas las alertas",
+  "Reached: {list}": "Alcanzado: {list}",
+  "Alert": "Alerta"
 }

@@ -3061,5 +3061,22 @@
   "Watch {value}": "注意 {value}",
   "Warning {value}": "警戒 {value}",
   "Flood {value}": "氾濫 {value}",
-  "Record high {value}": "最高記録 {value}"
+  "Record high {value}": "最高記録 {value}",
+  "Alert at {level}": "アラート: {level}",
+  "Level alert: Weather panel": "水位アラート: 気象パネル",
+  "Up to {count} gauge alerts": "観測所アラートは最大 {count} 件",
+  "Alert off · {name}": "アラート解除 · {name}",
+  "{name} is already at {level}": "{name} はすでに{level}です",
+  "Alert set · {name} · {level}": "アラート設定 · {name} · {level}",
+  "All gauge alerts off": "観測所アラートをすべて解除しました",
+  "River alert · {name}": "河川アラート · {name}",
+  "Alert me · {name}": "通知する · {name}",
+  "Off": "オフ",
+  "Checked every 10 minutes while the app is open": "アプリを開いている間、10 分ごとに確認",
+  "{name} publishes no levels to alert on": "{name} はアラート用の水位を公開していません",
+  "Click a gauge to set a level alert": "観測所をクリックして水位アラートを設定",
+  "Alerts on: {list}": "設定中のアラート: {list}",
+  "Turn off all alerts": "アラートをすべて解除",
+  "Reached: {list}": "到達: {list}",
+  "Alert": "アラート"
 }

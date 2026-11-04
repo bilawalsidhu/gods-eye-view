@@ -3441,5 +3441,22 @@
   "Watch {value}": "مراقبة {value}",
   "Warning {value}": "تحذير {value}",
   "Flood {value}": "فيضان {value}",
-  "Record high {value}": "أعلى مسجّل {value}"
+  "Record high {value}": "أعلى مسجّل {value}",
+  "Alert at {level}": "تنبيه عند: {level}",
+  "Level alert: Weather panel": "تنبيه المنسوب: لوحة الطقس",
+  "Up to {count} gauge alerts": "حتى {count} تنبيهات للمحطات",
+  "Alert off · {name}": "أُوقف التنبيه · {name}",
+  "{name} is already at {level}": "{name} عند {level} بالفعل",
+  "Alert set · {name} · {level}": "ضُبط التنبيه · {name} · {level}",
+  "All gauge alerts off": "أُوقفت كل تنبيهات المحطات",
+  "River alert · {name}": "تنبيه نهر · {name}",
+  "Alert me · {name}": "نبّهني · {name}",
+  "Off": "إيقاف",
+  "Checked every 10 minutes while the app is open": "يُفحص كل 10 دقائق ما دام التطبيق مفتوحًا",
+  "{name} publishes no levels to alert on": "لا تنشر {name} مستويات للتنبيه",
+  "Click a gauge to set a level alert": "انقر على محطة لضبط تنبيه المنسوب",
+  "Alerts on: {list}": "التنبيهات المفعّلة: {list}",
+  "Turn off all alerts": "إيقاف كل التنبيهات",
+  "Reached: {list}": "تم بلوغه: {list}",
+  "Alert": "تنبيه"
 }
