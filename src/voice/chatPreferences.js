@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { msg, t } from '../i18n/index.js';
 
 /**
  * Chat suggestions and the one chat preference (quick commands), written to
@@ -17,10 +17,10 @@ export function bindChatPreferences({ ui, getDraft, setDraft }) {
   };
   const quickCommands = () =>
     [
-      'Fly to Tokyo',
-      'Show live flights',
-      'Reset to globe view',
-      'Show earthquakes',
+      msg('Fly to Tokyo'),
+      msg('Show live flights'),
+      msg('Reset to globe view'),
+      msg('Show earthquakes'),
     ].map((text) => t(text));
   try {
     const stored = JSON.parse(localStorage.getItem(key));
