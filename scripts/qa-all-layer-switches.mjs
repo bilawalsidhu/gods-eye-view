@@ -298,6 +298,11 @@ const runs = [
   ['local-adsb-engine-switch', 'local-adsb-engine-switch', ['local-adsb']],
   ['ghostmaps-switch', 'ghostmaps-switch', ['s2-ghostmaps']],
   [
+    'open-layers-switch',
+    'open-layers-switch',
+    ['drone-airspace', 'osm-places', 'sea-marks', 'ski-pistes'],
+  ],
+  [
     'weather-engine-switch',
     'weather-engine-switch',
     [
