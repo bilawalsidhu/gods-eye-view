@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { clampOpacity, dimEntityColors } from '../sceneOpacity.js';
 import {
   PERIMETER_OVERLAY_SOURCE_ID,
   perimeterAnchorDegrees,
@@ -59,6 +60,8 @@ export function createFirePerimetersLayer({
   let _stale = false;
   let _lastError = null;
   let _enabled = false;
+  // The layer-panel opacity slider; kept across disable and re-init.
+  let _opacity = 1;
   let _clickHandler = null;
   let _selectedId = null;
   let _selectedLink = null;
@@ -366,6 +369,8 @@ export function createFirePerimetersLayer({
 
         _dataSource.entities.removeAll();
         for (const entity of nextEntities) _dataSource.entities.add(entity);
+        // Rebuilt entities start at the colours drawn above.
+        if (_opacity < 1) dimEntityColors(_dataSource, _opacity);
         _snapshotSignature = signature;
         // Refresh (or drop) the selected incident's card against the new feed.
         if (_selectedId) publishSelectedCard();
@@ -387,6 +392,12 @@ export function createFirePerimetersLayer({
       } finally {
         if (_request === request) _request = null;
       }
+    },
+
+    /** Dim the polygons and outlines: the colours of this layer's entities. */
+    setOpacity(fraction) {
+      _opacity = clampOpacity(fraction);
+      dimEntityColors(_dataSource, _opacity);
     },
 
     destroy(viewer = _viewer) {
