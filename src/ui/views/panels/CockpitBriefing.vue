@@ -72,12 +72,16 @@ function leaveSignals() {
           <small id="cockpit-local-coordinates">{{ b.local.coordinates }}</small>
         </div>
         <div class="cockpit-local-grid">
-          <div><span>{{ t('TEMP') }}</span><strong id="cockpit-local-temperature">{{ b.local.temperature }}</strong><small translate="no">OPEN-METEO</small></div>
+          <div><span>{{ t('TEMP') }}</span><strong id="cockpit-local-temperature">{{ b.local.temperature }}</strong><small id="cockpit-local-weather-source">{{ b.local.weatherSource }}</small></div>
           <div><span>{{ t('WIND') }}</span><strong id="cockpit-local-wind">{{ b.local.wind }}</strong><small id="cockpit-local-wind-direction">{{ b.local.windDirection }}</small></div>
           <div><span>{{ t('SKY') }}</span><strong id="cockpit-local-condition">{{ b.local.condition }}</strong><small id="cockpit-local-cloud">{{ b.local.cloud }}</small></div>
           <div><span>{{ t('PRECIP') }}</span><strong id="cockpit-local-precipitation">{{ b.local.precipitation }}</strong><small>{{ t('MM') }}</small></div>
         </div>
-        <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">{{ t('Weather data by Open-Meteo.com') }}</a>
+        <a id="cockpit-local-weather-station" href="https://www.smn.gob.ar/descarga-de-datos" target="_blank" rel="noopener noreferrer" class="cockpit-local-observation" :hidden="b.local.weatherStationHidden" :title="b.local.weatherStationTitle">{{ b.local.weatherStation }}</a>
+        <p id="cockpit-local-weather-time" class="cockpit-local-observation" :hidden="b.local.weatherTimeHidden">{{ b.local.weatherTime }}</p>
+        <p id="cockpit-local-observation" class="cockpit-local-observation" :hidden="b.local.observationHidden">{{ b.local.observation }}</p>
+        <a class="cockpit-weather-credit" href="https://www.meteorologia.gov.py/" target="_blank" rel="noopener" :hidden="b.local.observationHidden" translate="no">DMH / DINAC</a>
+        <a id="cockpit-weather-credit" class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">{{ b.local.weatherCredit }}</a>
       </section>
     </div>
     <footer class="cockpit-signal-footer">

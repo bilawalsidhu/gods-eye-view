@@ -64,7 +64,8 @@ function weatherRow(weather) {
   if (!weather) return null;
   return {
     observed_at: weather.observedAt ?? null,
-    conditions: WEATHER_CODES[weather.weatherCode] ?? null,
+    conditions:
+      weather.conditionText || WEATHER_CODES[weather.weatherCode] || null,
     weather_code: weather.weatherCode ?? null,
     temperature_c: weather.temperatureC ?? null,
     feels_like_c: weather.apparentTemperatureC ?? null,
@@ -73,6 +74,26 @@ function weatherRow(weather) {
     wind_kph: weather.windKph ?? null,
     wind_direction_deg: weather.windDirectionDeg ?? null,
     visibility_m: weather.visibilityM ?? null,
+    ...(weather.source
+      ? {
+          source: weather.source,
+          source_url: weather.sourceUrl ?? null,
+          kind: weather.kind ?? null,
+          reported_at: weather.reportedAt ?? null,
+          time_zone: weather.timeZone ?? null,
+          station: weather.station
+            ? {
+                id: weather.station.id,
+                name: weather.station.name,
+                latitude: weather.station.latitude,
+                longitude: weather.station.longitude,
+                distance_km: round(weather.station.distanceKm, 1),
+              }
+            : null,
+          humidity_pct: weather.humidityPct ?? null,
+          station_pressure_hpa: weather.stationPressureHpa ?? null,
+        }
+      : {}),
   };
 }
 
@@ -83,7 +104,10 @@ function describeWeather(row) {
     Number.isFinite(row.temperature_c) && `${Math.round(row.temperature_c)}°C`,
     Number.isFinite(row.wind_kph) && `wind ${Math.round(row.wind_kph)} km/h`,
   ].filter(Boolean);
-  return parts.join(', ') || 'conditions unknown';
+  const description = parts.join(', ') || 'conditions unknown';
+  return row.source === 'smn'
+    ? `${description} (SMN station ${row.station?.name || 'unknown'}, ${row.station?.distance_km ?? '?'} km from query; reported ${row.reported_at || 'unknown'}, time zone unspecified)`
+    : description;
 }
 
 export const getWeather = defineTool({
@@ -126,7 +150,7 @@ export const getRegionalBrief = defineTool({
   title: 'Regional brief',
   description:
     'What and where a location is, its current weather, and recent news ' +
-    'headlines for the region.',
+    'headlines for the region. Weather identifies a nearby SMN station observation when usable, otherwise the Open-Meteo model; station readings are not conditions at flight altitude. In and near Paraguay, station_observation separately identifies a recent nearby DMH reading; it is not a forecast at the requested point.',
   inputSchema: {
     type: 'object',
     properties: { location: POINT_SCHEMA },
@@ -160,6 +184,8 @@ export const getRegionalBrief = defineTool({
           kind: place.kind ?? null,
         },
         weather,
+        station_observation: brief?.stationObservation ?? null,
+        station_observation_status: brief?.stationObservationStatus ?? null,
         news_source: brief?.newsSource ?? null,
         articles,
       },

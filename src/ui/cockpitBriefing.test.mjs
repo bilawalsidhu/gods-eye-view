@@ -100,7 +100,7 @@ test('pages, the cycle toggle and the source follow the controller', async (t) =
   assert.deepEqual(visiblePages(), ['local']);
   assert.equal(
     text('#cockpit-brief-source'),
-    'NATURAL EARTH · OPEN-METEO · UTC',
+    'NATURAL EARTH · WEATHER UNAVAILABLE',
   );
   setBriefAutoRotate.call(owner, true);
   await nextTick();
@@ -278,7 +278,10 @@ test('the card and its toggle render the collapse the controller presents', asyn
   await nextTick();
   assert.equal(card.dataset.collapsed, 'true');
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-  assert.equal(toggle.getAttribute('aria-label'), 'Expand cockpit briefing panel');
+  assert.equal(
+    toggle.getAttribute('aria-label'),
+    'Expand cockpit briefing panel',
+  );
   assert.equal(toggle.title, 'Expand briefing panel');
   assert.equal(toggle.textContent.trim(), 'right_panel_open');
   assert.equal(owner.signalUserCollapsed, true);
@@ -286,4 +289,71 @@ test('the card and its toggle render the collapse the controller presents', asyn
   await nextTick();
   assert.equal(card.dataset.collapsed, 'false');
   assert.equal(toggle.textContent.trim(), 'right_panel_close');
+});
+
+test('Vue keeps SMN and DMH values, clocks, escaping and clearing independent', async (t) => {
+  const { $, text, owner } = fixture(t);
+  const weather = {
+    source: 'smn',
+    temperatureC: 18.5,
+    conditionText: 'Cubierto',
+    reportedAt: '2026-11-02T03:00',
+    station: {
+      id: '87178',
+      name: '<img src=x onerror=alert(1)>',
+      distanceKm: 2,
+    },
+  };
+  const payload = {
+    weather,
+    stationObservation: {
+      stationName: '<Station & test>',
+      distanceM: 1234,
+      temperatureC: 0,
+      humidityPct: 0,
+      windKph: 0,
+      windDirectionDeg: 0,
+      observedAt: new Date().toISOString(),
+    },
+  };
+  showBriefPage.call(owner, 2);
+  renderRegionalBrief.call(owner, payload, INFO);
+  await nextTick();
+  assert.equal(text('#cockpit-local-temperature'), '19°C');
+  assert.equal(text('#cockpit-local-condition'), 'Cubierto');
+  assert.match(text('#cockpit-local-weather-station'), /<img src=x/);
+  assert.equal($('#cockpit-local-weather-station img'), null);
+  assert.match(text('#cockpit-local-weather-time'), /TIME ZONE UNSPECIFIED/);
+  assert.doesNotMatch(text('#cockpit-local-weather-time'), /UTC/);
+  assert.match(text('#cockpit-local-observation'), /<Station & test>.*1.2 KM/s);
+  assert.match(
+    text('#cockpit-local-observation'),
+    /0.0°C · RH 0% · WIND 0 KM\/H/,
+  );
+  assert.match(text('#cockpit-local-observation'), /UTC/);
+  assert.equal($('#cockpit-local-observation').hidden, false);
+  assert.match(text('#cockpit-brief-source'), /SMN.*DMH/);
+  assert.ok($('a[href="https://www.smn.gob.ar/descarga-de-datos"]'));
+  assert.ok($('a[href="https://www.meteorologia.gov.py/"]'));
+  renderRegionalBrief.call(
+    owner,
+    {
+      ...payload,
+      stationObservation: {
+        ...payload.stationObservation,
+        observedAt: new Date(Date.now() - 91 * 60_000).toISOString(),
+      },
+    },
+    INFO,
+  );
+  await nextTick();
+  assert.equal($('#cockpit-local-observation').hidden, true);
+  assert.match(text('#cockpit-local-weather-station'), /<img src=x/);
+  renderRegionalBriefStatus.call(owner, 'loading', INFO);
+  await nextTick();
+  assert.equal(text('#cockpit-local-temperature'), '—');
+  assert.equal($('#cockpit-local-weather-station').hidden, true);
+  assert.equal($('#cockpit-local-weather-time').hidden, true);
+  assert.equal(text('#cockpit-local-observation'), '');
+  assert.doesNotMatch(text('#cockpit-brief-source'), /SMN|DMH/);
 });

@@ -71,6 +71,15 @@ export function createBriefState() {
       condition: t('UNKNOWN'),
       cloud: '—',
       precipitation: '—',
+      weatherSource: t('UNAVAILABLE'),
+      weatherStation: '',
+      weatherStationTitle: '',
+      weatherStationHidden: true,
+      weatherTime: '',
+      weatherTimeHidden: true,
+      weatherCredit: t('Weather data by Open-Meteo.com'),
+      observation: '',
+      observationHidden: true,
     },
   };
 }
