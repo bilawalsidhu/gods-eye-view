@@ -345,6 +345,7 @@ test('with no list yet and IOC down the route answers 503; an empty or odd list 
 test('routes take GET and HEAD only and answer unknown paths with 404', async () => {
   const plugin = seaLevelProxy({
     log: quiet,
+    now: () => NOW,
     fetchImpl: async () =>
       jsonResponse([row('hoek', 'flt', '2026-10-24 20:20:00.000')]),
   });
@@ -366,6 +367,7 @@ test('the station route validates the code before any upstream call', async () =
   const urls = [];
   const plugin = seaLevelProxy({
     log: quiet,
+    now: () => NOW,
     fetchImpl: async (url) => {
       urls.push(url);
       return jsonResponse([
