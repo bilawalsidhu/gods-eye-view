@@ -766,9 +766,12 @@ each side, and the empty Voice Preview suggests things to say until voice
 starts. Settings opened from chat keep chat's frame and show the shared AI
 provider, the quick-commands option and then the voice preferences (Voice
 Preview, inactivity timeout and model tier), so they stay in reach while
-Preview is off, with Back to chat; voice Settings show Back to voice. Escape steps back from either Settings view, closes Voice
+Preview is off, with Back to chat; voice Settings show Back to voice. Switching
+AI Provider keeps that view: chat's Settings, or chat itself, stay as they were
+for the new provider. Escape steps back from either Settings view, closes Voice
 Preview, and does nothing in chat. Closing chat ends a typed session, and the
-voice panel's close turns voice off. Asking the assistant from chat to open
+voice panel's close turns voice off. Opening chat or closing the voice panel
+also clears a voice error left on the dock. Asking the assistant from chat to open
 Voice Settings or Voice Preview puts chat away, minimized or not, and shows the
 voice panel; the typed conversation and its running reply carry on, and the
 chat button brings them back.

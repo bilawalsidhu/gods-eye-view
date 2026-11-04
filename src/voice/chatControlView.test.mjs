@@ -364,3 +364,34 @@ test('the chat gear is named for the settings it opens', async (t) => {
     'Settings',
   );
 });
+
+test('a provider switch carries chat Settings or chat itself to the next mount', async (t) => {
+  const mount = () => {
+    const ui = createTestVoiceUi({ panel: true });
+    const chat = bindChatControl({ ui, session: typedSession() });
+    t.after(() => chat.destroy());
+    return { ui, chat };
+  };
+  // Chat's Settings: the next mount shows Settings in chat's frame again.
+  const before = mount();
+  before.ui.emit('chat-button');
+  before.ui.update('voicePanel', { hidden: false });
+  before.ui.emit('settings-button');
+  const settings = before.chat.presentation();
+  assert.equal(settings.view, 'settings');
+  const after = mount();
+  after.chat.restorePresentation(settings);
+  assert.equal(after.ui.state.voicePanel.context, 'chat');
+  assert.equal(after.ui.state.chat.backVisible, true);
+  assert.equal(after.ui.state.root.assistantMode, 'chat');
+  // Open and minimized chat come back as they were, without taking focus.
+  for (const view of ['open', 'minimized']) {
+    const next = mount();
+    next.chat.restorePresentation({ view });
+    assert.equal(next.ui.state.chat.open, true);
+    assert.equal(next.ui.state.chat.minimized, view === 'minimized');
+    assert.equal(next.chat.presentation().view, view);
+  }
+  // Idle chat carries nothing.
+  assert.equal(mount().chat.presentation(), null);
+});

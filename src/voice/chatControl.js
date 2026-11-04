@@ -94,7 +94,10 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
       : '';
   function open({ focus = true } = {}) {
     leaveChatSettings();
-    if (!isTyped() && session.isActive()) session.stop();
+    // Chat replaces voice, a stale voice error included, so the dock stops
+    // showing it.
+    if (!isTyped() && (session.isActive() || session.state === 'error'))
+      session.stop();
     onOpen?.();
     ui.update('chat', { open: true, minimized: false, rows: 2, authNote });
     sync();
@@ -413,10 +416,39 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
     }),
   ];
   sync();
+  // What a provider switch carries to the next mount: chat's Settings or
+  // chat itself, never the conversation.
+  function presentation() {
+    if (inChatSettings()) {
+      const { frameWidth, frameHeight } = ui.state.voicePanel;
+      return { view: 'settings', frameWidth, frameHeight };
+    }
+    if (chat().open) return { view: chat().minimized ? 'minimized' : 'open' };
+    return null;
+  }
+  // Restored without moving focus: the switch keeps it on the provider choice.
+  function restorePresentation(state) {
+    if (disposed || !state) return;
+    if (state.view === 'settings') {
+      ui.update('voicePanel', {
+        context: 'chat',
+        ...(state.frameWidth && {
+          frameWidth: state.frameWidth,
+          frameHeight: state.frameHeight,
+        }),
+      });
+      ui.update('chat', { backVisible: true });
+      return sync();
+    }
+    open({ focus: false });
+    if (state.view === 'minimized') minimize({ focus: false });
+  }
   return {
     close,
     minimize,
     restore: open,
+    presentation,
+    restorePresentation,
     get minimized() {
       return chat().open && chat().minimized;
     },
