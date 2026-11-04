@@ -160,13 +160,28 @@ export function createVoiceCommands({
     // An explicit, successful show hands the frame from chat to the voice
     // panel, which chat's open state hides. Closing chat keeps its typed
     // session, running turn and messages; reopening chat restores them.
+    // Focus held in chat (its composer, or chat Settings' Back) would be
+    // left on a hidden control, so it moves to the panel's view, as the
+    // panel's own tabs do; focus anywhere else stays where it is.
     controls.captureVoicePanelOperation = () => {
       const operation = panelMount.captureOperation();
       return {
         ...operation,
         show(view, open = true) {
+          const focused = globalThis.document?.activeElement;
+          const inChat =
+            Boolean(focused) &&
+            (ui.element('chatPanel')?.contains?.(focused) ||
+              focused === ui.element('chatBack'));
           const result = operation.show(view, open);
-          if (open && result.ok) chat?.close();
+          if (!open || !result.ok) return result;
+          chat?.close();
+          if (inChat)
+            void ui.focus(
+              result.view === 'settings'
+                ? ['settingsTab', 'voiceBack', 'settingsClose']
+                : ['previewTab', 'settingsTab', 'settingsClose'],
+            );
           return result;
         },
       };

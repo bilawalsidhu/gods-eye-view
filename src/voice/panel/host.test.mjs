@@ -512,7 +512,13 @@ test('the voice inactivity timeout never ends a typed chat session', async (t) =
 
 async function directActions(
   t,
-  { storage = null, delayExit = false, exposePanel = true, typed = false } = {},
+  {
+    storage = null,
+    delayExit = false,
+    exposePanel = true,
+    typed = false,
+    view = false,
+  } = {},
 ) {
   let f, releaseExit;
   const state = { active: true, exits: 0, visual: [] };
@@ -544,7 +550,7 @@ async function directActions(
     readVoicePanelOperation: () =>
       exposePanel ? f?.commands.captureVoicePanelOperation() : undefined,
   });
-  f = mounted(t, { native: true, runner, storage });
+  f = mounted(t, { native: true, runner, storage, view });
   // A typed chat session starts from chat's first send instead.
   if (typed) {
     const adapter = f.instances[0];
@@ -670,6 +676,44 @@ for (const minimized of [false, true])
     assert.equal(f.ui.chatMessages[0].text, 'Fly to Tokyo');
     assert.equal(adapter.stops, 0);
   });
+
+for (const [panelId, target] of [
+  ['voice-settings', 'gev-voice-settings-tab'],
+  ['voice-preview', 'gev-voice-preview-tab'],
+])
+  test(`${panelId} asked for from the chat composer takes focus with it`, async (t) => {
+    const f = await directActions(t, { typed: true, view: true });
+    await f.settle();
+    $('#gev-chat-button').click();
+    await f.commands.session.start({ textOnly: true });
+    await f.settle();
+    $('#gev-chat-input').focus();
+    assert.equal(active(), 'gev-chat-input');
+    const result = await f.run('set_panel_open', { panelId, open: true });
+    assert.equal(result.ok, true);
+    await f.settle();
+    assert.equal($('#gev-chat-panel').hidden, true);
+    assert.equal(active(), target);
+    assert.equal(f.ui.visible('voicePanel'), true);
+  });
+
+test('a voice panel asked for from chat leaves unrelated focus alone', async (t) => {
+  const f = await directActions(t, { typed: true, view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.commands.session.start({ textOnly: true });
+  await f.settle();
+  const elsewhere = globalThis.document.body.appendChild(
+    globalThis.document.createElement('button'),
+  );
+  elsewhere.id = 'elsewhere';
+  t.after(() => elsewhere.remove());
+  elsewhere.focus();
+  await f.run('set_panel_open', { panelId: 'voice-settings', open: true });
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, true);
+  assert.equal(active(), 'elsewhere');
+});
 
 test('canonical exit reveals requested voice UI; newer manual choice or Stop defeats pending reveal', async (t) => {
   const f = await directActions(t, { delayExit: true });
