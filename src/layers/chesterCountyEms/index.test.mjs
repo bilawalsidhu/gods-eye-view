@@ -59,6 +59,11 @@ test('renders individual street markers, selects card, removes expired incidents
   assert.equal(entries.has('chester-county-ems'), false);
   assert.equal(entities.values.length, 2);
   assert.equal(layer.getStats().count, 2);
+  assert.equal(
+    layer.getRowControls,
+    undefined,
+    'active reports belong to the dedicated app, not the Data Layers row',
+  );
   layer.setParams({ selectedIncident: row.id });
   assert.doesNotMatch(
     entries.get('chester-county-ems-selected')[0].details.join(' '),
@@ -96,10 +101,14 @@ test('failed refresh retains last report as stale; unlocated reports stay in lis
     },
   });
   await layer.update();
-  assert.equal(layer.getRowControls().list.items.length, 1);
+  assert.equal(layer.getIncidentPanelState().list.items.length, 1);
   fail = true;
   await layer.update();
   assert.equal(layer.getStats().stale, true);
+  assert.match(
+    layer.getIncidentPanelState().info,
+    /Chester County incidents unavailable/,
+  );
   assert.equal(layer.getStats().count, 1);
   layer.destroy();
 });
@@ -135,10 +144,13 @@ test('fresh unresolved records show explicit coverage without claiming feed degr
   assert.equal(layerFeedState(layer.getStats()), 'nominal');
   assert.equal(layer.getStats().unresolvedCount, 1);
   assert.match(
-    layer.getRowControls().info,
+    layer.getIncidentPanelState().info,
     /0 mapped · 1 unresolved · 0 lookup errors/,
   );
-  assert.match(layer.getRowControls().list.items[0].text, /No location match/);
+  assert.match(
+    layer.getIncidentPanelState().list.items[0].text,
+    /No location match/,
+  );
   layer.destroy();
 });
 test('actual GIS errors remain degraded and feed staleness takes precedence', async () => {
@@ -154,7 +166,7 @@ test('actual GIS errors remain degraded and feed staleness takes precedence', as
   });
   await layer.update();
   assert.equal(layerFeedState(layer.getStats()), 'degraded');
-  assert.match(layer.getRowControls().info, /1 lookup errors/);
+  assert.match(layer.getIncidentPanelState().info, /1 lookup errors/);
   isStale = true;
   await layer.update();
   assert.equal(layerFeedState(layer.getStats()), 'stale');
@@ -285,5 +297,41 @@ test('selected unit failures keep the summary and previous units without degradi
   assert.match(text, /MEDIC01/);
   assert.match(text, /Unit status is stale/);
   assert.equal(layerFeedState(layer.getStats()), 'nominal');
+  layer.destroy();
+});
+
+test('category filters affect the map and app list without refetching or dropping feed coverage', async () => {
+  let fetches = 0;
+  const rows = ['fire', 'ems', 'traffic'].map((category) => ({
+    ...row,
+    id: `${category}:test`,
+    category,
+  }));
+  const { layer, entities, entries } = setup({
+    getSnapshot: async () => {
+      fetches++;
+      return snapshot(rows);
+    },
+  });
+  await layer.update();
+  layer.setParams({ selectedIncident: 'ems:test' });
+  assert.ok(entries.has('chester-county-ems-selected'));
+  layer.setParams({ categories: ['fire', 'traffic'] });
+  assert.equal(entries.has('chester-county-ems-selected'), false);
+  assert.equal(entities.values.length, 2);
+  assert.equal(layer.getIncidentPanelState().list.items.length, 2);
+  assert.equal(layer.getStats().count, 3);
+  assert.equal(layer.getStats().displayCount, 2);
+  layer.setParams({ selectedIncident: 'ems:test' });
+  assert.equal(entries.has('chester-county-ems-selected'), false);
+  layer.setParams({ categories: [] });
+  assert.equal(entities.values.length, 0);
+  assert.match(layer.getIncidentPanelState().info, /No matching incidents/);
+  assert.equal(layer.getIncidentPanelState().enabled, true);
+  layer.setParams({ categories: ['fire', 'ems', 'traffic'] });
+  assert.equal(entities.values.length, 3);
+  layer.setParams({ categories: ['invalid'] });
+  assert.deepEqual(layer.getParams().categories, ['fire', 'ems', 'traffic']);
+  assert.equal(fetches, 1);
   layer.destroy();
 });

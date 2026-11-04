@@ -2901,5 +2901,13 @@
   "Unit status unavailable": "单位状态不可用",
   "{count} more unit updates · open source": "还有 {count} 条更新 · 打开来源",
   "Open incident source ↗": "打开事件来源 ↗",
-  "{unit} · {status} · {time}": "{unit} · {status} · {time}"
+  "{unit} · {status} · {time}": "{unit} · {status} · {time}",
+  "CHESCO INCIDENTS": "切斯科事件",
+  "Fire": "火警",
+  "EMS": "急救",
+  "Police / traffic": "警察 / 交通",
+  "Incident categories": "事件类别",
+  "{matching} of {total} incidents": "{total} 起事件中的 {matching} 起",
+  "No matching incidents": "没有匹配的事件",
+  "Public WebCAD traffic reports": "WebCAD 公开交通事件报告"
 }

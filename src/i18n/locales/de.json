@@ -2971,5 +2971,13 @@
   "Unit status unavailable": "Einheitenstatus nicht verfügbar",
   "{count} more unit updates · open source": "{count} weitere Statusmeldungen · Quelle öffnen",
   "Open incident source ↗": "Einsatzquelle öffnen ↗",
-  "{unit} · {status} · {time}": "{unit} · {status} · {time}"
+  "{unit} · {status} · {time}": "{unit} · {status} · {time}",
+  "CHESCO INCIDENTS": "CHESCO-EINSÄTZE",
+  "Fire": "Feuer",
+  "EMS": "Rettungsdienst",
+  "Police / traffic": "Polizei / Verkehr",
+  "Incident categories": "Einsatzarten",
+  "{matching} of {total} incidents": "{matching} von {total} Einsätzen",
+  "No matching incidents": "Keine passenden Einsätze",
+  "Public WebCAD traffic reports": "Öffentliche WebCAD-Verkehrsmeldungen"
 }

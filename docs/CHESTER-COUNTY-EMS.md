@@ -1,14 +1,29 @@
 # Chester County, Pennsylvania incidents
 
-Enable **Data Layers → Events → Chester County, PA incidents**, then choose
-**View Chester County**. This layer includes all three public WebCAD tables:
+Enable **Data Layers → Events → Chester County, PA incidents**, then open
+**CHESCO INCIDENTS** on the right rail. Its **View Chester County** action moves
+the map to the county. The right-side app holds the active list, coverage/freshness
+status and county actions; Data Layers retains the layer toggle and standard
+feed count. Disabling the layer hides the app and its launcher. An enabled empty
+or failed feed keeps the app available, showing its empty/stale/error state.
+The list updates from the existing feed without a separate polling loop.
+
+The app's **Fire**, **EMS** and **Police / traffic** toggles filter the map icons
+and active list together. All three start on. Police / traffic corresponds to
+the public WebCAD Traffic table, not a complete police-call feed. The app shows
+matching/total counts; switching every category off keeps the app available with
+**No matching incidents**. Excluding the selected report closes its map card and
+cancels its pending detail lookup. Filters apply in the current app session;
+MCP can query the full public feed or apply its own category filter.
+
+This layer includes all three public WebCAD tables:
 
 - **Fire:** orange flame icon.
 - **EMS:** red cross icon.
 - **Traffic:** red/blue police-siren icon.
 
 Resolved reports show category icons only. Click an icon to open its card;
-click empty map space to dismiss it. The list can also select an incident and
+click empty map space to dismiss it. The app list can also select an incident and
 fly to its location. The card shows labelled location/municipality fields,
 incident number/type, dispatch time, station or agency, and the county's public
 unit IDs, statuses and status-entry timestamps when available. Cards show up to eight public unit updates, with a link to the full county page.
@@ -135,7 +150,8 @@ terms when operating or sharing an instance.
 node --import=./build/registerVue.js --test \
   server/providers/chesterCountyEms.test.mjs \
   server/providers/chesterCountyEms/locations.test.mjs \
-  src/layers/chesterCountyEms/index.test.mjs
+  src/layers/chesterCountyEms/index.test.mjs \
+  src/ui/chesterCountyPanel.test.mjs
 QA_BASE_URL=http://localhost:4177 node scripts/qa-chester-county-ems.mjs
 ```
 
@@ -143,9 +159,11 @@ The browser gate uses synthetic records only and checks all three categories,
 actual icon selection, public unit fields, mapping coverage, empty-snapshot clearing and disable. It writes
 its screenshot to `qa-shots/chester-county-ems/selected.png`. Set
 `QA_RECORDING_PATH` to an `.mp4` path to also record the interaction.
+For installed Brave on macOS, `PUPPETEER_EXECUTABLE_PATH` can select its binary
+and `QA_BROWSER_ANGLE=metal` can use the native renderer for the capture.
 
 PR evidence uses only synthetic records: [screenshot](media/chester-county-incidents-synthetic.png)
-and [demo recording](media/chester-county-incidents-demo.mp4) (2× playback).
+and [demo recording](media/chester-county-incidents-demo.mp4) (accelerated playback).
 
 ## AI and MCP queries
 

@@ -2901,5 +2901,13 @@
   "Unit status unavailable": "部隊の状況を取得できません",
   "{count} more unit updates · open source": "他に{count}件の更新 · 情報源を開く",
   "Open incident source ↗": "事案の情報源を開く ↗",
-  "{unit} · {status} · {time}": "{unit} · {status} · {time}"
+  "{unit} · {status} · {time}": "{unit} · {status} · {time}",
+  "CHESCO INCIDENTS": "チェスコの事案",
+  "Fire": "火災",
+  "EMS": "救急",
+  "Police / traffic": "警察 / 交通",
+  "Incident categories": "事案の種類",
+  "{matching} of {total} incidents": "{total}件中{matching}件の事案",
+  "No matching incidents": "一致する事案はありません",
+  "Public WebCAD traffic reports": "WebCADの公開交通事案"
 }

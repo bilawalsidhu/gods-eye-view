@@ -3251,5 +3251,13 @@
   "Unit status unavailable": "حالة الوحدات غير متاحة",
   "{count} more unit updates · open source": "{count} تحديثات أخرى · فتح المصدر",
   "Open incident source ↗": "فتح مصدر الحادث ↗",
-  "{unit} · {status} · {time}": "{unit} · {status} · {time}"
+  "{unit} · {status} · {time}": "{unit} · {status} · {time}",
+  "CHESCO INCIDENTS": "حوادث تشيسكو",
+  "Fire": "حريق",
+  "EMS": "الإسعاف",
+  "Police / traffic": "الشرطة / المرور",
+  "Incident categories": "فئات الحوادث",
+  "{matching} of {total} incidents": "{matching} من {total} حادث",
+  "No matching incidents": "لا توجد حوادث مطابقة",
+  "Public WebCAD traffic reports": "تقارير المرور العامة من WebCAD"
 }

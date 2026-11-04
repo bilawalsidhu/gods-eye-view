@@ -3,6 +3,7 @@ import { msg, t } from '../../i18n/index.js';
 
 const ID = 'chester-county-ems';
 const SELECTED = `${ID}-selected`;
+const CATEGORIES = ['fire', 'ems', 'traffic'];
 const STYLES = {
   fire: {
     symbol: '🔥',
@@ -58,11 +59,15 @@ export function createChesterCountyEmsLayer({
   picking,
   pointer,
 }) {
-  let viewer, dataSource, request, listener;
+  let viewer, dataSource, request;
+  const panelListeners = new Set();
   let enabled = false;
   let snapshot = null;
   let error = null;
   let selected = null;
+  let categories = [...CATEGORIES];
+  const visibleRows = () =>
+    (snapshot?.rows || []).filter((row) => categories.includes(row.category));
   let clickHandler, detailsRequest;
   let detail = null,
     detailsError = false;
@@ -77,7 +82,7 @@ export function createChesterCountyEmsLayer({
   async function loadDetails() {
     detailsRequest?.abort();
     detailsRequest = null;
-    const row = snapshot?.rows.find((row) => row.id === selected);
+    const row = visibleRows().find((row) => row.id === selected);
     if (!row || !detailLink(row) || !source.getIncidentDetails) return;
     const current = new AbortController();
     detailsRequest = current;
@@ -113,7 +118,7 @@ export function createChesterCountyEmsLayer({
     }
   }
   function select(id, fly = false) {
-    const row = snapshot?.rows.find((row) => row.id === id);
+    const row = visibleRows().find((row) => row.id === id);
     if (!enabled || !row) return;
     clearSelection();
     selected = row.id;
@@ -139,7 +144,7 @@ export function createChesterCountyEmsLayer({
         sourceId: SELECTED,
       });
       if (hit?.entryId === selected) {
-        const row = snapshot?.rows.find((row) => row.id === selected);
+        const row = visibleRows().find((row) => row.id === selected);
         const link = row && detailLink(row);
         if (link) openExternal?.(link);
         return;
@@ -156,7 +161,7 @@ export function createChesterCountyEmsLayer({
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
   const notify = () => {
-    listener?.();
+    for (const listener of panelListeners) listener();
     viewer?.scene?.requestRender?.();
   };
   const position = (row) =>
@@ -170,7 +175,7 @@ export function createChesterCountyEmsLayer({
   function render() {
     if (!dataSource || !enabled) return;
     dataSource.entities.removeAll();
-    for (const row of snapshot?.rows || []) {
+    for (const row of visibleRows()) {
       if (!row.mapPosition) continue;
       const style = styleFor(row);
       const anchor = position(row);
@@ -193,7 +198,7 @@ export function createChesterCountyEmsLayer({
   }
   function renderSelection() {
     overlayHost.clearSource(SELECTED);
-    const row = snapshot?.rows.find((row) => row.id === selected);
+    const row = visibleRows().find((row) => row.id === selected);
     if (!enabled || !row?.mapPosition) return;
     overlayHost.setEntries(
       SELECTED,
@@ -354,11 +359,13 @@ export function createChesterCountyEmsLayer({
     destroy() {
       layer.disable();
       if (dataSource) viewer.dataSources.remove(dataSource, true);
-      viewer = dataSource = snapshot = listener = null;
+      panelListeners.clear();
+      viewer = dataSource = snapshot = null;
     },
     getStats() {
       return {
         count: snapshot?.rows.length || 0,
+        displayCount: visibleRows().length,
         lastUpdate: snapshot?.fetchedAt || null,
         observedAt: snapshot?.observedAt || null,
         stale: stale(),
@@ -373,9 +380,13 @@ export function createChesterCountyEmsLayer({
         locationErrorCount: snapshot?.locationCoverage?.unavailable || 0,
       };
     },
-    getRowControls() {
-      const rows = snapshot?.rows || [];
+    getIncidentPanelState() {
+      const allRows = snapshot?.rows || [];
+      const rows = visibleRows();
       return {
+        enabled,
+        categories: [...categories],
+        total: allRows.length,
         chips: [
           {
             id: 'county',
@@ -407,13 +418,21 @@ export function createChesterCountyEmsLayer({
 
           snapshot
             ? `${t('Updated')}: ${new Date(snapshot.observedAt).toLocaleString(undefined, { timeZone: 'America/New_York' })} (America/New_York)`
-            : t('Loading...'),
+            : error
+              ? ''
+              : t('Loading...'),
+          snapshot
+            ? t('{matching} of {total} incidents', {
+                matching: rows.length,
+                total: allRows.length,
+              })
+            : '',
           snapshot
             ? t(
                 '{mapped} mapped · {unresolved} unresolved · {errors} lookup errors',
                 {
-                  mapped: rows.filter((row) => row.mapPosition).length,
-                  unresolved: rows.filter(
+                  mapped: allRows.filter((row) => row.mapPosition).length,
+                  unresolved: allRows.filter(
                     (row) =>
                       !row.mapPosition && row.locationStatus !== 'unavailable',
                   ).length,
@@ -421,8 +440,12 @@ export function createChesterCountyEmsLayer({
                 },
               )
             : '',
+          error ? t(error) : '',
           stale() ? t('Stale data') : '',
-          snapshot && !rows.length ? t('No active incidents') : '',
+          snapshot && !allRows.length ? t('No active incidents') : '',
+          snapshot && allRows.length && !rows.length
+            ? t('No matching incidents')
+            : '',
         ]
           .filter(Boolean)
           .join(' · '),
@@ -438,12 +461,28 @@ export function createChesterCountyEmsLayer({
         },
       };
     },
+    getParams() {
+      return { categories: [...categories] };
+    },
     setParams(params) {
+      if (
+        Object.hasOwn(params, 'categories') &&
+        Array.isArray(params.categories) &&
+        params.categories.every((category) => CATEGORIES.includes(category))
+      ) {
+        categories = CATEGORIES.filter((category) =>
+          params.categories.includes(category),
+        );
+        if (!visibleRows().some((row) => row.id === selected)) clearSelection();
+        render();
+      }
       if (!enabled || !Object.hasOwn(params, 'selectedIncident')) return;
       select(params.selectedIncident, true);
     },
-    setRowControlsListener(next) {
-      listener = next;
+    /** Subscribe to incident/list selection updates without owning the layer's polling. */
+    subscribeIncidentPanel(listener) {
+      panelListeners.add(listener);
+      return () => panelListeners.delete(listener);
     },
   };
   return layer;

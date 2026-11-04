@@ -6729,3 +6729,18 @@ coverage; selected report queries return bounded public unit status or an
 explicit unavailable result without discarding the report. Voice can toggle
 the layer through scoped Chesco/Chester County aliases. Its spatial analyst
 exclusion now directs the model to these tools rather than hiding the layer.
+
+The active Chester County report list now lives in its own **CHESCO INCIDENTS**
+right-side app alongside the other panels. Its launcher and panel are hidden
+while the data layer is off, and return when it is enabled. Data Layers keeps
+only the normal visibility toggle/feed count. The app shares the existing
+snapshot and selection lifecycle, with no additional requests or polling;
+empty/stale/error feeds remain accessible while enabled. List selections still
+open the same map cards, and icon selections update the app's active row.
+
+The county app includes Fire, EMS and Police/Traffic category toggles, all on
+by default. These filter map icons and the app list together, with matching/total
+counts and a distinct no-match state. Police/Traffic uses WebCAD's public Traffic
+table. Category changes use the cached snapshot, preserve full feed health/counts,
+and dismiss a selected report when its category is hidden. Filters are session
+state; the existing enabled-only share token and MCP full-feed queries persist.

@@ -13,7 +13,7 @@ const browser = await puppeteer.launch({
   args: [
     '--no-sandbox',
     '--use-gl=angle',
-    '--use-angle=swiftshader',
+    `--use-angle=${process.env.QA_BROWSER_ANGLE || 'swiftshader'}`,
     '--enable-webgl',
   ],
 });
@@ -127,6 +127,7 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
     timeout: 60000,
   });
+  assert.equal(await page.$('[data-rail-item="chester-county-panel"]'), null);
   if (process.env.QA_RECORDING_PATH) {
     await mkdir(dirname(process.env.QA_RECORDING_PATH), { recursive: true });
     recorder = await page.screencast({
@@ -147,10 +148,10 @@ try {
     return {
       count: layer.getStats().count,
       degraded: layer.getStats().degraded,
-      list: layer.getRowControls().list.items.length,
-      info: layer.getRowControls().info,
+      list: layer.getIncidentPanelState().list.items.length,
+      info: layer.getIncidentPanelState().info,
       unselected: layer
-        .getRowControls()
+        .getIncidentPanelState()
         .list.items.every((item) => !item.active),
     };
   });
@@ -161,13 +162,55 @@ try {
   assert.match(result.info, /3 mapped · 1 unresolved · 0 lookup errors/);
   assert.match(result.info, /Street locations are approximate/);
   const incidentSelector =
-    '[data-layer-id="chester-county-ems"] button[data-list-item-id="ems:F26000001"]';
-  const incidentVisible = await page.evaluate((selector) => {
-    const item = document.querySelector(selector);
-    return item?.checkVisibility({ visibilityProperty: true }) || false;
-  }, incidentSelector);
-  if (!incidentVisible)
-    await page.locator('[data-rail-item="data-panel"]').click();
+    '#chester-county-panel button[data-list-item-id="ems:F26000001"]';
+  await page.waitForSelector('[data-rail-item="chester-county-panel"]');
+  assert.equal(
+    await page.$('[data-layer-id="chester-county-ems"] [data-list-item-id]'),
+    null,
+  );
+  await page.locator('[data-rail-item="chester-county-panel"]').click();
+  await page.waitForSelector(incidentSelector, { visible: true });
+  // Toggle each category through the app; both map and list must follow.
+  const visibleCounts = () =>
+    page.evaluate(() => {
+      const app = window.__godsEyeView;
+      return {
+        icons:
+          app.viewer.dataSources.getByName('chester-county-ems')[0].entities
+            .values.length,
+        rows: document.querySelectorAll(
+          '#chester-county-panel button[data-list-item-id]',
+        ).length,
+        total: app.dataManager.layers
+          .get('chester-county-ems')
+          .module.getStats().count,
+      };
+    });
+  for (const category of ['fire', 'traffic', 'ems']) {
+    await page.locator(`[data-county-category="${category}"]`).click();
+    await page.waitForFunction(
+      (category) =>
+        document
+          .querySelector(`[data-county-category="${category}"]`)
+          ?.getAttribute('aria-pressed') === 'false',
+      {},
+      category,
+    );
+    assert.deepEqual(
+      await visibleCounts(),
+      category === 'ems'
+        ? { icons: 2, rows: 2, total: 4 }
+        : { icons: 2, rows: 3, total: 4 },
+    );
+    await page.locator(`[data-county-category="${category}"]`).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll(
+          '#chester-county-panel button[data-list-item-id]',
+        ).length === 4,
+    );
+    assert.deepEqual(await visibleCounts(), { icons: 3, rows: 4, total: 4 });
+  }
   if (recorder) {
     await page.evaluate(() => {
       const layer =
@@ -175,7 +218,7 @@ try {
           'chester-county-ems',
         ).module;
       layer
-        .getRowControls()
+        .getIncidentPanelState()
         .chips.find((chip) => chip.id === 'county')
         .onClick();
     });
@@ -187,7 +230,8 @@ try {
     const Cesium = window.Cesium;
     app.viewer.camera.cancelFlight();
     app.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(-75.603, 39.96, 1800),
+      destination: Cesium.Cartesian3.fromDegrees(-75.605, 39.96, 1800),
+      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
     app.viewer.scene.requestRender();
   });
@@ -236,7 +280,7 @@ try {
     () =>
       document
         .querySelector(
-          '[data-layer-id="chester-county-ems"] button[data-list-item-id="ems:F26000001"]',
+          '#chester-county-panel button[data-list-item-id="ems:F26000001"]',
         )
         ?.getAttribute('aria-pressed') === 'true',
   );
@@ -277,8 +321,28 @@ try {
     return { count, enabled: manager.isEnabled('chester-county-ems') };
   });
   assert.deepEqual(cleared, { count: 0, enabled: false });
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#chester-county-panel')?.hidden &&
+      !document.querySelector('[data-rail-item="chester-county-panel"]'),
+  );
+  // Empty feeds retain the app while enabled; a later enable restores its launcher.
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.setEnabled('chester-county-ems', true, {
+      origin: 'user',
+    }),
+  );
+  await page.waitForSelector('[data-rail-item="chester-county-panel"]');
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.setEnabled('chester-county-ems', false, {
+      origin: 'user',
+    }),
+  );
+  await page.waitForFunction(
+    () => !document.querySelector('[data-rail-item="chester-county-panel"]'),
+  );
   console.log(
-    'PASS: county icons, actual map click, unit details, empty refresh and disable',
+    'PASS: dedicated county app, category filters, map/list selection, empty refresh, launcher hides on disable and returns on enable',
   );
 } finally {
   await recorder?.stop();

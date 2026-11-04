@@ -3111,5 +3111,13 @@
   "Unit status unavailable": "Стан підрозділів недоступний",
   "{count} more unit updates · open source": "Ще оновлень: {count} · відкрити джерело",
   "Open incident source ↗": "Відкрити джерело події ↗",
-  "{unit} · {status} · {time}": "{unit} · {status} · {time}"
+  "{unit} · {status} · {time}": "{unit} · {status} · {time}",
+  "CHESCO INCIDENTS": "ПОДІЇ CHESCO",
+  "Fire": "Пожежі",
+  "EMS": "Екстрена допомога",
+  "Police / traffic": "Поліція / ДТП",
+  "Incident categories": "Категорії подій",
+  "{matching} of {total} incidents": "Події: {matching} з {total}",
+  "No matching incidents": "Немає відповідних подій",
+  "Public WebCAD traffic reports": "Відкриті дорожні зведення WebCAD"
 }
