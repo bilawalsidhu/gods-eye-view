@@ -2,6 +2,7 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
 import { cssColor } from '../../render/color.js';
 import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+import { clampOpacity, dimColor } from '../sceneOpacity.js';
 import { msg, t } from '../../i18n/index.js';
 import {
   DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
@@ -78,6 +79,12 @@ export function createDroneAirspaceLayer({
   let _stale = false;
   let _enabled = false;
   let _clickSubscription = null;
+  // The layer-panel opacity slider; kept across disable and re-init.
+  let _opacity = 1;
+  // The fills and outlines as the layer draws them, before the slider dims
+  // them; the drawn ones are these at `_opacity`.
+  let _fillItems = [];
+  let _lineItems = [];
   let _selectedId = null;
   let _selectedCardId = null;
   /** @type {Map<string, {stableId: string, anchor: {lon: number, lat: number}}>} */
@@ -165,6 +172,27 @@ export function createDroneAirspaceLayer({
       overlayHost.clearSource(DRONE_AIRSPACE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, false);
     }
+  }
+
+  /**
+   * Draw the zones at the slider's opacity: the colours the layer drew,
+   * scaled. The items are copied, so the colours above stay as they are and
+   * a repeated slider move is exact.
+   */
+  function paintOpacity() {
+    if (!_fills || !_lines) return;
+    _fills.set(
+      _fillItems.map((item) => ({
+        ...item,
+        fill: dimColor(item.fill, _opacity),
+      })),
+    );
+    _lines.set(
+      _lineItems.map((item) => ({
+        ...item,
+        style: { ...item.style, color: dimColor(item.style?.color, _opacity) },
+      })),
+    );
   }
 
   const layer = {
@@ -284,8 +312,10 @@ export function createDroneAirspaceLayer({
           });
         }
 
-        _fills.set(nextFills);
-        _lines.set(nextLines);
+        // The zones as the layer draws them; the slider dims their colours.
+        _fillItems = nextFills;
+        _lineItems = nextLines;
+        paintOpacity();
         _snapshotSignature = signature;
         if (_selectedId) publishSelectedCard();
         _count = rows.length;
@@ -309,6 +339,12 @@ export function createDroneAirspaceLayer({
       }
     },
 
+    /** Dim the polygons and outlines: the colours this layer draws them in. */
+    setOpacity(fraction) {
+      _opacity = clampOpacity(fraction);
+      paintOpacity();
+    },
+
     destroy() {
       _request?.abort();
       _request = null;
@@ -321,6 +357,8 @@ export function createDroneAirspaceLayer({
       _fills?.dispose();
       _lines?.dispose();
       _fills = _lines = null;
+      _fillItems = [];
+      _lineItems = [];
       _setIds = new Set();
       _count = 0;
       _lastUpdate = null;

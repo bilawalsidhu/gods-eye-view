@@ -82,6 +82,8 @@ export function createOsmOverlayLayer(overlay, { globeOf = findGlobe } = {}) {
   let surface = 'none';
   /** The imagery layer this instance owns while enabled. */
   let owned = null;
+  /** The layer-panel opacity slider; kept while the overlay is off. */
+  let opacity = 1;
 
   /**
    * What the overlay drapes on: the map stack's record, or with no map
@@ -103,6 +105,8 @@ export function createOsmOverlayLayer(overlay, { globeOf = findGlobe } = {}) {
     } else if (!owned) {
       // Added last, so it draws above the map stack's base imagery.
       owned = globeOf(viewer)?.imagery.add(osmOverlaySpec(overlay)) ?? null;
+      // The imagery the overlay owns starts as dim as the slider says.
+      if (owned) owned.alpha = opacity;
     }
   }
 
@@ -135,6 +139,14 @@ export function createOsmOverlayLayer(overlay, { globeOf = findGlobe } = {}) {
     },
     update() {
       return true;
+    },
+    /** Dim the drape: the imagery layer's own alpha, 0 to 1. */
+    setOpacity(fraction) {
+      opacity = Number.isFinite(fraction)
+        ? Math.min(1, Math.max(0, fraction))
+        : 1;
+      // The renderer asks for a draw when the alpha changes.
+      if (owned) owned.alpha = opacity;
     },
     getStats() {
       // Without a controller subscription the stats poll doubles as the

@@ -322,3 +322,50 @@ test('a boundary change alone redraws the zone; identical geometry does not', as
   assert.notDeepEqual(redrawn.positions, first.positions);
   assert.ok(h.layer.getAnalystRecords()[0].lon > -76.6);
 });
+
+const fillAlpha = (item) => item.fill[3];
+const lineAlpha = (item) => item.style.color[3];
+
+test('setOpacity dims the fill and the outline and 100 % restores them', async () => {
+  const h = harness({ getSnapshot: async () => [row] });
+  await h.layer.update(h.viewer);
+  assert.equal(fillAlpha([...h.fills().items.values()][0]), 0.25);
+  assert.equal(lineAlpha([...h.lines().items.values()][0]), 0.9);
+
+  h.layer.setOpacity(0.4);
+  assert.ok(
+    Math.abs(fillAlpha([...h.fills().items.values()][0]) - 0.1) < 1e-9,
+  );
+  assert.ok(
+    Math.abs(lineAlpha([...h.lines().items.values()][0]) - 0.36) < 1e-9,
+  );
+
+  h.layer.setOpacity(1);
+  assert.equal(fillAlpha([...h.fills().items.values()][0]), 0.25);
+  assert.equal(lineAlpha([...h.lines().items.values()][0]), 0.9);
+});
+
+test('a refresh that redraws the zones keeps the opacity', async () => {
+  let rows = [row];
+  const h = harness({ getSnapshot: async () => rows });
+  await h.layer.update(h.viewer);
+  h.layer.setOpacity(0.4);
+  rows = [row, { ...row, stableId: 'second', polygons: [[ring]] }];
+  await h.layer.update(h.viewer);
+  assert.equal(h.fills().items.size, 2);
+  for (const fill of h.fills().items.values())
+    assert.ok(Math.abs(fillAlpha(fill) - 0.1) < 1e-9, fill.id);
+  for (const line of h.lines().items.values())
+    assert.ok(Math.abs(lineAlpha(line) - 0.36) < 1e-9, line.id);
+});
+
+test('an opacity set before the layer starts is honoured by its first draw', async () => {
+  const h = harness({ getSnapshot: async () => [row] });
+  h.layer.destroy(h.viewer);
+  h.layer.setOpacity(0.5); // no draw sets yet: must not throw
+  h.layer.init(h.viewer);
+  h.layer.enable(h.viewer);
+  await h.layer.update(h.viewer);
+  const [fill] = h.fills().items.values();
+  assert.ok(Math.abs(fillAlpha(fill) - 0.125) < 1e-9);
+});

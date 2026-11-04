@@ -22,6 +22,8 @@ function fakeGlobe() {
       add(spec) {
         const layer = {
           spec,
+          alpha: 1,
+          show: true,
           removed: false,
           remove() {
             layer.removed = true;
@@ -190,4 +192,45 @@ test('an overlay enabled before its viewer has a globe port adds it once one doe
   assert.equal(globe.layers.length, 1);
   layer.getStats();
   assert.equal(globe.layers.length, 1, 'added once');
+});
+
+test('setOpacity dims the owned imagery and survives disable and enable', () => {
+  const { layer, globe } = setup();
+  // Set before the overlay exists, as a value restored from the address is.
+  layer.setOpacity(0.4);
+  assert.equal(globe.layers.length, 0);
+  layer.enable();
+  assert.equal(globe.layers[0].alpha, 0.4, 'the new imagery layer starts dimmed');
+
+  layer.setOpacity(0.7);
+  assert.equal(globe.layers[0].alpha, 0.7);
+
+  layer.disable();
+  layer.enable();
+  assert.equal(
+    globe.layers[0].alpha,
+    0.7,
+    'a re-enabled overlay keeps the value',
+  );
+
+  layer.setOpacity(1);
+  assert.equal(globe.layers[0].alpha, 1);
+});
+
+test('setOpacity clamps and treats a non-number as 100 %', () => {
+  const { layer, globe } = setup();
+  layer.enable();
+  layer.setOpacity(-1);
+  assert.equal(globe.layers[0].alpha, 0);
+  layer.setOpacity(4);
+  assert.equal(globe.layers[0].alpha, 1);
+  layer.setOpacity(0.5);
+  layer.setOpacity(Number.NaN);
+  assert.equal(globe.layers[0].alpha, 1);
+});
+
+test('an overlay never dimmed is created at full alpha', () => {
+  const { layer, globe } = setup();
+  layer.enable();
+  assert.equal(globe.layers[0].alpha, 1);
 });
