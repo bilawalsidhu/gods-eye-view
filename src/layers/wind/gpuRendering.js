@@ -5,6 +5,7 @@ import {
   WIND_PATH_LIMIT,
   WIND_NARROW_PATH_LIMIT,
 } from './streamlines.js';
+import { clampOpacity } from '../sceneOpacity.js';
 
 const WIND_FADE_LOW_METERS = 15000;
 const WIND_FADE_HIGH_METERS = 60000;
@@ -49,6 +50,11 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
     heightFade: 0,
   });
   let diagnostics = emptyDiagnostics();
+  // The layer-panel opacity (1 = as drawn). It scales the height fade, which
+  // already multiplies the streamline alpha in the shader. The fade is kept
+  // apart from `diagnostics`, which emptyDiagnostics() resets.
+  let opacity = 1;
+  let lastHeightFade = 0;
 
   function supported() {
     const scene = getViewer?.()?.scene;
@@ -224,7 +230,8 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
       ),
     );
     diagnostics.heightFade = heightFade;
-    if (material) material.uniforms.heightFade = heightFade;
+    lastHeightFade = heightFade;
+    if (material) material.uniforms.heightFade = heightFade * opacity;
     diagnostics.visibleCells = 0;
     diagnostics.visibleVertexCount = 0;
     let volume;
@@ -257,6 +264,11 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
     tick(elapsedSeconds) {
       if (material && !paused && Number.isFinite(elapsedSeconds))
         material.uniforms.phaseTime = Math.max(0, elapsedSeconds) % 10000;
+    },
+    /** Dim the streamlines; takes effect on the next draw. */
+    setOpacity(value) {
+      opacity = clampOpacity(value);
+      if (material) material.uniforms.heightFade = lastHeightFade * opacity;
     },
     setOptions(options = {}) {
       if (typeof options.paused === 'boolean') paused = options.paused;

@@ -1193,3 +1193,66 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
     h.rendering.destroy();
   });
 }
+
+for (const overlay of ['speed', 'temperature']) {
+  test(`${overlay} globe imagery follows the opacity slider and keeps the camera fade`, () => {
+    const gpu = {
+      supported: () => true,
+      setField: () => true,
+      updateVisibility: () => true,
+      tick() {},
+      setOptions() {},
+      setOpacity(value) {
+        gpu.opacity = value;
+      },
+      clear() {},
+      destroy() {},
+      getParticleCount: () => 1,
+      getDiagnostics: () => ({ ready: true }),
+    };
+    const h = harness({ createGpuRendering: () => gpu });
+    const camera = h.viewer.scene.camera;
+    const baseAlpha = overlay === 'temperature' ? 1 : 0.85;
+    camera.positionCartographic.height = 17_368_000;
+    h.rendering.attach();
+    h.rendering.setOptions({ overlay });
+    // Set before the field exists, as a value restored from the address is.
+    h.rendering.setOpacity(0.4);
+    assert.equal(gpu.opacity, 0.4, 'the streamlines are told');
+    h.rendering.setField({
+      grid: FIELD,
+      u: FIELD.u,
+      v: FIELD.v,
+      scalar: {
+        kind: overlay,
+        units: '°C',
+        values: Float32Array.from([20]),
+      },
+    });
+    h.rendering.start();
+    const layer = h.imagery[0];
+    assert.ok(Math.abs(layer.alpha - baseAlpha * 0.4) < 1e-12);
+
+    camera.positionCartographic.height = Math.sqrt(200_000 * 1_200_000);
+    h.preRender.emit();
+    assert.ok(Math.abs(layer.alpha - baseAlpha * 0.4 * 0.5) < 1e-12);
+
+    h.rendering.setOpacity(1);
+    assert.ok(Math.abs(layer.alpha - baseAlpha * 0.5) < 1e-12);
+    h.rendering.setOpacity(0);
+    assert.equal(layer.alpha, 0);
+    assert.equal(layer.show, false);
+    h.rendering.destroy();
+  });
+}
+
+test('opacity dims the canvas fallback and a re-attached canvas', () => {
+  const h = harness();
+  h.rendering.attach();
+  assert.equal(h.canvas.style.opacity ?? '', '');
+  h.rendering.setOpacity(0.3);
+  assert.equal(h.canvas.style.opacity, '0.3');
+  h.rendering.setOpacity(1);
+  assert.equal(h.canvas.style.opacity, '');
+  h.rendering.destroy();
+});

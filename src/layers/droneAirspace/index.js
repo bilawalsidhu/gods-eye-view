@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { clampOpacity, dimEntityColors } from '../sceneOpacity.js';
 import { msg, t } from '../../i18n/index.js';
 import {
   DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
@@ -58,6 +59,8 @@ export function createDroneAirspaceLayer({
   let _lastError = null;
   let _stale = false;
   let _enabled = false;
+  // The layer-panel opacity slider; kept across disable and re-init.
+  let _opacity = 1;
   let _clickHandler = null;
   let _selectedId = null;
   let _selectedCardId = null;
@@ -269,6 +272,8 @@ export function createDroneAirspaceLayer({
 
         _dataSource.entities.removeAll();
         for (const entity of nextEntities) _dataSource.entities.add(entity);
+        // Rebuilt entities start at the colours drawn above.
+        if (_opacity < 1) dimEntityColors(_dataSource, _opacity);
         _snapshotSignature = signature;
         if (_selectedId) publishSelectedCard();
         _count = rows.length;
@@ -290,6 +295,12 @@ export function createDroneAirspaceLayer({
       } finally {
         if (_request === request) _request = null;
       }
+    },
+
+    /** Dim the polygons and outlines: the colours of this layer's entities. */
+    setOpacity(fraction) {
+      _opacity = clampOpacity(fraction);
+      dimEntityColors(_dataSource, _opacity);
     },
 
     destroy(viewer = _viewer) {

@@ -447,3 +447,36 @@ test('a parameter replacement during manager enable does not roll the layer back
   assert.equal(layer.getStats().count, 4);
   await manager.destroyAll();
 });
+
+test('setOpacity reaches the renderer now and for a renderer made later', () => {
+  const told = [];
+  const made = [];
+  const layer = createWindLayer({
+    feed: { getSnapshot: async () => snapshot('gfs') },
+    createRendering: () => {
+      const rendering = {
+        attach() {},
+        start() {},
+        stop() {},
+        clear() {},
+        destroy() {},
+        setField() {},
+        getDiagnostics: () => ({}),
+        setOpacity: (value) => told.push([made.length, value]),
+      };
+      made.push(rendering);
+      return rendering;
+    },
+  });
+  layer.setOpacity(0.4); // before init: nothing to tell yet
+  assert.deepEqual(told, []);
+  layer.init({ container: {} });
+  assert.deepEqual(told, [[1, 0.4]]);
+  layer.setOpacity(0.7);
+  layer.setOpacity(Number.NaN);
+  assert.deepEqual(told.slice(1), [
+    [1, 0.7],
+    [1, 1],
+  ]);
+  layer.destroy();
+});

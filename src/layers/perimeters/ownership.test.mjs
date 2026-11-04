@@ -585,3 +585,48 @@ test('a failed refresh after a stale snapshot reads as the failure, not stale', 
   assert.equal(h.layer.getStats().stale, false);
   assert.equal(h.layer.getStats().error, 'WFIGS HTTP 502');
 });
+
+const fillAlpha = (entity) => entity.polygon.material.getValue().color.alpha;
+const lineAlpha = (entity) => entity.polyline.material.getValue().color.alpha;
+
+test('setOpacity dims the fill and the outline and 100 % restores them', async () => {
+  const h = harness({ getSnapshot: async () => [row] });
+  await h.layer.update(h.viewer);
+  const [entity] = h.sources[0].entities.values;
+  assert.equal(fillAlpha(entity), 0.25);
+  assert.equal(lineAlpha(entity), 0.9);
+
+  h.layer.setOpacity(0.4);
+  assert.ok(Math.abs(fillAlpha(entity) - 0.1) < 1e-9);
+  assert.ok(Math.abs(lineAlpha(entity) - 0.36) < 1e-9);
+
+  h.layer.setOpacity(1);
+  assert.equal(fillAlpha(entity), 0.25);
+  assert.equal(lineAlpha(entity), 0.9);
+});
+
+test('a refresh that rebuilds the entities keeps the opacity', async () => {
+  let rows = [row];
+  const h = harness({ getSnapshot: async () => rows });
+  await h.layer.update(h.viewer);
+  h.layer.setOpacity(0.4);
+  rows = [row, { ...row, stableId: 'second', polygons: [[ring]] }];
+  await h.layer.update(h.viewer);
+  const entities = h.sources[0].entities.values;
+  assert.equal(entities.length, 2);
+  for (const entity of entities) {
+    assert.ok(Math.abs(fillAlpha(entity) - 0.1) < 1e-9, entity.id);
+    assert.ok(Math.abs(lineAlpha(entity) - 0.36) < 1e-9, entity.id);
+  }
+});
+
+test('an opacity set before the layer starts is honoured by its first draw', async () => {
+  const h = harness({ getSnapshot: async () => [row] });
+  h.layer.destroy(h.viewer);
+  h.layer.setOpacity(0.5); // no data source yet: must not throw
+  h.layer.init(h.viewer);
+  h.layer.enable(h.viewer);
+  await h.layer.update(h.viewer);
+  const [entity] = h.sources[0].entities.values;
+  assert.ok(Math.abs(fillAlpha(entity) - 0.125) < 1e-9);
+});

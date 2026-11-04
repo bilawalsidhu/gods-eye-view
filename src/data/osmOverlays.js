@@ -81,6 +81,8 @@ export function createOsmOverlayLayer(
   let hostInfo = { collection: null, kind: 'none' };
   /** The imagery layer this instance owns while enabled, and where it sits. */
   let owned = null;
+  /** The layer-panel opacity slider; kept while the overlay is off. */
+  let opacity = 1;
 
   const usable = (collection) => collection && !collection.isDestroyed?.();
 
@@ -110,10 +112,13 @@ export function createOsmOverlayLayer(
     if (!enabled) {
       detach(true);
     } else {
-      owned ||= {
-        layer: createImageryLayer(createProvider(overlay)),
-        collection: null,
-      };
+      if (!owned) {
+        owned = {
+          layer: createImageryLayer(createProvider(overlay)),
+          collection: null,
+        };
+        owned.layer.alpha = opacity;
+      }
       if (owned.collection !== hostInfo.collection) {
         detach(false);
         if (usable(hostInfo.collection)) {
@@ -155,6 +160,14 @@ export function createOsmOverlayLayer(
     },
     update() {
       return true;
+    },
+    /** Dim the drape: the imagery layer's own alpha, 0 to 1. */
+    setOpacity(fraction) {
+      opacity = Number.isFinite(fraction)
+        ? Math.min(1, Math.max(0, fraction))
+        : 1;
+      if (owned) owned.layer.alpha = opacity;
+      viewer?.scene?.requestRender?.();
     },
     getStats() {
       // Without a controller subscription the stats poll doubles as the
