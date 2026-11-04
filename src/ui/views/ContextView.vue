@@ -46,6 +46,11 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
       <template #badge><span id="recent-imagery-panel-count" :aria-label="t('Imagery days in the box')"></span></template>
       <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
+    <!-- solunar/panel.js fills the body: the next 7 days of hunting and fishing
+         windows, sun and moon times and the day rating for a map spot. -->
+    <RailPanel id="solunar-panel" start-collapsed :title="t('SOLUNAR')" sideways rail-scroller>
+      <div id="gev-solunar-body" class="gev-sl-body" role="group" :aria-label="t('Solunar')"></div>
+    </RailPanel>
     <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :title="t('CONTEXT')" sideways scroll rail-scroller>
         <div class="cyber-panel-body ui-scroll" data-rail-scroller>
         <div class="global-context-modes" role="tablist" :aria-label="t('Context mode')">

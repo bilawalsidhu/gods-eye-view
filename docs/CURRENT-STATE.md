@@ -607,6 +607,40 @@ owner (open state, filters, the rows they show, Remove all) and the text
 helpers the view renders, so every label follows the locale. Only the modal
 open/close and focus moves are imperative.
 
+## Solunar — November 3, 2026
+
+A SOLUNAR card in the right dock (`#solunar-panel`, in the dock after RECENT IMAGERY; dock icon
+`dark_mode`) shows the next 7 local days for one map
+spot: the major windows (moon overhead and underfoot, 2 h) and minor windows
+(moonrise and moonset, 1 h), sunrise, sunset, moonrise, moonset, moon overhead
+and underfoot, the moon phase and illumination, and a 1-4 star rating for
+hunting and fishing with its rule printed under the list. While the card is
+open a click on the map picks the spot (a gold dot marks it); the default is
+the middle of the map, and "Use map centre" returns to it. Times are in the
+spot's own time zone, with a 12 h / 24 h switch that is remembered.
+
+- Code: `src/solunar/` (`solunarDay.js` sky math on astronomy-engine,
+  `rating.js` the day rating, `zone.js` the spot's time zone and local-day
+  bounds, `panel.js` the card body, `solunarShell.js` the map click and marker).
+  Everything is computed in the browser; no outside data feed and no key.
+- Day rule: an event belongs to a local day only when it falls between that
+  day's local midnights. A day with no moonrise or moonset shows "none"; the
+  next day's event is never borrowed. A clock-change day is 23 or 25 hours long.
+- Rating: new or full moon within 1 day = 2 points, within 2.5 days = 1;
+  dawn and dusk bands are 1 h either side of sunrise and sunset; fishing adds 1
+  per band that a major window overlaps, hunting adds 1 per band that any
+  window overlaps; stars = points, 1 to 4 (`rating.js`, `RATING_RULE`).
+- Checked against the USNO Astronomical Applications `rstt/oneday` service for
+  33.05,-95.1 (2026-11-02, with no moonrise, and 2026-11-03), Anchorage and
+  Sydney, and the clock-change days 2026-03-08, 2026-11-01 and 2026-10-04, to
+  within 2 minutes (`src/solunar/solunarDay.test.mjs`, fixtures in
+  `src/solunar/fixtures/`).
+- Feature gate: `npm run qa:solunar` (`scripts/qa-solunar.mjs`, needs a dev server and
+  Chrome; set `QA_BASE_URL`) opens the card in a real browser on desktop and phone sizes
+  and checks the seven days, the "none" rule, the rule text, the map dot and the console.
+- New dependencies: `astronomy-engine` 2.1.19 (MIT, sun and moon positions) and
+  `tz-lookup` 6.1.25 (CC0, bundled, offline) for the zone.
+
 ## Utilities panel — October 29, 2026
 
 UTILITIES is its own left-side panel, between Data Layers and Scenes, with

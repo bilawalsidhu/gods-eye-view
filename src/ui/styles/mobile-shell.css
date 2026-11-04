@@ -160,7 +160,8 @@ body.mobile-shell #right-context-rail > *,
    they belong to the Context sheet only. */
 body.mobile-shell #right-context-rail > #weather-panel,
 body.mobile-shell #right-context-rail > #news-panel,
-body.mobile-shell #right-context-rail > #recent-imagery-panel {
+body.mobile-shell #right-context-rail > #recent-imagery-panel,
+body.mobile-shell #right-context-rail > #solunar-panel {
   display: none;
 }
 
@@ -189,6 +190,9 @@ body.mobile-shell[data-mobile-sheet='context']
 body.mobile-shell[data-mobile-sheet='context']
   #right-context-rail
   > #recent-imagery-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
+  > #solunar-panel:not([hidden]),
 body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
   position: relative;
   inset: auto;

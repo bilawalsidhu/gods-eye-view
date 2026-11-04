@@ -1736,6 +1736,13 @@ export class StyleManager extends ShellFacade {
       showToast: (message) => this._showToast(message),
     });
     this._cameraOrientationControls = controls;
+    import('../solunar/solunarShell.js')
+      .then((solunar) => {
+        if (this._disposed) return; // shell torn down while the module loaded
+        this._solunar?.destroy();
+        this._solunar = solunar.mountSolunarForShell(this);
+      })
+      .catch((error) => console.warn('[Solunar] card unavailable:', error));
   }
 
   // ── Share Button ─────────────────────────────
@@ -1878,6 +1885,7 @@ export class StyleManager extends ShellFacade {
     useDisplayStore(applicationPinia()).connectMapSource(null);
     useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
+    this._solunar?.destroy();
     this._releaseGlobeActions();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);
