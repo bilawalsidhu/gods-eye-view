@@ -212,7 +212,9 @@
     "ΔN",
     "Ⅱ PAUSE",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "SOLUNAR",
+    "Solunar"
   ],
   "es": [
     "1090 MHz",
@@ -351,7 +353,11 @@
     "Reptiles",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "SOLUNAR",
+    "Solunar",
+    "12 h",
+    "24 h"
   ],
   "fr": [
     "1090 MHz",
@@ -545,7 +551,9 @@
     "ΔN",
     "Ⅱ PAUSE",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "12 h",
+    "24 h"
   ],
   "it": [
     "1090 MHz",
@@ -725,7 +733,9 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "12 h",
+    "24 h"
   ],
   "ja": [
     "1090 MHz",
@@ -919,7 +929,11 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "SOLUNAR",
+    "Solunar",
+    "12 h",
+    "24 h"
   ],
   "ru": [
     "AIS: --",
