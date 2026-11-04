@@ -7,12 +7,10 @@ import * as Cesium from 'cesium';
 import {
   ORBITAL_FOCUS_EASE_TAU_MS,
   ORBITAL_REACH_LIST_MAX,
-  detailRows,
   easeFocusRemainder,
   focusEaseDtMs,
   focusInReach,
   focusLook,
-  geodeticToEcef,
   inFrame,
   pointsInReach,
 } from './cockpitOrbitalFocus.js';
@@ -53,24 +51,13 @@ const onSphere = (latDeg, lonDeg, radiusM) => {
   };
 };
 
+/** A point on the WGS84 ellipsoid, as the globe draws it. */
+const geodeticToEcef = (latDeg, lonDeg, heightM = 0) =>
+  Cesium.Cartesian3.fromDegrees(lonDeg, latDeg, heightM);
+
 const ISS_ALT_M = 420_000;
 const satelliteAt = (latDeg, lonDeg, altitudeM = ISS_ALT_M) =>
   geodeticToEcef(latDeg, lonDeg, altitudeM);
-
-test('geodetic positions match Cesium on the WGS84 ellipsoid', () => {
-  for (const [lat, lon, h] of [
-    [0, 0, 0],
-    [52.37, 4.9, 12],
-    [-33.9, 151.2, 420_000],
-    [89.9, -120, 0],
-  ]) {
-    const mine = geodeticToEcef(lat, lon, h);
-    const cesium = Cesium.Cartesian3.fromDegrees(lon, lat, h);
-    for (const axis of ['x', 'y', 'z'])
-      near(mine[axis], cesium[axis], `${lat},${lon} ${axis}`, 1e-6);
-  }
-  assert.equal(geodeticToEcef(Number.NaN, 0), null);
-});
 
 test('the focus look turns the nadir frame onto the target exactly', () => {
   const satellite = satelliteAt(30, -97);
@@ -259,33 +246,4 @@ test('in frame follows the view, its height and its width', () => {
   });
   assert.equal(inFrame(tilted, satellite, target, narrow), true);
   assert.equal(inFrame(tilted, satellite, target, { verticalFovRad: 0 }), false);
-});
-
-test('details keep text, numbers and lists of text, and drop internal keys', () => {
-  assert.deepEqual(
-    detailRows({
-      name: ' Camp Example ',
-      military: 'base',
-      height: 12,
-      bad: Number.NaN,
-      empty: '',
-      _internal: 'x',
-      memberNames: ['North field', '', 4, 'South field'],
-      validation: { ok: true },
-      fixme: false,
-    }),
-    [
-      { key: 'name', value: 'Camp Example' },
-      { key: 'military', value: 'base' },
-      { key: 'height', value: '12' },
-      { key: 'memberNames', value: 'North field, South field' },
-      { key: 'fixme', value: 'no' },
-    ],
-  );
-  assert.deepEqual(detailRows(null), []);
-  assert.equal(
-    detailRows(Object.fromEntries([...Array(40)].map((_, i) => [`k${i}`, 'v'])))
-      .length,
-    16,
-  );
 });

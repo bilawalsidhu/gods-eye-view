@@ -133,22 +133,6 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
   }
 
   /**
-   * The mapped points the orbital view shows or can be turned to: null
-   * outside orbit. Shape: `{ count, focusKey|null, entries: [{ key, label,
-   * layerName, source, latitude, longitude, offNadirDeg, reachable,
-   * focused, osm, details: [{ key, value }] }] }`, nearest to nadir first
-   * and at most 12 (`count` is all of them); `reachable` is false for a
-   * point in the frame but beyond the off-nadir reach, `osm` marks details
-   * that are OpenStreetMap tags (src/ui/cockpitOrbitalFocus.js).
-   */
-  const orbitalReach = shallowRef(null);
-
-  /** @param {?object} next A fresh list of the mapped points in reach. */
-  function publishOrbitalReach(next) {
-    orbitalReach.value = next && markRaw(next);
-  }
-
-  /**
    * The utility strip's measured layout: its top and height limits as CSS
    * lengths (null leaves the stylesheet's), whether only the expanded control
    * fits, and whether a collapsed control beside an expanded one is hidden
@@ -187,8 +171,6 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
     publishRadar,
     orbital,
     publishOrbital,
-    orbitalReach,
-    publishOrbitalReach,
     utilityLayout,
     publishUtilityLayout,
   };
