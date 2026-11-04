@@ -539,3 +539,62 @@ test('the cockpit sets the cinematic clouds cover and null gives the look its ow
   assert.equal(mobile.hasClouds, false);
   assert.equal(mobile.setCloudCoverage(0.5), false);
 });
+
+test('a second look on the page scales the shared atmosphere vectors from their base, not twice', () => {
+  // takram's materials hold AtmosphereParameters.DEFAULT's vectors: one
+  // per page, shared by every material of every globe.
+  const pageDefault = factors();
+  const sharing = () => ({
+    [SUN]: { value: pageDefault[SUN].value },
+    [SKY]: { value: pageDefault[SKY].value },
+  });
+  const build = () => {
+    const materials = {
+      sky: sharing(),
+      stars: sharing(),
+      aerialPerspective: sharing(),
+      clouds: sharing(),
+    };
+    const look = buildNavaraLook(
+      fakeView(0),
+      plugin([]),
+      navaraScenePlan('cinematic'),
+      () => 0,
+      fakeInternals(materials),
+    );
+    look.frame(900);
+    look.frame(900);
+    return materials;
+  };
+  const first = build();
+  near(first.sky[SKY].value.x, 1.5 * k);
+  assert.equal(
+    pageDefault[SKY].value.x,
+    1.5,
+    'the shared vector is not written',
+  );
+  // The first globe's context is lost and a new one is built on the page.
+  const second = build();
+  near(second.sky[SKY].value.x, 1.5 * k);
+  near(second.clouds[SUN].value.x, 1.3 * k);
+  assert.equal(second.stars[SKY].value.x, 1.5);
+  near(first.sky[SKY].value.x, 1.5 * k);
+});
+
+test('a value a material writes into the scaled vector is put back on the next frame', () => {
+  const materials = { sky: factors(), aerialPerspective: factors() };
+  const look = buildNavaraLook(
+    fakeView(0),
+    plugin([]),
+    navaraScenePlan('cinematic'),
+    () => 0,
+    fakeInternals(materials),
+  );
+  look.frame(900);
+  look.frame(900);
+  // The shared scaled vector, rewritten in place to the base.
+  materials.sky[SKY].value.copy(vec(1.5, 0.9, 0.8));
+  assert.equal(look.frame(900), true);
+  near(materials.aerialPerspective[SKY].value.x, 1.5 * k);
+  assert.equal(look.frame(900), false);
+});
