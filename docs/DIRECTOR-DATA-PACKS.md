@@ -95,6 +95,11 @@ registry of source functions. Each receives `{ path, signal, maxBytes }` and
 returns `{ bytes: Uint8Array, mimeType }`. Custom transports must honor the
 signal, bound reads and return the real MIME type. They remain application code,
 not scene document fields. Without registrations, referenced sources fail closed.
+A standalone `SceneDirector` also passes `dataPacks.overlayHost`, the
+world-overlay host that draws pack world text such as a media pack's label (an
+object with `setEntries(sourceId, entries)` and `clearSource(sourceId)`);
+without it a media pack fails to load. `createApplicationTools` passes the
+application's shared host.
 
 The portable session receives format adapters separately. Each adapter receives
 `{ pack, asset, anchors, signal }` and returns a resource with an idempotent

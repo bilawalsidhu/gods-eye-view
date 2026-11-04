@@ -18,6 +18,7 @@ import {
   releaseContinuousRender,
 } from '../renderGovernor.js';
 import { entityRecord, readEntityRecord } from '../data/entityRecords.js';
+import { overlayHost } from './layers/overlayHost.js';
 
 /** Attach scene tools, rendering listeners and the application debug handle. */
 export function createApplicationTools({
@@ -37,7 +38,7 @@ export function createApplicationTools({
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
-    dataPacks: sceneDataPacks,
+    dataPacks: { overlayHost, ...sceneDataPacks },
     isMapStackAvailable: (id) =>
       mapStackController?.isStackAvailable(id) === true,
   });

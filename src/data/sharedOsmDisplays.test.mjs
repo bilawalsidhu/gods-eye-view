@@ -71,7 +71,7 @@ test('Directions introduces the shared OSM credit when the requested route draws
     render: { governorRequestRender: noop, holdContinuousRender: noop, releaseContinuousRender: noop },
     sprites: { registerSpriteCollection: noop, unregisterSpriteCollection: noop, restoreSpriteOrder: noop },
     picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-    ground: { warmGroundFloor: noop },
+    ground: { warmGroundFloor: noop, resolveGroundFloorCells: async () => {} },
   } });
   layer.init(v); layer.enable(v);
   layer.placeEndpoint('a', { lat: 0, lon: 0 }); layer.placeEndpoint('b', { lat: 0.01, lon: 0.01 });
