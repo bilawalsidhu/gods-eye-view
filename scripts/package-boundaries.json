@@ -1317,6 +1317,7 @@
       "src/layers/flights/rendering.js",
       "src/layers/flights/icons.js",
       "src/data/aircraftIconLayer.js",
+      "src/data/aircraftModelLayer.js",
       "src/data/aircraftMotionRegime.js",
       "src/data/iconSetPrimitive.js",
       "src/data/iconSet.js",
@@ -1387,6 +1388,7 @@
       "src/layers/military/rendering.js",
       "src/layers/military/icons.js",
       "src/data/aircraftIconLayer.js",
+      "src/data/aircraftModelLayer.js",
       "src/data/aircraftMotionRegime.js",
       "src/data/iconSetPrimitive.js",
       "src/data/iconSet.js",
@@ -2267,6 +2269,7 @@
     "modules": [
       "src/layers/flights/icons.js",
       "src/data/aircraftIconLayer.js",
+      "src/data/aircraftModelLayer.js",
       "src/data/aircraftMotionRegime.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
@@ -3270,6 +3273,7 @@
     "modules": [
       "src/layers/flights/icons.js",
       "src/data/aircraftIconLayer.js",
+      "src/data/aircraftModelLayer.js",
       "src/data/aircraftMotionRegime.js",
       "src/data/iconSetPrimitive.js",
       "src/data/iconSet.js",
