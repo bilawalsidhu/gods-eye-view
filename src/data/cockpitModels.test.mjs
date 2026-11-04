@@ -1,4 +1,5 @@
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -39,9 +40,9 @@ for (const layer of LAYERS) {
   test(`${layer.name}: Cockpit 3D obeys the shared Display toggle`, () => {
     const regime = /^([ \t]*)function _modelRegimeActive\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.ok(regime, '_modelRegimeActive is defined');
-    assert.match(regime, /if\s*\(\s*!(?:flightState\.)?_models3dEnabled,?\s*\)\s*return\s*false;/,
+    assert.match(regime, /if\s*\(\s*!(?:(?:flightState|state)\.)?_models3dEnabled,?\s*\)\s*return\s*false;/,
       'OFF must keep Cockpit AIR contacts in 2D');
-    assert.doesNotMatch(regime, /!(?:flightState\.)?_models3dEnabled\s*&&\s*!(?:flightState\.)?_cockpitContactMode/,
+    assert.doesNotMatch(regime, /!(?:(?:flightState|state)\.)?_models3dEnabled\s*&&\s*!(?:(?:flightState|state)\.)?_cockpitContactMode/,
       'Cockpit must not bypass the owner-visible Display toggle');
   });
 
@@ -53,7 +54,7 @@ for (const layer of LAYERS) {
     // suppression is now an explicit early return.
     const regime = /^([ \t]*)function _trackedModelRegimeActive\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.ok(regime, '_trackedModelRegimeActive is defined');
-    assert.match(regime, /if\s*\(\s*!(?:flightState\.)?_trackedIcao\s*\|\|\s*(?:flightState\.)?_cockpitContactMode\s*\|\|[\s\S]*?return\s*false;/,
+    assert.match(regime, /if\s*\(\s*!(?:(?:flightState|state)\.)?_trackedIcao\s*\|\|\s*(?:(?:flightState|state)\.)?_cockpitContactMode\s*\|\|[\s\S]*?return\s*false;/,
       '_trackedModelRegimeActive excludes cockpit');
     const tracked = /^([ \t]*)function _updateTrackedModel\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.ok(tracked, '_updateTrackedModel is defined');
@@ -70,13 +71,13 @@ for (const layer of LAYERS) {
 
     const add = /^([ \t]*)function _modelAddDistM\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     const keep = /^([ \t]*)function _modelKeepDistM\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
-    assert.match(add, /(?:flightState\.)?_models3dMode\s*===\s*'all'\s*\?\s*MODEL_ALL_ADD_M\s*:\s*MODEL_PROX_ADD_M/);
-    assert.match(keep, /(?:flightState\.)?_models3dMode\s*===\s*'all'\s*\?\s*MODEL_ALL_KEEP_M\s*:\s*MODEL_PROX_KEEP_M/);
+    assert.match(add, /(?:(?:flightState|state)\.)?_models3dMode\s*===\s*'all'\s*\?\s*(?:policy\.)?MODEL_ALL_ADD_M\s*:\s*(?:policy\.)?MODEL_PROX_ADD_M/);
+    assert.match(keep, /(?:(?:flightState|state)\.)?_models3dMode\s*===\s*'all'\s*\?\s*(?:policy\.)?MODEL_ALL_KEEP_M\s*:\s*(?:policy\.)?MODEL_PROX_KEEP_M/);
     assert.doesNotMatch(add, /COCKPIT_MODEL_ADD_M/);
     assert.doesNotMatch(keep, /COCKPIT_MODEL_KEEP_M/);
 
     const cap = /^([ \t]*)function _modelCap\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
-    assert.match(cap, /Math\.min\(\s*COCKPIT_MODEL_MAX/,
+    assert.match(cap, /Math\.min\(\s*(?:policy\.)?COCKPIT_MODEL_MAX/,
       'Cockpit keeps its 60-model performance ceiling');
   });
 
@@ -100,7 +101,29 @@ for (const layer of LAYERS) {
 
   test(`${layer.name}: Cockpit exit clears near state before restoring map presentation`, () => {
     const setMode = /^([ \t]*)function _setCockpitContactMode\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
-    assert.match(setMode, /else\s*(?:flightState\.)?_cockpitNearContacts\s*=\s*new\s*Set\(\s*,?\s*\);/);
+    assert.match(setMode, /else\s*(?:(?:flightState|state)\.)?_cockpitNearContacts\s*=\s*new\s*Set\(\s*,?\s*\);/);
     assert.match(setMode, /for \(let row = 0; row < \(icons\?\.count \?\? 0\); row\+\+\)\s*parts\.icons\._applyIconPresentation\(icons\.idAt\(row\)\);/);
   });
 }
+
+// The source reads above include the shared model module, so they pass from it
+// alone. These pin that each layer actually builds its models from it, and that
+// flights keeps its own hooks.
+const RENDERING = {
+  flights: new URL('../layers/flights/rendering.js', import.meta.url),
+  militaryFlights: new URL('../layers/military/rendering.js', import.meta.url),
+};
+
+for (const [name, url] of Object.entries(RENDERING)) {
+  test(`${name}: 3D models come from the shared aircraft model module`, () => {
+    const source = readFileSync(url, 'utf8');
+    assert.match(source, /createAircraftModels\(\{/);
+    assert.match(source, /\.\.\.models\b/);
+  });
+}
+
+test('flights: model eligibility nudges enrichment and the tick floors grounded icons', () => {
+  const source = readFileSync(RENDERING.flights, 'utf8');
+  assert.match(source, /onModelEligible:[\s\S]*?_requestTypeEnrichment\(icao24, true\)/);
+  assert.match(source, /afterReplan:[\s\S]*?_floorGroundedIcons\(/);
+});

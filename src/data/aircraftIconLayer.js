@@ -29,6 +29,19 @@ import { horizonOccluder } from './iconOrientation.js';
 
 /** Raster size of the cockpit contact pip (cockpitContactDot.js draws 16 px). */
 const COCKPIT_DOT_PX = 16;
+/** Fleet glyphs keep the established close-range 3× scale. */
+const NORMAL_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
+  1000,
+  3.0,
+  8000000,
+  0.5,
+);
+const COCKPIT_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
+  1000,
+  1.15,
+  8000000,
+  0.65,
+);
 /** Contacts drawn below this height (m) are judged for the horizon a little
  *  above the ellipsoid (ICON_CULL_LIFT). */
 const CULL_LIFT_BELOW_M = 10;
@@ -79,8 +92,6 @@ export function createAircraftIcons({
   const scratchPosition = new Cesium.Cartesian3();
   const scratchCull = new Cesium.Cartesian3();
   const scratchScaleByDistance = new Cesium.NearFarScalar();
-  let normalScaleByDistance = null;
-  let cockpitScaleByDistance = null;
 
   /** The delayed instant every untracked contact is drawn at. */
   function _displayTime(result = scratchTime) {
@@ -292,8 +303,7 @@ export function createAircraftIcons({
       set.setImage(row, dot, dot);
       set.setSize(row, cockpitContactSizePx, cockpitContactSizePx);
       set.setScale(row, 1);
-      cockpitScaleByDistance ??= rendering._cockpitBillboardScaleByDistance();
-      set.setScaleByDistance(row, cockpitScaleByDistance);
+      set.setScaleByDistance(row, COCKPIT_SCALE_BY_DISTANCE);
       set.setColor(row, rendering._cockpitContactColor(icao24, info));
       set.setFlag(row, ICON_ROTATES, false);
     } else {
@@ -314,8 +324,7 @@ export function createAircraftIcons({
       const size = tracked ? 24 : 20;
       set.setSize(row, size, size);
       set.setScale(row, rendering._fleetBillboardScale(icao24, info?.klass));
-      normalScaleByDistance ??= rendering._normalBillboardScaleByDistance();
-      set.setScaleByDistance(row, normalScaleByDistance);
+      set.setScaleByDistance(row, NORMAL_SCALE_BY_DISTANCE);
       set.setColor(row, rendering._fleetBillboardColor(icao24, info));
       set.setFlag(row, ICON_ROTATES, true);
     }
