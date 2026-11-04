@@ -36,7 +36,10 @@ export const getGnssIntegrity = defineTool({
       !Number.isFinite(snapshot.ageMs) ||
       snapshot.ageMs < 0
     )
-      throw new ToolError('malformed', 'GNSS snapshot has no valid observation window');
+      throw new ToolError(
+        'malformed',
+        'GNSS snapshot has no valid observation window',
+      );
 
     const now = Date.now();
     const stale = snapshot.stale === true || snapshot.ageMs > GNSS_WINDOW_MS;
@@ -60,8 +63,7 @@ export const getGnssIntegrity = defineTool({
       .sort(
         (a, b) =>
           ({ high: 2, medium: 1, low: 0 })[b.level] -
-            ({ high: 2, medium: 1, low: 0 })[a.level] ||
-          a.id.localeCompare(b.id),
+            { high: 2, medium: 1, low: 0 }[a.level] || a.id.localeCompare(b.id),
       )
       .map((cell) => ({
         id: cell.id,
@@ -90,7 +92,8 @@ export const getGnssIntegrity = defineTool({
         window_ms: GNSS_WINDOW_MS,
         classifier: snapshot.classifier ?? GNSS_PROVENANCE.classifier.id,
         provenance: GNSS_PROVENANCE,
-        caveat: 'Low aircraft-reported position accuracy has multiple causes; GNSS interference is unconfirmed.',
+        caveat:
+          'Low aircraft-reported position accuracy has multiple causes; GNSS interference is unconfirmed.',
         anomaly_cells: anomalies,
         ...capRows(cells, args.limit),
       },

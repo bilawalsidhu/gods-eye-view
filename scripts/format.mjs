@@ -120,17 +120,6 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
-  // Temporary diagnostic for PR #1550; removed before final review.
-  if (mode === '--check' && process.env.GITHUB_ACTIONS === 'true') {
-    for (const { name, formatted } of changed) {
-      if (name.startsWith('src/tools/queries/') &&
-          (name.includes('observationQueries.test.mjs') ||
-           name.endsWith('/airQuality.js') ||
-           name.endsWith('/gnss.js'))) {
-        console.log(`__GEV_FORMAT_START__${name}\n${formatted}__GEV_FORMAT_END__`);
-      }
-    }
-  }
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }

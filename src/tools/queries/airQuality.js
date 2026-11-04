@@ -49,7 +49,10 @@ export const getAirQuality = defineTool({
     const area = await resolveArea(args.area, { services, signal });
     const snapshot = await services.airQuality.getSnapshot({ signal });
     if (!Array.isArray(snapshot))
-      throw new ToolError('malformed', 'Air-quality observations are malformed');
+      throw new ToolError(
+        'malformed',
+        'Air-quality observations are malformed',
+      );
     const now = Date.now();
     // The source already rejects observations older than six hours. Recheck
     // at query time because a cached source result may have aged since then.
