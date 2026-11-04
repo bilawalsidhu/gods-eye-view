@@ -540,8 +540,9 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
       const detail = parent.detail;
       assert.equal(detail.index, index);
       assert.equal(detail.status, trace === firstTrace ? 'recorded' : 'missing');
+      // The fourth probe finds nothing and the fifth throws: both are misses.
       assert.equal(detail.clampResult,
-        trace === firstTrace && index === 4 ? 'threw' : 'returned');
+        trace === firstTrace && index !== 3 && index !== 4 ? 'hit' : 'missed');
       assert.ok(Number.isFinite(detail.clampStart) && Number.isFinite(detail.clampEnd));
       assert.ok(parent.start <= detail.clampStart && detail.clampStart <= detail.clampEnd && detail.clampEnd <= parent.end);
       if (index === 7) {

@@ -25,6 +25,7 @@ import {
 } from './visuals.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { alprMarkers } from './markerState.js';
+import { heightsFor } from '../../queries/heights.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;
@@ -518,16 +519,13 @@ export function createAlprPresentation({ state, services, source }) {
       record.longitude,
       record.latitude,
     );
-    let height;
-    if (state.viewer.scene.sampleHeightSupported) {
-      try {
-        height = state.viewer.scene.sampleHeight(location, [nearest]);
-      } catch {
-        /* tiles may still be streaming */
-      }
-    }
+    const heights = heightsFor(state.viewer.scene);
+    // A miss is tiles still streaming.
+    let height = state.viewer.scene.sampleHeightSupported
+      ? heights.now(location, { exclude: [nearest] })
+      : null;
     if (!validAlprGroundHeight(height) && state.viewer.scene.globe.show)
-      height = state.viewer.scene.globe.getHeight?.(location);
+      height = heights.now(location, { against: 'terrain' });
     if (!validAlprGroundHeight(height))
       height = cachedGroundFloor(record.latitude, record.longitude);
     const center = Cesium.Cartesian3.fromDegrees(
@@ -598,16 +596,13 @@ export function createAlprPresentation({ state, services, source }) {
       record.longitude,
       record.latitude,
     );
-    let height;
-    if (scene.sampleHeightSupported) {
-      try {
-        height = scene.sampleHeight(location, [entity]);
-      } catch {
-        /* tiles may still be streaming */
-      }
-    }
+    const heights = heightsFor(scene);
+    // A miss is tiles still streaming.
+    let height = scene.sampleHeightSupported
+      ? heights.now(location, { exclude: [entity] })
+      : null;
     if (!validAlprGroundHeight(height) && scene.globe.show)
-      height = scene.globe.getHeight?.(location);
+      height = heights.now(location, { against: 'terrain' });
     if (!validAlprGroundHeight(height))
       height = cachedGroundFloor(record.latitude, record.longitude);
     if (!validAlprGroundHeight(height)) return;

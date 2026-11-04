@@ -1262,3 +1262,40 @@ test('KML namespace repair ignores declaration text inside quoted attribute valu
     /note="xmlns:xsi='x'" xmlns:xsi="http:\/\/www.w3.org\/2001\/XMLSchema-instance">/,
   );
 });
+
+test('a failed mesh clamp fails the import instead of leaving pins at sea level', async () => {
+  const previous = Cesium.PinBuilder.prototype.fromColor;
+  Cesium.PinBuilder.prototype.fromColor = () => ({
+    tagName: 'CANVAS',
+    toDataURL: () => 'data:image/png;base64,local',
+  });
+  try {
+    const viewer = {
+      terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+      camera: {
+        positionCartographic: { height: 100000 },
+        computeViewRectangle: () => Cesium.Rectangle.MAX_VALUE,
+      },
+      scene: {
+        frameState: { mode: Cesium.SceneMode.SCENE3D },
+        globe: { show: false, getHeight: () => 0 },
+        clampToHeightSupported: true,
+        clampToHeightMostDetailed: async () => {
+          throw new Error('tile request failed');
+        },
+      },
+    };
+    await assert.rejects(
+      loadGeoFile(
+        new File(
+          [JSON.stringify({ type: 'Point', coordinates: [1, 2] })],
+          'surface.geojson',
+        ),
+        { viewer },
+      ),
+      /Ground heights could not be read/,
+    );
+  } finally {
+    Cesium.PinBuilder.prototype.fromColor = previous;
+  }
+});

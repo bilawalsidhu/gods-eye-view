@@ -12,6 +12,7 @@ import {
   MAX_TOTAL_POINTS,
   COLOR_OUTLINE,
 } from './policy.js';
+import { heightsFor } from '../../queries/heights.js';
 
 export function createRendering({
   state: layerState,
@@ -100,12 +101,10 @@ export function createRendering({
 
     let height = POINT_HEIGHT_OFFSET_M;
     // Sample terrain height so points sit on ground rather than at ellipsoid level
-    if (layerState._viewer?.scene?.sampleHeightSupported) {
-      const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-      const sampled = layerState._viewer.scene.sampleHeight(carto);
-      if (Number.isFinite(sampled)) {
-        height = sampled + POINT_HEIGHT_OFFSET_M;
-      }
+    const scene = layerState._viewer?.scene;
+    if (scene?.sampleHeightSupported) {
+      const sampled = heightsFor(scene).now({ lon, lat });
+      if (sampled !== null) height = sampled + POINT_HEIGHT_OFFSET_M;
     }
 
     return Cesium.Cartesian3.fromDegrees(lon, lat, height);

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
+import { heightsFor } from '../../queries/heights.js';
 
 /** Fly the globe camera once to frame a photo after it opens. */
 export function createCameraFraming({ state }) {
@@ -30,7 +31,8 @@ export function createCameraFraming({ state }) {
     const scene = state.viewer?.scene;
     const carto = Cesium.Cartographic.fromDegrees(lon, lat);
     let height = sampledSurfaceHeight(scene, carto);
-    if (height === null) height = scene?.globe?.getHeight?.(carto);
+    if (height === null && scene)
+      height = heightsFor(scene).now(carto, { against: 'terrain' });
     if (!plausibleSurfaceHeight(height)) height = fallback;
     return plausibleSurfaceHeight(height) ? height : 0;
   }

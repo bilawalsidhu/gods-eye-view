@@ -3,6 +3,7 @@ import * as Cesium from 'cesium';
 import { createImportImageBudget } from './geoImportImages.js';
 import { createImportedPins } from './geoImportPins.js';
 import { msg } from '../i18n/marker.js';
+import { heightsFor } from '../queries/heights.js';
 
 /** Largest file accepted, in bytes. */
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
@@ -1272,10 +1273,11 @@ async function settleGroundPins(dataSource, viewer, signal) {
     // a buried starting point can make the downward mesh ray miss the surface.
     const ellipsoid =
       viewer.terrainProvider instanceof Cesium.EllipsoidTerrainProvider;
+    const heights = viewer.scene ? heightsFor(viewer.scene) : null;
     for (let i = 0; i < positions.length; i++) {
       const sampled = ellipsoid
         ? 0
-        : viewer.scene?.globe?.getHeight?.(positions[i]);
+        : heights?.now(positions[i], { against: 'terrain' });
       positions[i].height = mesh
         ? (batch[i].groundHeight ??
           Math.max(0, Number.isFinite(sampled) ? sampled : 0))
@@ -1295,7 +1297,7 @@ async function settleGroundPins(dataSource, viewer, signal) {
           indices.push(i);
       if (indices.length) {
         const resolved = await boundedImport(
-          viewer.scene.clampToHeightMostDetailed(
+          heights.clampBatch(
             indices.map((i) => {
               const c = positions[i];
               return Cesium.Cartesian3.fromRadians(

@@ -45,6 +45,7 @@ import {
 import { createOutlineRungs } from './outlineRungs.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { heightsFor } from '../queries/heights.js';
 
 /** Prepare only local dateline outlines for planar admission and centering. */
 function localOutlineFrame(fp) {
@@ -2351,26 +2352,18 @@ export function createAnnotationResolver({
   function sampleGroundHeight(viewer, lon, lat) {
     const scene = viewer?.scene;
     if (!scene) return 0;
-    try {
-      if (
-        scene.clampToHeightSupported &&
-        typeof scene.clampToHeight === 'function'
-      ) {
-        const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-        const surface = Cesium.Cartographic.toCartesian(carto);
-        const clamped = scene.clampToHeight(surface);
-        if (clamped) {
-          const h = Cesium.Cartographic.fromCartesian(clamped).height;
-          if (Number.isFinite(h)) return h;
-        }
+    const heights = heightsFor(scene);
+    // A miss is tiles not ready: fall through to the terrain, then 0.
+    if (heights.supported().clamp) {
+      const surface = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+      const clamped = heights.clampNow(surface);
+      if (clamped) {
+        const h = Cesium.Cartographic.fromCartesian(clamped)?.height;
+        if (Number.isFinite(h)) return h;
       }
-    } catch {
-      /* tiles not ready — fall through */
     }
-    const globeHeight = scene.globe?.getHeight?.(
-      Cesium.Cartographic.fromDegrees(lon, lat),
-    );
-    return Number.isFinite(globeHeight) && globeHeight > 0 ? globeHeight : 0;
+    const globeHeight = heights.now({ lon, lat }, { against: 'terrain' });
+    return globeHeight !== null && globeHeight > 0 ? globeHeight : 0;
   }
 
   function shortLabel(formattedAddress) {

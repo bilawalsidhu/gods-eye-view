@@ -15,7 +15,8 @@
       "src/input/dispatcher.js",
       "src/input/sensorPick.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/queries/heights.js"
     ],
     "external": ["cesium"]
   },
@@ -1859,7 +1860,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/queries/heights.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1900,7 +1902,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/queries/heights.js"
     ],
     "external": ["cesium"]
   },
@@ -2046,7 +2049,8 @@
       "src/data/scenePick.js",
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/queries/heights.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
   },
@@ -2089,7 +2093,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/queries/heights.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -3327,7 +3332,8 @@
       "src/data/local_data/wof_neighborhoods/files.js",
       "src/data/entityRecords.js",
       "src/input/sensorPick.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/queries/heights.js"
     ],
     "external": [
       "hls.js",
@@ -3952,7 +3958,8 @@
       "src/data/local_data/wof_neighborhoods/files.js",
       "src/data/entityRecords.js",
       "src/input/sensorPick.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/queries/heights.js"
     ],
     "external": [
       "hls.js",
@@ -4039,7 +4046,8 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/queries/heights.js"
     ],
     "external": [
       "cesium",
@@ -4647,7 +4655,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/input/sensorPick.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/queries/heights.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -4703,7 +4712,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/queries/heights.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -4869,7 +4879,8 @@
       "src/data/scenePick.js",
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/queries/heights.js"
     ],
     "external": ["cesium"]
   },
@@ -5100,6 +5111,11 @@
       "src/data/installationFeedback.js",
       "src/i18n/marker.js"
     ],
+    "external": ["cesium"]
+  },
+  "heights": {
+    "exports": ["./queries/heights"],
+    "modules": ["src/queries/heights.js"],
     "external": ["cesium"]
   }
 }

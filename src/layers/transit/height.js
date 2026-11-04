@@ -7,6 +7,7 @@ import {
   HEIGHT_SAMPLE_MAX_ALTITUDE_M,
   withinViewBounds,
 } from './policy.js';
+import { heightsFor } from '../../queries/heights.js';
 
 /** Surface preparation off the render path, shared by markers and history. */
 export function createHeight({ state, services, parts }) {
@@ -63,14 +64,16 @@ export function createHeight({ state, services, parts }) {
       return { cell, height: fixtureFloor, prior: null };
     // On a terrain globe, use the loaded surface under the marker. This is
     // synchronous cache work and does not launch a terrain request.
-    const globe = state._viewer?.scene?.globe;
-    if (globe?.show === true) {
+    const scene = state._viewer?.scene;
+    if (scene?.globe?.show === true) {
       Cesium.Cartographic.fromDegrees(lon, lat, 0, terrainPoint);
-      const rendered = globe.getHeight?.(terrainPoint);
+      const rendered = heightsFor(scene).now(terrainPoint, {
+        against: 'terrain',
+      });
       const flat =
         state._viewer?.terrainProvider instanceof
         Cesium.EllipsoidTerrainProvider;
-      if (Number.isFinite(rendered) || flat)
+      if (rendered !== null || flat)
         return {
           cell,
           height: (flat ? 0 : rendered) + GROUND_FLOOR_LIFT_M,

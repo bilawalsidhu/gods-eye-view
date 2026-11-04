@@ -2,6 +2,7 @@ import { recordWorkSlice } from '../sources/phaseTiming.js';
 import { ringCentroid } from '../sources/featureGeometry.js';
 import * as Cesium from 'cesium';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
+import { heightsFor } from '../queries/heights.js';
 
 /**
  * World-space annotation renderer (Direction A).
@@ -174,20 +175,16 @@ export function createWorldAnnotationRenderer(viewer) {
           const sliceStart = performance.now();
           let error;
           try {
-            if (
-              viewer.scene.clampToHeightSupported &&
-              typeof viewer.scene.clampToHeight === 'function'
-            ) {
+            if (heightsFor(viewer.scene).supported().clamp) {
               const [lon, lat] = task.points[task.index++];
               timing.probes += 1;
               try {
                 const position = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
                 let c;
                 note?.('clampStart');
-                if (detail) detail.clampResult = 'threw';
                 try {
-                  c = viewer.scene.clampToHeight(position);
-                  if (detail) detail.clampResult = 'returned';
+                  c = heightsFor(viewer.scene).clampNow(position);
+                  if (detail) detail.clampResult = c ? 'hit' : 'missed';
                 } finally {
                   note?.('clampEnd');
                 }

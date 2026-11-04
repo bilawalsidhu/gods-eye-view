@@ -12,6 +12,7 @@ import { unavailablePlaceSearch } from './search/placeSearch.js';
 import { cancelCameraArrival } from './data/cameraArrival.js';
 import { guardCameraAboveGround } from './cameraGroundGuard.js';
 import { CITY_POIS } from './cityPois.js';
+import { heightsFor } from './queries/heights.js';
 
 /** Newest landmark arrival; an older post-arrival ground guard yields to it. */
 let arrivalGeneration = 0;
@@ -109,7 +110,9 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
 
   // Sample terrain height (sync — uses loaded tiles; 0 if globe/terrain not ready)
   const targetCartographic = Cesium.Cartographic.fromDegrees(lon, lat);
-  const sampledHeight = viewer.scene.globe?.getHeight(targetCartographic);
+  const sampledHeight = heightsFor(viewer.scene).now(targetCartographic, {
+    against: 'terrain',
+  });
 
   // Use sampled height if available, otherwise the cached ground-floor
   // elevation (same ellipsoidal datum), then the pre-baked city elevation.

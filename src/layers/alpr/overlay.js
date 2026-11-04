@@ -19,6 +19,7 @@ import {
   validAlprGroundHeight,
 } from './visuals.js';
 import { alprMarkers } from './markerState.js';
+import { heightsFor } from '../../queries/heights.js';
 
 /** Per-layer presentation on a caller-owned overlay; Cesium remains the fallback. */
 export function createAlprOverlay({
@@ -121,14 +122,11 @@ export function createAlprOverlay({
     else if (scene.sampleHeightSupported) {
       if (budget.samples <= 0) return null;
       budget.samples -= 1;
-      try {
-        height = scene.sampleHeight(location, [entity]);
-      } catch {
-        /* streaming tiles */
-      }
+      // A miss is tiles still streaming.
+      height = heightsFor(scene).now(location, { exclude: [entity] });
     }
     if (!validAlprGroundHeight(height) && scene.globe.show)
-      height = scene.globe.getHeight?.(location);
+      height = heightsFor(scene).now(location, { against: 'terrain' });
     if (!validAlprGroundHeight(height)) return null;
     setAnchor(record, entity, height);
     return alprMarkers.read(entity)?.canvasPosition;
@@ -202,15 +200,11 @@ export function createAlprOverlay({
         continue;
       }
       budget.samples -= 1;
-      let sample;
-      try {
-        sample = scene.sampleHeight(
-          Cesium.Cartographic.fromDegrees(record.longitude, record.latitude),
-          [entity],
-        );
-      } catch {
-        /* streaming tiles */
-      }
+      // A miss is tiles still streaming.
+      const sample = heightsFor(scene).now(
+        { lon: record.longitude, lat: record.latitude },
+        { exclude: [entity] },
+      );
       const current = Cesium.Cartographic.fromCartesian(anchor).height;
       const floor = services.groundFloor.cachedGroundFloor(
         record.latitude,

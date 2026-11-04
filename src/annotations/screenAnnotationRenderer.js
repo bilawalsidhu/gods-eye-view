@@ -9,6 +9,7 @@ import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { readEntityRecord } from '../data/entityRecords.js';
+import { heightsFor } from '../queries/heights.js';
 
 /** A label whose detailed outline could not be resolved. */
 function outlineUnavailableLabel(label) {
@@ -142,13 +143,10 @@ export function createScreenAnnotationRenderer(
       return cached.h;
     }
     try {
-      if (
-        scene.clampToHeightSupported &&
-        typeof scene.clampToHeight === 'function'
-      ) {
-        const c = scene.clampToHeight(
-          Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-        );
+      const heights = heightsFor(scene);
+      if (heights.supported().clamp) {
+        // A miss is tiles not ready.
+        const c = heights.clampNow(Cesium.Cartesian3.fromDegrees(lon, lat, 0));
         if (c) {
           const h = Cesium.Cartographic.fromCartesian(c).height;
           if (Number.isFinite(h) && h > -430 && h < 9000) {

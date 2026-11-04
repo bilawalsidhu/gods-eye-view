@@ -131,6 +131,38 @@ reads true only while no hold is out. A caller-supplied `createScene` that creat
 `defer(() => inputFor(viewer).destroy())` right after it; the standalone scene
 does this and returns the dispatcher as `scene.input`.
 
+## Height queries
+
+`gods-eye-view/queries/heights` exports `heightsFor(scene)`, the one place
+height queries go. Layers, tools and the camera ask it instead of calling
+`scene.sampleHeight`, `globe.getHeight`, `scene.clampToHeight` or the
+`*MostDetailed` variants themselves, so a renderer that answers heights another
+way plugs in without touching them.
+
+```js
+import { heightsFor } from 'gods-eye-view/queries/heights';
+
+const heights = heightsFor(viewer.scene);
+const ground = heights.now({ lon, lat }, { exclude: [ownMarkers] });
+if (ground !== null) place(ground);
+```
+
+| Member                        | What it answers                                                           |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| `now(point, opts)`            | Height in metres from what is loaded, or `null`                           |
+| `clampNow(position, opts)`    | The `Cartesian3` moved onto the drawn surface, or `null`                  |
+| `batch(points, opts)`         | A promise of heights once the most detailed tiles stream; `null` per miss |
+| `clampBatch(positions, opts)` | A promise of clamped copies of the positions; `null` per miss             |
+| `supported()`                 | `{ surface, clamp }`: whether the drawn surface can be queried at all     |
+
+A point is `{ lon, lat }` in degrees or a `Cesium.Cartographic` in radians.
+`against: 'surface'` (the default) reads what is drawn, 3D tiles and globe;
+`against: 'terrain'` reads the loaded terrain tiles alone. `exclude` lists the
+primitives and entities a query sees through. Every miss is `null`, including
+a Cesium throw for missing depth-texture support, and every caller treats it
+as one. Cesium answers `now()` synchronously from the scene, so it costs what
+the direct call did.
+
 ## Standalone wiring
 
 `src/main.js` reads the existing browser configuration and starts

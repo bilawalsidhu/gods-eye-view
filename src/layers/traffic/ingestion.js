@@ -12,6 +12,7 @@ import {
   TILE_CACHE_MAX_ENTRIES,
   FAST_FETCH_ALTITUDE,
 } from './policy.js';
+import { heightsFor } from '../../queries/heights.js';
 
 /** Retain complete parsed snapshots under both an LRU entry cap and a byte budget. */
 export function cacheRoadSnapshot(
@@ -273,16 +274,15 @@ export function createIngestion({
     const scene = layerState._viewer?.scene;
     const location = Cesium.Cartographic.fromDegrees(centerLon, centerLat);
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
-    if (!Number.isFinite(estimated)) {
-      try {
-        estimated = scene?.globe?.show
-          ? scene.globe.getHeight?.(location)
-          : scene?.sampleHeightSupported
-            ? scene.sampleHeight(location, [layerState._pointCollection])
-            : undefined;
-      } catch {
-        /* the local mesh can still be loading */
-      }
+    // A miss is the local mesh still loading.
+    if (!Number.isFinite(estimated) && scene) {
+      estimated = scene.globe?.show
+        ? heightsFor(scene).now(location, { against: 'terrain' })
+        : scene.sampleHeightSupported
+          ? heightsFor(scene).now(location, {
+              exclude: [layerState._pointCollection],
+            })
+          : undefined;
     }
     if (Number.isFinite(estimated) && Math.abs(estimated) <= 9000)
       layerState._viewHeightEstimate = estimated;
