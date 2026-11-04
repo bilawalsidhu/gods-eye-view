@@ -396,18 +396,18 @@ test('dense camera names tighten on scroll while camera brackets and other label
     };
     paint(500);
     const close = paint(500);
-    assert.ok(close.size > 0 && close.size <= 12);
-    assert.ok(paint(2500).size <= 8);
+    assert.ok(close.size > 0 && close.size <= 17);
+    assert.ok(paint(7500).size <= 15);
     assert.ok(
-      paint(7500, 1).size <= 4,
+      paint(20000, 1).size <= 12,
       'a cap reduction applies even before the next solve',
     );
     assert.equal(
-      paint(12000, 1).size,
+      paint(35000, 1).size,
       0,
       'zooming out removes even fading camera names immediately',
     );
-    paint(12000);
+    paint(35000);
     assert.equal(
       getDetectionDiagnostics().visibleCount,
       objects.length,

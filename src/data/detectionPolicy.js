@@ -13,14 +13,14 @@ export const ALLOCATION_STRATEGIES = Object.freeze([
 ]);
 
 /** Ambient camera names yield to icons outside city views. */
-export const CAMERA_LABEL_MAX_ALTITUDE_M = 10_000;
+export const CAMERA_LABEL_MAX_ALTITUDE_M = 30_000;
 
 export function cameraLabelPolicy(altitudeM) {
   if (!Number.isFinite(altitudeM) || altitudeM >= CAMERA_LABEL_MAX_ALTITUDE_M)
     return { limit: 0, spacingPx: 200 };
-  if (altitudeM >= 5_000) return { limit: 4, spacingPx: 200 };
-  if (altitudeM >= 1_500) return { limit: 8, spacingPx: 160 };
-  return { limit: 12, spacingPx: 120 };
+  if (altitudeM >= 15_000) return { limit: 12, spacingPx: 200 };
+  if (altitudeM >= 5_000) return { limit: 15, spacingPx: 160 };
+  return { limit: 17, spacingPx: 120 };
 }
 
 export function detectionLabelVisibleAtAltitude(type, altitudeM) {

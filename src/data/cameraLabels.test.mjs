@@ -7,13 +7,13 @@ import {
 } from './detectionPolicy.js';
 
 test('camera names hide beyond city zoom and tighten independently of other labels', () => {
-  assert.equal(detectionLabelVisibleAtAltitude('CAM', 9999), true);
-  for (const height of [10000, 100000, 1500000, NaN, undefined])
+  assert.equal(detectionLabelVisibleAtAltitude('CAM', 29999), true);
+  for (const height of [30000, 100000, 1500000, NaN, undefined])
     assert.equal(detectionLabelVisibleAtAltitude('CAM', height), false);
-  assert.equal(cameraLabelPolicy(500).limit, 12);
-  assert.equal(cameraLabelPolicy(1500).limit, 8);
-  assert.equal(cameraLabelPolicy(5000).limit, 4);
-  assert.equal(cameraLabelPolicy(10000).limit, 0);
+  assert.equal(cameraLabelPolicy(500).limit, 17);
+  assert.equal(cameraLabelPolicy(5000).limit, 15);
+  assert.equal(cameraLabelPolicy(15000).limit, 12);
+  assert.equal(cameraLabelPolicy(30000).limit, 0);
   for (const type of ['AIR', 'SAT', 'VESSEL', 'QUAKE'])
     assert.equal(detectionLabelVisibleAtAltitude(type, 1500000), true);
 });
@@ -29,10 +29,10 @@ test('dense camera callouts have their own stable, spaced budget and release it 
   const air = { type: 'AIR', key: 'aircraft' };
   const input = [...cameras, air];
   for (const [height, count] of [
-    [500, 12],
-    [2500, 8],
-    [7500, 4],
-    [10000, 0],
+    [500, 17],
+    [7500, 15],
+    [20000, 12],
+    [30000, 0],
   ]) {
     const admitted = limitCameraLabelCandidates(input, height);
     assert.equal(admitted.filter((c) => c.type === 'CAM').length, count);

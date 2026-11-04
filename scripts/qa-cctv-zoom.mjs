@@ -170,11 +170,11 @@ try {
   );
   const labelStates = [];
   for (const [altitude, cap] of [
-    [500, 12],
-    [2500, 8],
-    [7500, 4],
-    [12000, 0],
-    [500, 12],
+    [500, 17],
+    [7500, 15],
+    [20000, 12],
+    [35000, 0],
+    [500, 17],
   ]) {
     const previous = await page.evaluate(
       () =>

@@ -7,5 +7,5 @@
   the other source packs. Reduce marker density and ambient thumbnails as the
   map zooms out, restoring detail on zoom in while keeping the selected feed
   available. Camera name labels use a separate, stricter city-scale budget
-  and hide above 10 km while icons remain visible; live-session limits stay bounded
+  and hide above 30 km while icons remain visible; live-session limits stay bounded
   (Dylan Maniatakes, @dylanmaniatakes, #1530).

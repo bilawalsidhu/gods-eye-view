@@ -1065,9 +1065,9 @@ Marker spacing grows above 25 km viewer altitude, with overview caps of 160,
 A screen-space spacing pass also prevents overlapping markers in tilted views.
 Ambient thumbnails drop to eight at 50 km and hide at 100 km; zooming back in
 restores city detail. The full catalog and selected feed remain available.
-Ambient camera name callouts use a stricter text-only budget: at most 12 below
-1.5 km viewer altitude, eight below 5 km, four below 10 km, and none at or above
-10 km. Minimum anchor spacing grows from 120 to 200 pixels. These limits apply
+Ambient camera name callouts use a stricter text-only budget: at most 17 below
+5 km viewer altitude, 15 below 15 km, 12 below 30 km, and none at or above
+30 km. Minimum anchor spacing grows from 120 to 200 pixels. These limits apply
 even at maximum detection density and while old labels fade; camera icons,
 brackets and the selected camera's own title retain their existing behavior.
 The view pass reruns while the camera moves, paced by its own cost. The camera
