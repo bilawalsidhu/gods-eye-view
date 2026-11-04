@@ -367,6 +367,24 @@ export function recorderPlugin(env = process.env) {
           );
           return res.end(out.body);
         }
+        if (url.pathname === '/density') {
+          const cell = Math.min(
+            10,
+            Math.max(0.01, Number(q.get('cell')) || 0.5),
+          );
+          const cells = (
+            await recorder.store.density({ from, to, bbox, layers, cell })
+          ).map((c) => ({
+            gx: Number(c.gx),
+            gy: Number(c.gy),
+            n: Number(c.n),
+          }));
+          return sendJson(res, 200, {
+            cell,
+            cells,
+            max: cells.reduce((m, c) => Math.max(m, c.n), 0),
+          });
+        }
         if (url.pathname === '/window') {
           const points = await recorder.store.window({
             from,

@@ -127,3 +127,24 @@ test('storage bar projects growth against retention', async () => {
   // Too little history to say.
   assert.equal(storageUse({ bytes: MB, from_ts: 0, to_ts: 60 }).perHour, null);
 });
+
+test('heat squares pick a sensible size and colour', async () => {
+  const { niceCell, heatColor } = await import('./model.js');
+  assert.equal(niceCell(24), 0.5);
+  assert.equal(niceCell(0), 0.01);
+  assert.equal(niceCell(1000), 10);
+  assert.deepEqual(heatColor(0, 10), [0, 0, 0, 0]);
+  const quiet = heatColor(1, 1000);
+  const busy = heatColor(1000, 1000);
+  assert.ok(quiet[3] < busy[3], 'busier squares are more opaque');
+  assert.deepEqual(busy.slice(0, 3), [255, 60, 60]);
+});
+
+test('comparing two times names who appeared, went and stayed', async () => {
+  const { diffContacts } = await import('./model.js');
+  const p = (id, layer = 'air') => ({ id, layer });
+  const out = diffContacts([p('a'), p('b'), p('x', 'mil')], [p('b'), p('c'), p('x')]);
+  assert.deepEqual(out.appeared.map((c) => c.id), ['c', 'x']);
+  assert.deepEqual(out.gone.map((c) => c.id), ['a', 'x']);
+  assert.deepEqual(out.stayed.map((c) => c.id), ['b']);
+});

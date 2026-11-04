@@ -3301,5 +3301,21 @@
   "Browser notifications are blocked. Alerts sound and show here only.": "Уведомления браузера заблокированы. Оповещения звучат и показываются только здесь.",
   "ALERTS": "ОПОВЕЩЕНИЯ",
   "Sound and notify when a watched area is entered or an emergency is broadcast": "Подавать звук и уведомление при входе в наблюдаемую зону или сигнале бедствия",
-  "Watched area": "Наблюдаемая зона"
+  "Watched area": "Наблюдаемая зона",
+  "Nothing recorded in this period": "За этот период ничего не записано",
+  "Heat map failed": "Не удалось построить тепловую карту",
+  "Pick two times first": "Сначала выберите два момента времени",
+  "Nothing recorded near those times": "Рядом с этими моментами нет записей",
+  "Comparison failed": "Не удалось сравнить",
+  "Time A (UTC)": "Время A (UTC)",
+  "Time B (UTC)": "Время B (UTC)",
+  "HEAT": "ТЕПЛО",
+  "Show where contacts were densest in this period": "Показать, где было больше всего контактов за этот период",
+  "COMPARE": "СРАВНИТЬ",
+  "Show who appeared and who left between time A and time B": "Показать, кто появился и кто исчез между временем A и временем B",
+  "Clear the comparison": "Очистить сравнение",
+  "{count} contacts in the busiest square": "{count} контактов в самой загруженной клетке",
+  "{count} appeared": "Появилось: {count}",
+  "{count} gone": "Исчезло: {count}",
+  "{count} in both": "В обоих: {count}"
 }

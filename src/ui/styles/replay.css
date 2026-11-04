@@ -198,3 +198,24 @@
   color: #ff5c5c;
   font-weight: 700;
 }
+
+/* Heat map key: the same ramp the squares use, quiet to busy. */
+.replay-heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.replay-heat-legend[hidden] {
+  display: none;
+}
+.replay-heat-swatch {
+  flex: 0 0 56px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 212, 255, 0.35),
+    rgba(255, 176, 0, 0.67),
+    rgba(255, 60, 60, 0.92)
+  );
+}

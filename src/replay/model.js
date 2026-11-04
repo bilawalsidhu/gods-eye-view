@@ -143,3 +143,42 @@ export function storageUse(status) {
     fullInSec,
   };
 }
+
+const CELL_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10];
+
+/** A grid square size, in degrees, that gives about `across` squares across the view over `widthDeg`. */
+export function niceCell(widthDeg, across = 90) {
+  const want = Math.max(0, Number(widthDeg) || 0) / across;
+  return CELL_STEPS.find((step) => step >= want) ?? CELL_STEPS.at(-1);
+}
+
+/**
+ * Colour of a heat square as [r, g, b, a], from how busy it is next to the
+ * busiest square. Counts are compressed with a logarithm so a few very busy
+ * squares do not hide the rest: quiet is faint cyan, then amber, then red.
+ */
+export function heatColor(count, max) {
+  if (!(count > 0) || !(max > 0)) return [0, 0, 0, 0];
+  const t = Math.min(1, Math.log(1 + count) / Math.log(1 + max));
+  const mix = (a, b, f) => Math.round(a + (b - a) * f);
+  const stops = [
+    [0, 212, 255, 90],
+    [255, 176, 0, 170],
+    [255, 60, 60, 235],
+  ];
+  const [from, to, f] =
+    t < 0.5 ? [stops[0], stops[1], t * 2] : [stops[1], stops[2], (t - 0.5) * 2];
+  return [0, 1, 2, 3].map((i) => mix(from[i], to[i], f));
+}
+
+/** Who was in `before` and `after`: contacts that appeared, went, or stayed. */
+export function diffContacts(before, after) {
+  const key = (p) => `${p.layer}:${p.id}`;
+  const was = new Map(before.map((p) => [key(p), p]));
+  const is = new Map(after.map((p) => [key(p), p]));
+  return {
+    appeared: after.filter((p) => !was.has(key(p))),
+    gone: before.filter((p) => !is.has(key(p))),
+    stayed: after.filter((p) => was.has(key(p))),
+  };
+}

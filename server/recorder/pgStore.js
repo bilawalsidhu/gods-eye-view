@@ -207,6 +207,23 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         f.args,
       );
     },
+    /** Contacts seen per `cell`-degree square over a period (see the SQLite store). */
+    async density({ from, to, bbox, layers, cell, limit = 20000 }) {
+      await ready;
+      const f = filters();
+      const size = f.add(cell);
+      f.where.push(`ts BETWEEN ${f.add(from)} AND ${f.add(to)}`);
+      f.bbox(bbox, postgis);
+      f.layers(layers);
+      return rows(
+        `SELECT floor((lon + 180) / ${size})::int AS gx,
+                floor((lat + 90) / ${size})::int AS gy,
+                COUNT(DISTINCT layer || ':' || id) AS n
+         FROM positions WHERE ${f.where.join(' AND ')}
+         GROUP BY gx, gy ORDER BY n DESC LIMIT ${f.add(limit)}`,
+        f.args,
+      );
+    },
     /** Latest position per contact at or before `time`, no older than `lookback` s. */
     async at({ time, lookback = 600, bbox, layers, limit = 50000 }) {
       const inner = filters();

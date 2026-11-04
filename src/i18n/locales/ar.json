@@ -3451,5 +3451,21 @@
   "Browser notifications are blocked. Alerts sound and show here only.": "إشعارات المتصفح محظورة. تُسمع التنبيهات وتظهر هنا فقط.",
   "ALERTS": "التنبيهات",
   "Sound and notify when a watched area is entered or an emergency is broadcast": "إصدار صوت وإشعار عند دخول منطقة مراقبة أو عند بث حالة طوارئ",
-  "Watched area": "منطقة مراقبة"
+  "Watched area": "منطقة مراقبة",
+  "Nothing recorded in this period": "لا يوجد تسجيل في هذه الفترة",
+  "Heat map failed": "فشلت الخريطة الحرارية",
+  "Pick two times first": "اختر وقتين أولًا",
+  "Nothing recorded near those times": "لا يوجد تسجيل قرب هذين الوقتين",
+  "Comparison failed": "فشلت المقارنة",
+  "Time A (UTC)": "الوقت A (UTC)",
+  "Time B (UTC)": "الوقت B (UTC)",
+  "HEAT": "حرارة",
+  "Show where contacts were densest in this period": "إظهار أين كانت الأهداف أكثر كثافة في هذه الفترة",
+  "COMPARE": "مقارنة",
+  "Show who appeared and who left between time A and time B": "إظهار من ظهر ومن غادر بين الوقت A والوقت B",
+  "Clear the comparison": "مسح المقارنة",
+  "{count} contacts in the busiest square": "{count} أهداف في أكثر المربعات ازدحامًا",
+  "{count} appeared": "ظهر {count}",
+  "{count} gone": "غادر {count}",
+  "{count} in both": "{count} في الاثنين"
 }

@@ -3076,5 +3076,21 @@
   "Browser notifications are blocked. Alerts sound and show here only.": "ブラウザの通知はブロックされています。アラートはここに表示され、音で知らせます。",
   "ALERTS": "アラート",
   "Sound and notify when a watched area is entered or an emergency is broadcast": "監視エリアに入ったとき、または緊急信号が出たときに音と通知で知らせる",
-  "Watched area": "監視エリア"
+  "Watched area": "監視エリア",
+  "Nothing recorded in this period": "この期間の記録はありません",
+  "Heat map failed": "ヒートマップを作成できませんでした",
+  "Pick two times first": "先に2つの時刻を選んでください",
+  "Nothing recorded near those times": "その時刻付近の記録はありません",
+  "Comparison failed": "比較に失敗しました",
+  "Time A (UTC)": "時刻 A（UTC）",
+  "Time B (UTC)": "時刻 B（UTC）",
+  "HEAT": "ヒート",
+  "Show where contacts were densest in this period": "この期間にコンタクトが最も密集した場所を表示",
+  "COMPARE": "比較",
+  "Show who appeared and who left between time A and time B": "時刻 A と時刻 B の間に現れたものと消えたものを表示",
+  "Clear the comparison": "比較を消去",
+  "{count} contacts in the busiest square": "最も混雑したマスに {count} 件のコンタクト",
+  "{count} appeared": "{count} 件が出現",
+  "{count} gone": "{count} 件が消失",
+  "{count} in both": "{count} 件が両方に存在"
 }

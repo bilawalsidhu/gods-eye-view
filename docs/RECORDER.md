@@ -175,6 +175,26 @@ and the panel lists the newest events. Press WATCH in the panel and drag a box o
 routes below. Changing fences needs a JSON request from this origin, which stops
 other web pages from editing them.
 
+## Heat map and comparing two times
+
+**HEAT** draws where contacts were densest during the period the panel covers
+(the 1h, 6h or 24h window, or from a JUMP time). It counts different contacts
+in each square of a grid, not saved points, so a parked aircraft that saved few
+points does not look quiet. Squares run from faint cyan (a few contacts)
+through amber to red (the busiest), on a logarithmic scale so one very busy
+airport does not hide the rest. The line under the chips gives the busiest
+square's count. The squares are sized for the part of the globe on screen and
+drawn again a moment after the camera stops. Only the layers switched on and
+the REGION box, if any, count. It is laid over the globe as one image, so it
+is cheap to draw, but a photorealistic 3D tiles view can cover it.
+
+**COMPARE** shows who was present at two times. Pick time A and time B (UTC;
+they start as the newest hour against the hour before) and press COMPARE.
+Green dots are contacts seen at B but not at A, red dots were at A but not B,
+and small grey dots were at both. The line gives the three counts. A contact
+counts as present at a time if it was recorded within the ten minutes before
+it. Up to 2,000 dots are drawn for each colour. ✕ clears the comparison.
+
 ## Alerts
 
 The ALERTS chip makes the panel tell you when something happens, without you
@@ -213,6 +233,7 @@ and only announces ones that happen after the page opened.
 - `GET /api/history/events?since&fence&limit` — enter and exit events, newest first.
 - `GET /api/history/at?to=<epoch s>&bbox&layers` — last position of each
   contact within 10 minutes before `to`.
+- `GET /api/history/density?from&to&cell&bbox&layers` — contacts seen per `cell`-degree square, busiest first (up to 20,000 squares).
 - `GET /api/history/notices?since&limit` — area events and emergency alerts in one list, newest first.
 - `GET /api/history/search?q=` — contacts whose id, callsign or name contains
   `q`, best match first (up to 20).

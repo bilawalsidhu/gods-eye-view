@@ -3301,5 +3301,21 @@
   "Browser notifications are blocked. Alerts sound and show here only.": "Сповіщення браузера заблоковано. Оповіщення лунають і показуються лише тут.",
   "ALERTS": "ОПОВІЩЕННЯ",
   "Sound and notify when a watched area is entered or an emergency is broadcast": "Звук і сповіщення при вході в зону стеження або сигналі лиха",
-  "Watched area": "Зона стеження"
+  "Watched area": "Зона стеження",
+  "Nothing recorded in this period": "За цей період нічого не записано",
+  "Heat map failed": "Не вдалося побудувати теплову карту",
+  "Pick two times first": "Спочатку виберіть два моменти часу",
+  "Nothing recorded near those times": "Поруч із цими моментами немає записів",
+  "Comparison failed": "Не вдалося порівняти",
+  "Time A (UTC)": "Час A (UTC)",
+  "Time B (UTC)": "Час B (UTC)",
+  "HEAT": "ТЕПЛО",
+  "Show where contacts were densest in this period": "Показати, де було найбільше контактів за цей період",
+  "COMPARE": "ПОРІВНЯТИ",
+  "Show who appeared and who left between time A and time B": "Показати, хто з’явився і хто зник між часом A і часом B",
+  "Clear the comparison": "Очистити порівняння",
+  "{count} contacts in the busiest square": "Контактів у найзавантаженішій клітинці: {count}",
+  "{count} appeared": "З’явилося: {count}",
+  "{count} gone": "Зникло: {count}",
+  "{count} in both": "В обох: {count}"
 }

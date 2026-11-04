@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { msg, t } from '../i18n/index.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
+import { createAnalysis } from './analysis.js';
 import {
   buildTicks,
   groupTracks,
@@ -73,31 +74,37 @@ export function createReplayController({
   viewer.dataSources.add(fenceSource);
   const layers = new Set(['air', 'mil', 'vessel', 'local', 'sat']);
 
-  const state = () => ({
-    active,
-    loading,
-    error,
-    ticks,
-    speed,
-    speeds: SPEEDS,
-    layers: [...layers],
-    range,
-    status,
-    events,
-    fences,
-    drawing,
-    region,
-    track,
-    pins,
-    customFromSec,
-    hint,
-    contacts,
-    windowHours,
-    windows: WINDOW_HOURS,
-    playing: active && viewer.clock.shouldAnimate,
-    index: active ? tickIndexAt(ticks, currentMs()) : ticks.length - 1,
-    timeMs: active ? currentMs() : Date.now(),
-  });
+  const state = () => {
+    const analysisState = analysis.state();
+    return {
+      active,
+      loading,
+      error,
+      ticks,
+      speed,
+      speeds: SPEEDS,
+      layers: [...layers],
+      range,
+      status,
+      events,
+      fences,
+      drawing,
+      region,
+      track,
+      pins,
+      customFromSec,
+      hint: hint || analysisState.hint,
+      heat: analysisState.heat,
+      compare: analysisState.compare,
+      analysisBusy: analysisState.busy,
+      contacts,
+      windowHours,
+      windows: WINDOW_HOURS,
+      playing: active && viewer.clock.shouldAnimate,
+      index: active ? tickIndexAt(ticks, currentMs()) : ticks.length - 1,
+      timeMs: active ? currentMs() : Date.now(),
+    };
+  };
   const currentMs = () =>
     Cesium.JulianDate.toDate(viewer.clock.currentTime).getTime();
   const notify = () => {
@@ -252,6 +259,7 @@ export function createReplayController({
     viewer.scene.requestRender?.();
     if (active) await enter();
     else notify();
+    await analysis.refreshHeat();
   }
 
   /** Draw a contact's whole recorded path, its first and last fix, and gaps. */
@@ -425,6 +433,20 @@ export function createReplayController({
   }
 
   let again = false;
+  /** The period replay (and the heat map) covers: the newest hours, or from a jump. */
+  function currentWindow() {
+    const window = replayWindow(rawRange, windowHours);
+    if (!window || customFromSec == null) return window;
+    const fromSec = Math.max(
+      rawRange.from_ts,
+      Math.min(customFromSec, rawRange.to_ts - 60),
+    );
+    return {
+      fromSec,
+      toSec: Math.min(rawRange.to_ts, fromSec + windowHours * 3600),
+    };
+  }
+
   async function enter() {
     if (destroyed) return;
     if (loading) {
@@ -436,18 +458,9 @@ export function createReplayController({
     error = '';
     notify();
     try {
-      let window = (await refreshRange()) || null;
+      await refreshRange();
+      const window = currentWindow();
       if (!window) throw new Error('Nothing recorded yet');
-      if (customFromSec != null) {
-        const fromSec = Math.max(
-          rawRange.from_ts,
-          Math.min(customFromSec, rawRange.to_ts - 60),
-        );
-        window = {
-          fromSec,
-          toSec: Math.min(rawRange.to_ts, fromSec + windowHours * 3600),
-        };
-      }
       const query = new URLSearchParams({
         from: String(Math.floor(window.fromSec)),
         to: String(Math.floor(window.toSec)),
@@ -580,6 +593,23 @@ export function createReplayController({
   }
   const noticePoll = setInterval(pollNotices, 5000);
 
+  const analysis = createAnalysis({
+    viewer,
+    getJson,
+    getWindow: currentWindow,
+    getFilters: () => ({
+      layers: [...layers].join(','),
+      ...(region
+        ? {
+            bbox: [region.west, region.south, region.east, region.north].join(
+              ',',
+            ),
+          }
+        : {}),
+    }),
+    onChange: () => notify(),
+  });
+
   return {
     state,
     subscribe(listener) {
@@ -637,14 +667,21 @@ export function createReplayController({
       range = replayWindow(rawRange, windowHours);
       if (active) await enter();
       else notify();
+      await analysis.refreshHeat();
     },
     /** Replay from this time (epoch ms) instead of the newest history. */
     async jumpTo(ms) {
       if (!Number.isFinite(ms) || !rawRange?.from_ts) return;
       customFromSec = ms / 1000;
       await enter();
+      await analysis.refreshHeat();
     },
     findTrack,
+    /** Shows or hides where contacts were densest in the current period. */
+    toggleHeat: () => analysis.showHeat(!analysis.state().heat),
+    /** Marks who appeared, went and stayed between two times (epoch ms). */
+    compareTimes: (aMs, bMs) => analysis.compare(aMs, bMs),
+    clearCompare: () => analysis.clearCompare(),
     /** Keep (or stop keeping) the searched contact's history past retention. */
     async togglePin() {
       if (!track) return;
@@ -708,11 +745,13 @@ export function createReplayController({
       else layers.add(layer);
       if (active) await enter();
       else notify();
+      await analysis.refreshHeat();
     },
     async destroy() {
       destroyed = true;
       clearInterval(poll);
       clearInterval(noticePoll);
+      analysis.destroy();
       await boxTool?.destroy();
       viewer.dataSources.remove(fenceSource, true);
       viewer.dataSources.remove(trackSource, true);

@@ -3226,5 +3226,21 @@
   "Browser notifications are blocked. Alerts sound and show here only.": "Las notificaciones del navegador están bloqueadas. Las alertas suenan y se muestran solo aquí.",
   "ALERTS": "ALERTAS",
   "Sound and notify when a watched area is entered or an emergency is broadcast": "Avisar con sonido y notificación al entrar en un área vigilada o al emitirse una emergencia",
-  "Watched area": "Área vigilada"
+  "Watched area": "Área vigilada",
+  "Nothing recorded in this period": "Nada grabado en este periodo",
+  "Heat map failed": "Falló el mapa de calor",
+  "Pick two times first": "Elige primero dos horas",
+  "Nothing recorded near those times": "Nada grabado cerca de esas horas",
+  "Comparison failed": "Falló la comparación",
+  "Time A (UTC)": "Hora A (UTC)",
+  "Time B (UTC)": "Hora B (UTC)",
+  "HEAT": "CALOR",
+  "Show where contacts were densest in this period": "Mostrar dónde hubo más contactos en este periodo",
+  "COMPARE": "COMPARAR",
+  "Show who appeared and who left between time A and time B": "Mostrar quién apareció y quién se fue entre la hora A y la hora B",
+  "Clear the comparison": "Borrar la comparación",
+  "{count} contacts in the busiest square": "{count} contactos en el cuadro más concurrido",
+  "{count} appeared": "{count} aparecieron",
+  "{count} gone": "{count} se fueron",
+  "{count} in both": "{count} en ambas"
 }

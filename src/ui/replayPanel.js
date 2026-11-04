@@ -117,6 +117,43 @@ export function createReplayPanel({ container, controller } = {}) {
       if (Number.isFinite(ms)) controller.jumpTo(ms);
     },
   );
+  // Heat map and comparison of two times.
+  const compareRow = document.createElement('div');
+  compareRow.className = 'replay-chips';
+  const timeA = makeInput(compareRow, 'datetime-local', t('Time A (UTC)'));
+  const timeB = makeInput(compareRow, 'datetime-local', t('Time B (UTC)'));
+  const analysisRow = document.createElement('div');
+  analysisRow.className = 'replay-chips';
+  const heatChip = makeChip(
+    analysisRow,
+    t('HEAT'),
+    t('Show where contacts were densest in this period'),
+    () => controller.toggleHeat(),
+  );
+  const compareChip = makeChip(
+    analysisRow,
+    t('COMPARE'),
+    t('Show who appeared and who left between time A and time B'),
+    () =>
+      controller.compareTimes(
+        Date.parse(`${timeA.value}:00Z`),
+        Date.parse(`${timeB.value}:00Z`),
+      ),
+  );
+  const clearCompare = makeChip(
+    analysisRow,
+    '✕',
+    t('Clear the comparison'),
+    () => controller.clearCompare(),
+  );
+  const heatLegend = document.createElement('div');
+  heatLegend.className = 'replay-heat-legend replay-alerts';
+  const heatSwatch = document.createElement('span');
+  heatSwatch.className = 'replay-heat-swatch';
+  const heatText = document.createElement('span');
+  heatLegend.append(heatSwatch, heatText);
+  const compareLine = document.createElement('div');
+  compareLine.className = 'replay-alerts';
   const findRow = document.createElement('div');
   findRow.className = 'replay-chips';
   const ident = makeInput(findRow, 'text', t('Identifier'));
@@ -243,6 +280,10 @@ export function createReplayPanel({ container, controller } = {}) {
     layerRow,
     jumpRow,
     legend,
+    compareRow,
+    analysisRow,
+    heatLegend,
+    compareLine,
     findRow,
     trackLine,
     exportRow,
@@ -263,6 +304,60 @@ export function createReplayPanel({ container, controller } = {}) {
     onLatest: () => controller.exit(),
     onPlay: () => controller.togglePlay(),
   });
+
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 16);
+  const renderAnalysis = (state) => {
+    const to = state.status?.to_ts;
+    // Start with the newest hour against the one before it, ready to press.
+    if (to && !timeA.value && !timeB.value) {
+      timeB.value = stamp(to * 1000);
+      timeA.value = stamp((to - 3600) * 1000);
+    }
+    set(heatChip, 'disabled', !state.range);
+    set(compareChip, 'disabled', !state.range || state.analysisBusy);
+    set(
+      heatChip,
+      'className',
+      `data-toggle-chip${state.heat ? ' active' : ''}`,
+    );
+    set(clearCompare, 'hidden', !state.compare);
+    set(heatLegend, 'hidden', !state.heat);
+    set(
+      heatText,
+      'textContent',
+      state.heat
+        ? t('{count} contacts in the busiest square', { count: state.heat.max })
+        : '',
+    );
+    const c = state.compare;
+    const key = c ? `${c.appeared}|${c.gone}|${c.stayed}` : '';
+    if (compareLine.dataset.key !== key) {
+      compareLine.dataset.key = key;
+      const part = (text, className) => {
+        const node = document.createElement('span');
+        node.className = className;
+        node.textContent = text;
+        return node;
+      };
+      compareLine.replaceChildren(
+        ...(c
+          ? [
+              part(
+                `● ${t('{count} appeared', { count: c.appeared })}`,
+                'replay-track-first',
+              ),
+              ' · ',
+              part(
+                `● ${t('{count} gone', { count: c.gone })}`,
+                'replay-track-last',
+              ),
+              ` · ${t('{count} in both', { count: c.stayed })}`,
+            ]
+          : []),
+      );
+    }
+    set(compareLine, 'hidden', !c);
+  };
 
   const renderStorage = (s) => {
     set(storage, 'hidden', !s);
@@ -359,6 +454,7 @@ export function createReplayPanel({ container, controller } = {}) {
               : t('No recording')),
     );
     renderStorage(state.status);
+    renderAnalysis(state);
     set(start, 'disabled', state.loading || !state.range);
     set(fit, 'disabled', !state.active || !state.contacts);
     set(jump, 'disabled', state.loading || !state.range);

@@ -279,3 +279,35 @@ test('area events carry the contact name', async () => {
   assert.equal(store.events({})[0].name, 'UAL1');
   await rec.close();
 });
+
+test('density counts different contacts per grid square, not saved points', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const store = openHistoryStore(':memory:');
+  store.insertMany([
+    pt({ id: 'a', lat: 10.2, lon: 20.2, ts: 100 }),
+    pt({ id: 'a', lat: 10.3, lon: 20.3, ts: 200 }),
+    pt({ id: 'b', lat: 10.4, lon: 20.4, ts: 300 }),
+    pt({ id: 'c', lat: 40.1, lon: -70.1, ts: 300 }),
+    pt({ id: 'd', lat: 10.2, lon: 20.2, ts: 9000 }),
+  ]);
+  const cells = store.density({ from: 0, to: 1000, cell: 1 });
+  // (lon + 180) / 1 and (lat + 90) / 1, truncated.
+  assert.deepEqual(
+    cells.map((c) => ({ ...c })),
+    [
+      { gx: 200, gy: 100, n: 2 },
+      { gx: 109, gy: 130, n: 1 },
+    ],
+  );
+  assert.deepEqual(
+    store.density({ from: 0, to: 1000, cell: 1, layers: ['mil'] }),
+    [],
+  );
+  const west = store.density({
+    from: 0,
+    to: 1000,
+    cell: 1,
+    bbox: { west: -80, south: 30, east: -60, north: 50 },
+  });
+  assert.equal(west.length, 1);
+});

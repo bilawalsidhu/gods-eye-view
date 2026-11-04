@@ -3053,6 +3053,7 @@
       "src/ui/replayPanel.js",
       "src/ui/replayAlerts.js",
       "src/replay/model.js",
+      "src/replay/analysis.js",
       "src/replay/controller.js",
       "src/ui/imageryBoxTool.js",
       "src/voice/pointerContext.js",

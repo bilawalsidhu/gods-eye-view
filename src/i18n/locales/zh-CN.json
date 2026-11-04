@@ -3076,5 +3076,21 @@
   "Browser notifications are blocked. Alerts sound and show here only.": "浏览器通知已被屏蔽。提醒仅在此处显示并发声。",
   "ALERTS": "提醒",
   "Sound and notify when a watched area is entered or an emergency is broadcast": "进入监视区域或发出紧急信号时发声并通知",
-  "Watched area": "监视区域"
+  "Watched area": "监视区域",
+  "Nothing recorded in this period": "此时间段没有记录",
+  "Heat map failed": "热力图生成失败",
+  "Pick two times first": "请先选择两个时间",
+  "Nothing recorded near those times": "这两个时间附近没有记录",
+  "Comparison failed": "对比失败",
+  "Time A (UTC)": "时间 A（UTC）",
+  "Time B (UTC)": "时间 B（UTC）",
+  "HEAT": "热力",
+  "Show where contacts were densest in this period": "显示此时间段内目标最密集的位置",
+  "COMPARE": "对比",
+  "Show who appeared and who left between time A and time B": "显示时间 A 与时间 B 之间新出现和已离开的目标",
+  "Clear the comparison": "清除对比",
+  "{count} contacts in the busiest square": "最繁忙方格内有 {count} 个目标",
+  "{count} appeared": "新出现 {count}",
+  "{count} gone": "已离开 {count}",
+  "{count} in both": "两者都有 {count}"
 }

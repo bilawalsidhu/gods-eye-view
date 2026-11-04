@@ -149,6 +149,28 @@ export function openHistoryStore(file) {
         )
         .all(...args, limit);
     },
+    /**
+     * How many different contacts were seen in each square of a grid, over a
+     * period. A square is `cell` degrees wide; (gx, gy) count from -180, -90.
+     */
+    density({ from, to, bbox, layers, cell, limit = 20000 }) {
+      const where = ['ts BETWEEN ? AND ?'];
+      const args = [from, to];
+      addBox(where, args, bbox);
+      if (layers?.length) {
+        where.push(`layer IN (${layers.map(() => '?').join(',')})`);
+        args.push(...layers);
+      }
+      return db
+        .prepare(
+          `SELECT CAST((lon + 180) / ? AS INTEGER) AS gx,
+                  CAST((lat + 90) / ? AS INTEGER) AS gy,
+                  COUNT(DISTINCT layer || ':' || id) AS n
+           FROM positions WHERE ${where.join(' AND ')}
+           GROUP BY gx, gy ORDER BY n DESC LIMIT ?`,
+        )
+        .all(cell, cell, ...args, limit);
+    },
     /** Latest position per contact at or before `time`, no older than `lookback` s. */
     at({ time, lookback = 600, bbox, layers, limit = 50000 }) {
       const where = ['ts BETWEEN ? AND ?'];

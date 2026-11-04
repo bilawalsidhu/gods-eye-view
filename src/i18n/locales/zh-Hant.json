@@ -3076,5 +3076,21 @@
   "Browser notifications are blocked. Alerts sound and show here only.": "瀏覽器通知已被封鎖。提醒只會在此顯示並發出聲音。",
   "ALERTS": "提醒",
   "Sound and notify when a watched area is entered or an emergency is broadcast": "進入監看區域或發出緊急訊號時發出聲音並通知",
-  "Watched area": "監看區域"
+  "Watched area": "監看區域",
+  "Nothing recorded in this period": "此時段沒有錄製",
+  "Heat map failed": "熱度圖產生失敗",
+  "Pick two times first": "請先選擇兩個時間",
+  "Nothing recorded near those times": "這兩個時間附近沒有錄製",
+  "Comparison failed": "比較失敗",
+  "Time A (UTC)": "時間 A（UTC）",
+  "Time B (UTC)": "時間 B（UTC）",
+  "HEAT": "熱度",
+  "Show where contacts were densest in this period": "顯示此時段內目標最密集的位置",
+  "COMPARE": "比較",
+  "Show who appeared and who left between time A and time B": "顯示時間 A 與時間 B 之間新出現與已離開的目標",
+  "Clear the comparison": "清除比較",
+  "{count} contacts in the busiest square": "最繁忙方格內有 {count} 個目標",
+  "{count} appeared": "新出現 {count}",
+  "{count} gone": "已離開 {count}",
+  "{count} in both": "兩者皆有 {count}"
 }
