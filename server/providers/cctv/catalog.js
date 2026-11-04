@@ -29,6 +29,7 @@ import {
   loadTorontoSourcesFromOpenData,
   loadAucklandSourcesFromOpenData,
   loadFloridaSourcesFromOpenData,
+  loadHoustonSourcesFromOpenData,
   loadA22SourcesFromOpenDataHub,
 } from './sources.js';
 
@@ -173,6 +174,11 @@ const LIVE_PACKS = [
     name: 'taiwan',
     enabled: () => envEnabled('CCTV_TAIWAN_ENABLED'),
     load: loadTaiwanSources,
+  },
+  {
+    name: 'houston',
+    enabled: () => envOptIn('CCTV_HOUSTON_ENABLED'),
+    load: loadHoustonSourcesFromOpenData,
   },
   {
     name: 'a22',
