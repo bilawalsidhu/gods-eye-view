@@ -4,4 +4,4 @@
   Marks and Ski Pistes. The setting is shared as `?lop=<layer-id>:<percent>`,
   separate from the `#v=2` share codec and written only for layers below 100 %.
   A layer opts in with `setOpacity(fraction)`; the others show no slider
-  (Byrd-IT, #0000).
+  (Byrd-IT, #1542).
