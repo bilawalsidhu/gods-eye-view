@@ -1987,8 +1987,15 @@ body.cockpit-mode
 /* The visor starts with flight instruments. Panels restores the optional
    displays for this flight without changing the map's panel preferences. */
 body.cockpit-mode:has(#cockpit-panels-toggle[aria-pressed='false'])
-  :is(#left-panel-stack, #intel-hud, #corner-actions, #global-loading-status,
-      #cockpit-utility-controls, #cockpit-context, #cockpit-signal-stream) {
+  :is(
+    #left-panel-stack,
+    #intel-hud,
+    #corner-actions,
+    #global-loading-status,
+    #cockpit-utility-controls,
+    #cockpit-context,
+    #cockpit-signal-stream
+  ) {
   display: none !important;
 }
 body.cockpit-mode #left-panel-stack {

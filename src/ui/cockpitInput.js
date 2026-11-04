@@ -48,9 +48,7 @@ export function onKeyDown(event) {
   const key = event.key?.toLowerCase();
   if (key === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey) {
     if (!this.active) {
-      const cockpitAttempt = !!(
-        this.readAircraftInfo() && this.host.current()
-      );
+      const cockpitAttempt = !!(this.readAircraftInfo() && this.host.current());
       if (!cockpitAttempt) return;
     }
     event.preventDefault();

@@ -1,6 +1,7 @@
 import { catalogControlServices } from './catalog.js';
 import { StyleManager } from '../ui/composition.js';
 import { flyToAustin } from '../camera.js';
+import { installZoomOutGuard } from './zoomOutGuard.js';
 import {
   initCockpitCloudEffects,
   initEngineCockpitClouds,
@@ -67,6 +68,24 @@ export async function createApplicationControls({
   await attachScenePart(
     scene,
     shellScenePart(styleManager, { builtOn: currentSceneOf(scene), catalog }),
+    { defer },
+  );
+  // Outward zooms stay bounded and framed. The guard works through Cesium's
+  // camera controller, so it attaches to Cesium globes only.
+  await attachScenePart(
+    scene,
+    {
+      name: 'zoom-out-guard',
+      attachScene(next, { defer: release }) {
+        if (!next.viewer) return;
+        release(
+          installZoomOutGuard(next.viewer, {
+            subscribeCameraHandoff: (listener) =>
+              styleManager.subscribeCameraHandoff?.(listener),
+          }),
+        );
+      },
+    },
     { defer },
   );
   // The previous multi-canvas weather compositor remains disabled. Cockpit

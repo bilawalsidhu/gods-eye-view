@@ -17,6 +17,7 @@ import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
 import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationRecentImagery } from './layers/recentImagery.js';
+import { createApplicationOsmPlaces } from './layers/osmPlaces.js';
 import { createApplicationTransit } from './layers/transit.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
 import { createApplicationSatellites } from './layers/satellites.js';
@@ -30,7 +31,9 @@ import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
+import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
 import { createApplicationCables } from './layers/submarineCables.js';
+import { OSM_OVERLAYS, createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureSessionLayer } from '../layers/infrastructure/index.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -44,6 +47,8 @@ import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
  */
 export const LOCAL_ONLY_LAYER_METADATA = Object.freeze([
   Object.freeze({ id: 'local-adsb', disposition: 'local-only' }),
+  // Voice search results belong to this session, like a receiver to this machine.
+  Object.freeze({ id: 'osm-places', disposition: 'local-only' }),
 ]);
 
 /** Serialization metadata for every layer the application catalog constructs. */
@@ -249,6 +254,16 @@ export function createApplicationCatalog({
             createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
           ),
       ],
+      // Cesium only, and without attachRenderer: built for each catalog and
+      // destroyed when its globe leaves, so never a session model (as are
+      // osm-places and the OSM overlays).
+      [
+        'drone-airspace',
+        () =>
+          createApplicationDroneAirspace({
+            source: sources['drone-airspace'],
+          }),
+      ],
       [
         'alpr-cameras',
         () =>
@@ -337,6 +352,7 @@ export function createApplicationCatalog({
             }),
           ),
       ],
+      ['osm-places', () => createApplicationOsmPlaces()],
       ['ais-live-vessels', vessels],
       ['military-installations', installations],
       [
@@ -388,6 +404,7 @@ export function createApplicationCatalog({
             }),
           ),
       ],
+      [OSM_OVERLAYS.map(({ id }) => id), () => createOsmOverlayLayers()],
       [
         ['local-datacenters', 'local-dams'],
         () =>

@@ -37,9 +37,10 @@ export class CockpitCoordinator {
       operations,
     );
     this._cockpitDisplayPortal = null;
-    this.cockpitView = viewer || (engine?.frames?.preUpdate && engine?.camera?.followChanged)
-      ? this._createCockpitView(viewer, services)
-      : null;
+    this.cockpitView =
+      viewer || (engine?.frames?.preUpdate && engine?.camera?.followChanged)
+        ? this._createCockpitView(viewer, services)
+        : null;
   }
   _createCockpitView(viewer, services) {
     const {
@@ -136,8 +137,7 @@ export class CockpitCoordinator {
     // flip true/false between calls while `active` stayed true; readers
     // (including the voice model) read that as a broken half-entered state.
     const entryAllowed =
-      !active &&
-      Boolean(gateOpen && info && this.cockpitView?.host.current());
+      !active && Boolean(gateOpen && info && this.cockpitView?.host.current());
     return {
       active,
       entryAllowed,

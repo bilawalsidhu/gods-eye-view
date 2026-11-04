@@ -61,9 +61,12 @@ const PANEL_GROUPS = [
     ids: [
       'alpr-cameras',
       'military-installations',
+      'drone-airspace',
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'sea-marks',
+      'ski-pistes',
     ],
   },
   {
@@ -92,7 +95,7 @@ const PANEL_GROUPS = [
   // needs no heading there.
   {
     label: msg('Utilities'),
-    ids: ['directions'],
+    ids: ['directions', 'osm-places'],
     containerId: 'utilities-toggles',
   },
   {

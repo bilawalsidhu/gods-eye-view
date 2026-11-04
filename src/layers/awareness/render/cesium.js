@@ -1,12 +1,15 @@
-import { BoundingSphere, Color } from 'cesium';
-import { AWARENESS_RADIUS_M } from '../../../data/militaryAwarenessEngine.js';
-import { CONTEXT_RIM_HEIGHT_M } from '../policy.js';
+import { BoundingSphere } from 'cesium';
 
+/**
+ * The awareness layer's view of a Cesium globe. Its range ring, pulse disc
+ * and echoes are Cesium primitives (rendering.js), built on `viewer`.
+ */
 export function createAwarenessCesiumRenderer(viewer) {
   return {
+    viewer,
     container: viewer.container,
     get canvas() {
-      return viewer.scene?.canvas;
+      return viewer.canvas ?? viewer.scene?.canvas;
     },
     get camera() {
       return viewer.camera;
@@ -14,27 +17,14 @@ export function createAwarenessCesiumRenderer(viewer) {
     get trackedEntity() {
       return viewer.trackedEntity;
     },
+    // Off while another owner (the cockpit, a gizmo drag, a drawing tool)
+    // has the camera: the user's gesture moves nothing then.
+    cameraInputsEnabled: () =>
+      viewer.scene?.screenSpaceCameraController?.enableInputs !== false,
     onFrame: (run) => viewer.scene.preRender.addEventListener(run),
     frameContact: (center, radius, duration) =>
       viewer.camera.flyToBoundingSphere(new BoundingSphere(center, radius), {
         duration,
       }),
-    createRim(center) {
-      const entity = viewer.entities.add({
-        position: center,
-        ellipse: {
-          semiMajorAxis: AWARENESS_RADIUS_M,
-          semiMinorAxis: AWARENESS_RADIUS_M,
-          fill: false,
-          outline: true,
-          outlineColor: Color.fromCssColorString('#62b5ff').withAlpha(0.72),
-          height: CONTEXT_RIM_HEIGHT_M,
-        },
-      });
-      return {
-        move: (next) => entity.position.setValue(next),
-        destroy: () => viewer.entities.remove(entity),
-      };
-    },
   };
 }

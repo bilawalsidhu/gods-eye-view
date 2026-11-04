@@ -91,24 +91,26 @@ test('every capability-gated action is a real offered tool', () => {
     assert.ok(tools.has(name), `${name} is a voice tool`);
 });
 
-for (const kind of ['cesium', 'navara']) test(`${kind} enters cockpit on a ready tracked aircraft without starting Contacts`, async () => {
-  const engine = engineOverAustin({kind});
-  const runner = runnerOn(engine, {
-    styleManager: {
-      getCockpitState: () => ({ entryAllowed: true }),
-      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: '507c84' }),
-      setContextMode: () => assert.fail('the selected flight already owns the camera'),
-      controlCockpit: (action, { rollbackTarget }) => {
-        assert.equal(action, 'enter');
-        assert.equal(rollbackTarget.id, '507c84');
-        return { ok: true, state: { active: true } };
+for (const kind of ['cesium', 'navara'])
+  test(`${kind} enters cockpit on a ready tracked aircraft without starting Contacts`, async () => {
+    const engine = engineOverAustin({ kind });
+    const runner = runnerOn(engine, {
+      styleManager: {
+        getCockpitState: () => ({ entryAllowed: true }),
+        getAircraftTrackingTarget: () => ({ layerId: 'flights', id: '507c84' }),
+        setContextMode: () =>
+          assert.fail('the selected flight already owns the camera'),
+        controlCockpit: (action, { rollbackTarget }) => {
+          assert.equal(action, 'enter');
+          assert.equal(rollbackTarget.id, '507c84');
+          return { ok: true, state: { active: true } };
+        },
       },
-    },
+    });
+    const result = await runner('control_cockpit', { action: 'enter' });
+    assert.equal(result.ok, true);
+    assert.equal(result.state.active, true);
   });
-  const result = await runner('control_cockpit', { action: 'enter' });
-  assert.equal(result.ok, true);
-  assert.equal(result.state.active, true);
-});
 
 test('missing scene capabilities refuse with a structured result', async () => {
   const engine = engineOverAustin({ kind: 'navara' });

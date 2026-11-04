@@ -211,7 +211,8 @@ export class CockpitViewController {
     this._listen(this.tr3bToggle, 'click', () => this.toggleTrackedTr3b());
     this._listen(this.mapViewButton, 'click', () => this.exit());
     this._listen(document.getElementById('view-switcher'), 'click', (event) => {
-      if (event.target.closest?.('#cockpit-panels-toggle')) this.scheduleContextLayout();
+      if (event.target.closest?.('#cockpit-panels-toggle'))
+        this.scheduleContextLayout();
     });
     this._listen(this.visionPrevious, 'click', () => this.cycleVisionMode(-1));
     this._listen(this.visionCurrent, 'click', () => this.cycleVisionMode(1));

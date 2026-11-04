@@ -109,11 +109,7 @@ export function navigateContext(direction, options = {}) {
 
 export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
   const nextEntity = this.host.current();
-  if (
-    !this.active ||
-    !nextEntity ||
-    nextEntity === this.trackedEntity
-  )
+  if (!this.active || !nextEntity || nextEntity === this.trackedEntity)
     return false;
   const info = suppliedInfo || this.readAircraftInfo();
   if (!info) return false;
