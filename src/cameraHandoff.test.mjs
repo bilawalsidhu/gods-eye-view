@@ -1,4 +1,6 @@
 import { LayerBindings } from './ui/layerBindings.js';
+import { ScreenSpaceEventType } from 'cesium';
+import { FIRMS_LEFT_CLICK } from './layers/firms/render/cesium.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { enter as cockpitEnter, navigateContext } from './ui/cockpitTrackingController.js';
@@ -416,7 +418,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   );
   assert.match(vesselFocus, /requestWorldFocus\(\{/);
   assert.match(firms, /const clickType\s*=\s*layerState\._renderer\?\.clickType\s*\?\?\s*config\.leftClickEventType/);
-  assert.match(firms, /FIRMS_LEFT_CLICK = Cesium\.ScreenSpaceEventType\.LEFT_CLICK/);
+  assert.equal(FIRMS_LEFT_CLICK, ScreenSpaceEventType.LEFT_CLICK);
   const fireClick = body(
     firms,
     /_clickHandler\.setInputAction\(\(click\) => \{([\s\S]*?)\n    \}, clickType\);/,

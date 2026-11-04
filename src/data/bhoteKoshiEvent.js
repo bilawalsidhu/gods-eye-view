@@ -1,5 +1,6 @@
 import { waitForSignal } from '../sources/requestDeadline.js';
 import * as Cesium from 'cesium';
+import { cesiumSdkReady, loadCesiumSdk } from '../app/loadCesium.js';
 import { isPointerFree } from './inputOwnership.js';
 import {
   clearOverlaySource,
@@ -47,8 +48,9 @@ const SCENE_PATH_RENDER_HOLD = 'bhote-koshi-scene-path-travel';
 const SCENE_MEDIA_MIN_PLAYBACK_SECONDS = 6;
 const SCENE_MEDIA_EXIT_SECONDS = 0.65;
 const BHOTE_EVENT_ACCENT = WORLD_OVERLAY_STYLE.accent;
-const FLOOD_COLOR = Cesium.Color.fromCssColorString('#d8954e').withAlpha(0.68);
-const SURGE_COLOR = Cesium.Color.fromCssColorString('#e8b47c');
+const FLOOD_COLOR = () =>
+  Cesium.Color.fromCssColorString('#d8954e').withAlpha(0.68);
+const SURGE_COLOR = () => Cesium.Color.fromCssColorString('#e8b47c');
 const CINEMATIC_INPUT_EVENTS = Object.freeze(['pointerdown', 'wheel']);
 const CINEMATIC_VIEW_SPECS = Object.freeze([
   {
@@ -1077,8 +1079,8 @@ export function createBhoteKoshiEventLayer({
   let _cinematicKeyframes = [];
   let _cinematicActive = false;
   let _cinematicReplayArmed = false;
-  let _cinematicPose = { target: new Cesium.Cartesian3() };
-  let _cinematicOffset = new Cesium.HeadingPitchRange();
+  let _cinematicPose = { target: { x: 0, y: 0, z: 0 } };
+  let _cinematicOffset = { heading: 0, pitch: 0, range: 0 };
   let _lastCinematicProgress = null;
   let _cameraInputTarget = null;
   let _evidenceClickTarget = null;
@@ -2570,11 +2572,11 @@ export function createBhoteKoshiEventLayer({
     const tileSafe = usesPhotorealFloodSurface();
     _floodSurfaceMode = tileSafe ? 'tiles' : 'terrain';
     const haloMaterial = new Cesium.PolylineDashMaterialProperty({
-      color: FLOOD_COLOR.withAlpha(0.38),
+      color: FLOOD_COLOR().withAlpha(0.38),
       dashLength: 18,
     });
     const coreMaterial = new Cesium.PolylineGlowMaterialProperty({
-      color: FLOOD_COLOR.withAlpha(0.96),
+      color: FLOOD_COLOR().withAlpha(0.96),
       glowPower: 0.24,
       taperPower: 0.7,
     });
@@ -2619,7 +2621,7 @@ export function createBhoteKoshiEventLayer({
       position: Cesium.Cartesian3.ZERO,
       point: {
         pixelSize: 11,
-        color: SURGE_COLOR,
+        color: SURGE_COLOR(),
         outlineColor: Cesium.Color.BLACK.withAlpha(0.85),
         outlineWidth: 3,
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -3540,6 +3542,11 @@ export function createBhoteKoshiEventLayer({
     if (!_viewer && _engine) _native = createNativeRenderer(engine);
     _embeddedMedia?.attachScene?.(viewer, engine);
     if (!_enabled) return;
+    // Its enable has loaded the SDK; a restored attachment waits for it too.
+    if (!cesiumSdkReady()) {
+      await untilSceneReleased(loadCesiumSdk(), signal);
+      if (!current()) return;
+    }
     // The catalog has rebound the incoming map controller before this call.
     if (_mapStackController) {
       _comparisonLease = acquireImageryComparison(_mapStackController, {
@@ -3618,6 +3625,12 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function enable(viewer, { origin = 'local-restore', signal } = {}) {
+    // The imagery, flood and corridor are Cesium entities on either globe, so
+    // a Navara page loads the Cesium SDK for them first.
+    if (!cesiumSdkReady()) {
+      await loadCesiumSdk();
+      throwIfEnableCancelled(signal, true);
+    }
     _viewer = viewer;
     _enabled = true;
     // Public lifecycle passes signal, not intent origin, to enable. Its atomic

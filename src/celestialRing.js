@@ -2,10 +2,11 @@ import * as geo from './geo/index.js';
 import { createCelestialView } from './celestialRing/view.js';
 import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import {
-  createCelestialEphemeris,
+  cesiumIcrfToFixed,
   projectCelestialPoint,
   flyCelestialViewer,
 } from './celestialRing/render/cesium.js';
+import { createCelestialEphemeris } from './celestialRing/ephemeris.js';
 import { appClock } from './time/clock.js';
 import { governorRequestRender } from './renderGovernor.js';
 
@@ -431,7 +432,10 @@ export class CelestialRing {
     this._moonFixed = geo.cartesian3.create();
     this._toCenter = geo.cartesian3.create();
     this._screenCenter = geo.cartesian2.create();
-    this._ephemeris = createCelestialEphemeris();
+    // A Cesium viewer's ICRF rotation; an engine (Navara) takes the TEME one.
+    this._ephemeris = createCelestialEphemeris(
+      viewer?.kind ? {} : { icrfToFixed: cesiumIcrfToFixed },
+    );
 
     this._initView(store);
     this._removePostRender = this.viewer.scene.postRender.addEventListener(() =>

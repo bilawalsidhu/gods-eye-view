@@ -67,7 +67,7 @@ export function createCyclonesLayer({
   feed,
   hitTestOverlay = hitTestWorldOverlay,
   overlayHost,
-  cesium = Cesium,
+  cesium = null,
   createRendering = createCycloneRendering,
   createNativeRendering = null,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
@@ -99,24 +99,27 @@ export function createCyclonesLayer({
     selectedId = id;
     rendering?.setSelection(id);
   }
+  // The SDK, on Cesium only: the production build's Cesium global loads with
+  // the first Cesium globe, so a Navara page has none.
+  const sdk = () => cesium ?? (engine?.kind === 'navara' ? null : Cesium);
   // Photorealistic 3D Tiles pick as tileset content without an entity id;
   // that is empty map, the same as no pick at all on the globe.
   const isSurfacePick = (picked) =>
     !picked ||
     (picked.id === undefined &&
       (picked.content !== undefined ||
-        (typeof cesium.Cesium3DTileset === 'function' &&
-          picked.primitive instanceof cesium.Cesium3DTileset)));
+        (typeof sdk()?.Cesium3DTileset === 'function' &&
+          picked.primitive instanceof sdk().Cesium3DTileset)));
   function installSelection() {
     const canvas = engine?.host.canvas ?? viewer?.scene?.canvas;
     const native = engine?.kind === 'navara';
     if (
       clickHandler ||
       !canvas ||
-      (!native && typeof cesium.ScreenSpaceEventHandler !== 'function')
+      (!native && typeof sdk()?.ScreenSpaceEventHandler !== 'function')
     )
       return;
-    const owner = native ? {} : new cesium.ScreenSpaceEventHandler(canvas);
+    const owner = native ? {} : new (sdk().ScreenSpaceEventHandler)(canvas);
     clickHandler = owner;
     let capturedHit = null;
     const overlayHit = (x, y) => {
@@ -192,7 +195,7 @@ export function createCyclonesLayer({
     };
     if (native)
       owner.destroy = engine.input.on('click', onClick, { pick: true });
-    else owner.setInputAction(onClick, cesium.ScreenSpaceEventType.LEFT_CLICK);
+    else owner.setInputAction(onClick, sdk().ScreenSpaceEventType.LEFT_CLICK);
   }
   function removeSelection() {
     const owner = clickHandler;
@@ -217,7 +220,7 @@ export function createCyclonesLayer({
       rendering =
         engine?.kind === 'navara'
           ? createNativeRendering(engine, { overlayHost })
-          : createRendering({ viewer, cesium, overlayHost });
+          : createRendering({ viewer, cesium: sdk(), overlayHost });
       if (!enabled) return;
       installSelection();
       if (snapshot && !snapshot.unavailable) {

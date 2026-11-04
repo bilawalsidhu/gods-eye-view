@@ -2,7 +2,6 @@ import {
   AWARENESS_RADIUS_M,
   AWARENESS_RELATIONSHIP,
 } from '../../data/militaryAwarenessEngine.js';
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { t } from '../../i18n/index.js';
 import {
@@ -265,7 +264,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
         layerState.display?.trackedEntity?.gevDisplayPosition?.();
       if (trackedPosition) {
         return {
-          position: Cesium.Cartesian3.clone(trackedPosition),
+          position: geo.cartesian3.clone(trackedPosition),
           // Only the follow camera's own contact proves presence this way; a
           // different tracked entity says nothing about this subject.
           presence:
@@ -280,7 +279,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       // awareness position instead of allocating/scanning up to 1,000 contacts.
       if (!allowCollectionMaterialization) {
         return {
-          position: Cesium.Cartesian3.clone(subject.position),
+          position: geo.cartesian3.clone(subject.position),
           presence: SUBJECT_PRESENCE.UNCHECKED,
         };
       }
@@ -295,7 +294,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     if (subject.layerId === 'ais-live-vessels') {
       if (!allowCollectionMaterialization) {
         return {
-          position: Cesium.Cartesian3.clone(subject.position),
+          position: geo.cartesian3.clone(subject.position),
           presence: SUBJECT_PRESENCE.UNCHECKED,
         };
       }
@@ -308,7 +307,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     // Mapped installations come from static geometry, not a live feed: there is
     // nothing to be culled from.
     return {
-      position: Cesium.Cartesian3.clone(subject.position),
+      position: geo.cartesian3.clone(subject.position),
       presence: SUBJECT_PRESENCE.LIVE,
     };
   }
@@ -343,8 +342,8 @@ export function createSubject({ state: layerState, services, parts, source }) {
           : SUBJECT_PRESENCE.UNCHECKED;
     return {
       position: current?.position
-        ? Cesium.Cartesian3.clone(current.position)
-        : Cesium.Cartesian3.clone(subject.position),
+        ? geo.cartesian3.clone(current.position)
+        : geo.cartesian3.clone(subject.position),
       presence,
     };
   }

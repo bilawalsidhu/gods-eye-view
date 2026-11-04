@@ -54,7 +54,7 @@ export function windStats(manifest) {
 export function createWindLayer({
   feed,
   clock,
-  cesium = Cesium,
+  cesium = null,
   container,
   createRendering = createWindRendering,
   createNativeRendering,
@@ -90,7 +90,7 @@ export function createWindLayer({
         y: canvas.clientHeight / 2,
       });
     }
-    reading = inspectWindAtCenter(manifest, viewer, cesium, {
+    reading = inspectWindAtCenter(manifest, viewer, {
       position,
       units,
       overlay,
@@ -129,7 +129,9 @@ export function createWindLayer({
         engine?.kind === 'navara'
           ? createNativeRendering(engine)
           : createRendering({
-              cesium,
+              // Read on Cesium only: the production build's Cesium global
+              // loads with the first Cesium globe.
+              cesium: cesium ?? Cesium,
               container: container ?? nextViewer.container,
               getViewer: () => viewer,
               getHost: () =>
@@ -147,7 +149,7 @@ export function createWindLayer({
       inspectionMarker = createWindInspectionMarker({
         container: target,
         viewer,
-        cesium,
+        cesium: engine ? null : (cesium ?? Cesium),
         engine,
       });
       if (enabled && manifest && !manifest.unavailable) {

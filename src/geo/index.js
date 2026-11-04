@@ -16,3 +16,5 @@ export * as transforms from './transforms.js';
 
 export * as ellipsoidGeodesic from './ellipsoidGeodesic.js';
 export * as boundingSphere from './boundingSphere.js';
+export * as julianDate from './julianDate.js';
+export * as simon1994 from './simon1994.js';

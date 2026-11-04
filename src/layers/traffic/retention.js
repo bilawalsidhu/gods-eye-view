@@ -12,10 +12,10 @@ export function roadIdentity(road) {
 /** Retain one road and its dot population across tile and surface publications. */
 export function createRetention({ state, parts }) {
   const records = new Map();
-  const heightStep = new Cesium.Cartesian3();
-  const screenFrom = new Cesium.Cartesian2();
-  const screenTo = new Cesium.Cartesian2();
-  const eye = new Cesium.Cartesian3();
+  const heightStep = { x: 0, y: 0, z: 0 };
+  const screenFrom = { x: 0, y: 0 };
+  const screenTo = { x: 0, y: 0 };
+  const eye = { x: 0, y: 0, z: 0 };
   function projectSafely(scene, point, screen) {
     if (scene.project) return Boolean(scene.project(point, screen));
     if (scene.camera.viewMatrix) {

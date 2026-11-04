@@ -24,8 +24,13 @@ import { formatDistanceText } from '../data/distanceFormat.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
-if (typeof window !== 'undefined' && !window.__CESIUM__)
-  window.__CESIUM__ = Cesium;
+// A getter, because the production build's Cesium global loads only with the
+// first Cesium globe.
+if (typeof window !== 'undefined' && !('__CESIUM__' in window))
+  Object.defineProperty(window, '__CESIUM__', {
+    configurable: true,
+    get: () => Cesium,
+  });
 
 /**
  * Annotation engine — the voice agent's "whiteboard" over the 3D world.

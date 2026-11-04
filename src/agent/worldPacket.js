@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import {
   feedProvenanceEnvelope,
   layerSnapshot,
@@ -110,7 +110,7 @@ export function getWorldPacket(options = {}) {
   if (!dataManager || typeof dataManager.getAll !== 'function')
     throw new TypeError('World Packet requires a data manager');
 
-  const cartographic = Cesium.Cartographic.fromCartesian(
+  const cartographic = geo.cartographic.fromCartesian(
     engine?.camera.livePosition ?? viewer.camera.positionWC,
   );
   // Read the roster once. Voice must not rewalk disabled layers: preserving the
@@ -127,8 +127,8 @@ export function getWorldPacket(options = {}) {
     ok: true,
     action: 'get_current_view_state',
     camera: {
-      latitude: Cesium.Math.toDegrees(cartographic.latitude),
-      longitude: Cesium.Math.toDegrees(cartographic.longitude),
+      latitude: geo.math.toDegrees(cartographic.latitude),
+      longitude: geo.math.toDegrees(cartographic.longitude),
       heightM: cartographic.height,
     },
     style: styleManager?.activeStyle || 'normal',
