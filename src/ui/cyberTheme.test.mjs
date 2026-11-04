@@ -706,7 +706,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(
     militaryRendering,
-    /baseAlpha:[\s\S]*?alpha: flightState\._irBoost \? 1 : treatment\.alpha/,
+    /alpha: flightState\._irBoost\s*\?\s*1\s*:\s*aircraftTreatmentAlpha\(/,
   );
   assert.match(
     cyberStyles,

@@ -5,28 +5,23 @@ import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
  * @module militaryFlights
  * @description Real-time military flight tracking layer powered by the adsb.lol API.
  *
- * Renders aircraft as amber chevron billboards in a single BillboardCollection
- * for GPU-efficient batch drawing. Supports click-to-track: selecting an aircraft
+ * Renders aircraft as amber chevrons in one GPU icon set (iconSet.js), whose
+ * shader dead-reckons and orients every row. Supports click-to-track: selecting an aircraft
  * spawns an Entity the camera follows, whose position is driven by a
  * dead-reckoning CallbackProperty. The whole fleet renders at
  * now - RENDER_DELAY_SEC so positions interpolate BETWEEN two known fixes
  * instead of extrapolating ahead and snapping back when the next poll lands.
- *
- * Billboard orientation uses alignedAxis set to the WGS84 surface normal at each
- * position so that the rotation angle (heading/track) operates in the local tangent
- * plane where 0 deg = north; near nadir the icons switch to screen-aligned
- * rotation (camera.heading - track) with hysteresis.
  */
 
 /** @constant {number} Milliseconds to wait before retrying after a transient error */
 
 /** @constant {number} Max position samples retained per aircraft for dead reckoning */
 
-/** @constant {number} Base billboard display scale */
+/** @constant {number} Base icon display scale */
 
 export const BILLBOARD_SCALE = 0.7;
 
-/** @constant {Cesium.Color} Default amber tint for untracked military billboards */
+/** @constant {Cesium.Color} Default amber tint for untracked military icons */
 
 export const MIL_ICON_COLOR = Cesium.Color.fromCssColorString('#FFB800');
 
@@ -44,7 +39,7 @@ export const EMERGENCY_ICON_COLOR =
 // boolean). Such aircraft are RENDERED instead of floating at the 3 km altitude
 // fallback: same silhouette + rotation pipeline, clickable/trackable/detectable,
 // sticky metadata updating normally. The on-ground flip restyles the existing
-// billboard IN PLACE (landing/takeoff transition, never a removal); ground planes
+// icon IN PLACE (landing/takeoff transition, never a removal); ground planes
 // draw no trails. In 3D mode they take model slots like airborne planes (owner
 // decision 2026-07-03 — no air/ground distinction), placed by the one-shot
 // ground snap (see _modelDisplayPosition).
@@ -53,7 +48,7 @@ export const EMERGENCY_ICON_COLOR =
 // test: the day-1 slate-gray 50%-alpha muted tint was unreadable — "in NYC I can
 // barely see them"). "On the ground" reads from the ×0.8 scale + missing trail;
 // "feed-dropped, coasting" stays the 45%-alpha stale fade.
-/** Ground billboards render slightly smaller so airport clutter stays visually minor. */
+/** Ground icons render slightly smaller so airport clutter stays visually minor. */
 
 export const GROUND_SCALE = 0.8;
 
@@ -215,24 +210,9 @@ export const LANDED_SPEED_MAX_MPS = 23;
 // gets the floor.
 /** @constant {number} Max render altitude (m, ellipsoidal) eligible for the ground-floor clamp. */
 
-// ---------------------------------------------------------------------------
-// Nadir-stable icon orientation (mirrors flights.js): surface-normal alignment
-// degenerates when the camera looks straight down (the normal is parallel to
-// the view direction and the shader's screen-projected angle is 0/0). Near
-// nadir we switch to screen-aligned billboards with
-// rotation = camera.heading - track (screen-up points at azimuth
-// camera.heading; a CW track t appears t-h from screen-up; billboard rotation
-// is CCW-positive => r = h - t). Discrete switch with hysteresis; rotations
-// are continuous at the boundary with this formula.
-// ---------------------------------------------------------------------------
-
 /** @constant {number} Fleet dead-reckoning tick interval (ms) — ~12Hz, not per-frame. */
 
 export const FLEET_DR_INTERVAL_MS = 80;
-
-/** @constant {number} Max ms between rotation passes while the camera is idle. */
-
-export const ROTATION_REFRESH_MS = 1000;
 
 /** Max course slew (deg/s) — well above real turns (≤4°/s), hides fix-boundary
  *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). */

@@ -24,6 +24,8 @@ export function createFlightSnapshotRenderer({
   const { warmGroundFloor } = groundFloor;
   const { sampleMeshFloorCells } = meshFloor;
   return function applySnapshot(snapshot, viewer) {
+    // Before init (or after destroy) there is no icon set to draw into.
+    if (!flightState._icons) return { count: 0, ids: new Set() };
     const currentIcaos = new Set();
     const acceptedSnapshotIcaos = new Set();
     // Field-test round 3 (2026-07-06, Austin fleet-underground): viewer

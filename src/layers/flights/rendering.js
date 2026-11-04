@@ -456,7 +456,7 @@ export function createRendering({
         id: icao24, // so scene.pick returns the icao for click-to-track
       });
     } catch {
-      // asset/decode fail — stay billboard. Only touch this lifecycle's state if still current
+      // asset/decode fail — stay an icon. Only touch this lifecycle's state if still current
       // (a destroy/re-init may have swapped the globals while this load was in flight).
       if (epoch === flightState._modelEpoch) {
         flightState._modelPending.delete(icao24);
@@ -509,7 +509,7 @@ export function createRendering({
     visual.specKey = specKey; // class-change sync compares against this
     visual.irBoost = loadIrBoost; // boost-flip reload queue compares against this
     // Admitted, not yet the visual. Cesium's default is show=true, which would let
-    // an unplaced primitive claim ownership from the billboard for the frames
+    // an unplaced primitive claim ownership from the icon for the frames
     // between admission and the next fleet tick (and draw at the identity matrix,
     // i.e. the Earth's centre). The handoff turns it on once it has a matrix.
     setModel(model, 'show', false);

@@ -181,22 +181,16 @@ export const LANDED_SPEED_MAX_MPS = 23;
 /** @constant {number} Max viewer distance (km) for the fleet ground-floor clamp. */
 
 // ---------------------------------------------------------------------------
-// Icon orientation (2026-06-10 playtest fix): rotation is computed by
-// projecting each aircraft's course vector into WINDOW coordinates
-// (iconOrientation.js) with alignedAxis always ZERO — exact at every camera
-// pitch/heading, including tracked-entity orbit mode. Rotation passes run on
-// the fleet tick only when the camera pose changed (or 1s drift catch-up).
-// The same tick horizon-culls billboards: with the Cesium globe hidden there
-// is no far-side depth, so planes otherwise show through the planet.
+// Fleet icons are one GPU icon set (iconSet.js): the shader dead-reckons each
+// row's motion segment, projects its course into window coordinates and
+// horizon-culls it (with the Cesium globe hidden there is no far-side depth,
+// so planes otherwise show through the planet). The fleet tick only re-plans
+// expired rows and drives the model handoff.
 // ---------------------------------------------------------------------------
 
 /** @constant {number} Fleet dead-reckoning tick interval (ms) — ~12Hz, not per-frame. */
 
 export const FLEET_DR_INTERVAL_MS = 80;
-
-/** @constant {number} Max ms between rotation passes while the camera is idle. */
-
-export const ROTATION_REFRESH_MS = 1000;
 
 /** Max course slew (deg/s) — well above real turns (≤4°/s), hides fix-boundary
  *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). */

@@ -87,7 +87,7 @@ test('military state owns separate contact maps, motion scratch and ground sampl
   for (const key of [
     'records',
     'feed',
-    '_billboards',
+    '_displayCourse',
     '_positionHistory',
     '_groundSnap',
     '_scratchCarto',
@@ -141,7 +141,7 @@ test('a normalized source can retain its stale reason without changing standalon
 test('a newly seen military contact appears at its delayed position, not ahead of it', async () => {
   // The military fleet renders RENDER_DELAY_SEC behind real time, so a fresh
   // contact's first displayed position is its fix projected back to that
-  // delayed time. Creating the billboard at the raw fix drew it ahead until
+  // delayed time. Creating the icon at the raw fix drew it ahead until
   // the next fleet tick jumped it back.
   const Cesium = await import('cesium');
   const { RENDER_DELAY_SEC } = await import('./policy.js');
@@ -177,7 +177,6 @@ test('a newly seen military contact appears at its delayed position, not ahead o
       },
     },
   });
-  const added = [];
   layer.testing._setTrackedMilitaryRefreshStateForTest({
     icao24: 'seed00',
     entity: null,
@@ -186,22 +185,14 @@ test('a newly seen military contact appears at its delayed position, not ahead o
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection: {
-      show: false,
-      add(options) {
-        const billboard = { ...options };
-        added.push(billboard);
-        return billboard;
-      },
-      remove() {},
-    },
+    billboardCollection: { show: false },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked: false,
   });
   await layer.update({ camera: { positionCartographic: null }, scene: {} });
-  const billboard = added.find((entry) => entry.id === 'ae0001');
-  assert.ok(billboard, 'the new contact gets a billboard');
-  const shown = Cesium.Cartographic.fromCartesian(billboard.position);
+  const icon = layer.testing._iconForTest('ae0001');
+  assert.ok(icon, 'the new contact gets an icon');
+  const shown = Cesium.Cartographic.fromCartesian(icon.position);
   const behindM = Cesium.Cartesian3.distance(
     Cesium.Cartesian3.fromRadians(shown.longitude, shown.latitude, 0),
     Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 0),
@@ -288,4 +279,18 @@ test('voice context reads a track that rounds to north as 0°, not 360°', () =>
     tracking._contextSubjectMetadata('ae1234').properties.heading,
     '0°',
   );
+});
+
+test('a military layer without an icon set declines contact refreshes', () => {
+  // Before init and after destroy there are no icon rows: a TR-3B refresh
+  // reports that the layer owns no such contact instead of throwing.
+  const layer = createMilitaryFlightLayer({
+    source: { label: 'Fixture aircraft', getSnapshot() {} },
+    services: {
+      ...services(),
+      aircraftPresentation: { isTr3b: () => true, tr3bConvertedIds: () => [] },
+    },
+  });
+  assert.equal(layer.refreshTr3b('abc123'), false);
+  assert.equal(layer.trackById('abc123'), false);
 });

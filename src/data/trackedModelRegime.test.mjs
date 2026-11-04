@@ -44,6 +44,8 @@ import militaryFlightsLayer, {
   _trackedBillboardColorForTest as militaryTrackedBillboardColor,
   _driveFleetModelHandoffForTest as militaryDriveFleetModel,
   _ensureFleetModelForTest as militaryEnsureFleetModel,
+  _iconForTest as militaryIcon,
+  _setIconForTest as militarySetIcon,
 } from './militaryFlights.js';
 import { clearTr3bRegistry, setTr3b } from './tr3bRegistry.js';
 import { reportMeshFloorCell, _clearMeshFloorCellsForTest } from './groundFloor.js';
@@ -188,21 +190,21 @@ function contactBillboard() {
   };
 }
 
-/** A flights contact's icon row, read and written the way these tests read a
+/** A contact's icon row, read and written the way these tests read a
  *  billboard: where it is drawn and whether the layer shows it. */
-function flightIconView(icao24) {
+function iconView(icao24, readIcon, setIcon) {
   return {
     get position() {
-      return flightsIcon(icao24)?.position;
+      return readIcon(icao24)?.position;
     },
     set position(position) {
-      flightsSetIcon(icao24, { position });
+      setIcon(icao24, { position });
     },
     get show() {
-      return flightsIcon(icao24)?.shown === true;
+      return readIcon(icao24)?.shown === true;
     },
     set show(shown) {
-      flightsSetIcon(icao24, { shown });
+      setIcon(icao24, { shown });
     },
   };
 }
@@ -237,7 +239,7 @@ const LAYERS = [
         modelCollection,
         meta: { callsign: 'TEST123 ', altitude: 10_668, klass: 'airliner', onGround },
       });
-      return flightIconView(icao24);
+      return iconView(icao24, flightsIcon, flightsSetIcon);
     },
   },
   {
@@ -262,7 +264,7 @@ const LAYERS = [
         modelCollection,
         meta: { callsign: 'TEST123 ', altitudeFt: 35_000, klass: 'fastjet', onGround },
       });
-      return billboard;
+      return iconView(icao24, militaryIcon, militarySetIcon);
     },
   },
 ];
