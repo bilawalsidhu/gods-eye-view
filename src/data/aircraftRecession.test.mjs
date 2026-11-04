@@ -3,11 +3,10 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_AIRCRAFT_RECESSION_PARAMS,
   aircraftRecessionFactors,
-  applyAircraftBillboardTreatment,
   applyAircraftModelTreatment,
   cameraLimbDistanceM,
+  aircraftTreatmentAlpha,
 } from './aircraftRecession.js';
-import { mirrorBillboard } from './billboardMirror.js';
 
 const params = { ...DEFAULT_AIRCRAFT_RECESSION_PARAMS };
 const cameraHeightM = 1_000_000;
@@ -67,72 +66,15 @@ test('globe-view transition eases to identity without a threshold pop', () => {
   assert.deepEqual(end, { scale: 1, alpha: 1, limbRatio: null });
 });
 
-test('aircraft billboard wire writes scale and alpha only for the far treatment', () => {
-  const color = { withAlpha: (alpha) => ({ alpha }) };
-  const near = mirrorBillboard({ scale: 1.2, color: { alpha: 0.8 } });
-  const nearResult = applyAircraftBillboardTreatment({
-    billboard: near,
-    baseScale: 1.2,
-    baseAlpha: 0.8,
-    baseColor: color,
-    focusFactor: 1,
-    cameraDistanceM: limb * 0.4,
-    cameraHeightM,
-    params,
-  });
-  assert.equal(nearResult.scaleWrites, 0);
-  assert.equal(nearResult.alphaWrites, 0);
-
-  const far = mirrorBillboard({ scale: 1.2, color: { alpha: 0.8 } });
-  const farResult = applyAircraftBillboardTreatment({
-    billboard: far,
-    baseScale: 1.2,
-    baseAlpha: 0.8,
-    baseColor: color,
-    focusFactor: 0.5,
-    cameraDistanceM: limb,
-    cameraHeightM,
-    params,
-  });
-  assert.equal(farResult.scaleWrites, 1);
-  assert.equal(farResult.alphaWrites, 1);
-  assert.ok(Math.abs(far.scale - (1.2 * 0.45)) < 1e-12);
-  assert.ok(Math.abs(far.color.alpha - (0.8 * 0.20)) < 1e-12);
-});
-
 test('combined focus and haze product is clamped at the composed alpha floor', () => {
-  const color = { withAlpha: (alpha) => ({ alpha }) };
-  const billboard = mirrorBillboard({ scale: 0.45, color: { alpha: 1 } });
-  const result = applyAircraftBillboardTreatment({
-    billboard,
-    baseScale: 1,
+  const alpha = aircraftTreatmentAlpha({
     baseAlpha: 1,
-    baseColor: color,
     focusFactor: 0.25,
     cameraDistanceM: limb,
     cameraHeightM,
     params,
   });
-  assert.equal(result.alpha, 0.20);
-  assert.equal(billboard.color.alpha, 0.20);
-});
-
-test('applyAircraftBillboardTreatment returns its documented module singleton', () => {
-  const color = { withAlpha: (alpha) => ({ alpha }) };
-  const billboard = mirrorBillboard({ scale: 1, color: { alpha: 1 } });
-  const input = {
-    billboard,
-    baseAlpha: 1,
-    baseColor: color,
-    focusFactor: 1,
-    cameraDistanceM: 0,
-    cameraHeightM,
-    params,
-  };
-  const first = applyAircraftBillboardTreatment({ ...input, baseScale: 1 });
-  const second = applyAircraftBillboardTreatment({ ...input, baseScale: 0.5 });
-  assert.strictEqual(first, second);
-  assert.equal(first.scale, 0.5, 'the prior reference reflects the next call');
+  assert.equal(alpha, 0.2);
 });
 
 test('ambient model presentation receives composed alpha without changing blend semantics', () => {

@@ -164,8 +164,8 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
   _setTrackedFlightRefreshStateForTest({
     icao24,
     entity,
-    billboard,
-    billboardCollection: { show: false, remove() {} },
+    icon: billboard,
+    iconLayer: { show: false, remove() {} },
     viewer,
     meta: {
       callsign: 'OLD1',
@@ -298,13 +298,13 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
   _setTrackedFlightRefreshStateForTest({
     icao24,
     entity: null,
-    billboard: {
+    icon: {
       position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 9_000),
       color: Cesium.Color.WHITE,
       image: aircraftIcon('tr3b'),
       show: true,
     },
-    billboardCollection: { show: false, remove() {} },
+    iconLayer: { show: false, remove() {} },
     viewer,
     tracked: false,
     meta: { callsign: 'OLD1', altitude: 9_000, klass: 'airliner', rawLat: 30.2, rawLon: -97.7 },
@@ -462,12 +462,12 @@ test('cockpit class filter matches a converted contact end to end', async () => 
   const seed = () => _setTrackedFlightRefreshStateForTest({
     icao24,
     entity: null,
-    billboard: {
+    icon: {
       position: Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668),
       color: Cesium.Color.WHITE,
       show: true,
     },
-    billboardCollection: { show: true, remove() {} },
+    iconLayer: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked: false,
     meta: { callsign: 'SWA696 ', altitude: 10_668, klass: 'airliner', onGround: false },
@@ -508,12 +508,12 @@ test('military records and detection cards agree with the conversion', () => {
   const seed = () => _setTrackedMilitaryRefreshStateForTest({
     icao24,
     entity: null,
-    billboard: {
+    icon: {
       position: Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668),
       color: Cesium.Color.WHITE,
       show: true,
     },
-    billboardCollection: { show: true, remove() {} },
+    iconLayer: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked: false,
     meta: { callsign: 'RCH451', altitudeFt: 35_000, klass: 'quadjet', type: 'C-17A', onGround: false },

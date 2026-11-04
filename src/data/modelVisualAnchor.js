@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium';
-import { modelState } from './modelMirror.js';
 /**
  * Model-space visual centres measured from the shipped GLBs' scene-space AABBs.
  *
@@ -107,13 +106,16 @@ const _chainScratch = new Cesium.Matrix4();
  * here, so exactly one transform — Cesium's own — stands between the table and
  * the world, and there is no second convention to drift.
  *
- * @param {object} model Cesium Model (needs modelMatrix, computedScale, sceneGraph).
+ * @param {import('./modelRecord.js').ModelRecord} record The layer's record of
+ *   the model: where it placed it, and the Cesium Model (computedScale,
+ *   sceneGraph).
  * @param {readonly number[]} nativeAnchor Raw glTF `[x, y, z]` native-unit offset.
  * @param {{x:number,y:number,z:number}} result Mutable Cartesian-like result.
  * @returns {{x:number,y:number,z:number}|null} World position of the anchor.
  */
-export function modelAnchorWorld(model, nativeAnchor, result) {
-  const modelMatrix = modelState(model)?.modelMatrix;
+export function modelAnchorWorld(record, nativeAnchor, result) {
+  const modelMatrix = record?.matrix;
+  const model = record?.model;
   if (!modelMatrix || !nativeAnchor || !result) return null;
   const scale = Number.isFinite(model.computedScale) ? model.computedScale : 1;
   _anchorScratch.x = (nativeAnchor[0] || 0) * scale;

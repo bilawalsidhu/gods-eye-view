@@ -51,8 +51,8 @@ const LAYERS = [
       _setTrackedFlightRefreshStateForTest({
         icao24: ICAO,
         entity: null,
-        billboard: contactBillboard(billboardShow),
-        billboardCollection: { show: true, remove() {} },
+        icon: contactBillboard(billboardShow),
+        iconLayer: { show: true, remove() {} },
         viewer: contactViewer(),
         tracked: false,
         models,
@@ -74,8 +74,8 @@ const LAYERS = [
       _setTrackedMilitaryRefreshStateForTest({
         icao24: ICAO,
         entity: null,
-        billboard: contactBillboard(billboardShow),
-        billboardCollection: { show: true, remove() {} },
+        icon: contactBillboard(billboardShow),
+        iconLayer: { show: true, remove() {} },
         viewer: contactViewer(),
         tracked: false,
         models,

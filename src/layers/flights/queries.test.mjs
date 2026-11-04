@@ -6,7 +6,11 @@ import { createRendering } from './rendering.js';
 import { createIcons } from './icons.js';
 import { createIconSet } from '../../data/iconSet.js';
 import { writeHoldSegment } from '../../data/iconSegment.js';
-import { mirrorModel, setModel } from '../../data/modelMirror.js';
+import {
+  createModelRecord,
+  placeModel,
+  showModel,
+} from '../../data/modelRecord.js';
 
 function fixture() {
   const info = {
@@ -109,7 +113,7 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   const get = t.mock.method(f.flightState._models, 'get');
   const [candidate] = f.queries.getDetectableObjects();
   assert.equal(get.mock.callCount(), 1);
-  const model = mirrorModel({
+  const record = createModelRecord({
     ready: false,
     show: true,
     modelMatrix: Cesium.Matrix4.fromTranslation(
@@ -120,25 +124,24 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
     visualCenterNative: Cesium.Cartesian3.ZERO,
     scale: 1,
   });
-  f.flightState._models.set('abc123', model);
+  f.flightState._models.set('abc123', record);
   f.show(false);
   assert.deepEqual(f.queries.getDetectableObjects(), []);
-  model.ready = true;
+  record.model.ready = true;
   assert.equal(f.queries.getDetectableObjects()[0], candidate);
   assert.deepEqual(candidate.position, new Cesium.Cartesian3(10, 20, 30));
-  setModel(
-    model,
-    'modelMatrix',
+  placeModel(
+    record,
     Cesium.Matrix4.fromTranslation(new Cesium.Cartesian3(40, 50, 60)),
   );
   f.queries.getDetectableObjects();
   assert.deepEqual(candidate.position, new Cesium.Cartesian3(40, 50, 60));
-  setModel(model, 'show', false);
+  showModel(record, false);
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   f.show(true);
   assert.deepEqual(f.queries.getDetectableObjects()[0].position, f.drawn());
   assert.equal(get.mock.callCount(), 6);
-  setModel(model, 'show', true);
+  showModel(record, true);
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123'), true);
   assert.equal(get.mock.callCount(), 7);
 });
@@ -146,7 +149,7 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
 test('tracked ownership and live anchors remain independent of fleet models', () => {
   const f = fixture();
   f.flightState._trackedIcao = 'abc123';
-  f.flightState._trackedModel = mirrorModel({ ready: true, show: true });
+  f.flightState._trackedModel = createModelRecord({ ready: true, show: true });
   f.parts.rendering._modelSpec = () => ({});
   let anchor = new Cesium.Cartesian3(10, 20, 30);
   f.parts.motion._trackedVisualCached = () => anchor;
@@ -158,16 +161,16 @@ test('tracked ownership and live anchors remain independent of fleet models', ()
   assert.equal(f.queries.getDetectableObjects()[0].position, anchor);
   for (const tracked of [
     null,
-    mirrorModel({ ready: false, show: true }),
-    mirrorModel({ ready: true, show: false }),
+    createModelRecord({ ready: false, show: true }),
+    createModelRecord({ ready: true, show: false }),
   ]) {
     f.flightState._trackedModel = tracked;
     assert.equal(
-      f.parts.rendering._modelOwnsVisual('abc123', mirrorModel({ ready: true, show: true })),
+      f.parts.rendering._modelOwnsVisual('abc123', createModelRecord({ ready: true, show: true })),
       false,
     );
   }
-  f.flightState._trackedModel = mirrorModel({ ready: true, show: true });
+  f.flightState._trackedModel = createModelRecord({ ready: true, show: true });
   f.parts.tracking._trackedModelRegimeActive = () => false;
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123', null), false);
 });

@@ -188,8 +188,8 @@ test('nonempty OpenSky payload with zero usable rows cannot prove share target a
   _setTrackedFlightRefreshStateForTest({
     icao24: 'abc123',
     entity: withEntityRecord({}, { labelModel: { title: 'WARM', details: [] } }),
-    billboard: { show: false },
-    billboardCollection: { show: true, remove() {} },
+    icon: { show: false },
+    iconLayer: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     meta: { rawLat: 30.2, rawLon: -97.7, onGround: false },
   });
@@ -229,16 +229,16 @@ test('a newly seen aircraft appears at its delayed position, not ahead of it', a
   // first displayed position is its fix projected back to that delayed time.
   // Creating the icon at the raw fix drew it ahead until the next fleet
   // tick, which then jumped it back about one delay of travel.
-  const billboardCollection = { show: false };
+  const iconLayer = { show: false };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
     icao24: 'seed00',
     entity: null,
-    billboard: {
+    icon: {
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection,
+    iconLayer,
     viewer,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
     tracked: false,
@@ -317,13 +317,13 @@ test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STA
     color: Cesium.Color.WHITE,
     show: false,
   };
-  const billboardCollection = { show: false, remove() {} };
+  const iconLayer = { show: false, remove() {} };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
     icao24,
     entity,
-    billboard,
-    billboardCollection,
+    icon: billboard,
+    iconLayer,
     viewer,
     meta: {
       callsign: 'OLD1',
@@ -473,8 +473,8 @@ test('real civil track path creates no native label and publishes every cached h
     _setTrackedFlightRefreshStateForTest({
       icao24,
       entity: null,
-      billboard,
-      billboardCollection: { show: true, remove() {} },
+      icon: billboard,
+      iconLayer: { show: true, remove() {} },
       viewer,
       tracked: false,
       history: [
@@ -597,7 +597,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     _addFlightTrackingCandidateForTest({
       icao24: 'late001',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.5, 30.4, 9_000),
       },
@@ -621,7 +621,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     _addFlightTrackingCandidateForTest({
       icao24: 'late002',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.4, 30.5, 8_000),
       },
@@ -644,7 +644,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     _addFlightTrackingCandidateForTest({
       icao24: 'late003',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.3, 30.6, 7_000),
       },
@@ -661,7 +661,7 @@ test('real civil track path creates no native label and publishes every cached h
     assert.equal(_pendingFlightTrackingRestoreForTest(), 'late004');
     _addFlightTrackingCandidateForTest({
       icao24: 'late004',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.2, 30.7, 6_000),
       },
@@ -686,7 +686,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     _addFlightTrackingCandidateForTest({
       icao24: 'late005',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.1, 30.8, 5_000),
       },
@@ -732,12 +732,12 @@ function seedLabelContact({
   _setTrackedFlightRefreshStateForTest({
     icao24: LABEL_ICAO,
     entity: null,
-    billboard: {
+    icon: {
       position: LABEL_POSITION,
       color: Cesium.Color.WHITE,
       show: true,
     },
-    billboardCollection: { show: true, remove() {} },
+    iconLayer: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked,
     meta: {
@@ -940,12 +940,12 @@ test('civil tracked readout: a callsign-less enriched contact reads as its regis
   _setTrackedFlightRefreshStateForTest({
     icao24: LABEL_ICAO,
     entity,
-    billboard: {
+    icon: {
       position: LABEL_POSITION,
       color: Cesium.Color.WHITE,
       show: false,
     },
-    billboardCollection: { show: false, remove() {} },
+    iconLayer: { show: false, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     meta: {
       callsign: '  ',
@@ -1064,16 +1064,16 @@ test('a newly seen taxiing aircraft starts on the floor under its delayed positi
   _clearDisplayFloorStateForTest();
   _clearMeshFloorCellsForTest();
   setMeshFloorPreferred(true);
-  const billboardCollection = { show: false };
+  const iconLayer = { show: false };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
     icao24: 'seed00',
     entity: null,
-    billboard: {
+    icon: {
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection,
+    iconLayer,
     viewer,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
     tracked: false,
@@ -1154,11 +1154,11 @@ test('far grounded contacts take turns on the floor; near ones refloor every tic
   _setTrackedFlightRefreshStateForTest({
     icao24: 'seed00',
     entity: null,
-    billboard: {
+    icon: {
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection: { show: false },
+    iconLayer: { show: false },
     viewer,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
     tracked: false,

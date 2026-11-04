@@ -1193,7 +1193,8 @@ export function createTracking({
           const rawPick =
             typeof picked.id === 'string' ? picked.id : picked.primitive?.id;
           if (
-            picked.primitive === flightState._trackedModel ||
+            (flightState._trackedModel &&
+              picked.primitive === flightState._trackedModel.model) ||
             rawPick === flightState._trackedIcao
           )
             return;

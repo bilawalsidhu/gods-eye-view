@@ -32,7 +32,7 @@ import {
   trailHeadStart,
   modelAnchorWorld,
 } from './modelVisualAnchor.js';
-import { mirrorModel } from './modelMirror.js';
+import { createModelRecord } from './modelRecord.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -798,13 +798,13 @@ test('the trail anchor rides the rendered longitudinal axis at every heading', (
       position, hpr, Cesium.Ellipsoid.WGS84, undefined, new Cesium.Matrix4(),
     );
     for (const [url, anchor] of Object.entries(MODEL_TRAIL_ANCHOR_NATIVE)) {
-      const model = mirrorModel({
+      const record = createModelRecord({
         modelMatrix,
         computedScale: 1,
         sceneGraph: { components: { transform: rootTransform } },
       });
       const origin = Cesium.Matrix4.getTranslation(modelMatrix, new Cesium.Cartesian3());
-      const world = modelAnchorWorld(model, anchor, new Cesium.Cartesian3());
+      const world = modelAnchorWorld(record, anchor, new Cesium.Cartesian3());
       // Reference axes derived INDEPENDENTLY, from the ENU frame and the same
       // heading the matrix was built with — deliberately NOT through
       // modelAnchorWorld. Taking them through the function under test makes the
@@ -861,13 +861,13 @@ test('a hovering rotorcraft anchors aft of its own hull, whatever its heading', 
   const anchor = MODEL_TRAIL_ANCHOR_NATIVE['/models/bell206.glb'];
   for (const headingDeg of [0, 137.5, 271.9]) {
     const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(headingDeg), 0, 0);
-    const model = mirrorModel({
+    const record = createModelRecord({
       modelMatrix: Cesium.Transforms.headingPitchRollToFixedFrame(
         position, hpr, Cesium.Ellipsoid.WGS84, undefined, new Cesium.Matrix4()),
       computedScale: 1,
     });
-    const origin = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
-    const world = modelAnchorWorld(model, anchor, new Cesium.Cartesian3());
+    const origin = Cesium.Matrix4.getTranslation(record.matrix, new Cesium.Cartesian3());
+    const world = modelAnchorWorld(record, anchor, new Cesium.Cartesian3());
     const enu = Cesium.Transforms.eastNorthUpToFixedFrame(origin, Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
     const ax = (i) => {
       const c = Cesium.Matrix4.getColumn(enu, i, new Cesium.Cartesian4());

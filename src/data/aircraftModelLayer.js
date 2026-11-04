@@ -3,8 +3,12 @@ import { selectModelEligible } from './modelEligibility.js';
 import { horizonOccluder } from './iconOrientation.js';
 import { aircraftTreatmentAlpha } from './aircraftRecession.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from './aircraftModelLighting.js';
-import { aircraftVisuals } from '../layers/aircraft/visualState.js';
-import { modelState, setModel } from './modelMirror.js';
+import {
+  createModelRecord,
+  modelIsRendering,
+  placeModel,
+  showModel,
+} from './modelRecord.js';
 
 /**
  * An aircraft layer's 3D models: the fleet regime and its gap-proof handoff
@@ -98,8 +102,8 @@ export function createAircraftModels({
   }
 
   /** World model matrix from a position + course heading (pitch/roll 0; ENU frame). Writes into
-   *  `result` (a shared scratch by default) and returns it. Push it with `setModel`, which copies
-   *  it into Core's mirror and the model's own matrix, so models never share one mutable matrix
+   *  `result` (a shared scratch by default) and returns it. Push it with `placeModel`, which copies
+   *  it into the model's record and its own matrix, so models never share one mutable matrix
    *  object. `Model.modelMatrix` is a plain field (not a cloning setter); Cesium
    *  clones it per frame in updateModelMatrix(). Sharing a single scratch made every model render at
    *  the LAST-written transform — all stacked on one plane — and, once the tracked model wrote the
@@ -187,14 +191,14 @@ export function createAircraftModels({
 
   function _driveFleetModelHandoff(
     icao24,
-    model,
+    record,
     row,
     pos,
     course,
     beforeShow,
   ) {
     const icons = state._icons;
-    if (!model) {
+    if (!record) {
       icons.setShown(row, true);
       return false;
     }
@@ -204,16 +208,15 @@ export function createAircraftModels({
       state._scratchGroundPos,
     );
     if (!displayPos) {
-      setModel(model, 'show', false); // no ground evidence → nothing safe to place a depth-tested model at
+      showModel(record, false); // no ground evidence → nothing safe to place a depth-tested model at
       icons.setShown(row, true);
       return false;
     }
     // The matrix is written BEFORE the readiness test on purpose: a model can flip
     // `ready` during scene update after this tick, and a first rendered frame on a
     // stale load-start matrix is the one-frame jump this ordering prevents.
-    setModel(
-      model,
-      'modelMatrix',
+    placeModel(
+      record,
       _modelMatrix(
         displayPos,
         course,
@@ -221,13 +224,13 @@ export function createAircraftModels({
         _headingOffsetDeg(state.records.data.get(icao24)?.klass),
       ),
     );
-    if (!model.ready) {
-      setModel(model, 'show', false); // not loaded yet → keep the 2D icon, no half-model flash
+    if (!record.model.ready) {
+      showModel(record, false); // not loaded yet → keep the 2D icon, no half-model flash
       icons.setShown(row, true);
       return false;
     }
     beforeShow?.();
-    if (!modelState(model).show) setModel(model, 'show', true);
+    if (!record.show) showModel(record, true);
     icons.setShown(row, false); // hand off ONLY once the model renders
     return true;
   }
@@ -265,33 +268,30 @@ export function createAircraftModels({
    *    null or still-loading tracked model from claiming a visual it is not
    *    drawing yet.
    * @param {string} icao24
-   * @param {Cesium.Model|null} [model] Resolved fleet model; null means absent.
+   * @param {import('./modelRecord.js').ModelRecord|null} [record] Resolved
+   *   fleet model record; null means absent.
    * @returns {boolean}
    */
 
-  function _modelOwnsVisual(icao24, model) {
+  function _modelOwnsVisual(icao24, record) {
     if (icao24 === state._trackedIcao) {
       return (
         parts.tracking._trackedModelRegimeActive() &&
-        _modelIsRendering(state._trackedModel)
+        modelIsRendering(state._trackedModel)
       );
     }
-    return _modelIsRendering(
-      model === undefined ? state._models.get(icao24) : model,
+    return modelIsRendering(
+      record === undefined ? state._models.get(icao24) : record,
     );
   }
 
-  /** A model is the visual only once it actually draws — loaded AND shown.
-   *
-   * `show` is sufficient evidence of a safe placement because only ONE site ever
-   * sets it true for a fleet model (`_driveFleetModelHandoff`, after the matrix is
-   * committed) and one for the tracked model (`_updateTrackedModel`, likewise);
-   * everything else — admission, an unresolved ground, a not-yet-ready glTF, the
-   * limb cull, a regime exit — only ever clears it. */
-
-  function _modelIsRendering(model) {
-    return !!model && model.ready === true && modelState(model)?.show === true;
-  }
+  // A model is the visual only once it actually draws, loaded AND shown
+  // (`modelIsRendering`). `show` is sufficient evidence of a safe placement
+  // because only ONE site ever sets it true for a fleet model
+  // (`_driveFleetModelHandoff`, after the matrix is committed) and one for the
+  // tracked model (`_updateTrackedModel`, likewise); everything else —
+  // admission, an unresolved ground, a not-yet-ready glTF, the limb cull, a
+  // regime exit — only ever clears it.
 
   /** Spec identity for a LOADED model: URL and scale together (same-URL classes
    *  differ by scale — airliner vs quadjet both ship airplane.glb). */
@@ -313,7 +313,7 @@ export function createAircraftModels({
     const key = _specKeyFor(state.records.data.get(icao24)?.klass);
     const current = state._models.get(icao24);
     if (
-      (current && aircraftVisuals.read(current)?.specKey !== key) ||
+      (current && current.specKey !== key) ||
       (!current && state._modelPending.has(icao24))
     ) {
       _releaseModel(icao24);
@@ -321,7 +321,7 @@ export function createAircraftModels({
     if (
       icao24 === state._trackedIcao &&
       state._trackedModel &&
-      aircraftVisuals.read(state._trackedModel)?.specKey !== key
+      state._trackedModel.specKey !== key
     ) {
       _releaseTrackedModel();
     }
@@ -340,9 +340,8 @@ export function createAircraftModels({
     if (!state._irReloadQueue) return;
     const batch = state._irReloadQueue.splice(0, policy.IR_RELOAD_BATCH);
     for (const icao of batch) {
-      const model = state._models.get(icao);
-      if (!model || aircraftVisuals.read(model)?.irBoost === state._irBoost)
-        continue; // already right state
+      const record = state._models.get(icao);
+      if (!record || record.irBoost === state._irBoost) continue; // already right state
       _releaseModel(icao);
     }
     if (state._irReloadQueue.length === 0) state._irReloadQueue = null;
@@ -435,16 +434,17 @@ export function createAircraftModels({
     // Keep the pick identity explicit on the resolved primitive. This also
     // protects injected/custom loaders that do not copy the creation option.
     model.id = icao24;
-    const visual = aircraftVisuals.write(model);
-    visual.specKey = specKey; // class-change sync compares against this
-    visual.irBoost = loadIrBoost; // boost-flip reload queue compares against this
+    const record = createModelRecord(model, {
+      specKey, // class-change sync compares against this
+      irBoost: loadIrBoost, // boost-flip reload queue compares against this
+    });
     // Admitted, not yet the visual. Cesium's default is show=true, which would let
     // an unplaced primitive claim ownership from the icon for the frames
     // between admission and the next fleet tick (and draw at the identity matrix,
     // i.e. the Earth's centre). The handoff turns it on once it has a matrix.
-    setModel(model, 'show', false);
+    showModel(record, false);
     state._modelCollection.add(model);
-    state._models.set(icao24, model);
+    state._models.set(icao24, record);
     state._planeModelLoaded = true; // GLB is cached now — the tracked entity's model can fade in its billboard
   }
 
@@ -452,17 +452,17 @@ export function createAircraftModels({
    *  Bumps the load generation so any in-flight load for this icao is rejected on completion. */
 
   function _releaseModel(icao24) {
-    const m = state._models.get(icao24);
+    const record = state._models.get(icao24);
     const pending = state._modelPending.has(icao24);
     // Only bump the generation when there's something to invalidate (an in-flight load or a
     // live model) — so removing never-modeled aircraft doesn't grow _modelGen.
-    if (m || pending) {
+    if (record || pending) {
       state._modelGen.set(icao24, (state._modelGen.get(icao24) || 0) + 1);
     }
-    if (m) {
+    if (record) {
       if (state._modelCollection && !state._modelCollection.isDestroyed()) {
         try {
-          state._modelCollection.remove(m);
+          state._modelCollection.remove(record.model);
         } catch {
           /* gone */
         }
@@ -492,9 +492,9 @@ export function createAircraftModels({
     for (const icao of state._modelPending)
       state._modelGen.set(icao, (state._modelGen.get(icao) || 0) + 1);
     if (state._modelCollection && !state._modelCollection.isDestroyed()) {
-      for (const m of state._models.values()) {
+      for (const record of state._models.values()) {
         try {
-          state._modelCollection.remove(m);
+          state._modelCollection.remove(record.model);
         } catch {
           /* gone */
         }
@@ -521,7 +521,7 @@ export function createAircraftModels({
     if (state._trackedModel) {
       if (state._modelCollection && !state._modelCollection.isDestroyed()) {
         try {
-          state._modelCollection.remove(state._trackedModel);
+          state._modelCollection.remove(state._trackedModel.model);
         } catch {
           /* gone */
         }
@@ -542,7 +542,7 @@ export function createAircraftModels({
       state._modelCollection &&
       !state._modelCollection.isDestroyed();
     if (!active) {
-      if (state._trackedModel) setModel(state._trackedModel, 'show', false);
+      if (state._trackedModel) showModel(state._trackedModel, false);
       return;
     }
     // Ask the frame-cached source directly. If the entity callback already ran,
@@ -553,7 +553,7 @@ export function createAircraftModels({
       parts.motion._trackedDisplayPosition(state._trackedIcao) ||
       parts.icons._iconPosition(state._trackedIcao);
     if (!pos) {
-      if (state._trackedModel) setModel(state._trackedModel, 'show', false);
+      if (state._trackedModel) showModel(state._trackedModel, false);
       return;
     }
     if (
@@ -621,8 +621,11 @@ export function createAircraftModels({
           // Assign after resolution as well as in the creation options so the
           // standalone primitive always exposes the tracked aircraft pick id.
           m.id = state._trackedIcao;
-          aircraftVisuals.write(m).specKey = trackedKey; // class-change sync compares against this
-          setModel(m, 'show', false); // admitted, not yet the visual — the driver shows it once placed
+          const record = createModelRecord(m, {
+            specKey: trackedKey, // class-change sync compares against this
+            irBoost: trackedIrBoost,
+          });
+          showModel(record, false); // admitted, not yet the visual — the driver shows it once placed
           // Seed the world transform before the primitive enters the scene. A model
           // can become ready+shown between render phases; leaving Cesium's identity
           // default here produces a one-frame jump to the Earth's center.
@@ -636,9 +639,8 @@ export function createAircraftModels({
               state._scratchGroundPos,
             );
             if (displayPos)
-              setModel(
-                m,
-                'modelMatrix',
+              placeModel(
+                record,
                 _modelMatrix(
                   displayPos,
                   parts.motion._trackedDisplayCourse(),
@@ -648,7 +650,7 @@ export function createAircraftModels({
                 ),
               );
           }
-          state._trackedModel = m;
+          state._trackedModel = record;
           state._trackedModelLoading = false;
           // A good load retires this selection's failure budget — a contact that
           // recovers after a transient blip is not one attempt from giving up.
@@ -675,15 +677,14 @@ export function createAircraftModels({
         state._scratchGroundPos,
       );
       if (!displayPos) {
-        setModel(state._trackedModel, 'show', false); // no ground evidence → the billboard carries it
+        showModel(state._trackedModel, false); // no ground evidence → the icon carries it
         return;
       }
       const spec = _modelSpec(
         state.records.data.get(state._trackedIcao)?.klass,
       );
-      setModel(
+      placeModel(
         state._trackedModel,
-        'modelMatrix',
         _modelMatrix(
           displayPos,
           parts.motion._trackedDisplayCourse(),
@@ -691,8 +692,8 @@ export function createAircraftModels({
           spec.headingOffsetDeg ?? policy.MODEL_HEADING_OFFSET_DEG,
         ),
       );
-      if (!state._trackedModel.ready) return;
-      state._trackedModel.scale = trackedModelScaleForPixelCap({
+      if (!state._trackedModel.model.ready) return;
+      state._trackedModel.model.scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
         nativeRadiusM: spec.nativeRadiusM,
         rangeM: Cesium.Cartesian3.distance(
@@ -703,7 +704,7 @@ export function createAircraftModels({
         fovyRad: state._viewer.camera.frustum.fovy,
         maximumPixelSize: policy.TRACKED_MODEL_MAX_PX,
       });
-      setModel(state._trackedModel, 'show', true);
+      showModel(state._trackedModel, true);
     }
   }
 
@@ -824,22 +825,22 @@ export function createAircraftModels({
       if (!parts.icons._aboveHorizon(row, position, occluder)) {
         // A model that crossed the limb would keep rendering through the
         // hidden globe at its last matrix; the icon's own cull is on the GPU.
-        const m = state._models.get(icao24);
-        if (m && modelState(m)?.show) setModel(m, 'show', false);
+        const hidden = state._models.get(icao24);
+        if (hidden?.show) showModel(hidden, false);
         continue;
       }
       _ensureModel(icao24);
-      const model = state._models.get(icao24);
+      const record = state._models.get(icao24);
       const cameraDistanceM = Cesium.Cartesian3.distance(camPos, position);
       _driveFleetModelHandoff(
         icao24,
-        model,
+        record,
         row,
         position,
         icons.course(row, tau),
         () => {
           applyAircraftModelTreatment({
-            model,
+            model: record.model,
             // IR boost must survive the per-tick treatment write — otherwise
             // any alpha change would repaint the ordinary tint over the hot
             // white. Boosted models also skip the recession fade: hot targets
@@ -871,7 +872,6 @@ export function createAircraftModels({
     _modelDisplayPosition,
     _driveFleetModelHandoff,
     _modelOwnsVisual,
-    _modelIsRendering,
     _specKeyFor,
     _syncModelToClass,
     _reloadModelsForIrBoost,

@@ -1,11 +1,11 @@
 /**
- * Limb-relative recession for distant aircraft billboards.
+ * Limb-relative recession for distant aircraft: the factors icon sets apply in
+ * their shader (ICON_RECEDES) and models apply through their colour alpha.
  *
- * This multiplies the billboard's ordinary scale, which Cesium then composes
- * with the locked NearFarScalar. It never edits that scalar, culls a contact,
- * or allows alpha to reach zero.
+ * It multiplies an icon's ordinary scale, which composes with its locked
+ * NearFarScalar. It never edits that scalar, culls a contact, or allows alpha
+ * to reach zero.
  */
-import { billboardState, setBillboard } from './billboardMirror.js';
 
 export const DEFAULT_AIRCRAFT_RECESSION_PARAMS = Object.freeze({
   startLimbRatio: 0.5,
@@ -20,13 +20,6 @@ export const DEFAULT_AIRCRAFT_RECESSION_PARAMS = Object.freeze({
 
 let _params = { ...DEFAULT_AIRCRAFT_RECESSION_PARAMS };
 const _scratchFactors = { scale: 1, alpha: 1, limbRatio: null };
-const _treatmentResult = {
-  scale: 1,
-  alpha: 1,
-  scaleWrites: 0,
-  alphaWrites: 0,
-  factors: _scratchFactors,
-};
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -176,71 +169,6 @@ export function aircraftRecessionFactors(
     tuning,
     { scale: 1, alpha: 1, limbRatio: null },
   );
-}
-
-/**
- * Production wire helper: compose base scale/alpha, focus emphasis, and limb
- * recession into one deadband-gated billboard write site.
- * @param {object} input
- * @param {object} input.billboard
- * @param {number} input.baseScale
- * @param {number} input.baseAlpha
- * @param {{withAlpha:(alpha:number)=>object}} input.baseColor
- * @param {number} input.focusFactor
- * @param {number} input.cameraDistanceM
- * @param {number} input.cameraHeightM
- * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [input.params]
- *
- * IMPORTANT: the returned object (including `factors`) is a module-owned
- * mutable singleton. Consume every needed property before the next call;
- * never retain it as a snapshot.
- * @returns {{scale:number,alpha:number,scaleWrites:number,alphaWrites:number,factors:object}}
- */
-export function applyAircraftBillboardTreatment({
-  billboard,
-  baseScale,
-  baseAlpha,
-  baseColor,
-  focusFactor,
-  cameraDistanceM,
-  cameraHeightM,
-  params,
-}) {
-  const tuning = resolvedParams(params);
-  const factors = aircraftRecessionFactorsResolved(
-    cameraDistanceM,
-    cameraHeightM,
-    tuning,
-    _scratchFactors,
-  );
-  const scale = baseScale * factors.scale;
-  const composedTreatment = Math.max(
-    tuning.combinedAlphaFloor,
-    clamp(focusFactor, 0, 1) * factors.alpha,
-  );
-  const alpha = baseAlpha * composedTreatment;
-  let scaleWrites = 0;
-  let alphaWrites = 0;
-  const pushedScale = billboardState(billboard)?.scale;
-  if (
-    !Number.isFinite(pushedScale) ||
-    Math.abs(pushedScale - scale) > tuning.writeEpsilon
-  ) {
-    setBillboard(billboard, 'scale', scale);
-    scaleWrites = 1;
-  }
-  if (
-    !Number.isFinite(billboard.color?.alpha) ||
-    Math.abs(billboard.color.alpha - alpha) > tuning.writeEpsilon
-  ) {
-    billboard.color = baseColor.withAlpha(alpha);
-    alphaWrites = 1;
-  }
-  _treatmentResult.scale = scale;
-  _treatmentResult.alpha = alpha;
-  _treatmentResult.scaleWrites = scaleWrites;
-  _treatmentResult.alphaWrites = alphaWrites;
-  return _treatmentResult;
 }
 
 /**

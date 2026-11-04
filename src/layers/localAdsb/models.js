@@ -15,8 +15,11 @@ import {
   MODEL_PROX_KEEP_M,
 } from '../flights/policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
-import { aircraftVisuals } from '../aircraft/visualState.js';
-import { setModel } from '../../data/modelMirror.js';
+import {
+  createModelRecord,
+  placeModel,
+  showModel,
+} from '../../data/modelRecord.js';
 
 const specKey = (spec) => `${spec.url}@${spec.scale}`;
 
@@ -48,7 +51,7 @@ export function createLocalAdsbModels({
 }) {
   const collection = new Cesium.PrimitiveCollection();
   viewer.scene.primitives.add(collection);
-  /** @type {Map<string, object>} id -> admitted model */
+  /** @type {Map<string, import('../../data/modelRecord.js').ModelRecord>} id -> admitted model */
   const models = new Map();
   /** @type {Map<string, number>} id -> generation of an in-flight load */
   const pending = new Map();
@@ -64,10 +67,10 @@ export function createLocalAdsbModels({
 
   function release(id) {
     pending.delete(id);
-    const model = models.get(id);
-    if (!model) return;
+    const record = models.get(id);
+    if (!record) return;
     models.delete(id);
-    if (!collection.isDestroyed()) collection.remove(model);
+    if (!collection.isDestroyed()) collection.remove(record.model);
     groundSnap?.forget?.(id);
   }
 
@@ -81,7 +84,7 @@ export function createLocalAdsbModels({
     const spec = civilAircraftModelSpec(marker.klass);
     const key = specKey(spec);
     const current = models.get(id);
-    if (current && aircraftVisuals.read(current)?.specKey === key) return;
+    if (current?.specKey === key) return;
     if (current) release(id);
     if (pending.has(id) || models.size + pending.size >= cap) return;
     const loadGeneration = generation;
@@ -116,13 +119,14 @@ export function createLocalAdsbModels({
       return;
     }
     model.id = id;
-    const visual = aircraftVisuals.write(model);
-    visual.specKey = key;
-    visual.bellyM = spec.bellyM;
+    const record = createModelRecord(model, {
+      specKey: key,
+      bellyM: spec.bellyM,
+    });
     // Admitted, not yet the visual: placement turns it on.
-    setModel(model, 'show', false);
+    showModel(record, false);
     collection.add(model);
-    models.set(id, model);
+    models.set(id, record);
   }
 
   function regime(preferences) {
@@ -171,11 +175,11 @@ export function createLocalAdsbModels({
 
   function placement(id, marker) {
     if (!marker.onGround) return marker.position;
-    const model = models.get(id);
+    const record = models.get(id);
     // The vertical sample must hit the tile skin, not this aircraft's own
     // billboard or model.
     const height = groundSnap?.heightFor?.(viewer, id, marker.position, () =>
-      [marker.entity, model].filter(Boolean),
+      [marker.entity, record?.model].filter(Boolean),
     );
     if (!Number.isFinite(height)) return null;
     const carto = Cesium.Cartographic.fromCartesian(
@@ -186,7 +190,7 @@ export function createLocalAdsbModels({
     return Cesium.Cartesian3.fromRadians(
       carto.longitude,
       carto.latitude,
-      height + (aircraftVisuals.read(model)?.bellyM || 0),
+      height + (record?.bellyM || 0),
       Cesium.Ellipsoid.WGS84,
       scratchGround,
     );
@@ -221,12 +225,12 @@ export function createLocalAdsbModels({
       }
       const occluder = horizonOccluder(viewer.camera);
       for (const [id, marker] of markers) {
-        const model = models.get(id);
+        const record = models.get(id);
         marker.modelOwnsVisual = false;
-        if (!model || !marker.position) continue;
+        if (!record || !marker.position) continue;
         const position = placement(id, marker);
         if (!position || !occluder.isPointVisible(marker.position)) {
-          setModel(model, 'show', false);
+          showModel(record, false);
           continue;
         }
         scratchHpr.heading = Cesium.Math.toRadians(
@@ -234,9 +238,8 @@ export function createLocalAdsbModels({
         );
         scratchHpr.pitch = 0;
         scratchHpr.roll = 0;
-        setModel(
-          model,
-          'modelMatrix',
+        placeModel(
+          record,
           Cesium.Transforms.headingPitchRollToFixedFrame(
             position,
             scratchHpr,
@@ -245,11 +248,11 @@ export function createLocalAdsbModels({
             scratchMatrix,
           ),
         );
-        if (!model.ready) {
-          setModel(model, 'show', false);
+        if (!record.model.ready) {
+          showModel(record, false);
           continue;
         }
-        setModel(model, 'show', true);
+        showModel(record, true);
         marker.modelOwnsVisual = true;
       }
       for (const id of [...models.keys()]) if (!markers.has(id)) release(id);

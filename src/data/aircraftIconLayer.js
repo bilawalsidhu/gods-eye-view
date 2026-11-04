@@ -412,15 +412,14 @@ export function createAircraftIcons({
  * @param {string} layerId
  */
 export function aircraftIconTestSeams(state, parts, layerId) {
-  /** Give a test contact an icon row held at `billboard.position`, shown as
-   *  `billboard.show` says (hidden by default while tracked). */
-  function _seedIconForTest(icao24, billboard, tracked) {
+  /** Give a test contact an icon row held at `icon.position`, shown as
+   *  `icon.show` says (hidden by default while tracked). */
+  function _seedIconForTest(icao24, icon, tracked) {
     const set = state._icons;
     const row = set.add(icao24, { layer: layerId, id: icao24 });
-    if (billboard?.position)
-      writeHoldSegment(set.segments, row, billboard.position, 0);
+    if (icon?.position) writeHoldSegment(set.segments, row, icon.position, 0);
     set.segmentWritten(row);
-    set.setShown(row, billboard?.show ?? !tracked);
+    set.setShown(row, icon?.show ?? !tracked);
     return row;
   }
 
