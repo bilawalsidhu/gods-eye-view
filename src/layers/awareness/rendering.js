@@ -662,12 +662,167 @@ export function createRendering({
     clearAwarenessEchoField();
     if (visual?.rim || (visual?.entities && viewer)) {
       visual.rim?.destroy();
+      visual.disc?.destroy();
       for (const entity of visual.entities ?? [])
         viewer.entities.remove(entity);
       // Idle mode renders only on request; a removed ring must not linger.
       governorRequestRender('awareness-visual');
     }
     layerState.visual = null;
+  }
+
+  /** A fresh pulse window, running from now. */
+  function newWake() {
+    return wakeAwarenessPulses(
+      { startMs: -Infinity, untilMs: -Infinity },
+      performance.now(),
+    );
+  }
+
+  /**
+   * How far the pulses are on at a time (0 at rest or while `belowRim()`),
+   * and the ring's opacity: while pulses run it flashes as each one arrives
+   * and otherwise dims to `restOpacity`; as they settle it returns to full.
+   */
+  function pulseClock(wake, belowRim) {
+    const levelAt = (nowMs) =>
+      wake && !belowRim() ? awarenessPulseLevel(nowMs, wake) : 0;
+    const ringAlpha = (nowMs) => {
+      const pulsed = Math.max(
+        AWARENESS_RANGE_RING_STYLE.restOpacity,
+        awarenessRingFlash(nowMs),
+      );
+      return 1 - levelAt(nowMs) * (1 - pulsed);
+    };
+    return { levelAt, ringAlpha, belowRim };
+  }
+
+  /**
+   * Run the pulses on a globe: each frame `draw` gets the level, the ring's
+   * opacity and the fronts (fractions of the range, opacities). Each drawn
+   * frame, whoever asked for it, arms one request a Cyber sonar interval
+   * later, as the Cyber sonar scene does. Requests never land within 80 ms
+   * of a frame, so they cannot beat the detection lane's 80 ms gate, and
+   * they stop once the pulses rest. The detection overlay pulses the
+   * brackets of flights and vessels a front crosses; it reads `center` in
+   * place, so it follows the subject too. Returns the stop.
+   */
+  function runPulses({
+    center,
+    wake,
+    levelAt,
+    ringAlpha,
+    belowRim,
+    onFrame,
+    onFrameEnd,
+    draw,
+  }) {
+    const pulse = AWARENESS_RANGE_PULSE;
+    const count = Math.min(pulse.count, AWARENESS_PULSE_GRADIENT_MAX);
+    const radii = [0, 0, 0, 0];
+    const alphas = [0, 0, 0, 0];
+    const removeFrame = onFrame(() => {
+      const nowMs = performance.now();
+      const level = levelAt(nowMs);
+      for (let index = 0; index < count; index++) {
+        const state = awarenessPulseState(nowMs, index);
+        radii[index] = state.radiusM / AWARENESS_RADIUS_M;
+        alphas[index] = state.alpha * level;
+      }
+      draw({ level, alpha: ringAlpha(nowMs), radii, alphas });
+    });
+    let timer = null;
+    const removeFrameEnd = onFrameEnd(() => {
+      globalThis.clearTimeout(timer);
+      timer = null;
+      if (performance.now() < wake.untilMs && !belowRim())
+        timer = globalThis.setTimeout(() => {
+          timer = null;
+          governorRequestRender('awareness-pulse');
+        }, CYBER_SONAR_RENDER_INTERVAL_MS);
+    });
+    setAwarenessEchoField({
+      center,
+      radiusM: AWARENESS_RADIUS_M,
+      pulse,
+      echo: AWARENESS_RANGE_ECHO,
+      level: levelAt,
+    });
+    return () => {
+      removeFrame?.();
+      removeFrameEnd?.();
+      globalThis.clearTimeout(timer);
+      timer = null;
+    };
+  }
+
+  /**
+   * Rebuild the visual when reduced motion is turned on or off mid-session.
+   * Returns the listener's removal.
+   */
+  function watchReducedMotion() {
+    const motionQuery = globalThis.matchMedia?.(REDUCED_MOTION_QUERY);
+    const onMotionChange = () => {
+      if (layerState.subject) renderVisual(layerState.subject);
+    };
+    // Safari before 14 has only the older addListener / removeListener.
+    if (motionQuery?.addEventListener)
+      motionQuery.addEventListener('change', onMotionChange);
+    else motionQuery?.addListener?.(onMotionChange);
+    return () => {
+      if (motionQuery?.removeEventListener)
+        motionQuery.removeEventListener('change', onMotionChange);
+      else motionQuery?.removeListener?.(onMotionChange);
+    };
+  }
+
+  /**
+   * The visual through the display of an engine without a Cesium viewer:
+   * its range ring and, unless reduced motion is on or it cannot draw them,
+   * the pulses and their echoes, timed as on Cesium.
+   */
+  function renderDisplayVisual(key, groundCenter, reducedMotion) {
+    const display = layerState.display;
+    const animate = Boolean(
+      !reducedMotion &&
+      display.createPulses &&
+      display.onFrameEnd &&
+      display.cameraHeight,
+    );
+    const wake = animate ? newWake() : null;
+    const { levelAt, ringAlpha, belowRim } = pulseClock(
+      wake,
+      () => display.cameraHeight() < CONTEXT_RIM_HEIGHT_M,
+    );
+    const center = geo.cartesian3.clone(groundCenter);
+    const rim = display.createRim(groundCenter);
+    const disc = animate ? display.createPulses(groundCenter) : null;
+    const stopPulses = animate
+      ? runPulses({
+          center,
+          wake,
+          levelAt,
+          ringAlpha,
+          belowRim,
+          onFrame: display.onFrame,
+          onFrameEnd: display.onFrameEnd,
+          draw({ level, alpha, radii, alphas }) {
+            rim.setAlpha?.(alpha);
+            disc.draw({ level, radii, alphas });
+          },
+        })
+      : null;
+    layerState.visual = {
+      key,
+      rim,
+      disc,
+      center,
+      reducedMotion,
+      wake,
+      stopPulses,
+      removeMotionListener: watchReducedMotion(),
+    };
+    governorRequestRender('awareness-visual');
   }
 
   function renderVisual(subject) {
@@ -693,6 +848,7 @@ export function createRendering({
       ) {
         if (layerState.visual.rim) {
           layerState.visual.rim.move(groundCenter);
+          layerState.visual.disc?.move(groundCenter);
           geo.cartesian3.clone(groundCenter, layerState.visual.center);
         } else {
           const positions = awarenessRangeRingPositions(
@@ -724,17 +880,11 @@ export function createRendering({
     }
     clearVisual();
 
-    // Only a Cesium globe has the pulse disc and its echoes; another engine
-    // draws the plain range ring.
+    // A Cesium globe draws the ring and the pulse disc as primitives below;
+    // another engine through its display: a ring, and pulses when it can.
     const viewer = layerState.display.viewer;
     if (!viewer) {
-      layerState.visual = {
-        key,
-        rim: layerState.display.createRim(groundCenter),
-        center: geo.cartesian3.clone(groundCenter),
-        reducedMotion,
-      };
-      governorRequestRender('awareness-visual');
+      renderDisplayVisual(key, groundCenter, reducedMotion);
       return;
     }
     const entities = [];
@@ -749,18 +899,14 @@ export function createRendering({
       scene?.postRender?.addEventListener,
     );
     // Pulses run from now until `wake.untilMs`, then rest.
-    const wake = animate
-      ? wakeAwarenessPulses(
-          { startMs: -Infinity, untilMs: -Infinity },
-          performance.now(),
-        )
-      : null;
+    const wake = animate ? newWake() : null;
     // From a camera below the rim height the disc would sweep across the sky,
     // so it is hidden there, and the pulses rest with it: no flash, no
     // echoes, no frames.
-    const belowRim = () => cameraHeightM(scene) < CONTEXT_RIM_HEIGHT_M;
-    const levelAt = (nowMs) =>
-      wake && !belowRim() ? awarenessPulseLevel(nowMs, wake) : 0;
+    const { levelAt, ringAlpha, belowRim } = pulseClock(
+      wake,
+      () => cameraHeightM(scene) < CONTEXT_RIM_HEIGHT_M,
+    );
 
     // A polyline, not an ellipse outline: WebGL draws ellipse outlines at
     // 1 px whatever `outlineWidth` says, and the ring needs a halo.
@@ -772,12 +918,6 @@ export function createRendering({
       AWARENESS_RADIUS_M,
       CONTEXT_RIM_HEIGHT_M,
     );
-    // While pulses run, the ring flashes as each one arrives and otherwise
-    // dims to `restOpacity`; as they settle it returns to full and stays.
-    const ringAlpha = (nowMs) => {
-      const pulsed = Math.max(ring.restOpacity, awarenessRingFlash(nowMs));
-      return 1 - levelAt(nowMs) * (1 - pulsed);
-    };
     let ringEntity = null;
     let ringMaterial = null;
     let ringPrimitive = null;
@@ -843,65 +983,25 @@ export function createRendering({
       gradient = scene.primitives.add(
         createPulseGradient(groundCenter, material),
       );
-      const radii = [0, 0, 0, 0];
-      const alphas = [0, 0, 0, 0];
-      const removePreRender = scene.preRender.addEventListener(() => {
-        const nowMs = performance.now();
-        const level = levelAt(nowMs);
-        const alpha = ringAlpha(nowMs);
-        ringMaterial.uniforms.color.alpha = core.alpha * alpha;
-        ringMaterial.uniforms.outlineColor.alpha = halo.alpha * alpha;
-        // The disc is looked up each frame: a subject move swaps it.
-        const disc = layerState.visual?.gradient;
-        if (disc) disc.show = level > 0;
-        for (let index = 0; index < count; index++) {
-          const state = awarenessPulseState(nowMs, index);
-          radii[index] = state.radiusM / AWARENESS_RADIUS_M;
-          alphas[index] = state.alpha * level;
-        }
-        Cesium.Cartesian4.fromArray(radii, 0, material.uniforms.radii);
-        Cesium.Cartesian4.fromArray(alphas, 0, material.uniforms.alphas);
-      });
-      // Each drawn frame, whoever asked for it, arms one request a Cyber
-      // sonar interval later, as the Cyber sonar scene does. Requests never
-      // land within 80 ms of a frame, so they cannot beat the detection
-      // lane's 80 ms gate, and they stop once the pulses rest.
-      let timer = null;
-      const removePostRender = scene.postRender.addEventListener(() => {
-        globalThis.clearTimeout(timer);
-        timer = null;
-        if (performance.now() < wake.untilMs && !belowRim())
-          timer = globalThis.setTimeout(() => {
-            timer = null;
-            governorRequestRender('awareness-pulse');
-          }, CYBER_SONAR_RENDER_INTERVAL_MS);
-      });
-      stopPulses = () => {
-        removePreRender();
-        removePostRender();
-        globalThis.clearTimeout(timer);
-        timer = null;
-      };
-      // The detection overlay pulses the brackets of flights and vessels a
-      // front crosses; it reads the centre in place, so it follows too.
-      setAwarenessEchoField({
+      stopPulses = runPulses({
         center,
-        radiusM: AWARENESS_RADIUS_M,
-        pulse,
-        echo: AWARENESS_RANGE_ECHO,
-        level: levelAt,
+        wake,
+        levelAt,
+        ringAlpha,
+        belowRim,
+        onFrame: (run) => scene.preRender.addEventListener(run),
+        onFrameEnd: (run) => scene.postRender.addEventListener(run),
+        draw({ level, alpha, radii, alphas }) {
+          ringMaterial.uniforms.color.alpha = core.alpha * alpha;
+          ringMaterial.uniforms.outlineColor.alpha = halo.alpha * alpha;
+          // The disc is looked up each frame: a subject move swaps it.
+          const disc = layerState.visual?.gradient;
+          if (disc) disc.show = level > 0;
+          Cesium.Cartesian4.fromArray(radii, 0, material.uniforms.radii);
+          Cesium.Cartesian4.fromArray(alphas, 0, material.uniforms.alphas);
+        },
       });
     }
-
-    // Turning reduced motion on or off mid-session rebuilds the visual.
-    const motionQuery = globalThis.matchMedia?.(REDUCED_MOTION_QUERY);
-    const onMotionChange = () => {
-      if (layerState.subject) renderVisual(layerState.subject);
-    };
-    // Safari before 14 has only the older addListener / removeListener.
-    if (motionQuery?.addEventListener)
-      motionQuery.addEventListener('change', onMotionChange);
-    else motionQuery?.addListener?.(onMotionChange);
 
     layerState.visual = {
       key,
@@ -915,11 +1015,7 @@ export function createRendering({
       reducedMotion,
       wake,
       stopPulses,
-      removeMotionListener: () => {
-        if (motionQuery?.removeEventListener)
-          motionQuery.removeEventListener('change', onMotionChange);
-        else motionQuery?.removeListener?.(onMotionChange);
-      },
+      removeMotionListener: watchReducedMotion(),
     };
     governorRequestRender('awareness-visual');
   }

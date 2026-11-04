@@ -3821,6 +3821,7 @@
       "src/layers/earthquakes/render/navaraGrid.js",
       "src/layers/installations/render/navara.js",
       "src/layers/awareness/render/navara.js",
+      "src/layers/awareness/render/navaraPulses.js",
       "src/layers/infrastructure/render/navara.js",
       "src/layers/shared/render/navaraStems.js",
       "src/layers/shared/render/navaraSceneDepth.js",

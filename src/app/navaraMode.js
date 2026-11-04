@@ -220,9 +220,12 @@ export async function registerNavaraLayerRenderers() {
       return (engine) =>
         createGhostMapsNavaraRenderer(engine, navaraViews.get(engine).view);
     },
-    'military-awareness': async () =>
-      (await import('../layers/awareness/render/navara.js'))
-        .createAwarenessNavaraRenderer,
+    'military-awareness': async () => {
+      const { createAwarenessNavaraRenderer } =
+        await import('../layers/awareness/render/navara.js');
+      return (engine) =>
+        createAwarenessNavaraRenderer(engine, navaraViews.get(engine));
+    },
     'military-installations': async () => {
       const { createInstallationsNavaraRenderer } =
         await import('../layers/installations/render/navara.js');
