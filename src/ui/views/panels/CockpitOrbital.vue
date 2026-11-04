@@ -14,7 +14,6 @@ import {
   shownOwnerMark,
 } from '../../ownerFlag.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
-import CockpitOrbitalReach from './CockpitOrbitalReach.vue';
 
 // The orbital view's HUD: a nadir reticle over the picture, the satellite's
 // identity and orbit, and the optical zoom. The Cockpit controller presents
@@ -328,8 +327,6 @@ const lensStyle = computed(() => {
           <button id="cockpit-orbital-nadir" ref="nadirButton" type="button" class="cockpit-orbital-nadir" :aria-label="t('Return the view to nadir')" :title="t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ t('NADIR') }}</button>
         </div>
         <p id="cockpit-orbital-focus" class="cockpit-orbital-focus" aria-live="polite">{{ focusText }}</p>
-        <!-- The mapped points the view shows or can be turned to, each with FOCUS. -->
-        <CockpitOrbitalReach />
       </div>
       <div class="cockpit-orbital-optics">
         <button id="cockpit-orbital-zoom-out" ref="zoomOutButton" type="button" class="cockpit-orbital-zoom-button" :disabled="atWidest" :aria-label="t('Zoom out')" :title="t('Zoom out (−)')" aria-keyshortcuts="- _">−</button>

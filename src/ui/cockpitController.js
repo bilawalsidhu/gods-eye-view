@@ -34,6 +34,12 @@ import {
   toggleOrbitalFocus,
 } from './cockpitOrbitalFocus.js';
 import {
+  handleOrbitalSignalClick,
+  refreshOrbitalSignals,
+  updateOrbitalSignals,
+} from './cockpitOrbitalSignals.js';
+import { rideOrbitalSatellite } from './cockpitOrbitalSatellites.js';
+import {
   publishInstrumentsView,
   publishRouteView,
   updateHud,
@@ -233,7 +239,6 @@ export class CockpitViewController {
     this.publishUtilityLayout = publish.utilityLayout ?? (() => {});
     this.publishRadar = publish.radar ?? (() => {});
     this.publishOrbital = publish.orbital ?? (() => {});
-    this.publishOrbitalReach = publish.orbitalReach ?? (() => {});
     /** The bridge radar's range in nautical miles; kept across bridges. */
     this.radarRangeNm = DEFAULT_RADAR_RANGE_NM;
     this.presence = {
@@ -358,10 +363,6 @@ export class CockpitViewController {
       else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
       else if (target?.closest?.('#cockpit-orbital-sensor'))
         this.jumpToSensorSwath();
-      else {
-        const focus = target?.closest?.('[data-orbital-focus]');
-        if (focus) this.toggleOrbitalFocus(focus.dataset.orbitalFocus);
-      }
     });
     this._listen(this.signalToggle, 'click', () =>
       this.setSignalCollapsed(!this.signalCollapsed, { user: true }),
@@ -455,13 +456,36 @@ export class CockpitViewController {
     return onOrbitalDoubleClick.call(this, position);
   }
   /**
-   * FOCUS on the reach list: focus that point, switch to it, or end the
-   * focus held on it.
-   * @param {string} key The point's context id.
+   * A site's orbital Live Signals row: focus that site, switch to it, or end
+   * the focus held on it.
+   * @param {string} key The site's id in the Mapped Installations layer.
    * @returns {boolean} True when the focus changed.
    */
   toggleOrbitalFocus(key) {
     return toggleOrbitalFocus.call(this, key);
+  }
+  /** Rebuild the orbital Live Signals rows now. */
+  refreshOrbitalSignals() {
+    return refreshOrbitalSignals.call(this);
+  }
+  /** Rebuild the orbital Live Signals rows on their clock. */
+  updateOrbitalSignals(nowMs) {
+    return updateOrbitalSignals.call(this, nowMs);
+  }
+  /**
+   * Ride the satellite an orbital Live Signals row names (RETURN goes back).
+   * @param {number|string} noradId
+   * @returns {boolean} True when the ridden satellite changed.
+   */
+  rideOrbitalSatellite(noradId) {
+    return rideOrbitalSatellite.call(this, noradId);
+  }
+  /**
+   * A click on an orbital Live Signals row.
+   * @returns {boolean} True in orbit.
+   */
+  handleOrbitalSignalClick(layerId, id) {
+    return handleOrbitalSignalClick.call(this, layerId, id);
   }
   /**
    * Tilt the orbital view one arrow step off nadir.

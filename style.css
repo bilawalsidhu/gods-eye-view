@@ -10,7 +10,7 @@
 @import './src/ui/styles/cockpit.css';
 @import './src/ui/styles/cockpitRadar.css';
 @import './src/ui/styles/cockpitOrbital.css';
-@import './src/ui/styles/cockpitOrbitalReach.css';
+@import './src/ui/styles/cockpitOrbitalFocus.css';
 @import './src/ui/styles/overlays.css';
 @import './src/ui/styles/layers.css';
 @import './src/ui/styles/radio.css';

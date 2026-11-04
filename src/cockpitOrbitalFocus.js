@@ -21,22 +21,15 @@ import {
  */
 export const ORBITAL_FOCUS_EASE_TAU_MS = 250;
 
-/** How often the list of mapped points in reach is rebuilt, ms. */
+/** How often the orbital Live Signals rows are rebuilt, ms. */
 export const ORBITAL_REACH_REFRESH_MS = 1000;
 
-/** The most mapped points the reach list shows, nearest to nadir first. */
-export const ORBITAL_REACH_LIST_MAX = 12;
-
-/** The most detail rows (OpenStreetMap tags or properties) shown per point. */
-export const ORBITAL_REACH_DETAIL_MAX = 16;
+/** The most mapped sites offered for the rows, nearest to nadir first. */
+export const ORBITAL_REACH_LIST_MAX = 6;
 
 /** Slack on the reach limit so a target held exactly at 45° stays. */
 const REACH_EPSILON_DEG = 1e-6;
 
-const WGS84_A = 6378137;
-const WGS84_E2 = 6.69437999014e-3;
-
-const toRadians = (deg) => (deg * Math.PI) / 180;
 const toDegrees = (rad) => (rad * 180) / Math.PI;
 
 function dot(a, b) {
@@ -50,29 +43,6 @@ function finiteVector(v) {
     Number.isFinite(v.y) &&
     Number.isFinite(v.z)
   );
-}
-
-/**
- * Earth-fixed position of a geodetic point on the WGS84 ellipsoid, as
- * Cesium's `Cartesian3.fromDegrees` places it.
- * @param {number} latDeg
- * @param {number} lonDeg
- * @param {number} [heightM] Height above the ellipsoid.
- * @returns {{x: number, y: number, z: number}|null}
- */
-export function geodeticToEcef(latDeg, lonDeg, heightM = 0) {
-  if (!Number.isFinite(latDeg) || !Number.isFinite(lonDeg)) return null;
-  const h = Number.isFinite(heightM) ? heightM : 0;
-  const lat = toRadians(latDeg);
-  const lon = toRadians(lonDeg);
-  const sinLat = Math.sin(lat);
-  const cosLat = Math.cos(lat);
-  const n = WGS84_A / Math.sqrt(1 - WGS84_E2 * sinLat * sinLat);
-  return {
-    x: (n + h) * cosLat * Math.cos(lon),
-    y: (n + h) * cosLat * Math.sin(lon),
-    z: (n * (1 - WGS84_E2) + h) * sinLat,
-  };
 }
 
 /**
@@ -246,36 +216,8 @@ export function pointsInReach(
       a.offNadirDeg - b.offNadirDeg || String(a.key).localeCompare(b.key),
   );
   const limit =
-    Number.isInteger(max) && max >= 0 ? max : ORBITAL_REACH_LIST_MAX;
+    max === Infinity || (Number.isInteger(max) && max >= 0)
+      ? max
+      : ORBITAL_REACH_LIST_MAX;
   return { count: entries.length, entries: entries.slice(0, limit) };
-}
-
-/**
- * A mapped point's details as key/value rows: its OpenStreetMap tags, or the
- * properties its layer keeps. Text, numbers and lists of text only; keys
- * starting with `_` are internal. At most `max` rows, in the layer's order.
- * @param {object|null|undefined} properties
- * @param {number} [max]
- * @returns {Array<{key: string, value: string}>}
- */
-export function detailRows(properties, max = ORBITAL_REACH_DETAIL_MAX) {
-  const rows = [];
-  if (!properties || typeof properties !== 'object') return rows;
-  for (const [key, raw] of Object.entries(properties)) {
-    if (rows.length >= max) break;
-    if (!key || key.startsWith('_')) continue;
-    let value = null;
-    if (typeof raw === 'string') value = raw.trim();
-    else if (typeof raw === 'number' && Number.isFinite(raw))
-      value = String(raw);
-    else if (typeof raw === 'boolean') value = raw ? 'yes' : 'no';
-    else if (Array.isArray(raw)) {
-      const items = raw
-        .filter((item) => typeof item === 'string' && item.trim())
-        .map((item) => item.trim());
-      value = items.join(', ');
-    }
-    if (value) rows.push({ key, value });
-  }
-  return rows;
 }

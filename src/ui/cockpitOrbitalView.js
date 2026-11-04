@@ -41,11 +41,11 @@ import { isPointerFree } from '../data/inputOwnership.js';
 import { zoomableSwathKm } from '../layers/satellites/sensors.js';
 import {
   easeOrbitalLook,
-  endOrbitalFocus,
   orbitalFocusReadout,
   releaseOrbitalFocus,
   updateOrbitalFocus,
 } from './cockpitOrbitalFocus.js';
+import { orbitalEyePosition } from './cockpitOrbitalSatellites.js';
 import {
   COCKPIT_CONTEXT_UPDATE_MS,
   COCKPIT_HUD_UPDATE_MS,
@@ -128,7 +128,6 @@ export function endOrbital() {
   // Back to the map the operator had, unless they picked another meanwhile.
   state.imagery?.release?.()?.catch?.(() => {});
   this.publishOrbital(null);
-  endOrbitalFocus.call(this);
 }
 
 /**
@@ -297,9 +296,11 @@ export function updateOrbital(nowMs) {
   );
   if (!position) return;
   const state = this.orbital;
+  // On the satellite, or on the way to it after Previous/Next.
+  const eye = orbitalEyePosition(state, position, nowMs);
   // Track-up: the ground track at the top, so the picture scrolls along it.
   // A geostationary satellite has no track and stays north-up.
-  const nadir = nadirOrientation(position, {
+  const nadir = nadirOrientation(eye, {
     previousUp: state.previousUp,
     headingDeg: Number.isFinite(info.groundTrackDeg)
       ? info.groundTrackDeg
@@ -317,7 +318,7 @@ export function updateOrbital(nowMs) {
     goToZoom.call(this, maxZoom);
   }
   // A ground focus aims the look itself (src/ui/cockpitOrbitalFocus.js).
-  if (!updateOrbitalFocus.call(this, state, nadir, position, nowMs))
+  if (!updateOrbitalFocus.call(this, state, nadir, eye, nowMs))
     state.lookView = easeOrbitalLook(
       state,
       nowMs - (state.lookLastMs || nowMs),
@@ -331,7 +332,7 @@ export function updateOrbital(nowMs) {
   const zoomStepping = Boolean(state.transition);
   const reading = applyFov.call(this, state, info.altitudeM, nowMs);
   this.viewer.camera.setView({
-    destination: position,
+    destination: eye,
     orientation: {
       direction: intoCartesian(view.direction, this.scratchForward),
       up: intoCartesian(view.up, this.scratchUp),

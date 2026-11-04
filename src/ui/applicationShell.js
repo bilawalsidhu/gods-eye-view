@@ -363,6 +363,8 @@ export class StyleManager extends ShellFacade {
         militaryFlightsLayer: services.militaryFlightsLayer,
         aisLiveVesselsLayer: services.aisLiveVesselsLayer,
         satellitesLayer: services.satellitesLayer,
+        // Orbit's Live Signals rows list and focus its mapped sites.
+        militaryInstallationsLayer: services.militaryInstallationsLayer,
         isTr3b: services.isTr3b,
         toggleTr3b: services.toggleTr3b,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
@@ -413,8 +415,6 @@ export class StyleManager extends ShellFacade {
             useCockpitStore(applicationPinia()).publishRadar(view),
           orbital: (view) =>
             useCockpitStore(applicationPinia()).publishOrbital(view),
-          orbitalReach: (view) =>
-            useCockpitStore(applicationPinia()).publishOrbitalReach(view),
           utilityLayout: (layout) =>
             useCockpitStore(applicationPinia()).publishUtilityLayout(layout),
         },
