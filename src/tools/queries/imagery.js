@@ -31,11 +31,6 @@ export const getRecentImagery = defineTool({
   requires: ['imagery'],
   async run(args, { services, signal }) {
     const area = await resolveArea(args.area, { services, signal });
-    if (area.west > area.east)
-      throw new ToolError(
-        'invalid_arguments',
-        'The area must not cross the antimeridian',
-      );
     if (
       Math.abs(area.south) > MAX_LATITUDE ||
       Math.abs(area.north) > MAX_LATITUDE
@@ -55,6 +50,13 @@ export const getRecentImagery = defineTool({
       east: area.east,
       north: area.north,
     };
+    // Worldview Snapshots rejects a west > east BBOX, so a dateline area can
+    // never produce the image this tool returns: refuse before searching.
+    if (box.west > box.east)
+      throw new ToolError(
+        'invalid_arguments',
+        'A snapshot cannot cross the dateline',
+      );
     let latest;
     try {
       latest = await services.imagery.latest({ box, signal });

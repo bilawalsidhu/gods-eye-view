@@ -23,6 +23,8 @@ export const IMAGERY_BOX_POINTER_OWNER = 'recent-imagery-box';
  * @param {{ viewer: object, onBox: (box: object) => void, onCancel?: (reason: string, message?: string, box?: object) => void, onActive?: (active: boolean) => void, onEscape?: () => boolean, cesium?: object, pickWorld?: Function, documentRef?: object }} deps
  *   `onEscape` runs before the tool cancels on Escape; returning `true` claims
  *   the key (it is still consumed) and leaves the tool armed.
+ *   A drag whose corners are more than 180 degrees of longitude apart is the
+ *   short box across the dateline, returned with west > east.
  * @returns {{ start: () => boolean, cancel: (reason?: string) => void, isActive: () => boolean, destroy: () => Promise<void> } | null}
  */
 export function initImageryBoxTool({
@@ -48,13 +50,20 @@ export function initImageryBoxTool({
   let savedDoubleClick = null;
   let savedCameraInputs = null;
 
-  const dragBox = () =>
-    anchor && {
-      west: Math.min(anchor.lon, corner.lon),
+  const dragBox = () => {
+    if (!anchor) return null;
+    const lo = Math.min(anchor.lon, corner.lon);
+    const hi = Math.max(anchor.lon, corner.lon);
+    // Corners more than half the globe apart are the short way round, over
+    // the dateline: west is the eastern corner and east the western one.
+    const crosses = hi - lo > 180;
+    return {
+      west: crosses ? hi : lo,
       south: Math.min(anchor.lat, corner.lat),
-      east: Math.max(anchor.lon, corner.lon),
+      east: crosses ? lo : hi,
       north: Math.max(anchor.lat, corner.lat),
     };
+  };
 
   const dataSource = new cesium.CustomDataSource(
     'gev-recent-imagery-box-preview',

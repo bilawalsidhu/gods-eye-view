@@ -239,16 +239,32 @@ test('an invalid box or clock is refused before any request', async () => {
   };
   await assert.rejects(
     searchHls({
-      box: { west: 179, south: 0, east: -179, north: 1 },
+      box: { west: -181, south: 0, east: -179, north: 1 },
       fetchImpl,
     }),
-    /dateline/,
+    /±180/,
   );
   await assert.rejects(
     searchHls({ box: BOX, now: 'never', fetchImpl }),
     /clock/,
   );
   assert.equal(called, false);
+});
+
+test('a dateline box goes to CMR as it is: CMR reads west > east as the short box', async () => {
+  const calls = [];
+  const result = await searchHls({
+    box: { west: 179, south: 0, east: -179, north: 1 },
+    days: 2,
+    now: '2026-09-21T00:00:00Z',
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return response({ json: { hits: 1, items: [ummItem({})] } });
+    },
+  });
+  assert.equal(calls.length, 2, 'one search per product');
+  assert.ok(calls.every((url) => url.includes('bounding_box=179,0,-179,1')));
+  assert.ok(result.candidates.some((candidate) => candidate.product === 'S30'));
 });
 
 test('CMR pages follow the CMR-Search-After cursor up to 2,000 records and truncation stays honest', async () => {

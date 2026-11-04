@@ -40,3 +40,40 @@ test('cancelled thumbnail acquisition does not return stale responses or retry',
   await assert.rejects(source.getThumbnail({}, {}, { signal: controller.signal }), { name: 'AbortError' });
   assert.equal(calls, 1);
 });
+
+test('a dateline thumbnail is requested for the wider side, never as a crossing BBOX', async () => {
+  const requested = [];
+  const source = createRecentImagerySource({
+    thumbnailUrl: ({ box }) => {
+      requested.push(box);
+      return 'https://imagery.example/thumbnail';
+    },
+    fetchImpl: async () => new Response('image'),
+  });
+  const candidate = { product: 'S30', day: '2026-10-01' };
+  await source.getThumbnail(candidate, {
+    west: 179.9,
+    south: 0,
+    east: -179,
+    north: 1,
+  });
+  assert.deepEqual(requested.at(-1), {
+    west: -180,
+    south: 0,
+    east: -179,
+    north: 1,
+  });
+  await source.getThumbnail(candidate, {
+    west: 179,
+    south: 0,
+    east: -179.9,
+    north: 1,
+  });
+  assert.deepEqual(requested.at(-1), {
+    west: 179,
+    south: 0,
+    east: 180,
+    north: 1,
+  });
+  assert.ok(requested.every((box) => box.west <= box.east));
+});
