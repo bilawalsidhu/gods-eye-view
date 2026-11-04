@@ -12,7 +12,11 @@
   --mobile-sheet-max-height: min(62vh, calc(100vh - 168px));
   --mobile-dock-sheet-max-height: 34vh;
   --mobile-rail-under-dock-max-height: 40vh;
-  --mobile-view-switcher-bottom: calc(var(--mobile-tab-space) + 106px);
+  --mobile-voice-height: 5.35rem;
+  /* Dock offset + voice height + gap; preserves 106px at a 16px root. */
+  --mobile-view-switcher-bottom: calc(
+    var(--mobile-tab-space) + 10px + var(--mobile-voice-height) + 10.4px
+  );
 }
 
 /* Dynamic viewport units keep sheets inside the area a mobile browser's
@@ -379,7 +383,7 @@ body.mobile-shell #command-dock #gev-voice-control {
   flex: none;
   align-self: center;
   width: min(280px, 80vw);
-  height: 5.35rem;
+  height: var(--mobile-voice-height);
   margin: 0;
   transform: none;
 }
