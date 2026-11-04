@@ -93,7 +93,8 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
    *    zoom, zoomSteps: number[], maxZoom, footprintKm|null,
    *    sensor: { label|null, swathKm, stripFraction|null, zoom|null }|null,
    *    transition: { active, blurPx, lockTick },
-   *    look: { offset, readout, swathScale, swathKm|null }, trackUp, northDeg,
+   *    look: { offset, readout, swathScale, swathKm|null,
+   *      focus: { key, label }|null }, trackUp, northDeg,
    *    place: { kind: 'country'|'sea'|'ocean', name, countryCode,
    *      division?|null, near?|null }|null|undefined,
    *    noradId|null, cosparId|null, tle: { line1, line2, epochMs }|null,
@@ -117,7 +118,9 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
    * src/cockpitOrbital.js), `look` says whether the view is tilted off
    * nadir and words the tilt (`readout`, '' at nadir), with the approximate
    * ground width at the tilted view's centre (`swathKm`, null at nadir) and
-   * its ratio to the nadir footprint (`swathScale`, 1 at nadir), `trackUp`
+   * its ratio to the nadir footprint (`swathScale`, 1 at nadir) and the
+   * mapped point a ground focus holds the view on (`focus`; the readout
+   * then gives the single off-nadir angle to it), `trackUp`
    * whether the view is turned to the ground track (false for a satellite with none,
    * which stays north-up) and `northDeg` where north sits, in degrees
    * clockwise from the top (0 when north-up).
@@ -127,6 +130,22 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
   /** @param {?object} next A fresh presentation of the orbital view HUD. */
   function publishOrbital(next) {
     orbital.value = next && markRaw(next);
+  }
+
+  /**
+   * The mapped points the orbital view shows or can be turned to: null
+   * outside orbit. Shape: `{ count, focusKey|null, entries: [{ key, label,
+   * layerName, source, latitude, longitude, offNadirDeg, reachable,
+   * focused, osm, details: [{ key, value }] }] }`, nearest to nadir first
+   * and at most 12 (`count` is all of them); `reachable` is false for a
+   * point in the frame but beyond the off-nadir reach, `osm` marks details
+   * that are OpenStreetMap tags (src/ui/cockpitOrbitalFocus.js).
+   */
+  const orbitalReach = shallowRef(null);
+
+  /** @param {?object} next A fresh list of the mapped points in reach. */
+  function publishOrbitalReach(next) {
+    orbitalReach.value = next && markRaw(next);
   }
 
   /**
@@ -168,6 +187,8 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
     publishRadar,
     orbital,
     publishOrbital,
+    orbitalReach,
+    publishOrbitalReach,
     utilityLayout,
     publishUtilityLayout,
   };

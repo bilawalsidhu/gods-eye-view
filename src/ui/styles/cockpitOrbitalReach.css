@@ -1,0 +1,150 @@
+/* The orbital view's ground focus (src/ui/views/panels/CockpitOrbital.vue,
+   CockpitOrbitalReach.vue): the focused target under the off-nadir readout
+   and, at the foot of the readout card, the mapped points in reach. The HUD
+   passes clicks through to the picture; the list takes its own, so a click
+   on it never ends a focus. */
+.cockpit-orbital-focus:not(:empty) {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #f4fbff;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit-orbital-reach {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--orbital-faint);
+  pointer-events: auto;
+}
+.cockpit-orbital-reach-toggle,
+.cockpit-orbital-reach-focus {
+  padding: 2px 7px;
+  border: 1px solid var(--orbital-line);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.6);
+  color: #f4fbff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+.cockpit-orbital-reach-toggle[aria-expanded='true'],
+.cockpit-orbital-reach-focus[aria-pressed='true'],
+.cockpit-orbital-reach-toggle:hover,
+.cockpit-orbital-reach-toggle:focus-visible,
+.cockpit-orbital-reach-focus:hover,
+.cockpit-orbital-reach-focus:focus-visible {
+  border-color: var(--cockpit-accent, #00dcff);
+  color: #fff;
+  outline: none;
+}
+.cockpit-orbital-reach-focus[aria-pressed='true'] {
+  background: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 22%,
+    rgba(0, 7, 12, 0.8)
+  );
+}
+.cockpit-orbital-reach-focus[aria-disabled='true'] {
+  border-color: rgba(244, 251, 255, 0.12);
+  color: rgba(244, 251, 255, 0.32);
+  cursor: default;
+}
+.cockpit-orbital-reach-body {
+  max-height: min(30vh, 260px);
+  margin-top: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.cockpit-orbital-reach-list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cockpit-orbital-reach-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cockpit-orbital-reach-name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-inline-start-color: var(--orbital-faint);
+  background: rgba(0, 7, 12, 0.34);
+  color: #f4fbff;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.cockpit-orbital-reach-name strong,
+.cockpit-orbital-reach-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit-orbital-reach-name small {
+  color: rgba(244, 251, 255, 0.56);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit-orbital-reach-name[aria-expanded='true'],
+.cockpit-orbital-reach-name:hover,
+.cockpit-orbital-reach-name:focus-visible {
+  border-color: var(--orbital-line);
+  outline: none;
+}
+.cockpit-orbital-reach-focused .cockpit-orbital-reach-name {
+  border-inline-start-color: var(--cockpit-accent, #00dcff);
+}
+.cockpit-orbital-reach-details {
+  margin: 3px 0 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--orbital-faint);
+  background: rgba(0, 4, 8, 0.7);
+  user-select: text;
+}
+.cockpit-orbital-reach-where {
+  color: rgba(244, 251, 255, 0.66);
+  font-variant-numeric: tabular-nums;
+}
+.cockpit-orbital-readout .cockpit-orbital-reach-kicker {
+  margin-top: 4px;
+  color: var(--cockpit-accent, #00dcff);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.cockpit-orbital-reach-tags {
+  display: grid;
+  gap: 2px;
+  margin: 3px 0 0;
+}
+.cockpit-orbital-reach-tag {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.cockpit-orbital-reach-tag dt {
+  flex: none;
+  color: rgba(244, 251, 255, 0.56);
+}
+.cockpit-orbital-reach-tag dd {
+  min-width: 0;
+  margin: 0;
+  color: #f4fbff;
+  overflow-wrap: anywhere;
+}
+.cockpit-orbital-reach-empty,
+.cockpit-orbital-reach-more {
+  color: rgba(244, 251, 255, 0.56);
+}
+.cockpit-orbital-readout .cockpit-orbital-reach-more {
+  margin-top: 4px;
+}
