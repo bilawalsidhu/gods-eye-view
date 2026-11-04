@@ -491,6 +491,20 @@
     ],
     "external": []
   },
+  "news-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/news"],
+    "modules": [
+      "server/providers/news.js",
+      "server/providers/common/http.js",
+      "src/layers/news/source.js",
+      "src/layers/news/records.js",
+      "src/sources/httpBody.js",
+      "src/sources/capability.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
   "openai-provider": {
     "runtime": "node",
     "exports": ["./server/providers/openai"],
