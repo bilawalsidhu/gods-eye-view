@@ -25,6 +25,11 @@ const sources = Array.from({ length: 2000 }, (_, i) => ({
   rangeM: 150,
   mountHeightM: 8,
 }));
+// Include a crowded city cluster to distinguish camera-name limits from icon LOD.
+for (let i = 0; i < 80; i++) {
+  sources[i].lat = 40.9 + (Math.floor(i / 10) - 3.5) * 0.00015;
+  sources[i].lon = -77.9 + ((i % 10) - 4.5) * 0.00015;
+}
 const browser = await puppeteer.launch({
   headless: true,
   args:
@@ -92,8 +97,7 @@ try {
       'zoom-camera-1020',
     ),
   );
-  const states = [];
-  for (const altitude of [30000, 120000, 600000, 2500000, 30000]) {
+  const viewAt = async (altitude) => {
     await page.evaluate(async (height) => {
       const { viewer } = window.__godsEyeView;
       viewer.camera.cancelFlight();
@@ -124,6 +128,10 @@ try {
       {},
       altitude,
     );
+  };
+  const states = [];
+  for (const altitude of [30000, 120000, 600000, 2500000, 30000]) {
+    await viewAt(altitude);
     const state = await page.evaluate(() => {
       const s =
         window.__godsEyeView.styleManager._cctvControls.cctv.getUIState();
@@ -153,6 +161,61 @@ try {
   assert.ok(states[0].cards > 0, 'city thumbnails are restored');
   assert.ok(states.at(-1).cards > 0, 'thumbnails return after zooming in');
   console.log('ZOOM QA PASSED', JSON.stringify(states));
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setDetection({
+      enabled: true,
+      densityPct: 100,
+      allocationStrategy: 'elastic',
+    }),
+  );
+  const labelStates = [];
+  for (const [altitude, cap] of [
+    [500, 12],
+    [2500, 8],
+    [7500, 4],
+    [12000, 0],
+    [500, 12],
+  ]) {
+    const previous = await page.evaluate(
+      () =>
+        window.__godsEyeView.styleManager.getDetectionDiagnostics()
+          ?.solveRevision || 0,
+    );
+    await viewAt(altitude);
+    await page.waitForFunction(
+      ({ previous, cap, altitude }) => {
+        const d = window.__godsEyeView.styleManager.getDetectionDiagnostics();
+        const count = d?.labelsByLayer?.cctv || 0;
+        return (
+          d?.solveRevision > previous &&
+          count <= cap &&
+          (altitude !== 500 || count > 0)
+        );
+      },
+      { timeout: 30000 },
+      { previous, cap, altitude },
+    );
+    const labelState = await page.evaluate(() => {
+      const app = window.__godsEyeView;
+      const d = app.styleManager.getDetectionDiagnostics();
+      const c = app.styleManager._cctvControls.cctv.getUIState();
+      return {
+        markers: c.cameraIndex.length,
+        names: d.labelsByLayer?.cctv || 0,
+        selected: c.activeCameraId,
+      };
+    });
+    assert.ok(labelState.names <= cap);
+    assert.ok(labelState.markers > 0);
+    assert.equal(labelState.selected, 'zoom-camera-1020');
+    if (altitude === 500)
+      assert.ok(
+        labelState.markers > labelState.names,
+        'crowded icons remain while camera names are capped',
+      );
+    labelStates.push({ altitude, ...labelState });
+  }
+  console.log('CAMERA LABEL QA PASSED', JSON.stringify(labelStates));
 } finally {
   await browser.close();
 }

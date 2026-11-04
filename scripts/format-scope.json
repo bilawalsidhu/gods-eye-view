@@ -1232,5 +1232,6 @@
   "scripts/qa-cctv-catalog.mjs",
   "src/data/cctvLod.test.mjs",
   "src/data/cctvViewThinning.test.mjs",
-  "scripts/qa-cctv-zoom.mjs"
+  "scripts/qa-cctv-zoom.mjs",
+  "src/data/cameraLabels.test.mjs"
 ]
