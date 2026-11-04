@@ -98,6 +98,27 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## River levels — official river gauges
+
+The Weather group includes **River levels** (`river-levels`, share-link token
+`9`), off by default. `/api/river-levels` merges two keyless national networks
+into one station shape: PEGELONLINE (every German federal-waterway gauge) and
+Taiwan's Water Resources Agency (real-time stage, register converted from
+TWD97). Each gauge is coloured only from the references its operator publishes
+for it — lowest on record, below normal, normal, watch, warning, flood, above
+record high — because gauge zeros are local and values never compare between
+gauges; a gauge without references stays grey. From afar each gauge is a dot
+with a rising/falling/steady arrow, flood and record-high gauges pulse (capped
+at 24), and the most severe gauges in view carry labels. Below 150 km the 60
+nearest referenced gauges get a glass column with the water height on the
+gauge's own scale and a ring at the flood line. Selecting a gauge shows level,
+trend, references and a 72 h sparkline (PEGELONLINE series; for WRA, what the
+server has seen), with "local gauge zero" and "raw data" caveats. The
+Weather panel readout lists the band legend and the most severe gauges in
+view. Readings older than 3 hours are faded and marked late; older than 3 days
+they are dropped. Voice does not carry the layer (prompt budget). See the
+live-layers table below.
+
 ## Prohibited & Restricted Airspace — FAA special-use airspace
 
 The Infrastructure group includes **Prohibited & Restricted Airspace** (`drone-airspace`,
@@ -4192,6 +4213,7 @@ its criteria cannot be silently ignored.
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
+| River levels ≈ | PEGELONLINE (WSV, Germany) + Water Resources Agency (Taiwan); raw gauge readings | `src/layers/riverLevels/` via `src/app/layers/riverLevels.js` | `/api/river-levels`, `/api/river-levels/station/…` | 10 min (server cache 10 min; stale-on-error up to 6 h; WRA register 24 h) |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |

@@ -14,6 +14,7 @@ const ORDER = [
   'weather-satellite',
   'weather-lightning',
   'air-quality',
+  'river-levels',
 ];
 const OBSERVED = new Set(ORDER.slice(2, 5));
 const utc = (time) =>

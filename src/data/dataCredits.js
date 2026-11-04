@@ -188,6 +188,17 @@ export const DATA_CREDITS = [
       '<a href="https://adds-faa.opendata.arcgis.com/" target="_blank" rel="noopener">FAA Special Use Airspace</a>' +
       ' (prohibited and restricted zones; informational only)',
   },
+  {
+    key: 'river-levels',
+    html:
+      'River levels: ' +
+      '<a href="https://www.pegelonline.wsv.de/" target="_blank" rel="noopener">PEGELONLINE</a>, ' +
+      'Wasserstraßen- und Schifffahrtsverwaltung des Bundes (WSV), ' +
+      '<a href="https://www.govdata.de/dl-de/zero-2-0" target="_blank" rel="noopener">DL-DE Zero 2.0</a>' +
+      ' · Water Resources Agency, Ministry of Economic Affairs (Taiwan), ' +
+      '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, version 1.0</a>' +
+      ' (raw data, not quality controlled; informational only)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

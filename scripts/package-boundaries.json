@@ -2944,6 +2944,11 @@
       "src/layers/droneAirspace/source.js",
       "src/layers/droneAirspace/records.js",
       "src/layers/droneAirspace/cards.js",
+      "src/app/layers/riverLevels.js",
+      "src/layers/riverLevels/index.js",
+      "src/layers/riverLevels/model.js",
+      "src/layers/riverLevels/cards.js",
+      "src/layers/riverLevels/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -3695,6 +3700,11 @@
       "src/layers/droneAirspace/source.js",
       "src/layers/droneAirspace/records.js",
       "src/layers/droneAirspace/cards.js",
+      "src/app/layers/riverLevels.js",
+      "src/layers/riverLevels/index.js",
+      "src/layers/riverLevels/model.js",
+      "src/layers/riverLevels/cards.js",
+      "src/layers/riverLevels/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -4413,7 +4423,9 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/layers/droneAirspace/source.js",
-      "src/layers/droneAirspace/records.js"
+      "src/layers/droneAirspace/records.js",
+      "src/layers/riverLevels/model.js",
+      "src/layers/riverLevels/source.js"
     ],
     "external": []
   },
@@ -5023,6 +5035,43 @@
     "modules": [
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
+  "river-levels": {
+    "exports": ["./layers/river-levels"],
+    "modules": [
+      "src/layers/riverLevels/index.js",
+      "src/layers/riverLevels/model.js",
+      "src/layers/riverLevels/cards.js",
+      "src/layers/riverLevels/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/ar.json",
+      "src/i18n/locales/de.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/fr.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/pt.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/locales/zh-Hant.json",
+      "src/ui/statusText.js",
+      "src/ui/layerNames.js"
+    ],
+    "external": ["cesium"]
+  },
+  "river-levels-source": {
+    "exports": ["./layers/river-levels/source"],
+    "modules": [
+      "src/layers/riverLevels/model.js",
+      "src/layers/riverLevels/source.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
     ],

@@ -29,6 +29,7 @@ import { firePerimetersProxy } from './firePerimeters.js';
 import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { ghostMapsProxy } from './ghostMaps.js';
 import { droneAirspaceProxy } from './droneAirspace.js';
+import { riverLevelsProxy } from './riverLevels/index.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 
@@ -81,6 +82,7 @@ function localProviderPlugins({
     gnssIntegrityProxy(),
     ghostMapsProxy(),
     droneAirspaceProxy(),
+    riverLevelsProxy(),
     keySetupEndpoint(),
   ];
 }

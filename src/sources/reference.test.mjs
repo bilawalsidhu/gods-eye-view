@@ -17,6 +17,7 @@ test('reference factories retain compatibility without starting acquisition or s
     'air-quality',
     'fire-perimeters',
     'drone-airspace',
+    'river-levels',
     'cables',
     'gnss-integrity',
   ]);
