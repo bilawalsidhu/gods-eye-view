@@ -19,7 +19,7 @@ test('phone nav clears the shared safe-area-aware switcher bottom and measured h
   );
   assert.match(
     shell,
-    /--mobile-view-switcher-bottom:\s*calc\(var\(--mobile-tab-space\) \+ 106px\)/,
+    /--mobile-view-switcher-bottom:\s*calc\(\s*var\(--mobile-tab-space\) \+ 10px \+ var\(--mobile-voice-height\) \+ 10\.4px\s*\)/,
   );
   assert.match(
     shell,
@@ -28,6 +28,14 @@ test('phone nav clears the shared safe-area-aware switcher bottom and measured h
   assert.match(
     nav,
     /body\.mobile-shell \.gev-nav\s*\{\s*bottom: calc\(\s*var\(--mobile-view-switcher-bottom\) \+\s*var\(--mobile-view-switcher-height, 0px\) \+ 8px\s*\)/,
+  );
+});
+
+test('phone voice and switcher share a root-font-relative height', () => {
+  assert.match(shell, /--mobile-voice-height:\s*5\.35rem;/);
+  assert.match(
+    shell,
+    /body\.mobile-shell #command-dock #gev-voice-control\s*\{[^}]*height: var\(--mobile-voice-height\);/,
   );
 });
 
