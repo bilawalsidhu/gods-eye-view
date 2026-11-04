@@ -256,12 +256,12 @@ The CCTV layer's hardware-model specs are a small extract (v2.26.0, plus the Bos
 records from v2.29.0) of the
 [CCTV Camera Database](https://github.com/ch-bas/cctv-camera-database), an open dataset of
 camera models transcribed from manufacturer datasheets, dedicated to the public domain under
-**CC0-1.0**. Only the records for hardware named by the integrated public catalogs (King
-County, Sarasota County and Sioux Falls), plus the City of Amsterdam register proposed
-in [#251](https://github.com/bilawalsidhu/gods-eye-view/pull/251), are bundled, compiled into the module. Nothing is
-fetched at runtime. The MIC specification fields are unchanged; product titles are shortened
-to model codes and colour aliases are added locally. The records describe camera products (optics, resolution, night vision)
-only, never endpoints, stream paths or access data. CC0 requires no attribution; the CCTV HUD
+**CC0-1.0**. Only records for hardware named by the integrated public catalogs (King County,
+Sarasota County and Sioux Falls) or by the City of Amsterdam register proposed in
+[#251](https://github.com/bilawalsidhu/gods-eye-view/pull/251) are bundled, compiled into the
+module. Nothing is fetched at runtime. The MIC records keep their specification fields; their
+titles are shortened to model codes and colour aliases are added. The records describe camera
+products (optics, resolution, night vision) only, never endpoints, stream paths or access data. CC0 requires no attribution; the CCTV HUD
 credits it anyway as `SPECS: CCTV-DATABASE.COM` beside any spec line it renders.
 
 ### Bundled OpenStreetMap data

@@ -27,14 +27,12 @@
  */
 
 /**
- * Records from the dataset's model-enrichment extract (v2.26.0; the Bosch MIC
- * records from v2.29.0). MIC specification fields are unchanged; product
- * titles are shortened to model codes and colour aliases are added locally.
- * Bosch MIC order codes end in a colour letter (B black, G grey, W white)
- * on one shared datasheet; those siblings,
- * and the `x` wildcard registries write for the colour letter, are listed as
- * aliases of the one vendored record. Its `model` leaves the colour out, so
- * the HUD never names a variant the source did not.
+ * Records from the dataset's model-enrichment extract: v2.26.0, plus the Bosch
+ * MIC records from v2.29.0 with titles shortened to model codes.
+ * A Bosch MIC order code ends in a colour letter (B, G, W; registries write
+ * `x`) on one shared datasheet. The colours are aliases of one record whose
+ * `model` leaves the letter out, so the HUD never names a variant the source
+ * did not.
  */
 const RECORDS = [
   {
