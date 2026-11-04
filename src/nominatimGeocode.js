@@ -75,7 +75,7 @@ export function nominatimLongitude(value) {
 export function typesFromNominatim(hit) {
   const addresstype = String(hit?.addresstype || '').toLowerCase();
   const osmType = String(hit?.type || '').toLowerCase();
-  const osmClass = String(hit?.class || '').toLowerCase();
+  const osmClass = String(hit?.category || hit?.class || '').toLowerCase();
   const mapped =
     ADDRESS_TYPE_MAP[addresstype] ||
     ADDRESS_TYPE_MAP[osmType] ||
@@ -166,6 +166,8 @@ export function nominatimViewboxFromBounds(bounds) {
   const neLat = nominatimLatitude(match[3]);
   const neLng = nominatimLongitude(match[4]);
   if ([swLat, swLng, neLat, neLng].some((value) => value === null)) return null;
-  if (swLat >= neLat) return null;
+  // One Nominatim viewbox cannot express a wrapped interval. Omit this soft
+  // preference rather than biasing the search toward the opposite hemisphere.
+  if (swLat >= neLat || swLng > neLng) return null;
   return `${swLng},${neLat},${neLng},${swLat}`;
 }

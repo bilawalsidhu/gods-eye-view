@@ -7,10 +7,8 @@ import { setLocale, t, translateKnown } from '../i18n/index.js';
 import { presentStreetLevelPanel } from './streetLevelPresentation.js';
 import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
 import { createWeatherSource } from '../layers/weather/source.js';
-import {
-  presentRoutingFailure,
-  presentRoutingRefusal,
-} from '../layers/directions/index.js';
+import { presentRoutingFailure } from '../layers/directions/index.js';
+import { translateFeedError } from './statusText.js';
 import { AIM_AT_GROUND_MESSAGE } from '../layers/streetLevel/policy.js';
 
 const NO_IMAGERY = 'No street-level imagery within 50 m of that point';
@@ -53,9 +51,13 @@ for (const locale of ['es', 'ru']) {
   test(`${locale}: the route proxy's refusals are shown translated`, () => {
     setLocale(locale);
     try {
-      const shown = t('Routing failed: {error}', {
-        error: presentRoutingRefusal('route leg too long'),
-      });
+      // Directions stores these in English; the Layers panel shows them
+      // through translateFeedError.
+      const shown = translateFeedError('Routing failed: route leg too long');
+      assert.equal(
+        shown,
+        t('Routing failed: {error}', { error: t('route leg too long') }),
+      );
       assert.doesNotMatch(shown, /route leg too long/);
       const limited = presentRoutingFailure(
         Object.assign(new Error('rate limited — try again in a moment'), {
@@ -63,16 +65,46 @@ for (const locale of ['es', 'ru']) {
           refusal: 'rate limited',
         }),
       );
-      assert.doesNotMatch(limited, /rate limited|try again in a moment/);
+      assert.equal(limited, 'rate limited — try again in a moment');
+      assert.doesNotMatch(
+        translateFeedError(limited),
+        /rate limited|try again in a moment/,
+      );
       const http = presentRoutingFailure(
         Object.assign(new Error('Routing unavailable (HTTP 503)'), {
           status: 503,
         }),
       );
-      assert.notEqual(http, 'Routing unavailable (HTTP 503)');
-      assert.match(http, /503/);
+      assert.equal(http, 'Routing unavailable (HTTP 503)');
+      assert.notEqual(translateFeedError(http), http);
+      assert.match(translateFeedError(http), /503/);
       // A text the proxy never sends is shown as given.
-      assert.equal(presentRoutingRefusal('something else'), 'something else');
+      assert.equal(
+        translateFeedError('Routing failed: something else'),
+        t('Routing failed: {error}', { error: 'something else' }),
+      );
+      // Every refusal the proxy sends (server/providers/places/routes.js),
+      // and "rate limited" after "Routing failed:", which the feed pattern
+      // "<source> rate limited" would otherwise take.
+      for (const [english, shown] of [
+        [
+          'routing busy — too many routes at once — try again in a moment',
+          t('{error} — try again in a moment', {
+            error: t('routing busy — too many routes at once'),
+          }),
+        ],
+        [
+          'Routing failed: route proxy error',
+          t('Routing failed: {error}', { error: t('route proxy error') }),
+        ],
+        [
+          'Routing failed: rate limited',
+          t('Routing failed: {error}', { error: t('rate limited') }),
+        ],
+      ]) {
+        assert.equal(translateFeedError(english), shown);
+        assert.doesNotMatch(shown, /routing busy|route proxy|rate limited/);
+      }
     } finally {
       setLocale('en');
     }
