@@ -3504,5 +3504,6 @@
   "Answered with no contacts, {ago} ago": "ردّ بلا أهداف، قبل {ago}",
   "HTTP {status}, since {time}": "HTTP {status}، منذ {time}",
   "Nothing has asked for it for {ago}": "لم يطلبه أحد منذ {ago}",
-  "Not seen since the server started": "لم يُرَ منذ تشغيل الخادم"
+  "Not seen since the server started": "لم يُرَ منذ تشغيل الخادم",
+  "N2YO backup: {count} pinned satellites loaded": "احتياطي N2YO: تم تحميل {count} من الأقمار المثبّتة"
 }

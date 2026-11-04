@@ -3204,5 +3204,6 @@
   "Answered with no contacts, {ago} ago": "Ohne Kontakte geantwortet, vor {ago}",
   "HTTP {status}, since {time}": "HTTP {status}, seit {time}",
   "Nothing has asked for it for {ago}": "Seit {ago} hat niemand danach gefragt",
-  "Not seen since the server started": "Seit dem Serverstart nicht gesehen"
+  "Not seen since the server started": "Seit dem Serverstart nicht gesehen",
+  "N2YO backup: {count} pinned satellites loaded": "N2YO-Reserve: {count} fixierte Satelliten geladen"
 }

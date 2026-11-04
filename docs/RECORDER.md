@@ -175,6 +175,28 @@ and the panel lists the newest events. Press WATCH in the panel and drag a box o
 routes below. Changing fences needs a JSON request from this origin, which stops
 other web pages from editing them.
 
+## N2YO as a backup for satellite elements
+
+The recorder takes orbital elements from CelesTrak (through the app's own
+cache). For a satellite you have **pinned** (search it, then PIN) it can fall
+back on [N2YO](https://www.n2yo.com/api/) when CelesTrak did not give that
+satellite, or gave a set more than five days old. This is optional and off
+without a key.
+
+To turn it on, make a free key on your n2yo.com profile and give it to the
+recorder by the `GEV_N2YO_KEY` environment variable or `"n2yoKey"` in
+`recorder.config.json` (the settings file is kept out of git, but it holds the
+key in plain text). The key is never shown in the panel, the status or an error.
+
+What it does and does not do: at most 20 pinned satellites; each is asked
+for at most once every six hours; the recorder stops itself at 600 requests an
+hour, well under N2YO's limit of 1,000. It fetches elements only and works out
+positions itself, so it is not a recording source on its own, and a pinned
+satellite is only recorded while the `sat` layer is on. When both sources have
+a set for the same satellite, the newer one is used. The FEEDS list shows how
+many pinned satellites came from N2YO. N2YO asks that nobody use several keys to
+get round its limit; use one.
+
 ## Feed health
 
 A stretch with no recorded points can mean three different things, and the

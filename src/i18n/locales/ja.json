@@ -3129,5 +3129,6 @@
   "Answered with no contacts, {ago} ago": "コンタクトなしで応答（{ago}前）",
   "HTTP {status}, since {time}": "HTTP {status}（{time} から）",
   "Nothing has asked for it for {ago}": "{ago} の間、要求がありません",
-  "Not seen since the server started": "サーバー起動後まだ確認されていません"
+  "Not seen since the server started": "サーバー起動後まだ確認されていません",
+  "N2YO backup: {count} pinned satellites loaded": "N2YO バックアップ：固定した衛星 {count} 基を読み込み済み"
 }

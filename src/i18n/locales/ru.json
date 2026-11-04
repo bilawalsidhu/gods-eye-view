@@ -3354,5 +3354,6 @@
   "Answered with no contacts, {ago} ago": "Ответил без контактов, {ago} назад",
   "HTTP {status}, since {time}": "HTTP {status}, с {time}",
   "Nothing has asked for it for {ago}": "Его не запрашивали {ago}",
-  "Not seen since the server started": "Не виден с запуска сервера"
+  "Not seen since the server started": "Не виден с запуска сервера",
+  "N2YO backup: {count} pinned satellites loaded": "Резерв N2YO: загружено закреплённых спутников — {count}"
 }

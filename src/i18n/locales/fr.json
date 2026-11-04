@@ -3279,5 +3279,6 @@
   "Answered with no contacts, {ago} ago": "A répondu sans contact, il y a {ago}",
   "HTTP {status}, since {time}": "HTTP {status}, depuis {time}",
   "Nothing has asked for it for {ago}": "Personne ne l’a sollicité depuis {ago}",
-  "Not seen since the server started": "Pas vu depuis le démarrage du serveur"
+  "Not seen since the server started": "Pas vu depuis le démarrage du serveur",
+  "N2YO backup: {count} pinned satellites loaded": "Secours N2YO : {count} satellites épinglés chargés"
 }

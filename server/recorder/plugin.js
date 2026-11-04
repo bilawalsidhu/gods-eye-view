@@ -19,6 +19,7 @@ import {
 import { exportPoints, summarizeTrack } from './exporters.js';
 import { createPgStore } from './pgStore.js';
 import { createFeedMonitor } from './feeds.js';
+import { createN2yoClient, refreshFromN2yo } from './n2yo.js';
 import { createRecorder } from './recorder.js';
 import { DEFAULT_SAT_GROUPS, createSatelliteSource } from './satellites.js';
 
@@ -152,6 +153,8 @@ export function recorderPlugin(env = process.env) {
     }
 
     let satPoll = null;
+    let n2yoState = { enabled: false, loaded: 0, error: '' };
+    const n2yoTimers = [];
     {
       const satGroups = config.satGroups.length
         ? config.satGroups
@@ -210,6 +213,37 @@ export function recorderPlugin(env = process.env) {
         }
       }, step * 1000);
       satPoll.unref?.();
+
+      // Pinned satellites CelesTrak did not give (or gave an old set for) are
+      // filled in from N2YO, when a key is set.
+      const n2yo = createN2yoClient({ key: config.n2yoKey });
+      const lastTried = new Map();
+      n2yoState = { enabled: n2yo.enabled, loaded: 0, error: '' };
+      if (n2yo.enabled) {
+        const refresh = async () => {
+          try {
+            const pins = (await recorder.store.listPins()).map((p) => p.id);
+            const result = await refreshFromN2yo({
+              sats,
+              pins,
+              client: n2yo,
+              last: lastTried,
+              nowSec: nowSec(),
+            });
+            n2yoState = {
+              enabled: true,
+              loaded: sats.extraCount(),
+              error: result.error,
+            };
+          } catch {
+            // Try again at the next round.
+          }
+        };
+        const n2yoPoll = setInterval(refresh, 30 * 60 * 1000);
+        n2yoPoll.unref?.();
+        n2yoTimers.push(n2yoPoll);
+        refresh();
+      }
     }
 
     const poll = setInterval(() => {
@@ -274,6 +308,7 @@ export function recorderPlugin(env = process.env) {
             ...(await recorder.store.range()),
             layer_counts: await recorder.store.layerCounts(),
             feeds: feeds.snapshot(live.layers ?? [], nowSec()),
+            n2yo: n2yoState,
             disk_free_bytes: diskFree,
             recording: true,
             retention_days: live.retentionSec / 86400,
@@ -498,6 +533,7 @@ export function recorderPlugin(env = process.env) {
     server.httpServer?.on('close', () => {
       clearInterval(poll);
       clearInterval(feedTick);
+      for (const timer of n2yoTimers) clearInterval(timer);
       if (satPoll) clearInterval(satPoll);
       recorder.close();
     });

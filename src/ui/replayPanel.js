@@ -604,6 +604,7 @@ export function createReplayPanel({ container, controller } = {}) {
   };
   const renderFeeds = (s) => {
     const feeds = s?.feeds ?? [];
+    const backup = s?.n2yo?.enabled ? s.n2yo : null;
     set(feedLine, 'hidden', !feeds.length);
     const now = Math.floor(Date.now() / 1000);
     const names = Object.fromEntries(
@@ -614,7 +615,7 @@ export function createReplayPanel({ container, controller } = {}) {
       'className',
       `data-toggle-chip${feedList.hidden ? '' : ' active'}`,
     );
-    const key = `${feedList.hidden ? 0 : 1}|${feeds.map((f) => `${f.layer}:${f.state}:${f.lastRequest}`).join('|')}`;
+    const key = `${feedList.hidden ? 0 : 1}|${backup ? `${backup.loaded}${backup.error}` : ''}|${feeds.map((f) => `${f.layer}:${f.state}:${f.lastRequest}`).join('|')}`;
     if (feedLine.dataset.key === key) return;
     feedLine.dataset.key = key;
     feedLine.replaceChildren(
@@ -633,6 +634,17 @@ export function createReplayPanel({ container, controller } = {}) {
         row.textContent = `${names[f.layer] || f.layer} ${t(FEED_STATE[f.state])} · ${feedText(f, now)}`;
         return row;
       }),
+      ...(backup
+        ? [
+            Object.assign(document.createElement('div'), {
+              textContent: backup.error
+                ? `${t('N2YO backup: {count} pinned satellites loaded', { count: backup.loaded })} · ${backup.error}`
+                : t('N2YO backup: {count} pinned satellites loaded', {
+                    count: backup.loaded,
+                  }),
+            }),
+          ]
+        : []),
     );
   };
 

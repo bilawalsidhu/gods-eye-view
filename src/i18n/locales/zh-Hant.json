@@ -3129,5 +3129,6 @@
   "Answered with no contacts, {ago} ago": "回應為空，{ago}前",
   "HTTP {status}, since {time}": "HTTP {status}，自 {time}",
   "Nothing has asked for it for {ago}": "已有 {ago} 無人請求",
-  "Not seen since the server started": "伺服器啟動後尚未見到"
+  "Not seen since the server started": "伺服器啟動後尚未見到",
+  "N2YO backup: {count} pinned satellites loaded": "N2YO 備援：已載入 {count} 顆已釘選衛星"
 }

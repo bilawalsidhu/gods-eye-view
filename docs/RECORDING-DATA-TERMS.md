@@ -43,6 +43,8 @@ CelesTrak orbital elements, not copied from a position feed. CelesTrak asks
 clients not to fetch more than about every two hours, and the app already
 respects that. Check https://celestrak.org before sharing recordings.
 
+**N2YO (optional backup for `sat`).** If you give the recorder an N2YO key it fetches orbital elements for pinned satellites from api.n2yo.com when CelesTrak lacks them. Its API is free but limited per key, it asks users not to abuse it or use several keys, and it logs traffic. Elements only are fetched, and your key stays in your own settings file or environment. Read https://www.n2yo.com/api/.
+
 **Your own receivers (`local`).** These are your own observations, so the
 source's terms do not apply. Local law may still limit what you may receive,
 keep or share, and laws about personal data may apply (see below).

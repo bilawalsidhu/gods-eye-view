@@ -60,3 +60,73 @@ test('satellite points carry the name for search', () => {
   src.learn('stations', TLE);
   assert.equal(src.points(EPOCH)[0].name, 'ISS (ZARYA)');
 });
+
+const N2YO_REPLY = {
+  info: { satid: 25544, satname: 'SPACE STATION', transactionscount: 1 },
+  tle: TLE.split('\n').slice(1, 3).join('\r\n'),
+};
+const standIn = (reply = N2YO_REPLY, status = 200) => {
+  const seen = [];
+  const fetchImpl = async (url) => {
+    seen.push(String(url));
+    return { ok: status === 200, status, json: async () => reply };
+  };
+  return { fetchImpl, seen };
+};
+
+test('N2YO elements fill in a pinned satellite CelesTrak did not give', async () => {
+  const { createN2yoClient, refreshFromN2yo } = await import('./n2yo.js');
+  const { fetchImpl, seen } = standIn();
+  const client = createN2yoClient({ key: 'SECRET-KEY', fetchImpl });
+  const sats = createSatelliteSource({ groups: ['stations'] });
+  const last = new Map();
+  const nowSec = EPOCH;
+  const first = await refreshFromN2yo({ sats, pins: ['SAT-25544', 'A1B2C3'], client, last, nowSec });
+  assert.equal(first.loaded, 1, 'only the satellite id is looked up');
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /\/tle\/25544&apiKey=SECRET-KEY$/);
+  assert.equal(sats.extraCount(), 1);
+  assert.equal(sats.points(EPOCH)[0].id, 'SAT-25544');
+  // a fresh set is not fetched again, and not before six hours
+  const again = await refreshFromN2yo({ sats, pins: ['SAT-25544'], client, last, nowSec: nowSec + 3600 });
+  assert.equal(again.loaded, 0);
+  assert.equal(seen.length, 1);
+});
+
+test('N2YO is not asked when CelesTrak has a recent set, and the key stays out of errors', async () => {
+  const { createN2yoClient, refreshFromN2yo } = await import('./n2yo.js');
+  const { fetchImpl, seen } = standIn();
+  const client = createN2yoClient({ key: 'SECRET-KEY', fetchImpl });
+  const sats = createSatelliteSource({ groups: ['stations'] });
+  sats.learn('stations', TLE);
+  const fresh = await refreshFromN2yo({ sats, pins: ['SAT-25544'], client, nowSec: EPOCH + 86400 });
+  assert.equal(seen.length, 0, 'a one day old set is good enough');
+  const old = await refreshFromN2yo({ sats, pins: ['SAT-25544'], client, nowSec: EPOCH + 9 * 86400 });
+  assert.equal(seen.length, 1, 'a nine day old set is replaced');
+  assert.equal(fresh.loaded + old.loaded, 1);
+
+  const broken = createN2yoClient({ key: 'SECRET-KEY', fetchImpl: standIn({}, 500).fetchImpl });
+  const failed = await refreshFromN2yo({ sats: createSatelliteSource({ groups: [] }), pins: ['SAT-25544'], client: broken, nowSec: EPOCH });
+  assert.equal(failed.error, 'N2YO HTTP 500');
+  assert.ok(!failed.error.includes('SECRET'));
+  const down = createN2yoClient({ key: 'SECRET-KEY', fetchImpl: async () => { throw new Error('connect SECRET-KEY'); } });
+  await assert.rejects(down.tle(25544), (e) => !e.message.includes('SECRET') && /could not be reached/.test(e.message));
+  await assert.rejects(createN2yoClient({}).tle(25544), /No N2YO key/);
+});
+
+test('the newest element set wins and N2YO keeps within its hourly limit', async () => {
+  const { createN2yoClient } = await import('./n2yo.js');
+  const sats = createSatelliteSource({ groups: ['stations'] });
+  sats.learn('stations', TLE);
+  const newer = TLE.replace('24001.50000000', '24009.50000000');
+  const [, l1, l2] = newer.split('\n');
+  assert.ok(sats.addElements('ISS (ZARYA)', l1, l2));
+  assert.ok(Math.abs(sats.epochAgeDays('SAT-25544', EPOCH + 9 * 86400)) < 2.1, 'the newer epoch is used');
+  assert.equal(sats.addElements('x', 'junk', 'junk'), false);
+  let clock = 0;
+  const client = createN2yoClient({ key: 'k', fetchImpl: standIn().fetchImpl, now: () => clock });
+  for (let i = 0; i < 600; i++) await client.tle(25544);
+  await assert.rejects(client.tle(25544), /hourly limit/);
+  clock = 3600_001;
+  await client.tle(25544);
+});

@@ -50,6 +50,7 @@ export function loadConfigFile(root, env = process.env) {
     [].concat(raw.satelliteGroups ?? []).join(','),
   );
   set('GEV_HISTORY_DB', raw.database);
+  set('GEV_N2YO_KEY', raw.n2yoKey);
   if (raw.file) out.GEV_HISTORY_FILE = path.resolve(root, String(raw.file));
   return out;
 }
@@ -125,5 +126,6 @@ export function recorderConfig(env = process.env) {
     maxBytes: Number.isFinite(maxMb) && maxMb > 0 ? maxMb * 1048576 : 0,
     intervalSec: Number.isFinite(interval) && interval >= 1 ? interval : 30,
     databaseUrl: String(env.GEV_HISTORY_DB || '').trim(),
+    n2yoKey: String(env.GEV_N2YO_KEY || '').trim(),
   };
 }
