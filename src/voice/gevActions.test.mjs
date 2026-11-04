@@ -635,6 +635,162 @@ test('a motion does not run at a flight that lands while the next place is looke
   assert.equal(result.motion, 'tilt');
 });
 
+// A later fly-to that finds nothing moves nothing: the motion still runs where
+// the earlier flight lands, whether the lookup fails before or after that.
+for (const order of ['lands first', 'not found first']) {
+  test(`a motion runs at its flight when a later fly-to finds nothing (${order})`, async (t) => {
+    t.after(() => interruptCameraMotion('test-cleanup'));
+    const harness = tiltAfterFlightHarness();
+    const { viewer, styleManager, flights } = harness;
+    const searches = [];
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: { layers: new Map(), getAll: () => [] },
+      searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
+    });
+    assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+    const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+    const flyB = runner('fly_to_location', { query: 'Nowhere' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (order === 'lands first') flights[0].complete();
+    searches[0].resolve(null);
+    assert.equal((await flyB).ok, false);
+    if (order !== 'lands first') flights[0].complete();
+    const result = await moved;
+    assert.equal(result.ok, true, result.error);
+    assert.equal(result.motion, 'tilt');
+  });
+}
+
+test('a motion beside a fly-to that finds nothing never acts at an earlier reply\'s flight', async () => {
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const searches = [];
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+      searches.push({ query, options, resolve });
+    }),
+  });
+  // Reply 1: "fly to Austin", still flying.
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  // Reply 2: "fly to Nowhere and tilt".
+  const flyB = runner('fly_to_location', { query: 'Nowhere' });
+  const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  searches[0].resolve(null);
+  assert.equal((await flyB).ok, false);
+  flights[0].complete();
+  const result = await moved;
+  assert.equal(result.ok, false);
+  assert.match(result.error, /did not arrive/);
+});
+
+// Two later lookups that both find nothing, in either order, leave the motion
+// acting where the first flight landed.
+for (const first of [0, 1]) {
+  test(`a motion looks past two lookups that found nothing (lookup ${first + 1} fails first)`, async (t) => {
+    t.after(() => interruptCameraMotion('test-cleanup'));
+    const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+    const searches = [];
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: { layers: new Map(), getAll: () => [] },
+      searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
+    });
+    assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+    const moved = runner('move_camera', { motion: 'orbit' });
+    const flyB = runner('fly_to_location', { query: 'Nowhere B' });
+    const flyC = runner('fly_to_location', { query: 'Nowhere C' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    searches[first].resolve(null);
+    searches[1 - first].resolve(null);
+    assert.equal((await flyB).ok, false);
+    assert.equal((await flyC).ok, false);
+    flights[0].complete();
+    const result = await moved;
+    assert.equal(result.ok, true, result.error);
+  });
+}
+
+test('a lookup cancelled by a newer one that finds nothing does not hide the flight that landed', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const searches = [];
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+      searches.push({ query, options, resolve });
+    }),
+  });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  const flyB = runner('fly_to_location', { query: 'Place B' });
+  const flyC = runner('fly_to_location', { query: 'Nowhere C' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  flights[0].complete();
+  // C's start takes navigation from B's lookup; C then finds nothing.
+  searches[0].resolve({ cancelled: true });
+  searches[1].resolve(null);
+  assert.equal((await flyB).cancelled, true);
+  assert.equal((await flyC).ok, false);
+  const result = await moved;
+  assert.equal(result.ok, true, result.error);
+});
+
+test('a motion sent after a fly-to that found nothing still waits for the flight before it', async (t) => {
+  // Serial dispatch: "fly to Austin, fly to Nowhere, tilt", one call at a time.
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, order, flights } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: async () => null,
+  });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal((await runner('fly_to_location', { query: 'Nowhere' })).ok, false);
+  const before = order.length;
+  const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  const movedDone = settledYet(moved);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(movedDone(), false, 'the tilt must wait for the Austin flight');
+  assert.equal(order.slice(before).includes('cancel'), false);
+  flights[0].complete();
+  assert.equal((await moved).ok, true);
+});
+
+test('two lookups that found nothing in a row still leave the motion waiting for the flight', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, order, flights } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: async () => null,
+  });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal((await runner('fly_to_location', { query: 'Nowhere' })).ok, false);
+  assert.equal((await runner('fly_to_location', { query: 'Nowhere 2' })).ok, false);
+  const before = order.length;
+  const moved = runner('move_camera', { motion: 'orbit' });
+  const movedDone = settledYet(moved);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(movedDone(), false, 'the orbit must wait for the Austin flight');
+  assert.equal(order.slice(before).includes('cancel'), false);
+  flights[0].complete();
+  assert.equal((await moved).ok, true);
+});
+
 test('a stale motion does not follow a newer reply\'s fly-to', async () => {
   const { viewer, styleManager, flights } = tiltAfterFlightHarness();
   const runner = createGevActionRunner({

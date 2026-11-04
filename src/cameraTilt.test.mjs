@@ -185,6 +185,7 @@ for (const pitch of [-90, -89]) {
     const result = moveCamera({ motion: 'tilt', pitchDeg: pitch });
     assert.equal(result.ok, true);
     assert.equal(result.unchanged, true);
+    assert.equal(result.pitchDeg, Math.round(before));
     assert.equal(getActiveCameraMotion(), null);
     assert.equal(pitchDeg(h.camera), before);
   });

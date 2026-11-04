@@ -288,9 +288,10 @@ export function createGevActionRunner({
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
-  // The latest voice flight. A tilt in the same reply as "fly to X" waits for
-  // it to land: run at once, its navigation cancelled the flight, or the
-  // flight (still geocoding) then replaced the tilt.
+  // The latest voice flight. A tilt, orbit, pan or rotate in the same reply
+  // as "fly to X" waits for it to land: run at once, its navigation
+  // cancelled the flight, or the flight (still geocoding) then replaced the
+  // motion. The wait follows later fly-tos (voiceFlightTarget).
   let voiceFlight = null;
   let analystEngine;
   // Area handles live for this runner (the page): resolve_area, the
@@ -1143,10 +1144,11 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      // Chained fly-tos in one reply: a grab during the earlier one counts.
-      const flight = trackVoiceFlight(
-        voiceFlight && !voiceFlight.done ? voiceFlight.inputCount : undefined,
-      );
+      // Chained fly-tos: a grab during the earlier one counts. The flight
+      // replaced is the last one that moved, past lookups that found nothing.
+      const prior = voiceFlightTarget(voiceFlight);
+      const replaced = prior && !prior.done ? prior : null;
+      const flight = trackVoiceFlight(replaced?.inputCount, replaced);
       voiceFlight = flight;
       const flown = flyToRequestedLocation(viewer, args, {
         onFlightEnd: flight.settle,
@@ -1177,13 +1179,23 @@ export function createGevActionRunner({
           if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
         },
       });
-      // No flight started (not found, refused, cancelled): nothing to wait for.
-      flown.then(
-        (result) => {
-          if (result?.ok !== true) flight.settle('failed');
-        },
-        () => flight.settle('failed'),
-      );
+      // No flight started: nothing to wait for. A lookup that was not found,
+      // threw, or was cancelled once a newer voice fly-to had begun (which
+      // takes navigation from it) moved nothing, so a queued motion looks
+      // past it to the flight it replaced. One cancelled while still the
+      // latest voice flight lost navigation to something else (a search, a
+      // share link, Cockpit): the motion then refuses. A flight its own hooks
+      // already settled (cancelled mid-air) keeps its status.
+      const notStarted = () => {
+        if (!flight.done) flight.movedNothing = true;
+        flight.settle('failed');
+      };
+      flown.then((result) => {
+        if (result?.ok === true) return;
+        if (result?.cancelled && voiceFlight === flight)
+          flight.settle('failed');
+        else notStarted();
+      }, notStarted);
       return flown;
     }
 
@@ -1287,39 +1299,45 @@ export function createGevActionRunner({
 
     if (name === 'move_camera') {
       const motion = String(args.motion || '').toLowerCase();
+      // A lookup that already found nothing does not hide the last flight
+      // that moved: running now would cancel that flight mid-air.
+      const pending = voiceFlightTarget(voiceFlight);
       if (
         VOICE_FLIGHT_WAITING_MOTIONS.has(motion) &&
-        voiceFlight &&
-        !voiceFlight.done
+        pending &&
+        !pending.done
       ) {
         // Bad arguments are refused now, not after waiting on the flight.
         const argsError = moveCameraArgsError(args);
         if (argsError) return argsError;
         const deadline = Date.now() + VOICE_FLIGHT_WAIT_MS;
-        let flight = voiceFlight;
+        const start = pending;
+        let flight = start;
         let status = await waitForVoiceFlight(
           flight,
           runOptions.signal,
           deadline,
         );
-        // A later fly-to in the same reply replaces this one: follow it to
-        // where the camera lands, within the same deadline. Its status does
-        // not matter. A geocode that loses navigation reports failed, and a
-        // flight left flying while the next place is looked up can still
-        // land; running there would take navigation and cancel the newer one.
-        while (
-          voiceFlight !== flight &&
-          status !== 'aborted' &&
-          status !== 'timeout' &&
-          current()
-        ) {
-          flight = voiceFlight;
+        // A later fly-to replaces this one: follow it to where the camera
+        // lands, within the same deadline, whatever this flight reported. A
+        // geocode that loses navigation reports failed, and a flight left
+        // flying while the next place is looked up can still land; running
+        // there would take navigation and cancel the newer one. A later
+        // lookup that found nothing moved nothing, so the motion acts on the
+        // last flight it saw that did move the camera.
+        let landed = flight.movedNothing ? null : { flight, status };
+        while (status !== 'aborted' && status !== 'timeout' && current()) {
+          const target = voiceFlightTarget(voiceFlight, start);
+          if (!target || target === flight) break;
+          flight = target;
           status = await waitForVoiceFlight(
             flight,
             runOptions.signal,
             deadline,
           );
+          if (!flight.movedNothing) landed = { flight, status };
         }
+        if (flight.movedNothing && landed) ({ flight, status } = landed);
         if (!current())
           return { ok: false, action: 'move_camera', cancelled: true };
         if (status !== 'arrived')
@@ -2939,11 +2957,25 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
   );
 }
 
-/** A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once. */
-function trackVoiceFlight(inputCount = manualCameraInputCount()) {
+let voiceFlightCount = 0;
+
+/**
+ * A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once.
+ * `replaced` is the last flight that moved, if still pending when this one
+ * began (past lookups that found nothing). It is kept only
+ * while this one may turn out to have moved nothing (a lookup that found no
+ * place), so a queued motion can look past it.
+ */
+function trackVoiceFlight(
+  inputCount = manualCameraInputCount(),
+  replaced = null,
+) {
   let resolve;
   const flight = {
     done: false,
+    seq: (voiceFlightCount += 1),
+    replaced,
+    movedNothing: false,
     // Manual input after this means the user took the camera mid-flight.
     inputCount,
     ended: new Promise((settle) => {
@@ -2952,10 +2984,24 @@ function trackVoiceFlight(inputCount = manualCameraInputCount()) {
     settle: (status) => {
       if (flight.done) return;
       flight.done = true;
+      if (!flight.movedNothing) flight.replaced = null;
       resolve(status);
     },
   };
   return flight;
+}
+
+/**
+ * The flight a motion queued since `start` acts on: the latest one that
+ * actually started. A lookup that found nothing moved nothing, so look past
+ * it to the flight it replaced, but never to one older than `start` (a flight
+ * from an earlier reply). Null when every later lookup found nothing. With
+ * no `start`, the latest flight that started, however old.
+ */
+function voiceFlightTarget(latest, start = null) {
+  let flight = latest;
+  while (flight?.movedNothing) flight = flight.replaced;
+  return flight && (!start || flight.seq >= start.seq) ? flight : null;
 }
 
 /**

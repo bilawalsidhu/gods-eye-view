@@ -1682,7 +1682,9 @@ export function moveCamera(args = {}, runNavigation = null) {
         ok: true,
         action: 'move_camera',
         motion,
-        pitchDeg: Math.round(Cesium.Math.toDegrees(tiltToPitch)),
+        pitchDeg: Math.round(
+          Cesium.Math.toDegrees(atTopDown ? from : tiltToPitch),
+        ),
         unchanged: true,
       };
     }
