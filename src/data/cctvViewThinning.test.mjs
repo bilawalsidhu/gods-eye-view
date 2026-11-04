@@ -6,11 +6,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import cctvLayer, {
+  _cctvIconsForTest,
   _setCctvCoverageStateForTest,
   _viewRecordIdsForTest,
   refreshHorizonCulling,
 } from './cctv.js';
-import { mirrorBillboard } from './billboardMirror.js';
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -41,7 +41,6 @@ function recordsAt(
         mountHeightM: 8,
       },
       position,
-      billboard: mirrorBillboard({ position, show: true }),
       coverageEntities: [],
       projection: null,
     };
@@ -60,7 +59,7 @@ function viewerAt(heightM, screenByPosition, shiftX = 0) {
     scene: {
       canvas: { clientWidth: WIDTH, clientHeight: HEIGHT },
       cartesianToCanvasCoordinates: (position) => {
-        // The mirror holds its own copy of each position, so match by value.
+        // Match by value: a record's position may be a copy of the fixture's.
         const key = [...screenByPosition.keys()].find((candidate) =>
           Cesium.Cartesian3.equals(candidate, position),
         );
@@ -73,7 +72,10 @@ function viewerAt(heightM, screenByPosition, shiftX = 0) {
 
 function shownIds(records) {
   return records
-    .filter((record) => record.billboard.show)
+    .filter((record) => {
+      const icons = _cctvIconsForTest();
+      return icons.shown(icons.row(record.camera.id));
+    })
     .map((record) => record.camera.id)
     .sort();
 }
@@ -165,7 +167,11 @@ test('the active camera always shows, even in a crowded cell', () => {
       activeCameraId: active.camera.id,
     });
     refreshHorizonCulling();
-    assert.ok(active.billboard.show, `${active.camera.id} shows while active`);
+    const icons = _cctvIconsForTest();
+    assert.ok(
+      icons.shown(icons.row(active.camera.id)),
+      `${active.camera.id} shows while active`,
+    );
   }
 });
 

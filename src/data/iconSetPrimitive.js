@@ -259,10 +259,14 @@ export class IconSetPrimitive {
 
   update(frameState) {
     const set = this.set;
+    // Icons are screen overlays, not world surfaces: they stay out of the
+    // offscreen ray picks behind pickFromRay and sampleHeight, so a layer's
+    // ground and mesh probes never hit its own (or another layer's) icons.
     if (
       !this.show ||
       !set.show ||
-      (!frameState.passes.render && !frameState.passes.pick)
+      (!frameState.passes.render && !frameState.passes.pick) ||
+      frameState.passes.offscreen
     )
       return;
     const context = frameState.context;
@@ -446,6 +450,9 @@ export class IconSetPrimitive {
       handle = {
         pickId: context.createPickId({
           id,
+          // Which set drew the pick: ownership for layers whose row ids are
+          // upstream ids a sibling may share.
+          iconSet: set,
           get meta() {
             const at = set.row(id);
             return at >= 0 ? set.metaAt(at) : undefined;

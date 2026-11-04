@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
+  CAMERA_ICON,
   IDLE_CAMERA_COLOR,
   LIVE_CAMERA_COLOR,
   ACTIVE_COVERAGE_CENTER,
@@ -14,7 +15,24 @@ import {
   VIEW_ICON_MARGIN,
   VIEW_MIN_CELL_M,
 } from './policy.js';
-import { billboardState, setBillboard } from '../../data/billboardMirror.js';
+import { createIconSet } from '../../data/iconSet.js';
+import { writeHoldSegment } from '../../data/iconSegment.js';
+import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
+import { iconAtlas } from '../../data/iconAtlas.js';
+
+/** The camera icon's drawn size (px). */
+const CAMERA_ICON_PX = 24;
+/**
+ * Its atlas raster: 1.25× near scale on a 2× display draws it at 60 device px,
+ * so it is rasterised past the drawn size to stay sharp there.
+ */
+const CAMERA_RASTER_PX = 48;
+const CAMERA_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
+  350,
+  1.25,
+  4_000_000,
+  0.42,
+);
 
 /** FNV-1a over a camera id: a stable, well-spread order for crowded cells. */
 function idHash(id) {
@@ -32,6 +50,72 @@ export function createRendering({
   parts,
   source,
 }) {
+  /** The scene the icon primitive was added to. */
+  let iconScene = null;
+
+  /**
+   * The catalog's icon set and the primitive that draws it. Cameras hold still,
+   * so each row is a hold segment and the primitive's clock only keeps segment
+   * times small. Rows draw depth-test-free (field-test fix 2026-07-06: the old
+   * finite depth-test distance re-engaged at far zoom, where the COARSE
+   * far-LOD Google-3D mesh sits above the true ground and swallowed
+   * ground-anchored icons); the GPU culls the far side of the globe and
+   * refreshHorizonCulling thins the rest.
+   * @param {Cesium.Viewer} viewer
+   */
+  function createCameraIcons(viewer) {
+    // A re-init against a new viewer replaces the icons; the old ones go.
+    destroyCameraIcons();
+    const epoch = Cesium.JulianDate.now();
+    layerState._icons = createIconSet({ epoch });
+    layerState._iconPrimitive = new IconSetPrimitive({
+      set: layerState._icons,
+      renderTime: () => epoch,
+      requestRender: () => layerState._viewer?.scene?.requestRender?.(),
+    });
+    viewer.scene.primitives.add(layerState._iconPrimitive);
+    iconScene = viewer.scene;
+    return layerState._iconPrimitive;
+  }
+
+  /**
+   * Take the icons out of the scene they were added to, whichever viewer the
+   * caller tears down, and free them: a destroyed primitive left in a live
+   * scene throws on its next frame.
+   */
+  function destroyCameraIcons() {
+    const primitive = layerState._iconPrimitive;
+    if (primitive && iconScene && !iconScene.isDestroyed?.())
+      iconScene.primitives.remove(primitive);
+    if (primitive && !primitive.isDestroyed()) primitive.destroy();
+    iconScene = null;
+    layerState._iconPrimitive = null;
+    layerState._icons = null;
+  }
+
+  /** Add a camera record's icon row, idle and shown, at its position. */
+  function addCameraIcon(record) {
+    const set = layerState._icons;
+    const id = record.camera.id;
+    const row = set.add(id, { layer: 'cctv', id });
+    const slot = iconAtlas.slot(CAMERA_ICON, CAMERA_RASTER_PX);
+    set.setImage(row, slot, slot);
+    set.setSize(row, CAMERA_ICON_PX, CAMERA_ICON_PX);
+    set.setScaleByDistance(row, CAMERA_SCALE_BY_DISTANCE);
+    set.setColor(row, cameraColorFor(record));
+    set.setShown(row, true);
+    moveCameraIcon(record);
+  }
+
+  /** Hold a camera's row at its record's current position. */
+  function moveCameraIcon(record) {
+    const set = layerState._icons;
+    const row = set?.row(record.camera.id) ?? -1;
+    if (row < 0 || !record.position) return;
+    writeHoldSegment(set.segments, row, record.position, 0);
+    set.segmentWritten(row);
+  }
+
   /** Icon color: active wins, then live-capable video feeds, then idle stills. */
   function cameraColorFor(record) {
     if (record.camera.id === layerState._activeCameraId)
@@ -81,25 +165,26 @@ export function createRendering({
         ),
       cameraDistanceFor: (position) =>
         Cesium.Cartesian3.distance(camera.positionWC, position),
-      baseColorFor: cameraColorFor,
     });
     layerState._activeFocusStyleCount = result.activeCount;
   }
 
   /**
-   * Apply the gated CCTV focus pass through the production color path.
+   * Apply the gated CCTV focus pass through the set's focus column (the shader
+   * multiplies it into the base color's alpha).
    * @param {object} input
+   * @param {object} [input.icons] The icon set (defaults to the layer's).
    * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
    */
 
   function applyCctvFocusDeemphasis({
     records,
+    icons = layerState._icons,
     target,
     previousActiveCount = 0,
     nowMs,
     screenPositionFor,
     cameraDistanceFor,
-    baseColorFor,
     params,
   }) {
     if (!focusPassIsNeeded(target, previousActiveCount)) {
@@ -109,31 +194,28 @@ export function createRendering({
     let transitioning = false;
     let activeCount = 0;
     for (const record of records || []) {
-      const bb = record.billboard;
-      if (!bb) continue;
-      const icon = billboardState(bb);
-      const position = icon.position;
+      const row = icons?.row(record.camera?.id) ?? -1;
+      if (row < 0) continue;
+      const position = record.position;
       // CCTV never publishes a tracked focus target, so every icon is ambient.
-      const focus = advanceSpriteFocus(bb, {
+      const focus = advanceSpriteFocus(icons.metaAt(row), {
         // Keep hidden icons in the state/release pass so the active count cannot
         // drop while a stale dim alpha remains waiting to reappear.
         screenPosition:
-          icon.show === false || !position ? null : screenPositionFor(position),
+          !icons.shown(row) || !position ? null : screenPositionFor(position),
         cameraDistance: position ? cameraDistanceFor(position) : Number.NaN,
         nowMs,
         target,
         params,
-        spriteHalfWidthPx: (icon.width || 24) * (icon.scale || 1) * 0.5,
-        spriteHalfHeightPx: (icon.height || 24) * (icon.scale || 1) * 0.5,
+        spriteHalfWidthPx: icons.width(row) * icons.scale(row) * 0.5,
+        spriteHalfHeightPx: icons.height(row) * icons.scale(row) * 0.5,
       });
       transitioning ||= focus.transitioning;
       if (focus.active) activeCount += 1;
-      const base = baseColorFor(record);
-      const alpha = base.alpha * focus.factor;
-      if (focusAlphaNeedsWrite(bb.color?.alpha, alpha, params)) {
-        // Order-independent narrow amendment to always-visible icons: CCTV
-        // contacts retain a non-zero floor while yielding near the tracked target.
-        bb.color = base.withAlpha(alpha);
+      // Order-independent narrow amendment to always-visible icons: CCTV
+      // contacts retain a non-zero floor while yielding near the tracked target.
+      if (focusAlphaNeedsWrite(icons.focus(row), focus.factor, params)) {
+        icons.setFocus(row, focus.factor);
         writes += 1;
       }
     }
@@ -141,18 +223,17 @@ export function createRendering({
   }
 
   /**
-   * Updates visual styles (colors, widths, visibility) for all camera billboards,
+   * Updates visual styles (colors, widths, visibility) for all camera icons,
    * coverage polylines, viewshed volumes, and projection entities based on which
    * camera is active, whether the layer is enabled, and the current
    * coverage-mode/projection toggle states.
    */
   /**
-   * Field-test fix (2026-07-06): horizon-culls camera billboards, mirroring the
-   * flights layer's EllipsoidalOccluder pass. With the Cesium globe hidden
-   * (Google-3D regime) nothing writes far-side depth, and the billboards are now
-   * always-on-top (`disableDepthTestDistance: INFINITY` — the far-zoom submerge
-   * fix), so without this pass London's cluster would shine through the planet
-   * from a US viewpoint.
+   * Field-test fix (2026-07-06): horizon-culls camera icons on the CPU as the
+   * icon shader does on the GPU. With the Cesium globe hidden (Google-3D
+   * regime) nothing writes far-side depth and the icons are always-on-top, so
+   * the shown set (cards, geometry, the picker) must not include London's
+   * cluster from a US viewpoint.
    *
    * The same pass thins the view so a large catalog stays readable and cheap:
    * icons well off screen hide, and each camera competes for a world-anchored
@@ -202,7 +283,7 @@ export function createRendering({
     const shown = [];
     const cells = new Map();
     for (const record of layerState._records) {
-      const position = billboardState(record.billboard)?.position;
+      const position = record.position;
       if (!position) continue;
       const vx = position.x * inverseRadii.x - cx;
       const vy = position.y * inverseRadii.y - cy;
@@ -243,12 +324,10 @@ export function createRendering({
       record.viewPass = pass;
       shown.push(record);
     }
+    const icons = layerState._icons;
     for (const record of layerState._records) {
-      const bb = record.billboard;
-      if (!bb) continue;
-      const visible = record.viewPass === pass;
-      if (billboardState(bb).show !== visible)
-        setBillboard(bb, 'show', visible);
+      const row = icons?.row(record.camera.id) ?? -1;
+      if (row >= 0) icons.setShown(row, record.viewPass === pass);
     }
     const previous = layerState._viewRecords;
     const changed =
@@ -369,7 +448,7 @@ export function createRendering({
       layerState._activeCameraId,
     );
     parts.projection.clearProjectionOverlay();
-    if (layerState._billboards) layerState._billboards.show = false;
+    if (layerState._icons) layerState._icons.show = false;
     parts.projection.pauseInactiveProjectionFeeds(null);
   }
 
@@ -391,19 +470,15 @@ export function createRendering({
         coverageVisible,
       );
     }
+    const icons = layerState._icons;
     for (const record of layerState._records) {
       const isActive = record.camera.id === activeId;
-      if (record.billboard) {
-        // Unchanged writes still dirty the collection, which then rewrites
-        // every icon's vertices: across a large catalog, write only changes.
-        const color = cameraColorFor(record);
-        if (!Cesium.Color.equals(record.billboard.color, color))
-          record.billboard.color = color;
-        const scale = isActive ? 1.25 : 1.0;
-        if (billboardState(record.billboard).scale !== scale)
-          setBillboard(record.billboard, 'scale', scale);
-        // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
-        // (set at creation) — see the field-test far-zoom submerge fix there.
+      const row = icons?.row(record.camera.id) ?? -1;
+      if (row >= 0) {
+        // The set skips unchanged writes, so across a large catalog only the
+        // changed rows upload.
+        icons.setColor(row, cameraColorFor(record));
+        icons.setScale(row, isActive ? 1.25 : 1.0);
       }
 
       if (
@@ -506,11 +581,14 @@ export function createRendering({
       }
     }
 
-    if (layerState._billboards)
-      layerState._billboards.show = !!layerState._enabled;
+    if (layerState._icons) layerState._icons.show = !!layerState._enabled;
     parts.projection.pauseInactiveProjectionFeeds(activeId);
   }
   return {
+    createCameraIcons,
+    destroyCameraIcons,
+    addCameraIcon,
+    moveCameraIcon,
     refreshCctvFocusStyles,
     applyCctvFocusDeemphasis,
     refreshHorizonCulling,

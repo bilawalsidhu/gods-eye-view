@@ -16,7 +16,6 @@ import {
   poseHash,
   requiredPlaneLift,
 } from '../../data/cctvFootprint.js';
-import { setBillboard } from '../../data/billboardMirror.js';
 import { cctvPicks } from './pickState.js';
 
 export function createGeometry({ state: layerState, services, parts, source }) {
@@ -328,7 +327,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * Recomputes the pure frustum geometry from the camera pose + the given ground
-   * altitude and writes it into the scene: billboard position, the 5 wireframe
+   * altitude and writes it into the scene: icon position, the 5 wireframe
    * polylines (4 corner rays + closed far-plane rectangle), and the monitor
    * plane placement. This is the ONLY place v2 geometry is written — called on
    * slider input / save / activation / the one-shot ground snap, never per frame.
@@ -348,9 +347,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     record.frustumPositions = positions;
     record.position = positions.mount;
     record.camera.absoluteHeightM = geometry.mount.alt;
-    if (record.billboard) {
-      setBillboard(record.billboard, 'position', positions.mount);
-    }
+    parts.rendering.moveCameraIcon(record);
     if (record.coverageEntities?.length >= 5) {
       record.coverageEntities[0].polyline.positions = [
         positions.mount,
@@ -458,7 +455,6 @@ export function createGeometry({ state: layerState, services, parts, source }) {
         (record.groundMeshSampleRequestCount || 0) + 1;
       const viewerCarto = layerState._viewer?.camera?.positionCartographic;
       const excludeObjects = [...(record.coverageEntities || [])];
-      if (record.billboard) excludeObjects.push(record.billboard);
       if (record.projection?.planeEntity)
         excludeObjects.push(record.projection.planeEntity);
       sampleMeshFloorCells(layerState._viewer?.scene, [point], {
@@ -644,8 +640,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       );
       const { dir } = frustumFrameEcef(camera, mountPos);
       // Exclude everything the layer itself draws so the probe can only hit the
-      // world (3D tiles), not our own billboards/polylines/planes.
-      const exclude = [layerState._billboards, ...layerState._coverageEntities];
+      // world (3D tiles), not our own polylines/planes. Icons never draw into
+      // ray picks.
+      const exclude = [...layerState._coverageEntities];
       for (const runtime of layerState._projectionEntities) {
         if (runtime?.planeEntity) exclude.push(runtime.planeEntity);
       }
@@ -699,6 +696,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       record.frustumGeometry = geometry;
       record.frustumPositions = positions;
       record.position = positions.mount;
+      parts.rendering.moveCameraIcon(record);
     }
 
     const addPolyline = (role, linePositions) => {

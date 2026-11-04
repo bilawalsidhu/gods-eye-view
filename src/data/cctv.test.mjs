@@ -32,6 +32,7 @@ import cctvLayer, {
   _extractPickedCameraIdForTest,
   _updateCctvProjectionPlaneForTest,
   _setCctvCoverageStateForTest,
+  _cctvIconsForTest,
   _pushAmbientCardEntriesForTest,
   _setCctvOverlayHostForTest,
   activationProbeClampRange,
@@ -79,7 +80,6 @@ import {
   IDLE_CAMERA_COLOR,
   LIVE_CAMERA_COLOR,
 } from '../layers/cctv/policy.js';
-import { mirrorBillboard } from './billboardMirror.js';
 import { cctvPicks } from '../layers/cctv/pickState.js';
 
 const ASPECT = 16 / 9;
@@ -357,7 +357,6 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
 test('camera icons are violet for video feeds, cyan for stills, amber when active', () => {
   const record = (id, feedType) => ({
     camera: { ...UNCLAMPED_CAMERA, id, feedType, groundElevationM: 0 },
-    billboard: mirrorBillboard({}),
     coverageEntities: [],
     projection: null,
   });
@@ -377,9 +376,15 @@ test('camera icons are violet for video feeds, cyan for stills, amber when activ
       coverageMode: 'off',
     });
     refreshCoverageStyles();
-    assert.equal(idleVideo.billboard.color, LIVE_CAMERA_COLOR);
-    assert.equal(idleStill.billboard.color, IDLE_CAMERA_COLOR);
-    assert.equal(activeVideo.billboard.color, ACTIVE_CAMERA_COLOR);
+    const icons = _cctvIconsForTest();
+    const color = (record) => icons.color(icons.row(record.camera.id));
+    const bytes = (c) =>
+      [c.red, c.green, c.blue, c.alpha].map(Cesium.Color.floatToByte);
+    assert.deepEqual(bytes(color(idleVideo)), bytes(LIVE_CAMERA_COLOR));
+    assert.deepEqual(bytes(color(idleStill)), bytes(IDLE_CAMERA_COLOR));
+    assert.deepEqual(bytes(color(activeVideo)), bytes(ACTIVE_CAMERA_COLOR));
+    assert.equal(icons.scale(icons.row(activeVideo.camera.id)), 1.25);
+    assert.equal(icons.scale(icons.row(idleVideo.camera.id)), 1);
   } finally {
     _setCctvCoverageStateForTest({ enabled: false });
   }
@@ -684,7 +689,6 @@ test('CCTV disable hide sweep hides record visuals and destroys viewsheds withou
       camera: { id: 'a' },
       activationDone: true,
       probeClampRangeM: 105,
-      billboard: mirrorBillboard({ color: 'keep-color', scale: 1.25 }),
       coverageEntities: [{ show: true }, { show: true }],
       projection: { planeEntity: { show: true } },
       viewshedPrimitive: viewshedA,
@@ -693,7 +697,6 @@ test('CCTV disable hide sweep hides record visuals and destroys viewsheds withou
       camera: { id: 'b' },
       activationDone: true,
       probeClampRangeM: 146,
-      billboard: mirrorBillboard({ color: 'keep-color', scale: 1 }),
       projection: null,
       viewshedPrimitive: viewshedB,
     },
@@ -726,13 +729,6 @@ test('CCTV disable hide sweep hides record visuals and destroys viewsheds withou
   assert.deepEqual(
     records.map((record) => record.activationDone),
     [false, true],
-  );
-  assert.deepEqual(
-    records.map((record) => record.billboard),
-    [
-      { color: 'keep-color', scale: 1.25 },
-      { color: 'keep-color', scale: 1 },
-    ],
   );
 });
 
@@ -1130,14 +1126,12 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
 });
 
 test('CCTV camera extraction requires layer ownership, not a colliding sibling ID', () => {
-  const billboard = { id: 'shared-id' };
   const ownedCoverageEntity = { id: 'cctv-shared-id-cap' };
   cctvPicks.write(ownedCoverageEntity).cameraId = 'shared-id';
   const strayEntity = { id: 'cctv-shared-id-stray' };
   cctvPicks.write(strayEntity).cameraId = 'shared-id';
   const record = {
     ...makeDeselectRecord('shared-id'),
-    billboard,
     coverageEntities: [ownedCoverageEntity],
   };
   _setCctvCoverageStateForTest({
@@ -1146,12 +1140,17 @@ test('CCTV camera extraction requires layer ownership, not a colliding sibling I
   });
   try {
     assert.equal(
-      _extractPickedCameraIdForTest({ id: 'shared-id', primitive: billboard }),
+      _extractPickedCameraIdForTest({
+        id: 'shared-id',
+        iconSet: _cctvIconsForTest(),
+        primitive: { id: 'shared-id' },
+      }),
       'shared-id',
     );
     assert.equal(
       _extractPickedCameraIdForTest({
         id: 'shared-id',
+        iconSet: {},
         primitive: { id: 'shared-id' },
       }),
       null,

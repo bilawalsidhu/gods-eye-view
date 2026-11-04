@@ -110,6 +110,7 @@ export function createCctvLayer({ services, source }) {
       _extractPickedCameraIdForTest:
         parts.testing._extractPickedCameraIdForTest,
       _setCctvCoverageStateForTest: parts.testing._setCctvCoverageStateForTest,
+      _cctvIconsForTest: parts.testing._cctvIconsForTest,
       focusCctvRecord: parts.navigation.focusCctvRecord,
       maybeAutoHop: parts.navigation.maybeAutoHop,
       cctvCycleIndex: parts.navigation.cctvCycleIndex,

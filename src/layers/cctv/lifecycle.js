@@ -4,15 +4,12 @@ import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
-  CAMERA_ICON,
-  IDLE_CAMERA_COLOR,
   CALIBRATION_RANGE_FLOOR_M,
   VIEW_MOTION_REFRESH_MS,
   VIEW_MOTION_MIN_MOVE_FRACTION,
   VIEW_MOTION_MIN_TURN_DEG,
   VIEW_MOTION_COST_FACTOR,
 } from './policy.js';
-import { addBillboard } from '../../data/billboardMirror.js';
 
 const MIN_TURN_COS = Math.cos((VIEW_MOTION_MIN_TURN_DEG * Math.PI) / 180);
 
@@ -134,7 +131,7 @@ export function createLifecycle({
   const methods = {
     /**
      * Initializes the CCTV layer: loads camera sources, builds the catalog,
-     * restores calibration from localStorage, creates billboards, sets up click
+     * restores calibration from localStorage, creates camera icons, sets up click
      * handling, and performs initial health sync. Coverage entities stay lazy.
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
@@ -156,16 +153,10 @@ export function createLifecycle({
       layerState._lastViewContext = '';
       layerState._calibrationById = parts.calibration.loadCalibrationStore();
 
-      layerState._billboards = new Cesium.BillboardCollection();
-      // Cesium switches a property's buffer-usage hint whenever it starts or
-      // stops changing from one frame to the next, and every switch rewrites
-      // the vertex data of every billboard. The view pass toggles `show` on a
-      // few icons of a large catalog at a time, so on a 33K catalog each pass
-      // cost two full rewrites. With the hint fixed, Cesium uploads only the
-      // icons that changed.
-      layerState._billboards.computeNewBuffersUsage = () => false;
-      layerState._viewer.scene.primitives.add(layerState._billboards);
-      registerSpriteCollection('cctv', layerState._billboards);
+      registerSpriteCollection(
+        'cctv',
+        parts.rendering.createCameraIcons(layerState._viewer),
+      );
 
       const sources = await parts.catalog.loadCameraSources();
       const catalogFromSources = parts.catalog.buildCatalogFromSources(sources);
@@ -238,27 +229,9 @@ export function createLifecycle({
           camera.lat,
           camera.absoluteHeightM,
         );
-        const billboard = addBillboard(layerState._billboards, {
-          id: camera.id,
-          image: CAMERA_ICON,
-          position,
-          color: IDLE_CAMERA_COLOR,
-          width: 24,
-          height: 24,
-          // Field-test fix (2026-07-06): always-on-top. The old finite value
-          // (1800 m) re-engaged the depth test at far zoom, where the COARSE
-          // far-LOD Google-3D mesh sits above the true ground and swallowed
-          // ground-anchored icons ("submerged" pills over SF). Far-side-of-globe
-          // icons are handled by refreshHorizonCulling() (the flights-layer
-          // EllipsoidalOccluder pattern), not by the depth test.
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(350, 1.25, 4_000_000, 0.42),
-        });
-
         const record = {
           camera,
           position,
-          billboard,
           coverageEntities: [],
           projection: null,
           // Task 5 (height-datum fix): regime-aware ground resolution state.
@@ -297,6 +270,7 @@ export function createLifecycle({
         };
         layerState._records.push(record);
         layerState._recordById.set(camera.id, record);
+        parts.rendering.addCameraIcon(record);
       }
 
       layerState._count = layerState._records.length;
@@ -334,7 +308,7 @@ export function createLifecycle({
       }
 
       // Field-test fix (2026-07-06): horizon-cull on camera settle (pairs with
-      // the billboards' always-on-top depth setting) + one initial pass so the
+      // the icons' always-on-top drawing) + one initial pass so the
       // first paint is already culled.
       // A re-init against a new viewer moves the move listeners to its camera.
       if (
@@ -493,7 +467,7 @@ export function createLifecycle({
       )
         services.credits?.showOsmCredit?.(layerState._viewer, 'cctv');
       layerState._lastUpdate = Date.now();
-      // Pick-ownership (H2): camera billboards use the camera id directly;
+      // Pick-ownership (H2): camera icons use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
       registerPickOwner('cctv', (pickedId) => {
         if (layerState._recordById.has(pickedId)) return true;
@@ -565,7 +539,7 @@ export function createLifecycle({
 
     /**
      * Tears down the layer: destroys click handler, projection loop, coverage
-     * entities, billboards, and clears all runtime state and subscribers.
+     * entities, icons, and clears all runtime state and subscribers.
      * @param {Cesium.Viewer} [viewer] - Viewer instance (falls back to stored ref).
      */
     destroy(viewer) {
@@ -621,10 +595,7 @@ export function createLifecycle({
       parts.geometryQueue.stopGeometryLoadQueue();
       parts.cards.teardownAmbientCards();
       parts.geometry.destroyCoverageEntities();
-      if (layerState._billboards && teardownViewer) {
-        teardownViewer.scene.primitives.remove(layerState._billboards);
-        layerState._billboards = null;
-      }
+      parts.rendering.destroyCameraIcons();
       clearRuntimeState();
       layerState._viewer = null;
       layerState._enabled = false;

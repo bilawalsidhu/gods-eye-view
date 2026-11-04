@@ -4,7 +4,6 @@ import {
   planeSupportPoints,
   poseHash,
 } from '../../data/cctvFootprint.js';
-import { setBillboard } from '../../data/billboardMirror.js';
 
 /** Cooldown before a provisional (geoid-fallback / partial) footprint is retried. */
 const FOOTPRINT_RETRY_MS = 60_000;
@@ -239,8 +238,7 @@ export function createGround({ state: layerState, services, parts, source }) {
             undefined,
             record.position,
           );
-          if (record.billboard)
-            setBillboard(record.billboard, 'position', record.position);
+          parts.rendering.moveCameraIcon(record);
           moved += 1;
         }
         continue;

@@ -207,7 +207,7 @@ export function createSelection({
   }
 
   /**
-   * Extracts a camera ID from a Cesium pick result by checking billboard IDs,
+   * Extracts a camera ID from a Cesium pick result by checking icon row IDs,
    * primitive IDs, and the camera ids the layer keeps for its coverage entities.
    * @param {Object|null} picked - Result from scene.pick().
    * @returns {string|null} Camera ID, or null if the pick is not a CCTV entity.
@@ -237,10 +237,9 @@ export function createSelection({
       if (record && (ownsCoverageEntity || ownsProjectionEntity)) return value;
     }
 
-    // Camera billboard IDs are intentionally the upstream camera ID, so a
+    // Camera icon row IDs are intentionally the upstream camera ID, so a
     // sibling may legitimately use the same string. A bare ID match is not
-    // ownership proof: require this layer's billboard collection or the exact
-    // billboard stored on the record.
+    // ownership proof: require that this layer's icon set drew the pick.
     const directId =
       typeof picked.id === 'string'
         ? picked.id
@@ -250,8 +249,7 @@ export function createSelection({
     const record =
       directId === null ? null : layerState._recordById.get(directId);
     if (!record) return null;
-    return picked.primitive === layerState._billboards ||
-      picked.primitive === record.billboard
+    return layerState._icons && picked.iconSet === layerState._icons
       ? directId
       : null;
   }

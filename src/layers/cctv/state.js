@@ -15,7 +15,9 @@ export function createState({ services }) {
 
   layerState._viewer = null;
 
-  layerState._billboards = null;
+  /** The catalog's icon set and the primitive that draws it. */
+  layerState._icons = null;
+  layerState._iconPrimitive = null;
 
   layerState._records = [];
 
