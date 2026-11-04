@@ -18,6 +18,8 @@ const NAME_REFRESH_SEC = 3600;
 export function createRecorder({
   file,
   store = openHistoryStore(file),
+  // Opens the store again after a failed write (a drive that was unplugged).
+  reopen = null,
   retentionDays = 7,
   retentionSec = retentionDays * 86400,
   layers = null,
@@ -25,6 +27,28 @@ export function createRecorder({
   intervalSec = 30,
   now = () => Date.now(),
 }) {
+  /** How writing is going: a drive can be pulled out while recording. */
+  const health = {
+    ok: true,
+    since: Math.floor(now() / 1000),
+    error: '',
+    failures: 0,
+  };
+  let lastReopen = 0;
+  const markFailed = (error) => {
+    if (health.ok) health.since = Math.floor(now() / 1000);
+    health.ok = false;
+    health.failures += 1;
+    health.error = String(error?.message ?? error).slice(0, 200);
+  };
+  const markWorking = () => {
+    if (!health.ok) health.since = Math.floor(now() / 1000);
+    health.ok = true;
+    health.failures = 0;
+    health.error = '';
+  };
+  const waiting = () =>
+    buffer.length + eventBuffer.length + nameBuffer.length + alertBuffer.length;
   const keep = createThinner({ minGapSec: intervalSec });
   let wanted = layers ? new Set(layers) : null;
   let buffer = [];
@@ -45,8 +69,10 @@ export function createRecorder({
     buffer = [];
     try {
       await store.insertMany(batch);
+      markWorking();
     } catch (error) {
       buffer = batch.concat(buffer).slice(-MAX_BUFFER);
+      markFailed(error);
       throw error;
     }
   }
@@ -114,6 +140,20 @@ export function createRecorder({
       if (!(await store.dropOldest(0.1))) break;
   }
   const quiet = (work) => work.catch(() => {});
+  /** After repeated failed writes, try to open the store again, at most every 15 s. */
+  async function maybeReopen() {
+    if (!reopen || health.ok || health.failures < 2) return;
+    if (Date.now() - lastReopen < 15000) return;
+    lastReopen = Date.now();
+    const fresh = await reopen();
+    const old = store;
+    store = fresh;
+    try {
+      await old.close();
+    } catch {
+      // The old handle was on a drive that is gone.
+    }
+  }
   const timers = [
     setInterval(() => {
       quiet(flush());
@@ -121,6 +161,7 @@ export function createRecorder({
       quiet(flushNames());
       quiet(flushAlerts());
       quiet(enforceCap());
+      quiet(maybeReopen());
     }, FLUSH_MS),
     setInterval(() => quiet(purge()), PURGE_MS),
   ];
@@ -128,7 +169,24 @@ export function createRecorder({
   quiet(purge());
 
   return {
-    store,
+    get store() {
+      return store;
+    },
+    /** Whether writing works, since when, and how many points are waiting. */
+    health: () => ({ ...health, waiting: waiting() }),
+    /**
+     * Moves recording to another store, which must already hold everything the
+     * old one did. The old store is returned for the caller to close.
+     */
+    async switchStore(next) {
+      // Swap at once: points that arrive meanwhile, and what is still
+      // buffered, are written to the new store.
+      const old = store;
+      store = next;
+      markWorking();
+      tracker.setFences(await next.listFences());
+      return old;
+    },
     /** What the recorder is using now. */
     settings: () => ({
       retentionSec,

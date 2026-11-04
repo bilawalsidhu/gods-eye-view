@@ -1,4 +1,4 @@
-import { readFileSync, statfsSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aisStreamRows } from '../providers/vessels/ais-store.js';
@@ -20,7 +20,9 @@ import { exportPoints, summarizeTrack } from './exporters.js';
 import { createPgStore } from './pgStore.js';
 import { createFeedMonitor } from './feeds.js';
 import { createN2yoClient, refreshFromN2yo } from './n2yo.js';
+import { checkFolder, historyFileIn, listDrives } from './location.js';
 import { createRecorder } from './recorder.js';
+import { createUnavailableStore, openHistoryStore } from './store.js';
 import { DEFAULT_SAT_GROUPS, createSatelliteSource } from './satellites.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -79,7 +81,7 @@ const intParam = (v) => (v == null || v === '' ? null : Math.floor(Number(v)));
 export function recorderPlugin(env = process.env) {
   const settings = mergedSettings(root, env);
   const enabled = settings.GEV_RECORDER === '1';
-  const file =
+  let file =
     settings.GEV_HISTORY_FILE || path.join(root, 'data', 'history.sqlite');
   const config = enabled ? recorderConfig(settings) : null;
 
@@ -89,13 +91,37 @@ export function recorderPlugin(env = process.env) {
       `[gev-recorder] recording to ${config.databaseUrl ? 'PostgreSQL' : file}. ` +
         'Some feeds restrict storing their data: read docs/RECORDING-DATA-TERMS.md',
     );
+    // A folder outside the default data folder is on another drive: if it is
+    // not there, record nothing yet and keep trying, instead of creating a
+    // stray folder on the main disk.
+    function startingStore() {
+      const inDefault = path
+        .resolve(file)
+        .startsWith(path.resolve(root, 'data') + path.sep);
+      try {
+        return openHistoryStore(file, { createFolder: inDefault });
+      } catch (error) {
+        server.config?.logger?.warn(
+          '[gev-recorder] ' +
+            error.message +
+            ' (is the drive plugged in?). Waiting for it.',
+        );
+        return createUnavailableStore(error.message);
+      }
+    }
     const recorder = createRecorder({
       file,
       retentionSec: config.retentionSec,
       layers: config.layers,
       maxBytes: config.maxBytes,
       intervalSec: config.intervalSec,
-      store: config.databaseUrl ? createPgStore(config.databaseUrl) : undefined,
+      store: config.databaseUrl
+        ? createPgStore(config.databaseUrl)
+        : startingStore(),
+      // After failed writes: open the same file again (a drive plugged back in).
+      reopen: config.databaseUrl
+        ? null
+        : async () => openHistoryStore(file, { createFolder: false }),
     });
     const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -257,12 +283,67 @@ export function recorderPlugin(env = process.env) {
     }, VESSEL_POLL_MS);
     poll.unref?.();
 
+    /**
+     * Moves recording to a folder, perhaps on another drive. The history so far
+     * is copied there first (unless the folder already holds one, which is used
+     * as it is) and checked, so nothing is lost; the old file is deleted only
+     * when asked, and only after the copy checked out.
+     */
+    async function moveRecording(body) {
+      const check = checkFolder(body.folder);
+      if (!check.ok) throw new TypeError(check.error);
+      const target = historyFileIn(check.path);
+      if (path.resolve(target) === path.resolve(file))
+        return { changed: false };
+      await recorder.flush();
+      const oldFile = file;
+      const oldStore = recorder.store;
+      const reused = existsSync(target);
+      let copied = false;
+      if (!reused && body.copy !== false) {
+        const before = oldStore.range().count;
+        oldStore.copyTo(target);
+        copied = true;
+        const check2 = openHistoryStore(target, { createFolder: false });
+        const after = check2.range().count;
+        check2.close();
+        if (after < before) {
+          rmSync(target, { force: true });
+          throw new Error('The copy came out incomplete; nothing was changed');
+        }
+      }
+      const next = openHistoryStore(target, { createFolder: false });
+      const old = await recorder.switchStore(next);
+      file = target;
+      try {
+        saveConfigFile(root, { file: target }, env);
+      } catch {
+        // Applied until restart; the response says it was not kept.
+      }
+      await Promise.resolve(old.close()).catch(() => {});
+      let deleted = false;
+      if (body.deleteOld && copied) {
+        for (const suffix of ['', '-wal', '-shm'])
+          rmSync(oldFile + suffix, { force: true });
+        deleted = true;
+      }
+      return {
+        changed: true,
+        copied,
+        reused,
+        deleted,
+        from: oldFile,
+        to: target,
+      };
+    }
+
     /** Which settings an environment variable sets, so the panel can say so. */
     const lockedSettings = () =>
       Object.entries({
         retention: ['GEV_HISTORY_RETENTION', 'GEV_HISTORY_DAYS'],
         maxMb: ['GEV_HISTORY_MAX_MB'],
         interval: ['GEV_RECORDER_INTERVAL'],
+        file: ['GEV_HISTORY_FILE'],
         layers: ['GEV_RECORDER_LAYERS'],
       })
         .filter(([, names]) =>
@@ -280,7 +361,8 @@ export function recorderPlugin(env = process.env) {
       if (forwarded || !LOOPBACK.has(req.socket?.remoteAddress))
         return sendJson(res, 403, { error: 'History is local only' });
       try {
-        await recorder.flush();
+        // A failed write (an unplugged drive) must not hide the status that says so.
+        await recorder.flush().catch(() => {});
         const url = new URL(req.url || '/', 'http://localhost');
         const q = url.searchParams;
         const from = intParam(q.get('from')) ?? 0;
@@ -309,6 +391,7 @@ export function recorderPlugin(env = process.env) {
             layer_counts: await recorder.store.layerCounts(),
             feeds: feeds.snapshot(live.layers ?? [], nowSec()),
             n2yo: n2yoState,
+            storage: { path: file, ...recorder.health() },
             disk_free_bytes: diskFree,
             recording: true,
             retention_days: live.retentionSec / 86400,
@@ -331,8 +414,18 @@ export function recorderPlugin(env = process.env) {
               to,
             }),
           });
+        if (url.pathname === '/drives')
+          return sendJson(res, 200, {
+            current: path.dirname(file),
+            drives: listDrives({ mainDir: root }),
+          });
         if (url.pathname === '/settings' && req.method === 'POST')
           return readJson(req, res, async (body) => {
+            // Where to record is settled first, so a refusal changes nothing.
+            const moved =
+              body.folder !== undefined && !config.databaseUrl
+                ? await moveRecording(body)
+                : null;
             const { runtime, file: saved } = cleanSettings(body);
             recorder.configure(runtime);
             // Applied now; kept in the settings file so a restart keeps it.
@@ -342,7 +435,7 @@ export function recorderPlugin(env = process.env) {
             } catch {
               kept = false;
             }
-            return sendJson(res, 200, { applied: true, saved: kept });
+            return sendJson(res, 200, { applied: true, saved: kept, moved });
           });
         if (url.pathname === '/thin' && req.method === 'POST')
           return readJson(req, res, async (body) => {

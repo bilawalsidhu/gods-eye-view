@@ -175,6 +175,41 @@ and the panel lists the newest events. Press WATCH in the panel and drag a box o
 routes below. Changing fences needs a JSON request from this origin, which stops
 other web pages from editing them.
 
+## Recording to another drive
+
+To keep recordings off the main drive, open SETTINGS and use **Save recordings
+in**. The other drives and mounted volumes the computer has are listed as chips
+with their free space; pressing one fills in a folder called `GEV History` on
+it, and you can type any full folder path instead. APPLY then:
+
+1. checks the folder: it must be a full path, accept a file, and either exist
+   or sit directly inside a folder that does. A drive that is not plugged in
+   is refused, so no stray folder is made on the main disk;
+2. copies the history so far into `history.sqlite` in that folder (leave
+   "Copy the history so far" ticked), and checks the copy holds every
+   position before switching. If the folder already has a `history.sqlite` it
+   is used as it is and nothing is overwritten;
+3. switches recording to the new place at once, with no restart, and saves the
+   path in `recorder.config.json`;
+4. deletes the old file only if "Delete the old copy afterwards" is ticked,
+   and only after the copy checked out. It is off by default; tick it to free
+   the space on the main drive.
+
+The storage bar and the "free" figures then measure the new drive. The switch
+happens between batches of writes, so no points are lost.
+
+**If the drive is unplugged** while recording, or is missing when the server
+starts, recording does not stop and does not move to the main drive. The
+recorder keeps the points it cannot write in memory, the panel shows a red
+line ("Cannot write to the recording folder... N points are waiting"), and it
+tries to open the file again every 15 seconds. When the drive is back the
+waiting points are written. Memory holds about 200,000 points; past that the
+oldest waiting ones are dropped, so plug the drive back in within a few minutes
+on a busy feed. The history API still answers (with nothing) while the drive is
+away. This only applies to SQLite; with PostgreSQL the database server owns
+the storage and the box is hidden. A `GEV_HISTORY_FILE` environment variable
+fixes the location again at the next restart.
+
 ## N2YO as a backup for satellite elements
 
 The recorder takes orbital elements from CelesTrak (through the app's own
@@ -298,7 +333,8 @@ and only announces ones that happen after the page opened.
 - `GET /api/history/events?since&fence&limit` — enter and exit events, newest first.
 - `GET /api/history/at?to=<epoch s>&bbox&layers` — last position of each
   contact within 10 minutes before `to`.
-- `POST /api/history/settings` — change retention, size cap, interval or layers (`{ retention, maxMb, interval, layers }`); applied at once and saved. Same-origin JSON only.
+- `GET /api/history/drives` — other drives and volumes with free space, and the folder in use.
+- `POST /api/history/settings` — change retention, size cap, interval or layers (`{ retention, maxMb, interval, layers }`), and where to record (`folder`, `copy`, `deleteOld`); applied at once and saved. Same-origin JSON only. `/status` has `storage` (`path`, `ok`, `error`, `waiting`).
 - `POST /api/history/thin` — `{ olderThan, keepEvery, dryRun }`; `dryRun` (the default) only counts. Returns `{ removed, total }`.
 - `GET /api/history/feeds?layer&from&to` — logged feed changes for one layer (ok, empty, failing, idle), oldest first, led by the one in force at `from`. `/status` also carries the current `feeds`.
 - `GET /api/history/density?from&to&cell&bbox&layers` — contacts seen per `cell`-degree square, busiest first (up to 20,000 squares).

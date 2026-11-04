@@ -260,3 +260,16 @@
 .replay-feed-unseen {
   color: #8da3ad;
 }
+
+.replay-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-check input {
+  margin: 1px 0 0;
+  accent-color: #00d4ff;
+}

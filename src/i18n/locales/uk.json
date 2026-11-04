@@ -3355,5 +3355,14 @@
   "HTTP {status}, since {time}": "HTTP {status}, з {time}",
   "Nothing has asked for it for {ago}": "Його не запитували {ago}",
   "Not seen since the server started": "Не видно від запуску сервера",
-  "N2YO backup: {count} pinned satellites loaded": "Резерв N2YO: завантажено закріплених супутників — {count}"
+  "N2YO backup: {count} pinned satellites loaded": "Резерв N2YO: завантажено закріплених супутників — {count}",
+  "Recording moved to {path}": "Запис перенесено до {path}",
+  "Using the history already in that folder": "Використовується історія, що вже була в цій теці",
+  "The old copy was deleted": "Стару копію видалено",
+  "Cannot write to the recording folder: {error}. {count} points are waiting.": "Неможливо записувати в теку запису: {error}. Очікують точок: {count}.",
+  "Save recordings in (full folder path)": "Зберігати записи в (повний шлях до теки)",
+  "Copy the history so far to the new place": "Скопіювати наявну історію на нове місце",
+  "Delete the old copy afterwards to free space here": "Потім видалити стару копію, щоб звільнити місце тут",
+  "{label} · {free} free": "{label} · вільно {free}",
+  "Recording to {path}": "Запис іде до {path}"
 }

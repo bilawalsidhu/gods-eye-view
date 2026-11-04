@@ -3280,5 +3280,14 @@
   "HTTP {status}, since {time}": "HTTP {status}, desde {time}",
   "Nothing has asked for it for {ago}": "Ninguém o pede há {ago}",
   "Not seen since the server started": "Não visto desde que o servidor arrancou",
-  "N2YO backup: {count} pinned satellites loaded": "Reserva N2YO: {count} satélites fixados carregados"
+  "N2YO backup: {count} pinned satellites loaded": "Reserva N2YO: {count} satélites fixados carregados",
+  "Recording moved to {path}": "Gravação movida para {path}",
+  "Using the history already in that folder": "A usar o histórico que já estava nessa pasta",
+  "The old copy was deleted": "A cópia antiga foi eliminada",
+  "Cannot write to the recording folder: {error}. {count} points are waiting.": "Não é possível escrever na pasta de gravação: {error}. {count} pontos à espera.",
+  "Save recordings in (full folder path)": "Guardar gravações em (caminho completo da pasta)",
+  "Copy the history so far to the new place": "Copiar o histórico atual para o novo local",
+  "Delete the old copy afterwards to free space here": "Depois eliminar a cópia antiga para libertar espaço aqui",
+  "{label} · {free} free": "{label} · {free} livres",
+  "Recording to {path}": "A gravar em {path}"
 }

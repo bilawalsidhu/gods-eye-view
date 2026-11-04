@@ -29,6 +29,12 @@ const FEED_STATE = {
   idle: msg('not asked'),
   unseen: msg('not seen yet'),
 };
+const MOVED = msg('Recording moved to {path}');
+const REUSED = msg('Using the history already in that folder');
+const OLD_DELETED = msg('The old copy was deleted');
+const DRIVE_DOWN = msg(
+  'Cannot write to the recording folder: {error}. {count} points are waiting.',
+);
 const COULD_NOT_APPLY = msg('Could not apply the settings');
 const COULD_NOT_THIN = msg('Could not thin the data');
 const BLOCKED = msg(
@@ -209,6 +215,71 @@ export function createReplayPanel({ container, controller } = {}) {
     field(t('Size cap in MB (0 for none)'), capIn),
     field(t('Save a point every (seconds)'), intervalIn),
   );
+  // Where recordings are kept: a folder, perhaps on another drive.
+  const locationBlock = document.createElement('div');
+  locationBlock.className = 'replay-settings';
+  const folderIn = makeInput(
+    locationBlock,
+    'text',
+    t('Save recordings in (full folder path)'),
+  );
+  const driveRow = document.createElement('div');
+  driveRow.className = 'replay-chips';
+  const copyBox = document.createElement('input');
+  copyBox.type = 'checkbox';
+  copyBox.checked = true;
+  const deleteBox = document.createElement('input');
+  deleteBox.type = 'checkbox';
+  const check = (box, label) => {
+    const wrap = document.createElement('label');
+    wrap.className = 'replay-check';
+    const text = document.createElement('span');
+    text.textContent = label;
+    wrap.append(box, text);
+    return wrap;
+  };
+  const whereNote = document.createElement('div');
+  whereNote.className = 'replay-alerts';
+  locationBlock.replaceChildren(
+    field(t('Save recordings in (full folder path)'), folderIn),
+    driveRow,
+    check(copyBox, t('Copy the history so far to the new place')),
+    check(deleteBox, t('Delete the old copy afterwards to free space here')),
+    whereNote,
+  );
+  folderIn.addEventListener('input', () => {
+    settingsDirty = true;
+  });
+  /** Chips for the other drives; pressing one fills in a folder on it. */
+  let drivesLoaded = false;
+  async function loadDrives() {
+    if (drivesLoaded) return;
+    drivesLoaded = true;
+    try {
+      const { drives } = await controller.drives();
+      driveRow.replaceChildren(
+        ...drives
+          .filter((d) => !d.main)
+          .map((d) => {
+            const chip = makeChip(
+              driveRow,
+              t('{label} · {free} free', {
+                label: d.label,
+                free: formatBytes(d.freeBytes),
+              }),
+              d.path,
+              () => {
+                folderIn.value = d.path;
+                settingsDirty = true;
+              },
+            );
+            return chip;
+          }),
+      );
+    } catch {
+      drivesLoaded = false;
+    }
+  }
   const recordLabel = document.createElement('div');
   recordLabel.className = 'replay-alerts';
   recordLabel.textContent = t('Record these layers');
@@ -241,18 +312,41 @@ export function createReplayPanel({ container, controller } = {}) {
     t('Apply these settings now and save them'),
     async () => {
       try {
+        const here = controller.state().status?.storage?.path;
+        const folderChanged =
+          folderIn.value.trim() &&
+          folderIn.value.trim().replace(/[\\/]+$/, '') !==
+            String(here ?? '').replace(/[\\/][^\\/]*$/, '');
         const result = await controller.saveSettings({
+          ...(folderChanged
+            ? {
+                folder: folderIn.value.trim(),
+                copy: copyBox.checked,
+                deleteOld: deleteBox.checked,
+              }
+            : {}),
           retention: retentionIn.value,
           maxMb: capIn.value === '' ? 0 : capIn.value,
           interval: intervalIn.value,
           layers: [...recordChosen],
         });
         settingsDirty = false;
-        settingsMessage = result.saved
-          ? t('Settings applied')
-          : t(
-              'Settings applied for now, but could not be saved to the settings file',
-            );
+        const moved = result.moved?.changed
+          ? [
+              t(MOVED, { path: result.moved.to }),
+              result.moved.reused ? t(REUSED) : '',
+              result.moved.deleted ? t(OLD_DELETED) : '',
+            ]
+              .filter(Boolean)
+              .join('. ') + '. '
+          : '';
+        settingsMessage =
+          moved +
+          (result.saved
+            ? t('Settings applied')
+            : t(
+                'Settings applied for now, but could not be saved to the settings file',
+              ));
       } catch (error) {
         settingsMessage = `${t(COULD_NOT_APPLY)}: ${error.message}`;
       }
@@ -330,6 +424,7 @@ export function createReplayPanel({ container, controller } = {}) {
       render(controller.state());
     },
   );
+  settingsBlock.prepend(locationBlock);
   settingsBlock.append(
     recordLabel,
     recordRow,
@@ -456,6 +551,9 @@ export function createReplayPanel({ container, controller } = {}) {
   storageNote.className = 'replay-alerts';
   const storageLayers = document.createElement('div');
   storageLayers.className = 'replay-alerts';
+  const driveWarn = document.createElement('div');
+  driveWarn.className = 'replay-storage-warn';
+  driveWarn.hidden = true;
   const storageWarn = document.createElement('div');
   storageWarn.className = 'replay-storage-warn';
   // Feed health: one coloured word per feed, and the detail on request.
@@ -472,6 +570,7 @@ export function createReplayPanel({ container, controller } = {}) {
     storageLayers,
     feedLine,
     feedList,
+    driveWarn,
     storageWarn,
   );
   const legend = document.createElement('div');
@@ -657,6 +756,24 @@ export function createReplayPanel({ container, controller } = {}) {
     );
     if (!s || settingsBlock.hidden) return;
     // Show what the recorder uses now, until the viewer starts editing.
+    set(locationBlock, 'hidden', s.backend === 'postgres');
+    loadDrives();
+    if (!settingsDirty) {
+      folderIn.value = String(s.storage?.path ?? '').replace(
+        /[\\/][^\\/]*$/,
+        '',
+      );
+    }
+    set(
+      whereNote,
+      'textContent',
+      s.storage?.path
+        ? t('Recording to {path}', { path: s.storage.path }) +
+            (s.disk_free_bytes != null
+              ? ` · ${t('{free} free', { free: formatBytes(s.disk_free_bytes) })}`
+              : '')
+        : '',
+    );
     if (!settingsDirty) {
       retentionIn.value = s.retention_sec
         ? formatSpanCompact(s.retention_sec)
@@ -693,9 +810,25 @@ export function createReplayPanel({ container, controller } = {}) {
     set(thinNow, 'disabled', previewed !== current);
   };
 
+  const renderDriveWarning = (s) => {
+    const bad = s.storage && s.storage.ok === false;
+    set(
+      driveWarn,
+      'textContent',
+      bad
+        ? t(DRIVE_DOWN, {
+            error: s.storage.error,
+            count: s.storage.waiting.toLocaleString(),
+          })
+        : '',
+    );
+    set(driveWarn, 'hidden', !bad);
+  };
+
   const renderStorage = (s) => {
     set(storage, 'hidden', !s);
     if (!s) return;
+    renderDriveWarning(s);
     const use = storageUse(s);
     const percent = Math.round(use.fraction * 100);
     storage.dataset.level = use.basis === 'none' ? 'none' : use.level;

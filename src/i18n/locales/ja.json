@@ -3130,5 +3130,14 @@
   "HTTP {status}, since {time}": "HTTP {status}（{time} から）",
   "Nothing has asked for it for {ago}": "{ago} の間、要求がありません",
   "Not seen since the server started": "サーバー起動後まだ確認されていません",
-  "N2YO backup: {count} pinned satellites loaded": "N2YO バックアップ：固定した衛星 {count} 基を読み込み済み"
+  "N2YO backup: {count} pinned satellites loaded": "N2YO バックアップ：固定した衛星 {count} 基を読み込み済み",
+  "Recording moved to {path}": "記録先を {path} に移しました",
+  "Using the history already in that folder": "そのフォルダーにすでにある履歴を使用します",
+  "The old copy was deleted": "古いコピーを削除しました",
+  "Cannot write to the recording folder: {error}. {count} points are waiting.": "記録フォルダーに書き込めません：{error}。{count} 点が待機中です。",
+  "Save recordings in (full folder path)": "記録の保存先（フォルダーの完全なパス）",
+  "Copy the history so far to the new place": "これまでの履歴を新しい場所へコピー",
+  "Delete the old copy afterwards to free space here": "終わったら古いコピーを削除してここの空きを増やす",
+  "{label} · {free} free": "{label} · 空き {free}",
+  "Recording to {path}": "{path} に記録中"
 }

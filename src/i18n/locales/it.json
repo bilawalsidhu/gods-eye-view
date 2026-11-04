@@ -3280,5 +3280,14 @@
   "HTTP {status}, since {time}": "HTTP {status}, dalle {time}",
   "Nothing has asked for it for {ago}": "Nessuno lo richiede da {ago}",
   "Not seen since the server started": "Non visto dall’avvio del server",
-  "N2YO backup: {count} pinned satellites loaded": "Riserva N2YO: {count} satelliti fissati caricati"
+  "N2YO backup: {count} pinned satellites loaded": "Riserva N2YO: {count} satelliti fissati caricati",
+  "Recording moved to {path}": "Registrazione spostata in {path}",
+  "Using the history already in that folder": "Si usa la cronologia già presente in quella cartella",
+  "The old copy was deleted": "La vecchia copia è stata eliminata",
+  "Cannot write to the recording folder: {error}. {count} points are waiting.": "Impossibile scrivere nella cartella di registrazione: {error}. {count} punti in attesa.",
+  "Save recordings in (full folder path)": "Salva le registrazioni in (percorso completo della cartella)",
+  "Copy the history so far to the new place": "Copia la cronologia attuale nel nuovo posto",
+  "Delete the old copy afterwards to free space here": "Poi elimina la vecchia copia per liberare spazio qui",
+  "{label} · {free} free": "{label} · {free} liberi",
+  "Recording to {path}": "Registrazione in {path}"
 }

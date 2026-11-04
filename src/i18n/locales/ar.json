@@ -3505,5 +3505,14 @@
   "HTTP {status}, since {time}": "HTTP {status}، منذ {time}",
   "Nothing has asked for it for {ago}": "لم يطلبه أحد منذ {ago}",
   "Not seen since the server started": "لم يُرَ منذ تشغيل الخادم",
-  "N2YO backup: {count} pinned satellites loaded": "احتياطي N2YO: تم تحميل {count} من الأقمار المثبّتة"
+  "N2YO backup: {count} pinned satellites loaded": "احتياطي N2YO: تم تحميل {count} من الأقمار المثبّتة",
+  "Recording moved to {path}": "نُقل التسجيل إلى {path}",
+  "Using the history already in that folder": "يُستخدم السجل الموجود أصلًا في ذلك المجلد",
+  "The old copy was deleted": "حُذفت النسخة القديمة",
+  "Cannot write to the recording folder: {error}. {count} points are waiting.": "لا يمكن الكتابة في مجلد التسجيل: {error}. {count} نقطة في الانتظار.",
+  "Save recordings in (full folder path)": "حفظ التسجيلات في (المسار الكامل للمجلد)",
+  "Copy the history so far to the new place": "نسخ السجل الحالي إلى المكان الجديد",
+  "Delete the old copy afterwards to free space here": "ثم حذف النسخة القديمة لتوفير مساحة هنا",
+  "{label} · {free} free": "{label} · متاح {free}",
+  "Recording to {path}": "التسجيل في {path}"
 }

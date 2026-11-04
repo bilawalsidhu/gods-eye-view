@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -16,9 +16,18 @@ function addBox(where, args, bbox) {
   }
 }
 
-/** SQLite position history. `file` may be ':memory:'. */
-export function openHistoryStore(file) {
-  if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
+/**
+ * SQLite position history. `file` may be ':memory:'. The folder is created
+ * unless `createFolder` is false, which is how a folder on another drive is
+ * opened: a drive that is not plugged in must not leave a stray folder on the
+ * main disk, so a missing folder is an error there.
+ */
+export function openHistoryStore(file, { createFolder = true } = {}) {
+  if (file !== ':memory:') {
+    if (createFolder) mkdirSync(path.dirname(file), { recursive: true });
+    else if (!existsSync(path.dirname(file)))
+      throw new Error(`Folder not found: ${path.dirname(file)}`);
+  }
   const db = new DatabaseSync(file);
   db.exec(`
     PRAGMA journal_mode = WAL;
@@ -140,6 +149,13 @@ export function openHistoryStore(file) {
         .prepare(`DELETE FROM positions WHERE ${where}`)
         .run(...args).changes;
       return { removed: Number(removed), total: Number(total) };
+    },
+    /**
+     * Writes a compact copy of the whole database to `target`, which must not
+     * exist. SQLite does this in one safe step, even while recording.
+     */
+    copyTo(target) {
+      db.prepare('VACUUM INTO ?').run(target);
     },
     /** Number of saved positions per layer. */
     layerCounts() {
@@ -383,4 +399,41 @@ export function openHistoryStore(file) {
       db.close();
     },
   };
+}
+
+/**
+ * Stands in for a store whose folder is not there (an unplugged drive). Reads
+ * answer with nothing, so the panel still works; writes fail, so the recorder
+ * keeps what it has buffered and tries to open the real store again.
+ */
+export function createUnavailableStore(message) {
+  const empty = {
+    range: { from_ts: null, to_ts: null, count: 0 },
+    layerCounts: {},
+    usedBytes: 0,
+    listFences: [],
+    listPins: [],
+    track: [],
+    window: [],
+    at: [],
+    density: [],
+    events: [],
+    alerts: [],
+    feedEvents: [],
+    findContacts: [],
+  };
+  return new Proxy(
+    {},
+    {
+      get: (_, name) => {
+        if (name === 'close') return () => {};
+        if (name === 'then') return undefined;
+        return Object.hasOwn(empty, name)
+          ? () => structuredClone(empty[name])
+          : () => {
+              throw new Error(message);
+            };
+      },
+    },
+  );
 }

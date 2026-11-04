@@ -3205,5 +3205,14 @@
   "HTTP {status}, since {time}": "HTTP {status}, seit {time}",
   "Nothing has asked for it for {ago}": "Seit {ago} hat niemand danach gefragt",
   "Not seen since the server started": "Seit dem Serverstart nicht gesehen",
-  "N2YO backup: {count} pinned satellites loaded": "N2YO-Reserve: {count} fixierte Satelliten geladen"
+  "N2YO backup: {count} pinned satellites loaded": "N2YO-Reserve: {count} fixierte Satelliten geladen",
+  "Recording moved to {path}": "Aufzeichnung verschoben nach {path}",
+  "Using the history already in that folder": "Der in diesem Ordner schon vorhandene Verlauf wird verwendet",
+  "The old copy was deleted": "Die alte Kopie wurde gelöscht",
+  "Cannot write to the recording folder: {error}. {count} points are waiting.": "Im Aufzeichnungsordner kann nicht geschrieben werden: {error}. {count} Punkte warten.",
+  "Save recordings in (full folder path)": "Aufzeichnungen speichern in (vollständiger Ordnerpfad)",
+  "Copy the history so far to the new place": "Bisherigen Verlauf an den neuen Ort kopieren",
+  "Delete the old copy afterwards to free space here": "Danach die alte Kopie löschen, um hier Platz zu schaffen",
+  "{label} · {free} free": "{label} · {free} frei",
+  "Recording to {path}": "Aufzeichnung nach {path}"
 }

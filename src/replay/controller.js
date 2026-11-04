@@ -706,6 +706,8 @@ export function createReplayController({
       await analysis.refreshHeat();
     },
     findTrack,
+    /** Drives and volumes a recording could go to, with their free space. */
+    drives: () => getJson('/api/history/drives'),
     /** Changes how the recorder keeps data; { retention, maxMb, interval, layers }. */
     async saveSettings(values) {
       const result = await sendJson('/api/history/settings', {
