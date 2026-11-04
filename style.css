@@ -36,4 +36,5 @@
 @import './src/ui/styles/rtl.css';
 @import './src/ui/styles/mobile-shell.css';
 @import './src/ui/styles/annotations.css';
+@import './src/ui/styles/ai-chat.css';
 @import './src/ui/styles/cyber.css';

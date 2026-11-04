@@ -67,6 +67,12 @@ function initialState(panel) {
       microphone: null,
       rowGrace: false,
       errorDismissed: false,
+      // Which assistant the dock shows as selected: idle, voice or chat.
+      assistantMode: 'idle',
+      chatOpen: false,
+      chatBusy: false,
+      // Set once either side has spoken this voice session.
+      voiceExchange: false,
     },
     // The provider field and its select.
     provider: {
@@ -100,7 +106,10 @@ function initialState(panel) {
       text: () =>
         t('Hold Space to speak · tap Space to activate focused controls'),
     },
-    error: { text: '' },
+    // A typed chat error reads as chat's, without the microphone hint.
+    error: { text: '', typed: false },
+    // Connection and turn state beside the selected mode's indicator.
+    phase: { text: '' },
     voicePanel: {
       hidden: true,
       view: null,
@@ -108,7 +117,45 @@ function initialState(panel) {
       settingsHidden: true,
       settingsExpanded: false,
       selected: 'preview',
+      minimized: false,
+      // 'chat' while Settings were opened from chat.
+      context: null,
+      // Chat's frame, so Settings opened from chat keep its size.
+      frameWidth: null,
+      frameHeight: null,
     },
+    // The typed chat panel; its messages publish apart (setChatMessages).
+    chat: {
+      open: false,
+      minimized: false,
+      busy: false,
+      status: () => t('Silent chat · microphone off'),
+      empty: true,
+      quickChecked: true,
+      // The latest reply, shown above the minimized bar.
+      miniReply: '',
+      // A reply is typing out; the conversation is busy for screen readers.
+      revealing: false,
+      // Says chat bills the OpenAI key while voice uses ChatGPT sign-in.
+      authNote: '',
+      suggestions: [],
+      attachments: [],
+      attachMenuOpen: false,
+      layers: [],
+      locked: false,
+      sendDisabled: true,
+      // The input's text; bumped revision means the owner wrote it.
+      draft: '',
+      draftRevision: 0,
+      rows: 2,
+      backVisible: false,
+    },
+    // The minimized voice bar's last sentence from each side.
+    mini: { user: '', assistant: '' },
+    // Above the dock, or docked into the right rail's lane.
+    // `yielded` names the panel minimized to make room for a dock tray;
+    // `trayDocked` marks a dock taken only while a tray was open.
+    layout: { docked: false, yielded: null, trayDocked: false },
     previewEmpty: {
       hidden: false,
       text: () => t('Voice replies appear here.'),
@@ -140,7 +187,16 @@ const ELEMENT_IDS = Object.freeze({
   previewTab: 'gev-voice-preview-tab',
   settingsTab: 'gev-voice-settings-tab',
   settingsButton: 'gev-voice-settings-button',
+  settingsClose: 'gev-voice-settings-close',
   card: 'gev-voice-card',
+  chatButton: 'gev-chat-button',
+  chatPanel: 'gev-chat-panel',
+  chatInput: 'gev-chat-input',
+  chatLayer: 'gev-chat-layer',
+  chatFile: 'gev-chat-file',
+  chatBack: 'gev-chat-back',
+  voiceBack: 'gev-voice-back',
+  chatMiniReply: 'gev-chat-mini-reply',
 });
 
 let controlCount = 0;
@@ -195,6 +251,7 @@ export function createVoiceControl({
   let defaultCard = true;
   // Each bar's `--audio-level` and `--audio-opacity`, or null at rest.
   let bars = null;
+  let chatMessages = [];
   let removed = false;
   const owns = () => !removed && store.controls === ui;
   const publish = () => {
@@ -241,8 +298,14 @@ export function createVoiceControl({
      * Listen for an interaction the view reports: `button`, `tier`,
      * `provider-change`, `settings-button`, `settings-close`, `tab`,
      * `tab-keydown`, `panel-keydown`, `pointerenter`, `pointerleave`,
-     * `preview-change`, `timeout-select`, `timeout-input`, `card-dismiss`;
-     * and `locale` after a locale change, for an owner's own words.
+     * `preview-change`, `timeout-select`, `timeout-input`, `card-dismiss`,
+     * `voice-back`, `voice-minimize`, `layout-dock`; the chat's
+     * `chat-button`, `chat-close`, `chat-minimize`, `chat-restore`,
+     * `chat-back`, `chat-input`, `chat-keydown`, `chat-submit`, `chat-stop`,
+     * `chat-prompt`, `chat-suggestion`, `chat-quick-change`,
+     * `chat-attach-toggle`, `chat-layer`, `chat-file-button`, `chat-files`,
+     * `chat-attachment-remove`; and `locale` after a locale change, for an
+     * owner's own words.
      * @returns {() => void} Removes the listener.
      */
     on(name, listener) {
@@ -259,6 +322,20 @@ export function createVoiceControl({
     /** The waveform's bars, or null at rest. */
     get bars() {
       return bars;
+    },
+    /** The chat conversation, as last published. */
+    get chatMessages() {
+      return chatMessages;
+    },
+    /**
+     * Show the chat conversation. Published apart from the rest of the
+     * control: a typed reply reveals frame by frame.
+     * @param {Array<{id: number, role: string, text: string}>} next
+     */
+    setChatMessages(next) {
+      if (removed) return;
+      chatMessages = next;
+      if (owns()) store.publishChat(chatMessages);
     },
     /**
      * Show the waveform's bars (null rests it). Published apart from the
@@ -301,6 +378,7 @@ export function createVoiceControl({
         store.connect(null);
         store.publish(null);
         store.publishBars(null);
+        store.publishChat([]);
       }
       removed = true;
       offLocale();
@@ -320,6 +398,7 @@ export function createVoiceControl({
   });
   store.connect(ui);
   store.publishBars(null);
+  store.publishChat(chatMessages);
   publish();
   return ui;
 }
