@@ -19,6 +19,14 @@ import {
   COCKPIT_GROUND_WAIT_TIMEOUT_MS,
 } from './cockpitPresentation.js';
 
+/** The aircraft eye: just ahead of and above the reported position. */
+const AIRCRAFT_CAMERA_PROFILE = Object.freeze({
+  forwardM: COCKPIT_FORWARD_OFFSET_M,
+  upM: COCKPIT_UP_OFFSET_M,
+  pitchDeg: COCKPIT_VIEW_PITCH_DEG,
+  minClearanceM: COCKPIT_MIN_GROUND_CLEARANCE_M,
+});
+
 export function update() {
   if (this.destroyed) return false;
   if (!this.active) {
@@ -75,7 +83,20 @@ export function update() {
       COCKPIT_HEADING_SLEW_DPS * dtSec,
     );
   }
+  placeCamera.call(this, target, info, nowMs, dtSec, AIRCRAFT_CAMERA_PROFILE);
+}
 
+/**
+ * Place the camera for one update: advance the inertial anchor, clamp it and
+ * the eye against the rendered surface, and look along the slewed heading.
+ * @param {Cesium.Cartesian3} target Authoritative subject position.
+ * @param {object} info Subject info.
+ * @param {number} nowMs Frame time.
+ * @param {number} dtSec Seconds since the previous camera update.
+ * @param {{forwardM: number, upM: number, pitchDeg: number,
+ *   minClearanceM: number}} profile Eye offsets for the subject kind.
+ */
+function placeCamera(target, info, nowMs, dtSec, profile) {
   if (!this.cockpitAnchorValid) {
     Cesium.Cartesian3.clone(target, this.cockpitAnchor);
     this.cockpitAnchorValid = true;
@@ -89,7 +110,7 @@ export function update() {
   // 15/30-second interpolation and per-frame cache without exposing its
   // sample-boundary corrections to the camera.
   const headingRad = Cesium.Math.toRadians(this.heading ?? 0);
-  const pitchRad = Cesium.Math.toRadians(COCKPIT_VIEW_PITCH_DEG);
+  const pitchRad = Cesium.Math.toRadians(profile.pitchDeg);
   const speedMps = Number.isFinite(info.velocityMps)
     ? Math.max(0, info.velocityMps)
     : 0;
@@ -248,7 +269,7 @@ export function update() {
     const minimumAnchorHeightM = cockpitGroundSafeHeight(
       anchorCartographic.height,
       cockpitFloorM,
-      COCKPIT_MIN_GROUND_CLEARANCE_M - COCKPIT_UP_OFFSET_M,
+      profile.minClearanceM - profile.upM,
     );
     if (minimumAnchorHeightM !== anchorCartographic.height) {
       anchorCartographic.height = minimumAnchorHeightM;
@@ -297,7 +318,7 @@ export function update() {
 
   Cesium.Cartesian3.multiplyByScalar(
     this.scratchHorizontal,
-    COCKPIT_FORWARD_OFFSET_M,
+    profile.forwardM,
     this.scratchCamera,
   );
   Cesium.Cartesian3.add(
@@ -309,7 +330,7 @@ export function update() {
   Cesium.Cartesian3.normalize(this.scratchTarget, this.scratchTarget);
   Cesium.Cartesian3.multiplyByScalar(
     this.scratchTarget,
-    COCKPIT_UP_OFFSET_M,
+    profile.upM,
     this.scratchTarget,
   );
   Cesium.Cartesian3.add(
@@ -338,7 +359,7 @@ export function update() {
     const safeHeightM = cockpitGroundSafeHeight(
       cameraCartographic.height,
       cockpitFloorM,
-      COCKPIT_MIN_GROUND_CLEARANCE_M,
+      profile.minClearanceM,
     );
     if (safeHeightM !== cameraCartographic.height) {
       cameraCartographic.height = safeHeightM;
