@@ -600,3 +600,17 @@ test('the hotspots answer carries the window it was counted over', () => {
     null,
   );
 });
+
+test('a checked severity keeps saying who set it', () => {
+  const page = normalizeFeedPayload({
+    reports: ['label', 'model', 'guess'].map((by, i) => ({
+      ...report(`r${i}`, '2026-10-28T09:00:00Z'),
+      severity: 2,
+      severityBy: by,
+    })),
+  });
+  assert.deepEqual(
+    page.reports.map((r) => r.severityBy),
+    ['label', 'model', 'rules'],
+  );
+});

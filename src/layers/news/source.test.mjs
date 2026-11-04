@@ -58,8 +58,8 @@ test('reads validated hotspots, feed and outlines from the same-origin routes', 
     [
       '/api/news/hotspots',
       '/api/news/feed?hotspot=all&limit=60&today=1',
-      '/api/news/outline?hotspot=ua&v=3',
-      '/api/news/outline?country=SD&v=3',
+      '/api/news/outline?hotspot=ua&v=4',
+      '/api/news/outline?country=SD&v=4',
     ],
   );
   for (const { url, init } of calls) {
@@ -166,7 +166,7 @@ test('the host allowlist admits the client routes and refuses anything else', ()
     '/api/news/air-alerts',
     '/api/news/outline?hotspot=ua',
     '/api/news/outline?hotspot=ua&v=2',
-    '/api/news/outline?country=ukraine&v=3',
+    '/api/news/outline?country=ukraine&v=4',
   ])
     assert.equal(allowed(path), false, path);
 });

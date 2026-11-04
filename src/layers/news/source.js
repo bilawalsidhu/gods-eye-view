@@ -13,7 +13,7 @@ const msg = (text) => text;
 const MAX_BYTES = 4 * 1024 * 1024;
 const BASE_PATH = '/api/news';
 // The outline geometry version the client draws (disputed areas included).
-const OUTLINE_VERSION = '3';
+const OUTLINE_VERSION = '4';
 
 /** The three read routes the news layer calls, for a host's path allowlist. */
 export const NEWS_API_PATHS = Object.freeze([

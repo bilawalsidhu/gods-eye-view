@@ -253,7 +253,9 @@ function normalizeReport(raw) {
       ? raw.relevance
       : 'related',
     severity: severity(raw.severity),
-    severityBy: raw.severityBy === 'model' ? 'model' : 'rules',
+    severityBy: ['model', 'label'].includes(raw.severityBy)
+      ? raw.severityBy
+      : 'rules',
     claim:
       raw.claim && typeof raw.claim === 'object'
         ? { by: text(raw.claim.by, 80) }
