@@ -274,11 +274,14 @@ export function _renderCctvState(state) {
   const liveIntent =
     enabled && !!activeCamera?.isVideo && !activeCamera?.browserMediaUrl;
   this.store.setLive(liveIntent);
+  // A background tab or a collapsed panel shows nothing, so neither plays the
+  // video nor fetches the still; the observer and the visibilitychange listener
+  // render again when the panel is shown.
+  const panelShown =
+    !(typeof document !== 'undefined' && document.hidden) &&
+    !this._cctvPanel?.classList?.contains('collapsed');
   if (this._cctvVideo) {
-    const visible =
-      liveIntent &&
-      !document.hidden &&
-      !this._cctvPanel?.classList.contains('collapsed');
+    const visible = liveIntent && panelShown;
     if (!visible || this._cctvVideoCameraId !== activeId) {
       this._cctvVideoSurface?.stop();
       this._cctvVideoSurface = null;
@@ -303,6 +306,7 @@ export function _renderCctvState(state) {
     // immediate so navigation never waits on the prior camera's request.
     if (
       nextSrc &&
+      panelShown &&
       (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
       this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);

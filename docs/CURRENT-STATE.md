@@ -1574,6 +1574,16 @@ The view pass reruns while the camera moves, paced by its own cost. The camera
 picker lists the cameras in view, active camera first, and closes with the
 count of cameras outside the view.
 
+The active camera's pictures follow what can be seen. The monitor plane on the
+globe stops fetching its still every 10 s while the sphere around the camera
+mount and the plane is outside the view, or all of its points are below the
+horizon (a 2D or Columbus scene always counts as visible), and fetches again
+on the first refresh tick after it returns; activating or calibrating a camera
+always fetches. The panel's still preview is requested only while the tab is
+visible and the panel is expanded, and the panel asks for the current picture
+when it is shown again. This matches the panel's live video, which already
+played only in a visible tab and an expanded panel.
+
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames.
 
 Traffic and bikeshare expose factories through `./layers/traffic` and

@@ -1,3 +1,4 @@
+import * as Cesium from 'cesium';
 import {
   FRAME_SIGNATURE_W,
   FRAME_SIGNATURE_H,
@@ -237,6 +238,53 @@ export function createFrames({ state: layerState, services, parts, source }) {
   }
 
   /**
+   * Whether a camera's monitor plane can be on screen: the mount, the far cap
+   * and its corners are bounded by one sphere that is tested against the view
+   * frustum, and at least one of those points must be above the horizon.
+   * Anything this cannot judge (no viewer, a 2D or Columbus scene, no geometry
+   * yet) counts as visible, so a missing input never blocks a picture.
+   * @param {Object} record - Camera record.
+   * @returns {boolean}
+   */
+
+  function projectionInView(record) {
+    const viewer = layerState._viewer;
+    if (!viewer || viewer.isDestroyed?.()) return true;
+    const { camera, scene } = viewer;
+    if (!camera || !scene || scene.mode !== Cesium.SceneMode.SCENE3D)
+      return true;
+    const placed = record?.frustumPositions;
+    const points = [
+      record?.billboard?.position,
+      placed?.mount,
+      placed?.capCenter,
+      placed?.tl,
+      placed?.tr,
+      placed?.br,
+      placed?.bl,
+    ].filter(Boolean);
+    if (
+      !points.length ||
+      typeof camera.frustum?.computeCullingVolume !== 'function'
+    )
+      return true;
+    const occluder = new Cesium.EllipsoidalOccluder(
+      Cesium.Ellipsoid.WGS84,
+      camera.positionWC,
+    );
+    if (!points.some((point) => occluder.isPointVisible(point))) return false;
+    const culling = camera.frustum.computeCullingVolume(
+      camera.positionWC,
+      camera.directionWC,
+      camera.upWC,
+    );
+    return (
+      culling.computeVisibility(Cesium.BoundingSphere.fromPoints(points)) !==
+      Cesium.Intersect.OUTSIDE
+    );
+  }
+
+  /**
    * Triggers a new frame fetch for an image-mode projection if the refresh
    * interval has elapsed. Active cameras refresh more frequently than idle ones.
    * @param {Object} record - Camera record.
@@ -269,6 +317,10 @@ export function createFrames({ state: layerState, services, parts, source }) {
     // bypass a provider's explicit minimum between image requests.
     if (sourceRefreshMs > 0 && sinceLastRefresh < sourceRefreshMs) return;
     if (!force && sinceLastRefresh < refreshMs) return;
+    // A plane nobody can see (panned away, far side of the globe) needs no new
+    // picture; the next tick after it comes back fetches one. A forced refresh
+    // (fresh activation, calibration) still runs.
+    if (!force && !projectionInView(record)) return;
     runtime.lastImageRefreshAt = now;
 
     const frameUrl = frameUrlFor(record.camera, refreshMs);
@@ -402,6 +454,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     mediaUrlFor,
     paintProjectionPlaceholder,
     refreshProjectionImage,
+    projectionInView,
     paintPlaceholderThrottled,
     drawProjectionFrame,
   };

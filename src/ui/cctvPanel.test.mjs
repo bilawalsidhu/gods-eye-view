@@ -388,6 +388,8 @@ test('the frame preview renders each step of a camera frame request', async (t) 
     globalThis.Image = prior;
   });
   const { controls, byId } = panel(t);
+  // The preview loads while the panel is open; the panel starts collapsed.
+  byId('cctv-panel').classList.remove('collapsed');
   const frame = byId('cctv-frame');
   const wrap = byId('cctv-frame-wrap');
   const badge = byId('cctv-source-badge');
@@ -605,4 +607,59 @@ test('the meta line of a disabled layer does not describe its last camera', () =
     '3 cameras loaded · enable CCTV to activate',
   );
   assert.match(presentCctvPanel(activeState, true).meta, /^Austin · HDG /);
+});
+
+test('the still preview is fetched only while the tab and the panel are shown', async (t) => {
+  const prior = globalThis.Image;
+  const requests = [];
+  globalThis.Image = class {
+    constructor() {
+      requests.push(this);
+    }
+  };
+  const hidden = Object.getOwnPropertyDescriptor(document, 'hidden');
+  let tabHidden = false;
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => tabHidden,
+  });
+  t.after(() => {
+    globalThis.Image = prior;
+    if (hidden) Object.defineProperty(document, 'hidden', hidden);
+    else delete document.hidden;
+  });
+  const { controls, byId } = panel(t);
+  const panelElement = byId('cctv-panel');
+  const state = (frameUrl) => ({
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'a',
+    activeCamera: { ...camera, frameUrl, sourceKind: 'snapshot' },
+  });
+
+  // Collapsed panel: nothing is requested, however often the state arrives.
+  assert.equal(panelElement.classList.contains('collapsed'), true);
+  controls._renderCctvState(state('a1.jpg'));
+  controls._renderCctvState(state('a2.jpg'));
+  assert.equal(requests.length, 0, 'collapsed panel');
+
+  // Opening it renders again (the real panel does so from a class observer)
+  // and asks for the current picture once.
+  panelElement.classList.remove('collapsed');
+  controls._renderCctvState(state('a2.jpg'));
+  assert.equal(requests.length, 1, 'expanded panel');
+  assert.equal(requests[0].src, 'a2.jpg');
+  requests[0].onload();
+
+  // A background tab: refreshed URLs are not requested.
+  tabHidden = true;
+  controls._renderCctvState(state('a3.jpg'));
+  assert.equal(requests.length, 1, 'hidden tab');
+
+  // Back in the tab: the next render fetches the current URL.
+  tabHidden = false;
+  controls._renderCctvState(state('a3.jpg'));
+  assert.equal(requests.length, 2, 'visible tab');
+  assert.equal(requests[1].src, 'a3.jpg');
 });
