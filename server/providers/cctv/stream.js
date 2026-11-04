@@ -88,6 +88,8 @@ function sameOriginHlsUrl(value, base) {
 
 /** Clear MPEG-TS or whole-file fMP4; encrypted and byte-range inputs fail closed. */
 export function parseHlsMedia(text, base, limit = HLS_LIMITS.segments) {
+  if (!Number.isSafeInteger(limit) || limit < 1)
+    throw new Error('Invalid HLS segment limit');
   if (
     !text.startsWith('#EXTM3U') ||
     /#EXT-X-(?:KEY|SESSION-KEY|BYTERANGE|I-FRAMES-ONLY)/.test(text)
@@ -144,6 +146,7 @@ export function parseHlsMedia(text, base, limit = HLS_LIMITS.segments) {
 export function createHlsPuller({
   fetchImpl = fetch,
   limits = HLS_LIMITS,
+  resolveUrl,
 } = {}) {
   const active = new Map();
   let closed = false;
@@ -217,7 +220,18 @@ export function createHlsPuller({
   };
   const poll = async (entry) => {
     try {
-      let base = entry.chunklistUrl || entry.url;
+      // Resolve server-side player credentials without exposing them downstream.
+      // The provider cannot redirect this session outside its registered origin.
+      const resolvedUrl = resolveUrl
+        ? await resolveUrl(entry.url, entry.controller.signal, entry.cameraId)
+        : entry.url;
+      sameOriginHlsUrl(resolvedUrl, entry.url);
+      if (entry.stopping) return;
+      if (entry.resolvedUrl !== resolvedUrl) {
+        entry.chunklistUrl = null;
+        entry.resolvedUrl = resolvedUrl;
+      }
+      let base = entry.chunklistUrl || resolvedUrl;
       let text = (await read(entry, base, limits.playlistBytes)).toString(
         'utf8',
       );
@@ -228,7 +242,7 @@ export function createHlsPuller({
           .find((line) => line && !line.startsWith('#'));
         if (!variant || !text.includes('#EXT-X-STREAM-INF:'))
           throw new Error('Missing HLS variant');
-        base = sameOriginHlsUrl(variant, entry.url);
+        base = sameOriginHlsUrl(variant, resolvedUrl);
         text = (await read(entry, base, limits.playlistBytes)).toString('utf8');
       }
       entry.chunklistUrl = base;
