@@ -43,6 +43,11 @@ import {
   setCyberSonarEnabled,
 } from '../cyberSonar.js';
 import { cyberVisualDefaultsForHudTransition } from '../hudLayouts.js';
+import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+import {
+  readDisplayPreferences,
+  writeDisplayPreferences,
+} from './displayPreferences.js';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
 
 /** Own visual preferences, detection overrides and display-control state. */
@@ -241,6 +246,80 @@ export class VisualSettings {
   }
   get hud() {
     return this.readHud();
+  }
+  /** Run after startup defaults; an explicit shared view owns its visual fields. */
+  restoreLocalPreferences({ sharedView = false } = {}) {
+    let storage;
+    try {
+      storage = globalThis.localStorage;
+    } catch {
+      /* unavailable storage */
+    }
+    const saved = readDisplayPreferences(storage, {
+      styles: STYLES,
+      layouts: HUD_LAYOUTS,
+      maps: this.mapStackController?.getStacks?.().map(({ id }) => id) || [],
+    });
+    if (saved) {
+      const { sonar, mapStack, ...visual } = saved;
+      if (sonar) {
+        applyCyberSonarSettings(sonar);
+        if (typeof sonar.enabled === 'boolean')
+          setCyberSonarEnabled(sonar.enabled);
+        this._syncCyberSonarControl();
+      }
+      if (!sharedView) {
+        // Without a map switch, all visual writes occur synchronously before
+        // restoreShareState's final await; startup cannot save defaults over them.
+        void this.restoreShareState(visual).catch((error) =>
+          console.warn('[Display] Could not restore preferences:', error),
+        );
+        if (mapStack && this.mapStackController?.isStackAvailable(mapStack)) {
+          this._localMapPreference = mapStack;
+          void Promise.resolve(
+            this._setMapStack(mapStack, { syncShare: false }),
+          )
+            .catch((error) =>
+              console.warn('[Display] Could not restore map:', error),
+            )
+            .finally(() => {
+              this._localMapPreference = null;
+              this.persistLocalPreferences();
+            });
+        }
+      }
+    }
+    this._localPreferencesReady = true;
+  }
+
+  persistLocalPreferences() {
+    if (!this._localPreferencesReady) return;
+    let storage;
+    try {
+      storage = globalThis.localStorage;
+    } catch {
+      return;
+    }
+    const { bloomEnabled, sharpenEnabled, options } = this._readShareState();
+    const uniforms = STYLES[this.activeStyle]?.uniforms;
+    const styleParams =
+      uniforms &&
+      Object.fromEntries(
+        Object.keys(uniforms).map((name) => [
+          name,
+          this.stages[this.activeStyle]?.uniforms[name],
+        ]),
+      );
+    writeDisplayPreferences(storage, {
+      ...options,
+      mapStack: this._localMapPreference || options.mapStack,
+      bloom: bloomEnabled,
+      sharpen: sharpenEnabled,
+      celestialRing: options.celestialRingEnabled,
+      style: this.activeStyle,
+      styleParams,
+      sonar: { enabled: isCyberSonarEnabled(), ...readCyberSonarSettings() },
+    });
   }
   get cockpitView() {
     return this.readCockpit();
@@ -745,6 +824,7 @@ export class VisualSettings {
   _setCyberSonarEnabled(enabled = !isCyberSonarEnabled()) {
     const next = setCyberSonarEnabled(!!enabled);
     this._syncCyberSonarControl();
+    this.persistLocalPreferences();
     this.services.governorRequestRender('cyber-sonar-toggle');
     return next;
   }
@@ -754,6 +834,7 @@ export class VisualSettings {
     if (!Object.hasOwn(settings, name)) return settings;
     const next = applyCyberSonarSettings({ ...settings, [name]: value });
     this._syncCyberSonarControl();
+    this.persistLocalPreferences();
     this.services.governorRequestRender(`cyber-sonar-${name}`);
     return next;
   }
@@ -1597,6 +1678,7 @@ export class VisualSettings {
     this._layoutRightPanels();
   }
   stop() {
+    this._localPreferencesReady = false;
     this._lifetime.destroy();
     if (this._parametersToken) this.store.detach(this._parametersToken);
     this._parametersToken = null;
