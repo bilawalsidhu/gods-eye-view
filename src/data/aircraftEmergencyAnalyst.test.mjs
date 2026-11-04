@@ -3,6 +3,12 @@ import { TRACKED_ICON_COLOR } from '../layers/military/policy.js';
 import { createRendering as civilRendering } from '../layers/flights/rendering.js';
 import { createRendering as militaryRendering } from '../layers/military/rendering.js';
 import { createMilitarySnapshotRenderer } from '../layers/military/snapshotRenderer.js';
+import { createIcons as createMilitaryIcons } from '../layers/military/icons.js';
+import { createIconSet } from './iconSet.js';
+import {
+  aircraftMotionRegime,
+  createMotionRegime,
+} from './aircraftMotionRegime.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
 // Source-to-voice provenance, status retention/clearing, contact-time contracts,
 // and civil/military billboard, Cockpit and model tint regressions.
@@ -462,18 +468,16 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
   }
 });
 
-test('GERMAN: an existing untracked military billboard repaints each poll without alpha loss', () => {
+test('GERMAN: an existing untracked military icon repaints each poll without losing its fade', () => {
   const { flightState, rendering } = renderHarness(militaryRendering);
-  const bb = {
-    color: rendering._fleetBillboardColor('abc123').withAlpha(0.65),
-  };
   Object.assign(flightState, {
-    _billboards: new Map([['abc123', bb]]),
+    _icons: createIconSet(),
     _models: new Map(),
     _positionHistory: new Map(),
-    _cullPositions: new Map(),
+    _displayCourse: new Map(),
     _groundSnap: { forget() {} },
     _cockpitContactMode: false,
+    _cockpitNearContacts: new Set(),
   });
   const records = new MilitaryFlightRecords({
     geoidHeight: () => 0,
@@ -481,18 +485,42 @@ test('GERMAN: an existing untracked military billboard repaints each poll withou
     floorAltitudeM: (value) => value,
   });
   flightState.records = records;
+  const parts = {
+    rendering: {
+      ...rendering,
+      _iconKind: () => 'jet',
+      _syncModelToClass() {},
+    },
+    motion: {
+      _motionRegime: (history, info, renderTime) =>
+        aircraftMotionRegime(
+          history,
+          info,
+          renderTime,
+          { speed: 'speedMps', track: 'track' },
+          createMotionRegime(),
+        ),
+    },
+  };
+  const icons = createMilitaryIcons({
+    flightState,
+    services: { focus: { focusPassIsNeeded: () => false } },
+    parts,
+  });
+  const row = flightState._icons.add('abc123', {
+    layer: 'military',
+    id: 'abc123',
+  });
+  // The focus fade the fleet tick composes lives in its own column.
+  flightState._icons.setFocus(row, 0.65);
   const apply = createMilitarySnapshotRenderer({
     flightState,
     records,
     groundFloor: { warmGroundFloor() {}, cachedGroundFloor: () => null },
     meshFloor: { sampleMeshFloorCells() {} },
     militaryRegistry: { registerMilitaryIcaos() {} },
-    rendering: {
-      ...rendering,
-      _syncModelToClass() {},
-      _applyFleetBillboardPresentation() {},
-    },
-    motion: {},
+    rendering: parts.rendering,
+    icons,
     tracking: {},
     queries: {},
   });
@@ -518,7 +546,7 @@ test('GERMAN: an existing untracked military billboard repaints each poll withou
       { observedAtMs: NOW_MS },
     );
     apply(snapshot, {});
-    assert.equal(bb.color.green < 0.5, red);
-    assert.equal(bb.color.alpha, 0.65);
+    assert.equal(flightState._icons.color(row).green < 0.5, red);
+    assert.ok(Math.abs(flightState._icons.focus(row) - 0.65) < 1e-6);
   }
 });

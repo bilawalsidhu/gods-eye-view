@@ -2,7 +2,7 @@ import * as Cesium from 'cesium';
 import { CYAN_TRANSPARENT } from './policy.js';
 import { mirrorModel } from '../../data/modelMirror.js';
 import { createIconSet } from '../../data/iconSet.js';
-import { writeHoldSegment } from '../../data/iconSegment.js';
+import { aircraftIconTestSeams } from '../../data/aircraftIconLayer.js';
 
 export function createTesting({
   flightState,
@@ -11,6 +11,8 @@ export function createTesting({
   layer,
   resolveAsset,
 }) {
+  const { _seedIconForTest, _iconForTest, _setIconForTest } =
+    aircraftIconTestSeams(flightState, parts, 'flights');
   /** Test seam for the display-floor clamp (unit-tested against real Cesium math
    *  with seeded mesh cells — the drift mechanism is otherwise only reachable
    *  through a live poll + render loop). */
@@ -37,19 +39,6 @@ export function createTesting({
 
   function _clearDisplayFloorStateForTest() {
     flightState._displayFloorState.clear();
-  }
-
-  /** Give a test contact an icon row held at `billboard.position`, shown as
-   *  `billboard.show` says (hidden by default while tracked). */
-
-  function _seedIconForTest(icao24, billboard, tracked) {
-    const icons = flightState._icons;
-    const row = icons.add(icao24, { layer: 'flights', id: icao24 });
-    if (billboard?.position)
-      writeHoldSegment(icons.segments, row, billboard.position, 0);
-    icons.segmentWritten(row);
-    icons.setShown(row, billboard?.show ?? !tracked);
-    return row;
   }
 
   /**
@@ -212,38 +201,12 @@ export function createTesting({
     );
   }
 
-  /** Where a contact's icon is drawn now and whether the layer shows it. */
-
-  function _iconForTest(icao24) {
-    const position = parts.icons._iconPosition(icao24);
-    return position
-      ? {
-          position,
-          shown: parts.icons._iconShown(icao24),
-          course: parts.icons._iconCourse(icao24),
-        }
-      : null;
-  }
-
   /** Exercise the exact asynchronous fleet loader and return its admitted model. */
 
   async function _ensureFleetModelForTest(icao24) {
     await parts.rendering._ensureModel(icao24);
     return flightState._models.get(icao24) || null;
   }
-  /** Show or hide a contact's icon as a handoff would, or hold it somewhere. */
-
-  function _setIconForTest(icao24, { shown, position } = {}) {
-    const icons = flightState._icons;
-    const row = icons?.row(icao24) ?? -1;
-    if (row < 0) return;
-    if (shown !== undefined) icons.setShown(row, shown);
-    if (position) {
-      writeHoldSegment(icons.segments, row, position, 0);
-      icons.segmentWritten(row);
-    }
-  }
-
   /** Run the fleet tick's grounded floor pass once, at `renderTime`. */
 
   function _floorGroundedIconsForTest(renderTime, cameraPosition) {

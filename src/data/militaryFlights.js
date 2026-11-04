@@ -32,5 +32,7 @@ export const _driveFleetModelHandoffForTest =
   militaryFlightsLayer.testing._driveFleetModelHandoffForTest;
 export const _ensureFleetModelForTest =
   militaryFlightsLayer.testing._ensureFleetModelForTest;
+export const _iconForTest = militaryFlightsLayer.testing._iconForTest;
+export const _setIconForTest = militaryFlightsLayer.testing._setIconForTest;
 export const mapAnalystRecord = militaryFlightsLayer.mapAnalystRecord;
 export default militaryFlightsLayer;

@@ -11,7 +11,6 @@ import {
 } from '../../data/contactMatch.js';
 import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
-import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 import { modelState } from '../../data/modelMirror.js';
 
 export function createQueries({
@@ -88,7 +87,7 @@ export function createQueries({
 
   /**
    * Build a public descriptor for one aircraft using its best current position
-   * (dead-reckoned when history exists, billboard position otherwise).
+   * (dead-reckoned when history exists, icon position otherwise).
    * @param {string} icao24 - ICAO hex identifier of the aircraft.
    * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
    *   Descriptor with a cloned position, or null if the aircraft is unknown.
@@ -96,10 +95,8 @@ export function createQueries({
 
   function _describeFlight(icao24) {
     const info = flightState.records.data.get(icao24);
-    const bb = flightState._billboards.get(icao24);
     const basePos =
-      parts.motion._deadReckon(icao24) ||
-      (bb ? billboardState(bb).position : null);
+      parts.motion._deadReckon(icao24) || parts.icons._iconPosition(icao24);
     if (!basePos) return null;
     const displayed = displayedKinematics({
       derivedSpeedMps: flightState._drSpeedMps,
@@ -271,13 +268,8 @@ export function createQueries({
         if (!flightState._models3dEnabled) {
           parts.rendering._releaseModels();
           parts.tracking._syncTracked2dRotation();
-          // Restore fleet billboards (horizon-cull re-asserts next tick), but NEVER the tracked
-          // plane's own fleet billboard — its tracked entity is the visual (avoids a double-image).
-          if (flightState._billboardCollection)
-            for (const [icao, bb] of flightState._billboards) {
-              if (icao !== flightState._trackedIcao)
-                setBillboard(bb, 'show', true);
-            }
+          // (Releasing the models handed each fleet contact back to its icon, never
+          // the tracked plane's own — its tracked entity is the visual.)
         }
       }
       if (
@@ -357,12 +349,11 @@ export function createQueries({
      * @returns {Array<Object>} Sorted array of nearby aircraft descriptors
      */
     getNearby(center, range, maxCount = 50, { includeHidden = false } = {}) {
-      if (
-        !center ||
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show
-      )
-        return [];
+      const icons = flightState._icons;
+      if (!center || !icons || !icons.show) return [];
+      const occluder = parts.icons._occluder();
+      const tau = parts.icons._displayTau();
+      const scratch = flightState._scratchNearbyPos;
 
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
@@ -372,28 +363,30 @@ export function createQueries({
 
       const nearby = [];
 
-      for (const [icao24, bb] of flightState._billboards) {
+      for (let row = 0; row < icons.count; row++) {
+        const icao24 = icons.idAt(row);
         const isTracked = icao24 === flightState._trackedIcao;
-        // Keep planes rendered as a 3D model (billboard hidden) so proximity counts
-        // don't drop to zero on the 2D→3D handoff; bb.position stays current while hidden.
+        const trackedPos = isTracked
+          ? parts.motion._trackedDisplayCached()
+          : null; // cached, no recompute (anti-jitter)
+        const drawn = trackedPos || icons.position(row, tau, scratch);
+        // Keep planes rendered as a 3D model (icon hidden) so proximity counts
+        // don't drop to zero on the 2D→3D handoff.
         if (
           !aircraftIncludedInNearby({
             isTracked,
-            billboardShown: billboardState(bb).show,
+            billboardShown:
+              icons.shown(row) &&
+              parts.icons._aboveHorizon(row, drawn, occluder),
             modelRendering: parts.rendering._modelOwnsVisual(icao24),
             includeHidden,
           })
         )
           continue;
 
-        const trackedPos = isTracked
-          ? parts.motion._trackedDisplayCached()
-          : null; // cached, no recompute (anti-jitter)
-        const pos = trackedPos || billboardState(bb).position;
-        if (!pos) continue;
-
-        const distance = Cesium.Cartesian3.distance(center, pos);
+        const distance = Cesium.Cartesian3.distance(center, drawn);
         if (distance > maxRange) continue;
+        const pos = trackedPos || Cesium.Cartesian3.clone(drawn);
 
         const info = flightState.records.data.get(icao24);
         nearby.push({
@@ -434,40 +427,32 @@ export function createQueries({
      * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
      */
     getDetectableObjects(options = {}) {
-      if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show
-      )
-        return [];
+      const icons = flightState._icons;
+      if (!icons || !icons.show) return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
-        : flightState._billboards.size;
+        : icons.count;
       const seed = Number.isFinite(options.seed) ? Math.floor(options.seed) : 0;
-      // Deterministic stride: evenly space selections across the billboard map
-      const stride = Math.max(
-        1,
-        Math.ceil(flightState._billboards.size / maxCount),
-      );
+      // Deterministic stride: evenly space selections across the icon rows
+      const stride = Math.max(1, Math.ceil(icons.count / maxCount));
       const start = seed % stride;
+      const occluder = parts.icons._occluder();
+      const tau = parts.icons._displayTau();
 
       const result = [];
-      let idx = 0;
-      for (const [icao24, bb] of flightState._billboards) {
-        const shouldTake = (idx - start) % stride === 0;
-        idx++;
-        if (!shouldTake) continue;
+      for (let row = start; row < icons.count; row += stride) {
+        const icao24 = icons.idAt(row);
         if (
           flightState._cockpitContactMode &&
           icao24.toLowerCase() === flightState._cockpitSubjectId
         )
           continue;
         const isTracked = icao24 === flightState._trackedIcao;
-        // Keep planes rendered as a 3D model (billboard hidden) so the detection box
-        // doesn't vanish on the 2D→3D handoff; bb.position stays current while hidden.
+        // Keep planes rendered as a 3D model (icon hidden) so the detection box
+        // doesn't vanish on the 2D→3D handoff.
         const model = flightState._models.get(icao24);
         const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
-        if (!isTracked && !billboardState(bb).show && !modelOwnsVisual)
-          continue;
+        if (!isTracked && !icons.shown(row) && !modelOwnsVisual) continue;
         const info = flightState.records.data.get(icao24);
         const callsign = info?.callsign?.trim();
         const registration = info?.registration?.trim();
@@ -478,18 +463,20 @@ export function createQueries({
             type: 'AIR',
             tier: 'military',
             _weldPos: new Cesium.Cartesian3(),
+            _iconPos: new Cesium.Cartesian3(),
           };
           flightState._detectionObjects.set(icao24, object);
         }
         // WELD (mirror of flights.js): anchor to whatever owns the visual. Model-owned
         // contacts read the translation the fleet tick already wrote into their
-        // modelMatrix; sprite-owned contacts keep `bb.position`, where sprite and bracket
-        // are co-located anyway.
+        // modelMatrix; icon-owned contacts keep the drawn icon position, where icon and
+        // bracket are co-located anyway.
         const spec = modelOwnsVisual
           ? parts.rendering._modelSpec(info?.klass)
           : null;
         const pos = isTracked
-          ? parts.motion._trackedVisualCached() || billboardState(bb).position
+          ? parts.motion._trackedVisualCached() ||
+            icons.position(row, tau, object._iconPos)
           : modelOwnsVisual
             ? modelVisualAnchor(
                 modelState(model).modelMatrix,
@@ -499,8 +486,15 @@ export function createQueries({
                   : spec.scale,
                 object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
               )
-            : billboardState(bb).position;
-        if (!pos) continue;
+            : icons.position(row, tau, object._iconPos);
+        // An icon past the horizon is not drawn, so it is not detectable.
+        if (
+          !pos ||
+          (!isTracked &&
+            !modelOwnsVisual &&
+            !parts.icons._aboveHorizon(row, pos, occluder))
+        )
+          continue;
         object.position = pos;
         object.skipLabel = isTracked;
         const id = callsign || registration || icao24;
@@ -519,13 +513,9 @@ export function createQueries({
         result.push(object);
         if (result.length >= maxCount) break;
       }
-      if (
-        flightState._detectionObjects.size >
-        flightState._billboards.size + 512
-      ) {
+      if (flightState._detectionObjects.size > icons.count + 512) {
         for (const icao24 of flightState._detectionObjects.keys()) {
-          if (!flightState._billboards.has(icao24))
-            flightState._detectionObjects.delete(icao24);
+          if (!icons.has(icao24)) flightState._detectionObjects.delete(icao24);
         }
       }
       return result;
@@ -577,8 +567,8 @@ export function createQueries({
 
     /**
      * Return id/label/position for up to maxCount currently rendered aircraft.
-     * Cheap snapshot for voice-tool framing — billboard positions only, no
-     * dead reckoning and no cloning.
+     * Cheap snapshot for voice-tool framing — drawn icon positions, no
+     * extra dead reckoning.
      * @param {number} [maxCount=500] - Maximum number of entries to return.
      * @returns {Array<{id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number}>}
      */
@@ -595,34 +585,25 @@ export function createQueries({
      *   holds no data and therefore cannot answer.
      */
     hasContact(icao24) {
-      if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
-        flightState._billboards.size === 0
-      )
-        return null;
+      const icons = flightState._icons;
+      if (!icons || !icons.show || icons.count === 0) return null;
       if (!icao24) return false;
       const id = String(icao24).trim();
-      return (
-        flightState._billboards.has(id) ||
-        flightState._billboards.has(id.toLowerCase())
-      );
+      return icons.has(id) || icons.has(id.toLowerCase());
     },
 
     getAllPositions(maxCount = 500) {
-      if (
-        !flightState._billboardCollection ||
-        flightState._billboards.size === 0
-      )
-        return [];
+      const icons = flightState._icons;
+      if (!icons || icons.count === 0) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 500;
+      const tau = parts.icons._displayTau();
 
       const result = [];
-      for (const [icao24, bb] of flightState._billboards) {
-        const pos = billboardState(bb).position;
-        if (!pos) continue;
+      for (let row = 0; row < icons.count; row++) {
+        const icao24 = icons.idAt(row);
+        const pos = icons.position(row, tau);
         const carto = Cesium.Cartographic.fromCartesian(
           pos,
           Cesium.Ellipsoid.WGS84,
@@ -657,11 +638,7 @@ export function createQueries({
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
-        flightState.records.data.size === 0
-      )
+      if (!flightState._icons?.show || flightState.records.data.size === 0)
         return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
@@ -682,8 +659,8 @@ export function createQueries({
     trackById(icao24, { origin = 'programmatic' } = {}) {
       if (!icao24) return false;
       let id = String(icao24).trim();
-      if (!flightState._billboards.has(id)) id = id.toLowerCase();
-      if (!flightState._billboards.has(id)) return false;
+      if (!flightState._icons?.has(id)) id = id.toLowerCase();
+      if (!flightState._icons?.has(id)) return false;
       if (parts.tracking._isExplicitTrackingOrigin(origin))
         parts.tracking._cancelPendingTrackingRestore();
       if (flightState._trackedIcao === id)
@@ -752,7 +729,7 @@ export function createQueries({
       )
         return false;
       let id = String(icao24).trim();
-      if (!flightState._billboards.has(id)) id = id.toLowerCase();
+      if (!flightState._icons?.has(id)) id = id.toLowerCase();
       if (
         id !== flightState._trackedIcao ||
         !flightState._viewer.entities?.contains?.(flightState._trackedEntity) ||

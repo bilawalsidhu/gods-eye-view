@@ -10,7 +10,6 @@ export function createFlightState({ source, services }) {
     ...services.geoid,
     ...services.groundFloor,
   });
-  flightState._cullPositions = new Map();
 
   /** Per-class model spec for THIS layer (2026-08-16, owner playtest ask:
    *  military contacts should read as their WEIGHT CLASS, always in this layer's
@@ -87,22 +86,24 @@ export function createFlightState({ source, services }) {
     new Cesium.Cartesian3(),
     1.0,
   );
-  // frustum-visibility test
-  /** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
-
-  flightState._billboardLimbScale = new WeakMap();
 
   // ---------------------------------------------------------------------------
   // Module-level state
   // ---------------------------------------------------------------------------
 
-  /** @type {Cesium.BillboardCollection|null} Single GPU-batched collection for all aircraft */
+  /** Every contact's icon row (see icons.js); null outside a layer lifetime. */
 
-  flightState._billboardCollection = null;
+  flightState._icons = null;
 
-  /** @type {Map<string, Cesium.Billboard>} ICAO hex -> billboard primitive */
+  /** The primitive drawing `_icons`. */
 
-  flightState._billboards = new Map();
+  flightState._iconPrimitive = null;
+
+  flightState._scratchIconRenderTime = new Cesium.JulianDate();
+
+  /** Rows still away from full focus emphasis after the last focus pass. */
+
+  flightState._iconFocusActive = 0;
 
   /** Stable lightweight records reused by the detection overlay between polls. */
 
@@ -187,14 +188,6 @@ export function createFlightState({ source, services }) {
 
   flightState._lastFleetTickMs = 0;
 
-  /** @type {string} Camera pose signature at the last rotation pass */
-
-  flightState._lastCamPoseSig = '';
-
-  /** @type {number} Epoch ms of the last full rotation pass */
-
-  flightState._lastRotPassMs = 0;
-
   /** @type {number} Last computed rotation for the tracked entity (radians) */
 
   flightState._lastTrackedRotation = 0;
@@ -225,7 +218,13 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchRenderTime = new Cesium.JulianDate();
 
+  flightState._scratchFleetRenderTime = new Cesium.JulianDate();
+
   flightState._scratchFleetPos = new Cesium.Cartesian3();
+
+  flightState._scratchCockpitPos = new Cesium.Cartesian3();
+
+  flightState._scratchNearbyPos = new Cesium.Cartesian3();
 
   flightState._scratchSonarScreen = new Cesium.Cartesian2();
 

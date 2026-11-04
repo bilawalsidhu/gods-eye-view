@@ -14,7 +14,10 @@ import flightsLayer, {
   _iconForTest,
   _setTrackedFlightRefreshStateForTest,
 } from './flights.js';
-import militaryFlightsLayer, { _setTrackedMilitaryRefreshStateForTest } from './militaryFlights.js';
+import militaryFlightsLayer, {
+  _iconForTest as _militaryIconForTest,
+  _setTrackedMilitaryRefreshStateForTest,
+} from './militaryFlights.js';
 
 const ICAO = 'abc123';
 const OTHER = 'def456';
@@ -66,7 +69,7 @@ const LAYERS = [
     name: 'military',
     layer: militaryFlightsLayer,
     visualCenterM: Cesium.Cartesian3.ZERO,
-    spritePosition: () => contactBillboard(true).position,
+    spritePosition: () => _militaryIconForTest(ICAO).position,
     seed({ billboardShow, models = [] }) {
       _setTrackedMilitaryRefreshStateForTest({
         icao24: ICAO,

@@ -1,6 +1,8 @@
+import * as Cesium from 'cesium';
 import { AMBER_TRANSPARENT, TRACKED_ICON_COLOR } from './policy.js';
-import { mirrorBillboard } from '../../data/billboardMirror.js';
 import { mirrorModel } from '../../data/modelMirror.js';
+import { createIconSet } from '../../data/iconSet.js';
+import { aircraftIconTestSeams } from '../../data/aircraftIconLayer.js';
 
 export function createTesting({
   flightState,
@@ -9,6 +11,8 @@ export function createTesting({
   layer,
   resolveAsset,
 }) {
+  const { _seedIconForTest, _iconForTest, _setIconForTest } =
+    aircraftIconTestSeams(flightState, parts, 'military');
   /**
    * Seed only the mutable state needed to exercise tracked-card refreshes through
    * the production military poll reconciler. Tests still call
@@ -17,13 +21,14 @@ export function createTesting({
    * @param {string} state.icao24
    * @param {object} state.entity
    * @param {object} state.meta
-   * @param {object} state.billboard
-   * @param {object} state.billboardCollection
+   * @param {{position?: Cesium.Cartesian3, show?: boolean}} [state.billboard]
+   *   Where the contact's icon is held, and whether it is shown.
+   * @param {{show?: boolean}} [state.billboardCollection] Layer visibility.
    * @param {object} state.viewer
    * @param {Array<Object>} [state.history=[]]
    * @param {boolean} [state.tracked=true]
    * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
-   *   by icao24, for the billboard-hidden/model-shown handoff state.
+   *   by icao24, for the icon-hidden/model-shown handoff state.
    */
 
   function _setTrackedMilitaryRefreshStateForTest({
@@ -40,9 +45,11 @@ export function createTesting({
   }) {
     flightState._viewer = viewer;
     flightState._modelCollection = modelCollection;
-    flightState._billboardCollection = billboardCollection;
-    flightState._billboards = new Map([[icao24, mirrorBillboard(billboard)]]);
-    flightState._cullPositions.clear();
+    flightState._icons = createIconSet({
+      epoch: parts.icons._displayTime(new Cesium.JulianDate()),
+    });
+    flightState._icons.show = billboardCollection?.show ?? true;
+    _seedIconForTest(icao24, billboard, tracked);
     flightState._models.clear();
     for (const [key, model] of models)
       flightState._models.set(key, mirrorModel(model));
@@ -89,7 +96,7 @@ export function createTesting({
     billboard,
     history = [],
   }) {
-    flightState._billboards.set(icao24, mirrorBillboard(billboard));
+    _seedIconForTest(icao24, billboard, false);
     flightState.records.data.set(icao24, meta);
     flightState._positionHistory.set(icao24, history);
   }
@@ -135,13 +142,13 @@ export function createTesting({
       : TRACKED_ICON_COLOR;
   }
 
-  /** Drive the exact fleet billboard-to-model handoff used by `_fleetTick`. */
+  /** Drive the exact fleet icon-to-model handoff used by `_fleetTick`. */
 
   function _driveFleetModelHandoffForTest({ icao24, position, course = 0 }) {
     return parts.rendering._driveFleetModelHandoff(
       icao24,
       flightState._models.get(icao24),
-      flightState._billboards.get(icao24),
+      flightState._icons.row(icao24),
       position,
       course,
     );
@@ -153,6 +160,7 @@ export function createTesting({
     await parts.rendering._ensureModel(icao24);
     return flightState._models.get(icao24) || null;
   }
+
   return {
     _setTrackedMilitaryRefreshStateForTest,
     _setMilitaryTrackingRefreshOutcomeForTest,
@@ -164,6 +172,8 @@ export function createTesting({
     _updateTrackedModelForTest,
     _trackedBillboardColorForTest,
     _driveFleetModelHandoffForTest,
+    _iconForTest,
+    _setIconForTest,
     _ensureFleetModelForTest,
   };
 }

@@ -147,3 +147,17 @@ test('voice context reads a track that rounds to north as 0°, not 360°', () =>
     '0°',
   );
 });
+
+test('a flight layer without an icon set declines contact refreshes', () => {
+  // Before init and after destroy there are no icon rows: a TR-3B refresh
+  // reports that the layer owns no such contact instead of throwing.
+  const layer = createCivilFlightLayer({
+    source: { label: 'Fixture aircraft', getSnapshot() {} },
+    services: {
+      ...services(),
+      aircraftPresentation: { isTr3b: () => true, tr3bConvertedIds: () => [] },
+    },
+  });
+  assert.equal(layer.refreshTr3b('abc123'), false);
+  assert.equal(layer.trackById('abc123'), false);
+});

@@ -59,14 +59,14 @@ export class MilitaryFlightRecords {
     // GROUND-SNAP INTERPLAY (brief item 3 — "don't double-correct"): a
     // grounded plane's MODEL already rides groundSnap.js's one-shot tileset
     // sample (_modelDisplayPosition), which is the visual on the ground, and
-    // its billboard is depth-test-free (_groundDepthDistance) so its exact
+    // its icon is depth-test-free (the icon set draws on the near plane) so its exact
     // height is cosmetic. Deliberately pass surfaceM=null so
     // pickRenderAltitudeM's on-ground surface branch never fires here:
     //  1. It would be the SECOND correction of the same grounded plane
     //     (model tileset-snap is the first) — the exact double-correct the
     //     brief forbids.
     //  2. Military ground rows carry NO baro ("alt_baro":"ground"), so the
-    //     grounded billboard sits at 0 m until a surface value warms; letting
+    //     grounded icon sits at 0 m until a surface value warms; letting
     //     surfaceM then jump it 0 -> ~surface (often ~100 m) BETWEEN polls
     //     drags the model's ground-snap input past groundSnap's 50 m
     //     move-invalidation threshold and forces a re-sample every time the
@@ -95,7 +95,7 @@ export class MilitaryFlightRecords {
     // ellipsoidal ground (warm-cache read only — the batch warm below
     // fills cells for later polls). Grounded contacts are deliberately
     // NOT touched: their model rides groundSnap's tileset sample and
-    // their billboard is depth-test-free (see the surfaceM:null block
+    // their icon is depth-test-free (see the surfaceM:null block
     // above — same one-shot-invariant reasoning).
     if (!onGround && renderAltitudeM < GROUND_FLOOR_WARM_MAX_ALT_M) {
       renderAltitudeM = floorAltitudeM(
@@ -105,10 +105,10 @@ export class MilitaryFlightRecords {
       _floorWarmPoints.push({ lat, lon });
     } else if (onGround) {
       // Grounded contacts: warm the floor cell, and — round 4 — when NO
-      // 3D model owns this contact's visual, lift the billboard itself
+      // 3D model owns this contact's visual, lift the icon itself
       // onto the floor (mesh-first): the R20053 heli sat "straight up in
       // the ground" because grounded rows render at the legacy ~0 m.
-      // With a model present the billboard stays put (it hides behind
+      // With a model present the icon stays put (it hides behind
       // the tileset-snapped model, and moving it would drag groundSnap's
       // input past its move-invalidation threshold — the T7 one-shot
       // invariant the track regression locks).

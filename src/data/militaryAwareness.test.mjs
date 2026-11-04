@@ -1665,7 +1665,7 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
     [
       'militaryFlights',
       readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*const icons = flightState\._icons;\s*\n\s*if\s*\(\s*!icons\s*\|\|\s*!icons\.show\s*\|\|\s*icons\.count\s*===\s*0,?\s*\)\s*return\s*null;/,
     ],
     [
       'aisLiveVessels',

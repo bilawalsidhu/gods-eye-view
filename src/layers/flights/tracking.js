@@ -164,7 +164,7 @@ export function createTracking({
     const distancesSquared = [];
     const icons = flightState._icons;
     const tau = parts.icons._displayTau();
-    for (let row = 0; row < icons.count; row++) {
+    for (let row = 0; row < (icons?.count ?? 0); row++) {
       const icao24 = icons.idAt(row);
       if (icao24 === flightState._trackedIcao) continue;
       const position = icons.position(row, tau, flightState._scratchCockpitPos);
@@ -987,7 +987,7 @@ export function createTracking({
         alignedAxis: Cesium.Cartesian3.ZERO,
         // The tracked target must never vanish into tile geometry — tracking a
         // taxiing plane at street level would otherwise bury the cyan icon inside
-        // the runway skin exactly like the fleet ground icons (_groundDepthDistance);
+        // the runway skin, so it draws depth-test-free like the fleet icon set;
         // its shared-host tracked card is top-composited separately.
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         // Screen-projected rotation, evaluated per frame: exact in tracked-orbit

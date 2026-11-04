@@ -1,15 +1,10 @@
 import * as Cesium from 'cesium';
-import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   turnRateFromFixHistory,
   liftRepeatedGroundFix,
   synthesizeForwardKinematicsFix,
 } from '../../data/motionModel.js';
-import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
-import { BILLBOARD_SCALE, GROUND_SCALE, TRACKED_ICON_COLOR } from './policy.js';
-import { addBillboard, setBillboard } from '../../data/billboardMirror.js';
 
 /** Apply military record changes to Cesium resources and existing follow operations. */
 export function createMilitarySnapshotRenderer({
@@ -20,7 +15,7 @@ export function createMilitarySnapshotRenderer({
   militaryRegistry,
   rendering,
   tracking,
-  motion,
+  icons,
   queries,
 }) {
   const { warmGroundFloor, cachedGroundFloor, GROUND_FLOOR_LIFT_M } =
@@ -28,6 +23,8 @@ export function createMilitarySnapshotRenderer({
   const { sampleMeshFloorCells } = meshFloor;
   const { registerMilitaryIcaos } = militaryRegistry;
   return function applySnapshot(snapshot, viewer) {
+    // Before init (or after destroy) there is no icon set to draw into.
+    if (!flightState._icons) return { count: 0, ids: new Set() };
     const currentIcaos = new Set();
     const receiptNowMs = snapshot.observedAtMs;
     // Field-test fix (RS46): coarse floor cells to warm for the below-ground
@@ -55,12 +52,6 @@ export function createMilitarySnapshotRenderer({
         meta.renderAltitudeM,
       );
       if (groundFlipped) flightState._groundSnap.forget(icao24);
-      flightState._cullPositions.set(
-        icao24,
-        meta.renderAltitudeM < 10
-          ? Cesium.Cartesian3.fromDegrees(meta.rawLon, meta.rawLat, 12)
-          : null,
-      );
       const isTracked = icao24 === flightState._trackedIcao;
 
       // Append to position history stamped with the FEED's fix epoch.
@@ -120,63 +111,19 @@ export function createMilitarySnapshotRenderer({
         }
       }
 
-      if (flightState._billboards.has(icao24)) {
-        const bb = flightState._billboards.get(icao24);
-        if (!isTracked) {
-          bb.color = rendering
-            ._fleetBillboardColor(icao24, meta)
-            .withAlpha(cyberSonarBaseAlpha(bb));
-        }
-        // Position AND rotation are owned by the fleet pass (_fleetTick);
-        // course changes land on the next rotation pass (forced below).
-        // Ground flips (landing/takeoff) restyle this SAME billboard in
-        // place — the transition is never a removal.
-        if (
-          prevMeta?.klass !== meta.klass ||
-          groundFlipped ||
-          flightState._cockpitContactMode
-        ) {
-          rendering._applyFleetBillboardPresentation(icao24, bb);
-        }
+      if (flightState._icons.has(icao24)) {
+        // Reclassification, a ground flip (a restyle, never a removal), a
+        // freshness change and the cockpit contract all land on the row's
+        // style; motion re-plans from the updated history.
+        icons._applyIconPresentation(icao24);
+        icons._planIcon(icao24);
         // Per-class GLBs: a class change can mean a different asset OR scale —
         // resync the live model, any in-flight load, and the tracked
         // standalone (mirror of flights.js).
         if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
-        // Round 5: depth policy is uniform (always depth-test-free, see
-        // _groundDepthDistance) — nothing to flip on landing/takeoff.
       } else {
-        // Start where the fleet pass will draw it: the fleet renders behind
-        // real time, so a fresh contact's displayed position is its fix
-        // projected back to that delayed time. Creating it at the raw fix drew
-        // it ahead until the next fleet tick snapped it back.
-        const displayed =
-          motion._deadReckon(icao24, new Cesium.Cartesian3()) || position;
-        const bb = addBillboard(flightState._billboardCollection, {
-          position: displayed,
-          image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
-          width: isTracked ? 24 : 20,
-          height: isTracked ? 24 : 20,
-          scale:
-            BILLBOARD_SCALE *
-            (CLASS_SCALE_2D[meta.klass] || 1) *
-            (meta.onGround ? GROUND_SCALE : 1),
-          // Screen-projected rotation lands on the next fleet tick.
-          rotation: 0,
-          alignedAxis: Cesium.Cartesian3.ZERO,
-          color: isTracked
-            ? TRACKED_ICON_COLOR
-            : rendering._fleetBillboardColor(icao24, meta),
-          sizeInMeters: false,
-          scaleByDistance: rendering._normalBillboardScaleByDistance(),
-          // Grounded/near-surface planes sit at/below the photoreal tile
-          // surface — render them depth-test-free so they never vanish up
-          // close (_groundDepthDistance).
-          disableDepthTestDistance: rendering._groundDepthDistance(),
-          id: icao24,
-          show: !isTracked, // hidden if currently tracked (entity replaces it)
-        });
-        flightState._billboards.set(icao24, bb);
-        rendering._applyFleetBillboardPresentation(icao24, bb);
+        // Hidden while tracked: the tracked entity replaces it.
+        icons._addIcon(icao24);
       }
 
       // Takeoff while TRACKED: ground traffic drew no trail, so start one
@@ -200,7 +147,7 @@ export function createMilitarySnapshotRenderer({
     // Round 6: re-floor STALE grounded contacts (mirror of flights.js) —
     // a parked contact whose feed went quiet froze at its pre-warm height.
     // The model-ownership gate matches the live grounded-clamp path (a
-    // tileset-snapped model owns its visual; moving its billboard would
+    // tileset-snapped model owns its visual; moving its icon would
     // disturb groundSnap's input — the T7 one-shot invariant).
     for (const [icao24, info] of flightState.records.data) {
       if (!info?.onGround || currentIcaos.has(icao24)) continue;
@@ -216,7 +163,6 @@ export function createMilitarySnapshotRenderer({
       )
         continue;
       info.renderAltitudeM = lifted;
-      flightState._cullPositions.delete(icao24);
       const liftedPos = Cesium.Cartesian3.fromDegrees(
         info.rawLon,
         info.rawLat,
@@ -226,18 +172,20 @@ export function createMilitarySnapshotRenderer({
       const newest = hist?.[hist.length - 1];
       if (newest)
         newest.position = Cesium.Cartesian3.clone(liftedPos, newest.position);
-      const bbStale = flightState._billboards.get(icao24);
-      if (bbStale) setBillboard(bbStale, 'position', liftedPos);
+      if (flightState._icons.has(icao24)) {
+        icons._applyIconPresentation(icao24);
+        icons._planIcon(icao24);
+      }
     }
     // Round 4: sample the RENDERED mesh for those cells (one-shot per cell,
     // budget-capped, viewer-proximate, google-3d regime only), excluding
-    // this layer's own billboards/models from the probe.
+    // this layer's own icons/models from the probe.
     {
       const viewerCarto =
         flightState._viewer?.camera?.positionCartographic || null;
       sampleMeshFloorCells(flightState._viewer?.scene, _floorWarmPoints, {
         excludeObjects: [
-          ...flightState._billboards.values(),
+          ...icons._iconIds(),
           ...flightState._models.values(),
           flightState._trackedModel,
         ].filter(Boolean),
@@ -256,8 +204,12 @@ export function createMilitarySnapshotRenderer({
     // EXCEPTION: likely-landed planes (last fix low + slow) get only
     // LANDED_MISSING_POLL_LIMIT — their disappearance means "landed", not a
     // feed gap, and the full grace left phantom planes parked at airports.
-    for (const [icao24, bb] of flightState._billboards) {
-      if (currentIcaos.has(icao24)) continue;
+    const absentIds = [];
+    for (let row = 0; row < flightState._icons.count; row++) {
+      const icao24 = flightState._icons.idAt(row);
+      if (!currentIcaos.has(icao24)) absentIds.push(icao24);
+    }
+    for (const icao24 of absentIds) {
       const absence = records.absence(icao24, {
         complete: snapshot.complete,
         retainIds: snapshot.retainIds,
@@ -265,8 +217,9 @@ export function createMilitarySnapshotRenderer({
       });
       if (absence === 'retain') continue;
       if (absence === 'stale') {
+        icons._applyIconPresentation(icao24); // the faded freshness alpha
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity) {
-          // Honest readout: the tracked plane has no faded billboard (its
+          // Honest readout: the tracked plane has no faded icon (its
           // entity owns the visual), so refresh the label — with icao24 now
           // in _missingPolls, _buildTrackedLabel appends the STALE cue so
           // last-known altitude/speed aren't presented as live.
@@ -277,7 +230,7 @@ export function createMilitarySnapshotRenderer({
 
       // If the tracked flight is truly gone, clear tracking BEFORE deleting
       // its state (M3 ordering, keep it): teardown reads the maps this loop
-      // is about to delete (billboard restore, DR cache reset), and we must
+      // is about to delete (icon restore, DR cache reset), and we must
       // never leave the camera mid-follow with stale tracking state. The
       // camera is then RELEASED IN PLACE — it stays where the follow left
       // it, fully free (owner decision 2026-07-02: no overview flyTo).
@@ -285,22 +238,12 @@ export function createMilitarySnapshotRenderer({
         tracking._clearTracking(false, { evicted: true });
       }
 
-      flightState._billboardCollection.remove(bb);
-      flightState._billboards.delete(icao24);
-      rendering._releaseModel(icao24); // aged-out aircraft: drop its 3D model (no orphan / cap leak)
-      records.forget(icao24);
-      flightState._cullPositions.delete(icao24);
-      flightState._positionHistory.delete(icao24);
-      flightState._displayCourse.delete(icao24);
-      flightState._groundSnap.forget(icao24);
+      icons._forgetContact(icao24); // aged out: its 3D model goes too (no orphan / cap leak)
     }
-
-    // Fresh courses arrived — force a rotation pass on the next fleet tick
-    flightState._lastCamPoseSig = '';
 
     // Feed the shared registry so the flights layer can classify/suppress
     registerMilitaryIcaos(currentIcaos);
 
-    return { count: flightState._billboards.size, ids: currentIcaos };
+    return { count: flightState._icons.count, ids: currentIcaos };
   };
 }
