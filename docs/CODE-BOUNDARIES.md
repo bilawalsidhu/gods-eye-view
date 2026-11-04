@@ -33,12 +33,13 @@ export inventory. Use declared exports rather than reaching into internal files.
 | `src/layers/<family>/` | Source acquisition, records and Cesium resources with explicit controller/renderer owners               |
 | `src/sources/`         | Portable protocols and source contracts; request state belongs to each factory instance                 |
 | `src/services/`        | Supplied application operations; scene construction owns caches and cancellation                        |
+| `src/render/`          | The renderer contract, the stub renderer, the conformance suite and Cesium renderer pieces              |
 | `src/voice/`           | Portable action schemas/session, common controls, action execution and separate protocol adapters       |
 | `server/providers/`    | Node route factories, process-scoped provider caches and shutdown cleanup                               |
 | `server/standalone/`   | Environment, local settings writes and server composition                                               |
 
 See [application construction](APPLICATION.md) and the
-[infrastructure contract](INFRASTRUCTURE-LAYERS.md) for construction interfaces.
+[infrastructure contract](INFRASTRUCTURE-LAYERS.md) for construction interfaces, and the [renderer contract](RENDERER-CONTRACT.md) for what a renderer provides.
 
 ## Import direction gates
 

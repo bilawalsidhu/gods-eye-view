@@ -84,3 +84,12 @@ export function webglContext(scene) {
 export function cameraFlightActive(camera) {
   return camera?._currentFlight != null;
 }
+
+/**
+ * Run the camera's `changed` check, as a scene does once a frame. For a
+ * camera driven without a scene (the reference camera traces).
+ * @param {object} camera Cesium Camera.
+ */
+export function updateCameraChanged(camera) {
+  camera._updateCameraChanged();
+}

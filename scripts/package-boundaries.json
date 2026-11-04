@@ -5126,5 +5126,27 @@
     "exports": ["./queries/heights"],
     "modules": ["src/queries/heights.js"],
     "external": ["cesium"]
+  },
+  "render": {
+    "exports": ["./render/contract", "./render/stub", "./render/conformance"],
+    "modules": [
+      "src/render/contract/index.js",
+      "src/render/stub/index.js",
+      "src/render/conformance/index.js",
+      "src/render/conformance/scenes.js",
+      "src/render/conformance/cameraScripts.js",
+      "src/render/conformance/visual.js",
+      "src/render/conformance/cameraRunner.js",
+      "src/render/conformance/expect.js",
+      "src/render/conformance/checks/ports.js",
+      "src/render/stub/math.js",
+      "src/render/stub/motion.js",
+      "src/render/stub/camera.js",
+      "src/render/stub/geodesic.js",
+      "src/render/stub/viewRectangle.js",
+      "src/render/conformance/goldens/camera.json",
+      "src/render/conformance/checks/camera.js"
+    ],
+    "external": []
   }
 }

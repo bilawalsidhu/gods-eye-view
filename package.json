@@ -79,6 +79,7 @@
     "prettier": "3.9.6",
     "puppeteer": "^25.16.0",
     "sharp": "^0.35.4",
+    "typescript": "5.9.3",
     "vite": "^6.4.4",
     "vite-plugin-cesium": "^1.2.23",
     "ws": "^8.21.0"
@@ -293,6 +294,9 @@
     "./tools/panel": "./src/tools/panel.js",
     "./tools/services": "./src/tools/services.js",
     "./view": "./src/view/index.js",
-    "./agent/world-packet": "./src/agent/worldPacket.js"
+    "./agent/world-packet": "./src/agent/worldPacket.js",
+    "./render/contract": "./src/render/contract/index.js",
+    "./render/stub": "./src/render/stub/index.js",
+    "./render/conformance": "./src/render/conformance/index.js"
   }
 }

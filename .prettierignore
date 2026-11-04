@@ -9,6 +9,8 @@ coverage
 pinokio/ENVIRONMENT
 pinokio/.installed
 src/data/local_data/
+# Written by scripts/record-camera-goldens.mjs and compared byte for byte.
+src/render/conformance/goldens/
 *.geojson
 *.geojsonl
 
