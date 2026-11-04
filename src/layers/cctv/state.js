@@ -18,6 +18,8 @@ export function createState({ services }) {
   layerState._billboards = null;
 
   layerState._records = [];
+  layerState._cameraCategories = { general: true, penndot: true };
+  layerState._cameraCategoryCounts = { general: 0, penndot: 0 };
 
   layerState._recordById = new Map();
 

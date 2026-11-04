@@ -1,3 +1,4 @@
+import { cameraIsEnabled } from './categories.js';
 import * as Cesium from 'cesium';
 import {
   GEO_PROGRESS_NOTIFY_INTERVAL_MS,
@@ -219,6 +220,8 @@ export function createGeometryQueue({
           document.body?.classList.contains('cockpit-mode'),
       }),
       visit: (record) => {
+        if (!cameraIsEnabled(record.camera, layerState._cameraCategories))
+          return;
         try {
           parts.geometry.updateRecordGeometry(record);
         } catch (err) {

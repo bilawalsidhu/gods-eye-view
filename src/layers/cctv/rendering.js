@@ -1,3 +1,4 @@
+import { cameraIsEnabled } from './categories.js';
 import * as Cesium from 'cesium';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -201,6 +202,8 @@ export function createRendering({
     let shown = [];
     const cells = new Map();
     for (const record of layerState._records) {
+      if (!cameraIsEnabled(record.camera, layerState._cameraCategories))
+        continue;
       const position = record.billboard?.position;
       if (!position) continue;
       const vx = position.x * inverseRadii.x - cx;

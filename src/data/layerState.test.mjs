@@ -202,8 +202,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 34);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 34);
+  assert.equal(REGISTERED_LAYER_IDS.length, 35);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 35);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -242,10 +242,14 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '8');
+  assert.equal(nextLayerStateToken(), '00');
   assert.equal(
     nextLayerStateToken({
-      ...LAYER_STATE_TOKEN_RESERVATIONS,
+      ...Object.fromEntries(
+        Object.entries(LAYER_STATE_TOKEN_RESERVATIONS).filter(
+          ([id]) => id !== 'chester-county-ems',
+        ),
+      ),
       alpha: '8',
       bravo: '9',
     }),
@@ -305,8 +309,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '8',
-      next: '9',
+      future: '00',
+      next: '01',
     }),
     true,
   );
@@ -314,12 +318,11 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     () =>
       validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
         ...LAYER_STATE_TOKEN_RESERVATIONS,
-        future: '00',
+        future: '01',
       }),
-    /next free token 8/,
+    /next free token 00/,
   );
-  const beforeLastDigit = { ...digitsExhausted };
-  delete beforeLastDigit['prior-9'];
+  const beforeLastDigit = Object.fromEntries(Object.entries(digitsExhausted).filter(([, token]) => token !== '9'));
   assert.equal(
     validateLayerStateAllocations(beforeLastDigit, {
       ...beforeLastDigit,
@@ -339,10 +342,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '8' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '8', competing: '8' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9', competing: '9' },
       ),
-    /next free token 9/,
+    /next free token 00/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -594,6 +597,14 @@ test('Radio genre ids with spaces and ampersands round-trip through v2', () => {
     assert.equal(decoded.options.radio.filter, filter);
   }
 });
+
+test('PennDOT can restore independently while retaining shared camera viewer settings', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=9&lo=9.c.v_9.p.0'));
+  assert.deepEqual(decoded.enabledLayerIds, ['penndot-traffic-cams']);
+  assert.equal(decoded.options.cctv.coverageMode, 'viewshed');
+  assert.equal(decoded.options.cctv.showProjection, false);
+});
+
 
 test('mirrored option owners decode into the owner owner-options bucket', () => {
   const decoded = decodeLayerStateParams(

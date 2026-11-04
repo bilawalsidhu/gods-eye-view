@@ -1,5 +1,6 @@
 - Add an opt-in statewide PennDOT / 511PA camera catalog with published map
-  coordinates, road/intersection map labels, county filters, snapshots and live
+  coordinates, a separate PennDOT Traffic Cams data-list toggle, road/intersection
+  map labels, county filters, snapshots and live
   fragmented MP4 HLS playback.
   Keep video authorization server-side with rate-limit backoff and bounded
   initialization/segment caches. Expand the shared camera catalog budget to

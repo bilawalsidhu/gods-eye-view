@@ -1,4 +1,9 @@
 import {
+  cameraCategory,
+  cameraCategoryCounts,
+  cameraIsEnabled,
+} from './categories.js';
+import {
   DEFAULT_UPDATE_INTERVAL_MS,
   MIN_AUTO_HOP_SEC,
   MAX_AUTO_HOP_SEC,
@@ -20,6 +25,43 @@ export function createControls({ state: layerState, services, parts, source }) {
     source: 'CCTV + Street View fallback',
 
     updateInterval: DEFAULT_UPDATE_INTERVAL_MS,
+
+    /** Enable one catalog category without rebuilding or duplicating the viewer. */
+    setCameraCategoryEnabled(category, enabled) {
+      if (
+        !['general', 'penndot'].includes(category) ||
+        typeof enabled !== 'boolean'
+      )
+        return false;
+      layerState._cameraCategories ||= { general: true, penndot: true };
+      layerState._cameraCategories[category] = enabled;
+      layerState._count = layerState._records.filter(({ camera }) =>
+        cameraIsEnabled(camera, layerState._cameraCategories),
+      ).length;
+      layerState._cameraIndexCache = null;
+      const active =
+        layerState._activeCameraId &&
+        layerState._recordById.get(layerState._activeCameraId);
+      if (
+        active &&
+        !cameraIsEnabled(active.camera, layerState._cameraCategories)
+      )
+        parts.selection.deactivateActiveCamera();
+      const hover =
+        layerState._hoverCardId &&
+        layerState._recordById.get(layerState._hoverCardId);
+      if (hover && !cameraIsEnabled(hover.camera, layerState._cameraCategories))
+        parts.hover.clearHoverCard();
+      if (layerState._enabled && layerState._viewer) {
+        parts.rendering.refreshHorizonCulling();
+        parts.rendering.refreshCoverageStyles();
+        parts.geometryQueue.enqueueViewGeometry();
+        parts.cards.refreshAmbientCards();
+      }
+      parts.presentation.notifyListeners();
+      layerState._viewer?.scene?.requestRender?.();
+      return true;
+    },
 
     /**
      * Applies runtime parameter changes: coverage/projection toggles, auto-hop
@@ -206,7 +248,11 @@ export function createControls({ state: layerState, services, parts, source }) {
      */
     getDetectableObjects(options = {}) {
       // The cameras the view pass shows, not icons it has hidden.
-      const records = layerState._viewRecords;
+      const records = options.category
+        ? layerState._viewRecords.filter(
+            ({ camera }) => cameraCategory(camera) === options.category,
+          )
+        : layerState._viewRecords;
       if (!layerState._enabled || records.length === 0) return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
@@ -238,6 +284,10 @@ export function createControls({ state: layerState, services, parts, source }) {
     getStats() {
       return {
         count: layerState._count,
+        categoryCounts: {
+          ...(layerState._cameraCategoryCounts ||
+            cameraCategoryCounts(layerState._records)),
+        },
         lastUpdate: layerState._lastUpdate,
         error: layerState._lastError,
         loading: layerState._geoLoading,
@@ -320,14 +370,17 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {string|null} The newly active camera ID, or null if catalog is empty.
      */
     cycleCamera(step = 1, options = {}) {
-      if (!layerState._records.length) return null;
+      const records = layerState._records.filter(({ camera }) =>
+        cameraIsEnabled(camera, layerState._cameraCategories),
+      );
+      if (!records.length) return null;
       const current = parts.selection.getActiveRecord();
       const nextIdx = parts.navigation.cctvCycleIndex(
-        layerState._records.findIndex((record) => record === current),
+        records.findIndex((record) => record === current),
         step,
-        layerState._records.length,
+        records.length,
       );
-      const nextId = layerState._records[nextIdx].camera.id;
+      const nextId = records[nextIdx].camera.id;
       parts.selection.setActiveCamera(nextId);
       if (options.focus) {
         parts.navigation.focusCamera(nextId, options.durationSec || 1.8);

@@ -331,6 +331,17 @@ const layers = [
     },
   },
   {
+    id: 'penndot-traffic-cams',
+    aliases: [
+      'penndot',
+      'PennDOT traffic cams',
+      'Pennsylvania traffic cameras',
+      '511pa',
+    ],
+    context: false,
+    noQuery: 'use control_cctv',
+  },
+  {
     id: 'cctv',
     aliases: ['traffic cameras', 'cameras', 'webcams'],
     context: false,

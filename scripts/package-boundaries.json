@@ -1872,7 +1872,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/layers/cctv/categories.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -3207,7 +3208,9 @@
       "src/voice/osmActions.js",
       "src/layers/osmPlaces/index.js",
       "src/app/layers/osmPlaces.js",
-      "src/voice/areaActions.js"
+      "src/voice/areaActions.js",
+      "src/layers/cctv/categories.js",
+      "src/app/layers/cameraCategories.js"
     ],
     "external": [
       "hls.js",
@@ -3819,7 +3822,9 @@
       "src/data/local_data/wof_neighborhoods/files.js",
       "src/layers/osmPlaces/model.js",
       "src/layers/osmPlaces/index.js",
-      "src/app/layers/osmPlaces.js"
+      "src/app/layers/osmPlaces.js",
+      "src/layers/cctv/categories.js",
+      "src/app/layers/cameraCategories.js"
     ],
     "external": [
       "hls.js",

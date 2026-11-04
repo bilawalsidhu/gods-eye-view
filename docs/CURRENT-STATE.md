@@ -1038,6 +1038,15 @@ this can take longer than simply revealing hidden entities. Destruction clears
 the parsed cache as well. A disable during loading cannot leave a completed
 build hidden in the scene.
 
+The Cameras data group has independent **Cameras** and **PennDOT Traffic Cams**
+switches. The latter contains only the statewide 511PA catalog; curated webcams
+and manually configured webcams remain in Cameras. Either category can be enabled alone or both together. They share one
+camera viewer, geometry/media owner and playback limits. The picker, cycling,
+nearest-camera action, detection and coverage honor the enabled categories;
+switching off a category releases its active camera without changing the other
+category. Counts are reported separately. Share token `9` preserves PennDOT's
+switch and mirrors the existing CCTV viewer options; token `c` keeps Cameras.
+
 CCTV exposes a factory through `./layers/cctv`. Catalog and health requests,
 frame/media URLs, camera records, ground placement, geometry queues, playback,
 projection, cards, calibration and interaction have separate components. The
