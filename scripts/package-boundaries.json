@@ -1928,15 +1928,7 @@
       "src/scenes/storyTags.js",
       "src/scenes/storyThumb.js"
     ],
-    "external": [
-      "cesium",
-      "vue",
-      "pinia",
-      "vue-i18n",
-      "kdbush",
-      "astronomy-engine",
-      "tz-lookup"
-    ]
+    "external": ["cesium", "vue", "pinia", "vue-i18n", "kdbush"]
   },
   "live-observations": {
     "exports": ["./sources/live"],
@@ -6841,14 +6833,7 @@
       "src/geoDistance.js",
       "src/data/motionModel.js"
     ],
-    "external": [
-      "cesium",
-      "vue",
-      "pinia",
-      "vue-i18n",
-      "astronomy-engine",
-      "tz-lookup"
-    ]
+    "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
   "ui-panel-chrome": {
     "exports": ["./ui/panel-chrome"],
