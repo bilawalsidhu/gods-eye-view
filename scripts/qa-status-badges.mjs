@@ -69,8 +69,6 @@ try {
           calDirty: false,
         },
       });
-      window.__qaBadgeText =
-        document.getElementById('cctv-source-badge').textContent;
     });
     await page.waitForSelector('.weather-coverage.gev-status-badge');
     const inventory = await page.evaluate(() => {
@@ -120,20 +118,22 @@ try {
     );
 
     for (const state of ['loading', 'error', 'retained', 'ready', 'idle']) {
-      const result = await page.evaluate((state) => {
+      const result = await page.evaluate(async (state) => {
         const owner = window.__godsEyeView.styleManager._cctvControls;
-        owner._cctvFrame.dataset.loading = state === 'loading' ? 'true' : '';
-        owner._cctvFrame.dataset.error = ['error', 'retained'].includes(state)
-          ? 'true'
-          : '';
-        owner._cctvFrameWrap.classList.toggle(
-          'has-frame',
-          state === 'retained',
-        );
+        const frame = owner._frame;
+        owner._frame = {
+          ...frame,
+          loading: state === 'loading',
+          error: ['error', 'retained'].includes(state),
+          hasFrame: state === 'retained',
+        };
         owner._syncCctvSourceBadge(
           owner._cctvState.activeCamera,
           state !== 'idle',
         );
+        owner._frame = frame;
+        // The panel view renders the badge on Vue's next flush.
+        await new Promise((resolve) => requestAnimationFrame(resolve));
         const badge = document.getElementById('cctv-source-badge');
         return {
           state: badge.dataset.frameState,
@@ -164,7 +164,7 @@ try {
       ['curated', true, 'rgb(255, 208, 138)'],
     ]) {
       const result = await page.evaluate(
-        ({ calBadge, dirty }) => {
+        async ({ calBadge, dirty }) => {
           const owner = window.__godsEyeView.styleManager._cctvControls;
           document.getElementById('cctv-next-btn').focus();
           owner._renderCctvState({
@@ -175,6 +175,8 @@ try {
               calDirty: dirty,
             },
           });
+          // The panel view renders the chip on Vue's next flush.
+          await new Promise((resolve) => requestAnimationFrame(resolve));
           const badge = document.getElementById('cctv-quality-chip');
           return {
             state: badge.dataset.calBadge,

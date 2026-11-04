@@ -9,6 +9,8 @@ import { resolveDeicticArgs } from './deixis.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
+import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import * as Cesium from 'cesium';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
@@ -58,6 +60,14 @@ import {
   activeContactsWindow,
   TRACKABLE_FAMILIES,
 } from '../agent/worldPacket.js';
+import { createVoiceAreas } from './areaActions.js';
+import { findImagery } from './imageryActions.js';
+import { osmQuery } from './osmActions.js';
+import { createOsmFeatureSource } from '../sources/osmFeatures.js';
+import {
+  OSM_PLACES_CREDIT,
+  registerDynamicCredit,
+} from '../data/dataCredits.js';
 
 const ALLOWED_STYLES = new Set([
   'normal',
@@ -97,6 +107,12 @@ const PANEL_ALIASES = new Map([
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],
   ['context right panel', 'global-context-panel'],
+  ['utilities', 'utilities-panel'],
+  ['utilities panel', 'utilities-panel'],
+  ['draw', 'utilities-panel'],
+  ['drawing', 'utilities-panel'],
+  ['import', 'utilities-panel'],
+  ['import files', 'utilities-panel'],
   ['authoring', 'scene-panel'],
   ['scenes', 'scene-panel'],
   ['scene', 'scene-panel'],
@@ -120,6 +136,7 @@ const PANEL_IDS = new Set([
   'cctv-panel',
   'radio-panel',
   'global-context-panel',
+  'utilities-panel',
   'scene-panel',
   'pp-toggles',
   'weather-panel',
@@ -259,6 +276,8 @@ export function createGevActionRunner({
   speechBuilders = null,
   deixis = null,
   readVoicePanelOperation = null,
+  osmSearch = null,
+  areaOptions = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -268,13 +287,25 @@ export function createGevActionRunner({
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
   let analystEngine;
-  const resolveRegionRing = (name, signal) =>
-    annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
+  // Area handles live for this runner (the page): resolve_area, the
+  // analyst's region/area/drawn scopes, find_imagery and osm_query all read
+  // the same store.
+  const voiceAreas = createVoiceAreas({
+    viewer,
+    annotations,
+    placeSearch,
+    annotationResolver,
+    ...(areaOptions || {}),
+  });
+  const searchOsmFeatures = osmSearch || createOsmFeatureSource();
+  const resolveRegionRing = (name, options) =>
+    voiceAreas.resolveRegion(name, options);
   const ensureAnalystEngine = () =>
     (analystEngine ||= createAnalystEngine(
       analystProviders(viewer, dataManager, {
         placeSearch,
         resolveRegionRing,
+        resolveAreaScope: voiceAreas.resolveAreaScope,
         isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
       }),
     ));
@@ -772,10 +803,9 @@ export function createGevActionRunner({
             cancelled: true,
           };
         const doc = globalThis.document;
-        const panel = doc?.getElementById?.('key-setup');
-        const button = open
-          ? doc?.getElementById?.('key-setup-chip')
-          : panel?.querySelector?.('[data-key-setup-close]');
+        // The setup owner (src/keySetup.js) publishes the dialog and takes
+        // its open and close requests.
+        const settings = useProviderSettingsStore(applicationPinia());
         const concealed =
           open &&
           [
@@ -784,11 +814,7 @@ export function createGevActionRunner({
             'cockpit-mode',
             'scene-playback-mode',
           ].some((mode) => doc?.body?.classList?.contains(mode));
-        if (
-          concealed ||
-          panel?.dataset?.ready !== 'true' ||
-          typeof button?.click !== 'function'
-        ) {
+        if (concealed || settings.view?.ready !== true || !settings.controls) {
           const error = concealed
             ? 'Provider Settings is hidden in the current view. Leave that view before opening it.'
             : 'Provider Settings is unavailable in this runtime.';
@@ -802,11 +828,11 @@ export function createGevActionRunner({
             say: error,
           };
         }
-        button.click();
-        // Opening unhides immediately; closing removes visible before its fade ends.
-        const applied = open
-          ? !panel.hidden
-          : !panel.classList.contains('visible');
+        if (open) settings.controls.open();
+        else settings.controls.close();
+        // Opening unhides at once; closing drops visible before its fade ends.
+        const dialog = settings.view.dialog;
+        const applied = open ? !dialog.hidden : !dialog.visible;
         const say = applied
           ? `Provider Settings is ${open ? 'open' : 'closed'}.`
           : 'Provider Settings did not change.';
@@ -815,12 +841,22 @@ export function createGevActionRunner({
           action: name,
           panelId,
           applied,
-          open: applied ? open : !panel.hidden,
+          open: applied ? open : !dialog.hidden,
           say,
           ...(!applied ? { error: say } : {}),
         };
       }
-      setPanelOpen(styleManager, panelId, open);
+      if (!setPanelOpen(styleManager, panelId, open)) {
+        const say = 'There is no panel to open here.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          say,
+          error: say,
+        };
+      }
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
@@ -1046,15 +1082,18 @@ export function createGevActionRunner({
 
     if (name === 'show_data_layers_menu') {
       const layerId = normalizeLayerId(args.layerId || args.layer);
-      setPanelOpen(styleManager, 'data-panel', true);
-      const focusedLayer =
+      const row =
         layerId && dataManager.layers.has(layerId)
-          ? focusDataLayerRow(layerId)
+          ? findDataLayerRow(layerId)
           : null;
+      // Open the panel that holds the row: Directions lives in Utilities.
+      const panelId = row?.closest('[data-panel-id]')?.id || 'data-panel';
+      setPanelOpen(styleManager, panelId, true);
+      const focusedLayer = row ? focusDataLayerRow(row, layerId) : null;
       return {
         ok: true,
         action: 'show_data_layers_menu',
-        panelId: 'data-panel',
+        panelId,
         focusedLayer,
         layers: dataManager
           .getAll()
@@ -1142,6 +1181,65 @@ export function createGevActionRunner({
 
     if (name === 'next_iss_pass') {
       return nextIssPass(viewer, dataManager, args);
+    }
+
+    if (name === 'resolve_area') {
+      return voiceAreas.resolveAreaAction(args, {
+        signal: runOptions.signal,
+        isCurrent: current,
+        progress: reportProgress,
+      });
+    }
+
+    if (name === 'find_imagery') {
+      return findImagery(
+        {
+          dataManager,
+          viewer,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'recent-imagery', enabled },
+              runOptions,
+            ),
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
+    }
+
+    if (name === 'osm_query') {
+      return osmQuery(
+        {
+          dataManager,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          viewBox: () => cameraViewBox(viewer),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'osm-places', enabled },
+              runOptions,
+            ),
+          search: searchOsmFeatures,
+          onCredit: () => registerDynamicCredit(viewer, OSM_PLACES_CREDIT),
+          // The listed places become the analyst's "last answer", so
+          // "which of those…" filters them and never an older set.
+          rememberResults: (rows, presentation, { truncated = false } = {}) => {
+            if (!current()) return;
+            if (rows)
+              ensureAnalystEngine().remember('osm-places', rows, {
+                presentation,
+                truncated,
+              });
+            else analystEngine?.reset();
+          },
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
     }
 
     if (name === 'analyst_query') {
@@ -1335,10 +1433,31 @@ export function createGevActionRunner({
 
     throw new Error(`Unknown GEV tool: ${name}`);
   };
-  // Lifetimes: the runner lives for the page; conversation state — the
+  // Lifetimes: the runner lives for the page (area handles included, so an
+  // outline stays countable across mic sessions); conversation state — the
   // analyst's follow-up memory and any write still in flight — lives for one
   // voice session and is dropped by resetConversation().
   let conversation = 0;
+  // Calls emitted by one assistant response are siblings rather than newer
+  // user intent. The new spatial actions share mutable surfaces (area board,
+  // imagery panel, OSM layer/follow-up memory), so serialize those siblings in
+  // event order just as analyst_query already was. A genuinely newer group or
+  // direct call still invalidates the older attempt.
+  const serializedSiblingActions = new Set([
+    'analyst_query',
+    'resolve_area',
+    'find_imagery',
+    'osm_query',
+  ]);
+  let serializedAttempt = 0;
+  let serializedSiblingGroup = null;
+  let serializedSiblingTail = Promise.resolve();
+  // Direct/programmatic callers do not necessarily arrive through
+  // createVoiceSession, so the runner must own the conversation lifetime of
+  // its serialized spatial workflows as well. Reset/dispose abort the real
+  // provider/catalog work, not just the eventual commit, while area handles
+  // remain owned by voiceAreas for the page lifetime.
+  let conversationAbort = new AbortController();
   let disposed = false;
   async function runVoiceAction(name, rawArgs = {}, callerOptions = {}) {
     if (disposed)
@@ -1349,56 +1468,113 @@ export function createGevActionRunner({
         error: 'Voice ended.',
       };
     const epoch = conversation;
+    let attempt = null;
+    let releaseSerializedSibling = null;
+    if (serializedSiblingActions.has(name)) {
+      const siblingGroup = callerOptions.authorityGroup || null;
+      if (siblingGroup) {
+        if (siblingGroup !== serializedSiblingGroup) {
+          serializedSiblingGroup = siblingGroup;
+          serializedSiblingTail = Promise.resolve();
+          serializedAttempt++;
+        }
+        attempt = serializedAttempt;
+        const predecessor = serializedSiblingTail;
+        const completion = new Promise((resolve) => {
+          releaseSerializedSibling = resolve;
+        });
+        serializedSiblingTail = predecessor.then(() => completion);
+        await predecessor;
+      } else {
+        serializedSiblingGroup = null;
+        serializedSiblingTail = Promise.resolve();
+        attempt = ++serializedAttempt;
+      }
+    }
+    const runnerSignal = serializedSiblingActions.has(name)
+      ? conversationAbort.signal
+      : null;
+    const signal = runnerSignal
+      ? callerOptions.signal
+        ? AbortSignal.any([runnerSignal, callerOptions.signal])
+        : runnerSignal
+      : callerOptions.signal;
     const runOptions = {
       ...callerOptions,
+      ...(signal ? { signal } : {}),
       isCurrent: () =>
+        !signal?.aborted &&
         epoch === conversation &&
+        (attempt === null || attempt === serializedAttempt) &&
         !disposed &&
         (typeof callerOptions.isCurrent !== 'function' ||
           callerOptions.isCurrent()),
     };
-    const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
-    // Point-and-ask: 'pointer' and referent:n become real targets here, from
-    // the turn's pointer snapshot and the latest numbered result.
-    const deictic = resolveDeicticArgs(name, input, {
-      pointer: deixis?.pointer?.activeSnapshot?.() || null,
-      referents: deixis?.referents || null,
-      imageFrame: deixis?.imageFrame?.() || null,
-      cameraKey: deixis?.cameraKey?.() || null,
-    });
-    if (deictic.error) {
-      return attachVoiceResult(
-        name,
-        { ok: false, action: name, error: deictic.error },
-        input,
-        builders,
-      );
-    }
-    const referentGeneration = deixis?.referents?.generation?.();
-    let result = await runGevAction(name, deictic.args, runOptions);
-    if (deictic.used && result && typeof result === 'object')
-      result = { ...result, resolvedFrom: deictic.used };
-    const out = attachVoiceResult(name, result, deictic.args, builders);
-    // Only an accepted, still-current result may become "the last list": a
-    // cancelled turn or one finishing after the session ended must not
-    // repopulate a cleared registry.
-    const stillCurrent =
-      !runOptions.signal?.aborted &&
-      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
-    if (stillCurrent)
-      deixis?.referents?.recordResult?.(name, out, {
-        since: referentGeneration,
+    try {
+      const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+      if (attempt !== null && !runOptions.isCurrent()) {
+        return attachVoiceResult(
+          name,
+          {
+            ok: false,
+            action: name,
+            code: 'CANCELLED',
+            cancelled: true,
+            error: 'This request was superseded.',
+          },
+          input,
+          builders,
+        );
+      }
+      // Point-and-ask: 'pointer' and referent:n become real targets here, from
+      // the turn's pointer snapshot and the latest numbered result.
+      const deictic = resolveDeicticArgs(name, input, {
+        pointer: deixis?.pointer?.activeSnapshot?.() || null,
+        referents: deixis?.referents || null,
+        imageFrame: deixis?.imageFrame?.() || null,
+        cameraKey: deixis?.cameraKey?.() || null,
       });
-    if (stillCurrent && deictic.used?.source === 'pointer')
-      deixis?.onPointerUsed?.();
-    return out;
+      if (deictic.error) {
+        return attachVoiceResult(
+          name,
+          { ok: false, action: name, error: deictic.error },
+          input,
+          builders,
+        );
+      }
+      const referentGeneration = deixis?.referents?.generation?.();
+      let result = await runGevAction(name, deictic.args, runOptions);
+      if (deictic.used && result && typeof result === 'object')
+        result = { ...result, resolvedFrom: deictic.used };
+      const out = attachVoiceResult(name, result, deictic.args, builders);
+      // Only an accepted, still-current result may become "the last list": a
+      // cancelled turn or one finishing after the session ended must not
+      // repopulate a cleared registry.
+      const stillCurrent =
+        !runOptions.signal?.aborted &&
+        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+      if (stillCurrent)
+        deixis?.referents?.recordResult?.(name, out, {
+          since: referentGeneration,
+        });
+      if (stillCurrent && deictic.used?.source === 'pointer')
+        deixis?.onPointerUsed?.();
+      return out;
+    } finally {
+      releaseSerializedSibling?.();
+    }
   }
   /**
    * A voice session ended: invalidate every write still in flight, then
-   * forget the analyst's "last answer".
+   * forget the analyst's "last answer". Area handles stay (page lifetime).
    */
   runVoiceAction.resetConversation = () => {
+    conversationAbort.abort();
+    conversationAbort = new AbortController();
     conversation++;
+    serializedAttempt++;
+    serializedSiblingGroup = null;
+    serializedSiblingTail = Promise.resolve();
     analystEngine?.reset();
   };
   /** Voice was removed: nothing may run or write again. */
@@ -1406,6 +1582,7 @@ export function createGevActionRunner({
     if (disposed) return;
     runVoiceAction.resetConversation();
     disposed = true;
+    voiceAreas.dispose();
   };
   return runVoiceAction;
 }
@@ -2210,7 +2387,11 @@ export async function controlRadio(
     if (!radioActionIsCurrent(options)) return cancelled(summarize);
     const prepared = state.selected
       ? true
-      : radio.cycleStation?.(1, { focus: false, autoplay: false });
+      : radio.cycleStation?.(1, {
+          focus: false,
+          autoplay: false,
+          fallback: true,
+        });
     return {
       ok: Boolean(prepared),
       action: 'control_radio',
@@ -2234,6 +2415,7 @@ export async function controlRadio(
     const selected = radio.cycleStation?.(action === 'next' ? 1 : -1, {
       focus: false,
       autoplay: false,
+      fallback: true,
     });
     return {
       ok: Boolean(selected),
@@ -3146,13 +3328,14 @@ function normalizeAircraftClassFilter(value) {
   return raw.replace(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
 }
 
+/**
+ * @returns {boolean} Whether a shell took the change: its panel chrome owns
+ *   panel state, so without one there is no panel to open.
+ */
 function setPanelOpen(styleManager, panelId, open) {
-  if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
-    styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
-  } else {
-    const panel = document.getElementById(panelId);
-    if (panel) panel.classList.toggle('collapsed', !open);
-  }
+  if (typeof styleManager?.setPanelCollapsed !== 'function') return false;
+  styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
+  return true;
 }
 
 function normalizeContextMode(value) {
@@ -3189,11 +3372,14 @@ function normalizeCockpitAction(value) {
   return null;
 }
 
-function focusDataLayerRow(layerId) {
-  const row = document.querySelector(
-    `#data-toggles [data-layer-id="${CSS.escape(layerId)}"]`,
+function findDataLayerRow(layerId) {
+  const selector = `[data-layer-id="${CSS.escape(layerId)}"]`;
+  return document.querySelector(
+    `#data-toggles ${selector}, #utilities-toggles ${selector}`,
   );
-  if (!row) return null;
+}
+
+function focusDataLayerRow(row, layerId) {
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;
@@ -3855,8 +4041,14 @@ async function aircraftProximityWindowForQuery(
       layerKeys: wanted,
       coverage,
       unanswered: [...(result?.unanswered || [])],
-      scopeLabel: answer.scopeLabel,
-      scopeDetail: answer.display.scope,
+      presentation: {
+        scopeLabel: answer.scopeLabel,
+        display: answer.display,
+        coverageScope: coverage.scope,
+        coverageNote: coverage.note,
+        centeredOn: answer.window.centeredOn,
+        window: answer.window,
+      },
     },
   };
 }
@@ -4745,6 +4937,7 @@ function analystProviders(
         placeSearch,
       ),
     isWarming = () => false,
+    resolveAreaScope = null,
   } = {},
 ) {
   // Per-layer truncation seen by the last getRecords call.
@@ -4799,6 +4992,7 @@ function analystProviders(
       return note ? note.trim() : null;
     },
     resolveRegionRing,
+    ...(resolveAreaScope ? { resolveAreaScope } : {}),
     /**
      * The active Contacts subject, when there is one — the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
@@ -4832,6 +5026,15 @@ function analystProviders(
       };
     },
   };
+}
+
+/** The camera's view rectangle as [west, south, east, north] degrees, or null. */
+function cameraViewBox(viewer) {
+  const rect = viewer?.camera?.computeViewRectangle?.();
+  if (!rect) return null;
+  return [rect.west, rect.south, rect.east, rect.north].map((radians) =>
+    Cesium.Math.toDegrees(radians),
+  );
 }
 
 /** Identity fields every compact analyst item keeps when present. */
@@ -4893,6 +5096,9 @@ const ANALYST_REFUSAL_FIELDS = Object.freeze([
   'layers',
   'layerStatus',
   'cancelled',
+  'needsClarification',
+  'candidates',
+  'query',
 ]);
 
 const VIEWPORT_COVERAGE_NOTE = 'the flights layer loads by viewport';
@@ -4941,7 +5147,7 @@ async function runAnalystQuery(
   args = {},
   _layerEnabledAt,
   isCurrent = () => true,
-  signal = undefined,
+  signal = null,
 ) {
   let entityWindow = null;
   const result = await analystEngine.query(
@@ -4955,8 +5161,8 @@ async function runAnalystQuery(
       followUp: Boolean(args.followUp),
     },
     {
-      isCurrent,
       signal,
+      isCurrent,
       beforeCommit: async (candidate) => {
         const projected = await aircraftProximityWindowForQuery(
           dataManager,
@@ -4985,8 +5191,8 @@ async function runAnalystQuery(
       code: result.code || null,
       error: result.error,
     };
-    // The engine's semantic fields pass through unchanged: a cancellation
-    // stays a cancellation.
+    // The engine's semantic fields pass through unchanged: a clarification
+    // keeps its candidates, a cancellation stays a cancellation.
     for (const key of ANALYST_REFUSAL_FIELDS)
       if (result[key] !== undefined) refusal[key] = result[key];
     if (result.coverage) refusal.coverage = result.coverage;
@@ -5059,7 +5265,9 @@ async function runAnalystQuery(
     ...(result.partial
       ? { partial: true, unanswered: result.unanswered || [] }
       : {}),
+    ...(result.areaId ? { areaId: result.areaId } : {}),
     ...(result.centeredOn ? { centeredOn: result.centeredOn } : {}),
+    ...(result.window ? { window: result.window } : {}),
     // Every count names its scope in words; a bare number is what made two
     // honest answers look like a contradiction.
     scopeLabel: result.scopeLabel,

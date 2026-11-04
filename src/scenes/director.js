@@ -17,6 +17,7 @@ import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from '../ui/scenes.js';
+import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
 import * as Cesium from 'cesium';
@@ -28,7 +29,7 @@ import {
   getSceneAppendRecipeById,
 } from './recipes.js';
 import { sceneLayerPlan, sceneRequiresContextModeExit } from './scenePolicy.js';
-import { t, tn, msg } from '../i18n/index.js';
+import { t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { createSceneDataPacks } from './dataPacks/controller.js';
 import { createSceneInteractions } from './interactions.js';
 import { createSceneSharing } from './sharing.js';
@@ -175,17 +176,21 @@ export class SceneDirector {
     /** @type {string|null} Scene whose layer state most recently landed. */
     this._loadedSceneId = null;
 
+    const readError = this._storageReadError;
     this._presentation = {
-      status: this._storageReadError
-        ? t(
-            'Saved project could not be read; storage preserved. Import a valid file to resume saving.',
-          )
-        : t('Ready'),
+      status: '',
       progress: 0,
       runtime: '',
       playbackActive: false,
       keyboardEnabled: false,
     };
+    this._setStatus(() =>
+      readError
+        ? t(
+            'Saved project could not be read; storage preserved. Import a valid file to resume saving.',
+          )
+        : t('Ready'),
+    );
     this._state = createStateChannel(() => ({
       ...this.getPlaybackStatus(),
       ...this._presentation,
@@ -211,6 +216,12 @@ export class SceneDirector {
       }
     }
     this._initUI();
+    // A status the director wrote itself follows the language; one it was
+    // handed (an error message) stays as it is.
+    this._offLocale = onLocaleChange(() => {
+      if (typeof this._statusText === 'function')
+        this._updateStatus(this._statusText);
+    });
     this._visibilityUnsubscribe =
       this.dataManager.subscribeVisibilityRequests?.((change) => {
         if (
@@ -246,13 +257,14 @@ export class SceneDirector {
     this._interactions?.destroy();
     this._dataPacks?.destroy();
     this._controls?.destroy();
+    this._offLocale?.();
     this._state.destroy();
     this._destroyPromise = Promise.resolve().then(async () => {
       this.stopScene(msg('Stopped'));
       this._loadAbort?.abort();
       this._loadGeneration++;
       this.viewer.camera.cancelFlight();
-      clearTimeout(this._storageToastTimer);
+      this._storageToast?.cancel();
       await Promise.allSettled(this._pendingWork || []);
       this._clock.destroy();
       this._cancelActiveSceneTravel();
@@ -323,7 +335,7 @@ export class SceneDirector {
   /** Persist the current project state to localStorage with an updated timestamp. */
   _saveProject() {
     if (this._storageReadError) {
-      this._toastStorageError(
+      this._toastStorageError(() =>
         t(
           'Scene not saved — existing saved project could not be read. Export edits or import a valid file.',
         ),
@@ -351,33 +363,26 @@ export class SceneDirector {
       );
       this._toastStorageError(
         invalid
-          ? t('Scene not saved — {reason}', {
-              reason: sceneSaveFailureReason(e),
-            })
+          ? () =>
+              t('Scene not saved — {reason}', {
+                reason: sceneSaveFailureReason(e),
+              })
           : undefined,
       );
       return false;
     }
   }
 
-  /** Surface a "scene not saved" notice via the global toast + scene status line. */
+  /**
+   * Surface a "scene not saved" notice via the global toast + scene status
+   * line. `message` words it, so the status line follows the locale.
+   */
   _toastStorageError(
-    message = t('Scene not saved — browser storage unavailable'),
+    message = () => t('Scene not saved — browser storage unavailable'),
   ) {
     this._updateStatus(message);
-    try {
-      const toast = document.getElementById('toast');
-      if (toast) {
-        toast.textContent = message;
-        toast.classList.add('visible');
-        clearTimeout(this._storageToastTimer);
-        this._storageToastTimer = setTimeout(() => {
-          toast.classList.remove('visible');
-        }, 2600);
-      }
-    } catch {
-      /* toast is best-effort */
-    }
+    this._storageToast ??= createToast({ durationMs: 2600 });
+    this._storageToast.show(message());
   }
 
   /** Immutable playback snapshots and completed editing actions. */
@@ -391,10 +396,12 @@ export class SceneDirector {
 
   _shotOutcome(type, scene, shot, index = scene.shots.indexOf(shot)) {
     if (type === 'shot-loaded')
-      this._presentation.status = t('Loaded: {scene} / {shot}', {
-        scene: displaySceneTitle(scene),
-        shot: displayShotTitle(shot.title, shot, scene),
-      });
+      this._setStatus(() =>
+        t('Loaded: {scene} / {shot}', {
+          scene: displaySceneTitle(scene),
+          shot: displayShotTitle(shot.title, shot, scene),
+        }),
+      );
     this._publish({
       type,
       sceneId: scene.id,
@@ -405,8 +412,8 @@ export class SceneDirector {
   }
 
   /**
-   * Wire up all scene-panel DOM event listeners and render the initial UI state.
-   * Exits silently if the scene-select element is missing (headless/test mode).
+   * Present the Scene panel through SceneControls, which publishes it to the
+   * store the panel views render; a page without them simply draws nothing.
    */
   _initUI() {
     this._sharing?.mount();
@@ -796,7 +803,7 @@ export class SceneDirector {
               (shot, index) => shot.title === requiredShotTitles[index],
             ));
       if (!inventoryMatches) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Cannot update {scene}: shot inventory changed', {
             scene: t(recipe.title),
           }),
@@ -829,7 +836,7 @@ export class SceneDirector {
           (beatId, index) => beatId === requiredSourcePackBeatIds[index],
         );
       if (!sourcePackMatches) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Cannot update {scene}: evidence beats changed', {
             scene: t(recipe.title),
           }),
@@ -854,7 +861,7 @@ export class SceneDirector {
       shot: resolvePatchedShot(patch),
     }));
     if (resolvedPatches.some(({ shot }) => !shot)) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Cannot update {scene}: shot bindings are incomplete', {
           scene: t(recipe.title),
         }),
@@ -935,7 +942,7 @@ export class SceneDirector {
       this._renderShotList();
     }
     if (announce && saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         marker
           ? tn(
               patchedShotCount,
@@ -970,7 +977,7 @@ export class SceneDirector {
 
     const camera = this.styleManager.getCameraState();
     if (!camera) {
-      this._updateStatus(t('Cannot capture shot: camera not ready'));
+      this._updateStatus(() => t('Cannot capture shot: camera not ready'));
       return;
     }
 
@@ -993,7 +1000,7 @@ export class SceneDirector {
     const saved = this._saveProject();
     this._shotOutcome('shot-captured', scene, shot);
     if (saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Captured: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1012,7 +1019,7 @@ export class SceneDirector {
 
     const shot = scene.shots.find((item) => item.id === this._selectedShotId);
     if (!shot) {
-      this._updateStatus(t('Select a shot first'));
+      this._updateStatus(() => t('Select a shot first'));
       return;
     }
 
@@ -1028,7 +1035,7 @@ export class SceneDirector {
     const saved = this._saveProject();
     this._shotOutcome('shot-updated', scene, shot);
     if (saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Updated: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1140,7 +1147,7 @@ export class SceneDirector {
       const released = await this._releaseSceneLayers(previousScene, token);
       if (!released || token.cancelled) {
         if (!token.cancelled)
-          this._updateStatus(
+          this._updateStatus(() =>
             t('Could not leave scene: {scene}', {
               scene: displaySceneTitle(previousScene),
             }),
@@ -1194,7 +1201,7 @@ export class SceneDirector {
         seeking: true,
       });
       if (this._loadAbort === controller) this._loadAbort = null;
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Seeked: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1644,7 +1651,7 @@ export class SceneDirector {
       running: false,
       seeking: true,
     });
-    this._updateStatus(
+    this._updateStatus(() =>
       t('Seeked: {scene} / {shot}', {
         scene: displaySceneTitle(scene),
         shot: displayShotTitle(shot.title, shot, scene),
@@ -1731,7 +1738,7 @@ export class SceneDirector {
       this._claimingCamera = false;
     }
     if (claimed === false) {
-      this._updateStatus(t('Camera unavailable — exit cockpit first'));
+      this._updateStatus(() => t('Camera unavailable — exit cockpit first'));
       return false;
     }
     return true;
@@ -1866,7 +1873,7 @@ export class SceneDirector {
       if (!queue.length) return { started: false, reason: 'scene-complete' };
     }
     if (!queue.length) {
-      this._updateStatus(t('No shots to run'));
+      this._updateStatus(() => t('No shots to run'));
       return { started: false, reason: 'no-shots' };
     }
 
@@ -1951,7 +1958,7 @@ export class SceneDirector {
         releaseOnFinish: preview,
       });
     } catch (error) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Error: {message}', {
           message: error.message || 'run failed',
         }),
@@ -2020,7 +2027,7 @@ export class SceneDirector {
     if (!this._running || !this._runToken) return;
     this._runToken.cancelled = true;
     this._runAbort?.abort();
-    this._updateStatus(t(reason));
+    this._updateStatus(() => t(reason));
     this._logEvent('scene_stopped', { reason });
   }
 
@@ -2076,7 +2083,7 @@ export class SceneDirector {
     }
     if (action.type === 'shot') {
       if (this._interactionTransitions >= 64) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Scene transition limit reached — load a shot to reset'),
         );
         return false;
@@ -2120,7 +2127,9 @@ export class SceneDirector {
     try {
       payload = stringifySceneDocument(this._project);
     } catch (error) {
-      this._updateStatus(t('Export failed: {error}', { error: error.message }));
+      this._updateStatus(() =>
+        t('Export failed: {error}', { error: error.message }),
+      );
       return;
     }
     // Trigger a browser download via a temporary anchor element
@@ -2133,7 +2142,7 @@ export class SceneDirector {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    this._presentation.status = t('Project exported');
+    this._setStatus(() => t('Project exported'));
     this._publish({ type: 'project-exported', project: this._project });
   }
 
@@ -2193,7 +2202,8 @@ export class SceneDirector {
       this._loadedSceneId = null;
       const saved = this._saveProject();
       this._publish({ type: 'project-imported', project });
-      if (saved) this._updateStatus(t('Imported {file}', { file: file.name }));
+      if (saved)
+        this._updateStatus(() => t('Imported {file}', { file: file.name }));
       return true;
     } catch (error) {
       if (
@@ -2202,7 +2212,7 @@ export class SceneDirector {
         generation !== this._importGeneration
       )
         return false;
-      this._updateStatus(
+      this._updateStatus(() =>
         error instanceof SceneDocumentError
           ? t('Import failed: {error}', { error: error.message })
           : t('Import failed (could not read JSON file)'),
@@ -2312,7 +2322,7 @@ export class SceneDirector {
     }
 
     if (refused.length) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Layers refused: {layers}', { layers: refused.join(', ') }),
       );
       this._logEvent('shot_layers_refused', { layerIds: [...refused] });
@@ -2404,7 +2414,7 @@ export class SceneDirector {
         `[Scenes] Could not exit ${mode}:`,
         result.error || 'unknown reason',
       );
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Could not exit {mode} — scene layers may be refused', { mode }),
       );
       this._logEvent('context_mode_exit_failed', {
@@ -2637,8 +2647,18 @@ export class SceneDirector {
    * @param {string} text
    */
   _updateStatus(text) {
-    this._presentation.status = text;
+    this._setStatus(text);
     this._publish({ type: 'status-changed' });
+  }
+
+  /**
+   * Set the status line without publishing. A function is called again when
+   * the locale changes, so its text follows the language.
+   * @param {string|(() => string)} text
+   */
+  _setStatus(text) {
+    this._statusText = text;
+    this._presentation.status = typeof text === 'function' ? text() : text;
   }
 
   /**

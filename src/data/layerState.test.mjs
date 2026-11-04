@@ -1,6 +1,6 @@
 import { encodeParams, decodeParams } from '../layers/streetLevel/params.js';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../../build/application-html.js';
+import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -202,8 +202,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 32);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 32);
+  assert.equal(REGISTERED_LAYER_IDS.length, 35);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 35);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -242,20 +242,18 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '6');
+  assert.equal(nextLayerStateToken(), '9');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '6',
-      bravo: '7',
+      alpha: '9',
+      bravo: '00',
     }),
-    '8',
+    '01',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries(
-      [...'6789'].map((digit) => [`prior-${digit}`, digit]),
-    ),
+    ...Object.fromEntries([...'9'].map((digit) => [`prior-${digit}`, digit])),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
@@ -307,8 +305,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '6',
-      next: '7',
+      future: '9',
+      next: '00',
     }),
     true,
   );
@@ -318,7 +316,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
         ...LAYER_STATE_TOKEN_RESERVATIONS,
         future: '00',
       }),
-    /next free token 6/,
+    /next free token 9/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
@@ -341,10 +339,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '6' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '6', competing: '6' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9', competing: '9' },
       ),
-    /next free token 7/,
+    /next free token 00/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -734,18 +732,27 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     /this\.(?:flightState\.)?_models3dMode = 'proximity';/,
     'ui.js: and believes the mode is proximity',
   );
-  const html = expandApplicationHtml(
+  const html = await renderApplicationHtml(
     await readFile(new URL('../../index.html', import.meta.url), 'utf8'),
   );
   assert.match(
     html,
-    /class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true"/,
+    /<button(?=[^>]*\sid="models3d-toggle")(?=[^>]*\sclass="(?=[^"]*\bpp-toggle-btn\b)(?=[^"]*\bactive\b))(?=[^>]*\saria-pressed="true")/,
     'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so',
   );
   assert.match(
     ui,
-    /this\._models3dBtn\?\.setAttribute\(\s*'aria-pressed',\s*String\(this\.(?:flightState\.)?_models3dEnabled\),?\s*\)/,
-    'ui.js: and keeps aria-pressed synchronized, so the lit state is not colour-only',
+    /this\._models3dPressedShown = this\._models3dEnabled;/,
+    'ui.js: and keeps the pressed state synchronized, so the lit state is not colour-only',
+  );
+  const panel = await readFile(
+    new URL('../ui/views/panels/DisplayPanel.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    panel,
+    /:pressed="models3dOn" pressed-class="active" id="models3d-toggle"/,
+    'DisplayPanel.vue: the view renders aria-pressed with the lit state',
   );
   assert.match(
     html,
@@ -2684,6 +2691,22 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
   assert.equal(
     parseStoredLayerState(previous).options['recent-imagery'].split,
     50,
+  );
+});
+
+test('drone restrictions uses digit 8 without colliding with fire perimeters', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=8.2'));
+  assert.deepEqual(decoded.enabledLayerIds, [
+    'drone-airspace',
+    'fire-perimeters',
+  ]);
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'drone-airspace').token,
+    '8',
+  );
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
   );
 });
 
