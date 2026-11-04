@@ -141,3 +141,37 @@ test('clearing rows during decode preserves the new generation and commits only 
   assert.equal(h.commits, 1);
   h.bank.destroy();
 });
+
+test('the heatmap hand-off fades every marker and hides them all once it completes', async () => {
+  const h = harness(async () => ({ width: 56, height: 56 }));
+  h.bank.add({ id: 'firms-0', position: { x: 1, y: 2, z: 3 }, image: 'a' });
+  h.bank.add({ id: 'firms-1', position: { x: 4, y: 5, z: 6 }, image: 'a' });
+  h.bank.setVisible(true);
+  await settle();
+  await settle();
+  const entry = h.registry.sets.get('firms-test');
+  assert.equal(entry.store.count, 2);
+  assert.deepEqual(
+    [...entry.store.colors.slice(0, 8)],
+    [1, 1, 1, 1, 1, 1, 1, 1],
+  );
+  h.bank.setFade(0.25, true);
+  await settle();
+  await settle();
+  assert.deepEqual(
+    [...entry.store.colors.slice(0, 8)],
+    [1, 1, 1, 0.25, 1, 1, 1, 0.25],
+  );
+  h.bank.setFade(0, false);
+  await settle();
+  await settle();
+  assert.equal(entry.store.count, 0, 'the heatmap alone: no marker drawn');
+  h.bank.setFade(1, true);
+  await settle();
+  await settle();
+  assert.equal(entry.store.count, 2);
+  assert.deepEqual(
+    [...entry.store.colors.slice(0, 8)],
+    [1, 1, 1, 1, 1, 1, 1, 1],
+  );
+});

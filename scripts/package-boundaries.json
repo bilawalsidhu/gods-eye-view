@@ -3866,6 +3866,7 @@
       "src/layers/shared/render/navaraCellGeometry.js",
       "src/layers/shared/render/navaraGroundCells.js",
       "src/layers/firms/render/navaraSprites.js",
+      "src/layers/firms/render/navaraHeat.js",
       "src/layers/shared/render/navaraGroundGeometry.js",
       "src/layers/shared/render/navaraGroundGrid.js",
       "src/layers/shared/render/navaraGroundSurface.js",

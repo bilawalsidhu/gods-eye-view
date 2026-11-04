@@ -11,7 +11,8 @@ const settle = async () => {
     await new Promise((resolve) => setImmediate(resolve));
 };
 const FIRE = { lat: 38.5, lon: -121.5 };
-// One cluster a few hundred metres across: one cell from orbit, sprites at the fire.
+// One cluster a few hundred metres across: one heat spot and one card from
+// orbit, sprites at the fire.
 const records = Array.from({ length: 9 }, (_, i) => ({
   lat: FIRE.lat + (i % 3) * 0.002,
   lon: FIRE.lon + Math.floor(i / 3) * 0.002,
@@ -69,7 +70,17 @@ function fixture() {
       camera: {},
       registerEffect() {},
       addEffect(config) {
-        const handle = { config, update() {}, delete() {} };
+        const handle = {
+          config,
+          visible: config.visible,
+          deleted: false,
+          update(next) {
+            if ('visible' in next) handle.visible = next.visible;
+          },
+          delete() {
+            handle.deleted = true;
+          },
+        };
         effects.push(handle);
         return handle;
       },
@@ -77,8 +88,6 @@ function fixture() {
     EffectDesc: class {},
     NavaraEffect: class {},
   };
-  // Cells the layer hands to the ground display for its current build.
-  let cells = [];
   const noop = () => {};
   const layer = createFirmsHeatmapLayer({
     id: 'local-firms',
@@ -106,13 +115,8 @@ function fixture() {
     },
     overlayHost: { setEntries: noop, setVisible: noop, clearSource: noop },
     renderer: {
-      create: ({ engine: target, id }) => {
-        const renderer = createFirmsNavaraRenderer(target, { ...native, id });
-        const { addCell, clearCells } = renderer;
-        renderer.addCell = (cell) => (cells.push(cell), addCell(cell));
-        renderer.clearCells = () => ((cells = []), clearCells());
-        return renderer;
-      },
+      create: ({ engine: target, id }) =>
+        createFirmsNavaraRenderer(target, { ...native, id }),
     },
   });
   layer.init(null, { engine });
@@ -123,9 +127,20 @@ function fixture() {
     engine,
     layer,
     pose,
-    cells: () => cells,
-    // Ground cells actually drawn by the shared display.
-    drawnCells: () => effects[0]?.config.gevFirmsGround.owner.state.count ?? 0,
+    // The heatmap as drawn: its raster's alpha at the fire, 0 when the
+    // drape is hidden, faded out or unpainted.
+    drawnHeat() {
+      const handle = effects.find(
+        (effect) => effect.config.gevFirmsHeat && !effect.deleted,
+      );
+      const owner = handle?.config.gevFirmsHeat.owner;
+      if (!handle?.visible || !owner?.texture || !(owner.opacity > 0)) return 0;
+      const { data, width, height } = owner.texture.image;
+      const x = Math.floor(((FIRE.lon + 180) / 360) * width);
+      const y = Math.floor(((90 - FIRE.lat) / 180) * height);
+      return (data[(y * width + x) * 4 + 3] / 255) * owner.opacity;
+    },
+    cards: () => layer.getStats().cells,
     // Fire sprites actually drawn (shown instances of the engine set).
     drawnSprites() {
       const set = engine.fake.moverSet('firms:local-firms');
@@ -148,21 +163,16 @@ function fixture() {
   };
 }
 
-test('edge:local-firms: orbit to the fire keeps the observation sum and never doubles a marker across LOD changes', async () => {
+test('edge:local-firms: orbit to the fire hands over between heatmap and markers and never shows both', async () => {
   const f = fixture();
   try {
     await f.layer.enable();
     await f.step();
-    const sum = (list) => list.reduce((n, c) => n + c.properties.count, 0);
-    assert.equal(
-      sum(f.cells()),
-      records.length,
-      'orbit cells hold every observation',
-    );
-    assert.equal(f.drawnCells(), 1);
+    assert.ok(f.drawnHeat() > 0, 'orbit: the heatmap glows at the fire');
+    assert.equal(f.cards(), 1, 'orbit: one card holds the cluster');
     assert.equal(f.drawnSprites(), 0);
     for (const round of [1, 2]) {
-      // Down to the fire: detections replace the cell, one sprite per observation.
+      // Down to the fire: markers replace the heatmap, one per observation.
       f.pose(20_000);
       await f.step();
       assert.equal(
@@ -171,19 +181,18 @@ test('edge:local-firms: orbit to the fire keeps the observation sum and never do
         `round ${round} at the fire`,
       );
       assert.equal(
-        f.drawnCells(),
+        f.drawnHeat(),
         0,
-        `round ${round}: no cell under the sprites`,
+        `round ${round}: no heat under the markers`,
       );
-      // Back to orbit: the cell returns with the same sum, sprites go.
+      // Back to orbit: the heatmap returns, the markers go.
       f.pose(12_000_000);
       await f.step();
-      assert.equal(sum(f.cells()), records.length);
-      assert.equal(f.drawnCells(), 1, `round ${round} in orbit`);
+      assert.ok(f.drawnHeat() > 0, `round ${round} in orbit`);
       assert.equal(
         f.drawnSprites(),
         0,
-        `round ${round}: no sprite over the cell`,
+        `round ${round}: no marker over the heatmap`,
       );
     }
   } finally {

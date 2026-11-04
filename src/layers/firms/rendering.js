@@ -69,19 +69,13 @@ export function createRendering({
   }
 
   /**
-   * Draw one band. On a globe that can drape the heatmap (Cesium), markers
-   * and heatmap stay built in every band and the hand-off only fades
-   * between them. Elsewhere the far bands draw heat cells instead.
+   * Draw one band. Markers and heatmap stay built in every band; the
+   * hand-off only fades between them.
    * @param {Object} lod - Band descriptor.
    * @param {?Object} bounds - Padded view bounds in degrees, or null.
    */
 
   function renderBand(lod, bounds) {
-    if (!heatImagery()) {
-      if (lod.mode === 'detections') renderDetections(lod, bounds);
-      else renderCells(aggregateFires(lod, bounds), lod, bounds);
-      return;
-    }
     prepareHeat(lod.mode === 'heat');
     if (lod.mode === 'detections') renderDetections(lod, bounds);
     else renderHeat(lod, bounds);
@@ -91,8 +85,7 @@ export function createRendering({
   /**
    * Cross-fade between markers and heatmap by camera height (HANDOFF_FADE),
    * on every rendered frame, so a fast zoom never outruns the throttled band
-   * check. Cheap when nothing changed: one height read and a compare. A
-   * globe without the heatmap keeps its markers as they are.
+   * check. Cheap when nothing changed: one height read and a compare.
    * @param {boolean} [force] Reapply, e.g. to freshly added markers.
    */
 
@@ -175,10 +168,7 @@ export function createRendering({
     return clipped;
   }
 
-  /**
-   * The heat imagery adapter, created on first use, or null when the
-   * renderer's globe cannot drape it.
-   */
+  /** The renderer's heat imagery adapter, created on first use. */
 
   function heatImagery() {
     layerState._heatImagery ??=
@@ -234,8 +224,8 @@ export function createRendering({
   }
 
   /**
-   * Far bands (global/regional) on a globe with the heatmap: a Snap
-   * Map–style heatmap draped over the globe, transparent where nothing
+   * Far bands (global/regional): a Snap Map–style heatmap draped over the
+   * globe, transparent where nothing
    * burns, plus the decluttered "N FIRES" cards from the coarse aggregation.
    * The nearest band's markers are kept built underneath for the hand-off
    * fade and hidden once it completes; cards go through the same
@@ -258,69 +248,6 @@ export function createRendering({
       const centerLat = cell.latCell + lod.gridDegrees / 2;
       layerState._labelCandidates.push({
         position: geo.cartesian3.fromDegrees(centerLon, centerLat, 0),
-        cullPosition: components.model.cellCullPosition(centerLon, centerLat),
-        fire: null,
-        cell,
-        accent: components.model.cellCardAccent(cell),
-      });
-    }
-
-    components.cards.rebuildAmbientLabels();
-    components.selection.refreshContextRegistrations(
-      components.selection.topFiresWithinBounds(bounds),
-    );
-  }
-
-  /**
-   * Far bands on a globe without the heatmap (Navara): aggregated heat cells
-   * as ground rectangles colored on the FRP ramp by their strongest fire.
-   * Labels go through the same screen-space pipeline as detections.
-   * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
-   * @param {Object} lod - Active LOD descriptor.
-   * @param {?Object} bounds - Padded view bounds in degrees, or null.
-   */
-
-  function renderCells(cells, lod, bounds) {
-    ensureDetectionCollections();
-    layerState._renderer.clearCells();
-    if (layerState._billboards) layerState._billboards.removeAll();
-    layerState._pickIndexById.clear();
-    layerState._cullPositions.length = 0;
-    layerState._cellCount = cells.length;
-    const maxScore = Math.max(1, ...cells.map(components.model.heatScore));
-
-    layerState._labelCandidates = [];
-    layerState._labelLodDistance = lod.labelDistance;
-
-    for (const cell of cells) {
-      const score = components.model.heatScore(cell);
-      const normalized = Math.min(1, Math.sqrt(score / maxScore));
-      const alpha = 0.16 + normalized * 0.5;
-      const color = components.model
-        .frpColorStop(cell.maxFrp)
-        .color.withAlpha(alpha);
-      const centerLon = cell.lonCell + lod.gridDegrees / 2;
-      const centerLat = cell.latCell + lod.gridDegrees / 2;
-      const position = geo.cartesian3.fromDegrees(centerLon, centerLat, 0);
-
-      layerState._renderer.addCell({
-        west: cell.lonCell,
-        south: cell.latCell,
-        east: cell.lonCell + lod.gridDegrees,
-        north: cell.latCell + lod.gridDegrees,
-        color,
-        position,
-        properties: {
-          count: cell.count,
-          intensity: score,
-          maxFrp: cell.maxFrp,
-          night: cell.night,
-        },
-      });
-
-      // Cells arrive heat-sorted, so candidate order doubles as label priority.
-      layerState._labelCandidates.push({
-        position,
         cullPosition: components.model.cellCullPosition(centerLon, centerLat),
         fire: null,
         cell,
@@ -496,7 +423,6 @@ export function createRendering({
     renderBand,
     aggregateFires,
     renderHeat,
-    renderCells,
     renderDetections,
     applyHandoffFade,
     ensureDetectionCollections,

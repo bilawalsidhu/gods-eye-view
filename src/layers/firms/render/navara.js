@@ -4,6 +4,7 @@ import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
 import { LOD_LEVELS } from '../policy.js';
 import { createFirmsSpriteBank } from './navaraSprites.js';
 import { createGroundCellDisplay } from '../../shared/render/navaraGroundCells.js';
+import { createFirmsHeatDrape } from './navaraHeat.js';
 export function createFirmsNavaraRenderer(
   engine,
   { view: nativeView, EffectDesc, NavaraEffect, id = 'local-firms' } = {},
@@ -121,6 +122,20 @@ export function createFirmsNavaraRenderer(
       return destroyed ? null : sprites.add(description);
     },
     removeSprites,
+    /** The far-zoom heatmap, draped on this view's surface. */
+    createHeatImagery() {
+      return destroyed
+        ? null
+        : createFirmsHeatDrape(engine, {
+            view: nativeView,
+            EffectDesc,
+            NavaraEffect,
+          });
+    },
+    /** The hand-off fade: every marker at `alpha`, shown while `show`. */
+    fadeSprites(alpha, show) {
+      if (!destroyed) sprites?.setFade(alpha, show);
+    },
     onEnable() {},
     destroy() {
       if (destroyed) return;

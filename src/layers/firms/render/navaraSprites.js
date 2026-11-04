@@ -27,6 +27,9 @@ export function createFirmsSpriteBank(
 ) {
   let rows = [],
     visible = false,
+    // The heatmap hand-off: every marker's alpha, and whether any shows.
+    fade = WHITE,
+    fadeShown = true,
     destroyed = false,
     generation = 0,
     queued = false,
@@ -88,7 +91,7 @@ export function createFirmsSpriteBank(
   }
   async function flush() {
     if (destroyed) return;
-    if (!visible || !rows.length) {
+    if (!visible || !fadeShown || !rows.length) {
       hide();
       return;
     }
@@ -120,7 +123,7 @@ export function createFirmsSpriteBank(
         position: row.position,
         cell: cell.key,
         scale: cell.scale,
-        color: WHITE,
+        color: fade,
         show: row.show,
         pickId: row.id,
       });
@@ -176,6 +179,15 @@ export function createFirmsSpriteBank(
       rows.push(row);
       schedule();
       return row;
+    },
+    /** The hand-off fade: every marker at `alpha`, drawn while `show`. */
+    setFade(alpha, show) {
+      if (destroyed) return;
+      const next = alpha >= 1 ? WHITE : Object.freeze([1, 1, 1, alpha]);
+      if (next[3] === fade[3] && Boolean(show) === fadeShown) return;
+      fade = next;
+      fadeShown = Boolean(show);
+      schedule();
     },
     setVisible(value) {
       if (destroyed || visible === Boolean(value)) return;
