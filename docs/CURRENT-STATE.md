@@ -944,6 +944,9 @@ fix times, sticky fields and partial-feed retention. A row without track or
 speed holds the last known value, as civil records do; a grounded row without
 speed reads 0. Rendering retains ground
 model ownership, motion history, military registration and tracking cleanup.
+The tracked descriptor (Cockpit, voice, picked context) reports the reported
+barometric altitude converted from those feet, or null when the aircraft never
+reported one, never the render height.
 
 Civil flights separate source acquisition, portable record reconciliation and
 scene application. The record owner keeps sticky metadata, geoid cache and
