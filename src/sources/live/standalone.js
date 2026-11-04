@@ -31,9 +31,7 @@ function openSkyError(response) {
     const reasons = {
       oauth_invalid_or_missing: 'OpenSky OAuth client missing/invalid',
       oauth_invalid_credentials: 'OpenSky OAuth rejected credentials',
-      basic_invalid_credentials: 'OpenSky username/password rejected',
-      missing_basic_creds: 'OpenSky auth missing',
-      missing_oauth_and_basic_creds: 'OpenSky auth missing',
+      missing_oauth_creds: 'OpenSky auth missing',
       auth_required: 'OpenSky auth required',
       forced_anonymous: 'OpenSky auth required',
     };

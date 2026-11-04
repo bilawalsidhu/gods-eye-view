@@ -2,15 +2,17 @@
 import { formatNumber, t, msg } from '../i18n/index.js';
 import {
   COCKPIT_BRIEF_ROTATE_MS,
-  COCKPIT_BRIEF_CYCLE_OFF_HELP,
-  COCKPIT_BRIEF_CYCLE_ON_HELP,
   COCKPIT_REGIONAL_REFRESH_MS,
   COCKPIT_REGIONAL_REFRESH_DISTANCE_M,
-  COCKPIT_BRIEF_PAGES,
   formatCockpitBriefAge,
   formatCockpitCoordinate,
   formatCockpitWindDirection,
 } from './cockpitPresentation.js';
+import {
+  COCKPIT_BRIEF_PAGES,
+  CYCLE_HELP_KEYS,
+  createBriefState,
+} from './cockpitBriefPages.js';
 
 // regionalModel.weatherCodeLabel is shared with node code and returns
 // English; translate it here.
@@ -29,72 +31,73 @@ const WEATHER_CONDITION_KEYS = Object.freeze({
   'MIXED CONDITIONS': msg('MIXED CONDITIONS'),
 });
 
+/** Hand a fresh copy of the briefing to the view. */
+export function publishBriefView() {
+  const brief = this.brief;
+  this.publishBrief({
+    ...brief,
+    news: { ...brief.news },
+    local: { ...brief.local },
+  });
+}
+
 export function showBriefPage(index, { manual = false } = {}) {
   if (this.destroyed) return;
   const count = COCKPIT_BRIEF_PAGES.length;
   this.briefPageIndex = ((Number(index) % count) + count) % count;
   const page = COCKPIT_BRIEF_PAGES[this.briefPageIndex];
-  this.briefPages.forEach((element) => {
-    element.hidden = element.dataset.cockpitBriefPage !== page.id;
-  });
-  this.briefTabs.forEach((button) => {
-    const current =
-      Number(button.dataset.cockpitBriefIndex) === this.briefPageIndex;
-    button.setAttribute('aria-current', current ? 'true' : 'false');
-  });
-  if (this.briefKicker) {
-    const indicator = this.briefKicker.querySelector('i');
-    this.briefKicker.replaceChildren(
-      ...[indicator, document.createTextNode(` ${t(page.kickerKey)}`)].filter(
-        Boolean,
-      ),
-    );
-  }
-  if (this.briefSubtitle) this.briefSubtitle.textContent = t(page.subtitleKey);
-  if (this.briefPosition)
-    this.briefPosition.textContent = `${this.briefPageIndex + 1} / ${count}`;
-  if (this.briefSource)
-    this.briefSource.textContent = page.sourceKey
+  Object.assign(this.brief, {
+    pageIndex: this.briefPageIndex,
+    pageId: page.id,
+    kicker: t(page.kickerKey),
+    subtitle: t(page.subtitleKey),
+    position: `${this.briefPageIndex + 1} / ${count}`,
+    source: page.sourceKey
       ? t(page.sourceKey, { source: page.sourceName })
-      : page.source;
-  if (this.signalStream) this.signalStream.dataset.briefPage = page.id;
+      : page.source,
+  });
+  this.publishBriefView();
   if (manual && this.briefAutoRotateEnabled)
     this.startBriefRotation({ reset: true });
   this.scheduleContextLayout();
 }
 
+// The state is the accessible name; the help is the tooltip.
+function cycleWords(enabled) {
+  return {
+    autoRotate: enabled,
+    autoLabel: enabled ? t('CYCLE ON') : t('CYCLE OFF'),
+    autoHelp: t(CYCLE_HELP_KEYS[enabled ? 'on' : 'off']),
+  };
+}
+
+/**
+ * Word the briefing again in the current locale: its page, cycle toggle and
+ * whatever the regional card shows.
+ */
+export function relocalizeBrief() {
+  if (this.destroyed) return;
+  if (this.brief.news.state === null) {
+    const { news, local } = createBriefState();
+    this.brief.news = news;
+    this.brief.local = { ...local, coordinates: this.brief.local.coordinates };
+  }
+  Object.assign(this.brief, cycleWords(this.briefAutoRotateEnabled));
+  this.showBriefPage(this.briefPageIndex);
+  if (this.regionalBrief)
+    this.renderRegionalBrief(this.regionalBrief, this.lastAircraftInfo);
+  else if (this.brief.news.state)
+    this.renderRegionalBriefStatus(
+      this.brief.news.state,
+      this.lastAircraftInfo,
+    );
+}
+
 export function setBriefAutoRotate(enabled) {
   if (this.destroyed) return;
   this.briefAutoRotateEnabled = Boolean(enabled);
-  if (this.briefAutoToggle) {
-    this.briefAutoToggle.setAttribute(
-      'aria-pressed',
-      String(this.briefAutoRotateEnabled),
-    );
-    const label = this.briefAutoRotateEnabled ? 'CYCLE ON' : 'CYCLE OFF';
-    this.briefAutoToggle.textContent = label;
-    const help = this.briefAutoRotateEnabled
-      ? COCKPIT_BRIEF_CYCLE_ON_HELP
-      : COCKPIT_BRIEF_CYCLE_OFF_HELP;
-    this.briefAutoToggle.setAttribute('aria-label', label);
-    this.briefAutoToggle.title = help;
-    // cockpitMarkup.test.mjs pins the English writes above; these translate
-    // them.
-    const labelKey = this.briefAutoRotateEnabled
-      ? msg('CYCLE ON')
-      : msg('CYCLE OFF');
-    this.briefAutoToggle.textContent = t(labelKey);
-    this.briefAutoToggle.setAttribute('aria-label', t(labelKey));
-    this.briefAutoToggle.title = t(
-      this.briefAutoRotateEnabled
-        ? msg(
-            'Stop automatic page cycling. Previous, Next, and the SIG/NEWS/LOCAL tabs stay available.',
-          )
-        : msg(
-            'Cycle briefing pages automatically every 9 seconds (Signals → News → Local). Pauses while you hover or focus the panel. Live signal data refreshes continuously either way.',
-          ),
-    );
-  }
+  Object.assign(this.brief, cycleWords(this.briefAutoRotateEnabled));
+  this.publishBriefView();
   if (this.briefAutoRotateEnabled) this.startBriefRotation({ reset: true });
   else this.stopBriefRotation();
 }
@@ -129,15 +132,20 @@ export function stopBriefRotation() {
   this.briefTimer = null;
 }
 
-export function updateLocalPosition(info) {
-  if (!this.localCoordinates) return;
-  if (!Number.isFinite(info.latitude) || !Number.isFinite(info.longitude)) {
-    this.localCoordinates.textContent = t('POSITION UNAVAILABLE');
-    return;
-  }
+/** @returns {string} The position line for the Local page. */
+function localCoordinates(info) {
+  if (!Number.isFinite(info.latitude) || !Number.isFinite(info.longitude))
+    return t('POSITION UNAVAILABLE');
   const lat = formatCockpitCoordinate(info.latitude, 'N', 'S');
   const lon = formatCockpitCoordinate(info.longitude, 'E', 'W');
-  this.localCoordinates.textContent = `${lat} · ${lon}`;
+  return `${lat} · ${lon}`;
+}
+
+export function updateLocalPosition(info) {
+  const coordinates = localCoordinates(info);
+  if (coordinates === this.brief.local.coordinates) return;
+  this.brief.local.coordinates = coordinates;
+  this.publishBriefView();
 }
 
 export function maybeRefreshRegionalBrief(info) {
@@ -208,105 +216,79 @@ export function maybeRefreshRegionalBrief(info) {
 }
 
 export function renderRegionalBriefStatus(status, info) {
-  if (this.newsStatus) {
-    this.newsStatus.hidden = false;
-    this.newsStatus.dataset.state = status;
-    this.newsStatus.textContent =
-      status === 'loading'
-        ? t('ACQUIRING REGIONAL NEWS')
-        : t('REGIONAL NEWS UNAVAILABLE');
-  }
-  if (status === 'unavailable') this.newsList?.replaceChildren();
-  if (this.localPlace && status === 'loading')
-    this.localPlace.textContent = t('RESOLVING REGION');
-  if (this.localPlace && status === 'unavailable')
-    this.localPlace.textContent = t('REGION UNAVAILABLE');
-  this.updateLocalPosition(info);
+  const { news, local } = this.brief;
+  news.statusHidden = false;
+  news.state = status;
+  news.status =
+    status === 'loading'
+      ? t('ACQUIRING REGIONAL NEWS')
+      : t('REGIONAL NEWS UNAVAILABLE');
+  if (status === 'unavailable') news.articles = [];
+  if (status === 'loading') local.place = t('RESOLVING REGION');
+  if (status === 'unavailable') local.place = t('REGION UNAVAILABLE');
+  local.coordinates = localCoordinates(info);
+  this.publishBriefView();
 }
 
 export function renderRegionalBrief(payload, info) {
   const articles = Array.isArray(payload?.articles) ? payload.articles : [];
-  if (this.newsStatus) {
-    this.newsStatus.hidden = articles.length > 0;
-    this.newsStatus.dataset.state = payload?.newsStatus || 'unavailable';
-    this.newsStatus.textContent =
-      payload?.newsStatus === 'empty'
-        ? t('NO RECENT LOCATION MATCHES')
-        : t('REGIONAL NEWS UNAVAILABLE');
-  }
-  if (this.newsList) {
-    this.newsList.replaceChildren(
-      ...articles.slice(0, 4).map((article) => {
-        const entry = document.createElement('li');
-        const link = document.createElement('a');
-        link.href = article.url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        const title = document.createElement('strong');
-        title.textContent = article.title;
-        const metadata = document.createElement('span');
-        metadata.textContent = t('{domain} · {age}', {
-          domain: article.domain || t('SOURCE'),
-          age: formatCockpitBriefAge(article.publishedAt),
-        });
-        link.append(title, metadata);
-        entry.append(link);
-        return entry;
-      }),
-    );
-  }
-
+  const seen = new Map();
+  const storyKey = (url) => {
+    const count = seen.get(url) ?? 0;
+    seen.set(url, count + 1);
+    return count ? `${url}#${count}` : String(url);
+  };
+  const weather = payload?.weather;
+  const condition = this.services.weatherCodeLabel(weather?.weatherCode);
+  const conditionKey = WEATHER_CONDITION_KEYS[condition];
   const placeLabel =
     payload?.place?.label || payload?.place?.country || t('REGION UNAVAILABLE');
-  if (this.localPlace) this.localPlace.textContent = placeLabel.toUpperCase();
-  this.updateLocalPosition(info);
-  const weather = payload?.weather;
-  if (this.localTemperature) {
-    this.localTemperature.textContent = Number.isFinite(weather?.temperatureC)
+  this.brief.news = {
+    statusHidden: articles.length > 0,
+    state: payload?.newsStatus || 'unavailable',
+    status:
+      payload?.newsStatus === 'empty'
+        ? t('NO RECENT LOCATION MATCHES')
+        : t('REGIONAL NEWS UNAVAILABLE'),
+    articles: articles.slice(0, 4).map((article) => ({
+      // A row keeps its node, and so its focus, only for the same story.
+      key: storyKey(article.url),
+      url: article.url,
+      title: article.title,
+      meta: t('{domain} · {age}', {
+        domain: article.domain || t('SOURCE'),
+        age: formatCockpitBriefAge(article.publishedAt),
+      }),
+    })),
+  };
+  this.brief.local = {
+    place: placeLabel.toUpperCase(),
+    coordinates: localCoordinates(info),
+    temperature: Number.isFinite(weather?.temperatureC)
       ? `${Math.round(weather.temperatureC)}°C`
-      : '—';
-  }
-  if (this.localWind) {
-    this.localWind.textContent = Number.isFinite(weather?.windKph)
+      : '—',
+    wind: Number.isFinite(weather?.windKph)
       ? t('{value} KM/H', { value: Math.round(weather.windKph) })
-      : '—';
-  }
-  if (this.localWindDirection) {
-    this.localWindDirection.textContent = formatCockpitWindDirection(
-      weather?.windDirectionDeg,
-    );
-  }
-  if (this.localCondition) {
-    const condition = this.services.weatherCodeLabel(weather?.weatherCode);
-    const conditionKey = WEATHER_CONDITION_KEYS[condition];
-    this.localCondition.textContent = conditionKey
-      ? t(conditionKey)
-      : condition;
-  }
-  if (this.localCloud) {
-    this.localCloud.textContent = Number.isFinite(weather?.cloudCoverPct)
-      ? t('CLOUD {pct}%', {
-          pct: Math.round(weather.cloudCoverPct),
-        })
-      : t('CLOUD UNKNOWN');
-  }
-  if (this.localPrecipitation) {
-    this.localPrecipitation.textContent = Number.isFinite(
-      weather?.precipitationMm,
-    )
+      : '—',
+    windDirection: formatCockpitWindDirection(weather?.windDirectionDeg),
+    condition: conditionKey ? t(conditionKey) : condition,
+    cloud: Number.isFinite(weather?.cloudCoverPct)
+      ? t('CLOUD {pct}%', { pct: Math.round(weather.cloudCoverPct) })
+      : t('CLOUD UNKNOWN'),
+    precipitation: Number.isFinite(weather?.precipitationMm)
       ? formatNumber(weather.precipitationMm, {
           useGrouping: false,
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         })
-      : '—';
-  }
-  if (this.signalStream)
-    this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
-  if (this.briefPageIndex === 1 && this.briefSource) {
-    this.briefSource.textContent = t('{source} · LOCATION QUERY', {
+      : '—',
+  };
+  this.brief.regionalStatus = payload?.status || 'partial';
+  if (this.briefPageIndex === 1) {
+    this.brief.source = t('{source} · LOCATION QUERY', {
       source: String(payload?.newsSource || t('REGIONAL NEWS')).toUpperCase(),
     });
   }
+  this.publishBriefView();
   this.scheduleContextLayout();
 }

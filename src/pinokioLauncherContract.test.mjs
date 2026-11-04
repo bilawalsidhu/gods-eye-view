@@ -25,6 +25,8 @@ const PROVIDER_FIELDS = [
 const RATE_LIMIT_FIELDS = [
   'GEV_RATELIMIT_OPENAI_PER_MIN',
   'GEV_RATELIMIT_GOOGLE_PER_MIN',
+  'GEV_RATELIMIT_OPENAI_CHAT_PER_MIN',
+  'GEV_RATELIMIT_GEMINI_CHAT_PER_MIN',
 ];
 const APP_VALUE_FIELDS = [...PROVIDER_FIELDS, ...RATE_LIMIT_FIELDS];
 const SHARING_FIELDS = [
@@ -113,6 +115,9 @@ test('Pinokio menu resolves the nested install marker and exposes each lifecycle
     runtime.url = url;
     const items = await menu(kernel, info);
     assert.equal(items.filter((item) => item.default).length, 1);
+    const ready = installed && running === 'start.js' && Boolean(url);
+    assert.equal(items[0].popout, ready ? true : undefined);
+    assert.ok(items.slice(1).every((item) => item.popout === undefined));
     return items.map(({ text, href, default: isDefault = false }) => ({ text, href, default: isDefault }));
   };
 

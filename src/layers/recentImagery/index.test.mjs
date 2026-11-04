@@ -1385,3 +1385,13 @@ test('with SELECT BOX armed, Escape clears the preview first and the next Escape
   assert.equal(f.snap().toolActive, false);
   await tool.destroy();
 });
+
+test('a voice search cancelled mid-flight says so instead of looking empty', async () => {
+  const f = fixture();
+  f.layer.enable();
+  f.layer.setBox(BOX);
+  assert.equal(f.snap().searching, true);
+  f.layer.cancelPendingSearch();
+  assert.equal(f.snap().searching, false);
+  assert.equal(f.snap().notice, 'Search cancelled');
+});

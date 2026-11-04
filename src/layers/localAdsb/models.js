@@ -14,6 +14,7 @@ import {
   MODEL_PROX_ADD_M,
   MODEL_PROX_KEEP_M,
 } from '../flights/policy.js';
+import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
 const specKey = (spec) => `${spec.url}@${spec.scale}`;
 
@@ -87,6 +88,7 @@ export function createLocalAdsbModels({
       model = await loadModel({
         url: resolveAsset(spec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color,
