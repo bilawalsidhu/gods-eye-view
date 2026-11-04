@@ -2188,6 +2188,11 @@ accessible name remains "Don't show this again". Control behavior is unchanged.
 
 ## FIRMS source status
 
+Following #1552, FIRMS requests VIIRS NOAA-20, VIIRS NOAA-21 and MODIS NRT,
+without requesting the retired Suomi NPP source. Historical SNPP records remain
+readable. Opt-in CONAE GOES retains independent acquisition/cache state, keyless
+operation, partial-error reporting and null unpublished FRP/confidence.
+
 The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.
 The `get_active_fires` tool reports acquisition times as UTC ISO timestamps,
 including zero-padded hours and minutes; missing or invalid dates and times

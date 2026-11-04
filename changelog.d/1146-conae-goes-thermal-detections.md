@@ -15,3 +15,8 @@ low intensity. Empty refresh/filter results remove previous render resources
 and context registrations. FIRMS context labels retain their English tool-data
 contract and localized display. Adds unit regressions and optional mixed-source
 intensity/share-link integration gates for temporarily combining PR #1426.
+
+- Align NASA acquisition with #1552: request NOAA-20, NOAA-21 and MODIS only,
+  retain historical SNPP labels, and preserve independent/keyless CONAE acquisition
+  with unknown unpublished measurements and partial-source reporting
+  (NASA source retirement: IMBrandao, #1552; CONAE integration: radianx, #1146).

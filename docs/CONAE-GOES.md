@@ -22,7 +22,7 @@ Reviewed upstream commit 871523593f76c56404e4b5da99d6daea5701cd25 on 2026-10-15.
 - Active Fires already separates acquisition from rendering:
   `server/providers/firms.js` -> `src/layers/firms/source.js` ->
   `firmsAdapt.js` -> the existing scene, selection, cards and analyst records.
-- The FIRMS proxy fetches VIIRS NOAA-20/21/SNPP and MODIS sequentially, retains its
+- The FIRMS proxy fetches VIIRS NOAA-20/21 and MODIS (aligned with #1552) sequentially, retains its
   own memory/disk cache for 30 minutes, and filters observations to 24 hours.
   Its quota and key handling should remain owned by that provider.
 - Existing adaptation converts missing confidence to zero and labels that
