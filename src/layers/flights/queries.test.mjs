@@ -3,11 +3,9 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createQueries } from './queries.js';
 import { createRendering } from './rendering.js';
-import {
-  billboardState,
-  mirrorBillboard,
-  setBillboard,
-} from '../../data/billboardMirror.js';
+import { createIcons } from './icons.js';
+import { createIconSet } from '../../data/iconSet.js';
+import { writeHoldSegment } from '../../data/iconSegment.js';
 import { mirrorModel, setModel } from '../../data/modelMirror.js';
 
 function fixture() {
@@ -16,14 +14,11 @@ function fixture() {
     registration: ' N123 ',
     altitude: 1000,
   };
-  const bb = mirrorBillboard({
-    show: true,
-    position: new Cesium.Cartesian3(1, 2, 3),
-  });
+  const icons = createIconSet();
   const flightState = {
     feed: {},
-    _billboardCollection: { show: true },
-    _billboards: new Map([['abc123', bb]]),
+    _icons: icons,
+    _scratchIconRenderTime: new Cesium.JulianDate(),
     _models: new Map(),
     _detectionObjects: new Map(),
     records: { data: new Map([['abc123', info]]) },
@@ -48,8 +43,27 @@ function fixture() {
     motion: { _trackedVisualCached: () => null },
   };
   parts.rendering = createRendering({ flightState, services, parts });
+  parts.icons = createIcons({ flightState, services, parts });
   const queries = createQueries({ flightState, services, parts }).methods;
-  return { flightState, info, bb, parts, queries, formats: () => formats };
+  const row = () => icons.row('abc123');
+  /** Hold the contact's icon at `position`. */
+  const place = (position) => {
+    writeHoldSegment(icons.segments, row(), position, 0);
+    icons.segmentWritten(row());
+  };
+  icons.add('abc123', { id: 'abc123' });
+  place(new Cesium.Cartesian3(1, 2, 3));
+  icons.setShown(row(), true);
+  return {
+    flightState,
+    info,
+    parts,
+    queries,
+    formats: () => formats,
+    place,
+    show: (shown) => icons.setShown(row(), shown),
+    drawn: () => parts.icons._iconPosition('abc123'),
+  };
 }
 
 test('candidate text follows in-place enrichment without freezing identity or positions', () => {
@@ -57,9 +71,9 @@ test('candidate text follows in-place enrichment without freezing identity or po
   const [first] = f.queries.getDetectableObjects();
   assert.equal(first.id, 'TEST123');
   assert.equal(first.sourceId, 'abc123');
-  setBillboard(f.bb, 'position', new Cesium.Cartesian3(4, 5, 6));
+  f.place(new Cesium.Cartesian3(4, 5, 6));
   assert.equal(f.queries.getDetectableObjects()[0], first);
-  assert.equal(first.position, billboardState(f.bb).position);
+  assert.deepEqual(first.position, f.drawn());
   assert.deepEqual(first.position, new Cesium.Cartesian3(4, 5, 6));
   assert.equal(f.formats(), 1);
   f.info.callsign = ' NEW456 ';
@@ -107,7 +121,7 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
     scale: 1,
   });
   f.flightState._models.set('abc123', model);
-  setBillboard(f.bb, 'show', false);
+  f.show(false);
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   model.ready = true;
   assert.equal(f.queries.getDetectableObjects()[0], candidate);
@@ -121,11 +135,8 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   assert.deepEqual(candidate.position, new Cesium.Cartesian3(40, 50, 60));
   setModel(model, 'show', false);
   assert.deepEqual(f.queries.getDetectableObjects(), []);
-  setBillboard(f.bb, 'show', true);
-  assert.equal(
-    f.queries.getDetectableObjects()[0].position,
-    billboardState(f.bb).position,
-  );
+  f.show(true);
+  assert.deepEqual(f.queries.getDetectableObjects()[0].position, f.drawn());
   assert.equal(get.mock.callCount(), 6);
   setModel(model, 'show', true);
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123'), true);

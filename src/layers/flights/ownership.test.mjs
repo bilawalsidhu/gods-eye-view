@@ -59,7 +59,8 @@ test('flight state owns distinct mutable records, scratch objects and floor samp
   for (const key of [
     'records',
     'feed',
-    '_billboards',
+    '_grounded',
+    '_floorPinned',
     '_positionHistory',
     '_displayFloorState',
     '_groundSnap',

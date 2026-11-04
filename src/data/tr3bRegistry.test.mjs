@@ -233,7 +233,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
 
     // 1. The 3D model handoff is SUPPRESSED for a converted contact — there is
     //    no TR-3B GLB, so the triangle billboard stays the visual.
-    assert.match(source, /modelEligible\.has\(icao24\) && !isTr3b\(icao24\)/,
+    assert.match(source, /modelEligible\.has\(icao24\) && !isTr3b\(icao24\)|for \(const icao24 of modelEligible\) \{\s*if \(isTr3b\(icao24\)\) continue;/,
       `${name}: fleet model handoff skips converted contacts`);
     // The tracked regime became default-on and camera-distance driven
     // (2026-08-19), so the suppression moved from a conjunct on
@@ -245,7 +245,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     // 2. The billboard is never hidden by that suppression — it must keep
     //    satisfying the getNearby/getDetectableObjects visibility guards, so a
     //    converted contact still works in Contacts and Cockpit.
-    assert.match(source, /if\s*\(\s*(bb|modelled)\s*&&\s*id\s*!==\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*setBillboard\(\s*\1,\s*'show',\s*true,?\s*\);/,
+    assert.match(source, /if\s*\(\s*(bb|modelled)\s*&&\s*id\s*!==\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*setBillboard\(\s*\1,\s*'show',\s*true,?\s*\);|if\s*\(\s*row >= 0\s*&&\s*id\s*!==\s*flightState\._trackedIcao\s*\)\s*flightState\._icons\.setShown\(row, true\);/,
       `${name}: converting restores the billboard the model handoff had hidden`);
 
     // 3. Every aircraftIcon() CALL SITE routes through the kind resolver, so no
@@ -411,7 +411,7 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
     const source = readLayerSource(new URL(`./${name}`, import.meta.url));
     // Anchor on the MODEL-eligibility loop (keepDistSq), not the unrelated
     // ambient-enrichment candidate loop that also builds a `cand`.
-    const loop = /const\s*cand\s*=\s*\[\];\s*\n\s*for\s*\(\s*const\s*\[icao,\s*bb\]\s*of\s*(?:flightState\.)?_billboards,?\s*\)[\s\S]*?cand\.push\(\s*/.exec(source)?.[0];
+    const loop = /const\s*cand\s*=\s*\[\];\s*\n\s*for\s*\((?:\s*const\s*\[icao,\s*bb\]\s*of\s*(?:flightState\.)?_billboards,?\s*|let row = 0; row < icons\.count; row\+\+)\)[\s\S]*?cand\.push\(\s*/.exec(source)?.[0];
     assert.ok(loop, `${name}: the model-eligibility candidate loop is present`);
     assert.match(loop, /keepDistSq/, `${name}: matched the model-eligibility loop`);
     assert.match(loop, /if \(isTr3b\(icao\)\) continue;/,

@@ -1315,6 +1315,12 @@
       "src/layers/flights/policy.js",
       "src/layers/flights/queries.js",
       "src/layers/flights/rendering.js",
+      "src/layers/flights/icons.js",
+      "src/data/iconSetPrimitive.js",
+      "src/data/iconSet.js",
+      "src/data/iconSegment.js",
+      "src/data/iconAtlas.js",
+      "src/data/aircraftRecession.js",
       "src/data/modelMirror.js",
       "src/data/billboardMirror.js",
       "src/layers/aircraft/visualState.js",
@@ -2249,6 +2255,7 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/layers/flights/icons.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
@@ -3248,6 +3255,11 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/layers/flights/icons.js",
+      "src/data/iconSetPrimitive.js",
+      "src/data/iconSet.js",
+      "src/data/iconSegment.js",
+      "src/data/iconAtlas.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",

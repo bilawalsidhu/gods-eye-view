@@ -1,22 +1,14 @@
 import * as Cesium from 'cesium';
-import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
 import { civilAircraftModelSpec } from './modelSpec.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
-import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
-import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
-import {
-  cameraPoseSignature,
-  horizonOccluder,
-  screenProjectedRotation,
-} from '../../data/iconOrientation.js';
-import { limitCourseStep, courseSlewCapDps } from '../../data/motionModel.js';
+import { horizonOccluder } from '../../data/iconOrientation.js';
+import { aircraftTreatmentAlpha } from '../../data/aircraftRecession.js';
 import {
   MIL_TINT,
   EMERGENCY_TINT,
   GROUND_SCALE,
-  COCKPIT_CONTACT_SIZE_PX,
   COCKPIT_CIVILIAN_COLOR,
   MODEL_ALT_CEIL_M,
   MODEL_MAX_ALL,
@@ -32,14 +24,9 @@ import {
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
-  RENDER_DELAY_SEC,
-  COURSE_SLEW_DT_MAX_SEC,
-  ROTATION_REFRESH_MS,
-  COURSE_MAX_DPS,
 } from './policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 import { aircraftVisuals } from '../aircraft/visualState.js';
-import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 import { modelState, setModel } from '../../data/modelMirror.js';
 
 export function createRendering({
@@ -52,14 +39,8 @@ export function createRendering({
   const { isMilitaryIcao } = services.militaryRegistry;
   const { tr3bIconKind, isTr3b } = services.aircraftPresentation;
   const { trackedModelScaleForPixelCap } = services.camera;
-  const {
-    focusNowMs,
-    getFocusTarget,
-    nearFarScalarValueAtDistance,
-    advanceProjectedSpriteFocus,
-  } = services.focus;
-  const { applyAircraftBillboardTreatment, applyAircraftModelTreatment } =
-    services.recession;
+  const { focusNowMs, getFocusTarget } = services.focus;
+  const { applyAircraftModelTreatment } = services.recession;
 
   /** True while this contact's latest poll broadcast an emergency code. */
 
@@ -98,22 +79,6 @@ export function createRendering({
     );
   }
 
-  /** Depth-test policy for aircraft billboards. Round 5 (owner directive
-   *  2026-07-06: "I just want the planes and their lines to ALWAYS be
-   *  visible... evenly applied"): EVERY contact renders depth-test-free at
-   *  every distance — grounded, low, and airborne alike. The photoreal mesh
-   *  writes depth and residual baro/floor error will always leave some sprite
-   *  geometry at or below it; a uniform rule beats the grounded-only /
-   *  low-AGL-only conditions that kept leaving classes of contacts buried
-   *  (2026-07-03 Van Nuys grounded case; 2026-07-06 Austin QNH-below-field
-   *  case). Far-side planes are still removed by the fleet tick's horizon
-   *  occluder, which never depended on depth. Kept as a function so the
-   *  callers' restyle sites stay diff-stable. */
-
-  function _groundDepthDistance() {
-    return Number.POSITIVE_INFINITY;
-  }
-
   function _modelSpec(klass) {
     const cached = flightState._specCache.get(klass);
     if (cached) return cached;
@@ -140,53 +105,6 @@ export function createRendering({
 
   const _iconKind = (icao24, klass) =>
     tr3bIconKind(icao24, klass, { hot: flightState._irBoost });
-
-  /** Apply the current normal/cockpit visual contract to one owned fleet billboard. */
-
-  function _applyFleetBillboardPresentation(icao24, bb) {
-    if (!bb) return;
-    const limbScale = flightState._billboardLimbScale.get(bb) ?? 1;
-    const isCockpitContact =
-      flightState._cockpitContactMode && icao24 !== flightState._trackedIcao;
-    const isCockpitNear =
-      isCockpitContact && flightState._cockpitNearContacts.has(icao24);
-    if (isCockpitContact && !isCockpitNear) {
-      const freshnessAlpha = cyberSonarBaseAlpha(bb);
-      bb.image = cockpitContactDotImage();
-      setBillboard(bb, 'width', COCKPIT_CONTACT_SIZE_PX);
-      setBillboard(bb, 'height', COCKPIT_CONTACT_SIZE_PX);
-      setBillboard(bb, 'scale', limbScale);
-      setBillboard(bb, 'scaleByDistance', _cockpitBillboardScaleByDistance());
-      bb.color = _cockpitContactColor(icao24).withAlpha(freshnessAlpha);
-      setBillboard(bb, 'rotation', 0);
-      return;
-    }
-
-    const meta = flightState.records.data.get(icao24);
-    bb.image = aircraftIcon(
-      _iconKind(icao24, meta?.klass),
-      aircraftVisuals.read(bb)?.iconLarge ? TRACKED_ICON_PX : undefined,
-    );
-    setBillboard(bb, 'width', icao24 === flightState._trackedIcao ? 24 : 20);
-    setBillboard(bb, 'height', icao24 === flightState._trackedIcao ? 24 : 20);
-    setBillboard(
-      bb,
-      'scale',
-      _fleetBillboardScale(icao24, meta?.klass) * limbScale,
-    );
-    setBillboard(bb, 'scaleByDistance', _normalBillboardScaleByDistance());
-    bb.color = _fleetBillboardColor(icao24).withAlpha(cyberSonarBaseAlpha(bb));
-  }
-
-  /**
-   * Per-preRender fleet pass at ~12Hz: dead-reckons every untracked billboard,
-   * horizon-culls billboards beyond the limb (no far-side depth with the globe
-   * hidden), and refreshes screen-projected icon rotations whenever the camera
-   * pose changed (plus a 1s drift catch-up while idle). Driven by
-   * scene.preRender — NOT camera.changed, whose granularity is globally
-   * degraded by other layers mutating camera.percentageChanged.
-   * @returns {void}
-   */
 
   /** Model tint, mirroring the billboard color rules. */
 
@@ -272,12 +190,12 @@ export function createRendering({
   /** Everything scene.sampleHeight must NOT hit when snapping a grounded model: the
    *  vertical pick ray at a plane's own lat/lon otherwise lands on its (or a parked
    *  neighbor's) billboard/model instead of the tile skin. Cesium's ray-pick exclusion
-   *  matches picked-object IDs, and every billboard AND model in this layer carries its
+   *  matches picked-object IDs, and every icon AND model in this layer carries its
    *  icao as `id`, so the icao strings cover both; the tracked entity is excluded as the
    *  object itself. Built lazily — only when a sample actually fires (one-shot). */
 
   function _groundSampleExclusions() {
-    const out = [...flightState._billboards.keys()];
+    const out = parts.icons._iconIds();
     if (flightState._trackedEntity) out.push(flightState._trackedEntity);
     return out;
   }
@@ -323,15 +241,23 @@ export function createRendering({
     );
   }
 
-  /** Atomically hand one fleet contact from its billboard to a safely placed,
+  /** Atomically hand one fleet contact from its icon to a safely placed,
    * ready 3D model. Missing/loading models and unresolved terrain always leave
-   * the billboard owning the visual, so no render frame can hide both.
+   * the icon owning the visual, so no render frame can hide both.
    * `beforeShow` runs only on the committing path — the per-tick model treatment
    * belongs to a model that is about to draw, not to one still waiting. */
 
-  function _driveFleetModelHandoff(icao24, model, bb, pos, course, beforeShow) {
+  function _driveFleetModelHandoff(
+    icao24,
+    model,
+    row,
+    pos,
+    course,
+    beforeShow,
+  ) {
+    const icons = flightState._icons;
     if (!model) {
-      setBillboard(bb, 'show', true);
+      icons.setShown(row, true);
       return false;
     }
     const displayPos = _modelDisplayPosition(
@@ -341,7 +267,7 @@ export function createRendering({
     );
     if (!displayPos) {
       setModel(model, 'show', false); // no ground evidence → nothing safe to place a depth-tested model at
-      setBillboard(bb, 'show', true);
+      icons.setShown(row, true);
       return false;
     }
     // The matrix is written BEFORE the readiness test on purpose: a model can flip
@@ -350,12 +276,12 @@ export function createRendering({
     setModel(model, 'modelMatrix', _modelMatrix(displayPos, course));
     if (!model.ready) {
       setModel(model, 'show', false); // not loaded yet → keep the 2D icon, no half-model flash
-      setBillboard(bb, 'show', true);
+      icons.setShown(row, true);
       return false;
     }
     beforeShow?.();
     if (!modelState(model).show) setModel(model, 'show', true);
-    if (billboardState(bb).show) setBillboard(bb, 'show', false); // hand off ONLY once the model renders
+    icons.setShown(row, false); // hand off ONLY once the model renders
     return true;
   }
 
@@ -443,9 +369,6 @@ export function createRendering({
       (current && aircraftVisuals.read(current)?.specKey !== key) ||
       (!current && flightState._modelPending.has(icao24))
     ) {
-      const bb = flightState._billboards.get(icao24);
-      if (bb && icao24 !== flightState._trackedIcao)
-        setBillboard(bb, 'show', true);
       _releaseModel(icao24);
     }
     if (
@@ -479,9 +402,6 @@ export function createRendering({
         aircraftVisuals.read(model)?.irBoost === flightState._irBoost
       )
         continue; // already right state
-      const bb = flightState._billboards.get(icao);
-      if (bb && icao !== flightState._trackedIcao)
-        setBillboard(bb, 'show', true);
       _releaseModel(icao);
     }
     if (flightState._irReloadQueue.length === 0)
@@ -624,6 +544,7 @@ export function createRendering({
         }
       }
       flightState._models.delete(icao24);
+      _showReleasedIcon(icao24);
     }
     // Do NOT clear _modelPending here — the in-flight load's OWN post-await removes it. Keeping
     // it (a) prevents a duplicate load from starting and (b) keeps the bumped gen entry alive so
@@ -664,7 +585,18 @@ export function createRendering({
         }
       }
     }
+    for (const icao24 of flightState._models.keys()) _showReleasedIcon(icao24);
     flightState._models.clear();
+  }
+
+  /** A released fleet model hands the visual straight back to its icon (the
+   *  tracked contact's entity keeps its own). */
+
+  function _showReleasedIcon(icao24) {
+    const icons = flightState._icons;
+    const row = icons?.row(icao24) ?? -1;
+    if (row >= 0 && icao24 !== flightState._trackedIcao)
+      icons.setShown(row, true);
   }
 
   /** Destroy the standalone tracked-aircraft model and invalidate any in-flight load. */
@@ -709,8 +641,7 @@ export function createRendering({
     // readout consumers then reuse that exact cached position.
     const pos =
       parts.motion._trackedDisplayPosition(flightState._trackedIcao) ||
-      billboardState(flightState._billboards.get(flightState._trackedIcao))
-        ?.position;
+      parts.icons._iconPosition(flightState._trackedIcao);
     if (!pos) {
       if (flightState._trackedModel)
         setModel(flightState._trackedModel, 'show', false);
@@ -789,9 +720,7 @@ export function createRendering({
           // default here produces a one-frame jump to the Earth's center.
           const currentPos =
             parts.motion._trackedDisplayCached() ||
-            billboardState(
-              flightState._billboards.get(flightState._trackedIcao),
-            )?.position;
+            parts.icons._iconPosition(flightState._trackedIcao);
           if (currentPos) {
             const displayPos = _modelDisplayPosition(
               flightState._trackedIcao,
@@ -859,54 +788,40 @@ export function createRendering({
     }
   }
 
+  /**
+   * ~12 Hz fleet pass. Motion, rotation, the horizon cull, limb recession and
+   * the two-tier glyph swap all run on the GPU from each row's segment, so this
+   * only re-plans rows whose regime ended, pins grounded contacts to the floor
+   * under them, advances focus de-emphasis while a target exists, and drives
+   * the 3D-model handoff inside the model regime. Driven by scene.preRender.
+   * @returns {void}
+   */
+
   function _fleetTick() {
-    if (
-      !flightState._viewer ||
-      !flightState._billboardCollection ||
-      !flightState._billboardCollection.show
-    )
-      return;
+    const icons = flightState._icons;
+    if (!flightState._viewer || !icons || !icons.show) return;
     const scene = flightState._viewer.scene;
     const camera = flightState._viewer.camera;
     const nowMs = focusNowMs(Date.now());
 
-    // (The tracked trail head is now the per-frame _trailHeadEntity segment — no 1 Hz
-    // primitive rebuild needed here anymore.)
-
     if (nowMs - flightState._lastFleetTickMs < FLEET_DR_INTERVAL_MS) return;
-    const tickDtSec = flightState._lastFleetTickMs
-      ? Math.min(
-          COURSE_SLEW_DT_MAX_SEC,
-          (nowMs - flightState._lastFleetTickMs) / 1000,
-        )
-      : 0.08;
     flightState._lastFleetTickMs = nowMs;
     // Every contact in this pass shares the same delayed display instant.
-    const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(flightState._scratchFleetRenderTime),
-      -RENDER_DELAY_SEC,
+    const renderTime = parts.icons._displayTime(
       flightState._scratchFleetRenderTime,
     );
+    const tau = icons.seconds(renderTime);
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)
       parts.tracking._refreshCockpitNearContacts();
-    const poseSig = cameraPoseSignature(camera);
-    // Only the nearby Cockpit silhouettes need projected course; far dots are
-    // rotation-free. The per-contact gate below keeps the pip path cheap.
-    const doRotations =
-      poseSig !== flightState._lastCamPoseSig ||
-      nowMs - flightState._lastRotPassMs >= ROTATION_REFRESH_MS;
-    if (doRotations) {
-      flightState._lastCamPoseSig = poseSig;
-      flightState._lastRotPassMs = nowMs;
-    }
-
-    const occluder = horizonOccluder(camera);
+    parts.icons._replanExpired(tau);
+    parts.icons._floorGroundedIcons(renderTime, tau, nowMs, camera.positionWC);
     const focusTarget = getFocusTarget();
+    parts.icons._focusIcons(tau, scene, camera, nowMs, focusTarget);
 
     // 3D model regime: only when enabled AND the camera is zoomed in past the altitude ceiling.
-    // Drop all models the moment we leave it (toggled off / zoomed out) so billboards resume.
+    // Drop all models the moment we leave it (toggled off / zoomed out) so icons resume.
     const useModels = _modelRegimeActive();
     // Drop live models AND invalidate in-flight loads on leaving the regime (else a load that
     // resolves after zoom-out could briefly add a model outside the 3D-model regime).
@@ -915,6 +830,7 @@ export function createRendering({
       (flightState._models.size || flightState._modelPending.size)
     )
       _releaseModels();
+    if (!useModels) return;
 
     // 3D-model eligibility: by DISTANCE (the mode's add/keep band), with ON-SCREEN PRIORITY under the
     // cap. FOUR passes, visible-first, so the slots are spent on what you can see: (1) KEEP on-screen
@@ -925,273 +841,124 @@ export function createRendering({
     // on-screen plane that wants one (passes 1–2) — a single KEEP-everything pass could fill the cap
     // with off-screen retained models. Pure-distance let off-screen planes eat the cap; pure-frustum
     // filtering dropped near off-screen planes entirely. This does both right.
-    let modelEligible = null;
-    if (useModels) {
-      const cap = _modelCap();
-      const camPos = camera.positionWC;
-      const addM = _modelAddDistM();
-      const addDistSq = addM * addM;
-      const keepM = _modelKeepDistM();
-      const keepDistSq = keepM * keepM;
-      const cull = camera.frustum.computeCullingVolume(
-        camPos,
-        camera.directionWC,
-        camera.upWC,
+    const cap = _modelCap();
+    const camPos = camera.positionWC;
+    const addM = _modelAddDistM();
+    const addDistSq = addM * addM;
+    const keepM = _modelKeepDistM();
+    const keepDistSq = keepM * keepM;
+    const cull = camera.frustum.computeCullingVolume(
+      camPos,
+      camera.directionWC,
+      camera.upWC,
+    );
+    // Candidates = planes within the KEEP radius, nearest first, each tagged with on-screen-ness.
+    const cand = [];
+    for (let row = 0; row < icons.count; row++) {
+      const icao = icons.idAt(row);
+      if (icao === flightState._trackedIcao) continue;
+      // A converted TR-3B renders as an icon and can never take a model, so
+      // it must not occupy a CAP SLOT either — excluded here at selection time,
+      // not just at the handoff below, or accumulated conversions would starve
+      // ordinary contacts of 3D models. (The handoff guard stays as defence.)
+      if (isTr3b(icao)) continue;
+      // Ground planes compete for model slots like everyone else (owner decision
+      // 2026-07-03: "3D mode is respected regardless of whether a plane is on the
+      // ground or in the air — no distinction"). The cap + nearest-first ordering
+      // below already bound airport clusters; grounded placement is handled by the
+      // one-shot ground snap in _modelDisplayPosition.
+      const position = icons.position(
+        row,
+        tau,
+        flightState._scratchModelBS.center,
       );
-      // Candidates = planes within the KEEP radius, nearest first, each tagged with on-screen-ness.
-      const cand = [];
-      for (const [icao, bb] of flightState._billboards) {
-        if (icao === flightState._trackedIcao) continue;
-        // A converted TR-3B renders as a billboard and can never take a model, so
-        // it must not occupy a CAP SLOT either — excluded here at selection time,
-        // not just at the handoff below, or accumulated conversions would starve
-        // ordinary contacts of 3D models. (The handoff guard stays as defence.)
-        if (isTr3b(icao)) continue;
-        // Ground planes compete for model slots like everyone else (owner decision
-        // 2026-07-03: "3D mode is respected regardless of whether a plane is on the
-        // ground or in the air — no distinction"). The cap + nearest-first ordering
-        // below already bound airport clusters; grounded placement is handled by the
-        // one-shot ground snap in _modelDisplayPosition.
-        const { position } = billboardState(bb);
-        const d2 = Cesium.Cartesian3.distanceSquared(camPos, position);
-        if (d2 > keepDistSq) continue; // beyond the keep radius → never eligible
-        Cesium.Cartesian3.clone(position, flightState._scratchModelBS.center);
-        cand.push([
-          icao,
-          d2,
-          cull.computeVisibility(flightState._scratchModelBS) !==
-            Cesium.Intersect.OUTSIDE,
-        ]);
-      }
-      cand.sort((a, b) => a[1] - b[1]); // nearest first
-      if (cand.length > cap && nowMs - flightState._lastModelCapWarnMs > 5000) {
-        console.warn(
-          `[Data:Flights] ${cand.length} planes in 3D range; capped at ${cap} (${flightState._models3dMode}). On-screen planes are prioritized.`,
-        );
-        flightState._lastModelCapWarnMs = nowMs;
-      }
-      modelEligible = selectModelEligible(cand, {
-        cap,
-        addDistSq,
-        isModeled: (icao) => flightState._models.has(icao),
-      });
-      const toRelease = [];
-      for (const icao of flightState._models.keys()) {
-        if (icao !== flightState._trackedIcao && !modelEligible.has(icao))
-          toRelease.push(icao);
-      }
-      for (const icao of toRelease) _releaseModel(icao);
+      const d2 = Cesium.Cartesian3.distanceSquared(camPos, position);
+      if (d2 > keepDistSq) continue; // beyond the keep radius → never eligible
+      cand.push([
+        icao,
+        d2,
+        cull.computeVisibility(flightState._scratchModelBS) !==
+          Cesium.Intersect.OUTSIDE,
+      ]);
     }
-
-    for (const [icao24, bb] of flightState._billboards) {
-      if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
-      const icon = billboardState(bb);
-
-      const info = flightState.records.data.get(icao24);
-
-      const dr = parts.motion._deadReckon(
-        icao24,
-        flightState._scratchFleetPos,
-        renderTime,
+    cand.sort((a, b) => a[1] - b[1]); // nearest first
+    if (cand.length > cap && nowMs - flightState._lastModelCapWarnMs > 5000) {
+      console.warn(
+        `[Data:Flights] ${cand.length} planes in 3D range; capped at ${cap} (${flightState._models3dMode}). On-screen planes are prioritized.`,
       );
-      // The dead-reckoned point drifts away from the fix whose cell supplied the
-      // height, so a grounded contact's sprite ends up under the mesh it taxied
-      // (or coasted) over. Re-floor at the DISPLAYED coordinate — read-only, and
-      // never while a 3D model owns the visual (T7).
-      const display = parts.motion._floorGroundedDisplayPosition(
-        icao24,
-        info,
-        dr,
-        _modelOwnsVisual(icao24),
-        nowMs,
-      );
-      // Gate the write — assigning Billboard.position dirties the whole
-      // collection's vertex buffer, so skip sub-meter moves.
-      if (
-        display &&
-        Cesium.Cartesian3.distanceSquared(display, icon.position) > 1.0
-      ) {
-        setBillboard(bb, 'position', display);
-      }
+      flightState._lastModelCapWarnMs = nowMs;
+    }
+    const modelEligible = selectModelEligible(cand, {
+      cap,
+      addDistSq,
+      isModeled: (icao) => flightState._models.has(icao),
+    });
+    const toRelease = [];
+    for (const icao of flightState._models.keys()) {
+      if (icao !== flightState._trackedIcao && !modelEligible.has(icao))
+        toRelease.push(icao);
+    }
+    for (const icao of toRelease) _releaseModel(icao);
 
-      // Round 6: occlusion-test a LIFTED point for contacts rendering below
-      // (or within a wingspan of) the ellipsoid — EllipsoidalOccluder judges a
-      // sub-ellipsoid point near the limb "beyond the horizon" and the fleet
-      // pass would hide a plane that is really just low over high-N terrain
-      // waiting for its floor to warm (ATL grounded contacts at geoid −31 m).
-      const beyondHorizon = !occluder.isPointVisible(
-        flightState._cullPositions.get(icao24) || icon.position,
-      );
-      // A billboard flipping INTO view (horizon reveal while the camera idles)
-      // gets its rotation refreshed THIS tick even without a pose change —
-      // otherwise it reappears wearing its stale (often creation-north) nose for
-      // up to ROTATION_REFRESH_MS. (Model-handed-off planes also read show=false
-      // here; harmless — the model branch below `continue`s past the rotation.)
-      const revealed = !beyondHorizon && !icon.show;
-      if (icon.show === beyondHorizon) setBillboard(bb, 'show', !beyondHorizon);
-      if (beyondHorizon) {
-        // Also hide any 3D model — otherwise a model that crossed the limb would keep
-        // rendering through the hidden globe at its last matrix.
+    // 3D model takes over from the icon for eligible planes. GAP-PROOF: the icon stays shown
+    // until the model is actually READY to render, so a plane is never both iconless AND
+    // modelless (the "planes vanish when 3D turns on" bug). Position the model every tick
+    // regardless so it's framed the instant it becomes ready. Converted TR-3Bs stay 2D on
+    // purpose: the Easter egg IS the triangle, and there is no GLB for it.
+    const occluder = horizonOccluder(camera);
+    for (const icao24 of modelEligible) {
+      if (isTr3b(icao24)) continue;
+      const row = icons.row(icao24);
+      if (row < 0) continue;
+      const position = icons.position(row, tau, flightState._scratchFleetPos);
+      if (!parts.icons._aboveHorizon(row, position, occluder)) {
+        // A model that crossed the limb would keep rendering through the
+        // hidden globe at its last matrix; the icon's own cull is on the GPU.
         const m = flightState._models.get(icao24);
         if (m && modelState(m)?.show) setModel(m, 'show', false);
         continue;
       }
-
-      // One order-independent write site composes freshness × focus × limb haze
-      // for alpha, and base class/ground scale × limb taper for scale. Cesium's
-      // locked NearFarScalar remains a separate multiplicative stage. This
-      // narrowly amends always-visible rendering without count culling or zero
-      // alpha; nearer focus behavior remains tunable rather than universal.
-      const cameraDistanceM = Cesium.Cartesian3.distance(
-        camera.positionWC,
-        icon.position,
+      _ensureModel(icao24);
+      const model = flightState._models.get(icao24);
+      const cameraDistanceM = Cesium.Cartesian3.distance(camPos, position);
+      _driveFleetModelHandoff(
+        icao24,
+        model,
+        row,
+        position,
+        icons.course(row, tau),
+        () => {
+          applyAircraftModelTreatment({
+            model,
+            // IR boost must survive the per-tick treatment write — otherwise
+            // any alpha change would repaint the ordinary tint over the hot
+            // white. Boosted models also skip the recession fade: hot targets
+            // stay full-strength at any range (icons keep their normal
+            // fade — full-opacity glyph walls read as overwhelming).
+            baseColor: flightState._irBoost
+              ? Cesium.Color.WHITE
+              : _modelColor(icao24),
+            alpha: flightState._irBoost
+              ? 1
+              : aircraftTreatmentAlpha({
+                  baseAlpha: icons.alpha(row),
+                  focusFactor: icons.focus(row),
+                  cameraDistanceM,
+                  cameraHeightM: camera.positionCartographic?.height,
+                }),
+          });
+        },
       );
-      const distanceScale = nearFarScalarValueAtDistance(
-        icon.scaleByDistance,
-        cameraDistanceM,
-      );
-      const focus = advanceProjectedSpriteFocus(
-        bb,
-        icon.position,
-        scene,
-        camera,
-        nowMs,
-        focusTarget,
-        undefined,
-        (icon.width || 20) * (icon.scale || 1) * distanceScale * 0.5,
-        (icon.height || 20) * (icon.scale || 1) * distanceScale * 0.5,
-      );
-      const isCockpitNear =
-        flightState._cockpitContactMode &&
-        flightState._cockpitNearContacts.has(icao24);
-      const layerBaseColor =
-        flightState._cockpitContactMode && !isCockpitNear
-          ? _cockpitContactColor(icao24, info)
-          : _fleetBillboardColor(icao24, info);
-      const baseColor = layerBaseColor;
-      const treatment = applyAircraftBillboardTreatment({
-        billboard: bb,
-        baseScale:
-          flightState._cockpitContactMode && !isCockpitNear
-            ? 1
-            : _fleetBillboardScale(icao24, info?.klass),
-        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
-        baseColor,
-        focusFactor: focus.factor,
-        cameraDistanceM,
-        cameraHeightM: camera.positionCartographic?.height,
-      });
-      flightState._billboardLimbScale.set(bb, treatment.factors.scale);
-      // Two-tier glyph raster (owner playtest 2026-08-16): the billboard atlas
-      // has no mipmaps, so no single texture stays crisp across the ~25–150
-      // device-px range scaleByDistance produces. Swap between the 64 px fleet
-      // raster and the 192 px close raster on the billboard's ACTUAL on-screen
-      // size — post-treatment bb.scale, so focus/limb recession counts — with
-      // hysteresis so zoom oscillation never thrashes the atlas.
-      if (!flightState._cockpitContactMode || isCockpitNear) {
-        const glyphDevPx =
-          (icon.width || 20) *
-          (icon.scale || 1) *
-          distanceScale *
-          (globalThis.devicePixelRatio || 1);
-        const visual = aircraftVisuals.write(bb);
-        const wantLarge = visual.iconLarge ? glyphDevPx > 56 : glyphDevPx > 76;
-        if (wantLarge !== !!visual.iconLarge) {
-          visual.iconLarge = wantLarge;
-          bb.image = aircraftIcon(
-            _iconKind(icao24, info?.klass),
-            wantLarge ? TRACKED_ICON_PX : undefined,
-          );
-        }
-      }
-
-      // Smoothed display course: the path direction _deadReckon just reported
-      // for THIS aircraft (nothing else calls _deadReckon in between), rate-
-      // limited so segment-boundary course steps glide instead of snapping.
-      // The slew cap eases toward COURSE_MIN_DPS at low speed, and a hovering
-      // aircraft (hold flag) keeps its previous nose direction outright.
-      const rawCourse =
-        flightState._drCourseDeg != null
-          ? flightState._drCourseDeg
-          : (info && info.true_track) || 0;
-      const prevCourse = flightState._displayCourse.get(icao24);
-      const course =
-        flightState._drCourseHold && prevCourse != null
-          ? prevCourse
-          : limitCourseStep(
-              prevCourse,
-              rawCourse,
-              courseSlewCapDps(
-                flightState._drSpeedMps != null
-                  ? flightState._drSpeedMps
-                  : ((info && info.velocity) ?? NaN),
-                COURSE_MAX_DPS,
-              ),
-              tickDtSec,
-            );
-      flightState._displayCourse.set(icao24, course);
-
-      // 3D model takes over from the billboard for in-view planes (modelEligible). GAP-PROOF: the
-      // billboard stays shown until the model is actually READY to render, so a plane is never both
-      // iconless AND modelless (the "planes vanish when 3D turns on" bug). Position the model every
-      // tick regardless so it's framed the instant it becomes ready.
-      // Converted TR-3Bs stay 2D on purpose: the Easter egg IS the triangle, and
-      // there is no GLB for it, so the model handoff is suppressed rather than
-      // fed a stand-in mesh. The billboard keeps rendering (and keeps satisfying
-      // the getNearby/getDetectableObjects `bb.show` visibility guards), so a
-      // converted contact still works in Contacts and Cockpit.
-      if (useModels && dr && modelEligible.has(icao24) && !isTr3b(icao24)) {
-        _ensureModel(icao24);
-        const model = flightState._models.get(icao24);
-        const ownsVisual = _driveFleetModelHandoff(
-          icao24,
-          model,
-          bb,
-          dr,
-          course,
-          () => {
-            applyAircraftModelTreatment({
-              model,
-              // IR boost must survive the per-tick treatment write — otherwise
-              // any alpha change would repaint the ordinary tint over the hot
-              // white. Boosted models also skip the recession fade: hot targets
-              // stay full-strength at any range (billboards keep their normal
-              // fade — full-opacity glyph walls read as overwhelming).
-              baseColor: flightState._irBoost
-                ? Cesium.Color.WHITE
-                : _modelColor(icao24),
-              alpha: flightState._irBoost ? 1 : treatment.alpha,
-            });
-          },
-        );
-        if (ownsVisual) continue; // skip billboard rotation
-      }
-
-      if (
-        (!flightState._cockpitContactMode || isCockpitNear) &&
-        (doRotations || revealed)
-      ) {
-        const rot = screenProjectedRotation(
-          scene,
-          icon.position,
-          course,
-          icon.rotation,
-        );
-        if (rot !== null && Math.abs(rot - icon.rotation) > 0.002) {
-          setBillboard(bb, 'rotation', rot);
-        }
-      }
     }
   }
   return {
     _fleetBillboardColor,
     _fleetBillboardScale,
-    _groundDepthDistance,
+    _cockpitContactColor,
     _modelSpec,
     _normalBillboardScaleByDistance,
     _cockpitBillboardScaleByDistance,
     _iconKind,
-    _applyFleetBillboardPresentation,
     _modelColor,
     _modelRegimeActive,
     _modelCap,

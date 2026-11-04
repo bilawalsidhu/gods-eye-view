@@ -14,6 +14,8 @@ import flightsLayer, {
   _setTrackedFlightRefreshStateForTest,
   _floorGroundedDisplayPositionForTest,
   _clearDisplayFloorStateForTest,
+  _iconForTest,
+  _floorGroundedIconsForTest,
   mapAnalystRecord,
 } from './flights.js';
 import { setMilitaryLayerActive } from './militaryRegistry.js';
@@ -225,18 +227,9 @@ test('nonempty OpenSky payload with zero usable rows cannot prove share target a
 test('a newly seen aircraft appears at its delayed position, not ahead of it', async () => {
   // The fleet renders RENDER_DELAY_SEC behind real time, so a fresh contact's
   // first displayed position is its fix projected back to that delayed time.
-  // Creating the billboard at the raw fix drew it ahead until the next fleet
+  // Creating the icon at the raw fix drew it ahead until the next fleet
   // tick, which then jumped it back about one delay of travel.
-  const added = [];
-  const billboardCollection = {
-    show: false,
-    add(options) {
-      const billboard = { ...options };
-      added.push(billboard);
-      return billboard;
-    },
-    remove() {},
-  };
+  const billboardCollection = { show: false };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
     icao24: 'seed00',
@@ -293,9 +286,9 @@ test('a newly seen aircraft appears at its delayed position, not ahead of it', a
   };
   try {
     await flightsLayer.update(viewer);
-    const billboard = added.find((entry) => entry.id === icao24);
-    assert.ok(billboard, 'the new contact gets a billboard');
-    const shown = Cesium.Cartographic.fromCartesian(billboard.position);
+    const icon = _iconForTest(icao24);
+    assert.ok(icon, 'the new contact gets an icon');
+    const shown = Cesium.Cartographic.fromCartesian(icon.position);
     const fix = Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 10_700);
     const behindM = Cesium.Cartesian3.distance(
       Cesium.Cartesian3.fromRadians(shown.longitude, shown.latitude, 10_700),
@@ -1066,21 +1059,12 @@ const _floorCarto = (pos) =>
 
 test('a newly seen taxiing aircraft starts on the floor under its delayed position', async () => {
   // A grounded contact is drawn at its delayed position lifted onto the floor
-  // under it. Creating the billboard without that lift started it on the
+  // under it. Creating the icon without that lift started it on the
   // floor of its reported fix, then the next fleet tick raised it.
   _clearDisplayFloorStateForTest();
   _clearMeshFloorCellsForTest();
   setMeshFloorPreferred(true);
-  const added = [];
-  const billboardCollection = {
-    show: false,
-    add(options) {
-      const billboard = { ...options };
-      added.push(billboard);
-      return billboard;
-    },
-    remove() {},
-  };
+  const billboardCollection = { show: false };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
     icao24: 'seed00',
@@ -1142,9 +1126,9 @@ test('a newly seen taxiing aircraft starts on the floor under its delayed positi
   };
   try {
     await flightsLayer.update(viewer);
-    const billboard = added.find((entry) => entry.id === icao24);
-    assert.ok(billboard, 'the new contact gets a billboard');
-    const shown = _floorCarto(billboard.position);
+    const icon = _iconForTest(icao24);
+    assert.ok(icon, 'the new contact gets an icon');
+    const shown = _floorCarto(icon.position);
     assert.ok(
       Cesium.Math.toDegrees(shown.longitude) < fixLon,
       'drawn behind the fix',
@@ -1153,6 +1137,95 @@ test('a newly seen taxiing aircraft starts on the floor under its delayed positi
       Math.abs(shown.height - (131.5 + GROUND_FLOOR_LIFT_M)) < 0.05,
       `height ${shown.height} should be the delayed position's floor, 131.5 + lift`,
     );
+  } finally {
+    globalThis.fetch = realFetch;
+    _clearMeshFloorCellsForTest();
+    _clearDisplayFloorStateForTest();
+  }
+});
+
+test('far grounded contacts take turns on the floor; near ones refloor every tick', async () => {
+  // The floor pass is the fleet tick's only per-contact CPU work. Past
+  // FLOOR_NEAR_M a contact is refloored once per FLOOR_FAR_EVERY_TICKS.
+  _clearDisplayFloorStateForTest();
+  _clearMeshFloorCellsForTest();
+  setMeshFloorPreferred(true);
+  const viewer = { camera: { positionCartographic: null }, scene: {} };
+  _setTrackedFlightRefreshStateForTest({
+    icao24: 'seed00',
+    entity: null,
+    billboard: {
+      show: false,
+      position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
+    },
+    billboardCollection: { show: false },
+    viewer,
+    meta: { rawLat: 0, rawLon: 0, onGround: false },
+    tracked: false,
+  });
+  const icao24 = 'taxi02';
+  const fixLon = -97.66;
+  const fixLat = 30.2;
+  for (let k = -40; k <= 40; k += 1) {
+    reportMeshFloorCell(fixLat, fixLon + k * 0.0001, 131.5);
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (!String(url).startsWith('/api/flights')) {
+      return { ok: true, status: 200, json: async () => ({ ac: [] }) };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({
+        time: nowSec,
+        states: [
+          [
+            icao24,
+            'TAXI02 ',
+            'United States',
+            nowSec - 2,
+            nowSec - 2,
+            fixLon,
+            fixLat,
+            null,
+            true,
+            10,
+            90,
+            0,
+            null,
+            null,
+            null,
+            null,
+            null,
+            5,
+          ],
+        ],
+      }),
+    };
+  };
+  try {
+    await flightsLayer.update(viewer);
+    const start = Cesium.JulianDate.now();
+    const at = (s) =>
+      Cesium.JulianDate.addSeconds(start, s, new Cesium.JulianDate());
+    const far = Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 3_000_000);
+    const near = Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 10_000);
+    let last = _iconForTest(icao24).position;
+    const moves = (camera, from, to) => {
+      let count = 0;
+      for (let tick = from; tick <= to; tick += 1) {
+        _floorGroundedIconsForTest(at(tick), camera);
+        const now = _iconForTest(icao24).position;
+        if (Cesium.Cartesian3.distance(now, last) > 1) count += 1;
+        last = now;
+      }
+      return count;
+    };
+    assert.equal(moves(far, 1, 24), 2, 'far: once per 12 ticks');
+    assert.equal(moves(near, 25, 30), 6, 'near: every tick');
   } finally {
     globalThis.fetch = realFetch;
     _clearMeshFloorCellsForTest();

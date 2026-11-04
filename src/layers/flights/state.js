@@ -11,7 +11,6 @@ export function createFlightState({ source, services }) {
     ...services.geoid,
     ...services.groundFloor,
   });
-  flightState._cullPositions = new Map();
 
   /** Per-class model spec. Hangar-fleet classes (CLASS_MODEL_REAL) ship GLBs
    *  vertex-baked to real-world METERS in the airplane.glb axis convention, so
@@ -91,22 +90,37 @@ export function createFlightState({ source, services }) {
     1.0,
   );
   // frustum-visibility test
-  /** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
-
-  flightState._billboardLimbScale = new WeakMap();
   // keep last N positions per aircraft
 
   // ---------------------------------------------------------------------------
   // Module-level state: billboard collection and per-aircraft lookup maps
   // ---------------------------------------------------------------------------
 
-  /** @type {Cesium.BillboardCollection|null} */
+  /** Every contact's icon row (see icons.js); null outside a layer lifetime. */
 
-  flightState._billboardCollection = null;
+  flightState._icons = null;
 
-  /** @type {Map<string, Cesium.Billboard>} icao24 -> billboard primitive */
+  /** The primitive drawing `_icons`. */
 
-  flightState._billboards = new Map();
+  flightState._iconPrimitive = null;
+
+  flightState._scratchIconRenderTime = new Cesium.JulianDate();
+
+  /** Contacts whose latest poll put them on the ground. */
+
+  flightState._grounded = new Set();
+
+  /** Grounded contacts the floor currently lifts; their rows hold CPU positions. */
+
+  flightState._floorPinned = new Set();
+
+  /** Fleet ticks since start; far grounded rows take their floor turn by it. */
+
+  flightState._floorTick = 0;
+
+  /** Rows still away from full focus emphasis after the last focus pass. */
+
+  flightState._iconFocusActive = 0;
 
   /** Stable lightweight records reused by the detection overlay between polls. */
 
@@ -204,14 +218,6 @@ export function createFlightState({ source, services }) {
 
   flightState._lastFleetTickMs = 0;
 
-  /** @type {string} Camera pose signature at the last rotation pass */
-
-  flightState._lastCamPoseSig = '';
-
-  /** @type {number} Epoch ms of the last full rotation pass */
-
-  flightState._lastRotPassMs = 0;
-
   /** @type {number} Last computed rotation for the tracked entity (radians) */
 
   flightState._lastTrackedRotation = 0;
@@ -249,6 +255,10 @@ export function createFlightState({ source, services }) {
   flightState._scratchFleetRenderTime = new Cesium.JulianDate();
 
   flightState._scratchFleetPos = new Cesium.Cartesian3();
+
+  flightState._scratchCockpitPos = new Cesium.Cartesian3();
+
+  flightState._scratchNearbyPos = new Cesium.Cartesian3();
 
   flightState._scratchSonarScreen = new Cesium.Cartesian2();
 

@@ -702,7 +702,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.doesNotMatch(detection, /sonarActive \? 1 : 0/);
   assert.match(
     civilRendering,
-    /alpha: flightState\._irBoost \? 1 : treatment\.alpha/,
+    /alpha: flightState\._irBoost\s*\?\s*1\s*:\s*aircraftTreatmentAlpha\(/,
   );
   assert.match(
     militaryRendering,

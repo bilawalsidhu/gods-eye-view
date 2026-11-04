@@ -1,7 +1,8 @@
 import * as Cesium from 'cesium';
 import { CYAN_TRANSPARENT } from './policy.js';
-import { mirrorBillboard } from '../../data/billboardMirror.js';
 import { mirrorModel } from '../../data/modelMirror.js';
+import { createIconSet } from '../../data/iconSet.js';
+import { writeHoldSegment } from '../../data/iconSegment.js';
 
 export function createTesting({
   flightState,
@@ -38,6 +39,19 @@ export function createTesting({
     flightState._displayFloorState.clear();
   }
 
+  /** Give a test contact an icon row held at `billboard.position`, shown as
+   *  `billboard.show` says (hidden by default while tracked). */
+
+  function _seedIconForTest(icao24, billboard, tracked) {
+    const icons = flightState._icons;
+    const row = icons.add(icao24, { layer: 'flights', id: icao24 });
+    if (billboard?.position)
+      writeHoldSegment(icons.segments, row, billboard.position, 0);
+    icons.segmentWritten(row);
+    icons.setShown(row, billboard?.show ?? !tracked);
+    return row;
+  }
+
   /**
    * Seed only the mutable state needed to exercise tracked-card refreshes through
    * the production poll reconciler. Tests still call `flightsLayer.update()`;
@@ -46,13 +60,14 @@ export function createTesting({
    * @param {string} state.icao24
    * @param {object} state.entity
    * @param {object} state.meta
-   * @param {object} state.billboard
-   * @param {object} state.billboardCollection
+   * @param {{position?: Cesium.Cartesian3, show?: boolean}} [state.billboard]
+   *   Where the contact's icon is held, and whether it is shown.
+   * @param {{show?: boolean}} [state.billboardCollection] Layer visibility.
    * @param {object} state.viewer
    * @param {Array<Object>} [state.history=[]]
    * @param {boolean} [state.tracked=true]
    * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
-   *   by icao24, for the billboard-hidden/model-shown handoff state.
+   *   by icao24, for the icon-hidden/model-shown handoff state.
    */
 
   function _setTrackedFlightRefreshStateForTest({
@@ -69,9 +84,13 @@ export function createTesting({
   }) {
     flightState._viewer = viewer;
     flightState._modelCollection = modelCollection;
-    flightState._billboardCollection = billboardCollection;
-    flightState._billboards = new Map([[icao24, mirrorBillboard(billboard)]]);
-    flightState._cullPositions.clear();
+    flightState._icons = createIconSet({
+      epoch: parts.icons._displayTime(new Cesium.JulianDate()),
+    });
+    flightState._icons.show = billboardCollection?.show ?? true;
+    flightState._grounded.clear();
+    flightState._floorPinned.clear();
+    _seedIconForTest(icao24, billboard, tracked);
     flightState._models.clear();
     for (const [key, model] of models)
       flightState._models.set(key, mirrorModel(model));
@@ -120,7 +139,7 @@ export function createTesting({
     billboard,
     history = [],
   }) {
-    flightState._billboards.set(icao24, mirrorBillboard(billboard));
+    _seedIconForTest(icao24, billboard, false);
     flightState.records.data.set(icao24, meta);
     flightState._positionHistory.set(icao24, history);
   }
@@ -181,16 +200,29 @@ export function createTesting({
       : Cesium.Color.CYAN;
   }
 
-  /** Drive the exact fleet billboard-to-model handoff used by `_fleetTick`. */
+  /** Drive the exact fleet icon-to-model handoff used by `_fleetTick`. */
 
   function _driveFleetModelHandoffForTest({ icao24, position, course = 0 }) {
     return parts.rendering._driveFleetModelHandoff(
       icao24,
       flightState._models.get(icao24),
-      flightState._billboards.get(icao24),
+      flightState._icons.row(icao24),
       position,
       course,
     );
+  }
+
+  /** Where a contact's icon is drawn now and whether the layer shows it. */
+
+  function _iconForTest(icao24) {
+    const position = parts.icons._iconPosition(icao24);
+    return position
+      ? {
+          position,
+          shown: parts.icons._iconShown(icao24),
+          course: parts.icons._iconCourse(icao24),
+        }
+      : null;
   }
 
   /** Exercise the exact asynchronous fleet loader and return its admitted model. */
@@ -199,7 +231,33 @@ export function createTesting({
     await parts.rendering._ensureModel(icao24);
     return flightState._models.get(icao24) || null;
   }
+  /** Show or hide a contact's icon as a handoff would, or hold it somewhere. */
+
+  function _setIconForTest(icao24, { shown, position } = {}) {
+    const icons = flightState._icons;
+    const row = icons?.row(icao24) ?? -1;
+    if (row < 0) return;
+    if (shown !== undefined) icons.setShown(row, shown);
+    if (position) {
+      writeHoldSegment(icons.segments, row, position, 0);
+      icons.segmentWritten(row);
+    }
+  }
+
+  /** Run the fleet tick's grounded floor pass once, at `renderTime`. */
+
+  function _floorGroundedIconsForTest(renderTime, cameraPosition) {
+    const icons = flightState._icons;
+    parts.icons._floorGroundedIcons(
+      renderTime,
+      icons.seconds(renderTime),
+      Date.now(),
+      cameraPosition,
+    );
+  }
   return {
+    _floorGroundedIconsForTest,
+    _setIconForTest,
     _floorGroundedDisplayPositionForTest,
     _clearDisplayFloorStateForTest,
     _setTrackedFlightRefreshStateForTest,
@@ -214,6 +272,7 @@ export function createTesting({
     _updateTrackedModelForTest,
     _trackedBillboardColorForTest,
     _driveFleetModelHandoffForTest,
+    _iconForTest,
     _ensureFleetModelForTest,
   };
 }

@@ -35,9 +35,22 @@ import {
   DISPLAY_CORRIDOR_CELL_BUDGET,
   DISPLAY_CORRIDOR_FAIR_SHARE,
 } from './policy.js';
-import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 import { modelState } from '../../data/modelMirror.js';
 import { readEntityRecord } from '../../data/entityRecords.js';
+
+/** A fix's own ground speed, else the record's. */
+function fixSpeedMps(fix, info) {
+  return Number.isFinite(fix.velocity)
+    ? fix.velocity
+    : (info && info.velocity) || 0;
+}
+
+/** A fix's own track, else the record's. */
+function fixTrackDeg(fix, info) {
+  return Number.isFinite(fix.track)
+    ? fix.track
+    : (info && info.true_track) || 0;
+}
 
 export function createMotion({
   flightState,
@@ -66,6 +79,23 @@ export function createMotion({
   // Fixes leave the cache with their history; corrected positions invalidate
   // the local frame even when the existing Cartesian is mutated in place.
   const fixFrames = new WeakMap();
+  /** `_motionRegime`'s reused result. */
+  const regime = {
+    kind: 'fix',
+    a: null,
+    b: null,
+    span: 0,
+    speed: 0,
+    trackFrom: 0,
+    trackTo: 0,
+    chordCourse: null,
+    blend: 0,
+    fix: null,
+    heading: 0,
+    turnRateDps: 0,
+    minDt: 0,
+    maxDt: 0,
+  };
 
   // Round 5: the old `_warmGroundedAircraftSurfaceCache` (global exact-5-decimal
   // warm for every grounded contact on Earth) is GONE. Parked-aircraft GPS
@@ -81,7 +111,7 @@ export function createMotion({
    * coasting on its final meta — if that fix predated the floor warm, it sat
    * frozen underground forever. Runs once per poll over the (bounded) flight
    * map; touches only grounded, feed-absent, demonstrably-below-floor
-   * contacts, and patches the stored fix + billboard in place (zero-velocity
+   * contacts, and patches the stored fix + icon in place (zero-velocity
    * DR renders the patched fix verbatim).
    * @param {Set<string>} currentIcaos - Contacts present in THIS poll (already
    *   floored by the live path — skipped here).
@@ -101,7 +131,6 @@ export function createMotion({
       )
         continue;
       info.renderAltitudeM = lifted;
-      flightState._cullPositions.delete(icao24); // above the ellipsoid now (or floors say otherwise next poll)
       const position = Cesium.Cartesian3.fromDegrees(
         info.rawLon,
         info.rawLat,
@@ -111,8 +140,9 @@ export function createMotion({
       const newest = history?.[history.length - 1];
       if (newest)
         newest.position = Cesium.Cartesian3.clone(position, newest.position);
-      const bb = flightState._billboards.get(icao24);
-      if (bb) setBillboard(bb, 'position', position);
+      // Above the ellipsoid now (or floors say otherwise next poll).
+      parts.icons._applyIconPresentation(icao24);
+      parts.icons._planIcon(icao24);
     }
   }
 
@@ -134,9 +164,7 @@ export function createMotion({
   function _deadReckon(icao24, result, sampledRenderTime) {
     const info = flightState.records.data.get(icao24);
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
-      const position = billboardState(
-        flightState._billboards.get(icao24),
-      )?.position;
+      const position = parts.icons._iconPosition(icao24);
       flightState._drCourseDeg = info?.true_track || 0;
       flightState._drSpeedMps = info?.velocity || 0;
       flightState._drCourseHold =
@@ -166,100 +194,113 @@ export function createMotion({
         flightState._scratchRenderTime,
       );
 
-    // Bracketing pair: interpolate — no extrapolation error, no snap-back.
+    const regime = _motionRegime(history, info, renderTime);
+    if (regime.kind === 'between') {
+      const { a, b, span } = regime;
+      const t =
+        span > 0
+          ? Cesium.JulianDate.secondsDifference(renderTime, a.time) / span
+          : 1.0;
+      const trackCourse = lerpAngleDeg(regime.trackFrom, regime.trackTo, t);
+      flightState._drCourseDeg =
+        regime.chordCourse != null
+          ? lerpAngleDeg(trackCourse, regime.chordCourse, regime.blend)
+          : trackCourse;
+      flightState._drSpeedMps = regime.speed;
+      flightState._drCourseHold = regime.speed < COURSE_HOLD_SPEED_MPS;
+      flightState._drExtrapolating = false;
+      return Cesium.Cartesian3.lerp(a.position, b.position, t, out);
+    }
+    const dt = Cesium.Math.clamp(
+      Cesium.JulianDate.secondsDifference(renderTime, regime.fix.time),
+      regime.minDt,
+      regime.maxDt,
+    );
+    return _extrapolateFix(regime.fix, info, dt, out, regime.turnRateDps);
+  }
+
+  /**
+   * Which motion a contact's history gives at `renderTime` — the one choice
+   * `_deadReckon` (CPU) and the icon planner (GPU segment) both draw from.
+   *
+   * - `between`: interpolate the bracketing pair `a`→`b`, no extrapolation
+   *   error and no snap-back. The course of the DISPLAYED motion blends the
+   *   time-interpolated reported track toward the chord by `blend`: the chord
+   *   is only trustworthy when the segment covers real ground (at hover its
+   *   direction is GPS jitter; on a slow tight turn it STEPS the whole
+   *   per-segment turn at each boundary), and helicopters never use it
+   *   (rotorcraft chords are noise-dominated at their typical speeds).
+   * - `fix`: extrapolate `fix` by the elapsed time clamped to [minDt, maxDt].
+   *   Warm-up (renderTime predates ALL history: freshly seen or just tracked,
+   *   before RENDER_DELAY_SEC of history exists) runs the OLDEST fix BACKWARD,
+   *   preserving the 30s-behind invariant, so as history fills the icon glides
+   *   FORWARD into interpolation with no freeze and no backward snap (holding
+   *   the oldest fix froze the icon; extrapolating the newest to wall-clock
+   *   made it jump back a poll interval when interpolation took over).
+   *   Otherwise the newest fix coasts. OpenSky can still be receiving fresh
+   *   contact messages for that aircraft; freezing 60 s after the position
+   *   produced a stop → catch-up → stop cadence, so it coasts through the latest
+   *   real contact plus a bounded grace, with an absolute cap so a stale cached
+   *   feed cannot drift forever.
+   *
+   * The returned object is a reused scratch: read it before the next call.
+   * @param {Array<object>} history Non-empty, oldest first.
+   * @param {object|undefined} info The contact's record.
+   * @param {Cesium.JulianDate} renderTime
+   */
+  function _motionRegime(history, info, renderTime) {
     for (let i = history.length - 1; i >= 1; i--) {
       const a = history[i - 1];
       const b = history[i];
       if (
-        Cesium.JulianDate.lessThanOrEquals(a.time, renderTime) &&
-        Cesium.JulianDate.lessThanOrEquals(renderTime, b.time)
-      ) {
-        const span = Cesium.JulianDate.secondsDifference(b.time, a.time);
-        const t =
-          span > 0
-            ? Cesium.JulianDate.secondsDifference(renderTime, a.time) / span
-            : 1.0;
-        // Course of the DISPLAYED motion. The chord is only trustworthy when the
-        // segment covers real ground (at hover its direction is GPS jitter; on a
-        // slow tight turn it STEPS the whole per-segment turn at each boundary),
-        // so it is blended against the reported per-fix track by displayed
-        // ground speed — and the track is TIME-INTERPOLATED between the fixes so
-        // a slow turner's nose advances continuously through the segment instead
-        // of snapping once per poll. Helicopters always use the reported track
-        // (rotorcraft chords are noise-dominated at their typical speeds).
-        const chordLenM = Cesium.Cartesian3.distance(a.position, b.position);
-        const segSpeed =
-          span > 0 ? chordLenM / span : (info && info.velocity) || 0;
-        const fallbackTrack = (info && info.true_track) || 0;
-        const trackFrom = Number.isFinite(a.track) ? a.track : fallbackTrack;
-        const trackTo = Number.isFinite(b.track) ? b.track : trackFrom;
-        const trackCourse = lerpAngleDeg(trackFrom, trackTo, t);
-        const w = info && info.klass === 'helicopter' ? 0 : speedRamp(segSpeed);
-        const chordCourse =
-          w > 0 ? courseBetweenCartesians(a.position, b.position) : null;
-        flightState._drCourseDeg =
-          chordCourse != null
-            ? lerpAngleDeg(trackCourse, chordCourse, w)
-            : trackCourse;
-        flightState._drSpeedMps = segSpeed;
-        flightState._drCourseHold = segSpeed < COURSE_HOLD_SPEED_MPS;
-        flightState._drExtrapolating = false;
-        return Cesium.Cartesian3.lerp(a.position, b.position, t, out);
-      }
+        !Cesium.JulianDate.lessThanOrEquals(a.time, renderTime) ||
+        !Cesium.JulianDate.lessThanOrEquals(renderTime, b.time)
+      )
+        continue;
+      const span = Cesium.JulianDate.secondsDifference(b.time, a.time);
+      const chordLenM = Cesium.Cartesian3.distance(a.position, b.position);
+      const speed = span > 0 ? chordLenM / span : (info && info.velocity) || 0;
+      const fallbackTrack = (info && info.true_track) || 0;
+      const trackFrom = Number.isFinite(a.track) ? a.track : fallbackTrack;
+      const blend = info && info.klass === 'helicopter' ? 0 : speedRamp(speed);
+      regime.kind = 'between';
+      regime.a = a;
+      regime.b = b;
+      regime.span = span;
+      regime.speed = speed;
+      regime.trackFrom = trackFrom;
+      regime.trackTo = Number.isFinite(b.track) ? b.track : trackFrom;
+      regime.chordCourse =
+        blend > 0 ? courseBetweenCartesians(a.position, b.position) : null;
+      regime.blend = blend;
+      return regime;
     }
-
     const newest = history[history.length - 1];
-    const elapsedSec = Cesium.JulianDate.secondsDifference(
-      renderTime,
-      newest.time,
-    );
-    if (elapsedSec <= 0) {
-      // Warm-up: renderTime predates ALL history (freshly seen / just-started-tracking
-      // aircraft, before RENDER_DELAY_SEC of history has accumulated, so no bracketing
-      // pair exists yet). Render at the DELAYED renderTime — preserving the 30s-behind
-      // invariant — by extrapolating the OLDEST fix BACKWARD to renderTime. As history
-      // fills, renderTime advances toward the first fix and the icon glides FORWARD into
-      // the bracketing interpolation above with NO freeze and NO backward snap. (Holding
-      // the oldest fix froze the icon; extrapolating the NEWEST fix to wall-clock now made
-      // the icon jump back ~one poll interval the instant interpolation took over.)
-      const oldest = history[0];
-      const lookbackSec = Cesium.JulianDate.secondsDifference(
-        oldest.time,
-        renderTime,
-      ); // ≥ 0
-      return _extrapolateFix(
-        oldest,
-        info,
-        -Math.min(lookbackSec, 60),
-        out,
-        (info && info.turnRateDps) || 0,
-      );
-    }
-
-    // Newest POSITION is older than renderTime. OpenSky can still be receiving
-    // fresh contact/kinematic messages for that aircraft; freezing at a hard
-    // 60 s-after-position boundary produced the visible stop → catch-up → stop
-    // cadence. Coast through the latest real contact plus a bounded grace
-    // window, with an absolute cap so a stale cached feed cannot drift forever.
-    const coastLimitSec = staleCoastLimitSeconds({
-      // `epochMs` is captured once when the poll is normalized. Avoid allocating
-      // a Date per aircraft on every 12 Hz fleet tick.
-      fixEpochMs: Number.isFinite(newest.epochMs)
-        ? newest.epochMs
-        : Cesium.JulianDate.toDate(newest.time).getTime(),
-      lastContactEpochMs: info?.lastContactEpochMs,
-      // Permit one minute of contact grace but cap any cached-feed drift at
-      // five minutes. Source backoff is exposed separately as a STALE cue.
-      minimumSec: 60,
-      maximumSec: 300,
-    });
-    return _extrapolateFix(
-      newest,
-      info,
-      Math.min(elapsedSec, coastLimitSec),
-      out,
-      (info && info.turnRateDps) || 0,
-    );
+    const warming = Cesium.JulianDate.lessThan(renderTime, history[0].time);
+    regime.kind = 'fix';
+    regime.fix = warming ? history[0] : newest;
+    regime.speed = fixSpeedMps(regime.fix, info);
+    regime.heading = fixTrackDeg(regime.fix, info);
+    regime.turnRateDps = (info && info.turnRateDps) || 0;
+    regime.minDt = -60;
+    // A warm-up ends when real time reaches the oldest fix; a single fix keeps
+    // coasting forward on the same arc.
+    regime.maxDt =
+      warming && history.length > 1
+        ? 0
+        : staleCoastLimitSeconds({
+            // `epochMs` is captured once when the poll is normalized. Avoid
+            // allocating a Date per aircraft on every 12 Hz fleet tick.
+            fixEpochMs: Number.isFinite(newest.epochMs)
+              ? newest.epochMs
+              : Cesium.JulianDate.toDate(newest.time).getTime(),
+            lastContactEpochMs: info?.lastContactEpochMs,
+            // Permit one minute of contact grace but cap any cached-feed drift
+            // at five minutes. Source backoff is exposed separately as a STALE cue.
+            minimumSec: 60,
+            maximumSec: 300,
+          });
+    return regime;
   }
 
   /**
@@ -274,12 +315,8 @@ export function createMotion({
    */
 
   function _extrapolateFix(fix, info, dt, out, turnRateDps = 0) {
-    const speed = Number.isFinite(fix.velocity)
-      ? fix.velocity
-      : (info && info.velocity) || 0;
-    const heading = Number.isFinite(fix.track)
-      ? fix.track
-      : (info && info.true_track) || 0;
+    const speed = fixSpeedMps(fix, info);
+    const heading = fixTrackDeg(fix, info);
     flightState._drSpeedMps = speed;
     flightState._drCourseHold = speed < COURSE_HOLD_SPEED_MPS;
     flightState._drExtrapolating = true;
@@ -1114,6 +1151,7 @@ export function createMotion({
   return {
     _refloorStaleGroundedContacts,
     _deadReckon,
+    _motionRegime,
     _extrapolateFix,
     _isTrackWarmingUp,
     _trackedFocusSizePx,

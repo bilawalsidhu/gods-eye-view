@@ -9,7 +9,6 @@ import {
   ENRICH_AMBIENT_REFILL_WINDOW_MS,
   ENRICH_AMBIENT_PER_SWEEP,
 } from './policy.js';
-import { billboardState } from '../../data/billboardMirror.js';
 
 export function createEnrichment({
   flightState,
@@ -94,9 +93,7 @@ export function createEnrichment({
           });
           if (klass !== meta.klass) {
             meta.klass = klass;
-            const bb = flightState._billboards.get(icao24);
-            if (bb)
-              parts.rendering._applyFleetBillboardPresentation(icao24, bb);
+            parts.icons._applyIconPresentation(icao24);
             // Hangar fleet: the class's GLB/scale may have changed — resync the
             // live model, any in-flight load, and the tracked standalone model.
             parts.rendering._syncModelToClass(icao24);
@@ -182,8 +179,7 @@ export function createEnrichment({
     if (
       flightState._enrichAmbientBudget <= 0 ||
       !flightState._viewer ||
-      !flightState._billboardCollection ||
-      !flightState._billboardCollection.show
+      !flightState._icons?.show
     )
       return;
     try {
@@ -196,13 +192,19 @@ export function createEnrichment({
         camera.upWC,
       );
       const cand = [];
-      for (const [icao24, bb] of flightState._billboards) {
+      const icons = flightState._icons;
+      const tau = parts.icons._displayTau();
+      for (let row = 0; row < icons.count; row++) {
+        const icao24 = icons.idAt(row);
         if (flightState._enrichSeen.has(`t:${icao24}`)) continue; // answered / queued / negative this session
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
-        const { position } = billboardState(bb);
-        if (!position || !occluder.isPointVisible(position)) continue; // beyond the limb
-        Cesium.Cartesian3.clone(position, flightState._scratchModelBS.center);
+        const position = icons.position(
+          row,
+          tau,
+          flightState._scratchModelBS.center,
+        );
+        if (!occluder.isPointVisible(position)) continue; // beyond the limb
         if (
           cull.computeVisibility(flightState._scratchModelBS) ===
           Cesium.Intersect.OUTSIDE

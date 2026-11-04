@@ -45,7 +45,7 @@ const COURSE0 = 19; // deg
 const COURSE_SLOPE = 20; // lerp: deg per unit fraction
 const SLEW_OFFSET = 21; // deg still to glide at SLEW_T0
 const SLEW_T0 = 22; // s
-const SLEW_RATE = 23; // deg/s
+const SLEW_RATE = 23; // deg/s; negative holds the course at the glide's start
 
 const DEG = Math.PI / 180;
 const STRAIGHT_BELOW_RAD_PER_SEC = 1e-4;
@@ -140,6 +140,8 @@ export function writeArcSegment(out, row, segment) {
 /**
  * Glide the displayed course from `fromCourseDeg` onto the segment's own course,
  * at most `rateDps`, starting at `t0` (the rate limit at a segment boundary).
+ * A rate of zero or less holds `fromCourseDeg` for the whole segment instead
+ * (a hover: the nose keeps its heading however the track moves).
  * Call after writing the segment.
  * @param {Float32Array} out
  * @param {number} row
@@ -153,7 +155,7 @@ export function writeCourseGlide(out, row, fromCourseDeg, t0, rateDps) {
   const target = targetCourse(out, o, t0);
   out[o + SLEW_OFFSET] = norm180(fromCourseDeg - target);
   out[o + SLEW_T0] = t0;
-  out[o + SLEW_RATE] = Math.max(0, rateDps);
+  out[o + SLEW_RATE] = rateDps > 0 ? rateDps : -1;
 }
 
 /**
@@ -195,6 +197,8 @@ export function segmentCourse(seg, row, tau) {
   const o = row * SEGMENT_STRIDE;
   const course = targetCourse(seg, o, tau);
   const offset = seg[o + SLEW_OFFSET];
+  if (seg[o + SLEW_RATE] < 0)
+    return norm360(targetCourse(seg, o, seg[o + SLEW_T0]) + offset);
   if (offset === 0) return norm360(course);
   // limitCourseStep: the displayed course turns at the rate toward the segment's
   // own (possibly turning) course until it reaches it, then follows it. The
@@ -205,6 +209,17 @@ export function segmentCourse(seg, row, tau) {
   const turned = seg[o + SLEW_RATE] * Math.max(0, tau - t0);
   const gap = toward * (course - start - offset);
   return norm360(turned < gap ? start + offset + toward * turned : course);
+}
+
+/**
+ * The course the row glides toward at `tau` (its segment's own course).
+ * @param {Float32Array} seg
+ * @param {number} row
+ * @param {number} tau
+ * @returns {number}
+ */
+export function segmentTargetCourse(seg, row, tau) {
+  return norm360(targetCourse(seg, row * SEGMENT_STRIDE, tau));
 }
 
 /** The segment's own course at `tau`, before any glide. */
@@ -310,6 +325,7 @@ float iconTargetCourse(vec4 seg3, vec4 seg4, vec4 seg5, float tau) {
 float iconSegmentCourse(vec4 seg3, vec4 seg4, vec4 seg5, float tau) {
   float course = iconTargetCourse(seg3, seg4, seg5, tau);
   float offset = seg5.y;
+  if (seg5.w < 0.0) return iconTargetCourse(seg3, seg4, seg5, seg5.z) + offset;
   if (offset == 0.0) return course;
   float toward = -sign(offset);
   float start = iconTargetCourse(seg3, seg4, seg5, seg5.z);

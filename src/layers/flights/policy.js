@@ -207,6 +207,14 @@ export const COURSE_MAX_DPS = 60;
 
 export const COURSE_SLEW_DT_MAX_SEC = 0.25;
 
+/** Grounded contacts this close to the camera are floored every fleet tick. */
+
+export const FLOOR_NEAR_M = 50_000;
+
+/** Farther grounded contacts are floored once per this many fleet ticks (~1 s). */
+
+export const FLOOR_FAR_EVERY_TICKS = 12;
+
 // ---------------------------------------------------------------------------
 // adsbdb enrichment (best-effort, fail-silent). Bounded fan-out: max 4
 // concurrent requests, dispatches dripped ≥ENRICH_DISPATCH_GAP_MS apart

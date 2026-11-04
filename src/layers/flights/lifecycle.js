@@ -34,7 +34,7 @@ export function createLifecycle({
 
     /**
      * Initialize the flights layer.
-     * Creates the BillboardCollection, resets all state, and installs the
+     * Creates the icon set and its primitive, resets all state, and installs the
      * click-to-track handler on the scene canvas.
      * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
      */
@@ -48,9 +48,7 @@ export function createLifecycle({
       clearFocusTarget('flights');
       flightState._focusEvidenceIds.clear();
       flightState._viewer = viewer;
-      flightState._billboardCollection = new Cesium.BillboardCollection();
-      viewer.scene.primitives.add(flightState._billboardCollection);
-      registerSpriteCollection('flights', flightState._billboardCollection);
+      registerSpriteCollection('flights', parts.icons._createIcons(viewer));
       flightState._modelCollection = new Cesium.PrimitiveCollection();
       viewer.scene.primitives.add(flightState._modelCollection);
       // Warm the glTF cache so the tracked plane's model instantiates instantly when first needed
@@ -78,8 +76,9 @@ export function createLifecycle({
             /* tracked plane just stays a billboard a beat longer */
           });
       }
-      flightState._billboards = new Map();
-      flightState._cullPositions.clear();
+      flightState._grounded.clear();
+      flightState._floorPinned.clear();
+      flightState._iconFocusActive = 0;
       flightState._detectionObjects = new Map();
       flightState.records.data = new Map();
       flightState._positionHistory = new Map();
@@ -126,16 +125,15 @@ export function createLifecycle({
 
       restoreSpriteOrder(viewer);
 
-      console.log('[Data:Flights] Initialized with billboard icons');
+      console.log('[Data:Flights] Initialized with GPU icons');
     },
 
     /**
-     * Show the billboard collection and re-install the click handler.
+     * Show the icons and re-install the click handler.
      * @param {Cesium.Viewer} viewer
      */
     enable(viewer) {
-      if (flightState._billboardCollection)
-        flightState._billboardCollection.show = true;
+      if (flightState._icons) flightState._icons.show = true;
       holdContinuousRender('flights'); // per-frame animator (perf wave 2)
       if (flightState._modelCollection)
         flightState._modelCollection.show = true;
@@ -156,11 +154,10 @@ export function createLifecycle({
           });
       }
       parts.tracking._installClickHandler(viewer);
-      registerPickOwner('flights', (pickedId) =>
-        flightState._billboards.has(pickedId),
+      registerPickOwner(
+        'flights',
+        (pickedId) => flightState._icons?.has(pickedId) === true,
       );
-      // Force a fresh rotation pass on the first tick after re-enable
-      flightState._lastCamPoseSig = '';
       if (!flightState._preRenderRemove && viewer?.scene) {
         flightState._preRenderRemove = viewer.scene.preRender.addEventListener(
           parts.rendering._fleetTick,
@@ -173,18 +170,11 @@ export function createLifecycle({
           );
       }
       if (!flightState._moveEndRemove && viewer?.camera) {
-        // Arrival polish (field test 2026-07-03: "planes look weird when you first
-        // come to them"): when a camera move SETTLES (voice fly-to, fast pan
-        // release), force a full rotation pass on the very next frame. The
-        // pose-signature gate alone can eat the settle — the final easing frames
-        // of a flight land inside one quantization bucket (10 m / 0.06°), leaving
-        // every icon wearing its last mid-flight rotation for up to
-        // ROTATION_REFRESH_MS. Zeroing the tick throttle too means the pass runs
-        // on the next preRender, not up to FLEET_DR_INTERVAL_MS later. Cost: one
-        // extra rotation pass per completed camera gesture — nothing per-frame.
+        // A settled camera move (voice fly-to, fast pan release) runs the fleet
+        // pass on the very next preRender rather than up to FLEET_DR_INTERVAL_MS
+        // later, so the model handoff and focus land with the camera.
         flightState._moveEndRemove = viewer.camera.moveEnd.addEventListener(
           () => {
-            flightState._lastCamPoseSig = '';
             flightState._lastFleetTickMs = 0;
           },
         );
@@ -193,15 +183,14 @@ export function createLifecycle({
     },
 
     /**
-     * Hide all flight billboards and tear down click/keyboard handlers.
+     * Hide all flight icons and tear down click/keyboard handlers.
      * Also clears any active flight tracking so the camera is released.
      * @param {Cesium.Viewer} viewer
      */
     disable(viewer) {
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
-      if (flightState._billboardCollection)
-        flightState._billboardCollection.show = false;
+      if (flightState._icons) flightState._icons.show = false;
       releaseContinuousRender('flights');
       parts.rendering._releaseModels();
       if (flightState._modelCollection)
@@ -282,10 +271,12 @@ export function createLifecycle({
         flightState._moveEndRemove = null;
       }
       parts.rendering._releaseModels();
-      if (flightState._billboardCollection) {
-        viewer.scene.primitives.remove(flightState._billboardCollection);
-        flightState._billboardCollection = null;
+      if (flightState._iconPrimitive) {
+        viewer.scene.primitives.remove(flightState._iconPrimitive); // removing destroys it
+        flightState._iconPrimitive = null;
       }
+      flightState._icons?.clear();
+      flightState._icons = null;
       if (flightState._modelCollection) {
         viewer.scene.primitives.remove(flightState._modelCollection); // removing destroys it + its models
         flightState._modelCollection = null;
@@ -302,8 +293,9 @@ export function createLifecycle({
         flightState._preloadModel = null;
       }
       flightState._planeModelLoaded = false;
-      flightState._billboards.clear();
-      flightState._cullPositions.clear();
+      flightState._grounded.clear();
+      flightState._floorPinned.clear();
+      flightState._iconFocusActive = 0;
       flightState._detectionObjects.clear();
       flightState.records.data.clear();
       flightState._positionHistory.clear();

@@ -4,6 +4,8 @@ import * as Cesium from 'cesium';
 import {
   createIconSet,
   DirtyRows,
+  ICON_CULL_HEIGHT_M,
+  ICON_CULL_LIFT,
   ICON_ROTATES,
   ICON_SHOWN,
 } from './iconSet.js';
@@ -224,4 +226,26 @@ test('rebasing moves the epoch without moving any row', () => {
   assert.ok(Math.abs(set.course(row, tau - 4000) - courseBefore) < 1e-3);
   assert.equal(set.expires(row), 1100);
   assert.deepEqual(set.dirty.segments.runs(set.count), [[0, 0]]);
+});
+
+test('a cull-lift row is judged at no lower than the cull height above the ellipsoid', () => {
+  const set = createIconSet();
+  const row = set.add('a');
+  const height = (p) => Cesium.Cartographic.fromCartesian(p).height;
+  const at = (h) => Cesium.Cartesian3.fromDegrees(-84.43, 33.64, h);
+  assert.ok(
+    Math.abs(height(set.cullPoint(row, at(-31))) - -31) < 1e-6,
+    'unflagged: as drawn',
+  );
+  set.setFlag(row, ICON_CULL_LIFT, true);
+  for (const h of [-31, 0, 5]) {
+    assert.ok(
+      Math.abs(height(set.cullPoint(row, at(h))) - ICON_CULL_HEIGHT_M) < 0.01,
+      `${h} m is judged at ${ICON_CULL_HEIGHT_M} m`,
+    );
+  }
+  assert.ok(
+    Math.abs(height(set.cullPoint(row, at(131))) - 131) < 1e-6,
+    'a contact floored higher keeps its own height',
+  );
 });

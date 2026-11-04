@@ -3,7 +3,6 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { routePlausible } from './routePlausible.js';
 import { createTracking } from '../layers/flights/tracking.js';
-import { addBillboard } from './billboardMirror.js';
 
 const SFO = { lat: 37.6188, lon: -122.3754, code: 'SFO' };
 const LAX = { lat: 33.9416, lon: -118.4085, code: 'LAX' };
@@ -116,15 +115,14 @@ test('unjudgeable endpoint geometry and missing coordinates keep the loose contr
   assert.equal(plausible(beyond, null, null), true);
 });
 
-test('the actual native tracked label hides the wrong leg and keeps a healthy route', (t) => {
-  const collection = new Cesium.BillboardCollection();
-  t.after(() => collection.destroy());
+test('the actual native tracked label hides the wrong leg and keeps a healthy route', () => {
   const flightState = {
     records: { data: new Map(), missingPolls: new Map() },
     feed: { _backoff: false },
-    _billboards: new Map(),
     _scratchCarto: new Cesium.Cartographic(),
   };
+  // Where each contact's icon is drawn.
+  const drawn = new Map();
   // Only application host services are supplied. Route admission, WGS84
   // billboard conversion and tracked-label formatting are the actual owners.
   const services = Object.fromEntries(
@@ -141,7 +139,10 @@ test('the actual native tracked label hides the wrong leg and keeps a healthy ro
     ].map((name) => [name, {}]),
   );
   services.aircraftPresentation = { isTr3b: () => false };
-  const parts = { queries: { _contactLabel: (_, info) => info.callsign } };
+  const parts = {
+    queries: { _contactLabel: (_, info) => info.callsign },
+    icons: { _iconPosition: (id) => drawn.get(id) ?? null },
+  };
   const tracking = createTracking({ flightState, services, parts });
   for (const [position, expected] of [
     [beyond, false],
@@ -155,18 +156,9 @@ test('the actual native tracked label hides the wrong leg and keeps a healthy ro
       verticalRate: 0,
       route,
     });
-    flightState._billboards.set(
+    drawn.set(
       id,
-      addBillboard(collection, {
-        id,
-        width: 20,
-        height: 20,
-        position: Cesium.Cartesian3.fromDegrees(
-          position.lon,
-          position.lat,
-          10000,
-        ),
-      }),
+      Cesium.Cartesian3.fromDegrees(position.lon, position.lat, 10000),
     );
     assert.equal(
       tracking._trackedLabelText(id).includes('SFO → LAX'),
