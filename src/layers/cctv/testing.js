@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { createIconSet } from '../../data/iconSet.js';
 
 export function createTesting({ state: layerState, services, parts, source }) {
   /** Test seam: republishes host entries through the real push path, so tests
@@ -101,7 +102,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     );
     layerState._coverageEntities = [];
     layerState._projectionEntities = [];
-    layerState._billboards = null;
+    layerState._iconPrimitive = null;
     layerState._activeCameraId = activeCameraId;
     layerState._autoHopSuspended = false;
     layerState._enabled = !!enabled;
@@ -115,6 +116,16 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
+    // A real set (no primitive): every record gets its row as init adds it.
+    layerState._icons = createIconSet();
+    for (const record of layerState._records)
+      if (record?.camera?.id) parts.rendering.addCameraIcon(record);
+  }
+
+  /** The layer's icon set, for tests that read what the rows draw. */
+
+  function _cctvIconsForTest() {
+    return layerState._icons;
   }
   return {
     _pushAmbientCardEntriesForTest,
@@ -123,5 +134,6 @@ export function createTesting({ state: layerState, services, parts, source }) {
     _updateCctvProjectionPlaneForTest,
     _extractPickedCameraIdForTest,
     _setCctvCoverageStateForTest,
+    _cctvIconsForTest,
   };
 }

@@ -4,7 +4,6 @@ import { applyVesselFocusDeemphasis } from './aisLiveVessels.js';
 import { applyCctvFocusDeemphasis } from './cctv.js';
 import { applySatellitePointFocusDeemphasis } from './satellites.js';
 import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
-import { mirrorBillboard } from './billboardMirror.js';
 import { createIconSet } from './iconSet.js';
 
 const params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS, paddingPx: 0 };
@@ -29,7 +28,11 @@ function assertResumeGate(name, makePass) {
     const { pass, readAlpha } = makePass();
     let activeCount = 0;
     const tick = (nowMs, focusTarget) => {
-      const result = pass({ nowMs, target: focusTarget, previousActiveCount: activeCount });
+      const result = pass({
+        nowMs,
+        target: focusTarget,
+        previousActiveCount: activeCount,
+      });
       activeCount = result.activeCount;
       return result;
     };
@@ -40,7 +43,11 @@ function assertResumeGate(name, makePass) {
     assert.equal(readAlpha(), params.dimFloor);
 
     const releaseStart = tick(params.attackMs + 1, null);
-    assert.equal(releaseStart.ran, true, 'active count keeps the no-target release pass alive');
+    assert.equal(
+      releaseStart.ran,
+      true,
+      'active count keeps the no-target release pass alive',
+    );
     assert.equal(releaseStart.activeCount, 1);
 
     const restored = tick(params.attackMs + params.releaseMs + 2, null);
@@ -48,16 +55,23 @@ function assertResumeGate(name, makePass) {
     assert.equal(restored.activeCount, 0);
     assert.equal(readAlpha(), 1);
 
-    assert.equal(tick(params.attackMs + params.releaseMs + 82, null).ran, false);
+    assert.equal(
+      tick(params.attackMs + params.releaseMs + 82, null).ran,
+      false,
+    );
   });
 }
 
 assertResumeGate('vessel', () => {
   const icons = createIconSet();
   icons.setSize(icons.add('353136000', { id: '353136000' }), 32, 32);
-  const record = { iconId: '353136000', position: { x: 1, y: 2, z: 3 }, visible: true };
+  const record = {
+    iconId: '353136000',
+    position: { x: 1, y: 2, z: 3 },
+    visible: true,
+  };
   return {
-    pass: ({ nowMs, target: focusTarget, previousActiveCount }) => (
+    pass: ({ nowMs, target: focusTarget, previousActiveCount }) =>
       applyVesselFocusDeemphasis({
         records: [record],
         icons,
@@ -67,36 +81,30 @@ assertResumeGate('vessel', () => {
         screenPositionFor: () => ({ x: 50, y: 50 }),
         cameraDistanceFor: () => 1200,
         params,
-      })
-    ),
+      }),
     readAlpha: () => icons.focus(icons.row('353136000')),
   };
 });
 
 assertResumeGate('CCTV', () => {
-  const billboard = mirrorBillboard({
-    position: { x: 1, y: 2, z: 3 },
-    show: true,
-    width: 24,
-    height: 24,
-    scale: 1,
-    color: color(),
-  });
-  const record = { camera: { id: 'cam-1' }, billboard };
+  const icons = createIconSet();
+  const row = icons.add('cam-1', { id: 'cam-1' });
+  icons.setSize(row, 24, 24);
+  icons.setShown(row, true);
+  const record = { camera: { id: 'cam-1' }, position: { x: 1, y: 2, z: 3 } };
   return {
-    pass: ({ nowMs, target: focusTarget, previousActiveCount }) => (
+    pass: ({ nowMs, target: focusTarget, previousActiveCount }) =>
       applyCctvFocusDeemphasis({
         records: [record],
+        icons,
         target: focusTarget,
         previousActiveCount,
         nowMs,
         screenPositionFor: () => ({ x: 50, y: 50 }),
         cameraDistanceFor: () => 1200,
-        baseColorFor: () => color(),
         params,
-      })
-    ),
-    readAlpha: () => billboard.color.alpha,
+      }),
+    readAlpha: () => icons.focus(icons.row('cam-1')),
   };
 });
 
@@ -108,7 +116,7 @@ assertResumeGate('satellite', () => {
     color: color(),
   };
   return {
-    pass: ({ nowMs, target: focusTarget, previousActiveCount }) => (
+    pass: ({ nowMs, target: focusTarget, previousActiveCount }) =>
       applySatellitePointFocusDeemphasis({
         points: new Map([[42, point]]),
         trackedId: null,
@@ -119,8 +127,7 @@ assertResumeGate('satellite', () => {
         cameraDistanceFor: () => 1200,
         baseColorFor: () => color(),
         params,
-      })
-    ),
+      }),
     readAlpha: () => point.color.alpha,
   };
 });

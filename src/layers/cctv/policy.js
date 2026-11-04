@@ -179,7 +179,7 @@ export const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
   heightM: 0,
 });
 
-/** Base64-encoded SVG camera icon for billboard rendering. */
+/** Base64-encoded SVG camera icon for the camera icon rows. */
 
 export const CAMERA_ICON = (() => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">

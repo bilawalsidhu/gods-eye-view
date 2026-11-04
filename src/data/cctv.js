@@ -65,6 +65,7 @@ export const materializeCctvVisibleCoverageEntities =
 export const _extractPickedCameraIdForTest =
   layer._extractPickedCameraIdForTest;
 export const _setCctvCoverageStateForTest = layer._setCctvCoverageStateForTest;
+export const _cctvIconsForTest = layer._cctvIconsForTest;
 export const focusCctvRecord = layer.focusCctvRecord;
 export const maybeAutoHop = layer.maybeAutoHop;
 export const cctvCycleIndex = layer.cctvCycleIndex;
