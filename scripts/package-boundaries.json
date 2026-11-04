@@ -18,6 +18,11 @@
   "application": {
     "exports": ["./application"],
     "modules": [
+      "src/ui/views/panels/VesselPanel.vue",
+      "src/ui/stores/vesselPanel.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/vesselTypes.js",
+      "src/data/vesselLabels.js",
       "src/app/application.js",
       "src/ui/vueRuntime.js",
       "src/ui/views/index.js",
@@ -912,6 +917,10 @@
   "ui-shell": {
     "exports": ["./ui/shell"],
     "modules": [
+      "src/ui/vesselPanel.js",
+      "src/ui/stores/vesselPanel.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/vesselTypes.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/i18n/marker.js",
@@ -1434,6 +1443,9 @@
   "vessel-layer": {
     "exports": ["./layers/vessels"],
     "modules": [
+      "src/layers/vessels/displayFilters.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/viewArea.js",
       "src/data/headingDegrees.js",
       "src/layers/vessels/cards.js",
       "src/layers/vessels/evidence.js",
@@ -2229,6 +2241,11 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/layers/vessels/displayFilters.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/viewArea.js",
+      "src/ui/vesselPanel.js",
+      "src/ui/stores/vesselPanel.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
@@ -3236,6 +3253,9 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/layers/vessels/displayFilters.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/viewArea.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",

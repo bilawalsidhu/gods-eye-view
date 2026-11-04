@@ -1240,5 +1240,20 @@
   "src/voice/imageryActions.test.mjs",
   "src/voice/osmActions.test.mjs",
   "src/voice/realtimeProtocol.test.mjs",
-  "src/layers/awareness/rangeRing.test.mjs"
+  "src/layers/awareness/rangeRing.test.mjs",
+  "src/data/vesselDisplayFilters.js",
+  "src/data/vesselDisplayFilters.test.mjs",
+  "src/data/viewArea.js",
+  "src/data/viewArea.test.mjs",
+  "src/layers/vessels/displayFilters.js",
+  "src/layers/vessels/displayFilters.test.mjs",
+  "src/ui/vesselPanel.js",
+  "src/ui/vesselPanel.test.mjs",
+  "src/ui/vesselPanelView.test.mjs",
+  "src/ui/stores/vesselPanel.js",
+  "src/ui/views/panels/VesselPanel.vue",
+  "docs/VESSEL-FILTERS.md",
+  "scripts/qa-vessel-filters.mjs",
+  "scripts/qa-vessel-labels.mjs",
+  "changelog.d/vessel-display-filters.md"
 ]

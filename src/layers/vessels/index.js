@@ -10,12 +10,14 @@ import { createCards } from './cards.js';
 import { createTesting } from './testing.js';
 import { createEvidence } from './evidence.js';
 import { createQueries } from './queries.js';
+import { createVesselDisplayFilters } from './displayFilters.js';
 /** Compose one vessel layer with application-owned scene services. */
 export function createVesselLayer({ source, services, options = {} } = {}) {
   const vesselState = createVesselState({ source, services });
   const parts = {};
   const layer = {};
   const context = { vesselState, services, parts, layer, options };
+  parts.display = createVesselDisplayFilters(context);
   parts.lifecycle = createLifecycle(context);
   parts.rendering = createRendering(context);
   parts.selection = createSelection(context);
@@ -54,6 +56,7 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   Object.assign(
     layer,
     parts.queries.methods,
+    parts.display.methods,
     parts.lifecycle.methods,
     parts.ingestion.methods,
   );

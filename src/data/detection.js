@@ -1481,6 +1481,8 @@ function _drawOverlay(frame) {
       continue;
     }
 
+    if (obj.suppressLabel) continue;
+
     const primary = String(obj.id || '');
     const micro = String(obj.metric || '');
     if (!primary && !micro) continue;

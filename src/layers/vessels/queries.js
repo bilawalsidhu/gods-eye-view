@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { t, msg } from '../../i18n/index.js';
+import { normalizeVesselType } from '../../data/vesselTypes.js';
 
 // ingestion.js is a portable export (package.json) and writes English labels
 // into state; translate the known ones here, pass anything else through.
@@ -504,6 +505,10 @@ export function createQueries({
           id: record.name || record.mmsi || 'VESSEL',
           type: 'SEA',
           skipLabel: record === selected,
+          // Civilian names belong to the selected detail card; AIS type 35
+          // and explicitly military types retain ambient detection names.
+          suppressLabel:
+            normalizeVesselType(record.type).toUpperCase() !== 'MILITARY',
           klass: record.type
             ? String(record.type).toUpperCase().slice(0, 14)
             : undefined,

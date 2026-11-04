@@ -98,6 +98,26 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Vessel display filters and roster
+
+Live Vessels exposes independent Declutter, Underway only, Vessel types and Speed
+range toggles in Data Layers. The right-side Vessels app provides detailed
+settings and a searchable 50-row paged list of every matching loaded MMSI,
+including contacts hidden by decluttering. It and its menu button hide when the
+feed is off; filter preferences persist in this browser. Selected vessels bypass
+filters. The display policy culls outside a padded camera view and thins wide
+views with stable Earth-fixed cells on the existing visibility cadence. The list
+refreshes only while its app is open and the document is visible; source polling,
+records, history and analyst queries are unchanged. Underway means a reported
+speed above 1 knot; unknown speeds cannot match an enabled speed filter.
+
+Unselected civilian and unknown vessels retain map icons and detection brackets
+without nameplates or detail cards. Selection publishes one protected full-detail
+card. Explicit military AIS types, including code 35, retain ambient detection
+names. See [Vessel filters](VESSEL-FILTERS.md). Feature gates:
+`node scripts/qa-vessel-filters.mjs` and `node scripts/qa-vessel-labels.mjs`.
+
+
 ## Prohibited & Restricted Airspace — FAA special-use airspace
 
 The Infrastructure group includes **Prohibited & Restricted Airspace** (`drone-airspace`,
@@ -3437,10 +3457,9 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   `ambient-card` source budgets sum to a bounded 1,150-card shared lane: two
 >   96-card infrastructure budgets, FIRMS' shipped 18-card cohort, AIS's
 >   existing configured 900-row absolute ceiling, and CCTV's shipped 40-card
->   ambient maximum. Runtime AIS demand still
->   derives from its shipped 118 px grid: 112 candidates at the 1600×900
->   allocation viewport and 170 at full HD; its existing 150 px greedy
->   separation usually admits fewer. The host owns final cross-source declutter
+>   ambient maximum. AIS retains its configured budget for compatibility but
+>   publishes no ambient cards; its protected selected entry uses no ambient
+>   quota. The host owns final cross-source declutter
 >   without letting source count grow beyond the pre-migration source bounds.
 >   Cards use the infrastructure name plus available operator/capacity for
 >   datacenters or river for dams. Their native Cesium points, stems, polygons,
@@ -3689,20 +3708,14 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   shared Outside floor instead of bypassing edge fade through the former
 >   cockpit/celestial gate.
 > - **Vessel card ownership:** `aisLiveVessels.js` retains the 800 ms visibility
->   pass, 118 px one-winner grid, priority ranking, 150 px greedy separation,
->   type/detail formatting, and the AIS positions produced by its unchanged sea
->   datum path. It publishes ambient tactical cards and one protected selected
->   card into the host. `vesselLabels.js` is formatting/policy-only: no vessel
->   canvas, projection, paint loop, or post-render listener remains. Ambient
->   vessels share `ambient-card`; the selected entry paints in the selected lane,
->   bypasses the ambient cohort/distance fade, and its protected rectangle
->   excludes sibling ambient cards. Tracked readout still excludes AIS, avoiding
->   a duplicate card for the same selection. Disable and destroy clear the host
->   source. This is not a pixel-for-pixel port: shared cross-source collision,
->   UI exclusion, and horizon culling can admit fewer cards than the isolated
->   canvas, and the shared always-on keyhole policy now applies the shipped
->   Outside floor in ordinary map mode instead of using the interim active-mask
->   gate.
+>   cadence, type/detail formatting and sea-datum placement. Display filters
+>   select map icons independently of the full source record set. It publishes
+>   only one protected selected detail card into the host; unselected vessels
+>   have no ambient name/speed/type cards. `vesselLabels.js` remains a formatting
+>   and policy helper with no canvas, paint loop or post-render listener.
+>   The selected entry bypasses ambient quotas and reserves its protected
+>   rectangle against sibling cards. Tracked readout still excludes AIS to
+>   avoid a duplicate selection card. Disable and destroy clear the host source.
 > - **Tracked-readout ownership:** `trackedReadout.js` is now a presentation-model
 >   bridge only; it owns no canvas, projection, post-render listener, layout,
 >   keyhole fade, or paint path. Civilian flights, military flights, satellites,
@@ -5448,7 +5461,7 @@ and unreachable upstream (502/504) separately from road geometry.
   warm vessels survive later zero-position refreshes as stale/degraded data,
   while disable/re-enable owns a new timer and superseded responses remain
   inert.
-- Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug); screen-space label clustering caps active labels at `VITE_AIS_LIVE_LABEL_MAX_ROWS` (default 900).
+- Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug). Display filters control icon density and manual type/speed selection without deleting records. Detail cards are selection-only; civilian and unknown detection names are suppressed while explicit military types retain ambient detection names.
 - Click-to-inspect wired into the voice context store.
 
 ### Voice Control (June 2026)
