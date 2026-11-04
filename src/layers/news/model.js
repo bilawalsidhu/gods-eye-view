@@ -460,18 +460,28 @@ export function sidesLine(report, now = Date.now()) {
   });
 }
 
-/** The event's picture for a card: two or more sources, and the publisher named. */
+/**
+ * The event's picture, the publisher named, and its clip when it has one. The
+ * panel shows it for any event; the globe's picture cards are for events of
+ * two or more sources (isCardEvent).
+ */
 export function eventPicture(report) {
-  const event = report?.event;
-  if (!event?.image || event.size < NEWS_CARD_MIN_SOURCES) return null;
-  return { url: event.image.url, credit: event.image.publisher || '' };
+  const image = report?.event?.image;
+  if (!image) return null;
+  return {
+    url: image.url,
+    credit: image.publisher || '',
+    ...(image.video ? { video: image.video } : {}),
+  };
 }
 
 /** What an event's picture card on the globe shows. */
 export function cardView(report, now = Date.now()) {
   const event = report.event;
   const sides = eventSides(report, now).map(sideLabel);
-  const picture = eventPicture(report);
+  // A globe card's picture needs two or more sources, as the card does.
+  const picture =
+    report?.event?.size >= NEWS_CARD_MIN_SOURCES ? eventPicture(report) : null;
   return {
     title: report.titleEn || report.title,
     meta: [

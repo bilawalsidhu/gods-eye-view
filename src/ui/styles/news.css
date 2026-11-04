@@ -226,6 +226,25 @@
   height: 100%;
   object-fit: cover;
 }
+/* A clip waits behind its picture; the open card plays it. */
+.news-card__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+.news-card__clip {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  background: #000;
+}
 .news-card__credit {
   position: absolute;
   inset-inline-end: 0;

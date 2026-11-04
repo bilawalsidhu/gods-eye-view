@@ -157,6 +157,32 @@ test('payloads are validated record by record; empty and malformed payloads', ()
   });
 });
 
+test("an event's clip is kept only as an HTTPS file a browser plays itself", () => {
+  const clip = (video) =>
+    normalizeFeedPayload({
+      reports: [
+        {
+          id: 'r',
+          title: 'T',
+          url: 'https://x.test/r',
+          publishedAt: '2026-10-28T09:00:00Z',
+          event: {
+            size: 1,
+            image: { url: 'https://cdn.test/p.jpg', publisher: 'P', video },
+          },
+        },
+      ],
+    }).reports[0].event.image.video;
+  assert.equal(
+    clip('https://cdn.test/v.mp4?token=a'),
+    'https://cdn.test/v.mp4?token=a',
+  );
+  assert.equal(clip('https://cdn.test/v.webm'), 'https://cdn.test/v.webm');
+  assert.equal(clip('http://cdn.test/v.mp4'), undefined);
+  assert.equal(clip('https://cdn.test/v.m3u8'), undefined);
+  assert.equal(clip(undefined), undefined);
+});
+
 test('outlines keep valid rings, borders and named disputed areas', () => {
   const ring = [
     [30, 45],
@@ -488,6 +514,24 @@ test('feed cards read like Breaking: headline, meta parts, sides and chips', () 
   const single = feedCardView(report('s', '2026-10-28T09:00:00Z'), NOW);
   assert.equal(single.sides, 'Reported by UA sources');
   assert.equal(single.picture, null);
+  // A one-source event (a Telegram post) shows its picture and its clip in
+  // the panel, though the globe's picture cards need two sources.
+  const post = report('p', '2026-10-28T09:00:00Z', {
+    event: {
+      size: 1,
+      sides: [],
+      image: {
+        url: 'https://cdn4.telesco.pe/file/v.jpg',
+        publisher: 'Channel',
+        video: 'https://cdn4.telesco.pe/file/v.mp4?token=x',
+      },
+    },
+  });
+  assert.deepEqual(feedCardView(post, NOW).picture, {
+    url: 'https://cdn4.telesco.pe/file/v.jpg',
+    credit: 'Channel',
+    video: 'https://cdn4.telesco.pe/file/v.mp4?token=x',
+  });
   assert.equal(single.original, null);
   assert.equal(sidesLine({ side: 'unknown' }), '');
 });

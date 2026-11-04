@@ -162,11 +162,23 @@ function normalizeGeo(geo) {
   };
 }
 
-/** The event's picture: an HTTPS URL on the publisher's site, and whose it is. */
+/**
+ * The event's picture: an HTTPS URL on the publisher's site, and whose it is;
+ * with the post's own clip when it has one a browser plays itself (an HTTPS
+ * MP4 or WebM file), the picture then its poster.
+ */
 function eventImage(image) {
   const url = httpUrl(image?.url);
   if (!url?.startsWith('https://')) return null;
-  return { url, publisher: text(image.publisher, 80) || '' };
+  const video = httpUrl(image.video);
+  const playable =
+    video?.startsWith('https://') &&
+    /\.(?:mp4|m4v|webm)$/i.test(new URL(video).pathname);
+  return {
+    url,
+    publisher: text(image.publisher, 80) || '',
+    ...(playable ? { video } : {}),
+  };
 }
 
 /** An event summary from `/feed?events=1`: size and one report per side. */

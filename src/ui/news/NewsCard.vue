@@ -7,8 +7,9 @@ import UiButton from '../kit/UiButton.vue';
 // picture when the event has one, the headline, a mono meta line (severity
 // marker, category, place, sources, age), who reported it, and its
 // attestation and media chips. A click chooses it (the layer flies there and
-// opens its card on the globe); open, it shows the summary, the other sides'
-// reports and the link to the original article. The layer computes every
+// opens its card on the globe); open, it plays the post's clip when it has
+// one (on request, with sound and controls), and shows the summary, the other
+// sides' reports and the link to the original article. The layer computes every
 // value shown (feedCardView in src/layers/news/model.js).
 const props = defineProps({
   item: { type: Object, required: true },
@@ -22,9 +23,17 @@ const pictureFailed = ref(false);
 const dropPicture = () => {
   pictureFailed.value = true;
 };
+// So does a clip whose signed link has expired.
+const clipFailed = ref(false);
+const dropClip = () => {
+  clipFailed.value = true;
+};
 watch(
   () => props.item.picture?.url,
-  () => (pictureFailed.value = false),
+  () => {
+    pictureFailed.value = false;
+    clipFailed.value = false;
+  },
 );
 const meta = () =>
   [
@@ -61,7 +70,13 @@ const meta = () =>
           decoding="async"
           referrerpolicy="no-referrer"
           v-on="{ error: dropPicture }"
-        /><span v-if="item.picture.credit" class="news-card__credit">{{
+        /><span
+          v-if="item.picture.video && !clipFailed"
+          class="news-card__play"
+          role="img"
+          :aria-label="t('Video')"
+          >▶</span
+        ><span v-if="item.picture.credit" class="news-card__credit">{{
           item.picture.credit
         }}</span></span
       >
@@ -95,6 +110,17 @@ const meta = () =>
       >
     </button>
     <div v-if="open" class="news-card__open">
+      <video
+        v-if="item.picture?.video && !clipFailed"
+        class="news-card__clip"
+        :src="item.picture.video"
+        :poster="pictureFailed ? undefined : item.picture.url"
+        controls
+        playsinline
+        preload="none"
+        referrerpolicy="no-referrer"
+        v-on="{ error: dropClip }"
+      ></video>
       <p v-if="item.original" class="news-card__original">{{
         item.original
       }}</p>

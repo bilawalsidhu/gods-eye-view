@@ -314,3 +314,49 @@ test('the panel names the window the server serves', () => {
     'Last 12 h',
   );
 });
+
+test('a clip waits behind its picture and plays, on request, in the open card', () => {
+  const { news, panel } = fixture();
+  const clipped = report('clip', {
+    event: {
+      size: 1,
+      sides: [],
+      image: {
+        url: 'https://cdn4.telesco.pe/file/v.jpg',
+        publisher: 'Channel',
+        video: 'https://cdn4.telesco.pe/file/v.mp4?token=x',
+      },
+    },
+  });
+  news.update(view({ items: [feedCardView(clipped, NOW)] }));
+  const card = panel.querySelector('.news-card');
+  assert.equal(card.querySelector('.news-card__play').textContent, '▶');
+  assert.equal(card.querySelector('video'), null);
+  news.update(
+    view({
+      items: [feedCardView(clipped, NOW)],
+      selected: feedCardView(clipped, NOW),
+    }),
+  );
+  const video = panel.querySelector('.news-card.is-open video');
+  assert.equal(
+    video.getAttribute('src'),
+    'https://cdn4.telesco.pe/file/v.mp4?token=x',
+  );
+  assert.equal(
+    video.getAttribute('poster'),
+    'https://cdn4.telesco.pe/file/v.jpg',
+  );
+  assert.equal(video.getAttribute('preload'), 'none');
+  assert.ok(video.hasAttribute('controls'));
+  // An expired link leaves the card without the clip.
+  video.dispatchEvent(new Event('error'));
+  news.update(
+    view({
+      items: [feedCardView(clipped, NOW)],
+      selected: feedCardView(clipped, NOW),
+    }),
+  );
+  assert.equal(panel.querySelector('.news-card.is-open video'), null);
+  news.destroy();
+});
