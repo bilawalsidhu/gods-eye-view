@@ -98,6 +98,27 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Prohibited & Restricted Airspace — FAA special-use airspace
+
+The Infrastructure group includes **Prohibited & Restricted Airspace** (`drone-airspace`,
+share-link token `8`), off by default. `/api/drone-airspace` pages the public
+FAA Special Use Airspace FeatureServer for `TYPE_CODE` P (prohibited) and R
+(restricted), simplifies geometry, caches for an hour, and serves the last
+good snapshot as stale when a refresh fails. The globe draws ground-clamped
+outlines with a translucent fill: red for prohibited, orange for restricted.
+Selecting a zone shows name, an altitude range built from the
+`LOWER_*`/`UPPER_*` value, unit and reference fields (for example `SFC to
+5,000 ft MSL` or `20,000 ft MSL to Unlimited`), times of use and controlling
+agency,
+plus a notice that the layer is informational only and not a substitute for
+official UAS flight-planning tools. Pick ownership is unregistered so sibling
+layer cards still work over a zone. Voice is off for this layer for now
+(`VOICE_OFF_LAYERS`: the Realtime prompt has no room), so neither voice nor the
+analyst can toggle or query it. The layer covers FAA prohibited and restricted
+special-use airspace only, not the UAS Facility Map / LAANC grids, National
+Security UAS Flight Restrictions or TFRs; the label and legend say so.
+See the live-layers table below.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
@@ -706,6 +727,52 @@ announces the reason.
 
 Automatic Voice Preview uses output from the active mounted provider, including late replies that may answer an older request. Manual panel choices remain until genuine local input rearms automatic presentation. Preview stays off when disabled, remains hidden in Cockpit, and retires on Stop or provider replacement. Display events do not grant command authority.
 
+Typed chat sits beside voice in the dock. Chat replies are silent and never
+request microphone access. The first message connects with the selected
+provider and runs the same map actions as voice through each provider's text
+API: OpenAI uses `OPENAI_CHAT_MODEL` (default `gpt-4.1-mini`) and needs an API
+key; Gemini sends a text-only `generateContent` request with
+`GEMINI_CHAT_MODEL` (default `gemini-3.5-flash-lite`) and never starts Live.
+Only one mode runs at a time: the microphone closes chat, and opening chat
+stops voice. Enter sends, Shift+Enter adds a line, and Up or Down at the start
+of the field recall recent messages and restore the draft. Attachments are up
+to four map-layer references or UTF-8 TXT, Markdown, CSV, JSON and GeoJSON
+files, 10 KB in total, sent only with the message; a layer reference names
+the layer without exporting its records. The conversation and recent commands
+stay in memory for the page.
+
+The chat routes answer a missing key with `503` and code `API_KEY_MISSING`.
+OpenAI chat can only bill `OPENAI_API_KEY`, so while `GEV_PREFER_CODEX_OAUTH`
+pins OpenAI to ChatGPT OAuth it answers `503` with code `CODEX_OAUTH_REQUIRED`
+instead; Gemini chat is unaffected. An upstream `429` or `503` keeps its status
+and passes on a `Retry-After` given in seconds, capped at an hour; the chat
+names the wait, and a throttled reply carries code `RATE_LIMITED`. A refused
+key or account stops reaching the provider for a minute, unless the configured
+key changes: `API_KEY_REJECTED` for a `401` or Gemini's `400` with reason
+`API_KEY_INVALID`, `ACCESS_DENIED` for a `403`, and `QUOTA_EXCEEDED` for
+OpenAI's `429` `insufficient_quota`. Each refusal answers `502` with its code,
+and the chat shows a matching message.
+
+Chat and the voice panel sit above the dock or dock into the right rail's lane,
+which hides the rail until the panel minimizes or closes, or a rail panel opens.
+Minimized panels always sit as a bar centred above the dock; restoring returns a
+docked panel to the lane. A centred panel steps down to its bar when the pointer
+reaches the Location or Visual Presets button and rests above an open tray,
+without moving keyboard focus. Expanded over an open tray, it docks into the
+lane until the trays close; a panel that stepped down expands in the centre
+again once the trays close and the pointer leaves the wings. Panel height animates when one panel replaces the
+other or the voice view changes. Minimized voice shows the last sentence from
+each side, and the empty Voice Preview suggests things to say until voice
+starts. Settings opened from chat keep chat's frame and show the shared AI
+provider, the quick-commands option and then the voice preferences (Voice
+Preview, inactivity timeout and model tier), so they stay in reach while
+Preview is off, with Back to chat; voice Settings show Back to voice. Escape steps back from either Settings view, closes Voice
+Preview, and does nothing in chat. Closing chat ends a typed session, and the
+voice panel's close turns voice off. Asking the assistant from chat to open
+Voice Settings or Voice Preview puts chat away, minimized or not, and shows the
+voice panel; the typed conversation and its running reply carry on, and the
+chat button brings them back.
+
 Contacts nearest-aircraft follow-ups retain the snapshot's distance basis even
 after the camera moves. An explicit new scope replaces that basis. Provider
 instructions require an analyst query for requested lists and use the requested
@@ -848,7 +915,7 @@ Source factories have dedicated `layers/<family>/source` exports. ALPR and earth
 
 Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/progress/result, interruption, completion and turn-metrics events; stopping or replacing a session cancels pending actions. An active session's normal Stop publishes one idle transition, including adapters that emit their own terminal state; a restart triggered by that transition keeps ownership of its new startup state. Alternate adapters can use the same controls and action runner.
 
-The standalone app offers OpenAI and Gemini Live through an explicit provider chooser. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
+The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
 Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 33 tools using separate description-only metadata; a session is offered 32 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
 
@@ -1419,6 +1486,33 @@ By default the 250 cameras nearest downtown Vancouver and Victoria load.
 The Open Government Licence – British Columbia attribution is registered in the
 Data attribution popover.
 
+## Houston TranStar CCTV source pack
+
+The CCTV catalog adds Greater Houston traffic cameras from Houston TranStar
+alongside the other live packs. The server reads the keyless camera list at
+`https://traffic.houstontranstar.org/data/layers/cctvSnapshots_json.js` and
+keeps cameras with a numeric snapshot id inside the metro bounding box. Frame
+URLs are built from each camera id under
+`https://www.houstontranstar.org/snapshots/cctv/<id>.jpg`; they are never taken
+from the payload. TranStar's `dir` is the side of the freeway the camera sits
+on, not the way it faces; TranStar's own map reads it as the direction of the
+nearest traffic (South → eastbound, North → westbound, West → southbound,
+East → northbound). That travel direction seeds a low-confidence heading with
+the low-confidence pose, and `None` or an unknown value uses the shared id-hash
+fallback; both stay marked as estimated.
+Gate: `src/data/cctvHouston.test.mjs`.
+
+TranStar's Content Usage terms (https://traffic.houstontranstar.org/disclaimer.aspx)
+prohibit copying, distribution and external framing of specific images without
+TxDOT's prior written permission. The pack is off by default; operators should
+set `CCTV_HOUSTON_ENABLED=1` only if they hold that permission. Frames are
+fetched and relayed on demand, buffered only transiently per request, sent with
+`Cache-Control: no-store`, and not archived. Once enabled, it loads the 250
+cameras nearest downtown, Uptown, the Medical Center, IAH and Galveston.
+`CCTV_HOUSTON_MAX_SOURCES` sets the pack cap (8–400). Snapshots update about
+every 3 minutes. The catalog-wide ceiling stays at 4,000 and is shared
+round-robin, so adding this pack does not silently drop another region.
+
 ## Location control ownership
 
 City/POI rows, search/reset bindings, location readouts and the orbit indicator
@@ -1738,6 +1832,12 @@ unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` ov
 those; exactly `0` disables the limiter, while a value that cannot be read as a
 number falls back to the default rather than to unlimited. Over-limit requests
 receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
+Typed chat (`/api/openai/chat`, `/api/gemini/chat`) counts in its own window,
+set by `GEV_RATELIMIT_OPENAI_CHAT_PER_MIN` and `GEV_RATELIMIT_GEMINI_CHAT_PER_MIN`.
+Left unset, each takes its provider's resolved cap — `GEV_RATELIMIT_OPENAI_PER_MIN`
+or `GEV_RATELIMIT_GEMINI_PER_MIN`, both 30 by default — so lowering a provider
+throttle lowers chat too; an explicit chat value, including `0`, wins. Its
+over-limit reply carries `Retry-After: 60`.
 The client key is the socket peer address only — a forwarded-for header is not
 trusted, so a proxied deployment shares one bucket per upstream hop.
 
@@ -4039,7 +4139,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Houston TranStar (opt-in) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
@@ -4055,6 +4155,7 @@ its criteria cannot be silently ignored.
 | Sea Marks ⚓ (`sea-marks`) | OpenSeaMap seamark raster tiles (keyless; CC BY-SA 2.0 tiles, OSM data ODbL) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Ski Pistes ⛷ (`ski-pistes`) | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| Prohibited & Restricted Airspace 🚫 | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry) | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js` | `/api/drone-airspace` | 1 h (server cache 1 h; stale-on-error) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -4081,6 +4182,20 @@ anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+
+Prohibited & Restricted Airspace is off by default (share-link token `8`) and sits in
+Infrastructure. The proxy pages `TYPE_CODE IN ('P','R')` from the FAA SUA
+FeatureServer, caps the body, and reuses a one-hour snapshot, serving the last
+good payload as stale for at most 24 hours when a refresh fails; the layer row
+then reads STALE, dated by that snapshot's fetch. An answer with no valid zone, or
+paging that ends while the service still flags more records, counts as a
+failed refresh. Client-supplied URLs are ignored. The route uses the keyless
+same-site checks: a cross-site browser request gets `403` before it spends the
+per-client quota or starts a refresh, and the app still works behind a reverse
+proxy.
+Polygons keep holes; pick ownership is deliberately unregistered so sibling
+cards still work over a zone. The row legend and selected card state that the
+layer is informational only and not a substitute for B4UFLY / LAANC.
 
 Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
 layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts
@@ -5002,7 +5117,7 @@ silently demoting every later lookup for the session.
 - Enabled Data Layer controls report normalized feed health on the button (`LOADING`, `DEGRADED`, `STALE`, `FALLBACK`, or `UNAVAILABLE`) while the metadata line retains the source and reason. A partial CelesTrak group failure keeps the usable catalog and reports `DEGRADED`; a total outage keeps last-good catalog data visible but reports `UNAVAILABLE`.
 - On activation it focuses the nearest currently observed aircraft across the civilian and military feeds, with military winning an exact distance tie; if none are available, it focuses an observed AIS vessel. The aircraft search is deliberately uncapped and one refresh-tick retry handles initially empty feeds. This is an attention-priority navigation shortcut, not a high-risk, affiliation, or threat classification.
 - A selected aircraft, AIS vessel, or mapped installation gets a 250 km **context window** with nearby cohort counts, nearest examples, source labels, and stale/unavailable reasons. It emits `NEARBY` or `UNKNOWN`; no detection, engagement, affiliation, or sensor-activity conclusion is calculated.
-- The window's edge is drawn on the globe as a 250 km range ring: a 4 px polyline with a 2 px Context-blue core inside a 1 px dark halo on each side, 2.5 km above the ellipsoid (`AWARENESS_RANGE_RING_STYLE` in `src/layers/awareness/policy.js`). The halo keeps it legible over bright desert and snow, dark ocean and forest, and under the FLIR, NVG and CRT styles, where the earlier 1 px ellipse outline disappeared. It is a polyline because WebGL draws ellipse outlines at 1 px whatever width is asked for. The ring follows a moving subject once it has moved 250 m.
+- The window's edge is drawn on the globe as a 250 km range ring: a 4 px polyline with a 2 px Context-blue core inside a 1 px dark halo on each side, 2.5 km above the ellipsoid (`AWARENESS_RANGE_RING_STYLE` in `src/layers/awareness/policy.js`). The halo keeps it legible over bright desert and snow, dark ocean and forest, and under the FLIR, NVG and CRT styles, where the earlier 1 px ellipse outline disappeared. It is a polyline because WebGL draws ellipse outlines at 1 px whatever width is asked for, drawn as an unpickable primitive rather than an entity so a click or tap on its edge reaches the contact underneath (headless viewers without a primitive collection get a static entity instead); it is rebuilt when the subject moves. Three dim sonar pulses (3 px with a 1 px dark outline, same colours, at most 60% opacity) grow slowly from the subject at constant speed, one every 3 s and each taking 9 s, and arrive at the ring at about a third of that. Behind each pulse a radial gradient in the same blue fades inward over 35% of the radius. One unpickable 250 km disc draws both the pulse lines and the gradient, its shader reading the pulse radii and opacities each frame, so a click or tap near a pulse still reaches the contact underneath; the disc follows the subject by a model-matrix rotation and is rebuilt only after the subject moves 20 km, and not at all while the pulses rest. While the camera is below the disc's 2.5 km height, where it would sweep across the sky, the pulses rest: the disc is hidden and there is no ring flash, no echo and no frame request. Terrain or 3D tiles higher than 2.5 km (the Alps, Andes, Rockies) still cut through the disc and the ring when seen from above, as the ring alone already did; the height check uses the camera's height above the ellipsoid, not above the ground. While pulses run, the ring dims to 40% and flashes to full strength as each pulse reaches it, fading over 1.8 s. As a pulse front crosses a flight, military aircraft or AIS vessel, the detection overlay draws a second bracket around that contact's own bracket, in the pulse blue on the default detection style and in the style's own line colour under NVG, FLIR and CRT, which spreads outward as it fades over 1.4 s (`AWARENESS_RANGE_ECHO`, read through `src/awarenessEcho.js`; no layer's icon is restyled, and mapped installations have no detection bracket). Pulses are born 5 km out, so the subject itself and anything nearer never echo. Pulses run for 9 s (three ring flashes) after a selection or a camera move, fading in and out over 1.2 s, then rest: the ring stays on screen at full strength, the pulses, gradient and echoes are hidden, and nothing asks for frames, so a parked Contacts view is quiet again. Only a camera move within 1.5 s of the user handling the map (pointer, wheel or touch on the Cesium canvas, which covers a drag's inertia, and a drag or touch begun there keeps counting until its last finger or button lifts, even outside the canvas, unless the window loses focus or the page is hidden first; keys typed elsewhere do not count, nor does input while Cesium's camera controls are off, as in the cockpit view, and a gesture still pending when the cockpit or another owner takes the camera is dropped) wakes them; a moving subject and the app's own camera moves (a tracked aircraft, the cockpit view, an orbit, a fly-to) do not, since they move on every refresh. While they run they never hold continuous rendering: each drawn frame arms one render request 80 ms later (the Cyber sonar cadence, `CYBER_SONAR_RENDER_INTERVAL_MS`), so they repaint at about 12.5 fps and never beat the detection lane's 80 ms gate. Under `prefers-reduced-motion`, or in a scene without primitives or preRender and postRender hooks, there are no pulses or echoes and the ring stays on screen; changing the preference mid-session rebuilds the ring. The ring follows a moving subject once it has moved 250 m.
 - For a selected live aircraft or vessel, the context window refreshes from the existing tracker/feed position every 750 ms, so nearest distances and cohort counts follow the subject without introducing a duplicate poll loop.
 - Aircraft cohort membership uses every locally loaded, selectable contact inside the 250 km window, including a plane hidden only by horizon culling or because its 3D model owns the visual. Counts and navigation therefore do not change with the current camera angle or billboard/model handoff.
 - Nearby examples in the context panel are focus controls: they use their owning layer's existing selection/tracking path, then frame that contact. Static-installation distances use ellipsoidal surface distance so the count matches the ground-projected context disk.
@@ -5838,7 +5953,7 @@ apply to `public/` assets or built-preview serving.
 - Panel POSITION keys are versioned `v8` (`godsEyeView.v8.panelPos.<id>`); collapsed-state keys remain `v6`. The one-time position reset clears stale DISPLAY placements that could overlap the Context rail.
 - Map Source lives in the bottom Visual Presets tray. The left accordion contains no MAP STACK panel, and the `k` panel token that addressed it is gone from the share registry, so legacy `ui=k...` state takes the ordinary unknown-token skip.
 - A dock popover (Visual Presets, Location) auto-dismisses on mouse-away unless pinned. Focus inside the tray defers that dismissal only when the browser reports `:focus-visible` — keyboard focus and typed-into fields hold the tray open; a mouse-clicked tile does not, because Chromium focuses a `<button>` on press.
-- GEV MIC control is a glass capsule (var(--glass-bg), blur(24px) saturate(1.4), 999px radius; panel radius in error state).
+- The voice and chat panels share the left panels' glass surface (`--glass-bg`, `--glass-border`, blur(24px) saturate(1.4); `src/ui/styles/ai-chat.css`). The docked voice control draws its own blur on a layer behind it, so the panels inside it still blur the map. Cyber keeps its own surfaces.
 - The desktop right rail (`#right-context-rail`) owns `DISPLAY`, `CCTV`, its active parameter controls, and `GLOBAL CONTEXT` as one fixed responsive stack in that order. Its compact buttons use the same 176 px width as the left accordion and one consistent 50 px height, share the left stack's 52 px edge inset and measured top baseline across HUD variants, then constrain themselves against visible HUD/chrome rectangles and the remaining vertical corridor. `DISPLAY` is no longer draggable and legacy saved coordinates are ignored.
 - The right rail is labeled **DISPLAY** (formerly "MOVE") and groups, in order, HUD, DETECT, Bloom, Sharpen, 3D, Clean-UI (HUD + DETECT promoted to the top). Its expanded controls retain the same compact 176 px width as the right-side tabs instead of growing to the wider Context detail-card width. It starts expanded on first run and respects the user's later `v6` collapse choice. Collapses/expands with directional chevrons (`◀` collapsed, `▶` expanded).
 - Display and Context use matching 330 px expanded widths and matching compact tab dimensions. The parameter panel is part of Display's expanded content. One right-rail panel is open at a time in every HUD layout and collapsed launchers are hidden; the panel rail beside the stack switches between them (see Panel rails). The most recently opened right-rail panel owns the lane even when it appears later in DOM order; passive restoration and automatic disclosure do not replace that explicit owner. When the open panel exceeds the measured corridor, it scrolls internally.
