@@ -2,6 +2,7 @@ import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
+import * as geo from '../../geo/index.js';
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
@@ -317,7 +318,8 @@ export function createShellSurface({
 }
 
 function fitTexture(cesium, { width, height }) {
-  const limit = cesium.ContextLimits?.maximumTextureSize;
+  // Cesium's limit once its context exists; a Navara shell has no SDK.
+  const limit = cesium?.ContextLimits?.maximumTextureSize;
   // Halve, down to 1024 px wide, on devices with a smaller texture limit.
   while (limit > 0 && width > limit && width > 1024) {
     width /= 2;
@@ -574,7 +576,7 @@ export function createWeatherShell({
   /** Recompute the window from the camera's ground footprint; returns whether it changed. */
   function computeView() {
     const rectangle = detailed ? viewRectangle() : null;
-    const degrees = cesium.Math.toDegrees;
+    const degrees = geo.math.toDegrees;
     const footprint = rectangle && {
       west: degrees(rectangle.west),
       south: degrees(rectangle.south),
@@ -688,7 +690,15 @@ export function createWeatherShell({
       viewer,
       cesium,
       height,
-      rectangle: cesium.Rectangle.fromDegrees(west, south, east, north),
+      // A Navara surface reads the four radians; Cesium gets its Rectangle.
+      rectangle: cesium
+        ? cesium.Rectangle.fromDegrees(west, south, east, north)
+        : {
+            west: geo.math.toRadians(west),
+            south: geo.math.toRadians(south),
+            east: geo.math.toRadians(east),
+            north: geo.math.toRadians(north),
+          },
       onSettled: () => commit(frame),
     });
     next.bounds = frame.bounds;

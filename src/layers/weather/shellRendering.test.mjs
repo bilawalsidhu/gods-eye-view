@@ -1502,3 +1502,42 @@ test('global infrared keeps one full-extent image; detail images halve for small
   });
   small.shell.clear();
 });
+
+test('a Navara shell runs without the Cesium SDK and hands its surface the extent in radians', async () => {
+  const surfaces = [];
+  const shell = createWeatherShell({
+    product: 'radar',
+    viewRectangle: () => ({ west: -1.8, south: 0.5, east: -1.6, north: 0.6 }),
+    moveEnd: { addEventListener: () => () => {} },
+    requestRender: () => {},
+    fetchImpl: async () => response(),
+    decodeImage: async () => ({
+      width: 4096,
+      height: 2048,
+      close() {},
+    }),
+    createCanvas: canvas,
+    createSurface: (options) => {
+      surfaces.push(options);
+      return {
+        setAlpha() {},
+        setImage() {},
+        setWindow() {},
+        setDetail() {},
+        setHidden() {},
+        destroy() {},
+      };
+    },
+  });
+  shell.setFrame(snapshot('radar'), '2026-11-04T12:00:00Z');
+  await flush();
+  assert.equal(surfaces.length, 1);
+  assert.equal(surfaces[0].cesium, undefined);
+  const { bounds } = snapshot('radar');
+  for (const side of ['west', 'south', 'east', 'north'])
+    assert.equal(
+      surfaces[0].rectangle[side],
+      Cesium.Math.toRadians(bounds[side]),
+    );
+  shell.clear();
+});
