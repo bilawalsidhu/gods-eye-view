@@ -327,6 +327,8 @@ scripts/build-milky-way.mjs	VERIFY			Использовать как огран�
 scripts/build-panel.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/build-sf-neighborhoods.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/build-wof-neighborhoods.py	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/check-cesium-load-time.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/check-cesium-load-time.test.mjs	VERIFY		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 scripts/check-import-directions.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/check-layer-state-tokens.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/check-main-chunk.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
@@ -809,6 +811,8 @@ src/app/layers/submarineCables.js	LAYER		cesium	Разобрать прямой 
 src/app/layers/traffic.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/transit.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/transit.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/app/loadCesium.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	traffic-layer
+src/app/loadCesium.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/localGeojsonServices.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
 src/app/mapLifecycle.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/navaraLayers.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -864,6 +868,7 @@ src/cctvFocusRequest.js	NAV	cctv		Перенести фокус на нейтр�
 src/cctvFocusRequest.test.mjs	NAV	cctv		Перенести фокус на нейтральную команду; проверить отмену при смене камеры	—
 src/celestialRing.js	FX			Отделить пресет и время от нативного прохода; проверить качество и стоимость	application-components
 src/celestialRing.test.mjs	FX			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/celestialRing/ephemeris.js	FX			Отделить пресет и время от нативного прохода; проверить качество и стоимость	application-components
 src/celestialRing/render/cesium.js	FX		cesium	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/celestialRing/view.js	FX			Отделить пресет и время от нативного прохода; проверить качество и стоимость	application-components
 src/celestialRingView.test.mjs	FX		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -1355,6 +1360,7 @@ src/geo/ellipsoidGeodesic.js	PLANET			Проверить операции/еди
 src/geo/ellipsoidGeodesic.test.mjs	PLANET		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/geo/index.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	cockpit-controls
 src/geo/index.test.mjs	PLANET			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/geo/julianDate.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	cockpit-controls
 src/geo/math.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	cockpit-controls
 src/geo/math.test.mjs	PLANET		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/geo/matrix.test.mjs	PLANET		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -1363,6 +1369,8 @@ src/geo/matrix4.js	PLANET			Проверить операции/единицы �
 src/geo/quaternion.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	cockpit-controls
 src/geo/releaseParity.test.mjs	PLANET			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/geo/scaleToGeodeticSurface.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	cockpit-controls
+src/geo/simon1994.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	cockpit-controls
+src/geo/simon1994.test.mjs	PLANET		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/geo/transforms.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	cockpit-controls
 src/geo/transforms.test.mjs	PLANET		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/geoDistance.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	regional-provider
@@ -2358,6 +2366,8 @@ src/scenes/cameraMotion.test.mjs	AUTHOR			Сохранить проверку; �
 src/scenes/dataPacks/controller.js	AUTHOR			Сохранить документ, время и права инструмента; переподключить draw/camera/pick	scenes
 src/scenes/dataPacks/geometry.js	AUTHOR		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	scenes
 src/scenes/dataPacks/navara.js	AUTHOR		cesium,three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/scenes/dataPacks/navaraGeometry.js	AUTHOR		three	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
+src/scenes/dataPacks/navaraGeometry.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/scenes/dataPacks/presentation.js	AUTHOR		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	scenes
 src/scenes/dataPacks/presentation.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/scenes/dataPacks/presentationView.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
