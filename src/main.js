@@ -16,6 +16,10 @@ import { createSessionDiagnostics } from './app/sessionDiagnostics.js';
 import { useDisplayStore } from './ui/stores/display.js';
 import { applicationPinia } from './ui/vueRuntime.js';
 import { t } from './i18n/index.js';
+import { guardCesiumGlobal } from './app/loadCesium.js';
+
+// Cesium.js loads with the first Cesium globe (src/app/loadCesium.js).
+guardCesiumGlobal();
 
 // The Vite boundary exposes only undefined, null, or a validated URL.
 const photonSetting = import.meta.env.PHOTON_URL;

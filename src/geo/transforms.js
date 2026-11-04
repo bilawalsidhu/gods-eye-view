@@ -9,7 +9,12 @@
 import { DEBUG } from './debug.js';
 import { Check } from './check.js';
 import { DeveloperError } from './developerError.js';
-import { EPSILON14, equalsEpsilon as scalarEqualsEpsilon } from './math.js';
+import {
+  EPSILON14,
+  TWO_PI,
+  equalsEpsilon as scalarEqualsEpsilon,
+} from './math.js';
+import * as JulianDate from './julianDate.js';
 import {
   create as createCartesian3,
   cross,
@@ -237,4 +242,58 @@ export function headingPitchRollToFixedFrame(
   const hprMatrix = rotationFromQuaternion(hprQuaternion, scratchHPRMatrix4);
   result = fixedFrameTransform(origin, ellipsoid, result);
   return multiply(result, hprMatrix, result);
+}
+
+const gmstConstant0 = 6 * 3600 + 41 * 60 + 50.54841;
+const gmstConstant1 = 8640184.812866;
+const gmstConstant2 = 0.093104;
+const gmstConstant3 = -6.2e-6;
+const rateCoef = 1.1772758384668e-19;
+const wgs84WRPrecessing = 7.2921158553e-5;
+const twoPiOverSecondsInDay = TWO_PI / 86400.0;
+let dateInUtc = { dayNumber: 0, secondsOfDay: 0 };
+
+/**
+ * The rotation from the True Equator Mean Equinox (TEME) axes to the
+ * pseudo-fixed axes at a geo/julianDate.js date: Cesium's
+ * computeTemeToPseudoFixedMatrix, which takes UTC for UT1.
+ */
+export function computeTemeToPseudoFixedMatrix(date, result) {
+  dateInUtc = JulianDate.addSeconds(
+    date,
+    -JulianDate.computeTaiMinusUtc(date),
+    dateInUtc,
+  );
+  const utcDayNumber = dateInUtc.dayNumber;
+  const utcSecondsIntoDay = dateInUtc.secondsOfDay;
+
+  let t;
+  const diffDays = utcDayNumber - 2451545;
+  if (utcSecondsIntoDay >= 43200.0) {
+    t = (diffDays + 0.5) / 36525.0;
+  } else {
+    t = (diffDays - 0.5) / 36525.0;
+  }
+
+  const gmst0 =
+    gmstConstant0 +
+    t * (gmstConstant1 + t * (gmstConstant2 + t * gmstConstant3));
+  const angle = (gmst0 * twoPiOverSecondsInDay) % TWO_PI;
+  const ratio = wgs84WRPrecessing + rateCoef * (utcDayNumber - 2451545.5);
+  const secondsSinceMidnight = (utcSecondsIntoDay + 86400.0 * 0.5) % 86400.0;
+  const gha = angle + ratio * secondsSinceMidnight;
+  const cosGha = Math.cos(gha);
+  const sinGha = Math.sin(gha);
+
+  if (result == null) result = new Array(9);
+  result[0] = cosGha;
+  result[1] = -sinGha;
+  result[2] = 0.0;
+  result[3] = sinGha;
+  result[4] = cosGha;
+  result[5] = 0.0;
+  result[6] = 0.0;
+  result[7] = 0.0;
+  result[8] = 1.0;
+  return result;
 }

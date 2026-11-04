@@ -11,7 +11,6 @@ import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
-import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
@@ -2798,8 +2797,8 @@ async function frameOverhead(engine, dataManager, styleManager, args = {}) {
     };
   }
 
-  // Cesium's bounding sphere (pure math, no viewer), flown by the engine.
-  const bounds = Cesium.BoundingSphere.fromPoints(
+  // Cesium's bounding sphere (geo's port, no SDK), flown by the engine.
+  const bounds = geo.boundingSphere.fromPoints(
     entries.map((entry) => entry.position),
   );
   const sphere = {

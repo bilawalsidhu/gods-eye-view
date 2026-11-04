@@ -7,22 +7,9 @@ import { inspectWindAtCenter } from './inspection.js';
 import { windReadingResult } from './presentation.js';
 import { sampleWind, windColor, windSpeed } from './model.js';
 import { windStats } from './index.js';
+import * as geo from '../../geo/index.js';
 
-const cesium = {
-  Cartesian2: class {
-    constructor(x, y) {
-      this.x = x;
-      this.y = y;
-    }
-  },
-  Ellipsoid: { WGS84: {} },
-  Cartographic: { fromCartesian: (p) => p },
-  Math: { toDegrees: (x) => (x * 180) / Math.PI },
-};
-const at = (lonDeg, latDeg) => ({
-  longitude: (lonDeg * Math.PI) / 180,
-  latitude: (latDeg * Math.PI) / 180,
-});
+const at = (lonDeg, latDeg) => geo.cartesian3.fromDegrees(lonDeg, latDeg);
 const grid = { nx: 4, ny: 3, lo1: 0, la1: 90, dx: 90, dy: 90 };
 const field = (u, v) => ({
   grid,
@@ -44,11 +31,10 @@ const viaViewer = (snapshot, point) =>
       camera: { pickEllipsoid: () => point },
       scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
     },
-    cesium,
     options,
   );
 const viaPosition = (snapshot, point) =>
-  inspectWindAtCenter(snapshot, null, cesium, { ...options, position: point });
+  inspectWindAtCenter(snapshot, null, { ...options, position: point });
 const windLine = (reading) =>
   windReadingResult(reading).lines.find(({ id }) => id === 'wind').text;
 

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { getOverlayPaintRect } from '../overlays/worldOverlay.js';
 import {
   getActiveTrackedReadoutId,
@@ -90,8 +91,8 @@ export function createScreenAnnotationRenderer(
   let published = '';
   // Only the renderer whose board the store shows may change or remove it.
   const shown = () => store.board?.owner === owner;
-  const scratch = new Cesium.Cartesian2();
-  const scratchDir = new Cesium.Cartesian3();
+  const scratch = geo.cartesian2.create();
+  const scratchDir = geo.cartesian3.create();
   // Per-point ground height cache. Marks must sit on the real surface, not at
   // sea level — otherwise in elevated cities (Austin ~150 m) they project
   // underground and parallax sinks them at oblique angles. Sampled once the
@@ -141,11 +142,9 @@ export function createScreenAnnotationRenderer(
     }
     try {
       if (view.clampToHeightSupported()) {
-        const c = view.clampToHeight(
-          Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-        );
+        const c = view.clampToHeight(geo.cartesian3.fromDegrees(lon, lat, 0));
         if (c) {
-          const h = Cesium.Cartographic.fromCartesian(c).height;
+          const h = geo.cartographic.fromCartesian(c).height;
           if (Number.isFinite(h) && h > -430 && h < 9000) {
             heightCache.set(key, { h, settled: true, gen: projGen });
             trimHeightCache();
@@ -359,14 +358,10 @@ export function createScreenAnnotationRenderer(
     // Anchor at the real surface height (cached + validated), so marks sit on
     // the ground/building instead of at sea level. The settle-once cache keeps
     // it stable (no per-frame jitter that earlier broke nearby projections).
-    const world = Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      groundHeight(lon, lat),
-    );
+    const world = geo.cartesian3.fromDegrees(lon, lat, groundHeight(lon, lat));
     // Reject points behind the camera (they produce wrapped/extreme coords).
-    Cesium.Cartesian3.subtract(world, view.cameraPosition(), scratchDir);
-    if (Cesium.Cartesian3.dot(scratchDir, view.cameraDirection()) <= 0)
+    geo.cartesian3.subtract(world, view.cameraPosition(), scratchDir);
+    if (geo.cartesian3.dot(scratchDir, view.cameraDirection()) <= 0)
       return null;
     // Reject points beyond the globe horizon.
     if (!view.horizonVisible(world)) return null;
@@ -392,7 +387,7 @@ export function createScreenAnnotationRenderer(
   const TRACKED_BBOX_MARGIN = 8; // px buffer added around the footprint
   const TRACKED_FADE_EASE = 0.22; // per-frame ease toward hidden(0) / visible(1)
   const TRACKED_HYSTERESIS_PX = 18; // dead-band so the overlap test can't flip-flop
-  const _scratchTrackedWin = new Cesium.Cartesian2();
+  const _scratchTrackedWin = geo.cartesian2.create();
 
   // Evaluate a NearFarScalar (billboard scaleByDistance) at a camera distance.
   function nearFarValue(nfs, dist) {
@@ -428,7 +423,7 @@ export function createScreenAnnotationRenderer(
       if (sbd)
         scale = nearFarValue(
           sbd,
-          Cesium.Cartesian3.distance(view.cameraPosition(), world),
+          geo.cartesian3.distance(view.cameraPosition(), world),
         );
       const hw = (baseW * scale) / 2;
       const hh = (baseH * scale) / 2;

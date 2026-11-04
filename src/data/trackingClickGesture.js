@@ -47,7 +47,7 @@ export function isTrackingClickGesture(gesture = {}) {
  */
 export function bindTrackingClickGesture(handler, onClick, options = {}) {
   const now = options.now || (() => performance.now());
-  const eventTypes = options.eventTypes || trackingEventTypes;
+  const eventTypes = options.eventTypes || trackingEventTypes();
   let pressActive = false;
   let pressStartedAt = 0;
   let previousPosition = null;

@@ -1,4 +1,5 @@
 import * as geo from '../../geo/index.js';
+import { whenCesiumSdk } from '../../app/loadCesium.js';
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFraming } from './cameraFraming.js';
@@ -549,15 +550,19 @@ export function createStreetLevelLayer({
       mapStack = null;
       state.viewer = null;
     },
-    enable(viewer) {
-      state.enabled = true;
-      if (viewer) state.viewer = viewer;
-      parts.marker.setVisible(true);
-      parts.selection.install(state.viewer);
-      for (const entry of activeEntries()) activate(entry);
-      watchCamera(state.viewer);
-      remeasureGround();
-      notify();
+    enable(viewer, { signal } = {}) {
+      // The marker, cones, coverage and ground picks use Cesium's math and
+      // primitives on either globe: a Navara page loads the Cesium SDK first.
+      return whenCesiumSdk(() => {
+        state.enabled = true;
+        if (viewer) state.viewer = viewer;
+        parts.marker.setVisible(true);
+        parts.selection.install(state.viewer);
+        for (const entry of activeEntries()) activate(entry);
+        watchCamera(state.viewer);
+        remeasureGround();
+        notify();
+      }, signal);
     },
 
     disable() {

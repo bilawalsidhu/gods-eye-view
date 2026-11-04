@@ -1,5 +1,6 @@
 /** Session-local geodata loading with bounded geometry and local-only file references. */
 import * as Cesium from 'cesium';
+import { cesiumSdkReady, loadCesiumSdk } from '../app/loadCesium.js';
 import { createImportImageBudget } from './geoImportImages.js';
 import { createImportedPins } from './geoImportPins.js';
 import { msg } from '../i18n/marker.js';
@@ -1416,6 +1417,9 @@ export async function loadGeoFile(
     throw new GeoImportError(
       msg('Only GeoJSON, KML, KMZ and GPX files can be imported.'),
     );
+  // The import builds Cesium data sources on either globe: a Navara page
+  // loads the Cesium SDK first.
+  if (!cesiumSdkReady()) await boundedImport(loadCesiumSdk(), signal);
   const stroke = Cesium.Color.fromCssColorString(color);
   const urls = [];
   let pins;

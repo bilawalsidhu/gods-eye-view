@@ -5,6 +5,7 @@ import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
 } from '../../data/cameraSensitivity.js';
+import { whenCesiumSdk } from '../../app/loadCesium.js';
 
 export function createLifecycle({
   state: layerState,
@@ -245,36 +246,40 @@ export function createLifecycle({
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
-    enable(viewer) {
-      if (layerState._enabled) return;
-      if (viewer) layerState._viewer = viewer;
-      layerState._enabled = true;
-      if (layerState._roadMode !== 'tomtom') source.prefetch?.();
-      bindScene();
-      // Enabling is explicit intent, not a camera gesture that needs settling.
-      parts.viewport.onCameraChanged({ immediate: true });
+    enable(viewer, { signal } = {}) {
+      // The simulation's math is Cesium's on either globe: a Navara page
+      // loads the Cesium SDK first.
+      return whenCesiumSdk(() => {
+        if (layerState._enabled) return;
+        if (viewer) layerState._viewer = viewer;
+        layerState._enabled = true;
+        if (layerState._roadMode !== 'tomtom') source.prefetch?.();
+        bindScene();
+        // Enabling is explicit intent, not a camera gesture that needs settling.
+        parts.viewport.onCameraChanged({ immediate: true });
 
-      // Boot-order guard (field-test round 1: layer sat empty until the user
-      // moved): when the persisted layer state re-enables traffic during the
-      // intro flyTo, the initial check bails at high altitude — and a camera
-      // that then parks never re-fires camera.changed. Retry cheaply until the
-      // first load commits, then self-clear. Also acts as a safety kick if a
-      // failed first fetch left the viewport unloaded while parked.
-      clearInterval(layerState._enableKickTimer);
-      layerState._enableKickTimer = setInterval(() => {
-        if (
-          !layerState._enabled ||
-          layerState._lastUpdate ||
-          layerState._roadRetryStopped ||
-          layerState._retryAttempts >= 3
-        ) {
-          clearInterval(layerState._enableKickTimer);
-          layerState._enableKickTimer = null;
-          return;
-        }
-        if (!layerState._fetching && !layerState._retryTimer)
-          parts.viewport.onCameraChanged();
-      }, 1500);
+        // Boot-order guard (field-test round 1: layer sat empty until the user
+        // moved): when the persisted layer state re-enables traffic during the
+        // intro flyTo, the initial check bails at high altitude — and a camera
+        // that then parks never re-fires camera.changed. Retry cheaply until the
+        // first load commits, then self-clear. Also acts as a safety kick if a
+        // failed first fetch left the viewport unloaded while parked.
+        clearInterval(layerState._enableKickTimer);
+        layerState._enableKickTimer = setInterval(() => {
+          if (
+            !layerState._enabled ||
+            layerState._lastUpdate ||
+            layerState._roadRetryStopped ||
+            layerState._retryAttempts >= 3
+          ) {
+            clearInterval(layerState._enableKickTimer);
+            layerState._enableKickTimer = null;
+            return;
+          }
+          if (!layerState._fetching && !layerState._retryTimer)
+            parts.viewport.onCameraChanged();
+        }, 1500);
+      }, signal);
     },
 
     /**

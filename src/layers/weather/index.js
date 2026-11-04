@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createWeatherRendering } from './rendering.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
@@ -57,7 +58,7 @@ export function createWeatherLayer({
   feed,
   clock,
   id = 'weather-radar',
-  cesium = Cesium,
+  cesium = null,
   createRendering = createWeatherRendering,
   createNativeRendering = null,
   documentRef = globalThis.document,
@@ -311,11 +312,13 @@ export function createWeatherLayer({
     attachRenderer(nextViewer, { engine = null } = {}) {
       viewer = nextViewer;
       sceneEngine = engine;
-      const options = { viewer, cesium, getHost, onChange: notify };
+      const options = { viewer, getHost, onChange: notify };
+      // The SDK is read here, on Cesium only: the production build's Cesium
+      // global loads with the first Cesium globe.
       rendering =
         engine?.kind === 'navara'
           ? createNativeRendering(engine, options)
-          : createRendering(options);
+          : createRendering({ ...options, cesium: cesium ?? Cesium });
       checkHost(false);
       eventTarget?.addEventListener?.(
         'gev:map-stack-changed',
@@ -530,12 +533,20 @@ export function createWeatherLayer({
             : manifest.bounds);
         runNavigation(() =>
           (sceneEngine?.camera ?? viewer.camera).flyTo({
-            destination: cesium.Rectangle.fromDegrees(
-              b.west,
-              b.south,
-              b.east,
-              b.north,
-            ),
+            // The engine camera takes a plain rectangle in radians.
+            destination: sceneEngine
+              ? {
+                  west: geo.math.toRadians(b.west),
+                  south: geo.math.toRadians(b.south),
+                  east: geo.math.toRadians(b.east),
+                  north: geo.math.toRadians(b.north),
+                }
+              : (cesium ?? Cesium).Rectangle.fromDegrees(
+                  b.west,
+                  b.south,
+                  b.east,
+                  b.north,
+                ),
             duration: motion?.matches ? 0 : 1.4,
           }),
         );
@@ -634,20 +645,17 @@ export function createWeatherLayer({
       const point =
         canvas &&
         (sceneEngine?.camera ?? viewer.camera).pickEllipsoid?.(
-          new cesium.Cartesian2(
+          geo.cartesian2.create(
             canvas.clientWidth / 2,
             canvas.clientHeight / 2,
           ),
           viewer?.scene?.globe?.ellipsoid,
         );
       const camera = point
-        ? cesium.Cartographic.fromCartesian(
-            point,
-            viewer?.scene?.globe?.ellipsoid,
-          )
+        ? geo.cartographic.fromCartesian(point, viewer?.scene?.globe?.ellipsoid)
         : null;
-      const lon = camera ? cesium.Math.toDegrees(camera.longitude) : 0;
-      const lat = camera ? cesium.Math.toDegrees(camera.latitude) : 0;
+      const lon = camera ? geo.math.toDegrees(camera.longitude) : 0;
+      const lat = camera ? geo.math.toDegrees(camera.latitude) : 0;
       const outside =
         b &&
         camera &&

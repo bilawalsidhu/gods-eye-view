@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   BufferAttribute,
   BufferGeometry,
@@ -11,6 +10,8 @@ import {
   SRGBColorSpace,
   Texture,
 } from 'three';
+import * as geo from '../../geo/index.js';
+import { polygonShape, rectangleShape } from './navaraGeometry.js';
 import {
   attachSceneDepth,
   createSceneDepthTest,
@@ -18,7 +19,7 @@ import {
 const KEY = 'gevScenePack',
   registered = new WeakSet();
 const cyan = [0, 1, 1, 1],
-  xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
+  xyz = ([lon, lat, height]) => geo.cartesian3.fromDegrees(lon, lat, height);
 export function createNavaraPackRenderer(engine, { view, MeshDesc }) {
   if (!registered.has(view)) {
     view.registerMesh(
@@ -153,20 +154,9 @@ export function createNavaraPackRenderer(engine, { view, MeshDesc }) {
           line.setPositions(f.coordinates.map(xyz));
         } else {
           batch ??= meshGroup(handle);
-          const polygon = new Cesium.PolygonGeometry({
-            polygonHierarchy: new Cesium.PolygonHierarchy(
-              f.coordinates[0].map(xyz),
-              f.coordinates
-                .slice(1)
-                .map((r) => new Cesium.PolygonHierarchy(r.map(xyz))),
-            ),
-            perPositionHeight: true,
-            vertexFormat: Cesium.VertexFormat.POSITION_ONLY,
-            arcType: Cesium.ArcType.GEODESIC,
-          });
           addMesh(
             batch,
-            Cesium.PolygonGeometry.createGeometry(polygon),
+            polygonShape(f.coordinates),
             { color: new Color(0x00ffff), opacity: 0.35 },
             id,
             null,
@@ -189,7 +179,7 @@ export function createNavaraPackRenderer(engine, { view, MeshDesc }) {
             const hits = raycaster.intersectObjects(batch.group.children);
             const earth = engine.picker.pickGlobe(at);
             const depth = earth
-              ? Cesium.Cartesian3.distance(ray.origin, earth)
+              ? geo.cartesian3.distance(ray.origin, earth)
               : Infinity;
             return hits
               .filter((h) => h.distance <= depth + 1)
@@ -210,12 +200,9 @@ export function createNavaraPackRenderer(engine, { view, MeshDesc }) {
       texture.colorSpace = SRGBColorSpace;
       texture.needsUpdate = true;
       batch.owned.push(texture);
-      const shape = Cesium.RectangleGeometry.createGeometry(
-        new Cesium.RectangleGeometry({
-          rectangle: Cesium.Rectangle.fromDegrees(...pack.placement.bounds),
-          height: pack.placement.height,
-          vertexFormat: Cesium.VertexFormat.POSITION_AND_ST,
-        }),
+      const shape = rectangleShape(
+        pack.placement.bounds,
+        pack.placement.height,
       );
       addMesh(batch, shape, { color: 0xffffff, opacity: 1 }, null, texture);
       engine.render.request('scene-pack');

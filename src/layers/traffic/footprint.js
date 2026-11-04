@@ -68,7 +68,7 @@ export function createReticleFootprint() {
   const pixels = Array.from({ length: 25 }, () => geo.cartesian2.create());
   const hits = Array.from({ length: 25 }, () => geo.cartesian3.create());
   const carto = geo.cartographic.create();
-  const ray = new Cesium.Ray();
+  let ray;
   return (viewer, altitude, engine) => {
     const camera = engine?.camera ?? viewer?.camera;
     if (!camera?.getPickRay && !camera?.pickRay) return null;
@@ -91,7 +91,9 @@ export function createReticleFootprint() {
           p = pixels[i];
         p.x = left + (side * col) / 4;
         p.y = top + (side * row) / 4;
-        const hit = camera.pickEllipsoid(p, Cesium.Ellipsoid.WGS84, hits[i]);
+        const hit = engine
+          ? camera.pickEllipsoid(p)
+          : camera.pickEllipsoid(p, Cesium.Ellipsoid.WGS84, hits[i]);
         let dx, dy;
         if (hit) {
           geo.cartographic.fromCartesian(hit, geo.ellipsoid.WGS84, carto);
@@ -102,7 +104,7 @@ export function createReticleFootprint() {
         } else {
           const picked = engine
             ? camera.pickRay(p)
-            : camera.getPickRay(p, ray) || ray;
+            : camera.getPickRay(p, (ray ??= new Cesium.Ray())) || ray;
           if (!picked) continue;
           const d = picked.direction;
           dx =

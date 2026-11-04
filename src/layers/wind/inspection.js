@@ -1,5 +1,6 @@
 import { sampleWind, windSpeed } from './model.js';
 import { sampleScalar } from './fields.js';
+import * as geo from '../../geo/index.js';
 
 // The reading stays English: AI tools read it too. Text is marked for i18n
 // extraction and translated where the WEATHER card shows it (presentation.js).
@@ -45,17 +46,17 @@ export function formatWindSpeed(speed, units = 'km/h') {
 export function inspectWindAtCenter(
   snapshot,
   viewer,
-  cesium,
   { units, overlay, model, validTime, status, position } = {},
 ) {
   const scene = viewer?.scene;
   const canvas = scene?.canvas;
-  const ellipsoid = scene?.globe?.ellipsoid || cesium.Ellipsoid?.WGS84;
+  // The globe's own ellipsoid, else WGS84 (geo's default).
+  const ellipsoid = scene?.globe?.ellipsoid;
   const point =
     position ||
     (canvas &&
       viewer.camera?.pickEllipsoid?.(
-        new cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+        geo.cartesian2.create(canvas.clientWidth / 2, canvas.clientHeight / 2),
         ellipsoid,
       ));
   const noReading = () => ({
@@ -69,9 +70,9 @@ export function inspectWindAtCenter(
     ),
   });
   if (!point || !snapshot?.u || !snapshot?.v) return noReading();
-  const location = cesium.Cartographic.fromCartesian(point, ellipsoid);
-  const lon = cesium.Math.toDegrees(location.longitude);
-  const lat = cesium.Math.toDegrees(location.latitude);
+  const location = geo.cartographic.fromCartesian(point, ellipsoid);
+  const lon = geo.math.toDegrees(location.longitude);
+  const lat = geo.math.toDegrees(location.latitude);
   const vector = sampleWind(
     { ...snapshot.grid, u: snapshot.u, v: snapshot.v },
     lon,

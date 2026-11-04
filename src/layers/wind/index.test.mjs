@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createWindLayer, formatWindValidTime, windStats } from './index.js';
 import { useWindInspectionStore } from '../../ui/stores/windInspection.js';
 import { applicationPinia } from '../../ui/vueRuntime.js';
+import * as geo from '../../geo/index.js';
 
 const snapshot = (model) => ({
   model,
@@ -314,7 +315,7 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   };
   const viewer = {
     container,
-    camera: { positionWC: {}, pickEllipsoid: () => { samples++; return { longitude: 0, latitude: 0 }; } },
+    camera: { positionWC: {}, pickEllipsoid: () => { samples++; return geo.cartesian3.fromDegrees(0, 0); } },
     scene: {
       mode: 3,
       canvas: { clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
@@ -352,7 +353,7 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   assert.deepEqual(layer.getRowControls().summary.settings.map(({ label }) => label), ['MODEL', 'FIELD', 'UNITS', 'MOTION']);
   assert.ok(marker());
   assert.equal(typeof listener, 'function');
-  viewer.camera.pickEllipsoid = () => { samples++; return { longitude: 70, latitude: 20 }; };
+  viewer.camera.pickEllipsoid = () => { samples++; return geo.cartesian3.fromDegrees(70, 20); };
   layer.setParams({ overlay: 'speed' });
   assert.equal(layer.getRowControls().summary.reading.coordinates, captured.coordinates);
   layer.setParams({ model: 'ifs' });

@@ -1786,11 +1786,13 @@ function orbitOffset(position, heading, target) {
   const carto = geo.cartographic.fromCartesian(position);
   const tCarto = geo.cartographic.fromCartesian(target);
   const dh = carto.height - tCarto.height;
-  return new Cesium.HeadingPitchRange(
+  // A plain heading/pitch/range: Cesium's lookAt reads the fields, and the
+  // Cesium SDK is not loaded on a Navara page.
+  return {
     heading,
-    -Math.asin(Math.min(1, Math.max(-1, dh / Math.max(1, range)))),
+    pitch: -Math.asin(Math.min(1, Math.max(-1, dh / Math.max(1, range)))),
     range,
-  );
+  };
 }
 
 /** Rigid origin-centred rotation stays outside the actual ellipsoid's bounding sphere. */
