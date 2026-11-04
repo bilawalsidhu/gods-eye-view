@@ -25,12 +25,11 @@ export const collectAircraftProximityWindow =
   layer.collectAircraftProximityWindow;
 export const _getAwarenessNavigationStateForTest =
   layer._getAwarenessNavigationStateForTest;
+export const _getAwarenessPanelRendersForTest =
+  layer._getAwarenessPanelRendersForTest;
 export const canNavigateAwarenessNext = layer.canNavigateAwarenessNext;
 export const historySubjectSnapshot = layer.historySubjectSnapshot;
 export const findCompatibleHistoryIndex = layer.findCompatibleHistoryIndex;
-export const awarenessPanelControlKey = layer.awarenessPanelControlKey;
-export const captureAwarenessPanelFocus = layer.captureAwarenessPanelFocus;
-export const restoreAwarenessPanelFocus = layer.restoreAwarenessPanelFocus;
 export const awarenessResultsAreLive = layer.awarenessResultsAreLive;
 export const awarenessNeedsContinuousRender =
   layer.awarenessNeedsContinuousRender;

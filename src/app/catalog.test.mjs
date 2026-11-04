@@ -94,6 +94,35 @@ test('data setup seals the caller catalog before controls can restore and drains
   assert.equal(dataManager.layers.size, 0);
 });
 
+test('data setup keeps layers polling in an inline panel its host reports hidden', async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = {
+    hidden: true,
+    visibilityState: 'hidden',
+    getElementById: () => null,
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  t.after(() => {
+    delete globalThis.GEV_EMBED_INLINE;
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  const releases = [];
+  const { dataManager } = createApplicationData({
+    scene: { viewer: {} },
+    controls: { styleManager: { attachDataManager() {} } },
+    catalog: createLayerCatalog([], []),
+    defer: (release) => releases.push(release),
+  });
+  const visibility = dataManager._visibilityTarget;
+  assert.equal(visibility.hidden, true, 'a hidden page pauses outside a panel');
+  globalThis.GEV_EMBED_INLINE = true;
+  assert.equal(visibility.hidden, false);
+  assert.equal(visibility.visibilityState, 'visible');
+  for (const release of releases.reverse()) await release();
+});
+
 test('controls bind catalog instances rather than similarly named defaults', () => {
   const ids = [
     'traffic',
