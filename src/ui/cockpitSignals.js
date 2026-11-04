@@ -62,7 +62,31 @@ export function pushCockpitSignal(key, tone, title, detail, target = null) {
   this.publishCockpitSignals();
 }
 
-export function updateCockpitSignals(snapshot, unknownCount) {
+/**
+ * Take a status row off the list, as when the feed it warned about is back.
+ * @param {string} key The row's key.
+ */
+export function dropCockpitSignal(key) {
+  this.signalSignatures.delete(key);
+  const kept = this.signalItems.filter((item) => item.key !== key);
+  if (kept.length === this.signalItems.length) return;
+  this.signalItems = kept;
+  this.publishCockpitSignals();
+}
+
+/**
+ * Rebuild the rows from a Contacts snapshot: the nearest flights, a row for
+ * unknown inputs and, first, a row naming an air feed that is off.
+ * @param {object} snapshot `militaryAwareness.getContextSnapshot()` result.
+ * @param {number} unknownCount Cohorts whose count is unknown.
+ * @param {?{title: string, detail: string}} [partialPicture] The feed-off
+ *   row (see `readPartialPicture`), or null with every air feed on.
+ */
+export function updateCockpitSignals(
+  snapshot,
+  unknownCount,
+  partialPicture = null,
+) {
   const previous = new Map(this.signalItems.map((item) => [item.key, item]));
   const contacts = [];
   const subject = snapshot.subject;
@@ -110,7 +134,9 @@ export function updateCockpitSignals(snapshot, unknownCount) {
     }
   }
   contacts.sort((a, b) => a.distanceM - b.distanceM);
-  const nextItems = contacts.slice(0, 5).map((item) => ({
+  // A feed-off row leads, so the list never reads as the whole picture.
+  const reserved = partialPicture ? 1 : 0;
+  const nextItems = contacts.slice(0, 5 - reserved).map((item) => ({
     ...item,
     timestamp:
       previous.get(item.key)?.timestamp || snapshot.evaluatedAt || Date.now(),
@@ -120,18 +146,35 @@ export function updateCockpitSignals(snapshot, unknownCount) {
       .filter((cohort) => cohort.count === null)
       .map((cohort) => cohort.source)
       .join(' · ');
-    nextItems.splice(4, Math.max(0, nextItems.length - 4), {
-      key: 'input-status',
+    nextItems.splice(
+      4 - reserved,
+      Math.max(0, nextItems.length - 4 + reserved),
+      {
+        key: 'input-status',
+        tone: 'warning',
+        title: tn(
+          unknownCount,
+          '{count} INPUT UNKNOWN',
+          '{count} INPUTS UNKNOWN',
+        ),
+        detail: sources || t('SOURCE STATUS UNAVAILABLE'),
+        target: null,
+        timestamp:
+          previous.get('input-status')?.timestamp ||
+          snapshot.evaluatedAt ||
+          Date.now(),
+      },
+    );
+  }
+  if (partialPicture) {
+    nextItems.unshift({
+      key: 'feed-status',
       tone: 'warning',
-      title: tn(
-        unknownCount,
-        '{count} INPUT UNKNOWN',
-        '{count} INPUTS UNKNOWN',
-      ),
-      detail: sources || t('SOURCE STATUS UNAVAILABLE'),
+      title: partialPicture.title,
+      detail: partialPicture.detail,
       target: null,
       timestamp:
-        previous.get('input-status')?.timestamp ||
+        previous.get('feed-status')?.timestamp ||
         snapshot.evaluatedAt ||
         Date.now(),
     });

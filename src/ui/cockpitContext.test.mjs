@@ -204,6 +204,63 @@ test('without a snapshot the card stands by, hidden', async (t) => {
   assert.equal(signals.at(-1)[2], 'CONTEXT STANDBY');
 });
 
+test('a feed that is off makes the card and Live Signals say the picture is partial', async (t) => {
+  // Every input known, so only the feed that is off can make it partial.
+  const { $, text, owner } = fixture(
+    t,
+    snapshot({
+      cohorts: [
+        {
+          id: 'flights',
+          label: 'Flights',
+          count: 12,
+          relationship: 'OBSERVED',
+          nearest: [{ id: 'N1', distanceM: 4200 }],
+        },
+      ],
+    }),
+  );
+  const rebuilt = [];
+  owner.updateCockpitSignals = (...args) => rebuilt.push(args);
+  owner.services.isLayerEnabled = () => true;
+  updateContext.call(owner, INFO, 0);
+  await nextTick();
+  assert.equal($('#cockpit-context').dataset.state, 'current');
+  assert.equal(rebuilt.at(-1)[2], null, 'both feeds on: nothing to add');
+
+  owner.services.isLayerEnabled = (layerId) => layerId !== 'military';
+  updateContext.call(owner, INFO, 0);
+  await nextTick();
+  assert.equal($('#cockpit-context').dataset.state, 'uncertain');
+  assert.equal(
+    text('#cockpit-context-uncertainty'),
+    'MILITARY FEED OFF · PARTIAL PICTURE',
+  );
+  assert.deepEqual(rebuilt.at(-1)[2], {
+    title: 'MILITARY FEED OFF · PARTIAL PICTURE',
+    detail: 'NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR',
+  });
+});
+
+test('without Contacts, a feed that is off adds a signal until it is back', async (t) => {
+  const { owner, signals } = fixture(t, null);
+  const dropped = [];
+  owner.dropCockpitSignal = (key) => dropped.push(key);
+  // Riding a military aircraft with Live Flights off.
+  owner.services.isLayerEnabled = (layerId) => layerId === 'military';
+  updateContext.call(owner, { ...INFO, layerId: 'military' }, 0);
+  assert.equal(signals.at(-2)[2], 'CONTEXT STANDBY');
+  assert.deepEqual(signals.at(-1), [
+    'feed-status',
+    'warning',
+    'FLIGHTS FEED OFF · PARTIAL PICTURE',
+    'NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR',
+  ]);
+  owner.services.isLayerEnabled = () => true;
+  updateContext.call(owner, { ...INFO, layerId: 'military' }, 0);
+  assert.deepEqual(dropped, ['feed-status']);
+});
+
 test('the weather toggle renders its state and the action it offers', async (t) => {
   const { $, text, owner } = fixture(t);
   syncWeatherToggle.call(owner, true);
