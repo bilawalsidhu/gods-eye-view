@@ -96,7 +96,13 @@ function fixture(
   const viewer = {
     camera,
     scene: { requestRender() {}, preRender: new Cesium.Event() },
-    dataSources: { add() {}, remove() {} },
+    added: [],
+    dataSources: {
+      add(source) {
+        viewer.added.push(source);
+      },
+      remove() {},
+    },
   };
   const layer = createNewsLayer({
     source,
@@ -164,7 +170,7 @@ test('choosing a card selects it and flies straight down from 150 km; reduced mo
   assert.equal(layer.getRowControls().feed.selected, null);
 });
 
-test('the card toggle and the severity floor change what is shown, not what is read', async (t) => {
+test('the severity floor changes what is shown, not what is read', async (t) => {
   const { layer, entries, calls } = fixture(t, { height: 500_000 });
   layer.enable();
   await layer.update();
@@ -174,105 +180,97 @@ test('the card toggle and the severity floor change what is shown, not what is r
   assert.deepEqual(cards(), []);
   await settle();
   const reads = calls.feed.length;
-  layer.setParams({ filters: { cards: false, minSeverity: 0 } });
+  layer.setParams({ filters: { minSeverity: 0 } });
   assert.equal(calls.feed.length, reads);
-  assert.equal(layer.getRowControls().feed.filters.cards, false);
   assert.deepEqual(
     layer.getRowControls().feed.items.map((item) => item.id),
     ['major', 'minor', 'far'],
   );
 });
 
-test('In view places the held reports when the camera settles low, with no new read', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  let centre = { lat: 49, lon: 36 };
-  const { layer, camera, calls } = fixture(t, {
-    height: 1_000_000,
-    centre: () => centre,
-  });
-  layer.enable();
-  await layer.update();
-  const reads = calls.feed.length;
-  const view = layer.getRowControls().feed.inView;
-  assert.equal(view.active, true);
-  assert.equal(view.loading, false);
-  // Gaza is beyond 500 km of the view centre; the old report is past 24 h.
-  assert.deepEqual(
-    view.items.map((item) => item.id),
-    ['major'],
-  );
-  // Panning to another cell (over Gaza) reads nothing: it reuses the map's
-  // reports, once the camera has settled.
-  centre = { lat: 31.5, lon: 34.4 };
-  camera.moveEnd.raiseEvent();
-  t.mock.timers.tick(799);
-  assert.deepEqual(
-    layer.getRowControls().feed.inView.items.map((item) => item.id),
-    ['major'],
-  );
-  t.mock.timers.tick(1);
-  await Promise.resolve();
-  assert.deepEqual(
-    layer.getRowControls().feed.inView.items.map((item) => item.id),
-    ['far'],
-  );
-  assert.equal(calls.feed.length, reads);
-  // Up above 3,000 km, In view goes away.
-  camera.positionCartographic.height = 5_000_000;
-  camera.moveEnd.raiseEvent();
-  t.mock.timers.tick(800);
-  assert.equal(layer.getRowControls().feed.inView.active, false);
-});
-
-test('In view with minor news reads once, not per pan; a failed read shows', async (t) => {
+test('Local reads every report once, lists those near the view and takes the map over', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let centre = { lat: 49, lon: 36 };
   let fail = false;
-  const minorReads = [];
-  const { layer, camera } = fixture(t, {
+  const localReads = [];
+  const { layer, camera, viewer } = fixture(t, {
     height: 1_000_000,
     centre: () => centre,
     source: {
       getFeed: async (query) => {
         if (query.relevance === '' && query.limit === 500) {
-          minorReads.push(query);
+          localReads.push(query);
           if (fail) throw new Error('boom');
           return {
-            reports: [report('broad', { severity: 2, relevance: 'minor' })],
+            reports: [
+              report('broad', { severity: 1, relevance: 'minor' }),
+              report('south', {
+                severity: 2,
+                pins: [{ lat: 31.5, lon: 34.4, place: 'Gaza', mappable: true }],
+              }),
+            ],
             nextBefore: null,
           };
         }
-        return { reports: [], nextBefore: null };
+        return {
+          reports: [report('major', { severity: 3 })],
+          nextBefore: null,
+        };
       },
     },
   });
+  const markers = () =>
+    // The layer adds its outlines' source first, then its markers'.
+    viewer.added[1].entities.values
+      .map((entity) => String(entity.id))
+      .filter((id) => /~\d+$/.test(id))
+      .map((id) => id.replace(/^.*:/, '').replace(/~\d+$/, ''));
   layer.enable();
   await layer.update();
-  camera.moveEnd.raiseEvent();
-  t.mock.timers.tick(800);
-  await Promise.resolve();
-  assert.equal(minorReads.length, 0);
-  layer.setParams({ filters: { includeMinor: true } });
   for (let i = 0; i < 4; i++) await Promise.resolve();
-  assert.equal(minorReads.length, 1);
+  // Conflicts: no read of minor news, the hotspots' news on the map.
+  assert.equal(localReads.length, 0);
+  assert.equal(layer.getRowControls().feed.inView.active, true);
+  assert.deepEqual(markers(), ['major']);
+  layer.setParams({ filters: { section: 'local' } });
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  assert.equal(localReads.length, 1);
+  let view = layer.getRowControls().feed;
+  // Every severity near the centre; Gaza is beyond 500 km; no older pages.
   assert.deepEqual(
-    layer.getRowControls().feed.inView.items.map((item) => item.id),
+    view.inView.items.map((item) => item.id),
     ['broad'],
   );
-  centre = { lat: 47, lon: 33 };
+  assert.equal(view.hasMore, false);
+  assert.deepEqual(markers(), ['broad']);
+  // A pan reads nothing more and follows the camera once it settles.
+  centre = { lat: 31.5, lon: 34.4 };
   camera.moveEnd.raiseEvent();
   t.mock.timers.tick(800);
   await Promise.resolve();
-  assert.equal(minorReads.length, 1);
-  // Turned off and on again with the server failing: the error is shown.
-  layer.setParams({ filters: { includeMinor: false } });
+  assert.equal(localReads.length, 1);
+  assert.deepEqual(
+    layer.getRowControls().feed.inView.items.map((item) => item.id),
+    ['south'],
+  );
+  assert.deepEqual(markers(), ['south']);
+  // Up above 3,000 km there is no "near here": the map shows conflicts again.
+  camera.positionCartographic.height = 5_000_000;
+  camera.moveEnd.raiseEvent();
+  t.mock.timers.tick(800);
+  view = layer.getRowControls().feed;
+  assert.equal(view.inView.active, false);
+  assert.ok(!markers().includes('south'));
+  // Back to Conflicts and to Local again with the server failing: it shows.
+  camera.positionCartographic.height = 1_000_000;
+  layer.setParams({ filters: { section: 'conflicts' } });
   fail = true;
-  layer.setParams({ filters: { includeMinor: true } });
+  layer.setParams({ filters: { section: 'local' } });
   for (let i = 0; i < 4; i++) await Promise.resolve();
-  assert.equal(minorReads.length, 2);
-  const view = layer.getRowControls().feed.inView;
-  assert.equal(view.error, 'News feed unavailable');
-  assert.deepEqual(view.items, []);
+  assert.equal(localReads.length, 2);
+  view = layer.getRowControls().feed;
+  assert.equal(view.inView.error, 'News feed unavailable');
+  assert.deepEqual(view.inView.items, []);
 });
 
 test('a shorter window narrows the feed and reads the hotspot counts for it', async (t) => {

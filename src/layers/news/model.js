@@ -46,6 +46,14 @@ export const NEWS_DETAIL_MAX_HEIGHT_M = 2_500_000;
 export const NEWS_IN_VIEW_MAX_HEIGHT_M = 3_000_000;
 export const NEWS_IN_VIEW_RADIUS_KM = 500;
 export const NEWS_IN_VIEW_LIMIT = 12;
+/** The Local section lists at most this many reports near the view centre. */
+export const NEWS_LOCAL_LIMIT = 40;
+/**
+ * The News panel's sections: Conflicts (the hotspots' significant news, on the
+ * map whenever the layer is on) and Local (everything near the view centre,
+ * on the map while the section is chosen).
+ */
+export const NEWS_SECTIONS = Object.freeze(['conflicts', 'local']);
 export const NEWS_SETTLE_MS = 800;
 export const NEWS_CELL_DEG = 0.5;
 /** A feed card's click flies the camera to this height over the event. */
@@ -625,9 +633,9 @@ export function normalizeFilters(next = {}, hotspots = [], previous = {}) {
     hotspot,
     category,
     minSeverity,
-    includeMinor: merged.includeMinor === true,
-    // Event cards on the map; off leaves only the clicked event's card.
-    cards: merged.cards !== false,
+    section: NEWS_SECTIONS.includes(merged.section)
+      ? merged.section
+      : 'conflicts',
     // A shorter window than the server's; null shows all it serves.
     hours: NEWS_WINDOW_CHOICES.includes(merged.hours) ? merged.hours : null,
   };
@@ -661,12 +669,22 @@ export function visibleOnMap(
   );
 }
 
-/** API query for the feed under the current filters: the window only. */
+/**
+ * The filters Local applies: every hotspot and every severity, near the view
+ * centre; the category and the window still hold.
+ */
+export const localFilters = (filters) => ({
+  ...filters,
+  hotspot: 'all',
+  minSeverity: 0,
+});
+
+/** API query for the Conflicts feed under the current filters: the window only. */
 export function feedQueryFor(filters, extra = {}) {
   return {
     events: true,
     today: true,
-    relevance: filters.includeMinor ? '' : NEWS_RELEVANT,
+    relevance: NEWS_RELEVANT,
     hotspot: filters.hotspot,
     category: filters.category === 'all' ? '' : filters.category,
     limit: NEWS_FEED_PAGE,

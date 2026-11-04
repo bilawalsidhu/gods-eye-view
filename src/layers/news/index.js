@@ -22,6 +22,7 @@ import {
   NEWS_FEED_PAGE,
   NEWS_FOCUS_HEIGHT_M,
   NEWS_IN_VIEW_MAX_HEIGHT_M,
+  NEWS_LOCAL_LIMIT,
   NEWS_LAYER_ID,
   NEWS_MAP_LIMIT,
   NEWS_OVERLAY_SOURCE_ID,
@@ -47,6 +48,7 @@ import {
   mergeFeedPage,
   newsWindowChoices,
   newsWindowMs,
+  localFilters,
   normalizeFilters,
   passesFilters,
   reportMarkerPosition,
@@ -85,8 +87,9 @@ const emptyFeed = () => ({
   loading: false,
   error: null,
 });
+// Local: `active` while the camera is low enough to have a "near here";
 // `minor` holds the day's reports with minor news included, read once while
-// that filter is on; otherwise In view uses the map's own reports.
+// the Local section is chosen.
 const emptyInView = () => ({
   active: false,
   cell: null,
@@ -167,7 +170,26 @@ export function createNewsLayer({
     inView.minor?.find((r) => r.id === id) ||
     null;
   const selected = () => (selectedId ? findReport(selectedId) : null);
-  const onMap = (report) => visibleOnMap(report, filters, now(), windowMs);
+  const local = () => filters.section === 'local';
+  // Local takes the map over only while there is a "near here" to show.
+  const localMode = () => local() && inView.active;
+  const onMap = (report) =>
+    visibleOnMap(
+      report,
+      localMode() ? localFilters(filters) : filters,
+      now(),
+      windowMs,
+    );
+  // The Local section's reports near the view centre, every severity.
+  const localReports = (limit) =>
+    reportsInView(
+      inView.minor || [],
+      inView.centre,
+      localFilters(filters),
+      now(),
+      limit,
+      windowMs,
+    );
   const shownWindowMs = () =>
     Math.min(maxWindowMs, (filters.hours ?? Infinity) * 3_600_000);
   // The hours to ask the hotspot counts for, when shorter than the server's.
@@ -450,17 +472,14 @@ export function createNewsLayer({
     }
   }
 
-  // The big events stand as picture cards over their marker, unless the
-  // reader has turned them off; never two on top of each other. The clicked
-  // event shows its picture card either way, under its marker, with its text
-  // card above.
+  // The big events stand as picture cards over their marker, never two on
+  // top of each other. The clicked event shows its picture card under its
+  // marker, with its text card above.
   function pictureCards(drawn, current, labels) {
-    const cardable = filters.cards
-      ? cardEvents(
-          drawn.filter((r) => r.id !== selectedId && onMap(r)),
-          now(),
-        )
-      : [];
+    const cardable = cardEvents(
+      drawn.filter((r) => r.id !== selectedId && onMap(r)),
+      now(),
+    );
     const pictured =
       current?.pins.length &&
       current.event?.size >= NEWS_CARD_MIN_SOURCES &&
@@ -582,9 +601,12 @@ export function createNewsLayer({
     // A report picked in the feed or In view still gets its marker.
     const current = selected();
     const elsewhere = catchAllIds();
-    const shown = detail
-      ? mapReports
-      : mapReports.filter((r) => elsewhere.has(r.hotspotId));
+    // Local: what is near the view centre instead of the hotspots' news.
+    const shown = localMode()
+      ? localReports(NEWS_MAP_LIMIT)
+      : detail
+        ? mapReports
+        : mapReports.filter((r) => elsewhere.has(r.hotspotId));
     const drawn =
       current && !shown.some((r) => r.id === current.id)
         ? [...shown, current]
@@ -888,6 +910,7 @@ export function createNewsLayer({
         inViewRequest?.abort();
         inViewRequest = null;
         inView = emptyInView();
+        if (local()) render();
         notify();
       }
       return;
@@ -897,7 +920,7 @@ export function createNewsLayer({
     const cell = viewCell(centre);
     if (!force && inView.active && cell === inView.cell) return;
     inView = { ...inView, active: true, cell, centre };
-    if (!filters.includeMinor) {
+    if (!local()) {
       inViewRequest?.abort();
       inViewRequest = null;
       inView = { ...inView, minor: null, loading: false, error: null };
@@ -905,6 +928,7 @@ export function createNewsLayer({
       return;
     }
     if (!force && (inView.minor || inViewRequest)) {
+      render();
       notify();
       return;
     }
@@ -942,7 +966,10 @@ export function createNewsLayer({
         error: cause?.message || FEED_UNAVAILABLE,
       };
     } finally {
-      if (inViewRequest === controller) inViewRequest = null;
+      if (inViewRequest === controller) {
+        inViewRequest = null;
+        render();
+      }
       notify();
     }
   }
@@ -1036,20 +1063,14 @@ export function createNewsLayer({
         active: inView.active,
         loading: inView.loading,
         error: inView.error ? t(FEED_UNAVAILABLE) : null,
-        items: reportsInView(
-          filters.includeMinor ? inView.minor || [] : mapReports,
-          inView.centre,
-          filters,
-          at,
-          undefined,
-          windowMs,
-        ).map((r) => feedCardView(r, at)),
+        items: localReports(NEWS_LOCAL_LIMIT).map((r) => feedCardView(r, at)),
       },
       selected:
         report && withinNewsWindow(report, at, windowMs)
           ? feedCardView(report, at)
           : null,
-      hasMore: Boolean(feed.nextBefore),
+      // Older pages are the Conflicts feed's; Local has none to scroll to.
+      hasMore: !local() && Boolean(feed.nextBefore),
       loading: feed.loading || loading,
       // Read failures are English data; the panel shows them translated.
       error: error || feed.error ? t(error || feed.error) : null,
@@ -1211,11 +1232,11 @@ export function createNewsLayer({
       }
       if (params.filters && typeof params.filters === 'object') {
         const next = normalizeFilters(params.filters, hotspots, filters);
-        // The severity floor and the cards change what is shown, not what is read.
-        const readKey = ({ hotspot, category, includeMinor }) =>
-          `${hotspot}|${category}|${includeMinor}`;
+        // The severity floor and the section change what is shown, not what
+        // the Conflicts feed reads.
+        const readKey = ({ hotspot, category }) => `${hotspot}|${category}`;
         const reread = readKey(next) !== readKey(filters);
-        const minorChanged = next.includeMinor !== filters.includeMinor;
+        const sectionChanged = next.section !== filters.section;
         filters = next;
         const previousWindowMs = windowMs;
         windowMs = shownWindowMs();
@@ -1230,7 +1251,7 @@ export function createNewsLayer({
         if (reread) feed = emptyFeed();
         render();
         if (reread) void loadFeed('replace');
-        if (minorChanged) void refreshInView({ force: true });
+        if (sectionChanged) void refreshInView({ force: true });
         // The hotspot counts are the server's, so a new window reads them again.
         if (windowMs !== previousWindowMs) void layer.update(viewer);
         notify();
@@ -1266,7 +1287,9 @@ export function createNewsLayer({
     },
     getStats() {
       return {
-        count: mapReports.filter((r) => r.pins.length && onMap(r)).length,
+        count: (localMode() ? localReports(NEWS_MAP_LIMIT) : mapReports).filter(
+          (r) => r.pins.length && onMap(r),
+        ).length,
         lastUpdate,
         loading,
         error,

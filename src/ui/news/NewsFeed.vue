@@ -9,9 +9,10 @@ import NewsCard from './NewsCard.vue';
 
 // The News panel: the window the server serves only (the last 24 hours, or
 // fewer where the host serves less), or a shorter one chosen at the
-// top (24/12/6/3/1 h). Hotspot chips, filters, the chosen
-// event, "In view" (reports near the view centre while the camera is low)
-// and a continuous feed, newest first. It renders the `feed` view the news
+// top (24/12/6/3/1 h), and two sections. Conflicts: hotspot chips, the
+// severity floor, the chosen event and a continuous feed, newest first.
+// Local: every report near the view centre while the camera is low, which the
+// map then shows instead of the hotspots' news. It renders the `feed` view the news
 // layer publishes and acts only through `onParams`.
 const props = defineProps({
   view: { type: Object, default: null },
@@ -19,6 +20,16 @@ const props = defineProps({
 });
 
 const filters = computed(() => props.view?.filters ?? {});
+const local = computed(() => filters.value.section === 'local');
+const sections = computed(() =>
+  [
+    { id: 'conflicts', label: t('Conflicts') },
+    { id: 'local', label: t('Local') },
+  ].map((chip) => ({
+    ...chip,
+    active: (filters.value.section ?? 'conflicts') === chip.id,
+  })),
+);
 const chips = computed(() =>
   (props.view?.hotspots ?? []).map((chip) => ({
     id: chip.id,
@@ -59,10 +70,9 @@ const selectedId = computed(() => props.view?.selected?.id ?? null);
 const selectedApart = computed(() => {
   const chosen = props.view?.selected;
   if (!chosen) return null;
-  const listed =
-    props.view.items.some((item) => item.id === chosen.id) ||
-    (props.view.inView.active &&
-      props.view.inView.items.some((item) => item.id === chosen.id));
+  const listed = local.value
+    ? props.view.inView.items.some((item) => item.id === chosen.id)
+    : props.view.items.some((item) => item.id === chosen.id);
   return listed ? null : chosen;
 });
 const status = computed(() => {
@@ -99,7 +109,22 @@ const clear = () => props.onParams({ clear: true });
     <p v-else class="news-readout__window ui-mono">{{
       t('Last {hours} h', { hours: view.windowHours })
     }}</p>
-    <div class="news-readout__chips" role="group" :aria-label="t('Hotspots')">
+    <div
+      class="news-readout__sections"
+      role="group"
+      :aria-label="t('News sections')"
+    >
+      <RailChips
+        :chips="sections"
+        :on-select="(chip) => setFilter('section', chip.id)"
+      />
+    </div>
+    <div
+      v-if="!local"
+      class="news-readout__chips"
+      role="group"
+      :aria-label="t('Hotspots')"
+    >
       <RailChips
         :chips="chips"
         :on-select="(chip) => setFilter('hotspot', chip.id)"
@@ -107,6 +132,7 @@ const clear = () => props.onParams({ clear: true });
     </div>
     <div class="news-readout__filters">
       <UiSelect
+        v-if="!local"
         class="gev-field news-filter"
         :aria-label="t('Severity')"
         :model-value="String(filters.minSeverity ?? 2)"
@@ -120,20 +146,6 @@ const clear = () => props.onParams({ clear: true });
         :options="categoryOptions"
         @update:model-value="setFilter('category', $event)"
       />
-      <label class="news-toggle"
-        ><input
-          type="checkbox"
-          :checked="filters.includeMinor === true"
-          @change="setFilter('includeMinor', $event.target.checked)"
-        /><span>{{ t('Include minor news') }}</span></label
-      >
-      <label class="news-toggle"
-        ><input
-          type="checkbox"
-          :checked="filters.cards !== false"
-          @change="setFilter('cards', $event.target.checked)"
-        /><span>{{ t('Show event cards') }}</span></label
-      >
     </div>
 
     <NewsCard
@@ -146,12 +158,16 @@ const clear = () => props.onParams({ clear: true });
     />
 
     <section
-      v-if="view.inView.active"
+      v-if="local"
       class="news-readout__section"
-      :aria-label="t('In view')"
+      :aria-label="t('Local')"
     >
-      <h3 class="news-readout__head ui-mono">{{ t('In view') }}</h3>
-      <p v-if="view.inView.error" class="news-readout__status">
+      <UiEmpty
+        v-if="!view.inView.active"
+        class="news-readout__empty"
+        :title="t('Zoom in to see local news')"
+      />
+      <p v-else-if="view.inView.error" class="news-readout__status">
         {{ view.inView.error }}
       </p>
       <UiEmpty
@@ -180,7 +196,11 @@ const clear = () => props.onParams({ clear: true });
       </ol>
     </section>
 
-    <section class="news-readout__section" :aria-label="t('Latest news')">
+    <section
+      v-else
+      class="news-readout__section"
+      :aria-label="t('Latest news')"
+    >
       <h3 class="news-readout__head ui-mono">{{ t('Latest') }}</h3>
       <ol
         v-if="view.items.length"

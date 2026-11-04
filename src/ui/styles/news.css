@@ -116,6 +116,7 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+.news-readout__sections,
 .news-readout__chips {
   display: flex;
   flex-wrap: wrap;

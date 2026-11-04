@@ -286,11 +286,17 @@ test('filters default to significant news and map to a last-24-hours query', () 
     hotspot: 'ua',
     category: 'all',
     minSeverity: 2,
-    includeMinor: false,
-    cards: true,
+    section: 'conflicts',
     hours: null,
   });
-  assert.equal(normalizeFilters({ cards: false }, hotspots).cards, false);
+  assert.equal(
+    normalizeFilters({ section: 'local' }, hotspots).section,
+    'local',
+  );
+  assert.equal(
+    normalizeFilters({ section: 'nope' }, hotspots).section,
+    'conflicts',
+  );
   assert.equal(normalizeFilters({ hours: 6 }, hotspots).hours, 6);
   assert.equal(normalizeFilters({ hours: 5 }, hotspots).hours, null);
   assert.equal(normalizeFilters({ minSeverity: 0 }, hotspots).minSeverity, 0);
@@ -301,10 +307,10 @@ test('filters default to significant news and map to a last-24-hours query', () 
     ),
     'hotspot=ua&before=2026-10-28T08%3A00%3A00.000Z&limit=60&relevance=core%2Crelated&today=1&events=1',
   );
-  // "Include minor news" drops the relevance filter.
-  assert.doesNotMatch(
-    newsFeedQuery(feedQueryFor({ ...filters, includeMinor: true })),
-    /relevance/,
+  // The Conflicts feed reads the same whichever section is chosen.
+  assert.equal(
+    newsFeedQuery(feedQueryFor({ ...filters, section: 'local' })),
+    newsFeedQuery(feedQueryFor(filters)),
   );
 });
 

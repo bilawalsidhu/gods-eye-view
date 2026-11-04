@@ -119,7 +119,7 @@ test('the panel shows the last 24 h as event cards and opens once', () => {
     'Last 24 h',
   );
   assert.deepEqual(
-    [...panel.querySelectorAll('.data-toggle-chip[data-chip-id]')].map(
+    [...panel.querySelectorAll('.news-readout__chips [data-chip-id]')].map(
       (chip) => chip.textContent,
     ),
     ['All 7', 'Ukraine–Russia 7'],
@@ -189,41 +189,51 @@ test('a card click flies there; open, it links the source and closes', () => {
   news.destroy();
 });
 
-test('filters, In view and empty or failed reads', () => {
+test('filters, the Local section and empty or failed reads', () => {
   const { news, panel, calls } = fixture();
   news.update(view());
-  assert.equal(panel.querySelector('[aria-label="In view"]'), null);
+  assert.equal(panel.querySelector('[aria-label="Local"]'), null);
+  assert.equal(panel.querySelector('.news-toggle'), null);
   const severity = panel.querySelector('select[aria-label="Severity"]');
   assert.equal(severity.value, '2');
   severity.value = '3';
   severity.dispatchEvent(new Event('change'));
   assert.deepEqual(calls.at(-1)[1], { filters: { minSeverity: 3 } });
-  const [minor, cards] = panel.querySelectorAll('.news-toggle input');
-  assert.equal(minor.checked, false);
-  assert.equal(cards.checked, true);
-  cards.checked = false;
-  cards.dispatchEvent(new Event('change'));
-  assert.deepEqual(calls.at(-1)[1], { filters: { cards: false } });
   panel.querySelector('[data-chip-id="ua-ru-war"]').click();
   assert.deepEqual(calls.at(-1)[1], { filters: { hotspot: 'ua-ru-war' } });
+  panel.querySelector('[data-chip-id="local"]').click();
+  assert.deepEqual(calls.at(-1)[1], { filters: { section: 'local' } });
 
   news.update(
     view({
-      inView: { active: true, loading: false, error: null, items: [] },
       items: [],
       hasMore: false,
     }),
-  );
-  const section = panel.querySelector('[aria-label="In view"]');
-  assert.match(
-    section.textContent,
-    /Nothing reported near here in the last 24 h/,
   );
   assert.match(
     panel.textContent,
     /No news matches these filters in the last 24 h/,
   );
   assert.equal(panel.querySelector('.news-readout__footer button'), null);
+
+  // Local: no hotspot chips or severity floor, and its own empty states.
+  const localView = (inView) =>
+    view({
+      filters: normalizeFilters({ section: 'local' }),
+      inView: { loading: false, error: null, items: [], ...inView },
+    });
+  news.update(localView({ active: false }));
+  const section = panel.querySelector('[aria-label="Local"]');
+  assert.match(section.textContent, /Zoom in to see local news/);
+  assert.equal(panel.querySelector('[data-chip-id="ua-ru-war"]'), null);
+  assert.equal(panel.querySelector('select[aria-label="Severity"]'), null);
+  assert.equal(panel.querySelector('[aria-label="Latest news"]'), null);
+  news.update(localView({ active: true }));
+  assert.match(
+    panel.querySelector('[aria-label="Local"]').textContent,
+    /Nothing reported near here in the last 24 h/,
+  );
+  news.update(view());
 
   news.update(
     view({ items: [], error: 'News feed unavailable', hasMore: false }),
