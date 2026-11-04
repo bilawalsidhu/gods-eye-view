@@ -233,6 +233,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **Natural Earth physical regions** (1,046 land + 292 marine named polygons) | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **DataSF Analysis Neighborhoods** (41 SF neighborhood polygons)             | `neighborhoods/`                  | **PDDL 1.0** (public domain)                                                                              | ✅ (no restrictions)                             | "City & County of San Francisco — DataSF" (courtesy — not legally required) |
 | **Natural Earth countries, states and provinces** (260 admin-0/map units + 4,587 admin-1 polygons)             | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
+| **Natural Earth populated places** (7,342 points: name, position, rank)     | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **US Census Bureau counties** (3,235 county polygons)                       | `us_census_counties/`             | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
 | **US Census Bureau places** (32,629 city, town and CDP polygons)            | `us_census_places/`               | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
 | **Who's On First neighborhoods** (61,441 polygons)                          | `wof_neighborhoods/`              | Per source: CC BY, ODC-By, Open Government licences, CC0, PDDL, public domain (folder `ATTRIBUTION.md`)   | ✅ (attribution)                                 | "Neighborhood boundaries: Who's On First and contributors"; per-source credits in the folder |
@@ -316,6 +317,16 @@ Natural Earth is **public domain** (no permission needed, no attribution legally
 https://www.naturalearthdata.com/about/terms-of-use/). We credit anyway: "Made with Natural
 Earth". Registration in the in-app `dataCredits.js` attribution list ships with the resolver
 wiring (see below).
+
+### Natural Earth populated places (`natural_earth/populated_places.json`)
+
+Natural Earth 10m populated places (`ne_10m_populated_places_simple`, the same pinned
+`nvkelso/natural-earth-vector` commit and SHA-256 as the admin-1 build reads), reduced to one
+row per place: name, latitude and longitude rounded to 3 decimals, `scalerank` and `rank_max`
+(7,342 places, 229 KB). From 8x the orbital view names the most prominent place within half
+its width ("Sichuan, China · near Chengdu"), offline, with the states and provinces pack giving
+the division. Public domain; credited "Made with Natural Earth" with the other packs. Rebuild:
+`node scripts/build-admin-packs.mjs --only places`; provenance in the folder README.
 
 ### Sky background (`sky/`)
 

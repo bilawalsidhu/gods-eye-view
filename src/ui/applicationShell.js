@@ -362,6 +362,7 @@ export class StyleManager extends ShellFacade {
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
         aisLiveVesselsLayer: services.aisLiveVesselsLayer,
+        satellitesLayer: services.satellitesLayer,
         isTr3b: services.isTr3b,
         toggleTr3b: services.toggleTr3b,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
@@ -376,6 +377,13 @@ export class StyleManager extends ShellFacade {
         fetchRegionalBrief: services.fetchRegionalBrief,
         regionalDistanceM: services.regionalDistanceM,
         weatherCodeLabel: services.weatherCodeLabel,
+        // Orbit reads flat Esri imagery: Google 3D tiles stay coarse from
+        // hundreds of kilometres up. The lease puts the map back on exit.
+        acquireOrbitImagery: () =>
+          this.mapStackController?.acquireImageryComparison?.({
+            owner: 'cockpit-orbit',
+            switchPolicy: 'esri-if-photoreal',
+          }) ?? null,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -403,6 +411,8 @@ export class StyleManager extends ShellFacade {
             useCockpitStore(applicationPinia()).publishSignals(rows),
           radar: (view) =>
             useCockpitStore(applicationPinia()).publishRadar(view),
+          orbital: (view) =>
+            useCockpitStore(applicationPinia()).publishOrbital(view),
           utilityLayout: (layout) =>
             useCockpitStore(applicationPinia()).publishUtilityLayout(layout),
         },

@@ -181,3 +181,64 @@ export function lookReadoutParts(look, restPitchDeg) {
     angleDeg: Math.abs(pitch),
   };
 }
+
+/**
+ * The orbital view's off-nadir limit on each axis. The orbital look reuses
+ * the bridge's `{yawDeg, pitchDeg}` shape over a fixed nadir frame: yaw tilts
+ * the view east (positive) or west, pitch tilts it north (positive) or
+ * south. Single 5° steps only; the bridge keeps its own limits.
+ */
+export const ORBITAL_LOOK_LIMIT_DEG = 45;
+
+/** Clamp one orbital look axis to ±ORBITAL_LOOK_LIMIT_DEG; NaN rests. */
+function clampOrbitalAxis(deg) {
+  if (!Number.isFinite(deg)) return 0;
+  const value = Math.min(
+    ORBITAL_LOOK_LIMIT_DEG,
+    Math.max(-ORBITAL_LOOK_LIMIT_DEG, deg),
+  );
+  return value === 0 ? 0 : value;
+}
+
+/**
+ * Clamp an orbital look to the off-nadir limit on both axes.
+ * @param {{yawDeg: number, pitchDeg: number}} look East and north tilt.
+ * @returns {{yawDeg: number, pitchDeg: number}}
+ */
+export function clampOrbitalLook(look) {
+  return {
+    yawDeg: clampOrbitalAxis(look?.yawDeg),
+    pitchDeg: clampOrbitalAxis(look?.pitchDeg),
+  };
+}
+
+/**
+ * Apply one arrow step to an orbital look: the bridge's stepping on the
+ * same 5° grid, then the off-nadir clamp.
+ * @param {{yawDeg: number, pitchDeg: number}} target Current look target.
+ * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step From
+ *   {@link lookKeyStep}.
+ * @returns {{yawDeg: number, pitchDeg: number}}
+ */
+export function stepOrbitalLook(target, step) {
+  return clampOrbitalLook(stepLook(clampOrbitalLook(target), step));
+}
+
+/**
+ * The parts of an off-nadir readout, for the Cockpit to word: the north or
+ * south tilt and the east or west tilt, each null at rest, in whole degrees.
+ * @param {{yawDeg: number, pitchDeg: number}} look Orbital look target.
+ * @returns {{northSouth: 'N'|'S'|null, northSouthDeg: number,
+ *   eastWest: 'E'|'W'|null, eastWestDeg: number}}
+ */
+export function orbitalLookReadoutParts(look) {
+  const { yawDeg, pitchDeg } = clampOrbitalLook(look);
+  const north = Math.round(pitchDeg);
+  const east = Math.round(yawDeg);
+  return {
+    northSouth: north > 0 ? 'N' : north < 0 ? 'S' : null,
+    northSouthDeg: Math.abs(north),
+    eastWest: east > 0 ? 'E' : east < 0 ? 'W' : null,
+    eastWestDeg: Math.abs(east),
+  };
+}
