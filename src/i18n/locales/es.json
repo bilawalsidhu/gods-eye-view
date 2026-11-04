@@ -3219,5 +3219,12 @@
   "Full in about {time} at this rate": "Se llena en unos {time} a este ritmo",
   "Nearly full. The oldest positions are being dropped.": "Casi lleno. Se están eliminando las posiciones más antiguas.",
   "Disk nearly full. Lower retention or set a size cap.": "Disco casi lleno. Reduce la retención o fija un límite de tamaño.",
-  "Several matches, showing the best one": "Varias coincidencias, se muestra la mejor"
+  "Several matches, showing the best one": "Varias coincidencias, se muestra la mejor",
+  "{contact}: {status} (squawk {squawk})": "{contact}: {status} (squawk {squawk})",
+  "{contact}: {status}": "{contact}: {status}",
+  "Emergency broadcast": "Emisión de emergencia",
+  "Browser notifications are blocked. Alerts sound and show here only.": "Las notificaciones del navegador están bloqueadas. Las alertas suenan y se muestran solo aquí.",
+  "ALERTS": "ALERTAS",
+  "Sound and notify when a watched area is entered or an emergency is broadcast": "Avisar con sonido y notificación al entrar en un área vigilada o al emitirse una emergencia",
+  "Watched area": "Área vigilada"
 }

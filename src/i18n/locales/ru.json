@@ -3294,5 +3294,12 @@
   "Full in about {time} at this rate": "Заполнится примерно через {time} при таком темпе",
   "Nearly full. The oldest positions are being dropped.": "Почти заполнено. Самые старые позиции удаляются.",
   "Disk nearly full. Lower retention or set a size cap.": "Диск почти заполнен. Сократите срок хранения или задайте лимит размера.",
-  "Several matches, showing the best one": "Несколько совпадений, показано лучшее"
+  "Several matches, showing the best one": "Несколько совпадений, показано лучшее",
+  "{contact}: {status} (squawk {squawk})": "{contact}: {status} (сквок {squawk})",
+  "{contact}: {status}": "{contact}: {status}",
+  "Emergency broadcast": "Сигнал бедствия",
+  "Browser notifications are blocked. Alerts sound and show here only.": "Уведомления браузера заблокированы. Оповещения звучат и показываются только здесь.",
+  "ALERTS": "ОПОВЕЩЕНИЯ",
+  "Sound and notify when a watched area is entered or an emergency is broadcast": "Подавать звук и уведомление при входе в наблюдаемую зону или сигнале бедствия",
+  "Watched area": "Наблюдаемая зона"
 }

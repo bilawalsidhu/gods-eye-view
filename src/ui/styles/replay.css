@@ -193,3 +193,8 @@
     transition: none;
   }
 }
+
+.replay-alert-emergency {
+  color: #ff5c5c;
+  font-weight: 700;
+}

@@ -3069,5 +3069,12 @@
   "Full in about {time} at this rate": "按此速度约 {time} 后写满",
   "Nearly full. The oldest positions are being dropped.": "即将写满，正在删除最旧的位置记录。",
   "Disk nearly full. Lower retention or set a size cap.": "磁盘即将写满。请缩短保留时间或设置大小上限。",
-  "Several matches, showing the best one": "有多个匹配，显示最佳项"
+  "Several matches, showing the best one": "有多个匹配，显示最佳项",
+  "{contact}: {status} (squawk {squawk})": "{contact}：{status}（应答码 {squawk}）",
+  "{contact}: {status}": "{contact}：{status}",
+  "Emergency broadcast": "紧急广播",
+  "Browser notifications are blocked. Alerts sound and show here only.": "浏览器通知已被屏蔽。提醒仅在此处显示并发声。",
+  "ALERTS": "提醒",
+  "Sound and notify when a watched area is entered or an emergency is broadcast": "进入监视区域或发出紧急信号时发声并通知",
+  "Watched area": "监视区域"
 }

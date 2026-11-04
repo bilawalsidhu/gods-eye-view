@@ -1,3 +1,4 @@
+import { createEmergencyWatcher } from './alerts.js';
 import { cleanFence, createFenceTracker } from './fences.js';
 import { createThinner } from './thin.js';
 import { openHistoryStore } from './store.js';
@@ -29,6 +30,8 @@ export function createRecorder({
   let buffer = [];
   let eventBuffer = [];
   let nameBuffer = [];
+  let alertBuffer = [];
+  const emergencies = createEmergencyWatcher();
   /** layer:id -> { name, saved } for names already queued or written. */
   const names = new Map();
   const tracker = createFenceTracker();
@@ -69,6 +72,17 @@ export function createRecorder({
       throw error;
     }
   }
+  async function flushAlerts() {
+    if (!alertBuffer.length) return;
+    const batch = alertBuffer;
+    alertBuffer = [];
+    try {
+      await store.addAlerts(batch);
+    } catch (error) {
+      alertBuffer = batch.concat(alertBuffer).slice(-MAX_BUFFER);
+      throw error;
+    }
+  }
   /** Remembers a callsign or ship name the first time, when it changes, and hourly. */
   function noteName(point) {
     const key = `${point.layer}:${point.id}`;
@@ -105,6 +119,7 @@ export function createRecorder({
       quiet(flush());
       quiet(flushEvents());
       quiet(flushNames());
+      quiet(flushAlerts());
       quiet(enforceCap());
     }, FLUSH_MS),
     setInterval(() => quiet(purge()), PURGE_MS),
@@ -118,6 +133,8 @@ export function createRecorder({
     ingest(point) {
       if (wanted && !wanted.has(point.layer)) return;
       if (point.name) noteName(point);
+      const alert = emergencies(point);
+      if (alert) alertBuffer.push(alert);
       eventBuffer.push(...tracker.check(point));
       if (keep(point)) buffer.push(point);
     },
@@ -139,13 +156,18 @@ export function createRecorder({
       for (const p of points) this.ingest(p);
     },
     async flush() {
-      await Promise.all([flush(), flushEvents(), flushNames()]);
+      await Promise.all([flush(), flushEvents(), flushNames(), flushAlerts()]);
     },
     enforceCap,
     async close() {
       for (const t of timers) clearInterval(t);
       try {
-        await Promise.all([flush(), flushEvents(), flushNames()]);
+        await Promise.all([
+          flush(),
+          flushEvents(),
+          flushNames(),
+          flushAlerts(),
+        ]);
       } finally {
         await store.close();
       }

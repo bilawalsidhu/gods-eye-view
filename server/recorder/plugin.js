@@ -257,6 +257,45 @@ export function recorderPlugin(env = process.env) {
           );
           return sendJson(res, removed ? 200 : 404, { removed });
         }
+        // Area enter/exit events and emergency squawks in one list, newest
+        // first, so the panel needs one request to know what happened.
+        if (url.pathname === '/notices') {
+          const since = intParam(q.get('since')) ?? 0;
+          const limit = Math.min(200, intParam(q.get('limit')) ?? 50);
+          const [events, alerts] = await Promise.all([
+            recorder.store.events({ since, limit }),
+            recorder.store.alerts({ since, limit }),
+          ]);
+          return sendJson(res, 200, {
+            notices: [
+              ...events.map((e) => ({
+                type: 'fence',
+                ts: e.ts,
+                kind: e.kind,
+                fence: e.fence || '',
+                id: e.id,
+                layer: e.layer,
+                name: e.name || '',
+                lat: e.lat,
+                lon: e.lon,
+              })),
+              ...alerts.map((a) => ({
+                type: 'emergency',
+                ts: a.ts,
+                kind: a.code,
+                severity: a.severity,
+                id: a.id,
+                layer: a.layer,
+                name: a.name,
+                lat: a.lat,
+                lon: a.lon,
+                squawk: a.detail,
+              })),
+            ]
+              .sort((a, b) => b.ts - a.ts)
+              .slice(0, limit),
+          });
+        }
         if (url.pathname === '/search')
           return sendJson(res, 200, {
             matches: await recorder.store.findContacts(q.get('q') || ''),

@@ -3069,5 +3069,12 @@
   "last": "最後一個",
   "{count} gaps": "{count} 個空檔",
   "Stop watching this area": "停止監看此區域",
-  "Replay state": "重播狀態"
+  "Replay state": "重播狀態",
+  "{contact}: {status} (squawk {squawk})": "{contact}：{status}（應答碼 {squawk}）",
+  "{contact}: {status}": "{contact}：{status}",
+  "Emergency broadcast": "緊急廣播",
+  "Browser notifications are blocked. Alerts sound and show here only.": "瀏覽器通知已被封鎖。提醒只會在此顯示並發出聲音。",
+  "ALERTS": "提醒",
+  "Sound and notify when a watched area is entered or an emergency is broadcast": "進入監看區域或發出緊急訊號時發出聲音並通知",
+  "Watched area": "監看區域"
 }

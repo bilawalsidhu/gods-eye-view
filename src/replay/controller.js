@@ -127,12 +127,12 @@ export function createReplayController({
     try {
       const [s, e, f, p] = await Promise.all([
         getJson('/api/history/status'),
-        getJson('/api/history/events?limit=5'),
+        getJson('/api/history/notices?limit=6'),
         getJson('/api/history/fences'),
         getJson('/api/history/pins'),
       ]);
       status = rawRange = s;
-      events = e.events;
+      events = e.notices;
       fences = f.fences;
       pins = p.pins.map((x) => x.id);
       drawFences();
@@ -545,11 +545,51 @@ export function createReplayController({
     if (!destroyed && !loading) refreshRange();
   }, 15000);
 
+  // New area events and emergency squawks are checked more often than the rest
+  // of the status, and each one is handed to the listeners once. Anything that
+  // happened before the page opened is not announced.
+  const noticeListeners = new Set();
+  const seenNotices = new Set();
+  let noticeSince = Math.floor(Date.now() / 1000);
+  async function pollNotices() {
+    if (destroyed || !status) return;
+    try {
+      const { notices } = await getJson(
+        `/api/history/notices?since=${noticeSince}&limit=50`,
+      );
+      const fresh = notices
+        .filter((n) => {
+          const key = `${n.type}|${n.ts}|${n.kind}|${n.id}|${n.fence || ''}`;
+          if (seenNotices.has(key)) return false;
+          seenNotices.add(key);
+          return true;
+        })
+        .reverse();
+      if (!fresh.length) return;
+      noticeSince = Math.max(noticeSince, fresh.at(-1).ts - 5);
+      if (seenNotices.size > 1000)
+        for (const key of [...seenNotices].slice(0, 500))
+          seenNotices.delete(key);
+      events = [...fresh.slice().reverse(), ...events].slice(0, 6);
+      for (const notice of fresh)
+        for (const listener of noticeListeners) listener(notice);
+      notify();
+    } catch {
+      // The next poll tries again.
+    }
+  }
+  const noticePoll = setInterval(pollNotices, 5000);
+
   return {
     state,
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    /** Calls back once for each new area event or emergency squawk. */
+    onNotice(listener) {
+      noticeListeners.add(listener);
+      return () => noticeListeners.delete(listener);
     },
     refreshRange,
     enter,
@@ -672,6 +712,7 @@ export function createReplayController({
     async destroy() {
       destroyed = true;
       clearInterval(poll);
+      clearInterval(noticePoll);
       await boxTool?.destroy();
       viewer.dataSources.remove(fenceSource, true);
       viewer.dataSources.remove(trackSource, true);

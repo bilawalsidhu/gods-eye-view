@@ -3219,5 +3219,12 @@
   "last": "última",
   "{count} gaps": "{count} falhas",
   "Stop watching this area": "Deixar de vigiar esta área",
-  "Replay state": "Estado da reprodução"
+  "Replay state": "Estado da reprodução",
+  "{contact}: {status} (squawk {squawk})": "{contact}: {status} (squawk {squawk})",
+  "{contact}: {status}": "{contact}: {status}",
+  "Emergency broadcast": "Emissão de emergência",
+  "Browser notifications are blocked. Alerts sound and show here only.": "As notificações do navegador estão bloqueadas. Os alertas soam e aparecem apenas aqui.",
+  "ALERTS": "ALERTAS",
+  "Sound and notify when a watched area is entered or an emergency is broadcast": "Som e notificação ao entrar numa área vigiada ou quando é emitida uma emergência",
+  "Watched area": "Área vigiada"
 }

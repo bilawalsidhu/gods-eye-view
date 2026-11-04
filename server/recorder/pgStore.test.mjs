@@ -63,7 +63,7 @@ test('postgres store matches the SQLite store', { skip: !url }, async () => {
   const admin = new pg.Client({ connectionString: url });
   await admin.connect();
   await admin.query(
-    'DROP TABLE IF EXISTS positions, fences, fence_events, pins, contacts CASCADE',
+    'DROP TABLE IF EXISTS positions, fences, fence_events, pins, contacts, alerts CASCADE',
   );
   await admin.end();
 

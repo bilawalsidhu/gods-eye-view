@@ -3444,5 +3444,12 @@
   "last": "الأخير",
   "{count} gaps": "{count} فجوات",
   "Stop watching this area": "إيقاف مراقبة هذه المنطقة",
-  "Replay state": "حالة إعادة العرض"
+  "Replay state": "حالة إعادة العرض",
+  "{contact}: {status} (squawk {squawk})": "{contact}: {status} (رمز {squawk})",
+  "{contact}: {status}": "{contact}: {status}",
+  "Emergency broadcast": "بث طوارئ",
+  "Browser notifications are blocked. Alerts sound and show here only.": "إشعارات المتصفح محظورة. تُسمع التنبيهات وتظهر هنا فقط.",
+  "ALERTS": "التنبيهات",
+  "Sound and notify when a watched area is entered or an emergency is broadcast": "إصدار صوت وإشعار عند دخول منطقة مراقبة أو عند بث حالة طوارئ",
+  "Watched area": "منطقة مراقبة"
 }

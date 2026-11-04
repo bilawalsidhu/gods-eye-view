@@ -240,3 +240,42 @@ test('contacts are found by callsign, ship name or id, best match first', async 
   assert.deepEqual(first(''), []);
   await rec.close();
 });
+
+test('an emergency squawk raises one alert, again only after a quiet spell', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const { aircraftPoints, militaryPoints } = await import('./extract.js');
+  const store = openHistoryStore(':memory:');
+  const rec = createRecorder({ store, layers: null });
+  const row = (ts, squawk) => [
+    'abc123', 'UAL7', 'US', ts, ts, 8.5, 47.5, 100, false, 200, 270, 0, null, 120, squawk,
+  ];
+  rec.ingestMany(aircraftPoints({ states: [row(1000, '7700')] }, 1000));
+  rec.ingestMany(aircraftPoints({ states: [row(1030, '7700')] }, 1030));
+  rec.ingestMany(aircraftPoints({ states: [row(1060, '1200')] }, 1060));
+  rec.ingestMany(
+    militaryPoints({ ac: [{ hex: 'ae1', lat: 1, lon: 2, flight: 'RCH9', emergency: 'minfuel' }] }, 1070),
+  );
+  rec.ingestMany(aircraftPoints({ states: [row(1000 + 2000, '7600')] }, 3000));
+  rec.ingestMany(aircraftPoints({ states: [row(1000 + 4000, '7700')] }, 5000));
+  await rec.flush();
+  const found = store.alerts({ since: 0 }).map((a) => `${a.code}:${a.id}:${a.severity}`);
+  assert.deepEqual(found.sort(), [
+    'general:abc123:emergency',
+    'general:abc123:emergency',
+    'minfuel:ae1:priority',
+    'nordo:abc123:emergency',
+  ]);
+  assert.equal(store.alerts({ since: 0 })[0].name, 'UAL7');
+  await rec.close();
+});
+
+test('area events carry the contact name', async () => {
+  const { openHistoryStore } = await import('./store.js');
+  const store = openHistoryStore(':memory:');
+  const rec = createRecorder({ store, layers: null, now: () => 0 });
+  await rec.addFence({ name: 'Box', west: 0, south: 0, east: 20, north: 20, layers: [] });
+  rec.ingest(pt({ id: 'a', name: 'UAL1', lat: 10, lon: 10, ts: 100 }));
+  await rec.flush();
+  assert.equal(store.events({})[0].name, 'UAL1');
+  await rec.close();
+});

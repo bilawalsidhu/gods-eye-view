@@ -175,6 +175,33 @@ and the panel lists the newest events. Press WATCH in the panel and drag a box o
 routes below. Changing fences needs a JSON request from this origin, which stops
 other web pages from editing them.
 
+## Alerts
+
+The ALERTS chip makes the panel tell you when something happens, without you
+watching it. It is off until you press it, and the choice is kept in this
+browser only. When on, each new event plays a short tone and, if the browser
+allows it, raises a desktop notification. The first press asks the browser for
+permission; if it is refused, the panel says so and alerts then sound and show
+in the panel only.
+
+Two things raise an alert:
+
+- A contact entering or leaving a watched area, shown with its callsign or
+  name (for example "RCH871 entered Gulf box").
+- A contact broadcasting an emergency: squawk 7500 (unlawful interference),
+  7600 (radio failure) or 7700 (general emergency), or an ADS-B emergency
+  status from adsb.lol (general, unlawful, no radio, downed, minimum fuel,
+  lifeguard). Emergencies are listed in red. Minimum fuel and lifeguard are
+  priority statuses: they are listed but never sound. The recorder raises one
+  alert when a status starts, and another only if the contact has been quiet
+  for half an hour.
+
+An emergency alert is what the transponder broadcast in that moment. Crews pass
+through 7x00 codes while dialling a new squawk, so treat it as a prompt to look,
+not as a finding. OpenSky and adsb.lol carry the squawk; your own receivers'
+squawk is not recorded yet. The panel checks for new alerts every five seconds
+and only announces ones that happen after the page opened.
+
 ## History API (loopback only)
 
 - `GET /api/history/status` — range plus position count, retention days and file size.
@@ -186,6 +213,7 @@ other web pages from editing them.
 - `GET /api/history/events?since&fence&limit` — enter and exit events, newest first.
 - `GET /api/history/at?to=<epoch s>&bbox&layers` — last position of each
   contact within 10 minutes before `to`.
+- `GET /api/history/notices?since&limit` — area events and emergency alerts in one list, newest first.
 - `GET /api/history/search?q=` — contacts whose id, callsign or name contains
   `q`, best match first (up to 20).
 

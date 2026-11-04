@@ -1,5 +1,7 @@
 import { msg, t, translateKnown } from '../i18n/index.js';
+import { aircraftEmergency } from '../data/aircraftEmergency.js';
 import { formatBytes, formatSpan, storageUse } from '../replay/model.js';
+import { alertsEnabled, announce, setAlerts } from './replayAlerts.js';
 import { createRailTimeline, utcClock } from './railTimeline.js';
 
 const LAYER_LABELS = [
@@ -12,6 +14,28 @@ const LAYER_LABELS = [
 const BASIS = { cap: msg('CAP'), disk: msg('DISK') };
 const ENTERED = msg('{contact} entered {fence}');
 const LEFT = msg('{contact} left {fence}');
+const EMERGENCY = msg('{contact}: {status} (squawk {squawk})');
+const EMERGENCY_ADSB = msg('{contact}: {status}');
+const EMERGENCY_TITLE = msg('Emergency broadcast');
+const BLOCKED = msg(
+  'Browser notifications are blocked. Alerts sound and show here only.',
+);
+
+/** One notice as a line of text: an area event or an emergency broadcast. */
+function noticeText(n) {
+  const contact = n.name || n.id;
+  if (n.type === 'emergency') {
+    const status = aircraftEmergency({ emergency: n.kind, squawk: n.squawk });
+    const label = translateKnown(status?.label ?? n.kind);
+    return n.squawk
+      ? t(EMERGENCY, { contact, status: label, squawk: n.squawk })
+      : t(EMERGENCY_ADSB, { contact, status: label });
+  }
+  return t(n.kind === 'enter' ? ENTERED : LEFT, {
+    contact,
+    fence: n.fence || '',
+  });
+}
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -51,6 +75,21 @@ export function createReplayPanel({ container, controller } = {}) {
   const watch = makeChip(chips, t('WATCH'), t('Draw an area to watch'), () =>
     controller.watch(),
   );
+  let alertsOn = alertsEnabled();
+  const alertsChip = makeChip(
+    chips,
+    t('ALERTS'),
+    t(
+      'Sound and notify when a watched area is entered or an emergency is broadcast',
+    ),
+    async () => {
+      alertsOn = !alertsOn;
+      const permission = await setAlerts(alertsOn);
+      note = alertsOn && permission !== 'granted' ? t(BLOCKED) : '';
+      render(controller.state());
+    },
+  );
+  let note = '';
   const region = makeChip(
     chips,
     t('REGION'),
@@ -383,12 +422,13 @@ export function createReplayPanel({ container, controller } = {}) {
         'className',
         `data-toggle-chip${state.layers.includes(id) ? ' active' : ''}`,
       );
-    const lines = state.events.map((e) =>
-      t(e.kind === 'enter' ? ENTERED : LEFT, {
-        contact: e.id,
-        fence: e.fence || '',
-      }),
+    const lines = state.events.map(noticeText);
+    set(
+      alertsChip,
+      'className',
+      `data-toggle-chip${alertsOn ? ' active' : ''}`,
     );
+    if (note) lines.push(note);
     set(
       watch,
       'className',
@@ -417,9 +457,11 @@ export function createReplayPanel({ container, controller } = {}) {
     if (alerts.dataset.shown !== shown) {
       alerts.dataset.shown = shown;
       alerts.replaceChildren(
-        ...lines.map((line) => {
+        ...lines.map((line, i) => {
           const row = document.createElement('div');
           row.textContent = line;
+          if (state.events[i]?.type === 'emergency')
+            row.className = 'replay-alert-emergency';
           return row;
         }),
       );
@@ -437,6 +479,18 @@ export function createReplayPanel({ container, controller } = {}) {
     });
   };
 
+  const unsubscribeNotices = controller.onNotice((n) => {
+    if (!alertsOn) return;
+    const urgent = n.type === 'emergency' && n.severity === 'emergency';
+    // A priority status (minimum fuel, lifeguard) is listed but never sounds.
+    if (n.type === 'emergency' && !urgent) return;
+    announce({
+      title: urgent ? t(EMERGENCY_TITLE) : t('Watched area'),
+      body: noticeText(n),
+      urgent,
+      tag: `${n.type}:${n.id}:${n.kind}`,
+    });
+  });
   const unsubscribe = controller.subscribe(render);
   render(controller.state());
   controller.refreshRange();
@@ -444,6 +498,7 @@ export function createReplayPanel({ container, controller } = {}) {
   return {
     destroy() {
       unsubscribe();
+      unsubscribeNotices();
       timeline?.destroy();
       root.remove();
       if (panel) set(panel, 'hidden', true);

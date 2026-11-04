@@ -3069,5 +3069,12 @@
   "last": "最後",
   "{count} gaps": "空白 {count} 件",
   "Stop watching this area": "このエリアの監視を停止",
-  "Replay state": "リプレイの状態"
+  "Replay state": "リプレイの状態",
+  "{contact}: {status} (squawk {squawk})": "{contact}：{status}（スコーク {squawk}）",
+  "{contact}: {status}": "{contact}：{status}",
+  "Emergency broadcast": "緊急通報",
+  "Browser notifications are blocked. Alerts sound and show here only.": "ブラウザの通知はブロックされています。アラートはここに表示され、音で知らせます。",
+  "ALERTS": "アラート",
+  "Sound and notify when a watched area is entered or an emergency is broadcast": "監視エリアに入ったとき、または緊急信号が出たときに音と通知で知らせる",
+  "Watched area": "監視エリア"
 }

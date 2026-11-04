@@ -53,7 +53,12 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         id TEXT PRIMARY KEY, created_ts BIGINT NOT NULL);
       CREATE TABLE IF NOT EXISTS contacts(
         layer TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
-        last_seen BIGINT NOT NULL, PRIMARY KEY(layer, id));`);
+        last_seen BIGINT NOT NULL, PRIMARY KEY(layer, id));
+      CREATE TABLE IF NOT EXISTS alerts(
+        ts BIGINT NOT NULL, code TEXT NOT NULL, severity TEXT NOT NULL,
+        id TEXT NOT NULL, layer TEXT NOT NULL, name TEXT NOT NULL,
+        lat DOUBLE PRECISION, lon DOUBLE PRECISION, detail TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS alerts_ts ON alerts(ts);`);
     try {
       await pool.query('CREATE EXTENSION IF NOT EXISTS postgis');
       await pool.query(`ALTER TABLE positions ADD COLUMN IF NOT EXISTS geom
@@ -267,10 +272,44 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
       f.where.push(`e.ts >= ${f.add(since)}`);
       if (fenceId != null) f.where.push(`e.fence_id = ${f.add(fenceId)}`);
       return rows(
-        `SELECT e.*, f.name AS fence FROM fence_events e
+        `SELECT e.*, f.name AS fence, c.name AS name FROM fence_events e
          LEFT JOIN fences f ON f.id = e.fence_id
+         LEFT JOIN contacts c ON c.layer = e.layer AND c.id = e.id
          WHERE ${f.where.join(' AND ')} ORDER BY e.ts DESC LIMIT ${f.add(limit)}`,
         f.args,
+      );
+    },
+    addAlerts: (list) =>
+      insertColumns(
+        'alerts',
+        [
+          'ts',
+          'code',
+          'severity',
+          'id',
+          'layer',
+          'name',
+          'lat',
+          'lon',
+          'detail',
+        ],
+        [
+          'bigint',
+          'text',
+          'text',
+          'text',
+          'text',
+          'text',
+          'float8',
+          'float8',
+          'text',
+        ],
+        list,
+      ),
+    alerts({ since = 0, limit = 200 } = {}) {
+      return rows(
+        'SELECT * FROM alerts WHERE ts >= $1 ORDER BY ts DESC LIMIT $2',
+        [since, limit],
       );
     },
     async addPin(id, createdTs) {
@@ -301,6 +340,7 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
     },
     async purgeBefore(ts) {
       await query('DELETE FROM fence_events WHERE ts < $1', [ts]);
+      await query('DELETE FROM alerts WHERE ts < $1', [ts]);
       await query(
         'DELETE FROM contacts WHERE last_seen < $1 AND id NOT IN (SELECT id FROM pins)',
         [ts],

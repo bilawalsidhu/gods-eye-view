@@ -3294,5 +3294,12 @@
   "last": "остання",
   "{count} gaps": "Прогалин: {count}",
   "Stop watching this area": "Припинити стеження за цією зоною",
-  "Replay state": "Стан відтворення"
+  "Replay state": "Стан відтворення",
+  "{contact}: {status} (squawk {squawk})": "{contact}: {status} (сквок {squawk})",
+  "{contact}: {status}": "{contact}: {status}",
+  "Emergency broadcast": "Сигнал лиха",
+  "Browser notifications are blocked. Alerts sound and show here only.": "Сповіщення браузера заблоковано. Оповіщення лунають і показуються лише тут.",
+  "ALERTS": "ОПОВІЩЕННЯ",
+  "Sound and notify when a watched area is entered or an emergency is broadcast": "Звук і сповіщення при вході в зону стеження або сигналі лиха",
+  "Watched area": "Зона стеження"
 }

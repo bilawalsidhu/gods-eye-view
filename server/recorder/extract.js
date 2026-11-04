@@ -6,11 +6,22 @@ function cleanName(value) {
   return /^MMSI \d+$/.test(s) ? '' : s;
 }
 
-function point(layer, id, lat, lon, alt, heading, speed, ts, name) {
+/** The transponder's squawk and emergency field, kept only when present. */
+function transponder(squawk, emergency) {
+  const code = typeof squawk === 'string' ? squawk.trim() : '';
+  const status = typeof emergency === 'string' ? emergency.trim() : '';
+  return {
+    ...(code ? { squawk: code } : {}),
+    ...(status && status !== 'none' ? { emergency: status } : {}),
+  };
+}
+
+function point(layer, id, lat, lon, alt, heading, speed, ts, name, extra) {
   if (!id || num(lat) === null || num(lon) === null) return null;
   const label = cleanName(name);
   return {
     ...(label ? { name: label } : {}),
+    ...extra,
     id: String(id),
     layer,
     lat,
@@ -37,6 +48,7 @@ export function aircraftPoints(body, nowSec) {
       s[9],
       num(s[3]) ?? nowSec,
       s[1],
+      transponder(s[14]),
     );
     if (p) out.push(p);
   }
@@ -61,6 +73,7 @@ export function militaryPoints(body, nowSec) {
       speed,
       nowSec,
       a?.flight || a?.r,
+      transponder(a?.squawk, a?.emergency),
     );
     if (p) out.push(p);
   }

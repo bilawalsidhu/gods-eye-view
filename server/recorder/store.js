@@ -40,7 +40,12 @@ export function openHistoryStore(file) {
     CREATE TABLE IF NOT EXISTS contacts(
       layer TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
       last_seen INTEGER NOT NULL, PRIMARY KEY(layer, id));
-    CREATE INDEX IF NOT EXISTS contacts_name ON contacts(name);`);
+    CREATE INDEX IF NOT EXISTS contacts_name ON contacts(name);
+    CREATE TABLE IF NOT EXISTS alerts(
+      ts INTEGER NOT NULL, code TEXT NOT NULL, severity TEXT NOT NULL,
+      id TEXT NOT NULL, layer TEXT NOT NULL, name TEXT NOT NULL,
+      lat REAL, lon REAL, detail TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS alerts_ts ON alerts(ts);`);
   const insert = db.prepare(
     `INSERT INTO positions(${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
@@ -207,11 +212,42 @@ export function openHistoryStore(file) {
       const where = fenceId == null ? '' : 'AND e.fence_id = ?';
       return db
         .prepare(
-          `SELECT e.*, f.name AS fence FROM fence_events e
+          `SELECT e.*, f.name AS fence, c.name AS name FROM fence_events e
            LEFT JOIN fences f ON f.id = e.fence_id
+           LEFT JOIN contacts c ON c.layer = e.layer AND c.id = e.id
            WHERE e.ts >= ? ${where} ORDER BY e.ts DESC LIMIT ?`,
         )
         .all(...[since, ...(fenceId == null ? [] : [fenceId]), limit]);
+    },
+    /** Emergency squawk alerts, newest first. */
+    addAlerts(list) {
+      const stmt = db.prepare(
+        'INSERT INTO alerts(ts, code, severity, id, layer, name, lat, lon, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      );
+      db.exec('BEGIN');
+      try {
+        for (const a of list)
+          stmt.run(
+            a.ts,
+            a.code,
+            a.severity,
+            a.id,
+            a.layer,
+            a.name,
+            a.lat,
+            a.lon,
+            a.detail,
+          );
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    },
+    alerts({ since = 0, limit = 200 } = {}) {
+      return db
+        .prepare('SELECT * FROM alerts WHERE ts >= ? ORDER BY ts DESC LIMIT ?')
+        .all(since, limit);
     },
     /** Bytes of live data in the file (free pages excluded). */
     usedBytes() {
@@ -237,6 +273,7 @@ export function openHistoryStore(file) {
     },
     purgeBefore(ts) {
       db.prepare('DELETE FROM fence_events WHERE ts < ?').run(ts);
+      db.prepare('DELETE FROM alerts WHERE ts < ?').run(ts);
       db.prepare(
         'DELETE FROM contacts WHERE last_seen < ? AND id NOT IN (SELECT id FROM pins)',
       ).run(ts);

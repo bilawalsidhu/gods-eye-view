@@ -3051,6 +3051,7 @@
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
       "src/ui/replayPanel.js",
+      "src/ui/replayAlerts.js",
       "src/replay/model.js",
       "src/replay/controller.js",
       "src/ui/imageryBoxTool.js",
