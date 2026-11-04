@@ -34,8 +34,14 @@ build/vueLoader.js	DELIVERY			Сохранить API и загрузку асс�
 build/vueOptions.js	DELIVERY			Сохранить API и загрузку ассетов/конфигов; проверить сборки, лицензии и запуск	vite-build
 changelog.d/1014-director-callback-failures.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1078-firms-ipv4-fallback.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1086-prohibited-restricted-airspace.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1093-multipart-cable-feature-ownership.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1125-houston-cctv-pack.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/114-open-map-overlays.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1206-radio-priority-countries.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1209-layer-errors-english-in-data.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1308-overpass-admission-review-fixes.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1319-cctv-bosch-mic-specs.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1344-inline-panel-visibility.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1374-director-seek-visibility.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1401-geocode-place-region.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -47,6 +53,7 @@ changelog.d/1430-traditional-chinese.md	VERIFY			Сохранить истори
 changelog.d/1432-vessel-course-north.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1433-awareness-marker-kilometre.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1434-voice-unknown-altitude.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1435-military-positionless-rows.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1436-military-geom-vertical-rate.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1441-cctv-heading-north.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1442-traffic-coverage-edges.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -62,11 +69,13 @@ changelog.d/1451-alpr-direction-north.md	VERIFY			Сохранить истор�
 changelog.d/1452-transit-heading-north.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1453-satellite-launch-year.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1454-voice-context-heading-north.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1456-terrain-partial-heights.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1457-dock-icon-only-wings.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1458-node-24-22-1-security-release.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1459-hud-place-lookups.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1462-voice-alias-hint-budget.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1463-dev-tool-updates.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1464-infrastructure-ground-sample-in-view.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1466-panel-chrome-consistency.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1467-remove-operator-hud-layout.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1468-remove-snow-preset.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -85,11 +94,18 @@ changelog.d/1485-cctv-view-thinning.md	VERIFY			Сохранить истори�
 changelog.d/1488-hud-summary-language.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1491-gnss-source-window.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1494-weather-product-display.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1495-traffic-paired-sides.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1499-vue-and-pinia.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1500-vue-loader-cache.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1501-rail-pills.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1507-typed-ai-chat.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1518-range-ring-visibility.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1519-range-ring-sonar-pulses.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1522-zoom-out-runaway.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1545-typed-chat-translations.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/210-contributor-docs-refresh.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/842-voice-outlines.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/846-voice-geometry.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/871-vessels-idle-render.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/956-a22-brennero-webcams.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/980-codespaces-setup.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -581,6 +597,7 @@ scripts/qa-weather-swap.mjs	VERIFY			Зафиксировать исходный
 scripts/qa-weather-teardown.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-wind-canvas.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-wind-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-zoom-out-guard.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa/appSessionHarness.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/qa/navara-contract.html	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/qa/navaraContractPage.js	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
@@ -629,19 +646,26 @@ server/providers/cctv/range.js	PLATFORM			Сохранить контракт д
 server/providers/cctv/sources.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	cctv-provider
 server/providers/cctv/stream.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	cctv-provider
 server/providers/cctv/taiwan.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	cctv-provider
+server/providers/common/boundedCache.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
 server/providers/common/geo.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	place-providers
 server/providers/common/http.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	live-providers
 server/providers/common/query.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	live-providers
 server/providers/common/rate-limit.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	place-providers
+server/providers/common/rateLimitKeys.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 server/providers/common/request.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
 server/providers/common/request.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 server/providers/common/same-site.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	place-providers
 server/providers/common/source-root.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
+server/providers/common/textChat.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
+server/providers/common/textInstructions.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
+server/providers/common/textTools.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
 server/providers/cyclones.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	—
+server/providers/droneAirspace.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	—
 server/providers/firePerimeters.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	—
 server/providers/firms.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	firms-provider
 server/providers/gbfs.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	gbfs-provider
 server/providers/gemini.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	—
+server/providers/gemini/chat.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	—
 server/providers/gemini/config.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	—
 server/providers/gemini/realtime.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	—
 server/providers/gemini/request.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	—
@@ -659,6 +683,7 @@ server/providers/military-installations/cache.js	PLATFORM			Сохранить �
 server/providers/military-installations/constants.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	military-installations-provider
 server/providers/military-installations/query.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	military-installations-provider
 server/providers/openai.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
+server/providers/openai/chat.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
 server/providers/openai/codex-auth.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
 server/providers/openai/constants.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
 server/providers/openai/debug-log.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	openai-provider
@@ -672,6 +697,8 @@ server/providers/overpass.js	PLATFORM			Сохранить контракт да
 server/providers/overpass/cache.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
 server/providers/overpass/constants.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
 server/providers/overpass/geometry.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
+server/providers/overpass/osmFeatures.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
+server/providers/overpass/osmFeaturesRoute.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
 server/providers/overpass/query.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
 server/providers/overpass/requestAdmission.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 server/providers/overpass/transport.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
@@ -784,6 +811,7 @@ src/app/layers/bikeshare.js	LAYER			Отделить источник/запис
 src/app/layers/cctv.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/directions.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/directory.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	ui-shell
+src/app/layers/droneAirspace.js	LAYER		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/app/layers/earthquakes.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/firms.js	LAYER		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/app/layers/flights.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
@@ -793,6 +821,7 @@ src/app/layers/localAdsb.js	LAYER			Отделить источник/запис
 src/app/layers/militaryAwareness.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/militaryFlights.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/militaryInstallations.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
+src/app/layers/osmPlaces.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/overlayHost.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/app/layers/perimeters.js	LAYER		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/app/layers/qaSources.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
@@ -842,6 +871,10 @@ src/app/surfaceServices.js	SESSION			Разделить владельцев с�
 src/app/tools.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
 src/app/viewer.js	SESSION		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	viewer
 src/app/viewerlessTools.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/app/zoomOutGuard.js	SESSION		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
+src/app/zoomOutGuard.test.mjs	SESSION		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/awarenessEcho.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	awareness-layer
+src/awarenessEcho.test.mjs	VERIFY		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/bench/launchFixture.js	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 src/bench/satelliteFixture.js	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 src/bench/satelliteFixture.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -936,6 +969,11 @@ src/data/ambiguous-camera-direction.test.mjs	NAV			Сохранить прове
 src/data/analystEngine.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	application-components
 src/data/analystEngine.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/approxDistance.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	civil-flights
+src/data/areaGeometry.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
+src/data/areaGeometry.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/areaResolver.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
+src/data/areaResolver.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/areaStore.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/data/bhoteKoshiEmbeddedMedia.js	LAYER	bhote-koshi-2026/bhote-koshi-locator	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/data/bhoteKoshiEmbeddedMedia.test.mjs	LAYER	bhote-koshi-2026/bhote-koshi-locator		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/bhoteKoshiEvent.js	LAYER	bhote-koshi-2026/bhote-koshi-locator	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
@@ -980,6 +1018,7 @@ src/data/cctvGizmo.test.mjs	LAYER	cctv	cesium	Сохранить проверк�
 src/data/cctvGroundHeights.test.mjs	LAYER	cctv		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/cctvHk.test.mjs	LAYER	cctv		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/cctvHlsStream.test.mjs	LAYER	cctv		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/cctvHouston.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/cctvKingCountySource.test.mjs	LAYER	cctv		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/cctvLithuania.test.mjs	LAYER	cctv		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/cctvLod.js	LAYER	cctv		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	cctv-layer
@@ -1017,6 +1056,7 @@ src/data/cyclonesProxy.test.mjs	LAYER			Сохранить проверку; д�
 src/data/dataCredits.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/data/dataCredits.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/detection.js	OVERLAY			Оставить политику общей; переподключить проекцию, глубину и picking по поколению	application-components
+src/data/detectionAwarenessEcho.test.mjs	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/detectionCohort.js	OVERLAY			Оставить политику общей; переподключить проекцию, глубину и picking по поколению	application-components
 src/data/detectionCohort.test.mjs	OVERLAY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/detectionDraw.js	OVERLAY			Оставить политику общей; переподключить проекцию, глубину и picking по поколению	application-components
@@ -1035,6 +1075,7 @@ src/data/directions.js	LAYER			Отделить источник/записи о
 src/data/directions.test.mjs	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/distanceFormat.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	place-providers
 src/data/distanceFormat.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/droneAirspaceProxy.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/earthquakes.js	LAYER	earthquakes		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/data/earthquakes.test.mjs	LAYER	earthquakes	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/feedState.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	openai-provider
@@ -1190,6 +1231,9 @@ src/data/naturalEarthRegions.test.mjs	LAYER			Сохранить проверк�
 src/data/nearbyModelHandoff.test.mjs	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/neighborhoodPolygons.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	geography
 src/data/neighborhoodPolygons.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/osmOverlays.js	LAYER	bhote-koshi-2026/bhote-koshi-locator	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
+src/data/osmOverlays.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/osmPresets.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	overpass-provider
 src/data/overpassProxy.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/packGeometry.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/pickRegistry.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	application-components
@@ -1337,6 +1381,7 @@ src/firstRunCopy.js	UI			Сохранить контроллер и состоя
 src/firstRunExperience.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application-components
 src/firstRunExperience.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/firstRunLauncherView.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/geminiChatServer.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/geminiComposition.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/geminiServer.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/geo/bitExact.test.mjs	PLANET		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -1613,6 +1658,7 @@ src/layers/awareness/presentation.js	LAYER	military-awareness		Отделить 
 src/layers/awareness/presentation.test.mjs	LAYER	military-awareness		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/awareness/queries.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	awareness-layer
 src/layers/awareness/queries.test.mjs	LAYER	military-awareness	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/awareness/rangeRing.test.mjs	LAYER	military-awareness	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/awareness/render/cesium.js	LAYER	military-awareness	cesium	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	awareness-layer
 src/layers/awareness/render/navara.js	LAYER	military-awareness		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/awareness/rendering.js	LAYER	military-awareness	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	awareness-layer
@@ -1719,6 +1765,15 @@ src/layers/directions/render/navara.js	LAYER	directions		Локализоват�
 src/layers/directions/source.js	LAYER	directions		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/directions/source.test.mjs	LAYER	directions		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/directions/statusLocale.test.mjs	LAYER	directions		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/droneAirspace/cards.js	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	application-components
+src/layers/droneAirspace/cards.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/droneAirspace/docs.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/droneAirspace/index.js	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	application-components
+src/layers/droneAirspace/ownership.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/droneAirspace/records.js	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	application-components
+src/layers/droneAirspace/records.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/droneAirspace/source.js	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	application-components
+src/layers/droneAirspace/source.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/earthquakes/edgeCases.test.mjs	LAYER	earthquakes		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/earthquakes/index.js	LAYER	earthquakes		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	earthquakes
 src/layers/earthquakes/model.js	LAYER	earthquakes		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	earthquakes
@@ -1926,6 +1981,9 @@ src/layers/military/snapshotRenderer.js	LAYER	military		Отделить ист�
 src/layers/military/state.js	LAYER	military		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	military-flights
 src/layers/military/testing.js	LAYER	military		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	military-flights
 src/layers/military/tracking.js	LAYER	military		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	military-flights
+src/layers/osmPlaces/index.js	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	application-components
+src/layers/osmPlaces/index.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/osmPlaces/model.js	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	application-components
 src/layers/perimeters/cards.i18n.test.mjs	LAYER	fire-perimeters		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/perimeters/cards.js	LAYER	fire-perimeters		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/perimeters/cards.test.mjs	LAYER	fire-perimeters		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2490,6 +2548,8 @@ src/sources/openFreeMap.test.mjs	PLATFORM			Сохранить проверку;
 src/sources/openFreeMapOutlines.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	application-components
 src/sources/openFreeMapOutlines.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/sources/openFreeMapOutlinesEdges.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/sources/osmFeatures.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	application-components
+src/sources/osmFeatures.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/sources/overpass.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
 src/sources/overpassFeatures.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	application-components
 src/sources/overpassFeatures.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2561,11 +2621,13 @@ src/testSupport/viewerEngine.mjs	VERIFY			Сохранить проверку; �
 src/testSupport/voiceUi.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/voiceView.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/vueDom.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/textChatServer.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/time/clock.js	PLANET			Проверить операции/единицы и адаптеры; чистые операции проверить без графики	civil-flights
 src/time/clock.test.mjs	PLANET			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/toolProjectRoot.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/allowedHosts.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/applicationHtml.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/tooling/boundedCache.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/changelogFragments.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/environmentProviders.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/firmsGlowMetrics.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2588,6 +2650,7 @@ src/tooling/nominatimGuardLifecycle.test.mjs	VERIFY			Сохранить про�
 src/tooling/nominatimLockOwnership.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/nominatimOutlineRoute.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/nominatimSearchRoute.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/tooling/osmFeaturesRoute.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/packageBoundaries.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/panelBuild.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/panelStorageDocs.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2969,6 +3032,7 @@ src/ui/styleParameters.js	UI			Сохранить контроллер и сос
 src/ui/styleParameters.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/styles.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	ui-styles
 src/ui/styles/action-button.css	UI			Проверить общую видимость/темы/DPR, раскладку и доступность на обоих движках	—
+src/ui/styles/ai-chat.css	UI			Проверить общую видимость/темы/DPR, раскладку и доступность на обоих движках	—
 src/ui/styles/annotations.css	UI			Проверить общую видимость/темы/DPR, раскладку и доступность на обоих движках	—
 src/ui/styles/bhote-koshi.css	UI			Проверить общую видимость/темы/DPR, раскладку и доступность на обоих движках	ui-styles
 src/ui/styles/cctv.css	UI			Проверить общую видимость/темы/DPR, раскладку и доступность на обоих движках	ui-styles
@@ -3037,6 +3101,7 @@ src/ui/views/panels/AwarenessPanel.vue	UI			Сохранить контролл�
 src/ui/views/panels/BhoteKoshiPanel.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/CctvPanel.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/CelestialRing.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
+src/ui/views/panels/ChatPanel.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/CockpitBriefing.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/CockpitContext.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/CockpitRollingValue.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
@@ -3058,6 +3123,7 @@ src/ui/views/panels/LocalePicker.vue	UI			Сохранить контролле�
 src/ui/views/panels/MissionDetail.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/MissionReplayOverlay.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/MissionRoster.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
+src/ui/views/panels/PanelLayoutButtons.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/PhoneTabBar.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/RadioPanel.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/RadioTuner.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
@@ -3091,7 +3157,16 @@ src/voice/aircraftIdentityNarration.test.mjs	TOOLS			Сохранить пров
 src/voice/analystAccessors.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/analystCardLocale.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/analystEmptyNotes.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/areaActions.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	application-components
+src/voice/areaActions.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/areaCandidateContract.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	openai-provider
 src/voice/cctvRouting.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/chatAttachments.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/chatAttachments.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/chatControl.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/chatControlView.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/chatPreferences.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/chatPreferences.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/cloudVoiceAuth.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/cloudVoiceAuth.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/commands.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
@@ -3113,6 +3188,8 @@ src/voice/geminiNativeRecovery.test.mjs	TOOLS			Сохранить провер�
 src/voice/geminiPacketOwnership.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/geminiSession.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/geminiSession.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/geminiTextChat.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/geminiTextChat.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/gevActions.js	TOOLS		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/voice/gevActions.test.mjs	TOOLS		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/gevActionsCapabilities.test.mjs	TOOLS		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -3121,12 +3198,17 @@ src/voice/gevRealtime.js	TOOLS			Протестировать общую ком�
 src/voice/gevRealtime.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/globeResetConfirmation.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/hudPlaceLabels.test.mjs	TOOLS		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/imageryActions.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	application-components
+src/voice/imageryActions.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/integrationContract.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/layerActionOwnership.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	application-components
 src/voice/layerManifest.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	openai-provider
 src/voice/layerManifest.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/layerSummary.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/narration.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/narration.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/osmActions.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	application-components
+src/voice/osmActions.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/panel/actionObserver.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/panel/actionObserver.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/panel/host.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
@@ -3140,6 +3222,7 @@ src/voice/panel/nativeActivity.test.mjs	TOOLS			Сохранить провер�
 src/voice/panel/preferences.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/panel/preferences.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/panel/preferencesView.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/panelLayout.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/pointAndAsk.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/pointAndAskReview.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/pointerContext.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
@@ -3169,6 +3252,7 @@ src/voice/realtimeNarration.test.mjs	TOOLS			Сохранить проверку
 src/voice/realtimeOwners.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/realtimePreferences.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/realtimeProtocol.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/realtimeProtocol.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/realtimeRadio.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/realtimeRadio.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/realtimeSession.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
@@ -3186,6 +3270,9 @@ src/voice/sessionCommands.js	TOOLS			Протестировать общую к�
 src/voice/speech.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/speech.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/speechLint.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/textChat.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/textChat.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/textProtocol.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/turnMetrics.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/turnMetrics.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/voiceCard.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
@@ -3198,6 +3285,8 @@ src/voice/voiceCardPresentation.js	TOOLS			Протестировать общу
 src/voice/voiceControlView.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/voiceCost.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	openai-provider
 src/voice/voiceCost.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/voiceMiniPreview.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/voiceMiniPreview.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/voiceWorkflowHarness.mjs	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	—
 src/weatherEffectsMath.js	FX			Отделить пресет и время от нативного прохода; проверить качество и стоимость	application-components
 src/weatherEffectsMath.test.mjs	FX			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
