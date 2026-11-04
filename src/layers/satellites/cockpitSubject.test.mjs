@@ -18,6 +18,7 @@ import {
   satelliteCockpitInfo,
 } from './cockpitSubject.js';
 import { groundTrackBearingDeg } from './orbits.js';
+import { indexImagingSensors } from './sensors.js';
 import { ISS_NORAD } from './policy.js';
 
 const COMPANION = 25545;
@@ -66,6 +67,20 @@ const UCS = new Map([
   ],
 ]);
 
+// One sensor entry, matched by NORAD number, for the orbital zoom cap.
+const SENSORS = indexImagingSensors({
+  entries: [
+    {
+      id: 'fixture-imager',
+      label: 'Fixture imager',
+      match: { norad: [GPS] },
+      narrowestSwathKm: 50,
+      swathConfirmed: true,
+      sources: ['https://example.test/spec'],
+    },
+  ],
+});
+
 async function fixture(t) {
   const source = {
     async readGroup(group) {
@@ -76,6 +91,7 @@ async function fixture(t) {
       return { ok: true, status: 200, text: SATCAT_TEXT[group] || '' };
     },
     readUcs: async () => UCS,
+    readSensors: async () => SENSORS,
   };
   const noop = () => {};
   const services = {
@@ -259,6 +275,10 @@ test('the subject says what it is, which TLE it flies, and who owns and runs it'
   );
   assert.deepEqual(gps.owner, { countryCode: 'US', label: 'United States' });
   assert.equal(gps.operator, null);
+  // The sensor pack is matched once, at ingestion.
+  assert.equal(gps.sensor?.id, 'fixture-imager');
+  assert.equal(gps.sensor.narrowestSwathKm, 50);
+  assert.equal(iss.sensor, null, 'no sensor entry, no extra zoom');
 
   // A bare catalog entry still answers every field.
   const bare = satelliteCockpitInfo(

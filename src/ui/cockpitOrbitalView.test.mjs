@@ -15,6 +15,8 @@ import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
 import IntelHudView from './views/IntelHudView.vue';
 import {
+  ORBITAL_PREFETCH_INTERVAL_MS,
+  ORBITAL_PREFETCH_MAX_TILES,
   ORBITAL_SETTLE_BLUR_PX,
   ORBITAL_SETTLE_MAX_MS,
   ORBITAL_ZOOM_TRANSITION_MS,
@@ -23,6 +25,8 @@ import {
   orbitalBaseFovRad,
 } from '../cockpitOrbital.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
+import { prefetchImageryAhead } from './cockpitOrbitalView.js';
+import { imageryLevelForView } from '../cockpitOrbital.js';
 import { claimPointer, releasePointer } from '../data/inputOwnership.js';
 
 const ISS = Object.freeze({
@@ -1012,6 +1016,302 @@ test('a tracked aircraft takes entry before a tracked satellite', async (t) => {
   assert.equal(store.presence.entryKind, 'aircraft');
 });
 
+/** An imaging satellite with a narrow confirmed sensor swath. */
+const WORLDVIEW = Object.freeze({
+  ...ISS,
+  id: '40115',
+  noradId: 40115,
+  name: 'WORLDVIEW-3 (WV-3)',
+  classKey: 'visual',
+  classLabel: 'IMAGING',
+  altitudeM: 617_000,
+  sensor: Object.freeze({
+    label: 'WorldView-3',
+    narrowestSwathKm: 13.1,
+    swathConfirmed: true,
+  }),
+});
+
+/** A wide-area imager whose swath fits inside 8x. */
+const LANDSAT = Object.freeze({
+  ...WORLDVIEW,
+  id: '49260',
+  noradId: 49260,
+  name: 'LANDSAT 9',
+  altitudeM: 705_000,
+  sensor: Object.freeze({
+    label: 'Landsat 8 / Landsat 9',
+    narrowestSwathKm: 185,
+    swathConfirmed: true,
+  }),
+});
+
+test('an imaging satellite zooms past 8x as far as its sensor swath', async (t) => {
+  const { $, cockpit, store } = await orbitAt(t, { satellite: WORLDVIEW });
+  assert.equal(store.orbital.maxZoom, 64);
+  assert.deepEqual(store.orbital.zoomSteps, [1, 2, 4, 8, 16, 32, 64]);
+  for (let step = 0; step < 8; step += 1) press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 64, 'stops at the cap');
+  await settle();
+  assert.equal($('#cockpit-orbital-zoom-in').disabled, true);
+  assert.match($('.cockpit-orbital-zoom').textContent, /64×/);
+  // The swath, to scale: 13.1 km of a ~20 km view.
+  assert.match(
+    $('.cockpit-orbital-sensor-swath').textContent,
+    /SENSOR SWATH 13\.1 KM/,
+  );
+  const width = parseFloat($('.cockpit-orbital-sensor-strip').style.width);
+  assert.ok(width > 50 && width < 100, String(width));
+  // The swath is narrower than the 64x view: no SENSOR step to take.
+  assert.equal($('#cockpit-orbital-sensor'), null);
+});
+
+test("the SENSOR step frames a wide sensor's swath", async (t) => {
+  const { $, cockpit, store } = await orbitAt(t, { satellite: LANDSAT });
+  assert.equal(store.orbital.maxZoom, 8, 'a wide swath adds no steps');
+  await settle();
+  const button = $('#cockpit-orbital-sensor');
+  assert.ok(button, 'the SENSOR step is offered');
+  assert.equal(button.getAttribute('aria-keyshortcuts'), null, 'no key');
+  assert.doesNotMatch(button.title, /\(S\)/);
+  button.click();
+  const zoom = store.orbital.zoom;
+  assert.ok(zoom > 4 && zoom < 8, String(zoom));
+  assert.ok(Math.abs(store.orbital.footprintKm - 185) < 1, 'view = swath');
+  await settle();
+  assert.match($('.cockpit-orbital-zoom').textContent, /ZOOM \d\.\d×/);
+  press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 8, 'on to the step above');
+  press(cockpit, '-');
+  press(cockpit, '-');
+  assert.equal(store.orbital.zoom, 2);
+  $('#cockpit-orbital-sensor').click();
+  assert.equal(store.orbital.zoom, zoom, 'the button takes it again');
+});
+
+test('off nadir the sensor strip stays and its swath reads approximate', async (t) => {
+  const { $, cockpit, store } = await orbitAt(t, { satellite: LANDSAT });
+  await settle();
+  assert.equal(
+    $('.cockpit-orbital-sensor-swath').textContent,
+    'SENSOR SWATH 185 KM',
+  );
+  const nadirWidth = $('.cockpit-orbital-sensor-strip').style.width;
+  press(cockpit, 'ArrowRight');
+  press(cockpit, 'ArrowRight');
+  await settle();
+  assert.equal(store.orbital.look.offset, true);
+  // Across the frame by 10°: 185 km / cos² 10° ≈ 190.8 km.
+  const text = $('.cockpit-orbital-sensor-swath').textContent;
+  const km = Number(text.match(/^SENSOR SWATH ≈ ([\d.]+) KM$/)[1]);
+  assert.ok(Math.abs(km - 185 / Math.cos((10 * Math.PI) / 180) ** 2) < 0.1);
+  assert.equal(
+    $('.cockpit-orbital-sensor-strip').style.width,
+    nadirWidth,
+    'the strip keeps its share of the view',
+  );
+  assert.equal($('#cockpit-orbital-sensor'), null, 'no SENSOR step tilted');
+  press(cockpit, 'Home');
+  await settle();
+  assert.equal(
+    $('.cockpit-orbital-sensor-swath').textContent,
+    'SENSOR SWATH 185 KM',
+  );
+  assert.ok($('#cockpit-orbital-sensor'));
+});
+
+test('S does nothing in an orbital view, even with a SENSOR step', async (t) => {
+  const { $, cockpit, store } = await orbitAt(t, { satellite: LANDSAT });
+  await settle();
+  assert.ok($('#cockpit-orbital-sensor'), 'the SENSOR step is offered');
+  for (const key of ['s', 'S']) {
+    const event = press(cockpit, key, { shiftKey: key === 'S' });
+    assert.equal(event.defaultPrevented, false, key);
+    assert.equal(store.orbital.zoom, 1, key);
+  }
+  assert.doesNotMatch(
+    document.querySelector('.cockpit-help')?.textContent ?? '',
+    /SENSOR/,
+    'no key hint',
+  );
+});
+
+/** A globe draping one Web Mercator imagery layer that records requests. */
+function imageryGlobe(viewer, { requestImage } = {}) {
+  const requests = [];
+  const requestObjects = [];
+  const provider = {
+    tilingScheme: new Cesium.WebMercatorTilingScheme(),
+    tileWidth: 256,
+    maximumLevel: 19,
+    requestImage:
+      requestImage ??
+      ((x, y, level, request) => {
+        requests.push(`${level}/${x}/${y}`);
+        requestObjects.push(request);
+        return Promise.resolve({});
+      }),
+  };
+  viewer.scene.globe = { show: true, tilesLoaded: true };
+  viewer.scene.canvas = { clientWidth: 1600, clientHeight: 900 };
+  viewer.imageryLayers = {
+    length: 1,
+    get: () => ({ show: true, alpha: 1, imageryProvider: provider }),
+  };
+  return { requests, requestObjects, provider };
+}
+
+const WORLDVIEW_ON_TRACK = Object.freeze({ ...WORLDVIEW, groundTrackDeg: 52 });
+
+test('from 16x the imagery ahead of the ground track is pre-loaded', async (t) => {
+  const { cockpit, viewer, store, clock } = await orbitAt(t, {
+    satellite: WORLDVIEW_ON_TRACK,
+  });
+  const { requests } = imageryGlobe(viewer);
+  for (const zoom of [2, 4, 8]) {
+    press(cockpit, '+');
+    assert.equal(store.orbital.zoom, zoom);
+    clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+    cockpit.update();
+  }
+  assert.deepEqual(requests, [], 'nothing below 16x');
+  press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 16);
+  clock.advance(16);
+  cockpit.update();
+  assert.ok(requests.length > 0, 'tiles ahead are asked for');
+  assert.ok(requests.length <= ORBITAL_PREFETCH_MAX_TILES, 'bounded');
+  assert.equal(new Set(requests.map((key) => key.split('/')[0])).size, 1);
+  const first = requests.length;
+  // Not again until the interval has passed, and never the same tile twice.
+  clock.advance(16);
+  cockpit.update();
+  assert.equal(requests.length, first);
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  assert.equal(new Set(requests).size, requests.length, 'no repeats');
+  // A tighter zoom needs a finer level.
+  press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 32);
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  const levels = requests.map((key) => Number(key.split('/')[0]));
+  assert.equal(levels.at(-1), levels[0] + 1);
+  // Back below 16x, and after the exit: no more work.
+  const before = requests.length;
+  press(cockpit, '-');
+  press(cockpit, '-');
+  assert.equal(store.orbital.zoom, 8);
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  assert.equal(requests.length, before, 'stops below 16x');
+  press(cockpit, '+');
+  cockpit.exit();
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  assert.equal(
+    prefetchImageryAhead.call(cockpit, WORLDVIEW_ON_TRACK, Infinity),
+    0,
+  );
+  assert.equal(requests.length, before, 'stops after the exit');
+});
+
+test('the pre-load skips a hidden globe and a provider that cannot fetch', async (t) => {
+  const { cockpit, viewer, store, clock } = await orbitAt(t, {
+    satellite: WORLDVIEW_ON_TRACK,
+  });
+  const { requests, provider } = imageryGlobe(viewer);
+  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 16);
+  // Google 3D tiles drawn, the globe hidden: nothing to pre-load.
+  viewer.scene.globe.show = false;
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  assert.deepEqual(requests, []);
+  viewer.scene.globe.show = true;
+  // No requestImage, or one that throws: no error, nothing remembered.
+  delete provider.requestImage;
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  assert.doesNotThrow(() => cockpit.update());
+  provider.requestImage = () => {
+    throw new Error('offline');
+  };
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  assert.doesNotThrow(() => cockpit.update());
+  assert.equal(store.orbital.zoom, 16, 'the view carries on');
+});
+
+test('an unconfirmed sensor swath is drawn but adds no zoom steps', async (t) => {
+  const { store } = await orbitAt(t, {
+    satellite: {
+      ...WORLDVIEW,
+      sensor: {
+        label: 'SuperView Neo-1',
+        narrowestSwathKm: 12,
+        swathConfirmed: false,
+      },
+    },
+  });
+  assert.equal(store.orbital.maxZoom, 8);
+  assert.equal(store.orbital.sensor.swathKm, 12);
+});
+
+test('the wheel steps the orbital zoom one notch at a time', async (t) => {
+  const { cockpit, store, clock } = await orbitAt(t, { satellite: WORLDVIEW });
+  const wheel = (deltaY) => {
+    const event = {
+      deltaY,
+      deltaMode: 0,
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+    };
+    cockpit.onOrbitalWheel(event);
+    return event;
+  };
+  assert.equal(wheel(-100).defaultPrevented, true);
+  assert.equal(store.orbital.zoom, 2);
+  // The same notch's trailing events do nothing.
+  assert.equal(wheel(-100).defaultPrevented, false);
+  assert.equal(store.orbital.zoom, 2);
+  clock.advance(300);
+  wheel(-100);
+  assert.equal(store.orbital.zoom, 4);
+  clock.advance(300);
+  wheel(120);
+  assert.equal(store.orbital.zoom, 2, 'toward the viewer zooms out');
+  // A tool that owns the pointer keeps the wheel.
+  const lease = claimPointer('measure');
+  t.after(() => releasePointer(lease));
+  clock.advance(300);
+  wheel(-100);
+  assert.equal(store.orbital.zoom, 2);
+  releasePointer(lease);
+  cockpit.exit();
+  await settle();
+  assert.equal(cockpit.onOrbitalWheel({ deltaY: -100 }), false, 'orbit only');
+});
+
+test('the orbital view reads the TLE age on each HUD publish', async (t) => {
+  const HOUR = 3_600_000;
+  const { cockpit, store, clock } = await orbitAt(t, {
+    satellite: {
+      ...ISS,
+      tle: {
+        line1: '1 25544U',
+        line2: '2 25544',
+        epochMs: START_MS - 13.5 * HOUR,
+      },
+    },
+  });
+  const ageH = () => store.orbital.tleAgeMs / HOUR;
+  assert.ok(Math.abs(ageH() - 13.5) < 0.01, String(ageH()));
+  clock.advance(HOUR);
+  cockpit.update();
+  assert.ok(Math.abs(ageH() - 14.5) < 0.01, 'kept current by the HUD cadence');
+});
+
 /** The ISS climbing north-east along its ground track. */
 const ISS_ON_TRACK = Object.freeze({ ...ISS, groundTrackDeg: 52 });
 
@@ -1059,8 +1359,25 @@ test('a satellite with no ground track stays north-up', async (t) => {
   assert.match($('.cockpit-orbital-north').textContent, /NORTH UP/);
 });
 
+test('a narrower window pulls the zoom back to the new top step', async (t) => {
+  const { cockpit, viewer, store, clock } = await orbitAt(t, {
+    satellite: WORLDVIEW,
+  });
+  for (let step = 0; step < 8; step += 1) press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 64);
+  // A portrait window: the same zoom now shows finer ground than the sensor
+  // images, so the top step drops.
+  viewer.camera.frustum.aspectRatio = 0.5;
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  assert.ok(store.orbital.maxZoom < 64, String(store.orbital.maxZoom));
+  assert.equal(store.orbital.zoom, store.orbital.maxZoom);
+  assert.ok(store.orbital.zoomSteps.includes(store.orbital.zoom));
+});
+
 test('a zoom button that turns off hands focus to the other one', async (t) => {
-  const { $, cockpit } = await orbitAt(t);
+  const { $, cockpit } = await orbitAt(t, { satellite: WORLDVIEW });
   await settle();
   $('#cockpit-orbital-zoom-in').focus();
   for (let step = 0; step < 8; step += 1) press(cockpit, '+');
@@ -1072,6 +1389,16 @@ test('a zoom button that turns off hands focus to the other one', async (t) => {
     '+ =',
   );
   assert.match($('#cockpit-orbital-zoom-in').title, /\(\+\)/);
+});
+
+test('SENSOR hands focus to NADIR when a tilt takes it away', async (t) => {
+  const { $, cockpit } = await orbitAt(t, { satellite: LANDSAT });
+  await settle();
+  $('#cockpit-orbital-sensor').focus();
+  press(cockpit, 'ArrowUp');
+  await settle();
+  assert.equal($('#cockpit-orbital-sensor'), null);
+  assert.equal(document.activeElement?.id, 'cockpit-orbital-nadir');
 });
 
 test('the readout says OFF-NADIR while the view is tilted', async (t) => {
@@ -1087,4 +1414,46 @@ test('the readout says OFF-NADIR while the view is tilted', async (t) => {
     $('.cockpit-orbital-kicker').textContent.trim(),
     'ORBITAL VIEW · OFF-NADIR',
   );
+});
+
+test('the pre-load is throttled, at the level Cesium draws, and waits out a tilt', async (t) => {
+  const { cockpit, viewer, store, clock } = await orbitAt(t, {
+    satellite: WORLDVIEW_ON_TRACK,
+  });
+  const { requests, requestObjects } = imageryGlobe(viewer);
+  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 16);
+  // Tilted off nadir the view looks away from the track: nothing asked.
+  press(cockpit, 'ArrowRight');
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  assert.deepEqual(requests, [], 'nothing while tilted');
+  press(cockpit, 'Home');
+  for (let frame = 0; frame < 30; frame += 1) {
+    clock.advance(16);
+    cockpit.update();
+  }
+  assert.ok(requests.length > 0, 'back at nadir it pre-loads');
+  // Every request may be declined while Cesium is busy with the screen.
+  for (const request of requestObjects) {
+    assert.ok(request instanceof Cesium.Request);
+    assert.equal(request.throttle, true);
+    assert.equal(request.throttleByServer, true);
+    assert.equal(
+      request.priority,
+      Number.MAX_VALUE,
+      'never ahead of the screen',
+    );
+    assert.equal(request.type, Cesium.RequestType.IMAGERY);
+  }
+  // The level Cesium's own selection takes for this view.
+  const fov = fovForZoom(orbitalBaseFovRad(WORLDVIEW.altitudeM), 16);
+  const metresPerPixel =
+    (WORLDVIEW.altitudeM * 2 * Math.tan(fov / 2)) /
+    viewer.scene.canvas.clientHeight;
+  const expected = imageryLevelForView(new Cesium.WebMercatorTilingScheme(), {
+    metresPerPixel,
+    latitudeDeg: WORLDVIEW.latitude,
+  });
+  assert.equal(Number(requests[0].split('/')[0]), expected);
 });

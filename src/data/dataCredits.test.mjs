@@ -52,6 +52,15 @@ test('the UCS Satellite Database is acknowledged with its version and webpage', 
   );
 });
 
+test('the imaging sensor swaths credit operator and agency specifications', () => {
+  // Each sensor-pack entry cites its operator's or agency's own pages;
+  // no aggregator database is credited.
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'imaging-sensors');
+  assert.ok(credit, 'the orbital zoom caps come from the sensor pack');
+  assert.match(credit.html, /operator and agency specifications/);
+  assert.doesNotMatch(credit.html, /OSCAR|wmo\.int/);
+});
+
 test('OpenStreetMap has one generic data credit with separate tile and names distributors', () => {
   const osm = DATA_CREDITS.filter((entry) =>
     entry.html.includes('openstreetmap.org/copyright'),

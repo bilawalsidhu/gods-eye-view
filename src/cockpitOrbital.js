@@ -13,10 +13,14 @@
 /** Mean Earth radius used for footprint and framing geometry, metres. */
 export const ORBITAL_EARTH_RADIUS_M = 6371008.8;
 
-/** The optical zoom steps. */
-export const ORBITAL_ZOOM_LADDER = Object.freeze([1, 2, 4, 8]);
+/**
+ * The whole zoom ladder. Steps past ORBITAL_BASE_MAX_ZOOM belong only to
+ * imaging satellites with a known sensor, each up to the step its sensor's
+ * swath allows (`orbitalMaxZoom`).
+ */
+export const ORBITAL_ZOOM_LADDER = Object.freeze([1, 2, 4, 8, 16, 32, 64, 128]);
 
-/** The tightest step. */
+/** The tightest step for a satellite without sensor data. */
 export const ORBITAL_BASE_MAX_ZOOM = 8;
 
 /** The zoom an orbital view opens at. */
@@ -61,9 +65,9 @@ const ZOOM_EPSILON = 1e-6;
 
 /**
  * The next tighter ladder step, up to `maxZoom`; at the cap the zoom stays.
- * A zoom between steps moves to the step above it.
+ * A zoom between steps (the SENSOR step) moves to the step above it.
  * @param {number} zoom Current zoom.
- * @param {number} [maxZoom] The tightest step.
+ * @param {number} [maxZoom] The satellite's tightest step.
  * @returns {number}
  */
 export function nextOrbitalZoom(zoom, maxZoom = ORBITAL_BASE_MAX_ZOOM) {
@@ -86,6 +90,86 @@ export function previousOrbitalZoom(zoom) {
     (step) => step < current * (1 - ZOOM_EPSILON),
   );
   return wider.length ? wider[wider.length - 1] : ORBITAL_DEFAULT_ZOOM;
+}
+
+/**
+ * The ground width the view spans at a zoom: what the SWATH readout shows.
+ * @param {number} altitudeM Satellite altitude, metres.
+ * @param {number} zoom Magnification.
+ * @param {number} aspect Canvas width / height.
+ * @returns {number|null} Kilometres, or null for an unusable altitude.
+ */
+export function viewWidthKm(altitudeM, zoom, aspect) {
+  return footprintWidthKm(
+    altitudeM,
+    fovForZoom(orbitalBaseFovRad(altitudeM), zoom),
+    aspect,
+  );
+}
+
+/**
+ * A satellite's tightest zoom step at its live altitude: the tightest ladder
+ * step whose view is still at least as wide as its sensor's narrowest
+ * standard swath, so the view never shows finer ground than the sensor
+ * images. Never below ORBITAL_BASE_MAX_ZOOM; no sensor swath, no extra steps.
+ * @param {number} altitudeM Live altitude, metres.
+ * @param {number|null|undefined} sensorSwathKm Narrowest standard swath.
+ * @param {number} aspect Canvas width / height.
+ * @returns {number} One of ORBITAL_ZOOM_LADDER.
+ */
+export function orbitalMaxZoom(altitudeM, sensorSwathKm, aspect) {
+  if (!Number.isFinite(sensorSwathKm) || sensorSwathKm <= 0)
+    return ORBITAL_BASE_MAX_ZOOM;
+  let max = ORBITAL_BASE_MAX_ZOOM;
+  for (const step of ORBITAL_ZOOM_LADDER) {
+    if (step <= ORBITAL_BASE_MAX_ZOOM) continue;
+    const width = viewWidthKm(altitudeM, step, aspect);
+    if (!Number.isFinite(width)) break;
+    if (width * (1 + ZOOM_EPSILON) < sensorSwathKm) break;
+    max = step;
+  }
+  return max;
+}
+
+/**
+ * The zoom at which the view is exactly as wide as the sensor's swath, for
+ * the SENSOR step; null when that lies outside 1x..`maxZoom` (a swath wider
+ * than the 1x view, or narrower than the tightest allowed step).
+ * @param {number} altitudeM Live altitude, metres.
+ * @param {number|null|undefined} sensorSwathKm
+ * @param {number} aspect Canvas width / height.
+ * @param {number} maxZoom The satellite's tightest step.
+ * @returns {number|null}
+ */
+export function sensorSwathZoom(altitudeM, sensorSwathKm, aspect, maxZoom) {
+  if (!Number.isFinite(sensorSwathKm) || sensorSwathKm <= 0) return null;
+  const widest = viewWidthKm(altitudeM, 1, aspect);
+  const tightest = viewWidthKm(altitudeM, maxZoom, aspect);
+  if (!Number.isFinite(widest) || !Number.isFinite(tightest)) return null;
+  if (sensorSwathKm > widest * (1 + ZOOM_EPSILON)) return null;
+  if (sensorSwathKm < tightest * (1 - ZOOM_EPSILON)) return null;
+  // The width falls monotonically with zoom: bisect in log space.
+  let low = 0;
+  let high = Math.log2(maxZoom);
+  for (let i = 0; i < 48; i += 1) {
+    const mid = (low + high) / 2;
+    if (viewWidthKm(altitudeM, 2 ** mid, aspect) > sensorSwathKm) low = mid;
+    else high = mid;
+  }
+  return Math.round(2 ** ((low + high) / 2) * 100) / 100;
+}
+
+/**
+ * How much of the view's width a sensor swath covers, for the strip drawn
+ * to scale in the reticle: 0..1, 1 when the swath fills the view or more.
+ * @param {number|null|undefined} sensorSwathKm
+ * @param {number|null|undefined} viewKm The view's current ground width.
+ * @returns {number|null} Null without both widths.
+ */
+export function sensorStripFraction(sensorSwathKm, viewKm) {
+  if (!Number.isFinite(sensorSwathKm) || sensorSwathKm <= 0) return null;
+  if (!Number.isFinite(viewKm) || viewKm <= 0) return null;
+  return Math.min(1, sensorSwathKm / viewKm);
 }
 
 /**
@@ -410,4 +494,274 @@ export function offNadirOrientation(nadir, { northDeg = 0, eastDeg = 0 } = {}) {
   // Toward east: the view swings onto the right axis.
   const direction = combine(d1, Math.cos(e), r, Math.sin(e));
   return { direction, up: u1, right: cross(direction, u1) };
+}
+
+/** Scroll distance, in pixels, that makes one zoom step. A mouse notch is ~100. */
+export const ORBITAL_WHEEL_PIXELS_PER_STEP = 100;
+
+/**
+ * After a step, the rest of that gesture is absorbed for this long, so one
+ * physical notch (which some browsers deliver as several events) is one step.
+ */
+export const ORBITAL_WHEEL_COOLDOWN_MS = 200;
+
+/**
+ * A pause this long ends a scroll gesture: a partial sum left from an earlier
+ * gesture never adds to a later one.
+ */
+export const ORBITAL_WHEEL_GESTURE_GAP_MS = 300;
+
+/** `WheelEvent.deltaMode` line and page units, in pixels. */
+const WHEEL_LINE_PX = 16;
+const WHEEL_PAGE_PX = 800;
+
+/**
+ * Turn wheel events into zoom steps. Trackpads send many small pixel deltas,
+ * so they are summed until they reach a step; a change of direction, or a
+ * pause of ORBITAL_WHEEL_GESTURE_GAP_MS, starts over. Wheeling away from the
+ * viewer (negative deltaY) zooms in.
+ * @param {{sum: number, lastStepMs: number, lastEventMs?: number}|null}
+ *   accumulator Previous state.
+ * @param {{deltaY: number, deltaMode?: number}} wheel The event's deltas.
+ * @param {number} nowMs
+ * @returns {{accumulator: {sum: number, lastStepMs: number,
+ *   lastEventMs: number}, step: -1|0|1}} The new state and the step to take
+ *   (1 = zoom in).
+ */
+export function wheelZoomStep(accumulator, wheel, nowMs) {
+  const held = accumulator || { sum: 0, lastStepMs: -Infinity };
+  const previous =
+    nowMs - (held.lastEventMs ?? -Infinity) > ORBITAL_WHEEL_GESTURE_GAP_MS
+      ? { ...held, sum: 0 }
+      : held;
+  const unit =
+    wheel?.deltaMode === 1
+      ? WHEEL_LINE_PX
+      : wheel?.deltaMode === 2
+        ? WHEEL_PAGE_PX
+        : 1;
+  const delta = (Number.isFinite(wheel?.deltaY) ? wheel.deltaY : 0) * unit;
+  if (!delta) return { accumulator: held, step: 0 };
+  if (nowMs - previous.lastStepMs < ORBITAL_WHEEL_COOLDOWN_MS)
+    return {
+      accumulator: { ...previous, sum: 0, lastEventMs: nowMs },
+      step: 0,
+    };
+  const sum =
+    Math.sign(previous.sum) === -Math.sign(delta)
+      ? delta
+      : previous.sum + delta;
+  if (Math.abs(sum) < ORBITAL_WHEEL_PIXELS_PER_STEP)
+    return { accumulator: { ...previous, sum, lastEventMs: nowMs }, step: 0 };
+  return {
+    accumulator: { sum: 0, lastStepMs: nowMs, lastEventMs: nowMs },
+    step: sum < 0 ? 1 : -1,
+  };
+}
+
+/** From this zoom the view pre-loads imagery ahead along the ground track. */
+export const ORBITAL_PREFETCH_MIN_ZOOM = 16;
+
+/** How often the pre-load looks ahead, ms. */
+export const ORBITAL_PREFETCH_INTERVAL_MS = 2000;
+
+/** How far ahead it looks, seconds of ground-track travel, nearest first. */
+export const ORBITAL_PREFETCH_LEAD_S = Object.freeze([5, 10, 15, 20]);
+
+/**
+ * Where across the track it looks, as fractions of the view's width: the
+ * centre line and a third out each side, so a tile row spans the frame.
+ */
+export const ORBITAL_PREFETCH_ACROSS = Object.freeze([0, -1 / 3, 1 / 3]);
+
+/** At most this many tile requests per look-ahead. */
+export const ORBITAL_PREFETCH_MAX_TILES = 12;
+
+const toRadians = (deg) => (deg * Math.PI) / 180;
+const toDegrees = (rad) => (rad * 180) / Math.PI;
+
+/**
+ * The point `distanceM` from a point along an initial bearing, on a sphere.
+ * @returns {{lat: number, lon: number}} Degrees, longitude in -180..180.
+ */
+export function destinationPoint(latDeg, lonDeg, bearingDeg, distanceM) {
+  const delta = distanceM / ORBITAL_EARTH_RADIUS_M;
+  const lat1 = toRadians(latDeg);
+  const theta = toRadians(bearingDeg);
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(delta) +
+      Math.cos(lat1) * Math.sin(delta) * Math.cos(theta),
+  );
+  const lon2 =
+    toRadians(lonDeg) +
+    Math.atan2(
+      Math.sin(theta) * Math.sin(delta) * Math.cos(lat1),
+      Math.cos(delta) - Math.sin(lat1) * Math.sin(lat2),
+    );
+  const lon = ((((toDegrees(lon2) + 180) % 360) + 360) % 360) - 180;
+  return { lat: toDegrees(lat2), lon };
+}
+
+/**
+ * Points the view will pass over: for each lead time, the sub-satellite
+ * point that far along the ground track (orbital speed scaled down to the
+ * ground), and points across the track at `across` fractions of the view's
+ * width. Nearest lead first. Empty without a track, speed or width.
+ * @param {{latitude: number, longitude: number, groundTrackDeg: number,
+ *   velocityMps: number, altitudeM: number}} info Satellite subject.
+ * @param {number} viewKm The view's ground width, km.
+ * @returns {Array<{lat: number, lon: number}>}
+ */
+export function groundTrackAhead(
+  info,
+  viewKm,
+  { leadS = ORBITAL_PREFETCH_LEAD_S, across = ORBITAL_PREFETCH_ACROSS } = {},
+) {
+  const { latitude, longitude, groundTrackDeg, velocityMps, altitudeM } =
+    info || {};
+  if (
+    ![latitude, longitude, groundTrackDeg, velocityMps, altitudeM].every(
+      Number.isFinite,
+    ) ||
+    velocityMps <= 0 ||
+    altitudeM <= 0 ||
+    !(viewKm > 0)
+  )
+    return [];
+  const R = ORBITAL_EARTH_RADIUS_M;
+  const groundMps = (velocityMps * R) / (R + altitudeM);
+  const points = [];
+  for (const seconds of leadS) {
+    const centre = destinationPoint(
+      latitude,
+      longitude,
+      groundTrackDeg,
+      groundMps * seconds,
+    );
+    for (const fraction of across) {
+      points.push(
+        fraction === 0
+          ? centre
+          : destinationPoint(
+              centre.lat,
+              centre.lon,
+              groundTrackDeg + (fraction > 0 ? 90 : -90),
+              Math.abs(fraction) * viewKm * 1000,
+            ),
+      );
+    }
+  }
+  return points;
+}
+
+/** WGS84's equatorial radius: Cesium sizes terrain and imagery tiles on it. */
+const WGS84_MAXIMUM_RADIUS_M = 6378137;
+
+/**
+ * Cesium's geometric error for a heightmap terrain tile at `level`, metres:
+ * its level-zero estimate (TerrainProvider's
+ * getEstimatedLevelZeroGeometricErrorForAHeightmap, heightmap quality 0.25)
+ * for the ellipsoid terrain's 64-sample tiles on two root tiles, halved per
+ * level.
+ * @param {number} level
+ * @returns {number}
+ */
+export function ellipsoidTerrainLevelErrorM(level) {
+  return (WGS84_MAXIMUM_RADIUS_M * 2 * Math.PI * 0.25) / (64 * 2) / 2 ** level;
+}
+
+/** The deepest terrain level considered. */
+const MAX_TERRAIN_LEVEL = 30;
+
+/**
+ * The imagery level Cesium draws under the view, and so the one to pre-load.
+ * Cesium refines the terrain tile under the view while its geometric error
+ * spans more than `maximumScreenSpaceError` pixels (QuadtreePrimitive's
+ * screenSpaceError: error over the ground a pixel covers), then drapes the
+ * imagery level whose texel spacing is nearest that error (ImageryLayer's
+ * getLevelWithMaximumTexelSpacing, rounded): about one to two screen pixels
+ * per texel, not one. Fog, which below 800 km can only coarsen the choice,
+ * is left out. Clamped to the provider's levels; null without a usable input.
+ * @param {{getNumberOfXTilesAtLevel?: (level: number) => number,
+ *   rectangle?: {width: number}}} tilingScheme The imagery tiling scheme.
+ * @param {{metresPerPixel: number, latitudeDeg: number,
+ *   geographic?: boolean, tileWidthPx?: number, minimumLevel?: number,
+ *   maximumLevel?: number, maximumScreenSpaceError?: number,
+ *   terrainLevelErrorM?: (level: number) => number}} view `metresPerPixel`
+ *   is the ground one CSS pixel covers at the view's centre; `geographic`
+ *   marks a scheme in the geographic projection, whose texels do not narrow
+ *   with latitude as Web Mercator's do; `terrainLevelErrorM` is the terrain
+ *   provider's getLevelMaximumGeometricError.
+ * @returns {number|null}
+ */
+export function imageryLevelForView(
+  tilingScheme,
+  {
+    metresPerPixel,
+    latitudeDeg,
+    geographic = false,
+    tileWidthPx = 256,
+    minimumLevel = 0,
+    maximumLevel = 30,
+    maximumScreenSpaceError = 2,
+    terrainLevelErrorM = ellipsoidTerrainLevelErrorM,
+  },
+) {
+  if (!(metresPerPixel > 0) || !Number.isFinite(latitudeDeg)) return null;
+  const sse = maximumScreenSpaceError > 0 ? maximumScreenSpaceError : 2;
+  let terrainLevel = 0;
+  while (
+    terrainLevel < MAX_TERRAIN_LEVEL &&
+    !(terrainLevelErrorM(terrainLevel) / metresPerPixel <= sse)
+  )
+    terrainLevel += 1;
+  const errorM = terrainLevelErrorM(terrainLevel);
+  if (!(errorM > 0)) return null;
+  const rootTiles = tilingScheme?.getNumberOfXTilesAtLevel?.(0) || 1;
+  const widthRad = tilingScheme?.rectangle?.width || 2 * Math.PI;
+  const latitudeFactor = geographic
+    ? 1
+    : Math.cos(toRadians(Math.min(89, Math.abs(latitudeDeg))));
+  const levelZeroTexelM =
+    (WGS84_MAXIMUM_RADIUS_M * widthRad * latitudeFactor) /
+    ((tileWidthPx || 256) * rootTiles);
+  const level = Math.max(0, Math.round(Math.log2(levelZeroTexelM / errorM)));
+  if (!Number.isFinite(level)) return null;
+  const top = Number.isFinite(maximumLevel) ? maximumLevel : 30;
+  const bottom = Number.isFinite(minimumLevel) ? minimumLevel : 0;
+  return Math.min(top, Math.max(bottom, level));
+}
+
+/**
+ * The tiles at `level` holding `points`, in order, without repeats or tiles
+ * `skip` reports as already asked for, at most `maxTiles`.
+ * @param {{positionToTileXY: Function}} tilingScheme Cesium tiling scheme.
+ * @param {Array<{lat: number, lon: number}>} points Degrees.
+ * @param {number} level
+ * @param {{maxTiles?: number, skip?: (key: string) => boolean}} [options]
+ * @returns {Array<{x: number, y: number, level: number, key: string}>}
+ */
+export function tilesForPoints(
+  tilingScheme,
+  points,
+  level,
+  { maxTiles = ORBITAL_PREFETCH_MAX_TILES, skip = () => false } = {},
+) {
+  const tiles = [];
+  if (typeof tilingScheme?.positionToTileXY !== 'function') return tiles;
+  if (!Number.isInteger(level) || level < 0) return tiles;
+  const seen = new Set();
+  for (const point of points) {
+    if (tiles.length >= maxTiles) break;
+    const xy = tilingScheme.positionToTileXY(
+      { longitude: toRadians(point.lon), latitude: toRadians(point.lat) },
+      level,
+    );
+    if (!xy) continue;
+    const key = `${level}/${xy.x}/${xy.y}`;
+    if (seen.has(key) || skip(key)) continue;
+    seen.add(key);
+    tiles.push({ x: xy.x, y: xy.y, level, key });
+  }
+  return tiles;
 }

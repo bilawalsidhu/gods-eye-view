@@ -75,6 +75,8 @@ function satelliteIdentity(noradId, sat) {
       satelliteOwner({ ucs: sat.ucs, satcat: sat.satcat, satelliteClass }),
     ),
     operator: satelliteOperator({ ucs: sat.ucs, satelliteClass }),
+    // src/layers/satellites/sensors.js entry, or null: the orbital view's sensor swath.
+    sensor: sat.sensor ?? null,
   });
   sat.cockpitIdentity = identity;
   return identity;
@@ -138,6 +140,7 @@ export function satelliteCockpitInfo(noradId, sat, fix) {
     // owners), label: English name } or null.
     owner: identity.owner,
     operator: identity.operator,
+    sensor: identity.sensor,
   };
 }
 

@@ -895,6 +895,7 @@
       "src/ui/cockpitCamera.js",
       "src/ui/cockpitOrbitalView.js",
       "src/data/placeBelow.js",
+      "src/layers/satellites/sensors.js",
       "src/data/adminBoundaries.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
@@ -1044,6 +1045,7 @@
       "src/ui/cockpitCamera.js",
       "src/ui/cockpitOrbitalView.js",
       "src/data/placeBelow.js",
+      "src/layers/satellites/sensors.js",
       "src/data/adminBoundaries.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
@@ -1682,7 +1684,9 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/layers/satellites/classes.js",
+      "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js"
     ],
@@ -3380,7 +3384,9 @@
       "src/layers/wildlifeSightings/photoText.js",
       "src/layers/wildlifeSightings/performance.js",
       "src/layers/satellites/classes.js",
-      "src/data/ucsSatellites.js"
+      "src/layers/satellites/sensors.js",
+      "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js"
     ],
     "external": [
       "hls.js",
@@ -4035,7 +4041,9 @@
       "src/layers/wildlifeSightings/photoText.js",
       "src/layers/wildlifeSightings/performance.js",
       "src/layers/satellites/classes.js",
-      "src/data/ucsSatellites.js"
+      "src/layers/satellites/sensors.js",
+      "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js"
     ],
     "external": [
       "hls.js",
@@ -4542,7 +4550,9 @@
     "modules": [
       "src/layers/satellites/source.js",
       "src/layers/satellites/classes.js",
+      "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js"
     ],
@@ -5166,7 +5176,9 @@
       "src/sources/infrastructureData.js",
       "src/sources/eventPacks.js",
       "src/layers/satellites/classes.js",
-      "src/data/ucsSatellites.js"
+      "src/layers/satellites/sensors.js",
+      "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
