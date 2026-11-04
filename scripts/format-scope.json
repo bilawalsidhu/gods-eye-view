@@ -1251,9 +1251,8 @@
   "src/ui/vesselPanel.test.mjs",
   "src/ui/vesselPanelView.test.mjs",
   "src/ui/stores/vesselPanel.js",
-  "src/ui/views/panels/VesselPanel.vue",
   "docs/VESSEL-FILTERS.md",
   "scripts/qa-vessel-filters.mjs",
   "scripts/qa-vessel-labels.mjs",
-  "changelog.d/vessel-display-filters.md"
+  "changelog.d/1538-vessel-display-filters.md"
 ]

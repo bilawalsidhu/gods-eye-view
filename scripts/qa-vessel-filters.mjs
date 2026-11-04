@@ -260,5 +260,21 @@ try {
   await writeFile(`${output}/results.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report));
 } finally {
-  await browser.close();
+  // Chromium can exit while inherited stdio keeps Puppeteer's close pending.
+  // Bound teardown without swallowing an assertion failure from the test body.
+  let timeout;
+  try {
+    await Promise.race([
+      browser.close(),
+      new Promise((resolve) => {
+        timeout = setTimeout(resolve, 5000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+    await browser.disconnect();
+    const child = browser.process();
+    if (child?.exitCode === null) child.kill('SIGKILL');
+    for (const pipe of child?.stdio || []) pipe?.destroy?.();
+  }
 }
