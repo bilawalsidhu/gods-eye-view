@@ -168,7 +168,34 @@ try {
     await page.$('[data-layer-id="chester-county-ems"] [data-list-item-id]'),
     null,
   );
+  const layerChip = (category) =>
+    `[data-layer-id="chester-county-ems"] [data-chip-id="${category}"]`;
+  await page.locator('[data-rail-item="data-panel"]').click();
+  await page.waitForSelector(layerChip('ems'), { visible: true });
+  await page.locator(layerChip('ems')).click();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-county-category="ems"]')
+        ?.getAttribute('aria-pressed') === 'false',
+  );
+  assert.deepEqual(
+    await page.evaluate(
+      () =>
+        window.__godsEyeView.dataManager.layers
+          .get('chester-county-ems')
+          .module.getIncidentPanelState().categories,
+    ),
+    ['fire', 'traffic'],
+  );
   await page.locator('[data-rail-item="chester-county-panel"]').click();
+  await page.locator('[data-county-category="ems"]').click();
+  await page.waitForFunction(
+    (selector) =>
+      document.querySelector(selector)?.getAttribute('aria-pressed') === 'true',
+    {},
+    layerChip('ems'),
+  );
   await page.waitForSelector(incidentSelector, { visible: true });
   // Toggle each category through the app; both map and list must follow.
   const visibleCounts = () =>
@@ -196,6 +223,12 @@ try {
       {},
       category,
     );
+    assert.equal(
+      await page.$eval(layerChip(category), (chip) =>
+        chip.getAttribute('aria-pressed'),
+      ),
+      'false',
+    );
     assert.deepEqual(
       await visibleCounts(),
       category === 'ems'
@@ -210,6 +243,12 @@ try {
         ).length === 4,
     );
     assert.deepEqual(await visibleCounts(), { icons: 3, rows: 4, total: 4 });
+    assert.equal(
+      await page.$eval(layerChip(category), (chip) =>
+        chip.getAttribute('aria-pressed'),
+      ),
+      'true',
+    );
   }
   if (recorder) {
     await page.evaluate(() => {

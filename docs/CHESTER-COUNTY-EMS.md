@@ -3,14 +3,15 @@
 Enable **Data Layers → Events → Chester County, PA incidents**, then open
 **CHESCO INCIDENTS** on the right rail. Its **View Chester County** action moves
 the map to the county. The right-side app holds the active list, coverage/freshness
-status and county actions; Data Layers retains the layer toggle and standard
-feed count. Disabling the layer hides the app and its launcher. An enabled empty
-or failed feed keeps the app available, showing its empty/stale/error state.
+status and county actions; Data Layers retains the layer toggle, standard feed
+count and category filters. Disabling the layer hides the app and its launcher.
+An enabled empty or failed feed keeps the app available, showing its empty/stale/error state.
 The list updates from the existing feed without a separate polling loop.
 
-The app's **Fire**, **EMS** and **Police / traffic** toggles filter the map icons
-and active list together. All three start on. Police / traffic corresponds to
-the public WebCAD Traffic table, not a complete police-call feed. The app shows
+The **Fire**, **EMS** and **Police / traffic** toggles in Data Layers and the
+app stay in sync and filter the map icons and active list together. All three
+start on. Police / traffic corresponds to the public WebCAD Traffic table,
+not a complete police-call feed. The app shows
 matching/total counts; switching every category off keeps the app available with
 **No matching incidents**. Excluding the selected report closes its map card and
 cancels its pending detail lookup. Filters apply in the current app session;
@@ -156,6 +157,7 @@ QA_BASE_URL=http://localhost:4177 node scripts/qa-chester-county-ems.mjs
 ```
 
 The browser gate uses synthetic records only and checks all three categories,
+including synchronized changes from Data Layers and the county app,
 actual icon selection, public unit fields, mapping coverage, empty-snapshot clearing and disable. It writes
 its screenshot to `qa-shots/chester-county-ems/selected.png`. Set
 `QA_RECORDING_PATH` to an `.mp4` path to also record the interaction.

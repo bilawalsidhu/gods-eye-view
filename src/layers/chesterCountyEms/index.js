@@ -59,7 +59,7 @@ export function createChesterCountyEmsLayer({
   picking,
   pointer,
 }) {
-  let viewer, dataSource, request;
+  let viewer, dataSource, request, rowControlsListener;
   const panelListeners = new Set();
   let enabled = false;
   let snapshot = null;
@@ -161,6 +161,7 @@ export function createChesterCountyEmsLayer({
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
   const notify = () => {
+    rowControlsListener?.();
     for (const listener of panelListeners) listener();
     viewer?.scene?.requestRender?.();
   };
@@ -360,6 +361,7 @@ export function createChesterCountyEmsLayer({
       layer.disable();
       if (dataSource) viewer.dataSources.remove(dataSource, true);
       panelListeners.clear();
+      rowControlsListener = null;
       viewer = dataSource = snapshot = null;
     },
     getStats() {
@@ -379,6 +381,33 @@ export function createChesterCountyEmsLayer({
           ).length || 0,
         locationErrorCount: snapshot?.locationCoverage?.unavailable || 0,
       };
+    },
+    getRowControls() {
+      return {
+        chips: CATEGORIES.map((category) => ({
+          id: category,
+          label: t(
+            category === 'fire'
+              ? 'Fire'
+              : category === 'ems'
+                ? 'EMS'
+                : 'Police / traffic',
+          ),
+          title:
+            category === 'traffic'
+              ? t('Public WebCAD traffic reports')
+              : undefined,
+          active: categories.includes(category),
+          params: {
+            categories: categories.includes(category)
+              ? categories.filter((value) => value !== category)
+              : [...categories, category],
+          },
+        })),
+      };
+    },
+    setRowControlsListener(listener) {
+      rowControlsListener = typeof listener === 'function' ? listener : null;
     },
     getIncidentPanelState() {
       const allRows = snapshot?.rows || [];

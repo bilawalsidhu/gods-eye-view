@@ -60,7 +60,7 @@ test('renders individual street markers, selects card, removes expired incidents
   assert.equal(entities.values.length, 2);
   assert.equal(layer.getStats().count, 2);
   assert.equal(
-    layer.getRowControls,
+    layer.getRowControls().list,
     undefined,
     'active reports belong to the dedicated app, not the Data Layers row',
   );
@@ -314,9 +314,32 @@ test('category filters affect the map and app list without refetching or droppin
     },
   });
   await layer.update();
+  const controls = layer.getRowControls();
+  assert.deepEqual(
+    controls.chips.map(({ id, label, active }) => ({ id, label, active })),
+    [
+      { id: 'fire', label: 'Fire', active: true },
+      { id: 'ems', label: 'EMS', active: true },
+      { id: 'traffic', label: 'Police / traffic', active: true },
+    ],
+  );
+  let rowChanges = 0,
+    appChanges = 0;
+  layer.setRowControlsListener(() => rowChanges++);
+  const unsubscribe = layer.subscribeIncidentPanel(() => appChanges++);
   layer.setParams({ selectedIncident: 'ems:test' });
   assert.ok(entries.has('chester-county-ems-selected'));
-  layer.setParams({ categories: ['fire', 'traffic'] });
+  layer.setParams(controls.chips.find(({ id }) => id === 'ems').params);
+  assert.ok(rowChanges > 0);
+  assert.ok(appChanges > 0);
+  assert.deepEqual(layer.getIncidentPanelState().categories, [
+    'fire',
+    'traffic',
+  ]);
+  assert.equal(
+    layer.getRowControls().chips.find(({ id }) => id === 'ems').active,
+    false,
+  );
   assert.equal(entries.has('chester-county-ems-selected'), false);
   assert.equal(entities.values.length, 2);
   assert.equal(layer.getIncidentPanelState().list.items.length, 2);
@@ -330,8 +353,14 @@ test('category filters affect the map and app list without refetching or droppin
   assert.equal(layer.getIncidentPanelState().enabled, true);
   layer.setParams({ categories: ['fire', 'ems', 'traffic'] });
   assert.equal(entities.values.length, 3);
+  assert.ok(layer.getRowControls().chips.every(({ active }) => active));
   layer.setParams({ categories: ['invalid'] });
   assert.deepEqual(layer.getParams().categories, ['fire', 'ems', 'traffic']);
   assert.equal(fetches, 1);
+  unsubscribe();
+  layer.setRowControlsListener(null);
+  const detachedCounts = [rowChanges, appChanges];
+  layer.setParams({ categories: [] });
+  assert.deepEqual([rowChanges, appChanges], detachedCounts);
   layer.destroy();
 });

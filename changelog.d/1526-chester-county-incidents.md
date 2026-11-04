@@ -2,4 +2,4 @@
 
 - Expose Chester County public incident lists and unit details to MCP and voice, with scoped visibility aliases, source freshness, approximate GIS provenance and unresolved-report coverage.
 
-- Move the active Chester County list into a dedicated right-side app, with Fire/EMS/Police-Traffic filters for the list and map, and its launcher hidden whenever the data layer is off.
+- Move the active Chester County list into a dedicated right-side app, with synchronized Fire/EMS/Police-Traffic filters in the app and Data Layers for the list and map, and its launcher hidden whenever the data layer is off.
