@@ -252,6 +252,8 @@ const _b64 = (s) =>
  *  NEAR the display size lets the browser's SVG AA do the work: crisp AND
  *  smooth. 64 covers the 40–58 px fleet band with ≤1.6× minification. */
 const FLEET_RASTER_PX = 64;
+/** Raster size of the default fleet glyph. */
+export const FLEET_ICON_PX = FLEET_RASTER_PX;
 /** Tracked raster: the tracked billboard is the one SUSTAINED large 2D glyph
  *  (close-zoom fleet flybys hand off to 3D models). Keep the 192 px texture so
  *  it stays crisp at its biggest on-screen sizes. */

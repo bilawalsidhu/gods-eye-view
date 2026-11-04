@@ -34,6 +34,8 @@ import flightsLayer, {
   _trackedBillboardColorForTest as flightsTrackedBillboardColor,
   _driveFleetModelHandoffForTest as flightsDriveFleetModel,
   _ensureFleetModelForTest as flightsEnsureFleetModel,
+  _iconForTest as flightsIcon,
+  _setIconForTest as flightsSetIcon,
 } from './flights.js';
 import militaryFlightsLayer, {
   _setTrackedMilitaryRefreshStateForTest,
@@ -186,6 +188,25 @@ function contactBillboard() {
   };
 }
 
+/** A flights contact's icon row, read and written the way these tests read a
+ *  billboard: where it is drawn and whether the layer shows it. */
+function flightIconView(icao24) {
+  return {
+    get position() {
+      return flightsIcon(icao24)?.position;
+    },
+    set position(position) {
+      flightsSetIcon(icao24, { position });
+    },
+    get show() {
+      return flightsIcon(icao24)?.shown === true;
+    },
+    set show(shown) {
+      flightsSetIcon(icao24, { shown });
+    },
+  };
+}
+
 /** Records what the driver hands to the scene, so a test can assert that a
  *  failing loader never put a model up. */
 function recordingModelCollection() {
@@ -216,7 +237,7 @@ const LAYERS = [
         modelCollection,
         meta: { callsign: 'TEST123 ', altitude: 10_668, klass: 'airliner', onGround },
       });
-      return billboard;
+      return flightIconView(icao24);
     },
   },
   {

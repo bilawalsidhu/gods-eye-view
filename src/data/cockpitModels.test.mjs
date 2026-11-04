@@ -83,24 +83,24 @@ for (const layer of LAYERS) {
   test(`${layer.name}: near AIR state is independent from model admission`, () => {
     assert.match(source, /nextCockpitNearContacts\(/,
       'Cockpit derives a separate near-contact hysteresis set');
-    assert.match(source, /isCockpitContact && !isCockpitNear[\s\S]*cockpitContactDotImage\(\)/,
+    assert.match(source, /isCockpitContact && !isCockpitNear[\s\S]*cockpitContactDotImage\(\)|!flightState\._cockpitNearContacts\.has\(icao24\);\s*if \(cockpitDot\) \{\s*const dot = iconAtlas\.slot\(cockpitContactDotImage\(\)/,
       'only out-of-range Cockpit contacts become dots');
     // `_iconKind` is identity for every unconverted contact (see
     // tr3bRegistry.test.mjs) — it only swaps the glyph for a contact the
     // operator explicitly converted into a TR-3B.
-    assert.match(source, /bb\.image\s*=\s*aircraftIcon\(\s*_iconKind\(\s*icao24,\s*meta\?\.klass,?\s*\)(,\s*aircraftVisuals\.read\(bb\)\?\.iconLarge\s*\?\s*TRACKED_ICON_PX\s*:\s*undefined)?,?\s*\)/,
+    assert.match(source, /bb\.image\s*=\s*aircraftIcon\(\s*_iconKind\(\s*icao24,\s*meta\?\.klass,?\s*\)(,\s*aircraftVisuals\.read\(bb\)\?\.iconLarge\s*\?\s*TRACKED_ICON_PX\s*:\s*undefined)?,?\s*\)|aircraftIcon\(\s*parts\.rendering\._iconKind\(icao24, info\?\.klass\),?\s*\)/,
       'near contacts and model fallbacks retain the class-derived aircraft silhouette');
-    assert.match(source, /setBillboard\(\s*bb,\s*'rotation',\s*0\s*\);/,
+    assert.match(source, /setBillboard\(\s*bb,\s*'rotation',\s*0\s*\);|set\.setFlag\(row, ICON_ROTATES, false\);/,
       'far dots are reset to a rotation-free presentation');
-    assert.match(source, /\(\s*!(?:flightState\.)?_cockpitContactMode\s*\|\|\s*isCockpitNear,?\s*\)\s*&&\s*\(\s*doRotations\s*\|\|\s*revealed,?\s*\)/,
+    assert.match(source, /\(\s*!(?:flightState\.)?_cockpitContactMode\s*\|\|\s*isCockpitNear,?\s*\)\s*&&\s*\(\s*doRotations\s*\|\|\s*revealed,?\s*\)|set\.setFlag\(row, ICON_ROTATES, true\);/,
       'near 2D silhouettes continue to receive projected course');
-    assert.match(source, /if\s*\(\s*billboardState\(bb\)\.show,?\s*\)\s*setBillboard\(\s*bb,\s*'show',\s*false\s*\);\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders/,
+    assert.match(source, /if\s*\(\s*billboardState\(bb\)\.show,?\s*\)\s*setBillboard\(\s*bb,\s*'show',\s*false\s*\);\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders|icons\.setShown\(row, false\);\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders/,
       'the gap-proof billboard-to-model handoff remains intact');
   });
 
   test(`${layer.name}: Cockpit exit clears near state before restoring map presentation`, () => {
     const setMode = /^([ \t]*)function _setCockpitContactMode\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.match(setMode, /else\s*(?:flightState\.)?_cockpitNearContacts\s*=\s*new\s*Set\(\s*,?\s*\);/);
-    assert.match(setMode, /for\s*\(\s*const\s*\[icao24,\s*bb\]\s*of\s*(?:flightState\.)?_billboards,?\s*\)\s*(?:parts\.\w+\.)?_applyFleetBillboardPresentation\(\s*icao24,\s*bb,?\s*\);/);
+    assert.match(setMode, /for\s*\(\s*const\s*\[icao24,\s*bb\]\s*of\s*(?:flightState\.)?_billboards,?\s*\)\s*(?:parts\.\w+\.)?_applyFleetBillboardPresentation\(\s*icao24,\s*bb,?\s*\);|for \(let row = 0; row < \(icons\?\.count \?\? 0\); row\+\+\)\s*parts\.icons\._applyIconPresentation\(icons\.idAt\(row\)\);/);
   });
 }

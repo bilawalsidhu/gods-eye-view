@@ -10,7 +10,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import flightsLayer, { _setTrackedFlightRefreshStateForTest } from './flights.js';
+import flightsLayer, {
+  _iconForTest,
+  _setTrackedFlightRefreshStateForTest,
+} from './flights.js';
 import militaryFlightsLayer, { _setTrackedMilitaryRefreshStateForTest } from './militaryFlights.js';
 
 const ICAO = 'abc123';
@@ -39,6 +42,8 @@ const LAYERS = [
     name: 'commercial',
     layer: flightsLayer,
     visualCenterM: Cesium.Cartesian3.ZERO,
+    // Where the icon is drawn: the seeded position as the GPU encodes it.
+    spritePosition: () => _iconForTest(ICAO).position,
     seed({ billboardShow, models = [] }) {
       _setTrackedFlightRefreshStateForTest({
         icao24: ICAO,
@@ -61,6 +66,7 @@ const LAYERS = [
     name: 'military',
     layer: militaryFlightsLayer,
     visualCenterM: Cesium.Cartesian3.ZERO,
+    spritePosition: () => contactBillboard(true).position,
     seed({ billboardShow, models = [] }) {
       _setTrackedMilitaryRefreshStateForTest({
         icao24: ICAO,
@@ -149,8 +155,8 @@ for (const fixture of LAYERS) {
     const spritePosition = detectionPosition(fixture.layer);
     assert.ok(spritePosition, 'the 2D sprite publishes a detection candidate');
     assert.ok(
-      Cesium.Cartesian3.equalsEpsilon(spritePosition, contactBillboard(true).position, 0, 1e-6),
-      'the 2D bracket stays welded to the billboard position',
+      Cesium.Cartesian3.equalsEpsilon(spritePosition, fixture.spritePosition(), 0, 1e-6),
+      'the 2D bracket stays welded to the drawn sprite position',
     );
 
     const modelMatrix = Cesium.Matrix4.fromRotationTranslation(MODEL_ROTATION, MODEL_POSITION);
@@ -195,7 +201,7 @@ for (const fixture of LAYERS) {
     const loadingPosition = detectionPosition(fixture.layer);
     assert.ok(loadingPosition, 'the billboard remains detectable while its model loads');
     assert.ok(
-      Cesium.Cartesian3.equalsEpsilon(loadingPosition, contactBillboard(true).position, 0, 1e-6),
+      Cesium.Cartesian3.equalsEpsilon(loadingPosition, fixture.spritePosition(), 0, 1e-6),
       'a shown-but-unready zero-scale model cannot steal the detection anchor',
     );
   });

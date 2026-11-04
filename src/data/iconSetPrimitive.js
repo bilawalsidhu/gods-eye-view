@@ -16,7 +16,7 @@
  */
 import * as Cesium from 'cesium';
 import { ICON_SEGMENT_GLSL, SEGMENT_STRIDE } from './iconSegment.js';
-import { ICON_CULL_LIFT, STYLE_STRIDE } from './iconSet.js';
+import { ICON_CULL_HEIGHT_M, ICON_CULL_LIFT, STYLE_STRIDE } from './iconSet.js';
 import { iconAtlas, MAX_ICON_SLOTS } from './iconAtlas.js';
 import {
   cameraLimbDistanceM,
@@ -25,8 +25,6 @@ import {
 
 /** On-screen device pixels above which a row draws its near (large) image. */
 const NEAR_IMAGE_PX = 76;
-/** Rows lifted this far before the horizon test when flagged (low fixes). */
-const CULL_LIFT_M = 12;
 
 const ATTRIBUTE_LOCATIONS = Object.freeze({
   corner: 0,
@@ -80,6 +78,13 @@ bool iconFlag(float flags, float bit) {
   return mod(floor(flags / bit), 2.0) == 1.0;
 }
 
+// Raise a near-ground point to at least the cull height (iconSet.cullPoint).
+vec3 iconCullPoint(vec3 world) {
+  float radius = length(world);
+  float height = radius * (1.0 - 1.0 / length(world * czm_ellipsoidInverseRadii));
+  return world + world / radius * max(0.0, ${ICON_CULL_HEIGHT_M.toFixed(1)} - height);
+}
+
 bool occludedByEllipsoid(vec3 world) {
   vec3 cv = u_horizon.xyz;
   float vh2 = u_horizon.w;
@@ -101,7 +106,7 @@ void main() {
 
   vec3 rte = iconSegmentPosition(seg0, seg1, seg2, seg3, seg4, u_tau);
   vec3 world = u_cameraPosition + rte;
-  vec3 cullPoint = iconFlag(flags, ${ICON_CULL_LIFT.toFixed(1)}) ? world + normalize(world) * ${CULL_LIFT_M.toFixed(1)} : world;
+  vec3 cullPoint = iconFlag(flags, ${ICON_CULL_LIFT.toFixed(1)}) ? iconCullPoint(world) : world;
   if (occludedByEllipsoid(cullPoint)) return;
 
   vec4 positionEC = czm_modelViewRelativeToEye * vec4(rte, 1.0);

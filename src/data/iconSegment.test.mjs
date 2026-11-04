@@ -213,3 +213,35 @@ test('the course glide never outruns the rate while its target turns', () => {
     'then it follows the turn',
   );
 });
+
+test('a zero-rate glide holds the course however the segment turns', () => {
+  const seg = new Float32Array(SEGMENT_STRIDE);
+  const to = Cesium.Cartesian3.fromDegrees(-97.04, 32.90001, 10_500);
+  for (const from of [0, 30]) {
+    writeLerpSegment(seg, 0, {
+      from: fix,
+      to,
+      t0: 0,
+      t1: 30,
+      course0Deg: 0,
+      courseSlopeDeg: 90,
+    });
+    writeCourseGlide(seg, 0, from, 0, 0);
+    for (const tau of [0, 10, 20, 30, 60])
+      assert.ok(
+        courseGap(segmentCourse(seg, 0, tau), from) < 1e-4,
+        `from ${from}° at τ=${tau}`,
+      );
+  }
+  writeArcSegment(seg, 0, {
+    fix,
+    t0: 0,
+    minDt: 0,
+    maxDt: 300,
+    speedMps: 1,
+    trackDeg: 90,
+    turnRateDps: 3,
+  });
+  writeCourseGlide(seg, 0, 90, 0, 0);
+  assert.ok(courseGap(segmentCourse(seg, 0, 20), 90) < 1e-4, 'arc turn held');
+});

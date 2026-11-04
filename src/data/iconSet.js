@@ -43,8 +43,14 @@ export const ICON_SHOWN = 1;
 export const ICON_ROTATES = 2;
 /** Fade and shrink toward the globe's limb (aircraft recession). */
 export const ICON_RECEDES = 4;
-/** Lift the row 12 m along the normal before the horizon test (fixes near the ground). */
+/**
+ * Judge the row at no lower than ICON_CULL_HEIGHT_M above the ellipsoid in the
+ * horizon test. A fix near or below the ellipsoid (a grounded contact at geoid
+ * −31 m before its floor warms) otherwise reads as beyond the limb.
+ */
 export const ICON_CULL_LIFT = 8;
+/** The ellipsoid height a CULL_LIFT row is raised to for the horizon test. */
+export const ICON_CULL_HEIGHT_M = 12;
 
 /** Move the epoch forward once render times pass this many seconds. */
 const REBASE_AFTER_SEC = 1800;
@@ -421,6 +427,24 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
     /** The row's displayed course at `tau`, degrees clockwise from north. */
     course(row, tau) {
       return segmentCourse(segments, row, tau);
+    },
+    /** The point the horizon test judges for a row drawn at `position`. */
+    cullPoint(row, position, result = new Cesium.Cartesian3()) {
+      if (!(style[row * STYLE_STRIDE + FLAGS] & ICON_CULL_LIFT))
+        return Cesium.Cartesian3.clone(position, result);
+      // Height above the ellipsoid along the geocentric ray, as the shader
+      // computes it: exact to millimetres this close to the surface.
+      const radius = Cesium.Cartesian3.magnitude(position);
+      Cesium.Cartesian3.multiplyComponents(
+        position,
+        Cesium.Ellipsoid.WGS84.oneOverRadii,
+        result,
+      );
+      const height = radius * (1 - 1 / Cesium.Cartesian3.magnitude(result));
+      const lift = Math.max(0, ICON_CULL_HEIGHT_M - height);
+      Cesium.Cartesian3.normalize(position, result);
+      Cesium.Cartesian3.multiplyByScalar(result, lift, result);
+      return Cesium.Cartesian3.add(position, result, result);
     },
   };
 

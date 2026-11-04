@@ -244,6 +244,40 @@ export function applyAircraftBillboardTreatment({
 }
 
 /**
+ * The alpha an aircraft draws with: base × max(combined floor, focus × limb
+ * haze). Icon sets compose the same thing in their shader; models need it here.
+ * @param {object} input
+ * @param {number} input.baseAlpha
+ * @param {number} input.focusFactor
+ * @param {number} input.cameraDistanceM
+ * @param {number} input.cameraHeightM
+ * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [input.params]
+ * @returns {number}
+ */
+export function aircraftTreatmentAlpha({
+  baseAlpha,
+  focusFactor,
+  cameraDistanceM,
+  cameraHeightM,
+  params,
+}) {
+  const tuning = resolvedParams(params);
+  const factors = aircraftRecessionFactorsResolved(
+    cameraDistanceM,
+    cameraHeightM,
+    tuning,
+    _scratchFactors,
+  );
+  return (
+    baseAlpha *
+    Math.max(
+      tuning.combinedAlphaFloor,
+      clamp(focusFactor, 0, 1) * factors.alpha,
+    )
+  );
+}
+
+/**
  * Apply layer-owned hue and composed aircraft alpha to an ambient glTF model without
  * disturbing Cesium's existing MIX/colorBlendAmount presentation semantics.
  * @param {object} input
