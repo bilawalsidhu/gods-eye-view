@@ -21,7 +21,7 @@ assert.notEqual(start, -1, 'FIRMS refresh function exists');
 const end = config.indexOf('\n  }', start);
 assert.notEqual(end, -1, 'FIRMS refresh function closes');
 const refreshSource = config.slice(start, end + 4);
-const SOURCES = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT'];
+const SOURCES = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'MODIS_NRT'];
 const NOW = Date.UTC(2026, 8, 11, 12);
 const recent = { acqDate: '2026-09-11', acqTime: '1100' };
 
@@ -63,7 +63,7 @@ test('FIRMS keeps successful sources when another upstream fails', async () => {
     if (source === SOURCES[1]) throw new Error('upstream unavailable');
     return [recent];
   })('fixture');
-  assert.equal(result.fires.length, 3);
+  assert.equal(result.fires.length, SOURCES.length - 1);
   assert.deepEqual(result.sources, SOURCES.map((source, index) => ({
     source, count: index === 1 ? 0 : 1, ok: index !== 1,
   })));
@@ -77,7 +77,7 @@ test('FIRMS reports one failure if consuming a source throws before append', asy
       // Fault injection for aggregation; ordinary parsed CSV returns an array.
       return { length: 1, [Symbol.iterator]() { throw new Error('aggregation failed'); } };
     })('fixture');
-  assert.equal(result.fires.length, 3);
+  assert.equal(result.fires.length, SOURCES.length - 1);
   assert.deepEqual(result.sources, SOURCES.map((source, index) => ({
     source, count: index === 0 ? 0 : 1, ok: index !== 0,
   })));
@@ -107,7 +107,7 @@ function wrappedAddressSelectionFailure() {
     { name: 'ConnectTimeoutError', code: 'UND_ERR_CONNECT_TIMEOUT', cause: inner });
   return new TypeError('fetch failed', { cause });
 }
-const URL_WITH_KEY = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/SECRET/VIIRS_SNPP_NRT/world/2';
+const URL_WITH_KEY = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/SECRET/VIIRS_NOAA20_NRT/world/2';
 
 test('FIRMS failures log the socket cause, never the keyed URL', () => {
   const described = describeFetchError(addressSelectionFailure());
@@ -306,4 +306,14 @@ test('every FIRMS upstream request goes through the IPv4 fallback', async () => 
   assert.equal(calls[0][0], 'fetchFirms');
   assert.ok(calls[0][2] instanceof AbortSignal);
   assert.deepEqual(calls[1], ['read', response, calls[0][2]], 'the body read shares the request deadline');
+});
+
+test('FIRMS requests only the satellites NASA still delivers', () => {
+  const listed = config.match(/const SOURCES = \[([^\]]*)\];/);
+  assert.ok(listed, 'FIRMS source list exists');
+  const production = [...listed[1].matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1]);
+  assert.deepEqual(production, SOURCES, 'the test mirrors the production source list');
+  // NASA stopped delivering Suomi NPP data on 2026-11-02 (#849): requesting it
+  // returns no rows and still spends a MAP_KEY transaction on every refresh.
+  assert.ok(!production.includes('VIIRS_SNPP_NRT'));
 });
