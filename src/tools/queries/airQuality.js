@@ -58,7 +58,7 @@ export const getAirQuality = defineTool({
     // at query time because a cached source result may have aged since then.
     const current = snapshot.filter(
       (reading) =>
-        AIR_QUALITY_PROVIDERS[reading?.provider] &&
+        Object.hasOwn(AIR_QUALITY_PROVIDERS, reading?.provider) &&
         Number.isFinite(reading?.value) &&
         airQualityBandById(reading?.band) &&
         Number.isFinite(reading?.lat) &&
@@ -67,12 +67,12 @@ export const getAirQuality = defineTool({
         reading.observedMs <= now &&
         now - reading.observedMs <= OBSERVATION_MAX_AGE_MS,
     );
-    const stale = readingsAreStale(current, now);
     const center = areaCenter(area);
-    const rows = current
-      .filter((reading) =>
-        areaContains(area, { lat: reading.lat, lon: reading.lon }),
-      )
+    const matched = current.filter((reading) =>
+      areaContains(area, { lat: reading.lat, lon: reading.lon }),
+    );
+    const stale = readingsAreStale(matched, now);
+    const rows = matched
       .map((reading) => ({
         id: displayText(reading.id),
         station: displayText(reading.name),

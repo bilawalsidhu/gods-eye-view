@@ -99,6 +99,20 @@ test('air-quality reports a stale upstream snapshot without presenting it as liv
   assert.match(result.summary, /stale/);
 });
 
+test('air-quality freshness is measured within the requested area', async () => {
+  const result = await withServices({
+    airQuality: {
+      getSnapshot: async () => [
+        station('toronto', 43.65, -79.38, 3 * 60 * 60_000),
+        station('vancouver', 49.28, -123.12, 30_000),
+      ],
+    },
+  }).call('get_air_quality', { area: nearToronto });
+  assert.equal(result.data.total, 1);
+  assert.equal(result.data.stale, true);
+  assert.match(result.summary, /stale/);
+});
+
 test('air-quality rows are limited without hiding the total', async () => {
   const all = Array.from({ length: 10 }, (_, i) =>
     station(String(i), 43.65 + i / 1000, -79.38),
