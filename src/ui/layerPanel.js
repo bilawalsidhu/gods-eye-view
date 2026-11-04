@@ -442,6 +442,8 @@ export class LayerPanel {
             this._selectChip(layerId, chipId, generation),
           onListItem: (layerId, itemId) =>
             this._selectListItem(layerId, itemId, generation),
+          onSlider: (layerId, sliderId, value) =>
+            this._moveSlider(layerId, sliderId, value, generation),
         }),
         id === null ? this._toggleContainer : this._groupContainers.get(id),
       );
@@ -471,7 +473,8 @@ export class LayerPanel {
   }
 
   /**
-   * A layer's row chips, color legend, info line and ordered list. The block
+   * A layer's row chips, one-of-many switch, slider, color legend, info line
+   * and ordered list. The block
    * is hidden while the layer is off (or while a dependency owner has
    * surrendered it), so a quiet row stays quiet. Chips and list items are
    * keyed, so the refresh a chip's own click triggers keeps keyboard focus.
@@ -495,11 +498,20 @@ export class LayerPanel {
           : `${item.label} ${formatCount(item.count)}`,
     }));
     const infoText = controls?.info ? String(controls.info) : '';
+    const segmented = controls?.segmented || null;
+    const slider = controls?.slider || null;
     // The info line, once shown, stays in place and hides when empty.
     if (infoText) row.info = true;
     return {
-      hidden: chips.length === 0 && legend.length === 0 && !infoText,
+      hidden:
+        chips.length === 0 &&
+        legend.length === 0 &&
+        !infoText &&
+        !segmented &&
+        !slider,
       chips,
+      segmented,
+      slider,
       legend,
       info: row.info
         ? { text: infoText, title: controls?.infoTitle || '' }
@@ -537,13 +549,31 @@ export class LayerPanel {
   // listeners, so a click from a released generation is dropped.
   _selectChip(id, chipId, generation = this._generation) {
     if (this._destroyed || this._generation !== generation) return;
-    const chip = this._rowControlsFor(id)?.chips?.find(
-      (entry) => entry.id === chipId,
-    );
+    // A switch option carries the same fields as a chip.
+    const live = this._rowControlsFor(id);
+    const chip = [
+      ...(live?.chips || []),
+      ...(live?.segmented?.options || []),
+    ].find((entry) => entry.id === chipId);
     if (!chip || chip.disabled || !this.isEnabled(id)) return;
     if (typeof chip.onClick === 'function') chip.onClick();
     else if (chip.params)
       this.setLayerParams(id, chip.params, { origin: 'user' });
+  }
+
+  // A row slider (e.g. the Active Fires minimum-FRP filter) maps its position
+  // to params through the live descriptor on every tick.
+  _moveSlider(id, sliderId, value, generation = this._generation) {
+    if (this._destroyed || this._generation !== generation) return;
+    const slider = this._rowControlsFor(id)?.slider;
+    if (
+      !slider ||
+      slider.id !== sliderId ||
+      typeof slider.params !== 'function' ||
+      !this.isEnabled(id)
+    )
+      return;
+    this.setLayerParams(id, slider.params(value), { origin: 'user' });
   }
 
   _selectListItem(id, itemId, generation = this._generation) {
