@@ -25,6 +25,7 @@ import {
   CYAN_TRANSPARENT,
 } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import { aircraftRegistryLine } from '../../data/aircraftRegistry.js';
 
 export function createTracking({
   flightState,
@@ -777,6 +778,8 @@ export function createTracking({
           .filter(Boolean)
           .join(' · ');
     if (ident) lines.push(ident);
+    const registry = isTr3b(icao24) ? '' : aircraftRegistryLine(info.rab);
+    if (registry) lines.push(registry);
     if (info.route && _routeIsPlausible(icao24, info.route)) {
       lines.push(`${info.route.origin.code} → ${info.route.destination.code}`);
     }

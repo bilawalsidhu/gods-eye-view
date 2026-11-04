@@ -3166,5 +3166,15 @@
   "The provider rejected the API key. Check it in Provider Settings.": "Il provider ha rifiutato la chiave API. Controllala in Impostazioni provider.",
   "Too many chat requests. Try again in {seconds} s.": "Troppe richieste di chat. Riprova tra {seconds} s.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Il provider ha negato l'accesso per questa chiave. Controlla progetto, regione o autorizzazioni della chiave.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "L'account del provider ha esaurito il credito. Controlla la fatturazione o scegli un altro provider IA in Impostazioni."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "L'account del provider ha esaurito il credito. Controlla la fatturazione o scegli un altro provider IA in Impostazioni.",
+  "aircraft operation|Airline": "Compagnia aerea",
+  "aircraft operation|Air taxi": "Aerotaxi",
+  "aircraft operation|Government": "Governativo",
+  "aircraft operation|Private": "Privato",
+  "Built {year}": "Costruito nel {year}",
+  "{count} seats": {
+    "one": "{count} posto",
+    "many": "{count} di posti",
+    "other": "{count} posti"
+  }
 }
