@@ -1,11 +1,13 @@
-import {
-  tallySatelliteClasses,
-  satelliteClassLabel,
-  satelliteClassLegend,
-} from '../../data/satelliteClass.js';
+import { satelliteClassText } from '../../data/satelliteClass.js';
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
-import { ISS_NORAD, POINT_STYLES } from './policy.js';
+import {
+  DEFAULT_SATELLITE_CLASSES,
+  SATELLITE_CLASS_DISPLAY,
+  SATELLITE_CLASS_IDS,
+  mergeClassVisibility,
+} from './classes.js';
+import { ISS_NORAD, POINT_STYLES, classPointStyle } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
@@ -19,7 +21,60 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   function _pointStyleFor(noradId, group) {
     if (noradId === ISS_NORAD) return POINT_STYLES.iss;
-    return POINT_STYLES[group] || POINT_STYLES.visual;
+    return classPointStyle(
+      group,
+      layerState._catalog.get(noradId)?.satelliteClass,
+    );
+  }
+
+  /** The class-visibility choice, defaults filled in. */
+  function _classes() {
+    return layerState._params.classes || DEFAULT_SATELLITE_CLASSES;
+  }
+
+  /**
+   * Whether a satellite's class is shown. Starlink follows the catalog mode:
+   * its points exist only in dense mode. An unclassed entry shows.
+   * @param {number} noradId NORAD catalog number.
+   */
+  function _classVisible(noradId) {
+    const satelliteClass = layerState._catalog.get(noradId)?.satelliteClass;
+    if (!satelliteClass) return true;
+    if (satelliteClass === 'starlink')
+      return layerState._params.catalog === 'dense';
+    return _classes()[satelliteClass] === true;
+  }
+
+  /**
+   * Show or hide every point by its class. The tracked satellite's point
+   * stays hidden (its entity draws the dot).
+   */
+  function _applyClassVisibility() {
+    for (const [noradId, point] of layerState._points) {
+      if (noradId === layerState._trackedNorad) continue;
+      point.show = _classVisible(noradId);
+    }
+    layerState._detectionObjects.clear();
+  }
+
+  /**
+   * The row's info line while the classes rest on old or missing SATCAT
+   * evidence (`_satcatState`), and an empty one otherwise.
+   * @returns {{info: string, infoTitle: string}}
+   */
+  function classEvidenceNotice() {
+    const evidence = layerState._satcatState;
+    if (evidence !== 'stale' && evidence !== 'unavailable')
+      return { info: '', infoTitle: '' };
+    return {
+      info:
+        evidence === 'stale'
+          ? t('Classes may lag: SATCAT is a cached copy')
+          : t('Classes may lag: SATCAT unavailable'),
+      infoTitle: t(
+        "CelesTrak SATCAT gives each object's type and status. Without a current copy the classes rest on the UCS database, names and CelesTrak groups, so a satellite that has died since may still show as working.",
+      ),
+    };
   }
 
   /** Tell the manager to re-render this layer's row (chip state / legend counts). */
@@ -46,14 +101,11 @@ export function createControls({ state: layerState, services, parts, source }) {
     ) {
       return layerState._classTallyCache.counts;
     }
-    const entries = [];
-    // Pass the ISS flag, not just the group: during a stations-feed outage the
-    // ISS is ingested as `visual`, and the legend must file it exactly where its
-    // card does (STATION) rather than letting STATION vanish from the legend.
-    for (const [noradId, sat] of layerState._catalog) {
-      entries.push({ group: sat.group, isIss: noradId === ISS_NORAD });
+    const counts = Object.create(null);
+    for (const sat of layerState._catalog.values()) {
+      const satelliteClass = sat.satelliteClass || 'probes';
+      counts[satelliteClass] = (counts[satelliteClass] || 0) + 1;
     }
-    const counts = tallySatelliteClasses(entries);
     layerState._classTallyCache = {
       revision: layerState._catalogRevision,
       counts,
@@ -88,6 +140,47 @@ export function createControls({ state: layerState, services, parts, source }) {
       requestedCatalog !== currentCatalog
     );
   }
+  /** The STARLINK chip: the dense catalog, with its load state. */
+  function _starlinkChip() {
+    const loading = layerState._denseStatus === 'loading';
+    const failed = layerState._denseStatus === 'failed';
+    const active =
+      layerState._params.catalog === 'dense' &&
+      layerState._denseStatus === 'ready';
+    let title = t(
+      'Add the full Starlink broadband shell (thousands of extra points)',
+    );
+    if (loading) title = t('Loading the Starlink shell…');
+    else if (failed)
+      title = t('Starlink {detail} — click to retry', {
+        detail: layerState._denseError || t('load failed'),
+      });
+    else if (active)
+      title = t(
+        'Showing the full Starlink shell — click for the core catalog only',
+      );
+    return {
+      id: 'catalog',
+      label: loading
+        ? t('STARLINK ···')
+        : failed
+          ? t('STARLINK ✕')
+          : t('STARLINK'),
+      active,
+      busy: loading,
+      disabled: loading,
+      state: loading
+        ? 'loading'
+        : failed
+          ? 'error'
+          : active
+            ? 'active'
+            : 'idle',
+      title,
+      params: { catalog: active ? 'core' : 'dense' },
+    };
+  }
+
   const methods = {
     id: 'satellites',
 
@@ -129,6 +222,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         if (!shouldTake) continue;
         if (!point.position) continue;
         const isTracked = noradId === layerState._trackedNorad;
+        // A hidden class is not on screen, so nothing is bracketed on it.
+        if (!isTracked && !_classVisible(noradId)) continue;
         // A docked companion sits at the tracked subject's own position, so its
         // mark and label would stack underneath the tracked card. It is listed on
         // that card instead. Only members of the tracked cluster are affected —
@@ -141,15 +236,16 @@ export function createControls({ state: layerState, services, parts, source }) {
             sourceId: noradId,
             id: cat?.name || `SAT-${noradId}`,
             type: 'SAT',
-            // Human class ("NAV · GPS"), not the raw CelesTrak tag ("GPS-OPS").
-            // The detection canvas composites ABOVE the post-FX chain, so this
-            // is how class survives NVG/FLIR once the dot colors are collapsed.
-            klass: satelliteClassLabel(cat?.group, {
-              isIss: noradId === ISS_NORAD,
-            }),
           };
           layerState._detectionObjects.set(noradId, object);
         }
+        // Human class ("TELECOM · GPS"), not the raw CelesTrak tag
+        // ("GPS-OPS"). The detection canvas composites ABOVE the post-FX
+        // chain, so this is how class survives NVG/FLIR once the dot colors
+        // are collapsed. Read each time: SATCAT can reclassify a satellite.
+        object.klass = satelliteClassText(cat?.satelliteClass, cat?.group, {
+          isIss: noradId === ISS_NORAD,
+        });
         object.position = point.position;
         object.skipLabel = isTracked;
         result.push(object);
@@ -222,6 +318,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       for (const [noradId, point] of layerState._points) {
         if (result.length >= cap) break;
         if (!point.position) continue;
+        if (!_classVisible(noradId)) continue;
         // Dense extras are points-only — keep voice/framing lists to the core catalog.
         if (
           layerState._denseIds.length > 0 &&
@@ -380,9 +477,11 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Runtime params (DataLayerManager.setLayerParams path).
-     * catalog: 'core' (default, ~840 sats) | 'dense' (adds the Starlink shell
-     * as points-only extras on a relaxed propagation budget).
-     * @param {{ catalog?: 'core'|'dense', showPoints?: boolean, showOrbits?: boolean, selectedSatTrackingId?: number|null }} [params]
+     * catalog: 'core' (default, about 1,300 satellites from the CelesTrak
+     * groups) | 'dense' (adds the Starlink shell as points-only extras on a
+     * relaxed propagation budget). classes: which of the six classes show
+     * (src/layers/satellites/classes.js); Starlink's toggle is the dense catalog.
+     * @param {{ catalog?: 'core'|'dense', classes?: Record<string, boolean>, showPoints?: boolean, showOrbits?: boolean, selectedSatTrackingId?: number|null }} [params]
      */
     setParams(params = {}, { origin = 'programmatic' } = {}) {
       if (
@@ -391,9 +490,22 @@ export function createControls({ state: layerState, services, parts, source }) {
       ) {
         parts.tracking._cancelPendingTrackingRestore();
       }
-      const catalog = params.catalog;
+      let catalog = params.catalog;
       if (catalog !== undefined && catalog !== 'core' && catalog !== 'dense')
         return false;
+      if (params.classes !== undefined) {
+        if (!params.classes || typeof params.classes !== 'object') return false;
+        // Starlink's toggle is the dense catalog: its points load on demand.
+        if (
+          typeof params.classes.starlink === 'boolean' &&
+          catalog === undefined
+        )
+          catalog = params.classes.starlink ? 'dense' : 'core';
+        layerState._params.classes = mergeClassVisibility(
+          params.classes,
+          _classes(),
+        );
+      }
       const catalogChanged = satelliteCatalogModeChanged(
         layerState._params.catalog,
         catalog,
@@ -431,6 +543,13 @@ export function createControls({ state: layerState, services, parts, source }) {
       }
       if (catalogChanged)
         console.log(`[Data:Satellites] Catalog mode: ${catalog}`);
+      if (params.classes !== undefined || catalogChanged) {
+        layerState._params.classes = {
+          ..._classes(),
+          starlink: layerState._params.catalog === 'dense',
+        };
+        _applyClassVisibility();
+      }
       if (Object.hasOwn(params, 'selectedSatTrackingId')) {
         const requested = parts.tracking._normalizeTrackedNorad(
           params.selectedSatTrackingId,
@@ -462,25 +581,29 @@ export function createControls({ state: layerState, services, parts, source }) {
         catalog: layerState._params.catalog,
         showPoints: layerState._params.showPoints,
         showOrbits: layerState._params.showOrbits,
+        classes: { ..._classes() },
         selectedSatTrackingId: layerState._trackedNorad,
       };
     },
 
     /**
-     * Layer-row sub-controls (DataLayerManager row-controls contract): the DENSE
-     * catalog chip plus a class legend so the point colors are learnable without
-     * a new panel.
+     * Layer-row sub-controls (DataLayerManager row-controls contract): one
+     * toggle chip per satellite class (src/layers/satellites/classes.js), and a legend
+     * of the classes on screen so the point colours are learnable.
      *
-     * The chip is stateless — it declares the params to apply and the manager
+     * Chips are stateless — each declares the params to apply and the manager
      * owns the write, so the Space Missions snapshot/restore path (which drives
-     * the same `catalog` param) stays the single source of truth and the chip
+     * the same `catalog` param) stays the single source of truth and a chip
      * always renders whatever the layer actually has.
      *
-     * The chip reports the dense LOAD state, not the catalog param: the param
-     * flips synchronously while the Starlink shell takes seconds to arrive and
-     * frequently 502s, so ACTIVE means "dense points are on screen" and nothing
-     * less. The legend tally is cached against the catalog revision.
-     * @returns {{ chips: Array<object>, legend: Array<object> }} Row controls.
+     * STARLINK is the dense catalog (chip id `catalog`) and reports the dense
+     * LOAD state, not the param: the param flips synchronously while the shell
+     * takes seconds to arrive and frequently 502s, so ACTIVE means "Starlink
+     * points are on screen" and nothing less. The legend tally is cached
+     * against the catalog revision. While SATCAT is stale or unavailable the
+     * info line says the classes may lag (see `classEvidenceNotice`).
+     * @returns {{ chips: Array<object>, legend: Array<object>, info: string,
+     *   infoTitle: string }} Row controls.
      */
     getRowControls() {
       // A dependency owner (Space Missions) borrows this layer for TLE lookup
@@ -489,48 +612,36 @@ export function createControls({ state: layerState, services, parts, source }) {
       // restore. Surrender the row rather than lie about it.
       if (!layerState._params.showPoints) return { chips: [], legend: [] };
 
-      const loading = layerState._denseStatus === 'loading';
-      const failed = layerState._denseStatus === 'failed';
-      const active =
-        layerState._params.catalog === 'dense' &&
-        layerState._denseStatus === 'ready';
-      let title = t(
-        'Add the full Starlink broadband shell (thousands of extra points)',
+      const classes = _classes();
+      const chips = SATELLITE_CLASS_IDS.map((id) =>
+        id === 'starlink'
+          ? _starlinkChip()
+          : {
+              id: `class-${id}`,
+              label: t(SATELLITE_CLASS_DISPLAY[id].label),
+              active: classes[id] === true,
+              state: classes[id] === true ? 'active' : 'idle',
+              title: t(SATELLITE_CLASS_DISPLAY[id].blurb),
+              params: { classes: { [id]: classes[id] !== true } },
+            },
       );
-      if (loading) title = t('Loading the Starlink shell…');
-      else if (failed)
-        title = t('Starlink {detail} — click to retry', {
-          detail: layerState._denseError || t('load failed'),
+      const counts = _classTally();
+      const legend = [];
+      for (const id of SATELLITE_CLASS_IDS) {
+        const shown =
+          id === 'starlink'
+            ? layerState._params.catalog === 'dense'
+            : classes[id] === true;
+        if (!shown || !(counts[id] > 0)) continue;
+        legend.push({
+          klass: id,
+          label: t(SATELLITE_CLASS_DISPLAY[id].label),
+          color: SATELLITE_CLASS_DISPLAY[id].color,
+          blurb: t(SATELLITE_CLASS_DISPLAY[id].blurb),
+          count: counts[id],
         });
-      else if (active)
-        title = t(
-          'Showing the full Starlink shell — click for the core catalog only',
-        );
-      return {
-        chips: [
-          {
-            id: 'catalog',
-            label: loading
-              ? t('DENSE ···')
-              : failed
-                ? t('DENSE ✕')
-                : t('DENSE'),
-            active,
-            busy: loading,
-            disabled: loading,
-            state: loading
-              ? 'loading'
-              : failed
-                ? 'error'
-                : active
-                  ? 'active'
-                  : 'idle',
-            title,
-            params: { catalog: active ? 'core' : 'dense' },
-          },
-        ],
-        legend: satelliteClassLegend(_classTally()),
-      };
+      }
+      return { chips, legend, ...classEvidenceNotice() };
     },
 
     /**
@@ -559,6 +670,9 @@ export function createControls({ state: layerState, services, parts, source }) {
                 ? 'stale'
                 : 'nominal',
         error: layerState._lastError,
+        // SATCAT refines the classes; when it is stale or unavailable the
+        // classes rest on UCS, names and groups alone.
+        classEvidence: layerState._satcatState,
       };
     },
   };
@@ -567,6 +681,8 @@ export function createControls({ state: layerState, services, parts, source }) {
     _pointStyleFor,
     _notifyRowControls,
     _classTally,
+    _classVisible,
+    _applyClassVisibility,
     satelliteVisualsVisible,
     satelliteCatalogModeChanged,
     methods,
