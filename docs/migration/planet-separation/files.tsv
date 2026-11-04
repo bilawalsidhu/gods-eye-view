@@ -48,6 +48,7 @@ changelog.d/1401-geocode-place-region.md	VERIFY			Сохранить истор�
 changelog.d/1402-terrain-429-pause.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1404-perimeters-stale.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1405-traffic-layer-stale.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1426-fire-intensity-filter.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1427-military-installations-cross-site-gate.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1430-traditional-chinese.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1432-vessel-course-north.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -102,6 +103,7 @@ changelog.d/1507-typed-ai-chat.md	VERIFY			Сохранить историю; о
 changelog.d/1518-range-ring-visibility.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1519-range-ring-sonar-pulses.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1522-zoom-out-runaway.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1535-fires-empty-heat-reenable.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1545-typed-chat-translations.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/210-contributor-docs-refresh.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/842-voice-outlines.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -1089,9 +1091,13 @@ src/data/firmsAdapt.test.mjs	LAYER	local-firms		Сохранить провер�
 src/data/firmsCards.test.mjs	LAYER	local-firms	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/firmsCsv.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	firms-csv
 src/data/firmsCsv.test.mjs	LAYER	local-firms		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/firmsHeatRaster.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
+src/data/firmsHeatRaster.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/firmsHeatmap.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/data/firmsHeatmap.test.mjs	LAYER	local-firms		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/firmsHorizonCull.test.mjs	LAYER	local-firms	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/firmsIntensity.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	ui-shell
+src/data/firmsIntensity.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/firmsInteraction.test.mjs	LAYER	local-firms	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/firmsLabels.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
 src/data/firmsLabels.test.mjs	LAYER	local-firms		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -1793,6 +1799,9 @@ src/layers/feedDegradationI18n.test.mjs	LAYER			Сохранить провер�
 src/layers/firms/anchors.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
 src/layers/firms/cards.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
 src/layers/firms/edgeCases.test.mjs	LAYER	local-firms		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/firms/heatImagery.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
+src/layers/firms/heatImagery.test.mjs	LAYER	local-firms		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/firms/heatVisibility.test.mjs	LAYER	local-firms		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/firms/index.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
 src/layers/firms/ingestion.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
 src/layers/firms/lifecycle.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
@@ -2863,6 +2872,8 @@ src/ui/layerNames.test.mjs	UI			Сохранить проверку; добав�
 src/ui/layerPanel.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	layer-panel
 src/ui/layerPanel.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/layerPanel/LayerRows.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	layer-panel
+src/ui/layerPanel/RowSlider.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	layer-panel
+src/ui/layerPanel/RowSwitch.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	layer-panel
 src/ui/layerPanel/RowText.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	layer-panel
 src/ui/layerPanel/layerRows.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/layerRowText.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	layer-panel
