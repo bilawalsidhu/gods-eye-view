@@ -16,10 +16,11 @@ test('Chinese HUD and cockpit units keep their case without spacing coordinates'
     assert.equal(hudQuantity(0, 'km'), '0 km');
     assert.equal(hudQuantity(2069, 'km', 1), '2069.0 km');
     assert.equal(formatCockpitDistance(14000), '14\u00a0km');
-    assert.equal(
-      LOCALIZED_LOCALITY.sector({ latDeg: 21.33, lonDeg: -77.5 }),
-      '扇区 21.33N 77.50W',
-    );
+    assert.equal(LOCALIZED_LOCALITY.sector({ latDeg: 21.33, lonDeg: -77.5 }),
+      '扇区 21.33N 77.50W');
+    setLocale('ja');
+    assert.equal(hudQuantity(13, 'km'), '13 km');
+    assert.equal(hudQuantity(1.5, 'km', 1), '1.5 km');
     setLocale('en');
     assert.equal(hudQuantity(0, 'km'), '0KM');
     assert.equal(hudQuantity(2069, 'km', 1), '2069.0KM');
@@ -109,10 +110,10 @@ test('radio option text and accessible name use the same localized parentheses',
       ['en', 'All', 'All (750)'],
     ]) {
       setLocale(locale);
+      let shown = null;
       const host = {
         _radioPanel: element(),
-        _radioFilter: element(),
-        _syncContextRadioLauncherState() {},
+        store: { publish: (view) => (shown = view), publishTuner() {} },
         actions: { getLifecycle: () => null, scheduleLayout() {} },
       };
       renderRadioState.call(host, {
@@ -123,9 +124,8 @@ test('radio option text and accessible name use the same localized parentheses',
         stationCount: 750,
         volume: 1,
       });
-      const option = host._radioFilter.children[0];
-      assert.equal(option.textContent, `● ${expected}`);
-      assert.equal(option.attributes['aria-label'], expected);
+      // The Radio panel shows it as `● label` and names the option `label`.
+      assert.equal(shown.filter.options[0].label, expected);
     }
   } finally {
     globalThis.document = originalDocument;

@@ -24,6 +24,10 @@ export const RADIO_DIRECTORY_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const RADIO_DIRECTORY_FUTURE_SKEW_MS = 5 * 60 * 1000;
 
+// Bound for the server's `rejectedStationCount` envelope field and the
+// combined client counter; matches server/providers/radio/constants.js.
+export const RADIO_REJECTED_STATION_COUNT_MAX = 10_000;
+
 export const RADIO_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

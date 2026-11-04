@@ -2,9 +2,15 @@ import {
   formatAwarenessLabel,
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
-import { formatNumber, t, translateKnown } from '../../i18n/index.js';
+import {
+  formatNumber,
+  onLocaleChange,
+  t,
+  translateKnown,
+} from '../../i18n/index.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
+import { distanceParts } from '../../data/distanceFormat.js';
 
 /** Format a cohort total without presenting a retained cap as exact. */
 export function formatAwarenessCount(summary = {}) {
@@ -25,13 +31,12 @@ function presentAwarenessCount(summary = {}) {
 }
 
 /** A distance as the panel shows it: 850 m, 4.6 km, 120 km, in the UI language. */
-function presentAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
-  if (meters < 1000) return formatQuantity(Math.round(meters), 'm');
-  const digits = meters < 10000 ? 1 : 0;
-  return formatQuantity(meters / 1000, 'km', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
+export function presentAwarenessDistance(meters) {
+  const parts = distanceParts(meters);
+  if (!parts) return '—';
+  return formatQuantity(parts.value, parts.unit, {
+    minimumFractionDigits: parts.digits,
+    maximumFractionDigits: parts.digits,
   });
 }
 
@@ -42,76 +47,95 @@ function presentAwarenessReason(summary = {}) {
     : translateKnown(summary.reason || '');
 }
 
-export function createPanel({ state: layerState, services, parts, source }) {
+/**
+ * The Contacts panel as a view renders it. The layer presents a plain view
+ * object (`standby`, `results` or `empty`) and publishes it to subscribers;
+ * Core's AwarenessPanel component renders it and calls the layer's
+ * navigation methods. Text arrives in the UI language.
+ */
+export function createPanel({ state: layerState, parts }) {
+  /** Publish a fresh view unless it is the one already shown. */
+  function publish(view) {
+    const signature = JSON.stringify(view);
+    if (layerState.panelSignature === signature) return;
+    layerState.panelSignature = signature;
+    layerState.panelView = view;
+    for (const listener of [...layerState.panelListeners]) listener(view);
+  }
+
+  /**
+   * Receive every published view, starting with the current one.
+   * @param {(view: object) => void} listener
+   * @returns {() => void} Unsubscribe.
+   */
+  function subscribePanel(listener) {
+    layerState.panelListeners.add(listener);
+    if (layerState.panelView) listener(layerState.panelView);
+    return () => layerState.panelListeners.delete(listener);
+  }
+
+  /** The panel shows layer views from the first enable or result onwards. */
   function ensurePanel() {
-    if (layerState.panel) return layerState.panel;
-    const existing = document.getElementById('military-awareness-panel');
-    const panel = existing || document.createElement('aside');
-    layerState.panelOwned = !existing;
-    if (!existing) {
-      panel.id = 'military-awareness-panel';
-    }
-    layerState.panelClickListener = (event) => {
-      const action = event.target.closest('button[data-awareness-action]');
-      if (action) {
-        event.preventDefault();
-        if (action.dataset.awarenessAction === 'previous')
-          parts.history.navigateHistory(-1, { origin: 'user' });
-        if (action.dataset.awarenessAction === 'next')
-          parts.history.navigateHistory(1, { origin: 'user' });
-        if (action.dataset.awarenessAction === 'focus')
-          parts.focus.focusCurrentSubject({ origin: 'user' });
-        return;
-      }
-      const target = event.target.closest(
-        'button[data-awareness-layer][data-awareness-id]',
-      );
-      if (!target) return;
-      event.preventDefault();
-      parts.focus.requestFocus(
-        target.dataset.awarenessLayer,
-        target.dataset.awarenessId,
-        false,
-        { origin: 'user' },
-      );
-    };
-    panel.addEventListener('click', layerState.panelClickListener);
-    if (!existing) document.body.appendChild(panel);
-    layerState.panel = panel;
-    return panel;
+    layerState.panelShown = true;
+    // A shown view is worded again in a new locale.
+    layerState.offPanelLocale ??= onLocaleChange(() => {
+      const kind = layerState.panelView?.kind;
+      if (kind === 'results') renderResults();
+      else if (kind === 'standby') hidePanel();
+    });
   }
 
   function hidePanel() {
-    if (layerState.panel) {
-      const markup = `<div class="military-awareness-standby">
-      <strong>${layerState.enabled ? t('CONTEXT READY') : t('GLOBAL CONTEXT OFF')}</strong>
-      <span>${layerState.enabled ? t('SELECT A FLIGHT, VESSEL, OR MAPPED INSTALLATION') : t('ENABLE TO LOAD OBSERVED / MAPPED PROXIMITY')}</span>
-    </div>`;
-      layerState.panel.hidden = false;
-      if (layerState.panelMarkup !== markup) {
-        layerState.panel.innerHTML = markup;
-        layerState.panelMarkup = markup;
-      }
-    }
-    if (layerState.directionRoot) layerState.directionRoot.hidden = true;
+    if (layerState.panelShown)
+      publish({
+        kind: 'standby',
+        title: layerState.enabled
+          ? t('CONTEXT READY')
+          : t('GLOBAL CONTEXT OFF'),
+        text: layerState.enabled
+          ? t('SELECT A FLIGHT, VESSEL, OR MAPPED INSTALLATION')
+          : t('ENABLE TO LOAD OBSERVED / MAPPED PROXIMITY'),
+      });
+    parts.rendering.hideDirectionOverlay();
   }
 
-  function rowHtml(cohort) {
+  /** Clear the panel when the layer is destroyed. */
+  function clearPanel() {
+    if (layerState.panelShown) publish({ kind: 'empty' });
+    layerState.offPanelLocale?.();
+    layerState.offPanelLocale = null;
+    layerState.panelShown = false;
+    layerState.panelView = null;
+    layerState.panelSignature = '';
+  }
+
+  function presentRow(cohort) {
     const summary = cohort.summary;
-    const count = presentAwarenessCount(summary);
     const page = layerState.cohortPages.get(cohort.id) || 0;
     const nearest = summary.nearest
       .slice(page, page + AWARENESS_PAGE_SIZE)
-      .map((item) => {
+      .map((item, index) => {
         const label = formatAwarenessLabel(item);
         const targetId = item.icao24 || item.mmsi || item.id;
-        if (!targetId) {
-          return `<li><span class="military-awareness-target unavailable" aria-label="${t('Unavailable')}">${escapeHtml(label)} <span>${presentAwarenessDistance(item.distanceM)}</span></span></li>`;
-        }
+        const distance = presentAwarenessDistance(item.distanceM);
+        if (!targetId)
+          return {
+            key: `unavailable:${page + index}`,
+            label,
+            distance,
+            ariaLabel: t('Unavailable'),
+          };
         const accessibleLabel = label === '—' ? t('Unavailable') : label;
-        return `<li><button type="button" class="military-awareness-target" data-awareness-layer="${escapeHtml(cohort.id)}" data-awareness-id="${escapeHtml(targetId)}" aria-label="${escapeHtml(t('Focus {label}', { label: accessibleLabel }))}">${escapeHtml(label)} <span>${presentAwarenessDistance(item.distanceM)}</span></button>${namedAreasHtml(item.memberNames)}</li>`;
-      })
-      .join('');
+        return {
+          key: `target:${cohort.id}:${targetId}`,
+          layer: cohort.id,
+          targetId: String(targetId),
+          label,
+          distance,
+          ariaLabel: t('Focus {label}', { label: accessibleLabel }),
+          names: presentNames(item.memberNames),
+        };
+      });
     const pageCount = Math.max(
       1,
       Math.ceil(summary.nearest.length / AWARENESS_PAGE_SIZE),
@@ -120,109 +144,58 @@ export function createPanel({ state: layerState, services, parts, source }) {
       pageCount > 1
         ? ` · ${Math.floor(page / AWARENESS_PAGE_SIZE) + 1}/${pageCount}`
         : '';
-    const coverage = cohort.coverage ? ` · ${escapeHtml(cohort.coverage)}` : '';
-    return `<section class="military-awareness-row ${summary.relationship.toLowerCase()}">
-    <div><strong>${escapeHtml(cohort.label)}</strong><b aria-live="polite">${count}${pageLabel}</b></div>
-    <small>${escapeHtml(cohort.source)}${coverage} · ${escapeHtml(presentAwarenessReason(summary))}</small>
-    ${nearest ? `<ul>${nearest}</ul>` : ''}
-  </section>`;
+    const coverage = cohort.coverage ? ` · ${cohort.coverage}` : '';
+    return {
+      id: cohort.id,
+      relationship: summary.relationship.toLowerCase(),
+      label: cohort.label,
+      count: `${presentAwarenessCount(summary)}${pageLabel}`,
+      detail: `${cohort.source}${coverage} · ${presentAwarenessReason(summary)}`,
+      nearest,
+    };
   }
 
-  function navigationControlsHtml() {
-    const canPrevious = layerState.navigationIndex > 0;
-    return `<div class="military-awareness-controls" role="group" aria-label="${t('Global Context navigation')}">
-    <button type="button" data-awareness-action="previous" title="${t('Previous — prior visited contact in the 250 km window')}"${canPrevious ? '' : ' disabled'}>${t('PREVIOUS')}</button>
-    <button type="button" data-awareness-action="focus">${t('FOCUS')}</button>
-    <button type="button" data-awareness-action="next" title="${t('Next — nearest unvisited contact in the 250 km window')}"${parts.navigation.canNavigateNext() ? '' : ' disabled'}>${t('NEXT')}</button>
-  </div>`;
+  function presentNavigation() {
+    return {
+      label: t('Global Context navigation'),
+      previous: {
+        text: t('PREVIOUS'),
+        title: t('Previous — prior visited contact in the 250 km window'),
+        disabled: !(layerState.navigationIndex > 0),
+      },
+      focus: { text: t('FOCUS') },
+      next: {
+        text: t('NEXT'),
+        title: t('Next — nearest unvisited contact in the 250 km window'),
+        disabled: !parts.navigation.canNavigateNext(),
+      },
+    };
   }
 
-  /** Stable identity for a delegated Contacts-panel button across live repaints. */
-
-  function awarenessPanelControlKey(element) {
-    const control = element?.closest?.(
-      'button[data-awareness-action], button[data-awareness-layer][data-awareness-id]',
-    );
-    if (!control) return null;
-    if (control.dataset.awarenessAction)
-      return `action:${control.dataset.awarenessAction}`;
-    return `target:${control.dataset.awarenessLayer}:${control.dataset.awarenessId}`;
-  }
-
-  /** Capture stable identity so a live repaint can restore only the same control. */
-
-  function captureAwarenessPanelFocus(
-    panel,
-    activeElement = document.activeElement,
-  ) {
-    if (!panel?.contains?.(activeElement)) return null;
-    if (activeElement?.matches?.('[data-awareness-focus-continuation]')) {
-      return { key: 'continuation' };
-    }
-    const key = awarenessPanelControlKey(activeElement);
-    if (!key) return null;
-    return { key };
-  }
-
-  /** Restore the same control, or continue beyond the list when it is no longer rendered. */
-
-  function restoreAwarenessPanelFocus(panel, snapshot) {
-    if (!panel || !snapshot) return null;
-    const continuation = panel.querySelector(
-      '[data-awareness-focus-continuation]',
-    );
-    const controls = [
-      ...panel.querySelectorAll(
-        'button[data-awareness-action], button[data-awareness-layer][data-awareness-id]',
-      ),
-    ].filter((control) => !control.disabled);
-    const retained =
-      snapshot.key === 'continuation'
-        ? continuation
-        : controls.find(
-            (control) => awarenessPanelControlKey(control) === snapshot.key,
-          );
-    const target = retained || continuation;
-    target?.focus?.({ preventScroll: true });
-    return target || null;
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '').replace(
-      /[&<>'"]/g,
-      (char) =>
-        ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          "'": '&#39;',
-          '"': '&quot;',
-        })[char],
-    );
-  }
-
-  function namedAreasHtml(names) {
+  function presentNames(names) {
     return names?.length
-      ? `<details class="military-awareness-names"><summary>${escapeHtml(t('Named areas ({n})', { n: formatNumber(names.length) }))}</summary><div>${names.map((name) => escapeHtml(name)).join('<br>')}</div></details>`
-      : '';
+      ? {
+          summary: t('Named areas ({n})', { n: formatNumber(names.length) }),
+          names: [...names].map((name) => String(name ?? '')),
+        }
+      : null;
   }
 
   function renderResults() {
     if (!layerState.enabled || !layerState.results) return hidePanel();
-    const panel = ensurePanel();
+    ensurePanel();
+    layerState.panelRenders += 1;
     const { subject, cohorts } = layerState.results;
-    const markup = `<div class="military-awareness-subject">${escapeHtml(subject.label)} · ${escapeHtml(t('{distance} FLIGHT / VESSEL WINDOW', { distance: presentAwarenessDistance(AWARENESS_RADIUS_M) }))}</div>
-    ${namedAreasHtml(subject.memberNames)}
-    ${navigationControlsHtml()}
-    ${cohorts.map(rowHtml).join('')}
-    <p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>${t('Open-source mapped/observed context. Missing broadcasts, unloaded map areas, or unmapped sites are not evidence of absence.')}</p>`;
-    panel.hidden = false;
-    if (layerState.panelMarkup !== markup) {
-      const focusSnapshot = captureAwarenessPanelFocus(panel);
-      panel.innerHTML = markup;
-      layerState.panelMarkup = markup;
-      restoreAwarenessPanelFocus(panel, focusSnapshot);
-    }
+    publish({
+      kind: 'results',
+      subject: `${subject.label} · ${t('{distance} FLIGHT / VESSEL WINDOW', { distance: presentAwarenessDistance(AWARENESS_RADIUS_M) })}`,
+      subjectNames: presentNames(subject.memberNames),
+      navigation: presentNavigation(),
+      rows: cohorts.map(presentRow),
+      note: t(
+        'Open-source mapped/observed context. Missing broadcasts, unloaded map areas, or unmapped sites are not evidence of absence.',
+      ),
+    });
   }
 
   function rotateAwarenessPages() {
@@ -276,14 +249,10 @@ export function createPanel({ state: layerState, services, parts, source }) {
     return cohorts.some((cohort) => Number(cohort?.summary?.count) > 0);
   }
   return {
+    subscribePanel,
     ensurePanel,
     hidePanel,
-    rowHtml,
-    navigationControlsHtml,
-    awarenessPanelControlKey,
-    captureAwarenessPanelFocus,
-    restoreAwarenessPanelFocus,
-    escapeHtml,
+    clearPanel,
     renderResults,
     rotateAwarenessPages,
     startAwarenessPageRotation,

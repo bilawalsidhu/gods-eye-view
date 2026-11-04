@@ -1,10 +1,19 @@
 import * as Cesium from 'cesium';
-import { t } from '../../i18n/index.js';
+import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
   MISSION_GLOBE_VIEW_RANGE_M,
 } from './policy.js';
 import { UNKNOWN_LAUNCH_STATUS } from './model.js';
+
+// Landing endpoints carry an English accuracy code (the panel and the map
+// entity compare it); only the text shown in the stage table is translated.
+// The downrange estimate arrives already translated.
+function accuracyLabel(accuracy) {
+  if (accuracy === 'CONFIRMED') return t('CONFIRMED');
+  if (accuracy === 'PAD / RTLS') return t('PAD / RTLS');
+  return accuracy;
+}
 
 export function createPanel({ state: layerState, services, parts, source }) {
   /**
@@ -88,68 +97,6 @@ export function createPanel({ state: layerState, services, parts, source }) {
     };
   }
 
-  /**
-   * Bind native keyboard focus events for one rendered roster row.
-   * @param {Element} button Mission roster button.
-   * @param {number} index Source-array mission index.
-   * @param {{pointerEnter: (index: number) => void, pointerLeave: () => void,
-   *   focus: (index: number) => void, blur: (nextIndex?: number|null) => void}} ownership
-   * @param {Element} roster Roster root used to reject focus targets outside the list.
-   */
-
-  function bindMissionRosterItemKeyboardPreview(
-    button,
-    index,
-    ownership,
-    roster,
-  ) {
-    button.addEventListener('mouseenter', () => ownership.pointerEnter(index));
-    button.addEventListener('mouseleave', () => ownership.pointerLeave());
-    button.addEventListener('focus', () => ownership.focus(index));
-    button.addEventListener('blur', (event) => {
-      const nextButton = event.relatedTarget?.closest?.(
-        '[data-mission-roster-index]',
-      );
-      const nextIndex =
-        nextButton && roster.contains(nextButton)
-          ? Number(nextButton.dataset.missionRosterIndex)
-          : null;
-      ownership.blur(nextIndex);
-    });
-  }
-
-  /** Capture the exact mission identity owned by keyboard focus before a refresh. */
-
-  function captureMissionRosterFocus(
-    list,
-    activeElement = globalThis.document?.activeElement,
-  ) {
-    const button = activeElement?.closest?.('[data-mission-roster-id]');
-    if (!button || !list?.contains(button)) return null;
-    const launchId = button.dataset.missionRosterId;
-    return launchId ? { launchId } : null;
-  }
-
-  /** Restore focus by mission identity, or continue after the list if it departed. */
-
-  function restoreMissionRosterFocus(list, snapshot, continuation) {
-    if (!snapshot?.launchId) return 'none';
-    const button = Array.from(
-      list?.querySelectorAll?.('[data-mission-roster-id]') || [],
-    ).find(
-      (candidate) => candidate.dataset.missionRosterId === snapshot.launchId,
-    );
-    if (button) {
-      button.focus({ preventScroll: true });
-      return 'restored';
-    }
-    if (continuation?.focus) {
-      continuation.focus({ preventScroll: true });
-      return 'continued';
-    }
-    return 'none';
-  }
-
   /** Resolve a pending preview against the current refresh, never a stale object. */
 
   function resolveMissionRosterPreviewLaunch(launches, launchId) {
@@ -158,213 +105,213 @@ export function createPanel({ state: layerState, services, parts, source }) {
     );
   }
 
-  function missionTableRows(items, columns, emptyText) {
-    if (!items.length)
-      return `<tr><td colspan="${columns}" class="mission-table-empty">${emptyText}</td></tr>`;
-    return items.map((item) => item).join('');
+  /**
+   * Publish a fresh view unless it is the one already shown. The roster
+   * carries its own signature, so a telemetry update compares the mission.
+   */
+  function publish(view) {
+    const signature = `${layerState._missionRosterSignature}|${JSON.stringify(view.mission)}`;
+    if (layerState._missionPanelSignature === signature) return;
+    layerState._missionPanelSignature = signature;
+    layerState._missionPanelView = view;
+    for (const listener of [...layerState._missionPanelListeners])
+      listener(view);
   }
 
-  function setMissionPanelField(selector, value, title = '') {
-    const output = layerState._missionPanel?.querySelector(selector);
-    if (!output) return;
-    const row = output.closest('[data-mission-field]');
-    const available =
-      value !== null && value !== undefined && String(value).trim() !== '';
-    if (row) row.hidden = !available;
-    if (!available) {
-      output.textContent = '';
-      output.removeAttribute('title');
-      return;
-    }
-    output.textContent = value;
-    if (title) output.title = title;
-    else output.removeAttribute('title');
+  /**
+   * Receive every published view, starting with the current one.
+   * @param {(view: {roster: ?object, mission: ?object}) => void} listener
+   * @returns {() => void} Unsubscribe.
+   */
+  function subscribePanel(listener) {
+    layerState._missionPanelListeners.add(listener);
+    if (layerState._missionPanelView) listener(layerState._missionPanelView);
+    return () => layerState._missionPanelListeners.delete(listener);
   }
 
-  function renderMissionPanel() {
-    if (!layerState._missionPanel) return;
+  /** Publish the roster and the selected mission as they stand. */
+  function publishPanel() {
+    if (!layerState._missionPanelReady) return;
+    publish({
+      roster: layerState._missionRosterView,
+      mission: presentMission(),
+    });
+  }
+
+  /** A detail value, or null when the panel hides its row. */
+  function presentField(value) {
+    return value !== null && value !== undefined && String(value).trim() !== ''
+      ? String(value)
+      : null;
+  }
+
+  function presentPayload(payload, launch) {
+    const detail = [
+      payload.manufacturer,
+      payload.operator && payload.operator !== payload.manufacturer
+        ? payload.operator
+        : null,
+      Number.isFinite(payload.massKg)
+        ? `${formatNumber(payload.massKg)} KG`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return {
+      name: `${payload.name ?? ''}${payload.amount > 1 ? ` ×${payload.amount}` : ''}`,
+      detail,
+      type: payload.type || t('UNSPECIFIED'),
+      destination:
+        payload.destination || launch.orbit?.name || t('UNAVAILABLE'),
+    };
+  }
+
+  function presentStage(stage, launch) {
+    const endpoint = stage.endpoint;
+    const destination =
+      stage.destination ||
+      (endpoint?.accuracy === 'PAD / RTLS'
+        ? launch.launchSite
+        : t('UNAVAILABLE'));
+    const position = endpoint
+      ? `${isolate(`${endpoint.lat.toFixed(2)}, ${endpoint.lon.toFixed(2)}`)} · ${accuracyLabel(endpoint.accuracy)}`
+      : stage.downrangeKm > 0
+        ? t('{value} KM DOWNRANGE', {
+            value: formatNumber(stage.downrangeKm),
+          })
+        : t('POSITION UNAVAILABLE');
+    const detail = [
+      Number.isFinite(stage.flightNumber)
+        ? t('FLIGHT {count}', {
+            count: stage.flightNumber,
+          })
+        : null,
+      stage.reused ? t('REUSED') : null,
+      stage.recoveryType,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return {
+      name: String(stage.name ?? ''),
+      detail,
+      status: String(stage.status ?? ''),
+      destination: String(destination ?? ''),
+      position,
+    };
+  }
+
+  /**
+   * The selected mission as the panel shows it, or null when none is
+   * selected and the panel hides. Text arrives in the UI language.
+   */
+  function presentMission() {
     const launch = layerState._launches.find(
       (item) => item.id === layerState._selectedLaunchId,
     );
-    const index = launch ? layerState._launches.indexOf(launch) : -1;
-    layerState._missionPanel.hidden = !launch;
-    if (!launch) return;
-    layerState._missionPanel.querySelector('[data-mission-title]').textContent =
-      parts.overlays.shortMissionLabel(launch.name, 32).toUpperCase();
-    setMissionPanelField('[data-mission-provider]', launch.provider);
-    // Launch Library status names are provider data, shown as sent; only the
-    // fallback for a launch without one is ours to translate.
-    setMissionPanelField(
-      '[data-mission-status]',
-      launch.status === UNKNOWN_LAUNCH_STATUS
-        ? t(UNKNOWN_LAUNCH_STATUS)
-        : launch.status,
-    );
-    setMissionPanelField(
-      '[data-mission-site]',
-      launch.launchSite && launch.launchSite !== 'Unknown launch site'
-        ? launch.launchSite
-        : null,
-    );
-    setMissionPanelField('[data-mission-time]', launch.launchTime);
+    if (!launch) return null;
+    const index = layerState._launches.indexOf(launch);
     const pathPresentation = parts.policyHelpers.missionPathPresentation(
       launch,
       layerState._replayTracks.has(launch.id),
     );
-    setMissionPanelField('[data-mission-orbit]', pathPresentation.orbit);
-    layerState._missionPanel.querySelector(
-      '[data-mission-ascent-source]',
-    ).textContent = pathPresentation.ascent;
-    const payloadRows = launch.payloads.length
-      ? launch.payloads.slice(0, 5).map((payload) => {
-          const detail = [
-            payload.manufacturer,
-            payload.operator && payload.operator !== payload.manufacturer
-              ? payload.operator
-              : null,
-            Number.isFinite(payload.massKg)
-              ? `${payload.massKg.toLocaleString()} KG`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(' · ');
-          return `<tr><td>${escapeMissionText(payload.name)}${payload.amount > 1 ? ` ×${payload.amount}` : ''}${detail ? `<small>${escapeMissionText(detail)}</small>` : ''}</td><td>${escapeMissionText(payload.type || t('UNSPECIFIED'))}</td><td>${escapeMissionText(payload.destination || launch.orbit?.name || t('UNAVAILABLE'))}</td></tr>`;
-        })
-      : [];
-    if (launch.payloads.length > 5) {
-      payloadRows.push(
-        `<tr><td colspan="3" class="mission-table-empty">${t('+{count} additional payload records', { count: launch.payloads.length - 5 })}</td></tr>`,
-      );
-    }
-    layerState._missionPanel.querySelector(
-      '[data-mission-payloads]',
-    ).innerHTML = missionTableRows(
-      payloadRows,
-      3,
-      t('PAYLOAD DATA UNAVAILABLE'),
-    );
-    const stageRows = launch.recoveryStages.map((stage) => {
-      const endpoint = stage.endpoint;
-      const destination =
-        stage.destination ||
-        (endpoint?.accuracy === 'PAD / RTLS'
+    const telemetry = layerState._missionTelemetry;
+    return {
+      scrollRequest: layerState._missionPanelScrollRequest,
+      title: parts.overlays.shortMissionLabel(launch.name, 32).toUpperCase(),
+      provider: presentField(launch.provider),
+      // Launch Library status names are provider data, shown as sent; only
+      // the fallback for a launch without one is ours to translate.
+      status: presentField(
+        launch.status === UNKNOWN_LAUNCH_STATUS
+          ? t(UNKNOWN_LAUNCH_STATUS)
+          : launch.status,
+      ),
+      site: presentField(
+        launch.launchSite && launch.launchSite !== 'Unknown launch site'
           ? launch.launchSite
-          : t('UNAVAILABLE'));
-      const position = endpoint
-        ? `${endpoint.lat.toFixed(2)}, ${endpoint.lon.toFixed(2)} · ${endpoint.accuracy}`
-        : stage.downrangeKm > 0
-          ? t('{value} KM DOWNRANGE', {
-              value: stage.downrangeKm.toLocaleString(),
-            })
-          : t('POSITION UNAVAILABLE');
-      const stageDetail = [
-        Number.isFinite(stage.flightNumber)
-          ? t('FLIGHT {count}', {
-              count: stage.flightNumber,
+          : null,
+      ),
+      time: presentField(launch.launchTime),
+      orbit: presentField(pathPresentation.orbit),
+      ascent: pathPresentation.ascent ?? '',
+      distance: telemetry?.distance ?? null,
+      speed: telemetry?.speed ?? null,
+      speedTitle: telemetry?.speedTitle ?? null,
+      payloads: launch.payloads
+        .slice(0, 5)
+        .map((payload) => presentPayload(payload, launch)),
+      payloadsMore:
+        launch.payloads.length > 5
+          ? t('+{count} additional payload records', {
+              count: launch.payloads.length - 5,
             })
           : null,
-        stage.reused ? t('REUSED') : null,
-        stage.recoveryType,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      return `<tr><td>${escapeMissionText(stage.name)}${stageDetail ? `<small>${escapeMissionText(stageDetail)}</small>` : ''}</td><td>${escapeMissionText(stage.status)}</td><td>${escapeMissionText(destination)}<small>${escapeMissionText(position)}</small></td></tr>`;
-    });
-    layerState._missionPanel.querySelector('[data-mission-stages]').innerHTML =
-      missionTableRows(stageRows, 3, t('NO STAGE RE-ENTRY / RECOVERY DATA'));
-    const stageSection = layerState._missionPanel.querySelector(
-      '[data-mission-stages-section]',
-    );
-    if (stageSection) stageSection.hidden = stageRows.length === 0;
-    updateMissionTelemetry(true);
-    layerState._missionPanel.querySelector('[data-mission-index]').textContent =
-      `${index + 1} / ${layerState._launches.length}`;
-    layerState._missionPanel.querySelector('[data-mission-prev]').disabled =
-      index <= 0;
-    layerState._missionPanel.querySelector('[data-mission-next]').disabled =
-      index < 0 || index >= layerState._launches.length - 1;
-    parts.replay.syncReplayButton();
-    const panelScroller = layerState._missionPanel.closest(
-      ":root[data-ui-theme='cyber'] .cyber-panel-body, .global-context-panel-inner",
-    );
-    if (panelScroller) panelScroller.scrollTop = 0;
+      stages: launch.recoveryStages.map((stage) => presentStage(stage, launch)),
+      index: `${index + 1} / ${layerState._launches.length}`,
+      previousDisabled: index <= 0,
+      nextDisabled: index < 0 || index >= layerState._launches.length - 1,
+      replay: parts.replay.presentReplay(),
+    };
   }
 
-  function renderMissionRoster() {
-    if (!layerState._missionRoster) return;
-    const list = layerState._missionRoster.querySelector(
-      '[data-mission-roster-list]',
-    );
-    const count = layerState._missionRoster.querySelector(
-      '[data-mission-roster-count]',
-    );
-    if (count)
-      count.textContent = t('{count} / 30D', {
-        count: layerState._launches.length,
-      });
-    if (!list) return;
-    const focusSnapshot = captureMissionRosterFocus(list);
-    layerState._missionRosterPreviewOwnership?.reset();
-    const entries = parts.policyHelpers.missionRosterEntries(
-      layerState._launches,
-    );
-    if (!entries.length) {
-      list.innerHTML = `<div class="space-mission-roster-empty">${t('NO MISSIONS AVAILABLE IN THE CURRENT 30-DAY WINDOW')}</div>`;
-      restoreMissionRosterFocus(
-        list,
-        focusSnapshot,
-        layerState._missionRoster.querySelector(
-          '[data-mission-roster-focus-continuation]',
-        ),
-      );
-      return;
-    }
-    list.innerHTML = entries
+  /** Present the newly selected mission and return its panel to the top. */
+  function renderMissionPanel() {
+    if (!layerState._missionPanelReady) return;
+    layerState._missionTelemetry = null;
+    updateMissionTelemetry(true, false);
+    layerState._missionPanelScrollRequest++;
+    publishPanel();
+  }
+
+  /** The roster entries as the list shows them. */
+  function presentRoster() {
+    const entries = parts.policyHelpers
+      .missionRosterEntries(layerState._launches)
       .map(({ launch, index }) => {
-        const color = parts.model.missionMarkerColor(launch).toCssColorString();
-        const date = launch.launchTime?.slice(0, 10) || t('DATE UNAVAILABLE');
-        const provider = launch.provider || t('UNSPECIFIED OPERATOR');
         const label = parts.overlays
           .shortMissionLabel(launch.name, 27)
           .toUpperCase();
-        return `<button type="button" class="space-mission-roster-item" data-mission-roster-index="${index}" data-mission-roster-id="${escapeMissionText(launch.id)}" aria-label="${escapeMissionText(t('Select {mission}', { mission: label }))}"><span class="space-mission-roster-marker" style="--mission-roster-color:${color}" aria-hidden="true"></span><span class="space-mission-roster-copy"><strong>${escapeMissionText(label)}</strong><small>${escapeMissionText(provider)} · ${escapeMissionText(date)}</small></span><span class="space-mission-roster-chevron" aria-hidden="true">›</span></button>`;
-      })
-      .join('');
-    list.querySelectorAll('[data-mission-roster-index]').forEach((button) => {
-      const index = Number(button.dataset.missionRosterIndex);
-      bindMissionRosterItemKeyboardPreview(
-        button,
-        index,
-        layerState._missionRosterPreviewOwnership,
-        layerState._missionRoster,
-      );
-    });
-    restoreMissionRosterFocus(
-      list,
-      focusSnapshot,
-      layerState._missionRoster.querySelector(
-        '[data-mission-roster-focus-continuation]',
-      ),
-    );
+        return {
+          index,
+          id: String(launch.id ?? ''),
+          color: parts.model.missionMarkerColor(launch).toCssColorString(),
+          label,
+          ariaLabel: t('Select {mission}', { mission: label }),
+          provider: launch.provider || t('UNSPECIFIED OPERATOR'),
+          date: launch.launchTime?.slice(0, 10) || t('DATE UNAVAILABLE'),
+        };
+      });
+    return {
+      count: t('{count} / 30D', { count: layerState._launches.length }),
+      entries,
+      empty: t('NO MISSIONS AVAILABLE IN THE CURRENT 30-DAY WINDOW'),
+    };
   }
 
-  function escapeMissionText(value) {
-    return String(value ?? '').replace(
-      /[&<>"']/g,
-      (character) =>
-        ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-        })[character],
-    );
+  /**
+   * Present the roster. A changed roster drops the hover and keyboard
+   * preview; the list restores keyboard focus by mission identity, which
+   * resumes the preview.
+   */
+  function renderMissionRoster() {
+    if (!layerState._missionPanelReady) return;
+    const roster = presentRoster();
+    const signature = JSON.stringify(roster);
+    if (signature !== layerState._missionRosterSignature) {
+      layerState._missionRosterSignature = signature;
+      layerState._missionRosterView = roster;
+      layerState._missionRosterPreviewOwnership?.reset();
+    }
+    publishPanel();
   }
 
-  function updateMissionTelemetry(force = false) {
+  /**
+   * Read the selected mission's altitude and speed, at most four times a
+   * second unless forced, and republish when they change.
+   */
+  function updateMissionTelemetry(force = false, republish = true) {
     if (
-      !layerState._missionPanel ||
+      !layerState._missionPanelReady ||
       !layerState._selectedLaunchId ||
       !layerState._dataSource
     )
@@ -381,33 +328,30 @@ export function createPanel({ state: layerState, services, parts, source }) {
     const altitudeM = position
       ? Cesium.Cartographic.fromCartesian(position)?.height
       : null;
-    setMissionPanelField(
-      '[data-mission-distance]',
-      Number.isFinite(altitudeM)
+    const speedMps = layerState._satelliteTelemetry.get(
+      layerState._selectedLaunchId,
+    )?.speedMps;
+    layerState._missionTelemetry = {
+      distance: Number.isFinite(altitudeM)
         ? t('{value} KM', {
-            value: Math.max(0, altitudeM / 1000).toLocaleString(undefined, {
+            value: formatNumber(Math.max(0, altitudeM / 1000), {
               maximumFractionDigits: 0,
             }),
           })
         : null,
-    );
-    const speedMps = layerState._satelliteTelemetry.get(
-      layerState._selectedLaunchId,
-    )?.speedMps;
-    setMissionPanelField(
-      '[data-mission-speed]',
-      Number.isFinite(speedMps)
+      speed: Number.isFinite(speedMps)
         ? t('{value} KM/S', {
-            value: (speedMps / 1000).toLocaleString(undefined, {
+            value: formatNumber(speedMps / 1000, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             }),
           })
         : null,
-      Number.isFinite(speedMps)
-        ? `${(speedMps * 3.6).toLocaleString(undefined, { maximumFractionDigits: 0 })} km/h`
-        : '',
-    );
+      speedTitle: Number.isFinite(speedMps)
+        ? `${formatNumber(speedMps * 3.6, { maximumFractionDigits: 0 })} km/h`
+        : null,
+    };
+    if (republish) publishPanel();
   }
 
   function selectMissionAt(index) {
@@ -451,121 +395,94 @@ export function createPanel({ state: layerState, services, parts, source }) {
     }, 140);
   }
 
-  function createMissionPanel() {
-    if (layerState._missionPanel || typeof document === 'undefined') return;
-    const host =
-      document.getElementById('space-mission-panel-host') ||
-      document.getElementById('right-context-rail');
-    if (!host) return;
-    layerState._missionRoster = document.getElementById('space-mission-roster');
-    if (layerState._missionRoster) {
-      layerState._missionRosterPreviewOwnership =
-        createMissionRosterPreviewOwnership({
-          preview: scheduleMissionRosterPreview,
-          clear: clearMissionRosterPreviewState,
-        });
-      layerState._missionRoster.onclick = (event) => {
-        const button =
-          event.target instanceof Element
-            ? event.target.closest('[data-mission-roster-index]')
-            : null;
-        if (!button) return;
-        selectMissionAt(Number(button.dataset.missionRosterIndex));
-      };
-    }
-    layerState._missionPanel = document.createElement('aside');
-    layerState._missionPanel.id = 'space-mission-panel';
-    layerState._missionPanel.className = 'context-space-mission-detail';
-    layerState._missionPanel.setAttribute(
-      'aria-label',
-      t('Selected Space Mission'),
+  /** Select the mission before or after the selected one. */
+  function selectAdjacentMission(step) {
+    selectMissionAt(
+      layerState._launches.findIndex(
+        (item) => item.id === layerState._selectedLaunchId,
+      ) + step,
     );
-    layerState._missionPanel.innerHTML = `<div class="space-mission-view-header"><span>${t('SELECTED SPACE MISSION')}</span><button type="button" data-mission-close title="${t('Show all missions')}" aria-label="${t('Deselect mission')}">×</button></div><div class="space-mission-detail"><strong data-mission-title>${t('MISSION')}</strong><span data-mission-field data-mission-provider></span><span data-mission-field>${t('STATUS · ')}<b data-mission-status></b></span><span data-mission-field>${t('LAUNCH SITE · ')}<b data-mission-site></b></span><span data-mission-field>${t('LAUNCH TIME · ')}<b data-mission-time></b></span><span data-mission-field>${t('ORBIT · ')}<b data-mission-orbit></b></span><span>${t('ASCENT PATH · ')}<b data-mission-ascent-source></b></span><span data-mission-field>${t('CURRENT DISTANCE FROM EARTH · ')}<b data-mission-distance></b></span><span data-mission-field>${t('SATELLITE SPEED · ')}<b data-mission-speed></b></span></div><section class="mission-data-section"><h4>${t('PAYLOAD')}</h4><div class="mission-table-scroll"><table class="mission-data-table"><thead><tr><th>${t('NAME')}</th><th>${t('TYPE')}</th><th>${t('DESTINATION')}</th></tr></thead><tbody data-mission-payloads></tbody></table></div></section><section class="mission-data-section" data-mission-stages-section><h4>${t('STAGE / RE-ENTRY / RECOVERY')}</h4><div class="mission-table-scroll"><table class="mission-data-table"><thead><tr><th>${t('STAGE')}</th><th>${t('STATUS')}</th><th>${t('FINAL POSITION')}</th></tr></thead><tbody data-mission-stages></tbody></table></div></section><div class="mission-replay-speed-control"><div class="mission-replay-speed-header"><label for="space-mission-replay-speed">${t('REPLAY SPEED')}</label><output class="gev-slider-value" for="space-mission-replay-speed" data-mission-replay-speed-output>1×</output></div><input id="space-mission-replay-speed" class="gev-quantitative-slider" type="range" min="0.25" max="4" step="0.25" value="1" data-mission-replay-speed aria-label="${t('Replay speed multiplier')}"><div class="mission-replay-speed-scale" aria-hidden="true"><span>0.25×</span><span>1×</span><span>4×</span></div></div><div class="mission-action-row"><button type="button" class="mission-focus-button" data-mission-focus>${t('FOCUS')}</button><button type="button" class="mission-replay-button" data-mission-replay aria-pressed="false">${t('REPLAY ASCENT')}</button></div><div class="space-mission-nav"><button type="button" class="mission-nav-button" data-mission-prev title="${t('Previous mission')}"><span aria-hidden="true">‹</span> ${t('PREV')}</button><span class="mission-nav-index" data-mission-index>—</span><button type="button" class="mission-nav-button" data-mission-next title="${t('Next mission')}">${t('NEXT')} <span aria-hidden="true">›</span></button></div><button type="button" class="panel-layer-toggle" data-mission-show-all>${t('SHOW ALL / DESELECT')}</button>`;
-    layerState._missionPanel
-      .querySelector('.mission-action-row')
-      .insertAdjacentHTML(
-        'beforeend',
-        `<div class="mission-replay-transport" data-mission-replay-transport hidden>
-      <button type="button" data-mission-replay-toggle title="${t('Pause replay')}" aria-label="${t('Pause replay')}">Ⅱ</button>
-      <button type="button" class="cancel" data-mission-replay-cancel title="${t('Cancel replay')}" aria-label="${t('Cancel replay')}"><span aria-hidden="true">×</span></button>
-    </div>`,
-      );
-    host.appendChild(layerState._missionPanel);
-    layerState._missionPanel
-      .querySelector('[data-mission-prev]')
-      .addEventListener('click', () =>
-        selectMissionAt(
-          layerState._launches.findIndex(
-            (item) => item.id === layerState._selectedLaunchId,
-          ) - 1,
-        ),
-      );
-    layerState._missionPanel
-      .querySelector('[data-mission-next]')
-      .addEventListener('click', () =>
-        selectMissionAt(
-          layerState._launches.findIndex(
-            (item) => item.id === layerState._selectedLaunchId,
-          ) + 1,
-        ),
-      );
-    layerState._missionPanel
-      .querySelector('[data-mission-close]')
-      .addEventListener('click', () =>
-        parts.selection.setSelectedMission(null),
-      );
-    layerState._missionPanel
-      .querySelector('[data-mission-show-all]')
-      .addEventListener('click', () =>
-        parts.selection.setSelectedMission(null),
-      );
-    layerState._missionPanel
-      .querySelector('[data-mission-focus]')
-      .addEventListener('click', () => {
-        const launch = layerState._launches.find(
-          (item) => item.id === layerState._selectedLaunchId,
-        );
-        if (launch) parts.selection.focusLaunchSite(launch);
-      });
-    layerState._missionPanel
-      .querySelector('[data-mission-replay]')
-      .addEventListener('click', () => {
-        if (layerState._selectedLaunchId)
-          parts.replay.startMissionReplay(layerState._selectedLaunchId);
-      });
-    layerState._missionPanel
-      .querySelector('[data-mission-replay-toggle]')
-      .addEventListener('click', () => {
-        if (layerState._replayPaused) parts.replay.resumeMissionReplay();
-        else parts.replay.pauseMissionReplay();
-      });
-    layerState._missionPanel
-      .querySelector('[data-mission-replay-cancel]')
-      .addEventListener('click', parts.replay.stopMissionReplay);
-    layerState._missionPanel
-      .querySelector('[data-mission-replay-speed]')
-      .addEventListener('input', (event) => {
-        parts.replay.setReplaySpeed(event.currentTarget.value);
-      });
-    parts.replay.syncReplaySpeedControl();
   }
+
+  /** The panel's commands, called by Core's mission components. */
+  const commands = {
+    selectMissionAt,
+    selectPreviousMission: () => selectAdjacentMission(-1),
+    selectNextMission: () => selectAdjacentMission(1),
+    deselectMission: () => parts.selection.setSelectedMission(null),
+    focusSelectedLaunchSite() {
+      const launch = layerState._launches.find(
+        (item) => item.id === layerState._selectedLaunchId,
+      );
+      if (launch) parts.selection.focusLaunchSite(launch);
+    },
+    startSelectedReplay() {
+      if (layerState._selectedLaunchId)
+        parts.replay.startMissionReplay(layerState._selectedLaunchId);
+    },
+    toggleReplayPause() {
+      if (layerState._replayPaused) parts.replay.resumeMissionReplay();
+      else parts.replay.pauseMissionReplay();
+    },
+    cancelReplay: () => parts.replay.stopMissionReplay(),
+    setReplaySpeed: (value) => parts.replay.setReplaySpeed(value),
+    rosterPointerEnter: (index) =>
+      layerState._missionRosterPreviewOwnership?.pointerEnter(index),
+    rosterPointerLeave: () =>
+      layerState._missionRosterPreviewOwnership?.pointerLeave(),
+    rosterFocus: (index) =>
+      layerState._missionRosterPreviewOwnership?.focus(index),
+    rosterBlur: (nextIndex) =>
+      layerState._missionRosterPreviewOwnership?.blur(nextIndex),
+  };
+
+  /** Start presenting the roster and the selected mission. */
+  function createMissionPanel() {
+    if (layerState._missionPanelReady) return;
+    layerState._missionPanelReady = true;
+    layerState._missionRosterPreviewOwnership =
+      createMissionRosterPreviewOwnership({
+        preview: scheduleMissionRosterPreview,
+        clear: clearMissionRosterPreviewState,
+      });
+    // The roster and mission are worded again in a new locale.
+    layerState._offMissionLocale = onLocaleChange(() => {
+      renderMissionRoster();
+      updateMissionTelemetry(true, false);
+      publishPanel();
+    });
+    publishPanel();
+  }
+
+  /** Stop presenting; the components return to their initial markup. */
+  function clearMissionPanel() {
+    layerState._missionPanelReady = false;
+    layerState._offMissionLocale?.();
+    layerState._offMissionLocale = null;
+    layerState._missionRosterPreviewOwnership = null;
+    layerState._missionRosterView = null;
+    layerState._missionRosterSignature = null;
+    layerState._missionTelemetry = null;
+    layerState._replayTransportLabel = null;
+    publish({ roster: null, mission: null });
+  }
+
   return {
     missionHoverPreviewRange,
     createMissionRosterPreviewOwnership,
-    bindMissionRosterItemKeyboardPreview,
-    captureMissionRosterFocus,
-    restoreMissionRosterFocus,
     resolveMissionRosterPreviewLaunch,
-    missionTableRows,
-    setMissionPanelField,
+    subscribePanel,
+    publishPanel,
+    presentMission,
     renderMissionPanel,
     renderMissionRoster,
-    escapeMissionText,
     updateMissionTelemetry,
     selectMissionAt,
     clearMissionRosterPreviewState,
     clearMissionRosterHover,
     scheduleMissionRosterPreview,
     createMissionPanel,
+    clearMissionPanel,
+    commands,
   };
 }
