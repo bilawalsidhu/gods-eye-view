@@ -53,8 +53,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     const vesselsState = sourceStates['ais-live-vessels'];
     const installationsState = sourceStates['military-installations'];
     const evaluatedAt = Date.now();
-    // Whether the provider answered as a fallback or from a stale snapshot.
-    // A poll in flight does not change that, and the source revision ignores it.
+    // A poll in flight keeps FALLBACK or STALE: the revision key ignores loading.
     // Before the first answer there is no snapshot, so loading stays.
     const sourceStatus = (sourceState) => {
       const feedState = layerFeedState(

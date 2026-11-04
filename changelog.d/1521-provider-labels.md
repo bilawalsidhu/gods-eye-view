@@ -1,4 +1,4 @@
-- Name the provider that answered in the Cockpit Contact counts and the
-  Contacts list, as the Layers panel does, marked `FALLBACK` or `STALE` when
-  it is. The counts no longer read OpenSky while flights come from the adsb.lol
-  fallback, and vessels no longer always read AISStream (German, @gekh, #1521).
+- Cockpit Contact counts and the Contacts list name the provider that
+  answered, marked `FALLBACK` or `STALE` as in the Layers panel. Flights from
+  the adsb.lol fallback no longer read OpenSky, and vessels no longer always
+  read AISStream (German, @gekh, #1521).

@@ -111,7 +111,6 @@ export function updateContext(info, heading) {
     if (shown) {
       shown.count = cohort.count === null ? '?' : String(cohort.count);
       shown.unknown = cohort.relationship === 'UNKNOWN';
-      // The provider that answered, named as the Layers panel names it.
       shown.source = sourceStatusLabel(cohort.source, cohort.sourceStatus);
     }
     if (cohort.count === null) unknownCount += 1;
