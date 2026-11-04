@@ -14,7 +14,8 @@
 //
 // Checked on every switch: the same session (manager and every layer
 // model), the radio still playing the same station with one play() call.
-// With --assert (the long run), after the warm-up (switch 20): live WebGL
+// With --assert (the long run), the flights' fix history fills first (see
+// below), then after the warm-up (switch 20): live WebGL
 // objects per engine context grow by at most 0.1 per switch (least-squares
 // slope over the checkpoints) and by at most 64 overall; no new WebGL
 // context; JS heap slope at most 10 KiB per switch; no new document; the
@@ -42,6 +43,7 @@ import {
 } from './qa-strict-session.mjs';
 import { installRadioFixture, stations } from './fixtures/w2/radio.mjs';
 import { trafficFixtureResponse } from './traffic-fixtures.mjs';
+import { POSITION_HISTORY_LIMIT } from '../src/layers/flights/recordPolicy.js';
 
 const base = localPreview(process.argv[2]);
 const option = (name, fallback) => {
@@ -193,6 +195,20 @@ for (let run = 1; run <= runs; run++) {
         window.__godsEyeView.dataManager.layers.get('radio').module.getUIState()
           .audioState === 'playing',
     );
+    // Each aircraft keeps its last POSITION_HISTORY_LIMIT fixes for dead
+    // reckoning, so the first polls of the flights feed grow the heap by
+    // itself (about 14 MiB here, over 2.5 min; a run without switches then
+    // levels off). The long run lets that history fill before it switches,
+    // so the heap slope it asserts is the switches' own.
+    if (strictMode) {
+      const filling = Date.now();
+      await p.waitForFunction(
+        (polls) => window.__qaReads.flights > polls,
+        { timeout: 300000, polling: 1000 },
+        POSITION_HISTORY_LIMIT,
+      );
+      row.historyFillSeconds = Math.round((Date.now() - filling) / 1000);
+    }
     row.workload = await p.evaluate(() => {
       const layers = window.__godsEyeView.dataManager.layers;
       return Object.fromEntries(

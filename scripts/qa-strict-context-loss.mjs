@@ -164,6 +164,51 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
     const outcome = after.engine === to ? 'switched' : 'rolled back';
     if (after.running) await rememberEngine(p);
     const drawn = after.running ? await draws(after.engine) : false;
+    // Why no frame passed, when none did: frames drawn in 3 s by the engine
+    // the page runs and by the one the probe watched, and how many of 48x48
+    // samples of the last frame differ from the first one.
+    const noFrame =
+      after.running && !drawn
+        ? await p.evaluate(async (kind) => {
+            const running = window.__godsEyeView.engine;
+            const watched = window.__qaEngines.get(kind);
+            const probe = document.createElement('canvas');
+            probe.width = probe.height = 48;
+            const context = probe.getContext('2d', {
+              willReadFrequently: true,
+            });
+            const count = { running: 0, watched: 0, differing: null };
+            const offs = [
+              running.frames.postRender.addEventListener(() => {
+                count.running++;
+                context.drawImage(running.host.canvas, 0, 0, 48, 48);
+                const d = context.getImageData(0, 0, 48, 48).data;
+                let differing = 0;
+                for (let i = 4; i < d.length; i += 4)
+                  if (
+                    Math.abs(d[i] - d[0]) +
+                      Math.abs(d[i + 1] - d[1]) +
+                      Math.abs(d[i + 2] - d[2]) >
+                    24
+                  )
+                    differing++;
+                count.differing = differing;
+              }),
+              watched === running
+                ? () => {}
+                : watched?.frames.postRender.addEventListener(
+                    () => count.watched++,
+                  ),
+            ];
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            offs.forEach((off) => off?.());
+            return {
+              ...count,
+              sameEngine: watched === running,
+              connected: running.host.canvas.isConnected,
+            };
+          }, after.engine)
+        : null;
     console.log(
       'after',
       label,
@@ -205,6 +250,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
       sessionIntact: intact(after),
       history: after.history - before.history,
       drawn,
+      ...(noFrame ? { noFrame } : {}),
       back,
       backEngine: backState?.engine ?? null,
       backSessionIntact: backState ? intact(backState) : false,
