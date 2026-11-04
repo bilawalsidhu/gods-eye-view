@@ -2,7 +2,6 @@ import * as Cesium from 'cesium';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
-  FLOOD_LINE_FRACTION,
   PULSING_BANDS,
   RIVER_LEVEL_BANDS,
   compareSeverity,
@@ -35,10 +34,22 @@ const PICK_PREFIX = 'river-levels:';
 const COLUMN_MAX_CAMERA_HEIGHT_M = 150_000;
 const COLUMN_MAX_DISTANCE_M = 400_000;
 const COLUMN_LIMIT = 60;
-/** A column at fraction 1 (the record high) is this tall. */
-const COLUMN_FULL_HEIGHT_M = 2_000;
-const COLUMN_RADIUS_M = 320;
-const RING_THICKNESS_M = 24;
+/** A column at fraction 1 (the record high) is this tall: a slender glass. */
+const COLUMN_FULL_HEIGHT_M = 1_600;
+const COLUMN_RADIUS_M = 110;
+const MARK_THICKNESS_M = 14;
+const SURFACE_THICKNESS_M = 10;
+/**
+ * The gauge's own references drawn on the glass, like the marks on a gauge
+ * board: white at the mean, then the colours of the bands they open.
+ */
+const COLUMN_MARKS = Object.freeze([
+  ['mean', null],
+  ['watch', 'watch'],
+  ['warning', 'warning'],
+  ['flood', 'flood'],
+  ['recordHigh', 'major'],
+]);
 /** Pulses mark water over the flood line; a fixed few, never per gauge. */
 const PULSE_LIMIT = 24;
 const PULSE_PERIOD_MS = 2_400;
@@ -117,7 +128,9 @@ function pulseSprite(bandId) {
 function stationIdFromPick(pickId) {
   if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX))
     return null;
-  return pickId.slice(PICK_PREFIX.length).replace(/:(tube|water|ring)$/, '');
+  return pickId
+    .slice(PICK_PREFIX.length)
+    .replace(/:(tube|water|surface|base|mark-[a-zA-Z]+)$/, '');
 }
 
 /**
@@ -385,9 +398,9 @@ export function createRiverLevelsLayer({
   }
 
   /**
-   * The nearest gauges with references get a water column: a faint tube to
-   * the record high, the water at its stage height in the band colour, and a
-   * white ring at the flood line. Rebuilt only when the chosen set or a
+   * The nearest gauges with references get a water column: a glass tube to
+   * the record high, the water at its stage height in the band colour, and
+   * the gauge's own reference marks on the glass. Rebuilt only when the chosen set or a
    * reading changes, never per frame.
    */
   function refreshColumns() {
@@ -418,53 +431,90 @@ export function createRiverLevelsLayer({
     const entities = _columns.entities;
     entities.suspendEvents();
     entities.removeAll();
+    const relative = Cesium.HeightReference.RELATIVE_TO_GROUND;
     for (const { station, fraction } of chosen) {
       const band = riverBandById(station.band);
       const late = readingIsLate(station);
-      const water = Math.max(RING_THICKNESS_M, fraction * COLUMN_FULL_HEIGHT_M);
+      const colour = Cesium.Color.fromCssColorString(band.color);
+      const water = Math.max(
+        SURFACE_THICKNESS_M * 2,
+        fraction * COLUMN_FULL_HEIGHT_M,
+      );
       // With RELATIVE_TO_GROUND, Cesium lifts a cylinder by half its length
       // itself (Entity.computeModelMatrixForHeightReference), so a position's
       // height is where the cylinder's bottom sits above the ground.
       const at = (bottom) =>
         Cesium.Cartesian3.fromDegrees(station.lon, station.lat, bottom);
-      const relative = Cesium.HeightReference.RELATIVE_TO_GROUND;
-      entities.add({
-        id: `${PICK_PREFIX}${station.id}:tube`,
-        position: at(0),
-        cylinder: {
-          length: COLUMN_FULL_HEIGHT_M,
-          topRadius: COLUMN_RADIUS_M,
-          bottomRadius: COLUMN_RADIUS_M,
-          material: Cesium.Color.WHITE.withAlpha(0.14),
-          heightReference: relative,
+      const disc = (part, bottom, length, radius, material, extra = {}) =>
+        entities.add({
+          id: `${PICK_PREFIX}${station.id}:${part}`,
+          position: at(bottom),
+          cylinder: {
+            length,
+            topRadius: radius,
+            bottomRadius: radius,
+            material,
+            heightReference: relative,
+            ...extra,
+          },
+        });
+      // A dark footing ties the glass to the ground it stands on.
+      disc(
+        'base',
+        0,
+        6,
+        COLUMN_RADIUS_M * 1.8,
+        Cesium.Color.BLACK.withAlpha(0.35),
+      );
+      // The glass: barely tinted, with its rims drawn so it reads as a tube.
+      disc(
+        'tube',
+        0,
+        COLUMN_FULL_HEIGHT_M,
+        COLUMN_RADIUS_M,
+        Cesium.Color.WHITE.withAlpha(0.08),
+        {
+          outline: true,
+          outlineColor: Cesium.Color.WHITE.withAlpha(0.55),
+          numberOfVerticalLines: 4,
         },
-      });
-      entities.add({
-        id: `${PICK_PREFIX}${station.id}:water`,
-        position: at(0),
-        cylinder: {
-          length: water,
-          topRadius: COLUMN_RADIUS_M * 0.92,
-          bottomRadius: COLUMN_RADIUS_M * 0.92,
-          material: Cesium.Color.fromCssColorString(band.color).withAlpha(
-            late ? 0.35 : 0.85,
-          ),
-          heightReference: relative,
-        },
-      });
-      entities.add({
-        id: `${PICK_PREFIX}${station.id}:ring`,
-        position: at(
-          FLOOD_LINE_FRACTION * COLUMN_FULL_HEIGHT_M - RING_THICKNESS_M / 2,
-        ),
-        cylinder: {
-          length: RING_THICKNESS_M,
-          topRadius: COLUMN_RADIUS_M * 1.2,
-          bottomRadius: COLUMN_RADIUS_M * 1.2,
-          material: Cesium.Color.WHITE.withAlpha(0.5),
-          heightReference: relative,
-        },
-      });
+      );
+      disc(
+        'water',
+        0,
+        water,
+        COLUMN_RADIUS_M * 0.9,
+        colour.withAlpha(late ? 0.35 : 0.8),
+      );
+      // A brighter skin marks where the water stands.
+      disc(
+        'surface',
+        water - SURFACE_THICKNESS_M,
+        SURFACE_THICKNESS_M,
+        COLUMN_RADIUS_M * 0.9,
+        Cesium.Color.lerp(
+          colour,
+          Cesium.Color.WHITE,
+          0.55,
+          new Cesium.Color(),
+        ).withAlpha(late ? 0.4 : 0.95),
+      );
+      for (const [key, markBand] of COLUMN_MARKS) {
+        const value = station.refs?.[key];
+        if (!Number.isFinite(value)) continue;
+        const markFraction = stageFraction(value, station.refs);
+        if (markFraction === null) continue;
+        disc(
+          `mark-${key}`,
+          markFraction * COLUMN_FULL_HEIGHT_M - MARK_THICKNESS_M / 2,
+          MARK_THICKNESS_M,
+          COLUMN_RADIUS_M * 1.35,
+          (markBand
+            ? Cesium.Color.fromCssColorString(riverBandById(markBand).color)
+            : Cesium.Color.WHITE
+          ).withAlpha(0.85),
+        );
+      }
     }
     entities.resumeEvents();
   }
