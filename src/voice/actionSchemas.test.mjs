@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { GEV_ACTION_SCHEMAS, createActionTools } from './actionSchemas.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+import { createAreaStore } from '../data/areaStore.js';
+import { createAreaResolver } from '../data/areaResolver.js';
+import { findAdminCandidates } from '../data/adminBoundaries.js';
 import {
   validateArgs,
   validateCall,
@@ -50,7 +53,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The Operator HUD layout leaves set_hud's layout enum.
     // EOX Sentinel-2 joins the set_map_stack enum.
     // The layer alias hint leaves out aliases the layer id already spells.
-    'e5ea67d462544eb19d43e6e42837b49346e220f01d58ba1f017bc11dd9d7c053',
+    // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
+    // area scopes and the osm-places layer; natural-region candidates and the
+    // tightened area tool wording follow review.
+    '93b9edca1f0bfe405b1c5cca234734a39071d201d1ed9e2dd4ce3e72bba59877',
   );
 });
 
@@ -78,6 +84,37 @@ test('descriptions customize wording without changing immutable shared arguments
     JSON.stringify(GEV_ACTION_SCHEMAS).includes('"description"'),
     false,
   );
+});
+
+test('every emitted area candidate round-trips through the production schema', async () => {
+  const candidateSchema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'resolve_area',
+  ).parameters.properties.candidateId;
+  const resolver = createAreaResolver({
+    store: createAreaStore(),
+    findAdminCandidates,
+  });
+  const ambiguous = await resolver.resolve({ query: 'Georgia' });
+  assert.equal(ambiguous.needsClarification, true);
+  for (const choice of ambiguous.candidates) {
+    assert.ok(choice.candidateId.length >= candidateSchema.minLength);
+    assert.ok(choice.candidateId.length <= candidateSchema.maxLength);
+    assert.match(choice.candidateId, new RegExp(candidateSchema.pattern, 'u'));
+    assert.equal(
+      (await resolver.resolve({ candidateId: choice.candidateId })).ok,
+      true,
+    );
+  }
+  assert.equal(ambiguous.candidates[0].candidateId.length, 44);
+  const grammar = new RegExp(candidateSchema.pattern, 'u');
+  for (const malformed of [
+    'ne:state:bad slug',
+    'ne:state:../../etc',
+    'ne:state:!!!',
+    'ne:state:a_b',
+  ])
+    assert.doesNotMatch(malformed, grammar);
+  assert.ok(`ne:state:${'x'.repeat(80)}`.length > candidateSchema.maxLength);
 });
 
 test('metadata cannot add tools, fields, types or enum values', () => {
@@ -113,6 +150,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'next_satellite_pass',
         'set_cyber_sonar',
         'set_voice_inactivity_timeout',
+        'resolve_area',
+        'find_imagery',
+        'osm_query',
       ].includes(tool.name),
   );
   // Layer enums are generated from the voice layer manifest and pinned by
@@ -166,6 +206,13 @@ test('all legacy action arguments are byte-identical after removing the delibera
   analystScopeKind.enum = analystScopeKind.enum.filter(
     (key) => key !== 'pointer',
   );
+  // Area handles add three scope kinds and their two identifiers.
+  const scope = property('analyst_query').scope;
+  scope.properties.kind.enum = scope.properties.kind.enum.filter(
+    (kind) => !['area', 'drawn', 'annotation'].includes(kind),
+  );
+  delete scope.properties.areaId;
+  delete scope.properties.id;
   // The analyst centre now requires a real coordinate.
   const center = property('analyst_query').scope.properties.center;
   delete center.required;

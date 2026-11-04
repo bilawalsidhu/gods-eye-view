@@ -42,11 +42,7 @@ export function update() {
   // NEXT/PREV selection can otherwise spend one frame driving the old
   // aircraft with the new aircraft's metadata.
   this._adoptTrackedEntity(nowMs, info);
-  if (
-    !info ||
-    !this.trackedEntity ||
-    !this.host.contains(this.trackedEntity)
-  ) {
+  if (!info || !this.trackedEntity || !this.host.contains(this.trackedEntity)) {
     if (nowMs < this.contextNavigationDeadlineMs) return;
     this.exit({ restoreTracking: false });
     return;
@@ -61,10 +57,7 @@ export function update() {
     return;
   this.lastCameraUpdateMs = nowMs;
 
-  const target = this.host.position(
-    this.trackedEntity,
-    this.scratchTarget,
-  );
+  const target = this.host.position(this.trackedEntity, this.scratchTarget);
   if (!target) return;
   const dtSec = Math.min(0.1, Math.max(0, (nowMs - this.lastFrameMs) / 1000));
   this.lastFrameMs = nowMs;

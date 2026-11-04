@@ -40,8 +40,13 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 33);
+  assert.equal(first.layers.length, 37);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
+  assert.deepEqual(
+    first.metadata.find(({ id }) => id === 'osm-places'),
+    { id: 'osm-places', disposition: 'local-only' },
+    'voice search results never enter share links or stored state',
+  );
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
     { id: 'local-adsb', disposition: 'local-only' },
@@ -62,6 +67,7 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.ok(first.get('fire-perimeters'));
   assert.ok(first.get('gnss-integrity'));
   assert.ok(first.get('s2-ghostmaps'));
+  assert.ok(first.get('drone-airspace'));
   assert.ok(first.get('transit'));
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
@@ -155,7 +161,7 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     surface: fixtureSurface(lifetime.signal),
   };
   const catalog = createApplicationCatalog(options);
-  assert.equal(catalog.layers.length, 33);
+  assert.equal(catalog.layers.length, 37);
   assert.deepEqual(catalog.get('street-level').providerIds, []);
   assert.equal(
     catalogControlServices(catalog).streetLevelLayer,
@@ -245,6 +251,14 @@ test('the catalog per engine: Cesium as before, Navara only what it can show', a
   assert.equal(subset.get('military'), undefined);
 });
 
+// Cesium-only layers without attachRenderer: rebuilt for each Cesium catalog.
+const CESIUM_ONLY_LAYERS = [
+  'drone-airspace',
+  'osm-places',
+  'sea-marks',
+  'ski-pistes',
+];
+
 test('both production registries attach to the same 33 session models', async (t) => {
   const { registerNavaraLayerRenderers } = await import('./navaraMode.js');
   const lifetime = new AbortController();
@@ -258,13 +272,20 @@ test('both production registries attach to the same 33 session models', async (t
   const cesium = createApplicationCatalog(options);
   await registerNavaraLayerRenderers();
   const navara = createApplicationCatalog({ ...options, engineKind: 'navara' });
-  assert.equal(cesium.layers.length, 33);
+  const shared = cesium.layers.filter(
+    ({ id }) => !CESIUM_ONLY_LAYERS.includes(id),
+  );
+  assert.equal(cesium.layers.length, 33 + CESIUM_ONLY_LAYERS.length);
+  assert.equal(shared.length, 33);
   assert.deepEqual(
     navara.layers.map(({ id }) => id),
-    cesium.layers.map(({ id }) => id),
+    shared.map(({ id }) => id),
   );
-  assert.deepEqual(navara.metadata, cesium.metadata);
-  for (const layer of cesium.layers) {
+  assert.deepEqual(
+    navara.unavailableMetadata.map(({ id }) => id).sort(),
+    [...CESIUM_ONLY_LAYERS].sort(),
+  );
+  for (const layer of shared) {
     assert.equal(navara.get(layer.id), layer, layer.id);
     assert.equal(typeof layer.attachRenderer, 'function', layer.id);
     assert.equal(typeof layer.detachRenderer, 'function', layer.id);
