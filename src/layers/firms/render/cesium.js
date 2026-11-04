@@ -3,6 +3,7 @@ import {
   worldToWindowCoordinates,
   horizonOccluder,
 } from '../../../data/render/cesiumProjection.js';
+import { createHeatImagery } from '../heatImagery.js';
 
 // Cesium ScreenSpaceEventType.LEFT_CLICK; available before the SDK loads.
 export const FIRMS_LEFT_CLICK = 2;
@@ -22,6 +23,7 @@ export function createFirmsCesiumRenderer(
   let sprites = null,
     visible = false,
     destroyed = false;
+  const fadeColor = new Cesium.Color();
   const spriteServices = services.sprites;
   function removeSprites() {
     if (!sprites) return;
@@ -110,6 +112,27 @@ export function createFirmsCesiumRenderer(
       });
     },
     removeSprites,
+    /**
+     * The far-zoom heatmap draped on this globe: on the active map stack's
+     * imagery host (`imageryHost()`), else on the viewer's imagery layers.
+     */
+    createHeatImagery(imageryHost) {
+      return createHeatImagery({
+        cesium: Cesium,
+        getHost: () =>
+          imageryHost?.() ?? {
+            collection: viewer.imageryLayers ?? null,
+            kind: 'globe',
+          },
+      });
+    },
+    /** The hand-off fade: every marker at `alpha`, shown while `show`. */
+    fadeSprites(alpha, show) {
+      if (destroyed || !sprites) return;
+      sprites.show = show;
+      const color = Cesium.Color.WHITE.withAlpha(alpha, fadeColor);
+      for (let i = 0; i < sprites.length; i += 1) sprites.get(i).color = color;
+    },
     onEnable() {
       if (!destroyed)
         spriteServices.restoreSpriteOrderOnEnable('firms', viewer);

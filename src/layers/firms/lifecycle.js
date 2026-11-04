@@ -11,7 +11,32 @@ export function createLifecycle({
   const { clearSelectedEntityContextForLayer } = services.context;
   const { id, overlayHost } = config;
 
+  // The heatmap is draped on the renderer's globe (Cesium only); it goes
+  // with the renderer and is built again on the next one that can drape it.
+  function releaseHeat() {
+    clearTimeout(layerState._heatRebuildTimer);
+    layerState._heatRebuildTimer = null;
+    layerState._heatImagery?.destroy();
+    layerState._heatImagery = null;
+    layerState._heatRaster = null;
+    layerState._handoffHeat = -1;
+  }
+
   const methods = {
+    /**
+     * Shell services: `imageryHost()` resolves where draped imagery goes on
+     * the active map stack (globe or 3D tiles, src/maps/imageryHost.js). The
+     * heatmap moves with it; without a host it drapes on viewer.imageryLayers.
+     * @param {{imageryHost?: () => {collection: ?Object, kind: string}}|null} services
+     */
+    attachShellServices(services) {
+      layerState._imageryHost =
+        typeof services?.imageryHost === 'function'
+          ? services.imageryHost
+          : null;
+      layerState._heatImagery?.rehome();
+    },
+
     init(viewer, options) {
       this.attachRenderer(viewer, options);
     },
@@ -53,6 +78,7 @@ export function createLifecycle({
       components.viewport.removeLodWatcher();
       unregisterPickOwner(id);
       components.rendering.removeDetectionCollections(layerState._viewer);
+      releaseHeat();
       layerState._renderer?.destroy();
       layerState._renderer = layerState._viewer = layerState._dataSource = null;
       layerState._pickIndexById.clear();
@@ -73,6 +99,10 @@ export function createLifecycle({
       }
       layerState._renderer.setVisible(true);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, true);
+      // A filter can leave an old raster cached while the current set is empty.
+      layerState._heatImagery?.setShow(layerState._fires.length > 0);
+      // The camera can have crossed the hand-off while the layer was off.
+      components.rendering.applyHandoffFade(true);
       components.viewport.installLodWatcher();
       components.viewport.installMoveEndWatcher();
       components.selection.installClickHandler();
@@ -101,6 +131,7 @@ export function createLifecycle({
       layerState._enabled = false;
       components.selection.clearFireSelection();
       layerState._renderer?.setVisible(false);
+      layerState._heatImagery?.setShow(false);
       overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
       clearSelectedEntityContextForLayer(id);
@@ -128,11 +159,17 @@ export function createLifecycle({
       layerState._dataSource = null;
       components.selection.clearContextRegistrations();
       clearSelectedEntityContextForLayer(id);
+      layerState._allFires = [];
+      layerState._allFiresByFrp = [];
       layerState._fires = [];
       layerState._firesByFrp = [];
       layerState._cellCacheByGrid.clear();
       layerState.glowSpriteCache.clear();
+      releaseHeat();
+      layerState._imageryHost = null;
       layerState._count = 0;
+      layerState._totalCount = 0;
+      layerState._rowControlsListener = null;
       layerState._cellCount = 0;
       layerState._lastUpdate = null;
       layerState._keyRequired = false;

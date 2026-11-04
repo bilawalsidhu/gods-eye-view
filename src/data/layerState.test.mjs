@@ -29,6 +29,7 @@ import radioLayer from './radio.js';
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { MAX_SINCE_DAYS } from '../layers/streetLevel/policy.js';
 import { SINCE_STOPS } from '../ui/streetLevelPresentation.js';
+import { FIRMS_CONFIDENCE_MODES, MIN_FRP_MW_MAX } from './firmsIntensity.js';
 
 function deferred() {
   let resolve;
@@ -3007,7 +3008,10 @@ test('Clear All cancels a saved restore still waiting to start', async () => {
   gate.resolve();
   const results = await restore;
   for (const id of ['earthquakes', 'flights']) {
-    assert.equal(results.find((result) => result.layerId === id).succeeded, false);
+    assert.equal(
+      results.find((result) => result.layerId === id).succeeded,
+      false,
+    );
   }
   assert.deepEqual([...manager.getEnabledLayerIds()], []);
   assert.equal(enabledLayerParam(sink), '');
@@ -3019,7 +3023,9 @@ test('a link through an engine without some layers keeps their state and activat
   const manager = new DataLayerManager({});
   const enabled = [];
   manager.register(
-    fakeLayer('satellites', { enable: () => (enabled.push('satellites'), true) }),
+    fakeLayer('satellites', {
+      enable: () => (enabled.push('satellites'), true),
+    }),
   );
   manager.finalizeRegistrations(
     LAYER_STATE_REGISTRY.filter(({ id }) => id === 'satellites'),
@@ -3042,10 +3048,11 @@ test('a link through an engine without some layers keeps their state and activat
     .sort();
   assert.deepEqual(missing, ['ais-live-vessels', 'flights']);
   // Re-saved (the link the user copies on Navara): the state is all there.
-  assert.deepEqual(
-    sink.provider().enabledLayerIds,
-    ['ais-live-vessels', 'flights', 'satellites'],
-  );
+  assert.deepEqual(sink.provider().enabledLayerIds, [
+    'ais-live-vessels',
+    'flights',
+    'satellites',
+  ]);
   // An explicit change of a layer that is here keeps the others too.
   await manager.setEnabled('satellites', false, { origin: 'user' });
   assert.deepEqual(sink.provider().enabledLayerIds, [
@@ -3058,4 +3065,81 @@ test('a link through an engine without some layers keeps their state and activat
   );
   assert.deepEqual(decoded.enabledLayerIds, ['ais-live-vessels', 'flights']);
   coordinator.destroy();
+});
+
+/** Active Fires options decoded from a v2 link with these `lo` assignments. */
+function firmsOptions(lo) {
+  const params = new URLSearchParams([
+    ['v', '2'],
+    ['l', 'w'],
+  ]);
+  if (lo) params.set('lo', lo);
+  return decodeLayerStateParams(params).options['local-firms'];
+}
+
+test('Active Fires: the intensity filter rides share token w and round-trips', () => {
+  const state = createDefaultLayerState();
+  assert.deepEqual(state.options['local-firms'], {
+    minFrp: 0,
+    confidence: 'all',
+  });
+  state.enabledLayerIds = ['local-firms'];
+  state.options['local-firms'] = { minFrp: 20, confidence: 'high' };
+  const encoded = encode(state);
+  assert.equal(new URLSearchParams(encoded).get('l'), 'w');
+  // Other owners write their own explicit defaults into `lo` too (flights 3D,
+  // wind overlay); the fire assignments ride beside them.
+  const assignments = new URLSearchParams(encoded).get('lo').split('_');
+  assert.ok(assignments.includes('w.f.20'), assignments.join(' '));
+  assert.ok(assignments.includes('w.c.h'), assignments.join(' '));
+  const decoded = decodeLayerStateParams(new URLSearchParams(encoded));
+  assert.deepEqual(decoded.options['local-firms'], {
+    minFrp: 20,
+    confidence: 'high',
+  });
+  assert.deepEqual(
+    parseStoredLayerState(serializeStoredLayerState(state)).options[
+      'local-firms'
+    ],
+    state.options['local-firms'],
+  );
+  // Defaults are omitted from the link: a plain `l=w` is "show everything".
+  const plain = createDefaultLayerState();
+  plain.enabledLayerIds = ['local-firms'];
+  assert.equal(
+    new URLSearchParams(encode(plain))
+      .get('lo')
+      .split('_')
+      .filter((assignment) => assignment.startsWith('w.')).length,
+    0,
+  );
+  assert.deepEqual(firmsOptions(''), { minFrp: 0, confidence: 'all' });
+});
+
+test('Active Fires: the codec accepts whole megawatts in bounds and the three confidence codes', () => {
+  // The codec spells its bounds out (it runs in isolation in the ledger
+  // tests); they must stay the layer's.
+  assert.equal(MIN_FRP_MW_MAX, 10000);
+  assert.deepEqual([...FIRMS_CONFIDENCE_MODES], ['all', 'nominal', 'high']);
+  assert.equal(firmsOptions('w.f.300').minFrp, 300);
+  assert.equal(firmsOptions('w.f.10000').minFrp, 10000);
+  assert.equal(firmsOptions('w.f.10001').minFrp, 0, 'out of bounds → default');
+  assert.equal(firmsOptions('w.f.-5').minFrp, 0);
+  assert.equal(
+    firmsOptions('w.f.2.5').minFrp,
+    0,
+    'a third segment is rejected',
+  );
+  assert.equal(firmsOptions('w.c.a').confidence, 'all');
+  assert.equal(firmsOptions('w.c.n').confidence, 'nominal');
+  assert.equal(firmsOptions('w.c.h').confidence, 'high');
+  assert.equal(
+    firmsOptions('w.c.x').confidence,
+    'all',
+    'unknown code → default',
+  );
+  assert.deepEqual(firmsOptions('w.c.n_w.f.5'), {
+    minFrp: 5,
+    confidence: 'nominal',
+  });
 });
