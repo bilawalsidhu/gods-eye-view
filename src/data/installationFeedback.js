@@ -1,6 +1,6 @@
 import { msg } from '../i18n/marker.js';
 
-// layers/installations/controls.js translates describeInstallationFeedback().
+// installationFeedback() is English data; ui/statusText.js shows it translated.
 const REASONS = Object.freeze({
   rate_limited: msg('Overpass rate-limited'),
   timeout: msg('Overpass timed out'),

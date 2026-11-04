@@ -74,6 +74,14 @@ const transitCoverage = [
   'transit: No feed here yet · 12 regions available',
 ];
 
+// Mapped Installations' statusMessage (data/installationFeedback.js).
+const installationNotes = [
+  'military-installations: No mapped sites in view',
+  'military-installations: No mapped sites within 25 km of the contact',
+  'military-installations: Overpass timed out — retrying in 30s',
+  'military-installations: Zoom in to search mapped installations',
+];
+
 for (const locale of ['es', 'ru']) {
   for (const [layerKey, caveat] of cases) {
     test(`${locale}: analyst note "${caveat}" is translated`, () => {
@@ -84,6 +92,19 @@ for (const locale of ['es', 'ru']) {
       });
     });
   }
+
+  test(`${locale}: Mapped Installations' empty note is translated on the analyst card`, () => {
+    inLocale(locale, () => {
+      for (const caveat of installationNotes) {
+        const notes = notesFor('military-installations', caveat);
+        assert.ok(notes.length > 0, 'the note is shown');
+        assert.doesNotMatch(
+          notes.join(' | '),
+          /mapped sites|retrying|Overpass timed out|Zoom in/,
+        );
+      }
+    });
+  });
 
   test(`${locale}: Transit's empty note is translated on the analyst card`, () => {
     inLocale(locale, () => {

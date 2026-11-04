@@ -11,7 +11,11 @@ import {
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
-import { translateFeedError, translateStatusLine } from './statusText.js';
+import {
+  translateFeedError,
+  translateStatusLine,
+  translateStatusPiece,
+} from './statusText.js';
 import {
   formatNumber,
   getLocale,
@@ -691,7 +695,7 @@ export class LayerPanel {
       typeof stats.statusMessage === 'string' &&
       stats.statusMessage.trim()
     ) {
-      return `${source} · ${translateKnown(stats.statusMessage.trim())}`;
+      return `${source} · ${translateStatusPiece(stats.statusMessage.trim())}`;
     }
     const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : t('never');
     if (stats.loading) {
