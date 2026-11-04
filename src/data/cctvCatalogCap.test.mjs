@@ -10,6 +10,7 @@ import {
   DEFAULT_CCTV_MAX_SOURCES,
 } from '../../server/providers/cctv/constants.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
+import * as sourceLimits from '../../server/providers/cctv/constants.js';
 
 const pack = (name, count, prefix = name) => ({
   name,
@@ -17,6 +18,63 @@ const pack = (name, count, prefix = name) => ({
     id: `${prefix}-${i}`,
     rank: i,
   })),
+});
+
+test('the default budget serves the full shipped pack budgets including statewide Pennsylvania', () => {
+  const lanes = Object.entries(sourceLimits)
+    .filter(
+      ([name]) =>
+        /^DEFAULT_.+_MAX_SOURCES$/.test(name) &&
+        name !== 'DEFAULT_CCTV_MAX_SOURCES',
+    )
+    .map(([name, count]) => pack(name, count));
+  // Smaller catalogs with module-local defaults: Taiwan 600, Lithuania
+  // 400 (opt-in), A22 13, and the curated municipal camera.
+  lanes.push(pack('other-small-packs', 1014));
+  const total = lanes.reduce((sum, lane) => sum + lane.sources.length, 0);
+  assert.ok(total > 5000, 'exercise a catalog above the previous hard ceiling');
+  assert.ok(
+    total <= DEFAULT_CCTV_MAX_SOURCES,
+    `shipped budgets (${total}) exceed the default (${DEFAULT_CCTV_MAX_SOURCES})`,
+  );
+  const allocation = allocateSourceCap(lanes, resolveCatalogCap(undefined));
+  assert.equal(allocation.sources.length, total);
+  assert.ok(allocation.packs.every((lane) => lane.kept === lane.offered));
+  assert.equal(
+    allocation.packs.find((lane) => lane.name === 'DEFAULT_PENNDOT_MAX_SOURCES')
+      .kept,
+    sourceLimits.DEFAULT_PENNDOT_MAX_SOURCES,
+  );
+  assert.ok(DEFAULT_CCTV_MAX_SOURCES <= CCTV_MAX_SOURCES_CEILING);
+});
+
+test('a catalog larger than the previous ceiling reaches clients in full with the default budget', async () => {
+  const saved = { ...process.env };
+  try {
+    delete process.env.CCTV_MAX_SOURCES;
+    process.env.CCTV_PREFER_AUSTIN = '0';
+    process.env.CCTV_FORCE_AUSTIN = '0';
+    process.env.CCTV_SOURCES_FILE = '/nonexistent/cctv.json';
+    const rows = [
+      ...pack('511pa', sourceLimits.DEFAULT_PENNDOT_MAX_SOURCES).sources,
+      ...pack('other-regions', 5000).sources,
+    ];
+    process.env.CCTV_SOURCES_JSON = JSON.stringify(
+      rows.map((row) => ({ ...row, lat: 40, lon: -76 })),
+    );
+    const catalog = createCctvCatalog({ sourceRoot: '/nonexistent' });
+    const sources = await catalog();
+    assert.equal(sources.length, rows.length);
+    assert.equal(
+      sources.filter((source) => source.id.startsWith('511pa-')).length,
+      sourceLimits.DEFAULT_PENNDOT_MAX_SOURCES,
+    );
+    assert.deepEqual(catalog.trimmedPacks(sources), []);
+  } finally {
+    for (const key of Object.keys(process.env))
+      if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
 });
 
 test('under the cap every pack is served whole, in merge order', () => {

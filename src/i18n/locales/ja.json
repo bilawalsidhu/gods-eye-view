@@ -3014,5 +3014,6 @@
   "The provider rejected the API key. Check it in Provider Settings.": "プロバイダーが API キーを拒否しました。プロバイダー設定で確認してください。",
   "Too many chat requests. Try again in {seconds} s.": "チャットのリクエストが多すぎます。{seconds} 秒後にもう一度お試しください。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "プロバイダーがこのキーへのアクセスを拒否しました。キーのプロジェクト、地域、権限を確認してください。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーのアカウントのクレジットが不足しています。請求を確認するか、設定で別の AI プロバイダーを選んでください。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーのアカウントのクレジットが不足しています。請求を確認するか、設定で別の AI プロバイダーを選んでください。",
+  "PennDOT Traffic Cams": "PennDOT交通カメラ"
 }

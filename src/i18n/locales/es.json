@@ -3164,5 +3164,6 @@
   "The provider rejected the API key. Check it in Provider Settings.": "El proveedor rechazó la clave de API. Revísala en Ajustes del proveedor.",
   "Too many chat requests. Try again in {seconds} s.": "Demasiadas solicitudes de chat. Vuelve a intentarlo en {seconds} s.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "El proveedor denegó el acceso a esta clave. Revisa el proyecto, la región o los permisos de la clave.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "La cuenta del proveedor no tiene crédito. Revisa la facturación o elige otro proveedor de IA en Ajustes."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "La cuenta del proveedor no tiene crédito. Revisa la facturación o elige otro proveedor de IA en Ajustes.",
+  "PennDOT Traffic Cams": "Cámaras de tráfico de PennDOT"
 }

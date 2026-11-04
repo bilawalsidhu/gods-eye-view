@@ -1262,5 +1262,13 @@
   "src/voice/geminiTextChat.js",
   "src/voice/panelLayout.js",
   "src/voice/textChat.js",
-  "src/voice/textProtocol.js"
+  "src/voice/textProtocol.js",
+  "src/data/cctvPennDot.test.mjs",
+  "scripts/qa-cctv-catalog.mjs",
+  "src/data/cctvLod.test.mjs",
+  "src/data/cctvViewThinning.test.mjs",
+  "scripts/qa-cctv-zoom.mjs",
+  "src/data/cameraLabels.test.mjs",
+  "src/app/layers/cameraCategories.test.mjs",
+  "scripts/qa-penndot-categories.mjs"
 ]

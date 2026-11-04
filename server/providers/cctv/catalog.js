@@ -6,6 +6,7 @@ import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
 import { loadTaiwanSources } from './taiwan.js';
+import { loadPennDotSources } from './penndot.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -49,6 +50,12 @@ const envOptIn = (name) => String(process.env[name] || '').trim() === '1';
  * terms are unconfirmed.
  */
 const LIVE_PACKS = [
+  {
+    name: '511pa',
+    // PennDOT requires a video-sharing agreement for direct feed use.
+    enabled: () => envOptIn('CCTV_511PA_ENABLED'),
+    load: loadPennDotSources,
+  },
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
   {
     name: 'caltrans',

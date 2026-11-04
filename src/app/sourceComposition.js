@@ -15,7 +15,7 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
   military: contract(['military'], ['getSnapshot']),
   vessels: contract(['ais-live-vessels'], ['getSnapshot']),
   cctv: contract(
-    ['cctv'],
+    ['cctv', 'penndot-traffic-cams'],
     ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
   ),
   radio: contract(['radio'], ['getDirectory', 'recordClick']),

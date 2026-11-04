@@ -1,3 +1,4 @@
+import { cameraCategoryCounts, cameraIsEnabled } from './categories.js';
 import * as Cesium from 'cesium';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
@@ -108,6 +109,7 @@ export function createLifecycle({
     parts.cards.teardownAmbientCards();
     parts.projection.clearProjectionOverlay();
     layerState._records = [];
+    layerState._cameraCategoryCounts = { general: 0, penndot: 0 };
     layerState._recordById = new Map();
     layerState._viewRecords = [];
     layerState._cameraIndexCache = null;
@@ -298,11 +300,19 @@ export function createLifecycle({
         layerState._recordById.set(camera.id, record);
       }
 
-      layerState._count = layerState._records.length;
+      layerState._cameraCategoryCounts = cameraCategoryCounts(
+        layerState._records,
+      );
+      layerState._count = layerState._records.filter(({ camera }) =>
+        cameraIsEnabled(camera, layerState._cameraCategories),
+      ).length;
       if (layerState._records.length > 0) {
         // Projection runtime + first frame fetch are deferred to enable() so
         // initializing the catalog stays render-cheap.
-        layerState._activeCameraId = layerState._records[0].camera.id;
+        layerState._activeCameraId =
+          layerState._records.find(({ camera }) =>
+            cameraIsEnabled(camera, layerState._cameraCategories),
+          )?.camera.id || null;
       }
 
       // Task 5: if the prior batch lost init's bounded race, apply it post-hoc
@@ -508,7 +518,10 @@ export function createLifecycle({
         return Boolean(coverage && layerState._recordById.has(coverage[1]));
       });
       if (!layerState._activeCameraId && layerState._records.length) {
-        layerState._activeCameraId = layerState._records[0].camera.id;
+        layerState._activeCameraId =
+          layerState._records.find(({ camera }) =>
+            cameraIsEnabled(camera, layerState._cameraCategories),
+          )?.camera.id || null;
         layerState._autoHopSuspended = false;
       }
       const activeRecord = parts.selection.getActiveRecord();

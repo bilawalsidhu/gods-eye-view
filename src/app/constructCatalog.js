@@ -10,6 +10,7 @@ import { createApplicationFlights } from './layers/flights.js';
 import { createApplicationMilitary } from './layers/militaryFlights.js';
 import { createApplicationVessels } from './layers/aisLiveVessels.js';
 import { createApplicationCctv } from './layers/cctv.js';
+import { createCameraCategories } from './layers/cameraCategories.js';
 import { createApplicationRadio } from './layers/radio.js';
 import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
@@ -110,6 +111,9 @@ export function createApplicationCatalog({
     const satellites = createApplicationSatellites({
       source: sources.satellites,
     });
+    const cameras = createCameraCategories(
+      createApplicationCctv({ surface, source: sources.cctv }),
+    );
     const catalog = createLayerCatalog(
       [
         createBhoteKoshiEventLayer(),
@@ -146,7 +150,8 @@ export function createApplicationCatalog({
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),
         createApplicationTraffic({ source: sources.traffic, surface }),
-        createApplicationCctv({ surface, source: sources.cctv }),
+        cameras.general,
+        cameras.penndot,
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),

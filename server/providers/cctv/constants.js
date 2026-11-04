@@ -8,12 +8,16 @@ export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
  * Catalog-wide safety ceiling on served cameras. Each pack already caps
  * itself (nearest-to-anchor first); this bound only matters when the packs
  * together exceed it, and it is then filled round-robin across packs (see
- * cap.js) so no region is silently dropped. The default per-pack caps
- * together can exceed it, so a default install may be thinned evenly here.
+ * cap.js) so no region is silently dropped. The default accommodates the
+ * combined shipped pack budgets, including statewide Pennsylvania, rather
+ * than thinning a new statewide feed to a few hundred cameras. Operators
+ * can still choose a smaller shared budget for constrained installations.
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 4000;
+export const DEFAULT_CCTV_MAX_SOURCES = 12000;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
-export const CCTV_MAX_SOURCES_CEILING = 5000;
+export const CCTV_MAX_SOURCES_CEILING = 20000;
+/** Full current 511PA catalog, with room for growth before its own cap. */
+export const DEFAULT_PENNDOT_MAX_SOURCES = 2000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
