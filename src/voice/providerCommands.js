@@ -61,6 +61,9 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     const pushToTalk = Boolean(
       current.session.adapter.getStartOptions?.().pushToTalk,
     );
+    const textOnly = Boolean(
+      current.session.adapter.getStartOptions?.().textOnly,
+    );
     const generation = ++mountGeneration;
     voiceEnabled = false;
     current.session.destroy();
@@ -79,7 +82,10 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     }
     mount();
     if (resume && !disposed && provider === next)
-      void current.session.start({ pushToTalk });
+      void current.session.start({
+        pushToTalk,
+        ...(textOnly ? { textOnly } : {}),
+      });
     // The new control renders first; focus stays on the provider choice.
     void current.ui?.focus?.(['provider'], { anyVisibility: true });
     return true;
