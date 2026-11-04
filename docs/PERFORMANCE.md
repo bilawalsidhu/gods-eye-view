@@ -97,7 +97,8 @@ operational sample contained 3,909 observations and two selected labels, but its
 live aircraft and traffic rows were empty, so it remains a limited stress case.
 
 Snow, Noir, dense detection, and text-heavy combined layers are the clearest
-controlled comparison points for later optimization work.
+controlled comparison points for later optimization work. Snow has since been
+retired as a visual preset; its row records the measurement as taken.
 
 ## Keyed live sources
 

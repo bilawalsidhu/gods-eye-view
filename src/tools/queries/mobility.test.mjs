@@ -171,6 +171,46 @@ test('bike share reports uncovered areas and failed systems honestly', async () 
   );
 });
 
+test('bike share excludes blank coordinates without losing stations on the prime meridian', async () => {
+  const stations = [
+    { station_id: 'blank', lat: 51.5, lon: ' ' },
+    { station_id: 'zero', lat: 51.5, lon: 0 },
+  ];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        systems: [system('fixture', 'Fixture Bikes', 51.5, 0)],
+        async getStations(url) {
+          return {
+            data: {
+              stations: url.endsWith('station_information.json')
+                ? stations
+                : stations.map(({ station_id }) => ({
+                    station_id,
+                    num_bikes_available: 4,
+                  })),
+            },
+          };
+        },
+      },
+    },
+  });
+  const result = await catalog.call('get_bike_share', {
+    area: { lat: 51.5, lon: 0, radius_km: 2 },
+  });
+  assert.deepEqual(
+    result.data.rows.map((row) => row.station_id),
+    ['zero'],
+  );
+  assert.equal(result.data.total, 1);
+  assert.equal(result.data.rows[0].lon, 0);
+  assert.equal(
+    result.summary,
+    '1 bike-share station in 2 km around 51.500, 0.000 with 4 bikes available.',
+  );
+});
+
 const feed = {
   id: 'capmetro',
   name: 'CapMetro',

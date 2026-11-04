@@ -12,7 +12,11 @@
  */
 
 import { EXCLUSIVE_SURFACE_CLASSES } from '../exclusiveSurfaces.js';
-import { msg, t } from '../i18n/index.js';
+import { msg } from '../i18n/index.js';
+import {
+  prefersCollapsed as prefersStateCollapsed,
+  readPanelState,
+} from './rail/panelState.js';
 
 export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
 export const MOBILE_SHELL_CLASS = 'mobile-shell';
@@ -85,52 +89,36 @@ function currentSheetOf(body) {
   return value && Object.hasOwn(MOBILE_SHEET_PANELS, value) ? value : null;
 }
 
-function buildChrome(documentRef) {
-  const backdrop = documentRef.createElement('div');
-  backdrop.id = 'mobile-sheet-backdrop';
-  backdrop.hidden = true;
-
-  const tabBar = documentRef.createElement('nav');
-  tabBar.id = 'mobile-tab-bar';
-  tabBar.setAttribute('aria-label', t('Panels'));
-  for (const tab of MOBILE_TABS) {
-    const button = documentRef.createElement('button');
-    button.type = 'button';
-    button.className = 'mobile-tab';
-    button.dataset.mobileSheet = tab.sheet;
-    button.setAttribute('aria-expanded', 'false');
-    const icon = documentRef.createElement('span');
-    icon.className = 'material-symbols-outlined mobile-tab-icon';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = tab.icon;
-    const label = documentRef.createElement('span');
-    label.className = 'mobile-tab-label';
-    label.textContent = t(tab.label);
-    button.append(icon, label);
-    tabBar.append(button);
-  }
-  documentRef.body.append(backdrop, tabBar);
-  return { backdrop, tabBar };
-}
-
 /**
  * Wires the phone shell: the media gate, tab bar, backdrop, Escape, focus,
- * and closing for full-screen modes.
+ * and closing for full-screen modes. The shell publishes its tabs, whether it
+ * is on and which sheet is open; Core's dock renders the tab bar and the
+ * backdrop at the end of the page from its first publish until it is
+ * destroyed, and the shell takes their clicks from the document.
  * @param {object} input
  * @param {(panelId: string, collapsed: boolean, options?: object) => void} input.setPanelCollapsed
  * @param {Document} [input.documentRef]
  * @param {(query: string) => MediaQueryList} [input.matchMedia]
  * @param {typeof MutationObserver} [input.MutationObserverImpl]
  * @param {typeof ResizeObserver} [input.ResizeObserverImpl]
+ * @param {(panel: Element) => object} [input.readPanel] A panel's state as its
+ *   owner presented it; its classes by default.
  * @param {(callback: () => void) => number} [input.requestFrame]
  * @param {() => void} [input.onSheetsClosed] Runs after the last sheet closes
  *   and its panels are put back (e.g. to refresh the share link).
  * @param {(sheet: string) => void} [input.onTabOpened] Runs only when the user
  *   opens a sheet from its tab, never on close or programmatic presentation.
+ * @param {(view: ?{enabled: boolean, sheet: string|null, tabs: typeof MOBILE_TABS}) => void} [input.publish]
+ *   Receives the tab bar: whether the shell is on, the open sheet and the
+ *   tabs; null once the shell is destroyed.
+ * @param {(callback: () => void) => void} [input.afterPublish] Runs a callback
+ *   once a publish has rendered, so focus returns to a tab whose state is
+ *   already current.
  * @returns {{ destroy: () => void, setSheet: (sheet: string|null) => void, getSheet: () => string|null, sharedCollapsed: (panelId: string) => boolean|undefined }}
  */
 export function initMobileShell({
   setPanelCollapsed,
+  readPanel = readPanelState,
   documentRef = globalThis.document,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   MutationObserverImpl = globalThis.MutationObserver,
@@ -138,9 +126,10 @@ export function initMobileShell({
   requestFrame = globalThis.requestAnimationFrame?.bind(globalThis),
   onSheetsClosed = () => {},
   onTabOpened = () => {},
+  publish = () => {},
+  afterPublish = (callback) => callback(),
 } = {}) {
   const body = documentRef.body;
-  const { backdrop, tabBar } = buildChrome(documentRef);
   const viewport = documentRef.querySelector('meta[name="viewport"]');
   const viewportContent = viewport?.getAttribute('content') ?? null;
   const removers = [];
@@ -162,6 +151,8 @@ export function initMobileShell({
    */
   let borrowed = null;
   let returnFocus = null;
+  // Opening a sheet or destroying the shell cancels a pending focus return.
+  let focusReturns = 0;
   let swipe = null;
   const written = new Map();
 
@@ -198,18 +189,14 @@ export function initMobileShell({
       : null;
   removers.push(() => resize?.disconnect());
 
-  const isCollapsed = (panelId) =>
-    element(panelId)?.classList.contains('collapsed') ?? true;
-  // The user's preference, as share links record it: a collapse that layout
-  // applies only for space (Tactical, Cyber) still counts as expanded.
+  const isCollapsed = (panelId) => {
+    const panel = element(panelId);
+    return panel ? readPanel(panel).collapsed : true;
+  };
+  // The user's preference, as share links record it.
   const prefersCollapsed = (panelId) => {
-    const classes = element(panelId)?.classList;
-    if (!classes) return true;
-    return (
-      classes.contains('collapsed') &&
-      !classes.contains('layout-auto-collapsed') &&
-      !classes.contains('cyber-accordion-collapsed')
-    );
+    const panel = element(panelId);
+    return panel ? prefersStateCollapsed(readPanel(panel)) : true;
   };
 
   const panelStates = () =>
@@ -231,15 +218,17 @@ export function initMobileShell({
     }
   };
 
+  const publishChrome = () =>
+    publish({
+      enabled: body.classList.contains(MOBILE_SHELL_CLASS),
+      sheet: currentSheetOf(body),
+      tabs: MOBILE_TABS,
+    });
+
   const present = (sheet) => {
     if (sheet) body.setAttribute(MOBILE_SHEET_ATTR, sheet);
     else body.removeAttribute(MOBILE_SHEET_ATTR);
-    backdrop.hidden = !sheet;
-    for (const button of tabBar.querySelectorAll('[data-mobile-sheet]'))
-      button.setAttribute(
-        'aria-expanded',
-        String(button.dataset.mobileSheet === sheet),
-      );
+    publishChrome();
     measureSheet();
   };
 
@@ -269,6 +258,7 @@ export function initMobileShell({
     const previous = currentSheetOf(body);
     if (previous === sheet) return;
     if (!previous) {
+      focusReturns += 1;
       borrowed = { before: panelStates(), applied: panelStates() };
       returnFocus = documentRef.activeElement ?? null;
     } else {
@@ -281,7 +271,14 @@ export function initMobileShell({
       onSheetsClosed();
       const focus = returnFocus;
       returnFocus = null;
-      if (focus && focus !== body && body.contains?.(focus)) focus.focus?.();
+      // Focus that moved elsewhere meanwhile stays where it went.
+      const closedWith = documentRef.activeElement;
+      const pending = ++focusReturns;
+      afterPublish(() => {
+        if (pending !== focusReturns) return;
+        if (documentRef.activeElement !== closedWith) return;
+        if (focus && focus !== body && body.contains?.(focus)) focus.focus?.();
+      });
       return;
     }
     for (const panelId of MOBILE_SHEET_PANELS[sheet])
@@ -301,9 +298,10 @@ export function initMobileShell({
   };
 
   const tabFor = (sheet) =>
-    [...tabBar.querySelectorAll('[data-mobile-sheet]')].find(
-      (button) => button.dataset.mobileSheet === sheet,
-    );
+    [
+      ...(element('mobile-tab-bar')?.querySelectorAll('[data-mobile-sheet]') ??
+        []),
+    ].find((button) => button.dataset.mobileSheet === sheet);
 
   const onMedia = (matches) => {
     if (matches) {
@@ -317,6 +315,7 @@ export function initMobileShell({
         );
       for (const node of [...rails, dock].filter(Boolean))
         resize?.observe(node);
+      publishChrome();
       measureSheet();
     } else {
       // Crossing to desktop closes the sheet, which puts its panels back.
@@ -327,7 +326,6 @@ export function initMobileShell({
       if (viewport && viewportContent !== null)
         viewport.setAttribute('content', viewportContent);
     }
-    tabBar.setAttribute('aria-hidden', String(!matches));
   };
 
   const media =
@@ -345,9 +343,14 @@ export function initMobileShell({
     removers.push(() => media.removeListener(onChange));
   }
 
-  listen(tabBar, 'click', (event) => {
-    const button = event.target?.closest?.('[data-mobile-sheet]');
-    if (!button) return;
+  listen(documentRef, 'click', (event) => {
+    const target = event.target;
+    if (target?.id === 'mobile-sheet-backdrop') {
+      setSheet(null);
+      return;
+    }
+    const button = target?.closest?.('[data-mobile-sheet]');
+    if (!button || !element('mobile-tab-bar')?.contains(button)) return;
     event.preventDefault();
     const sheet = nextSheet(currentSheetOf(body), button.dataset.mobileSheet);
     // Closing from the tab bar returns focus to the tab that was pressed.
@@ -355,7 +358,6 @@ export function initMobileShell({
     setSheet(sheet);
     if (sheet && currentSheetOf(body) === sheet) onTabOpened(sheet);
   });
-  listen(backdrop, 'click', () => setSheet(null));
   // Touch events let native scrolling continue until a downward pull at the
   // top is intentional. Pointer capture/touch-action:none would also seize
   // ordinary vertical scrolling inside the borrowed panels.
@@ -506,6 +508,7 @@ export function initMobileShell({
     },
     destroy() {
       setSheet(null);
+      focusReturns += 1;
       for (const remove of removers.splice(0)) remove();
       body.classList.remove(MOBILE_SHELL_CLASS);
       body.removeAttribute(MOBILE_SHEET_ATTR);
@@ -513,8 +516,7 @@ export function initMobileShell({
       body.style.removeProperty('--mobile-sheet-cover');
       if (viewport && viewportContent !== null)
         viewport.setAttribute('content', viewportContent);
-      backdrop.remove();
-      tabBar.remove();
+      publish(null);
     },
   };
 }
