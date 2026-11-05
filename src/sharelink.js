@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { fromDegrees, toDegrees, toRadians } from './geo/index.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from './bloom.js';
 import {
   migrateDetectionState,
@@ -327,15 +328,13 @@ export class ShareLinkManager {
     if (this._destroyed || !state)
       return { succeeded: false, reason: 'unavailable' };
     const view = {
-      destination: Cesium.Cartesian3.fromDegrees(
-        state.lon,
-        state.lat,
-        state.alt,
+      destination: Cesium.Cartesian3.clone(
+        fromDegrees(state.lon, state.lat, state.alt),
       ),
       orientation: {
-        heading: Cesium.Math.toRadians(state.heading),
-        pitch: Cesium.Math.toRadians(state.pitch),
-        roll: Cesium.Math.toRadians(state.roll),
+        heading: toRadians(state.heading),
+        pitch: toRadians(state.pitch),
+        roll: toRadians(state.roll),
       },
     };
     let cameraPromise = Promise.resolve({
@@ -652,21 +651,12 @@ export class ShareLinkManager {
 
     const params = new URLSearchParams();
     params.set('v', '2');
-    params.set('lat', Cesium.Math.toDegrees(carto.latitude).toFixed(4));
-    params.set('lon', Cesium.Math.toDegrees(carto.longitude).toFixed(4));
+    params.set('lat', toDegrees(carto.latitude).toFixed(4));
+    params.set('lon', toDegrees(carto.longitude).toFixed(4));
     params.set('alt', Math.round(carto.height).toString());
-    params.set(
-      'heading',
-      Math.round(Cesium.Math.toDegrees(camera.heading)).toString(),
-    );
-    params.set(
-      'pitch',
-      Math.round(Cesium.Math.toDegrees(camera.pitch)).toString(),
-    );
-    params.set(
-      'roll',
-      Math.round(Cesium.Math.toDegrees(camera.roll)).toString(),
-    );
+    params.set('heading', Math.round(toDegrees(camera.heading)).toString());
+    params.set('pitch', Math.round(toDegrees(camera.pitch)).toString());
+    params.set('roll', Math.round(toDegrees(camera.roll)).toString());
     params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');
     params.set('sharpen', this._sharpenEnabled ? '1' : '0');
