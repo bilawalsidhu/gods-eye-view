@@ -263,8 +263,19 @@ export function createPanel({ state: layerState, services, parts, source }) {
     publishPanel();
   }
 
-  /** The roster entries as the list shows them. */
+  /**
+   * The roster entries as the list shows them; null while the first index
+   * is still loading, and an empty failed roster once that load failed.
+   */
   function presentRoster() {
+    if (layerState._lastUpdate === null && !layerState._launches.length) {
+      if (!layerState._lastError) return null;
+      return {
+        count: '—',
+        entries: [],
+        empty: t('30-DAY MISSION INDEX UNAVAILABLE'),
+      };
+    }
     const entries = parts.policyHelpers
       .missionRosterEntries(layerState._launches)
       .map(({ launch, index }) => {

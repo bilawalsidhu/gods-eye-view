@@ -50,8 +50,9 @@ export function createIngestion({
     layerState._postTleRetryCount++;
     layerState._retryTimer = setTimeout(() => {
       layerState._retryTimer = null;
+      // A failed retry is already recorded in the layer stats.
       if (layerState._enabled && token === layerState._lifecycleToken)
-        requestMissionUpdate();
+        requestMissionUpdate().catch(() => {});
     }, POST_TLE_RETRY_DELAY_MS);
   }
 
@@ -201,6 +202,10 @@ export function createIngestion({
       if (layerState._renderedTleText === layerState._activeTleText)
         clearPostTleRetry();
       layerState._count = launches.length;
+      // The roster reads these to tell a loaded empty index from loading.
+      layerState._lastUpdate = Date.now();
+      layerState._lastError = null;
+      layerState._stale = stale === true;
       parts.panel.renderMissionRoster();
       if (
         !layerState._selectedLaunchId ||
@@ -219,13 +224,19 @@ export function createIngestion({
       }
       layerState._focusAfterActiveLookup = false;
       parts.panel.renderMissionPanel();
-      layerState._lastUpdate = Date.now();
-      layerState._lastError = null;
-      layerState._stale = stale === true;
+      layerState._entryCameraView = null;
     } catch (error) {
       if (layerState._enabled && token === layerState._lifecycleToken) {
         layerState._lastError = error.message;
         console.warn('[Data:RocketLaunches] Fetch error:', error);
+        // Without one usable index there is no mode to enter: report the
+        // failure so the manager fails the enable closed and Context rolls
+        // back. A refresh after a loaded index keeps its records instead.
+        if (layerState._lastUpdate === null) {
+          parts.panel.renderMissionRoster();
+          throw error;
+        }
+        layerState._entryCameraView = null;
       }
     }
   }

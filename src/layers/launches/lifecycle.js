@@ -111,6 +111,28 @@ export function createLaunchHover({
   };
 }
 
+/** The camera pose to give back, in world coordinates. */
+function captureCameraView(viewer) {
+  const camera = viewer?.camera;
+  if (!camera?.positionWC) return null;
+  return {
+    destination: Cesium.Cartesian3.clone(camera.positionWC),
+    orientation: {
+      heading: camera.heading,
+      pitch: camera.pitch,
+      roll: camera.roll,
+    },
+  };
+}
+
+/** Stop the full-globe flight and return to a captured pose. */
+function restoreCameraView(viewer, view) {
+  const camera = viewer?.camera;
+  if (!camera) return;
+  camera.cancelFlight?.();
+  camera.setView(view);
+}
+
 export function createLifecycle({
   state: layerState,
   services,
@@ -200,6 +222,14 @@ export function createLifecycle({
       layerState._updateDirty = false;
       if (layerState._dataSource) layerState._dataSource.show = true;
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
+      if (layerState._lastUpdate === null) {
+        // A new attempt at an index that never loaded starts from loading.
+        layerState._lastError = null;
+        parts.panel.renderMissionRoster();
+      }
+      // Kept until the mission index loads, so an entry that never does
+      // gives the view back.
+      layerState._entryCameraView = captureCameraView(layerState._viewer);
       parts.selection.focusFullGlobe(layerState._viewer);
       if (layerState._selectedLaunchId)
         parts.selection.setSelectedMission(
@@ -214,6 +244,9 @@ export function createLifecycle({
       hover?.reset();
       layerState._sourceController.abort();
       layerState._enabled = false;
+      const entryView = layerState._entryCameraView;
+      layerState._entryCameraView = null;
+      if (entryView) restoreCameraView(layerState._viewer, entryView);
       releaseContinuousRender('rocket-launches');
       layerState._lifecycleToken++;
       layerState._updateDirty = false;
@@ -239,6 +272,7 @@ export function createLifecycle({
       layerState._sourceController.abort();
       releaseContinuousRender('rocket-launches'); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
+      layerState._entryCameraView = null;
       layerState._lifecycleToken++;
       layerState._updateDirty = false;
       await parts.ingestion.restoreSatelliteDependency();
