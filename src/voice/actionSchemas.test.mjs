@@ -56,8 +56,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
     // move_camera tilt takes an optional pitchDeg angle, described as
-    // absolute rather than a step.
-    '1dbdef45a477806046cfe4a74a7766f137d7a2b551fdd0b9595986068a85ee8d',
+    // absolute, with steps sent as a direction.
+    'b192c42d1a1c59bea010da93ed0cfb1ce63d2e3ab5e5685921d3bf66e3f94e26',
   );
 });
 

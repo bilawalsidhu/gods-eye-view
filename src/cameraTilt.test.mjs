@@ -340,16 +340,16 @@ test('pitchDeg with a direction that agrees still tilts', (t) => {
   assert.ok(Math.abs(pitchDeg(h.camera) - -80) < 0.5);
 });
 
-test('the pitchDeg and direction check uses the pitch the swing starts from', (t) => {
-  // At regional range the Earth curves away: the pivot pitch is a degree or
-  // two shallower than the camera's (-30°), so -29° is still down from it.
+test('the pitchDeg and direction check uses the camera pitch', (t) => {
+  // At regional range the Earth curves away and the pivot pitch is a degree
+  // or two shallower than the camera's (-30°); -29° is still up from it.
   harness(t, { height: 150000, pitch: -30 });
-  const up = moveCamera({ motion: 'tilt', direction: 'up', pitchDeg: -29 });
-  assert.equal(up.ok, false);
-  assert.match(up.error, /tilts down, not up/);
   const down = moveCamera({ motion: 'tilt', direction: 'down', pitchDeg: -29 });
-  assert.equal(down.ok, true);
-  assert.equal(down.direction, 'down');
+  assert.equal(down.ok, false);
+  assert.match(down.error, /tilts up, not down/);
+  const up = moveCamera({ motion: 'tilt', direction: 'up', pitchDeg: -29 });
+  assert.equal(up.ok, true);
+  assert.equal(up.direction, 'up');
 });
 
 test('after a zoom in, a pivoting tilt never lowers the camera further', (t) => {
@@ -414,6 +414,13 @@ test('a zoom in during a pivot tilt stops at the clearance', (t) => {
   assert.deepEqual(adjustOrbitRange(1 / 2.4), { kind: 'tilt', changed: true });
   // At -40° the floor is 150 / sin 40° ≈ 233 m, which the first zoom reached.
   assert.deepEqual(adjustOrbitRange(1 / 2.4), { kind: 'tilt', changed: false });
+  // The camera must take that range, not just report it.
+  h.tick();
+  const floor = 150 / Math.sin(radians(40));
+  assert.ok(
+    Math.abs(pivotRange(h) - floor) < floor * 0.02,
+    `range ${pivotRange(h)} m, wanted about ${floor} m`,
+  );
   for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) {
     h.tick();
     assert.ok(heightM(h.camera) > 149, `camera at ${heightM(h.camera)} m`);
@@ -453,17 +460,39 @@ test('from globe range a tilt happens in place', (t) => {
   assert.ok(Cesium.Cartesian3.distance(h.camera.positionWC, before) < 1e-3);
 });
 
-test('a regional tilt-up nudge at the pivot limit refuses honestly', (t) => {
-  // 20 km up at -7°, the pivot 186 km out sits at -5.3°: already at the limit.
-  harness(t, { height: 20000, pitch: -7 });
-  const result = moveCamera({ motion: 'tilt', direction: 'up' });
-  assert.equal(result.ok, false);
-  assert.match(result.error, /upper tilt limit/);
-  assert.equal(getActiveCameraMotion(), null);
+for (const height of [100_000, 400_000, 900_000])
+  test(`from ${height / 1000} km a tilt to -5° ends with the camera at -5°`, (t) => {
+    // The pivot pitch is shallower than the camera's by up to 8° at this
+    // range; the camera reached only -5.9° to -12.9° when the swing stopped
+    // at a pivot pitch of -5°.
+    const h = harness(t, { height });
+    const result = moveCamera({ motion: 'tilt', pitchDeg: 5 });
+    assert.equal(result.pitchDeg, -5);
+    h.finish();
+    assert.ok(
+      Math.abs(pitchDeg(h.camera) - -5) < 0.5,
+      `pitch ${pitchDeg(h.camera)}`,
+    );
+    assert.ok(heightM(h.camera) > 149, `camera at ${heightM(h.camera)} m`);
+    const nudge = moveCamera({ motion: 'tilt', direction: 'up' });
+    assert.equal(nudge.ok, false);
+    assert.match(nudge.error, /upper tilt limit/);
+  });
+
+test('a regional tilt-up nudge goes to the camera horizon limit', (t) => {
+  // 20 km up at -7°: the pivot 186 km out sits at -5.3°, but the camera can
+  // still tilt up 2°.
+  const h = harness(t, { height: 20000, pitch: -7 });
+  assert.equal(moveCamera({ motion: 'tilt', direction: 'up' }).ok, true);
+  h.finish();
+  assert.ok(
+    Math.abs(pitchDeg(h.camera) - -5) < 0.5,
+    `pitch ${pitchDeg(h.camera)}`,
+  );
 });
 
-test('a voice tilt from a tracked view judges its limit from the pivot it will use', (t) => {
-  const h = harness(t, { height: 20000, pitch: -7 });
+test('a voice tilt from a tracked view judges its limit from the camera pitch', (t) => {
+  const h = harness(t, { height: 20000, pitch: -5.2 });
   h.viewer.trackedEntity = { id: 'tracked' };
   // Voice releases the follow camera before the motion starts.
   const release = (start) => {
@@ -474,3 +503,55 @@ test('a voice tilt from a tracked view judges its limit from the pivot it will u
   assert.equal(result.ok, false);
   assert.match(result.error, /upper tilt limit/);
 });
+
+test('a zoom out during a pivoting tilt stops at the pivot range limit', (t) => {
+  // 900 km top-down, "tilt to 10°", then "zoom out a lot" twice: capped at
+  // the orbit's 5,000 km, the swing reached 2,386 km up at a real -44°.
+  const h = harness(t, { height: 900_000 });
+  assert.equal(moveCamera({ motion: 'tilt', pitchDeg: -10 }).ok, true);
+  h.tick();
+  assert.deepEqual(adjustOrbitRange(2.4), { kind: 'tilt', changed: true });
+  assert.deepEqual(adjustOrbitRange(2.4), { kind: 'tilt', changed: false });
+  let farthest = 0;
+  for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) {
+    h.tick();
+    farthest = Math.max(farthest, pivotRange(h));
+  }
+  assert.equal(getActiveCameraMotion(), null, 'tilt must finish');
+  assert.ok(farthest <= 1_000_001, `swung ${farthest} m from the pivot`);
+  assert.ok(
+    Math.abs(pitchDeg(h.camera) - -10) < 0.5,
+    `pitch ${pitchDeg(h.camera)}`,
+  );
+});
+
+test('an unchanged angle still stops a running motion through navigation', (t) => {
+  const h = harness(t);
+  moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
+  tickUntil(h, () => pitchDeg(h.camera) >= -45.3);
+  let handoffs = 0;
+  const navigate = (start) => {
+    handoffs += 1;
+    return start();
+  };
+  const result = moveCamera({ motion: 'tilt', pitchDeg: -45 }, navigate);
+  assert.equal(result.ok, true);
+  assert.equal(result.unchanged, true);
+  assert.equal(handoffs, 1, 'the request must take navigation');
+  assert.equal(getActiveCameraMotion(), null, 'the tilt must stop');
+  const held = pitchDeg(h.camera);
+  for (let i = 0; i < 30; i += 1) h.tick();
+  assert.equal(pitchDeg(h.camera), held);
+});
+
+for (const direction of ['left', 'right'])
+  test(`a tilt ${direction} is refused`, (t) => {
+    harness(t, { pitch: -45 });
+    const result = moveCamera({ motion: 'tilt', direction });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /tilt needs up or down/);
+    const angled = moveCamera({ motion: 'tilt', direction, pitchDeg: -30 });
+    assert.equal(angled.ok, false);
+    assert.match(angled.error, /pitchDeg alone/);
+    assert.equal(getActiveCameraMotion(), null);
+  });

@@ -49,6 +49,7 @@ import {
   adjustOrbitRange,
   manualCameraInputCount,
   moveCameraArgsError,
+  getActiveCameraMotion,
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
@@ -293,6 +294,8 @@ export function createGevActionRunner({
   // cancelled the flight, or the flight (still geocoding) then replaced the
   // motion. The wait follows later fly-tos (voiceFlightTarget).
   let voiceFlight = null;
+  // Waiters to tell when a newer voice flight begins.
+  const voiceFlightWatchers = new Set();
   let analystEngine;
   // Area handles live for this runner (the page): resolve_area, the
   // analyst's region/area/drawn scopes, find_imagery and osm_query all read
@@ -1153,6 +1156,25 @@ export function createGevActionRunner({
         prior,
       );
       voiceFlight = flight;
+      for (const notify of [...voiceFlightWatchers]) notify();
+      // A motion already running (one the model sent before this fly-to) is
+      // stopped when the flight takes navigation; the result says so.
+      let stoppedMotion = null;
+      const noteStop =
+        (hook) =>
+        (...hookArgs) => {
+          const before = getActiveCameraMotion();
+          try {
+            return hook(...hookArgs);
+          } finally {
+            if (
+              before &&
+              !stoppedMotion &&
+              getActiveCameraMotion()?.motionId !== before.motionId
+            )
+              stoppedMotion = before.kind;
+          }
+        };
       const flown = flyToRequestedLocation(viewer, args, {
         onFlightEnd: flight.settle,
         onProgress: reportProgress,
@@ -1161,26 +1183,28 @@ export function createGevActionRunner({
         signal: runOptions.signal,
         runImmediate:
           typeof styleManager?.runImmediateLocationNavigation === 'function'
-            ? (navigate) =>
-                styleManager.runImmediateLocationNavigation(navigate)
+            ? noteStop((navigate) =>
+                styleManager.runImmediateLocationNavigation(navigate),
+              )
             : null,
         beginDeferred:
           typeof styleManager?.beginDeferredLocationNavigation === 'function'
-            ? () => styleManager.beginDeferredLocationNavigation()
+            ? noteStop(() => styleManager.beginDeferredLocationNavigation())
             : null,
         reassertDeferred:
           typeof styleManager?.reassertDeferredLocationNavigation === 'function'
-            ? (generation) =>
-                styleManager.reassertDeferredLocationNavigation(generation)
+            ? noteStop((generation) =>
+                styleManager.reassertDeferredLocationNavigation(generation),
+              )
             : null,
-        onStart: () => {
+        onStart: noteStop(() => {
           if (typeof styleManager?.beginLocationNavigation === 'function') {
             styleManager.beginLocationNavigation();
             return;
           }
           interruptCameraMotion('nav:fly_to_location');
           if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
-        },
+        }),
       });
       // No flight started: nothing to wait for. A lookup that was not found,
       // threw, or was cancelled once a newer voice fly-to had begun (which
@@ -1199,7 +1223,11 @@ export function createGevActionRunner({
           flight.settle('failed');
         else notStarted();
       }, notStarted);
-      return flown;
+      return flown.then((result) =>
+        stoppedMotion && result && typeof result === 'object'
+          ? { ...result, stoppedMotion }
+          : result,
+      );
     }
 
     if (name === 'adjust_camera_zoom') {
@@ -1315,35 +1343,31 @@ export function createGevActionRunner({
         if (argsError) return argsError;
         const deadline = Date.now() + VOICE_FLIGHT_WAIT_MS;
         const start = pending;
+        // Act on where the camera lands. Whatever a flight reports, a later
+        // fly-to replaces it, and the wait moves to that one as soon as it
+        // begins (a stalled geocode must not hold the motion past a newer
+        // flight that landed). A geocode that loses navigation reports
+        // failed, and a flight left flying while the next place is looked up
+        // can still land; running there would take navigation and cancel the
+        // newer one. A later lookup that found nothing moved nothing, so the
+        // motion looks past it to the last flight that did move the camera.
         let flight = start;
-        let status = await waitForVoiceFlight(
-          flight,
-          runOptions.signal,
-          deadline,
-        );
-        // A later fly-to replaces this one: follow it to where the camera
-        // lands, within the same deadline, whatever this flight reported. A
-        // geocode that loses navigation reports failed, and a flight left
-        // flying while the next place is looked up can still land; running
-        // there would take navigation and cancel the newer one. A later
-        // lookup that found nothing moved nothing, so the motion acts on the
-        // last flight it saw that did move the camera.
-        let landed = flight.movedNothing ? null : { flight, status };
-        while (status !== 'aborted' && status !== 'timeout' && current()) {
-          const target = voiceFlightTarget(voiceFlight, start);
-          if (!target || target === flight) break;
-          flight = target;
+        let status;
+        for (;;) {
           status = await waitForVoiceFlight(
             flight,
             runOptions.signal,
             deadline,
+            voiceFlightWatchers,
           );
-          if (!flight.movedNothing) landed = { flight, status };
+          if (status === 'aborted' || status === 'timeout' || !current()) break;
+          const target = voiceFlightTarget(voiceFlight, start);
+          if (!target || (target === flight && status !== 'newer')) break;
+          flight = target;
         }
-        if (flight.movedNothing && landed) ({ flight, status } = landed);
         if (!current())
           return { ok: false, action: 'move_camera', cancelled: true };
-        if (status !== 'arrived')
+        if (status !== 'arrived' || flight.movedNothing)
           return {
             ok: false,
             action: 'move_camera',
@@ -2973,7 +2997,6 @@ function trackVoiceFlight(
   inputCount = manualCameraInputCount(),
   replaced = null,
 ) {
-  let resolve;
   const flight = {
     done: false,
     seq: (voiceFlightCount += 1),
@@ -2981,14 +3004,20 @@ function trackVoiceFlight(
     movedNothing: false,
     // Manual input after this means the user took the camera mid-flight.
     inputCount,
-    ended: new Promise((settle) => {
-      resolve = settle;
-    }),
+    status: null,
+    // Waiters to tell when this flight ends.
+    watchers: new Set(),
     settle: (status) => {
       if (flight.done) return;
       flight.done = true;
-      if (!flight.movedNothing) flight.replaced = null;
-      resolve(status);
+      flight.status = status;
+      // Kept only past a lookup that found nothing, and then straight to the
+      // flight that moved, so a run of such lookups holds no chain.
+      flight.replaced = flight.movedNothing
+        ? voiceFlightTarget(flight.replaced)
+        : null;
+      for (const notify of [...flight.watchers]) notify(status);
+      flight.watchers.clear();
     },
   };
   return flight;
@@ -3027,22 +3056,32 @@ const VOICE_FLIGHT_WAITING_MOTIONS = new Set([
   'rotate',
 ]);
 
-/** Wait for a voice flight to end; 'timeout' or 'aborted' if it does not. */
-function waitForVoiceFlight(flight, signal, deadline) {
+/**
+ * Wait for a voice flight to end, or for a newer one to begin ('newer'):
+ * 'timeout' or 'aborted' if neither happens. A flight that has ended answers
+ * at once. Every listener is removed when the wait ends, so a flight that
+ * never settles holds nothing.
+ */
+function waitForVoiceFlight(flight, signal, deadline, newerWatchers) {
   if (signal?.aborted) return Promise.resolve('aborted');
+  if (flight.done) return Promise.resolve(flight.status);
   return new Promise((resolve) => {
     const finish = (status) => {
       clearTimeout(timer);
       signal?.removeEventListener?.('abort', onAbort);
+      flight.watchers.delete(finish);
+      newerWatchers?.delete(onNewer);
       resolve(status);
     };
     const onAbort = () => finish('aborted');
+    const onNewer = () => finish('newer');
     const timer = setTimeout(
       () => finish('timeout'),
       Math.max(0, deadline - Date.now()),
     );
     signal?.addEventListener?.('abort', onAbort, { once: true });
-    flight.ended.then(finish);
+    flight.watchers.add(finish);
+    newerWatchers?.add(onNewer);
   });
 }
 

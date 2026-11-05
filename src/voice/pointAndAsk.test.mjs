@@ -350,8 +350,8 @@ test('deixis prompt lint: one short rule, and every sentinel it names exists in 
   // the analyst area scopes) raised the ceiling to 55,500; tightening the
   // AREAS rule and the area tool descriptions left it at 55,103 as measured
   // below (every tool, osm_query included); main's Sea Marks and Ski Pistes
-  // layers bring it to 55,210, and the tilt pitchDeg argument to 55,332.
-  // integrationContract's Overpass prompt is the tightest, at 55,492 (8
+  // layers bring it to 55,210, and the tilt pitchDeg argument to 55,335.
+  // integrationContract's Overpass prompt is the tightest, at 55,495 (5
   // under). A new tool or rule has to fit under this ceiling.
   const size = instructions.length + JSON.stringify(GEV_REALTIME_TOOLS).length;
   assert.ok(size <= 55_500, `prompt size ${size}`);

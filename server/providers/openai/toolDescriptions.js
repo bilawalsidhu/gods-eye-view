@@ -533,7 +533,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         pitchDeg: {
           description:
-            'Absolute pitch, not a step: -45 oblique (default), -89 top-down.',
+            'Absolute; steps use direction. -45 oblique (default), -89 top-down.',
           $position: 1,
         },
       },

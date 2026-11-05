@@ -895,6 +895,50 @@ test('a motion gives up on a flight that has not landed in 15 s', async (t) => {
   assert.match(result.error, /did not arrive/);
 });
 
+test('a motion follows a newer fly-to that lands while its own lookup stalls', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    // Place A's lookup never answers.
+    searchNavigation: () => new Promise(() => {}),
+  });
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  runner('fly_to_location', { query: 'Place A' });
+  const moved = runner('move_camera', { motion: 'orbit' });
+  const movedDone = settledYet(moved);
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  t.mock.timers.tick(2_000);
+  await Promise.resolve();
+  assert.equal(movedDone(), false, 'the orbit must wait for the newer flight to land');
+  flights[0].complete();
+  for (let i = 0; i < 5 && !movedDone(); i += 1) await Promise.resolve();
+  assert.equal(movedDone(), true, 'the orbit must not wait out A');
+  const result = await moved;
+  assert.equal(result.ok, true);
+  assert.equal(result.motion, 'orbit');
+});
+
+test('a fly-to that stops a running motion says so', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  // The model sent the orbit first, so it ran at once.
+  const orbit = await runner('move_camera', { motion: 'orbit', mode: 'continuous' });
+  assert.equal(orbit.ok, true);
+  const fly = await runner('fly_to_location', { locationId: 'austin' });
+  assert.equal(fly.ok, true);
+  assert.equal(fly.stoppedMotion, 'orbit');
+  const again = await runner('fly_to_location', { locationId: 'austin' });
+  assert.equal('stoppedMotion' in again, false);
+});
+
 test('bad move_camera arguments are refused without waiting for a flight', async () => {
   const { viewer, styleManager } = tiltAfterFlightHarness();
   const runner = createGevActionRunner({
