@@ -173,7 +173,38 @@ test('a browser that refuses the address write costs the slider nothing', async 
     console.warn = warn;
   }
   assert.equal(opacity.get('wind'), 0.5);
-  assert.deepEqual(warned, ['[Opacity] address update failed: SecurityError']);
+  assert.deepEqual(warned, ['[Opacity] address update failed']);
+});
+
+test('exception diagnostics do not expose untrusted values', async () => {
+  const secret = 'synthetic-secret-ABC123';
+  const { opacity, manager, history } = fixture();
+  const error = new Error(secret, { cause: { token: secret } });
+  error.name = secret;
+  manager.layers.get('wind').module.setOpacity = () => {
+    throw error;
+  };
+  history.replaceState = () => {
+    throw error;
+  };
+  opacity.subscribe(() => {
+    throw error;
+  });
+  const oldWarn = console.warn;
+  const warned = [];
+  console.warn = (...args) => warned.push(args);
+  try {
+    assert.equal(opacity.set('wind', 0.5), true);
+    await wait();
+  } finally {
+    console.warn = oldWarn;
+    opacity.destroy();
+  }
+  assert.deepEqual(warned, [
+    ['[Opacity] setOpacity error'],
+    ['[Opacity] listener error'],
+    ['[Opacity] address update failed'],
+  ]);
 });
 
 test('restore applies the address to layers that can be dimmed', () => {
