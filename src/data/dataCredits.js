@@ -493,6 +493,14 @@ export const DATA_CREDITS = [
       'Shown as published; reports are S2 assessments, not verified fact.',
   },
   {
+    key: 'news',
+    html:
+      'News: every report is credited to its own publisher and links to the original article; ' +
+      'pictures are the publishers’ own, shown from their sites with the publisher named. ' +
+      'No single provider stands behind the feed. Places, categories, severity and English ' +
+      'headlines are derived automatically by the news server and can be wrong.',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +

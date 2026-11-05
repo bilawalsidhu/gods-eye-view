@@ -20,6 +20,7 @@ import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
 import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
+import { createNewsSource } from '../layers/news/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
@@ -60,6 +61,10 @@ export function createStandaloneLayerSources(
     alpr: createAlprTileSource(),
     firms: createFirmsSource(),
     's2-ghostmaps': createGhostMapsSource(),
+    // Same-origin /api/news: the local server proxies GEV_NEWS_ORIGIN and,
+    // without it, answers "not configured", which the layer shows as
+    // unavailable without retrying.
+    news: createNewsSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),
