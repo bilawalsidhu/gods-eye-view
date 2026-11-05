@@ -185,7 +185,9 @@ function viewerAt(position, direction, up) {
         fov: Cesium.Math.toRadians(60),
         aspectRatio: 16 / 9,
         near: 1,
-        far: 5e6,
+        // Cesium's default far plane, as the app uses: a smaller one rejects
+        // the far-side mount before the horizon check is ever reached.
+        far: 5e8,
       }),
     },
   };
