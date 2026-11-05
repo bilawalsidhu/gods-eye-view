@@ -273,3 +273,45 @@
   margin: 1px 0 0;
   accent-color: #00d4ff;
 }
+
+/* Layout: labelled groups, chips that share a row evenly, and inputs that
+   fill their line. */
+.replay-readout {
+  gap: 12px;
+}
+.replay-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.replay-group-label {
+  color: var(--text-secondary);
+  font: 9px var(--font-mono);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.replay-group .replay-chips,
+.replay-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+  gap: 6px;
+}
+.replay-group .replay-chips .data-toggle-chip,
+.replay-modes .data-toggle-chip {
+  justify-content: center;
+  text-align: center;
+}
+.replay-group .replay-row-input {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.replay-group .replay-row-pair {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.replay-input {
+  font-size: 11px;
+}
+.replay-alerts {
+  line-height: 1.5;
+}

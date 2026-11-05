@@ -85,19 +85,23 @@ export function createReplayPanel({ container, controller } = {}) {
     return node;
   };
   const chips = document.createElement('div');
-  chips.className = 'replay-chips';
+  chips.className = 'replay-chips replay-modes';
+  const areaRow = document.createElement('div');
+  areaRow.className = 'replay-chips';
+  const windowRow = document.createElement('div');
+  windowRow.className = 'replay-chips';
   const start = makeChip(chips, t('REPLAY'), t('Replay recorded history'), () =>
     controller.enter(),
   );
   const fit = makeChip(chips, t('FIT'), t('Fly to the replayed contacts'), () =>
     controller.fit(),
   );
-  const watch = makeChip(chips, t('WATCH'), t('Draw an area to watch'), () =>
+  const watch = makeChip(areaRow, t('WATCH'), t('Draw an area to watch'), () =>
     controller.watch(),
   );
   let alertsOn = alertsEnabled();
   const alertsChip = makeChip(
-    chips,
+    areaRow,
     t('ALERTS'),
     t(
       'Sound and notify when a watched area is entered or an emergency is broadcast',
@@ -111,7 +115,7 @@ export function createReplayPanel({ container, controller } = {}) {
   );
   let note = '';
   const region = makeChip(
-    chips,
+    areaRow,
     t('REGION'),
     t('Limit replay to a drawn area'),
     () => controller.region(),
@@ -126,7 +130,7 @@ export function createReplayPanel({ container, controller } = {}) {
     return node;
   };
   const jumpRow = document.createElement('div');
-  jumpRow.className = 'replay-chips';
+  jumpRow.className = 'replay-chips replay-row-input';
   const when = makeInput(jumpRow, 'datetime-local', t('Date and time (UTC)'));
   const jump = makeChip(
     jumpRow,
@@ -139,7 +143,7 @@ export function createReplayPanel({ container, controller } = {}) {
   );
   // Heat map and comparison of two times.
   const compareRow = document.createElement('div');
-  compareRow.className = 'replay-chips';
+  compareRow.className = 'replay-chips replay-row-pair';
   const timeA = makeInput(compareRow, 'datetime-local', t('Time A (UTC)'));
   const timeB = makeInput(compareRow, 'datetime-local', t('Time B (UTC)'));
   const analysisRow = document.createElement('div');
@@ -455,7 +459,7 @@ export function createReplayPanel({ container, controller } = {}) {
     },
   );
   const findRow = document.createElement('div');
-  findRow.className = 'replay-chips';
+  findRow.className = 'replay-chips replay-row-input';
   const ident = makeInput(findRow, 'text', t('Identifier'));
   ident.placeholder = t('Callsign, ship name, hex or MMSI');
   const find = makeChip(
@@ -493,7 +497,7 @@ export function createReplayPanel({ container, controller } = {}) {
     .state()
     .windows.map((hours) => [
       hours,
-      makeChip(chips, `${hours}h`, t('Time window'), () =>
+      makeChip(windowRow, `${hours}h`, t('Time window'), () =>
         controller.setWindowHours(hours),
       ),
     ]);
@@ -584,25 +588,35 @@ export function createReplayPanel({ container, controller } = {}) {
   alerts.className = 'replay-alerts';
   const timelineHost = document.createElement('div');
   timelineHost.className = 'weather-timeline-block';
+  // Controls sit in labelled groups so the panel reads top to bottom: what is
+  // recorded, how to play it, what to show, then the tools.
+  const group = (label, ...nodes) => {
+    const box = document.createElement('div');
+    box.className = 'replay-group';
+    if (label) {
+      const title = document.createElement('span');
+      title.className = 'replay-group-label';
+      title.textContent = label;
+      box.appendChild(title);
+    }
+    box.append(...nodes);
+    return box;
+  };
   root.append(
     status,
     storage,
     chips,
-    speedRow,
-    layerRow,
-    jumpRow,
-    legend,
-    compareRow,
-    analysisRow,
-    heatLegend,
-    compareLine,
-    settingsBlock,
-    findRow,
-    trackLine,
-    exportRow,
-    fenceList,
-    alerts,
     timelineHost,
+    group(t('Speed'), speedRow),
+    group(t('Time window'), windowRow),
+    group(t('Layers'), layerRow),
+    group(t('Area'), areaRow, fenceList),
+    group(t('JUMP'), jumpRow),
+    group('', compareRow, analysisRow, heatLegend, compareLine, settingsBlock),
+    group(t('FIND'), findRow, trackLine),
+    group(t('EXPORT'), exportRow),
+    legend,
+    alerts,
   );
   container.appendChild(root);
 
