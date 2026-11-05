@@ -778,7 +778,9 @@ export function createTracking({
           .join(' · ');
     if (ident) lines.push(ident);
     if (info.route && _routeIsPlausible(icao24, info.route)) {
-      lines.push(`${info.route.origin.code} → ${info.route.destination.code} · REFERENCE (UNVERIFIED)`);
+      lines.push(
+        `${info.route.origin.code} → ${info.route.destination.code} · REFERENCE (UNVERIFIED)`,
+      );
     }
     return lines.join('\n');
   }
