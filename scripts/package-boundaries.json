@@ -891,6 +891,7 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
+      "src/ui/layerNames.js",
       "src/ui/unitLabels.js"
     ],
     "external": ["cesium"]
@@ -1744,6 +1745,10 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
+      "src/data/feedState.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js",
+      "src/ui/layerNames.js",
       "src/ui/unitLabels.js"
     ],
     "external": ["cesium"]
@@ -3283,6 +3288,8 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/data/feedState.js",
+      "src/loadingFeedback.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
