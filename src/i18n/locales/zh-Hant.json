@@ -1578,6 +1578,9 @@
   "REGIONAL NEWS": "地區新聞",
   "{label} · {radius} AIR/SEA WINDOW": "{label} · {radius} 空/海監視窗口",
   "{scope} · INSTALLATIONS {coverage}": "{scope} · 設施 {coverage}",
+  "MILITARY FEED OFF · PARTIAL PICTURE": "軍用數據源已關閉 · 態勢不完整",
+  "FLIGHTS FEED OFF · PARTIAL PICTURE": "航班數據源已關閉 · 態勢不完整",
+  "NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR": "附近航空器資訊不完整 · 不代表安全無虞",
   "CONTEXT STANDBY": "態勢待機",
   "ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS": "啟用全局態勢以接收鄰近目標提醒",
   "CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR": "目標丟失 · 最後已知讀數 · 不代表安全無虞",
@@ -1650,7 +1653,7 @@
   "Restore real aircraft": "恢復真實飛機",
   "Reclassify as TR-3B": "重新歸類為 TR-3B",
   "TRACK ACQUIRED": "已獲取航跡",
-  "{label} · COURSE {heading}°": "{label} · 航向 {heading}°",
+  "{label} · COURSE {heading}°": "{label} · 對地航向 {heading}°",
   "Context could not restore every layer; try again": "態勢未能恢復所有圖層，請重試",
   "No selected data layers": "沒有已選數據圖層",
   "{count} data layers could not be cleared": {

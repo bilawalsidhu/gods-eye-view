@@ -1612,6 +1612,9 @@
   "REGIONAL NEWS": "地域ニュース",
   "{label} · {radius} AIR/SEA WINDOW": "{label} · 航空機/船舶の範囲 {radius}",
   "{scope} · INSTALLATIONS {coverage}": "{scope} · 施設 {coverage}",
+  "MILITARY FEED OFF · PARTIAL PICTURE": "軍用フィードオフ · 部分的な状況",
+  "FLIGHTS FEED OFF · PARTIAL PICTURE": "フライトフィードオフ · 部分的な状況",
+  "NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR": "付近の航空機情報は不完全 · 安全の保証ではありません",
   "CONTEXT STANDBY": "コンテキスト待機",
   "ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS": "グローバルコンテキストを有効にすると近接ピングを表示",
   "CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR": "コンタクト喪失 · 最終既知の値 · 安全の保証ではありません",
@@ -1684,7 +1687,7 @@
   "Restore real aircraft": "実際の航空機に戻す",
   "Reclassify as TR-3B": "TR-3Bに再分類",
   "TRACK ACQUIRED": "追跡開始",
-  "{label} · COURSE {heading}°": "{label} · 針路 {heading}°",
+  "{label} · COURSE {heading}°": "{label} · 対地針路 {heading}°",
   "Context could not restore every layer; try again": "コンテキストがすべてのレイヤーを復元できませんでした。もう一度お試しください",
   "No selected data layers": "選択中のデータレイヤーはありません",
   "{count} data layers could not be cleared": {

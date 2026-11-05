@@ -1660,6 +1660,9 @@
   "REGIONAL NEWS": "NOTÍCIAS DA ÁREA",
   "{label} · {radius} AIR/SEA WINDOW": "{label} · AR/MAR {radius}",
   "{scope} · INSTALLATIONS {coverage}": "{scope} · INSTALAÇÕES: {coverage}",
+  "MILITARY FEED OFF · PARTIAL PICTURE": "FEED MILITAR DESLIGADO · QUADRO PARCIAL",
+  "FLIGHTS FEED OFF · PARTIAL PICTURE": "FEED DE VOOS DESLIGADO · QUADRO PARCIAL",
+  "NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR": "AERONAVES PRÓXIMAS INCOMPLETAS · NÃO GARANTE SEGURANÇA",
   "CONTEXT STANDBY": "CONTEXTO EM ESPERA",
   "ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS": "ATIVE O CONTEXTO GLOBAL PARA PINGS DE PROXIMIDADE",
   "CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR": "CONTATO PERDIDO · ÚLTIMA LEITURA CONHECIDA · NÃO GARANTE SEGURANÇA",
@@ -1736,7 +1739,7 @@
   "Restore real aircraft": "Restaurar a aeronave real",
   "Reclassify as TR-3B": "Reclassificar como TR-3B",
   "TRACK ACQUIRED": "RASTRO ADQUIRIDO",
-  "{label} · COURSE {heading}°": "{label} · CURSO {heading}°",
+  "{label} · COURSE {heading}°": "{label} · RUMO {heading}°",
   "Context could not restore every layer; try again": "O contexto não conseguiu restaurar todas as camadas; tente novamente",
   "No selected data layers": "Nenhuma camada de dados selecionada",
   "{count} data layers could not be cleared": {

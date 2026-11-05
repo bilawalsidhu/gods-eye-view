@@ -2321,9 +2321,11 @@ async function runBehaviorLayer() {
       `result=${JSON.stringify(r)?.slice(0, 120)} state=${JSON.stringify(contextExited)?.slice(0, 80)}`,
     );
 
-    // (9f) With Contacts OFF the entry gate is shut. Entry must refuse with the
-    // reason rather than produce the half-entered state the operator saw: a
-    // plane anchored under the camera with no HUD and no exit control.
+    // (9f) Cockpit needs only the tracked aircraft's own layer, not Contacts.
+    // With Contacts OFF, status must explain a shut gate without blaming
+    // Contacts, and entry must either enter cleanly or refuse with the reason
+    // rather than produce the half-entered state the operator saw: a plane
+    // anchored under the camera with no HUD and no exit control.
     r = await run('control_cockpit', { action: 'status' });
     const gateReport = r?.state || {};
     const cockpitBeforeGate = await page.evaluate(() =>
@@ -2331,10 +2333,13 @@ async function runBehaviorLayer() {
     );
     report(
       gateReport.active === false &&
-        gateReport.entryAllowed === false &&
-        gateReport.entryBlockedReason === 'contacts-inactive' &&
+        (gateReport.entryAllowed === true
+          ? gateReport.entryBlockedReason === null
+          : ['subject-layer-off', 'no-tracked-aircraft'].includes(
+              gateReport.entryBlockedReason,
+            )) &&
         !cockpitBeforeGate,
-      'behavior: cockpit status names why entry is blocked with Contacts off',
+      'behavior: cockpit status explains its gate without requiring Contacts',
       `state=${JSON.stringify(gateReport)?.slice(0, 150)}`,
     );
 
@@ -2348,12 +2353,16 @@ async function runBehaviorLayer() {
       Boolean(window.__godsEyeView?.styleManager?.cockpitView?.active),
     );
     report(
-      gated?.ok === false &&
-        /contacts/i.test(gated?.error || '') &&
-        !cockpitAfterGate,
-      'behavior: cockpit entry with Contacts off is refused, not half-entered',
+      gated?.ok === true
+        ? cockpitAfterGate
+        : !cockpitAfterGate && !/contacts/i.test(gated?.error || ''),
+      'behavior: cockpit entry with Contacts off follows the own-layer gate, never half-entered',
       `ok=${gated?.ok} error=${String(gated?.error || '').slice(0, 90)} active=${cockpitAfterGate}`,
     );
+    if (cockpitAfterGate)
+      await page.evaluate(() =>
+        window.__godsEyeView?.styleManager?.controlCockpit?.('exit'),
+      );
 
     await runBundledOutlineScenarios({
       page,

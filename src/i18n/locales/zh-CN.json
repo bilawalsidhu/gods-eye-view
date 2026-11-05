@@ -1588,6 +1588,9 @@
   "REGIONAL NEWS": "地区新闻",
   "{label} · {radius} AIR/SEA WINDOW": "{label} · {radius} 空/海监视窗口",
   "{scope} · INSTALLATIONS {coverage}": "{scope} · 设施 {coverage}",
+  "MILITARY FEED OFF · PARTIAL PICTURE": "军用数据源已关闭 · 态势不完整",
+  "FLIGHTS FEED OFF · PARTIAL PICTURE": "航班数据源已关闭 · 态势不完整",
+  "NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR": "附近航空器信息不完整 · 不代表安全无虞",
   "CONTEXT STANDBY": "态势待机",
   "ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS": "启用全局态势以接收邻近目标提醒",
   "CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR": "目标丢失 · 最后已知读数 · 不代表安全无虞",
@@ -1660,7 +1663,7 @@
   "Restore real aircraft": "恢复真实飞机",
   "Reclassify as TR-3B": "重新归类为 TR-3B",
   "TRACK ACQUIRED": "已获取航迹",
-  "{label} · COURSE {heading}°": "{label} · 航向 {heading}°",
+  "{label} · COURSE {heading}°": "{label} · 对地航向 {heading}°",
   "Context could not restore every layer; try again": "态势未能恢复所有图层，请重试",
   "No selected data layers": "没有已选数据图层",
   "{count} data layers could not be cleared": {
