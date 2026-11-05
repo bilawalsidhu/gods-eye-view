@@ -31,6 +31,7 @@ import { ghostMapsProxy } from './ghostMaps.js';
 import { droneAirspaceProxy } from './droneAirspace.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { spcOutlooksProxy } from './spc.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -76,6 +77,7 @@ function localProviderPlugins({
     windProxy(),
     weatherProxy(),
     cycloneProxy(),
+    spcOutlooksProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),

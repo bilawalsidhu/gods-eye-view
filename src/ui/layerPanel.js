@@ -89,6 +89,7 @@ const PANEL_GROUPS = [
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'severe-weather-outlooks',
     ],
   },
   // Directions renders in the Utilities panel, beside Draw and Import, and
@@ -620,6 +621,7 @@ export class LayerPanel {
               'weather-satellite',
               'weather-lightning',
               'weather-cyclones',
+              'severe-weather-outlooks',
               'air-quality',
             ].includes(layer.id),
         )
