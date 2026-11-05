@@ -9,6 +9,7 @@ export const WORLD_CLICK_FOCUS_DURATION_SEC = 1.9;
 export const WORLD_FOCUS_FRAMING = Object.freeze({
   vessel: Object.freeze({ radiusM: 150, rangeM: 1200, pitchDeg: -30 }),
   fire: Object.freeze({ radiusM: 400, rangeM: 3000, pitchDeg: -35 }),
+  radiosonde: Object.freeze({ radiusM: 2000, rangeM: 45000, pitchDeg: -20 }),
 });
 
 /** Validate a layer-owned focus target before camera policy can release tracking. */

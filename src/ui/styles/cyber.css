@@ -2907,3 +2907,9 @@
     padding: 10px 12px 18px 18px;
   }
 }
+
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='radiosondes']
+  .data-icon::before {
+  content: '◓';
+}

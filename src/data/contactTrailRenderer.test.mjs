@@ -355,3 +355,202 @@ test('subdivision crossings only write the changed show range and age colors onc
       ),
     );
 });
+
+test('non-fading altitude paths use a full-strength outlined material without competing translucent lanes or draping', (t) => {
+  const scene = fixture(t, true);
+  const renderer = createContactTrailRenderer(scene, {
+    fade: false,
+    drape: false,
+  });
+  renderer.setStyle('#ff8fb1');
+  const positions = [10000, 20000].map((height, i) =>
+    Cesium.Cartesian3.fromDegrees(10 + i, 50, height),
+  );
+  renderer.replaceHistory({
+    revision: 1,
+    segments: [{ fromSeq: 0, toSeq: 1, fromT: 0, toT: 1000, positions }],
+  });
+  const { body, ground } = renderer.diagnostics();
+  assert.equal(ground, false);
+  assert.ok(scene.primitives.contains(body));
+  assert.equal(scene.groundPrimitives.length, 0);
+  assert.ok(body.appearance instanceof Cesium.PolylineMaterialAppearance);
+  assert.equal(body.appearance.material.type, 'PolylineOutline');
+  assert.equal(
+    body.geometryInstances.length,
+    1,
+    'one outlined lane prevents the dark backing overpainting the rose',
+  );
+  const uniforms = body.appearance.material.uniforms;
+  assert.deepEqual(uniforms.color, Cesium.Color.fromCssColorString('#ff8fb1'));
+  assert.equal(uniforms.color.alpha, 1);
+  assert.ok(uniforms.outlineWidth >= 1);
+  assert.ok(
+    uniforms.outlineColor.red * 0.299 +
+      uniforms.outlineColor.green * 0.587 +
+      uniforms.outlineColor.blue * 0.114 <
+      0.1,
+  );
+  assert.ok(uniforms.outlineColor.alpha >= 0.8);
+  assert.equal(
+    body.depthFailAppearance.material,
+    body.appearance.material,
+    'terrain occlusion keeps the same hue and dark outline',
+  );
+  const attributes = new Map(
+    body.geometryInstances.map((instance) => [
+      instance.id,
+      Object.fromEntries(
+        Object.entries(instance.attributes).map(([key, value]) => [
+          key,
+          value.value,
+        ]),
+      ),
+    ]),
+  );
+  body._ready = true;
+  body.getGeometryInstanceAttributes = (id) => attributes.get(id);
+  renderer.setDisplaySample(
+    { displayT: 900001, fromSeq: 0, toSeq: 1, fraction: 1 },
+    positions[1],
+  );
+  for (const a of attributes.values()) {
+    assert.equal(a.show[0], 1);
+  }
+  for (const instance of body.geometryInstances) {
+    assert.ok(instance.geometry instanceof Cesium.PolylineGeometry);
+    const built = Cesium.PolylineGeometry.createGeometry(instance.geometry);
+    const values = built.attributes.position.values;
+    const heights = [];
+    for (let i = 0; i < values.length; i += 3)
+      heights.push(
+        Cesium.Cartographic.fromCartesian(Cesium.Cartesian3.unpack(values, i))
+          .height,
+      );
+    assert.deepEqual(
+      [...new Set(heights.map(Math.round))].sort((a, b) => a - b),
+      [10000, 20000],
+    );
+    assert.ok(
+      heights.every(
+        (height) =>
+          Math.min(Math.abs(height - 10000), Math.abs(height - 20000)) < 0.01,
+      ),
+    );
+  }
+  assert.deepEqual(
+    uniforms.color,
+    Cesium.Color.fromCssColorString('#ff8fb1'),
+    'old segments retain full rose',
+  );
+  renderer.setDisplaySample(
+    { displayT: 500, fromSeq: 0, toSeq: 1, fraction: 0.5 },
+    positions[0],
+  );
+  const head = renderer.diagnostics();
+  assert.equal(head.head.material.uniforms.color.alpha, 1);
+  assert.equal(
+    head.headPrimitive.depthFailAppearance.material.uniforms.color.alpha,
+    1,
+  );
+  assert.equal(
+    head.headPrimitive.depthFailAppearance.material.uniforms.backing,
+    true,
+  );
+  renderer.setStyle('#FFFFFF');
+  renderer.setDisplaySample(
+    { displayT: 600, fromSeq: 0, toSeq: 1, fraction: 0.6 },
+    positions[0],
+  );
+  assert.deepEqual(uniforms.color, Cesium.Color.WHITE);
+  assert.ok(
+    Cesium.Color.equals(
+      renderer.diagnostics().head.material.uniforms.color,
+      Cesium.Color.WHITE,
+    ),
+  );
+  renderer.destroy();
+});
+
+test('fade false can retain default draping, and drape false retains default age fading', (t) => {
+  for (const options of [{ fade: false }, { drape: false }]) {
+    const scene = fixture(t, true);
+    const renderer = createContactTrailRenderer(scene, options);
+    const positions = [10000, 20000].map((height, i) =>
+      Cesium.Cartesian3.fromDegrees(10 + i, 50, height),
+    );
+    renderer.replaceHistory({
+      revision: 1,
+      segments: [{ fromSeq: 0, toSeq: 1, fromT: 0, toT: 1000, positions }],
+    });
+    const { body, ground } = renderer.diagnostics();
+    const draped = options.drape !== false;
+    assert.equal(ground, draped);
+    assert.equal(scene.groundPrimitives.contains(body), draped);
+    assert.equal(scene.primitives.contains(body), !draped);
+    const attributes = new Map(
+      body.geometryInstances.map((instance) => [
+        instance.id,
+        Object.fromEntries(
+          Object.entries(instance.attributes).map(([key, value]) => [
+            key,
+            value.value.slice(),
+          ]),
+        ),
+      ]),
+    );
+    body._ready = true;
+    body.getGeometryInstanceAttributes = (id) => attributes.get(id);
+    const alphas = [];
+    for (const displayT of [1000, 901000]) {
+      renderer.setDisplaySample(
+        { displayT, fromSeq: 0, toSeq: 1, fraction: 1 },
+        positions[1],
+      );
+      assert.ok([...attributes.values()].every((a) => a.show[0] === 1));
+      alphas.push(
+        options.fade === false
+          ? body.appearance.material.uniforms.color.alpha
+          : attributes.get('0:1').color[3],
+      );
+    }
+    assert.deepEqual(alphas, options.fade === false ? [1, 1] : [204, 20]);
+    for (const instance of body.geometryInstances) {
+      if (draped)
+        assert.ok(instance.geometry instanceof Cesium.GroundPolylineGeometry);
+      else {
+        const values = Cesium.PolylineGeometry.createGeometry(instance.geometry)
+          .attributes.position.values;
+        const heights = [];
+        for (let i = 0; i < values.length; i += 3)
+          heights.push(
+            Math.round(
+              Cesium.Cartographic.fromCartesian(
+                Cesium.Cartesian3.unpack(values, i),
+              ).height,
+            ),
+          );
+        assert.deepEqual(
+          [...new Set(heights)].sort((a, b) => a - b),
+          [10000, 20000],
+        );
+      }
+    }
+    renderer.setDisplaySample(
+      { displayT: 500, fromSeq: 0, toSeq: 1, fraction: 0.5 },
+      positions[0],
+    );
+    const { head, headPrimitive } = renderer.diagnostics();
+    assert.equal(head.show, true);
+    assert.equal(head.material.uniforms.fraction, 0.5);
+    assert.equal(
+      head.material.uniforms.color.alpha,
+      options.fade === false ? 1 : 0.8,
+    );
+    assert.equal(
+      headPrimitive instanceof Cesium.GroundPolylinePrimitive,
+      draped,
+    );
+    renderer.destroy();
+  }
+});

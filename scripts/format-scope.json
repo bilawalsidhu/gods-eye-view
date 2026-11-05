@@ -1267,5 +1267,17 @@
   "src/voice/geminiTextChat.js",
   "src/voice/panelLayout.js",
   "src/voice/textChat.js",
-  "src/voice/textProtocol.js"
+  "src/voice/textProtocol.js",
+  "src/layers/radiosondes/renderModel.perf.test.mjs",
+  "scripts/run-perf-tests.mjs",
+  "src/perfTestRunner.test.mjs",
+  "src/layers/radiosondes/source.test.mjs",
+  "src/layers/radiosondes/docs.test.mjs",
+  "src/layers/radiosondes/policy.test.mjs",
+  "src/layers/radiosondes/ownership.test.mjs",
+  "src/layers/radiosondes/cards.test.mjs",
+  "src/layers/radiosondes/records.test.mjs",
+  "server/providers/sondehub/mqtt.test.mjs",
+  "server/providers/sondehub/store.test.mjs",
+  "server/providers/radiosondes.test.mjs"
 ]

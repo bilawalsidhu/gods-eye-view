@@ -2757,7 +2757,6 @@
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
       "src/ui/mobileShell.js",
-      "src/exclusiveSurfaces.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
@@ -3204,7 +3203,6 @@
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
       "src/ui/stores/providerSettings.js",
-      "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js",
@@ -3257,7 +3255,15 @@
       "src/voice/osmActions.js",
       "src/layers/osmPlaces/index.js",
       "src/app/layers/osmPlaces.js",
-      "src/voice/areaActions.js"
+      "src/voice/areaActions.js",
+      "src/app/layers/radiosondes.js",
+      "src/layers/radiosondes/index.js",
+      "src/layers/radiosondes/rendering.js",
+      "src/layers/radiosondes/renderModel.js",
+      "src/layers/radiosondes/cards.js",
+      "src/layers/radiosondes/policy.js",
+      "src/layers/radiosondes/records.js",
+      "src/layers/radiosondes/source.js"
     ],
     "external": [
       "hls.js",
@@ -3877,7 +3883,16 @@
       "src/data/local_data/wof_neighborhoods/files.js",
       "src/layers/osmPlaces/model.js",
       "src/layers/osmPlaces/index.js",
-      "src/app/layers/osmPlaces.js"
+      "src/app/layers/osmPlaces.js",
+      "src/app/layers/radiosondes.js",
+      "src/layers/radiosondes/index.js",
+      "src/ui/rail/utcClock.js",
+      "src/layers/radiosondes/rendering.js",
+      "src/layers/radiosondes/renderModel.js",
+      "src/layers/radiosondes/cards.js",
+      "src/layers/radiosondes/policy.js",
+      "src/layers/radiosondes/records.js",
+      "src/layers/radiosondes/source.js"
     ],
     "external": [
       "hls.js",
@@ -4413,7 +4428,9 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/layers/droneAirspace/source.js",
-      "src/layers/droneAirspace/records.js"
+      "src/layers/droneAirspace/records.js",
+      "src/layers/radiosondes/source.js",
+      "src/layers/radiosondes/records.js"
     ],
     "external": []
   },
@@ -5040,5 +5057,45 @@
       "src/i18n/marker.js"
     ],
     "external": ["cesium"]
+  },
+  "radiosondes": {
+    "exports": ["./layers/radiosondes"],
+    "modules": [
+      "src/layers/radiosondes/index.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/ar.json",
+      "src/i18n/locales/de.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/fr.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/pt.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/locales/zh-Hant.json",
+      "src/ui/rail/utcClock.js",
+      "src/data/contactTrailRenderer.js",
+      "src/data/transitPresetStyle.js",
+      "src/layers/radiosondes/rendering.js",
+      "src/layers/radiosondes/renderModel.js",
+      "src/ui/unitLabels.js",
+      "src/data/iconOrientation.js",
+      "src/layers/radiosondes/cards.js",
+      "src/layers/radiosondes/policy.js",
+      "src/layers/radiosondes/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "radiosondes-source": {
+    "exports": ["./layers/radiosondes/source"],
+    "modules": [
+      "src/layers/radiosondes/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/layers/radiosondes/records.js"
+    ],
+    "external": []
   }
 }

@@ -124,6 +124,7 @@ test('every noun the callers pass has its own Cockpit refusal', () => {
     'cyclone',
     'vessel',
     'fire',
+    'radiosonde',
     'frame',
     'aircraft',
     'satellite',

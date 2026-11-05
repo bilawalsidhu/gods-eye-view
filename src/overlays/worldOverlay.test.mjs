@@ -13,6 +13,10 @@ import {
 import { createCctvThumbnailOverlayEntry, createFrameSlot } from '../data/cctvCards.js';
 import { combinedOverlayAlpha } from './worldOverlayDraw.js';
 import {
+  buildSondeLabel,
+  RADIOSONDES_OVERLAY_OPTIONS,
+} from '../layers/radiosondes/cards.js';
+import {
   AMBIENT_CARD_COLLISION_CAPACITY,
   WORLD_OVERLAY_OCCLUDER_SELECTORS,
   WORLD_OVERLAY_PAINT_LANES,
@@ -2024,6 +2028,89 @@ test('protected tracked entry bypasses ambient quota and excludes its paint foot
     assert.equal(intersects, false, 'ambient placement avoids the protected tracked rectangle');
   }
   env.cleanup();
+});
+
+test('balloon ambient labels declutter their actual paint rectangles after separated anchors cluster', (t) => {
+  const env = installMockEnvironment({ width: 800, height: 600, dpr: 1 });
+  t.after(() => env.cleanup());
+  initWorldOverlay(env.viewer);
+  const count = 12;
+  const publish = (clustered) =>
+    setOverlayEntries(
+      'radiosondes',
+      Array.from({ length: count }, (_, i) => ({
+        ...buildSondeLabel(
+          {
+            stableId: `sonde:${i}`,
+            serial: `26040${String(i).padStart(3, '0')}`,
+            altM: 100,
+          },
+          'signal-lost',
+        ),
+        position: new Cesium.Cartesian3(
+          clustered ? 0 : -0.75 + (i % 4) * 0.5,
+          clustered ? 0 : -0.6 + Math.floor(i / 4) * 0.6,
+          0,
+        ),
+        priority: count - i,
+        horizonCull: false,
+        edgeFade: 'none',
+      })),
+      RADIOSONDES_OVERLAY_OPTIONS,
+    );
+  const painted = () =>
+    Array.from({ length: count }, (_, i) =>
+      getOverlayPaintRect('radiosondes', `sonde:${i}`),
+    ).filter(Boolean);
+  const assertNoOverlap = () => {
+    const rects = painted();
+    assert.ok(
+      rects.length > 0 && rects.length < count,
+      'colliding labels must lose their slots',
+    );
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        const a = rects[i],
+          b = rects[j];
+        const overlap =
+          a.x < b.x + b.w &&
+          a.x + a.w > b.x &&
+          a.y < b.y + b.h &&
+          a.y + a.h > b.y;
+        assert.equal(overlap, false, `${a.entryId} overlaps ${b.entryId}`);
+      }
+    }
+  };
+  publish(false);
+  env.postRender.raise();
+  env.advanceTime(200);
+  env.postRender.raise();
+  assert.equal(
+    painted().length,
+    count,
+    'every separated label initially paints',
+  );
+
+  // A camera frame can cluster anchors before moveEnd republishes candidates
+  // and before the host's default 125 ms moving-source solve interval.
+  env.viewer.camera.viewMatrix[0] = 0;
+  env.viewer.camera.viewMatrix[5] = 0;
+  env.advanceTime(1);
+  env.postRender.raise();
+  assertNoOverlap();
+  env.viewer.camera.viewMatrix[0] = 1;
+  env.viewer.camera.viewMatrix[5] = 1;
+
+  publish(true);
+  env.postRender.raise();
+  assertNoOverlap();
+  env.advanceTime(200);
+  env.postRender.raise();
+  assertNoOverlap();
+  // A new camera-height cohort must not retain exit-fading historical labels.
+  setOverlayEntries('radiosondes', [], RADIOSONDES_OVERLAY_OPTIONS);
+  env.postRender.raise();
+  assert.equal(painted().length, 0);
 });
 
 test('three clustered protected cards fall back to the least-overlapping placement', () => {

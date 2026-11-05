@@ -30,6 +30,7 @@ import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { ghostMapsProxy } from './ghostMaps.js';
 import { droneAirspaceProxy } from './droneAirspace.js';
 import { cycloneProxy } from './cyclones.js';
+import { radiosondesProxy } from './radiosondes.js';
 import { windProxy } from './wind.js';
 
 /**
@@ -81,6 +82,7 @@ function localProviderPlugins({
     gnssIntegrityProxy(),
     ghostMapsProxy(),
     droneAirspaceProxy(),
+    radiosondesProxy(),
     keySetupEndpoint(),
   ];
 }
