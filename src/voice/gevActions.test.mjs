@@ -143,6 +143,14 @@ test('track_entity runner narrates a callsign-less aircraft by its registration'
 function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
   const order = [];
   let generation = 0;
+  // Camera handoffs, published on every navigation stamp as the shell does.
+  const handoffListeners = new Set();
+  const stamp = (noun) => {
+    generation += 1;
+    order.push(`stamp:${noun}`);
+    for (const listener of [...handoffListeners]) listener({ generation });
+    return generation;
+  };
   const position = Cesium.Cartesian3.fromDegrees(-97.74, 30.26, 500);
   const viewer = {
     trackedEntity: { id: 'prior-aircraft' },
@@ -179,11 +187,7 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       return runExplicitNavigation({
         cockpitActive,
         noun,
-        stamp: () => {
-          generation += 1;
-          order.push(`stamp:${noun}`);
-          return generation;
-        },
+        stamp: () => stamp(noun),
         release: () => {
           order.push('release');
           viewer.trackedEntity = undefined;
@@ -195,12 +199,21 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       });
     },
     getDetectionState: () => ({ detectionMode: 'DENSE' }),
+    subscribeCameraHandoff(listener) {
+      handoffListeners.add(listener);
+      return () => handoffListeners.delete(listener);
+    },
+    // A voice lookup stamps when it begins and leaves any flight flying.
+    beginDeferredLocationNavigation: () => stamp('location-lookup'),
+    reassertDeferredLocationNavigation: (stamped) => stamped === generation,
   };
   return {
     order,
     viewer,
     styleManager,
     currentGeneration: () => generation,
+    // A location-panel search: a deferred stamp that leaves a flight flying.
+    panelSearch: () => stamp('panel-search'),
   };
 }
 
@@ -919,6 +932,74 @@ test('a motion follows a newer fly-to that lands while its own lookup stalls', a
   const result = await moved;
   assert.equal(result.ok, true);
   assert.equal(result.motion, 'orbit');
+});
+
+// "Fly to Paris and orbit it", then a location-panel search while the camera
+// flies: the search stamps a deferred navigation without stopping the flight.
+// Run where the flight landed, the orbit took navigation and the search's
+// reassert failed, so the search was silently dropped.
+test('a motion queued behind a fly-to yields to a search started during the flight', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, flights, panelSearch, currentGeneration } =
+    tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  const moved = runner('move_camera', { motion: 'orbit' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const search = panelSearch();
+  flights[0].complete();
+  const result = await moved;
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Not run: another navigation took the camera/);
+  assert.equal(getActiveCameraMotion(), null);
+  assert.equal(currentGeneration(), search, 'the search still owns navigation');
+});
+
+test('a motion behind a geocoded fly-to yields to a search started while it flies', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, panelSearch } = tiltAfterFlightHarness();
+  const searches = [];
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+      searches.push({ query, options, resolve });
+    }),
+  });
+  const fly = runner('fly_to_location', { query: 'Place A' });
+  const moved = runner('move_camera', { motion: 'orbit' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  searches[0].resolve({ label: 'Place A', navigationMode: 'city-overview' });
+  assert.equal((await fly).ok, true);
+  panelSearch();
+  searches[0].options.onComplete();
+  const result = await moved;
+  assert.equal(result.ok, false);
+  assert.match(result.error, /another navigation took the camera/);
+  assert.equal(getActiveCameraMotion(), null);
+});
+
+test('a search before the fly-to does not drop the motion queued behind it', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, flights, panelSearch } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  panelSearch();
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  flights[0].complete();
+  const result = await moved;
+  assert.equal(result.ok, true);
+  assert.equal(result.motion, 'tilt');
 });
 
 test('a fly-to that stops a running motion says so', async (t) => {

@@ -296,6 +296,16 @@ export function createGevActionRunner({
   let voiceFlight = null;
   // Waiters to tell when a newer voice flight begins.
   const voiceFlightWatchers = new Set();
+  // Camera handoffs (navigation stamps) seen, and how many of them voice
+  // fly-tos made. A search, share link or import that stamps during a flight
+  // leaves it flying; the motion queued behind it then yields to that one.
+  let cameraHandoffs = 0;
+  let voiceFlightHandoffs = 0;
+  const otherHandoffs = () => cameraHandoffs - voiceFlightHandoffs;
+  const unsubscribeCameraHandoff =
+    styleManager?.subscribeCameraHandoff?.(() => {
+      cameraHandoffs += 1;
+    }) ?? null;
   let analystEngine;
   // Area handles live for this runner (the page): resolve_area, the
   // analyst's region/area/drawn scopes, find_imagery and osm_query all read
@@ -1155,6 +1165,8 @@ export function createGevActionRunner({
         prior && !prior.done ? prior.inputCount : undefined,
         prior,
       );
+      // Navigation by anything but a voice fly-to since this one began.
+      flight.handoffs = otherHandoffs();
       voiceFlight = flight;
       for (const notify of [...voiceFlightWatchers]) notify();
       // A motion already running (one the model sent before this fly-to) is
@@ -1164,9 +1176,13 @@ export function createGevActionRunner({
         (hook) =>
         (...hookArgs) => {
           const before = getActiveCameraMotion();
+          const handoffsBefore = cameraHandoffs;
           try {
             return hook(...hookArgs);
           } finally {
+            // A voice fly-to's own stamps are not another navigation, even
+            // for the flight it replaces (a later lookup may find nothing).
+            voiceFlightHandoffs += cameraHandoffs - handoffsBefore;
             if (
               before &&
               !stoppedMotion &&
@@ -1382,6 +1398,15 @@ export function createGevActionRunner({
             action: 'move_camera',
             motion,
             error: `Not run: the user moved the camera during the flight, so the ${motion} was dropped.`,
+          };
+        // A search, share link or import that took navigation during the
+        // flight leaves it flying; running now would cancel that navigation.
+        if (otherHandoffs() !== flight.handoffs)
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion,
+            error: `Not run: another navigation took the camera during the flight, so the ${motion} was dropped.`,
           };
       }
       return moveCamera(args, (navigate, releaseOptions) =>
@@ -1712,6 +1737,7 @@ export function createGevActionRunner({
     if (disposed) return;
     runVoiceAction.resetConversation();
     disposed = true;
+    unsubscribeCameraHandoff?.();
     voiceAreas.dispose();
   };
   return runVoiceAction;
