@@ -2355,6 +2355,10 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/geo/index.js",
+      "src/geo/vector.js",
+      "src/geo/ellipsoid.js",
+      "src/geo/frames.js",
       "src/layers/flights/icons.js",
       "src/data/aircraftIconLayer.js",
       "src/data/aircraftModelLayer.js",
@@ -5112,6 +5116,10 @@
   "agent-world-packet": {
     "exports": ["./agent/world-packet"],
     "modules": [
+      "src/geo/index.js",
+      "src/geo/vector.js",
+      "src/geo/ellipsoid.js",
+      "src/geo/frames.js",
       "src/agent/worldPacket.js",
       "src/data/layerSnapshot.js",
       "src/data/feedState.js",
@@ -5120,7 +5128,7 @@
       "src/data/installationFeedback.js",
       "src/i18n/marker.js"
     ],
-    "external": ["cesium"]
+    "external": []
   },
   "heights": {
     "exports": ["./queries/heights"],

@@ -7,7 +7,9 @@ import {
   geodeticSurfaceNormal,
   scaleToGeodeticSurface,
   toCartographicRadians,
+  toDegrees,
   toLonLatH,
+  toRadians,
 } from './index.js';
 
 /** A seeded generator, so a failure names a reproducible point. */
@@ -46,6 +48,13 @@ const closeVec = (a, b, tolerance, message) => {
   close(a.y, b.y, tolerance, `${message} y`);
   close(a.z, b.z, tolerance, `${message} z`);
 };
+
+test("angle conversions are bit for bit the default renderer's", () => {
+  for (const p of points()) {
+    assert.equal(toRadians(p.lon), Cesium.Math.toRadians(p.lon));
+    assert.equal(toDegrees(p.lat / 57), Cesium.Math.toDegrees(p.lat / 57));
+  }
+});
 
 test('geodetic to ECEF matches the default renderer', () => {
   for (const p of points()) {
