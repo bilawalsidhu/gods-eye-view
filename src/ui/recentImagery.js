@@ -523,6 +523,10 @@ export function createRecentImageryPanel({
 
   function exportsView() {
     const ab = snapshot.mode === 'ab';
+    // Worldview Snapshots rejects a crossing BBOX: say so up front.
+    const crossing = Boolean(
+      snapshot.box && snapshot.box.west > snapshot.box.east,
+    );
     return [
       {
         id: 'export',
@@ -532,10 +536,12 @@ export function createRecentImageryPanel({
           label: ab
             ? t('EXPORT {slot}', { slot: slotId.toUpperCase() })
             : t('EXPORT'),
-          title: ab
-            ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
-            : t('Download the image as a PNG'),
-          disabled: !exportTarget(slotId) || exporting.has(slotId),
+          title: crossing
+            ? t('Select one side of the dateline')
+            : ab
+              ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
+              : t('Download the image as a PNG'),
+          disabled: crossing || !exportTarget(slotId) || exporting.has(slotId),
           reserved: slotId === 'b' ? !ab : undefined,
           onClick: () => void exportImage(slotId),
         })),

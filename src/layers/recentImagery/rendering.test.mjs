@@ -287,3 +287,13 @@ test('a dateline provider that fails on the second half adds no layer', () => {
   assert.equal(globe.layers.length, 0);
   assert.equal(renderer.ownedCount(), 0);
 });
+
+test('a box that is not a box adds no layer and drapes nothing', () => {
+  const { renderer, globe, renders } = fixture();
+  for (const bad of [{ west: NaN, south: 0, east: 1, north: 1 }, { west: 0 }]) {
+    assert.equal(renderer.showSlot('a', S30, bad), false);
+  }
+  assert.equal(globe.layers.length, 0);
+  assert.equal(renderer.ownedCount(), 0);
+  assert.deepEqual(renders, []);
+});
