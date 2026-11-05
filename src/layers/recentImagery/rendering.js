@@ -148,8 +148,9 @@ export function createRecentImageryRenderer({
   }
 
   function mount(slotId, { candidate, box, alpha, split }) {
-    const rectangles = nonCrossingBoxes(box);
-    const parts = rectangles.length ? rectangles : [box];
+    // [] means "not a box": add no layer rather than drape the raw box.
+    const parts = nonCrossingBoxes(box);
+    if (!parts.length) return false;
     // Build every provider before adding any layer, so a throw on the second
     // half of a dateline box cannot leave the first layer untracked.
     const providers = parts.map((part) => createProvider(candidate, part));
@@ -176,6 +177,7 @@ export function createRecentImageryRenderer({
       split,
     };
     applyLook(owned[slotId]);
+    return true;
   }
 
   return {
@@ -215,7 +217,7 @@ export function createRecentImageryRenderer({
         return true;
       }
       removeOwned(slotId);
-      mount(slotId, { candidate, box, ...look });
+      if (!mount(slotId, { candidate, box, ...look })) return false;
       requestRender('recent-imagery-show');
       return true;
     },

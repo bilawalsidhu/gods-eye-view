@@ -978,6 +978,10 @@ test('opacity drives both images; EXPORT downloads the pin or the preview and EX
     'Select one side of the dateline',
     'the drawn box is not a warning until an export is tried',
   );
+  const crossingExport = f.byAction('export-a');
+  assert.equal(crossingExport.disabled, true, 'EXPORT is off up front');
+  assert.equal(crossingExport.title, 'Select one side of the dateline');
+  // The exportImage guard stays as a backstop.
   assert.equal(await f.readout.exportImage('a'), false);
   assert.equal(
     f.byId('ri-notice-text').textContent,

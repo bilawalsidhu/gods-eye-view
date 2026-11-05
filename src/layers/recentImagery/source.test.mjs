@@ -41,7 +41,7 @@ test('cancelled thumbnail acquisition does not return stale responses or retry',
   assert.equal(calls, 1);
 });
 
-test('a dateline thumbnail is requested for the wider side, never as a crossing BBOX', async () => {
+test('a dateline thumbnail is requested as two non-crossing halves, never as a crossing BBOX', async () => {
   const requested = [];
   const source = createRecentImagerySource({
     thumbnailUrl: ({ box }) => {
@@ -57,23 +57,100 @@ test('a dateline thumbnail is requested for the wider side, never as a crossing 
     east: -179,
     north: 1,
   });
-  assert.deepEqual(requested.at(-1), {
-    west: -180,
-    south: 0,
-    east: -179,
-    north: 1,
-  });
+  assert.deepEqual(requested, [
+    { west: -180, south: 0, east: -179, north: 1 },
+    { west: 179.9, south: 0, east: 180, north: 1 },
+  ]);
+  requested.length = 0;
   await source.getThumbnail(candidate, {
     west: 179,
     south: 0,
     east: -179.9,
     north: 1,
   });
-  assert.deepEqual(requested.at(-1), {
-    west: 179,
-    south: 0,
-    east: 180,
-    north: 1,
-  });
+  assert.deepEqual(requested[0], { west: 179, south: 0, east: 180, north: 1 });
+  assert.equal(requested.length, 2);
   assert.ok(requested.every((box) => box.west <= box.east));
+});
+
+const NARROW_WEST = { west: 179.9, south: 0, east: -179, north: 1 };
+const dated = (present, body = 'image') =>
+  new Response(body, { headers: { 'Data-Present': present } });
+function halvesSource(answers) {
+  const requested = [];
+  const source = createRecentImagerySource({
+    thumbnailUrl: ({ box }) => `https://imagery.example/${box.west}/${box.east}`,
+    fetchImpl: async (url) => {
+      requested.push(url);
+      const answer = answers[url.split('imagery.example/')[1]];
+      if (answer instanceof Error) throw answer;
+      return answer.clone ? answer : answer();
+    },
+  });
+  return { source, requested };
+}
+const candidate = { product: 'S30', day: '2026-10-01' };
+
+test('a crossing box probes both halves and is present when only the narrow half has data', async () => {
+  const { source, requested } = halvesSource({
+    '-180/-179': dated('false'),
+    '179.9/180': dated('true', 'narrow'),
+  });
+  const response = await source.getThumbnail(candidate, NARROW_WEST);
+  assert.equal(requested.length, 2);
+  assert.equal(response.headers.get('Data-Present'), 'true');
+  assert.equal(await response.text(), 'narrow');
+});
+
+test('a crossing box with data only on the wider half is present and shows the wider side', async () => {
+  const { source } = halvesSource({
+    '-180/-179': dated('true', 'wide'),
+    '179.9/180': dated('false'),
+  });
+  const response = await source.getThumbnail(candidate, NARROW_WEST);
+  assert.equal(await response.text(), 'wide');
+});
+
+test('a crossing box is empty only when both halves are confirmed empty', async () => {
+  const { source } = halvesSource({
+    '-180/-179': dated('false'),
+    '179.9/180': dated('false'),
+  });
+  const response = await source.getThumbnail(candidate, NARROW_WEST);
+  assert.equal(response.headers.get('Data-Present'), 'false');
+});
+
+test('a crossing box is not called empty when the other half failed', async () => {
+  const { source } = halvesSource({
+    '-180/-179': dated('false'),
+    '179.9/180': () => new Response('x', { status: 503 }),
+  });
+  const response = await source.getThumbnail(candidate, NARROW_WEST);
+  assert.equal(response.ok, false);
+});
+
+test('a crossing box with both halves present shows the wider half', async () => {
+  const { source } = halvesSource({
+    '-180/-179': dated('true', 'wide'),
+    '179.9/180': dated('true', 'narrow'),
+  });
+  const response = await source.getThumbnail(candidate, NARROW_WEST);
+  assert.equal(await response.text(), 'wide');
+});
+
+test('a rejected half does not hide data on the other half, and never reads as empty', async () => {
+  const { source } = halvesSource({
+    '-180/-179': new Error('network'),
+    '179.9/180': dated('true', 'narrow'),
+  });
+  const response = await source.getThumbnail(candidate, NARROW_WEST);
+  assert.equal(await response.text(), 'narrow');
+  const failing = halvesSource({
+    '-180/-179': new Error('network'),
+    '179.9/180': dated('false'),
+  });
+  await assert.rejects(
+    failing.source.getThumbnail(candidate, NARROW_WEST),
+    /network/,
+  );
 });
