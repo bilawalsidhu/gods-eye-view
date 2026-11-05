@@ -290,11 +290,7 @@ test('PR B manually replaces provisional 00 with 01 after PR A publishes 00', ()
 
 test('allocation batches cross the last digit and base-36 pair boundaries in order', () => {
   // News holds the last digit, 9: the ledger has no free digit left.
-  const digitRows = [];
-  const allDigits = parseLayerStateTokenReservations([
-    ...reservationRows,
-    ...digitRows,
-  ]);
+  const allDigits = parseLayerStateTokenReservations(reservationRows);
   const beforeNine = { ...allDigits };
   delete beforeNine.news;
   assert.equal(
@@ -342,24 +338,20 @@ test('allocation batches cross the last digit and base-36 pair boundaries in ord
 test('an isolated valid two-character fixture round-trips an l field beyond the old 64-character cap', async () => {
   const cwd = mkdtempSync(path.join(tmpdir(), 'gev-layer-token-width-'));
   try {
-    // News holds the last digit: no prior digit to fill.
-    const priorDigits = [];
+    // News holds the last digit: the fixture's layers start at pairs.
     const fixtureLayers = ['00', '01', '02', '03'].map((token) => ({
       id: `qa-layer-${token}`,
       token,
     }));
     const fixtureRows = [
       ...reservationRows,
-      ...priorDigits,
       ...fixtureLayers.map(({ id, token }) => [id, token]),
     ];
     const fixtureModule = writeCodecFixture(cwd, fixtureRows, fixtureLayers);
     const codec = await import(pathToFileURL(fixtureModule));
     assert.equal(codec.validateLayerStateRegistry(), true);
     assert.equal(
-      nextLayerStateToken(
-        parseLayerStateTokenReservations([...reservationRows, ...priorDigits]),
-      ),
+      nextLayerStateToken(parseLayerStateTokenReservations(reservationRows)),
       '00',
     );
     assert.equal(

@@ -55,8 +55,9 @@ const DAY_MS = 24 * HOUR_MS;
 // newest first, a dozen a read (the first day's 96 fill in over the next
 // reads, a few seconds apart, while each reads something new). One listed
 // but missing (404) an hour and a half after its time is taken as never
-// published; one that fails GDELT_EXPORT_TRIES times, or cannot be read at
-// all, is given up on, so one bad file never holds the rest back. The first
+// published; one that fails GDELT_EXPORT_TRIES times (a try a round), or
+// cannot be read at all, is given up on, so one bad file never holds the
+// rest back. Only while GDELT itself answers is a file given up on. The first
 // answer waits at most GDELT_FIRST_MS for the first exports.
 const GDELT_FRESH_MS = 5 * 60_000;
 const GDELT_EXPORTS_PER_READ = 12;
@@ -283,13 +284,13 @@ export function createKeyedNews({
     read: new Set(),
     // Exports still missing well after their time: not looked for again.
     gone: new Set(),
-    // Failed reads of each export not read yet.
+    // Failed reads of each export not read yet: `{tries, at}`.
     failures: new Map(),
     // Exports read among the newest whose GKG titles are not in yet, with
     // the tries made: `{tries, triedAt}`.
     untitled: new Map(),
     titling: null,
-    // When a read last brought an export in, with nothing failing.
+    // When a read last brought an export in.
     readAt: null,
     checkedAt: null,
     failedAt: null,
@@ -503,6 +504,8 @@ export function createKeyedNews({
     let failed = null;
     let added = 0;
     const failing = [];
+    const unreadable = [];
+    const unpublished = [];
     for (let i = 0; i < missing.length; i += GDELT_PARALLEL)
       await Promise.all(
         missing.slice(i, i + GDELT_PARALLEL).map(async (url) => {
@@ -511,13 +514,11 @@ export function createKeyedNews({
             events = await fetchExport(url, { fetchImpl });
           } catch (error) {
             failed = error;
-            // An unreadable file stays so.
-            if (error.unreadable) gdelt.gone.add(url);
-            else failing.push(url);
+            (error.unreadable ? unreadable : failing).push(url);
             return;
           }
           if (!events) {
-            if (at - exportAt(url) >= GDELT_GONE_MS) gdelt.gone.add(url);
+            if (at - exportAt(url) >= GDELT_GONE_MS) unpublished.push(url);
             return;
           }
           // The events count now; the titles follow (readTitles).
@@ -531,12 +532,19 @@ export function createKeyedNews({
         }),
       );
     if (failed) log(`[news] gdelt read failed: ${failed.message}`);
-    // A file that fails while others read is that file's fault, and gets a
-    // few tries; when none read, GDELT itself is down and no file is blamed.
+    // A file is blamed only while GDELT itself answers (its list read, or
+    // another export of the round read): then a 404 long after its time is
+    // never published, an unreadable file stays so, and a failing one gets a
+    // few tries, one a GDELT_FRESH_MS. With GDELT down, no file is blamed.
+    const answering = added > 0 || latest !== null;
+    if (answering)
+      for (const url of [...unpublished, ...unreadable]) gdelt.gone.add(url);
     if (added)
       for (const url of failing) {
-        const tries = (gdelt.failures.get(url) || 0) + 1;
-        gdelt.failures.set(url, tries);
+        const prior = gdelt.failures.get(url);
+        if (prior && now() - prior.at < GDELT_FRESH_MS) continue;
+        const tries = (prior?.tries || 0) + 1;
+        gdelt.failures.set(url, { tries, at: now() });
         if (tries >= GDELT_EXPORT_TRIES) gdelt.gone.add(url);
       }
     // Nothing read and a failure: tried again after RETRY_MS, not after

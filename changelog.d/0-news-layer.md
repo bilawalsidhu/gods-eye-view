@@ -18,7 +18,7 @@
   (default 30). A section says when its key is required, refused or out of
   its daily allowance. The Data attribution popover credits the GDELT
   Project, World News API and, once its items show, Liveuamap
-  (AUTHOR, #1).
+  (AUTHOR, #0).
 - Cockpit Regional News holds its list to the last 24 hours, newest first, on
   the server and in the client, and labels its four states apart: fresh
   results with no banner and a `LAST 24 H` footer, earlier results kept after

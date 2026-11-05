@@ -200,6 +200,8 @@ function upstream(answers = {}) {
         );
       if (answers.corrupt?.includes(href))
         return new Response('not a zip at all', { status: 200 });
+      if (answers.failing?.includes(href))
+        return new Response('busy', { status: 503 });
       const gkg = href.endsWith('.gkg.csv.zip');
       const listed = answers.exports ?? EXPORTS;
       const answer = gkg
@@ -669,7 +671,12 @@ test('exports never published are given up on, not looked for back to back', asy
   const quarter = exportName('20261105114500');
   const { ask, calls, clock, settle } = keyed({
     env: {},
-    answers: { exports: { [quarter]: EXPORTS[quarter] }, unlisted: 404 },
+    // GDELT's list names the newest; every other export it answers 404.
+    answers: {
+      exports: { [quarter]: EXPORTS[quarter] },
+      unlisted: 404,
+      lastupdate: '20261105120000',
+    },
   });
   assert.equal((await ask('/hotspots')).body.hotspots[0].counts.last24h, 3);
   await settle();
@@ -943,7 +950,7 @@ test('no export later than the newest GDELT lists is asked for (its CDN keeps a 
   );
 });
 
-test('a town a disputed area is named after is named alone, on both sides of its line', () => {
+test('a town a disputed area is named after is named as the town alone', () => {
   assert.equal(
     gdeltPlace({
       lat: 31.7667,
@@ -984,5 +991,64 @@ test('GDELT down for a few minutes gives up on no export: they are all read once
     gdeltCalls(calls).some(
       (c) => String(c.url) === exportName('20261105114500'),
     ),
+  );
+});
+
+test('a GDELT outage answering 404, its list down too, gives up on no export', async () => {
+  const answers = { exports: {}, unlisted: 404 };
+  const { ask, clock, settle } = keyed({ env: {}, answers });
+  // Long enough for the stories' exports to be 90 minutes old.
+  for (let i = 0; i < 20; i++) {
+    await ask('/hotspots');
+    await settle();
+    clock.now += 5 * MINUTE;
+  }
+  delete answers.exports;
+  delete answers.unlisted;
+  for (let i = 0; i < 3; i++) {
+    clock.now += 5 * MINUTE;
+    await ask('/hotspots');
+    await settle();
+  }
+  const back = await ask('/hotspots');
+  assert.equal(back.status, 200);
+  assert.equal(back.body.hotspots[0].counts.last24h, 4);
+});
+
+test('a host answering junk for every file gives up on none of them', async () => {
+  const answers = {
+    corrupt: [exportName('20261105114500'), exportName('20261105113000')],
+    exports: {},
+    unlisted: 404,
+  };
+  const { ask, clock, settle } = keyed({ env: {}, answers });
+  await ask('/hotspots');
+  await settle();
+  answers.corrupt = [];
+  delete answers.exports;
+  delete answers.unlisted;
+  clock.now += 6 * MINUTE;
+  await ask('/hotspots');
+  await settle();
+  const back = await ask('/hotspots');
+  assert.equal(back.body.hotspots[0].counts.last24h, 4);
+});
+
+test('a failing file gets one strike a round, not three within seconds', async () => {
+  const flaky = exportName('20261105114500');
+  const answers = { failing: [flaky] };
+  const { ask, calls, clock, settle } = keyed({ env: {}, answers });
+  // The startup fill runs several rounds a few seconds apart.
+  await ask('/hotspots');
+  await settle();
+  // GDELT answers again for it before three rounds five minutes apart.
+  answers.failing = [];
+  clock.now += 6 * MINUTE;
+  await ask('/hotspots');
+  await settle();
+  const back = await ask('/hotspots');
+  assert.equal(back.body.hotspots[0].counts.last24h, 4);
+  assert.ok(
+    gdeltCalls(calls).filter((c) => String(c.url) === flaky).length >= 2,
   );
 });

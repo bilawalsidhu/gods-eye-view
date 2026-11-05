@@ -8,7 +8,7 @@
 // as the fallback.
 
 /** Text as the rules match it: folded case, one apostrophe, no vowel marks. */
-export function normaliseForMatch(text) {
+function normaliseForMatch(text) {
   return String(text || '')
     .normalize('NFKC')
     .toLowerCase()
@@ -553,11 +553,6 @@ const COMPILED = Object.entries(RULES).map(([category, stems]) => ({
   }),
 }));
 
-/**
- * Categorise a report from its title and summary.
- * @returns {{category: string, tags: string[]}}
- */
-export const RELEVANCE_LEVELS = Object.freeze(['core', 'related', 'minor']);
 const EVENT_CATEGORIES = new Set([
   'strike',
   'air-defence',
@@ -771,7 +766,7 @@ const ELECTION =
 const PHYSICAL =
   /(?<![\p{L}])(?:kill|dead(?![\p{L}])|fighting|clash|air ?strike|strikes?(?![\p{L}])|struck|destroy|downed|ablaze|on fire|catch(?:es)? fire|caught fire|naval mine|landmine|shot down|sunk|sank|deaths?|injur|wounded|casualt|troops|soldier|missile|drone|rocket|shell(?:ing|ed)|artiller|explosi|blast|bomb|gunfire|shot(?![\p{L}])|shooting|magnitude|richter|tremor|evacuat|flood(?:ed|ing|waters)|убит|погиб|ранен|ракет|дрон|обстрел|загин|поранен|обстріл|قتل|جرح|صاروخ|הרג|פצוע|טיל)/u;
 /** The categories of a physical event (an alert is a threat, not yet one). */
-export const EVENT_KINDS = new Set([
+const EVENT_KINDS = new Set([
   'strike',
   'air-defence',
   'ground',
@@ -780,6 +775,10 @@ export const EVENT_KINDS = new Set([
   'infrastructure',
 ]);
 
+/**
+ * Categorise a report from its title and summary.
+ * @returns {{category: string, tags: string[]}}
+ */
 export function categorizeText({ title = '', summary = '' } = {}) {
   if (isAlertText(title)) return { category: 'alert', tags: ['alert'] };
   const t = rephrase(normaliseForMatch(title));
