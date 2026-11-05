@@ -52,10 +52,11 @@ def line(osm_id, sequence):
                                       'type': 'data_center', 'osm_id': osm_id}})
 norway = [([(0, 0), (20, 0), (20, 80), (0, 80)], False)]
 lines = [line(7, 1), line(8, 2)]
-out, report = merge(lines, {}, norway, {'w7', 'w12'})
-assert out == [lines[0]], out
+fresh = {'w13': {'geometry': {'type': 'Polygon', 'coordinates': square}, 'tags': {'building': 'data_center'}}}
+out, report = merge(lines, fresh, norway, {'w7', 'w12', 'w13'})
+assert out[0] == lines[0] and len(out) == 2, out
 assert report['unexported'] == ['w7'] and report['removed'] == ['w8'], report
-assert report['skipped'] == ['w12'] and report['added'] == [], report
+assert report['skipped'] == ['w12'] and report['added'] == ['w13'], report
 `,
   );
 });

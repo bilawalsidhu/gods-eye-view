@@ -182,7 +182,7 @@ def feature_line(key, sequence, fresh):
 
 
 def merge(lines, fresh, rings, tagged):
-    out, seen, known, sequence = [], set(), set(), 0
+    out, known, sequence = [], set(), 0
     report = {'kept': 0, 'updated': [], 'removed': [], 'added': [], 'unexported': [], 'skipped': []}
     for line in lines:
         feature = json.loads(line)
@@ -190,7 +190,6 @@ def merge(lines, fresh, rings, tagged):
         key = osm_key(feature)
         known.add(key)
         if key in fresh:
-            seen.add(key)
             old_tags = feature['properties']['tags']
             if old_tags == fresh[key]['tags'] and same_geometry(feature['geometry'], fresh[key]['geometry']):
                 out.append(line)
@@ -208,7 +207,7 @@ def merge(lines, fresh, rings, tagged):
             report['removed'].append(key)
             continue
         out.append(line)
-    for key in sorted(set(fresh) - seen, key=lambda k: (k[0], int(k[1:]))):
+    for key in sorted(set(fresh) - known, key=lambda k: (k[0], int(k[1:]))):
         sequence += 1
         out.append(feature_line(key, sequence, fresh[key]))
         report['added'].append(key)
