@@ -42,6 +42,14 @@ export function sameSiteGated(handler) {
   };
 }
 
+/** Same-origin gate that accepts reverse-proxy headers for public read routes. */
+export function sameSiteKeylessGated(handler) {
+  return (req, res, next) => {
+    if (admitSameSiteKeyless(req, res)) return undefined;
+    return handler(req, res, next);
+  };
+}
+
 /**
  * Proxy header values arrive client-controlled; read one only when it is a
  * single scheme token, never a comma-separated chain.

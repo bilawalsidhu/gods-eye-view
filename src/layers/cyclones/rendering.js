@@ -7,9 +7,18 @@ import {
 
 /** Only geometry from the displayed status advisory is eligible for rendering. */
 export function coherentCycloneGeometry(storm) {
+  if (storm.geometryStatus !== 'current') return false;
+  if (storm.provider === 'cwa')
+    return Boolean(
+      storm.cycleId &&
+      storm.geometryCycleId === storm.cycleId &&
+      storm.track &&
+      storm.forecastPoints?.length &&
+      !storm.cone,
+    );
   return (
-    storm.geometryStatus === 'current' &&
-    storm.geometryAdvisoryNumber === storm.advisoryNumber
+    storm.geometryAdvisoryNumber === storm.advisoryNumber &&
+    Boolean(storm.track && storm.cone && storm.forecastPoints?.length)
   );
 }
 
@@ -28,7 +37,13 @@ export function createCycloneRendering({ viewer, cesium: C, overlayHost }) {
     spheres = new Map();
   let entityStorms = new WeakMap();
   let entityIds = new Set();
-  let counts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
+  let counts = {
+    storms: 0,
+    tracks: 0,
+    cones: 0,
+    forecastPoints: 0,
+    probabilityRadii: 0,
+  };
   let horizonStorms = [],
     removePreRender = null,
     pointOccluder = null,
@@ -110,7 +125,13 @@ export function createCycloneRendering({ viewer, cesium: C, overlayHost }) {
         nextSpheres = new Map();
       const nextEntityStorms = new WeakMap();
       const nextEntityIds = new Set();
-      const nextCounts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
+      const nextCounts = {
+        storms: 0,
+        tracks: 0,
+        cones: 0,
+        forecastPoints: 0,
+        probabilityRadii: 0,
+      };
       const nextHorizonStorms = [];
       const nextLabels = [];
       const position = ({ longitude, latitude }) =>
@@ -221,6 +242,20 @@ export function createCycloneRendering({ viewer, cesium: C, overlayHost }) {
               addEntity({
                 id: `cyclone:${storm.id}:forecast:${index}`,
                 position: p,
+                ...(point.probabilityRadiusKm > 0
+                  ? {
+                      ellipse: {
+                        semiMajorAxis: point.probabilityRadiusKm * 1000,
+                        semiMinorAxis: point.probabilityRadiusKm * 1000,
+                        height: 0,
+                        heightReference: C.HeightReference.CLAMP_TO_GROUND,
+                        material: blue.withAlpha(0.1),
+                        outline: true,
+                        outlineColor: blue.withAlpha(0.5),
+                        outlineWidth: 1,
+                      },
+                    }
+                  : {}),
                 point: {
                   heightReference: C.HeightReference.CLAMP_TO_GROUND,
                   disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -230,13 +265,23 @@ export function createCycloneRendering({ viewer, cesium: C, overlayHost }) {
                   outlineWidth: 1,
                 },
               });
-              label.forecasts.push({ tauHours: point.tauHours, position: p });
+              if (point.probabilityRadiusKm > 0) nextCounts.probabilityRadii++;
+              label.forecasts.push({
+                tauHours: point.tauHours,
+                validAt: point.validAt ?? null,
+                position: p,
+              });
               nextCounts.forecastPoints++;
             }
           }
           const sphere = C.BoundingSphere.fromPoints(extent);
           // A status-only point still has a useful regional camera destination.
-          sphere.radius = Math.max(sphere.radius, 500_000);
+          const maxRadiusM = storm.forecastPoints.reduce(
+            (maximum, point) =>
+              Math.max(maximum, (point.probabilityRadiusKm || 0) * 1000),
+            0,
+          );
+          sphere.radius = Math.max(sphere.radius, 500_000, maxRadiusM);
           nextSpheres.set(storm.id, sphere);
           horizon.sphere = sphere;
           nextHorizonStorms.push(horizon);
@@ -293,7 +338,13 @@ export function createCycloneRendering({ viewer, cesium: C, overlayHost }) {
       entityStorms = new WeakMap();
       entityIds.clear();
       selected = null;
-      counts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
+      counts = {
+        storms: 0,
+        tracks: 0,
+        cones: 0,
+        forecastPoints: 0,
+        probabilityRadii: 0,
+      };
       render();
     },
     destroy() {
