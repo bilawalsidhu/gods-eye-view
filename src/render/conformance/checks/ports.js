@@ -20,6 +20,14 @@ import {
 } from 'satellite.js';
 import { deepEqual, equal, near, nearVec, ok, throws } from '../expect.js';
 
+/** 1 × 1 PNGs (red, green, blue), so imagery checks load nothing from the network. */
+const PIXEL_PNGS = [
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/wHwAEAQH/cetH5QAAAABJRU5ErkJggg==',
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==',
+];
+const PIXEL_PNG = PIXEL_PNGS[0];
+
 /** Elements for the orbit check: a station-like orbit, epoch 2026-01-04. */
 const ISS_TLE = Object.freeze([
   '1 25544U 98067A   26004.50000000  .00016717  00000-0  10270-3 0  9992',
@@ -1674,11 +1682,161 @@ export function portChecks() {
         deepEqual(ours(), ['a', 'b'], 'lowered');
         a.alpha = 0.5;
         equal(a.alpha, 0.5, 'alpha');
+        equal(b.drapeOn, 'all', 'drapes on whatever is drawn by default');
+        equal(b.lit, true, 'lit by default');
+        b.drapeOn = 'surface';
+        b.lit = false;
+        equal(b.drapeOn, 'surface', 'drapeOn is settable');
+        equal(b.lit, false, 'lit is settable');
         a.remove();
         deepEqual(ours(), ['b'], 'the removed layer is the one gone');
         b.remove();
         deepEqual(ours(), [], 'both removed');
-        ok(['globe', 'tiles', 'both'].includes(r.globe.imagery.host()), 'host');
+      },
+    ),
+    check(
+      'globe.imagery.frames',
+      'timed frames follow scene time, or setFrameTime on their own clock',
+      async (h, r) => {
+        await overAustin(h, r, 2000000);
+        const t0 = r.frame.time();
+        const frames = [0, 60000, 120000].map((dt, i) => ({
+          time: t0 + dt,
+          url: PIXEL_PNGS[i],
+        }));
+        const ready = [];
+        // Frames decode in real time: wait on the clock, drawing meanwhile.
+        const waitFor = async (time, ms = 5000) => {
+          const until = Date.now() + ms;
+          while (!ready.includes(time) && Date.now() < until) {
+            await drawn(h, r, 1);
+            await new Promise((done) => setTimeout(done, 10));
+          }
+          return ready.includes(time);
+        };
+        const settle = () => waitFor(Symbol('nothing'), 300);
+        const scene = r.globe.imagery.add({
+          kind: 'single-image',
+          url: PIXEL_PNG,
+        });
+        scene.on('frameReady', (time) => ready.push(time));
+        scene.setFrames({ kind: 'frames', frames });
+        r.frame.setTime(t0 + 50000);
+        ok(await waitFor(t0 + 60000), 'the frame nearest scene time is ready');
+        await settle();
+        ready.length = 0;
+        r.frame.setTime(t0 + 55000);
+        scene.setFrameTime(t0 + 130000);
+        await settle();
+        deepEqual(
+          ready,
+          [],
+          'the same frame is not ready twice, and setFrameTime does nothing on the scene clock',
+        );
+        scene.remove();
+
+        ready.length = 0;
+        const own = r.globe.imagery.add({
+          kind: 'single-image',
+          url: PIXEL_PNG,
+        });
+        own.on('frameReady', (time) => ready.push(time));
+        own.setFrames({ kind: 'frames', frames }, { clock: 'own' });
+        own.setFrameTime(t0 + 130000);
+        ok(await waitFor(t0 + 120000), 'setFrameTime on its own clock');
+        await settle();
+        ready.length = 0;
+        r.frame.setTime(t0 + 5000);
+        await settle();
+        deepEqual(ready, [], 'scene time does not move its own clock');
+        own.remove();
+
+        ready.length = 0;
+        const paused = r.globe.imagery.add({
+          kind: 'single-image',
+          url: PIXEL_PNG,
+        });
+        paused.on('frameReady', (time) => ready.push(time));
+        r.frame.suspend(true);
+        paused.setFrames({ kind: 'frames', frames });
+        r.frame.setTime(t0 + 1000);
+        r.frame.setTime(t0 + 61000);
+        await settle();
+        deepEqual(ready, [], 'nothing is ready while the loop is suspended');
+        r.frame.suspend(false);
+        ok(
+          await waitFor(t0 + 60000),
+          'the frame shown is ready once it is drawn',
+        );
+        equal(ready[0], t0 + 60000, 'and frames never drawn are not announced');
+        paused.remove();
+
+        ready.length = 0;
+        const first = r.globe.imagery.add({
+          kind: 'single-image',
+          url: PIXEL_PNG,
+        });
+        const second = r.globe.imagery.add({
+          kind: 'single-image',
+          url: PIXEL_PNG,
+        });
+        first.on('frameReady', () => {
+          ready.push('first');
+          second.remove();
+        });
+        second.on('frameReady', () => ready.push('second'));
+        first.setFrames({ kind: 'frames', frames });
+        second.setFrames({ kind: 'frames', frames });
+        r.frame.setTime(t0 + 120000);
+        await waitFor('first');
+        await settle();
+        ok(
+          !ready.includes('second'),
+          'a layer removed while another announces says nothing',
+        );
+        first.remove();
+      },
+      { capability: 'imageryFrames' },
+    ),
+    check(
+      'globe.withoutImageHooks',
+      'without imageHooks, a spec with main-thread tile hooks throws',
+      async (h) => {
+        const r = await h.create({
+          viewport: SCRIPT_VIEWPORT,
+          capabilities: CAPABILITIES.filter((c) => c !== 'imageHooks'),
+        });
+        if (!r) return { skip: 'this harness cannot drop capabilities' };
+        try {
+          const url = 'https://example.invalid/{z}/{x}/{y}.png';
+          throws(
+            () =>
+              r.globe.imagery.add({
+                kind: 'xyz',
+                url,
+                tileTransform: (t, i) => i,
+              }),
+            'tileTransform',
+          );
+          throws(
+            () =>
+              r.globe.imagery.add({
+                kind: 'xyz',
+                url,
+                admit: (t, issue) => issue(),
+              }),
+            'admit',
+          );
+          throws(
+            () => r.globe.imagery.add({ kind: 'canvas', drawTile: () => {} }),
+            'canvas imagery',
+          );
+          const plain = r.globe.imagery.add({ kind: 'xyz', url });
+          ok(plain, 'a plain layer is added');
+          plain.remove();
+        } finally {
+          r.destroy();
+        }
       },
     ),
     check(

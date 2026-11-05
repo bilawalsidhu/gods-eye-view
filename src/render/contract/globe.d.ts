@@ -10,13 +10,16 @@ export interface PhotorealSpec {
   key?: string;
   /** Renews a session token; called again when the token expires. */
   token?: () => Promise<string>;
-  /** Fall back to an ion-hosted copy when Google refuses. */
-  ionFallback?: boolean;
+  /**
+   * Fall back to the renderer's copy of the same tiles when Google refuses
+   * (for the default renderer, one hosted on Cesium ion).
+   */
+  fallback?: boolean;
 }
 
 export interface PhotorealStatus {
   /** Which route is drawing, or `'none'` when photoreal is off or failed. */
-  route: 'google' | 'ion' | 'none';
+  route: 'google' | 'fallback' | 'none';
   error?: { code: string; message: string };
 }
 
@@ -29,7 +32,11 @@ export interface PhotorealStatus {
 export type TerrainSpec = (
   | { kind: 'ellipsoid' }
   | { kind: 'quantizedMesh'; url: string; requestVertexNormals?: boolean }
-  | { kind: 'ion'; assetId: number }
+  /**
+   * The renderer's global terrain, through `CreateOptions.worldDataToken`
+   * (for the default renderer, Cesium World Terrain).
+   */
+  | { kind: 'world'; requestVertexNormals?: boolean }
   /** A DEM image pyramid (`{z}/{x}/{y}`), heights encoded in RGB. */
   | {
       kind: 'heightmap';
@@ -53,11 +60,27 @@ export interface TileRequest {
   level: number;
 }
 
+/**
+ * What a tile fetch answered: the bytes to decode, `missing` (no tile
+ * there; draw the parent's), or `defer` (ask again on a later frame).
+ */
+export type TileFetch =
+  | { bytes: ArrayBuffer; contentType?: string }
+  | { missing: true }
+  | { defer: true };
+
 export interface ImagerySpec {
-  kind: 'xyz' | 'wmts' | 'arcgis' | 'bing' | 'single-image' | 'canvas';
+  /**
+   * `world`: the renderer's global imagery through
+   * `CreateOptions.worldDataToken` (for the default renderer, Cesium ion's
+   * world imagery), in `worldStyle`. `canvas`: `imageHooks`.
+   */
+  kind: 'xyz' | 'wmts' | 'arcgis' | 'world' | 'single-image' | 'canvas';
+  /** `world`: aerial (the default), or aerial with labels. */
+  worldStyle?: 'aerial' | 'aerialLabels';
   /** URL or URL template (`{x}`, `{y}`, `{z}`, `{s}`, `{time}`). */
   url?: string;
-  /** `'canvas'`: draws one tile. */
+  /** `'canvas'` (`imageHooks`): draws one tile. */
   drawTile?: (tile: TileRequest, canvas: HTMLCanvasElement) => void;
   /** WMTS: layer, style, tile matrix set and format. */
   wmts?: {
@@ -77,14 +100,26 @@ export interface ImagerySpec {
   maxConcurrentRequests?: number;
   /** HTTP statuses retried rather than treated as missing. */
   retryStatuses?: number[];
-  /** Changes a tile's image before it is drawn. */
+  /**
+   * Fetches a tile in place of the renderer, with the URL it would fetch.
+   * Every renderer calls it, before its own decoding (in a worker, say).
+   */
+  fetchTile?: (request: {
+    tile: TileRequest;
+    url: string;
+    signal: AbortSignal;
+  }) => Promise<TileFetch>;
+  /** `imageHooks`: changes a tile's decoded image before it is drawn. */
   tileTransform?: (
     tile: TileRequest,
     image: ImageBitmap,
   ) => ImageBitmap | Promise<ImageBitmap>;
   /**
-   * Decides each tile request: call `issue()` to fetch it, or return
-   * `undefined` to defer it and be asked again on a later frame.
+   * `imageHooks`: decides each tile request on the main thread: call
+   * `issue()` to fetch it, or return `undefined` to defer it and be asked
+   * again on a later frame. `fetchTile`'s `defer` does the same anywhere.
+   * With both, `admit` decides first and an issued request goes through
+   * `fetchTile`; each defers on its own.
    */
   admit?: (
     tile: TileRequest,
@@ -100,20 +135,56 @@ export interface TimedUrl {
   url: string;
 }
 
+/**
+ * A timed source: frames as URLs (one template per time), or video tiles
+ * in segments, each a template whose tiles are videos spanning `start` to
+ * `end` (epoch ms), a time within shown by its offset into the segment's
+ * videos. Outside every segment, the nearest segment end is shown.
+ */
+export type TimedSource =
+  | { kind: 'frames'; frames: TimedUrl[] }
+  | {
+      kind: 'video';
+      segments: Array<{ url: string; start: number; end: number }>;
+    };
+
 export interface ImageryLayer {
   alpha: number;
   show: boolean;
   /** Which side of the split this layer shows on. */
   split: 'none' | 'left' | 'right';
-  /** What it drapes onto. `'active'` follows whichever base is showing. */
-  drapeOn: 'globe' | 'tiles' | 'both' | 'active';
-  /** `imageryFrames`: a timed sequence, prefetched hidden. */
+  /**
+   * What it drapes onto: the globe's surface (terrain or the ellipsoid),
+   * objects (3D tiles and models; `imageryOnTiles`), or all of them. The
+   * default `all` drapes on whichever is drawn, so under photoreal it is
+   * on the tiles. Without `imageryOnTiles`, `objects` drapes on nothing and
+   * `all` on the surface. So nothing drapes while the globe is hidden and
+   * either photoreal's route is `none` or there is no `imageryOnTiles`:
+   * Core reads that from what it set, with no event for it.
+   */
+  drapeOn: 'surface' | 'objects' | 'all';
+  /** Shaded by the sun like the surface (the default), or drawn unlit. */
+  lit: boolean;
+  /**
+   * `imageryFrames`: a timed source, prefetched hidden. `clock: 'scene'`
+   * (the default) shows the frame for the frame port's scene time;
+   * `'own'` shows the one `setFrameTime` names.
+   */
   setFrames?(
-    frames: TimedUrl[],
-    options?: { mode?: 'nearest' | 'blend'; prefetch?: number },
+    source: TimedSource,
+    options?: {
+      mode?: 'nearest' | 'blend';
+      prefetch?: number;
+      clock?: 'scene' | 'own';
+    },
   ): void;
-  /** `imageryFrames`: which time to show. */
+  /** `imageryFrames`: which time to show, on the `own` clock. */
   setFrameTime?(ms: number): void;
+  /**
+   * `imageryFrames`: the frame the layer's clock now shows (by its time)
+   * has been drawn. Fires once each time the shown frame changes, never
+   * for frames only prefetched.
+   */
   on(event: 'frameReady', cb: (time: number) => void): Off;
   on(
     event: 'tileError',
@@ -189,12 +260,18 @@ export interface GlobePort {
   setGlobeVisible(visible: boolean): void;
   /** `surfaceShading`. */
   setSurfaceShading?(shading: SurfaceShading | null): void;
+  /** `clouds`: the renderer's volumetric clouds, or none. */
+  setClouds?(clouds: { coverage: number } | null): void;
+  /** `water`: the renderer's own water surface on the oceans, on or off. */
+  setWater?(enabled: boolean): void;
   readonly imagery: {
+    /**
+     * Without `imageHooks`, a spec with `tileTransform`, `admit` or kind
+     * `canvas` throws, rather than drawing tiles the hooks were meant to
+     * change.
+     */
     add(spec: ImagerySpec, index?: number): ImageryLayer;
     list(): ImageryLayer[];
-    /** What imagery drapes onto now. */
-    host(): 'globe' | 'tiles' | 'both';
-    onHostChange(cb: (host: 'globe' | 'tiles' | 'both') => void): Off;
     /** `splitSwipe`: split position, a fraction of the canvas's CSS width. */
     getSplit?(): number;
     /** `splitSwipe`: move the split to `x01` of the canvas's CSS width. */

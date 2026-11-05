@@ -166,4 +166,6 @@ easing (`courseBlendMs`, `courseGlide`), and a hidden row keeping its eased
 course. The stub keeps no drawn course. These wait for scenes that capture
 an icon mid-turn. Height queries that count a set
 (`includeInHeightQueries`) are not checked either: the stub's heights are
-scripted, so it does not model them.
+scripted, so it does not model them. Nor are video frames (a check needs a
+video), `fetchTile` (the stub fetches nothing) or what clouds and water
+draw.
