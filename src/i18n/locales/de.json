@@ -3229,5 +3229,7 @@
   "{label} · {free} free": "{label} · {free} frei",
   "Recording to {path}": "Aufzeichnung nach {path}",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Der Anbieter hat den Zugriff für diesen Schlüssel verweigert. Projekt, Region oder Berechtigungen des Schlüssels prüfen.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "Das Anbieterkonto hat kein Guthaben mehr. Die Abrechnung prüfen oder in den Einstellungen einen anderen KI-Anbieter wählen."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "Das Anbieterkonto hat kein Guthaben mehr. Die Abrechnung prüfen oder in den Einstellungen einen anderen KI-Anbieter wählen.",
+  "{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.": "{drive} ist fast voll: {free} frei von {total}. Neue Punkte können nicht mehr gespeichert werden, wenn es voll ist.",
+  "The recording drive": "Das Aufzeichnungslaufwerk"
 }

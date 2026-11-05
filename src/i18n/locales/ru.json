@@ -3379,5 +3379,7 @@
   "The provider rejected the API key. Check it in Provider Settings.": "Провайдер отклонил ключ API. Проверьте его в «Настройках провайдеров».",
   "Too many chat requests. Try again in {seconds} s.": "Слишком много запросов в чате. Повторите попытку через {seconds} с.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Провайдер отказал этому ключу в доступе. Проверьте проект, регион или разрешения ключа.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашем счёте у провайдера закончились средства. Проверьте оплату или выберите другого провайдера ИИ в настройках."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашем счёте у провайдера закончились средства. Проверьте оплату или выберите другого провайдера ИИ в настройках.",
+  "{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.": "{drive} почти заполнен: свободно {free} из {total}. Когда он заполнится, новые точки сохраняться не смогут.",
+  "The recording drive": "Диск записи"
 }

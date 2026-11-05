@@ -20,7 +20,13 @@ import { exportPoints, summarizeTrack } from './exporters.js';
 import { createPgStore } from './pgStore.js';
 import { createFeedMonitor } from './feeds.js';
 import { createN2yoClient, refreshFromN2yo } from './n2yo.js';
-import { checkFolder, historyFileIn, listDrives } from './location.js';
+import {
+  checkFolder,
+  historyFileIn,
+  listDrives,
+  peekVolumeLabel,
+  volumeLabel,
+} from './location.js';
 import { createRecorder } from './recorder.js';
 import { createUnavailableStore, openHistoryStore } from './store.js';
 import { DEFAULT_SAT_GROUPS, createSatelliteSource } from './satellites.js';
@@ -379,10 +385,12 @@ export function recorderPlugin(env = process.env) {
           // Free space on the disk holding the SQLite file; PostgreSQL's disk
           // is not ours to measure.
           let diskFree = null;
+          let diskTotal = null;
           if (!config.databaseUrl)
             try {
               const fsInfo = statfsSync(path.dirname(file));
               diskFree = Number(fsInfo.bavail) * Number(fsInfo.bsize);
+              diskTotal = Number(fsInfo.blocks) * Number(fsInfo.bsize);
             } catch {
               // Leave it unknown.
             }
@@ -393,6 +401,10 @@ export function recorderPlugin(env = process.env) {
             n2yo: n2yoState,
             storage: { path: file, ...recorder.health() },
             disk_free_bytes: diskFree,
+            disk_total_bytes: diskTotal,
+            disk_label: config.databaseUrl
+              ? ''
+              : peekVolumeLabel(path.dirname(file)),
             recording: true,
             retention_days: live.retentionSec / 86400,
             retention_sec: live.retentionSec,
@@ -417,7 +429,12 @@ export function recorderPlugin(env = process.env) {
         if (url.pathname === '/drives')
           return sendJson(res, 200, {
             current: path.dirname(file),
-            drives: listDrives({ mainDir: root }),
+            drives: await Promise.all(
+              listDrives({ mainDir: root }).map(async (d) => ({
+                ...d,
+                volume: await volumeLabel(d.path),
+              })),
+            ),
           });
         if (url.pathname === '/settings' && req.method === 'POST')
           return readJson(req, res, async (body) => {

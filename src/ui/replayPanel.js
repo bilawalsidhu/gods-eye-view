@@ -4,6 +4,7 @@ import {
   formatBytes,
   formatSpan,
   formatSpanCompact,
+  driveSpace,
   storageUse,
 } from '../replay/model.js';
 import { alertsEnabled, announce, setAlerts } from './replayAlerts.js';
@@ -32,6 +33,10 @@ const FEED_STATE = {
 const MOVED = msg('Recording moved to {path}');
 const REUSED = msg('Using the history already in that folder');
 const OLD_DELETED = msg('The old copy was deleted');
+const DRIVE_FULL = msg(
+  '{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.',
+);
+const DRIVE_NAMELESS = msg('The recording drive');
 const DRIVE_DOWN = msg(
   'Cannot write to the recording folder: {error}. {count} points are waiting.',
 );
@@ -268,7 +273,7 @@ export function createReplayPanel({ container, controller } = {}) {
             const chip = makeChip(
               driveRow,
               t('{label} · {free} free', {
-                label: d.label,
+                label: d.volume ? `${d.label} ${d.volume}` : d.label,
                 free: formatBytes(d.freeBytes),
               }),
               d.path,
@@ -558,6 +563,9 @@ export function createReplayPanel({ container, controller } = {}) {
   const driveWarn = document.createElement('div');
   driveWarn.className = 'replay-storage-warn';
   driveWarn.hidden = true;
+  const driveFull = document.createElement('div');
+  driveFull.className = 'replay-storage-warn replay-drive-full';
+  driveFull.hidden = true;
   const storageWarn = document.createElement('div');
   storageWarn.className = 'replay-storage-warn';
   // Feed health: one coloured word per feed, and the detail on request.
@@ -575,6 +583,7 @@ export function createReplayPanel({ container, controller } = {}) {
     feedLine,
     feedList,
     driveWarn,
+    driveFull,
     storageWarn,
   );
   const legend = document.createElement('div');
@@ -843,6 +852,21 @@ export function createReplayPanel({ container, controller } = {}) {
     set(storage, 'hidden', !s);
     if (!s) return;
     renderDriveWarning(s);
+    const space = driveSpace(s);
+    const full = space && space.level !== 'ok';
+    set(
+      driveFull,
+      'textContent',
+      full
+        ? t(DRIVE_FULL, {
+            drive: s.disk_label || t(DRIVE_NAMELESS),
+            free: formatBytes(space.free),
+            total: formatBytes(space.total),
+          })
+        : '',
+    );
+    set(driveFull, 'hidden', !full);
+    driveFull.dataset.level = space?.level ?? 'ok';
     const use = storageUse(s);
     const percent = Math.round(use.fraction * 100);
     storage.dataset.level = use.basis === 'none' ? 'none' : use.level;
@@ -851,7 +875,7 @@ export function createReplayPanel({ container, controller } = {}) {
       'textContent',
       use.basis === 'none'
         ? t('STORAGE')
-        : `${t('STORAGE')} · ${t(BASIS[use.basis])}`,
+        : `${t('STORAGE')} · ${s.disk_label ? s.disk_label : t(BASIS[use.basis])}`,
     );
     set(storagePercent, 'textContent', use.total ? `${percent}%` : '');
     barFill.style.width = `${use.total ? Math.max(percent, 1) : 0}%`;

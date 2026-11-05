@@ -3304,5 +3304,7 @@
   "{label} · {free} free": "{label} · {free} liberi",
   "Recording to {path}": "Registrazione in {path}",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Il provider ha negato l'accesso per questa chiave. Controlla progetto, regione o autorizzazioni della chiave.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "L'account del provider ha esaurito il credito. Controlla la fatturazione o scegli un altro provider IA in Impostazioni."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "L'account del provider ha esaurito il credito. Controlla la fatturazione o scegli un altro provider IA in Impostazioni.",
+  "{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.": "{drive} è quasi pieno: {free} liberi su {total}. Quando si riempie non sarà possibile salvare nuovi punti.",
+  "The recording drive": "L'unità di registrazione"
 }

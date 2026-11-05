@@ -3154,5 +3154,7 @@
   "{label} · {free} free": "{label} · 剩餘 {free}",
   "Recording to {path}": "正在錄製到 {path}",
   "The provider refused access for this key. Check the key's project, region or permissions.": "服務商拒絕了此密鑰的訪問請求。請檢查該密鑰所屬的項目、區域或權限。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服務商賬戶餘額不足。請檢查賬戶的計費信息，或在設置中選擇其他 AI 服務商。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服務商賬戶餘額不足。請檢查賬戶的計費信息，或在設置中選擇其他 AI 服務商。",
+  "{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.": "{drive} 幾乎已滿：{total} 中僅剩 {free}。寫滿後將無法儲存新的點。",
+  "The recording drive": "錄製所在的磁碟機"
 }

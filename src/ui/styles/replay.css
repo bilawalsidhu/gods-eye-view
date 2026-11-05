@@ -315,3 +315,8 @@
 .replay-alerts {
   line-height: 1.5;
 }
+
+/* Nearly-full drive: orange when low, red when critical. */
+.replay-drive-full[data-level='low'] {
+  color: #ffb000;
+}

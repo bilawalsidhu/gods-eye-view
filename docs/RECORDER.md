@@ -198,6 +198,15 @@ it, and you can type any full folder path instead. APPLY then:
 The storage bar and the "free" figures then measure the new drive. The switch
 happens between batches of writes, so no points are lost.
 
+The storage line names the drive ("D: Backup" on Windows, the volume name on
+Mac and Linux), and the chips list each other drive by its name. When the
+drive that holds the recording has under 5 GB or 10% free, a line under the
+bar says so in orange; under 1 GB or 3% it turns red. This looks at the drive
+itself, so it still warns when a size cap keeps the recording small but other
+programs fill the disk. It is not shown for PostgreSQL, whose disk is not
+measured. The volume name is read once per drive (Windows asks PowerShell) and
+kept for five minutes.
+
 **If the drive is unplugged** while recording, or is missing when the server
 starts, recording does not stop and does not move to the main drive. The
 recorder keeps the points it cannot write in memory, the panel shows a red

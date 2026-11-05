@@ -6,10 +6,74 @@ import {
   statfsSync,
   writeFileSync,
 } from 'node:fs';
+import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 
 const FOLDER_NAME = 'GEV History';
+const LABEL_TTL_MS = 5 * 60 * 1000;
+const lookups = new Map();
+const names = new Map();
+const driveLetter = (dir) =>
+  path.parse(path.resolve(dir)).root.slice(0, 1).toUpperCase();
+
+/** The folder name that labels a volume on Mac and Linux, else null. */
+export function mountName(dir, platform = process.platform) {
+  const parts = String(dir)
+    .split(/[\\/]+/)
+    .filter(Boolean);
+  if (platform === 'darwin' && parts[0] === 'Volumes') return parts[1] ?? null;
+  if (platform !== 'linux') return null;
+  if (parts[0] === 'media') return parts[2] ?? null;
+  if (parts[0] === 'run' && parts[1] === 'media') return parts[3] ?? null;
+  if (parts[0] === 'mnt') return parts[1] ?? null;
+  return null;
+}
+
+/**
+ * The name a person gave a drive ("Backup"), or '' when it has none or cannot
+ * be read. Windows is asked once per drive and the answer is kept for a few
+ * minutes, so a status poll never waits on it.
+ */
+export function volumeLabel(dir, { platform = process.platform } = {}) {
+  if (platform !== 'win32')
+    return Promise.resolve(mountName(dir, platform) ?? '');
+  const letter = driveLetter(dir);
+  if (!/^[A-Z]$/.test(letter)) return Promise.resolve('');
+  const hit = lookups.get(letter);
+  if (hit && Date.now() - hit.at < LABEL_TTL_MS) return hit.promise;
+  const promise = new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `([System.IO.DriveInfo]'${letter}').VolumeLabel`,
+      ],
+      { timeout: 4000, windowsHide: true },
+      (error, stdout) => {
+        const name = error ? '' : String(stdout).trim();
+        names.set(letter, name);
+        resolve(name);
+      },
+    );
+  });
+  lookups.set(letter, { at: Date.now(), promise });
+  return promise;
+}
+
+/**
+ * How to name a folder's drive for a person, without waiting: "D: Backup" on
+ * Windows, the volume name on Mac and Linux, '' for the system disk. Starts a
+ * lookup, so the name appears from the second poll.
+ */
+export function peekVolumeLabel(dir, { platform = process.platform } = {}) {
+  volumeLabel(dir, { platform });
+  if (platform !== 'win32') return mountName(dir, platform) ?? '';
+  const name = names.get(driveLetter(dir)) ?? '';
+  return `${driveLetter(dir)}:${name ? ` ${name}` : ''}`;
+}
 
 function space(dir) {
   try {

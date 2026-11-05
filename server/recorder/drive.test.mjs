@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkFolder, historyFileIn, listDrives } from './location.js';
+import {
+  checkFolder,
+  historyFileIn,
+  listDrives,
+  mountName,
+} from './location.js';
 import { createRecorder } from './recorder.js';
 import { createUnavailableStore, openHistoryStore } from './store.js';
 
@@ -108,4 +113,13 @@ test('recording keeps points while the drive is gone and opens it again when it 
   assert.equal(rec.health().waiting, 0);
   assert.equal(rec.store.range().count, 1, 'what waited was written to the new place');
   await rec.close();
+});
+
+test('a volume is named by its mount folder on Mac and Linux', () => {
+  assert.equal(mountName('/Volumes/Backup/GEV History', 'darwin'), 'Backup');
+  assert.equal(mountName('/media/stu/USB DRIVE/x', 'linux'), 'USB DRIVE');
+  assert.equal(mountName('/run/media/stu/Backup', 'linux'), 'Backup');
+  assert.equal(mountName('/mnt/data/GEV History', 'linux'), 'data');
+  assert.equal(mountName('/home/stu/history', 'linux'), null);
+  assert.equal(mountName('/Users/stu/history', 'darwin'), null);
 });

@@ -105,6 +105,27 @@ export const STORAGE_RED = 0.85;
  * against the size cap when one is set, otherwise against the disk (what is
  * stored plus what is free). With neither, only the size is known.
  */
+const GIB = 1024 ** 3;
+/**
+ * How full the drive itself is, whatever the recording's own size: "low" under
+ * 5 GB or 10% free, "critical" under 1 GB or 3% free. Null when the drive's
+ * size is unknown (PostgreSQL, or a drive that cannot be read).
+ */
+export function driveSpace(status) {
+  const free = Number(status?.disk_free_bytes);
+  const total = Number(status?.disk_total_bytes);
+  if (!Number.isFinite(free) || !Number.isFinite(total) || total <= 0)
+    return null;
+  const fraction = free / total;
+  const level =
+    free < GIB || fraction < 0.03
+      ? 'critical'
+      : free < 5 * GIB || fraction < 0.1
+        ? 'low'
+        : 'ok';
+  return { free, total, fraction, level };
+}
+
 export function storageUse(status) {
   const used = Number(status?.bytes) || 0;
   const cap = Number(status?.max_bytes) || 0;

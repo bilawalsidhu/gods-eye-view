@@ -7,6 +7,7 @@ import {
   replayWindow,
   splitAtGaps,
   tickIndexAt,
+  driveSpace,
 } from './model.js';
 
 test('buildTicks spaces ticks evenly and refuses an empty span', () => {
@@ -177,4 +178,18 @@ test('gaps are matched to the feed trouble that explains them', async () => {
     { from: 750, to: 880 }, // a real absence
   ];
   assert.deepEqual(classifyGaps(gaps, outages), { failing: 1, idle: 1 });
+});
+
+test('a nearly full drive is flagged by free space, not recording size', () => {
+  const GIB = 1024 ** 3;
+  const at = (free, total) =>
+    driveSpace({ disk_free_bytes: free, disk_total_bytes: total })?.level;
+  assert.equal(at(500 * GIB, 1000 * GIB), 'ok');
+  assert.equal(at(4 * GIB, 100 * GIB), 'low');
+  assert.equal(at(9 * GIB, 100 * GIB), 'low');
+  assert.equal(at(20 * GIB, 100 * GIB), 'ok');
+  assert.equal(at(0.5 * GIB, 100 * GIB), 'critical');
+  assert.equal(at(2 * GIB, 1000 * GIB), 'critical');
+  assert.equal(driveSpace({ disk_free_bytes: 5 }), null);
+  assert.equal(driveSpace(null), null);
 });

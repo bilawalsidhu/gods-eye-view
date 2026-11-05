@@ -3379,5 +3379,7 @@
   "{label} · {free} free": "{label} · вільно {free}",
   "Recording to {path}": "Запис іде до {path}",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Постачальник відмовив цьому ключу в доступі. Перевірте проєкт, регіон або дозволи ключа.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашому рахунку в постачальника закінчилися кошти. Перевірте оплату або виберіть іншого постачальника ШІ в налаштуваннях."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашому рахунку в постачальника закінчилися кошти. Перевірте оплату або виберіть іншого постачальника ШІ в налаштуваннях.",
+  "{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.": "{drive} майже заповнений: вільно {free} із {total}. Коли він заповниться, нові точки не зберігатимуться.",
+  "The recording drive": "Диск запису"
 }

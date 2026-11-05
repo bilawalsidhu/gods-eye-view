@@ -3304,5 +3304,7 @@
   "Copy the history so far to the new place": "Copiar el historial actual al nuevo lugar",
   "Delete the old copy afterwards to free space here": "Borrar después la copia antigua para liberar espacio aquí",
   "{label} · {free} free": "{label} · {free} libres",
-  "Recording to {path}": "Grabando en {path}"
+  "Recording to {path}": "Grabando en {path}",
+  "{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.": "{drive} está casi lleno: {free} libres de {total}. No se podrán guardar más puntos cuando se llene.",
+  "The recording drive": "La unidad de grabación"
 }

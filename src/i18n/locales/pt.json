@@ -3304,5 +3304,7 @@
   "Delete the old copy afterwards to free space here": "Depois eliminar a cópia antiga para libertar espaço aqui",
   "{label} · {free} free": "{label} · {free} livres",
   "Recording to {path}": "A gravar em {path}",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "A conta do provedor está sem crédito. Verifique o faturamento ou escolha outro provedor de IA em \"Configurações\"."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "A conta do provedor está sem crédito. Verifique o faturamento ou escolha outro provedor de IA em \"Configurações\".",
+  "{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.": "{drive} está quase cheio: {free} livres de {total}. Não será possível guardar novos pontos quando encher.",
+  "The recording drive": "A unidade de gravação"
 }

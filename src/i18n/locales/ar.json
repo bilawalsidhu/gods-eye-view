@@ -3529,5 +3529,7 @@
   "Copy the history so far to the new place": "نسخ السجل الحالي إلى المكان الجديد",
   "Delete the old copy afterwards to free space here": "ثم حذف النسخة القديمة لتوفير مساحة هنا",
   "{label} · {free} free": "{label} · متاح {free}",
-  "Recording to {path}": "التسجيل في {path}"
+  "Recording to {path}": "التسجيل في {path}",
+  "{drive} is nearly full: {free} free of {total}. New points cannot be saved once it fills.": "{drive} شبه ممتلئ: {free} متاح من {total}. لن يمكن حفظ نقاط جديدة عند امتلائه.",
+  "The recording drive": "قرص التسجيل"
 }
