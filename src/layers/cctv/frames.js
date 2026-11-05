@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { horizonOccluder } from '../../data/iconOrientation.js';
 import {
   FRAME_SIGNATURE_W,
   FRAME_SIGNATURE_H,
@@ -41,6 +42,9 @@ export function fitToProjection(sourceW, sourceH) {
     h,
   };
 }
+
+const _scratchPoints = [];
+const _scratchSphere = new Cesium.BoundingSphere();
 
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
@@ -254,7 +258,10 @@ export function createFrames({ state: layerState, services, parts, source }) {
     if (!camera || !scene || scene.mode !== Cesium.SceneMode.SCENE3D)
       return true;
     const placed = record?.frustumPositions;
-    const points = [
+    // Reused buffers: this runs on every projection tick while out of view.
+    const points = _scratchPoints;
+    points.length = 0;
+    for (const point of [
       record?.billboard?.position,
       placed?.mount,
       placed?.capCenter,
@@ -262,16 +269,15 @@ export function createFrames({ state: layerState, services, parts, source }) {
       placed?.tr,
       placed?.br,
       placed?.bl,
-    ].filter(Boolean);
+    ]) {
+      if (point) points.push(point);
+    }
     if (
       !points.length ||
       typeof camera.frustum?.computeCullingVolume !== 'function'
     )
       return true;
-    const occluder = new Cesium.EllipsoidalOccluder(
-      Cesium.Ellipsoid.WGS84,
-      camera.positionWC,
-    );
+    const occluder = horizonOccluder(camera);
     if (!points.some((point) => occluder.isPointVisible(point))) return false;
     const culling = camera.frustum.computeCullingVolume(
       camera.positionWC,
@@ -279,8 +285,9 @@ export function createFrames({ state: layerState, services, parts, source }) {
       camera.upWC,
     );
     return (
-      culling.computeVisibility(Cesium.BoundingSphere.fromPoints(points)) !==
-      Cesium.Intersect.OUTSIDE
+      culling.computeVisibility(
+        Cesium.BoundingSphere.fromPoints(points, _scratchSphere),
+      ) !== Cesium.Intersect.OUTSIDE
     );
   }
 

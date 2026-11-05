@@ -73,7 +73,10 @@ export class CctvControls {
       if (state) this._renderCctvState(state);
       if (this._cctvChip) this._publishCctvChip({});
     });
-    if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
+    if (
+      (this._cctvVideo || this._cctvFrame) &&
+      typeof MutationObserver !== 'undefined'
+    ) {
       this._videoVisibilityObserver = new MutationObserver(() =>
         this._renderCctvState(this._cctvState),
       );
@@ -81,6 +84,12 @@ export class CctvControls {
         this._videoVisibilityObserver.observe(this._cctvPanel, {
           attributes: true,
           attributeFilter: ['class', 'hidden'],
+        });
+      // On phones the panel is on screen only while the Cameras sheet is open.
+      if (typeof document !== 'undefined' && document.body)
+        this._videoVisibilityObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class', 'data-mobile-sheet'],
         });
       this.listen(document, 'visibilitychange', () =>
         this._renderCctvState(this._cctvState),

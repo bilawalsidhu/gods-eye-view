@@ -277,9 +277,16 @@ export function _renderCctvState(state) {
   // A background tab or a collapsed panel shows nothing, so neither plays the
   // video nor fetches the still; the observer and the visibilitychange listener
   // render again when the panel is shown.
+  // On phones the panel also belongs to one sheet: the shell hides it unless
+  // data-mobile-sheet is 'cameras'.
+  const body = typeof document !== 'undefined' ? document.body : null;
+  const sheetClosed =
+    !!body?.classList?.contains('mobile-shell') &&
+    body.getAttribute('data-mobile-sheet') !== 'cameras';
   const panelShown =
     !(typeof document !== 'undefined' && document.hidden) &&
-    !this._cctvPanel?.classList?.contains('collapsed');
+    !this._cctvPanel?.classList?.contains('collapsed') &&
+    !sheetClosed;
   if (this._cctvVideo) {
     const visible = liveIntent && panelShown;
     if (!visible || this._cctvVideoCameraId !== activeId) {
