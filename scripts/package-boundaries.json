@@ -2421,6 +2421,8 @@
       "src/app/layers/traffic.js",
       "src/app/operations.js",
       "src/app/scene.js",
+      "src/app/renderer.js",
+      "src/render/contract/index.js",
       "src/sources/sourceSlot.js",
       "src/app/sources.js",
       "src/app/startupChrome.js",

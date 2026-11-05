@@ -1,9 +1,7 @@
 import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
-import {
-  createApplicationViewer,
-  installTrackpadPinchZoom,
-} from '../app/viewer.js';
+import { installTrackpadPinchZoom } from '../app/viewer.js';
+import { cesiumRenderer, cesiumViewerOf } from './renderer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -17,8 +15,14 @@ import {
 import { describeError } from './errors.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 
-/** Construct the application globe using the caller's local configuration. */
+/**
+ * Construct the application globe using the caller's local configuration.
+ * `renderer` is the `RendererPlugin` that draws it (default: Cesium). The
+ * application still runs on the Cesium viewer until its layers are ported,
+ * so a plugin whose renderer has none is refused.
+ */
 export async function createApplicationScene({
+  renderer: rendererPlugin = cesiumRenderer,
   requestServices,
   googleApiKey,
   googleTokens = null,
@@ -45,18 +49,29 @@ export async function createApplicationScene({
     });
   }
   loaderStatus.textContent = t('Configuring viewer...');
-  // Provider attribution stays visible, including clean-view and recording.
-  const creditContainer = document.createElement('div');
-  creditContainer.id = 'cesium-credits';
-  document.body.appendChild(creditContainer);
-  defer(() => creditContainer.remove());
-  const viewer = createApplicationViewer({
-    container: 'cesiumContainer',
-    creditContainer,
+  // The scene still loads the tiles, so their credentials stay here.
+  const renderer = await rendererPlugin.create({
+    container: document.getElementById('cesiumContainer'),
+    signal,
   });
+  const viewer = cesiumViewerOf(renderer);
+  if (!viewer) {
+    const refusal = new Error(
+      `The ${rendererPlugin.id} renderer cannot run the application yet`,
+    );
+    try {
+      renderer.destroy();
+    } catch (error) {
+      console.warn('[Init] Refused renderer failed to destroy:', error);
+    }
+    throw refusal;
+  }
   defer(() => {
-    uninstallRenderGovernor(viewer);
-    if (!viewer.isDestroyed()) viewer.destroy();
+    try {
+      uninstallRenderGovernor(viewer);
+    } finally {
+      renderer.destroy();
+    }
   });
   // Before any layer binds a click: every layer and tool shares this one.
   // Deferred after the viewer, so it is released before the viewer goes.
@@ -133,5 +148,12 @@ export async function createApplicationScene({
   });
 
   signal.throwIfAborted();
-  return { viewer, tileset, mapStackController, operations, input };
+  return {
+    renderer,
+    viewer,
+    tileset,
+    mapStackController,
+    operations,
+    input,
+  };
 }

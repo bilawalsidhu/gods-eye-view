@@ -671,6 +671,7 @@
   "src/services/application.js",
   "src/services/requests.js",
   "src/app/scene.js",
+  "src/app/renderer.test.mjs",
   "src/geo/geo.test.mjs",
   "src/geo/celestial.test.mjs",
   "src/geo/quaternion.test.mjs",
