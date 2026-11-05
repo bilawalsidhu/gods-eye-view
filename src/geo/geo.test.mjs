@@ -29,12 +29,20 @@ function points(count = 500) {
     { lon: 180, lat: 0, height: -400 },
     { lon: -97.7431, lat: 30.2672, height: 150 },
   ];
-  for (let i = 0; i < count; i++)
+  // Each height band gets its share: near the ground, low orbit, far out.
+  const bands = [
+    [-500, 1e4],
+    [1e4, 1e6],
+    [1e6, 4e7],
+  ];
+  for (let i = 0; i < count; i++) {
+    const [lo, hi] = bands[i % bands.length];
     out.push({
       lon: next() * 360 - 180,
       lat: next() * 180 - 90,
-      height: next() * 4e7 - 1e4,
+      height: lo + next() * (hi - lo),
     });
+  }
   return out;
 }
 
@@ -60,7 +68,7 @@ test('geodetic to ECEF matches the default renderer', () => {
   for (const p of points()) {
     const ours = fromDegrees(p.lon, p.lat, p.height);
     const theirs = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height);
-    closeVec(ours, theirs, 1e-6, `${p.lon},${p.lat},${p.height}`);
+    closeVec(ours, theirs, 0, `${p.lon},${p.lat},${p.height}`);
   }
 });
 
@@ -75,6 +83,37 @@ test('ECEF to geodetic matches the default renderer', () => {
       close(ours.lon, theirs.longitude, 1e-12, `${where} lon`);
     close(ours.lat, theirs.latitude, 1e-12, `${where} lat`);
     close(ours.height, theirs.height, 1e-6, `${where} height`);
+  }
+  // Inside the Earth: within the centre cutoff (the first four) and between
+  // it and the surface (the last).
+  for (const p of [
+    { x: 1e6, y: 0, z: 0 },
+    { x: 1, y: 2, z: 3 },
+    { x: -2e5, y: 3e5, z: 1e5 },
+    { x: 1e6, y: 1e6, z: 5e5 },
+    { x: 2e6, y: 1.5e6, z: 1.5e6 },
+  ]) {
+    const ours = toCartographicRadians(p);
+    const theirs = Cesium.Cartographic.fromCartesian(
+      new Cesium.Cartesian3(p.x, p.y, p.z),
+    );
+    const where = `${p.x},${p.y},${p.z}`;
+    close(ours.lon, theirs.longitude, 1e-12, `${where} lon`);
+    close(ours.lat, theirs.latitude, 1e-12, `${where} lat`);
+    close(ours.height, theirs.height, 1e-6, `${where} height`);
+  }
+  for (const p of [
+    { x: NaN, y: 0, z: 0 },
+    { x: 7e6, y: NaN, z: 0 },
+    { x: 7e6, y: 0, z: NaN },
+  ]) {
+    const nan = toLonLatH(p);
+    assert.ok(
+      Number.isNaN(nan.lon) &&
+        Number.isNaN(nan.lat) &&
+        Number.isNaN(nan.height),
+      JSON.stringify(nan),
+    );
   }
   assert.equal(toCartographicRadians({ x: 0, y: 0, z: 0 }), null);
   assert.equal(
