@@ -9,4 +9,4 @@
   Acartia comments are excluded. Attribution appears in the layer row and
   Data attribution popover. Cached progressive tiles, bounded image/billboard
   work and a paced queue preserve iNaturalist's 60/minute and 8,000/day limits.
-  All 11 locales supported. (lyehe, #0000)
+  All 11 locales supported. (lyehe, #1591)
