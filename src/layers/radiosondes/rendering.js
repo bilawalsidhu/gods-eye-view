@@ -445,6 +445,11 @@ export function createRadiosondeRendering({ viewer, services, overlayHost }) {
       syncAltitudeScale();
     },
     anchor: (serial) => marks.get(serial)?.sprite.position,
+    visibleAnchor(serial) {
+      // Reuse the sprite pass's horizon verdict; the host owns viewport culling.
+      const sprite = marks.get(serial)?.sprite;
+      return sprite?.show ? sprite.position : null;
+    },
     destroy() {
       services.sprites?.unregisterSpriteCollection?.('radiosondes', billboards);
       services.sprites?.unregisterSpriteCollection?.(

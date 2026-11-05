@@ -9,6 +9,8 @@ import { LayerLifecycle } from '../../data/lifecycle.js';
 import { createCredits } from '../streetLevel/credits.js';
 import * as policy from './policy.js';
 import { createColdRadiosondeServer } from '../../testSupport/radiosondeColdServer.mjs';
+import { isOverlayPointVisible } from '../../overlays/worldOverlay.js';
+import { horizonOccluder } from '../../data/iconOrientation.js';
 const start = 1_800_000_000_000;
 const nextLaunch = 'Next launch window 11:00–12:00 UTC · in 3h';
 const noneAloft = 'None aloft — launches are around 00:00 and 12:00 UTC';
@@ -96,6 +98,7 @@ function harness(
     trailReady = true,
     autoFlushBatches = true,
     project = () => ({ x: 500, y: 400 }),
+    openExternal,
   } = {},
 ) {
   const primitives = new Cesium.PrimitiveCollection();
@@ -114,6 +117,8 @@ function harness(
     pick = null,
     now = start,
     horizon = true,
+    cardHit = null,
+    pointerFree = true,
     closes = 0;
   const batchToken = Symbol('batch');
   let batchCallback = null;
@@ -169,6 +174,7 @@ function harness(
       else (clearTimeoutImpl ?? clearTimeout)(id);
     },
     now: () => now,
+    openExternal,
     overlayHost: {
       setEntries: (id, list, options) => {
         entries.set(id, list);
@@ -176,6 +182,8 @@ function harness(
       },
       setVisible: (id, value) => visible.set(id, value),
       clearSource: (id) => entries.delete(id),
+      hitTest: (_x, _y, { sourceId }) =>
+        cardHit?.sourceId === sourceId ? cardHit : null,
     },
     screenSpaceEventHandlerFactory: () => ({
       setInputAction(fn) {
@@ -201,6 +209,7 @@ function harness(
         holdContinuousRender: () => assert.fail('continuous hold'),
       },
       project,
+      pointer: { isPointerFree: () => pointerFree },
       horizonOccluder: () => ({
         isPointVisible: (p) =>
           typeof horizon === 'function' ? horizon(p) : horizon,
@@ -282,10 +291,127 @@ function harness(
     },
     setNow: (value) => (now = value),
     setHorizon: (value) => (horizon = value),
+    setCardHit: (value) => (cardHit = value),
+    setPointerFree: (value) => (pointerFree = value),
     closes: () => closes,
   };
 }
 const settle = () => new Promise(setImmediate);
+
+test('selected card pointer and keyboard activation open the tracker without disturbing selection', async (t) => {
+  const opened = [];
+  const h = harness(t, {}, { openExternal: (url) => opened.push(url) });
+  await h.layer.update(h.viewer);
+  h.click('radiosonde:TEST123');
+  await settle();
+  const card = h.entries.get('radiosondes-selected')[0];
+  assert.equal(card.details.at(-1), 'SondeHub tracker ↗ · CC BY-SA 2.0');
+  assert.equal(card.interactive, true);
+  assert.equal(
+    card.accessibilityLabel,
+    'Open the source for BALLOON · TEST123',
+  );
+  assert.equal(card.activate(), true);
+  h.setCardHit({ sourceId: 'radiosondes-selected', entryId: card.id });
+  h.setPointerFree(false);
+  h.click(null);
+  assert.equal(opened.length, 1, 'a tool owning the pointer suppresses clicks');
+  h.setPointerFree(true);
+  h.click(null);
+  assert.deepEqual(opened, [
+    'https://sondehub.org/TEST123',
+    'https://sondehub.org/TEST123',
+  ]);
+  assert.equal(h.entries.get('radiosondes-selected')[0], card);
+  assert.equal(h.trails.length, 1);
+  assert.equal(h.trails[0].destroyed, false);
+  h.setCardHit(null);
+  h.click(null);
+  assert.equal(h.entries.get('radiosondes-selected').length, 0);
+});
+
+test('selected cards stay inert when the host does not supply openExternal', async (t) => {
+  const h = harness(t);
+  await h.layer.update(h.viewer);
+  h.click('radiosonde:TEST123');
+  await settle();
+  const card = h.entries.get('radiosondes-selected')[0];
+  assert.equal(card.interactive, false);
+  assert.equal(card.activate, undefined);
+  h.setCardHit({ sourceId: 'radiosondes-selected', entryId: card.id });
+  h.click(null);
+  assert.equal(h.entries.get('radiosondes-selected')[0], card);
+  assert.equal(h.trails[0].destroyed, false);
+});
+
+test('selected card shares sprite horizon visibility and host viewport culling while keeping selection', async (t) => {
+  const h = harness(t);
+  await h.layer.update(h.viewer);
+  h.click('radiosonde:TEST123');
+  await settle();
+  const card = h.entries.get('radiosondes-selected')[0];
+  const sprite = h.viewer.scene.primitives.get(0).get(0);
+  const anchor = card.position();
+  assert.equal(anchor, sprite.position);
+  h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+    10,
+    50,
+    14_000_000,
+  );
+  h.setHorizon((point) =>
+    horizonOccluder(h.viewer.camera).isPointVisible(point),
+  );
+  const visible = (screen) =>
+    isOverlayPointVisible(card, card.position(), screen, {
+      width: 1000,
+      height: 800,
+    });
+  assert.equal(visible({ x: 500, y: 400 }), true);
+  h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+    -170,
+    -50,
+    14_000_000,
+  );
+  h.viewer.camera.moveEnd.raiseEvent();
+  assert.equal(sprite.show, false);
+  assert.equal(
+    card.position(),
+    null,
+    'a culled sprite must not publish an anchor to the host',
+  );
+  assert.equal(visible({ x: 500, y: 400 }), false);
+  assert.equal(h.entries.get('radiosondes-selected')[0], card);
+  assert.equal(h.trails[0].destroyed, false);
+  h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+    10,
+    50,
+    14_000_000,
+  );
+  h.viewer.camera.moveEnd.raiseEvent();
+  assert.equal(card.position(), anchor);
+  for (const screen of [
+    { x: -1, y: 400 },
+    { x: 1001, y: 400 },
+    { x: 500, y: -1 },
+    { x: 500, y: 801 },
+    null,
+  ])
+    assert.equal(visible(screen), false);
+  assert.equal(visible({ x: 500, y: 400 }), true);
+  assert.equal(
+    h.trails.length,
+    1,
+    'returning to view keeps the existing selection',
+  );
+  const calls = h.calls.length;
+  h.viewer.scene.postRender.raiseEvent();
+  assert.equal(h.calls.length, calls);
+  assert.equal(
+    h.viewer.scene.postRender.numberOfListeners,
+    0,
+    'visibility needs no layer frame callback',
+  );
+});
 
 const spriteArt = (sprite) =>
   JSON.parse(decodeURIComponent(sprite.image.split(',')[1]));
@@ -1645,7 +1771,7 @@ for (const mode of ['unchanged snapshot', 'failed snapshot', 'fresh stream']) {
       h.click(`radiosonde:${serial}`);
       await settle();
       const card = h.entries.get('radiosondes-selected')[0];
-      assert.ok(card.details[0].startsWith(`${wording} · Last reported: `));
+      assert.equal(card.details[0], `${wording} · last fix 10m ago`);
       assert.match(card.details.join('\n'), /last fix 10m ago/);
       assert.equal(h.entries.get('radiosondes').length, 1);
       assert.deepEqual(
@@ -1754,7 +1880,7 @@ test('a selected descending sonde loses its arrow, scale and burst labels on clo
   await h.layer.update(h.viewer);
   assert.match(
     h.entries.get('radiosondes-selected')[0].details[0],
-    /^Signal lost · Last reported: /,
+    /^Signal lost · last fix 10m ago$/,
   );
   assert.match(
     h.entries.get('radiosondes-selected')[0].details.join('\n'),

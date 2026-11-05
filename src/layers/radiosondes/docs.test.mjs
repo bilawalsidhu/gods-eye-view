@@ -90,7 +90,7 @@ test('documentation pins flight-style sprites, retained contact labels and host-
 test('documentation records full selected metadata, batching, reuse and bounded streaming', () => {
   const state = weatherState().replace(/\s+/g, ' ');
   for (const rule of [
-    /short grouped lines show phase, altitude, vertical and horizontal speed, heading, temperature, humidity, pressure, drift-derived wind, burst maximum, type\/subtype, frequency when present, heard\/launched ages, coverage disclaimer and source attribution/,
+    /short grouped lines show phase, altitude, vertical and horizontal speed, heading, temperature, humidity, pressure, drift-derived wind, burst maximum, type\/subtype, frequency when present, heard\/launched ages and source attribution/,
     /selected card shows all available metadata/,
     /all 11 locales/,
     /`RADIOSONDE_DATA_BATCH_MS = 500`/,
@@ -108,6 +108,22 @@ test('documentation records full selected metadata, batching, reuse and bounded 
     /`last=1800`.*then `last=10800`/,
     /`partial: true`, propagated to `stats.partial`/,
     /Partial snapshots merge membership/,
+  ])
+    assert.match(state, rule);
+});
+
+test('documentation records concise historical cards, tracker activation and retained hidden selections', () => {
+  const state = weatherState().replace(/\s+/g, ' ');
+  for (const rule of [
+    /last-fix age once beside the phase/,
+    /differ by at least one minute/,
+    /SondeHub tracker ↗ · CC BY-SA 2.0/,
+    /clicking or keyboard-activating the card/,
+    /validated SondeHub serial/,
+    /without `openExternal` keep the card inert/,
+    /horizon-culled or off-screen, retaining the selection/,
+    /no additional per-frame scan or listener/,
+    /volunteer-coverage disclaimer stays in the data credit and docs/,
   ])
     assert.match(state, rule);
 });

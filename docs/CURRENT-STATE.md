@@ -164,13 +164,22 @@ rose altitude trail with a dark outline, an observed burst marker and 10/20/30 k
 drop-line ticks below the current or known burst altitude. The selected card
 shows all available metadata: short grouped lines show phase, altitude, vertical
 and horizontal speed, heading, temperature, humidity, pressure, drift-derived
-wind, burst maximum, type/subtype, frequency when present, heard/launched ages,
-coverage disclaimer and source attribution. Landed and lost cards mark
-measurements as last reported and show last-fix age. Text is localized in all
-11 locales. The `radiosonde:` pick owner requests world focus without camera
-follow. Voice is off for this layer; there are no analyst records or detection
-brackets. Coverage depends on volunteer receivers, densest in Europe, the US
-and Australia; there are no landing predictions or launch sites. Ingest strips
+wind, burst maximum, type/subtype, frequency when present, heard/launched ages
+and source attribution. Landed and lost cards show last-fix age once beside
+the phase; their telemetry has no repeated prefixes. They show heard age only
+when receipt and fix timestamps differ by at least one minute. The final line
+is `SondeHub tracker ↗ · CC BY-SA 2.0`; clicking or keyboard-activating the card
+opens `https://sondehub.org/<encoded-serial>` for a validated SondeHub serial.
+Portable hosts without `openExternal` keep the card inert. The card hides while
+its sprite anchor is horizon-culled or off-screen, retaining the selection and
+returning when visible. It reuses the sprite pass's shared horizon verdict and
+the overlay host's viewport checks, with no additional per-frame scan or
+listener. The volunteer-coverage disclaimer stays in the data credit and docs.
+Text is localized in all 11 locales. The `radiosonde:` pick owner requests world
+focus without camera follow. Voice is off for this layer; there are no analyst
+records or detection brackets. Coverage depends on volunteer receivers, densest
+in Europe, the US and Australia; there are no landing predictions or launch
+sites. Ingest strips
 `uploader_*`, `rssi` and `snr`. Data is never bundled or written to disk.
 
 ## Prohibited & Restricted Airspace — FAA special-use airspace

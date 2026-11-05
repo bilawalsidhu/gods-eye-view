@@ -7,7 +7,12 @@ import {
   RADIOSONDE_LAUNCH_PERIOD_MS,
   RADIOSONDE_LAUNCH_WINDOW_MS,
 } from './policy.js';
-import { flightPhase, isSondeAloft, isSondeLanded } from './records.js';
+import {
+  flightPhase,
+  isSondeAloft,
+  isSondeLanded,
+  SONDE_SERIAL_RE,
+} from './records.js';
 
 export const RADIOSONDES_OVERLAY_SOURCE_ID = 'radiosondes';
 export const RADIOSONDES_SELECTED_SOURCE_ID = 'radiosondes-selected';
@@ -35,6 +40,14 @@ export const RADIOSONDES_LABEL_STYLE = Object.freeze({
   // Camera movement must recheck placement without incumbent overlaps or fades.
   stateless: true,
 });
+/** Link a validated SondeHub serial to its focused tracker. */
+export function sondeTrackerUrl(serial) {
+  return typeof serial === 'string' &&
+    serial === serial.trim() &&
+    SONDE_SERIAL_RE.test(serial)
+    ? `https://sondehub.org/${encodeURIComponent(serial)}`
+    : null;
+}
 /** Format elapsed time in compact, localized units. */
 export function formatAge(deltaMs) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
@@ -100,15 +113,13 @@ export function buildSelectedSondeCard(
               ? t('Ascending')
               : t('Direction unknown');
   const historical = !isSondeAloft(phase);
-  const reported = (values) =>
-    values && historical ? t('Last reported: {values}', { values }) : values;
   const speeds = [];
   if (Number.isFinite(frame.vVelMps))
     speeds.push(
       t('Vertical {speed}', {
         speed: formatQuantity(frame.vVelMps, 'm/s', {
           maximumFractionDigits: 1,
-          signDisplay: 'always',
+          signDisplay: 'exceptZero',
         }),
       }),
     );
@@ -158,7 +169,12 @@ export function buildSelectedSondeCard(
   const ages = [];
   const lastFix = formatAge(Math.max(0, nowMs - frame.timeMs));
   const heard = formatAge(Math.max(0, nowMs - frame.receivedMs));
-  if (heard) ages.push(t('heard {age} ago', { age: heard }));
+  // Receipts within a minute add no useful precision to a historical fix age.
+  if (
+    heard &&
+    (!historical || Math.abs(frame.receivedMs - frame.timeMs) >= 60_000)
+  )
+    ages.push(t('heard {age} ago', { age: heard }));
   const launched = track.length
     ? formatAge(Math.max(0, nowMs - track[0].timeMs))
     : null;
@@ -168,17 +184,23 @@ export function buildSelectedSondeCard(
     variant: 'selected',
     title: `${t('BALLOON')} · ${frame.serial}`,
     details: [
-      [phaseText, reported(altitude(frame.altM))].join(' · '),
-      reported(speeds.join(' · ')),
-      reported(heading),
-      reported(measurements.join(' · ')),
-      reported(wind),
+      [
+        phaseText,
+        historical
+          ? lastFix && t('last fix {age} ago', { age: lastFix })
+          : altitude(frame.altM),
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      historical ? altitude(frame.altM) : null,
+      speeds.join(' · '),
+      heading,
+      measurements.join(' · '),
+      wind,
       burst,
       equipment.join(' · '),
       ages.filter(Boolean).join(' · '),
-      historical && lastFix ? t('last fix {age} ago', { age: lastFix }) : null,
-      t('Coverage depends on volunteer receivers'),
-      `${t('SondeHub contributors')} · ${t('CC BY-SA 2.0')}`,
+      `${t('SondeHub tracker')} ↗ · ${t('CC BY-SA 2.0')}`,
     ].filter(Boolean),
     accent: RADIOSONDE_COLOR,
     interactive: false,

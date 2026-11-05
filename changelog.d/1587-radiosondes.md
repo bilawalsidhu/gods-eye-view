@@ -8,5 +8,9 @@
   host declutters up to 150 visible label candidates. Refreshes reuse billboards,
   skip unchanged signatures and coalesce pushes at 500 ms. Selection shows the
   flight trail, observed burst point and all available grouped metadata.
+  Historical cards state last-fix age once and omit redundant heard ages.
+  A single SondeHub tracker/licence line opens the serial's tracker by click
+  or keyboard; selected cards hide behind the horizon or off-screen and
+  return with the selection intact.
   Receiver fields are discarded; coverage depends on volunteer receivers
   (lyehe, #1587).

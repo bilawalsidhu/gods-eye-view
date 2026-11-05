@@ -14,6 +14,7 @@ import { overlayHost } from './overlayHost.js';
 export function createApplicationRadiosondes({ groundFloor, source }) {
   return createRadiosondesLayer({
     source,
+    openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     services: {
       groundFloor,
       render,

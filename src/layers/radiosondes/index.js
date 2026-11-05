@@ -17,6 +17,7 @@ import {
 } from './records.js';
 import {
   buildSelectedSondeCard,
+  sondeTrackerUrl,
   formatAge,
   launchWindowText,
   RADIOSONDES_OVERLAY_SOURCE_ID,
@@ -30,6 +31,7 @@ export function createRadiosondesLayer({
   source,
   services = {},
   overlayHost = null,
+  openExternal = null,
   screenSpaceEventHandlerFactory = null,
   now = Date.now,
   setTimeoutImpl = setTimeout,
@@ -66,6 +68,8 @@ export function createRadiosondesLayer({
     pendingBatch = null,
     lastBatchMs = -Infinity;
   let selected = null,
+    selectedCardId = null,
+    selectedLink = null,
     selectedTrack = [],
     trail = null,
     trailRevision = 0,
@@ -134,6 +138,7 @@ export function createRadiosondesLayer({
   function selectedCard() {
     if (!enabled || !overlayHost) return false;
     const record = records.get(selected);
+    selectedLink = record ? sondeTrackerUrl(record.frame.serial) : null;
     const entries = record
       ? [
           {
@@ -143,12 +148,23 @@ export function createRadiosondesLayer({
               now(),
               record.phase,
             ),
-            position: () =>
-              rendering.anchor(selected) ??
-              rendering.position(record.frame, isSondeLanded(record.phase)),
+            interactive: Boolean(selectedLink && openExternal),
+            position: () => rendering.visibleAnchor(record.frame.serial),
           },
         ]
       : [];
+    const card = entries[0];
+    if (card?.interactive) {
+      const link = selectedLink;
+      card.accessibilityLabel = t('Open the source for {title}', {
+        title: card.title,
+      });
+      card.activate = () => {
+        openExternal(link);
+        return true;
+      };
+    }
+    selectedCardId = card?.id ?? null;
     const signature = JSON.stringify(entries);
     if (signature === selectedCardSignature) return false;
     selectedCardSignature = signature;
@@ -162,6 +178,7 @@ export function createRadiosondesLayer({
   }
   function clearSelection() {
     selected = null;
+    selectedCardId = selectedLink = null;
     selectedTrack = [];
     selectionRequest?.abort();
     selectionRequest = null;
@@ -581,6 +598,15 @@ export function createRadiosondesLayer({
         clickHandler = screenSpaceEventHandlerFactory(viewer);
         clickHandler.setInputAction((click) => {
           if (!enabled || services.pointer?.isPointerFree?.() === false) return;
+          const cardHit = overlayHost?.hitTest?.(
+            click.position?.x,
+            click.position?.y,
+            { sourceId: RADIOSONDES_SELECTED_SOURCE_ID },
+          );
+          if (cardHit && cardHit.entryId === selectedCardId) {
+            if (selectedLink && openExternal) openExternal(selectedLink);
+            return;
+          }
           const picked = viewer.scene.pick(click.position);
           const id =
             services.picking?.resolvePickId?.(picked) ??

@@ -7,6 +7,7 @@ import {
   buildSondeLabel,
   buildSelectedSondeCard,
   formatAge,
+  sondeTrackerUrl,
   RADIOSONDES_OVERLAY_OPTIONS,
 } from './cards.js';
 import { RADIOSONDE_LABEL_CANDIDATE_CAP } from './policy.js';
@@ -34,6 +35,36 @@ const frame = normalizeSondeFrame(
   now,
 );
 
+test('tracker URLs accept only complete SondeHub serial tokens', () => {
+  for (const serial of ['TEST123', 'TEST-abc_123', 'A_0', 'T'.repeat(24)])
+    assert.equal(
+      sondeTrackerUrl(serial),
+      `https://sondehub.org/${encodeURIComponent(serial)}`,
+    );
+  for (const serial of [
+    null,
+    undefined,
+    123,
+    {},
+    '',
+    'AB',
+    'T'.repeat(25),
+    '../TEST123',
+    'TEST/123',
+    'TEST123?x=1',
+    'TEST123#map',
+    'TEST%2F123',
+    ' TEST123',
+    'TEST123 ',
+    'TEST123\n',
+    'TEST123\r\n',
+    'TEST\\123',
+    'TEST１２３',
+    'https://example.test',
+  ])
+    assert.equal(sondeTrackerUrl(serial), null);
+});
+
 test('selected card groups all metadata in short lines, including frequency and drift wind', () => {
   const card = buildSelectedSondeCard(
     frame,
@@ -49,8 +80,7 @@ test('selected card groups all metadata in short lines, including frequency and 
     'Wind (drift) 12\u00a0m/s from 254°',
     'RS41-SGP · 403\u00a0MHz',
     'heard <1m ago · launched 1h ago',
-    'Coverage depends on volunteer receivers',
-    'SondeHub contributors · CC BY-SA 2.0',
+    'SondeHub tracker ↗ · CC BY-SA 2.0',
   ]);
   assert.ok(
     card.details.length > 5,
@@ -101,7 +131,16 @@ test('missing selected metadata is omitted, zero measurements remain valid, and 
   );
   assert.ok(complete.details.includes('RS41 · RS41-SGP · 403.125\u00a0MHz'));
   assert.ok(
-    complete.details.includes('Vertical +0\u00a0m/s · Horizontal 0\u00a0m/s'),
+    complete.details.includes('Vertical 0\u00a0m/s · Horizontal 0\u00a0m/s'),
+  );
+  // A small negative rate that rounds to zero must not print "-0".
+  const nearZero = buildSelectedSondeCard(
+    { ...frame, vVelMps: -0.04, hVelMps: 0 },
+    [],
+    now,
+  );
+  assert.ok(
+    nearZero.details.includes('Vertical 0\u00a0m/s · Horizontal 0\u00a0m/s'),
   );
   assert.ok(complete.details.includes('Heading 000°'));
   assert.ok(complete.details.includes('0\u00a0°C · 0\u00a0% RH · 0\u00a0hPa'));
@@ -204,7 +243,7 @@ test('unknown or still fixes keep neutral labels and cards without an ascent arr
   }
 });
 
-test('historical cards retain heard and last-fix ages, and qualify each telemetry group', () => {
+test('historical cards qualify telemetry once with last-fix age and keep materially different receipt ages', () => {
   const clock = now + 11 * 60000;
   for (const [altM, phaseText, phase] of [
     [104, 'Landed (inferred)', undefined],
@@ -213,16 +252,21 @@ test('historical cards retain heard and last-fix ages, and qualify each telemetr
   ]) {
     const fix = { ...frame, altM, vVelMps: 0.05, receivedMs: clock };
     const card = buildSelectedSondeCard(fix, [fix], clock, phase);
-    assert.ok(
-      card.details[0].startsWith(`${phaseText} · Last reported: `),
-      card.details[0],
-    );
+    assert.equal(card.details[0], `${phaseText} · last fix 11m ago`);
+    assert.equal(card.details[1], `${altM === 104 ? '0.1' : '18.2'}\u00a0km`);
     assert.ok(card.details.includes('heard <1m ago · launched 11m ago'));
-    assert.ok(card.details.includes('last fix 11m ago'));
-    for (const group of card.details.filter((line) =>
-      /Vertical |Heading |RH|Wind /.test(line),
-    ))
-      assert.ok(group.startsWith('Last reported: '), group);
+    assert.ok(
+      card.details.includes('Vertical +0.1\u00a0m/s · Horizontal 12\u00a0m/s'),
+    );
+    assert.ok(card.details.includes('Heading 074°'));
+    assert.ok(
+      card.details.includes('-56.3\u00a0°C · 2\u00a0% RH · 71\u00a0hPa'),
+    );
+    assert.doesNotMatch(card.details.join(' '), /Last reported:/);
+    assert.equal(
+      card.details.filter((line) => line.includes('last fix')).length,
+      1,
+    );
     assert.equal(
       card.details.some((line) => line.includes('Wind (drift)')),
       phaseText === 'Signal lost',
@@ -230,6 +274,49 @@ test('historical cards retain heard and last-fix ages, and qualify each telemetr
     );
     assert.doesNotMatch(card.details.join(' '), /Ascending|Descending|[↑↓]/);
   }
+});
+
+test('historical cards omit redundant heard ages but retain launch age and all telemetry', () => {
+  const clock = now + 50 * 60000;
+  for (const receiptDelay of [0, 1000, 59_999]) {
+    const fix = {
+      ...frame,
+      altM: 104,
+      vVelMps: -3.2,
+      receivedMs: now + receiptDelay,
+    };
+    const card = buildSelectedSondeCard(
+      fix,
+      [{ ...fix, timeMs: now - 2 * 3600000 }],
+      clock,
+      'landed-inferred',
+    );
+    assert.deepEqual(card.details, [
+      'Landed (inferred) · last fix 50m ago',
+      '0.1\u00a0km',
+      'Vertical -3.2\u00a0m/s · Horizontal 12\u00a0m/s',
+      'Heading 074°',
+      '-56.3\u00a0°C · 2\u00a0% RH · 71\u00a0hPa',
+      'RS41-SGP · 403\u00a0MHz',
+      'launched 2h ago',
+      'SondeHub tracker ↗ · CC BY-SA 2.0',
+    ]);
+  }
+  const distinct = buildSelectedSondeCard(
+    { ...frame, receivedMs: now + 60000 },
+    [],
+    clock,
+    'signal-lost',
+  );
+  assert.ok(distinct.details.includes('heard 49m ago'));
+  // Hour/day rounding must not hide a meaningful difference in receipt time.
+  const rounded = buildSelectedSondeCard(
+    { ...frame, timeMs: now - 5 * 60000 },
+    [],
+    now + 2 * 3600000,
+    'signal-lost',
+  );
+  assert.ok(rounded.details.includes('heard 2h ago'));
 });
 
 test('heading is independent of horizontal speed and wind direction uses meteorological from', () => {
@@ -259,6 +346,7 @@ const cardMessageKeys = [
   'Heading {heading}°',
   'Wind (drift) {speed} from {dir}°',
   'Wind (drift) {speed}',
+  'SondeHub tracker',
 ];
 
 for (const locale of LOCALES.filter((value) => value !== 'en')) {
@@ -287,6 +375,10 @@ for (const locale of LOCALES.filter((value) => value !== 'en')) {
         `TEST123 ${catalog['radiosonde-label|lost']}`,
       );
       const card = buildSelectedSondeCard(frame, [frame], now);
+      assert.equal(
+        card.details.at(-1),
+        `${catalog['SondeHub tracker']} ↗ · CC BY-SA 2.0`,
+      );
       assert.doesNotMatch(
         card.details.join(' '),
         /Vertical |Horizontal |Heading |Wind \(drift\)/,
