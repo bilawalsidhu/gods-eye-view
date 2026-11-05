@@ -93,7 +93,7 @@ function fixture(t, kind, { native = kind === 'cesium' } = {}) {
       ...options,
       floorServices: { cachedGroundFloor: () => 0, warmGroundFloor: () => {} },
     });
-  t.after(() => releaseCameraVerbs(viewer ?? engine));
+  t.after(() => releaseCameraVerbs(engine));
   return { engine, viewer, annotations, styleManager, calls, build };
 }
 
@@ -129,12 +129,9 @@ for (const kind of ['cesium', 'navara']) {
       const result = await f.build()(action, args);
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.equal(result.engine, kind);
+      // The camera verbs drive the engine on both.
       if (call) assert.equal(f.calls[0][0], call);
-      else
-        assert.equal(
-          getActiveCameraMotion().rig,
-          f.viewer ? 'viewer' : 'engine',
-        );
+      else assert.equal(getActiveCameraMotion().rig, 'engine');
       if (action === 'set_post_processing') {
         assert.deepEqual(
           f.calls.map(([name]) => name),
@@ -154,10 +151,7 @@ for (const kind of ['cesium', 'navara']) {
       if (action === 'annotate_map') delete f.annotations.annotate;
       if (action === 'clear_annotations') delete f.annotations.clear;
       if (action === 'fly_route') delete f.annotations.list;
-      if (action === 'move_camera') {
-        if (f.viewer) delete f.viewer.clock.onTick;
-        else delete f.engine.camera.lookAt;
-      }
+      if (action === 'move_camera') delete f.engine.camera.lookAt;
       if (action === 'set_visual_style') {
         if (f.viewer) delete f.styleManager.setStyle;
         else delete f.engine.render.setStyle;
@@ -203,8 +197,7 @@ for (const kind of ['cesium', 'navara']) {
 
   test(`${kind}: fly_route also requires camera verbs`, async (t) => {
     const f = fixture(t, kind);
-    if (f.viewer) delete f.viewer.clock.onTick;
-    else delete f.engine.camera.lookAt;
+    delete f.engine.camera.lookAt;
     assert.equal((await f.build()('fly_route')).code, UNAVAILABLE_ON_ENGINE);
   });
 

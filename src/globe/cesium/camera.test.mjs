@@ -5,6 +5,7 @@ import * as geo from '../../geo/index.js';
 import { isEngineEvent } from '../contract.js';
 import { createCesiumCamera } from './camera.js';
 import { createFakeViewer } from './testing/fakeViewer.mjs';
+import { createCameraViewer } from './testing/cameraViewer.mjs';
 
 const notCesium = (value, label) => {
   assert.ok(value != null, `${label} is missing`);
@@ -113,6 +114,95 @@ test('flyTo maps easing, duration and callbacks and tracks the flight', () => {
   assert.equal(camera.flightActive(), false);
   assert.deepEqual(outcome, ['complete', 'cancel']);
   assert.equal(viewer.callsOf('camera.cancelFlight').length, 1);
+});
+
+test('flightActive also reports a flight started straight on the Cesium camera', () => {
+  const { viewer, camera, cesium } = setup();
+  assert.equal(camera.flightActive(), false);
+  // Cesium runs every camera flight as a scene tween, so a layer's own
+  // viewer.camera.flyTo counts as much as the engine's.
+  const layerFlight = {};
+  viewer.scene.tweens.push(layerFlight);
+  assert.equal(camera.flightActive(), true);
+  viewer.scene.tweens.splice(viewer.scene.tweens.indexOf(layerFlight), 1);
+  assert.equal(camera.flightActive(), false);
+  camera.flyTo({ destination: geo.cartesian3.fromDegrees(0, 0, 1e6) });
+  assert.equal(camera.flightActive(), true);
+  cesium.completeFlight();
+  assert.equal(camera.flightActive(), false);
+});
+
+test('setView with direction and up keeps the exact basis next to nadir', () => {
+  const { camera, engine } = createCameraViewer();
+  const unit = (x, y, z) =>
+    Cesium.Cartesian3.normalize(
+      new Cesium.Cartesian3(x, y, z),
+      new Cesium.Cartesian3(),
+    );
+  for (const locked of [false, true]) {
+    // Nearly straight down at 15° N with a 30° roll: inside the band where
+    // Cesium's heading/pitch/roll conversion drops the roll.
+    const destination = Cesium.Cartesian3.fromDegrees(0, 15, 18_000_000);
+    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(destination);
+    const toWorld = (local) =>
+      Cesium.Matrix4.multiplyByPointAsVector(
+        enu,
+        local,
+        new Cesium.Cartesian3(),
+      );
+    const direction = toWorld(unit(0.01, 0, -1));
+    const level = toWorld(unit(1, 0, 0.01));
+    const right = Cesium.Cartesian3.cross(
+      direction,
+      level,
+      new Cesium.Cartesian3(),
+    );
+    const roll = Cesium.Quaternion.fromAxisAngle(
+      direction,
+      Cesium.Math.toRadians(30),
+    );
+    const up = Cesium.Matrix3.multiplyByVector(
+      Cesium.Matrix3.fromQuaternion(roll),
+      Cesium.Cartesian3.normalize(
+        Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3()),
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    );
+    if (locked)
+      camera.lookAtTransform(
+        Cesium.Transforms.eastNorthUpToFixedFrame(
+          Cesium.Cartesian3.fromDegrees(20, 10),
+        ),
+      );
+    engine.camera.setView({
+      destination: geo.cartesian3.clone(destination),
+      orientation: {
+        direction: geo.cartesian3.clone(direction),
+        up: geo.cartesian3.clone(up),
+      },
+    });
+    const close = (actual, expected, tolerance, label) =>
+      assert.ok(
+        Cesium.Cartesian3.distance(actual, expected) < tolerance,
+        `${label}: ${Cesium.Cartesian3.distance(actual, expected)}`,
+      );
+    close(camera.positionWC, destination, 1e-6, 'position');
+    close(camera.directionWC, direction, 1e-12, 'direction');
+    close(camera.upWC, up, 1e-12, 'up');
+    close(
+      camera.rightWC,
+      Cesium.Cartesian3.cross(direction, up, new Cesium.Cartesian3()),
+      1e-12,
+      'right',
+    );
+    assert.equal(
+      Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY),
+      !locked,
+      'the reference frame is kept',
+    );
+    camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  }
 });
 
 test('flyTo with duration 0 completes before it returns and leaves no flight', () => {

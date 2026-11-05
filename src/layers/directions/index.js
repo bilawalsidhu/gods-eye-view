@@ -1401,9 +1401,8 @@ export function createDirectionsLayer({
   }
 
   function flyCurrentRoute() {
-    if (!_route || (!_viewer && !_engine)) return false;
+    if (!_route || !_engine) return false;
     cancelOwnedFlight('directions-refly');
-    if (_viewer) services.camera.initCameraVerbs(_viewer);
     const seams = _shellSeams;
     const result = services.camera.flyRoute(
       [

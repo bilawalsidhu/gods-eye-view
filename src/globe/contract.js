@@ -154,6 +154,8 @@
  *   target is now (what the follow centres).
  * @property {any} [native]
  * @property {object} [label] FollowOptions.label.
+ * @property {string} [name] Cesium only: the followed Entity's name, else its
+ *   id (a follow without an Entity has none).
  *
  * @typedef {'click'|'doubleClick'|'move'|'down'|'up'} InputType
  * @typedef {'ctrl'|'shift'|'alt'} InputModifier

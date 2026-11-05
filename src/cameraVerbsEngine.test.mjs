@@ -1,7 +1,7 @@
 // The camera verbs on the engine-neutral globe contract (the engine rig), on
 // the fake engine: pose deltas and durations against a real Cesium camera
-// driven through the viewer rig, cancellation, supersession and the release
-// an engine switch makes.
+// driven through the Cesium engine, cancellation, supersession and the
+// release an engine switch makes.
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -9,6 +9,7 @@ import * as Cesium from 'cesium';
 import * as geo from './geo/index.js';
 import { GLOBE_VIEW } from './locations.js';
 import { createFakeEngine } from './globe/testing/fakeEngine.js';
+import { createCameraViewer } from './globe/cesium/testing/cameraViewer.mjs';
 import {
   activeCameraMotionId,
   cameraVerbsSupported,
@@ -75,30 +76,19 @@ function engineHarness(t, pose = START, clock = installClock(t)) {
   return { engine, clock, frame, run, camera: () => engine.camera.pose() };
 }
 
-/** A real Cesium camera on a stub scene (no renderer), driven as a viewer. */
-function viewerHarness(t, pose = START, clock = installClock(t)) {
-  const canvas = Object.assign(new EventTarget(), {
-    clientWidth: WIDTH,
-    clientHeight: HEIGHT,
+/** The Cesium engine over a real Cesium camera on a stub scene (no renderer). */
+function cesiumHarness(t, pose = START, clock = installClock(t)) {
+  const {
+    viewer,
+    scene,
+    camera,
+    engine,
+    frame: turn,
+  } = createCameraViewer({
     width: WIDTH,
     height: HEIGHT,
   });
-  const ellipsoid = Cesium.Ellipsoid.WGS84;
-  const scene = {
-    canvas,
-    drawingBufferWidth: WIDTH,
-    drawingBufferHeight: HEIGHT,
-    frameState: { mode: Cesium.SceneMode.SCENE3D },
-    mapProjection: new Cesium.GeographicProjection(ellipsoid),
-    globe: { ellipsoid },
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    pixelRatio: 1,
-    tweens: [],
-    requestRender() {},
-  };
-  const camera = new Cesium.Camera(scene);
-  scene.camera = camera;
+  t.after(() => engine.destroy());
   camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(
       pose.lonDeg,
@@ -111,16 +101,9 @@ function viewerHarness(t, pose = START, clock = installClock(t)) {
       roll: 0,
     },
   });
-  const viewer = {
-    camera,
-    scene,
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
-    clock: { onTick: new Cesium.Event() },
-  };
   const frame = (seconds = 0.1) => {
     clock.ms += seconds * 1000;
-    viewer.clock.onTick.raiseEvent(viewer.clock);
+    turn();
   };
   const run = (seconds, step = 0.1) => {
     for (let s = 0; s < seconds - 1e-9; s += step) frame(step);
@@ -133,7 +116,15 @@ function viewerHarness(t, pose = START, clock = installClock(t)) {
     pitch: camera.pitch,
     roll: camera.roll,
   });
-  return { viewer, camera: cameraPose, frame, run, cesium: camera };
+  return {
+    viewer,
+    scene,
+    engine,
+    camera: cameraPose,
+    frame,
+    run,
+    cesium: camera,
+  };
 }
 
 function near(actual, expected, tolerance, label) {
@@ -162,20 +153,21 @@ function samePose(actual, expected, label, metres = 1e-3, unit = 1e-9) {
 const ORBIT_TARGET = geo.cartesian3.fromDegrees(10.02, 30.03, 0);
 
 /**
- * Run one verb on the Cesium viewer rig and on the engine rig from the same
- * pose with the same frames; return both camera poses before and after.
+ * Run one verb on the Cesium engine (a real Cesium camera) and on the fake
+ * engine from the same pose with the same frames; return both camera poses
+ * before and after.
  */
 function runOnBoth(t, args, seconds, { pose = START, target = null } = {}) {
   const clock = installClock(t);
-  const cesium = viewerHarness(t, pose, clock);
-  initCameraVerbs(cesium.viewer, () => target);
+  const cesium = cesiumHarness(t, pose, clock);
+  initCameraVerbs(cesium.engine, () => target);
   const cesiumBefore = cesium.camera();
   const cesiumResult = moveCamera(args);
   assert.equal(cesiumResult.ok, true, JSON.stringify(cesiumResult));
   cesium.run(seconds);
   const cesiumAfter = cesium.camera();
   interruptCameraMotion('parity');
-  releaseCameraVerbs(cesium.viewer);
+  releaseCameraVerbs(cesium.engine);
 
   const fake = engineHarness(t, pose, clock);
   initCameraVerbs(fake.engine, () => target);
@@ -436,11 +428,11 @@ test('installing another camera stops a motion running on the previous one', (t)
   initCameraVerbs(first.engine, () => ORBIT_TARGET);
   moveCamera({ motion: 'orbit', mode: 'continuous' });
   first.run(0.3);
-  const cesium = viewerHarness(t, START, first.clock);
-  initCameraVerbs(cesium.viewer, () => ORBIT_TARGET);
+  const cesium = cesiumHarness(t, START, first.clock);
+  initCameraVerbs(cesium.engine, () => ORBIT_TARGET);
   assert.equal(getActiveCameraMotion(), null);
   assert.deepEqual(first.engine.camera.transform(), [...geo.matrix4.IDENTITY]);
-  releaseCameraVerbs(cesium.viewer);
+  releaseCameraVerbs(cesium.engine);
 });
 
 test('globe rotation yields when a follow takes the engine camera', (t) => {
@@ -569,8 +561,8 @@ test('cameraVerbsSupported names the targets the verbs can drive', () => {
       scene: {},
       clock: { onTick: new Cesium.Event() },
     }),
-    true,
-    'a Cesium viewer',
+    false,
+    'a Cesium viewer is driven through its engine',
   );
   const partial = createFakeEngine();
   partial.camera = { ...partial.camera, following: undefined };
@@ -580,7 +572,7 @@ test('cameraVerbsSupported names the targets the verbs can drive', () => {
 });
 
 test('a once orbit armed through a flight still turns its full nudge', (t) => {
-  for (const kind of ['viewer', 'engine']) {
+  for (const kind of ['cesium', 'engine']) {
     const clock = installClock(t);
     const target = ORBIT_TARGET;
     let h;
@@ -596,15 +588,17 @@ test('a once orbit armed through a flight still turns its full nudge', (t) => {
       });
       flying = true;
     } else {
-      h = viewerHarness(t, START, clock);
-      initCameraVerbs(h.viewer, () => target);
-      h.viewer.scene.tweens.push({});
+      // A flight a layer started straight on viewer.camera: a scene tween
+      // the engine did not start.
+      h = cesiumHarness(t, START, clock);
+      initCameraVerbs(h.engine, () => target);
+      h.scene.tweens.push({});
       flying = true;
     }
     const before = h.camera();
     assert.equal(moveCamera({ motion: 'orbit' }).armed, 'waiting-for-arrival');
     h.run(1.6);
-    if (kind === 'viewer' && flying) h.viewer.scene.tweens.length = 0;
+    if (kind === 'cesium' && flying) h.scene.tweens.length = 0;
     h.run(1);
     const start = getActiveCameraMotion();
     assert.equal(start?.kind, 'orbit', `${kind}: the arm outlived 0.9 s`);
@@ -621,6 +615,6 @@ test('a once orbit armed through a flight still turns its full nudge', (t) => {
       geo.math.negativePiToPi(after.heading - before.heading),
     );
     near(turn, 30, 0.05, `${kind}: heading (camera frame vs target frame)`);
-    if (kind === 'viewer') releaseCameraVerbs(h.viewer);
+    if (kind === 'cesium') releaseCameraVerbs(h.engine);
   }
 });

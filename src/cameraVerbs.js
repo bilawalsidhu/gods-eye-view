@@ -18,14 +18,9 @@
  * globe motion, opposite to the camera's travel around Earth.
  */
 
-import * as Cesium from 'cesium';
 import * as geo from './geo/index.js';
 import { GLOBE_VIEW } from './locations.js';
-import {
-  projectEarthDiscToViewport,
-  earthDiscScreenRadius,
-  getKeyholeGeometry,
-} from './celestialRing.js';
+import { earthDiscScreenRadius, getKeyholeGeometry } from './celestialRing.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -955,21 +950,17 @@ export function advanceRouteFlight(state, dt) {
   };
 }
 
-/* ── Camera rigs ────────────────────────────────────────────────────────────
- * A motion drives one camera through a rig, and remembers which one.
+/* ── Camera rig ─────────────────────────────────────────────────────────────
+ * A motion drives one globe engine's camera through its rig, and remembers
+ * which one.
  *
- * The VIEWER rig is a Cesium viewer's own camera, exactly as the verbs were
- * proven on it: exact basis writes (setView's heading/pitch conversion is
- * singular at nadir), the scene's tween queue, the frustum's depth planes and
- * the scene modes. Its clock and input listeners are installed once per viewer.
- *
- * The ENGINE rig speaks only the engine-neutral globe contract
+ * The rig speaks only the engine-neutral globe contract
  * (src/globe/contract.js): camera.pose/height/setView/lookAt/release/
  * transform/flightActive/following/followChanged/cancelFlight, frames.preRender,
  * host.canvas/size, projector.worldToWindow, surface and render.request. The
- * same verbs therefore run on Navara, on the fake engine and on Cesium through
- * engineFromViewer. Its listeners exist only while one of its motions runs, so
- * an engine that is parked or destroyed holds nothing of ours.
+ * same verbs therefore run on Navara, on Cesium (src/globe/cesium) and on the
+ * fake engine. Its listeners exist only while one of its motions runs, so an
+ * engine that is parked or destroyed holds nothing of ours.
  * -------------------------------------------------------------------------- */
 
 /** Manual camera input that reclaims control (the cancelFlight reflex). */
@@ -1037,30 +1028,6 @@ function orientationVectors(position, heading, pitch, roll) {
   };
 }
 
-/** The keyhole admission's view of a Cesium camera (live or a probe clone). */
-function viewerKeyholeView(camera) {
-  const frustum = camera.frustum;
-  return {
-    position: camera.positionWC,
-    direction: camera.directionWC,
-    right: camera.rightWC,
-    up: camera.upWC,
-    perspective: frustum instanceof Cesium.PerspectiveFrustum,
-    // Read only once the depth planes passed: Cesium's frustum getters throw
-    // on invalid planes.
-    get fovy() {
-      return frustum?.fovy;
-    },
-    get aspectRatio() {
-      return frustum?.aspectRatio;
-    },
-    near: frustum?.near,
-    far: frustum?.far,
-    xOffset: frustum?.xOffset,
-    yOffset: frustum?.yOffset,
-  };
-}
-
 /** The keyhole admission's view of a contract camera pose. */
 function engineKeyholeView(pose) {
   return {
@@ -1083,134 +1050,6 @@ function engineKeyholeView(pose) {
   };
 }
 
-/**
- * Put the horizon back.
- *
- * The route dolly is the only motion that rolls the camera, and Cesium keeps
- * whatever world-space up vector it was last handed — so releasing a flight
- * mid-bank leaves the user holding a tilted horizon until some later motion
- * happens to level it. Heading, pitch and position are preserved; only the
- * roll is taken out.
- * @param {Cesium.Viewer} viewer
- * @returns {boolean} Whether a roll was actually removed.
- */
-function levelViewerRoll(viewer) {
-  try {
-    const cam = viewer?.camera;
-    if (!cam || typeof cam.setView !== 'function') return false;
-    const roll = geo.math.negativePiToPi(cam.roll || 0);
-    if (Math.abs(roll) < 1e-5) return false;
-    cam.setView({
-      orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },
-    });
-    return true;
-  } catch {
-    return false; // teardown race
-  }
-}
-
-/** A Cesium viewer's own camera (see the block comment above). */
-function createViewerRig(viewer) {
-  const cam = () => viewer.camera;
-  const ellipsoid = () =>
-    viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
-  return {
-    kind: 'viewer',
-    owner: viewer,
-    viewer,
-    engine: null,
-    position: () => cam().positionWC,
-    pitch: () => cam().pitch,
-    heightM: () => cam().positionCartographic.height,
-    orbitPose: () => ({ position: cam().positionWC, heading: cam().heading }),
-    // Camera flights are scene tweens, including ones started straight on
-    // the Cesium camera rather than through the engine.
-    flightBusy: () => viewer.scene.tweens.length > 0,
-    tracking: () => Boolean(viewer.trackedEntity),
-    trackedLabel() {
-      const entity = viewer.trackedEntity;
-      return entity ? entity.name || entity.id || 'the tracked target' : null;
-    },
-    is3D: () => viewer.scene.mode === Cesium.SceneMode.SCENE3D,
-    unlocked: () =>
-      Cesium.Matrix4.equals(cam().transform, Cesium.Matrix4.IDENTITY),
-    lookAt: (target, hpr) => cam().lookAt(target, hpr),
-    release: () => cam().lookAtTransform(Cesium.Matrix4.IDENTITY),
-    move(direction, amount) {
-      const c = cam();
-      if (direction === 'left') c.moveLeft(amount);
-      else if (direction === 'right') c.moveRight(amount);
-      else if (direction === 'up') c.moveUp(amount);
-      else c.moveDown(amount);
-    },
-    look(direction, angle) {
-      const c = cam();
-      if (direction === 'up') c.lookUp(angle);
-      else if (direction === 'down') c.lookDown(angle);
-      else if (direction === 'left') c.lookLeft(angle);
-      else c.lookRight(angle);
-    },
-    rotate: (axis, angle) => cam().rotate(axis, angle),
-    setFrame: (eye, direction, up) =>
-      cam().setView({ destination: eye, orientation: { direction, up } }),
-    levelRoll: () => levelViewerRoll(viewer),
-    surface: () => viewer.scene,
-    ellipsoid,
-    supportedEllipsoid: () =>
-      Cesium.Cartesian3.equals(ellipsoid().radii, Cesium.Ellipsoid.WGS84.radii),
-    viewport: () => ({
-      width: viewer.scene.canvas.clientWidth,
-      height: viewer.scene.canvas.clientHeight,
-    }),
-    keyholeView: () => viewerKeyholeView(cam()),
-    earthDiscProjects: (width, height) =>
-      Boolean(projectEarthDiscToViewport(viewer, width, height)),
-    resetView() {
-      // The unchanged Globe View destination, on a clone: the live camera
-      // never moves for the check.
-      const camera = Cesium.Camera.clone(cam());
-      const { longitude, latitude } = cam().positionCartographic;
-      camera.setView({
-        destination: Cesium.Cartesian3.fromRadians(
-          longitude,
-          latitude,
-          GLOBE_VIEW.heightM,
-        ),
-        orientation: {
-          heading: 0,
-          pitch: Cesium.Math.toRadians(GLOBE_VIEW.pitchDeg),
-          roll: 0,
-        },
-        endTransform: Cesium.Matrix4.IDENTITY,
-      });
-      return viewerKeyholeView(camera);
-    },
-    captureGlobePose() {
-      const c = cam();
-      return {
-        position: Cesium.Cartesian3.clone(c.positionWC),
-        direction: Cesium.Cartesian3.clone(c.directionWC),
-        up: Cesium.Cartesian3.normalize(c.upWC, new Cesium.Cartesian3()),
-        right: Cesium.Cartesian3.clone(c.rightWC),
-      };
-    },
-    takeGlobePose(pose) {
-      // Convert an inherited ground-target frame without changing the world
-      // pose. Rotation must pivot about Earth, never the previous local target.
-      const c = cam();
-      c.cancelFlight();
-      c.lookAtTransform(Cesium.Matrix4.IDENTITY);
-      // Handoff may level a route's bank. Keep the caller's exact world pose.
-      // Copy the basis directly: setView's heading/pitch conversion is singular
-      // at nadir and can change the captured orientation near the poles.
-      Cesium.Cartesian3.clone(pose.position, c.position);
-      Cesium.Cartesian3.clone(pose.direction, c.direction);
-      Cesium.Cartesian3.clone(pose.up, c.up);
-      Cesium.Cartesian3.clone(pose.right, c.right);
-    },
-  };
-}
-
 /** The globe contract's camera (see the block comment above). */
 function createEngineRig(engine) {
   const camera = engine.camera;
@@ -1220,7 +1059,6 @@ function createEngineRig(engine) {
   return {
     kind: 'engine',
     owner: engine,
-    viewer: null,
     engine,
     position: () => pose().position,
     pitch: () => pose().pitch,
@@ -1230,7 +1068,9 @@ function createEngineRig(engine) {
     tracking: () => Boolean(camera.following()),
     trackedLabel() {
       const handle = camera.following();
-      return handle ? handle.label?.id || 'the tracked target' : null;
+      return handle
+        ? handle.name || handle.label?.id || 'the tracked target'
+        : null;
     },
     // Both engines draw only the 3D globe.
     is3D: () => true,
@@ -1292,6 +1132,9 @@ function createEngineRig(engine) {
       );
     },
     setFrame: (eye, direction, up) => place(eye, direction, up),
+    // Put the horizon back: the route dolly is the only motion that rolls
+    // the camera, and a bank released mid-flight would stay until some later
+    // motion happened to level it. Heading, pitch and position are kept.
     levelRoll() {
       const p = pose();
       if (Math.abs(geo.math.negativePiToPi(p.roll)) <= 1e-5) return false;
@@ -1390,17 +1233,13 @@ const ENGINE_RIG_MEMBERS = Object.freeze([
 
 /**
  * Whether the camera verbs (move_camera, and fly_route over a route list) can
- * drive this target: a Cesium viewer, or a globe engine with every contract
- * member the engine rig reads. The voice gate asks this instead of "is there
- * a viewer".
- * @param {object|null|undefined} target A Cesium viewer or a globe engine.
+ * drive this target: a globe engine with every contract member the rig
+ * reads. The voice gate asks this instead of "is there a viewer".
+ * @param {object|null|undefined} target A globe engine.
  * @returns {boolean}
  */
 export function cameraVerbsSupported(target) {
-  if (!target) return false;
-  if (!isGlobeEngine(target))
-    return Boolean(target.camera && target.scene && target.clock?.onTick);
-  if (target.isDestroyed?.()) return false;
+  if (!isGlobeEngine(target) || target.isDestroyed?.()) return false;
   return ENGINE_RIG_MEMBERS.every(
     (path) =>
       typeof path
@@ -1416,14 +1255,9 @@ export function cameraVerbsSupported(target) {
 
 /** The rig new motions start on: the latest initCameraVerbs target. */
 let _rig = null;
-/** The viewer whose clock and input listeners are installed (viewer rig). */
-let _viewer = null;
 let _getTarget = null;
 let _active = null; // { kind, rig, direction, speed, mode, motionId, ...state }
-let _tickRemover = null;
-let _trackingRemover = null;
-let _inputRemovers = [];
-/** The engine listeners of the running engine-rig motion, or null. */
+/** The engine listeners of the running motion, or null. */
 let _engineBinding = null;
 
 function unbindEngineMotion() {
@@ -1451,8 +1285,9 @@ function bindEngineMotion(rig) {
       removers.push(() => canvas.removeEventListener(event, cancel));
     }
   }
-  // As the viewer rig's trackedEntityChanged: a follow taking the camera
-  // yields a globe rotation at once, before its next frame.
+  // A follow taking the camera (Cockpit can acquire and clear one between
+  // two frames) yields a globe rotation at once, before its next frame.
+  // Other motions carry on.
   removers.push(
     engine.camera.followChanged.addEventListener((handle) => {
       if (handle && _active?.rig === rig && _active.kind === 'rotate_globe')
@@ -1465,8 +1300,8 @@ function bindEngineMotion(rig) {
       if (_active?.rig === rig) engine.render.request('camera-verb');
     }),
   );
-  // Its first frame takes the minimum step, as a viewer rig's first tick
-  // does (a resumed flight must not jump across the time it was parked).
+  // Its first frame takes the minimum step (a resumed flight must not jump
+  // across the time it was parked).
   if (_active?.rig === rig) _active.lastMs = undefined;
   _engineBinding = {
     rig,
@@ -1478,14 +1313,13 @@ function bindEngineMotion(rig) {
 }
 
 /**
- * Park the Directions route flight `id` (an engine-rig flight) for an engine
- * switch: its listeners go, its state is returned for resumeRouteFlight.
+ * Park the Directions route flight `id` for an engine switch: its listeners
+ * go, its state is returned for resumeRouteFlight.
  * @param {number} id The flight's motion id.
  * @returns {object|null} The parked state, or null when `id` is not running.
  */
 export function suspendRouteFlight(id) {
-  if (!id || _active?.motionId !== id || _active.rig?.kind !== 'engine')
-    return null;
+  if (!id || _active?.motionId !== id) return null;
   const state = _active;
   _active = null;
   unbindEngineMotion();
@@ -1511,7 +1345,7 @@ let _motionSeq = 0;
 /**
  * Install a motion and stamp it with a fresh id. The id is what lets a caller
  * that started a flight stop THAT flight later without stopping whatever has
- * replaced it in the meantime. An engine-rig motion binds its listeners here.
+ * replaced it in the meantime. The motion binds its engine listeners here.
  * @param {object} state Motion state (with its rig).
  * @returns {object} The installed state.
  */
@@ -1519,7 +1353,7 @@ function setActiveMotion(state) {
   _motionSeq += 1;
   state.motionId = _motionSeq;
   _active = state;
-  if (state.rig?.kind === 'engine') bindEngineMotion(state.rig);
+  bindEngineMotion(state.rig);
   return state;
 }
 
@@ -1564,13 +1398,8 @@ export function interruptCameraMotion(reason = 'interrupt') {
     } catch {
       /* teardown race */
     }
-    // An engine dolly only ever sets views; it never locks a transform.
-    const engineRoute = motion.kind === 'route' && rig.kind === 'engine';
-    if (
-      !tracking &&
-      !engineRoute &&
-      (motion.kind === 'orbit' || motion.kind === 'route')
-    ) {
+    // A route dolly only ever sets views; it never locks a transform.
+    if (!tracking && motion.kind === 'orbit') {
       try {
         rig.release();
       } catch {
@@ -1579,7 +1408,7 @@ export function interruptCameraMotion(reason = 'interrupt') {
     }
     // Instant, not eased: the user grabbed the camera, or the flight is over.
     // Either way the next thing they hold must be a level horizon.
-    if (motion.kind === 'route' && (engineRoute || !tracking)) {
+    if (motion.kind === 'route') {
       try {
         leveled = rig.levelRoll();
       } catch {
@@ -1616,11 +1445,6 @@ export function getActiveCameraMotion() {
     info.meshProbeSpent = _active.meshProbeSpent;
   }
   return info;
-}
-
-/** The viewer clock's tick: advance a viewer-rig motion. */
-function onTick() {
-  if (_rig?.kind === 'viewer') tickMotion(_rig);
 }
 
 /** Advance the running motion one frame, when it runs on `rig`. */
@@ -1894,35 +1718,20 @@ export function interruptGlobeRotation(reason = 'camera-intent') {
   return { wasActive: false, reason, leveled: false };
 }
 
-function detachViewerListeners() {
-  _tickRemover?.();
-  _trackingRemover?.();
-  for (const remove of _inputRemovers) remove();
-  _inputRemovers = [];
-  _tickRemover = _trackingRemover = _viewer = null;
-}
-
 /**
- * Release what the verbs hold on a departing viewer or engine: a motion
- * running on it stops, and when it is the one new motions start on, its
- * listeners and getters go too.
- * @param {object} target The Cesium viewer or globe engine.
+ * Release what the verbs hold on a departing engine: a motion running on it
+ * stops, and when it is the one new motions start on, its getters go too.
+ * @param {object} target The globe engine.
  */
 export function releaseCameraVerbs(target) {
   if (target == null) return;
-  if (target === _viewer) {
-    if (_active) interruptCameraMotion('viewer-released');
-    detachViewerListeners();
-  } else if (_active?.rig?.owner === target) {
-    interruptCameraMotion('engine-released');
-  }
+  if (_active?.rig?.owner === target) interruptCameraMotion('engine-released');
   if (_rig?.owner === target) _rig = _getTarget = _isCockpitActive = null;
 }
 
 /**
- * Wire the module to the camera once (idempotent). `target` is a Cesium
- * viewer (its own camera: the viewer rig) or a globe engine (the contract:
- * the engine rig; Navara, or Cesium through engineFromViewer). The
+ * Wire the module to the camera once (idempotent). `target` is a globe
+ * engine (Navara, or the Cesium engine over the app's viewer). The
  * view-target getter is optional so a non-voice caller (the Directions FLY
  * chip) can arm route flights before any voice session exists; a later call
  * with a real getter installs it, and a call without one, FOR THE SAME
@@ -1948,18 +1757,14 @@ export function initCameraVerbs(
       _isCockpitActive = isCockpitActive;
     return;
   }
+  if (!isGlobeEngine(target)) return;
   const previous = _rig;
-  const next = isGlobeEngine(target)
-    ? engineRigFor(target)
-    : createViewerRig(target);
+  const next = engineRigFor(target);
   if (_active && (_active.rig === previous || previous === null)) {
-    // A globe motion belongs to the camera whose world pose it captured. Any
-    // other motion carries on with a new Cesium viewer (its state is world
-    // geometry), but never crosses to another kind of camera.
+    // A globe motion belongs to the camera whose world pose it captured, and
+    // no motion crosses to another camera.
     if (_active.kind === 'rotate_globe')
       interruptCameraMotion('viewer-replaced');
-    else if (_active.rig?.kind === 'viewer' && next.kind === 'viewer')
-      _active.rig = next;
     else if (_active.rig === previous && previous !== null)
       interruptCameraMotion('camera-replaced');
   }
@@ -1967,24 +1772,6 @@ export function initCameraVerbs(
   _isCockpitActive =
     typeof isCockpitActive === 'function' ? isCockpitActive : null;
   _rig = next;
-  detachViewerListeners();
-  if (next.kind !== 'viewer') return;
-  const viewer = target;
-  _viewer = viewer;
-  _tickRemover = viewer.clock.onTick.addEventListener(onTick);
-  // Cockpit can acquire then clear tracking before the next clock tick.
-  // Yield on acquisition itself without changing legacy camera motions.
-  _trackingRemover = viewer.trackedEntityChanged?.addEventListener((entity) => {
-    if (entity && _active?.kind === 'rotate_globe')
-      interruptCameraMotion('globe-camera-owner-changed');
-  });
-  const canvas = viewer.scene.canvas;
-  // ANY manual camera input reclaims control — the cancelFlight reflex.
-  for (const evt of MANUAL_INPUT_EVENTS) {
-    const h = () => interruptCameraMotion('manual-input');
-    canvas.addEventListener(evt, h, { passive: true });
-    _inputRemovers.push(() => canvas.removeEventListener(evt, h));
-  }
 }
 
 /**

@@ -2,7 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
+import { createFakeViewer } from '../globe/cesium/testing/fakeViewer.mjs';
 import { dataSourcePoints, flyToDataSource } from './flyToDataSource.js';
+
+/** The Cesium engine over a recording viewer, and the sphere flights it made. */
+function cesiumEngine() {
+  const viewer = createFakeViewer();
+  const engine = createCesiumEngine(viewer, { requestRender() {} });
+  const calls = () =>
+    viewer
+      .callsOf('camera.flyToBoundingSphere')
+      .map(({ args: [sphere, options] }) => ({ sphere, options }));
+  return { viewer, engine, calls };
+}
 
 function source() {
   const ds = new Cesium.CustomDataSource('t');
@@ -35,29 +48,23 @@ test('points come from positions, lines and polygons, as lon/lat only', () => {
 });
 
 test('the camera frames the footprint at the surface, never a buried center', () => {
-  const calls = [];
-  const viewer = {
-    camera: {
-      heading: 0,
-      flyToBoundingSphere: (sphere, options) => calls.push({ sphere, options }),
-    },
-    flyTo: () => calls.push('viewer.flyTo'),
-  };
-  assert.equal(flyToDataSource(viewer, source()), true);
-  const center = Cesium.Cartographic.fromCartesian(calls[0].sphere.center);
+  const { engine, calls } = cesiumEngine();
+  assert.equal(flyToDataSource(engine, source()), true);
+  const [flight] = calls();
+  const center = Cesium.Cartographic.fromCartesian(flight.sphere.center);
   assert.ok(Math.abs(center.height) < 50, `center height ${center.height}`);
-  assert.ok(calls[0].options.offset.range >= 800);
+  assert.ok(flight.options.offset.range >= 800);
   assert.equal(
-    typeof calls[0].options.complete,
+    typeof flight.options.complete,
     'function',
     'the ground guard runs on landing',
   );
   assert.equal(
-    flyToDataSource(viewer, new Cesium.CustomDataSource('empty')),
+    flyToDataSource(engine, new Cesium.CustomDataSource('empty')),
     false,
   );
   assert.equal(
-    calls.length,
+    calls().length,
     1,
     'empty sources never start deferred navigation',
   );
@@ -112,24 +119,24 @@ test('portrait framing accounts for FOV, high ground and symmetric extents', () 
       positions: Cesium.Cartesian3.fromDegreesArray([-105, 39, -104.9, 39]),
     },
   });
-  const calls = [];
-  const viewer = {
-    scene: { globe: { getHeight: () => 2600 } },
-    camera: {
-      frustum: { fov: Math.PI / 3, aspectRatio: 390 / 844 },
-      flyToBoundingSphere: (sphere, options) => calls.push({ sphere, options }),
-    },
-  };
-  flyToDataSource(viewer, ds);
+  const { viewer, engine, calls } = cesiumEngine();
+  viewer.scene.globe.getHeight = () => 2600;
+  // A 60° field of view on the narrower side, as Cesium's frustum keeps it:
+  // vertical in portrait, horizontal in landscape.
+  const { frustum } = viewer.camera;
+  frustum.aspectRatio = 390 / 844;
+  frustum.fovy = Math.PI / 3;
+  flyToDataSource(engine, ds);
   assert.ok(
     Math.abs(
-      Cesium.Cartographic.fromCartesian(calls[0].sphere.center).height - 2600,
+      Cesium.Cartographic.fromCartesian(calls()[0].sphere.center).height - 2600,
     ) < 1e-6,
   );
-  assert.equal(calls[0].options.offset.pitch, -Math.PI / 2);
-  viewer.camera.frustum.aspectRatio = 16 / 9;
-  flyToDataSource(viewer, ds);
-  assert.ok(calls[0].options.offset.range > calls[1].options.offset.range);
+  assert.equal(calls()[0].options.offset.pitch, -Math.PI / 2);
+  frustum.aspectRatio = 16 / 9;
+  frustum.fovy = 2 * Math.atan(Math.tan(Math.PI / 6) / frustum.aspectRatio);
+  flyToDataSource(engine, ds);
+  assert.ok(calls()[0].options.offset.range > calls()[1].options.offset.range);
   const symmetric = {
     entities: {
       values: [
@@ -138,10 +145,10 @@ test('portrait framing accounts for FOV, high ground and symmetric extents', () 
       ],
     },
   };
-  assert.doesNotThrow(() => flyToDataSource(viewer, symmetric));
-  assert.ok(Number.isFinite(calls.at(-1).options.offset.range));
-  assert.doesNotThrow(() => calls.at(-1).options.complete());
-  cancelCameraArrival(viewer);
+  assert.doesNotThrow(() => flyToDataSource(engine, symmetric));
+  assert.ok(Number.isFinite(calls().at(-1).options.offset.range));
+  assert.doesNotThrow(() => calls().at(-1).options.complete());
+  cancelCameraArrival(engine);
 });
 
 test('non-finite positions and hidden features never enter the camera footprint', () => {

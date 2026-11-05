@@ -5,7 +5,8 @@
 // (modelMover.js). In the cinematic look, depth stays in that scene and
 // lit model colour resolves in the display pass. Pickable sets register a
 // PickableInstancedMeshWrapper so Navara's pick pass sees each instance;
-// pickIds.js turns its batch ids back into instances. commit() uploads and
+// pickIds.js turns its batch ids back into instances, and batchIds.js gives
+// a removed set's ids to the next one. commit() uploads and
 // asks for one frame (view.forceUpdate); per-frame work runs only on frames
 // the view draws anyway, so an idle view stays idle.
 
@@ -17,6 +18,7 @@ import {
 } from '@navaramap/three';
 import { Group } from 'three';
 import { createMoverRegistry } from '../../movers.js';
+import { createBatchIdPool } from './batchIds.js';
 import { createModelMover } from './modelMover.js';
 import { createMoverMesh } from './moverMesh.js';
 import { createPickIndex } from './pickIds.js';
@@ -34,16 +36,16 @@ class GevMoverSetDesc extends withFrameUpdates(MeshDesc) {
   }
 
   createMesh() {
-    const { mover, pickable, onPickable } = this.gev;
+    const { mover, pickable, onPickable, batchIds } = this.gev;
     const register = (mesh, key) => {
       if (!pickable) return;
       const wrapper = new PickableInstancedMeshWrapper(
         mesh,
         mesh.instanceMatrix.count,
-        this.ctx,
+        batchIds.source(this.ctx),
       );
       this.ctx.registerPickableMesh(key, wrapper);
-      this.wrappers.push(key);
+      this.wrappers.push({ key, wrapper });
       onPickable(wrapper);
     };
     const group = new Group();
@@ -66,8 +68,9 @@ class GevMoverSetDesc extends withFrameUpdates(MeshDesc) {
 
   onDestroy() {
     this.destroyedByGev = true;
-    for (const key of this.wrappers) this.ctx.unregisterPickableMesh(key);
+    for (const { key } of this.wrappers) this.ctx.unregisterPickableMesh(key);
     this.gev.mover.dispose();
+    for (const { wrapper } of this.wrappers) this.gev.batchIds.release(wrapper);
     super.onDestroy();
   }
 }
@@ -90,6 +93,7 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
     registered.add(view);
   }
   const pickIndex = createPickIndex();
+  const batchIds = createBatchIdPool();
   const readFrameCamera = createMoverFrameCamera(view);
   let loader = null;
   const loadGltf = (url) => {
@@ -111,11 +115,12 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
       overlayUniforms: targetOverlay.uniforms,
     });
     const key = `gevMovers:${options.id}`;
+    let wrapper = null;
     if (options.pickable) {
-      const wrapper = new PickableInstancedMeshWrapper(
+      wrapper = new PickableInstancedMeshWrapper(
         mover.mesh,
         options.capacity,
-        targetOverlay.ctx,
+        batchIds.source(targetOverlay.ctx),
       );
       targetOverlay.registerPickable(key, wrapper);
       pickIndex.add(options.id, wrapper, (index) => store.pickIds[index]);
@@ -134,6 +139,7 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
         if (options.pickable) targetOverlay.unregisterPickable(key);
         targetOverlay.remove(mover.mesh);
         mover.dispose();
+        batchIds.release(wrapper);
         if (options.sharpen && --preSharpenUsers === 0) {
           preSharpenOverlay.destroy();
           preSharpenOverlay = null;
@@ -155,6 +161,7 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
         readFrameCamera,
         kind: options.kind,
         pickable: options.pickable,
+        batchIds,
         onPickable: (wrapper) =>
           pickIndex.add(options.id, wrapper, (index) => store.pickIds[index]),
       },

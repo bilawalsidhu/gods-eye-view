@@ -126,6 +126,33 @@ test('retarget switches the tracked entity without ending the follow', () => {
   assert.deepEqual(changes, [handle, handle]);
 });
 
+test('a follow on an Entity names it, as the tracked camera is named', () => {
+  const { viewer, camera } = setup();
+  // An entity the app tracked itself: its name, else its id.
+  viewer.trackedEntity = new Cesium.Entity({ id: 'N123AB', name: 'UAL 12' });
+  assert.equal(camera.following().name, 'UAL 12');
+  viewer.trackedEntity = new Cesium.Entity({ id: 'N456CD' });
+  assert.equal(camera.following().name, 'N456CD');
+  // The engine's own follow of a native entity; a proxy follow has none.
+  const native = new Cesium.Entity({
+    id: 'ISS',
+    position: Cesium.Cartesian3.clone(TARGET),
+    viewFrom: new Cesium.Cartesian3(0, -900, 400),
+  });
+  const handle = camera.follow({
+    native,
+    position: () => TARGET,
+    viewFrom: { x: 0, y: -900, z: 400 },
+  });
+  assert.equal(handle.name, 'ISS');
+  const proxy = camera.follow({
+    position: () => TARGET,
+    viewFrom: { x: 0, y: -900, z: 400 },
+  });
+  assert.equal(proxy.name, undefined);
+  proxy.stop();
+});
+
 test('destroy ends an engine follow and leaves an app-tracked entity alone', () => {
   const first = setup();
   first.camera.follow({

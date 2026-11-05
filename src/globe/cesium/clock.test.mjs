@@ -31,8 +31,7 @@ test('the clock reads the app clock and latches on the viewer clock from creatio
   const viewer = createFakeViewer();
   const wall = manualAppClock();
   const { clock } = createCesiumClock(viewer, { appClock: wall.appClock });
-  // Attached at creation, so it runs before onTick listeners added later
-  // (cameraVerbs installs its own after the engine exists).
+  // Attached at creation, so it runs before onTick listeners added later.
   assert.equal(viewer.clock.onTick.numberOfListeners, 1);
   const order = [];
   viewer.clock.onTick.addEventListener(() => order.push(clock.frameTime()));

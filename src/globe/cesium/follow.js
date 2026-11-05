@@ -5,7 +5,9 @@
 // one exact tracked frame on preUpdate (applyTrackedCameraFrame) and the
 // zoom limits that keep the camera outside the minimum range.
 // following() also reports a trackedEntity the app set itself, and
-// followChanged is viewer.trackedEntityChanged.
+// followChanged is viewer.trackedEntityChanged. A handle on an Entity carries
+// its `name` (the Entity's name, else its id): what the camera verbs say they
+// are following.
 
 import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
@@ -18,6 +20,7 @@ import {
 import { toCesium3 } from './convert.js';
 
 const MAX_FRAME_ATTEMPTS = 120;
+const entityName = (entity) => (entity ? entity.name || entity.id : undefined);
 const ZOOM_INERTIA_STATES = new WeakMap();
 
 function acquireStableTrackedZoom(controller, owner, minRange) {
@@ -188,6 +191,9 @@ export function createCesiumFollow(viewer, { commanded }) {
     if (!handle) {
       handle = {
         native: entity,
+        get name() {
+          return entityName(entity);
+        },
         target: () =>
           displayPosition(entity, viewer.clock.currentTime, undefined),
         stop() {
@@ -308,6 +314,9 @@ export function createCesiumFollow(viewer, { commanded }) {
     const state = { entity: null, proxy: null, options, handle: null };
     state.handle = {
       native: options.native,
+      get name() {
+        return entityName(state.handle.native);
+      },
       target() {
         try {
           return state.options.position();

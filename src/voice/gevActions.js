@@ -375,9 +375,8 @@ export function createGevActionRunner({
       { memory: analystMemory },
     ));
   installViewTargetPrewarm(engine);
-  // Keep Cesium's viewer rig; viewerless engines use the contract rig.
-  if (cameraVerbsSupported(viewer ?? engine))
-    initCameraVerbs(viewer ?? engine, () => getViewTargetCartesian(engine), {
+  if (cameraVerbsSupported(engine))
+    initCameraVerbs(engine, () => getViewTargetCartesian(engine), {
       isCockpitActive: () => Boolean(styleManager?.getCockpitState?.()?.active),
     });
   const annotationsAvailable = (method) =>
@@ -398,11 +397,9 @@ export function createGevActionRunner({
       case 'clear_annotations':
         return annotationsAvailable('clear');
       case 'move_camera':
-        return cameraVerbsSupported(viewer ?? engine);
+        return cameraVerbsSupported(engine);
       case 'fly_route':
-        return (
-          cameraVerbsSupported(viewer ?? engine) && annotationsAvailable('list')
-        );
+        return cameraVerbsSupported(engine) && annotationsAvailable('list');
       case 'set_visual_style':
         return renderSupported('visualStyles', 'setStyle');
       case 'set_cyber_sonar':

@@ -270,6 +270,7 @@ function attachViewerTools(
   });
   geoFileImport?.attachScene({
     viewer,
+    engine,
     navigation: styleManager,
     subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
   });

@@ -30,7 +30,8 @@ function localizedValues(values) {
  *   and returns their disconnect.
  *
  * The imported files belong to the session; their drawing belongs to the
- * attached globe. `attachScene({ viewer })` draws them on a Cesium viewer;
+ * attached globe. `attachScene({ viewer, engine })` draws them on a Cesium
+ * viewer (its engine flies the camera to them);
  * `attachScene({ engine, draw })` on a globe engine without one (Navara),
  * where `draw(dataSource)` resolves with that engine's drawing of a file
  * ({ report, setShow, refresh, destroy }: src/layers/shared/render/navaraStory.js).
@@ -67,7 +68,8 @@ export function createGeoFileImport({
   let hint = '';
   const lifetime = new AbortController();
   // The attached globe ({ viewer, engine, draw, controller }): a Cesium
-  // viewer, or an engine and its drawing; null while none is attached.
+  // viewer and its engine, or an engine and its drawing; null while none is
+  // attached.
   let scene = null;
 
   const listen = (target, type, listener, options) => {
@@ -186,9 +188,9 @@ export function createGeoFileImport({
   }
 
   const fly = (item) => {
-    if (!scene || !item.dataSource) return false;
+    if (!scene?.engine || !item.dataSource) return false;
     if (!item.visible) setVisible(item.id, true);
-    flyToSource(scene.viewer ?? scene.engine, item.dataSource, { ground });
+    flyToSource(scene.engine, item.dataSource, { ground });
     return true;
   };
 
@@ -471,7 +473,7 @@ export function createGeoFileImport({
     if (typeof offMapSource === 'function') groundRemovers.push(offMapSource);
     const attached = (scene = {
       viewer,
-      engine: viewer ? null : engine,
+      engine,
       draw: viewer ? null : drawOnEngine,
       controller: new AbortController(),
     });

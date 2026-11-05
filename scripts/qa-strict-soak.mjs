@@ -18,11 +18,12 @@
 // below), then after the warm-up (switch 20): live WebGL
 // objects per engine context grow by at most 0.1 per switch (least-squares
 // slope over the checkpoints) and by at most 64 overall; no new WebGL
-// context; the JS objects grow by at most 10 KiB per switch (heap snapshots
-// at the warm-up and the end, V8's compiled code and native memory left out
-// and reported apart, with the used heap's slope); no new document; the
-// webglcontextlost/restored listener counts on both engine canvases stay as
-// they were (each canvas keeps its webglcontextlost listener).
+// context; the JS objects grow by at most 10 KiB per switch and native
+// memory by at most 32 KiB (heap snapshots at the warm-up and the end, V8's
+// compiled code left out and reported apart, with the used heap's slope); no
+// new document; the webglcontextlost/restored listener counts on both engine
+// canvases stay as they were (each canvas keeps its webglcontextlost
+// listener).
 //
 //   node scripts/qa-strict-soak.mjs http://127.0.0.1:4208 --runs=6 --swaps=50
 //   node scripts/qa-strict-soak.mjs http://127.0.0.1:4208 --runs=1 --swaps=500 --assert
@@ -396,21 +397,22 @@ if (strictMode) {
     const perSwitch = (mib) =>
       Math.round(((mib * 1024) / (to.swap - from.swap)) * 100) / 100;
     const objectGrowth = perSwitch(objects(to) - objects(from));
+    const nativeGrowth = perSwitch(
+      (to.typesMiB.native ?? 0) - (from.typesMiB.native ?? 0),
+    );
     checks.push({
       check: 'JS heap KiB per switch',
       objectsKiBPerSwitch: objectGrowth,
       fromMiB: Math.round(objects(from) * 100) / 100,
       toMiB: Math.round(objects(to) * 100) / 100,
       // Reported, not asserted: the used heap's slope (compiled code
-      // included), compiled code's and native memory's growth.
+      // included) and compiled code's growth.
       usedSlopePerSwap: Math.round(slope(heap) * 100) / 100,
       codeKiBPerSwitch: perSwitch(
         (to.typesMiB.code ?? 0) - (from.typesMiB.code ?? 0),
       ),
-      nativeKiBPerSwitch: perSwitch(
-        (to.typesMiB.native ?? 0) - (from.typesMiB.native ?? 0),
-      ),
-      pass: objectGrowth <= 10,
+      nativeKiBPerSwitch: nativeGrowth,
+      pass: objectGrowth <= 10 && nativeGrowth <= 32,
     });
     checks.push({
       check: 'documents',

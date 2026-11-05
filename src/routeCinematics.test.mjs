@@ -34,6 +34,7 @@ import {
   routeSpeedProfile,
   signedTurnRad,
 } from './cameraVerbs.js';
+import { createCameraViewer } from './globe/cesium/testing/cameraViewer.mjs';
 
 const FRAME_S = 1 / 60;
 const CRUISE_M_S = { slow: 20, normal: 40, fast: 90 };
@@ -58,68 +59,43 @@ function rollDegOf(eye, direction, up) {
 }
 
 /**
- * A viewer whose camera actually MODELS orientation: setView with a
- * direction/up pair updates heading/pitch/roll the way Cesium's own
- * decomposition does, and setView with an explicit roll writes it back. Without
- * that, a pin can only prove the code called setView — not that the horizon
- * the user is left holding is level.
+ * The Cesium engine over a real Cesium camera, whose setView calls are
+ * recorded. Its heading/pitch/roll are Cesium's own decomposition of the
+ * camera it is left with, so a pin proves the horizon the user is left
+ * holding is level, not only that the code called setView.
  */
 function createTickableViewer({ heightM = 700 } = {}) {
-  const listeners = [];
-  const setViews = [];
   // The tick derives dt from the wall clock, so a synchronous test loop would
   // advance the flight by ~0 no matter how many times it ticked. Stub the
   // clock and step it explicitly.
   const realPerformance = globalThis.performance;
   let nowMs = 0;
   globalThis.performance = { now: () => nowMs };
-  const position = Cesium.Cartesian3.fromDegrees(-97.76, 30.26, heightM);
-  const camera = {
-    positionWC: position,
-    positionCartographic: Cesium.Cartographic.fromCartesian(position),
-    heading: 0,
-    pitch: Cesium.Math.toRadians(-45),
-    roll: 0,
-    cancelFlight() {},
-    lookAtTransform() {},
-    setView(options) {
-      setViews.push(options);
-      const orientation = options?.orientation;
-      // A destination ALWAYS moves the camera, whatever orientation form came
-      // with it. Branching on the orientation shape instead would let a
-      // levelling call that also passed a destination slip past the pose pin.
-      if (options?.destination) camera.positionWC = options.destination;
-      if (orientation?.direction) {
-        camera.roll = Cesium.Math.toRadians(rollDegOf(
-          options?.destination || camera.positionWC, orientation.direction, orientation.up,
-        ));
-      }
-      if (orientation && Number.isFinite(orientation.roll)) camera.roll = orientation.roll;
-      if (orientation && Number.isFinite(orientation.heading)) camera.heading = orientation.heading;
-      if (orientation && Number.isFinite(orientation.pitch)) camera.pitch = orientation.pitch;
-    },
-  };
-  const viewer = {
-    trackedEntity: undefined,
-    clock: { onTick: { addEventListener: (fn) => { listeners.push(fn); return () => {}; } } },
-    scene: {
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      tweens: [],
-      requestRender() {},
-      // A live app has a rendered surface under the route; the mesh probe reads
-      // it, so these flights start immediately rather than arming.
-      sampleHeight: () => 0,
-    },
-    camera,
+  const { viewer, scene, camera, engine, frame } = createCameraViewer();
+  // A live app has a rendered surface under the route; the mesh probe reads
+  // it, so these flights start immediately rather than arming.
+  scene.sampleHeightSupported = true;
+  scene.sampleHeight = () => 0;
+  camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-97.76, 30.26, heightM),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 },
+  });
+  const setViews = [];
+  const setView = camera.setView;
+  camera.setView = function (options) {
+    setViews.push(options);
+    return setView.call(this, options);
   };
   return {
     viewer,
+    engine,
     setViews,
     tick: (dtS = FRAME_S) => {
       nowMs += dtS * 1000;
-      for (const fn of listeners) fn();
+      frame();
     },
-    rollDeg: () => Cesium.Math.toDegrees(camera.roll),
+    rollDeg: () =>
+      Cesium.Math.toDegrees(Cesium.Math.negativePiToPi(camera.roll)),
     restore: () => { globalThis.performance = realPerformance; },
   };
 }
@@ -789,7 +765,7 @@ test('the reduced-motion PREFERENCE reaches a real flight, not just the flag', (
     assert.ok(queries.some((q) => /prefers-reduced-motion:\s*reduce/.test(q)), `queried ${queries}`);
 
     const viewer = createTickableViewer();
-    initCameraVerbs(viewer.viewer, () => null);
+    initCameraVerbs(viewer.engine, () => null);
     const started = flyRoute([{
       type: 'route', label: 'reduced', path: TWO_TURN_ROUTE.map(([lon, lat]) => ({ lon, lat, height: 0 })),
     }]);
@@ -886,7 +862,7 @@ test('approachValue is frame-rate independent and adopts a cold value', () => {
 
 test('an interrupt MID-BANK stops the dolly and puts the horizon back level', () => {
   const viewer = createTickableViewer();
-  initCameraVerbs(viewer.viewer, () => null);
+  initCameraVerbs(viewer.engine, () => null);
 
   const started = flyRoute([{
     type: 'route',
@@ -923,17 +899,23 @@ test('an interrupt MID-BANK stops the dolly and puts the horizon back level', ()
     `the horizon was left tilted at ${viewer.rollDeg().toFixed(3)}° after the cut`,
   );
   // Levelling preserves where the camera was looking — it is not a re-frame.
-  // Asserted NUMERICALLY, not just by the omitted destination: position,
-  // heading and pitch must come out the far side unchanged.
+  // Asserted NUMERICALLY: position, heading and pitch must come out the far
+  // side unchanged.
   const levelling = viewer.setViews.at(-1);
   assert.equal(levelling.orientation.roll, 0);
-  assert.equal(levelling.destination, undefined, 'levelling must not move the camera');
   assert.equal(
     Cesium.Cartesian3.distance(viewer.viewer.camera.positionWC, poseAtCut.position), 0,
     'the camera moved while being levelled',
   );
-  assert.equal(viewer.viewer.camera.heading, poseAtCut.heading, 'heading changed while levelling');
-  assert.equal(viewer.viewer.camera.pitch, poseAtCut.pitch, 'pitch changed while levelling');
+  // Cesium re-derives heading and pitch from the basis: equal to rounding.
+  assert.ok(
+    Math.abs(viewer.viewer.camera.heading - poseAtCut.heading) < 1e-12,
+    'heading changed while levelling',
+  );
+  assert.ok(
+    Math.abs(viewer.viewer.camera.pitch - poseAtCut.pitch) < 1e-12,
+    'pitch changed while levelling',
+  );
 
   const writesAtCut = viewer.setViews.length;
   viewer.tick();
@@ -948,7 +930,7 @@ test('an interrupt MID-BANK stops the dolly and puts the horizon back level', ()
 
 test('a completed dolly lands wings level and releases the slot', () => {
   const viewer = createTickableViewer();
-  initCameraVerbs(viewer.viewer, () => null);
+  initCameraVerbs(viewer.engine, () => null);
   // A route that is still turning as it ends — the case where a bank would
   // otherwise be frozen into the final frame.
   const started = flyRoute([{
@@ -1010,7 +992,7 @@ test('a flight can be stopped by its owner, and only while it is still theirs', 
   // somewhere, a tracked aircraft took over — and stopping that would be a
   // feature reaching across the app to cancel a stranger's motion.
   const viewer = createTickableViewer();
-  initCameraVerbs(viewer.viewer, () => null);
+  initCameraVerbs(viewer.engine, () => null);
   const path = TWO_TURN_ROUTE.map(([lon, lat]) => ({ lon, lat, height: 0 }));
 
   assert.equal(activeCameraMotionId(), 0, 'an idle camera has no motion id');
@@ -1053,7 +1035,7 @@ test('a new viewer lifetime drops the previous view-target getter', () => {
   const first = createTickableViewer();
   const target = Cesium.Cartesian3.fromDegrees(-97.76, 30.26, 0);
   let asked = 0;
-  initCameraVerbs(first.viewer, () => { asked += 1; return target; });
+  initCameraVerbs(first.engine, () => { asked += 1; return target; });
   const orbit = moveCamera({ motion: 'orbit', mode: 'continuous' });
   assert.equal(orbit.ok, true);
   assert.equal(orbit.armed, undefined, 'the installed getter supplied a target');
@@ -1061,7 +1043,7 @@ test('a new viewer lifetime drops the previous view-target getter', () => {
   interruptCameraMotion('test-cleanup');
 
   // Same viewer, no getter: the installed one stays.
-  initCameraVerbs(first.viewer);
+  initCameraVerbs(first.engine);
   const again = moveCamera({ motion: 'orbit', mode: 'continuous' });
   assert.equal(again.armed, undefined, 'the getter survives a call without one');
   interruptCameraMotion('test-cleanup');
@@ -1070,7 +1052,7 @@ test('a new viewer lifetime drops the previous view-target getter', () => {
   // New viewer, no getter: the old one is gone, so the orbit arms instead of
   // capturing a target from a viewer that no longer exists.
   const second = createTickableViewer();
-  initCameraVerbs(second.viewer);
+  initCameraVerbs(second.engine);
   const askedBefore = asked;
   const armed = moveCamera({ motion: 'orbit', mode: 'continuous' });
   assert.equal(armed.armed, 'waiting-for-arrival');
@@ -1081,7 +1063,7 @@ test('a new viewer lifetime drops the previous view-target getter', () => {
 
 test('a route hidden from Draw is not flown; the newest visible one is', () => {
   const viewer = createTickableViewer();
-  initCameraVerbs(viewer.viewer, () => null);
+  initCameraVerbs(viewer.engine, () => null);
   const route = (label, hidden) => ({
     type: 'route',
     label,

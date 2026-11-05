@@ -31,23 +31,18 @@ export function createInfrastructureNavaraRenderer(
     sourceId: id,
     host: services.overlayHost,
   });
-  const display = createNavaraPolygonDisplay(
-    engine,
-    native.view,
-    (tint, show) => ({
-      polyline: { color: tint, show, width: 2, clampToGround: true },
-      polygon: {
-        color: tint,
-        show,
-        opacity: 0.3,
-        transparent: true,
-        clampToGround: true,
-        outline: true,
-        outlineColor: tint,
-        outlineWidth: 2,
-      },
-    }),
-  );
+  const display = createNavaraPolygonDisplay(engine, native.view, (tint) => ({
+    polyline: { color: tint, width: 2, clampToGround: true },
+    polygon: {
+      color: tint,
+      opacity: 0.3,
+      transparent: true,
+      clampToGround: true,
+      outline: true,
+      outlineColor: tint,
+      outlineWidth: 2,
+    },
+  }));
   let dataset = null,
     records = new Map(),
     active = new Set(),

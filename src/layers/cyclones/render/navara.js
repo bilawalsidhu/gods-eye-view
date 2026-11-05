@@ -22,11 +22,10 @@ const zeroCounts = () => ({
 const world = ([lon, lat]) => geo.cartesian3.fromDegrees(lon, lat);
 
 export function createCyclonesNavaraRenderer(engine, view, { overlayHost }) {
-  const display = createNavaraPolygonDisplay(engine, view, (color, show) => ({
-    polyline: { color, show, width: 2.5, clampToGround: true },
+  const display = createNavaraPolygonDisplay(engine, view, (color) => ({
+    polyline: { color, width: 2.5, clampToGround: true },
     polygon: {
       color,
-      show,
       opacity: 0.16,
       transparent: true,
       clampToGround: true,

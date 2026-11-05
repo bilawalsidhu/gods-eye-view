@@ -14,17 +14,15 @@ export function createZonesNavaraRenderer(
   { idPrefix, colorOf },
 ) {
   let polygons = [];
-  const display = createNavaraPolygonDisplay(engine, view, (color, show) => ({
+  const display = createNavaraPolygonDisplay(engine, view, (color) => ({
     polygon: {
       color,
-      show,
       clampToGround: true,
       transparent: true,
       opacity: 0.25,
     },
     polyline: {
       color,
-      show,
       clampToGround: true,
       width: 2,
       transparent: true,

@@ -153,7 +153,6 @@ async function createRenderer({
     creditContainer,
   });
   defer(() => {
-    releaseCameraVerbs(viewer);
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
@@ -161,6 +160,8 @@ async function createRenderer({
   // once it loads.
   const tilesetRef = { current: null };
   const engine = createSceneEngine(viewer, { tilesetRef, defer });
+  // As the Navara scene above: a released engine keeps no camera verb.
+  defer(() => releaseCameraVerbs(engine));
   defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(engine, credits);
   configureCreditKeyboardAccess(document);
@@ -243,7 +244,6 @@ async function createRenderer({
     suspend() {
       uninstallRenderGovernor(viewer);
       engine.camera.cancelFlight();
-      releaseCameraVerbs(viewer);
       releaseCameraVerbs(engine);
       viewer.useDefaultRenderLoop = false;
     },

@@ -31,7 +31,7 @@ function observedShell(t) {
 }
 
 // What the tracking modules do around follow.start on a resume or a share
-// restore (flights, military and satellites tracking.js).
+// restore (the shared aircraft tracking.js and satellites tracking.js).
 function follow(trackedEntityChanged, entity, restoring) {
   if (restoring) entity.gevRestoring = true;
   try {
@@ -150,8 +150,7 @@ test('an engine switch resumes the aircraft with the origin it was selected by',
 
 test('every follow of a resumed or share-restored subject is marked while it starts', () => {
   for (const [file, resume] of [
-    ['flights/tracking.js', 'resume'],
-    ['military/tracking.js', 'resume'],
+    ['aircraft/tracking.js', 'resume'],
     ['satellites/tracking.js', 'resuming'],
   ]) {
     const source = readLayerSource(new URL(`../${file}`, import.meta.url));

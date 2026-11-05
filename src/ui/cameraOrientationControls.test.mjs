@@ -43,6 +43,12 @@ function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
     positionWC: position,
     directionWC: new Cesium.Cartesian3(-1, 0, 0),
     upWC: new Cesium.Cartesian3(0, 0, 1),
+    // The basis in the camera's reference frame (the world: identity), which
+    // the engine's setView writes.
+    direction: new Cesium.Cartesian3(-1, 0, 0),
+    up: new Cesium.Cartesian3(0, 0, 1),
+    right: new Cesium.Cartesian3(0, 1, 0),
+    inverseTransform: Cesium.Matrix4.IDENTITY,
     heading: Cesium.Math.toRadians(90),
     pitch: Cesium.Math.toRadians(-90),
     roll: 0,

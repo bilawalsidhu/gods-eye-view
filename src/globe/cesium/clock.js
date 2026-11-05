@@ -8,12 +8,11 @@
 // drives Cesium's own lighting as before.
 //
 // The latch is attached when the engine is created (the app creates it with
-// the scene, before cameraVerbs and the layers add their own onTick
-// listeners), so it runs first in each tick; an onTick listener added before
-// the engine existed would read the previous frame's time. destroy removes
-// it. A viewer without a clock (tests, a bare scene) latches on the scene's
-// preUpdate instead, attached on first use so creating the engine adds no
-// scene listener.
+// the scene), so it runs before any onTick listener added later; one added
+// before the engine existed would read the previous frame's time. destroy
+// removes it. A viewer without a clock (tests, a bare scene) latches on the
+// scene's preUpdate instead, attached on first use so creating the engine
+// adds no scene listener.
 
 import { appClock as pageClock } from '../../time/clock.js';
 

@@ -34,10 +34,9 @@ function stationFeature(reading, radius) {
 
 /** One native GeoJSON layer per AQHI colour, independent of station count. */
 export function createAirQualityNavaraRenderer(engine, { view }) {
-  const display = createNavaraPolygonDisplay(engine, view, (color, show) => ({
+  const display = createNavaraPolygonDisplay(engine, view, (color) => ({
     polygon: {
       color,
-      show,
       transparent: true,
       opacity: 0.35,
       clampToGround: true,

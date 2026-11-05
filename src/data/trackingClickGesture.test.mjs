@@ -122,7 +122,10 @@ test('civilian and military click handlers apply duration only at the deselect b
   assert.match(dispatcher, /if \(!isTrackingSelectionGesture\(gesture\)\) return;[\s\S]+onSelect/);
   assert.match(dispatcher, /if \(!isTrackingClickGesture\(gesture\)\) return;\s*for \(const owner of \[\.\.\.owners\.values\(\)\]\.filter\(plain\)\)\s*owner\.onEmptyClick/);
   for (const [layer, source] of [['flights', sources[0]], ['military', sources[1]]]) {
-    assert.match(source, new RegExp(`dispatcher\\.register\\('${layer}', \\{[\\s\\S]+onEmptyClick: _onEmptyClick`));
+    // Both layers register through the shared aircraft tracking, under their
+    // own layer id.
+    assert.match(source, /dispatcher\.register\(layerId, \{[\s\S]+onEmptyClick: _onEmptyClick/);
+    assert.match(source, new RegExp(`layerId: '${layer}'`));
     assert.match(source, /function _onEmptyClick\(\) \{[\s\S]+?_clearTracking\(false, \{ origin: 'user' \}\)/);
   }
   assert.doesNotMatch(

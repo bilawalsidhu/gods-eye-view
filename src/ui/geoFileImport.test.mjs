@@ -90,6 +90,9 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
     },
     flyTo: (target) => flights.push(target),
   };
+  // The viewer's globe engine, which flies the camera to a file.
+  const engine = { kind: 'cesium' };
+  const flownOn = [];
   const revoked = [];
   const loads = [];
   const defaultLoad = async (file, opts) => {
@@ -110,7 +113,12 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
     document,
     ...(navigation ? { navigation } : {}),
     ...(subscribeMapSource ? { subscribeMapSource } : {}),
-    flyToSource: flyToSource || ((_viewer, ds) => flights.push(ds)),
+    flyToSource:
+      flyToSource ||
+      ((target, ds) => {
+        flownOn.push(target);
+        flights.push(ds);
+      }),
     publish: (view) => {
       shown = view;
     },
@@ -119,15 +127,17 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
       return () => (actions = null);
     },
   });
-  tool?.attachScene({ viewer });
+  tool?.attachScene({ viewer, engine });
   return {
     tool,
     els,
     document,
     viewer,
+    engine,
     added,
     removed,
     flights,
+    flownOn,
     revoked,
     loads,
     renders: () => renders,
@@ -166,6 +176,7 @@ test('a pick imports each file', async () => {
   );
   assert.equal(rows(t).length, 2);
   assert.equal(t.flights.length, 1, 'the first file of a batch is flown to');
+  assert.equal(t.flownOn[0], t.engine, "the viewer's engine flies there");
   assert.equal(t.shown().hint, 'Added 2 files.');
   assert.deepEqual(
     t.tool.list().map((f) => f.name),

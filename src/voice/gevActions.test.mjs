@@ -163,6 +163,8 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       },
       globe: { getHeight: () => 0 },
       tweens: [],
+      // The frame event a camera verb advances on (through the engine).
+      preRender: new Cesium.Event(),
     },
     camera: {
       moveEnd: { addEventListener() {} },

@@ -38,6 +38,41 @@ const cesiumDestination = (destination) =>
 
 const cesiumEasing = (easing) => (easing ? easings()[easing] : undefined);
 
+let scratchBasis;
+
+/**
+ * Write a world direction and up (right = direction × up, up made
+ * perpendicular) as the camera's basis, in its current reference frame.
+ * Cesium's setView turns direction/up into heading/pitch/roll, which is
+ * singular looking straight down: within about 2.6° of nadir it drops the
+ * roll and reads the heading off `up`. The exact basis is what Cesium's own
+ * rotate/look/move leave. A degenerate pair (up along direction) keeps
+ * Cesium's result.
+ */
+function setBasis(cesium, direction, up) {
+  scratchBasis ??= {
+    direction: new Cesium.Cartesian3(),
+    up: new Cesium.Cartesian3(),
+    right: new Cesium.Cartesian3(),
+  };
+  const right = Cesium.Cartesian3.cross(direction, up, scratchBasis.right);
+  const rightLength = Cesium.Cartesian3.magnitude(right);
+  const directionLength = Cesium.Cartesian3.magnitude(direction);
+  if (!(rightLength > 1e-12 * directionLength) || !Number.isFinite(rightLength))
+    return;
+  Cesium.Cartesian3.divideByScalar(right, rightLength, right);
+  const forward = Cesium.Cartesian3.divideByScalar(
+    direction,
+    directionLength,
+    scratchBasis.direction,
+  );
+  const upright = Cesium.Cartesian3.cross(right, forward, scratchBasis.up);
+  const inverse = cesium.inverseTransform;
+  Cesium.Matrix4.multiplyByPointAsVector(inverse, forward, cesium.direction);
+  Cesium.Matrix4.multiplyByPointAsVector(inverse, upright, cesium.up);
+  Cesium.Matrix4.multiplyByPointAsVector(inverse, right, cesium.right);
+}
+
 // A HeadingPitchRange or a Cartesian offset, as Cesium's lookAt takes them.
 const cesiumOffset = (offset) =>
   'heading' in offset
@@ -167,10 +202,13 @@ export function createCesiumCamera(viewer) {
     setView(view) {
       if (!view?.destination)
         throw new TypeError('setView needs a destination');
+      const orientation = cesiumOrientation(view.orientation);
       cesium.setView({
         destination: cesiumDestination(view.destination),
-        orientation: cesiumOrientation(view.orientation),
+        orientation,
       });
+      if (orientation?.direction)
+        setBasis(cesium, orientation.direction, orientation.up);
     },
     flyTo(options) {
       if (!options?.destination)
@@ -209,7 +247,9 @@ export function createCesiumCamera(viewer) {
         ),
       );
     },
-    flightActive: () => flight != null,
+    // Also a flight started straight on viewer.camera (layers' flyTo and
+    // flyToBoundingSphere): Cesium runs every camera flight as a scene tween.
+    flightActive: () => flight != null || viewer.scene.tweens?.length > 0,
     lookAt(target, offset) {
       cesium.lookAt(toCesium3(target), cesiumOffset(offset));
     },

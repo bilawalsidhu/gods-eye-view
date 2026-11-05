@@ -30,9 +30,11 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
   const fovy = 2 * Math.atan(Math.tan(Math.PI / 6) * (height / width));
   const camera = {
     positionWC: new Cesium.Cartesian3(7e6, 1e5, 2e5),
-    // Position and direction in the camera's transform (identity: world).
+    // Position and basis in the camera's transform (identity: world).
     position: new Cesium.Cartesian3(7e6, 1e5, 2e5),
     direction: new Cesium.Cartesian3(-1, 0, 0),
+    up: new Cesium.Cartesian3(0, 0, 1),
+    right: new Cesium.Cartesian3(0, 1, 0),
     directionWC: new Cesium.Cartesian3(-1, 0, 0),
     upWC: new Cesium.Cartesian3(0, 0, 1),
     rightWC: new Cesium.Cartesian3(0, 1, 0),
@@ -48,6 +50,12 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
     },
     viewMatrix: Cesium.Matrix4.fromTranslation(new Cesium.Cartesian3(1, 2, 3)),
     transform: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+    get inverseTransform() {
+      return Cesium.Matrix4.inverseTransformation(
+        camera.transform,
+        new Cesium.Matrix4(),
+      );
+    },
     defaultZoomAmount: 100000,
     percentageChanged: 0.5,
     changed: new Cesium.Event(),
@@ -132,6 +140,8 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
     postRender: new Cesium.Event(),
     requestRenderMode: true,
     maximumRenderTimeChange: Infinity,
+    // Cesium's running camera flights (a flight on viewer.camera is one).
+    tweens: [],
     requestRender: record('scene.requestRender'),
     pick: record('scene.pick', () => undefined),
     drillPick: record('scene.drillPick', () => []),
