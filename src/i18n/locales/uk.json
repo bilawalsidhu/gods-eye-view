@@ -3284,5 +3284,17 @@
     "few": "{count} події",
     "many": "{count} подій",
     "other": "{count} події"
+  },
+  "All years": "Усі роки",
+  "Period": "Період",
+  "First year of the accident period": "Перший рік періоду подій",
+  "Length": "Тривалість",
+  "Length of the accident period": "Тривалість періоду подій",
+  "To the latest": "До останнього",
+  "{count} years": {
+    "one": "{count} рік",
+    "few": "{count} роки",
+    "many": "{count} років",
+    "other": "{count} року"
   }
 }

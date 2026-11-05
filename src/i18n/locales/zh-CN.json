@@ -3056,5 +3056,14 @@
   "Air accidents": "航空事故",
   "{count} occurrences": {
     "other": "{count} 起"
+  },
+  "All years": "所有年份",
+  "Period": "时段",
+  "First year of the accident period": "事故时段的起始年份",
+  "Length": "长度",
+  "Length of the accident period": "事故时段的长度",
+  "To the latest": "至最新",
+  "{count} years": {
+    "other": "{count} 年"
   }
 }

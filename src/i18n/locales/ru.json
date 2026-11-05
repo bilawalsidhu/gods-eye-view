@@ -3284,5 +3284,17 @@
     "few": "{count} события",
     "many": "{count} событий",
     "other": "{count} события"
+  },
+  "All years": "Все годы",
+  "Period": "Период",
+  "First year of the accident period": "Первый год периода происшествий",
+  "Length": "Длительность",
+  "Length of the accident period": "Длительность периода происшествий",
+  "To the latest": "До последнего",
+  "{count} years": {
+    "one": "{count} год",
+    "few": "{count} года",
+    "many": "{count} лет",
+    "other": "{count} года"
   }
 }

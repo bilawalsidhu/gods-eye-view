@@ -3436,5 +3436,19 @@
     "few": "{count} أحداث",
     "many": "{count} حدثًا",
     "other": "{count} حدث"
+  },
+  "All years": "كل السنوات",
+  "Period": "الفترة",
+  "First year of the accident period": "السنة الأولى من فترة الحوادث",
+  "Length": "المدة",
+  "Length of the accident period": "مدة فترة الحوادث",
+  "To the latest": "حتى الأحدث",
+  "{count} years": {
+    "zero": "{count} سنة",
+    "one": "{count} سنة",
+    "two": "{count} سنتان",
+    "few": "{count} سنوات",
+    "many": "{count} سنة",
+    "other": "{count} سنة"
   }
 }

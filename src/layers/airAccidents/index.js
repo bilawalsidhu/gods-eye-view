@@ -2,8 +2,16 @@ import * as Cesium from 'cesium';
 import { formatNumber, msg, t, tn } from '../../i18n/index.js';
 import { createHorizonCull } from '../streetLevel/view.js';
 import { KIND_COLORS, KIND_LABELS, describeAirAccident } from './cards.js';
+import {
+  PERIOD_SPANS,
+  inPeriod,
+  normalizePeriod,
+  periodRange,
+  yearExtent,
+} from './period.js';
 export * from './records.js';
 export * from './cards.js';
+export * from './period.js';
 export { createAirAccidentsSource } from './source.js';
 
 export const AIR_ACCIDENTS_LAYER_ID = 'air-accidents';
@@ -50,6 +58,9 @@ export function createAirAccidentsLayer({
   let _selectedCardId = null;
   let _selectedLink = null;
   const _kinds = new Set(['accident', 'serious-incident']);
+  let _period = { from: null, span: 'today' };
+  let _extent = null;
+  let _range = null;
 
   const render = () => _viewer?.scene?.requestRender?.();
   const notifyRow = () => _rowListener?.();
@@ -63,12 +74,29 @@ export function createAirAccidentsLayer({
     onChange: render,
   });
 
+  /** Shown: its class chip is on and its year is inside the period. */
+  function visible(record) {
+    return (
+      Boolean(record) && _kinds.has(record.kind) && inPeriod(record, _range)
+    );
+  }
+
   function applyPin(pin) {
-    pin.entity.show = pin.inFront && _kinds.has(pin.kind);
+    pin.entity.show = pin.inFront && visible(pin.record);
+  }
+
+  /** Re-apply the chips and the period to every marker and the open card. */
+  function applyFilter() {
+    for (const pin of _pins) applyPin(pin);
+    if (_selectedId && !visible(_records.get(_selectedId))) clearSelection();
+    notifyRow();
+    render();
   }
 
   function rebuild(records) {
     _records = new Map(records.map((record) => [record.id, record]));
+    _extent = yearExtent(records);
+    _range = periodRange(_period, _extent);
     _pins = [];
     if (!_dataSource) return;
     _dataSource.entities.suspendEvents();
@@ -91,7 +119,7 @@ export function createAirAccidentsLayer({
       });
       const pin = {
         entity,
-        kind: record.kind,
+        record,
         position,
         inFront: true,
         get show() {
@@ -116,7 +144,7 @@ export function createAirAccidentsLayer({
   function publishCard() {
     if (!canSelect()) return;
     const record = _selectedId ? _records.get(_selectedId) : null;
-    if (!record || !_kinds.has(record.kind)) {
+    if (!visible(record)) {
       clearSelection();
       return;
     }
@@ -224,17 +252,60 @@ export function createAirAccidentsLayer({
   function toggleKind(kind) {
     if (_kinds.has(kind)) _kinds.delete(kind);
     else _kinds.add(kind);
-    for (const pin of _pins) applyPin(pin);
-    if (_selectedId && !_kinds.has(_records.get(_selectedId)?.kind))
-      clearSelection();
-    notifyRow();
-    render();
+    applyFilter();
   }
 
   function countOf(kind) {
     let count = 0;
-    for (const record of _records.values()) if (record.kind === kind) count++;
+    for (const record of _records.values())
+      if (record.kind === kind && inPeriod(record, _range)) count++;
     return count;
+  }
+
+  /** The year slider and the period-length switch under the row. */
+  function periodControls() {
+    if (!_extent || _extent.min === _extent.max) return {};
+    const range = periodRange(_period, _extent);
+    const valueText = range.all
+      ? t('All years')
+      : range.from === range.to
+        ? String(range.from)
+        : `${range.from}–${range.to}`;
+    const middle = Math.round((_extent.min + _extent.max) / 2);
+    const tick = (year) => ({
+      at: (year - _extent.min) / (_extent.max - _extent.min),
+      label: String(year),
+    });
+    return {
+      slider: {
+        id: 'from-year',
+        label: t('Period'),
+        ariaLabel: t('First year of the accident period'),
+        valueText,
+        min: _extent.min,
+        max: _extent.max,
+        step: 1,
+        value: range.from,
+        ticks: [tick(_extent.min), tick(middle), tick(_extent.max)],
+        params: (value) => ({ from: Math.round(Number(value)) }),
+      },
+      segmented: {
+        id: 'span',
+        label: t('Length'),
+        ariaLabel: t('Length of the accident period'),
+        options: PERIOD_SPANS.map((span) => ({
+          id: `span-${span}`,
+          label:
+            span === 'today'
+              ? t('To the latest')
+              : tn(span, '{count} year', '{count} years', {
+                  count: formatNumber(span),
+                }),
+          active: _period.span === span,
+          params: { span },
+        })),
+      },
+    };
   }
 
   const layer = {
@@ -316,6 +387,20 @@ export function createAirAccidentsLayer({
       _rowListener = null;
     },
 
+    /** The period filter: `from` is the first year (null = oldest), `span` a PERIOD_SPANS value. */
+    getParams() {
+      return { ..._period };
+    },
+
+    setParams(params = {}) {
+      const next = normalizePeriod(params, _period);
+      if (next.from === _period.from && next.span === _period.span) return true;
+      _period = next;
+      _range = periodRange(_period, _extent);
+      applyFilter();
+      return true;
+    },
+
     setRowControlsListener(listener) {
       _rowListener = listener;
     },
@@ -337,6 +422,7 @@ export function createAirAccidentsLayer({
           ),
           onClick: () => toggleKind(kind),
         })),
+        ...periodControls(),
         legend: [],
         info: t('CENIPA (Brazil, since 2007) · Wikidata (worldwide)'),
         infoTitle: t(
@@ -347,8 +433,7 @@ export function createAirAccidentsLayer({
 
     getStats() {
       let shown = 0;
-      for (const record of _records.values())
-        if (_kinds.has(record.kind)) shown++;
+      for (const record of _records.values()) if (visible(record)) shown++;
       return {
         count: shown,
         lastUpdate: _snapshot?.fetchedAt ?? null,
@@ -363,7 +448,7 @@ export function createAirAccidentsLayer({
       const out = [];
       for (const record of _records.values()) {
         if (out.length >= maxCount) break;
-        if (!_kinds.has(record.kind)) continue;
+        if (!visible(record)) continue;
         out.push({
           id: record.id,
           kind: record.kind,

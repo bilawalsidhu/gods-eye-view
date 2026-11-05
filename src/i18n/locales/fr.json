@@ -3208,5 +3208,16 @@
     "one": "{count} évènement",
     "many": "{count} d’évènements",
     "other": "{count} évènements"
+  },
+  "All years": "Toutes les années",
+  "Period": "Période",
+  "First year of the accident period": "Première année de la période d’accidents",
+  "Length": "Durée",
+  "Length of the accident period": "Durée de la période d’accidents",
+  "To the latest": "Jusqu’au plus récent",
+  "{count} years": {
+    "one": "{count} an",
+    "many": "{count} d’ans",
+    "other": "{count} ans"
   }
 }
