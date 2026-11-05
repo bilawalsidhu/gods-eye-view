@@ -457,6 +457,8 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   // query for this layer wait until there is room.
   'drone-airspace':
     'informational airspace layer; no room in the prompt budget',
+  // Same budget: a historical wreck archive waits for room too.
+  shipwrecks: 'historical shipwreck archive; no room in the prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({
