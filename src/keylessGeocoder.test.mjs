@@ -35,6 +35,12 @@ import {
 import { geocodeNavigationMode } from './locations.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const MOSCOW_RESPONSES = JSON.parse(
+  fs.readFileSync(
+    path.join(ROOT, 'src/data/fixtures/photon-moscow-search.json'),
+    'utf8',
+  ),
+);
 
 /** Photon's real answer for "Hanoi", trimmed to the fields we consume. */
 const HANOI = {
@@ -223,7 +229,6 @@ const HUE = {
     extent: [107.3763, 16.7739, 108.0518, 16.1276],
   },
 };
-
 /** Answers biased requests with `nearby`, unbiased ones with `anywhere`. */
 function photonPair(nearby, anywhere) {
   const urls = [];
@@ -247,6 +252,36 @@ test('a biased near-miss is refused, and the unbiased answer is taken instead', 
   assert.equal(result.label.startsWith('Huế'), true, `got ${result.label}`);
   assert.equal(Math.round(result.lat), 16);
   assert.equal(fetchImpl.urls.length, 2, 'the refused bias costs exactly one extra request');
+});
+
+test('a non-Latin exact match keeps the nearby namesake', async () => {
+  const fetchImpl = photonPair(
+    MOSCOW_RESPONSES.biased.features,
+    MOSCOW_RESPONSES.unbiased.features,
+  );
+
+  const result = await geocodeKeyless('Москва', {
+    bias: '38.90,71.80|39.00,71.90',
+    fetchImpl,
+  });
+
+  assert.equal(result.label, 'Москва, Тоҷикистон');
+  assert.equal(fetchImpl.urls.length, 1);
+});
+
+test('toponym folding preserves non-Latin scripts', () => {
+  const cases = [
+    ['Huế', 'hue'],
+    ['Москва', 'москва'],
+    ['Αθήνα', 'αθήνα'],
+    ['القاهرة', 'القاهرة'],
+    ['東京', '東京'],
+    ['São 東京', 'sao 東京'],
+  ];
+
+  for (const [input, expected] of cases) {
+    assert.equal(normalizeToponym(input), expected, input);
+  }
 });
 
 test('a biased match that leads with the name is taken without a second request', async () => {

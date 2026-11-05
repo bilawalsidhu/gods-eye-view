@@ -552,6 +552,7 @@
       "src/search/placeSearch.js",
       "src/search/google.js",
       "src/keylessGeocoder.js",
+      "src/data/placeNames.js",
       "src/search/geospatial.js",
       "src/search/http.js",
       "src/search/defaults.js",
