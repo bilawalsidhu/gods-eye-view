@@ -1,5 +1,5 @@
 /**
- * Bundled OpenStreetMap infrastructure layers (datacenters and dams): their
+ * Bundled infrastructure layers (OpenStreetMap and IGN Argentina): their
  * data files, line-delimited GeoJSON parsing and analyst records.
  */
 
@@ -17,6 +17,57 @@ export const INFRASTRUCTURE_DATA_URLS = Object.freeze({
       .href;
   },
 });
+
+/** Independently attributed supplements, consumed by the same existing layer. */
+export const INFRASTRUCTURE_SUPPLEMENT_URLS = Object.freeze({
+  get 'local-dams'() {
+    return [
+      new URL(
+        '../data/local_data/argentina_dams/dams.geojsonl',
+        import.meta.url,
+      ).href,
+    ];
+  },
+});
+
+/** Every data file of a local infrastructure layer, main file first. */
+export function infrastructureDataUrls(layerId) {
+  const main = INFRASTRUCTURE_DATA_URLS[layerId];
+  if (!main) return [];
+  return [main, ...(INFRASTRUCTURE_SUPPLEMENT_URLS[layerId] ?? [])];
+}
+
+/** Keep the main dataset available when an optional supplement fails. */
+export async function loadInfrastructureFeatures(
+  urls,
+  { fetchImpl = (...args) => globalThis.fetch(...args), signal } = {},
+) {
+  signal?.throwIfAborted();
+  const batches = await Promise.allSettled(
+    [...new Set(urls)].map(async (url) => {
+      const response = await fetchImpl(url, { signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status ?? '?'}`);
+      const text = await response.text();
+      signal?.throwIfAborted();
+      return parseGeojsonLines(text);
+    }),
+  );
+  signal?.throwIfAborted();
+  let error = null;
+  for (const [index, batch] of batches.entries()) {
+    if (batch.status === 'rejected') {
+      if (index === 0 || batch.reason?.name === 'AbortError')
+        throw batch.reason;
+      error ??= batch.reason;
+    }
+  }
+  return {
+    features: batches.flatMap((batch) =>
+      batch.status === 'fulfilled' ? batch.value : [],
+    ),
+    error,
+  };
+}
 
 /** Parse GeoJSON Lines: one Feature per non-empty line. */
 export function parseGeojsonLines(text) {
@@ -45,7 +96,8 @@ export function layerTitle(layerId) {
  * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams`).
  * @returns {{id: string, name: string|null, lat: number|null, lon: number|null,
  *   operator: string|null, capacity: string|null, river: string|null,
- *   output: string|null}}
+ *   output: string|null, source?: string|null, sourceFeatureId?: string|null,
+ *   attribution?: string|null, retrievedAt?: string|null, sourceUpdatedAt?: string|null}}
  */
 export function mapAnalystRecord(raw, layerId = '') {
   const num = (v) => (Number.isFinite(v) ? v : null);
@@ -93,6 +145,13 @@ export function mapAnalystRecord(raw, layerId = '') {
     layerId === 'local-dams'
       ? text(props.output) || text(tags['plant:output:electricity'])
       : null;
+  const osmId =
+    text(props.osm_id) ||
+    (/^-?\d+$/.test(String(raw?.id)) ? text(raw.id) : null);
+  // #1009 keeps the NVE register separate from OSM. Its stable feature id
+  // also distinguishes dams sharing a register number; never use the name
+  // or the bare number as a cross-source deduplication key.
+  const nve = props.source === 'nve';
   return {
     id: name || text(raw?.id) || layerTitle(layerId),
     name,
@@ -102,6 +161,24 @@ export function mapAnalystRecord(raw, layerId = '') {
     capacity,
     river,
     output,
+    ...(layerId === 'local-dams'
+      ? {
+          source:
+            text(props.data_source) ||
+            (nve ? 'NVE' : null) ||
+            (osmId ? 'OpenStreetMap / OpenInfraMap' : null),
+          sourceFeatureId:
+            text(props.source_feature_id) || (nve ? text(raw?.id) : osmId),
+          retrievedAt: text(props.retrieved_at),
+          sourceUpdatedAt: text(props.source_updated_at),
+          attribution:
+            text(props.attribution) ||
+            (nve ? 'Norway: NVE (NLOD)' : null) ||
+            (osmId
+              ? '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map'
+              : null),
+        }
+      : {}),
   };
 }
 
@@ -135,30 +212,31 @@ export function createInfrastructureSource({
   const cache = new Map();
   return {
     async getRecords(layerId, { signal } = {}) {
-      const url = INFRASTRUCTURE_DATA_URLS[layerId];
-      if (!url) throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
+      const urls = infrastructureDataUrls(layerId);
+      if (!urls.length)
+        throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
       if (!cache.has(layerId)) {
-        signal?.throwIfAborted();
-        const response = await fetchImpl(url, { signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const records = parseGeojsonLines(await response.text()).flatMap(
-          (feature) => {
-            const point = featurePoint(feature);
-            return point
-              ? [
-                  mapAnalystRecord(
-                    {
-                      id: feature.properties?.osm_id ?? feature.id,
-                      ...point,
-                      properties: feature.properties,
-                    },
-                    layerId,
-                  ),
-                ]
-              : [];
-          },
-        );
-        cache.set(layerId, records);
+        const { features, error } = await loadInfrastructureFeatures(urls, {
+          fetchImpl,
+          signal,
+        });
+        const records = features.flatMap((feature) => {
+          const point = featurePoint(feature);
+          return point
+            ? [
+                mapAnalystRecord(
+                  {
+                    id: feature.properties?.osm_id ?? feature.id,
+                    ...point,
+                    properties: feature.properties,
+                  },
+                  layerId,
+                ),
+              ]
+            : [];
+        });
+        if (!error) cache.set(layerId, records);
+        return records;
       }
       return cache.get(layerId);
     },

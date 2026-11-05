@@ -2,7 +2,7 @@ import * as Cesium from 'cesium';
 import {
   layerTitle,
   mapAnalystRecord,
-  parseGeojsonLines,
+  loadInfrastructureFeatures,
 } from '../sources/infrastructureData.js';
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
 import { isPointerFree } from './inputOwnership.js';
@@ -586,19 +586,16 @@ export function createLocalGeoJsonLayer(
             try {
               let features = _cachedFeatures;
               if (!features) {
-                const response = await fetch(url, {
-                  signal: _loadController.signal,
-                });
+                const result = await loadInfrastructureFeatures(
+                  Array.isArray(url) ? url : [url],
+                  {
+                    signal: _loadController.signal,
+                  },
+                );
                 if (_destroyed) return;
-                // A 404 returns an HTML body that would otherwise die in JSON.parse
-                // one line later, reported as a parse error for a missing file.
-                if (!response.ok) {
-                  throw new Error(`HTTP ${response.status ?? '?'}`);
-                }
-                const text = await response.text();
-                if (_destroyed) return;
-                features = parseGeojsonLines(text);
-                _cachedFeatures = features;
+                features = result.features;
+                if (result.error) _error = localDatasetError(result.error);
+                else _cachedFeatures = features;
               }
 
               const geojson = {
@@ -693,7 +690,9 @@ export function createLocalGeoJsonLayer(
                   id: `${id}:${recordId}`,
                   layerId: id,
                   layerName: name,
-                  source,
+                  source:
+                    mapAnalystRecord({ id: recordId, properties }, id).source ||
+                    source,
                   dataSource: loaded,
                   label: featureLabelFromProperties(properties, id),
                   properties,

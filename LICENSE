@@ -36,6 +36,10 @@ remain subject to their own licenses and terms. Notably:
     remove these files or obtain a commercial license from TeleGeography.
   - Datacenters and Dams (OpenStreetMap / Open Infrastructure Map extracts):
     Open Database License (ODbL) 1.0 — attribution + share-alike on the data.
+  - Argentina dams supplement (src/data/local_data/argentina_dams/):
+    IGN reuse terms — attribution, retained source dates/reuse metadata,
+    free redistribution; commercial use only as input to derived products.
+    https://www.ign.gob.ar/descargas/tyc1.html. Not MIT or ODbL.
   - NASA FIRMS active-fire snapshot: CC0 / U.S. public domain (citation
     requested).
   - Bhote Koshi event imagery and derived river centerline

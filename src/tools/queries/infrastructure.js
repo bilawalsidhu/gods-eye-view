@@ -1,4 +1,4 @@
-/** Bundled OpenStreetMap infrastructure: datacenters and dams. */
+/** Bundled infrastructure: OpenStreetMap and IGN Argentina. */
 
 import { suggestView } from '../views.js';
 import { defineTool } from '../catalog.js';
@@ -17,7 +17,6 @@ const KINDS = {
 };
 const ATTRIBUTION = {
   datacenters: '© OpenStreetMap contributors (ODbL 1.0)',
-  dams: '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map',
 };
 
 const round = (value, digits) =>
@@ -28,7 +27,7 @@ export const findInfrastructure = defineTool({
   title: 'Datacenters and dams',
   description:
     'Datacenters (with operator and capacity) or dams (with river and power ' +
-    'output) mapped in OpenStreetMap within an area, nearest the center first.',
+    'output) from OpenStreetMap and IGN Argentina within an area, nearest the center first.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -47,25 +46,44 @@ export const findInfrastructure = defineTool({
     const records = await services.infrastructure.getRecords(layerId, {
       signal,
     });
-    const rows = records
-      .filter((record) => areaContains(area, record))
+    const matching = records.filter((record) => areaContains(area, record));
+    const rows = matching
       .map((record) => ({
         name: record.name,
         operator: record.operator,
         ...(args.kind === 'datacenters'
           ? { capacity: record.capacity }
-          : { river: record.river, output: record.output }),
+          : {
+              river: record.river,
+              output: record.output,
+              source: record.source ?? null,
+              source_id: record.sourceFeatureId ?? null,
+              retrieved_at: record.retrievedAt ?? null,
+              source_updated_at: record.sourceUpdatedAt ?? null,
+            }),
         lat: round(record.lat, 5),
         lon: round(record.lon, 5),
         distance_km: round(distanceKm(center, record), 1),
+        attribution: record.attribution,
       }))
       .sort((a, b) => a.distance_km - b.distance_km);
+    const capped = capRows(rows, args.limit);
     return {
       summary: `${countNoun(rows.length, `mapped ${noun}`)} in ${area.label}.`,
       data: {
         view: suggestView(services, { area, layers: [layerId] }),
-        ...capRows(rows, args.limit),
-        attribution: ATTRIBUTION[args.kind],
+        ...capped,
+        rows: capped.rows.map(({ attribution, ...row }) => row),
+        attribution:
+          args.kind === 'dams'
+            ? [
+                ...new Set(
+                  capped.rows
+                    .map((record) => record.attribution)
+                    .filter(Boolean),
+                ),
+              ].join('; ') || null
+            : ATTRIBUTION[args.kind],
       },
     };
   },

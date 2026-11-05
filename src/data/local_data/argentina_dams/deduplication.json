@@ -1,0 +1,55 @@
+{
+  "inputCount": 125,
+  "outputCount": 121,
+  "existingCount": 704,
+  "omitted": [
+    {
+      "id": "ign-ar-dique-2092",
+      "name": "Dique El Tigre",
+      "retainedId": 110183925,
+      "retainedName": "Dique El Tigre",
+      "reason": "inside-existing-dam-polygon"
+    },
+    {
+      "id": "ign-ar-dique-2503",
+      "name": "Los Quiroga",
+      "retainedId": 220340687,
+      "retainedName": "Central Hidroeléctrica Los Quiroga",
+      "reason": "inside-existing-dam-polygon"
+    }
+  ],
+  "excluded": [
+    {
+      "id": "ign-ar-dique-2512",
+      "name": "Bañado de la Estrella",
+      "sourceFeatureId": "puntos_de_aguas_continentales_BH051.2512",
+      "sourceType": "Bañado",
+      "reason": "wetland"
+    },
+    {
+      "id": "ign-ar-dique-2575",
+      "name": "Terraplén de Defensa del Río Salado",
+      "sourceFeatureId": "puntos_de_aguas_continentales_BH051.2575",
+      "sourceType": "Terraplén de Defensa",
+      "reason": "flood-defense-embankment"
+    }
+  ],
+  "nearbyUnnamed": [
+    {
+      "ids": [
+        "ign-ar-dique-2578",
+        "ign-ar-dique-2579"
+      ],
+      "distanceM": 77.9,
+      "status": "retained-distinctness-unverified"
+    },
+    {
+      "ids": [
+        "ign-ar-dique-2956",
+        "ign-ar-dique-2957"
+      ],
+      "distanceM": 36.1,
+      "status": "retained-distinctness-unverified"
+    }
+  ]
+}

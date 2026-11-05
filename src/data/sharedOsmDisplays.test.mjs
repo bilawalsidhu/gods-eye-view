@@ -38,7 +38,7 @@ function assertCredit(v) {
 }
 for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce the shared OSM credit when data displays`, async (t) => {
   const v = viewer(t);
-  t.mock.method(globalThis, 'fetch', async () => ({ ok: true, text: async () => JSON.stringify({ type: 'Feature', id: 'test', properties: { name: 'Site' }, geometry: { type: 'Polygon', coordinates: [[[0, 0], [0.01, 0], [0, 0.01], [0, 0]]] } }) }));
+  t.mock.method(globalThis, 'fetch', async (url) => ({ ok: true, text: async () => String(url).includes('/argentina_dams/') ? '' : JSON.stringify({ type: 'Feature', id: 'test', properties: { name: 'Site' }, geometry: { type: 'Polygon', coordinates: [[[0, 0], [0.01, 0], [0, 0.01], [0, 0]]] } }) }));
   const layer = createInfrastructureLayers({ overlayHost, registerEntityContext: noop, selectEntityContext: noop, clearSelectedEntityContextForLayer: noop, removeEntityContextsForLayer: noop, governorRequestRender: noop, showOsmCredit, hideOsmCredit })[index];
   await layer.enable(v);
   assert.equal(layer.getStats().count, 1);

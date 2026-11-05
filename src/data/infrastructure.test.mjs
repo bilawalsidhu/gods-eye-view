@@ -65,7 +65,11 @@ test('infrastructure factory preserves identity and creates independent state wi
     first.map(({ id, name, source }) => ({ id, name, source })),
     [
       { id: 'local-datacenters', name: 'Datacenters', source: 'Local' },
-      { id: 'local-dams', name: 'Dams', source: 'USACE' },
+      {
+        id: 'local-dams',
+        name: 'Dams',
+        source: 'OpenStreetMap / OpenInfraMap · IGN Argentina',
+      },
     ],
   );
   first.forEach((layer, index) => {
