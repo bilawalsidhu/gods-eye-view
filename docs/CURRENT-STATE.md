@@ -98,6 +98,36 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Shipwrecks — EMODnet and Wikidata
+
+The Events group includes **Shipwrecks** (`shipwrecks`, share-link token `9`),
+off by default. `/api/shipwrecks` downloads EMODnet Human Activities'
+`emodnet:heritageshipwrecks` WFS layer (about 7,000 wrecks in European waters
+compiled from SHOM, Ireland's National Monuments Service, Historic England and
+the Oxford Roman Economy Project; CC BY 4.0) and a Wikidata SPARQL query for
+shipwreck items with a coordinate and at least one Wikipedia article (about
+1,450 worldwide; CC0), at most once a day, and serves the last good snapshot as
+stale for up to seven days when a refresh fails. One source failing still serves
+the other. EMODnet rows the portal took from wrecksite.eu are skipped (that site
+is not openly licensed). A Wikidata wreck with the same name within 3 km of an
+EMODnet wreck is merged into one record that keeps the article link and takes
+EMODnet's year, sinking text, depth and position accuracy. Only ship columns are
+read: EMODnet's long histories (`ship_char`, `obj_desc`) are not, and any
+sinking or cargo text that names a person (owner, master, a diver who reported
+it) is dropped whole; deaths appear only as a Wikidata count.
+
+The globe draws a small hull marker per wreck, ground-clamped with the depth
+test off and the horizon cull GhostMaps uses, coloured by era: before 1900
+(ancient wrecks dated only by period count here), 1900–1945, after 1945, and
+date unknown. Four row chips show or hide each era (session-only, not in the
+share link). Clicking a marker opens a `stateless` card with the name, vessel
+type, sinking date or year (or the archaeological dating), what happened, deaths,
+least depth and its quality, how well the position is known, period notes or
+the Wikidata description, cargo or finds, protected status, waters and source.
+Clicking the card opens the Wikipedia article (else the Wikidata item), the
+wreck's own web page when EMODnet lists one, else EMODnet's portal. Voice does
+not toggle this layer yet (prompt budget, as for the airspace layer).
+
 ## Prohibited & Restricted Airspace — FAA special-use airspace
 
 The Infrastructure group includes **Prohibited & Restricted Airspace** (`drone-airspace`,
@@ -4212,6 +4242,7 @@ its criteria cannot be silently ignored.
 | Ski Pistes ⛷ (`ski-pistes`) | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 | Prohibited & Restricted Airspace 🚫 | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry) | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js` | `/api/drone-airspace` | 1 h (server cache 1 h; stale-on-error) |
+| Shipwrecks ⚓ (`shipwrecks`) | EMODnet Human Activities heritage shipwrecks (European waters, keyless WFS, CC BY 4.0) and Wikidata (notable wrecks worldwide, keyless, CC0) | `src/layers/shipwrecks/` via `src/app/layers/shipwrecks.js` | `/api/shipwrecks` | 6 h page check; server refresh once a day (stale-on-error up to 7 days) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;

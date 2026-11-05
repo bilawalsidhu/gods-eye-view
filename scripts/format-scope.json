@@ -1267,5 +1267,9 @@
   "src/voice/geminiTextChat.js",
   "src/voice/panelLayout.js",
   "src/voice/textChat.js",
-  "src/voice/textProtocol.js"
+  "src/voice/textProtocol.js",
+  "src/layers/shipwrecks/records.test.mjs",
+  "src/layers/shipwrecks/cards.test.mjs",
+  "src/layers/shipwrecks/eras.test.mjs",
+  "src/data/shipwrecksProxy.test.mjs"
 ]
