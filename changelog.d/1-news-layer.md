@@ -1,11 +1,21 @@
 - Add the News layer (Events ▸ News) and its right-rail NEWS panel: the last
-  24 hours from curated hotspots (or the fewer hours a server names), narrowed
-  in the panel to the last 12, 6, 3 or 1 hours with the hotspot counts read for
-  that window, coloured by severity only, with hotspot
-  beacons, outlines with disputed areas, picture cards for major events and a
-  continuous feed whose cards fly the globe to the event. A feed card shows its
-  event's picture even when one source reports it, and an open card plays the
-  post's clip on request. The panel's Local
-  section lists every report within 500 km of the view below 3,000 km, and the
-  map shows those instead of the hotspots' news while it is chosen. Core serves no news itself: set `GEV_NEWS_ORIGIN` to a news
-  server and the local server forwards the layer's three read routes there.
+  24 hours of news, narrowed in the panel to the last 12, 6, 3 or 1 hours with
+  the hotspot counts read for that window. Markers are coloured by severity
+  only, with hotspot beacons, outlines with disputed areas, picture cards for
+  major events and a continuous feed whose cards fly the globe to the event.
+  An open card plays the post's clip on request. The panel has two sections.
+  Conflicts lists the hotspots' news. Local, below 3,000 km, lists every
+  report in the area at the view centre, names and outlines that area on the
+  globe, and shows those reports on the map instead while it is chosen; a
+  disputed area is named as itself and read from no country's outlets. Set
+  `GEV_NEWS_ORIGIN` to a news server and the local server forwards the
+  layer's three read routes there. Unset, Core answers them itself:
+  Conflicts from the last 24 hours of GDELT 2.0 event exports with no key
+  (physical violence only, one report per story at GDELT's place for it,
+  titled from GDELT's GKG files for the newest 3 hours), plus Liveuamap's
+  mapped items with `LIVEUAMAP_API_KEY`; Local from World News API with
+  `WORLDNEWSAPI_KEY`, at most `WORLDNEWSAPI_DAILY_READS` reads a day
+  (default 30). A section says when its key is required, refused or out of
+  its daily allowance. The Data attribution popover credits the GDELT
+  Project, World News API and, once its items show, Liveuamap
+  (AUTHOR, #1).

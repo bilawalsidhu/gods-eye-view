@@ -4,4 +4,4 @@
   a failed refresh as `CACHED · REFRESH FAILED`, `NO NEWS IN THE LAST 24 H`,
   and `REGIONAL NEWS UNAVAILABLE`. The banner is now really hidden over a
   populated list, and the footer no longer reverts to a static `RECENT` on a
-  page change.
+  page change (AUTHOR, #0).
