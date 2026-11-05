@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
 import { assertGlobeEngine, engineCapabilities } from '../contract.js';
-import { cesiumFovy, orientationVectors } from './cameraMath.js';
+import { cesiumFovy, orientationVectors } from '../cameraMath.js';
 import { createNavaraEngine } from './createNavaraEngine.js';
 
 const { cartesian2, cartesian3, math } = geo;
@@ -138,7 +138,6 @@ test('the engine clock is the app clock, latched on the view preUpdate before fr
   const engine = createNavaraEngine(view, { hooks, appClock });
   assert.equal(engine.clock.now(), 2_000_000);
   const seen = [];
-  engine.clock.ticked.addEventListener((time) => seen.push(['ticked', time]));
   for (const name of ['preUpdate', 'preRender', 'postRender'])
     engine.frames[name].addEventListener(() =>
       seen.push([name, engine.clock.frameTime()]),
@@ -149,7 +148,6 @@ test('the engine clock is the app clock, latched on the view preUpdate before fr
   view.emit('preRender', 2);
   view.emit('postRender', 3);
   assert.deepEqual(seen, [
-    ['ticked', 2_000_016],
     ['preUpdate', 2_000_016],
     ['preRender', 2_000_016],
     ['postRender', 2_000_016],
@@ -158,7 +156,7 @@ test('the engine clock is the app clock, latched on the view preUpdate before fr
   engine.destroy();
   wall += 16;
   view.emit('preUpdate', 4);
-  assert.equal(seen.length, 4, 'no tick after destroy');
+  assert.equal(seen.length, 3, 'no frame after destroy');
 });
 
 test('render requests are forceUpdate and continuous mode is Navara animation', () => {

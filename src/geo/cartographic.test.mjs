@@ -4,12 +4,6 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as cartographic from './cartographic.js';
 
-const close = (a, b, tol, label) =>
-  assert.ok(
-    Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)),
-    `${label}: ${a} vs ${b}`,
-  );
-
 test('fromDegrees and fromRadians equal Cesium', () => {
   for (const [lon, lat, h] of [
     [0, 0, 0],
@@ -27,29 +21,6 @@ test('fromDegrees and fromRadians equal Cesium', () => {
         height: theirs.height,
       },
     );
-  }
-});
-
-test('fromCartesian and toCartesian equal Cesium, including the centre case', () => {
-  for (const [x, y, z] of [
-    [1334762.2, -4654869.1, 4137287.9],
-    [6378137, 0, 0],
-    [0.01, 0, 0],
-  ]) {
-    const ours = cartographic.fromCartesian({ x, y, z });
-    const theirs = Cesium.Cartographic.fromCartesian(
-      new Cesium.Cartesian3(x, y, z),
-    );
-    if (theirs === undefined) {
-      assert.equal(ours, undefined);
-      continue;
-    }
-    close(ours.longitude, theirs.longitude, 1e-12, 'lon');
-    close(ours.latitude, theirs.latitude, 1e-12, 'lat');
-    close(ours.height, theirs.height, 1e-9, 'h');
-    const back = cartographic.toCartesian(ours);
-    const cBack = Cesium.Cartographic.toCartesian(theirs);
-    for (const k of ['x', 'y', 'z']) close(back[k], cBack[k], 1e-12, k);
   }
 });
 

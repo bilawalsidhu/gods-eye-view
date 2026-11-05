@@ -1,4 +1,4 @@
-// The Cyber HUD sonar on Navara (Stage 6 C2): with the Cyber HUD on, the
+// The Cyber HUD sonar on Navara: with the Cyber HUD on, the
 // sweep lights the contacts it passes and dims the rest to the opacity
 // floor, by each contact's place on screen exactly as the CPU sampler of
 // src/cyberSonar.js rates it; the sweep turns; with the sweep off every
@@ -98,193 +98,189 @@ const framesIn = (page, ms) =>
 const mean = (values) =>
   values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 
-await strict.run(
-  { args: ['--use-angle=metal', '--enable-gpu'] },
-  async (browser) => {
-    const page = await browser.newPage();
-    const errors = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-    await page.evaluateOnNewDocument(() => {
-      localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+await strict.run({}, async (browser) => {
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.evaluateOnNewDocument(() => {
+    localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+  });
+  await page.setViewport({ width: WIDTH, height: HEIGHT });
+  await page.goto(visualPageUrl(base.origin, 'navara'), {
+    waitUntil: 'domcontentloaded',
+  });
+  await waitForEngine(page, 'navara');
+  await freeze(page);
+
+  const places = contactPlaces();
+  const placed = await page.evaluate((places) => {
+    const { engine } = window.__godsEyeView;
+    const set = engine.movers.createSet({
+      id: 'qa-sonar-contacts',
+      kind: 'point',
+      capacity: places.length,
+      depthTest: 'always',
+      point: { sizePx: 14, outlinePx: 0 },
     });
-    await page.setViewport({ width: WIDTH, height: HEIGHT });
-    await page.goto(visualPageUrl(base.origin, 'navara'), {
-      waitUntil: 'domcontentloaded',
+    window.__qaSonarSet = set;
+    let missing = 0;
+    places.forEach((place, index) => {
+      const position = engine.camera.pickEllipsoid(place);
+      if (!position) missing++;
+      set.set(index, { position, color: [1, 1, 1, 1] });
     });
-    await waitForEngine(page, 'navara');
-    await freeze(page);
+    set.setCount(places.length);
+    set.commit();
+    return { missing, sonar: engine.render.contactSonar?.() ?? null };
+  }, places);
+  check(
+    'Navara treats contacts itself; the sonar starts off',
+    placed.missing === 0 && placed.sonar?.enabled === false,
+    placed,
+  );
+  const baseline = await read(page, places);
 
-    const places = contactPlaces();
-    const placed = await page.evaluate((places) => {
-      const { engine } = window.__godsEyeView;
-      const set = engine.movers.createSet({
-        id: 'qa-sonar-contacts',
-        kind: 'point',
-        capacity: places.length,
-        depthTest: 'always',
-        point: { sizePx: 14, outlinePx: 0 },
-      });
-      window.__qaSonarSet = set;
-      let missing = 0;
-      places.forEach((place, index) => {
-        const position = engine.camera.pickEllipsoid(place);
-        if (!position) missing++;
-        set.set(index, { position, color: [1, 1, 1, 1] });
-      });
-      set.setCount(places.length);
-      set.commit();
-      return { missing, sonar: engine.render.contactSonar?.() ?? null };
-    }, places);
-    check(
-      'Navara treats contacts itself; the sonar starts off',
-      placed.missing === 0 && placed.sonar?.enabled === false,
-      placed,
+  await page.evaluate(() => {
+    const { styleManager } = window.__godsEyeView;
+    styleManager._setHudVariant('cyber');
+    // Normal keeps the contacts' own colours; the HUD stays on (in Normal
+    // it would hide itself, and the sweep with it).
+    styleManager.setStyle('normal');
+    styleManager.hud.setMode('on');
+    styleManager._setCyberSonarEnabled(true);
+    styleManager._setCyberSonarSetting('opacity', 35);
+  });
+  await page.waitForFunction(
+    () => window.__godsEyeView.styleManager.transitions.size === 0,
+  );
+  const theme = await page.evaluate(() => ({
+    theme: document.documentElement.dataset.uiTheme,
+    gpu: document.documentElement.dataset.cyberSonarGpu,
+    hud: document.getElementById('intel-hud')?.classList.contains('active'),
+  }));
+  check(
+    'the Cyber HUD runs with the contact adapter',
+    theme.theme === 'cyber' && theme.gpu === 'supported' && theme.hud,
+    theme,
+  );
+
+  const sweeps = [];
+  for (const wait of [0, 1300, 1300]) {
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    const { luma, sonar } = await read(page, places);
+    const expected = places.map(({ x, y }) =>
+      sonarFactorAt(x, y, WIDTH, HEIGHT, sonar),
     );
-    const baseline = await read(page, places);
-
-    await page.evaluate(() => {
-      const { styleManager } = window.__godsEyeView;
-      styleManager._setHudVariant('cyber');
-      // Normal keeps the contacts' own colours; the HUD stays on (in Normal
-      // it would hide itself, and the sweep with it).
-      styleManager.setStyle('normal');
-      styleManager.hud.setMode('on');
-      styleManager._setCyberSonarEnabled(true);
-      styleManager._setCyberSonarSetting('opacity', 35);
+    const lit = luma.filter((_, i) => expected[i] > 0.9);
+    const dim = luma.filter((_, i) => expected[i] <= sonar.opacity / 100);
+    sweeps.push({
+      spread: Math.max(...luma.slice(0, 32)) - Math.min(...luma.slice(0, 32)),
+      angle: sonar.angleDeg,
+      lit: lit.length,
+      litLuma: mean(lit),
+      dimLuma: mean(dim),
+      brightest: luma.indexOf(Math.max(...luma)),
+      expectedBrightest: expected.indexOf(Math.max(...expected)),
+      sonar,
     });
-    await page.waitForFunction(
-      () => window.__godsEyeView.styleManager.transitions.size === 0,
-    );
-    const theme = await page.evaluate(() => ({
-      theme: document.documentElement.dataset.uiTheme,
-      gpu: document.documentElement.dataset.cyberSonarGpu,
-      hud: document.getElementById('intel-hud')?.classList.contains('active'),
-    }));
     check(
-      'the Cyber HUD runs with the contact adapter',
-      theme.theme === 'cyber' && theme.gpu === 'supported' && theme.hud,
-      theme,
+      `the sweep at ${Math.round(sonar.angleDeg)}° lights the contacts it passes, the rest sit at the floor`,
+      sonar.enabled &&
+        sonar.active &&
+        sonar.opacity === 35 &&
+        lit.length >= 1 &&
+        dim.length >= 8 &&
+        mean(lit) > mean(dim) + 20 &&
+        expected[places.length - 1] === 0.35,
+      sweeps.at(-1),
     );
+  }
+  check(
+    'the sweep turns: another contact is lit',
+    new Set(sweeps.map((s) => s.expectedBrightest)).size > 1 &&
+      new Set(sweeps.map((s) => s.brightest)).size > 1,
+    sweeps.map(({ angle, brightest, expectedBrightest }) => ({
+      angle,
+      brightest,
+      expectedBrightest,
+    })),
+  );
+  const cadence = await framesIn(page, 1500);
+  check(
+    'a parked scene draws at the fleet cadence while the sweep runs over contacts',
+    cadence >= 8,
+    { frames: cadence },
+  );
 
-    const sweeps = [];
-    for (const wait of [0, 1300, 1300]) {
-      await new Promise((resolve) => setTimeout(resolve, wait));
-      const { luma, sonar } = await read(page, places);
-      const expected = places.map(({ x, y }) =>
-        sonarFactorAt(x, y, WIDTH, HEIGHT, sonar),
-      );
-      const lit = luma.filter((_, i) => expected[i] > 0.9);
-      const dim = luma.filter((_, i) => expected[i] <= sonar.opacity / 100);
-      sweeps.push({
-        spread: Math.max(...luma.slice(0, 32)) - Math.min(...luma.slice(0, 32)),
-        angle: sonar.angleDeg,
-        lit: lit.length,
-        litLuma: mean(lit),
-        dimLuma: mean(dim),
-        brightest: luma.indexOf(Math.max(...luma)),
-        expectedBrightest: expected.indexOf(Math.max(...expected)),
-        sonar,
-      });
-      check(
-        `the sweep at ${Math.round(sonar.angleDeg)}° lights the contacts it passes, the rest sit at the floor`,
-        sonar.enabled &&
-          sonar.active &&
-          sonar.opacity === 35 &&
-          lit.length >= 1 &&
-          dim.length >= 8 &&
-          mean(lit) > mean(dim) + 20 &&
-          expected[places.length - 1] === 0.35,
-        sweeps.at(-1),
-      );
-    }
-    check(
-      'the sweep turns: another contact is lit',
-      new Set(sweeps.map((s) => s.expectedBrightest)).size > 1 &&
-        new Set(sweeps.map((s) => s.brightest)).size > 1,
-      sweeps.map(({ angle, brightest, expectedBrightest }) => ({
-        angle,
-        brightest,
-        expectedBrightest,
-      })),
-    );
-    const cadence = await framesIn(page, 1500);
-    check(
-      'a parked scene draws at the fleet cadence while the sweep runs over contacts',
-      cadence >= 8,
-      { frames: cadence },
-    );
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager._setCyberSonarEnabled(false),
+  );
+  const neutral = await read(page, places);
+  const spread =
+    Math.max(...neutral.luma.slice(0, 32)) -
+    Math.min(...neutral.luma.slice(0, 32));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const idle = await framesIn(page, 1500);
+  check(
+    'with the sweep off every contact takes the neutral factor and the scene rests',
+    neutral.sonar.enabled &&
+      !neutral.sonar.active &&
+      // What still differs is the map under the translucent contacts.
+      spread < Math.min(...sweeps.map((sweep) => sweep.spread)) * 0.6 &&
+      idle <= 3,
+    { spread, sweeping: sweeps.map((sweep) => sweep.spread), frames: idle },
+  );
 
-    await page.evaluate(() =>
-      window.__godsEyeView.styleManager._setCyberSonarEnabled(false),
-    );
-    const neutral = await read(page, places);
-    const spread =
-      Math.max(...neutral.luma.slice(0, 32)) -
-      Math.min(...neutral.luma.slice(0, 32));
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const idle = await framesIn(page, 1500);
-    check(
-      'with the sweep off every contact takes the neutral factor and the scene rests',
-      neutral.sonar.enabled &&
-        !neutral.sonar.active &&
-        // What still differs is the map under the translucent contacts.
-        spread < Math.min(...sweeps.map((sweep) => sweep.spread)) * 0.6 &&
-        idle <= 3,
-      { spread, sweeping: sweeps.map((sweep) => sweep.spread), frames: idle },
-    );
+  await page.evaluate(() => {
+    const { styleManager } = window.__godsEyeView;
+    styleManager._setCyberSonarEnabled(true);
+    styleManager._setHudVariant('tactical');
+    styleManager.setStyle('normal');
+    styleManager.hud.setMode('auto');
+  });
+  await page.waitForFunction(
+    () => window.__godsEyeView.styleManager.transitions.size === 0,
+  );
+  const after = await read(page, places);
+  const drift = Math.max(
+    ...after.luma.map((value, i) => Math.abs(value - baseline.luma[i])),
+  );
+  check(
+    'leaving the Cyber HUD gives the contacts back unchanged',
+    after.sonar.enabled === false && drift < 3,
+    { drift },
+  );
+  await page.evaluate(() => window.__qaSonarSet.destroy());
 
-    await page.evaluate(() => {
-      const { styleManager } = window.__godsEyeView;
-      styleManager._setCyberSonarEnabled(true);
-      styleManager._setHudVariant('tactical');
-      styleManager.setStyle('normal');
-      styleManager.hud.setMode('auto');
-    });
-    await page.waitForFunction(
-      () => window.__godsEyeView.styleManager.transitions.size === 0,
-    );
-    const after = await read(page, places);
-    const drift = Math.max(
-      ...after.luma.map((value, i) => Math.abs(value - baseline.luma[i])),
-    );
-    check(
-      'leaving the Cyber HUD gives the contacts back unchanged',
-      after.sonar.enabled === false && drift < 3,
-      { drift },
-    );
-    await page.evaluate(() => window.__qaSonarSet.destroy());
+  // Cesium keeps its command adapter; its engine draws no sonar.
+  await strict.switchTo(page, 'cesium');
+  await page.evaluate(() => {
+    const { styleManager } = window.__godsEyeView;
+    styleManager._setHudVariant('cyber');
+  });
+  await page.waitForFunction(
+    () => document.documentElement.dataset.cyberSonarGpu,
+    { timeout: 10000 },
+  );
+  const cesium = await page.evaluate(() => ({
+    setContactSonar: typeof window.__godsEyeView.engine.render.setContactSonar,
+    gpu: document.documentElement.dataset.cyberSonarGpu,
+  }));
+  check(
+    'Cesium: the command adapter treats contacts, the engine none',
+    cesium.setContactSonar === 'undefined' && cesium.gpu === 'supported',
+    cesium,
+  );
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager._setHudVariant('tactical'),
+  );
 
-    // Cesium keeps its command adapter; its engine draws no sonar.
-    await strict.switchTo(page, 'cesium');
-    await page.evaluate(() => {
-      const { styleManager } = window.__godsEyeView;
-      styleManager._setHudVariant('cyber');
-    });
-    await page.waitForFunction(
-      () => document.documentElement.dataset.cyberSonarGpu,
-      { timeout: 10000 },
+  check('no page errors', errors.length === 0, errors);
+  if (outDir) {
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(outDir, 'sonar.json'),
+      JSON.stringify(report, null, 2),
     );
-    const cesium = await page.evaluate(() => ({
-      setContactSonar:
-        typeof window.__godsEyeView.engine.render.setContactSonar,
-      gpu: document.documentElement.dataset.cyberSonarGpu,
-    }));
-    check(
-      'Cesium: the command adapter treats contacts, the engine none',
-      cesium.setContactSonar === 'undefined' && cesium.gpu === 'supported',
-      cesium,
-    );
-    await page.evaluate(() =>
-      window.__godsEyeView.styleManager._setHudVariant('tactical'),
-    );
-
-    check('no page errors', errors.length === 0, errors);
-    if (outDir) {
-      fs.mkdirSync(outDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(outDir, 'sonar.json'),
-        JSON.stringify(report, null, 2),
-      );
-    }
-  },
-);
+  }
+});

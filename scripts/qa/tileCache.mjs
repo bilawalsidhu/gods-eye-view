@@ -1,14 +1,12 @@
-// Map tiles for headless QA: a disk cache shared by every run (in the system
-// temp directory) and one fetch per missing tile, with backoff on HTTP 429,
-// for the free tile hosts the QA pages load (OpenStreetMap imagery, the
-// keyless re:earth terrain). Back-to-back QA runs otherwise reload the same
-// tiles until those hosts rate-limit them. Only requests to these hosts are
-// paused (CDP Fetch with URL patterns); page-wide request interception also
-// held the Navara workers' requests and kept workers alive past their globe.
+// Map tiles for headless QA: the disk cache entry of a tile request and one
+// fetch per missing tile, with backoff on HTTP 429, for the free tile hosts
+// the QA pages load (OpenStreetMap imagery, the keyless re:earth terrain).
+// Back-to-back QA runs otherwise reload the same tiles until those hosts
+// rate-limit them. The strict harness (scripts/qa-strict-harness.mjs) pauses
+// only the requests to these hosts (CDP Fetch with URL patterns) and answers
+// them from the cache in the system temp directory.
 
 import { createHash } from 'node:crypto';
-import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 export const CACHED_TILE_HOSTS = Object.freeze([
@@ -118,83 +116,4 @@ export function createMissLoader({
       return promise;
     },
   };
-}
-
-/**
- * Serves the page's requests to CACHED_TILE_HOSTS (or `hosts`) from the
- * cache (filling it on a miss). Returns the counts.
- */
-export async function installTileCache(
-  page,
-  {
-    dir = path.join(os.tmpdir(), 'gev-qa-tiles'),
-    hosts = CACHED_TILE_HOSTS,
-  } = {},
-) {
-  fs.mkdirSync(dir, { recursive: true });
-  const stats = { hits: 0, fetched: 0, cancelled: 0, failed: 0, errors: {} };
-  const client = await page.createCDPSession();
-  const misses = createMissLoader();
-  client.on('Fetch.requestPaused', async ({ requestId, request }) => {
-    const accept = Object.entries(request.headers ?? {}).find(
-      ([name]) => name.toLowerCase() === 'accept',
-    )?.[1];
-    const file =
-      request.method === 'GET'
-        ? tileCacheFile(request.url, accept, dir, hosts)
-        : null;
-    try {
-      if (!file)
-        return await client.send('Fetch.continueRequest', { requestId });
-      let entry = null;
-      if (fs.existsSync(`${file}.json`)) {
-        entry = {
-          ...JSON.parse(fs.readFileSync(`${file}.json`, 'utf8')),
-          body: fs.readFileSync(file),
-        };
-        stats.hits++;
-      } else {
-        const tile = await misses.load(request.url, accept);
-        // Only successes are cached; a 404 (no tile there) is passed on.
-        if (tile.status === 200) {
-          fs.writeFileSync(file, tile.body);
-          fs.writeFileSync(
-            `${file}.json`,
-            JSON.stringify({ status: 200, contentType: tile.contentType }),
-          );
-          stats.fetched++;
-        } else if (tile.status === 429) stats.failed++;
-        entry = tile;
-      }
-      await client.send('Fetch.fulfillRequest', {
-        requestId,
-        responseCode: entry.status,
-        responseHeaders: [
-          ...(entry.contentType
-            ? [{ name: 'Content-Type', value: entry.contentType }]
-            : []),
-          { name: 'Access-Control-Allow-Origin', value: '*' },
-        ],
-        body: entry.body.toString('base64'),
-      });
-    } catch (error) {
-      // The page dropped the request meanwhile (a tile no longer in view).
-      if (/Invalid InterceptionId/.test(String(error?.message))) {
-        stats.cancelled++;
-        return;
-      }
-      stats.failed++;
-      const reason = String(error?.message ?? error).slice(0, 80);
-      stats.errors[reason] = (stats.errors[reason] ?? 0) + 1;
-      await client
-        .send('Fetch.failRequest', { requestId, errorReason: 'Failed' })
-        .catch(() => {});
-    }
-  });
-  await client.send('Fetch.enable', {
-    patterns: hosts.map((host) => ({
-      urlPattern: `https://${host}/*`,
-    })),
-  });
-  return stats;
 }

@@ -85,7 +85,7 @@ export class SceneDirector {
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
    * @param {Object} [options] `engine`: the globe engine whose camera the
    *   scene flights drive (defaults to the one registered for the viewer); the
-   *   viewer still serves tracking, interactions and data packs (phase 1c).
+   *   viewer still serves tracking, interactions and data packs.
    */
   constructor(
     viewer,

@@ -9,7 +9,7 @@ export const PITCH_CLAMP_MIN_HEIGHT_M = 300_000;
 // with the first Cesium globe, after this module (src/app/loadCesium.js).
 const RADIANS_PER_DEGREE = Math.PI / 180;
 /** Look this far below the Earth's limb, so the globe stays on screen. */
-export const LIMB_MARGIN_RAD = 8 * RADIANS_PER_DEGREE;
+const LIMB_MARGIN_RAD = 8 * RADIANS_PER_DEGREE;
 const PITCH_EASE = 0.35;
 const PITCH_SNAP_RAD = 0.1 * RADIANS_PER_DEGREE;
 const HEIGHT_EPSILON_M = 0.0001;

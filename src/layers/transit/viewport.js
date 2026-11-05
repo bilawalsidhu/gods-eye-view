@@ -7,6 +7,7 @@ import {
   inflateViewBounds,
 } from './policy.js';
 import { transitFeedsInRange } from '../../data/transitFeeds.js';
+import { viewRectangleCenter } from '../shared/viewRectangle.js';
 
 /**
  * Camera-driven feed activation: only the feeds whose coverage circle contains
@@ -25,11 +26,7 @@ export function createViewport({ state, services, parts }) {
   function getCameraCenterLatLon() {
     const rect = parts.renderer?.viewRectangle();
     if (rect) {
-      const east = rect.east < rect.west ? rect.east + Math.PI * 2 : rect.east;
-      const center = {
-        latitude: (rect.south + rect.north) / 2,
-        longitude: geo.math.negativePiToPi((rect.west + east) / 2),
-      };
+      const center = viewRectangleCenter(rect);
       return {
         lat: geo.math.toDegrees(center.latitude),
         lon: geo.math.toDegrees(center.longitude),

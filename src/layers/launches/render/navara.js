@@ -1,6 +1,6 @@
 // Mission points, paths and the pad zone on Navara.
 import * as geo from '../../../geo/index.js';
-import { createMoverBank } from '../../aircraft/render/navara.js';
+import { createMoverBank } from '../../shared/render/navaraMoverBank.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
 import { registerViewerEngine } from '../../../globe/cesium/engineFromViewer.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';

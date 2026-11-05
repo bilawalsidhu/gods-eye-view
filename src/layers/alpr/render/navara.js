@@ -1,21 +1,23 @@
-import { msg } from '../../../i18n/index.js';
 import * as geo from '../../../geo/index.js';
 import { distanceScale } from '../../../globe/cpuPicks.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
 import { resolvePickId } from '../../../data/pickRegistry.js';
-import { boxContains, alprCreditMarkup } from '../model.js';
+import { alprCreditMarkup } from '../model.js';
+import {
+  alprEntityContext,
+  alprFocusBox,
+  alprLabelModel,
+  alprViewRecords,
+} from '../presentation.js';
 import { createAlprFloorResolver } from '../floors.js';
 import { createAlprNavaraOverlay } from './navaraOverlay.js';
 import {
   MARKER_IMAGE,
   SELECTED_IMAGE,
-  alprDisplayId,
-  alprLabelDetails,
   validAlprGroundHeight,
 } from '../visuals.js';
 import {
   LAYER_ID,
-  MAX_VIEWPORT_DEGREES,
   MAX_RENDERED,
   ALPR_COLOR,
   ALPR_SELECTED_COLOR,
@@ -80,58 +82,12 @@ export function createAlprNavaraRenderer(engine, { state, services, source }) {
     if (!width || !height) return null;
     const focus = engine.camera.pickEllipsoid({ x: width / 2, y: height / 2 });
     if (!focus) return null;
-    const location = geo.cartographic.fromCartesian(focus);
-    const radius = Math.max(
-      1000,
-      2 * geo.cartesian3.distance(engine.camera.livePosition, focus),
+    return alprFocusBox(
+      geo.cartographic.fromCartesian(focus),
+      geo.cartesian3.distance(engine.camera.livePosition, focus),
     );
-    const latitude = geo.math.toDegrees(location.latitude);
-    const longitude = geo.math.toDegrees(location.longitude);
-    const latSpan = radius / 111000;
-    const lonSpan = latSpan / Math.cos(location.latitude);
-    if (
-      !Number.isFinite(latSpan + lonSpan) ||
-      2 * Math.max(latSpan, lonSpan) > MAX_VIEWPORT_DEGREES ||
-      Math.abs(latitude) + latSpan > 90 ||
-      Math.abs(longitude) + lonSpan > 180
-    )
-      return null;
-    return {
-      south: latitude - latSpan,
-      west: longitude - lonSpan,
-      north: latitude + latSpan,
-      east: longitude + lonSpan,
-    };
   }
-  function viewRecords(records) {
-    const box = viewportBox();
-    if (!box) return { visible: [], capped: false };
-    let visible = records.filter((r) =>
-      boxContains(box, {
-        south: r.latitude,
-        north: r.latitude,
-        west: r.longitude,
-        east: r.longitude,
-      }),
-    );
-    const capped = visible.length > MAX_RENDERED;
-    if (capped) {
-      const lat = (box.south + box.north) / 2,
-        lon = (box.west + box.east) / 2;
-      const scale = Math.cos((lat * Math.PI) / 180);
-      visible = visible
-        .map((record) => ({
-          record,
-          d:
-            (record.latitude - lat) ** 2 +
-            ((record.longitude - lon) * scale) ** 2,
-        }))
-        .sort((a, b) => a.d - b.d)
-        .slice(0, MAX_RENDERED)
-        .map(({ record }) => record);
-    }
-    return { visible, capped };
-  }
+  const viewRecords = (records) => alprViewRecords(records, viewportBox());
   function syncMarker(marker) {
     if (!initialized) return;
     const position =
@@ -321,41 +277,14 @@ export function createAlprNavaraRenderer(engine, { state, services, source }) {
     const record = marker.record;
     marker.gevTrackedId = record.id;
     marker.gevDisplayPosition = () => marker.displayPosition;
-    marker.gevLabelModel = {
-      title: alprDisplayId(record),
-      details: alprLabelDetails(record, source),
+    marker.gevLabelModel = alprLabelModel(record, source, {
       accent: ALPR_COLOR,
-      cardStyle: 'tactical',
-      selected: true,
-      leaderStyle: 'elbow',
-      leaderAnimationMs: 440,
-      leaderAnimationStartedAt:
-        record.id === state.selectedId ? selectionStartedAt : 0,
-      leaderDrawRatio: 0.68,
-      anchorRadiusPx: SELECTED_MARKER_ICON_SIZE / 2,
-      anchorRadiusScale: null,
-    };
-    services.context.registerEntityContext(marker, {
-      id: record.id,
-      layerId: LAYER_ID,
-      layerName: 'ALPR Cameras',
-      source:
-        source.attribution?.description || source.label || 'Camera source',
-      label: msg('ALPR camera'),
-      latitude: record.latitude,
-      longitude: record.longitude,
-      properties: {
-        operator: record.operator,
-        manufacturer: record.manufacturer,
-        cameraType: record.cameraType,
-        zone: record.zone,
-        directionDeg: record.directionDeg,
-        ref: record.ref,
-        lastVerified: record.lastVerified,
-        osmId: record.osmId,
-        sourceTag: record.source,
-      },
+      startedAt: record.id === state.selectedId ? selectionStartedAt : 0,
     });
+    services.context.registerEntityContext(
+      marker,
+      alprEntityContext(record, source),
+    );
   }
   function countOnScreen() {
     const { width, height } = engine.host.size();

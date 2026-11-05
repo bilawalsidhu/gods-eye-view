@@ -15,9 +15,7 @@ export function createCesiumProjector(
     worldToWindowCoordinates = Cesium.SceneTransforms.worldToWindowCoordinates,
   } = {},
 ) {
-  const { scene } = viewer;
-  // Viewer.camera is scene.camera; the engine reads the public alias.
-  const camera = viewer.camera ?? scene.camera;
+  const { scene, camera } = viewer;
   const scratchWindow = new Cesium.Cartesian2();
   const scratchMatrix = new Cesium.Matrix4();
   const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);

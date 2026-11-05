@@ -1,19 +1,28 @@
+// Recent imagery on a keyless preview, starting on Navara: the NASA catalog
+// and imagery tiles are fixtures, and the image, A/B, swap, divider, opacity,
+// basemap, toggle, failure, box-drag and zoom-to-fit checks read the rendered
+// pixels; both pinned dates survive a switch to Cesium and back. The report
+// and its screenshots go next to the evidence file (or to the temp directory).
+//
+//   node scripts/qa-w2-imagery.mjs http://127.0.0.1:<PORT>
+//     [--layers=recent-imagery] [--evidence=FILE]
 import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import sharp from 'sharp';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  strictArguments,
+} from './qa-strict-harness.mjs';
 import { isExpectedPreviewSetupError, redact } from './qa-browserEvidence.mjs';
 
-const args = process.argv.slice(2);
-const option = (name, fallback) =>
-  args.includes(name) ? args[args.indexOf(name) + 1] : fallback;
-const url = option('--url', 'http://127.0.0.1:4193');
-const output = option('--report', '/private/tmp/gev-imagery.json');
-if (
-  ['4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    new URL(url).port,
-  )
-)
-  throw new Error('Reserved QA port');
+const { origin } = localPreview(process.argv[2]);
+const url = origin + '/?engine=navara';
+const { evidence } = strictArguments();
+const output = evidence
+  ? path.join(path.dirname(evidence), 'imagery-report.json')
+  : path.join(os.tmpdir(), 'gev-imagery.json');
 const report = {
   url,
   checks: [],
@@ -26,7 +35,7 @@ let failLandsat = false,
 // The engine the page runs, for the strict assertion manifest.
 let engine = null;
 const strict = createStrict({
-  origin: localPreview(url).origin,
+  origin,
   layers: ['recent-imagery'],
   // The scenario answers the NASA catalog and imagery tiles itself.
   fixtures: ['*://*.earthdata.nasa.gov/*'],
@@ -48,8 +57,6 @@ const browser = await strict.launch({
   headless: true,
   args: [
     '--no-sandbox',
-    '--use-angle=metal',
-    '--enable-gpu',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
   ],
@@ -63,7 +70,7 @@ try {
     const text = redact(message.text());
     const expected =
       isExpectedPreviewSetupError(message, {
-        preview: args.includes('--preview'),
+        preview: true,
         baseUrl: url,
       }) ||
       (failedTiles > 0 &&
@@ -231,37 +238,35 @@ try {
   await sleep(2500);
   image = await capture('ab');
   check('A/B dates on opposite sides', red(image.left) && green(image.right));
-  if (args.includes('--switch')) {
-    const first = await page.evaluate(() => {
-      window.qaImageryOwner = window.__gevRecentImagery.layer;
-      return window.qaImageryOwner.diagnostics().pins;
-    });
-    const reads = () =>
-      report.requests.filter((r) => r.host === 'cmr.earthdata.nasa.gov').length;
-    const expectedReads = reads();
-    const initial = await page.evaluate(() => window.__godsEyeView.engine.kind);
-    for (const kind of [initial === 'navara' ? 'cesium' : 'navara', initial]) {
-      await strict.switchTo(page, kind);
-      engine = kind;
-      const state = await page.evaluate(() => ({
-        same: window.__gevRecentImagery.layer === window.qaImageryOwner,
-        ...window.qaImageryOwner.diagnostics(),
-      }));
-      check(
-        kind + ' holds both original pins',
-        state.same &&
-          state.mode === 'ab' &&
-          state.pins.a === first.a &&
-          state.pins.b === first.b,
-      );
-      await sleep(1800);
-      const pixels = await capture('switch-' + kind);
-      check(
-        kind + ' renders both pinned dates',
-        red(pixels.left) && green(pixels.right),
-      );
-      check(kind + ' reuses the STAC search', reads() === expectedReads);
-    }
+  const first = await page.evaluate(() => {
+    window.qaImageryOwner = window.__gevRecentImagery.layer;
+    return window.qaImageryOwner.diagnostics().pins;
+  });
+  const reads = () =>
+    report.requests.filter((r) => r.host === 'cmr.earthdata.nasa.gov').length;
+  const expectedReads = reads();
+  const initial = await page.evaluate(() => window.__godsEyeView.engine.kind);
+  for (const kind of [initial === 'navara' ? 'cesium' : 'navara', initial]) {
+    await strict.switchTo(page, kind);
+    engine = kind;
+    const state = await page.evaluate(() => ({
+      same: window.__gevRecentImagery.layer === window.qaImageryOwner,
+      ...window.qaImageryOwner.diagnostics(),
+    }));
+    check(
+      kind + ' holds both original pins',
+      state.same &&
+        state.mode === 'ab' &&
+        state.pins.a === first.a &&
+        state.pins.b === first.b,
+    );
+    await sleep(1800);
+    const pixels = await capture('switch-' + kind);
+    check(
+      kind + ' renders both pinned dates',
+      red(pixels.left) && green(pixels.right),
+    );
+    check(kind + ' reuses the STAC search', reads() === expectedReads);
   }
   await page.evaluate(() => window.__gevRecentImagery.layer.swapSides());
   image = await capture('swap');

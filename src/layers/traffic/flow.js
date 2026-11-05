@@ -19,7 +19,7 @@ import { nextTask } from '../../sources/vectorTiles.js';
  * local ground estimate (a local tangent-plane approximation, metres apart at
  * the traffic layer's kilometre range). Null without a camera.
  */
-export function groundDistanceFrom(camera, groundHeight = 0) {
+function groundDistanceFrom(camera, groundHeight = 0) {
   const view = camera && Cesium.Cartographic.fromCartesian(camera);
   if (!view) return null;
   const clearance = view.height - (groundHeight || 0) - DOT_HEIGHT_OFFSET;

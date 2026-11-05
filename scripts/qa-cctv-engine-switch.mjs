@@ -37,7 +37,7 @@ const { stdout: video } = await promisify(execFile)(
   { encoding: 'buffer', maxBuffer: 16000000 },
 );
 const strict = createStrict({ origin: url.origin, layers: ['cctv'] });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
+await strict.run({}, async (b) => {
   const p = await b.newPage();
   const errors = [];
   p.on('pageerror', (e) => {

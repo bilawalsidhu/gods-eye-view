@@ -3,12 +3,7 @@
 // Local east-north-up frames and heading-pitch-roll orientations as 4x4
 // column-major matrices (see matrix4.js). Outputs match Cesium bit for bit,
 // including the degenerate frames at the Earth's centre and at the poles.
-// With DEBUG on (development and tests; see debug.js) invalid arguments throw
-// the same DeveloperError as Cesium's debug checks.
 
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
-import { DeveloperError } from './developerError.js';
 import {
   EPSILON14,
   TWO_PI,
@@ -52,15 +47,6 @@ function unpack(array, result) {
  * `Transforms.localFrameToFixedFrameGenerator('east', 'north')`).
  */
 export function eastNorthUpToFixedFrame(origin, ellipsoid, result) {
-  if (DEBUG) {
-    if (origin == null) {
-      throw new DeveloperError('origin is required.');
-    }
-    if (isNaN(origin.x) || isNaN(origin.y) || isNaN(origin.z)) {
-      throw new DeveloperError('origin has a NaN component');
-    }
-  }
-
   if (result == null) result = createMatrix4();
 
   const east = scratchEast;
@@ -228,12 +214,6 @@ export function headingPitchRollToFixedFrame(
   fixedFrameTransform,
   result,
 ) {
-  // The private helpers below skip Cesium's checks on their internal
-  // arguments (scratch objects and constants), which can never fail.
-  if (DEBUG) {
-    Check.typeOf.object('HeadingPitchRoll', headingPitchRoll);
-  }
-
   fixedFrameTransform = fixedFrameTransform ?? eastNorthUpToFixedFrame;
   const hprQuaternion = quaternionFromHeadingPitchRoll(
     headingPitchRoll,

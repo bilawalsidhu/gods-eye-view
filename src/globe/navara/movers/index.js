@@ -7,7 +7,7 @@
 // PickableInstancedMeshWrapper so Navara's pick pass sees each instance;
 // pickIds.js turns its batch ids back into instances. commit() uploads and
 // asks for one frame (view.forceUpdate); per-frame work runs only on frames
-// the view draws anyway (S5), so an idle view stays idle.
+// the view draws anyway, so an idle view stays idle.
 
 import { withFrameUpdates } from '../frameDescriptor.js';
 import {

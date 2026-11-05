@@ -32,7 +32,7 @@ export function createFlightSnapshotRenderer({
       // Reclassify if the category resolved/changed (first extended poll);
       // a ground flip (landing/takeoff) re-scales the SAME billboard in
       // place — the transition is a restyle, never a removal.
-      // Round 5: depth policy is uniform (always depth-test-free, see
+      // The depth policy is uniform (always depth-test-free, see
       // _groundDepthDistance) — nothing to flip on landing/takeoff.
       // Position AND rotation are owned by the fleet pass (_fleetTick);
       // course changes land on the next rotation pass (forced below).

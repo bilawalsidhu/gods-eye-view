@@ -97,7 +97,6 @@ test('invalid and unsupported surface rays never invent terrain intersections', 
     undefined,
   );
   const missing = fixture(t, { supported: false });
-  assert.equal(missing.surface.raycastSupported, false);
   assert.equal(missing.surface.raycast(missing.ray), undefined);
   assert.equal(missing.terrainQueries(), 0);
 });

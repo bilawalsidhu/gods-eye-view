@@ -2370,17 +2370,3 @@ export function flyRoute(
   };
   return typeof runNavigation === 'function' ? runNavigation(start) : start();
 }
-
-// QA (development builds only; production builds drop it): the verbs and
-// their diagnostics, so a browser scenario can drive them on an engine whose
-// voice tools do not offer them yet.
-if (import.meta.env?.DEV && typeof window !== 'undefined')
-  window.__gevCameraVerbs = Object.freeze({
-    cameraVerbsSupported,
-    flyRoute,
-    getActiveCameraMotion,
-    initCameraVerbs,
-    interruptCameraMotion,
-    moveCamera,
-    releaseCameraVerbs,
-  });

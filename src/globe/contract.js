@@ -189,12 +189,12 @@
  * @typedef {object} GlobeSurface
  * @property {(cartographic: Cartographic, exclude?: any[]) => (number | undefined)} sampleHeight
  *   Height of the rendered scene (tiles, models) under a point.
- * @property {(cartographic: Cartographic, options?: { exclude?: any[], lod?: 'visible' | 'finest' }) => (SurfaceHeight | undefined)} sampleHeightDetailed
+ * @property {(cartographic: Cartographic, options?: { exclude?: any[] }) => (SurfaceHeight | undefined)} sampleHeightDetailed
  *   sampleHeight with the answer's quality (src/globe/surfaceDetail.js):
- *   lod 'visible' (default) answers from the tiles drawn now, 'finest' from
- *   the finest loaded ones (Navara; Cesium samples what it has loaded).
- *   Where no tile answers, the terrain. `exclude` takes this engine's mover
- *   sets as well as engine objects.
+ *   from the tiles drawn now (Navara: where they miss, the finest loaded
+ *   ones; Cesium samples what it has loaded). Where no tile answers, the
+ *   terrain. `exclude` takes this engine's mover sets as well as engine
+ *   objects.
  * @property {boolean} supported Whether sampleHeight works.
  * @property {(cartographic: Cartographic) => (number | undefined)} terrainHeight
  *   Height of the terrain/globe surface only (Cesium's globe.getHeight).
@@ -203,7 +203,6 @@
  *   The position moved onto the rendered scene along the geodetic normal.
  * @property {boolean} clampToHeightSupported
  * @property {() => boolean} tilesLoaded
- * @property {boolean} [raycastSupported] Optional visible-tile obstruction probe.
  * @property {(ray: { origin: Cartesian3, direction: Cartesian3, far: number, exclude?: any[] }) => ({ position: Cartesian3, distance: number, object: any } | undefined)} [raycast]
  *   Nearest visible tile triangle within finite positive `far` metres. Direction
  *   is normalized by the adapter. Excluded roots/meshes and hidden objects do
@@ -339,28 +338,23 @@
  *   epoch: the one time source for layers and the engine's own time-driven
  *   drawing (Navara's sun). By default it is the wall clock (Date.now); QA
  *   and tests may freeze, offset or speed it up on the app clock: now()
- *   follows at once, frameTime() and ticked from the engine's next frame, and
- *   in request-render mode nothing draws until a render is requested, so a
- *   QA helper that moves the clock calls render.request() after it.
- *   Not on this clock yet (each moves when its layer or code moves):
+ *   follows at once, frameTime() from the engine's next frame, and in
+ *   request-render mode nothing draws until a render is requested, so a QA
+ *   helper that moves the clock calls render.request() after it.
+ *   Not on this clock:
  *   - Cesium's viewer.clock: the app never animates it (shouldAnimate false,
  *     its time frozen at boot); Cesium's sun and lighting and every entity
  *     property read at viewer.clock.currentTime stay on that time;
- *   - wall-clock throttles and feed receipt stamps everywhere (they measure
- *     real elapsed time, not scene time).
- *   Launch replay, satellite propagation and orbit GMST now use this clock.
+ *   - wall-clock throttles and feed receipt stamps (they measure real
+ *     elapsed time, not scene time).
  * @property {() => number} now The current app time.
  * @property {() => number} frameTime The app time latched at the start of the
  *   engine's current frame: every reader in one frame gets the same value; it
  *   does not decrease from frame to frame while the app clock runs forward.
- *   Before the first frame, the current time.
- * @property {EngineEvent} ticked Raised once per engine frame, with the
- *   frame time, before that frame's preUpdate (and so before preRender). A
- *   frame is one turn of the engine's update loop, also when it draws
- *   nothing: Cesium raises it on the viewer clock's tick, right before
- *   scene.render (which raises preUpdate on every animation frame, drawn or
- *   not); Navara on the view's preUpdate, which it emits on every turn of
- *   its loop.
+ *   Before the first frame, the current time. A frame is one turn of the
+ *   engine's update loop, also when it draws nothing; its time is latched
+ *   before its preUpdate (Cesium: on the viewer clock's tick, right before
+ *   scene.render; Navara: on the view's preUpdate).
  *
  * @typedef {object} MoverSetOptions
  *   A set of moving objects drawn as one batch (src/globe/movers.js checks
@@ -383,14 +377,14 @@
  * @property {{ sizePx: number, outlinePx?: number, outlineColor?: number[], scaleByDistance?: number[], translucencyByDistance?: number[] }} [point]
  *   A filled disc of sizePx CSS px diameter plus outlinePx on each side;
  *   outlineColor is rgba in 0..1 (opaque black by default).
- * @property {{ url: string, minimumPixelSize?: number, maximumScale?: number,
+ * @property {{ url: string, minimumPixelSize?: number,
  *   colorBlend?: { mode: 'mix'|'replace', amount: number }, unlit?: boolean }} [model]
  *   A glTF drawn per instance in metres, at least minimumPixelSize px.
  * @property {boolean} [pickable]
  * @property {boolean} [sharpen] Sprites/points: include the glyph in the
- *   sharpen/AA stage after tone mapping, for translucent fields such as FIRMS.
- *   Navara defaults to the later display stage used by W1; Cesium retains its
- *   native billboard stage. Does not enable sharpening or change its amount.
+ *   sharpen/AA stage after tone mapping, for translucent fields such as FIRMS
+ *   (by default Navara draws them in the later display stage). Does not
+ *   enable sharpening or change its amount.
  *
  * @typedef {object} MoverFields
  *   One instance; omitted fields keep their value (defaults: white, scale 1,
@@ -413,10 +407,8 @@
  * @property {() => number} count
  * @property {() => void} commit Uploads what changed (one buffer write) and
  *   requests a render; nothing else draws a frame.
- * @property {() => Float64Array} positionsView x, y, z of the drawn
- *   instances (a view on the set's own array; read-only).
  * @property {() => boolean} ready Whether what the set draws has loaded: a
- *   model set's glTF (Cesium: every instance's model), a sprite set's atlas.
+ *   model set's glTF, a sprite set's atlas.
  *   A layer keeps its fallback visual until then.
  * @property {() => void} destroy
  *
@@ -475,8 +467,11 @@
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
  * @property {GlobeMaps} maps
  * @property {GlobeClock} clock
- * @property {GlobeMovers} movers
- * @property {GlobeLines} lines
+ * @property {GlobeMovers} [movers] Optional, with lines (capabilities
+ *   `movers` and `lines`): the engine draws the layers' moving objects and
+ *   polylines (Navara). Cesium has none: in Cesium mode the layers draw
+ *   their own Cesium primitives.
+ * @property {GlobeLines} [lines]
  * @property {() => void} destroy
  * @property {() => boolean} isDestroyed True once destroy() has run.
  */
@@ -491,7 +486,7 @@ export const INPUT_TYPES = Object.freeze([
 ]);
 export const MODIFIERS = Object.freeze(['ctrl', 'shift', 'alt']);
 /** Input types whose listeners may ask for picks. */
-export const PICK_INPUT_TYPES = Object.freeze(['click', 'doubleClick', 'move']);
+const PICK_INPUT_TYPES = Object.freeze(['click', 'doubleClick', 'move']);
 
 /**
  * input.on options checked and defaulted: { modifier, pick, drill } (drill
@@ -512,11 +507,6 @@ export function normalizeInputOptions(type, options = {}) {
   if (drill && type === 'move') throw new TypeError('A move cannot drill');
   return { modifier, pick: pick || drill > 0, drill };
 }
-export const FLIGHT_EASINGS = Object.freeze([
-  'cubicInOut',
-  'sinusoidalInOut',
-  'linear',
-]);
 
 const ENGINE_EVENT = Symbol('gev.globe.engineEvent');
 
@@ -681,9 +671,7 @@ const SHAPE = {
   },
   input: { on: isFunction, setCameraInputs: isFunction },
   credits: { addStatic: isFunction },
-  clock: { now: isFunction, frameTime: isFunction, ticked: isEngineEvent },
-  movers: { createSet: isFunction, list: isFunction },
-  lines: { createLine: isFunction, list: isFunction },
+  clock: { now: isFunction, frameTime: isFunction },
   maps: {
     setBaseImagery: isFunction,
     setTerrain: isFunction,
@@ -720,20 +708,15 @@ const OPTIONAL_SHAPE = {
     'render.setContactSonar': isFunction,
     'render.contactSonar': isFunction,
   },
+  movers: {
+    'movers.createSet': isFunction,
+    'movers.list': isFunction,
+  },
+  lines: {
+    'lines.createLine': isFunction,
+    'lines.list': isFunction,
+  },
 };
-
-/** The optional capability flags, e.g. 'visualStyles'. */
-export const ENGINE_CAPABILITIES = Object.freeze(Object.keys(OPTIONAL_SHAPE));
-
-/** The member paths of each optional capability. */
-export const OPTIONAL_ENGINE_MEMBERS = Object.freeze(
-  Object.fromEntries(
-    Object.entries(OPTIONAL_SHAPE).map(([flag, members]) => [
-      flag,
-      Object.freeze(Object.keys(members)),
-    ]),
-  ),
-);
 
 const memberAt = (engine, path) =>
   path.split('.').reduce((value, key) => value?.[key], engine);
@@ -755,16 +738,6 @@ export function engineCapabilities(engine) {
     ]),
   );
 }
-
-/** The capability paths the contract requires, e.g. 'camera.flyTo'. */
-export const GLOBE_ENGINE_MEMBERS = Object.freeze([
-  'kind',
-  ...Object.entries(SHAPE).flatMap(([capability, members]) =>
-    Object.keys(members).map((member) => `${capability}.${member}`),
-  ),
-  'destroy',
-  'isDestroyed',
-]);
 
 /**
  * Whether a value is a globe engine rather than, say, a Cesium viewer (a

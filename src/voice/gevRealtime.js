@@ -38,7 +38,7 @@ export function withToolCatalog(runner, loadCatalog) {
  * session; the action runner, the pointer's canvas and picker and the
  * annotation events belong to one engine attachment (`attachScene`), and a
  * switch only replaces those. Returns `{ commands, runner, attachScene,
- * detachScene }`; `commands` is what initGevVoiceCommands returns.
+ * detachScene }`; `commands` is the voice controls' command handle.
  *
  * `isSwitching()` tells the runner that the page has started a switch, so a
  * call made before the outgoing scene detaches waits for the next one too.
@@ -165,15 +165,4 @@ export function createSceneVoice(options) {
     },
     detachScene,
   };
-}
-
-/**
- * Compose the standalone action runner with the voice controls, on the globe
- * `engine` (by default the one registered for `options.viewer`). The runner
- * checks each action against the capabilities of the attached scene.
- */
-export function initGevVoiceCommands(options) {
-  const voice = createSceneVoice(options);
-  voice.attachScene(options);
-  return voice.commands;
 }

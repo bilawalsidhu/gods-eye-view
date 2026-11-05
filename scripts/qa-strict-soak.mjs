@@ -156,9 +156,7 @@ strict.extra.soak = report;
 
 for (let run = 1; run <= runs; run++) {
   const start = run % 2 ? 'navara' : 'cesium';
-  const browser = await strict.launch({
-    args: ['--use-angle=metal', '--enable-gpu'],
-  });
+  const browser = await strict.launch();
   const row = { run, start, swaps: [], checkpoints: [], errors: [] };
   report.runs.push(row);
   try {

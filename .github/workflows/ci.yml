@@ -59,7 +59,8 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
-      - name: Main chunk (no three or Navara in Cesium mode; size budget when recorded)
+      - name: Main chunk size budget
+        if: matrix.node == '24.22.2'
         run: npm run check:main-chunk
 
   street-level-browser:
@@ -89,9 +90,6 @@ jobs:
         env:
           MAPILLARY_CLIENT_TOKEN: 'MLY|0|qa-fixture'
         run: npm run build
-
-      - name: Main chunk (no three or Navara in Cesium mode; size budget when recorded)
-        run: npm run check:main-chunk
 
       - name: Start the preview server
         env:
@@ -154,6 +152,3 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
-
-      - name: Main chunk (no three or Navara in Cesium mode; size budget when recorded)
-        run: npm run check:main-chunk

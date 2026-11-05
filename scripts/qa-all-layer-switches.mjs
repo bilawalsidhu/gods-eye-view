@@ -83,42 +83,28 @@ try {
 // Every name the checkout's .env files define, plus key-like names in this
 // environment: all blank for the build and the preview.
 const KEY_LIKE = /(_KEY|_TOKEN|_SECRET|_CLIENT_ID|PASSWORD)$/;
-const dotenvNames = () => {
-  const names = new Set();
-  for (const file of ['.env', '.env.local'])
-    if (existsSync(join(root, file)))
-      for (const line of readFileSync(join(root, file), 'utf8').split('\n')) {
-        const name = line.match(/^\s*([A-Z0-9_]+)\s*=/)?.[1];
-        if (name) names.add(name);
-      }
-  return [...names].sort();
-};
-const envNames = () => {
-  const names = new Set();
-  for (const file of ['.env', '.env.local'])
-    if (existsSync(join(root, file)))
-      for (const line of readFileSync(join(root, file), 'utf8').split('\n')) {
-        const name = line.match(/^\s*([A-Z0-9_]+)\s*=/)?.[1];
-        if (name) names.add(name);
-      }
-  for (const name of Object.keys(process.env))
-    if (KEY_LIKE.test(name)) names.add(name);
-  return [...names].sort();
-};
-const envValues = () => {
-  const values = [];
-  for (const file of ['.env', '.env.local'])
-    if (existsSync(join(root, file)))
-      for (const line of readFileSync(join(root, file), 'utf8').split('\n')) {
-        const [, name, raw] = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/) ?? [];
-        const value = raw?.trim().replace(/^["']|["']$/g, '');
-        // Credentials only (model names and URLs are settings the code may
-        // also carry as defaults).
-        if (KEY_LIKE.test(name ?? '') && value && value.length >= 8)
-          values.push(value);
-      }
-  return values;
-};
+/** The [name, value] pairs of the checkout's .env and .env.local, in order. */
+const dotenv = () =>
+  ['.env', '.env.local']
+    .filter((file) => existsSync(join(root, file)))
+    .flatMap((file) => readFileSync(join(root, file), 'utf8').split('\n'))
+    .map((line) => line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)/))
+    .filter(Boolean)
+    .map(([, name, raw]) => [name, raw.trim().replace(/^["']|["']$/g, '')]);
+const dotenvNames = () => [...new Set(dotenv().map(([name]) => name))].sort();
+const envNames = () =>
+  [
+    ...new Set([
+      ...dotenvNames(),
+      ...Object.keys(process.env).filter((name) => KEY_LIKE.test(name)),
+    ]),
+  ].sort();
+// Credentials only (model names and URLs are settings the code may also
+// carry as defaults).
+const envValues = () =>
+  dotenv()
+    .filter(([name, value]) => KEY_LIKE.test(name) && value.length >= 8)
+    .map(([, value]) => value);
 const scrubbed = () => ({
   ...process.env,
   ...Object.fromEntries(envNames().map((name) => [name, ''])),
@@ -368,9 +354,9 @@ const runs = [
     ['rocket-launches'],
     ['--missions'],
   ],
-  // Stage 3's own checks (one application per page, voice across a switch).
-  // They block paid routes themselves but do not run under the strict
-  // harness, so they add no assertion manifest and no network ledger.
+  // One application per page, and voice across a switch: these block paid
+  // routes themselves but do not run under the strict harness, so they add
+  // no assertion manifest and no network ledger.
   ['app-once', 'app-once', [], [], 600, true],
   ['voice-engine-switch', 'voice-engine-switch', [], [], 300, true],
   ['strict-rapid-switch', 'strict-rapid-switch', []],
@@ -379,14 +365,18 @@ const runs = [
   ['strict-failure-matrix', 'strict-failure-matrix', [], [], 600],
   ['strict-cold-chunks', 'strict-cold-chunks', []],
   ['strict-prod-smoke', 'strict-prod-smoke', []],
-  // Stage 6: the app's visual styles, bloom, contact sonar, cockpit clouds
-  // and annotations drawn on Navara (annotations is a tool, not a catalog
-  // layer: TOOL_IDS).
+  // The app's visual styles, bloom, contact sonar, cockpit clouds, and the
+  // annotations, Draw, Import and the scope mask with the celestial ring on
+  // Navara (those are tools and display overlays, not catalog layers:
+  // TOOL_IDS).
   ['navara-visual-styles', 'navara-visual-styles', []],
   ['navara-bloom', 'navara-bloom', []],
   ['navara-sonar', 'navara-sonar', []],
   ['navara-cockpit-clouds', 'navara-cockpit-clouds', []],
   ['navara-annotations', 'navara-annotations', ['annotations']],
+  ['navara-draw', 'navara-draw', ['draw']],
+  ['navara-geo-import', 'navara-geo-import', ['geo-import']],
+  ['navara-scope', 'navara-scope', ['scope-mask', 'celestial-ring']],
   ['strict-soak', 'strict-soak', [], soakRuns, 1200],
   [
     'strict-soak--long',
@@ -398,7 +388,13 @@ const runs = [
 ];
 // Ids a scenario covers that are tools, not catalog layers: their
 // assertions are recorded, but the catalog comparison leaves them out.
-const TOOL_IDS = new Set(['annotations']);
+const TOOL_IDS = new Set([
+  'annotations',
+  'draw',
+  'geo-import',
+  'scope-mask',
+  'celestial-ring',
+]);
 const scenarioIds = [
   ...new Set(
     runs.flatMap(([, , ids]) => ids).filter((id) => !TOOL_IDS.has(id)),
@@ -414,9 +410,7 @@ const liveCatalog = {};
     layers: [],
     name: 'catalog',
   });
-  const browser = await strict.launch({
-    args: ['--use-angle=metal', '--enable-gpu'],
-  });
+  const browser = await strict.launch();
   try {
     for (const engine of ENGINES) {
       const page = await browser.newPage();
@@ -497,17 +491,7 @@ for (const [label, name, layers, extra = [], seconds = 300, external] of runs) {
   const script = 'scripts/qa-' + name + '.mjs';
   const evidence = join(output, 'evidence', label + '.json');
   rmSync(evidence, { force: true });
-  const args =
-    name === 'w2-imagery'
-      ? [
-          '--url',
-          base.origin + '/?engine=navara',
-          '--report',
-          join(output, 'evidence', 'imagery-report.json'),
-          '--switch',
-          '--preview',
-        ]
-      : [base.origin, ...extra];
+  const args = [base.origin, ...extra];
   if (external) args.splice(0, 1, base.origin + '/');
   else args.push(`--layers=${layers.join(',')}`, `--evidence=${evidence}`);
   const start = Date.now();

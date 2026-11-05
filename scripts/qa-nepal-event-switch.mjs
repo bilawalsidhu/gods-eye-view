@@ -1,6 +1,11 @@
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  openPage,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 
 const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
@@ -54,18 +59,8 @@ const strict = createStrict({
     },
   ],
 });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
-  const p = await b.newPage();
-  await p.setViewport({ width: 1024, height: 768 });
-  const errors = [];
-  p.on('pageerror', (e) => {
-    errors.push(e.message);
-    console.log('error', e.message.split('?')[0]);
-  });
-  p.on('console', (msg) => {
-    if (msg.type() === 'error' && /Shader|WebGLProgram/i.test(msg.text()))
-      errors.push(msg.text());
-  });
+await strict.run({}, async (b) => {
+  const { page: p, errors } = await openPage(b, { shaderErrors: true });
   const assets = [];
   p.on('request', (req) => {
     const path = new URL(req.url()).pathname;
@@ -77,21 +72,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
       assets.push(path);
   });
   await p.goto(base.href);
-  const ready = async (kind) => {
-    await p.waitForFunction(
-      (k) =>
-        window.__godsEyeView?.engine?.kind === k &&
-        !document.querySelector('#globe-engine')?.disabled &&
-        !document.querySelector('.engine-switch-frame') &&
-        document.querySelector('#loading-screen.hidden'),
-      { timeout: 90000 },
-      kind,
-    );
-    await p.evaluate(
-      () => window.__godsEyeView.styleManager.initialRestorePromise,
-    );
-  };
-  await ready('navara');
+  await waitForEngine(p, 'navara');
   await p.evaluate(async () => {
     const { tileset, dataManager, sceneDirector } = window.__godsEyeView;
     if (!sceneDirector?.listScenes().length)
@@ -118,8 +99,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   };
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await strict.pick(p, kind);
-      await ready(kind);
+      await strict.switchTo(p, kind);
     }
     const state = await p.evaluate(() => {
       const { dataManager } = window.__godsEyeView;
@@ -184,8 +164,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   await p.waitForFunction(
     () => window.qaEvent.getPlaybackState().progress > 0.53,
   );
-  await strict.pick(p, 'cesium');
-  await ready('cesium');
+  await strict.switchTo(p, 'cesium');
   const live = await p.evaluate(() => window.qaEvent.getPlaybackState());
   await strict.check(
     p,

@@ -1,6 +1,6 @@
 // Satellite points, rigid orbit rings and follow through the globe contract.
 import * as geo from '../../../geo/index.js';
-import { createMoverBank } from '../../aircraft/render/navara.js';
+import { createMoverBank } from '../../shared/render/navaraMoverBank.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
 import { WHITE, constantRgba } from '../../shared/color.js';

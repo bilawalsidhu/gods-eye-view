@@ -1,11 +1,10 @@
-// How the product builds its Navara view (S4, S5): render on demand (the
-// engine's render.setContinuous turns animation on), MSAA 4 as Cesium's
-// msaaSamples, the device pixel ratio unless a measurement pins one, a canvas
-// whose WebGL2 context keeps its drawing buffer (Cesium's
-// contextOptions.webgl.preserveDrawingBuffer, for captures), and a look:
-// `cinematic` by default (navaraScenePlan below), Navara's own `photoreal`
-// scene (aerial perspective, tone mapping and SMAA, about 5 ms a frame, S5)
-// with `?look=photoreal`, and `minimal` (sky, stars, sky light and sun
+// How the product builds its Navara view: render on demand (the engine's
+// render.setContinuous turns animation on), MSAA 4 as Cesium's msaaSamples,
+// the device pixel ratio, a canvas whose WebGL2 context keeps its drawing
+// buffer (Cesium's contextOptions.webgl.preserveDrawingBuffer, for captures),
+// and a look: `cinematic` by default (navaraScenePlan below), Navara's own
+// `photoreal` scene (aerial perspective, tone mapping and SMAA, about 5 ms a
+// frame) with `?look=photoreal`, and `minimal` (sky, stars, sky light and sun
 // without post effects) for benches.
 
 /** WebGL2 attributes Navara 0.2.1 asks for, plus preserveDrawingBuffer. */
@@ -21,14 +20,13 @@ export const NAVARA_CONTEXT_ATTRIBUTES = Object.freeze({
 
 const MSAA_SAMPLES = 4;
 
-/** ThreeView options; `pixelRatio` only when a measurement pins it. */
-export function navaraViewOptions({ container, canvas, pixelRatio } = {}) {
+/** ThreeView options. */
+export function navaraViewOptions({ container, canvas } = {}) {
   return {
     container,
     ...(canvas ? { canvas } : {}),
     animation: false,
     multisampling: MSAA_SAMPLES,
-    ...(pixelRatio !== undefined ? { pixelRatio } : {}),
   };
 }
 

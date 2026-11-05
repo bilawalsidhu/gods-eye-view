@@ -30,9 +30,9 @@ const globeEngine = (file) => /^src\/globe\/(?:cesium|navara)\//.test(file);
 const cesiumPackage = /^(?:cesium(?:\/|$)|@cesium\/)/;
 // Navara renders through three.js and its postprocessing peer.
 const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
-// Phase 3: the layers moved onto layer renderers (the *a tasks) keep each
-// engine in their renderers: cesium only in render/cesium*.js, three and
-// Navara only in render/navara*.js. The list grows with each moved layer.
+// Layers built on layer renderers keep each engine in their renderers:
+// cesium only in render/cesium*.js, three and Navara only in
+// render/navara*.js. The list grows with each layer moved onto renderers.
 const RENDERED_LAYER_DIRS = [
   'src/layers/alpr/',
   'src/layers/airQuality/',

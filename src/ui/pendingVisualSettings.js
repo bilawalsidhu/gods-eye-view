@@ -6,7 +6,7 @@
 // Reads answer from the outgoing settings' last state.
 
 /** The visual choices kept for the next engine, by method name. */
-export const PENDING_VISUAL_CHOICES = Object.freeze(
+const PENDING_VISUAL_CHOICES = Object.freeze(
   new Set([
     'setStyle',
     'setBloom',

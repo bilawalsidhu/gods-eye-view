@@ -18,8 +18,10 @@ import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 import { registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
 
 // The controls run on the globe engine; these viewer doubles get the Cesium
-// engine registered for them, as the app's scene engine is.
+// engine registered for them, as the app's scene engine is. A Viewer's
+// canvas is its scene's.
 function withEngine(viewer) {
+  viewer.canvas = viewer.scene.canvas;
   registerViewerEngine(viewer, createCesiumEngine(viewer));
   return viewer;
 }

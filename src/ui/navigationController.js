@@ -10,7 +10,7 @@ import {
 /**
  * Own camera authority generations, pending search UI and tracking handoff.
  * The camera is the globe `engine`'s. `viewer` is optional and only clears
- * Cesium's tracked entity (entity tracking moves to the engine in phase 1c).
+ * Cesium's tracked entity.
  */
 export class NavigationController {
   constructor({

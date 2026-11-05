@@ -3,7 +3,6 @@ import { isPointerFree } from '../../../data/inputOwnership.js';
 import {
   LAYER_ID,
   MAX_VIEWPORT_DEGREES,
-  MAX_RENDERED,
   ALPR_COLOR,
   ALPR_SELECTED_COLOR,
   MARKER_ICON_SIZE,
@@ -12,15 +11,17 @@ import {
   MARKER_FLOOR_LIFT_M,
   MARKER_SCALE_BY_DISTANCE,
 } from '../policy.js';
-import { boxContains } from '../model.js';
+import {
+  alprEntityContext,
+  alprFocusBox,
+  alprLabelModel,
+  alprViewRecords,
+} from '../presentation.js';
 import { createAlprFloorResolver } from '../floors.js';
 import { createAlprOverlay } from './cesiumOverlay.js';
-import { msg } from '../../../i18n/index.js';
 import {
   MARKER_IMAGE,
   SELECTED_IMAGE,
-  alprDisplayId,
-  alprLabelDetails,
   validAlprGroundHeight,
 } from '../visuals.js';
 
@@ -71,32 +72,8 @@ export function createAlprPresentation({ state, native, services, source }) {
   }
 
   /** Records the current view would display (viewport box, nearest first when capped). */
-  function viewRecords(records) {
-    const box = viewportBox(native.viewer);
-    if (!box) return { box, visible: [], capped: false };
-    let visible = records.filter((record) =>
-      boxContains(box, {
-        south: record.latitude,
-        north: record.latitude,
-        west: record.longitude,
-        east: record.longitude,
-      }),
-    );
-    const capped = visible.length > MAX_RENDERED;
-    if (capped) {
-      const lat = (box.south + box.north) / 2;
-      const lon = (box.west + box.east) / 2;
-      const scale = Math.cos((lat * Math.PI) / 180);
-      const distance = (record) =>
-        (record.latitude - lat) ** 2 + ((record.longitude - lon) * scale) ** 2;
-      visible = visible
-        .map((record) => ({ record, d: distance(record) }))
-        .sort((a, b) => a.d - b.d)
-        .slice(0, MAX_RENDERED)
-        .map((item) => item.record);
-    }
-    return { box, visible, capped };
-  }
+  const viewRecords = (records) =>
+    alprViewRecords(records, viewportBox(native.viewer));
 
   /**
    * Resolve the floor cells of the records this view will display, waiting at
@@ -249,9 +226,6 @@ export function createAlprPresentation({ state, native, services, source }) {
     return Cesium.Color.fromCssColorString(ALPR_COLOR);
   }
 
-  // The horizon rectangle is unstable during low-angle orbits and can exclude
-  // the ground point in the center of the screen. Bound nearby coverage around
-  // that point instead; the camera-to-ground range keeps zoom-out queries capped.
   function viewportBox(viewer) {
     const camera = viewer?.camera;
     const canvas = viewer?.scene.canvas;
@@ -264,26 +238,10 @@ export function createAlprPresentation({ state, native, services, source }) {
         viewer.scene.globe.ellipsoid,
       );
       if (!focus) return null;
-      const location = Cesium.Cartographic.fromCartesian(focus);
-      const range = Cesium.Cartesian3.distance(camera.positionWC, focus);
-      const radius = Math.max(1000, 2 * range);
-      const latitude = Cesium.Math.toDegrees(location.latitude);
-      const longitude = Cesium.Math.toDegrees(location.longitude);
-      const latSpan = radius / 111000;
-      const lonSpan = latSpan / Math.cos(location.latitude);
-      if (
-        !Number.isFinite(latSpan + lonSpan) ||
-        2 * Math.max(latSpan, lonSpan) > MAX_VIEWPORT_DEGREES ||
-        Math.abs(latitude) + latSpan > 90 ||
-        Math.abs(longitude) + lonSpan > 180
-      )
-        return null;
-      return {
-        south: latitude - latSpan,
-        west: longitude - lonSpan,
-        north: latitude + latSpan,
-        east: longitude + lonSpan,
-      };
+      return alprFocusBox(
+        Cesium.Cartographic.fromCartesian(focus),
+        Cesium.Cartesian3.distance(camera.positionWC, focus),
+      );
     }
     // Rectangle-only viewers retain the same bounded-area contract.
     const rectangle = viewer?.camera?.computeViewRectangle(
@@ -432,41 +390,14 @@ export function createAlprPresentation({ state, native, services, source }) {
       // at most once per second, through Cesium's public height APIs.
       entity.gevAlprDisplayPosition ??= null;
       entity.gevDisplayPosition = () => entity.gevAlprDisplayPosition;
-      entity.gevLabelModel = {
-        title: alprDisplayId(record),
-        details: alprLabelDetails(record, source),
+      entity.gevLabelModel = alprLabelModel(record, source, {
         accent: color.toCssColorString(),
-        cardStyle: 'tactical',
-        selected: true,
-        leaderStyle: 'elbow',
-        leaderAnimationMs: 440,
-        leaderAnimationStartedAt: selected ? selectionStartedAt : 0,
-        leaderDrawRatio: 0.68,
-        anchorRadiusPx: SELECTED_MARKER_ICON_SIZE / 2,
-        anchorRadiusScale: null,
-      };
+        startedAt: selected ? selectionStartedAt : 0,
+      });
       updateAppearance(entity, selected);
       registerEntityContext(entity, {
-        id: record.id,
-        layerId: LAYER_ID,
+        ...alprEntityContext(record, source),
         dataSource: native.dataSource,
-        layerName: 'ALPR Cameras',
-        source:
-          source.attribution?.description || source.label || 'Camera source',
-        label: msg('ALPR camera'),
-        latitude: record.latitude,
-        longitude: record.longitude,
-        properties: {
-          operator: record.operator,
-          manufacturer: record.manufacturer,
-          cameraType: record.cameraType,
-          zone: record.zone,
-          directionDeg: record.directionDeg,
-          ref: record.ref,
-          lastVerified: record.lastVerified,
-          osmId: record.osmId,
-          sourceTag: record.source,
-        },
       });
     }
     native.dataSource.entities.resumeEvents();

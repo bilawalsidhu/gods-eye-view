@@ -12,18 +12,6 @@ const close = (a, b, tol, label) =>
 const closeVec = (a, b, tol, label) => {
   for (const k of ['x', 'y', 'z']) close(a[k], b[k], tol, `${label}.${k}`);
 };
-const POINTS = [
-  [6378137, 0, 0],
-  [0, 6378137, 0],
-  [0, 0, 6356752.314245],
-  [1334762.2, -4654869.1, 4137287.9],
-  [-2694045, -4293642, 3857878],
-  [1e3, 1e3, 1e3],
-  [0.01, 0.01, 0.01],
-  [7e6, -2e6, 1e6],
-  [4510000, 4510000, 1],
-  [1, 1, 6400000],
-];
 
 test('WGS84 constants equal Cesium', () => {
   const c = Cesium.Ellipsoid.WGS84;
@@ -38,39 +26,6 @@ test('WGS84 constants equal Cesium', () => {
   }
   assert.equal(WGS84.minimumRadius, c.minimumRadius);
   assert.equal(WGS84.maximumRadius, c.maximumRadius);
-});
-
-test('surface normals, scaling and conversions equal Cesium', () => {
-  const c = Cesium.Ellipsoid.WGS84;
-  for (const [x, y, z] of POINTS) {
-    const p = { x, y, z };
-    const cp = new Cesium.Cartesian3(x, y, z);
-    closeVec(
-      WGS84.geodeticSurfaceNormal(p),
-      c.geodeticSurfaceNormal(cp),
-      1e-12,
-      'normal',
-    );
-    const ours = WGS84.scaleToGeodeticSurface(p);
-    const theirs = c.scaleToGeodeticSurface(cp);
-    if (theirs === undefined) assert.equal(ours, undefined);
-    else closeVec(ours, theirs, 1e-12, 'scale');
-    const carto = WGS84.cartesianToCartographic(p);
-    const cCarto = c.cartesianToCartographic(cp);
-    if (cCarto === undefined) {
-      assert.equal(carto, undefined);
-    } else {
-      close(carto.longitude, cCarto.longitude, 1e-12, 'lon');
-      close(carto.latitude, cCarto.latitude, 1e-12, 'lat');
-      close(carto.height, cCarto.height, 1e-9, 'height');
-      closeVec(
-        WGS84.cartographicToCartesian(carto),
-        c.cartographicToCartesian(cCarto),
-        1e-12,
-        'roundtrip',
-      );
-    }
-  }
 });
 
 test('result parameters are filled in place and may alias the input', () => {

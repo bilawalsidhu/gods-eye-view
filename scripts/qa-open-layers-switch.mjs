@@ -1,6 +1,11 @@
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  openPage,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 
 // Drone airspace, OSM places, sea marks and ski pistes on both engines, over
 // Navara → Cesium → Navara: each draws over the view centre, and the switch
@@ -57,14 +62,8 @@ const strict = createStrict({
     tileRoute('https://www.opensnowmap.org/*', 'ski-pistes'),
   ],
 });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
-  const p = await b.newPage();
-  await p.setViewport({ width: 1024, height: 768 });
-  const errors = [];
-  p.on('pageerror', (e) => {
-    errors.push(e.message);
-    console.log('error', e.message.split('?')[0]);
-  });
+await strict.run({}, async (b) => {
+  const { page: p, errors } = await openPage(b);
   await p.evaluateOnNewDocument((ring) => {
     const fetch = window.fetch.bind(window);
     window.qaZoneReads = 0;
@@ -101,20 +100,6 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
     };
   }, RING);
   await p.goto(base.href);
-  const ready = async (kind) => {
-    await p.waitForFunction(
-      (k) =>
-        window.__godsEyeView?.engine?.kind === k &&
-        !document.querySelector('#globe-engine')?.disabled &&
-        !document.querySelector('.engine-switch-frame') &&
-        document.querySelector('#loading-screen.hidden'),
-      { timeout: 90000 },
-      kind,
-    );
-    await p.evaluate(
-      () => window.__godsEyeView.styleManager.initialRestorePromise,
-    );
-  };
   const setEnabled = (id, on) =>
     p.evaluate(
       (layerId, show) =>
@@ -177,7 +162,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const greener = (on, off) =>
     2 * on[1] - on[0] - on[2] > 2 * off[1] - off[0] - off[2] + 10;
 
-  await ready('navara');
+  await waitForEngine(p, 'navara');
   await p.evaluate(() => {
     const { dataManager } = window.__godsEyeView;
     window.qaModels = Object.fromEntries(
@@ -190,8 +175,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   for (const [leg, kind] of ['navara', 'cesium', 'navara'].entries()) {
     const readsBeforeSwitch = await p.evaluate(() => window.qaZoneReads);
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await strict.pick(p, kind);
-      await ready(kind);
+      await strict.switchTo(p, kind);
       const same = await p.evaluate(() =>
         Object.entries(window.qaModels).every(
           ([id, model]) =>

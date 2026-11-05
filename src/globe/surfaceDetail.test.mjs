@@ -5,14 +5,12 @@ import {
   normalizeSurfaceOptions,
 } from './surfaceDetail.js';
 
-test('surface options: exclude list and lod visible (default) or finest', () => {
-  assert.deepEqual(normalizeSurfaceOptions(), { exclude: [], lod: 'visible' });
+test('surface options: an exclude list', () => {
+  assert.deepEqual(normalizeSurfaceOptions(), { exclude: [] });
   const set = { id: 'flights' };
-  assert.deepEqual(normalizeSurfaceOptions({ exclude: [set], lod: 'finest' }), {
+  assert.deepEqual(normalizeSurfaceOptions({ exclude: [set] }), {
     exclude: [set],
-    lod: 'finest',
   });
-  assert.throws(() => normalizeSurfaceOptions({ lod: 'best' }), TypeError);
   assert.throws(() => normalizeSurfaceOptions({ exclude: 'x' }), TypeError);
 });
 

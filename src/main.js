@@ -104,11 +104,7 @@ function liveComponents() {
 }
 
 // The page's application is created once; a switch detaches and attaches
-// only its engine-bound parts. `?switch=legacy` keeps the previous route, one
-// application per engine, for one release.
-const legacySwitch =
-  new URLSearchParams(globalThis.location?.search ?? '').get('switch') ===
-  'legacy';
+// only its engine-bound parts.
 
 // Hand the session off and release the running engine. Its renderer is
 // parked for a later switch back.
@@ -125,8 +121,7 @@ async function leave(from) {
     });
     renderers.retain(from);
   }
-  if (legacySwitch) await application?.destroy();
-  else if (attached) await application.detachScene({ handoff: true });
+  if (attached) await application.detachScene({ handoff: true });
   session.count('detaches');
 }
 
@@ -134,10 +129,9 @@ async function leave(from) {
 // with the session attached and the address's view restored; its first frame
 // only decides when the cover goes (settle).
 async function enter(kind, { recovery = false } = {}) {
-  if (legacySwitch) return enterLegacy(kind);
   if (!application || application.getState().status !== 'ready') {
     // The first engine never started: there is no application to attach to.
-    return enterLegacy(kind);
+    return enterNewApplication(kind);
   }
   layerSession.restoringView = true;
   try {
@@ -180,8 +174,9 @@ async function resume(style) {
   }
 }
 
-// The legacy route: a new application on the retained session.
-async function enterLegacy(kind) {
+// A new application on the retained session, for a page whose first engine
+// never started.
+async function enterNewApplication(kind) {
   const app = createApplication(kind, true);
   try {
     const { controls } = await app.start();

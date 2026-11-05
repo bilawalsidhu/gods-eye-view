@@ -1,15 +1,8 @@
 // Ported from CesiumJS 1.138 (Apache-2.0) — Math.js
 //
 // Engine-neutral angle maths. Formulas and constants match Cesium.Math bit for
-// bit. With DEBUG on (development and tests; see debug.js) invalid arguments
-// throw the same DeveloperError as Cesium's debug checks; production builds
-// skip the checks, as release Cesium does.
+// bit.
 
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
-import { DeveloperError } from './developerError.js';
-
-export const EPSILON7 = 0.0000001;
 export const EPSILON10 = 0.0000000001;
 export const EPSILON12 = 0.000000000001;
 export const EPSILON14 = 0.00000000000001;
@@ -20,32 +13,16 @@ export const DEGREES_PER_RADIAN = 180.0 / Math.PI;
 
 /** Converts degrees to radians. */
 export function toRadians(degrees) {
-  if (DEBUG) {
-    if (degrees == null) {
-      throw new DeveloperError('degrees is required.');
-    }
-  }
   return degrees * RADIANS_PER_DEGREE;
 }
 
 /** Converts radians to degrees. */
 export function toDegrees(radians) {
-  if (DEBUG) {
-    if (radians == null) {
-      throw new DeveloperError('radians is required.');
-    }
-  }
   return radians * DEGREES_PER_RADIAN;
 }
 
 /** Constrains a value to lie between two values. */
 export function clamp(value, min, max) {
-  if (DEBUG) {
-    Check.typeOf.number('value', value);
-    Check.typeOf.number('min', min);
-    Check.typeOf.number('max', max);
-  }
-
   return value < min ? min : value > max ? max : value;
 }
 
@@ -56,17 +33,6 @@ export function lerp(p, q, time) {
 
 /** The modulo operation that also works for negative dividends. */
 export function mod(m, n) {
-  if (DEBUG) {
-    if (m == null) {
-      throw new DeveloperError('m is required.');
-    }
-    if (n == null) {
-      throw new DeveloperError('n is required.');
-    }
-    if (n === 0.0) {
-      throw new DeveloperError('divisor cannot be 0.');
-    }
-  }
   if (Math.sign(m) === Math.sign(n) && Math.abs(m) < Math.abs(n)) {
     // Early exit if the input does not need to be modded. This avoids
     // unnecessary math which could introduce floating point error.
@@ -77,11 +43,6 @@ export function mod(m, n) {
 
 /** Produces an angle in the range 0 <= angle <= 2Pi equivalent to the provided angle. */
 export function zeroToTwoPi(angle) {
-  if (DEBUG) {
-    if (angle == null) {
-      throw new DeveloperError('angle is required.');
-    }
-  }
   if (angle >= 0 && angle <= TWO_PI) {
     // Early exit if the input is already inside the range. This avoids
     // unnecessary math which could introduce floating point error.
@@ -96,11 +57,6 @@ export function zeroToTwoPi(angle) {
 
 /** Produces an angle in the range -Pi <= angle <= Pi equivalent to the provided angle. */
 export function negativePiToPi(angle) {
-  if (DEBUG) {
-    if (angle == null) {
-      throw new DeveloperError('angle is required.');
-    }
-  }
   if (angle >= -Math.PI && angle <= Math.PI) {
     // Early exit if the input is already inside the range. This avoids
     // unnecessary math which could introduce floating point error.
@@ -114,15 +70,6 @@ export function negativePiToPi(angle) {
  * (the absolute one defaults to the relative one).
  */
 export function equalsEpsilon(left, right, relativeEpsilon, absoluteEpsilon) {
-  if (DEBUG) {
-    if (left == null) {
-      throw new DeveloperError('left is required.');
-    }
-    if (right == null) {
-      throw new DeveloperError('right is required.');
-    }
-  }
-
   relativeEpsilon = relativeEpsilon ?? 0.0;
   absoluteEpsilon = absoluteEpsilon ?? relativeEpsilon;
   const absDiff = Math.abs(left - right);

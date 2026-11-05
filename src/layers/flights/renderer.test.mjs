@@ -1,8 +1,7 @@
-// The flights logic draws only through its renderer (phase 3 Task 10a): with
-// a renderer that is plain data (no Cesium), the layer builds its fleet,
-// selects a contact on a click through the engine's selection dispatcher,
-// tracks and follows it, and releases it on an empty click. This is the seam
-// the Navara renderer (Task 10b) plugs into.
+// The flights logic draws only through its renderer: with a renderer that
+// is plain data (no Cesium), the layer builds its fleet, selects a contact
+// on a click through the engine's selection dispatcher, tracks and follows
+// it, and releases it on an empty click.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +11,6 @@ import { createApplicationFlights } from '../../app/layers/flights.js';
 import { defaultSurface } from '../../data/surfaceServices.js';
 import * as militaryRegistry from '../../data/militaryRegistry.js';
 import { openSkySnapshot } from '../../sources/live/aircraft.js';
-import { missingAircraftRendererMembers } from '../aircraft/render/contract.js';
 import { Rgba } from '../shared/color.js';
 import { recordingAircraftRenderer as recordingRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 
@@ -78,7 +76,6 @@ test('the flights logic draws, selects and follows only through its renderer', a
     },
   });
   layer.init(null, { engine });
-  assert.deepEqual(missingAircraftRendererMembers(renderer), []);
   layer.enable();
   try {
     await layer.update(null);

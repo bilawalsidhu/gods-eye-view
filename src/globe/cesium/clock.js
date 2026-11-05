@@ -15,7 +15,6 @@
 // preUpdate instead, attached on first use so creating the engine adds no
 // scene listener.
 
-import { createEngineEvent } from '../contract.js';
 import { appClock as pageClock } from '../../time/clock.js';
 
 /**
@@ -28,21 +27,16 @@ export function createCesiumClock(viewer, { appClock = pageClock } = {}) {
   // A viewer-shaped object without a clock (tests, a bare scene): the
   // scene's preUpdate opens the frame instead.
   const tickSource = viewer.clock?.onTick ?? viewer.scene.preUpdate;
-  const ticked = createEngineEvent();
   let removeTick = null;
   let destroyed = false;
-  const onTick = () => ticked.raiseValue(appClock.beginFrame());
+  const onTick = () => {
+    appClock.beginFrame();
+  };
   const attach = () => {
     if (!removeTick && !destroyed)
       removeTick = tickSource.addEventListener(onTick);
   };
   if (viewer.clock?.onTick) attach();
-  const add = ticked.addEventListener;
-  ticked.addEventListener = (listener) => {
-    const remove = add(listener);
-    attach();
-    return remove;
-  };
   return {
     clock: {
       now: () => appClock.now(),
@@ -50,7 +44,6 @@ export function createCesiumClock(viewer, { appClock = pageClock } = {}) {
         attach();
         return appClock.frameTime();
       },
-      ticked,
     },
     destroy() {
       destroyed = true;

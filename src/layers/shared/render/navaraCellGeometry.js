@@ -4,7 +4,7 @@ const ellipsoid = geo.ellipsoid.WGS84;
 const A = ellipsoid.radii.x,
   B = ellipsoid.radii.z;
 const E2 = 1 - (B * B) / (A * A);
-export function latitudeBoundary(degrees) {
+function latitudeBoundary(degrees) {
   const angle = geo.math.toRadians(degrees),
     sin = Math.sin(angle),
     cos = Math.cos(angle);

@@ -14,7 +14,7 @@ const LINE_ID = 'gev-draw-preview';
 const DOTS_ID = 'gev-draw-vertices';
 
 /** '#rrggbb' → rgba in 0..1. */
-export function cssRgba(css, alpha = 1) {
+function cssRgba(css, alpha = 1) {
   const hex = Number.parseInt(String(css).slice(1), 16);
   return [
     ((hex >> 16) & 255) / 255,

@@ -1,11 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
-import * as selection from '../../data/selectionDispatcher.js';
-import * as picking from '../../data/pickRegistry.js';
 import { createVesselLayer } from './index.js';
+import { recordingRenderer, services } from './testFixtures.mjs';
 import { createVesselsCesiumRenderer } from './render/cesium.js';
-import { missingVesselRendererMembers } from './render/contract.js';
 import { allVesselChevronIcons, vesselChevronIcon } from './icons.js';
 import {
   VESSEL_TYPE_CSS_COLORS,
@@ -13,109 +11,6 @@ import {
 } from '../../data/vesselLabels.js';
 
 const noop = () => {};
-
-/** A renderer of plain records over the engine: what the logic asks for. */
-function recordingRenderer(engine) {
-  const sprites = new Set();
-  const followListeners = new Set();
-  let following = false;
-  let attached = false;
-  return {
-    sprites,
-    raiseFollow(active) {
-      following = active;
-      for (const listener of followListeners) listener();
-    },
-    renderer: {
-      kind: 'plain',
-      engine,
-      view: {
-        camera: {
-          positionWC: { x: 0, y: 0, z: 20_000_000 },
-          positionCartographic: { latitude: 0, longitude: 0, height: 1e7 },
-          rightWC: { x: 1, y: 0, z: 0 },
-          upWC: { x: 0, y: 1, z: 0 },
-          heading: 0,
-          pitch: 0,
-          roll: 0,
-        },
-        scene: { canvas: { clientWidth: 0, clientHeight: 0 } },
-        horizon: () => ({ isPointVisible: () => true }),
-        worldToWindow: () => undefined,
-        canvasSize: () => ({ width: 1280, height: 800 }),
-        requestRender: noop,
-        on: () => noop,
-      },
-      fleet: {
-        collection: null,
-        attached: () => attached,
-        attach() {
-          attached = true;
-        },
-        setVisible: noop,
-        add(spec) {
-          const sprite = { ...spec };
-          sprites.add(sprite);
-          return sprite;
-        },
-        remove: (sprite) => sprites.delete(sprite),
-        detach() {
-          attached = false;
-        },
-      },
-      pickedRecord: (picked) =>
-        picked?.id && typeof picked.id === 'object' ? picked.id : null,
-      follow: {
-        onChanged(listener) {
-          followListeners.add(listener);
-          return () => followListeners.delete(listener);
-        },
-        active: () => following,
-      },
-      trails: { create: () => null },
-      destroy: noop,
-    },
-  };
-}
-
-function services(renderer) {
-  return {
-    context: {
-      clearSelectedEntityContextForLayer: noop,
-      registerEntityContext: () => null,
-      selectEntityContext: noop,
-    },
-    trails: { createTrail: null },
-    labels: {},
-    picking,
-    overlay: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
-      hitTestWorldOverlay: () => null,
-    },
-    geoid: { ensureGeoidReady: () => new Promise(noop), geoidHeight: () => 0 },
-    sprites: {
-      registerSpriteCollection: noop,
-      restoreSpriteOrder: noop,
-      restoreSpriteOrderOnEnable: noop,
-    },
-    focus: {
-      focusNowMs: (now) => now,
-      getFocusTarget: () => null,
-      focusPassIsNeeded: () => false,
-      forgetSpriteFocus: noop,
-    },
-    worldFocus: { requestWorldFocus: noop },
-    render: {
-      holdContinuousRender: noop,
-      releaseContinuousRender: noop,
-      governorRequestRender: noop,
-    },
-    selection,
-    renderer: { create: () => renderer },
-  };
-}
 
 const row = (mmsi, latitude, longitude) => ({
   id: mmsi,
@@ -130,11 +25,10 @@ const row = (mmsi, latitude, longitude) => ({
   courseDeg: 90,
 });
 
-test('the vessels Cesium renderer has every member of the contract', () => {
+test('the vessels Cesium renderer picks the record a billboard is of', () => {
   const renderer = createVesselsCesiumRenderer(null, {
     viewer: { scene: {}, camera: {} },
   });
-  assert.deepEqual(missingVesselRendererMembers(renderer), []);
   assert.equal(renderer.kind, 'cesium');
   // The record a pick is of: Cesium's billboard id is the record.
   const record = { mmsi: '111' };
@@ -221,7 +115,6 @@ test('vessels on the Navara renderer: one always-on-top chevron bank, MMSI picks
   const renderer = createVesselsNavaraRenderer(engine, {
     drawAtlas: async () => ({ canvas: { kind: 'atlas' }, cells: layout.cells }),
   });
-  assert.deepEqual(missingVesselRendererMembers(renderer), []);
   const layer = createVesselLayer({
     source: {
       label: 'Fixture vessels',
@@ -367,7 +260,8 @@ test('a pending AIS poll and selected trail survive replacement of the planet', 
 });
 
 test('a vessel bank commits rows arriving after its empty visibility commit and after growth', async () => {
-  const { createMoverBank } = await import('../aircraft/render/navara.js');
+  const { createMoverBank } =
+    await import('../shared/render/navaraMoverBank.js');
   let commits = 0;
   let pending = null;
   const bank = createMoverBank(

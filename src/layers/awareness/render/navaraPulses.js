@@ -4,15 +4,14 @@
 // Each surface pixel's distance from the subject along the Earth sets where
 // it lies within the range, and the same pulse lines, halos and inward band
 // as Cesium's material are drawn there. Nothing above the surface is touched.
-import { Effect, EffectAttribute } from 'postprocessing';
 import { Matrix4, Uniform, Vector3, Vector4 } from 'three';
 import {
   groundSurfaceUniforms,
   updateGroundSurface,
 } from '../../shared/render/navaraGroundSurface.js';
+import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
 
 const KEY = 'gevAwarenessPulses';
-const registeredViews = new WeakSet();
 const MEAN_EARTH_RADIUS_M = 6_371_000;
 
 const fragmentShader = /* glsl */ `
@@ -84,82 +83,68 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
 }
 `;
 
-function pulseEffectClass(EffectDesc, NavaraEffect) {
-  return class AwarenessPulseEffectDesc extends EffectDesc {
-    static key = KEY;
-    static insertAfter = [
-      'gevEarthquakeGround',
-      'gevObservedWeather',
-      'gevNepalEvent',
-      'gevRecentImagery',
-      'gevFirmsHeat',
-      'gevFirmsGround',
-      'toneMapping',
-    ];
-    static insertBefore = [
-      'gevPreSharpenOverlay',
-      'gevSharpen',
-      'smaa',
-      'fxaa',
-      'gevOverlay',
-      'final',
-    ];
-    constructor(view, context, config) {
-      super(view, context, config);
-      this.owner = config[KEY].owner;
-    }
-    createPass() {
-      this.effect = new Effect('GevAwarenessPulses', fragmentShader, {
-        attributes: EffectAttribute.CONVOLUTION,
-        uniforms: new Map([
-          ...groundSurfaceUniforms(),
-          ['uInverseView', new Uniform(new Matrix4())],
-          ['uCenter', new Uniform(new Vector3(1, 0, 0))],
-          ['uRadiusAngle', new Uniform(1)],
-          ['uColor', new Uniform(new Vector4())],
-          ['uLineColor', new Uniform(new Vector4())],
-          ['uHaloColor', new Uniform(new Vector4())],
-          ['uRadii', new Uniform(new Vector4())],
-          ['uAlphas', new Uniform(new Vector4())],
-          ['uDepth', new Uniform(0.35)],
-          ['uLineWidth', new Uniform(3)],
-          ['uHaloWidth', new Uniform(1)],
-          ['uPixelRatio', new Uniform(1)],
-        ]),
-      });
-      return new NavaraEffect(this.view.camera.raw, this.effect);
-    }
-    updateFrame() {
-      const owner = this.owner,
-        camera = this.view.camera.raw;
-      if (!this.effect || !camera) return;
-      updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
-      const u = this.effect.uniforms;
-      u.get('uInverseView').value.copy(camera.matrixWorld);
-      u.get('uCenter').value.copy(owner.center);
-      u.get('uRadiusAngle').value = owner.radiusAngle;
-      u.get('uColor').value.fromArray(owner.color);
-      u.get('uLineColor').value.fromArray(owner.lineColor);
-      u.get('uHaloColor').value.fromArray(owner.haloColor);
-      u.get('uRadii').value.fromArray(owner.radii);
-      u.get('uAlphas').value.fromArray(owner.alphas);
-      u.get('uDepth').value = owner.depth;
-      u.get('uLineWidth').value = owner.lineWidth;
-      u.get('uHaloWidth').value = owner.haloWidth;
-      // Buffer pixels per CSS pixel: the pass can run above the canvas's
-      // CSS size, and the pulse widths are in CSS pixels.
-      const cssWidth = owner.cssWidth();
-      u.get('uPixelRatio').value =
-        cssWidth > 0
-          ? this.ctx.getInputBuffer().width / cssWidth
-          : globalThis.devicePixelRatio || 1;
-    }
-    onDestroy() {
-      this.effect?.dispose();
-      super.onDestroy();
-    }
-  };
-}
+const pulseEffect = defineGroundEffect({
+  key: KEY,
+  name: 'GevAwarenessPulses',
+  fragmentShader,
+  insertAfter: [
+    'gevEarthquakeGround',
+    'gevObservedWeather',
+    'gevNepalEvent',
+    'gevRecentImagery',
+    'gevFirmsHeat',
+    'gevFirmsGround',
+    'toneMapping',
+  ],
+  insertBefore: [
+    'gevPreSharpenOverlay',
+    'gevSharpen',
+    'smaa',
+    'fxaa',
+    'gevOverlay',
+    'final',
+  ],
+  uniforms: () => [
+    ...groundSurfaceUniforms(),
+    ['uInverseView', new Uniform(new Matrix4())],
+    ['uCenter', new Uniform(new Vector3(1, 0, 0))],
+    ['uRadiusAngle', new Uniform(1)],
+    ['uColor', new Uniform(new Vector4())],
+    ['uLineColor', new Uniform(new Vector4())],
+    ['uHaloColor', new Uniform(new Vector4())],
+    ['uRadii', new Uniform(new Vector4())],
+    ['uAlphas', new Uniform(new Vector4())],
+    ['uDepth', new Uniform(0.35)],
+    ['uLineWidth', new Uniform(3)],
+    ['uHaloWidth', new Uniform(1)],
+    ['uPixelRatio', new Uniform(1)],
+  ],
+  update() {
+    const owner = this.owner,
+      camera = this.view.camera.raw;
+    if (!this.effect || !camera) return;
+    updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
+    const u = this.effect.uniforms;
+    u.get('uInverseView').value.copy(camera.matrixWorld);
+    u.get('uCenter').value.copy(owner.center);
+    u.get('uRadiusAngle').value = owner.radiusAngle;
+    u.get('uColor').value.fromArray(owner.color);
+    u.get('uLineColor').value.fromArray(owner.lineColor);
+    u.get('uHaloColor').value.fromArray(owner.haloColor);
+    u.get('uRadii').value.fromArray(owner.radii);
+    u.get('uAlphas').value.fromArray(owner.alphas);
+    u.get('uDepth').value = owner.depth;
+    u.get('uLineWidth').value = owner.lineWidth;
+    u.get('uHaloWidth').value = owner.haloWidth;
+    // Buffer pixels per CSS pixel: the pass can run above the canvas's
+    // CSS size, and the pulse widths are in CSS pixels.
+    const cssWidth = owner.cssWidth();
+    u.get('uPixelRatio').value =
+      cssWidth > 0
+        ? this.ctx.getInputBuffer().width / cssWidth
+        : globalThis.devicePixelRatio || 1;
+  },
+});
 
 /**
  * The pulse disc on one Navara view around `center` (Earth-fixed metres):
@@ -172,10 +157,7 @@ export function createAwarenessPulseDisc(
   { view, EffectDesc, NavaraEffect },
   { center, radiusM, color, lineColor, haloColor, depth, lineWidth, haloWidth },
 ) {
-  if (!registeredViews.has(view)) {
-    view.registerEffect(KEY, pulseEffectClass(EffectDesc, NavaraEffect));
-    registeredViews.add(view);
-  }
+  pulseEffect.register(view, { EffectDesc, NavaraEffect });
   const owner = {
     cssWidth: () => engine.host?.canvas?.clientWidth ?? 0,
     center: new Vector3(),

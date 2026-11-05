@@ -31,7 +31,7 @@ const strict = createStrict({
         '*://*.earthdata.nasa.gov/*',
       ],
 });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
+await strict.run({}, async (b) => {
   const p = await b.newPage();
   await p.setViewport({ width: 1280, height: 900 });
   const errors = [];

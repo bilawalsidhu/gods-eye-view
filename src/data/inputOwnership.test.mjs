@@ -143,7 +143,7 @@ test('every scene click handler consults ownership before it picks', () => {
       'src/layers/submarineCables/interaction.js',
       'viewer.scene.pick(click.position)',
     ],
-    // Vessels take the engine dispatcher's pick (phase 3, 13a): the guard
+    // Vessels take the engine dispatcher's pick: the guard
     // comes before the click rule reads it.
     ['src/layers/vessels/selection.js', 'resolvePickId(picked)'],
   ];

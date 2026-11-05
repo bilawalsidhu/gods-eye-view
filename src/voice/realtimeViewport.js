@@ -3,21 +3,19 @@ import {
   hasStructuredViewIdentity,
 } from './realtimeProtocol.js';
 import { cameraPoseKey } from './pointerContext.js';
-import { isGlobeEngine } from '../globe/contract.js';
 
-/** The page's globe engine (both engines), else its Cesium viewer. */
+/** The page's globe engine (both engines). */
 function pageGlobe() {
-  const debug = globalThis.window?.__godsEyeView;
-  return debug?.engine ?? debug?.viewer ?? null;
+  return globalThis.window?.__godsEyeView?.engine ?? null;
 }
 
-/** The map canvas: the engine's host canvas, else the viewer's. */
+/** The map canvas: the engine's host canvas. */
 function pageCanvas(globe) {
-  return isGlobeEngine(globe) ? globe.host.canvas : globe?.scene?.canvas;
+  return globe?.host?.canvas;
 }
 
 /** The live camera pose identity (Cesium-free read). */
-export function readViewerCameraKey() {
+function readViewerCameraKey() {
   return cameraPoseKey(pageGlobe());
 }
 // Viewport-screenshot size guards (M13). The old code clamped WIDTH only, so a
@@ -142,7 +140,7 @@ export function pointerCropRect({
  * @returns {Promise<{dataUrl: string, rect: object}|null>} JPEG data URL and
  *   the crop's normalized bounds in the full canvas, or null.
  */
-export async function capturePointerCrop(screenPx) {
+async function capturePointerCrop(screenPx) {
   const globe = pageGlobe();
   const source = pageCanvas(globe);
   if (!source?.width || !source?.height || !screenPx) return null;
@@ -243,14 +241,12 @@ export function estimateDataUrlBytes(dataUrl) {
  *   canvas as current. (perf wave 2)
  */
 export async function renderFreshFrame(globe) {
-  // The engine's frame events and render request, else the viewer's scene.
-  const scene = isGlobeEngine(globe)
-    ? {
-        postRender: globe.frames.postRender,
-        requestRender: () => globe.render.request('voice-capture'),
-      }
-    : globe?.scene;
-  if (!scene) return false;
+  if (!globe) return false;
+  // The engine's frame events and render request.
+  const scene = {
+    postRender: globe.frames.postRender,
+    requestRender: () => globe.render.request('voice-capture'),
+  };
   // While the document is hidden the render loop is suspended — don't
   // secretly restart rendering for an optional screenshot, and don't pass
   // the stale preserved frame off as current.
@@ -509,5 +505,5 @@ export class RealtimeViewport {
   }
 }
 
-/** renderFreshFrame for callers that hold a Cesium viewer. */
+/** renderFreshFrame under its earlier name (realtimeController re-exports it). */
 export const renderFreshCesiumFrame = renderFreshFrame;

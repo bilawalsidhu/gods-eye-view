@@ -3,14 +3,9 @@
 // A quadratic surface x²/a² + y²/b² + z²/c² = 1 as a plain, frozen object.
 // Every method takes an optional `result` and returns it (a new object when it
 // is absent); `result` may be the input. The algorithms and the operation order
-// match Cesium so the outputs are bit-identical. With DEBUG on (development
-// and tests; see debug.js) invalid arguments throw the same DeveloperError as
-// Cesium's debug checks.
+// match Cesium so the outputs are bit-identical.
 
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
 import { create as createCartographic } from './cartographic.js';
-import { DeveloperError } from './developerError.js';
 import { EPSILON14 } from './math.js';
 import { scaleToGeodeticSurface } from './scaleToGeodeticSurface.js';
 import {
@@ -39,11 +34,6 @@ export function create(x, y, z) {
   x = x ?? 0.0;
   y = y ?? 0.0;
   z = z ?? 0.0;
-  if (DEBUG) {
-    Check.typeOf.number.greaterThanOrEquals('x', x, 0.0);
-    Check.typeOf.number.greaterThanOrEquals('y', y, 0.0);
-    Check.typeOf.number.greaterThanOrEquals('z', z, 0.0);
-  }
 
   const radii = Object.freeze(vec(x, y, z));
   const radiiSquared = Object.freeze(vec(x * x, y * y, z * z));
@@ -68,10 +58,6 @@ export function create(x, y, z) {
 
   /** The normal to the ellipsoid surface at a geodetic position. */
   function geodeticSurfaceNormalCartographic(cartographic, result) {
-    if (DEBUG) {
-      Check.typeOf.object('cartographic', cartographic);
-    }
-
     const longitude = cartographic.longitude;
     const latitude = cartographic.latitude;
     const cosLatitude = Math.cos(latitude);
@@ -89,13 +75,6 @@ export function create(x, y, z) {
 
   /** The normal to the ellipsoid surface at a position, or `undefined` at the centre. */
   function geodeticSurfaceNormal(cartesian, result) {
-    if (DEBUG) {
-      Check.typeOf.object('cartesian', cartesian);
-      if (isNaN(cartesian.x) || isNaN(cartesian.y) || isNaN(cartesian.z)) {
-        throw new DeveloperError('cartesian has a NaN component');
-      }
-    }
-
     if (equalsEpsilon(cartesian, ZERO, EPSILON14)) {
       return undefined;
     }

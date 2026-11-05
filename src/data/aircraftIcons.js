@@ -261,10 +261,8 @@ const TRACKED_RASTER_PX = 192;
  *  Default size serves the fleet; pass `aircraftIcon(kind, TRACKED_ICON_PX)`
  *  (re-exported below) for the tracked billboard. */
 export const TRACKED_ICON_PX = TRACKED_RASTER_PX;
-/** The fleet raster size (aircraftIcon's default). */
-export const FLEET_ICON_PX = FLEET_RASTER_PX;
 /** Every silhouette kind aircraftIcon draws (an engine's sprite atlas). */
-export const AIRCRAFT_ICON_KINDS = Object.freeze(Object.keys(BODIES));
+const AIRCRAFT_ICON_KINDS = Object.freeze(Object.keys(BODIES));
 export function aircraftIcon(kind, px = FLEET_RASTER_PX) {
   const k = BODIES[kind] ? kind : 'airliner';
   const key = `${k}@${px}`;

@@ -1,14 +1,7 @@
 import * as Cesium from 'cesium';
-import { decodePackGeoJSON } from '../../director/packs/geojson.js';
 const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 
-/** Render a bounded geometry pack in owned batches; no asynchronous entity geometry or update loop. */
-export function renderPackGeometry({ asset, pack }, handle) {
-  if (!['application/json', 'application/geo+json'].includes(asset.mimeType))
-    throw new Error('Expected GeoJSON');
-  return renderDecodedGeometry(decodePackGeoJSON(asset.bytes), pack, handle);
-}
-
+/** Render decoded pack geometry in owned batches; no asynchronous entity geometry or update loop. */
 export function renderDecodedGeometry(features, pack, handle) {
   const polygons = [];
   let lines;

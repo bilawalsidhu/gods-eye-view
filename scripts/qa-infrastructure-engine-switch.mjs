@@ -1,7 +1,12 @@
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  openPage,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 
 const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
@@ -26,14 +31,8 @@ const strict = createStrict({
   origin: base.origin,
   layers: ['local-dams', 'local-datacenters'],
 });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
-  const p = await b.newPage();
-  await p.setViewport({ width: 1024, height: 768 });
-  const errors = [];
-  p.on('pageerror', (e) => {
-    errors.push(e.message);
-    console.log('error', e.message.split('?')[0]);
-  });
+await strict.run({}, async (b) => {
+  const { page: p, errors } = await openPage(b);
   const reads = { datacenters: 0, dams: 0 };
   p.on('request', (req) => {
     const path = new URL(req.url()).pathname;
@@ -52,21 +51,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
     });
   });
   await p.goto(base.href);
-  const ready = async (kind) => {
-    await p.waitForFunction(
-      (k) =>
-        window.__godsEyeView?.engine?.kind === k &&
-        !document.querySelector('#globe-engine')?.disabled &&
-        !document.querySelector('.engine-switch-frame') &&
-        document.querySelector('#loading-screen.hidden'),
-      { timeout: 90000 },
-      kind,
-    );
-    await p.evaluate(
-      () => window.__godsEyeView.styleManager.initialRestorePromise,
-    );
-  };
-  await ready('navara');
+  await waitForEngine(p, 'navara');
   const ids = ['local-datacenters', 'local-dams'];
   const dataset = await p.evaluate(async (ids) => {
     const { dataManager, tileset } = window.__godsEyeView;
@@ -184,8 +169,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
       await p.evaluate(() => {
         window.qaSelections = [];
       });
-      await strict.pick(p, kind);
-      await ready(kind);
+      await strict.switchTo(p, kind);
       await p.waitForFunction(
         () => window.qaSelections.includes('local-datacenters:342664739'),
         { timeout: 15000 },

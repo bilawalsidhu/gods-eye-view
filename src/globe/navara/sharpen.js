@@ -4,15 +4,16 @@
 // center + (center − blur) × amount, clamped to [0, 1].
 //
 // After tone mapping and native-stage fields such as FIRMS, before AA and
-// the ordinary W1 display overlay. Native SHARPEN_SHADER filters encoded
-// display RGB. Navara buffers stay linear, so use the exact sRGB transfer
-// before the box mask and its inverse afterward. A gamma-2.2 approximation
-// changes the colors of small, high-contrast glows even at the same amount.
+// the ordinary display overlay (overlay.js). Native SHARPEN_SHADER filters
+// encoded display RGB. Navara buffers stay linear, so use the exact sRGB
+// transfer before the box mask and its inverse afterward. A gamma-2.2
+// approximation changes the colors of small, high-contrast glows even at the
+// same amount.
 //
 // The sky is left alone: Navara's clouds are dithered (a fine grain at the
 // `low` quality the look uses), and the mask turned that grain into visible
 // noise. A pixel whose scene depth (the MRT pass's packed depth buffer, as
-// the S1 drape reads it) is the far plane is sky or cloud; it keeps its
+// the drape reads it) is the far plane is sky or cloud; it keeps its
 // colour, and costs one texture read instead of nine.
 //
 // Its own pass: a convolution reads the pass input, so merged into the tone
@@ -25,7 +26,7 @@ import { Effect as NavaraEffect, EffectDesc } from '@navaramap/three';
 import { Effect, EffectAttribute } from 'postprocessing';
 import { RGBADepthPacking, Uniform } from 'three';
 
-export const SHARPEN_EFFECT_KEY = 'gevSharpen';
+const SHARPEN_EFFECT_KEY = 'gevSharpen';
 
 const fragmentShader = /* glsl */ `
 uniform float amount;
@@ -87,9 +88,7 @@ class UnsharpMaskEffect extends Effect {
 }
 
 /** config.gevSharpen: { amount } (Cesium's `amount` uniform). */
-export class SharpenEffectDesc extends withPassDisposal(
-  withFrameUpdates(EffectDesc),
-) {
+class SharpenEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
   static key = SHARPEN_EFFECT_KEY;
   static insertAfter = ['toneMapping'];
   static insertBefore = ['smaa', 'fxaa', 'gevOverlay', 'final'];

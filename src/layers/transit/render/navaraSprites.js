@@ -1,11 +1,15 @@
 import * as geo from '../../../geo/index.js';
 import { Rgba } from '../../shared/color.js';
-import { createMoverBank } from '../../aircraft/render/navara.js';
+import { createMoverBank } from '../../shared/render/navaraMoverBank.js';
+import {
+  decodeImages,
+  packImageAtlas,
+} from '../../shared/render/imageAtlas.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 import { TRANSIT_ICON_KINDS, transitIcon } from '../../../data/transitIcons.js';
 
 /** The same bounded mode/selection/style rasters used by native billboards. */
-export async function drawTransitAtlas() {
+async function drawTransitAtlas() {
   const urls = [
     ...new Set(
       TRANSIT_ICON_KINDS.flatMap((mode) =>
@@ -15,34 +19,17 @@ export async function drawTransitAtlas() {
       ),
     ),
   ];
-  const images = await Promise.all(
-    urls.map(async (url) => {
-      const image = new Image();
-      image.src = url;
-      await image.decode();
-      return image;
-    }),
-  );
+  const images = await decodeImages(urls);
   const cell = Math.max(...images.map((image) => image.naturalWidth)) + 4;
-  const columns = Math.ceil(Math.sqrt(images.length));
-  const canvas = document.createElement('canvas');
-  canvas.width = columns * cell;
-  canvas.height = Math.ceil(images.length / columns) * cell;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Transit atlas requires a canvas');
-  const cells = {};
-  images.forEach((image, i) => {
-    const x = (i % columns) * cell + 2,
-      y = Math.floor(i / columns) * cell + 2;
-    context.drawImage(image, x, y);
-    cells[urls[i]] = [
-      x / canvas.width,
-      y / canvas.height,
-      (x + image.naturalWidth) / canvas.width,
-      (y + image.naturalHeight) / canvas.height,
-    ];
-  });
-  return { canvas, cells };
+  return packImageAtlas(
+    images.map((image, i) => ({
+      key: urls[i],
+      image,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+    })),
+    { cell, pad: 2 },
+  );
 }
 
 /** Two independently dirty banks: moving contacts never upload the static fleet. */

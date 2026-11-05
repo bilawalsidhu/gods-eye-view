@@ -1,13 +1,12 @@
-// Camera math for the Navara engine, on src/geo only: Cesium's heading/pitch/
-// roll convention, the perspective projection and picks of a camera given as
-// { position, direction, up, fovy, width, height } (Earth-fixed metres, unit
-// vectors, vertical fov in radians, CSS pixels), Cesium's view rectangle and
-// horizon test, and the Navara setCamera pose (degrees). Ported from the S4
-// spike (src/bench/cameraConvention.js) and the contract's fake engine; the
-// projection matches what Navara draws because the engine keeps Navara's
-// camera on the same pose and fov.
+// Camera math for the Navara and fake engines, on src/geo only: Cesium's
+// heading/pitch/roll convention, the perspective projection and picks of a
+// camera given as { position, direction, up, fovy, width, height }
+// (Earth-fixed metres, unit vectors, vertical fov in radians, CSS pixels),
+// Cesium's view rectangle and horizon test, and the Navara setCamera pose
+// (degrees). The projection matches what Navara draws because the engine
+// keeps Navara's camera on the same pose and fov.
 
-import * as geo from '../../geo/index.js';
+import * as geo from '../geo/index.js';
 
 const { cartesian2, cartesian3, cartographic, math, matrix4 } = geo;
 const WGS84 = geo.ellipsoid.WGS84;
@@ -109,7 +108,7 @@ export function headingPitchRoll(
 /**
  * The Navara setCamera/flyTo pose for a camera pose: the eye's longitude,
  * latitude and ellipsoid height, and the same heading/pitch/roll in degrees
- * (Navara 0.2.1 uses Cesium's convention, S4), heading in [0, 360) and roll
+ * (Navara 0.2.1 uses Cesium's convention), heading in [0, 360) and roll
  * in (−180, 180].
  */
 export function navaraPose(position, direction, up) {
@@ -206,14 +205,16 @@ export function pickRay(camera, screen) {
   return { origin: copy3(camera.position), direction: unit(direction) };
 }
 
-/** Nearest intersection of a ray with the WGS84 ellipsoid, if any. */
-export function intersectEllipsoid(origin, direction) {
-  const o = [origin.x / RADII.x, origin.y / RADII.y, origin.z / RADII.z];
-  const d = [
-    direction.x / RADII.x,
-    direction.y / RADII.y,
-    direction.z / RADII.z,
-  ];
+/**
+ * Nearest intersection of a ray with the WGS84 ellipsoid raised by `height`
+ * metres (each radius grown by it), if any.
+ */
+export function intersectEllipsoid(origin, direction, height = 0) {
+  const rx = RADII.x + height;
+  const ry = RADII.y + height;
+  const rz = RADII.z + height;
+  const o = [origin.x / rx, origin.y / ry, origin.z / rz];
+  const d = [direction.x / rx, direction.y / ry, direction.z / rz];
   const a = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
   const b = 2 * (o[0] * d[0] + o[1] * d[1] + o[2] * d[2]);
   const c = o[0] * o[0] + o[1] * o[1] + o[2] * o[2] - 1;

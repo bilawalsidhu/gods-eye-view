@@ -30,7 +30,7 @@ import {
   sphereRange,
   viewProjection,
   viewRectangle,
-} from './cameraMath.js';
+} from '../cameraMath.js';
 
 const { cartesian3, cartographic, math, matrix4 } = geo;
 const WGS84 = geo.ellipsoid.WGS84;

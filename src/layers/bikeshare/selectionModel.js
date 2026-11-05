@@ -4,7 +4,7 @@ import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
 } from './policy.js';
 
-export function buildBikeshareSelectionLabel(record) {
+function buildBikeshareSelectionLabel(record) {
   const stationName = String(record?.stationName || '').trim();
   const stationLabel =
     stationName ||

@@ -55,7 +55,8 @@ See [application construction](APPLICATION.md) and the
 2. `scripts/check-package-boundaries.mjs` builds every declared export without
    app Vite configuration or environment files. `scripts/package-boundaries.json`
    assigns each export exactly once and lists its owned modules and external
-   dependencies. Unused imports still count. Node exports have only a `node`
+   dependencies; a module entry ending in `/` (such as `src/geo/`) owns every
+   file under that directory. Unused imports still count. Node exports have only a `node`
    condition; browser groups cannot use build-only dependency exceptions.
 
 Portable source graphs cannot reach application/rendering, Node, Cesium or

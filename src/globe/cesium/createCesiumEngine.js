@@ -10,9 +10,7 @@ import { createCesiumClock } from './clock.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumFrames } from './frames.js';
 import { createCesiumInput } from './input.js';
-import { createCesiumLines } from './lines.js';
 import { createCesiumMaps } from './maps.js';
-import { createCesiumMovers } from './movers.js';
 import { createCesiumPicker } from './picker.js';
 import { createCesiumProjector } from './projector.js';
 import { createCesiumRender } from './render.js';
@@ -37,44 +35,18 @@ import { createCesiumSurface } from './surface.js';
  */
 export function createCesiumEngine(viewer, options = {}) {
   if (!viewer?.scene) throw new TypeError('createCesiumEngine needs a viewer');
-  // Viewer.canvas is scene.canvas; the engine reads the public alias.
-  const canvas = viewer.canvas ?? viewer.scene.canvas;
+  const { canvas } = viewer;
   const render = createCesiumRender(viewer, options);
   const credits = createCesiumCredits(viewer);
-  // Picks name the mover set or line they hit (movers and lines exist
-  // below; the picker asks them when it picks).
-  let lines = null;
-  let movers = null;
-  let projectorPart = null;
-  const picker = createCesiumPicker(viewer, {
-    identify: (picked) =>
-      movers?.identify(picked) ?? lines?.identify(picked) ?? null,
-    // A mover instance behind the globe is not picked (billboards drawn
-    // without a depth test reach Cesium's GPU pick through it).
-    visible: ({ owner, instance }) => {
-      const position = movers?.instancePosition(owner, instance);
-      return position ? projectorPart.projector.horizonVisible(position) : true;
-    },
-  });
+  const picker = createCesiumPicker(viewer);
   const parts = {
     camera: createCesiumCamera(viewer),
     picker,
-    projector: (projectorPart = createCesiumProjector(viewer)),
+    projector: createCesiumProjector(viewer),
     frames: createCesiumFrames(viewer),
     clock: createCesiumClock(viewer, options),
-    lines: (lines = createCesiumLines(viewer, {
-      requestRender: (reason) => render.render.request(reason),
-      ...(options.lineFactories ? { factories: options.lineFactories } : {}),
-    })),
-    movers: (movers = createCesiumMovers(viewer, {
-      requestRender: (reason) => render.render.request(reason),
-      ...(options.moverFactories ? { factories: options.moverFactories } : {}),
-    })),
     render,
-    // Mover sets in a surface `exclude` are hidden for the sample.
-    surface: createCesiumSurface(viewer, {
-      engineExclude: (entry) => movers?.primitiveOf(entry) ?? null,
-    }),
+    surface: createCesiumSurface(viewer),
     input: createCesiumInput(viewer, { ...options, picker: picker.picker }),
     credits,
     maps: createCesiumMaps(viewer, {

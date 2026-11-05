@@ -23,7 +23,7 @@ export function atlasUvRects(cells, keys) {
 }
 
 /** The camera distance from the origin past which the origin moves. */
-export const recentreDistance = (cameraHeight) =>
+const recentreDistance = (cameraHeight) =>
   Math.max(1_000, 0.1 * Math.abs(cameraHeight));
 
 /**

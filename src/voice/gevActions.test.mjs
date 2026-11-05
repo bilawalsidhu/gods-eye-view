@@ -184,6 +184,8 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       lookAtTransform() {},
     },
   };
+  // A Viewer's canvas is its scene's.
+  viewer.canvas = viewer.scene.canvas;
   // Location flights run on the globe engine registered for the viewer, as
   // the app's scene engine is (src/app/globeEngine.js).
   registerViewerEngine(viewer, createCesiumEngine(viewer));
@@ -3577,6 +3579,8 @@ function createPrewarmHarness({ pickPosition, positionCartographic } = {}) {
       },
     },
   };
+  // A Viewer's canvas is its scene's.
+  viewer.canvas = viewer.scene.canvas;
   return {
     viewer,
     calls,

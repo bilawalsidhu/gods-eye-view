@@ -1,5 +1,5 @@
-// Native earthquake entities, moved from the layer without changing its
-// static CLAMP_TO_GROUND ellipses, properties or analyst snapshot semantics.
+// Native earthquake entities: static CLAMP_TO_GROUND ellipses with the
+// layer's properties and analyst snapshot semantics.
 import * as Cesium from 'cesium';
 
 export function createEarthquakesCesiumRenderer(_engine, { viewer }) {

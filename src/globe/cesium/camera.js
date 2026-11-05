@@ -3,23 +3,16 @@
 
 import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
-import { createEngineEvent } from '../contract.js';
+import { wrapAngle } from '../cameraMath.js';
 import { bridgeEvent } from './events.js';
 import { toCesium2, toCesium3, toGeo3 } from './convert.js';
 import { createCesiumFollow } from './follow.js';
 
-const { math } = geo;
 const easings = () => ({
   cubicInOut: Cesium.EasingFunction.CUBIC_IN_OUT,
   sinusoidalInOut: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
   linear: Cesium.EasingFunction.LINEAR_NONE,
 });
-
-// Cesium reports heading and roll in [0, 2π]; the contract wants [0, 2π).
-function wrapAngle(angle) {
-  const value = math.zeroToTwoPi(angle);
-  return value < 1e-12 || math.TWO_PI - value < 1e-12 ? 0 : value;
-}
 
 function cesiumOrientation(orientation) {
   if (!orientation) return undefined;
@@ -65,70 +58,38 @@ const COMMANDS = Object.freeze([
 /**
  * camera.commanded: raised before any COMMANDS call on the Cesium camera and
  * when the viewer's tracked entity changes. The hooks exist only while the
- * event has listeners and then restore each method exactly (unless something
- * newer replaced it), so an idle engine leaves the camera untouched.
+ * event has listeners (bridgeEvent) and then restore each method exactly
+ * (unless something newer replaced it), so an idle engine leaves the camera
+ * untouched.
  */
 function commandedEvent(viewer, cesium) {
-  const event = createEngineEvent();
-  let unhook = null;
-  const hook = () => {
-    const removers = [];
-    for (const name of COMMANDS) {
-      const original = cesium[name];
-      if (typeof original !== 'function') continue;
-      const descriptor = Object.getOwnPropertyDescriptor(cesium, name);
-      const wrapped = function (...args) {
-        event.raiseEvent();
-        return original.apply(this, args);
+  return bridgeEvent({
+    addEventListener(raise) {
+      const removers = [];
+      for (const name of COMMANDS) {
+        const original = cesium[name];
+        if (typeof original !== 'function') continue;
+        const descriptor = Object.getOwnPropertyDescriptor(cesium, name);
+        const wrapped = function (...args) {
+          raise();
+          return original.apply(this, args);
+        };
+        cesium[name] = wrapped;
+        removers.push(() => {
+          if (cesium[name] !== wrapped) return;
+          if (descriptor) Object.defineProperty(cesium, name, descriptor);
+          else delete cesium[name];
+        });
+      }
+      const removeTracking = viewer.trackedEntityChanged?.addEventListener(() =>
+        raise(),
+      );
+      if (removeTracking) removers.push(removeTracking);
+      return () => {
+        for (const remove of removers) remove();
       };
-      cesium[name] = wrapped;
-      removers.push(() => {
-        if (cesium[name] !== wrapped) return;
-        if (descriptor) Object.defineProperty(cesium, name, descriptor);
-        else delete cesium[name];
-      });
-    }
-    const removeTracking = viewer.trackedEntityChanged?.addEventListener(() =>
-      event.raiseEvent(),
-    );
-    if (removeTracking) removers.push(removeTracking);
-    return () => {
-      for (const remove of removers) remove();
-    };
-  };
-  let detached = false;
-  const sync = () => {
-    const wanted = !detached && event.numberOfListeners > 0;
-    if (wanted === (unhook !== null)) return;
-    if (wanted) unhook = hook();
-    else {
-      const remove = unhook;
-      unhook = null;
-      remove();
-    }
-  };
-  const add = event.addEventListener;
-  const remove = event.removeEventListener;
-  event.addEventListener = (listener) => {
-    const removeListener = add(listener);
-    sync();
-    return () => {
-      removeListener();
-      sync();
-    };
-  };
-  event.removeEventListener = (listener) => {
-    const removed = remove(listener);
-    sync();
-    return removed;
-  };
-  return {
-    event,
-    detach() {
-      detached = true;
-      sync();
     },
-  };
+  });
 }
 
 /**
@@ -136,8 +97,7 @@ function commandedEvent(viewer, cesium) {
  * @returns {{ camera: import('../contract.js').GlobeCamera, destroy: () => void }}
  */
 export function createCesiumCamera(viewer) {
-  // Viewer.camera is scene.camera; the public alias is what shell callers read.
-  const cesium = viewer.camera ?? viewer.scene.camera;
+  const cesium = viewer.camera;
   const bridges = {
     changed: bridgeEvent(cesium.changed),
     moveStart: bridgeEvent(cesium.moveStart),

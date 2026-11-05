@@ -34,7 +34,7 @@ export const OPENMAPTILES_CREDIT = {
   key: 'openfreemap',
   html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
 };
-export const GOOGLE_PLACES_CREDIT = {
+const GOOGLE_PLACES_CREDIT = {
   key: 'google-maps-places',
   html: 'Google Maps Places: <a href="https://developers.google.com/maps/documentation/places/web-service/policies" target="_blank" rel="noopener">Google Maps</a>',
 };
@@ -45,7 +45,7 @@ const viewerCredits = new WeakMap();
 
 /**
  * Credits of a globe engine, or of a Cesium viewer's credit display for
- * callers that still hold a viewer (layers until phase 1c); null without one.
+ * callers that still hold a viewer (Cesium layers); null without one.
  * @returns {{ addStatic: Function, request: () => void } | null}
  */
 function creditsOf(target) {

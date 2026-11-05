@@ -327,7 +327,7 @@ function attachViewerTools(
   );
 
   // Install the explicit scope mask used by the DISPLAY controls.
-  installScopeMask(viewer);
+  installScopeMask(engine);
   defer(() => destroyScopeMask());
 
   // The follow camera recomputes the tracked target's dead-reckon position

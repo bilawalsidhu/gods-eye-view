@@ -23,7 +23,7 @@ function fail(message) {
  */
 export const TACTICAL_DASH = Object.freeze({ groups: 4, dashes: 100 });
 
-export const LINE_ARCS = Object.freeze(['none', 'geodesic']);
+const LINE_ARCS = Object.freeze(['none', 'geodesic']);
 
 const isColor = (value) =>
   (Array.isArray(value) || ArrayBuffer.isView(value)) &&

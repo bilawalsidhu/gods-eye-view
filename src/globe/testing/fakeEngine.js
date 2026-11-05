@@ -35,6 +35,20 @@ import {
   mergeStyle,
 } from '../contract.js';
 import { createAppClock } from '../../time/clock.js';
+import {
+  cesiumFovy,
+  headingPitchRoll,
+  horizonVisible,
+  lookAtFrame,
+  orientationVectors,
+  pickEllipsoid,
+  pickRay,
+  projectToWindow,
+  rectangleViewPosition,
+  sphereRange,
+  viewProjection,
+  viewRectangle,
+} from '../cameraMath.js';
 import { createLineRegistry } from '../lines.js';
 import { createMoverRegistry } from '../movers.js';
 import { createCpuPicker } from '../cpuPicks.js';
@@ -45,17 +59,10 @@ const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
 // Where the fake wall clock starts: 2026-01-01T00:00:00Z.
 const FAKE_EPOCH_MS = Date.UTC(2026, 0, 1);
-const RADII = WGS84.radii;
-const MAXIMUM_RADIUS = Math.max(RADII.x, RADII.y, RADII.z);
 // The terrain kinds the engines build themselves (src/maps/registry.js).
 const TERRAIN_KINDS = Object.freeze(['ellipsoid', 'keyless', 'world']);
 const DEFAULT_FLIGHT_SECONDS = 3;
 const DEFAULT_ZOOM_AMOUNT = 100000; // Cesium's camera.defaultZoomAmount
-const ZERO_RADIUS_SPHERE_RANGE = 100; // Cesium's MINIMUM_ZOOM
-const MINIMUM_ZOOM_DISTANCE = 1; // Cesium's screenSpaceCameraController default
-const MAXIMUM_ZOOM_DISTANCE = Infinity;
-const NEAR = 1;
-const FAR = 1e9;
 const SCRIPTABLE = new Set([
   'pick',
   'drillPick',
@@ -88,152 +95,6 @@ const sum = (...vectors) =>
 const unit = (vector) => cartesian3.normalize(vector, cartesian3.create());
 const cross = (left, right) =>
   cartesian3.cross(left, right, cartesian3.create());
-
-// An angle in [0, 2π), as Cesium's camera reports it.
-function wrapAngle(angle) {
-  const value = math.zeroToTwoPi(angle);
-  return value < 1e-12 || math.TWO_PI - value < 1e-12 ? 0 : value;
-}
-
-// The local east/north/up axes at a position, in Earth-fixed coordinates.
-function localAxes(position) {
-  const frame = geo.transforms.eastNorthUpToFixedFrame(position, WGS84);
-  return {
-    east: cartesian3.create(frame[0], frame[1], frame[2]),
-    north: cartesian3.create(frame[4], frame[5], frame[6]),
-    up: cartesian3.create(frame[8], frame[9], frame[10]),
-  };
-}
-
-const combine = (axes, e, n, u) =>
-  sum(scaled(axes.east, e), scaled(axes.north, n), scaled(axes.up, u));
-const toLocal = (axes, vector) => ({
-  e: cartesian3.dot(vector, axes.east),
-  n: cartesian3.dot(vector, axes.north),
-  u: cartesian3.dot(vector, axes.up),
-});
-
-// Direction and up for a heading/pitch/roll in the local frame at position,
-// as Cesium's setView builds them: heading 0 looks north, positive pitch looks
-// up, positive roll tilts `up` toward the camera's right.
-function orientationVectors(position, heading, pitch, roll) {
-  const axes = localAxes(position);
-  const cosPitch = Math.cos(pitch);
-  const direction = combine(
-    axes,
-    Math.sin(heading) * cosPitch,
-    Math.cos(heading) * cosPitch,
-    Math.sin(pitch),
-  );
-  const levelRight = combine(axes, Math.cos(heading), -Math.sin(heading), 0);
-  const levelUp = cross(levelRight, direction);
-  const up = sum(
-    scaled(levelUp, Math.cos(roll)),
-    scaled(levelRight, Math.sin(roll)),
-  );
-  return { direction: unit(direction), up: unit(up) };
-}
-
-// Cesium's Camera heading/pitch/roll getters, in the local frame at position.
-function headingPitchRoll(position, direction, up) {
-  const axes = localAxes(position);
-  const d = toLocal(axes, direction);
-  const u = toLocal(axes, up);
-  const r = toLocal(axes, cross(direction, up));
-  const vertical = Math.abs(Math.abs(d.u) - 1) <= 1e-3;
-  const raw = vertical
-    ? Math.atan2(u.n, u.e) - math.PI_OVER_TWO
-    : Math.atan2(d.n, d.e) - math.PI_OVER_TWO;
-  return {
-    heading: wrapAngle(math.TWO_PI - math.zeroToTwoPi(raw)),
-    pitch: math.PI_OVER_TWO - Math.acos(math.clamp(d.u, -1, 1)),
-    roll: vertical ? 0 : wrapAngle(Math.atan2(-r.u, u.u)),
-  };
-}
-
-// Camera offset from a target for a HeadingPitchRange, in the target's frame.
-function offsetFromHeadingPitchRange(heading, pitch, range) {
-  const p = math.clamp(pitch, -math.PI_OVER_TWO, math.PI_OVER_TWO);
-  const cosPitch = Math.cos(p);
-  return cartesian3.create(
-    -Math.sin(heading) * cosPitch * range,
-    -Math.cos(heading) * cosPitch * range,
-    -Math.sin(p) * range,
-  );
-}
-
-// Nearest intersection of a ray with the WGS84 ellipsoid, if any.
-function intersectEllipsoid(origin, direction) {
-  const o = [origin.x / RADII.x, origin.y / RADII.y, origin.z / RADII.z];
-  const d = [
-    direction.x / RADII.x,
-    direction.y / RADII.y,
-    direction.z / RADII.z,
-  ];
-  const a = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-  const b = 2 * (o[0] * d[0] + o[1] * d[1] + o[2] * d[2]);
-  const c = o[0] * o[0] + o[1] * o[1] + o[2] * o[2] - 1;
-  const discriminant = b * b - 4 * a * c;
-  if (discriminant < 0) return undefined;
-  const root = Math.sqrt(discriminant);
-  const near = (-b - root) / (2 * a);
-  const t = near > 0 ? near : (-b + root) / (2 * a);
-  if (!(t > 0)) return undefined;
-  return sum(origin, scaled(direction, t));
-}
-
-// Cesium's computeHorizonQuad: four limb points around the camera's nadir.
-function horizonQuad(position) {
-  const q = cartesian3.create(
-    position.x / RADII.x,
-    position.y / RADII.y,
-    position.z / RADII.z,
-  );
-  const qMagnitude = cartesian3.magnitude(q);
-  const qUnit = unit(q);
-  let east;
-  let north;
-  if (cartesian3.equalsEpsilon(qUnit, cartesian3.UNIT_Z, math.EPSILON10)) {
-    east = cartesian3.create(0, 1, 0);
-    north = cartesian3.create(0, 0, 1);
-  } else {
-    east = unit(cross(cartesian3.UNIT_Z, qUnit));
-    north = unit(cross(qUnit, east));
-  }
-  const center = scaled(qUnit, 1 / qMagnitude);
-  const offset =
-    Math.sqrt(Math.max(0, cartesian3.magnitudeSquared(q) - 1)) / qMagnitude;
-  const point = (n, e) => {
-    const p = sum(center, scaled(north, n * offset), scaled(east, e * offset));
-    return cartesian3.create(p.x * RADII.x, p.y * RADII.y, p.z * RADII.z);
-  };
-  // Same order as the corner picks: upper-left, lower-left, lower-right, upper-right.
-  return [point(1, -1), point(-1, -1), point(-1, 1), point(1, 1)];
-}
-
-// Cesium's Rectangle.fromCartographicArray, including the antimeridian case.
-function rectangleFromCartographics(points) {
-  let west = Infinity;
-  let east = -Infinity;
-  let westOverIDL = Infinity;
-  let eastOverIDL = -Infinity;
-  let south = Infinity;
-  let north = -Infinity;
-  for (const { longitude, latitude } of points) {
-    west = Math.min(west, longitude);
-    east = Math.max(east, longitude);
-    south = Math.min(south, latitude);
-    north = Math.max(north, latitude);
-    const adjusted = longitude >= 0 ? longitude : longitude + math.TWO_PI;
-    westOverIDL = Math.min(westOverIDL, adjusted);
-    eastOverIDL = Math.max(eastOverIDL, adjusted);
-  }
-  if (east - west > eastOverIDL - westOverIDL) {
-    west = westOverIDL > Math.PI ? westOverIDL - math.TWO_PI : westOverIDL;
-    east = eastOverIDL > Math.PI ? eastOverIDL - math.TWO_PI : eastOverIDL;
-  }
-  return { west, south, east, north };
-}
 
 // render.setContactSonar/contactSonar when asked; nothing otherwise.
 function fakeContactSonar(enabled, record) {
@@ -328,11 +189,7 @@ export function createFakeEngine(options = {}) {
   let width = options.width ?? 1024;
   let height = options.height ?? 768;
   // Cesium's default: 60 degrees across the wider canvas dimension.
-  const fovy =
-    options.fovy ??
-    (width > height
-      ? 2 * Math.atan(Math.tan(Math.PI / 6) * (height / width))
-      : Math.PI / 3);
+  const fovy = options.fovy ?? cesiumFovy(width, height);
   const state = {
     position: cartesian3.create(),
     direction: cartesian3.create(),
@@ -346,7 +203,6 @@ export function createFakeEngine(options = {}) {
     'frames.preUpdate': createEngineEvent(),
     'frames.preRender': createEngineEvent(),
     'frames.postRender': createEngineEvent(),
-    'clock.ticked': createEngineEvent(),
     // The follow steps here, before preRender (as on Navara).
     followStep: createEngineEvent(),
   };
@@ -435,32 +291,22 @@ export function createFakeEngine(options = {}) {
   const right = () => unit(cross(state.direction, state.up));
   const poseAngles = () =>
     headingPitchRoll(state.position, state.direction, state.up);
-
-  // Where a {west, south, east, north} destination is seen from.
-  function rectanglePosition({ west, south, east, north }) {
-    const lonSpan = east >= west ? east - west : east + math.TWO_PI - west;
-    const longitude = math.negativePiToPi(west + lonSpan / 2);
-    const latitude = (south + north) / 2;
-    const tanY = Math.tan(fovy / 2);
-    const radius = WGS84.maximumRadius;
-    // The widest parallel of the rectangle, and a small margin for curvature.
-    const widest =
-      south * north <= 0
-        ? 1
-        : Math.cos(Math.min(Math.abs(south), Math.abs(north)));
-    const across =
-      1.05 *
-      Math.max(
-        (radius * widest * lonSpan) / 2 / (tanY * aspect()),
-        (radius * (north - south)) / 2 / tanY,
-      );
-    return cartesian3.fromRadians(longitude, latitude, across, WGS84);
-  }
+  // The camera as cameraMath takes it.
+  const cameraView = () => ({
+    position: state.position,
+    direction: state.direction,
+    up: state.up,
+    fovy,
+    width,
+    height,
+  });
 
   // The pose for a destination and orientation; missing angles use `fallback`.
   function viewFor(destination, orientation, fallback) {
     const position =
-      'west' in destination ? rectanglePosition(destination) : destination;
+      'west' in destination
+        ? rectangleViewPosition(destination, fovy, aspect())
+        : destination;
     if (orientation && 'direction' in orientation)
       return {
         position: copy3(position),
@@ -487,30 +333,6 @@ export function createFakeEngine(options = {}) {
   function setTransform(next, target) {
     transform = [...next];
     lookAtTarget = target ? copy3(target) : null;
-  }
-
-  function lookAtFrame(frame, offset) {
-    const local =
-      offset && 'heading' in offset
-        ? offsetFromHeadingPitchRange(
-            offset.heading,
-            offset.pitch,
-            offset.range,
-          )
-        : copy3(offset);
-    const localDirection = unit(cartesian3.negate(local, cartesian3.create()));
-    let localRight = cross(localDirection, cartesian3.UNIT_Z);
-    if (cartesian3.magnitudeSquared(localRight) < math.EPSILON10)
-      localRight = copy3(cartesian3.UNIT_X);
-    localRight = unit(localRight);
-    const localUp = unit(cross(localRight, localDirection));
-    const vector = (value) =>
-      unit(matrix4.multiplyByPointAsVector(frame, value, cartesian3.create()));
-    apply({
-      position: matrix4.multiplyByPoint(frame, local, cartesian3.create()),
-      direction: vector(localDirection),
-      up: vector(localUp),
-    });
   }
 
   function cancelCurrentFlight() {
@@ -608,151 +430,6 @@ export function createFakeEngine(options = {}) {
     }
   }
 
-  function project(position, result) {
-    const offset = cartesian3.subtract(
-      position,
-      state.position,
-      cartesian3.create(),
-    );
-    const depth = cartesian3.dot(offset, state.direction);
-    if (!(depth > 0)) return undefined;
-    const tangent = Math.tan(fovy / 2);
-    const ndcX = cartesian3.dot(offset, right()) / (depth * tangent * aspect());
-    const ndcY = cartesian3.dot(offset, state.up) / (depth * tangent);
-    const x = ((ndcX + 1) / 2) * width;
-    const y = ((1 - ndcY) / 2) * height;
-    if (!result) return cartesian2.create(x, y);
-    result.x = x;
-    result.y = y;
-    return result;
-  }
-
-  function viewProjection(result = matrix4.create()) {
-    const f = 1 / Math.tan(fovy / 2);
-    const rows = [
-      [right(), f / aspect()],
-      [state.up, f],
-    ];
-    const D = state.direction;
-    const P = state.position;
-    for (const [row, [axis, scale]] of rows.entries()) {
-      result[row] = axis.x * scale;
-      result[4 + row] = axis.y * scale;
-      result[8 + row] = axis.z * scale;
-      result[12 + row] = -cartesian3.dot(axis, P) * scale;
-    }
-    // Eye z is −direction·(p − position); clip.w = −z_eye.
-    const A = (FAR + NEAR) / (NEAR - FAR);
-    const B = (2 * FAR * NEAR) / (NEAR - FAR);
-    result[2] = -D.x * A;
-    result[6] = -D.y * A;
-    result[10] = -D.z * A;
-    result[14] = cartesian3.dot(D, P) * A + B;
-    result[3] = D.x;
-    result[7] = D.y;
-    result[11] = D.z;
-    result[15] = -cartesian3.dot(D, P);
-    return result;
-  }
-
-  // Cesium's EllipsoidalOccluder.isPointVisible.
-  function horizonVisible(position) {
-    const camera = cartesian3.create(
-      state.position.x / RADII.x,
-      state.position.y / RADII.y,
-      state.position.z / RADII.z,
-    );
-    const limbSquared = cartesian3.magnitudeSquared(camera) - 1;
-    const target = cartesian3.create(
-      position.x / RADII.x,
-      position.y / RADII.y,
-      position.z / RADII.z,
-    );
-    const vt = cartesian3.subtract(target, camera, cartesian3.create());
-    const vtDotVc = -cartesian3.dot(vt, camera);
-    const occluded =
-      limbSquared < 0
-        ? vtDotVc > 0
-        : vtDotVc > limbSquared &&
-          (vtDotVc * vtDotVc) / cartesian3.magnitudeSquared(vt) > limbSquared;
-    return !occluded;
-  }
-
-  function ray(screen) {
-    const tangent = Math.tan(fovy / 2);
-    const ndcX = (2 * screen.x) / width - 1;
-    const ndcY = 1 - (2 * screen.y) / height;
-    const direction = sum(
-      state.direction,
-      scaled(right(), ndcX * tangent * aspect()),
-      scaled(state.up, ndcY * tangent),
-    );
-    return { origin: copy3(state.position), direction: unit(direction) };
-  }
-
-  // Whether the sphere around the Earth is fully outside the view frustum.
-  function globeOutsideFrustum() {
-    const toCentre = cartesian3.negate(state.position, cartesian3.create());
-    const D = state.direction;
-    const tanY = Math.tan(fovy / 2);
-    const tanX = tanY * aspect();
-    const R = right();
-    const U = state.up;
-    const planes = [
-      [D, NEAR],
-      [unit(sum(scaled(R, -1), scaled(D, tanX))), 0],
-      [unit(sum(R, scaled(D, tanX))), 0],
-      [unit(sum(scaled(U, -1), scaled(D, tanY))), 0],
-      [unit(sum(U, scaled(D, tanY))), 0],
-    ];
-    return planes.some(
-      ([normal, offset]) =>
-        cartesian3.dot(normal, toCentre) - offset < -MAXIMUM_RADIUS,
-    );
-  }
-
-  // Cesium's Camera.computeViewRectangle.
-  function computedViewRectangle() {
-    if (globeOutsideFrustum()) return undefined;
-    const horizon = horizonQuad(state.position);
-    let hits = 0;
-    const points = [
-      [0, 0],
-      [0, height],
-      [width, height],
-      [width, 0],
-    ].map(([x, y], index) => {
-      const hit = intersectEllipsoid(
-        state.position,
-        ray(cartesian2.create(x, y)).direction,
-      );
-      if (hit) hits++;
-      return cartographic.fromCartesian(hit ?? horizon[index], WGS84);
-    });
-    if (hits < 2)
-      return {
-        west: -Math.PI,
-        south: -math.PI_OVER_TWO,
-        east: Math.PI,
-        north: math.PI_OVER_TWO,
-      };
-    const rectangle = rectangleFromCartographics(points);
-    let travelled = 0;
-    let last = points[3].longitude;
-    for (const { longitude } of points) {
-      const step = Math.abs(longitude - last);
-      travelled += step > Math.PI ? math.TWO_PI - step : step;
-      last = longitude;
-    }
-    if (math.equalsEpsilon(Math.abs(travelled), math.TWO_PI, 1e-9)) {
-      rectangle.west = -Math.PI;
-      rectangle.east = Math.PI;
-      if (points[0].latitude >= 0) rectangle.north = math.PI_OVER_TWO;
-      else rectangle.south = -math.PI_OVER_TWO;
-    }
-    return rectangle;
-  }
-
   function scripted(name, args, fallback) {
     if (!scripts.has(name)) return fallback();
     const value = scripts.get(name);
@@ -801,52 +478,32 @@ export function createFakeEngine(options = {}) {
     flyToSphere(sphere, sphereOptions = {}) {
       command('camera.flyToSphere', [sphere, sphereOptions]);
       setTransform(matrix4.IDENTITY);
-      let range = sphereOptions.range;
-      if (!range) {
-        const tanPhi = Math.tan(fovy / 2);
-        const tanTheta = aspect() * tanPhi;
-        range =
-          sphere.radius === 0
-            ? ZERO_RADIUS_SPHERE_RANGE
-            : math.clamp(
-                Math.max(sphere.radius / tanTheta, sphere.radius / tanPhi),
-                MINIMUM_ZOOM_DISTANCE,
-                MAXIMUM_ZOOM_DISTANCE,
-              );
-      }
+      const range =
+        sphereOptions.range || sphereRange(sphere.radius, fovy, aspect());
       const frame = geo.transforms.eastNorthUpToFixedFrame(
         sphere.center,
         WGS84,
       );
-      const saved = {
-        position: state.position,
-        direction: state.direction,
-        up: state.up,
-      };
-      lookAtFrame(frame, {
-        heading: sphereOptions.heading ?? 0,
-        pitch: sphereOptions.pitch ?? -Math.PI / 4,
-        range,
-      });
-      const target = {
-        position: state.position,
-        direction: state.direction,
-        up: state.up,
-      };
-      apply(saved);
-      startFlight(sphereOptions, target);
+      startFlight(
+        sphereOptions,
+        lookAtFrame(frame, {
+          heading: sphereOptions.heading ?? 0,
+          pitch: sphereOptions.pitch ?? -Math.PI / 4,
+          range,
+        }),
+      );
     },
     flightActive: () => flight != null,
     lookAt(target, offset) {
       command('camera.lookAt', [target, offset]);
       const frame = geo.transforms.eastNorthUpToFixedFrame(target, WGS84);
       setTransform(frame, target);
-      lookAtFrame(frame, offset);
+      apply(lookAtFrame(frame, offset));
     },
     lookAtTransform(frame, offset) {
       record('camera.lookAtTransform', [frame, offset]);
       setTransform(frame, cartesian3.create(frame[12], frame[13], frame[14]));
-      if (offset) lookAtFrame(frame, offset);
+      if (offset) apply(lookAtFrame(frame, offset));
     },
     transform: () => [...transform],
     release() {
@@ -867,15 +524,15 @@ export function createFakeEngine(options = {}) {
     },
     viewRectangle() {
       record('camera.viewRectangle', []);
-      return scripted('viewRectangle', [], computedViewRectangle);
+      return scripted('viewRectangle', [], () => viewRectangle(cameraView()));
     },
     pickEllipsoid(screen) {
       return scripted('pickEllipsoid', [screen], () =>
-        intersectEllipsoid(state.position, ray(screen).direction),
+        pickEllipsoid(cameraView(), screen),
       );
     },
     pickRay(screen) {
-      return ray(screen);
+      return pickRay(cameraView(), screen);
     },
     changed: events['camera.changed'],
     moveStart: events['camera.moveStart'],
@@ -971,21 +628,20 @@ export function createFakeEngine(options = {}) {
     projector: {
       worldToWindow(position, result) {
         const value = scripted('worldToWindow', [position, result], () =>
-          project(position, result),
+          projectToWindow(cameraView(), position, result),
         );
         if (value && result && value !== result)
           return cartesian2.clone(value, result);
         return value;
       },
-      viewProjection,
-      horizonVisible,
+      viewProjection: (result) => viewProjection(cameraView(), result),
+      horizonVisible: (position) => horizonVisible(state.position, position),
     },
     movers: moverRegistry.movers,
     lines: lineRegistry.lines,
     clock: {
       now: () => appClock.now(),
       frameTime: () => appClock.frameTime(),
-      ticked: events['clock.ticked'],
     },
     frames: {
       preUpdate: events['frames.preUpdate'],
@@ -1020,24 +676,20 @@ export function createFakeEngine(options = {}) {
       // Scripted as 'sampleHeightDetailed', else from the scripted
       // sampleHeight (tiles, no size) and terrainHeight.
       sampleHeightDetailed(position, surfaceOptions) {
-        const { exclude, lod } = normalizeSurfaceOptions(surfaceOptions);
-        record('surface.sampleHeightDetailed', [position, { exclude, lod }]);
-        return scripted(
-          'sampleHeightDetailed',
-          [position, { exclude, lod }],
-          () => {
-            const height = scripted(
-              'sampleHeight',
-              [position, exclude],
-              () => undefined,
-            );
-            if (Number.isFinite(height)) return { height, source: 'tiles' };
-            const terrain = scripted('terrainHeight', [position], () => 0);
-            return Number.isFinite(terrain)
-              ? { height: terrain, source: 'terrain' }
-              : undefined;
-          },
-        );
+        const { exclude } = normalizeSurfaceOptions(surfaceOptions);
+        record('surface.sampleHeightDetailed', [position, { exclude }]);
+        return scripted('sampleHeightDetailed', [position, { exclude }], () => {
+          const height = scripted(
+            'sampleHeight',
+            [position, exclude],
+            () => undefined,
+          );
+          if (Number.isFinite(height)) return { height, source: 'tiles' };
+          const terrain = scripted('terrainHeight', [position], () => 0);
+          return Number.isFinite(terrain)
+            ? { height: terrain, source: 'terrain' }
+            : undefined;
+        });
       },
       supported: true,
       terrainHeight(position) {
@@ -1217,11 +869,11 @@ export function createFakeEngine(options = {}) {
     advanceTime(ms) {
       if (ownsWall) wallMs += ms;
     },
-    /** Runs one frame: clock.ticked, preUpdate, flight progress, preRender, camera events, postRender. */
+    /** Runs one frame: the clock's frame time, preUpdate, flight progress, preRender, camera events, postRender. */
     frame(dt = 16) {
       clock += dt;
       if (ownsWall) wallMs += dt;
-      events['clock.ticked'].raiseValue(appClock.beginFrame());
+      appClock.beginFrame();
       events['frames.preUpdate'].raiseEvent(clock);
       advanceFlight(dt);
       events.followStep.raiseEvent();

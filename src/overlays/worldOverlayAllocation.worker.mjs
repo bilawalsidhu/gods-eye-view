@@ -5,7 +5,7 @@ import {
   horizonVisible as navaraHorizonVisible,
   projectToWindow as navaraProjectToWindow,
   viewProjection as navaraViewProjection,
-} from '../globe/navara/cameraMath.js';
+} from '../globe/cameraMath.js';
 import {
   AMBIENT_CARD_COLLISION_CAPACITY,
   destroyWorldOverlay,
@@ -1242,8 +1242,8 @@ function buildPhase6DetectionWorkload(count) {
 }
 
 /**
- * The Navara engine's projector (its camera maths, src/globe/navara/
- * cameraMath.js, as createNavaraEngine wires it) over a real WGS84 camera
+ * The Navara engine's projector (its camera maths, src/globe/cameraMath.js,
+ * as createNavaraEngine wires it) over a real WGS84 camera
  * 2 000 km over (0°, 0°), and labels on a lon/lat grid under it with the
  * horizon test ON: the per-label horizon test and the per-frame matrix of
  * the engine-neutral host path, not the Cesium mock's.

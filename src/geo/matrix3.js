@@ -2,12 +2,7 @@
 //
 // 3x3 matrices as plain arrays of 9 numbers in Cesium's column-major index
 // order (m[column * 3 + row]), so Cesium accepts them wherever it reads
-// m[0]..m[8]. Only the subset gev uses is ported. With DEBUG on (development
-// and tests; see debug.js) invalid arguments throw the same DeveloperError as
-// Cesium's debug checks.
-
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
+// m[0]..m[8]. Only the subset gev uses is ported.
 
 /** A matrix of zeros (Cesium's `new Matrix3()`). */
 export function create() {
@@ -16,10 +11,6 @@ export function create() {
 
 /** The rotation matrix of a unit quaternion. */
 export function fromQuaternion(quaternion, result) {
-  if (DEBUG) {
-    Check.typeOf.object('quaternion', quaternion);
-  }
-
   const x2 = quaternion.x * quaternion.x;
   const xy = quaternion.x * quaternion.y;
   const xz = quaternion.x * quaternion.z;
@@ -58,10 +49,6 @@ export function fromQuaternion(quaternion, result) {
 
 /** A rotation by `angle` radians around the z-axis. */
 export function fromRotationZ(angle, result) {
-  if (DEBUG) {
-    Check.typeOf.number('angle', angle);
-  }
-
   const cosAngle = Math.cos(angle);
   const sinAngle = Math.sin(angle);
 
@@ -80,12 +67,6 @@ export function fromRotationZ(angle, result) {
 
 /** The product of a matrix and a column vector; `result` is required. */
 export function multiplyByVector(matrix, cartesian, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-    Check.typeOf.object('cartesian', cartesian);
-    Check.typeOf.object('result', result);
-  }
-
   const vX = cartesian.x;
   const vY = cartesian.y;
   const vZ = cartesian.z;
@@ -102,13 +83,6 @@ export function multiplyByVector(matrix, cartesian, result) {
 
 /** The column at `index` (0..2) as {x, y, z}; `result` is required. */
 export function getColumn(matrix, index, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-    Check.typeOf.number.greaterThanOrEquals('index', index, 0);
-    Check.typeOf.number.lessThanOrEquals('index', index, 2);
-    Check.typeOf.object('result', result);
-  }
-
   const startIndex = index * 3;
   const x = matrix[startIndex];
   const y = matrix[startIndex + 1];

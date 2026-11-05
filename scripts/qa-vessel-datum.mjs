@@ -19,7 +19,7 @@
  *   node scripts/qa-vessel-datum.mjs --ports rotterdam --url http://localhost:4173
  *   node scripts/qa-vessel-datum.mjs --engine navara --url 'http://localhost:PORT/?qaFeed=vessels:fixture'
  *
- * --engine cesium|navara (phase 3): the engine-neutral path on either engine,
+ * --engine cesium|navara: the engine-neutral path on either engine,
  * through window.__godsEyeView.engine and the QA probe (layers.drawn: each
  * chevron's drawn position and depth-test flag) instead of the Cesium
  * viewer's primitives; the URL gets ?engine=. Without it, as before.

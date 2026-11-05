@@ -5,7 +5,7 @@
 // metres), colours rgba in 0..1, rotations radians. No engine imports.
 
 export const MOVER_KINDS = Object.freeze(['sprite', 'point', 'model']);
-export const MOVER_DEPTH_TESTS = Object.freeze(['normal', 'always']);
+const MOVER_DEPTH_TESTS = Object.freeze(['normal', 'always']);
 
 const isFiniteNumber = (value) =>
   typeof value === 'number' && Number.isFinite(value);
@@ -146,10 +146,6 @@ export function normalizeMoverSetOptions(options) {
         'model.minimumPixelSize',
         0,
       ),
-      maximumScale:
-        model.maximumScale === undefined
-          ? Infinity
-          : positive(model.maximumScale, 'model.maximumScale'),
       colorBlend: blend
         ? { mode: blend.mode, amount: blend.amount ?? 0.5 }
         : null,
@@ -305,8 +301,10 @@ export function createMoverStore(options) {
       });
       this.clean();
     },
-    /** Indices changed since clean(), as [from, to), or null. */
-    /** The changed range (one object, reused: read it at once), or null. */
+    /**
+     * Indices changed since clean(), as [from, to) (one object, reused: read
+     * it at once), or null.
+     */
     dirty() {
       if (dirtyFrom === Infinity) return null;
       range.from = dirtyFrom;
@@ -350,14 +348,13 @@ export function createMoverSet(
       commit();
       store.clean();
     },
-    positionsView: () => store.positionsView(),
     // Whether what it draws has loaded (a model's glTF, an atlas image).
     ready: () => !destroyed && ready() === true,
     destroy() {
       if (destroyed) return;
       destroyed = true;
       destroy();
-      store.release?.();
+      store.release();
     },
     isDestroyed: () => destroyed,
   };

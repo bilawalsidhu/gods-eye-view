@@ -193,12 +193,7 @@ export function orbitOffset(
 }
 
 /** The ENU offset scaled by `factor`, never inside `minRange`. */
-export function zoomOffset(
-  offset,
-  factor,
-  minRange,
-  result = cartesian3.create(),
-) {
+function zoomOffset(offset, factor, minRange, result = cartesian3.create()) {
   const range = cartesian3.magnitude(offset);
   if (!(range > 0) || !(factor > 0)) return cartesian3.clone(offset, result);
   const next = Math.max(minRange, range * factor);

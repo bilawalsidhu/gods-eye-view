@@ -1,7 +1,12 @@
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  openPage,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 
 const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
@@ -27,39 +32,15 @@ const strict = createStrict({
   origin: base.origin,
   layers: ['telegeography-submarine-cables'],
 });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
-  const p = await b.newPage();
-  await p.setViewport({ width: 1024, height: 768 });
-  const errors = [];
-  p.on('pageerror', (e) => {
-    errors.push(e.message);
-    console.log('error', e.message.split('?')[0]);
-  });
+await strict.run({}, async (b) => {
+  const { page: p, errors } = await openPage(b, { shaderErrors: true });
   const reads = [];
   p.on('request', (req) => {
     const path = new URL(req.url()).pathname;
     if (/\/(cable-geo|landing-point-geo).*\.json$/.test(path)) reads.push(path);
   });
-  p.on('console', (msg) => {
-    if (msg.type() === 'error' && /Shader|WebGLProgram/i.test(msg.text()))
-      errors.push(msg.text());
-  });
   await p.goto(base.href);
-  const ready = async (kind) => {
-    await p.waitForFunction(
-      (k) =>
-        window.__godsEyeView?.engine?.kind === k &&
-        !document.querySelector('#globe-engine')?.disabled &&
-        !document.querySelector('.engine-switch-frame') &&
-        document.querySelector('#loading-screen.hidden'),
-      { timeout: 90000 },
-      kind,
-    );
-    await p.evaluate(
-      () => window.__godsEyeView.styleManager.initialRestorePromise,
-    );
-  };
-  await ready('navara');
+  await waitForEngine(p, 'navara');
   await p.evaluate(async () => {
     const { dataManager, tileset } = window.__godsEyeView;
     if (tileset || window.__GOOGLE_MAPS_API_KEY__)
@@ -71,8 +52,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   });
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await strict.pick(p, kind);
-      await ready(kind);
+      await strict.switchTo(p, kind);
     }
     await p.waitForFunction(
       () => window.qaCables.getStats().referenceLabelCount > 0,

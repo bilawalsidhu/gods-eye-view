@@ -230,15 +230,12 @@ test('sampleHeightDetailed names the source and the size of the answering tile',
   assert.equal(shown.source, 'tiles');
   near(shown.height, 43, 0.05, 'the shown tile');
   near(shown.tileSizeM, 600 * Math.SQRT2, 1, 'its size');
-  const finest = surface.sampleHeightDetailed(place, { lod: 'finest' });
-  near(finest.height, 40, 0.05, 'the finest loaded tile');
-  near(finest.tileSizeM, 200 * Math.SQRT2, 1, 'its size');
   assert.deepEqual(
     surface.sampleHeightDetailed(place, { exclude: [coarse.tile, fine.tile] }),
     { height: 7, source: 'terrain' },
   );
   assert.throws(
-    () => surface.sampleHeightDetailed(place, { lod: 'best' }),
+    () => surface.sampleHeightDetailed(place, { exclude: 'x' }),
     TypeError,
   );
   const bare = setup({ tiles: [] }).surface;

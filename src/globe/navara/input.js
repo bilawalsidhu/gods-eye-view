@@ -4,7 +4,7 @@
 // canvas's top-left corner, and a listener with a modifier fires only while
 // that key is held (shift over ctrl over alt), one without only while none is.
 //
-// Camera inputs map to Navara's controller flags (view.camera.options, S4).
+// Camera inputs map to Navara's controller flags (view.camera.options).
 // Navara 0.2.1 lets a flyTo run on under user input, where Cesium cancels it;
 // `onCameraInput` reports user camera input so the engine can do the same.
 

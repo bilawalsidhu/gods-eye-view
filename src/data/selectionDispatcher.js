@@ -1,6 +1,6 @@
 import { nearbyContact } from './pickRegistry.js';
-// One selection dispatcher for the layers that have moved onto the globe
-// engine (phase 3 Task 4): one click subscription with picks
+// One selection dispatcher for the layers that draw through the globe
+// engine: one click subscription with picks
 // (engine.input.on('click', …, { pick: true, drill: 8 })), the press
 // gesture and one Escape listener, instead of a ScreenSpaceEventHandler
 // per layer. Owners register as with pickRegistry (registerPickOwner, so
@@ -38,7 +38,7 @@ import {
   isTrackingSelectionGesture,
 } from './trackingClickGesture.js';
 
-export const SELECTION_DRILL = 8;
+const SELECTION_DRILL = 8;
 
 /**
  * @param {import('../globe/contract.js').GlobeEngine} engine

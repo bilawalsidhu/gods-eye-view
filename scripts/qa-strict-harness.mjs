@@ -29,8 +29,21 @@ import {
 import { createMissLoader, tileCacheFile } from './qa/tileCache.mjs';
 
 export const ENGINES = Object.freeze(['cesium', 'navara']);
-const RESERVED_PORTS = ['', '4173', '4185', '4186', '4187', '4188', '4189'];
-const RESERVED = [...RESERVED_PORTS, '4194', '4196'];
+/** Local ports that belong to the user's own servers: never a QA preview. */
+export const RESERVED_PORTS = Object.freeze([
+  '',
+  '4173',
+  '4174',
+  '4185',
+  '4186',
+  '4187',
+  '4188',
+  '4189',
+  '4194',
+  '4196',
+]);
+/** Chrome flags every scenario's browser starts with (the GPU path). */
+const CHROME_ARGS = Object.freeze(['--use-angle=metal', '--enable-gpu']);
 
 /** The values of --layers=a,b and --evidence=FILE (null when absent). */
 export function strictArguments(argv = process.argv) {
@@ -48,7 +61,7 @@ export function localPreview(href) {
   const url = new URL(href);
   if (
     !['localhost', '127.0.0.1'].includes(url.hostname) ||
-    RESERVED.includes(url.port)
+    RESERVED_PORTS.includes(url.port)
   )
     throw Error('Supply an unreserved local keyless preview URL');
   return url;
@@ -89,11 +102,18 @@ export async function installStrictNetwork(
   // workers' own requests are never held.
   const intercept = async (session, type) => {
     session.on('Fetch.requestPaused', async ({ requestId, request }) => {
-      const fulfil = (status, headers, body) =>
+      // Every answer allows any origin; `noStore` keeps it out of the cache.
+      const fulfil = (status, contentType, body, { noStore = false } = {}) =>
         session.send('Fetch.fulfillRequest', {
           requestId,
           responseCode: status,
-          responseHeaders: headers,
+          responseHeaders: [
+            ...(contentType
+              ? [{ name: 'Content-Type', value: contentType }]
+              : []),
+            ...(noStore ? [{ name: 'Cache-Control', value: 'no-store' }] : []),
+            { name: 'Access-Control-Allow-Origin', value: '*' },
+          ],
           ...(body == null
             ? {}
             : { body: Buffer.from(body).toString('base64') }),
@@ -106,12 +126,7 @@ export async function installStrictNetwork(
           const answer = await route.respond(request);
           return await fulfil(
             answer.status ?? 200,
-            [
-              ...(answer.contentType
-                ? [{ name: 'Content-Type', value: answer.contentType }]
-                : []),
-              { name: 'Access-Control-Allow-Origin', value: '*' },
-            ],
+            answer.contentType,
             answer.body ?? '',
           );
         }
@@ -128,14 +143,9 @@ export async function installStrictNetwork(
             (ledger.probes[probe.pattern] ?? 0) + 1;
           return await fulfil(
             probe.status,
-            [
-              ...(probe.contentType
-                ? [{ name: 'Content-Type', value: probe.contentType }]
-                : []),
-              { name: 'Cache-Control', value: 'no-store' },
-              { name: 'Access-Control-Allow-Origin', value: '*' },
-            ],
+            probe.contentType,
             probe.body ?? null,
+            { noStore: true },
           );
         }
         const accept = Object.entries(request.headers ?? {}).find(
@@ -172,16 +182,7 @@ export async function installStrictNetwork(
           const host = new URL(request.url).host;
           tiles.fetchedByHost[host] = (tiles.fetchedByHost[host] ?? 0) + 1;
         }
-        await fulfil(
-          entry.status,
-          [
-            ...(entry.contentType
-              ? [{ name: 'Content-Type', value: entry.contentType }]
-              : []),
-            { name: 'Access-Control-Allow-Origin', value: '*' },
-          ],
-          entry.body,
-        );
+        await fulfil(entry.status, entry.contentType, entry.body);
       } catch (error) {
         if (
           /Invalid InterceptionId|closed|detached/i.test(String(error?.message))
@@ -326,21 +327,15 @@ export async function installStrictNetwork(
  * each page gets an accessor in place of the global: reads before the script
  * has assigned it are logged with their stack in `ledger.cesiumBeforeLoad`
  * and answer `undefined`, as production would.
- *
- * GEV_QA_CESIUM_TRAP=record (a survey, not a check) answers such a read with
- * the SDK instead, loaded synchronously on the first one, and logs every
- * distinct read site until the page itself loads Cesium.js, so one run lists
- * all the Navara paths that still need Cesium.
  */
 async function trapCesiumGlobal(session, ledger) {
   const binding = '__gevStrictCesiumRead';
-  const record = process.env.GEV_QA_CESIUM_TRAP === 'record';
   session.on('Runtime.bindingCalled', (event) => {
     if (event.name !== binding) return;
     const stack = String(event.payload).slice(0, 1500);
     const known = ledger.cesiumBeforeLoad.find((read) => read.stack === stack);
     if (known) known.count++;
-    else if (ledger.cesiumBeforeLoad.length < (record ? 2000 : 50))
+    else if (ledger.cesiumBeforeLoad.length < 50)
       ledger.cesiumBeforeLoad.push({ stack, count: 1 });
   });
   await session.send('Runtime.enable');
@@ -349,10 +344,8 @@ async function trapCesiumGlobal(session, ledger) {
   await session.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `(() => {
       if (window.top !== window) return;
-      const record = ${record};
       const seen = new Set();
       let sdk;
-      let pageLoaded = false;
       const report = () => {
         const limit = Error.stackTraceLimit;
         Error.stackTraceLimit = 12;
@@ -366,20 +359,7 @@ async function trapCesiumGlobal(session, ledger) {
       Object.defineProperty(window, 'Cesium', {
         configurable: true,
         get() {
-          if (!record) {
-            if (sdk === undefined) report();
-            return sdk;
-          }
-          if (!pageLoaded) {
-            pageLoaded = !!document.querySelector('script[src$="/Cesium.js"]');
-            if (!pageLoaded) report();
-          }
-          if (sdk === undefined) {
-            const request = new XMLHttpRequest();
-            request.open('GET', '/cesium/Cesium.js', false);
-            request.send();
-            (0, eval)(request.responseText);
-          }
+          if (sdk === undefined) report();
           return sdk;
         },
         set(value) {
@@ -434,30 +414,8 @@ export async function pickEngine(
     );
   const opened = !(await expanded());
   if (opened) {
-    await page.click('#control-panel-toggle').catch(async (error) => {
-      const state = await page.evaluate(() => {
-        const el = document.querySelector('#control-panel-toggle');
-        const box = el?.getBoundingClientRect();
-        const style = el && getComputedStyle(el);
-        const hit =
-          box &&
-          document.elementFromPoint(
-            box.x + box.width / 2,
-            box.y + box.height / 2,
-          );
-        return {
-          box: box && [box.x, box.y, box.width, box.height],
-          display: style?.display,
-          visibility: style?.visibility,
-          hidden: el?.closest('[hidden]')?.id ?? null,
-          hit: hit?.id || hit?.className || null,
-          body: document.body.className,
-        };
-      });
-      throw Error(
-        `cannot click the control panel toggle (${error.message}): ` +
-          JSON.stringify(state),
-      );
+    await page.click('#control-panel-toggle').catch((error) => {
+      throw Error(`cannot click the control panel toggle: ${error.message}`);
     });
     await page.waitForFunction(
       () =>
@@ -593,6 +551,27 @@ export async function waitForEngine(page, kind, { timeout = 120000 } = {}) {
 }
 
 /**
+ * A new 1024×768 page of `browser` whose uncaught errors (and, with
+ * `shaderErrors`, shader and WebGL program errors on the console) land in
+ * `errors`; each uncaught error is also logged without its query string.
+ */
+export async function openPage(browser, { shaderErrors = false } = {}) {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1024, height: 768 });
+  const errors = [];
+  page.on('pageerror', (e) => {
+    errors.push(e.message);
+    console.log('error', e.message.split('?')[0]);
+  });
+  if (shaderErrors)
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && /Shader|WebGLProgram/i.test(msg.text()))
+        errors.push(msg.text());
+    });
+  return { page, errors };
+}
+
+/**
  * The strict context of one scenario run.
  *
  * @param {object} options
@@ -653,9 +632,16 @@ export function createStrict({
     ledger,
     extra,
     timings,
-    /** Launch Chrome with the policy on every target. */
-    async launch(options = {}) {
-      const browser = await puppeteer.launch({ headless: true, ...options });
+    /**
+     * Launch headless Chrome with the policy on every target; `args` adds
+     * flags to CHROME_ARGS.
+     */
+    async launch({ args = [], ...options } = {}) {
+      const browser = await puppeteer.launch({
+        headless: true,
+        ...options,
+        args: [...CHROME_ARGS, ...args],
+      });
       await installStrictNetwork(browser, {
         origin,
         fixtures,
@@ -665,7 +651,7 @@ export function createStrict({
       });
       return browser;
     },
-    /** Launch, run `body(browser)`, close, then finish(). */
+    /** Launch with `options`, run `body(browser)`, close, then finish(). */
     async run(options, body) {
       const browser = await strict.launch(options);
       let failed = null;

@@ -136,8 +136,6 @@ const FILES = [
 await strict.run(
   {
     args: [
-      '--use-angle=metal',
-      '--enable-gpu',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
     ],

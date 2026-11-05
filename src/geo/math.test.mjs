@@ -31,7 +31,6 @@ test('constants equal Cesium.Math', () => {
   for (const name of [
     'PI_OVER_TWO',
     'TWO_PI',
-    'EPSILON7',
     'EPSILON10',
     'EPSILON12',
     'EPSILON14',

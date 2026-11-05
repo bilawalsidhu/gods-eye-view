@@ -9,13 +9,6 @@
 // a release that runs, in reverse, when the part detaches (before its
 // detachScene).
 
-const STATES = Object.freeze([
-  'detached',
-  'attaching',
-  'attached',
-  'detaching',
-]);
-
 export class SceneSwitchingError extends Error {
   constructor(message = 'The globe is switching engines') {
     super(message);
@@ -208,5 +201,3 @@ export function createSceneHost({ onError = null } = {}) {
     },
   });
 }
-
-export const SCENE_HOST_STATES = STATES;

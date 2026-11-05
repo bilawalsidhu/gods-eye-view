@@ -1,10 +1,10 @@
 // The three side of a Navara model set: the glTF loaded once, one
 // InstancedMesh per mesh in it (all instances share the model's meshes),
 // each instance placed by position, orientation and scale relative to an
-// origin near the camera. Cesium's minimumPixelSize/maximumScale are kept on
-// the CPU once per drawn frame (models are few: tracked and proximity
-// aircraft), and the instance colour is mixed into the surface colour
-// (colorBlend), or the model drawn unlit.
+// origin near the camera. Cesium's minimumPixelSize is kept on the CPU once
+// per drawn frame (models are few: tracked and proximity aircraft), and the
+// instance colour is mixed into the surface colour (colorBlend), or the model
+// drawn unlit.
 
 import {
   Box3,
@@ -25,7 +25,7 @@ import { createModelTint } from './modelTint.js';
  * besides the sun. Navara's sky light alone left it grey-brown at dawn.
  * The instance colour is applied after lighting, independently of this share.
  */
-export const MODEL_AMBIENT = 0.5;
+const MODEL_AMBIENT = 0.5;
 
 /**
  * The distance Cesium sizes a model's minimumPixelSize at (Camera
@@ -159,7 +159,6 @@ export function createModelMover(
         const pixels = (2 * radius * scale) / (footprint * distance);
         if (pixels < model.minimumPixelSize)
           scale *= model.minimumPixelSize / pixels;
-        scale = Math.min(scale, model.maximumScale);
         drawnPx[index] = (pixels * scale) / scales[index];
       }
       scratchTranslation.set(

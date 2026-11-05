@@ -44,7 +44,7 @@ import {
 } from './viewOptions.js';
 
 // Navara 0.2.1 has no preserveDrawingBuffer option but takes a canvas whose
-// WebGL2 context is already created (S4); three then uses that context.
+// WebGL2 context is already created; three then uses that context.
 function preservedCanvas(container) {
   const canvas = document.createElement('canvas');
   Object.assign(canvas.style, {
@@ -107,24 +107,13 @@ function groundInView(engine) {
 /**
  * @param {{
  *   container: HTMLElement,
- *   effects?: 'minimal' | 'photoreal' | 'cinematic',
  *   search?: string,
- *   pixelRatio?: number,
- *   appClock?: import('../../time/clock.js').AppClock,
- * }} options `effects` names the look (cinematic by default); `search`, the
- *   page's query string, picks it from `?look=` instead (the app's way).
- *   `pixelRatio` only for measurements; the product uses the device's.
- *   `appClock` (the page's by default) is the engine clock's time and so the
- *   sun's: the look reads the engine clock's frame time.
+ * }} options `search`, the page's query string, picks the look from
+ *   `?look=` (cinematic by default). The sun follows the engine clock (the
+ *   page's app clock): the look reads its frame time.
  * @returns {Promise<{ view: object, engine: import('../contract.js').GlobeEngine, destroy: () => void }>}
  */
-export async function createNavaraGlobe({
-  container,
-  effects,
-  search,
-  pixelRatio,
-  appClock,
-}) {
+export async function createNavaraGlobe({ container, search }) {
   if (!container) throw new TypeError('createNavaraGlobe needs a container');
   const canvas = preservedCanvas(container);
   let view;
@@ -136,13 +125,13 @@ export async function createNavaraGlobe({
   // Parked for a switch back: its render loop is off (setRenderLoop).
   let parked = false;
   try {
-    view = new ThreeView(navaraViewOptions({ container, canvas, pixelRatio }));
+    view = new ThreeView(navaraViewOptions({ container, canvas }));
     const plugin = new DefaultPlugin();
     view.addPlugin(plugin);
     await view.init();
     const automaticLandscape =
-      !effects && new URLSearchParams(search).get('sun') !== 'live';
-    const plan = navaraScenePlan(effects ?? resolveNavaraLook(search), {
+      new URLSearchParams(search).get('sun') !== 'live';
+    const plan = navaraScenePlan(resolveNavaraLook(search), {
       mobile: Boolean(view.isMobileOptimized?.()),
     });
     // The sun follows the engine clock (one time source for layers and the
@@ -158,7 +147,6 @@ export async function createNavaraGlobe({
     engine = createNavaraEngine(view, {
       hooks: navaraHooks(view),
       container,
-      ...(appClock ? { appClock } : {}),
       sharpen: createNavaraSharpen(view),
       bloom: createNavaraBloom(view),
       clouds: createNavaraCloudCover(look),

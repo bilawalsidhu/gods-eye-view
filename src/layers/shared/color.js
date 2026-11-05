@@ -1,5 +1,5 @@
-// Engine-neutral layer colours (phase 3): the colour constants the layers
-// used to build as Cesium.Color, without Cesium.
+// Engine-neutral layer colours: the layers' colour constants, with
+// Cesium.Color's values but without Cesium.
 //
 // An Rgba has Cesium.Color's fields and the methods the layers call on their
 // colours (`withAlpha`, `clone`, `equals`), so it is accepted wherever a

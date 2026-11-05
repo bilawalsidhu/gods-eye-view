@@ -101,6 +101,8 @@ export function nativeIntegrationFixture(t) {
       },
     },
   };
+  // A Viewer's canvas is its scene's.
+  viewer.canvas = viewer.scene.canvas;
   const dataManager = { layers: new Map() };
   const actualRunner = createGevActionRunner({
     engine: createCesiumEngine(viewer),

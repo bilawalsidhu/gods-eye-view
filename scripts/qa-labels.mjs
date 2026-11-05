@@ -314,8 +314,7 @@ async function main() {
       (ids) => ids.filter((id) => !window.__godsEyeView.layers.available(id)),
       fieldLayers,
     );
-    // An engine with flights but not the other field layers (Navara, W1 so
-    // far): the same 12,000 / 5,200 observations, all as aircraft, so the
+    // An engine with flights but not the other field layers: the same 12,000 / 5,200 observations, all as aircraft, so the
     // detection lane is measured on the layers the engine has.
     let fieldCounts = FIELD_COUNTS;
     let normalCounts = NORMAL_COUNTS;

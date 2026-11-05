@@ -400,7 +400,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
     assert.doesNotMatch(source, /camera\.flyTo/);
   }
   // Vessels' click rule is a function the engine's selection dispatcher
-  // calls (phase 3, 13a): the same body, out of the old LEFT_CLICK handler.
+  // calls: the same body, out of the old LEFT_CLICK handler.
   const vesselClick = body(
     vessels,
     /function handleClick\(click\) \{([\s\S]*?)\n  \}/,

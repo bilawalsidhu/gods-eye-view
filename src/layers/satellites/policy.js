@@ -95,9 +95,9 @@ export const TRACK_VIEW_FROM_HIGH_SCALE = 4;
  * attribute, so classification costs nothing per frame.
  */
 
-export const POINT_OUTLINE = WHITE.withAlpha(0.3);
+const POINT_OUTLINE = WHITE.withAlpha(0.3);
 
-export const _classColor = (group) => rgbaFromCss(satelliteClassColor(group));
+const _classColor = (group) => rgbaFromCss(satelliteClassColor(group));
 
 export const POINT_STYLES = {
   // The ISS keeps its own long-standing red hero styling rather than the

@@ -4,122 +4,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
-import * as selection from '../../data/selectionDispatcher.js';
-import * as picking from '../../data/pickRegistry.js';
 import { createVesselLayer } from './index.js';
+import { recordingRenderer, services } from './testFixtures.mjs';
 
-const noop = () => {};
 const RAD = Math.PI / 180;
-
-function recordingRenderer(engine) {
-  const sprites = new Set();
-  const moveEnd = new Set();
-  const camera = {
-    positionWC: { x: 0, y: 0, z: 6_500_000 },
-    // 60 km up: the layer asks for a 60 km area around the camera.
-    positionCartographic: {
-      latitude: 40.6 * RAD,
-      longitude: -73.9 * RAD,
-      height: 60_000,
-    },
-    rightWC: { x: 1, y: 0, z: 0 },
-    upWC: { x: 0, y: 1, z: 0 },
-    heading: 0,
-    pitch: 0,
-    roll: 0,
-  };
-  let attached = false;
-  return {
-    sprites,
-    camera,
-    moveTo(lat, lon) {
-      camera.positionCartographic = {
-        latitude: lat * RAD,
-        longitude: lon * RAD,
-        height: 60_000,
-      };
-      for (const listener of moveEnd) listener();
-    },
-    renderer: {
-      kind: 'plain',
-      engine,
-      view: {
-        camera,
-        scene: { canvas: { clientWidth: 0, clientHeight: 0 } },
-        horizon: () => ({ isPointVisible: () => true }),
-        worldToWindow: () => undefined,
-        canvasSize: () => ({ width: 1280, height: 800 }),
-        requestRender: noop,
-        on(event, listener) {
-          if (event !== 'moveEnd') return noop;
-          moveEnd.add(listener);
-          return () => moveEnd.delete(listener);
-        },
-      },
-      fleet: {
-        collection: null,
-        attached: () => attached,
-        attach() {
-          attached = true;
-        },
-        setVisible: noop,
-        add(spec) {
-          const sprite = { ...spec };
-          sprites.add(sprite);
-          return sprite;
-        },
-        remove: (sprite) => sprites.delete(sprite),
-        detach() {
-          attached = false;
-        },
-      },
-      pickedRecord: (picked) =>
-        picked?.id && typeof picked.id === 'object' ? picked.id : null,
-      follow: { onChanged: () => noop, active: () => false },
-      trails: { create: () => null },
-      destroy: noop,
-    },
-  };
-}
-
-function services(renderer) {
-  return {
-    context: {
-      clearSelectedEntityContextForLayer: noop,
-      registerEntityContext: () => null,
-      selectEntityContext: noop,
-    },
-    trails: { createTrail: null },
-    labels: {},
-    picking,
-    overlay: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
-      hitTestWorldOverlay: () => null,
-    },
-    geoid: { ensureGeoidReady: () => new Promise(noop), geoidHeight: () => 0 },
-    sprites: {
-      registerSpriteCollection: noop,
-      restoreSpriteOrder: noop,
-      restoreSpriteOrderOnEnable: noop,
-    },
-    focus: {
-      focusNowMs: (now) => now,
-      getFocusTarget: () => null,
-      focusPassIsNeeded: () => false,
-      forgetSpriteFocus: noop,
-    },
-    worldFocus: { requestWorldFocus: noop },
-    render: {
-      holdContinuousRender: noop,
-      releaseContinuousRender: noop,
-      governorRequestRender: noop,
-    },
-    selection,
-    renderer: { create: () => renderer },
-  };
-}
 
 const row = (mmsi, latitude, longitude, observedAtMs) => ({
   id: mmsi,
@@ -136,7 +24,15 @@ const row = (mmsi, latitude, longitude, observedAtMs) => ({
 
 test('edge:ais-live-vessels: a vessel crossing into the next cell during an AIS gap keeps one request and its card by MMSI', async (t) => {
   const engine = createFakeEngine();
-  const recorder = recordingRenderer(engine);
+  // 60 km up: the layer asks for a 60 km area around the camera.
+  const recorder = recordingRenderer(engine, {
+    positionWC: { x: 0, y: 0, z: 6_500_000 },
+    positionCartographic: {
+      latitude: 40.6 * RAD,
+      longitude: -73.9 * RAD,
+      height: 60_000,
+    },
+  });
   const previousDocument = globalThis.document;
   globalThis.document = Object.assign(new EventTarget(), {
     getElementById: () => null,

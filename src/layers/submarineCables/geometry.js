@@ -41,7 +41,7 @@ export function featureReference(feature) {
  * Split a [lon, lat] path where a segment crosses the antimeridian, so no
  * drawn segment runs the long way across the whole map.
  */
-export function splitAtAntimeridian(path) {
+function splitAtAntimeridian(path) {
   const parts = [];
   let current = [];
   for (let index = 0; index < path.length; index++) {

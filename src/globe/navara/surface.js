@@ -1,4 +1,4 @@
-// GlobeSurface on Navara (S2): the height of the rendered scene is a CPU ray
+// GlobeSurface on Navara: the height of the rendered scene is a CPU ray
 // straight down the ellipsoid normal against the 3D-tile meshes Navara shows.
 // Where the shown tiles do not reach (outside the frustum), the loaded
 // tiles Navara hides answer, the finest first. Tile positions are float32
@@ -187,15 +187,14 @@ const NO_EXCLUDE = new Set();
 // the top one among them. Tiles the ray passes are tried finest first, and
 // coarser ones stop being tried once a hit sets the limit, so the coarse
 // parents' triangles are never walked.
-// With `includeShown` (lod 'finest') the shown tiles take part too.
 const hiddenTiles = [];
-function finestHiddenHit(roots, exclude, ray, includeShown = false) {
+function finestHiddenHit(roots, exclude, ray) {
   worldRay.origin.set(ray.origin.x, ray.origin.y, ray.origin.z);
   worldRay.direction.set(ray.direction.x, ray.direction.y, ray.direction.z);
   hiddenTiles.length = 0;
   for (let i = 0; i < roots.length; i++) {
     const root = roots[i];
-    if ((root.visible && !includeShown) || exclude.has(root)) continue;
+    if (root.visible || exclude.has(root)) continue;
     const extent = tileExtent(root);
     if (extent && worldRay.intersectsSphere(extent)) hiddenTiles.push(root);
   }
@@ -257,33 +256,29 @@ export function createNavaraSurface(view, hooks) {
     return height === undefined ? undefined : { height, source: 'terrain' };
   };
   const sampleHeightDetailed = (place, options) => {
-    const { exclude, lod } = normalizeSurfaceOptions(options);
+    const { exclude } = normalizeSurfaceOptions(options);
     if (!supported) return terrainDetail(place);
     const ray = surfaceRay(place);
     const roots = hooks.tileRoots();
     const excluded = exclude.length ? new Set(exclude) : NO_EXCLUDE;
-    let hit = { distance: Infinity, root: null };
-    if (lod === 'visible') {
-      // The tiles on screen first; where they do not reach (the ground
-      // under a camera looking ahead is outside the frustum), the hidden
-      // ones.
-      shownMeshes.length = 0;
-      shownRoots.length = 0;
-      for (let i = 0; i < roots.length; i++)
-        collectMeshes(
-          roots[i],
-          excluded,
-          true,
-          shownMeshes,
-          shownRoots,
-          roots[i],
-        );
-      hit = nearestHit(shownMeshes, shownRoots, ray);
-      shownMeshes.length = 0;
-      shownRoots.length = 0;
-    }
+    // The tiles on screen first; where they do not reach (the ground under
+    // a camera looking ahead is outside the frustum), the hidden ones.
+    shownMeshes.length = 0;
+    shownRoots.length = 0;
+    for (let i = 0; i < roots.length; i++)
+      collectMeshes(
+        roots[i],
+        excluded,
+        true,
+        shownMeshes,
+        shownRoots,
+        roots[i],
+      );
+    let hit = nearestHit(shownMeshes, shownRoots, ray);
+    shownMeshes.length = 0;
+    shownRoots.length = 0;
     if (!Number.isFinite(hit.distance))
-      hit = finestHiddenHit(roots, excluded, ray, lod === 'finest');
+      hit = finestHiddenHit(roots, excluded, ray);
     const height = heightAlongRay(ray, hit.distance);
     if (height === undefined) return terrainDetail(place);
     return { height, source: 'tiles', tileSizeM: tileSizeOf(hit.root) };
@@ -342,7 +337,6 @@ export function createNavaraSurface(view, hooks) {
   return {
     surface: {
       raycast,
-      raycastSupported: supported,
       sampleHeight,
       sampleHeightDetailed,
       supported,

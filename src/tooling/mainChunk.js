@@ -1,7 +1,8 @@
-// The main chunk of a Vite build and what it must not carry: the Cesium-mode
-// page loads the entry chunk and every chunk it imports statically; Navara and
-// three belong in the lazy chunk navaraMode.js loads with import(). Pure
-// helpers for scripts/check-main-chunk.mjs.
+// The main chunk of a Vite build and what the Cesium-mode page must not
+// load: Navara and three belong in the lazy chunk navaraMode.js loads with
+// import(). Pure helpers for scripts/check-main-chunk.mjs (which entry the
+// page loads) and scripts/qa-strict-cold-chunks.mjs (which chunks a cold
+// start fetches carry three or Navara code).
 
 /**
  * Markers that only three or Navara code leaves in a bundle (minification
@@ -38,37 +39,6 @@ export function entryFromManifest(manifest) {
     chunks.find((chunk) => chunk.isEntry && chunk.src === 'index.html') ??
     chunks.find((chunk) => chunk.isEntry);
   return entry?.file ?? null;
-}
-
-/** Sibling chunks a chunk imports statically (`from"./x.js"`, `import"./x.js"`). */
-export function staticImportsOf(code) {
-  const found = [];
-  const pattern = /(?:\bfrom|\bimport)\s*(["'])\.\/([^"']+\.js)\1/g;
-  for (const match of String(code).matchAll(pattern)) {
-    if (!found.includes(match[2])) found.push(match[2]);
-  }
-  return found;
-}
-
-/**
- * The entry and every chunk reachable from it by static imports, in
- * discovery order. `read(file)` returns a chunk's code (file relative to
- * dist, in the entry's directory).
- */
-export function initialChunks(entry, read) {
-  const directory = entry.includes('/')
-    ? entry.slice(0, entry.lastIndexOf('/') + 1)
-    : '';
-  const seen = [entry];
-  for (let index = 0; index < seen.length; index++) {
-    const code = read(seen[index]);
-    if (code == null) continue;
-    for (const name of staticImportsOf(code)) {
-      const file = directory + name;
-      if (!seen.includes(file)) seen.push(file);
-    }
-  }
-  return seen;
 }
 
 /** The names of FORBIDDEN_MARKERS found in code. */

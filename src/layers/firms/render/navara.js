@@ -9,8 +9,6 @@ export function createFirmsNavaraRenderer(
   engine,
   { view: nativeView, EffectDesc, NavaraEffect, id = 'local-firms' } = {},
 ) {
-  if (!engine?.movers || !nativeView?.camera || !EffectDesc || !NavaraEffect)
-    throw new TypeError('FIRMS requires a Navara view');
   const display = createGroundCellDisplay(
     engine,
     { view: nativeView, EffectDesc, NavaraEffect },

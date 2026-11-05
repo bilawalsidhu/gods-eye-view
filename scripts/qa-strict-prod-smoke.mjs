@@ -20,7 +20,7 @@ const base = localPreview(process.argv[2]);
 const strict = createStrict({ origin: base.origin, layers: [] });
 const results = [];
 strict.extra.contracts = results;
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
+await strict.run({}, async (b) => {
   for (const start of ENGINES) {
     const page = await b.newPage();
     await page.setViewport({ width: 1280, height: 800 });

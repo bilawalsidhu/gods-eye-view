@@ -32,7 +32,7 @@ const other = (kind) => (kind === 'navara' ? 'cesium' : 'navara');
 const strict = createStrict({ origin: base.origin, layers: [] });
 const results = [];
 strict.extra.contracts = results;
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
+await strict.run({}, async (b) => {
   let p = null;
   const errors = [];
   // A fresh page on `from`; warm visits the other engine first.

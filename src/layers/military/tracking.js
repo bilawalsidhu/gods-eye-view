@@ -523,7 +523,7 @@ export function createTracking({
     // to the 12 Hz icon instead of lagging ~1 s behind it.
     if (!flightState._trailHeadEntity && flightState._renderer) {
       flightState._trailHeadEntity = flightState._renderer.trails.createHead({
-        // 'gev-trail' namespace (round 6): claimed by trailRenderer's pick
+        // 'gev-trail' namespace: claimed by trailRenderer's pick
         // owner so a click on the head segment never reads as empty space.
         id: `gev-trail:mil-head-${++flightState._trailHeadSeq}`,
         show: !flightState._cockpitContactMode,
@@ -547,7 +547,7 @@ export function createTracking({
           // backward/reversing segment.
           const start =
             flightState._trailPositions[flightState._trailPositions.length - 2];
-          // Floor the head too (round 2): a grounded tracked contact's DR
+          // Floor the head too: a grounded tracked contact's DR
           // display height is the pre-datum default — without this the last
           // segment dives underground while taxiing.
           const end = _trailFloorPosition(geo.cartesian3.clone(head));
@@ -569,9 +569,9 @@ export function createTracking({
           return [from, end];
         },
         width: 2.5,
-        // Round 4: the head must never vanish into the mesh either (dimmed
-        // when occluded so depth still reads); round 8: geodesic, consistent
-        // with the trail body (no chords).
+        // The head must never vanish into the mesh either (dimmed when
+        // occluded so depth still reads); geodesic, consistent with the
+        // trail body (no chords).
         color: TRAIL_COLOR,
       });
     }

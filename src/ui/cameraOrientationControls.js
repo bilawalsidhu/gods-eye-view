@@ -142,7 +142,7 @@ export function readCameraTargetFrame(target, tracker) {
  * @param {object} frame From {@link readCameraTargetFrame}.
  * @param {object} [tracker] As in readCameraTargetFrame.
  */
-export function setCameraTargetFrame(target, frame, tracker) {
+function setCameraTargetFrame(target, frame, tracker) {
   const engine = engineOf(target);
   if (!engine || !frame?.target || !Number.isFinite(frame.range)) return false;
   const viewer = trackerOf(target, tracker);
@@ -311,7 +311,7 @@ export function createCameraOrientationAnimator(
  *   showToast?: Function,
  *   animationMs?: number,
  * }} options `engine` defaults to the one registered for `viewer`; the viewer
- *   is otherwise only read for its tracked entity (phase 1c).
+ *   is otherwise only read for its clock and tracked entity.
  */
 export function bindCameraOrientationControls({
   viewer = null,

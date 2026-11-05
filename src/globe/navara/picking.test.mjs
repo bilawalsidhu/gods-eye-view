@@ -162,36 +162,6 @@ test('without a GPU answer in time the click falls back to the CPU pick', async 
   assert.equal(view.handlers.size, 0);
 });
 
-test('click stats count GPU answers and timeouts with their latency', async () => {
-  const view = fakeView();
-  const clock = timers();
-  let time = 0;
-  const picking = createNavaraPicking({
-    view,
-    projector,
-    camera,
-    movers: () => [],
-    lines: () => [],
-    resolveBatch: () => null,
-    now: () => time,
-    ...clock,
-  });
-  const first = picking.clickPick({ x: 0, y: 0 });
-  time = 30;
-  view.emit('featureClick', null);
-  await first;
-  const second = picking.clickPick({ x: 0, y: 0 });
-  time = 280;
-  clock.pending[0].fn();
-  await second;
-  assert.deepEqual(picking.clickStats(), {
-    gpu: 1,
-    timeout: 1,
-    stale: 0,
-    latencies: [30, 250],
-  });
-});
-
 test("Navara's answer may come before the engine's click of the same gesture", async () => {
   const view = fakeView();
   const clock = timers();
@@ -247,7 +217,6 @@ test('a GPU answer naming an instance drawn far from the click is stale', async 
   const answer = picking.clickPick({ x: 10, y: 10 });
   view.emit('featureClick', { batchId: 2 });
   assert.equal((await answer).id, 'drawn-here');
-  assert.equal(picking.clickStats().stale, 1);
 });
 
 test('a thin line is picked within 8 px of its segments', () => {
@@ -328,7 +297,6 @@ test('a stale GPU answer for a neighbour of the click never wins over the instan
     view.emit('featureClick', { batchId: 1 }); // stale: A again
     assert.equal((await onB).id, 'b', `gesture ${gesture}: b, not the stale a`);
   }
-  assert.equal(picking.clickStats().stale, 20);
 });
 
 function modelSet(id, rows, radiusPx) {
@@ -406,7 +374,6 @@ test('a model hit is checked against its projected position within its drawn rad
   const outside = picking.clickPick({ x: 160, y: 100 });
   view.emit('featureClick', { batchId: 1 });
   assert.equal(await outside, undefined);
-  assert.equal(picking.clickStats().stale, 1);
   // The CPU pick sees the model at its drawn radius, not the 24 px minimum.
   assert.equal(picking.drillPick({ x: 121, y: 100 })[0]?.id, 'jet');
   assert.equal(picking.drillPick({ x: 125, y: 100 }).length, 0);

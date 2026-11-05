@@ -1,5 +1,4 @@
-// The vessels layer's renderer on Cesium (phase 3 Task 13a): the Cesium
-// objects the layer used to build itself, moved here one for one — its
+// The vessels layer's renderer on Cesium: its
 // BillboardCollection of ship chevrons (translucent blend, screen-aligned
 // rotation, centred, never depth-tested), the camera reads (horizon
 // occluder, window projection, canvas size), the "another layer took the
@@ -9,8 +8,8 @@
 //
 // The trail stays an entity polyline (createTrail) rather than engine.lines:
 // Cesium's engine.lines is a Primitive with a depth-fail appearance, the
-// path that did not draw segments below the photoreal mesh in round 6
-// (plan, the T13/T15 blocker; flights keeps the same entity path in 10a).
+// path that does not draw segments below the photoreal mesh (flights keeps
+// the same entity path).
 //
 // Interface (shared with render/navara.js): ./contract.js.
 

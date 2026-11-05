@@ -2,7 +2,7 @@ import { LayerStateCoordinator } from '../data/layerStateCoordinator.js';
 import { APPLICATION_LAYER_DIRECTORY } from '../app/layers/directory.js';
 
 /** How long the "kept in the link" notice stays up (ms). */
-export const NOT_ON_THIS_ENGINE_DWELL_MS = 15_000;
+const NOT_ON_THIS_ENGINE_DWELL_MS = 15_000;
 
 /** Names of the layers a link turned on that this engine does not have. */
 export function layersNotOnThisEngine(results) {

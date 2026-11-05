@@ -5,19 +5,7 @@
 // the session ids, listener counts and transport counters.
 import puppeteer from 'puppeteer';
 import { blockPaidQaMaps } from '../qa-map-policy.mjs';
-
-const RESERVED_PORTS = new Set([
-  '',
-  '4173',
-  '4174',
-  '4185',
-  '4186',
-  '4187',
-  '4188',
-  '4189',
-  '4194',
-  '4196',
-]);
+import { localPreview, waitForEngine } from '../qa-strict-harness.mjs';
 
 /** Paid or live model endpoints no switch gate may reach. */
 export const BLOCKED_URLS = Object.freeze([
@@ -36,13 +24,7 @@ export const BLOCKED_URLS = Object.freeze([
 
 /** The preview origin from argv, refusing the ports that belong to the user. */
 export function previewBase(argument) {
-  const base = new URL(argument ?? '');
-  if (
-    !['localhost', '127.0.0.1'].includes(base.hostname) ||
-    RESERVED_PORTS.has(base.port)
-  )
-    throw new Error('Supply an unreserved local preview URL');
-  return base;
+  return localPreview(argument ?? '');
 }
 
 /** The page address: Boston on OSM, no welcome, on the given engine. */
@@ -247,20 +229,8 @@ export async function openSessionPage(browser, address) {
 }
 
 /** The engine runs, its picker is idle and the loading screen is gone. */
-export async function waitReady(page, kind) {
-  await page.waitForFunction(
-    (kind) =>
-      window.__godsEyeView?.engine?.kind === kind &&
-      document.querySelector('#globe-engine')?.value === kind &&
-      !document.querySelector('#globe-engine').disabled &&
-      document.getElementById('loading-screen')?.classList.contains('hidden') &&
-      !document.querySelector('.engine-switch-frame'),
-    { timeout: 90_000, polling: 100 },
-    kind,
-  );
-  await page.evaluate(
-    () => window.__godsEyeView.styleManager.initialRestorePromise,
-  );
+export function waitReady(page, kind) {
+  return waitForEngine(page, kind, { timeout: 90_000 });
 }
 
 /**

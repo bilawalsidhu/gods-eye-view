@@ -21,18 +21,6 @@ function localizedValues(values) {
 }
 
 /**
- * Run the Import control on one viewer: the session's control (see
- * createGeoFileImport) attached to `viewer`. Null without a viewer or the
- * Import markup.
- */
-export function initGeoFileImport({ viewer, ...options }) {
-  if (!viewer) return null;
-  const tool = createGeoFileImport(options);
-  tool?.attachScene({ viewer });
-  return tool;
-}
-
-/**
  * The Import control for the page session.
  * @param {{load?: Function, document?: Document, publish?: Function,
  *   connect?: Function}} deps
@@ -618,7 +606,7 @@ export function summarize(outcomes) {
  * What the attached globe leaves out of the given files (each `{ name,
  * undrawn }`): the first file's name and the total count.
  */
-export function undrawnHint(items) {
+function undrawnHint(items) {
   return t('Map objects this engine leaves out of {name}: {count}.', {
     name: items[0].name,
     count: formatNumber(items.reduce((n, item) => n + item.undrawn, 0)),

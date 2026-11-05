@@ -52,14 +52,13 @@ resolved dependency inventory remains in `package-lock.json`.
   are adapted from `@cesium/engine/Source/Core` (`Math.js`, `Ellipsoid.js`,
   `scaleToGeodeticSurface.js`, `Cartographic.js`, `Cartesian2.js`,
   `Cartesian3.js`, `Matrix3.js`, `Matrix4.js`, `Quaternion.js`,
-  `Transforms.js`, `Check.js`, `DeveloperError.js`) and say so in their first
+  `Transforms.js`) and say so in their first
   line. The changes: the classes' static functions became module functions,
   vectors, geodetic positions and quaternions became plain-data instances of
   module-private constructors (own enumerable fields only, no methods),
   matrices plain arrays, and the ellipsoid a frozen object; the debug
-  argument checks were ported with Cesium's conditions and messages and, like
-  Cesium's, are active in development and tests and stripped from production
-  builds; only the subset gev uses was kept.
+  argument checks were left out, as in Cesium's release build; only the subset
+  gev uses was kept.
 - Author: Copyright 2011-2024 CesiumJS Contributors
 - Source: <https://github.com/CesiumGS/cesium>
 - License: Apache License 2.0

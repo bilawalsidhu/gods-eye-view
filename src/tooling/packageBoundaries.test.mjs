@@ -126,3 +126,39 @@ test('a lifecycle owner cannot acquire a layer panel even through an unused impo
   );
   await assert.rejects(checkPackageBoundaries(root), /unowned module.*panel/);
 });
+
+test('a module entry ending in a slash owns every file under that directory', async (t) => {
+  const root = await fixture(
+    t,
+    "import { a } from './shared/a.js'; export const value = a;",
+  );
+  await mkdir(path.join(root, 'shared/nested'), { recursive: true });
+  await writeFile(
+    path.join(root, 'shared/a.js'),
+    "export { b as a } from './nested/b.js';",
+  );
+  await writeFile(path.join(root, 'shared/nested/b.js'), 'export const b = 1;');
+  await writeFile(
+    path.join(root, 'scripts/package-boundaries.json'),
+    JSON.stringify({
+      feature: {
+        exports: ['./feature'],
+        modules: ['entry.js', 'shared/'],
+        external: [],
+      },
+    }),
+  );
+  assert.deepEqual(await checkPackageBoundaries(root), [
+    { name: 'feature', exports: 1, modules: 3 },
+  ]);
+  // The prefix is a directory, not a file-name prefix: shared.js stays unowned.
+  await writeFile(
+    path.join(root, 'shared/nested/b.js'),
+    "export { c as b } from '../../shared.js';",
+  );
+  await writeFile(path.join(root, 'shared.js'), 'export const c = 1;');
+  await assert.rejects(
+    checkPackageBoundaries(root),
+    /unowned module.*shared\.js/,
+  );
+});

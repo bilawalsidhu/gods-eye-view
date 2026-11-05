@@ -1,10 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  absentLayerControlServices,
-  createLayerCatalog,
-  catalogControlServices,
-} from './catalog.js';
+import { createLayerCatalog, catalogControlServices } from './catalog.js';
 import { createApplicationData } from './data.js';
 
 const metadata = (layers) =>
@@ -155,40 +151,6 @@ test('controls bind catalog instances rather than similarly named defaults', () 
   assert.throws(
     () => catalogControlServices(createLayerCatalog([], [])),
     /Control layer missing/,
-  );
-});
-
-test('without data layers the controls get one empty stand-in per layer role', () => {
-  const ids = [
-    'traffic',
-    'flights',
-    'military',
-    'satellites',
-    'cctv',
-    'street-level',
-    'radio',
-    'bikeshare',
-    'transit',
-    'ais-live-vessels',
-    'military-awareness',
-    'military-installations',
-    'rocket-launches',
-    'local-adsb',
-  ];
-  const layers = ids.map((id) => ({ id }));
-  const roles = Object.keys(
-    catalogControlServices(createLayerCatalog(layers, metadata(layers))),
-  );
-  const absent = absentLayerControlServices();
-  assert.deepEqual(Object.keys(absent), roles);
-  for (const role of roles) {
-    assert.deepEqual(Object.keys(absent[role]), [], role);
-    assert.equal(absent[role].subscribe, undefined);
-  }
-  assert.notEqual(absent.flightsLayer, absent.trafficLayer);
-  assert.notEqual(
-    absentLayerControlServices().flightsLayer,
-    absent.flightsLayer,
   );
 });
 

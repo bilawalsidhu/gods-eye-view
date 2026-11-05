@@ -11,7 +11,7 @@ import { createBloomPort } from './bloomSettings.js';
 import { pipelinePassNames } from './internals.js';
 import { withPassDisposal } from './frameDescriptor.js';
 
-export const BLOOM_EFFECT_KEY = 'gevBloom';
+const BLOOM_EFFECT_KEY = 'gevBloom';
 
 function apply(effect, settings) {
   effect.luminanceMaterial.threshold = settings.luminanceThreshold;

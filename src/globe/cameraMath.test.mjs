@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as geo from '../../geo/index.js';
+import * as geo from '../geo/index.js';
 import {
   cesiumFovy,
   headingPitchRoll,
@@ -194,8 +194,8 @@ test('horizonVisible: the nadir is visible and the antipode hidden', () => {
   assert.equal(horizonVisible(eye, cartesian3.fromDegrees(-70, 10, 2e7)), true);
 });
 
-test("viewRectangle matches Cesium's computeViewRectangle (S4 reference poses)", () => {
-  // S4 measured these on Cesium at 1280×720 with Cesium's fov.
+test("viewRectangle matches Cesium's computeViewRectangle (reference poses)", () => {
+  // Measured on Cesium at 1280×720 with Cesium's fov.
   const deg = (rectangle) =>
     ['west', 'south', 'east', 'north'].map((side) =>
       math.toDegrees(rectangle[side]),

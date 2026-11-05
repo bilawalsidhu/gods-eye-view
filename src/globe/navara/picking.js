@@ -52,13 +52,6 @@ export function createNavaraPicking({
 
   // Clicks waiting for Navara's GPU answer, oldest first.
   const waiting = [];
-  // Diagnostics: how clicks were answered and how long it took (ms).
-  const stats = { gpu: 0, timeout: 0, stale: 0, latencies: [] };
-  const answered = (entry, how) => {
-    stats[how]++;
-    stats.latencies.push(now() - entry.startedAt);
-    if (stats.latencies.length > 200) stats.latencies.shift();
-  };
   // Navara 0.2.1 answers clicks in quick succession (within a frame or so)
   // with the first click's pick: a GPU answer whose instance is not drawn
   // near the click is stale, and the CPU pick answers instead.
@@ -70,7 +63,7 @@ export function createNavaraPicking({
   // the CPU sees must be drawn under the click (its pick radius, no slack)
   // and be the one the CPU finds on top. A stale answer from the previous
   // gesture (the followed aircraft at the centre) lay within twice its
-  // radius of a neighbour's click and won (10b/11b flake). A model hit is
+  // radius of a neighbour's click and won. A model hit is
   // checked against its projected position within its drawn radius
   // (pickRadiusPx); the CPU's top hit (drawn order first) is not asked of
   // it, as a model is drawn depth-tested among the glyphs.
@@ -83,10 +76,7 @@ export function createNavaraPicking({
         (top !== undefined &&
           !(top.owner === hit.set && top.instance === hit.instance) &&
           (!isModelSet(hit.set) || top.instance === undefined));
-      if (stale) {
-        stats.stale++;
-        return drillPick(at, 1)[0];
-      }
+      if (stale) return drillPick(at, 1)[0];
     }
     return hit
       ? { id: hit.pickId, owner: hit.set, instance: hit.instance }
@@ -103,7 +93,6 @@ export function createNavaraPicking({
       return;
     }
     cancel(next.timer);
-    answered(next, 'gpu');
     next.resolve(answerFrom(resolveInfo(info), next.at));
   };
   view.on('featureClick', onFeatureClick);
@@ -119,29 +108,22 @@ export function createNavaraPicking({
     clickPick(at) {
       const gesture = early;
       early = null;
-      if (gesture && now() - gesture.at <= EARLY_ANSWER_MS) {
-        const entry = { startedAt: gesture.at };
-        answered(entry, 'gpu');
+      if (gesture && now() - gesture.at <= EARLY_ANSWER_MS)
         return Promise.resolve(answerFrom(gesture.hit, at));
-      }
       return new Promise((resolve) => {
         const entry = {
           at: { x: at.x, y: at.y },
           resolve,
           timer: null,
-          startedAt: now(),
         };
         entry.timer = later(() => {
           const index = waiting.indexOf(entry);
           if (index >= 0) waiting.splice(index, 1);
-          answered(entry, 'timeout');
           resolve(drillPick(entry.at, 1)[0]);
         }, timeoutMs);
         waiting.push(entry);
       });
     },
-    /** How clicks were answered: GPU picks, timeouts, recent latencies (ms). */
-    clickStats: () => ({ ...stats, latencies: [...stats.latencies] }),
     destroy() {
       meshPickers.clear();
       view.off('featureClick', onFeatureClick);

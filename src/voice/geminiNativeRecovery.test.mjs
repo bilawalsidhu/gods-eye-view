@@ -78,6 +78,8 @@ function fixture({ holdFirst = false } = {}) {
       },
     },
   };
+  // A Viewer's canvas is its scene's.
+  viewer.canvas = viewer.scene.canvas;
   const runner = createGevActionRunner({
     engine: createCesiumEngine(viewer),
     viewer,

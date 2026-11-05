@@ -42,7 +42,7 @@
  *
  * This legacy harness is the geometry, lifecycle and real-input oracle.
  * Migration runs use headless Metal and strict runtime error observation.
- * Screenshots remain visual-review evidence here; the W2 companion must
+ * Screenshots remain visual-review evidence here; a separate pixel gate must
  * independently prove actual marker, image-plane and video pixels.
  *
  * No `cesium` package import for in-page math: the app does not expose a
@@ -2245,7 +2245,7 @@ async function main() {
 
     // -----------------------------------------------------------------------
     // Screenshots supplement this state/geometry oracle. Positive rendered
-    // media pixels are a separate mandatory W2 companion gate.
+    // media pixels are a separate mandatory pixel gate.
     // -----------------------------------------------------------------------
     await sleep(1000);
     const shot = path.join(SHOTS_DIR, 'cctv-v2-active.png');

@@ -109,7 +109,7 @@ test('flights, AIS, and FIRMS enable paths are wired through the shared sprite r
   assert.deepEqual(calls, [viewer, viewer, viewer]);
 
   const firmsLayer = createFirmsHeatmapLayer({ id: 'firms', name: 'FIRMS' });
-  // Flights draws through its renderer (phase 3): enable asks the fleet to
+  // Flights draws through its renderer: enable asks the fleet to
   // restore its order, which the Cesium aircraft renderer wires to the shared
   // restorer under the flights' sprite slot.
   assert.match(flightsLayer.enable.toString(), /fleet\.restoreOrderOnEnable\(\)/);

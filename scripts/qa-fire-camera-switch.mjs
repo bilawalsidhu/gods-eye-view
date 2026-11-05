@@ -21,7 +21,7 @@ const strict = createStrict({
   // installAlprFixture answers the camera tiles.
   fixtures: ['https://tiles.dontgetflocked.com/*'],
 });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
+await strict.run({}, async (b) => {
   const p = await b.newPage();
   await p.setViewport({ width: 1280, height: 900 });
   const errors = [];

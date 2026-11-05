@@ -1,7 +1,6 @@
 // Classify the real visible terrain/Google-tiles surface in a public
 // Navara post-effect. Native ground colour blends in display space; doing
 // it explicitly preserves translucent colours and overlap order.
-import { Effect, EffectAttribute } from 'postprocessing';
 import { Uniform } from 'three';
 import {
   createGroundTexture as texture,
@@ -9,6 +8,7 @@ import {
   groundSurfaceUniforms,
   updateGroundSurface,
 } from '../../shared/render/navaraGroundSurface.js';
+import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
 import * as geo from '../../../geo/index.js';
 import {
   DISC_EDGES,
@@ -18,7 +18,6 @@ import {
 } from './navaraGeometry.js';
 import { createDiscGrid, GRID_COLS, GRID_ROWS } from './navaraGrid.js';
 const KEY = 'gevEarthquakeGround';
-const registeredViews = new WeakSet();
 const fragmentShader = /* glsl */ `
 uniform sampler2D tAllDepth;
 uniform sampler2D tSurfaceDepth;
@@ -196,81 +195,61 @@ function buildState(discs) {
   return state;
 }
 
-function groundEffectClass(EffectDesc, NavaraEffect) {
-  return class GroundEffectDesc extends EffectDesc {
-    static key = KEY;
-    static insertAfter = [
-      'gevObservedWeather',
-      'gevNepalEvent',
-      'gevRecentImagery',
-      'toneMapping',
+const groundEffect = defineGroundEffect({
+  key: KEY,
+  name: 'GevEarthquakeGround',
+  fragmentShader,
+  insertAfter: [
+    'gevObservedWeather',
+    'gevNepalEvent',
+    'gevRecentImagery',
+    'toneMapping',
+  ],
+  insertBefore: [
+    'gevFirmsGround',
+    'gevPreSharpenOverlay',
+    'gevSharpen',
+    'smaa',
+    'fxaa',
+    'gevOverlay',
+    'final',
+  ],
+  uniforms: () => [
+    ...groundSurfaceUniforms(),
+    ['tEdges', new Uniform(null)],
+    ['tFrames', new Uniform(null)],
+    ['tGrid', new Uniform(null)],
+    ['tCandidates', new Uniform(null)],
+    ['uEdgeSize', new Uniform([1, 1])],
+    ['uFrameSize', new Uniform([1, 1])],
+    ['uCandidateSize', new Uniform([1, 1])],
+  ],
+  update() {
+    const state = this.owner.state,
+      camera = this.view.camera.raw,
+      mrt = this.find('mrt');
+    if (!this.effect || !camera || !state) return;
+    updateGroundSurface(this.effect, camera, this.ctx, mrt);
+    state.update(camera, this.ctx);
+    const u = this.effect.uniforms;
+    u.get('tEdges').value = state.edges.texture;
+    u.get('uEdgeSize').value = [state.edges.width, state.edges.height];
+    u.get('tFrames').value = state.packed.texture;
+    u.get('uFrameSize').value = [state.packed.width, state.packed.height];
+    u.get('tGrid').value = state.gridTexture;
+    u.get('tCandidates').value = state.candidates.texture;
+    u.get('uCandidateSize').value = [
+      state.candidates.width,
+      state.candidates.height,
     ];
-    static insertBefore = [
-      'gevFirmsGround',
-      'gevPreSharpenOverlay',
-      'gevSharpen',
-      'smaa',
-      'fxaa',
-      'gevOverlay',
-      'final',
-    ];
-    constructor(view, ctx, config) {
-      super(view, ctx, config);
-      this.owner = config[KEY].owner;
-    }
-    createPass() {
-      this.effect = new Effect('GevEarthquakeGround', fragmentShader, {
-        // Keep a separate pass: inputColor is the already tone-mapped frame.
-        attributes: EffectAttribute.CONVOLUTION,
-        uniforms: new Map([
-          ...groundSurfaceUniforms(),
-          ['tEdges', new Uniform(null)],
-          ['tFrames', new Uniform(null)],
-          ['tGrid', new Uniform(null)],
-          ['tCandidates', new Uniform(null)],
-          ['uEdgeSize', new Uniform([1, 1])],
-          ['uFrameSize', new Uniform([1, 1])],
-          ['uCandidateSize', new Uniform([1, 1])],
-        ]),
-      });
-      return new NavaraEffect(this.view.camera.raw, this.effect);
-    }
-    updateFrame() {
-      const state = this.owner.state,
-        camera = this.view.camera.raw,
-        mrt = this.find('mrt');
-      if (!this.effect || !camera || !state) return;
-      updateGroundSurface(this.effect, camera, this.ctx, mrt);
-      state.update(camera, this.ctx);
-      const u = this.effect.uniforms;
-      u.get('tEdges').value = state.edges.texture;
-      u.get('uEdgeSize').value = [state.edges.width, state.edges.height];
-      u.get('tFrames').value = state.packed.texture;
-      u.get('uFrameSize').value = [state.packed.width, state.packed.height];
-      u.get('tGrid').value = state.gridTexture;
-      u.get('tCandidates').value = state.candidates.texture;
-      u.get('uCandidateSize').value = [
-        state.candidates.width,
-        state.candidates.height,
-      ];
-    }
-    onDestroy() {
-      this.effect?.dispose();
-      super.onDestroy();
-    }
-  };
-}
+  },
+});
 
 export function createEarthquakesNavaraRenderer(
   engine,
   { view, EffectDesc, NavaraEffect } = {},
 ) {
-  if (!view?.camera || !engine?.render || !EffectDesc || !NavaraEffect)
-    throw new TypeError('Earthquakes require a Navara view');
-  if (!registeredViews.has(view)) {
-    view.registerEffect(KEY, groundEffectClass(EffectDesc, NavaraEffect));
-    registeredViews.add(view);
-  }
+  groundEffect.register(view, { EffectDesc, NavaraEffect });
   let destroyed = false,
     visible = false,
     rows = [],

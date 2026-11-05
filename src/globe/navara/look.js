@@ -242,7 +242,7 @@ export function buildNavaraLook(
 }
 
 /** Navara's own stars intensity, for a look that does not set one. */
-export const NAVARA_STARS_INTENSITY = 10;
+const NAVARA_STARS_INTENSITY = 10;
 
 const IRRADIANCE_ON = Object.freeze({
   aerialPerspective: Object.freeze({ irradiance: true }),

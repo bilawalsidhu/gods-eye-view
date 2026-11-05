@@ -115,7 +115,7 @@ export function createLifecycle({
       const renderer = flightState._renderer;
       flightState.enabled = true;
       renderer?.fleet.setVisible(true);
-      if (renderer) holdContinuousRender('flights'); // per-frame animator (perf wave 2)
+      if (renderer) holdContinuousRender('flights'); // per-frame animator
       renderer?.models.setVisible(true);
       parts.tracking._setCockpitContactMode(
         globalThis.document?.body.classList.contains('cockpit-mode') === true,

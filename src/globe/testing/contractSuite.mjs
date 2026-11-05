@@ -132,6 +132,9 @@ export function createContractSuite(
     return cartesian2.create(width / 2, height / 2);
   };
 
+  const capabilities = engineCapabilities(engine);
+  // A check may name the optional capabilities it needs (movers, lines)
+  // after its function; without them it is left out.
   const checks = [
     [
       'shape: the engine has every contract capability',
@@ -382,19 +385,15 @@ export function createContractSuite(
       'clock: one frame time per frame, latched before preUpdate, never decreasing',
       async () => {
         const records = [];
-        const read = (name, value) =>
+        const read = (name) =>
           records.push({
             name,
-            value,
             frame: engine.clock.frameTime(),
             now: engine.clock.now(),
           });
-        const removers = [
-          engine.clock.ticked.addEventListener((time) => read('ticked', time)),
-          ...['preUpdate', 'preRender', 'postRender'].map((name) =>
-            engine.frames[name].addEventListener(() => read(name)),
-          ),
-        ];
+        const removers = ['preUpdate', 'preRender', 'postRender'].map((name) =>
+          engine.frames[name].addEventListener(() => read(name)),
+        );
         try {
           await until(
             () =>
@@ -409,43 +408,28 @@ export function createContractSuite(
             Number.isFinite(engine.clock.frameTime()),
           'clock.now or clock.frameTime is not a number',
         );
-        // From the first tick on: every frame event belongs to the frame the
-        // last tick opened, and reads that tick's frame time.
-        const start = records.findIndex(({ name }) => name === 'ticked');
-        ensure(start >= 0, 'clock.ticked never fired');
-        let tick = null;
-        let ticksSincePreUpdate = 0;
-        let previousFrame = -Infinity;
+        // From the first preUpdate on: every frame event reads the frame time
+        // its frame's preUpdate read, and that time never goes back.
+        const start = records.findIndex(({ name }) => name === 'preUpdate');
+        ensure(start >= 0, 'frames.preUpdate never fired');
+        let frame = null;
         for (const record of records.slice(start)) {
           ensure(
             record.frame <= record.now,
             `${record.name}: frameTime ${record.frame} is after now ${record.now}`,
           );
-          if (record.name === 'ticked') {
+          if (record.name === 'preUpdate') {
             ensure(
-              record.value === record.frame,
-              `ticked passed ${record.value}, frameTime read ${record.frame}`,
+              frame === null || record.frame >= frame.frame,
+              `frame time went back from ${frame?.frame} to ${record.frame}`,
             );
-            ensure(
-              record.frame >= previousFrame,
-              `frame time went back from ${previousFrame} to ${record.frame}`,
-            );
-            previousFrame = record.frame;
-            tick = record;
-            ticksSincePreUpdate++;
+            frame = record;
             continue;
           }
           ensure(
-            record.frame === tick.frame,
-            `${record.name} read frame time ${record.frame}, its frame's is ${tick.frame}`,
+            record.frame === frame.frame,
+            `${record.name} read frame time ${record.frame}, its frame's is ${frame.frame}`,
           );
-          if (record.name === 'preUpdate') {
-            ensure(
-              ticksSincePreUpdate >= 1,
-              'preUpdate ran without a tick before it',
-            );
-            ticksSincePreUpdate = 0;
-          }
         }
       },
     ],
@@ -496,11 +480,6 @@ export function createContractSuite(
           set.setCount(3);
           set.commit();
           ensure(set.count() === 3, `count ${set.count()}`);
-          const view = set.positionsView();
-          ensure(
-            view.length === 9 && view[3] === places[1].x,
-            'positionsView does not hold the positions',
-          );
           ensure(
             engine.movers
               .list()
@@ -595,6 +574,7 @@ export function createContractSuite(
           'a destroyed set is still listed',
         );
       },
+      ['movers'],
     ],
     [
       'colours: mid-tone sprite, point and line colours draw as asked (within 3 per channel)',
@@ -693,6 +673,7 @@ export function createContractSuite(
           for (const line of lines) line.destroy();
         }
       },
+      ['movers', 'lines'],
     ],
     [
       'lines: a line draws between its projections, turns with its model matrix and dims where hidden',
@@ -803,6 +784,7 @@ export function createContractSuite(
           'a destroyed line is still listed',
         );
       },
+      ['lines'],
     ],
     [
       'input: picks on click and move payloads, drill, lines',
@@ -942,6 +924,7 @@ export function createContractSuite(
           line.destroy();
         }
       },
+      ['movers', 'lines'],
     ],
     [
       'lines: pixel dashes are regular, in CSS pixels',
@@ -1011,6 +994,7 @@ export function createContractSuite(
           line.destroy();
         }
       },
+      ['lines'],
     ],
     [
       'movers: depth tests, rotation, cells, scale, count, points and models',
@@ -1239,6 +1223,7 @@ export function createContractSuite(
           for (const set of sets) set.destroy();
         }
       },
+      ['movers'],
     ],
     [
       'render: continuous mode toggles',
@@ -1599,7 +1584,7 @@ export function createContractSuite(
       },
     ],
     [
-      'surface.sampleHeightDetailed: source, tile size, lod and mover-set exclusion',
+      'surface.sampleHeightDetailed: source, tile size and mover-set exclusion',
       async () => {
         const place = cartographic.fromDegrees(20, 10, 0);
         const shape = (detail, label) => {
@@ -1617,10 +1602,6 @@ export function createContractSuite(
         };
         const visible = engine.surface.sampleHeightDetailed(place);
         shape(visible, 'visible');
-        shape(
-          engine.surface.sampleHeightDetailed(place, { lod: 'finest' }),
-          'finest',
-        );
         if (visible?.source === 'tiles')
           near(
             engine.surface.sampleHeight(place),
@@ -1628,13 +1609,7 @@ export function createContractSuite(
             1e-6,
             'sampleHeight and the detailed tiles answer',
           );
-        let rejected = null;
-        try {
-          engine.surface.sampleHeightDetailed(place, { lod: 'best' });
-        } catch (error) {
-          rejected = error;
-        }
-        ensure(rejected instanceof TypeError, 'an unknown lod was accepted');
+        if (!capabilities.movers) return;
         // A mover set in exclude: the sample works and the set stays.
         const set = engine.movers.createSet({
           id: 'contract-surface-exclude',
@@ -2765,10 +2740,9 @@ export function createContractSuite(
         }
       },
     ],
-  ];
+  ].filter(([, , needs = []]) => needs.every((flag) => capabilities[flag]));
   if (mapSources?.photoreal && mapSources.imagery?.length >= 2)
     checks.push(...mapChecks(engine.maps, mapSources));
-  const capabilities = engineCapabilities(engine);
   if (capabilities.visualStyles)
     checks.push(...styleChecks(engine.render, settle));
   if (capabilities.bloom) checks.push(...bloomChecks(engine.render, settle));

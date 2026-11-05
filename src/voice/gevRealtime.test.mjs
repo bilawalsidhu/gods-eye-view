@@ -2859,13 +2859,13 @@ test('isBenignViewportDeleteError is false for non-error payloads and junk', () 
 test('hidden document yields no fresh frame — capture must not label a stale canvas Current', async () => {
   const originalDocument = globalThis.document;
   let requested = 0;
-  const scene = {
-    postRender: { addEventListener() { return () => {}; } },
-    requestRender() { requested += 1; },
+  const engine = {
+    frames: { postRender: { addEventListener() { return () => {}; } } },
+    render: { request() { requested += 1; } },
   };
   try {
     globalThis.document = { hidden: true };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, false, 'hidden capture reports non-fresh');
     assert.equal(requested, 0, 'no secret render restart while hidden');
   } finally {
@@ -2878,11 +2878,11 @@ test('visible document with a rendering scene reports a fresh frame', async () =
   try {
     globalThis.document = { hidden: false };
     let fire = null;
-    const scene = {
-      postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
-      requestRender() { queueMicrotask(() => fire?.()); },
+    const engine = {
+      frames: { postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } } },
+      render: { request() { queueMicrotask(() => fire?.()); } },
     };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, true);
   } finally {
     globalThis.document = originalDocument;
@@ -2895,11 +2895,11 @@ test('a tab switch during the bounded render wait invalidates freshness', async 
     const doc = { hidden: false };
     globalThis.document = doc;
     let fire = null;
-    const scene = {
-      postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
-      requestRender() { doc.hidden = true; queueMicrotask(() => fire?.()); },
+    const engine = {
+      frames: { postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } } },
+      render: { request() { doc.hidden = true; queueMicrotask(() => fire?.()); } },
     };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, false, 'freshness rechecked after the await');
   } finally {
     globalThis.document = originalDocument;

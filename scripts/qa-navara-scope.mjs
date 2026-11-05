@@ -10,7 +10,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import sharp from 'sharp';
 import { fromDegrees } from '../src/geo/cartesian3.js';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 
 const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0';
@@ -31,8 +35,6 @@ const EDGE = { x: 1250, y: 560, width: 26, height: 90 };
 await strict.run(
   {
     args: [
-      '--use-angle=metal',
-      '--enable-gpu',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
     ],
@@ -43,21 +45,7 @@ await strict.run(
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(base.href);
-    const ready = async (kind) => {
-      await page.waitForFunction(
-        (k) =>
-          window.__godsEyeView?.engine?.kind === k &&
-          !document.querySelector('#globe-engine')?.disabled &&
-          !document.querySelector('.engine-switch-frame') &&
-          document.querySelector('#loading-screen.hidden'),
-        { timeout: 120000 },
-        kind,
-      );
-      await page.evaluate(
-        () => window.__godsEyeView.styleManager.initialRestorePromise,
-      );
-    };
-    await ready('navara');
+    await waitForEngine(page, 'navara');
     assert.equal(
       await page.evaluate(() =>
         Boolean(window.__godsEyeView.tileset || window.__GOOGLE_MAPS_API_KEY__),
@@ -92,8 +80,7 @@ await strict.run(
       if (
         (await page.evaluate(() => window.__godsEyeView.engine.kind)) !== kind
       ) {
-        await strict.pick(page, kind);
-        await ready(kind);
+        await strict.switchTo(page, kind);
       }
       await wait(2500);
       const mask = await page.evaluate(() => {

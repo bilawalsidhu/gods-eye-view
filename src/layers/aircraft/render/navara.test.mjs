@@ -10,7 +10,6 @@ import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../../data/aircraftIcons.js';
 import { CYAN, WHITE, nearFarScale, rgbaFromCss } from '../../shared/color.js';
-import { missingAircraftRendererMembers } from './contract.js';
 import {
   aircraftAtlasLayout,
   aircraftIconCells,
@@ -39,9 +38,8 @@ async function setup() {
 const setsOf = (engine, prefix) =>
   engine.movers.list().filter(({ id }) => id.startsWith(prefix));
 
-test('the Navara aircraft renderer has every member of the contract', async () => {
+test('the Navara aircraft renderer reports its kind', async () => {
   const { engine, renderer } = await setup();
-  assert.deepEqual(missingAircraftRendererMembers(renderer), []);
   assert.equal(renderer.kind, 'navara');
   renderer.destroy();
   engine.destroy();

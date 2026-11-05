@@ -2,14 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   ENGINE_KINDS,
-  GLOBE_ENGINE_MEMBERS,
   INPUT_TYPES,
   MODIFIERS,
   BLOOM_INITIAL,
   CLOUD_COVER_INITIAL,
   CONTACT_SONAR_INITIAL,
-  ENGINE_CAPABILITIES,
-  OPTIONAL_ENGINE_MEMBERS,
   SHARPEN_INITIAL,
   assertGlobeEngine,
   createEngineEvent,
@@ -198,42 +195,6 @@ test('assertGlobeEngine accepts a complete engine and names every missing capabi
   assert.throws(() => assertGlobeEngine(null), TypeError);
 });
 
-test('the contract carries what the shell infrastructure needs', () => {
-  for (const member of [
-    'camera.livePosition',
-    'camera.height',
-    'maps.releasePhotorealTiles',
-    'maps.current',
-  ])
-    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
-  const engine = createFakeEngine();
-  const broken = {
-    ...engine,
-    camera: { ...engine.camera, livePosition: undefined, height: 1 },
-    maps: { ...engine.maps, releasePhotorealTiles: undefined },
-  };
-  assert.throws(
-    () => assertGlobeEngine(broken),
-    /camera\.livePosition.*camera\.height.*maps\.releasePhotorealTiles/,
-  );
-});
-
-test('the contract carries what shell navigation needs', () => {
-  for (const member of ['camera.commanded', 'picker.pickGlobe', 'isDestroyed'])
-    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
-  const engine = createFakeEngine();
-  const broken = {
-    ...engine,
-    camera: { ...engine.camera, commanded: {} },
-    picker: { ...engine.picker, pickGlobe: undefined },
-    isDestroyed: false,
-  };
-  assert.throws(
-    () => assertGlobeEngine(broken),
-    /camera\.commanded.*picker\.pickGlobe.*isDestroyed/,
-  );
-});
-
 test('the fake engine passes the engine contract suite', async (t) => {
   const engine = createFakeEngine();
   const checks = createContractSuite(engine, {
@@ -314,9 +275,7 @@ test('raiseValue raises exactly one argument with the event semantics', () => {
   assert.equal(event.numberOfListeners, 1);
 });
 
-test('the contract carries the sharpening and checks its values', () => {
-  for (const member of ['render.setSharpen', 'render.sharpen'])
-    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+test('mergeSharpen keeps omitted fields and rejects bad values', () => {
   assert.deepEqual(SHARPEN_INITIAL, { enabled: false, amount: 1 });
   const on = mergeSharpen(SHARPEN_INITIAL, { enabled: true });
   assert.deepEqual(on, { enabled: true, amount: 1 });
@@ -334,68 +293,34 @@ test('the contract carries the sharpening and checks its values', () => {
     assert.throws(() => mergeSharpen(on, bad), TypeError);
 });
 
-test('the contract carries the app clock', () => {
-  for (const member of ['clock.now', 'clock.frameTime', 'clock.ticked'])
-    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+test('movers and lines are optional capabilities, whole or absent', () => {
   const engine = createFakeEngine();
-  assert.equal(assertGlobeEngine(engine), engine);
-  const broken = {
-    ...engine,
-    clock: { ...engine.clock, frameTime: 1, ticked: {} },
-  };
+  assert.equal(engineCapabilities(engine).movers, true);
+  assert.equal(engineCapabilities(engine).lines, true);
+  const without = { ...engine };
+  delete without.movers;
+  delete without.lines;
+  assert.equal(assertGlobeEngine(without), without);
+  assert.equal(engineCapabilities(without).movers, false);
+  const half = { ...engine, movers: { createSet: 1 } };
   assert.throws(
-    () => assertGlobeEngine(broken),
-    /clock\.frameTime.*clock\.ticked/,
-  );
-  const missing = { ...engine };
-  delete missing.clock;
-  assert.throws(() => assertGlobeEngine(missing), /\bclock\b/);
-});
-
-test('the contract carries instanced movers', () => {
-  for (const member of ['movers.createSet', 'movers.list'])
-    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
-  const engine = createFakeEngine();
-  const broken = { ...engine, movers: { createSet: 1 } };
-  assert.throws(
-    () => assertGlobeEngine(broken),
+    () => assertGlobeEngine(half),
     /movers\.createSet.*movers\.list/,
   );
-});
-
-test('the contract carries dynamic lines', () => {
-  for (const member of ['lines.createLine', 'lines.list'])
-    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
-  const engine = createFakeEngine();
-  assert.equal(assertGlobeEngine(engine), engine);
-  const broken = { ...engine, lines: {} };
-  assert.throws(
-    () => assertGlobeEngine(broken),
-    /lines\.createLine.*lines\.list/,
-  );
-});
-
-test('the contract carries the follow camera', () => {
-  for (const member of [
-    'camera.follow',
-    'camera.following',
-    'camera.followChanged',
-  ])
-    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
-  const engine = createFakeEngine();
-  const broken = { ...engine, camera: { ...engine.camera, followChanged: {} } };
-  assert.throws(() => assertGlobeEngine(broken), /camera\.followChanged/);
+  // Without them the suite leaves out the checks that draw movers and lines.
+  const names = (target) =>
+    createContractSuite(target, { waitFrames: async () => {} }).map(
+      ({ name }) => name,
+    );
+  assert.ok(names(engine).some((name) => name.startsWith('movers:')));
+  const plain = names(without);
+  assert.ok(!plain.some((name) => /^(movers|lines|colours):/.test(name)));
+  assert.ok(plain.some((name) => name.startsWith('camera.')));
 });
 
 test('engineCapabilities names the optional capabilities an engine has whole', () => {
-  assert.ok(ENGINE_CAPABILITIES.includes('visualStyles'));
-  assert.deepEqual(OPTIONAL_ENGINE_MEMBERS.visualStyles, [
-    'render.visualStyles',
-    'render.setStyle',
-    'render.style',
-  ]);
   const plain = createFakeEngine();
-  for (const flag of ENGINE_CAPABILITIES)
+  for (const flag of ['visualStyles', 'bloom', 'cloudCover', 'contactSonar'])
     assert.equal(engineCapabilities(plain)[flag], false, flag);
   const styled = createFakeEngine({
     visualStyles: { thermal: ['palette', 'time'] },
@@ -457,11 +382,6 @@ test('a fake engine with visual styles passes the optional style check', async (
 });
 
 test('the bloom capability: whole or absent, merged and checked', async (t) => {
-  assert.ok(ENGINE_CAPABILITIES.includes('bloom'));
-  assert.deepEqual(OPTIONAL_ENGINE_MEMBERS.bloom, [
-    'render.setBloom',
-    'render.bloom',
-  ]);
   const engine = createFakeEngine({ bloom: true });
   assert.equal(engineCapabilities(engine).bloom, true);
   assert.equal(engineCapabilities(engine).visualStyles, false);
@@ -482,7 +402,6 @@ test('the bloom capability: whole or absent, merged and checked', async (t) => {
 });
 
 test('the cloudCover capability: whole or absent, null for the engine own', async (t) => {
-  assert.ok(ENGINE_CAPABILITIES.includes('cloudCover'));
   const engine = createFakeEngine({ cloudCover: true });
   assert.equal(engineCapabilities(engine).cloudCover, true);
   assert.equal(engineCapabilities(createFakeEngine()).cloudCover, false);
@@ -506,12 +425,6 @@ test('the cloudCover capability: whole or absent, null for the engine own', asyn
 });
 
 test('the contactSonar capability: whole or absent, merged and checked', async (t) => {
-  assert.deepEqual(ENGINE_CAPABILITIES, [
-    'visualStyles',
-    'bloom',
-    'cloudCover',
-    'contactSonar',
-  ]);
   const engine = createFakeEngine({ contactSonar: true });
   assert.equal(engineCapabilities(engine).contactSonar, true);
   assert.deepEqual(engine.render.contactSonar(), CONTACT_SONAR_INITIAL);

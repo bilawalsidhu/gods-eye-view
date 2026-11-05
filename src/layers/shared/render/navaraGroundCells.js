@@ -1,7 +1,7 @@
 // Classify visible terrain and 3D tiles. Multiple cell layers share one non-pickable pass.
-import { Effect, EffectAttribute } from 'postprocessing';
 import { Matrix4, Uniform } from 'three';
 import { rectangleFrame } from './navaraCellGeometry.js';
+import { defineGroundEffect } from './navaraGroundEffect.js';
 import { viewFrame, groundClipBounds } from './navaraGroundGeometry.js';
 import { createGroundGrid, GRID_COLS, GRID_ROWS } from './navaraGroundGrid.js';
 import {
@@ -11,7 +11,6 @@ import {
   updateGroundSurface,
 } from './navaraGroundSurface.js';
 const KEY = 'gevFirmsGround';
-const registeredViews = new WeakSet();
 const fragmentShader = /* glsl */ `
 uniform sampler2D tAllDepth;
 uniform sampler2D tSurfaceDepth;
@@ -200,65 +199,51 @@ function buildState(cells) {
     },
   };
 }
-function groundEffectClass(EffectDesc, NavaraEffect) {
-  return class FirmsGroundEffectDesc extends EffectDesc {
-    static key = KEY;
-    static insertAfter = [
-      'gevEarthquakeGround',
-      'gevObservedWeather',
-      'gevNepalEvent',
-      'gevRecentImagery',
-      'toneMapping',
-    ];
-    static insertBefore = [
-      'gevPreSharpenOverlay',
-      'gevSharpen',
-      'smaa',
-      'fxaa',
-      'gevOverlay',
-      'final',
-    ];
-    constructor(view, context, config) {
-      super(view, context, config);
-      this.owner = config[KEY].owner;
-    }
-    createPass() {
-      this.effect = new Effect('GevFirmsGround', fragmentShader, {
-        attributes: EffectAttribute.CONVOLUTION,
-        uniforms: new Map([
-          ...groundSurfaceUniforms(),
-          ['tCells', new Uniform(null)],
-          ['tGrid', new Uniform(null)],
-          ['tCandidates', new Uniform(null)],
-          ['uCellSize', new Uniform([1, 1])],
-          ['uCandidateSize', new Uniform([1, 1])],
-          ['uInverseView', new Uniform(new Matrix4())],
-        ]),
-      });
-      return new NavaraEffect(this.view.camera.raw, this.effect);
-    }
-    updateFrame() {
-      const state = this.owner.state,
-        camera = this.view.camera.raw;
-      if (!this.effect || !state || !camera) return;
-      updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
-      state.update(camera, this.ctx);
-      const u = this.effect.uniforms;
-      u.get('tCells').value = state.packed.texture;
-      u.get('uCellSize').value[0] = state.packed.width;
-      u.get('uCellSize').value[1] = state.packed.height;
-      u.get('tGrid').value = state.gridTexture;
-      u.get('tCandidates').value = state.candidates.texture;
-      u.get('uCandidateSize').value[0] = state.candidates.width;
-      u.get('uCandidateSize').value[1] = state.candidates.height;
-      u.get('uInverseView').value.copy(camera.matrixWorld);
-    }
-    onDestroy() {
-      this.effect?.dispose();
-      super.onDestroy();
-    }
-  };
-}
+const groundEffect = defineGroundEffect({
+  key: KEY,
+  name: 'GevFirmsGround',
+  fragmentShader,
+  insertAfter: [
+    'gevEarthquakeGround',
+    'gevObservedWeather',
+    'gevNepalEvent',
+    'gevRecentImagery',
+    'toneMapping',
+  ],
+  insertBefore: [
+    'gevPreSharpenOverlay',
+    'gevSharpen',
+    'smaa',
+    'fxaa',
+    'gevOverlay',
+    'final',
+  ],
+  uniforms: () => [
+    ...groundSurfaceUniforms(),
+    ['tCells', new Uniform(null)],
+    ['tGrid', new Uniform(null)],
+    ['tCandidates', new Uniform(null)],
+    ['uCellSize', new Uniform([1, 1])],
+    ['uCandidateSize', new Uniform([1, 1])],
+    ['uInverseView', new Uniform(new Matrix4())],
+  ],
+  update() {
+    const state = this.owner.state,
+      camera = this.view.camera.raw;
+    if (!this.effect || !state || !camera) return;
+    updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
+    state.update(camera, this.ctx);
+    const u = this.effect.uniforms;
+    u.get('tCells').value = state.packed.texture;
+    u.get('uCellSize').value[0] = state.packed.width;
+    u.get('uCellSize').value[1] = state.packed.height;
+    u.get('tGrid').value = state.gridTexture;
+    u.get('tCandidates').value = state.candidates.texture;
+    u.get('uCandidateSize').value[0] = state.candidates.width;
+    u.get('uCandidateSize').value[1] = state.candidates.height;
+    u.get('uInverseView').value.copy(camera.matrixWorld);
+  },
+});
 // The SDK allows one active effect per key. Compose enabled datasets in
 // catalog order so both can be drawn without replacing one another.
 const views = new WeakMap();
@@ -267,10 +252,7 @@ export function createGroundCellDisplay(
   { view, EffectDesc, NavaraEffect },
   order,
 ) {
-  if (!registeredViews.has(view)) {
-    view.registerEffect(KEY, groundEffectClass(EffectDesc, NavaraEffect));
-    registeredViews.add(view);
-  }
+  groundEffect.register(view, { EffectDesc, NavaraEffect });
   let pass = views.get(view);
   if (!pass) {
     pass = {

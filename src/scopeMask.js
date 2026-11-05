@@ -1,5 +1,4 @@
 import { getKeyholeGeometry } from './celestialRing.js';
-import { isGlobeEngine } from './globe/contract.js';
 import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
 
 /**
@@ -12,7 +11,7 @@ import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
  * owner ruled: draw it explicitly on a canvas, make the edge featherable
  * (like the NVG/FLIR tube masks), and free the six shader passes for real.
  *
- * Implementation: one fixed canvas parented into the viewer container
+ * Implementation: one fixed canvas parented into the globe container
  * BELOW the detection surface (z-index 2 < 5) so detection's
  * mix-blend-mode still composites over the masked scene, exactly like the
  * old in-scene artifact. The mask is a radial gradient — fully transparent
@@ -88,8 +87,8 @@ const SCOPE_TERMINUS_SAMPLE_MS = 120;
 let _canvas = null;
 let _container = null;
 /**
- * The globe the mask sits over: { height(), preRender, moveEnd } from a
- * Cesium viewer or a globe engine (Navara).
+ * The globe the mask sits over: { height(), preRender, moveEnd } from its
+ * globe engine.
  */
 let _globe = null;
 let _enabled = true;
@@ -426,34 +425,27 @@ function syncScopeMaskAppearance(enabled = _enabled) {
 }
 
 /**
- * The camera height and frame/camera events of a Cesium viewer or a globe
- * engine, and the container the mask goes into.
+ * The camera height and frame/camera events of a globe engine, and the
+ * container the mask goes into.
  */
-function globeOf(target) {
-  if (isGlobeEngine(target))
-    return {
-      container: target.host.container,
-      height: () => target.camera.height(),
-      preRender: target.frames.preRender,
-      moveEnd: target.camera.moveEnd,
-    };
+function globeOf(engine) {
   return {
-    container: target?.container,
-    height: () => target?.camera?.positionCartographic?.height,
-    preRender: target?.scene?.preRender,
-    moveEnd: target?.camera?.moveEnd,
+    container: engine?.host?.container,
+    height: () => engine?.camera?.height?.(),
+    preRender: engine?.frames?.preRender,
+    moveEnd: engine?.camera?.moveEnd,
   };
 }
 
 /**
- * Install the scope mask into the globe's container: a Cesium viewer's, or
- * a globe engine's host container (Navara). Idempotent.
- * @param {Cesium.Viewer | import('./globe/contract.js').GlobeEngine} target
+ * Install the scope mask into the globe engine's host container.
+ * Idempotent.
+ * @param {import('./globe/contract.js').GlobeEngine} engine
  * @returns {void}
  */
-export function installScopeMask(target) {
+export function installScopeMask(engine) {
   if (_canvas) return;
-  const globe = globeOf(target);
+  const globe = globeOf(engine);
   // Only a DOM container can hold the mask (an engine double's cannot).
   if (typeof globe.container?.appendChild !== 'function') return;
   syncScopeMaskAppearance();

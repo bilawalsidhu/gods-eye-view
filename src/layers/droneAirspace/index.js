@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { msg, t } from '../../i18n/index.js';
 import { createZonesCesiumRenderer } from '../shared/render/cesiumZones.js';
@@ -11,11 +10,6 @@ import {
 export { normalizeDroneAirspaceSnapshot } from './records.js';
 export { createDroneAirspaceSource } from './source.js';
 export * from './cards.js';
-
-/** Fill/line color for a zone by TYPE_CODE. */
-export function droneAirspaceColor(typeCode) {
-  return Cesium.Color.fromCssColorString(droneAirspaceAccent(typeCode));
-}
 
 /** The zones on a Cesium globe (the default renderer). */
 export function createDroneAirspaceCesiumRenderer({

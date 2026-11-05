@@ -2,8 +2,7 @@
 // initial chunks are every entry chunk and what it imports statically;
 // navaraMode.js reaches Navara only through import(), so three and
 // @navaramap/* belong to lazy chunks. This checks the bundle's module ids
-// (what Rollup put in each chunk), and fails the build otherwise;
-// scripts/check-main-chunk.mjs checks the built files' text as well.
+// (what Rollup put in each chunk), and fails the build otherwise.
 
 /**
  * Module ids that only the Navara engine may load, when no package list is

@@ -18,7 +18,7 @@ import {
  * reaches the engine. A value the engine refuses (NaN from an old link,
  * say) stays here and is reported, as a Cesium uniform would just draw it.
  */
-export function engineStyleStage(render, name, shader) {
+function engineStyleStage(render, name, shader) {
   const values = { intensity: 0 };
   if (shader.fragmentShader.includes('uniform float time')) values.time = 0;
   for (const [uniform, meta] of Object.entries(shader.uniforms || {}))

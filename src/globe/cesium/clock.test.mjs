@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { isEngineEvent } from '../contract.js';
 import { createAppClock } from '../../time/clock.js';
 import { createCesiumClock } from './clock.js';
 import { createFakeViewer } from './testing/fakeViewer.mjs';
@@ -32,7 +31,6 @@ test('the clock reads the app clock and latches on the viewer clock from creatio
   const viewer = createFakeViewer();
   const wall = manualAppClock();
   const { clock } = createCesiumClock(viewer, { appClock: wall.appClock });
-  assert.ok(isEngineEvent(clock.ticked));
   // Attached at creation, so it runs before onTick listeners added later
   // (cameraVerbs installs its own after the engine exists).
   assert.equal(viewer.clock.onTick.numberOfListeners, 1);
@@ -51,7 +49,9 @@ test('frameTime is latched on the viewer clock tick, before preUpdate', () => {
   const wall = manualAppClock();
   const { clock } = createCesiumClock(viewer, { appClock: wall.appClock });
   const seen = [];
-  clock.ticked.addEventListener((time) => seen.push(['ticked', time]));
+  viewer.clock.onTick.addEventListener(() =>
+    seen.push(['tick', clock.frameTime()]),
+  );
   // A preUpdate listener the app added before the engine existed still
   // reads this frame's time: the latch is on the tick, not on preUpdate.
   viewer.scene.preUpdate.addEventListener(() =>
@@ -66,10 +66,10 @@ test('frameTime is latched on the viewer clock tick, before preUpdate', () => {
   wall.advance(16);
   cesiumFrame(viewer, { draw: false });
   assert.deepEqual(seen, [
-    ['ticked', t0],
+    ['tick', t0],
     ['preUpdate', t0],
     ['preRender', t0],
-    ['ticked', t0 + 19],
+    ['tick', t0 + 19],
     ['preUpdate', t0 + 19],
   ]);
 });
@@ -99,11 +99,14 @@ test('a viewer without a clock latches on preUpdate', () => {
   const { clock, destroy } = createCesiumClock(viewer, {
     appClock: wall.appClock,
   });
-  const seen = [];
-  clock.ticked.addEventListener((time) => seen.push(time));
+  // Attached on first use: creating the clock adds no scene listener.
+  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
+  const before = clock.frameTime();
+  assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
   wall.advance(7);
   viewer.scene.preUpdate.raiseEvent(viewer.scene);
-  assert.deepEqual(seen, [wall.appClock.now()]);
+  wall.advance(2);
+  assert.equal(clock.frameTime(), before + 7);
   destroy();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
 });
@@ -116,7 +119,7 @@ test('the viewer clock itself is left alone', () => {
   const { clock } = createCesiumClock(viewer, {
     appClock: manualAppClock().appClock,
   });
-  clock.ticked.addEventListener(() => {});
+  clock.frameTime();
   cesiumFrame(viewer);
   assert.equal(viewer.clock.shouldAnimate, false);
   assert.equal(viewer.clock.multiplier, 1);

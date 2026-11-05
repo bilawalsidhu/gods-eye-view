@@ -220,7 +220,7 @@ test('empty display overlay does not swap an unwritten frame buffer', () => {
   h.pass.dispose();
 });
 
-test('ordinary W1 overlays keep the direct pass without a display copy or target', () => {
+test('ordinary overlays keep the direct pass without a display copy or target', () => {
   const h = harness(),
     input = { width: 1280, height: 800, samples: 4, texture: {} };
   h.overlay.displayBlend = false;

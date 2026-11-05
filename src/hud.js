@@ -20,7 +20,6 @@ import { applicationServices } from './services/application.js';
  */
 
 import * as geo from './geo/index.js';
-import { isGlobeEngine } from './globe/contract.js';
 import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
@@ -229,17 +228,15 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
  */
 export class IntelHUD {
   /**
-   * @param {import('./globe/contract.js').GlobeEngine | object} engine The
-   *   globe engine whose camera drives the telemetry, or a viewer registered
-   *   for one.
+   * @param {import('./globe/contract.js').GlobeEngine} engine The globe
+   *   engine whose camera drives the telemetry.
    * @param {object} [options] `viewer`: the Cesium viewer the basemap label
-   *   context (voice, until phase 1c) reads; without one the summary has no
-   *   place labels. Defaults to the first argument when that is a viewer.
+   *   context (voice) reads; without one the summary has no place labels.
    */
   constructor(
     engine,
     {
-      viewer = isGlobeEngine(engine) ? null : engine,
+      viewer = null,
       placeSearch,
       summaryPolicy = {},
       basemapContext = {},
@@ -252,7 +249,7 @@ export class IntelHUD {
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
     this.placeSearch = placeSearch;
-    this.engine = engineFromViewer(engine);
+    this.engine = engine;
     this.viewer = viewer;
     this._visible = false;
     this._autoMode = true; // auto show/hide based on style

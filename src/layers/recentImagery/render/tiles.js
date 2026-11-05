@@ -1,6 +1,6 @@
 const LIMIT = 85.05112878;
 export const TILE_SIZE = 256;
-export const MAX_TILE_SIDE = 8;
+const MAX_TILE_SIDE = 8;
 export const mercatorX = (lon) => (lon + 180) / 360;
 export const mercatorY = (lat) => {
   const r = (Math.max(-LIMIT, Math.min(LIMIT, lat)) * Math.PI) / 180;

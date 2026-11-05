@@ -14,7 +14,7 @@ const strict = createStrict({
   origin: url.origin,
   layers: [missions ? 'rocket-launches' : 'satellites'],
 });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
+await strict.run({}, async (b) => {
   const p = await b.newPage();
   const errors = [];
   p.on('pageerror', (e) => {

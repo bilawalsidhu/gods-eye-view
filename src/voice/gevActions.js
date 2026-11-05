@@ -258,7 +258,7 @@ export const UNAVAILABLE_FEATURES = Object.freeze({
 });
 
 /** The engine to switch to for a refused feature. */
-export const SWITCH_ENGINE_HINT = '?engine=cesium';
+const SWITCH_ENGINE_HINT = '?engine=cesium';
 
 const engineName = (engine) =>
   engine?.kind === 'navara' ? 'the Navara engine' : 'this engine';

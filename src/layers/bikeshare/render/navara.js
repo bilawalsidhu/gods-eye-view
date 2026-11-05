@@ -1,6 +1,7 @@
 import * as geo from '../../../geo/index.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
 import { CYAN } from '../../shared/color.js';
+import { viewRectangleCenter } from '../../shared/viewRectangle.js';
 import { createViewport } from '../viewport.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
@@ -10,15 +11,9 @@ import {
   MAX_TOTAL_POINTS,
   POINT_HEIGHT_OFFSET_M,
 } from '../policy.js';
-import {
-  capacityToPixelSize,
-  resolveCapacity,
-  statusToColor,
-} from '../presentation.js';
-import {
-  buildBikeshareSelectionLabel,
-  createBikeshareSelectedOverlayEntry,
-} from '../selectionModel.js';
+import { capacityToPixelSize } from '../presentation.js';
+import { createBikeshareSelectedOverlayEntry } from '../selectionModel.js';
+import { createStationPoints } from '../stationPoints.js';
 
 const LAYER_ID = 'bikeshare';
 
@@ -36,8 +31,6 @@ function pointSet(engine, { id, capacity, order, depthTest, point }) {
 }
 
 export function createBikeshareNavaraRenderer(engine, context) {
-  if (!engine?.movers || !engine?.camera?.viewRectangle)
-    throw new TypeError('Bikeshare requires a Navara globe engine');
   const { state, services, parts } = context;
   const normalSet = pointSet(engine, {
     id: LAYER_ID,
@@ -85,13 +78,8 @@ export function createBikeshareNavaraRenderer(engine, context) {
   };
   const request = (reason) => services.render.governorRequestRender(reason);
 
-  const rendering = {
-    resolveCapacity: (capacity, status) =>
-      resolveCapacity(parts.model, capacity, status),
-    capacityToPixelSize,
-    statusToColor: (status, capacity) =>
-      statusToColor(parts.model, status, capacity),
-    createStationPosition(station) {
+  const rendering = createStationPoints(context, {
+    position(station) {
       const lon = Number(station?.lon);
       const lat = Number(station?.lat);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
@@ -105,122 +93,22 @@ export function createBikeshareNavaraRenderer(engine, context) {
         (Number.isFinite(sampled) ? sampled : 0) + POINT_HEIGHT_OFFSET_M;
       return geo.cartesian3.fromDegrees(lon, lat, height);
     },
-    ensureCityRuntime(cityId) {
-      let runtime = state._cityRuntime.get(cityId);
-      if (!runtime) {
-        runtime = { stationKeys: new Set() };
-        state._cityRuntime.set(cityId, runtime);
-      }
-      return runtime;
+    create(record, { position, pixelSize }) {
+      record.index = state._stationRenderMap.size;
+      record.point = { position, pixelSize, color: COLOR_NEUTRAL, show: true };
+      syncPoint(record);
+      return record.point;
     },
-    ensureCityPoints(cityId, stationMap) {
-      request('bikeshare-points');
-      const runtime = this.ensureCityRuntime(cityId);
-      for (const station of stationMap.values()) {
-        const key = parts.model.stationKey(cityId, station.stationId);
-        if (state._stationRenderMap.has(key)) {
-          runtime.stationKeys.add(key);
-          continue;
-        }
-        if (state._stationRenderMap.size >= MAX_TOTAL_POINTS) {
-          if (!state._limitWarned) {
-            state._limitWarned = true;
-            console.warn(
-              `[Data:Bikeshare] Point cap reached (${MAX_TOTAL_POINTS}).`,
-            );
-          }
-          break;
-        }
-        const position = this.createStationPosition(station);
-        if (!position) continue;
-        const record = {
-          key,
-          cityId,
-          stationId: station.stationId,
-          stationName: station.name,
-          index: state._stationRenderMap.size,
-          point: {
-            position,
-            pixelSize: capacityToPixelSize(station.capacity),
-            color: COLOR_NEUTRAL,
-            show: true,
-          },
-          capacity: parts.model.toNonNegativeInteger(station.capacity),
-          publishedCapacity: parts.model.toNonNegativeInteger(station.capacity),
-          bikesAvailable: null,
-          docksAvailable: null,
-          isInstalled: station.isInstalled,
-          isRenting: station.isRenting,
-          isReturning: station.isReturning,
-        };
-        state._stationRenderMap.set(key, record);
-        runtime.stationKeys.add(key);
-        syncPoint(record);
-      }
+    afterAdd() {
       normalSet.setCount(state._stationRenderMap.size);
       normalSet.commit();
-      state._count = state._stationRenderMap.size;
     },
-    removeCityPoints(cityId) {
-      const runtime = state._cityRuntime.get(cityId);
-      if (!runtime) return;
-      if (state._selectedKey && runtime.stationKeys.has(state._selectedKey))
-        selection._clearSelection();
-      for (const key of runtime.stationKeys)
-        state._stationRenderMap.delete(key);
-      state._cityRuntime.delete(cityId);
-      resetNormalSet();
-    },
-    applyStatusToPoints(cityId, statusMap) {
-      request('bikeshare-status');
-      const runtime = state._cityRuntime.get(cityId);
-      if (!runtime) return;
-      for (const key of runtime.stationKeys) {
-        const record = state._stationRenderMap.get(key);
-        if (!record) continue;
-        const status = statusMap.get(record.stationId) || null;
-        // Resolve from the published capacity, not last poll's derived value.
-        record.capacity = resolveCapacity(
-          parts.model,
-          record.publishedCapacity,
-          status,
-        );
-        record.bikesAvailable = parts.model.toNonNegativeInteger(
-          status?.bikesAvailable,
-        );
-        record.docksAvailable = parts.model.toNonNegativeInteger(
-          status?.docksAvailable,
-        );
-        record.isInstalled = parts.model.normalizeGbfsBool(
-          status?.isInstalled,
-          true,
-        );
-        record.isRenting = parts.model.normalizeGbfsBool(
-          status?.isRenting,
-          true,
-        );
-        record.isReturning = parts.model.normalizeGbfsBool(
-          status?.isReturning,
-          true,
-        );
-        record.point.pixelSize = capacityToPixelSize(record.capacity);
-        record.point.color = statusToColor(
-          parts.model,
-          status,
-          record.capacity,
-        );
-        syncPoint(record);
-      }
-      normalSet.commit();
-      selection.refreshSelectedCard();
-    },
-  };
+    afterRemove: resetNormalSet,
+    update: syncPoint,
+    afterUpdate: () => normalSet.commit(),
+  });
 
   const selection = {
-    buildSelectionLabel(record) {
-      return buildBikeshareSelectionLabel(record);
-    },
-    createBikeshareSelectedOverlayEntry,
     refreshSelectedCard() {
       const key = state._selectedKey;
       const record = state._stationRenderMap.get(key);
@@ -278,10 +166,6 @@ export function createBikeshareNavaraRenderer(engine, context) {
       }
       request('bikeshare-selection');
     },
-    _installClickHandler() {},
-    _onKeyDown(event) {
-      if (event.key === 'Escape' && state._selectedKey) this._clearSelection();
-    },
   };
 
   const viewport = createViewport({
@@ -291,12 +175,9 @@ export function createBikeshareNavaraRenderer(engine, context) {
       getCameraCenterLatLon() {
         const rect = engine.camera.viewRectangle();
         if (rect) {
-          let east = rect.east;
-          if (east < rect.west) east += Math.PI * 2;
-          let longitude = (rect.west + east) / 2;
-          if (longitude > Math.PI) longitude -= Math.PI * 2;
+          const { latitude, longitude } = viewRectangleCenter(rect);
           return {
-            lat: geo.math.toDegrees((rect.south + rect.north) / 2),
+            lat: geo.math.toDegrees(latitude),
             lon: geo.math.toDegrees(longitude),
           };
         }

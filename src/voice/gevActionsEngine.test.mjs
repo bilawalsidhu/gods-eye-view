@@ -1,4 +1,4 @@
-// The W1 voice actions on the globe engine (phase 3, Task 9): the same
+// The W1 voice actions on the globe engine: the same
 // results as on the Cesium viewer, through engine.camera / picker /
 // projector only, and a structured refusal when a required capability
 // is missing from the attached scene.
@@ -395,19 +395,21 @@ test('select_nearest_aircraft runs on the engine end to end', async () => {
   assert.equal(tracked, 'n1');
 });
 
-test('the camera pose key reads the engine as it reads the viewer', () => {
+test('the camera pose key reads the engine pose', () => {
   const engine = engineOverAustin({ kind: 'navara' });
-  const pose = engine.camera.pose();
-  const viewer = {
-    camera: {
-      positionWC: pose.position,
-      heading: pose.heading,
-      pitch: pose.pitch,
-      roll: pose.roll,
-    },
-  };
-  assert.equal(typeof cameraPoseKey(engine), 'string');
-  assert.equal(cameraPoseKey(engine), cameraPoseKey(viewer));
+  const { position, heading, pitch, roll } = engine.camera.pose();
+  const angle = (value) => Math.round(value * 1000);
+  assert.equal(
+    cameraPoseKey(engine),
+    [
+      Math.round(position.x),
+      Math.round(position.y),
+      Math.round(position.z),
+      angle(heading),
+      angle(pitch),
+      angle(roll),
+    ].join(','),
+  );
 });
 
 test('the pointer picker picks through the engine', () => {

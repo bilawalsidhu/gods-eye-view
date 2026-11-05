@@ -185,45 +185,6 @@ test('fake credits, maps and destroy keep inspectable state', () => {
   assert.equal(engine.fake.destroyed, true);
 });
 
-test('the fake camera follows Cesium conventions for roll, angle ranges and zoom', () => {
-  const engine = createFakeEngine();
-  const destination = geo.cartesian3.fromDegrees(0, 0, 1000);
-  engine.camera.setView({
-    destination,
-    orientation: { heading: 0, pitch: 0, roll: 0.3 },
-  });
-  const pose = engine.camera.pose();
-  // Facing north at (0, 0), east is +Y: positive roll tilts up toward east.
-  close(pose.up.y, Math.sin(0.3), 1e-9, 'up east component');
-  close(pose.roll, 0.3, 1e-9, 'roll');
-  engine.camera.setView({
-    destination,
-    orientation: { heading: -0.5, pitch: 0, roll: -0.2 },
-  });
-  const wrapped = engine.camera.pose();
-  close(wrapped.heading, 2 * Math.PI - 0.5, 1e-9, 'heading in [0, 2π)');
-  close(wrapped.roll, 2 * Math.PI - 0.2, 1e-9, 'roll in [0, 2π)');
-  engine.camera.setView({
-    destination,
-    orientation: { heading: 0.4, pitch: -Math.PI / 2, roll: 0.3 },
-  });
-  assert.equal(engine.camera.pose().roll, 0);
-  engine.camera.setView({
-    destination: geo.cartesian3.fromDegrees(0, 0, 5000),
-  });
-  const before = engine.camera.pose();
-  engine.camera.zoomIn(1000);
-  const after = engine.camera.pose();
-  close(
-    geo.cartesian3.distance(before.position, after.position),
-    1000,
-    1e-6,
-    'zoomIn',
-  );
-  engine.camera.zoomOut(400);
-  close(engine.camera.pose().cartographic.height, 5000 - 600, 1e-3, 'zoomOut');
-});
-
 test('fake lookAtTransform keeps the transform until release', () => {
   const engine = createFakeEngine();
   const target = geo.cartesian3.fromDegrees(10, 10, 0);
@@ -279,64 +240,6 @@ test('fake terrain height and clamp results default to the bare ellipsoid and ca
   assert.equal(engine.surface.clampToHeightSupported, true);
 });
 
-test('fake flights honour endTransform when they land', () => {
-  const engine = createFakeEngine();
-  const target = geo.cartesian3.fromDegrees(10, 20, 0);
-  engine.camera.lookAt(target, { heading: 0, pitch: -0.5, range: 1000 });
-  engine.camera.flyTo({
-    destination: geo.cartesian3.fromDegrees(10, 20, 5000),
-    duration: 0.1,
-    endTransform: geo.matrix4.IDENTITY,
-  });
-  assert.notDeepEqual(engine.camera.transform(), [...geo.matrix4.IDENTITY]);
-  engine.fake.frames(10, 16);
-  assert.deepEqual(engine.camera.transform(), [...geo.matrix4.IDENTITY]);
-});
-
-test('a fake rectangle destination looks down on the rectangle centre', () => {
-  const engine = createFakeEngine();
-  const rectangle = {
-    west: geo.math.toRadians(2.2),
-    south: geo.math.toRadians(48.8),
-    east: geo.math.toRadians(2.5),
-    north: geo.math.toRadians(48.9),
-  };
-  engine.camera.flyTo({ destination: rectangle, duration: 0 });
-  const pose = engine.camera.pose();
-  close(pose.pitch, -Math.PI / 2, 1e-9, 'pitch');
-  close(pose.cartographic.longitude, geo.math.toRadians(2.35), 1e-9, 'lon');
-  const { width, height } = engine.host.size();
-  for (const [lon, lat] of [
-    [rectangle.west, rectangle.south],
-    [rectangle.east, rectangle.north],
-  ]) {
-    const corner = engine.projector.worldToWindow(
-      geo.cartesian3.fromRadians(lon, lat, 0),
-    );
-    assert.ok(corner.x >= -1 && corner.x <= width + 1, `x ${corner.x}`);
-    assert.ok(corner.y >= -1 && corner.y <= height + 1, `y ${corner.y}`);
-  }
-});
-
-test('fake sphere range follows Cesium: 100 m only for radius 0, no floor otherwise', () => {
-  const engine = createFakeEngine({ width: 1000, height: 500 });
-  const center = geo.cartesian3.fromDegrees(0, 0, 0);
-  engine.camera.flyToSphere({ center, radius: 10 }, { duration: 0 });
-  const tanPhi = Math.tan(engine.camera.pose().fovy / 2);
-  close(
-    geo.cartesian3.distance(engine.camera.pose().position, center),
-    Math.max(10 / (2 * tanPhi), 10 / tanPhi),
-    1e-6,
-    'range (m)',
-  );
-  engine.camera.flyToSphere({ center, radius: 0 }, { duration: 0 });
-  close(
-    geo.cartesian3.distance(engine.camera.pose().position, center),
-    100,
-    1e-6,
-  );
-});
-
 test('fake drillPick records width and height; maps return promises', async () => {
   const engine = createFakeEngine();
   engine.picker.drillPick(geo.cartesian2.create(1, 2), 3, 4, 5);
@@ -352,20 +255,6 @@ test('fake drillPick records width and height; maps return promises', async () =
     assert.ok(call instanceof Promise);
     await call;
   }
-});
-
-test('fake livePosition is one object that follows the camera; height is the pose height', () => {
-  const engine = createFakeEngine({ altitude: 2_000_000 });
-  const live = engine.camera.livePosition;
-  assert.ok(
-    geo.cartesian3.distance(live, engine.camera.pose().position) < 1e-6,
-  );
-  assert.ok(Math.abs(engine.camera.height() - 2_000_000) < 0.01);
-  engine.fake.setPose({ longitude: 0.3, latitude: 0.2, height: 500 });
-  assert.equal(engine.camera.livePosition, live);
-  assert.ok(
-    geo.cartesian3.distance(live, engine.camera.pose().position) < 1e-6,
-  );
 });
 
 test('fake host elements can be supplied', () => {
@@ -402,9 +291,6 @@ test('the fake clock is the app clock the test controls, latched per frame', () 
   const start = Date.UTC(2026, 9, 16, 12);
   const engine = createFakeEngine({ nowMs: start });
   const seen = [];
-  engine.clock.ticked.addEventListener((time) =>
-    seen.push(['ticked', time, engine.clock.frameTime()]),
-  );
   for (const name of ['preUpdate', 'preRender', 'postRender'])
     engine.frames[name].addEventListener(() =>
       seen.push([name, engine.clock.frameTime()]),
@@ -412,7 +298,6 @@ test('the fake clock is the app clock the test controls, latched per frame', () 
   assert.equal(engine.clock.now(), start);
   engine.fake.frame(16);
   assert.deepEqual(seen, [
-    ['ticked', start + 16, start + 16],
     ['preUpdate', start + 16],
     ['preRender', start + 16],
     ['postRender', start + 16],

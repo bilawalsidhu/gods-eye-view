@@ -1,8 +1,6 @@
 // Ported from CesiumJS 1.138 (Apache-2.0) — BoundingSphere.js subset.
 // Exact mission framing: Ritter/box fit and the union of two spheres.
 import * as Cartesian3 from './cartesian3.js';
-import { Check } from './check.js';
-import { DEBUG } from './debug.js';
 const defined = (value) => value !== null && value !== undefined;
 export function create(center = Cartesian3.ZERO, radius = 0) {
   return { center: Cartesian3.clone(center), radius };
@@ -184,11 +182,6 @@ export function fromPoints(positions, result) {
   return result;
 }
 export function union(left, right, result) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-  }
-
   if (!defined(result)) {
     result = create();
   }

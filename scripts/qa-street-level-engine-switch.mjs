@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 import { serveFixtures, newFixture } from './qa-street-level.mjs';
 import { KV_LINE, KV_SEQUENCE_ID } from './fixtures/street-level/kartaView.mjs';
 import {
@@ -28,186 +32,166 @@ const strict = createStrict({
     'https://panoramax.openstreetmap.fr/*',
   ],
 });
-await strict.run(
-  { args: ['--use-angle=metal', '--enable-gpu'] },
-  async (browser) => {
-    const p = await browser.newPage();
-    await p.setViewport({ width: 1280, height: 900 });
-    const errors = [],
-      fixture = newFixture({ configured: true });
-    p.on('pageerror', (e) => {
-      errors.push(e.message);
-      console.error(e.message.split('?')[0]);
-    });
-    p.on('console', (m) => {
-      if (/shader|registerMeshPicker/i.test(m.text()) && m.type() === 'error')
-        errors.push(m.text());
-    });
-    await serveFixtures(p, fixture);
-    let photoRequests = 0;
-    p.on('request', (req) => {
-      if (
-        /\.jpg(?:$|\?)/i.test(new URL(req.url()).pathname) &&
-        /openstreetcam|kartaview|panoramax/.test(new URL(req.url()).hostname)
-      )
-        photoRequests++;
-    });
-    await p.goto(base.href);
-    const ready = async (k) => {
-      await p.waitForFunction(
-        (kind) =>
-          window.__godsEyeView?.engine?.kind === kind &&
-          !document.querySelector('#globe-engine')?.disabled &&
-          !document.querySelector('.engine-switch-frame') &&
-          document.querySelector('#loading-screen.hidden'),
-        { timeout: 90000 },
-        k,
-      );
-      await p.evaluate(
-        () => window.__godsEyeView.styleManager.initialRestorePromise,
-      );
-    };
-    await ready('navara');
-    await p.evaluate(async (provider) => {
-      const { dataManager, tileset } = window.__godsEyeView;
-      if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-        throw Error('Expected keyless preview');
-      window.qaStreet = dataManager.layers.get('street-level').module;
-      await dataManager.setEnabled('street-level', true, { origin: 'user' });
-      window.qaStreet.setProviderEnabled(provider, true);
-    }, provider);
-    const until = async (fn) => {
-      try {
-        await p.waitForFunction(fn, { timeout: 20000 });
-      } catch (e) {
-        console.log(await p.evaluate(() => window.qaStreet.getUIState()));
-        throw e;
-      }
-    };
-    await until(() => window.qaStreet.getUIState().coverage.count > 0);
-    // The fixture drive passes under the middle of the canvas. Click its actual picked line.
-    const pickLine = async () => {
-      const xy = await p.evaluate(
-        (prefix) => {
-          const { engine } = window.__godsEyeView,
-            canvas = engine.host.canvas,
-            rect = canvas.getBoundingClientRect();
-          for (let dy = -30; dy <= 30; dy += 3)
-            for (let dx = -40; dx <= 40; dx++) {
-              const at = { x: rect.width / 2 + dx, y: rect.height / 2 + dy },
-                pick = engine.picker.pick(at),
-                id = pick?.id?.id ?? pick?.id;
-              if (typeof id === 'string' && id.startsWith(prefix))
-                return { x: at.x + rect.x, y: at.y + rect.y, id };
-            }
-          return null;
-        },
-        panorama ? 'pnx:seq:' : 'kv:line:',
-      );
-      assert.ok(xy, 'native ground line was pickable');
-      console.log('pick', xy);
-      await p.mouse.click(xy.x, xy.y);
-      await until(
-        () =>
-          window.qaStreet.getUIState().street.open &&
-          window.qaStreet.getUIState().sequence.images > 0 &&
-          (document.querySelector('#sl-viewer img')?.naturalWidth > 0 ||
-            document.querySelector('#sl-viewer canvas:not([hidden])')?.width >
-              0),
-      );
-      await strict.passed(
-        p,
-        'street-level',
-        'a click on the coverage line opens its sequence and photo',
-        xy,
-      );
-      return xy;
-    };
-    const xy = await pickLine();
-    if (panorama) {
-      const expected = panoramaxPictures().filter(
-        (p) => p.sequenceId === xy.id.slice('pnx:seq:'.length),
-      ).length;
-      await p.waitForFunction(
-        (n) => window.qaStreet.getUIState().sequence.images === n,
-        { timeout: 20000 },
-        expected,
-      );
+await strict.run({}, async (browser) => {
+  const p = await browser.newPage();
+  await p.setViewport({ width: 1280, height: 900 });
+  const errors = [],
+    fixture = newFixture({ configured: true });
+  p.on('pageerror', (e) => {
+    errors.push(e.message);
+    console.error(e.message.split('?')[0]);
+  });
+  p.on('console', (m) => {
+    if (/shader|registerMeshPicker/i.test(m.text()) && m.type() === 'error')
+      errors.push(m.text());
+  });
+  await serveFixtures(p, fixture);
+  let photoRequests = 0;
+  p.on('request', (req) => {
+    if (
+      /\.jpg(?:$|\?)/i.test(new URL(req.url()).pathname) &&
+      /openstreetcam|kartaview|panoramax/.test(new URL(req.url()).hostname)
+    )
+      photoRequests++;
+  });
+  await p.goto(base.href);
+  await waitForEngine(p, 'navara');
+  await p.evaluate(async (provider) => {
+    const { dataManager, tileset } = window.__godsEyeView;
+    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
+      throw Error('Expected keyless preview');
+    window.qaStreet = dataManager.layers.get('street-level').module;
+    await dataManager.setEnabled('street-level', true, { origin: 'user' });
+    window.qaStreet.setProviderEnabled(provider, true);
+  }, provider);
+  const until = async (fn) => {
+    try {
+      await p.waitForFunction(fn, { timeout: 20000 });
+    } catch (e) {
+      console.log(await p.evaluate(() => window.qaStreet.getUIState()));
+      throw e;
     }
-    const first = await p.evaluate(() => {
-      window.streetPhoto =
-        document.querySelector('#sl-viewer canvas:not([hidden])') ??
-        document.querySelector('#sl-viewer img');
-      return window.qaStreet.getUIState();
-    });
-    assert.ok(
-      (panorama ? PNX_SEQUENCES : [KV_SEQUENCE_ID]).includes(
-        first.street.sequenceId,
-      ),
+  };
+  await until(() => window.qaStreet.getUIState().coverage.count > 0);
+  // The fixture drive passes under the middle of the canvas. Click its actual picked line.
+  const pickLine = async () => {
+    const xy = await p.evaluate(
+      (prefix) => {
+        const { engine } = window.__godsEyeView,
+          canvas = engine.host.canvas,
+          rect = canvas.getBoundingClientRect();
+        for (let dy = -30; dy <= 30; dy += 3)
+          for (let dx = -40; dx <= 40; dx++) {
+            const at = { x: rect.width / 2 + dx, y: rect.height / 2 + dy },
+              pick = engine.picker.pick(at),
+              id = pick?.id?.id ?? pick?.id;
+            if (typeof id === 'string' && id.startsWith(prefix))
+              return { x: at.x + rect.x, y: at.y + rect.y, id };
+          }
+        return null;
+      },
+      panorama ? 'pnx:seq:' : 'kv:line:',
     );
-    const reads = photoRequests;
-    for (const kind of ['cesium', 'navara']) {
-      await strict.pick(p, kind);
-      await ready(kind);
-      // The new globe reloads coverage right after it attaches: compare once
-      // that load is over.
-      await until(
-        () =>
-          !window.qaStreet.getUIState().coverage.loading &&
-          window.qaStreet.getUIState().coverage.count > 0,
-      );
-      const state = await p.evaluate(() => ({
-        model:
-          window.__godsEyeView.dataManager.layers.get('street-level').module ===
-          window.qaStreet,
-        samePhoto:
-          document.querySelector('#sl-viewer')?.contains(window.streetPhoto) &&
-          window.streetPhoto.isConnected,
-        ui: window.qaStreet.getUIState(),
-      }));
-      console.log(
-        kind,
-        state.model,
-        state.samePhoto,
-        state.ui.street.imageId,
-        state.ui.sequence.images,
-        state.ui.coverage.count,
-      );
-      assert.equal(state.model, true);
-      assert.equal(state.samePhoto, true);
-      assert.ok(state.ui.street.open);
-      assert.equal(state.ui.street.imageId, first.street.imageId);
-      assert.equal(state.ui.sequence.images, first.sequence.images);
-      assert.deepEqual(state.ui.filter, first.filter);
-      assert.ok(state.ui.coverage.count > 0);
-      await strict.passed(
-        p,
-        'street-level',
-        'same model, the same mounted photo, image and sequence; coverage kept',
-      );
-    }
-    assert.equal(photoRequests, reads);
+    assert.ok(xy, 'native ground line was pickable');
+    console.log('pick', xy);
+    await p.mouse.click(xy.x, xy.y);
+    await until(
+      () =>
+        window.qaStreet.getUIState().street.open &&
+        window.qaStreet.getUIState().sequence.images > 0 &&
+        (document.querySelector('#sl-viewer img')?.naturalWidth > 0 ||
+          document.querySelector('#sl-viewer canvas:not([hidden])')?.width > 0),
+    );
     await strict.passed(
       p,
       'street-level',
-      'no photo requested again by the switches',
+      'a click on the coverage line opens its sequence and photo',
+      xy,
     );
-    // Click-picking on Cesium: close the viewer, switch, click the line again.
-    await p.evaluate(() => window.qaStreet.closeViewer());
-    await until(() => !window.qaStreet.getUIState().street.open);
-    await strict.pick(p, 'cesium');
-    await ready('cesium');
+    return xy;
+  };
+  const xy = await pickLine();
+  if (panorama) {
+    const expected = panoramaxPictures().filter(
+      (p) => p.sequenceId === xy.id.slice('pnx:seq:'.length),
+    ).length;
+    await p.waitForFunction(
+      (n) => window.qaStreet.getUIState().sequence.images === n,
+      { timeout: 20000 },
+      expected,
+    );
+  }
+  const first = await p.evaluate(() => {
+    window.streetPhoto =
+      document.querySelector('#sl-viewer canvas:not([hidden])') ??
+      document.querySelector('#sl-viewer img');
+    return window.qaStreet.getUIState();
+  });
+  assert.ok(
+    (panorama ? PNX_SEQUENCES : [KV_SEQUENCE_ID]).includes(
+      first.street.sequenceId,
+    ),
+  );
+  const reads = photoRequests;
+  for (const kind of ['cesium', 'navara']) {
+    await strict.switchTo(p, kind);
+    // The new globe reloads coverage right after it attaches: compare once
+    // that load is over.
     await until(
       () =>
         !window.qaStreet.getUIState().coverage.loading &&
         window.qaStreet.getUIState().coverage.count > 0,
     );
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    await pickLine();
-    assert.deepEqual(errors, []);
-    assert.deepEqual(fixture.unknown, []);
+    const state = await p.evaluate(() => ({
+      model:
+        window.__godsEyeView.dataManager.layers.get('street-level').module ===
+        window.qaStreet,
+      samePhoto:
+        document.querySelector('#sl-viewer')?.contains(window.streetPhoto) &&
+        window.streetPhoto.isConnected,
+      ui: window.qaStreet.getUIState(),
+    }));
     console.log(
-      'PASS native line pick, same mounted photo and sequence across two switches',
+      kind,
+      state.model,
+      state.samePhoto,
+      state.ui.street.imageId,
+      state.ui.sequence.images,
+      state.ui.coverage.count,
     );
-  },
-);
+    assert.equal(state.model, true);
+    assert.equal(state.samePhoto, true);
+    assert.ok(state.ui.street.open);
+    assert.equal(state.ui.street.imageId, first.street.imageId);
+    assert.equal(state.ui.sequence.images, first.sequence.images);
+    assert.deepEqual(state.ui.filter, first.filter);
+    assert.ok(state.ui.coverage.count > 0);
+    await strict.passed(
+      p,
+      'street-level',
+      'same model, the same mounted photo, image and sequence; coverage kept',
+    );
+  }
+  assert.equal(photoRequests, reads);
+  await strict.passed(
+    p,
+    'street-level',
+    'no photo requested again by the switches',
+  );
+  // Click-picking on Cesium: close the viewer, switch, click the line again.
+  await p.evaluate(() => window.qaStreet.closeViewer());
+  await until(() => !window.qaStreet.getUIState().street.open);
+  await strict.switchTo(p, 'cesium');
+  await until(
+    () =>
+      !window.qaStreet.getUIState().coverage.loading &&
+      window.qaStreet.getUIState().coverage.count > 0,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await pickLine();
+  assert.deepEqual(errors, []);
+  assert.deepEqual(fixture.unknown, []);
+  console.log(
+    'PASS native line pick, same mounted photo and sequence across two switches',
+  );
+});

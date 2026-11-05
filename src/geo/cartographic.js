@@ -1,17 +1,13 @@
 // Ported from CesiumJS 1.138 (Apache-2.0) — Cartographic.js
 //
 // Geodetic positions as plain-data {longitude, latitude, height} objects (radians and
-// metres). Every function takes an optional `result` and returns it. With
-// DEBUG on (development and tests; see debug.js) invalid arguments throw the
-// same DeveloperError as Cesium's debug checks.
+// metres). Every function takes an optional `result` and returns it.
 //
 // Geo values are not Object.prototype objects, so src/app/stateChannel.js
 // copyState and src/director/documentFields.js jsonTree reject them: copy
 // the fields into a literal before putting one into product state or a
 // scene document.
 
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
 import { toRadians } from './math.js';
 import * as cartesian3 from './cartesian3.js';
 import { scaleToGeodeticSurface } from './scaleToGeodeticSurface.js';
@@ -51,11 +47,6 @@ const WGS84_CENTER_TOLERANCE_SQUARED = 0.1;
 
 /** A geodetic position from radians. */
 export function fromRadians(longitude, latitude, height, result) {
-  if (DEBUG) {
-    Check.typeOf.number('longitude', longitude);
-    Check.typeOf.number('latitude', latitude);
-  }
-
   height = height ?? 0.0;
   if (result == null) return create(longitude, latitude, height);
   result.longitude = longitude;
@@ -66,11 +57,6 @@ export function fromRadians(longitude, latitude, height, result) {
 
 /** A geodetic position from degrees; the result is in radians. */
 export function fromDegrees(longitude, latitude, height, result) {
-  if (DEBUG) {
-    Check.typeOf.number('longitude', longitude);
-    Check.typeOf.number('latitude', latitude);
-  }
-
   longitude = toRadians(longitude);
   latitude = toRadians(latitude);
   return fromRadians(longitude, latitude, height, result);
@@ -133,10 +119,6 @@ export function fromCartesian(cartesian, ellipsoid, result) {
  * where Cesium uses Ellipsoid.default; gev never changes it).
  */
 export function toCartesian(cartographic, ellipsoid, result) {
-  if (DEBUG) {
-    Check.defined('cartographic', cartographic);
-  }
-
   return cartesian3.fromRadians(
     cartographic.longitude,
     cartographic.latitude,

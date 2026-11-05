@@ -18,8 +18,6 @@ const RESAMPLE_TRIES = 20;
  * that found no surface under a place yet.
  */
 export function createOsmPlacesNavaraRenderer(engine) {
-  if (!engine?.movers)
-    throw new TypeError('OSM Places requires a globe engine');
   const color = rgbaFromCss(OSM_PLACE_COLOR).rgba();
   let set = null,
     capacity = 0,

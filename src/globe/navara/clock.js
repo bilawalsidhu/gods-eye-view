@@ -5,7 +5,6 @@
 // contract's preUpdate; every listener of the frame then reads that time.
 // The look (look.js) reads the same clock for the sun.
 
-import { createEngineEvent } from '../contract.js';
 import { appClock as pageClock } from '../../time/clock.js';
 
 /**
@@ -14,15 +13,13 @@ import { appClock as pageClock } from '../../time/clock.js';
  * @returns {{ clock: import('../contract.js').GlobeClock, beginFrame: () => void }}
  */
 export function createNavaraClock({ appClock = pageClock } = {}) {
-  const ticked = createEngineEvent();
   return {
     clock: {
       now: () => appClock.now(),
       frameTime: () => appClock.frameTime(),
-      ticked,
     },
     beginFrame() {
-      ticked.raiseValue(appClock.beginFrame());
+      appClock.beginFrame();
     },
   };
 }

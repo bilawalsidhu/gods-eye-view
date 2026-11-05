@@ -1,12 +1,12 @@
-import { Effect, EffectAttribute } from 'postprocessing';
 import { Uniform, Matrix4, DataTexture } from 'three';
 import {
   groundSurfaceUniforms,
   updateGroundSurface,
 } from '../../shared/render/navaraGroundSurface.js';
+import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
 
 const KEY = 'gevRecentImagery',
-  registered = new WeakMap();
+  effects = new Map();
 const shader = /* glsl */ `
 uniform sampler2D tAllDepth,tSurfaceDepth,tA,tB;
 uniform mat4 uInverseProjection,uWorld;
@@ -57,91 +57,75 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
 const boxVector = (b) =>
   b ? [b.west, b.south, b.east, b.north] : [0, 0, 0, 0];
 
+// Another key (the Nepal event imagery) draws over the recent imagery.
+const imageryEffect = (key) =>
+  defineGroundEffect({
+    key,
+    name: 'GevRecentImagery',
+    fragmentShader: shader,
+    insertAfter:
+      key === KEY ? ['toneMapping'] : ['gevRecentImagery', 'toneMapping'],
+    insertBefore: [
+      'gevNepalEvent',
+      'gevObservedWeather',
+      'gevEarthquakeGround',
+      'gevFirmsGround',
+      'gevPreSharpenOverlay',
+      'gevSharpen',
+      'smaa',
+      'fxaa',
+      'gevOverlay',
+      'final',
+    ],
+    uniforms: () => [
+      ...groundSurfaceUniforms(),
+      ['uGeographicA', new Uniform(false)],
+      ['uGeographicB', new Uniform(false)],
+      ['uWorld', new Uniform(new Matrix4())],
+      ['uSplit', new Uniform(0.5)],
+      ['uPixelRatio', new Uniform(1)],
+      ['uPreview', new Uniform([0, 0, 0, 0])],
+      ['uPreviewVisible', new Uniform(false)],
+      ...['A', 'B'].flatMap((id) => [
+        [`t${id}`, new Uniform(null)],
+        [`uBounds${id}`, new Uniform([0, 0, 1, 1])],
+        [`uBox${id}`, new Uniform([0, 0, 0, 0])],
+        [`uLook${id}`, new Uniform([0, 0])],
+      ]),
+    ],
+    update() {
+      if (!this.effect) return;
+      const camera = this.view.camera.raw,
+        u = this.effect.uniforms,
+        o = this.owner;
+      updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
+      u.get('uWorld').value.copy(camera.matrixWorld);
+      u.get('uSplit').value = o.split;
+      u.get('uPixelRatio').value = o.pixelRatio();
+      u.get('uPreview').value = boxVector(o.preview);
+      u.get('uPreviewVisible').value = Boolean(o.preview);
+      for (const id of ['A', 'B']) {
+        const r = o.slots[id.toLowerCase()];
+        u.get(`uGeographic${id}`).value = r?.atlas?.plan.geographic === true;
+        u.get(`t${id}`).value = r?.atlas?.texture || o.empty;
+        u.get(`uBounds${id}`).value = r?.atlas?.plan.bounds || [0, 0, 1, 1];
+        u.get(`uBox${id}`).value = boxVector(r?.box);
+        u.get(`uLook${id}`).value = [
+          r?.atlas ? r.alpha : 0,
+          r?.split === 'left' ? -1 : r?.split === 'right' ? 1 : 0,
+        ];
+      }
+    },
+  });
+
 export function createImageryGround(
   engine,
   { view, EffectDesc, NavaraEffect },
   owner,
   key = KEY,
 ) {
-  if (!view || !EffectDesc || !NavaraEffect)
-    throw new TypeError('Imagery requires Navara ground effects');
-  if (!registered.has(view)) registered.set(view, new Set());
-  if (!registered.get(view).has(key)) {
-    class ImageryEffect extends EffectDesc {
-      static key = key;
-      static insertAfter = ['toneMapping'];
-      static insertBefore = [
-        'gevNepalEvent',
-        'gevObservedWeather',
-        'gevEarthquakeGround',
-        'gevFirmsGround',
-        'gevPreSharpenOverlay',
-        'gevSharpen',
-        'smaa',
-        'fxaa',
-        'gevOverlay',
-        'final',
-      ];
-      constructor(view, context, config) {
-        super(view, context, config);
-        this.owner = config[key].owner;
-      }
-      createPass() {
-        this.effect = new Effect('GevRecentImagery', shader, {
-          attributes: EffectAttribute.CONVOLUTION,
-          uniforms: new Map([
-            ...groundSurfaceUniforms(),
-            ['uGeographicA', new Uniform(false)],
-            ['uGeographicB', new Uniform(false)],
-            ['uWorld', new Uniform(new Matrix4())],
-            ['uSplit', new Uniform(0.5)],
-            ['uPixelRatio', new Uniform(1)],
-            ['uPreview', new Uniform([0, 0, 0, 0])],
-            ['uPreviewVisible', new Uniform(false)],
-            ...['A', 'B'].flatMap((id) => [
-              [`t${id}`, new Uniform(null)],
-              [`uBounds${id}`, new Uniform([0, 0, 1, 1])],
-              [`uBox${id}`, new Uniform([0, 0, 0, 0])],
-              [`uLook${id}`, new Uniform([0, 0])],
-            ]),
-          ]),
-        });
-        return new NavaraEffect(this.view.camera.raw, this.effect);
-      }
-      updateFrame() {
-        if (!this.effect) return;
-        const camera = this.view.camera.raw,
-          u = this.effect.uniforms,
-          o = this.owner;
-        updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
-        u.get('uWorld').value.copy(camera.matrixWorld);
-        u.get('uSplit').value = o.split;
-        u.get('uPixelRatio').value = o.pixelRatio();
-        u.get('uPreview').value = boxVector(o.preview);
-        u.get('uPreviewVisible').value = Boolean(o.preview);
-        for (const id of ['A', 'B']) {
-          const r = o.slots[id.toLowerCase()];
-          u.get(`uGeographic${id}`).value = r?.atlas?.plan.geographic === true;
-          u.get(`t${id}`).value = r?.atlas?.texture || o.empty;
-          u.get(`uBounds${id}`).value = r?.atlas?.plan.bounds || [0, 0, 1, 1];
-          u.get(`uBox${id}`).value = boxVector(r?.box);
-          u.get(`uLook${id}`).value = [
-            r?.atlas ? r.alpha : 0,
-            r?.split === 'left' ? -1 : r?.split === 'right' ? 1 : 0,
-          ];
-        }
-      }
-      onDestroy() {
-        this.effect?.dispose();
-        super.onDestroy();
-      }
-    }
-    class NepalEffect extends ImageryEffect {
-      static insertAfter = ['gevRecentImagery', 'toneMapping'];
-    }
-    view.registerEffect(key, key === KEY ? ImageryEffect : NepalEffect);
-    registered.get(view).add(key);
-  }
+  if (!effects.has(key)) effects.set(key, imageryEffect(key));
+  effects.get(key).register(view, { EffectDesc, NavaraEffect });
   owner.empty = new DataTexture(new Uint8Array(4), 1, 1);
   owner.empty.needsUpdate = true;
   owner.pixelRatio = () =>

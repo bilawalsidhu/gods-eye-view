@@ -1,8 +1,8 @@
 // Every private Navara member the engine relies on, in one place. Written
 // against @navaramap/three 0.2.1 (package.json pins it exactly; the test in
 // internals.test.mjs fails if the two drift apart): re-check each access below
-// before moving to another Navara version. Each names the parity spike that
-// found it and the public API that would replace it upstream.
+// before moving to another Navara version. Each names the public API that
+// would replace it upstream.
 
 import { ModelMesh } from '@navaramap/three';
 import { patchCascadedLightCopy } from './cascadedLightCopy.js';
@@ -21,7 +21,7 @@ export function setRenderLoopEnabled(view, enabled) {
 let restoreRelease = null;
 
 /**
- * S2: keep 3D-tile positions and indices on the CPU after upload so the
+ * Keeps 3D-tile positions and indices on the CPU after upload so the
  * surface ray can hit them. Private: ModelMesh.prototype._releaseGeometryArrays,
  * which frees every attribute array once the tile is on the GPU. Patched on
  * the prototype, for all views; idempotent. Upstream ask: an option to retain
@@ -56,7 +56,7 @@ export function retainTileGeometry() {
 }
 
 /**
- * S2: the loaded 3D-tile roots (ModelMesh objects). Private: view._scenes.mrt,
+ * The loaded 3D-tile roots (ModelMesh objects). Private: view._scenes.mrt,
  * the scene Navara renders tiles into. Upstream ask: as for
  * retainTileGeometry.
  */
@@ -67,7 +67,7 @@ export function tileRoots(view) {
 }
 
 /**
- * S2/S5: whether Navara has stopped updating (tiles loaded, camera still).
+ * Whether Navara has stopped updating (tiles loaded, camera still).
  * Private: view._isIdle, which the public `idle` event reports only as an
  * edge. Upstream ask: a public isIdle/tilesLoaded getter.
  */
@@ -88,7 +88,7 @@ export function isIdle(view) {
  * throws in the dev server and warns once in a build. Upstream ask: a sky
  * luminance or atmosphere exposure that leaves unlit content alone.
  */
-export const LUMINANCE_UNIFORMS = Object.freeze([
+const LUMINANCE_UNIFORMS = Object.freeze([
   'SUN_SPECTRAL_RADIANCE_TO_LUMINANCE',
   'SKY_SPECTRAL_RADIANCE_TO_LUMINANCE',
 ]);
@@ -141,7 +141,7 @@ export function forEachLuminanceUniform(handles, visit) {
 }
 
 /**
- * Phase 3 review (leak): the sun's cascaded shadow lights are re-cloned by
+ * A leak: the sun's cascaded shadow lights are re-cloned by
  * the transparent pass every frame (cascadedLightCopy.js). Finds the
  * CascadedDirectionalLights class among the view's scene lights (private:
  * view._scenes.light) and patches its copy to update in place. Returns the
@@ -189,7 +189,7 @@ export const navaraHooks = (view) => ({
 });
 
 /**
- * Stage 6 (QA diagnostics only): the names of the passes in the view's
+ * QA diagnostics only: the names of the passes in the view's
  * post-processing pipeline, in draw order, or null when the path is gone.
  * Private: ctx.renderPassOrchestrator.passMap.list ({ name, pass }).
  * Upstream ask: a public read of the pipeline order.

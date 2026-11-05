@@ -1,4 +1,4 @@
-// The vessels layer's renderer on the Navara engine (phase 3 Task 13b),
+// The vessels layer's renderer on the Navara engine,
 // with render/cesium.js's interface (./contract.js), built only on the
 // engine contract: the chevrons are one engine.movers sprite bank (always on
 // top, as Cesium's depth-test-free billboards) whose atlas holds every
@@ -14,8 +14,17 @@
 // frame).
 
 import * as geo from '../../../geo/index.js';
-import { createMoverBank } from '../../aircraft/render/navara.js';
+import {
+  createMoverBank,
+  StoredColor,
+} from '../../shared/render/navaraMoverBank.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
+import { rgbaFromCss } from '../../shared/color.js';
+import {
+  decodeImages,
+  imageAtlasLayout,
+  packImageAtlas,
+} from '../../shared/render/imageAtlas.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 import { allVesselChevronIcons, VESSEL_ICON_PX } from '../icons.js';
 
@@ -25,62 +34,34 @@ const TRAIL_OCCLUDED_ALPHA = 0.4;
 const MIN_SEGMENT_DISTANCE_SQ = 0.01;
 const ATLAS_PAD = 2;
 
+const iconEntry = (key, image) => ({
+  key,
+  image,
+  width: VESSEL_ICON_PX,
+  height: VESSEL_ICON_PX,
+});
+const atlasOptions = (icons) => ({
+  cell: VESSEL_ICON_PX + 2 * ATLAS_PAD,
+  pad: ATLAS_PAD,
+  columns: icons.length,
+});
+
 /** The chevron atlas layout (pure): one 32 px cell per icon, in a row. */
 export function vesselAtlasLayout(icons = allVesselChevronIcons()) {
-  const cell = VESSEL_ICON_PX + 2 * ATLAS_PAD;
-  const width = icons.length * cell;
-  const height = cell;
-  const rects = new Map();
-  const cells = {};
-  icons.forEach((icon, column) => {
-    const x = column * cell + ATLAS_PAD;
-    const y = ATLAS_PAD;
-    rects.set(icon, { x, y, size: VESSEL_ICON_PX });
-    cells[icon] = [
-      x / width,
-      y / height,
-      (x + VESSEL_ICON_PX) / width,
-      (y + VESSEL_ICON_PX) / height,
-    ];
-  });
-  return { width, height, rects, cells };
+  return imageAtlasLayout(
+    icons.map((icon) => iconEntry(icon)),
+    atlasOptions(icons),
+  );
 }
 
 /** Draws the atlas (browser): a canvas and its cells, once the SVGs decode. */
-export async function drawVesselAtlas() {
-  const layout = vesselAtlasLayout();
-  const canvas = document.createElement('canvas');
-  canvas.width = layout.width;
-  canvas.height = layout.height;
-  const context = canvas.getContext('2d');
-  await Promise.all(
-    [...layout.rects].map(async ([uri, { x, y, size }]) => {
-      const image = new Image();
-      image.src = uri;
-      await image.decode();
-      context.drawImage(image, x, y, size, size);
-    }),
+async function drawVesselAtlas() {
+  const icons = allVesselChevronIcons();
+  const images = await decodeImages(icons);
+  return packImageAtlas(
+    icons.map((icon, i) => iconEntry(icon, images[i])),
+    { ...atlasOptions(icons), resize: true },
   );
-  return { canvas, cells: layout.cells };
-}
-
-const cssToRgb = (css) => {
-  const hex = String(css).replace('#', '');
-  return [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255);
-};
-
-/** Plain colour copy (what a handle's colour getter returns). */
-class StoredColor {
-  constructor(color) {
-    this.red = color?.red ?? 1;
-    this.green = color?.green ?? 1;
-    this.blue = color?.blue ?? 1;
-    this.alpha = color?.alpha ?? 1;
-  }
-
-  withAlpha(alpha) {
-    return new StoredColor({ ...this, alpha });
-  }
 }
 
 /**
@@ -338,7 +319,7 @@ export function createVesselsNavaraRenderer(
   let lineSeq = 0;
   const trails = {
     create({ color, width = 2.5 }) {
-      const [r, g, b] = cssToRgb(color);
+      const [r, g, b] = rgbaFromCss(color).rgba();
       const id = `gev-trail:${LAYER_ID}-${++lineSeq}`;
       let line = null;
       const ensure = () =>

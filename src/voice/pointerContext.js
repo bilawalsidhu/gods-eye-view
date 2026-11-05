@@ -19,8 +19,6 @@
  * Provider-neutral and Cesium-free: the pick is injected.
  */
 
-import { isGlobeEngine } from '../globe/contract.js';
-
 /** Movement below this many CSS pixels is still the same dwell. */
 const POINTER_DWELL_PX = 12;
 /** Stillness that makes a dwell point. */
@@ -59,17 +57,12 @@ const finite = finiteOrNull;
  * Camera pose identity: position to 1 m, orientation to about 0.06 degrees.
  * A pixel read under one key names nothing under another. Reads plain
  * numbers only, so it needs no Cesium import.
- * @param {object} globe The globe engine (its camera pose), or a Cesium
- *   viewer.
+ * @param {object} engine The globe engine (its camera pose).
  * @returns {string|null}
  */
-export function cameraPoseKey(globe) {
-  let camera = globe?.camera;
-  if (isGlobeEngine(globe)) {
-    const pose = camera.pose();
-    camera = { ...pose, positionWC: pose.position };
-  }
-  const p = camera?.positionWC;
+export function cameraPoseKey(engine) {
+  const camera = engine?.camera?.pose?.();
+  const p = camera?.position;
   if (!p || !Number.isFinite(p.x)) return null;
   const angle = (value) => Math.round((Number(value) || 0) * 1000);
   return [

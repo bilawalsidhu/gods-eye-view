@@ -1,4 +1,3 @@
-import { Effect, EffectAttribute } from 'postprocessing';
 import { Uniform } from 'three';
 import * as geo from '../../../geo/index.js';
 import { rgbaFromCss } from '../../shared/color.js';
@@ -17,9 +16,9 @@ import {
   viewFrame,
   groundClipBounds,
 } from '../../shared/render/navaraGroundGeometry.js';
+import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
 
-const KEY = 'gevTransitGround',
-  registered = new WeakSet();
+const KEY = 'gevTransitGround';
 const shader = /* glsl */ `
 uniform sampler2D tAllDepth,tSurfaceDepth,tSegments,tGrid,tCandidates;
 uniform vec2 uSegmentSize,uCandidateSize;
@@ -198,82 +197,63 @@ function storage(segments) {
   };
 }
 
-function descriptor(EffectDesc, NavaraEffect) {
-  return class TransitGroundEffect extends EffectDesc {
-    static key = KEY;
-    static insertAfter = ['toneMapping'];
-    static insertBefore = [
-      'gevSharpen',
-      'smaa',
-      'fxaa',
-      'gevPreSharpenOverlay',
-      'gevOverlay',
-      'final',
-    ];
-    constructor(view, context, config) {
-      super(view, context, config);
-      this.owner = config[KEY].owner;
+const groundEffect = defineGroundEffect({
+  key: KEY,
+  name: 'GevTransitGround',
+  fragmentShader: shader,
+  insertAfter: ['toneMapping'],
+  insertBefore: [
+    'gevSharpen',
+    'smaa',
+    'fxaa',
+    'gevPreSharpenOverlay',
+    'gevOverlay',
+    'final',
+  ],
+  uniforms: () => [
+    ...groundSurfaceUniforms(),
+    ['tSegments', new Uniform(null)],
+    ['tGrid', new Uniform(null)],
+    ['tCandidates', new Uniform(null)],
+    ['uSegmentSize', new Uniform([1, 1])],
+    ['uCandidateSize', new Uniform([1, 1])],
+    ['uDisplayT', new Uniform(0)],
+    ['uActive', new Uniform(-1)],
+    ['uColor', new Uniform([1, 1, 1])],
+    ['uPixelRatio', new Uniform(1)],
+  ],
+  update() {
+    if (!this.effect) return;
+    const { state, displayT, active, color, pixelRatio } = this.owner;
+    const camera = this.view.camera.raw;
+    updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
+    state.update(camera, this.ctx);
+    const u = this.effect.uniforms;
+    for (const [name, data] of [
+      ['Segments', state.packed],
+      ['Candidates', state.candidates],
+    ]) {
+      u.get(`t${name}`).value = data.texture;
+      const size = u.get(
+        name === 'Segments' ? 'uSegmentSize' : 'uCandidateSize',
+      ).value;
+      size[0] = data.width;
+      size[1] = data.height;
     }
-    createPass() {
-      this.effect = new Effect('GevTransitGround', shader, {
-        attributes: EffectAttribute.CONVOLUTION,
-        uniforms: new Map([
-          ...groundSurfaceUniforms(),
-          ['tSegments', new Uniform(null)],
-          ['tGrid', new Uniform(null)],
-          ['tCandidates', new Uniform(null)],
-          ['uSegmentSize', new Uniform([1, 1])],
-          ['uCandidateSize', new Uniform([1, 1])],
-          ['uDisplayT', new Uniform(0)],
-          ['uActive', new Uniform(-1)],
-          ['uColor', new Uniform([1, 1, 1])],
-          ['uPixelRatio', new Uniform(1)],
-        ]),
-      });
-      return new NavaraEffect(this.view.camera.raw, this.effect);
-    }
-    updateFrame() {
-      if (!this.effect) return;
-      const { state, displayT, active, color, pixelRatio } = this.owner;
-      const camera = this.view.camera.raw;
-      updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
-      state.update(camera, this.ctx);
-      const u = this.effect.uniforms;
-      for (const [name, data] of [
-        ['Segments', state.packed],
-        ['Candidates', state.candidates],
-      ]) {
-        u.get(`t${name}`).value = data.texture;
-        const size = u.get(
-          name === 'Segments' ? 'uSegmentSize' : 'uCandidateSize',
-        ).value;
-        size[0] = data.width;
-        size[1] = data.height;
-      }
-      u.get('tGrid').value = state.gridTexture;
-      u.get('uDisplayT').value = displayT - state.epoch;
-      u.get('uActive').value = active;
-      u.get('uColor').value = color;
-      u.get('uPixelRatio').value = pixelRatio();
-    }
-    onDestroy() {
-      this.effect?.dispose();
-      super.onDestroy();
-    }
-  };
-}
+    u.get('tGrid').value = state.gridTexture;
+    u.get('uDisplayT').value = displayT - state.epoch;
+    u.get('uActive').value = active;
+    u.get('uColor').value = color;
+    u.get('uPixelRatio').value = pixelRatio();
+  },
+});
 
 /** A static corridor texture; playback only updates time and active uniforms. */
 export function createTransitNavaraTrail(
   engine,
   { view, EffectDesc, NavaraEffect },
 ) {
-  if (!view || !EffectDesc || !NavaraEffect)
-    throw new TypeError('Transit trails require the Navara ground effect API');
-  if (!registered.has(view)) {
-    view.registerEffect(KEY, descriptor(EffectDesc, NavaraEffect));
-    registered.add(view);
-  }
+  groundEffect.register(view, { EffectDesc, NavaraEffect });
   let segments = [],
     revision = -1,
     rebuilds = 0,

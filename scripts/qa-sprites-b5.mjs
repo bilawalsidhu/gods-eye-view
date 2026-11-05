@@ -54,7 +54,7 @@ const getOpt = (name, dflt) => {
 };
 
 const BASE_URL = getOpt('--url', 'http://localhost:4173');
-// --engine=cesium|navara (phase 3): without a viewer the layer is read through
+// --engine=cesium|navara: without a viewer the layer is read through
 // the QA probe (window.__godsEyeView.layers.drawn) and the military checks are
 // skipped where the engine has no military layer.
 const ENGINE = (argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=cesium').slice(9);

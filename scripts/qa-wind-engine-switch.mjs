@@ -1,6 +1,11 @@
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  openPage,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 
 const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
@@ -9,14 +14,8 @@ base.hash =
 // The fixture field is uniform, so the GPU seeds a fixed particle count.
 const WIND_PATHS = 7200;
 const strict = createStrict({ origin: base.origin, layers: ['wind'] });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
-  const p = await b.newPage();
-  await p.setViewport({ width: 1024, height: 768 });
-  const errors = [];
-  p.on('pageerror', (e) => {
-    errors.push(e.message);
-    console.log('error', e.message.split('?')[0]);
-  });
+await strict.run({}, async (b) => {
+  const { page: p, errors } = await openPage(b);
   const reads = [];
   await p.setRequestInterception(true);
   p.on('request', (req) => {
@@ -70,21 +69,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
     }
   });
   await p.goto(base.href);
-  const ready = async (kind) => {
-    await p.waitForFunction(
-      (k) =>
-        window.__godsEyeView?.engine?.kind === k &&
-        !document.querySelector('#globe-engine')?.disabled &&
-        !document.querySelector('.engine-switch-frame') &&
-        document.querySelector('#loading-screen.hidden'),
-      { timeout: 90000 },
-      kind,
-    );
-    await p.evaluate(
-      () => window.__godsEyeView.styleManager.initialRestorePromise,
-    );
-  };
-  await ready('navara');
+  await waitForEngine(p, 'navara');
   await p.evaluate(async () => {
     const { dataManager, tileset } = window.__godsEyeView;
     if (tileset || window.__GOOGLE_MAPS_API_KEY__)
@@ -103,8 +88,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const baseline = reads.length;
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await strict.pick(p, kind);
-      await ready(kind);
+      await strict.switchTo(p, kind);
     }
     await p.waitForFunction(
       () =>

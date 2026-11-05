@@ -14,7 +14,7 @@
 //   drawn(id)              what the layer draws per object (glyph, model),
 //                          as plain data, or null (layers with qaDrawn)
 //   following()            { label, native } of engine.camera.following()
-//   movers()               engine.movers.list()
+//   movers()               engine.movers.list() ([] without movers: Cesium)
 //   framesDrawn()          frames drawn since the probe started
 
 const plain = (position) =>
@@ -83,7 +83,7 @@ export function createQaProbe({ engine, dataManager, availability }) {
         native: handle.native?.id ?? null,
       };
     },
-    movers: () => engine.movers.list(),
+    movers: () => engine.movers?.list() ?? [],
     framesDrawn: () => frames,
     destroy: () => removeFrames(),
   };

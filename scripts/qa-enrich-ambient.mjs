@@ -67,7 +67,7 @@ const getOpt = (name, dflt) => {
 };
 
 const BASE_URL = getOpt('--url', 'http://localhost:4173');
-// --engine=cesium|navara (phase 3): Navara reads the layer through the QA
+// --engine=cesium|navara: Navara reads the layer through the QA
 // probe (window.__godsEyeView.layers.drawn) and moves the engine camera.
 const ENGINE = (argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=cesium').slice(9);
 const APP_URL =

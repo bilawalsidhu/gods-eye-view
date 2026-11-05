@@ -221,7 +221,7 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       report.firstRoundTrip = await listenerCounts(page, { bySource: true });
     }
-    // Both engines draw the session's marks and files (Navara since Stage 6).
+    // Both engines draw the session's marks and files (Navara included).
     await page.waitForFunction(
       () => window.__gevGeoImport.diagnostics().drawn === 1,
       { timeout: 30_000 },
@@ -412,23 +412,6 @@ try {
   report.errors = errors;
   check(errors.length === 0, 'page errors', errors);
 
-  // The legacy route (?switch=legacy) still builds an application per
-  // engine, for one release.
-  const legacy = await openSessionPage(
-    browser,
-    sessionAddress(base, { engine: 'cesium', extra: { switch: 'legacy' } }),
-  );
-  await waitReady(legacy.page, 'cesium');
-  await switchEngine(legacy.page, 'navara');
-  await switchEngine(legacy.page, 'cesium');
-  report.legacy = await readSession(legacy.page);
-  check(
-    report.legacy.counters.applications === 3,
-    'the legacy route builds an application per engine',
-    report.legacy.counters,
-  );
-  check(legacy.errors.length === 0, 'legacy page errors', legacy.errors);
-  await legacy.page.close();
   console.log(JSON.stringify(report, null, 2));
   if (!reportOnly) console.log('PASS application created once; session kept');
 } finally {

@@ -3,19 +3,14 @@
 // 3D vectors as plain-data {x, y, z} objects. Arithmetic takes a required `result`
 // (as Cesium does) that may be one of the inputs; creators take an optional
 // one. The operation order matches Cesium so the outputs are bit-identical.
-// With DEBUG on (development and tests; see debug.js) invalid arguments throw
-// the same DeveloperError as Cesium's debug checks, and `normalize` throws on a
-// zero or non-finite vector; production builds skip the checks and return NaN
-// components there, as release Cesium does.
+// As in release Cesium, arguments are not checked and `normalize` returns NaN
+// components for a zero or non-finite vector.
 //
 // Geo values are not Object.prototype objects, so src/app/stateChannel.js
 // copyState and src/director/documentFields.js jsonTree reject them: copy
 // the fields into a literal before putting one into product state or a
 // scene document.
 
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
-import { DeveloperError } from './developerError.js';
 import { equalsEpsilon as scalarEqualsEpsilon, toRadians } from './math.js';
 
 // Values are instances of a module-private constructor rather than object
@@ -59,10 +54,6 @@ export const UNIT_Y = Object.freeze(create(0.0, 1.0, 0.0));
 export const UNIT_Z = Object.freeze(create(0.0, 0.0, 1.0));
 
 export function magnitudeSquared(cartesian) {
-  if (DEBUG) {
-    Check.typeOf.object('cartesian', cartesian);
-  }
-
   return (
     cartesian.x * cartesian.x +
     cartesian.y * cartesian.y +
@@ -77,60 +68,29 @@ export function magnitude(cartesian) {
 const distanceScratch = create();
 
 export function distance(left, right) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-  }
-
   subtract(left, right, distanceScratch);
   return magnitude(distanceScratch);
 }
 
 export function distanceSquared(left, right) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-  }
-
   subtract(left, right, distanceScratch);
   return magnitudeSquared(distanceScratch);
 }
 
-/** The unit vector; with DEBUG on, throws when the vector has no direction (zero or non-finite). */
+/** The unit vector; NaN components when the vector has no direction (zero or non-finite). */
 export function normalize(cartesian, result) {
-  if (DEBUG) {
-    Check.typeOf.object('cartesian', cartesian);
-    Check.typeOf.object('result', result);
-  }
-
   const length = magnitude(cartesian);
   result.x = cartesian.x / length;
   result.y = cartesian.y / length;
   result.z = cartesian.z / length;
-  if (DEBUG) {
-    if (isNaN(result.x) || isNaN(result.y) || isNaN(result.z)) {
-      throw new DeveloperError('normalized result is not a number');
-    }
-  }
   return result;
 }
 
 export function dot(left, right) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-  }
-
   return left.x * right.x + left.y * right.y + left.z * right.z;
 }
 
 export function multiplyComponents(left, right, result) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-    Check.typeOf.object('result', result);
-  }
-
   result.x = left.x * right.x;
   result.y = left.y * right.y;
   result.z = left.z * right.z;
@@ -138,12 +98,6 @@ export function multiplyComponents(left, right, result) {
 }
 
 export function add(left, right, result) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-    Check.typeOf.object('result', result);
-  }
-
   result.x = left.x + right.x;
   result.y = left.y + right.y;
   result.z = left.z + right.z;
@@ -151,12 +105,6 @@ export function add(left, right, result) {
 }
 
 export function subtract(left, right, result) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-    Check.typeOf.object('result', result);
-  }
-
   result.x = left.x - right.x;
   result.y = left.y - right.y;
   result.z = left.z - right.z;
@@ -164,12 +112,6 @@ export function subtract(left, right, result) {
 }
 
 export function multiplyByScalar(cartesian, scalar, result) {
-  if (DEBUG) {
-    Check.typeOf.object('cartesian', cartesian);
-    Check.typeOf.number('scalar', scalar);
-    Check.typeOf.object('result', result);
-  }
-
   result.x = cartesian.x * scalar;
   result.y = cartesian.y * scalar;
   result.z = cartesian.z * scalar;
@@ -177,12 +119,6 @@ export function multiplyByScalar(cartesian, scalar, result) {
 }
 
 export function divideByScalar(cartesian, scalar, result) {
-  if (DEBUG) {
-    Check.typeOf.object('cartesian', cartesian);
-    Check.typeOf.number('scalar', scalar);
-    Check.typeOf.object('result', result);
-  }
-
   result.x = cartesian.x / scalar;
   result.y = cartesian.y / scalar;
   result.z = cartesian.z / scalar;
@@ -190,11 +126,6 @@ export function divideByScalar(cartesian, scalar, result) {
 }
 
 export function negate(cartesian, result) {
-  if (DEBUG) {
-    Check.typeOf.object('cartesian', cartesian);
-    Check.typeOf.object('result', result);
-  }
-
   result.x = -cartesian.x;
   result.y = -cartesian.y;
   result.z = -cartesian.z;
@@ -204,25 +135,12 @@ export function negate(cartesian, result) {
 const lerpScratch = create();
 
 export function lerp(start, end, t, result) {
-  if (DEBUG) {
-    Check.typeOf.object('start', start);
-    Check.typeOf.object('end', end);
-    Check.typeOf.number('t', t);
-    Check.typeOf.object('result', result);
-  }
-
   multiplyByScalar(end, t, lerpScratch);
   result = multiplyByScalar(start, 1.0 - t, result);
   return add(lerpScratch, result, result);
 }
 
 export function cross(left, right, result) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-    Check.typeOf.object('result', result);
-  }
-
   const leftX = left.x;
   const leftY = left.y;
   const leftZ = left.z;
@@ -241,12 +159,6 @@ export function cross(left, right, result) {
 }
 
 export function midpoint(left, right, result) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-    Check.typeOf.object('result', result);
-  }
-
   result.x = (left.x + right.x) * 0.5;
   result.y = (left.y + right.y) * 0.5;
   result.z = (left.z + right.z) * 0.5;
@@ -292,11 +204,6 @@ let scratchK = create();
 
 /** The Earth-fixed position of a geodetic one in radians on the ellipsoid (WGS84 by default). */
 export function fromRadians(longitude, latitude, height, ellipsoid, result) {
-  if (DEBUG) {
-    Check.typeOf.number('longitude', longitude);
-    Check.typeOf.number('latitude', latitude);
-  }
-
   height = height ?? 0.0;
   const radiiSquared =
     ellipsoid == null ? WGS84_RADII_SQUARED : ellipsoid.radiiSquared;
@@ -318,11 +225,6 @@ export function fromRadians(longitude, latitude, height, ellipsoid, result) {
 
 /** The Earth-fixed position of a geodetic one in degrees on the ellipsoid (WGS84 by default). */
 export function fromDegrees(longitude, latitude, height, ellipsoid, result) {
-  if (DEBUG) {
-    Check.typeOf.number('longitude', longitude);
-    Check.typeOf.number('latitude', latitude);
-  }
-
   longitude = toRadians(longitude);
   latitude = toRadians(latitude);
   return fromRadians(longitude, latitude, height, ellipsoid, result);
@@ -330,15 +232,6 @@ export function fromDegrees(longitude, latitude, height, ellipsoid, result) {
 
 /** Positions from a flat [lon, lat, lon, lat, …] list in degrees, at height 0. */
 export function fromDegreesArray(coordinates, ellipsoid, result) {
-  if (DEBUG) {
-    Check.defined('coordinates', coordinates);
-    if (coordinates.length < 2 || coordinates.length % 2 !== 0) {
-      throw new DeveloperError(
-        'the number of coordinates must be a multiple of 2 and at least 2',
-      );
-    }
-  }
-
   const length = coordinates.length;
   if (result == null) {
     result = new Array(length / 2);
@@ -358,43 +251,9 @@ export function fromDegreesArray(coordinates, ellipsoid, result) {
   return result;
 }
 
-/** Positions from a flat [lon, lat, height, …] list in degrees and metres. */
-export function fromDegreesArrayHeights(coordinates, ellipsoid, result) {
-  if (DEBUG) {
-    Check.defined('coordinates', coordinates);
-    if (coordinates.length < 3 || coordinates.length % 3 !== 0) {
-      throw new DeveloperError(
-        'the number of coordinates must be a multiple of 3 and at least 3',
-      );
-    }
-  }
-
-  const length = coordinates.length;
-  if (result == null) {
-    result = new Array(length / 3);
-  } else {
-    result.length = length / 3;
-  }
-  for (let i = 0; i < length; i += 3) {
-    const index = i / 3;
-    result[index] = fromDegrees(
-      coordinates[i],
-      coordinates[i + 1],
-      coordinates[i + 2],
-      ellipsoid,
-      result[index],
-    );
-  }
-  return result;
-}
-
 const angleBetweenScratch = create();
 const angleBetweenScratch2 = create();
 export function angleBetween(left, right) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-  }
   normalize(left, angleBetweenScratch);
   normalize(right, angleBetweenScratch2);
   const cosine = dot(angleBetweenScratch, angleBetweenScratch2);

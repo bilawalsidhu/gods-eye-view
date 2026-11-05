@@ -9,9 +9,9 @@
 // - terrain: the keyless Re:Earth quantized mesh, Cesium World Terrain through
 //   the ion endpoint with an explicit token (Navara sends it as a Bearer
 //   token), or none (the ellipsoid). Navara 0.2.1 panics on a quantized-mesh
-//   URL without the {z}/{x}/{y}.terrain template (S2), so URLs always carry it.
-// - photoreal: Google 3D tiles with a browser key only in this phase (the
-//   server proxy of S3 comes later), with Google's logo and the tiles' own
+//   URL without the {z}/{x}/{y}.terrain template, so URLs always carry it.
+// - photoreal: Google 3D tiles with a browser key only (no server proxy),
+//   with Google's logo and the tiles' own
 //   copyright lines (creditLayerId) on screen. Showing them hides the base
 //   imagery, as MapSourceController removes it; clearing them does not bring
 //   it back until setBaseImagery. Hidden, not deleted: deleting the last
@@ -42,7 +42,7 @@ const ION_WORLD_TERRAIN_ENDPOINT =
 const GOOGLE_TILES_ROOT = 'https://tile.googleapis.com/v1/3dtiles/root.json';
 // The mark Cesium shows for Google tiles (GoogleMaps.getDefaultCredit).
 const GOOGLE_LOGO = 'https://assets.ion.cesium.com/google-credit.png';
-// Cesium3DTileset's default maximumScreenSpaceError, as the S1–S5 benches use.
+// Cesium3DTileset's default maximumScreenSpaceError.
 const PHOTOREAL_MAX_SSE = 16;
 
 const kindOf = (source) => (source?.descriptor ?? source)?.kind;

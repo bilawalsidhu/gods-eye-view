@@ -126,7 +126,7 @@ export function createLifecycle({
     layerState._lastAppliedRegime = null;
   }
   function bindScene(viewer, options) {
-    // Task 5: track the surface regime the initial geometry was computed for
+    // Track the surface regime the initial geometry was computed for
     // and listen for map-stack changes (main.js re-dispatches
     // MapStackController.onChange as this CustomEvent). The handler compares
     // regimes itself, so 'switching'/'error' emissions and same-regime stack
@@ -140,7 +140,7 @@ export function createLifecycle({
       );
     }
 
-    // Field-test fix (2026-07-06): horizon-cull on camera settle (pairs with
+    // Horizon-cull on camera settle (pairs with
     // the billboards' always-on-top depth setting) + one initial pass so the
     // first paint is already culled.
     if (!layerState._horizonCullListener) {
@@ -187,7 +187,7 @@ export function createLifecycle({
         // remain eligible for true empty-space deselection.
         const pickedId = resolvePickId(picked);
         if (pickedId !== null) return;
-        // Item A (owner round 2): the scene pick found no camera — try the
+        // The scene pick found no camera — try the
         // painted ambient cards. The cards canvas is pointer-events:none (this
         // handler owns the events), so a click landing on a card's rect selects
         // its camera exactly like a click on the icon. Cesium click positions
@@ -309,7 +309,7 @@ export function createLifecycle({
           parts.model.ensureCameraPose(camera);
         }
 
-        // Task 5 (height-datum fix): batch ALL camera coords through the Re:Earth
+        // Batch ALL camera coords through the Re:Earth
         // ellipsoidal ground-prior resolver (network-cached — NOT a scene query;
         // the catalog's orthometric groundElevationM feeds the geoid fallback
         // chain). Bounded wait: a warm proxy cache resolves in milliseconds, so
@@ -352,7 +352,7 @@ export function createLifecycle({
             billboard,
             coverageEntities: [],
             projection: null,
-            // Task 5 (height-datum fix): regime-aware ground resolution state.
+            // Regime-aware ground resolution state.
             //   groundPrior     — { ellipsoid, source } from the Re:Earth batch
             //     (null until a late batch lands). The prior applies in EVERY
             //     regime and is the terrain-globe resolution outright.
@@ -397,7 +397,7 @@ export function createLifecycle({
           layerState._activeCameraId = layerState._records[0].camera.id;
         }
 
-        // Task 5: if the prior batch lost init's bounded race, apply it post-hoc
+        // If the prior batch lost init's bounded race, apply it post-hoc
         // when it lands (pure recomputes — applyLateGroundPriors guards against
         // a torn-down/re-inited catalog).
         if (!priors) {

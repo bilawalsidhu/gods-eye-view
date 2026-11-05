@@ -11,7 +11,7 @@ import fs from 'node:fs';
 // QA_BASE_URL matches the sibling harnesses (qa-height-datum / qa-cctv-v2) so a
 // secondary checkout can verify against its own dev server instead of the default :4173.
 const BASE_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
-// --engine=cesium|navara (phase 3): on Navara the camera, the mesh probes and
+// --engine=cesium|navara: on Navara the camera, the mesh probes and
 // the sprite census go through the engine and the QA probe.
 const ENGINE = (process.argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=cesium').slice(9);
 const APP_URL =
@@ -125,7 +125,7 @@ const report = await page.evaluate(async () => {
         drawnBy: modelAt ? 'model' : 'sprite',
         meshM: meshH != null ? +meshH.toFixed(1) : null,
         aboveMeshM: meshH != null ? +(c.height - meshH).toFixed(1) : null,
-        // Why a contact sits where it does (10b review 6): the probe's own
+        // Why a contact sits where it does: the probe's own
         // answer (source, tile size) and the coarse DEM floor (the prior).
         probe: answer ? { source: answer.source, tileSizeM: answer.tileSizeM ?? null } : null,
         demFloorM: cachedGroundFloor(c.latitude * 180 / Math.PI, c.longitude * 180 / Math.PI) ?? null,

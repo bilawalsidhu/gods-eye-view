@@ -217,11 +217,11 @@ async function createRenderer({
     googleTileset: tileset,
     cesiumToken,
     initialStack: tileset ? 'photoreal' : 'esri-imagery',
-    // Task 5 (height-datum fix): rebroadcast stack changes as a window
-    // CustomEvent so data layers (CCTV per-regime ground resolution) can
-    // react without coupling MapStackController to layer modules. Fires on
-    // 'switching'/'ready'/'error'; listeners derive the surface regime from
-    // live scene state, so intermediate emissions are harmless.
+    // Rebroadcast stack changes as a window CustomEvent so data layers (CCTV
+    // per-regime ground resolution) can react without coupling
+    // MapStackController to layer modules. Fires on 'switching'/'ready'/
+    // 'error'; listeners derive the surface regime from live scene state, so
+    // intermediate emissions are harmless.
     onChange: (state) => {
       window.dispatchEvent(
         new CustomEvent('gev:map-stack-changed', { detail: state }),

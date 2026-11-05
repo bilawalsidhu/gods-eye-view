@@ -43,8 +43,7 @@ function sessionChrome(layerSession) {
  * `engineKind`; `attachScene(kind)` and `detachScene()` switch engines by
  * detaching and attaching only the engine-bound parts (src/app/sceneHost.js)
  * while the shell, stores, voice, tools and layer models stay. Destroy it
- * before creating another (the legacy route, ?switch=legacy, still builds
- * one per engine).
+ * before creating another.
  */
 export function createStandaloneApplication({
   googleApiKey,

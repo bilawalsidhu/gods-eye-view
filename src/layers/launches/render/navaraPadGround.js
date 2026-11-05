@@ -5,24 +5,21 @@
 // the zone's radius of the pad, with Cesium's fill, rim and emission. Nothing
 // is drawn at a height, so the zone neither floats over nor sinks under the
 // ground, and no height is sampled.
-import { Effect, EffectAttribute } from 'postprocessing';
 import { Matrix3, Uniform, Vector3 } from 'three';
 import * as geo from '../../../geo/index.js';
 import {
   groundSurfaceUniforms,
   updateGroundSurface,
 } from '../../shared/render/navaraGroundSurface.js';
+import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
+import { rgbaFromCss } from '../../shared/color.js';
 import { LAUNCH_PAD_ZONE_RADIUS_M, LAUNCH_PAD_ZONE_STYLE } from '../policy.js';
 
 export const PAD_GROUND_KEY = 'gevLaunchPadGround';
 // The surface above or below the pad that the zone still classifies, as
 // Cesium's classification volume spans the terrain heights there.
-export const PAD_GROUND_BAND_M = 9000;
-const registered = new WeakSet();
+const PAD_GROUND_BAND_M = 9000;
 const glslFloat = (value) => Number(value).toFixed(4);
-/** A #rrggbb colour as display (sRGB) values, as Cesium's material reads it. */
-const displayRgb = (hex) =>
-  [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255);
 
 export const padGroundShader = /* glsl */ `
 uniform sampler2D tAllDepth;
@@ -66,7 +63,7 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
 `;
 
 /** The pad's ECEF position and its east, north and up axes. */
-export function padFrame(launch) {
+function padFrame(launch) {
   const m = geo.transforms.eastNorthUpToFixedFrame(
     geo.cartesian3.fromDegrees(launch.lon, launch.lat, 0),
     geo.ellipsoid.WGS84,
@@ -79,72 +76,59 @@ export function padFrame(launch) {
   };
 }
 
-function padGroundClass(EffectDesc, NavaraEffect) {
-  return class LaunchPadGroundDesc extends EffectDesc {
-    static key = PAD_GROUND_KEY;
-    static insertAfter = [
-      'gevEarthquakeGround',
-      'gevObservedWeather',
-      'gevNepalEvent',
-      'gevRecentImagery',
-      'gevFirmsGround',
-      'toneMapping',
-    ];
-    static insertBefore = [
-      'gevPreSharpenOverlay',
-      'gevSharpen',
-      'smaa',
-      'fxaa',
-      'gevOverlay',
-      'final',
-    ];
-    constructor(view, context, config) {
-      super(view, context, config);
-      this.owner = config[PAD_GROUND_KEY].owner;
-    }
-    createPass() {
-      this.effect = new Effect('GevLaunchPadGround', padGroundShader, {
-        attributes: EffectAttribute.CONVOLUTION,
-        uniforms: new Map([
-          ...groundSurfaceUniforms(),
-          ['uViewToWorld', new Uniform(new Matrix3())],
-          ['uPadOffset', new Uniform(new Vector3())],
-          ['uEast', new Uniform(new Vector3())],
-          ['uNorth', new Uniform(new Vector3())],
-          ['uUp', new Uniform(new Vector3())],
-          [
-            'uPadColor',
-            new Uniform(
-              new Vector3(...displayRgb(LAUNCH_PAD_ZONE_STYLE.color)),
-            ),
-          ],
-        ]),
-      });
-      return new NavaraEffect(this.view.camera.raw, this.effect);
-    }
-    updateFrame() {
-      const frame = this.owner.frame,
-        camera = this.view.camera.raw;
-      if (!this.effect || !frame || !camera) return;
-      updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
-      const u = this.effect.uniforms;
-      u.get('uViewToWorld').value.setFromMatrix4(camera.matrixWorld);
-      const e = camera.matrixWorld.elements;
-      u.get('uPadOffset').value.set(
-        frame.origin[0] - e[12],
-        frame.origin[1] - e[13],
-        frame.origin[2] - e[14],
-      );
-      u.get('uEast').value.fromArray(frame.east);
-      u.get('uNorth').value.fromArray(frame.north);
-      u.get('uUp').value.fromArray(frame.up);
-    }
-    onDestroy() {
-      this.effect?.dispose();
-      super.onDestroy();
-    }
-  };
-}
+const padGroundEffect = defineGroundEffect({
+  key: PAD_GROUND_KEY,
+  name: 'GevLaunchPadGround',
+  fragmentShader: padGroundShader,
+  insertAfter: [
+    'gevEarthquakeGround',
+    'gevObservedWeather',
+    'gevNepalEvent',
+    'gevRecentImagery',
+    'gevFirmsGround',
+    'toneMapping',
+  ],
+  insertBefore: [
+    'gevPreSharpenOverlay',
+    'gevSharpen',
+    'smaa',
+    'fxaa',
+    'gevOverlay',
+    'final',
+  ],
+  uniforms: () => [
+    ...groundSurfaceUniforms(),
+    ['uViewToWorld', new Uniform(new Matrix3())],
+    ['uPadOffset', new Uniform(new Vector3())],
+    ['uEast', new Uniform(new Vector3())],
+    ['uNorth', new Uniform(new Vector3())],
+    ['uUp', new Uniform(new Vector3())],
+    [
+      'uPadColor',
+      // Display (sRGB) values, as Cesium's material reads the colour.
+      new Uniform(
+        new Vector3(...rgbaFromCss(LAUNCH_PAD_ZONE_STYLE.color).rgba()),
+      ),
+    ],
+  ],
+  update() {
+    const frame = this.owner.frame,
+      camera = this.view.camera.raw;
+    if (!this.effect || !frame || !camera) return;
+    updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
+    const u = this.effect.uniforms;
+    u.get('uViewToWorld').value.setFromMatrix4(camera.matrixWorld);
+    const e = camera.matrixWorld.elements;
+    u.get('uPadOffset').value.set(
+      frame.origin[0] - e[12],
+      frame.origin[1] - e[13],
+      frame.origin[2] - e[14],
+    );
+    u.get('uEast').value.fromArray(frame.east);
+    u.get('uNorth').value.fromArray(frame.north);
+    u.get('uUp').value.fromArray(frame.up);
+  },
+});
 
 /**
  * Show one pad zone on a Navara view; `show` toggles it, `destroy` removes it.
@@ -153,13 +137,7 @@ function padGroundClass(EffectDesc, NavaraEffect) {
  * @param {{ lon: number, lat: number }} launch
  */
 export function createPadGround(view, { EffectDesc, NavaraEffect }, launch) {
-  if (!registered.has(view)) {
-    view.registerEffect(
-      PAD_GROUND_KEY,
-      padGroundClass(EffectDesc, NavaraEffect),
-    );
-    registered.add(view);
-  }
+  padGroundEffect.register(view, { EffectDesc, NavaraEffect });
   const owner = { frame: padFrame(launch) };
   let handle = view.addEffect({
     [PAD_GROUND_KEY]: { owner },

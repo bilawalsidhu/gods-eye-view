@@ -38,7 +38,7 @@ const getOpt = (name, dflt) => {
 };
 
 const APP_URL = getOpt('--url', 'http://localhost:4173');
-// --engine cesium|navara (phase 3): frame, settle and read the renderer
+// --engine cesium|navara: frame, settle and read the renderer
 // through window.__godsEyeView.engine (either engine) instead of the Cesium
 // viewer; the URL gets ?engine=. Without it, as before.
 const ENGINE = getOpt('--engine', null);

@@ -15,15 +15,14 @@
 const ENGINES = Object.freeze(['cesium', 'navara']);
 
 /** A started engine whose first frame takes longer than this is shown anyway. */
-export const FIRST_FRAME_WAIT_MS = 10_000;
+const FIRST_FRAME_WAIT_MS = 10_000;
 
 /**
  * Drive engine switches for one page session.
  *
- * Every attempt has a generation. A failed attempt rolls back to the last
- * engine that actually started (never to the one that just failed) and, when
- * that recovery fails too, leaves the page without an engine but still able
- * to take the next request. A page lifetime abort (pagehide) stops the
+ * A failed attempt rolls back to the last engine that actually started
+ * (never to the one that just failed) and, when that recovery fails too,
+ * leaves the page without an engine but still able to take the next request. A page lifetime abort (pagehide) stops the
  * machine: nothing starts after it.
  *
  * @param {object} options
@@ -32,7 +31,7 @@ export const FIRST_FRAME_WAIT_MS = 10_000;
  * @param {AbortSignal} options.signal The page lifetime.
  * @param {(from: string, to: string, change: {visit: boolean}) => Promise<void>} options.leave
  *   Hand the session off from the running engine and release that engine.
- * @param {(kind: string, attempt: {generation: number, recovery: boolean}) => Promise<void>} options.enter
+ * @param {(kind: string, attempt: {recovery: boolean}) => Promise<void>} options.enter
  *   Start an engine on the retained session. It resolves once the engine runs
  *   with the session attached; when it rejects it has already released what
  *   it started.
@@ -64,7 +63,6 @@ export function createEngineSwitch({
   let working = kind;
   let failed = false;
   let busy = false;
-  let generation = 0;
   // Every request (select or address visit) bumps this; a visit also bumps
   // `visits`.
   let requests = 0;
@@ -81,7 +79,6 @@ export function createEngineSwitch({
       engine: live,
       busy,
       failed,
-      generation,
     });
   const publish = () => onChange?.(state());
 
@@ -163,7 +160,6 @@ export function createEngineSwitch({
   }
 
   async function attempt(target) {
-    const id = ++generation;
     const visitsAtStart = visits;
     const visit = pending?.to !== target;
     publish();
@@ -178,7 +174,7 @@ export function createEngineSwitch({
       }
       if (signal.aborted) return;
       live = target;
-      await enter(target, { generation: id, recovery: false });
+      await enter(target, { recovery: false });
       if (signal.aborted) return;
       current = working = target;
       failed = false;
@@ -202,7 +198,7 @@ export function createEngineSwitch({
       }
       live = working;
       try {
-        await enter(working, { generation: id, recovery: true });
+        await enter(working, { recovery: true });
         if (signal.aborted) return;
         current = working;
         failed = false;

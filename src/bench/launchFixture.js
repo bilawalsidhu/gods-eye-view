@@ -1,6 +1,6 @@
 // Deterministic Launch Library 2 records for phase-3 mission/replay acceptance.
 import { SATELLITE_FIXTURE_EPOCH } from './satelliteFixture.js';
-export const LAUNCH_FIXTURE_EPOCH = SATELLITE_FIXTURE_EPOCH;
+const LAUNCH_FIXTURE_EPOCH = SATELLITE_FIXTURE_EPOCH;
 export function launchFixture() {
   const definitions = [
     [

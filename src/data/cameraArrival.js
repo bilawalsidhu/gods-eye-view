@@ -2,8 +2,8 @@ import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 
 /**
  * Arrival corrections belong to one globe engine and yield to its next camera
- * owner. Callers may name the engine or (layers until phase 1c) the viewer it
- * is registered for; both reach the same correction.
+ * owner. Callers may name the engine or (layers that still hold one) the
+ * viewer it is registered for; both reach the same correction.
  */
 const arrivals = new WeakMap();
 

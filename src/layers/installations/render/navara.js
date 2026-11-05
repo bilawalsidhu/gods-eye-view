@@ -1,5 +1,4 @@
 import { t } from '../../../i18n/index.js';
-import { Effect, EffectAttribute } from 'postprocessing';
 import * as geo from '../../../geo/index.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
 import { createInfrastructureOverlayEntry } from '../../../data/infrastructureOverlayEntry.js';
@@ -14,8 +13,8 @@ import {
   createInstallationOutlineDrapedMesh,
 } from './navaraGeometry.js';
 import { batchInstallationOutlines } from './navaraOutlineBatch.js';
+import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
 
-const registeredViews = new WeakSet();
 const KEY = 'gevInstallationsDrape';
 const BLACK = [0, 0, 0, 0.8];
 const IDLE_SHADER = /* glsl */ `
@@ -24,46 +23,30 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
 }
 `;
 
-function createDrapeEffectClass(EffectDesc, NavaraEffect) {
-  return class InstallationDrapeDesc extends EffectDesc {
-    static key = KEY;
-    static insertAfter = ['mrt'];
-
-    constructor(view, ctx, config) {
-      super(view, ctx, config);
-      this.owner = config[KEY].owner;
+const drapeEffect = defineGroundEffect({
+  key: KEY,
+  name: 'GevInstallationDrape',
+  fragmentShader: IDLE_SHADER,
+  insertAfter: ['mrt'],
+  update() {
+    const mrt = this.find('mrt');
+    this.owner.globeNormal.value = mrt?.globeNormalBuffer ?? null;
+    this.owner.globeDepth.value = mrt?.globeDepthBuffer ?? null;
+    const scene = this.ctx.scenes.draped;
+    this.owner.scene = scene;
+    for (const mesh of this.owner.meshes)
+      if (mesh.parent !== scene) scene.add(mesh);
+  },
+  destroy() {
+    for (const mesh of this.owner.meshes) {
+      if (mesh.parent) mesh.parent.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.material.dispose();
     }
-
-    createPass() {
-      this.effect = new Effect('GevInstallationDrape', IDLE_SHADER, {
-        attributes: EffectAttribute.CONVOLUTION,
-      });
-      return new NavaraEffect(this.view.camera.raw, this.effect);
-    }
-
-    updateFrame() {
-      const mrt = this.find('mrt');
-      this.owner.globeNormal.value = mrt?.globeNormalBuffer ?? null;
-      this.owner.globeDepth.value = mrt?.globeDepthBuffer ?? null;
-      const scene = this.ctx.scenes.draped;
-      this.owner.scene = scene;
-      for (const mesh of this.owner.meshes)
-        if (mesh.parent !== scene) scene.add(mesh);
-    }
-
-    onDestroy() {
-      for (const mesh of this.owner.meshes) {
-        if (mesh.parent) mesh.parent.remove(mesh);
-        mesh.geometry.dispose();
-        mesh.material.dispose();
-      }
-      this.owner.meshes.clear();
-      this.owner.scene = null;
-      this.effect?.dispose();
-      super.onDestroy();
-    }
-  };
-}
+    this.owner.meshes.clear();
+    this.owner.scene = null;
+  },
+});
 
 function createPointSet(engine, { id, sizePx, capacity, order }) {
   return engine.movers.createSet({
@@ -92,19 +75,7 @@ export function createInstallationsNavaraRenderer(
     setupMaterialForDrape,
   },
 ) {
-  if (
-    !engine?.movers ||
-    !view?.registerEffect ||
-    !EffectDesc ||
-    !NavaraEffect ||
-    !DrapedMesh ||
-    !setupMaterialForDrape
-  )
-    throw new TypeError('Installations require a Navara view');
-  if (!registeredViews.has(view)) {
-    view.registerEffect(KEY, createDrapeEffectClass(EffectDesc, NavaraEffect));
-    registeredViews.add(view);
-  }
+  drapeEffect.register(view, { EffectDesc, NavaraEffect });
 
   const layerState = state;
   const owner = {

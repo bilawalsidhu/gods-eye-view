@@ -10,7 +10,8 @@
 // depth; their lit display colour is resolved here so HDR effects and MSAA
 // cannot spread a tint into neighbouring pixels.
 // FIRMS opts into a separate native-stage overlay before sharpening/AA.
-// Only that stage owns an encoded-RGBA8 blend target; W1 stays in place.
+// Only that stage owns an encoded-RGBA8 blend target; this overlay stays in
+// place.
 
 import { withFrameUpdates, withPassDisposal } from './frameDescriptor.js';
 import { EffectDesc, Pass as NavaraPass } from '@navaramap/three';
@@ -18,7 +19,7 @@ import { GevOverlayPass } from './overlayPass.js';
 import { sonarUniformsFor } from './sonar.js';
 import { RGBADepthPacking, Scene } from 'three';
 
-export const OVERLAY_EFFECT_KEY = 'gevOverlay';
+const OVERLAY_EFFECT_KEY = 'gevOverlay';
 const PRE_SHARPEN_KEY = 'gevPreSharpenOverlay';
 const registeredViews = new WeakMap();
 

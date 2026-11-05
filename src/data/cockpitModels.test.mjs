@@ -29,7 +29,7 @@ for (const layer of LAYERS) {
 
   test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
     // The aircraft renderer loads through its `loadModel`, Cesium.Model.fromGltfAsync
-    // unless a test injects a loader (phase 3).
+    // unless a test injects a loader.
     assert.match(source, /loadModel = \(options\) => Cesium\.Model\.fromGltfAsync\(options\)/);
     const calls = [...source.matchAll(/(?:Cesium\.Model\.fromGltfAsync|\bloadModel)\(\{([\s\S]*?)\}\)/g)];
     assert.ok(calls.length >= 3, `expected fleet, tracked, and preload model calls; found ${calls.length}`);

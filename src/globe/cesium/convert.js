@@ -18,6 +18,6 @@ export const toCesium3 = (value) =>
 
 /**
  * A new Cesium.Cartesian2 for a window position. Always a new instance: Cesium
- * caches pickPosition by windowPosition.toString() (phase 1a rule 9).
+ * caches pickPosition by windowPosition.toString().
  */
 export const toCesium2 = (value) => new Cesium.Cartesian2(value.x, value.y);

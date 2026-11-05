@@ -4,8 +4,6 @@
 // Internal to src/geo (not re-exported by index.js): used by ellipsoid.js and,
 // as in Cesium, directly by cartographic.fromCartesian.
 
-import { DEBUG } from './debug.js';
-import { DeveloperError } from './developerError.js';
 import { EPSILON12 } from './math.js';
 import {
   clone,
@@ -28,21 +26,6 @@ export function scaleToGeodeticSurface(
   centerToleranceSquared,
   result,
 ) {
-  if (DEBUG) {
-    if (cartesian == null) {
-      throw new DeveloperError('cartesian is required.');
-    }
-    if (oneOverRadii == null) {
-      throw new DeveloperError('oneOverRadii is required.');
-    }
-    if (oneOverRadiiSquared == null) {
-      throw new DeveloperError('oneOverRadiiSquared is required.');
-    }
-    if (centerToleranceSquared == null) {
-      throw new DeveloperError('centerToleranceSquared is required.');
-    }
-  }
-
   const positionX = cartesian.x;
   const positionY = cartesian.y;
   const positionZ = cartesian.z;

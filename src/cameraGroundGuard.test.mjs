@@ -57,6 +57,7 @@ function fakeViewer({ cameraHeightM, surfaceM, canvas = null }) {
   const position = Cesium.Cartographic.fromDegrees(-97.7603, 30.3141, cameraHeightM);
   const viewer = {
     flights,
+    canvas,
     scene: {
       canvas,
       sampleHeightSupported: true,

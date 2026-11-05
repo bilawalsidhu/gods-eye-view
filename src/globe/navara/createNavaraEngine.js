@@ -20,7 +20,7 @@ import {
   mergeSharpen,
   mergeStyle,
 } from '../contract.js';
-import { cesiumFovy } from './cameraMath.js';
+import { cesiumFovy, intersectEllipsoid } from '../cameraMath.js';
 import { createCameraModel } from './cameraModel.js';
 import { createNavaraClock } from './clock.js';
 import { createNavaraCredits } from './credits.js';
@@ -60,31 +60,6 @@ function readCamera(raw) {
     direction: unit(-e[8], -e[9], -e[10]),
     up: unit(e[4], e[5], e[6]),
   };
-}
-
-// Nearest hit of a ray with the WGS84 ellipsoid raised by `height` metres
-// (each radius grown by it), or undefined.
-function rayRaisedEllipsoid({ origin, direction }, height) {
-  const radii = geo.ellipsoid.WGS84.radii;
-  const rx = radii.x + height;
-  const ry = radii.y + height;
-  const rz = radii.z + height;
-  const o = [origin.x / rx, origin.y / ry, origin.z / rz];
-  const d = [direction.x / rx, direction.y / ry, direction.z / rz];
-  const a = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-  const b = 2 * (o[0] * d[0] + o[1] * d[1] + o[2] * d[2]);
-  const c = o[0] * o[0] + o[1] * o[1] + o[2] * o[2] - 1;
-  const discriminant = b * b - 4 * a * c;
-  if (discriminant < 0) return undefined;
-  const root = Math.sqrt(discriminant);
-  const near = (-b - root) / (2 * a);
-  const t = near > 0 ? near : (-b + root) / (2 * a);
-  if (!(t > 0)) return undefined;
-  return cartesian3.add(
-    origin,
-    cartesian3.multiplyByScalar(direction, t, cartesian3.create()),
-    cartesian3.create(),
-  );
 }
 
 /**
@@ -156,7 +131,7 @@ export function createNavaraEngine(
       read: () => readCamera(view.camera.raw),
       fly: (pose, options) => view.flyTo(pose, options),
       // Navara 0.2.1 has no cancel call: any camera change interrupts a
-      // flight, and an empty setCamera changes nothing else (S4).
+      // flight, and an empty setCamera changes nothing else.
       stop: () => view.setCamera({}),
       size,
       requestFrame: () => view.forceUpdate(),
@@ -170,8 +145,7 @@ export function createNavaraEngine(
   };
   const engineClock = createNavaraClock(appClock ? { appClock } : {});
   // camera.follow (src/globe/follow.js): Navara's own cameraFollow takes
-  // no user rotation or zoom (phase 3 Task 5 probe), so the engine steps
-  // its own follow each frame.
+  // no user rotation or zoom, so the engine steps its own follow each frame.
   const followStep = createEngineEvent();
   const follow = createFollowController({
     camera: model.camera,
@@ -259,8 +233,6 @@ export function createNavaraEngine(
     // Clicks with { pick } get Navara's GPU pick of the gesture instead.
     pick: (screen) => picking.pick(screen),
     drillPick: (screen, limit) => picking.drillPick(screen, limit),
-    // Navara-only diagnostics: how clicks with { pick } were answered.
-    clickStats: () => picking.clickStats(),
     pickPosition(screen) {
       const rect = canvas.getBoundingClientRect();
       const hit = view.pickDepthPosition(
@@ -282,7 +254,7 @@ export function createNavaraEngine(
           geo.cartographic.fromCartesian(hit, geo.ellipsoid.WGS84),
         );
         if (!Number.isFinite(height)) break;
-        const next = rayRaisedEllipsoid(ray, height);
+        const next = intersectEllipsoid(ray.origin, ray.direction, height);
         if (!next) break;
         const moved = cartesian3.distance(next, hit);
         hit = next;

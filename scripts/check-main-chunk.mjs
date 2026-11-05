@@ -1,17 +1,12 @@
 #!/usr/bin/env node
 /**
- * The main-chunk gate of the Cesium-mode bundle (run after `npm run build`):
+ * The size budget of the Cesium-mode main chunk (run after `npm run build`):
+ * gzip-9 of the entry chunk the built page loads (from the Vite manifest, or
+ * the module script dist/index.html loads) may exceed the baseline in
+ * scripts/main-chunk-baseline.json by at most its allowance. What the initial
+ * chunks may hold is the build's own check (build/initialChunkGuard.js).
  *
- * 1. Composition: the main chunk (the Vite manifest's entry, or the module
- *    script dist/index.html loads) and every chunk it imports statically carry
- *    no three or Navara code (text markers; the build itself also fails on
- *    three/@navaramap module ids in initial chunks, build/initialChunkGuard.js).
- * 2. Budget, when scripts/main-chunk-baseline.json exists: gzip-9 of the
- *    largest dist/assets/index-*.js may exceed the recorded baseline by at
- *    most its allowance (the phase-4 branch's check; same exports,
- *    checkMainChunk and measureMainChunk, so the two merge into this script).
- *
- * Prints the sizes. `--json` prints the whole result; `--dist=DIR` reads
+ * Prints the size. `--json` prints the whole result; `--dist=DIR` reads
  * another build.
  *
  *   npm run build && npm run check:main-chunk
@@ -20,12 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import {
-  entryFromHtml,
-  entryFromManifest,
-  forbiddenMarkersIn,
-  initialChunks,
-} from '../src/tooling/mainChunk.js';
+import { entryFromHtml, entryFromManifest } from '../src/tooling/mainChunk.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -44,38 +34,14 @@ export function checkMainChunk(
 
 /**
  * gzip-9 size of the main chunk, with its name: the entry the built page
- * loads (`entry`, or found from dist/index.html or the Vite manifest), else
- * (phase 4's rule, for a dist without a page) the largest
- * dist/assets/index-*.js.
+ * loads (`entry`, else found from the Vite manifest or dist/index.html).
  */
 export function measureMainChunk(distDir, { entry = null } = {}) {
-  let file = entry;
-  if (!file) {
-    try {
-      file = findEntry(distDir).entry;
-    } catch {
-      file = null;
-    }
-  }
-  if (file) {
-    const bytes = fs.readFileSync(path.join(distDir, file));
-    return {
-      name: path.basename(file),
-      gzipBytes: gzipSync(bytes, { level: 9 }).length,
-    };
-  }
-  const assets = path.join(distDir, 'assets');
-  const candidates = fs
-    .readdirSync(assets)
-    .filter((name) => /^index-.*\.js$/.test(name))
-    .map((name) => ({ name, bytes: fs.readFileSync(path.join(assets, name)) }))
-    .sort((a, b) => b.bytes.length - a.bytes.length);
-  if (!candidates.length)
-    throw new Error('no dist/assets/index-*.js: run npm run build first');
-  const [main] = candidates;
+  const file = entry ?? findEntry(distDir).entry;
+  const bytes = fs.readFileSync(path.join(distDir, file));
   return {
-    name: main.name,
-    gzipBytes: gzipSync(main.bytes, { level: 9 }).length,
+    name: path.basename(file),
+    gzipBytes: gzipSync(bytes, { level: 9 }).length,
   };
 }
 
@@ -96,44 +62,15 @@ function findEntry(dist) {
   return { entry, via: 'index.html' };
 }
 
-/** Composition of the initial chunks: sizes and forbidden markers. */
-export function checkComposition(dist) {
-  const read = (file) => {
-    const absolute = path.join(dist, file);
-    return fs.existsSync(absolute) ? fs.readFileSync(absolute, 'utf8') : null;
-  };
-  const { entry, via } = findEntry(dist);
-  const chunks = initialChunks(entry, read).map((file) => {
-    const code = read(file);
-    if (code == null)
-      return { file, missing: true, bytes: 0, gzipBytes: 0, markers: [] };
-    return {
-      file,
-      bytes: Buffer.byteLength(code),
-      gzipBytes: gzipSync(code).length,
-      markers: forbiddenMarkersIn(code),
-    };
-  });
-  return {
-    entry,
-    via,
-    mainBytes: chunks[0].bytes,
-    mainGzipBytes: chunks[0].gzipBytes,
-    initialBytes: chunks.reduce((sum, chunk) => sum + chunk.bytes, 0),
-    chunks,
-    ok: chunks.every((chunk) => !chunk.missing && !chunk.markers.length),
-  };
-}
-
 function main() {
   const option = (name) =>
     process.argv.find((arg) => arg.startsWith(`--${name}=`))?.split('=')[1];
   const dist = path.resolve(ROOT, option('dist') ?? 'dist');
-  const composition = checkComposition(dist);
+  const { entry, via } = findEntry(dist);
   const baselinePath = path.join(ROOT, 'scripts/main-chunk-baseline.json');
   let budget = null;
   if (fs.existsSync(baselinePath)) {
-    const measured = measureMainChunk(dist, { entry: composition.entry });
+    const measured = measureMainChunk(dist, { entry });
     budget = {
       ...measured,
       ...checkMainChunk(
@@ -142,28 +79,11 @@ function main() {
       ),
     };
   }
-  const ok = composition.ok && (budget?.ok ?? true);
+  const ok = budget?.ok ?? true;
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ composition, budget, ok }, null, 2));
+    console.log(JSON.stringify({ entry, via, budget, ok }, null, 2));
   } else {
-    const kb = (bytes) => `${(bytes / 1000).toFixed(2)} kB`;
-    console.log(
-      `[check:main-chunk] entry ${composition.entry} (via ${composition.via})`,
-    );
-    for (const chunk of composition.chunks)
-      console.log(
-        `[check:main-chunk]   ${chunk.file}: ${kb(chunk.bytes)} (gzip ${kb(chunk.gzipBytes)})` +
-          (chunk.missing ? ' MISSING' : '') +
-          (chunk.markers.length
-            ? ` FORBIDDEN: ${chunk.markers.join(', ')}`
-            : ''),
-      );
-    console.log(
-      `[check:main-chunk] main ${composition.mainBytes} bytes (gzip ${composition.mainGzipBytes}); initial chunks ${composition.initialBytes} bytes; ` +
-        (composition.ok
-          ? 'no three or Navara'
-          : 'three or Navara in the initial chunks'),
-    );
+    console.log(`[check:main-chunk] entry ${entry} (via ${via})`);
     console.log(
       budget
         ? `[check:main-chunk] ${budget.name}: ${budget.message}`

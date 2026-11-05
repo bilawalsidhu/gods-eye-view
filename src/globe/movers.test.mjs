@@ -43,7 +43,6 @@ test('set options are normalised with the contract defaults', () => {
     model: { url: '/models/airplane.glb' },
   });
   assert.equal(model.model.minimumPixelSize, 0);
-  assert.equal(model.model.maximumScale, Infinity);
   assert.equal(model.model.colorBlend, null);
 });
 
@@ -177,7 +176,7 @@ test('the set facade forwards to the store and an engine commit, once destroyed 
   set.set(0, { position: { x: 1, y: 2, z: 3 } });
   set.setCount(1);
   assert.equal(set.count(), 1);
-  assert.deepEqual([...set.positionsView()], [1, 2, 3]);
+  assert.deepEqual([...store.positionsView()], [1, 2, 3]);
   set.commit();
   assert.deepEqual(calls, [['commit', { from: 0, to: 1 }]]);
   assert.equal(store.dirty(), null, 'commit cleans the store');
@@ -205,7 +204,7 @@ test('a destroyed set releases its instance arrays', () => {
   assert.equal(store.count, 0);
   assert.equal(store.positions.length, 0);
   assert.equal(store.pickIds.length, 0);
-  assert.equal(set.positionsView().length, 0);
+  assert.equal(store.positionsView().length, 0);
   assert.equal(store.dirty(), null);
 });
 

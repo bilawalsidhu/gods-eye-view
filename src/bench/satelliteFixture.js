@@ -1,4 +1,4 @@
-// Deterministic TLE catalogs for phase 3 browser QA; no live feed requests.
+// Deterministic TLE catalogs for browser QA; no live feed requests.
 import { W1_FROZEN_MS } from './w1Feeds.js';
 
 const checksum = (line) => {
@@ -30,8 +30,6 @@ const GROUPS = {
   starlink: [50000, 6000, 53, 15.2, 'QA STARLINK'],
 };
 export const SATELLITE_FIXTURE_EPOCH = W1_FROZEN_MS;
-export const SATELLITE_FIXTURE_CORE_COUNT = 839;
-export const SATELLITE_FIXTURE_DENSE_COUNT = 6839;
 export function satelliteFixture(group) {
   const spec = GROUPS[group];
   if (!spec) throw new TypeError('Unknown fixture group');

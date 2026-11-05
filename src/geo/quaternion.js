@@ -1,16 +1,12 @@
 // Ported from CesiumJS 1.138 (Apache-2.0) — Quaternion.js
 //
 // Rotations as plain-data {x, y, z, w} objects. Only the subset gev uses is ported.
-// With DEBUG on (development and tests; see debug.js) invalid arguments throw
-// the same DeveloperError as Cesium's debug checks.
 //
 // Geo values are not Object.prototype objects, so src/app/stateChannel.js
 // copyState and src/director/documentFields.js jsonTree reject them: copy
 // the fields into a literal before putting one into product state or a
 // scene document.
 
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
 import { normalize, create as createCartesian3 } from './cartesian3.js';
 
 // Values are instances of a module-private constructor rather than object
@@ -32,13 +28,8 @@ export function create(x, y, z, w) {
 
 let fromAxisAngleScratch = createCartesian3();
 
-/** The rotation by `angle` radians around `axis` (normalised here; with DEBUG on, a zero axis throws). */
+/** The rotation by `angle` radians around `axis` (normalised here; a zero axis gives NaN). */
 export function fromAxisAngle(axis, angle, result) {
-  if (DEBUG) {
-    Check.typeOf.object('axis', axis);
-    Check.typeOf.number('angle', angle);
-  }
-
   const halfAngle = angle / 2.0;
   const s = Math.sin(halfAngle);
   fromAxisAngleScratch = normalize(axis, fromAxisAngleScratch);
@@ -63,10 +54,6 @@ const elementIndex = (column, row) => column * 3 + row;
 
 /** The rotation of a 3x3 rotation matrix. */
 export function fromRotationMatrix(matrix, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-  }
-
   let root;
   let x;
   let y;

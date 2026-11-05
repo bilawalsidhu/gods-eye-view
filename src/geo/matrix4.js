@@ -4,12 +4,8 @@
 // order (m[column * 4 + row]), so Cesium accepts them wherever it reads
 // m[0]..m[15] (e.g. the Model.modelMatrix setter clones by index). Products
 // and getters take a required `result` that may be an input; constructors
-// take an optional one. Only the subset gev uses is ported. With DEBUG on
-// (development and tests; see debug.js) invalid arguments throw the same
-// DeveloperError as Cesium's debug checks.
+// take an optional one. Only the subset gev uses is ported.
 
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
 import { ZERO } from './cartesian3.js';
 
 /** A matrix of zeros (Cesium's `new Matrix4()`). */
@@ -65,12 +61,6 @@ export function equals(left, right) {
 
 /** The product of two matrices. */
 export function multiply(left, right, result) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-    Check.typeOf.object('result', result);
-  }
-
   const left0 = left[0];
   const left1 = left[1];
   const left2 = left[2];
@@ -162,12 +152,6 @@ export function multiply(left, right, result) {
 
 /** The product of two affine transformations (bottom rows assumed [0, 0, 0, 1]). */
 export function multiplyTransformation(left, right, result) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-    Check.typeOf.object('result', result);
-  }
-
   const left0 = left[0];
   const left1 = left[1];
   const left2 = left[2];
@@ -234,12 +218,6 @@ export function multiplyTransformation(left, right, result) {
 
 /** Transforms a point (w = 1). */
 export function multiplyByPoint(matrix, cartesian, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-    Check.typeOf.object('cartesian', cartesian);
-    Check.typeOf.object('result', result);
-  }
-
   const vX = cartesian.x;
   const vY = cartesian.y;
   const vZ = cartesian.z;
@@ -256,12 +234,6 @@ export function multiplyByPoint(matrix, cartesian, result) {
 
 /** Transforms a direction (w = 0), ignoring the translation. */
 export function multiplyByPointAsVector(matrix, cartesian, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-    Check.typeOf.object('cartesian', cartesian);
-    Check.typeOf.object('result', result);
-  }
-
   const vX = cartesian.x;
   const vY = cartesian.y;
   const vZ = cartesian.z;
@@ -278,11 +250,6 @@ export function multiplyByPointAsVector(matrix, cartesian, result) {
 
 /** The translation part as {x, y, z}. */
 export function getTranslation(matrix, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-    Check.typeOf.object('result', result);
-  }
-
   result.x = matrix[12];
   result.y = matrix[13];
   result.z = matrix[14];
@@ -291,11 +258,6 @@ export function getTranslation(matrix, result) {
 
 /** The upper-left 3x3 part. */
 export function getMatrix3(matrix, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-    Check.typeOf.object('result', result);
-  }
-
   result[0] = matrix[0];
   result[1] = matrix[1];
   result[2] = matrix[2];
@@ -310,13 +272,6 @@ export function getMatrix3(matrix, result) {
 
 /** The column at `index` (0..3) as {x, y, z, w}. */
 export function getColumn(matrix, index, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-    Check.typeOf.number.greaterThanOrEquals('index', index, 0);
-    Check.typeOf.number.lessThanOrEquals('index', index, 3);
-    Check.typeOf.object('result', result);
-  }
-
   const startIndex = index * 4;
   const x = matrix[startIndex];
   const y = matrix[startIndex + 1];
@@ -332,11 +287,6 @@ export function getColumn(matrix, index, result) {
 
 /** The inverse of a rotation-plus-translation matrix (no scale or shear). */
 export function inverseTransformation(matrix, result) {
-  if (DEBUG) {
-    Check.typeOf.object('matrix', matrix);
-    Check.typeOf.object('result', result);
-  }
-
   // This function is an optimized version of the below 4 lines.
   // const rT = Matrix3.transpose(Matrix4.getMatrix3(matrix));
   // const rTN = Matrix3.negate(rT);
@@ -382,10 +332,6 @@ export function inverseTransformation(matrix, result) {
 
 /** A transformation from a 3x3 rotation and a translation (zero when absent). */
 export function fromRotationTranslation(rotation, translation, result) {
-  if (DEBUG) {
-    Check.typeOf.object('rotation', rotation);
-  }
-
   translation = translation ?? ZERO;
   if (result == null) result = create();
   result[0] = rotation[0];
@@ -403,32 +349,6 @@ export function fromRotationTranslation(rotation, translation, result) {
   result[12] = translation.x;
   result[13] = translation.y;
   result[14] = translation.z;
-  result[15] = 1.0;
-  return result;
-}
-
-/** A uniform scale. */
-export function fromUniformScale(scale, result) {
-  if (DEBUG) {
-    Check.typeOf.number('scale', scale);
-  }
-
-  if (result == null) result = create();
-  result[0] = scale;
-  result[1] = 0.0;
-  result[2] = 0.0;
-  result[3] = 0.0;
-  result[4] = 0.0;
-  result[5] = scale;
-  result[6] = 0.0;
-  result[7] = 0.0;
-  result[8] = 0.0;
-  result[9] = 0.0;
-  result[10] = scale;
-  result[11] = 0.0;
-  result[12] = 0.0;
-  result[13] = 0.0;
-  result[14] = 0.0;
   result[15] = 1.0;
   return result;
 }

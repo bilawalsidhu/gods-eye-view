@@ -1,8 +1,7 @@
-// The military logic draws only through its renderer (phase 3 Task 11a): with
-// a renderer that is plain data (no Cesium), the layer builds its amber
-// fleet, selects a contact on a click through the engine's selection
-// dispatcher, tracks and follows it, and releases it on an empty click or
-// Escape. This is the seam the Navara renderer (Task 11b) plugs into.
+// The military logic draws only through its renderer: with a renderer that
+// is plain data (no Cesium), the layer builds its amber fleet, selects a
+// contact on a click through the engine's selection dispatcher, tracks and
+// follows it, and releases it on an empty click or Escape.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +9,6 @@ import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createApplicationMilitary } from '../../app/layers/militaryFlights.js';
 import { defaultSurface } from '../../data/surfaceServices.js';
 import * as militaryRegistry from '../../data/militaryRegistry.js';
-import { missingAircraftRendererMembers } from '../aircraft/render/contract.js';
 import { Rgba } from '../shared/color.js';
 import { MIL_ICON_COLOR, TRACKED_ICON_COLOR } from './policy.js';
 import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
@@ -82,7 +80,6 @@ test('the military logic draws, selects and follows only through its renderer', 
     },
   });
   layer.init(null, { engine });
-  assert.deepEqual(missingAircraftRendererMembers(renderer), []);
   layer.enable();
   try {
     await layer.update(null);

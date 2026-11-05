@@ -66,17 +66,3 @@ test('endpoint reset, result reuse, custom sphere and dateline/polar paths retai
     );
   }
 });
-test('unset and near-antipodal geodesics reject the same debug inputs', () => {
-  assert.throws(() => geo.ellipsoidGeodesic.create().surfaceDistance, {
-    name: 'DeveloperError',
-  });
-  const a = geo.cartographic.fromDegrees(0, 0),
-    b = geo.cartographic.fromDegrees(180, 0);
-  assert.throws(() => geo.ellipsoidGeodesic.create(a, b), {
-    name: 'DeveloperError',
-  });
-  assert.throws(
-    () => geo.ellipsoidGeodesic.create().setEndPoints(undefined, b),
-    { name: 'DeveloperError' },
-  );
-});

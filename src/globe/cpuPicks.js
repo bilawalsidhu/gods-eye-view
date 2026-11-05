@@ -16,9 +16,9 @@ const scratchB = geo.cartesian3.create();
 const scratchScreen = { x: 0, y: 0 };
 const scratchScreenB = { x: 0, y: 0 };
 
-export const PICK_RADIUS_PX = 3;
+const PICK_RADIUS_PX = 3;
 /** A line is picked within 8 px of its drawn segments (thin trails too). */
-export const LINE_PICK_PX = 8;
+const LINE_PICK_PX = 8;
 
 /** Distance from point p to segment ab (2D). */
 export function distanceToSegment(p, a, b) {

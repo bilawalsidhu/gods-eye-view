@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
 import { createAircraftCesiumRenderer } from './cesium.js';
-import { missingAircraftRendererMembers } from './contract.js';
 import { CYAN, nearFarScale, rgbaFromCss } from '../../shared/color.js';
 
 /** A viewer with what the renderer touches: primitives, entities, camera. */
@@ -60,9 +59,8 @@ const renderer = (viewer, options = {}) =>
     ...options,
   });
 
-test('the Cesium aircraft renderer has every member of the contract', () => {
+test('the Cesium aircraft renderer reports its kind', () => {
   const { viewer } = stubViewer();
-  assert.deepEqual(missingAircraftRendererMembers(renderer(viewer)), []);
   assert.equal(renderer(viewer).kind, 'cesium');
 });
 

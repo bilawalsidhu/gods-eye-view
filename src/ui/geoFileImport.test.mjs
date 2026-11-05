@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { initGeoFileImport, summarize } from './geoFileImport.js';
+import { createGeoFileImport, summarize } from './geoFileImport.js';
 import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
 
 class FakeClassList {
@@ -105,8 +105,7 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
       revoke: () => revoked.push(file.name),
     };
   };
-  const tool = initGeoFileImport({
-    viewer,
+  const tool = createGeoFileImport({
     load: load || defaultLoad,
     document,
     ...(navigation ? { navigation } : {}),
@@ -120,6 +119,7 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
       return () => (actions = null);
     },
   });
+  tool?.attachScene({ viewer });
   return {
     tool,
     els,
@@ -148,16 +148,9 @@ const ROW_ACTIONS = {
 };
 const press = (t, row, name) => t.act(ROW_ACTIONS[name], row.id);
 
-test('returns null without its markup or viewer', () => {
+test('returns null without its markup', () => {
   const document = { getElementById: () => null };
-  assert.equal(initGeoFileImport({ viewer: {}, document }), null);
-  assert.equal(
-    initGeoFileImport({
-      viewer: null,
-      document: { getElementById: () => new FakeElement() },
-    }),
-    null,
-  );
+  assert.equal(createGeoFileImport({ document }), null);
 });
 
 test('a pick imports each file', async () => {

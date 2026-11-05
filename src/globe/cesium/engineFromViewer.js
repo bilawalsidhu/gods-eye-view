@@ -1,5 +1,5 @@
-// The bridge for shell callers that still hold only a Cesium viewer (layers
-// until phase 1c): the engine registered for that viewer. The app registers
+// The bridge for shell callers that hold only a Cesium viewer: the engine
+// registered for that viewer. The app registers
 // its scene engine (src/app/globeEngine.js) and unregisters it before
 // destroying it. Nothing is ever built here, so no engine can outlive its
 // viewer without a destroy path: an unregistered or torn-down viewer has none.

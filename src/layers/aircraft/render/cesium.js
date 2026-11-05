@@ -1,7 +1,6 @@
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../../data/aircraftModelLighting.js';
 // The aircraft renderer on Cesium (contract: ./contract.js): the Cesium
-// objects the aircraft layers used to build themselves, moved here one for
-// one — the fleet BillboardCollection and its sprite-order slot, the model
+// objects the aircraft layers draw with — the fleet BillboardCollection and its sprite-order slot, the model
 // PrimitiveCollection and its glTF loads, the tracked Entity (billboard with
 // per-frame CallbackProperties, followed through viewer.trackedEntity and
 // the one exact tracked frame), the trail entity and its live head
@@ -19,7 +18,7 @@ import { horizonOccluder } from '../../../data/iconOrientation.js';
 import { engineFromViewer } from '../../../globe/cesium/engineFromViewer.js';
 import { applyTrackedCameraFrame } from '../../../globe/cesium/follow.js';
 
-// The model shader of the IR boost (owner playtest 2026-08-16): boosted
+// The model shader of the IR boost: boosted
 // models render UNLIT so a side-lit airframe does not go black in FLIR/NVG.
 // Assigning a customShader to a ready model is a silent no-op, so the layer
 // reloads boosted models and the shader is set at creation. One stateless

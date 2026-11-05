@@ -6,17 +6,17 @@ import { createAirQualityCesiumRenderer } from '../../layers/airQuality/render/c
 import { createFirmsCesiumRenderer } from '../../layers/firms/render/cesium.js';
 import { createEarthquakesCesiumRenderer } from '../../layers/earthquakes/render/cesium.js';
 import { createLaunchesCesiumRenderer } from '../../layers/launches/render/cesium.js';
-// Which engine draws which layer: the layer renderer registry (plan, "layer
-// renderer interface") and the layer availability API built on it.
+// Which engine draws which layer: the layer renderer registry and the layer
+// availability API built on it.
 //
 // A renderer factory `(engine, options) => renderer` draws one layer on one
 // engine kind (`render/cesium.js`, `render/navara.js` of a layer). Cesium
-// layers still draw themselves until their render/cesium.js is extracted
-// (the *a tasks): they are registered as CESIUM_BUILTIN. Cesium entries are
-// registered here, statically (main chunk); Navara factories are registered
-// by the Navara mode after its import() (src/app/navaraMode.js).
+// layers without a render/cesium.js draw themselves: they are registered as
+// CESIUM_BUILTIN. Cesium entries are registered here, statically (main
+// chunk); Navara factories are registered by the Navara mode after its
+// import() (src/app/navaraMode.js).
 //
-// ## Layer availability (stable API, used by phase 4's layer list)
+// ## Layer availability (stable API, used by the layer list)
 //
 //   import { createLayerAvailability } from './app/layers/renderers.js';
 //   const availability = createLayerAvailability(engine.kind);
@@ -28,8 +28,8 @@ import { createLaunchesCesiumRenderer } from '../../layers/launches/render/cesiu
 // The object is frozen; available() and unavailable() return fresh arrays.
 // It reads the registry when called, so a Navara factory registered later
 // (after the Navara mode loads) shows up. `name` is the layer's display name
-// (src/app/layers/directory.js). Phase 4 injects it as its `availability`
-// provider (`{ engine, unavailable() }` is the part it reads).
+// (src/app/layers/directory.js). The layer list takes it as its
+// `availability` provider (`{ engine, unavailable() }` is the part it reads).
 
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
 import { createFlightsCesiumRenderer } from '../../layers/flights/render/cesium.js';

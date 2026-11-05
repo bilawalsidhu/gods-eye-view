@@ -1,4 +1,6 @@
 // The real FIRMS PNGs in one engine mover atlas.
+import { packImageAtlas } from '../../shared/render/imageAtlas.js';
+
 const WHITE = Object.freeze([1, 1, 1, 1]);
 const CELL = 60,
   PAD = 2,
@@ -61,33 +63,22 @@ export function createFirmsSpriteBank(
     }
   };
   function buildAtlas() {
-    const entries = [...loaded],
-      side = Math.ceil(Math.sqrt(entries.length));
-    const canvas = createCanvas();
-    canvas.width = side * CELL;
-    canvas.height = Math.ceil(entries.length / side) * CELL;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('FIRMS atlas requires a canvas');
-    const cells = {},
-      lookup = new Map();
-    entries.forEach(([url, image], index) => {
+    const lookup = new Map();
+    const entries = [...loaded].map(([url, image], index) => {
       const width = image.naturalWidth ?? image.width,
         height = image.naturalHeight ?? image.height;
       if (!(width > 0 && width <= BASE_SIZE && height === width))
         throw new Error('FIRMS sprite dimensions are invalid');
-      const x = (index % side) * CELL + PAD,
-        y = Math.floor(index / side) * CELL + PAD;
-      context.drawImage(image, x, y);
       const key = String(index);
-      cells[key] = [
-        x / canvas.width,
-        y / canvas.height,
-        (x + width) / canvas.width,
-        (y + height) / canvas.height,
-      ];
       lookup.set(url, { key, scale: width / BASE_SIZE });
+      return { key, image, width, height };
     });
-    return { canvas, cells, lookup };
+    const atlas = packImageAtlas(entries, {
+      canvas: createCanvas(),
+      cell: CELL,
+      pad: PAD,
+    });
+    return { ...atlas, lookup };
   }
   async function flush() {
     if (destroyed) return;

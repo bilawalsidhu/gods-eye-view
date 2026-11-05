@@ -179,6 +179,7 @@ function compositionFixture(
   const position = { x: 6379137, y: 0, z: 0 };
   const viewer = {
     clock: { onTick: { addEventListener: () => () => {} } },
+    canvas,
     camera: {
       positionWC: position,
       positionCartographic: { height: state.height },

@@ -114,7 +114,7 @@ test('civilian and military click handlers apply duration only at the deselect b
     readLayerSource(new URL('./flights.js', import.meta.url)),
     readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
   ];
-  // Flights and military moved to the selection dispatcher (phase 3), whose
+  // Flights and military use the selection dispatcher, whose
   // source applies the same two rules: the selection gesture before a
   // select, the full click classifier before the empty-space deselect, which
   // each layer answers with a user-origin clear.

@@ -140,7 +140,7 @@ test('sampler on a globe engine: samples engine.surface and latches against the 
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), 137.0);
   const [call] = engine.fake.callsOf('surface.sampleHeightDetailed');
   assert.ok(Math.abs(Cesium.Math.toDegrees(call.args[0].latitude) - cell.lat) < 1e-9);
-  assert.deepEqual(call.args[1], { exclude: ['own'], lod: 'visible' });
+  assert.deepEqual(call.args[1], { exclude: ['own'] });
 });
 
 test('sampler: a coarse tile answer is a miss; a fine one latches', async () => {

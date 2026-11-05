@@ -5,23 +5,15 @@
 // signal, since a coarse tile's surface can sit tens of metres off the
 // ground (a 20 m error measured at Austin while the tiles were streaming).
 
-const LODS = new Set(['visible', 'finest']);
-
 /**
- * @param {{ exclude?: any[], lod?: 'visible' | 'finest' }} [options]
- *   `exclude`: mover sets (or their ids), lines, or engine objects the ray
- *   passes through. `lod`: 'visible' answers from the tiles drawn now (where
- *   they miss, the finest loaded ones); 'finest' from the finest loaded
- *   tiles, drawn or not.
+ * @param {{ exclude?: any[] }} [options] `exclude`: mover sets (or their
+ *   ids), lines, or engine objects the ray passes through.
  */
 export function normalizeSurfaceOptions(options = {}) {
   const exclude = options.exclude ?? [];
   if (!Array.isArray(exclude))
     throw new TypeError('surface exclude must be an array');
-  const lod = options.lod ?? 'visible';
-  if (!LODS.has(lod))
-    throw new TypeError(`surface lod must be 'visible' or 'finest': ${lod}`);
-  return { exclude, lod };
+  return { exclude };
 }
 
 /**

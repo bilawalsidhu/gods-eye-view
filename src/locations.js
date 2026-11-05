@@ -317,7 +317,7 @@ export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
  */
 export async function searchAndFlyTo(target, query, options = {}) {
   const { placeSearch = unavailablePlaceSearch, signal } = options;
-  // The globe engine, or (voice, until phase 1c) a viewer registered for one.
+  // The globe engine, or (voice) a viewer registered for one.
   const engine = engineFromViewer(target);
   if (!engine) return null;
   signal?.throwIfAborted();

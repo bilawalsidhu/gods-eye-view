@@ -66,7 +66,7 @@ function createViewer({ latitude, longitude, heightM, groundM = 0 }) {
       ),
   };
   return {
-    viewer: createCesiumEngine({ camera, scene }),
+    viewer: createCesiumEngine({ camera, canvas, scene }),
     state,
     degreesPerPixel,
   };

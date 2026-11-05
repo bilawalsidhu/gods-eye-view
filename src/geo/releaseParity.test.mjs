@@ -1,36 +1,15 @@
-// Release parity: with DEBUG off, src/geo returns what release Cesium returns.
+// Release parity: src/geo returns what release Cesium returns.
 //
-// Production builds fold geo's DEBUG to false (see debug.js) and ship Cesium's
-// Build/Cesium, whose debug checks are stripped. So for a degenerate input that
-// throws in development (a zero vector to normalize, a NaN origin, a divisor
-// of 0, an index out of range) both must now return the same values, NaN for
-// NaN and -0 for -0, or fail with the same error. This file loads a copy of
-// src/geo whose debug.js says `DEBUG = false`, and the stripped Cesium build.
-import { test, after } from 'node:test';
+// Production builds ship Cesium's Build/Cesium, whose debug checks are
+// stripped, and src/geo has no debug checks either. So for a degenerate input
+// (a zero vector to normalize, a NaN origin, a divisor of 0, an index out of
+// range) both must return the same values, NaN for NaN and -0 for -0, or fail
+// with the same error.
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import {
-  cpSync,
-  mkdtempSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import * as geo from './index.js';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const copy = mkdtempSync(path.join(tmpdir(), 'geo-release-'));
-for (const name of readdirSync(here)) {
-  if (name.endsWith('.js'))
-    cpSync(path.join(here, name), path.join(copy, name));
-}
-writeFileSync(path.join(copy, 'debug.js'), 'export const DEBUG = false;\n');
-after(() => rmSync(copy, { recursive: true, force: true }));
-
-const geo = await import(pathToFileURL(path.join(copy, 'index.js')).href);
-const { DEBUG } = await import(pathToFileURL(path.join(copy, 'debug.js')).href);
 const Cesium = createRequire(import.meta.url)('cesium/Build/Cesium/index.cjs');
 
 const W = Cesium.Ellipsoid.WGS84;
@@ -185,18 +164,6 @@ const CASES = [
     C3.fromDegreesArray,
     [list(1, 2, 3)],
   ],
-  [
-    'cartesian3.fromDegreesArrayHeights(4)',
-    geo.cartesian3.fromDegreesArrayHeights,
-    C3.fromDegreesArrayHeights,
-    [list(1, 2, 3, 4)],
-  ],
-  [
-    'cartesian3.fromDegreesArrayHeights(str)',
-    geo.cartesian3.fromDegreesArrayHeights,
-    C3.fromDegreesArrayHeights,
-    [list(1, 2, 'h')],
-  ],
 
   [
     'cartographic.fromRadians(NaN)',
@@ -314,12 +281,6 @@ const CASES = [
     Cesium.Matrix4.multiplyByPoint,
     [nanMat4, NAN, R],
   ],
-  [
-    'matrix4.fromUniformScale(str)',
-    geo.matrix4.fromUniformScale,
-    Cesium.Matrix4.fromUniformScale,
-    [value('2'), mat4],
-  ],
 
   [
     'quaternion.fromAxisAngle(zero)',
@@ -403,11 +364,6 @@ function outcome(fn, args) {
   }
 }
 
-test('the copy under test has its debug checks off', () => {
-  assert.equal(DEBUG, false);
-  assert.ok(!('normalized result is not a number' in Cesium));
-});
-
 for (const [name, geoFn, cesiumFn, builders] of CASES) {
   test(`release ${name} matches Build/Cesium`, () => {
     const g = outcome(
@@ -432,7 +388,7 @@ for (const [name, geoFn, cesiumFn, builders] of CASES) {
   });
 }
 
-test('release geo returns NaN where development geo throws', () => {
+test('geo returns NaN for degenerate inputs, as release Cesium does', () => {
   const r = geo.cartesian3.normalize(
     geo.cartesian3.create(),
     geo.cartesian3.create(),

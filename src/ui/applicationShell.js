@@ -666,8 +666,8 @@ export class StyleManager extends ShellFacade {
     // production source explicitly registers entries.
     initWorldOverlay(engine);
     // Initialize detection overlay BEFORE style stages so the composite
-    // stage is first in the post-process pipeline. Both run on the engine
-    // (the Navara mode too: its layers arrive with Tasks 10a-13a).
+    // stage is first in the post-process pipeline. Both run on the engine,
+    // Navara's too.
     {
       initDetection(
         engine,
@@ -2061,8 +2061,8 @@ export class StyleManager extends ShellFacade {
     const handoff =
       Boolean(layerSession?.handoffLayers) &&
       !layerSession.lifetime.signal.aborted;
-    // A Context mode the next shell can resume (the legacy engine route,
-    // ?switch=legacy, still builds a shell per engine).
+    // A Context mode the next shell can resume when the session is handed to
+    // a new application.
     const retainContext = handoff && this._contextControls.canRetainScene();
     this._feedback.clearLoadingStatus();
     this._disposed = true;

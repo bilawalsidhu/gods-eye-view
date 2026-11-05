@@ -1,11 +1,14 @@
-// Seeded, deterministic bit-for-bit comparison of src/geo against Cesium.
+// Seeded, deterministic bit-for-bit comparison of src/geo against Cesium's
+// release build (Build/Cesium, debug checks stripped, as production ships it).
 // Every number is compared with Object.is (so -0 and NaN count), a throw on one
 // side must be a throw on the other, and `result` aliasing is exercised the
 // same way on both sides.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import { createRequire } from 'node:module';
 import * as geo from './index.js';
+
+const Cesium = createRequire(import.meta.url)('cesium/Build/Cesium/index.cjs');
 
 const {
   cartesian3: c3,
@@ -108,7 +111,7 @@ const cesium = (v) => new C3(v.x, v.y, v.z);
 
 test('vector operations, including -0 inputs and aliased results, equal Cesium bit for bit', () => {
   const { scalar, vector } = inputs(1);
-  // Directionless vectors first: normalize must throw on both sides.
+  // Directionless vectors first: normalize returns NaN on both sides.
   const DEGENERATE = [
     { x: 0, y: 0, z: 0 },
     { x: -0, y: 0, z: -0 },
@@ -397,12 +400,7 @@ test('matrices and quaternions, including aliased results and every fromRotation
     ][i % 4];
     const angle =
       i % 8 < 4 ? Math.PI - 0.5 * random() : (random() - 0.5) * 2 * Math.PI;
-    let m;
-    try {
-      m = rotation(axis, angle);
-    } catch {
-      continue; // a zero axis: Cesium throws, nothing to compare
-    }
+    const m = rotation(axis, angle);
     const trace = m[0] + m[4] + m[8];
     branches.add(
       trace > 0

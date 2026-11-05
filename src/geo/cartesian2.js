@@ -1,16 +1,11 @@
 // Ported from CesiumJS 1.138 (Apache-2.0) — Cartesian2.js
 //
-// 2D vectors (screen coordinates) as plain-data {x, y} objects. With DEBUG on
-// (development and tests; see debug.js) invalid arguments throw the same
-// DeveloperError as Cesium's debug checks.
+// 2D vectors (screen coordinates) as plain-data {x, y} objects.
 //
 // Geo values are not Object.prototype objects, so src/app/stateChannel.js
 // copyState and src/director/documentFields.js jsonTree reject them: copy
 // the fields into a literal before putting one into product state or a
 // scene document.
-
-import { DEBUG } from './debug.js';
-import { Check } from './check.js';
 
 // Values are instances of a module-private constructor rather than object
 // literals: every `{x, y}` literal in the process shares one V8 hidden
@@ -38,11 +33,6 @@ export function clone(cartesian, result) {
 
 /** The distance between two points. */
 export function distance(left, right) {
-  if (DEBUG) {
-    Check.typeOf.object('left', left);
-    Check.typeOf.object('right', right);
-  }
-
   const x = left.x - right.x;
   const y = left.y - right.y;
   return Math.sqrt(x * x + y * y);

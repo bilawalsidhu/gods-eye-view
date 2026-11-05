@@ -399,7 +399,7 @@ export function createTracking({
     // 12 Hz icon instead of lagging ~1 s behind it.
     if (!flightState._trailHeadEntity && flightState._renderer) {
       flightState._trailHeadEntity = flightState._renderer.trails.createHead({
-        // 'gev-trail' namespace (round 6): claimed by trailRenderer's pick
+        // 'gev-trail' namespace: claimed by trailRenderer's pick
         // owner so a click on the head segment never reads as empty space.
         id: `gev-trail:fl-head-${++flightState._trailHeadSeq}`,
         show: !flightState._cockpitContactMode,
@@ -441,9 +441,9 @@ export function createTracking({
           return [from, geo.cartesian3.clone(head)];
         },
         width: 2.5,
-        // Round 4: the head must never vanish into the mesh either (dimmed
-        // when occluded so depth still reads); round 8: geodesic, consistent
-        // with the trail body (no chords).
+        // The head must never vanish into the mesh either (dimmed when
+        // occluded so depth still reads); geodesic, consistent with the
+        // trail body (no chords).
         color: TRAIL_COLOR,
       });
     }

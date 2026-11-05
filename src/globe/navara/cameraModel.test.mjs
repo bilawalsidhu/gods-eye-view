@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
 import { isEngineEvent } from '../contract.js';
-import { orientationVectors } from './cameraMath.js';
+import { orientationVectors } from '../cameraMath.js';
 import { createCameraModel } from './cameraModel.js';
 
 const { cartesian2, cartesian3, math, matrix4 } = geo;

@@ -45,7 +45,7 @@ export function readLayerSource(file) {
                         ? '../layers/cctv'
                         : '../layers/vessels',
   );
-  // A layer's code includes its renderers (render/*.js, phase 3) and, for
+  // A layer's code includes its renderers (render/*.js) and, for
   // the aircraft layers, the shared aircraft renderer they draw through:
   // checks on what the layer does keep finding it where it moved.
   const directories = [directory, join(directory, 'render')];

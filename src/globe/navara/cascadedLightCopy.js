@@ -1,4 +1,4 @@
-// Navara 0.2.1 leak fix (phase 3 review): Navara's transparent pass keeps a
+// Navara 0.2.1 leak fix: Navara's transparent pass keeps a
 // copy of each scene light and refreshes it every frame with
 // `copy.copy(light, true)`. For the sun's cascaded shadow lights
 // (@navaramap/three-csm CascadedDirectionalLights) that copy clones every

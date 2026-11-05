@@ -1,36 +1,62 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import { createImageryGround } from '../../recentImagery/render/navaraGround.js';
+import { createEarthquakesNavaraRenderer } from '../../earthquakes/render/navara.js';
+import { createGroundCellDisplay } from './navaraGroundCells.js';
 
 // EffectDesc gives insertAfter priority, then tries insertBefore. Check the
 // actual renderer declarations under every activation order, including the
 // minimal look, whose pipeline has no toneMapping anchor.
 const declarations = [
-  ['gevRecentImagery', '../../recentImagery/render/navaraGround.js'],
-  ['gevNepalEvent', '../../recentImagery/render/navaraGround.js'],
-  ['gevObservedWeather', '../../weather/render/navaraSurface.js'],
-  ['gevEarthquakeGround', '../../earthquakes/render/navara.js'],
-  ['gevFirmsGround', './navaraGroundCells.js'],
-  ['gevPreSharpenOverlay', '../../../globe/navara/overlay.js'],
+  'gevRecentImagery',
+  'gevNepalEvent',
+  'gevObservedWeather',
+  'gevEarthquakeGround',
+  'gevFirmsGround',
+  'gevPreSharpenOverlay',
 ];
-const specs = await Promise.all(
-  declarations.map(async ([key, path]) => {
-    let source = await fs.readFile(new URL(path, import.meta.url), 'utf8');
-    if (key === 'gevPreSharpenOverlay')
-      source = source.split('class GevPreSharpenOverlayEffectDesc')[1];
-    const anchors = (name) =>
-      [
-        ...(key === 'gevNepalEvent' && name === 'insertAfter' ? source.split('class NepalEffect')[1] : source)
-          .match(new RegExp(`static ${name} = \\[([^\\]]*)\\]`))[1]
-          .matchAll(/'([^']+)'/g),
-      ].map((m) => m[1]);
-    return {
-      key,
-      after: anchors('insertAfter'),
-      before: anchors('insertBefore'),
-    };
-  }),
-);
+// The descriptor a renderer registers; its setup stops there.
+const stop = new Error('registered');
+function registered(create) {
+  let spec;
+  const view = {
+    camera: {},
+    registerEffect(key, Desc) {
+      spec = { key, after: Desc.insertAfter, before: Desc.insertBefore };
+      throw stop;
+    },
+  };
+  try {
+    create({ view, EffectDesc: class {}, NavaraEffect: class {} });
+  } catch (error) {
+    if (error !== stop) throw error;
+  }
+  return spec;
+}
+async function declared(key, path, className) {
+  let source = await fs.readFile(new URL(path, import.meta.url), 'utf8');
+  if (className) source = source.split(`class ${className}`)[1];
+  const anchors = (name) =>
+    [
+      ...source
+        .match(new RegExp(`static ${name} = \\[([^\\]]*)\\]`))[1]
+        .matchAll(/'([^']+)'/g),
+    ].map((m) => m[1]);
+  return { key, after: anchors('insertAfter'), before: anchors('insertBefore') };
+}
+const specs = [
+  registered((sdk) => createImageryGround({}, sdk, {})),
+  registered((sdk) => createImageryGround({}, sdk, {}, 'gevNepalEvent')),
+  await declared('gevObservedWeather', '../../weather/render/navaraSurface.js'),
+  registered((sdk) => createEarthquakesNavaraRenderer({ render: {} }, sdk)),
+  registered((sdk) => createGroundCellDisplay({}, sdk, 0)),
+  await declared(
+    'gevPreSharpenOverlay',
+    '../../../globe/navara/overlay.js',
+    'GevPreSharpenOverlayEffectDesc',
+  ),
+];
 const permutations = (items) =>
   items.length
     ? items.flatMap((item, i) =>
@@ -64,7 +90,7 @@ test('all ground/glyph activation orders preserve imagery, classification and ma
       }
       assert.deepEqual(
         order.filter((key) => specs.some((s) => s.key === key)),
-        declarations.map(([key]) => key),
+        declarations,
         `${toneMapping}: ${activation.map((s) => s.key)}`,
       );
     }

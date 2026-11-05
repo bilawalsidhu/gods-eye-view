@@ -1,7 +1,6 @@
 // The vessel renderer: what the vessels layer's logic asks of an engine to
 // draw its ship chevrons and the selected vessel's trail, and to read the
-// camera. render/cesium.js implements it over Cesium (the objects the layer
-// used to build itself, one for one); render/navara.js on the Navara engine
+// camera. render/cesium.js implements it over Cesium; render/navara.js on the Navara engine
 // over engine.movers / engine.lines / engine.projector. Nothing here imports
 // an engine.
 //
@@ -54,39 +53,3 @@
  * @property {{ create(options: { color: string, width: number }): object|null }} trails
  * @property {() => void} destroy
  */
-
-/** The members every vessel renderer has (both engines). */
-export const VESSEL_RENDERER_SHAPE = Object.freeze({
-  top: ['kind', 'view', 'fleet', 'pickedRecord', 'follow', 'trails', 'destroy'],
-  view: [
-    'camera',
-    'scene',
-    'horizon',
-    'worldToWindow',
-    'canvasSize',
-    'requestRender',
-    'on',
-  ],
-  fleet: [
-    'collection',
-    'attached',
-    'attach',
-    'setVisible',
-    'add',
-    'remove',
-    'detach',
-  ],
-  follow: ['onChanged', 'active'],
-  trails: ['create'],
-});
-
-/** The members of VESSEL_RENDERER_SHAPE a renderer lacks ([] when whole). */
-export function missingVesselRendererMembers(renderer) {
-  const missing = [];
-  for (const name of VESSEL_RENDERER_SHAPE.top)
-    if (!(name in (renderer ?? {}))) missing.push(name);
-  for (const part of ['view', 'fleet', 'follow', 'trails'])
-    for (const name of VESSEL_RENDERER_SHAPE[part])
-      if (!(name in (renderer?.[part] ?? {}))) missing.push(`${part}.${name}`);
-  return missing;
-}

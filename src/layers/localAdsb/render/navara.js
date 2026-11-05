@@ -1,4 +1,4 @@
-// The Local ADS-B layer's renderer on the Navara engine (phase 3 Task 12b),
+// The Local ADS-B layer's renderer on the Navara engine,
 // with render/cesium.js's interface: the shared aircraft renderer
 // (src/layers/aircraft/render/navara.js) draws the magenta markers (its
 // fleet glyphs), the Flights models and the trail; the markers' per-frame
@@ -9,10 +9,8 @@
 // (src/app/navaraMode.js). The camera never follows a local aircraft.
 
 import * as geo from '../../../geo/index.js';
-import {
-  createAircraftNavaraRenderer,
-  createMoverBank,
-} from '../../aircraft/render/navara.js';
+import { createAircraftNavaraRenderer } from '../../aircraft/render/navara.js';
+import { createMoverBank } from '../../shared/render/navaraMoverBank.js';
 import { MODEL_HEADING_OFFSET_DEG } from '../../flights/policy.js';
 import { nearFarScale, rgbaFromCss } from '../../shared/color.js';
 import {
@@ -37,7 +35,7 @@ const RING_TOTAL_PX = RING_PIXEL_SIZE + 2 * RING_OUTLINE_PX;
 const MARKER_ORDER = -1;
 
 /** The ring's atlas: a white ring on a 64 px canvas (tinted per instance). */
-export function drawUatRingAtlas(size = 64) {
+function drawUatRingAtlas(size = 64) {
   const canvas = globalThis.document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;

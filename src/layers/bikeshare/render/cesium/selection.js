@@ -1,9 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../../../data/inputOwnership.js';
-import {
-  buildBikeshareSelectionLabel,
-  createBikeshareSelectedOverlayEntry,
-} from '../../selectionModel.js';
+import { createBikeshareSelectedOverlayEntry } from '../../selectionModel.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
@@ -140,8 +137,6 @@ export function createSelection({
   }
   return {
     refreshSelectedCard,
-    buildSelectionLabel: buildBikeshareSelectionLabel,
-    createBikeshareSelectedOverlayEntry,
     _clearSelection,
     _selectStation,
     _installClickHandler,

@@ -5,8 +5,6 @@ import {
   entryFromHtml,
   entryFromManifest,
   forbiddenMarkersIn,
-  initialChunks,
-  staticImportsOf,
 } from './mainChunk.js';
 
 test('the entry is the module script the built index.html loads', () => {
@@ -42,31 +40,6 @@ test('the entry of a Vite manifest is the chunk marked isEntry for index.html', 
   assert.equal(entryFromManifest(manifest), 'assets/index-A.js');
 });
 
-test('static imports are found, dynamic imports are not', () => {
-  const code =
-    'import{a as b}from"./vendor-C.js";import"./side-D.js";' +
-    'const x=()=>import("./navaraMode-B.js");' +
-    "import { y } from './spaced-E.js';";
-  assert.deepEqual(staticImportsOf(code), [
-    'vendor-C.js',
-    'side-D.js',
-    'spaced-E.js',
-  ]);
-});
-
-test('the initial chunks are the entry and everything it imports statically', () => {
-  const files = {
-    'assets/index-A.js': 'import"./vendor-C.js";import("./lazy-L.js")',
-    'assets/vendor-C.js': 'import{z}from"./deep-D.js"',
-    'assets/deep-D.js': 'import"./vendor-C.js"',
-    'assets/lazy-L.js': 'THREE.WebGLRenderer',
-  };
-  assert.deepEqual(
-    initialChunks('assets/index-A.js', (file) => files[file]),
-    ['assets/index-A.js', 'assets/vendor-C.js', 'assets/deep-D.js'],
-  );
-});
-
 test('three and Navara markers are reported, ordinary engine names are not', () => {
   assert.deepEqual(
     forbiddenMarkersIn(
@@ -85,22 +58,11 @@ test('three and Navara markers are reported, ordinary engine names are not', () 
   assert.ok(FORBIDDEN_MARKERS.length >= 2);
 });
 
-test('the script exports the gzip budget check (phase 4 shape) next to the composition check', async () => {
-  const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
-  const { tmpdir } = await import('node:os');
-  const path = await import('node:path');
-  const { checkMainChunk, measureMainChunk } =
-    await import('../../scripts/check-main-chunk.mjs');
+test('the budget allows growth up to the allowance', async () => {
+  const { checkMainChunk } = await import('../../scripts/check-main-chunk.mjs');
   const baseline = { gzipBytes: 1000, allowanceBytes: 100 };
   assert.equal(checkMainChunk(1100, baseline).ok, true);
   assert.equal(checkMainChunk(1101, baseline).ok, false);
-  const dist = mkdtempSync(path.join(tmpdir(), 'gev-main-chunk-'));
-  mkdirSync(path.join(dist, 'assets'));
-  writeFileSync(path.join(dist, 'assets/index-small.js'), 'x');
-  writeFileSync(path.join(dist, 'assets/index-main.js'), 'x'.repeat(5000));
-  const measured = measureMainChunk(dist);
-  assert.equal(measured.name, 'index-main.js');
-  assert.ok(measured.gzipBytes > 0 && measured.gzipBytes < 5000);
 });
 
 test('the budget measures the entry the page loads, not the largest index chunk', async () => {

@@ -1,6 +1,7 @@
 import * as geo from '../../../geo/index.js';
 import { GNSS_LEVEL_COLORS } from '../records.js';
 import { rgbaFromCss } from '../../shared/color.js';
+import { viewRectangleCenter } from '../../shared/viewRectangle.js';
 import { createGroundCellDisplay } from '../../shared/render/navaraGroundCells.js';
 
 export function createGnssNavaraRenderer(engine, options) {
@@ -13,15 +14,7 @@ export function createGnssNavaraRenderer(engine, options) {
     let position = centre && geo.cartographic.fromCartesian(centre);
     if (!position) {
       const rect = camera.viewRectangle();
-      if (rect) {
-        const east =
-          rect.east < rect.west ? rect.east + 2 * Math.PI : rect.east;
-        const longitude = (rect.west + east) / 2;
-        position = {
-          latitude: (rect.south + rect.north) / 2,
-          longitude: longitude > Math.PI ? longitude - 2 * Math.PI : longitude,
-        };
-      } else position = camera.pose().cartographic;
+      position = rect ? viewRectangleCenter(rect) : camera.pose().cartographic;
     }
     return {
       latitude: geo.math.toDegrees(position.latitude),

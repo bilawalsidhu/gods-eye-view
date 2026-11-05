@@ -55,7 +55,7 @@ export function createMilitarySnapshotRenderer({
       // resync the live model, any in-flight load, and the tracked
       // standalone (mirror of flights.js).
       if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
-      // Round 5: depth policy is uniform (always depth-test-free, see
+      // The depth policy is uniform (always depth-test-free, see
       // _groundDepthDistance) — nothing to flip on landing/takeoff.
     } else {
       // Start where the fleet pass will draw it: the fleet renders behind

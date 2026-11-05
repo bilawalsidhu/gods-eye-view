@@ -1,4 +1,4 @@
-// The Local ADS-B logic on its Navara renderer (phase 3 Task 12b) over a
+// The Local ADS-B logic on its Navara renderer over a
 // fake engine: magenta markers in the shared aircraft renderer's glyph sets,
 // the UAT ring as its own set, a click through the engine's selection
 // dispatcher selects (the camera never follows), empty map releases, and the

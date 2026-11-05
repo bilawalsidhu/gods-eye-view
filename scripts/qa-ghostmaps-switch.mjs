@@ -1,21 +1,20 @@
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  openPage,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 
 const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=43.6500&lon=-79.3800&alt=46000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
 const strict = createStrict({ origin: base.origin, layers: ['s2-ghostmaps'] });
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
-  const p = await b.newPage();
-  await p.setViewport({ width: 1024, height: 768 });
-  const errors = [];
-  p.on('pageerror', (e) => {
-    errors.push(e.message);
-    console.log('error', e.message.split('?')[0]);
-  });
+await strict.run({}, async (b) => {
+  const { page: p, errors } = await openPage(b);
   const file = await readFile(
     new URL('./fixtures/ghostmaps-scenes.kmz', import.meta.url),
   );
@@ -63,21 +62,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
     [...file],
   );
   await p.goto(base.href);
-  const ready = async (kind) => {
-    await p.waitForFunction(
-      (k) =>
-        window.__godsEyeView?.engine?.kind === k &&
-        !document.querySelector('#globe-engine')?.disabled &&
-        !document.querySelector('.engine-switch-frame') &&
-        document.querySelector('#loading-screen.hidden'),
-      { timeout: 90000 },
-      kind,
-    );
-    await p.evaluate(
-      () => window.__godsEyeView.styleManager.initialRestorePromise,
-    );
-  };
-  await ready('navara');
+  await waitForEngine(p, 'navara');
   await p.evaluate(async () => {
     const { dataManager } = window.__godsEyeView;
     await dataManager.setEnabled('s2-ghostmaps', true, { origin: 'user' });
@@ -111,8 +96,7 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
       await p.evaluate(() => {
         window.ghostStats.titles = [];
       });
-      await strict.pick(p, kind);
-      await ready(kind);
+      await strict.switchTo(p, kind);
       await p.waitForFunction(() =>
         window.ghostStats.titles.some((v) => /QA zone/i.test(v)),
       );

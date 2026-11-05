@@ -3,7 +3,6 @@
 // visible terrain and 3D tiles by one non-pickable classification pass. Only
 // surface pixels take it, so the fire markers above stay untouched. The
 // adapter has heatImagery.js's interface, so the layer drives both alike.
-import { Effect, EffectAttribute } from 'postprocessing';
 import {
   DataTexture,
   LinearFilter,
@@ -18,9 +17,9 @@ import {
   groundSurfaceUniforms,
   updateGroundSurface,
 } from '../../shared/render/navaraGroundSurface.js';
+import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
 
 const KEY = 'gevFirmsHeat';
-const registeredViews = new WeakSet();
 
 // Row 0 of the raster is the north edge and column 0 is 180°W; the texture
 // keeps that order (no flip), so v = 0 is north.
@@ -63,59 +62,45 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
 }
 `;
 
-function heatEffectClass(EffectDesc, NavaraEffect) {
-  return class FirmsHeatEffectDesc extends EffectDesc {
-    static key = KEY;
-    // Under the heat cells' and markers' place in the chain: after the other
-    // surface drapes, before sharpening, anti-aliasing and overlays.
-    static insertAfter = [
-      'gevEarthquakeGround',
-      'gevObservedWeather',
-      'gevNepalEvent',
-      'gevRecentImagery',
-      'toneMapping',
-    ];
-    static insertBefore = [
-      'gevFirmsGround',
-      'gevPreSharpenOverlay',
-      'gevSharpen',
-      'smaa',
-      'fxaa',
-      'gevOverlay',
-      'final',
-    ];
-    constructor(view, context, config) {
-      super(view, context, config);
-      this.owner = config[KEY].owner;
-    }
-    createPass() {
-      this.effect = new Effect('GevFirmsHeat', fragmentShader, {
-        attributes: EffectAttribute.CONVOLUTION,
-        uniforms: new Map([
-          ...groundSurfaceUniforms(),
-          ['tHeat', new Uniform(null)],
-          ['uOpacity', new Uniform(1)],
-          ['uInverseView', new Uniform(new Matrix4())],
-        ]),
-      });
-      return new NavaraEffect(this.view.camera.raw, this.effect);
-    }
-    updateFrame() {
-      const owner = this.owner,
-        camera = this.view.camera.raw;
-      if (!this.effect || !owner.texture || !camera) return;
-      updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
-      const u = this.effect.uniforms;
-      u.get('tHeat').value = owner.texture;
-      u.get('uOpacity').value = owner.opacity;
-      u.get('uInverseView').value.copy(camera.matrixWorld);
-    }
-    onDestroy() {
-      this.effect?.dispose();
-      super.onDestroy();
-    }
-  };
-}
+const heatEffect = defineGroundEffect({
+  key: KEY,
+  name: 'GevFirmsHeat',
+  fragmentShader,
+  // Under the heat cells' and markers' place in the chain: after the other
+  // surface drapes, before sharpening, anti-aliasing and overlays.
+  insertAfter: [
+    'gevEarthquakeGround',
+    'gevObservedWeather',
+    'gevNepalEvent',
+    'gevRecentImagery',
+    'toneMapping',
+  ],
+  insertBefore: [
+    'gevFirmsGround',
+    'gevPreSharpenOverlay',
+    'gevSharpen',
+    'smaa',
+    'fxaa',
+    'gevOverlay',
+    'final',
+  ],
+  uniforms: () => [
+    ...groundSurfaceUniforms(),
+    ['tHeat', new Uniform(null)],
+    ['uOpacity', new Uniform(1)],
+    ['uInverseView', new Uniform(new Matrix4())],
+  ],
+  update() {
+    const owner = this.owner,
+      camera = this.view.camera.raw;
+    if (!this.effect || !owner.texture || !camera) return;
+    updateGroundSurface(this.effect, camera, this.ctx, this.find('mrt'));
+    const u = this.effect.uniforms;
+    u.get('tHeat').value = owner.texture;
+    u.get('uOpacity').value = owner.opacity;
+    u.get('uInverseView').value.copy(camera.matrixWorld);
+  },
+});
 
 /**
  * The raster as a texture: linear between pixels, wrapping across 180°. Its
@@ -148,10 +133,7 @@ export function createFirmsHeatDrape(
   engine,
   { view, EffectDesc, NavaraEffect },
 ) {
-  if (!registeredViews.has(view)) {
-    view.registerEffect(KEY, heatEffectClass(EffectDesc, NavaraEffect));
-    registeredViews.add(view);
-  }
+  heatEffect.register(view, { EffectDesc, NavaraEffect });
   const owner = { texture: null, opacity: 1 };
   let raster = null,
     show = true,

@@ -4,63 +4,6 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as transforms from './transforms.js';
 
-const close = (a, b, tol, label) =>
-  assert.ok(Math.abs(a - b) <= tol, `${label}: ${a} vs ${b}`);
-const ORIGINS = [
-  [-73.9857, 40.7484, 381],
-  [0, 0, 0],
-  [179.9, -45, 10],
-  [10, 89.9999999, 0],
-  [10, -90, 0],
-  [0, 90, 0],
-];
-
-test('eastNorthUpToFixedFrame equals Cesium, including the poles', () => {
-  for (const [lon, lat, h] of ORIGINS) {
-    const origin = Cesium.Cartesian3.fromDegrees(lon, lat, h);
-    const ours = transforms.eastNorthUpToFixedFrame({
-      x: origin.x,
-      y: origin.y,
-      z: origin.z,
-    });
-    const theirs = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
-    for (let i = 0; i < 16; i++)
-      close(
-        ours[i],
-        theirs[i],
-        1e-9 * Math.max(1, Math.abs(theirs[i])),
-        `${lon},${lat} [${i}]`,
-      );
-  }
-});
-
-test('headingPitchRollToFixedFrame equals Cesium', () => {
-  for (const [lon, lat, h] of ORIGINS.slice(0, 3)) {
-    const origin = Cesium.Cartesian3.fromDegrees(lon, lat, h);
-    for (const [hd, p, r] of [
-      [0, 0, 0],
-      [0.7, -0.2, 0.1],
-      [-2.5, 1.2, -0.4],
-    ]) {
-      const ours = transforms.headingPitchRollToFixedFrame(
-        { x: origin.x, y: origin.y, z: origin.z },
-        { heading: hd, pitch: p, roll: r },
-      );
-      const theirs = Cesium.Transforms.headingPitchRollToFixedFrame(
-        origin,
-        new Cesium.HeadingPitchRoll(hd, p, r),
-      );
-      for (let i = 0; i < 16; i++)
-        close(
-          ours[i],
-          theirs[i],
-          1e-9 * Math.max(1, Math.abs(theirs[i])),
-          `hpr [${i}]`,
-        );
-    }
-  }
-});
-
 test('headingPitchRollToFixedFrame keeps Cesium argument order (result is the fifth argument)', () => {
   const origin = Cesium.Cartesian3.fromDegrees(-73.9857, 40.7484, 381);
   const hpr = new Cesium.HeadingPitchRoll(0.7, -0.2, 0.1);

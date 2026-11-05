@@ -23,39 +23,33 @@ import {
   drawAircraftIconAtlas,
 } from '../../../data/aircraftIcons.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
+import { rgbaFromCss } from '../../shared/color.js';
+import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
+import {
+  createMoverBank,
+  StoredColor,
+  writeFields,
+} from '../../shared/render/navaraMoverBank.js';
 
 const BASE_SIZE_PX = 20;
 
 /**
  * The model frame → glTF scene axes on Navara: Cesium's own glTF axis
  * correction, Y_UP_TO_Z_UP × Z_UP_TO_X_UP (data/modelVisualAnchor.js).
- * Navara's glTF loader is three's GLTFLoader, which keeps the scene Y-up.
- * (10b used Z_UP_TO_X_UP alone, on the belief that the loader turned the
- * scene Z-up: every fleet model drew 90° off its heading — side by side
- * with Cesium at the near pose, 10b review item 3.)
+ * Navara's glTF loader is three's GLTFLoader, which keeps the scene Y-up,
+ * so Z_UP_TO_X_UP alone would draw every model 90° off its heading.
  */
 // Cesium's Axis.Y_UP_TO_Z_UP × Axis.Z_UP_TO_X_UP, column-major.
 const NAVARA_GLTF_AXIS = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
-const FIRST_CAPACITY = 1024;
 const ATLAS_PAD = 2;
 const TRAIL_ALPHA = 0.85;
 const TRAIL_OCCLUDED_ALPHA = 0.4;
 const MIN_SEGMENT_DISTANCE_SQ = 0.01;
 
 // ---------------------------------------------------------------------------
-// Banks of mover sets
+// Sprite fields
 // ---------------------------------------------------------------------------
 
-// Reused set() arguments (set() copies them; no object per write).
-const fieldsNoPick = {
-  position: undefined,
-  orientation: undefined,
-  color: undefined,
-  rotation: undefined,
-  scale: undefined,
-  cell: undefined,
-  show: undefined,
-};
 const scratchColor = new Float64Array(4);
 // Sprite setters write synchronously into the mover store; reuse their
 // field records rather than allocating one per contact and assignment.
@@ -64,102 +58,6 @@ const spriteShowField = { show: true };
 const spriteRotationField = { rotation: 0 };
 const spriteScaleField = { scale: 1 };
 const spriteColorField = { color: scratchColor };
-function writeFields(set, index, fields) {
-  const scratch = fieldsNoPick;
-  for (const key in fields) scratch[key] = fields[key];
-  set.set(index, scratch);
-  for (const key in fields) scratch[key] = undefined;
-}
-
-/**
- * A growing bank of one kind of mover: handles hold an index; removal moves
- * the last handle into the hole. `options(capacity, generation)` gives the
- * createSet options; `write(handle, set, index)` writes a handle whole.
- */
-export function createMoverBank(engine, { options, write, onCommit }) {
-  const handles = [];
-  let set = null;
-  let generation = 0;
-  let capacity = 0;
-  let visible = true;
-  let dirty = false;
-  const build = (wanted) => {
-    const next = engine.movers.createSet(options(wanted, ++generation));
-    set?.destroy();
-    set = next;
-    capacity = wanted;
-    handles.forEach((handle, index) => write(handle, set, index));
-    set.setCount(visible ? handles.length : 0);
-  };
-  const bank = {
-    handles,
-    get set() {
-      return set;
-    },
-    ready: () => Boolean(set?.ready()),
-    add(handle) {
-      if (handle.gevBank === bank) return;
-      handle.gevBank?.remove(handle);
-      handle.gevBank = bank;
-      handle.gevIndex = handles.length;
-      handles.push(handle);
-      if (!set || handles.length > capacity)
-        build(Math.max(FIRST_CAPACITY, capacity * 2, handles.length));
-      else {
-        write(handle, set, handle.gevIndex);
-        if (visible) set.setCount(handles.length);
-      }
-      bank.touch();
-    },
-    remove(handle) {
-      if (handle.gevBank !== bank) return;
-      const index = handle.gevIndex;
-      const last = handles.pop();
-      if (last !== handle) {
-        handles[index] = last;
-        last.gevIndex = index;
-        write(last, set, index);
-      }
-      handle.gevBank = null;
-      handle.gevIndex = -1;
-      set?.setCount(visible ? handles.length : 0);
-      bank.touch();
-    },
-    /** Writes `fields` of one handle (when it is in this bank). */
-    update(handle, fields) {
-      if (handle.gevBank !== bank || !set) return;
-      writeFields(set, handle.gevIndex, fields);
-      bank.touch();
-    },
-    setVisible(next) {
-      visible = next;
-      set?.setCount(visible ? handles.length : 0);
-      bank.touch();
-    },
-    visible: () => visible,
-    touch() {
-      if (!dirty) {
-        dirty = true;
-        onCommit(bank);
-      }
-    },
-    commit() {
-      if (!dirty) return;
-      dirty = false;
-      set?.commit();
-    },
-    destroy() {
-      for (const handle of handles) {
-        handle.gevBank = null;
-        handle.gevIndex = -1;
-      }
-      handles.length = 0;
-      set?.destroy();
-      set = null;
-    },
-  };
-  return bank;
-}
 
 const rgbaOf = (color, result = scratchColor) => {
   result[0] = color?.red ?? 1;
@@ -168,20 +66,6 @@ const rgbaOf = (color, result = scratchColor) => {
   result[3] = color?.alpha ?? 1;
   return result;
 };
-
-/** Plain colour copy (the stored value a handle's colour getter returns). */
-class StoredColor {
-  constructor(color) {
-    this.red = color?.red ?? 1;
-    this.green = color?.green ?? 1;
-    this.blue = color?.blue ?? 1;
-    this.alpha = color?.alpha ?? 1;
-  }
-
-  withAlpha(alpha) {
-    return new StoredColor({ ...this, alpha });
-  }
-}
 
 const depthKey = (distance) =>
   distance === Number.POSITIVE_INFINITY
@@ -826,13 +710,9 @@ export function createAircraftNavaraRenderer({
 
   // --- trails ----------------------------------------------------------------
   let lineSeq = 0;
-  const rgbaFromCss = (css) => {
-    const hex = String(css).replace('#', '');
-    return [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255);
-  };
   const trails = {
     create({ color, width = 2.5 }) {
-      const [r, g, b] = rgbaFromCss(color);
+      const [r, g, b] = rgbaFromCss(color).rgba();
       const id = `gev-trail:${layerId}-${++lineSeq}`;
       let line = null;
       let visible = true;
@@ -880,7 +760,7 @@ export function createAircraftNavaraRenderer({
       };
     },
     createHead({ id, show, positions, color, width = 2.5 }) {
-      const [r, g, b] = rgbaFromCss(color);
+      const [r, g, b] = rgbaFromCss(color).rgba();
       const line = engine.lines.createLine({
         id: `${id}`,
         widthPx: width,
@@ -944,6 +824,24 @@ export function createAircraftNavaraRenderer({
       trackedSprites.clear();
     },
   };
+}
+
+/**
+ * The Navara registry factory (src/app/layers/renderers.js) of one aircraft
+ * layer: its sprite slot (data/spriteOrder's order on Cesium) and its
+ * model's nose offset.
+ * @param {string} layerId
+ * @param {number} headingOffsetDeg
+ */
+export function aircraftLayerNavaraRenderer(layerId, headingOffsetDeg) {
+  /** @param {import('../../../globe/contract.js').GlobeEngine} engine */
+  return (engine) =>
+    createAircraftNavaraRenderer({
+      engine,
+      layerId,
+      order: SPRITE_LAYER_ORDER.indexOf(layerId),
+      headingOffsetDeg,
+    });
 }
 
 // The glyph atlas helpers, re-exported for tests.

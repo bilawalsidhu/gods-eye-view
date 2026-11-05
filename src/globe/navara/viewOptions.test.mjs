@@ -32,11 +32,6 @@ test('the product view renders on demand with MSAA 4 at the native pixel ratio',
     animation: false,
     multisampling: 4,
   });
-  assert.equal(
-    navaraViewOptions({ container, pixelRatio: 1 }).pixelRatio,
-    1,
-    'measurements pin the pixel ratio',
-  );
 });
 
 test('the canvas context keeps its drawing buffer, with the attributes Navara asks for', () => {
@@ -51,7 +46,7 @@ test('the canvas context keeps its drawing buffer, with the attributes Navara as
   });
 });
 
-test('cinematic is the default look; photoreal is the default plugin scene; minimal has no post effects (S5)', () => {
+test('cinematic is the default look; photoreal is the default plugin scene; minimal has no post effects', () => {
   assert.equal(DEFAULT_NAVARA_LOOK, 'cinematic');
   assert.deepEqual(navaraScenePlan(), navaraScenePlan('cinematic'));
   assert.deepEqual(navaraScenePlan('photoreal'), {

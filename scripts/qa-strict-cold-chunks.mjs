@@ -41,7 +41,7 @@ const navaraCode = async (url) => {
 };
 const results = [];
 strict.extra.contracts = results;
-await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
+await strict.run({}, async (b) => {
   for (const start of ['navara', 'cesium']) {
     const p = await b.newPage();
     await p.setViewport({ width: 1280, height: 800 });

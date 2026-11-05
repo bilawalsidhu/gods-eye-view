@@ -258,8 +258,8 @@ export function createLifecycle({
         // Enabling is explicit intent, not a camera gesture that needs settling.
         parts.viewport.onCameraChanged({ immediate: true });
 
-        // Boot-order guard (field-test round 1: layer sat empty until the user
-        // moved): when the persisted layer state re-enables traffic during the
+        // Boot-order guard (otherwise the layer sits empty until the user
+        // moves): when the persisted layer state re-enables traffic during the
         // intro flyTo, the initial check bails at high altitude — and a camera
         // that then parks never re-fires camera.changed. Retry cheaply until the
         // first load commits, then self-clear. Also acts as a safety kick if a

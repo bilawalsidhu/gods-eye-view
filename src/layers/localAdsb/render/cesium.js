@@ -1,5 +1,4 @@
-// The Local ADS-B layer's renderer on Cesium (phase 3 Task 12a): the Cesium
-// objects the layer used to build itself, moved here one for one — its
+// The Local ADS-B layer's renderer on Cesium: its
 // CustomDataSource of marker entities (billboard with per-frame position,
 // rotation and visibility callbacks, a 2,000 km display distance, the 978 MHz
 // UAT ring as a point graphic), its model PrimitiveCollection (models load,
