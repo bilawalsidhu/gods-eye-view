@@ -4,10 +4,20 @@
  * (ECEF) conversions, surface normals and projection onto the surface. The
  * formulas follow the default renderer's step for step, so they agree with
  * it to floating-point noise.
+ *
+ * Into ECEF, positions are arguments (`fromDegrees(lon, lat, height)`,
+ * `fromRadians` likewise); out of it, objects (`toLonLatH` gives
+ * `{lon, lat, height}` in degrees, `toCartographicRadians` the same in
+ * radians). Cesium's `Cartographic.fromDegrees(lon, lat, h)` is plain
+ * `{lon: toRadians(lon), lat: toRadians(lat), height: h}`; for its ECEF
+ * point, use `fromDegrees`.
+ *
+ * NaN in gives NaN fields out, never a throw (Cesium's debug build throws).
+ * The Earth's centre, and points so near it that their squares round to
+ * zero, answer null, as Cesium answers undefined.
  */
 import {
   add,
-  clone,
   dot,
   magnitude,
   normalize,
@@ -58,20 +68,13 @@ export function fromRadians(lon, lat, height = 0) {
   const r = WGS84.radiiSquared;
   let k = vec(r.x * n.x, r.y * n.y, r.z * n.z);
   const gamma = Math.sqrt(dot(n, k));
-  k = scale(k, 1 / gamma);
+  k = vec(k.x / gamma, k.y / gamma, k.z / gamma);
   return add(k, scale(n, height));
 }
 
 /** Geodetic degrees and metres to ECEF. */
 export const fromDegrees = (lon, lat, height = 0) =>
   fromRadians(toRadians(lon), toRadians(lat), height);
-
-/** A position in either contract form, as ECEF. */
-export function toEcef(position) {
-  if ('lon' in position && 'lat' in position)
-    return fromDegrees(position.lon, position.lat, position.height ?? 0);
-  return clone(position);
-}
 
 /** The point on the ellipsoid along the geodetic normal, or null at the centre. */
 export function scaleToGeodeticSurface(p) {

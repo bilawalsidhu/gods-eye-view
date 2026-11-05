@@ -18,6 +18,7 @@ export const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
 export const cross = (a, b) =>
   vec(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 export const magnitude = (a) => Math.sqrt(dot(a, a));
+/** Straight-line (chord) distance, not along the surface. */
 export const distance = (a, b) => magnitude(sub(a, b));
 export function normalize(a) {
   const m = magnitude(a);
