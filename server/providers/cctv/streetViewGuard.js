@@ -7,12 +7,18 @@ export const STREET_VIEW_MAX_REQUESTS = 12;
  * Query-string overrides are deliberately ignored: they are untrusted input.
  */
 export function registeredStreetViewLocation(source) {
-  if (!source || typeof source.id !== 'string' || !source.id.trim()) return null;
-  const lat = Number(source.lat);
-  const lon = Number(source.lon);
+  if (!source || typeof source.id !== 'string' || !source.id.trim())
+    return null;
   if (
     source.lat == null ||
     source.lon == null ||
+    (typeof source.lat === 'string' && !source.lat.trim()) ||
+    (typeof source.lon === 'string' && !source.lon.trim())
+  )
+    return null;
+  const lat = Number(source.lat);
+  const lon = Number(source.lon);
+  if (
     !Number.isFinite(lat) ||
     !Number.isFinite(lon) ||
     lat < -90 ||
