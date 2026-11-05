@@ -114,14 +114,26 @@ export function createEnrichment({
       .toUpperCase();
     if (!/^[A-Z]{3}\d/.test(cs)) return; // airline-style callsigns only (LLL + digit); GA tails won't resolve
     _enqueueEnrich(
-      `r:${cs}`,
+      `r:${icao24}:${cs}`,
       { kind: 'route', id: cs },
       (data) => {
         const meta = flightState.records.data.get(icao24);
-        if (!meta) return;
+        // The request can complete after another poll assigns this ICAO24 a
+        // different callsign. A delayed route must never attach to that flight.
+        if (!meta || String(meta.callsign || '').trim().toUpperCase() !== cs)
+          return;
         meta.airline = data.airline || meta.airline;
         if (data.origin && data.destination)
-          meta.route = { origin: data.origin, destination: data.destination };
+          meta.route = {
+            origin: data.origin,
+            destination: data.destination,
+            source: data.source || 'adsbdb',
+            retrievedAtMs: Number.isFinite(data.retrievedAtMs)
+              ? data.retrievedAtMs
+              : null,
+            operatingDate: null,
+            verification: 'unverified-reference',
+          };
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity)
           parts.tracking._updateTrackedLabelModel(icao24);
       },
