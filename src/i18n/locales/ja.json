@@ -3029,5 +3029,12 @@
   "The provider rejected the API key. Check it in Provider Settings.": "プロバイダーがAPIキーを拒否しました。プロバイダー設定で確認してください。",
   "Too many chat requests. Try again in {seconds} s.": "チャットのリクエストが多すぎます。{seconds}秒後にもう一度お試しください。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "プロバイダーがこのキーでのアクセスを拒否しました。キーのプロジェクト、リージョン、権限を確認してください。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーアカウントのクレジットが不足しています。課金状況を確認するか、設定で別のAIプロバイダーを選んでください。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーアカウントのクレジットが不足しています。課金状況を確認するか、設定で別のAIプロバイダーを選んでください。",
+  "The globe stopped drawing": "地球儀の描画が止まりました",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "ブラウザーが地球儀の 3D グラフィックスを解放しました。レイヤーと操作は引き続き使えますが、ページを再読み込みするまで地図は描画されません。",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "エラーのため描画が停止しました。レイヤーと操作は引き続き使えますが、地図は更新されません。",
+  "Reset view reloads the app without the view restored from the address bar.": "「ビューをリセット」は、アドレスバーから復元したビューを使わずにアプリを再読み込みします。",
+  "Reload": "再読み込み",
+  "Retry": "再試行",
+  "Reset view": "ビューをリセット"
 }

@@ -3254,5 +3254,12 @@
   "The provider rejected the API key. Check it in Provider Settings.": "Постачальник відхилив ключ API. Перевірте його в «Налаштуваннях постачальників».",
   "Too many chat requests. Try again in {seconds} s.": "Забагато запитів до чату. Спробуйте ще раз через {seconds} с.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Постачальник відмовив цьому ключу в доступі. Перевірте проєкт, регіон або дозволи ключа.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашому рахунку в постачальника закінчилися кошти. Перевірте оплату або виберіть іншого постачальника ШІ в налаштуваннях."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашому рахунку в постачальника закінчилися кошти. Перевірте оплату або виберіть іншого постачальника ШІ в налаштуваннях.",
+  "The globe stopped drawing": "Глобус перестав відмальовуватися",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "Браузер вимкнув 3D-графіку глобуса. Шари та елементи керування працюють, але карта не відмалюється, доки сторінку не буде перезавантажено.",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "Відмальовування зупинилося через помилку. Шари та елементи керування працюють, але карта не оновлюється.",
+  "Reset view reloads the app without the view restored from the address bar.": "«Скинути вигляд» перезавантажує застосунок без вигляду, відновленого з адресного рядка.",
+  "Reload": "Перезавантажити",
+  "Retry": "Повторити",
+  "Reset view": "Скинути вигляд"
 }
