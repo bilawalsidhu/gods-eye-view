@@ -188,6 +188,13 @@ export const DATA_CREDITS = [
       '<a href="https://adds-faa.opendata.arcgis.com/" target="_blank" rel="noopener">FAA Special Use Airspace</a>' +
       ' (prohibited and restricted zones; informational only)',
   },
+  {
+    key: 'wildlife',
+    html:
+      'Animal tracking data: ' +
+      '<a href="https://www.movebank.org/" target="_blank" rel="noopener">Movebank</a>' +
+      ' (movebank.org) studies by INBO and the Max Planck Institute of Animal Behavior; published datasets CC0',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
