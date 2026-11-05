@@ -23,6 +23,9 @@ export function normalizeVessel(row) {
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
     missedRefreshes: 0,
+    // Filled on first use by the cards' `vesselOverlayEntryId`. The id reads
+    // only the MMSI, or for an unkeyed row fields it never updates.
+    overlayEntryId: null,
   };
 }
 

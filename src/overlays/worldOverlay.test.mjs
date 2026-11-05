@@ -24,7 +24,7 @@ import {
   activateWorldOverlayAction,
   initWorldOverlay,
   subscribeWorldOverlayActions,
-  isOverlayEntryQueued,
+  getQueuedOverlayEntryAlpha,
   isOverlayPointVisible,
   normalizeOverlayEntry,
   paintLaneForOverlayEntry,
@@ -1216,16 +1216,16 @@ test('custom detection lane receives the shared host frame and paints below ordi
 
 test('a detection lane sees which cards this frame will paint before they publish paint rects', () => {
   // The detection lane paints first, so a card's paint rectangle for this
-  // frame does not exist yet when it runs. The queued check is what lets a
+  // frame does not exist yet when it runs. The queued alpha is what lets a
   // contact's callout give way to that contact's own card in the same frame.
   const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
   initWorldOverlay(env.viewer);
   const seen = [];
   registerWorldOverlayPaintLane('detection', () => {
     seen.push({
-      shown: isOverlayEntryQueued('cards', 'SHOWN'),
-      hidden: isOverlayEntryQueued('hidden-cards', 'HIDDEN'),
-      unknown: isOverlayEntryQueued('cards', 'NOT-PUBLISHED'),
+      shown: getQueuedOverlayEntryAlpha('cards', 'SHOWN'),
+      hidden: getQueuedOverlayEntryAlpha('hidden-cards', 'HIDDEN'),
+      unknown: getQueuedOverlayEntryAlpha('cards', 'NOT-PUBLISHED'),
       rect: getOverlayPaintRect('cards', 'SHOWN'),
     });
   }, { id: 'detection', active: true, target: 'detection' });
@@ -1238,16 +1238,16 @@ test('a detection lane sees which cards this frame will paint before they publis
   setOverlaySourceVisible('hidden-cards', false);
 
   env.postRender.raise();
-  assert.deepEqual(seen[0], { shown: true, hidden: false, unknown: false, rect: null },
+  assert.deepEqual(seen[0], { shown: 1, hidden: 0, unknown: 0, rect: null },
     'the card is queued while its paint rect is still unpublished');
   assert.ok(getOverlayPaintRect('cards', 'SHOWN'), 'the card did paint after the lane');
   assert.equal(getOverlayPaintRect('hidden-cards', 'HIDDEN'), null);
 
   clearOverlaySource('cards');
   env.postRender.raise();
-  assert.equal(seen[1].shown, false, 'a card cleared since the last frame is no longer queued');
+  assert.equal(seen[1].shown, 0, 'a card cleared since the last frame is no longer queued');
   destroyWorldOverlay();
-  assert.equal(isOverlayEntryQueued('cards', 'SHOWN'), false);
+  assert.equal(getQueuedOverlayEntryAlpha('cards', 'SHOWN'), 0);
   env.cleanup();
 });
 

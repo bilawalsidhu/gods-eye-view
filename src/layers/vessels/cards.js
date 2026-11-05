@@ -117,6 +117,14 @@ export function createCards({
   /** Stable overlay identity for MMSI-keyed and source-retained unkeyed rows. */
 
   function vesselOverlayEntryId(record) {
+    // Cached on the record: detection asks for it every frame for every vessel.
+    if (record?.overlayEntryId) return record.overlayEntryId;
+    const id = composeVesselOverlayEntryId(record);
+    if (record) record.overlayEntryId = id;
+    return id;
+  }
+
+  function composeVesselOverlayEntryId(record) {
     const mmsi = String(record?.mmsi || '').trim();
     if (mmsi) return `vessel:${mmsi}`;
     const name = String(record?.name || 'VESSEL').trim() || 'VESSEL';

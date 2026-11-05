@@ -22,7 +22,7 @@ import {
   keyholeLabelAlphaFromGeometry,
 } from '../celestialRing.js';
 import {
-  isOverlayEntryQueued,
+  getQueuedOverlayEntryAlpha,
   registerWorldOverlayPaintLane,
 } from '../overlays/worldOverlay.js';
 import {
@@ -110,6 +110,11 @@ const THEME_MAP = DETECTION_THEME_MAP;
 const SPARSE_ZONE_FRACTION = 0.5;
 /** Solve cadence for membership/collision; accepted identities still reproject every frame. */
 const LABEL_SOLVE_INTERVAL_MS = 125;
+/**
+ * A contact's own card at this opacity or more hides its callout; below it the
+ * callout fades in, so a card fading in or out never snaps the callout.
+ */
+const CARD_ALPHA_HIDING_CALLOUT = 0.5;
 /** Alpha bands retain bracket batching while approximating a continuous radial fade. */
 const BRACKET_ALPHA_STEPS = 4;
 /** Finer bands for Global Context echo brackets, whose fade is animated. */
@@ -579,8 +584,8 @@ export function getDetectionDiagnostics() {
   // sprites/strokes. Nothing is copied on the production paint path.
   result.calloutRects = _calloutPool
     .slice(0, _calloutCount)
-    .filter((row) => !row.yielded)
-    .map(({ x, y, w, h, alpha }) => ({ x, y, w, h, alpha }));
+    .filter((row) => row.paintAlpha > 0.001)
+    .map(({ x, y, w, h, paintAlpha }) => ({ x, y, w, h, alpha: paintAlpha }));
   return result;
 }
 
@@ -1083,7 +1088,7 @@ function _stashCallout(entry, acquireFade, keyhole) {
       alpha: 1,
       cardSourceId: '',
       cardEntryId: '',
-      yielded: false,
+      paintAlpha: 1,
     };
     _calloutPool[_calloutCount] = row;
   }
@@ -1112,7 +1117,7 @@ function _stashCallout(entry, acquireFade, keyhole) {
   row.alpha = alpha;
   row.cardSourceId = candidate.cardSourceId;
   row.cardEntryId = candidate.cardEntryId;
-  row.yielded = false;
+  row.paintAlpha = alpha;
   _calloutCount++;
 }
 
@@ -1144,15 +1149,15 @@ function _paintCalloutLane(frame) {
   ctx.textBaseline = 'alphabetic';
   for (let i = 0; i < _calloutCount; i++) {
     const row = _calloutPool[i];
-    // The contact's own card (an ambient vessel card) already names it, and
-    // this callout would show through the card's plate. Checked every frame
-    // against the cards queued for THIS frame: the host paints only part of
-    // the published cards, and a contact whose card did not paint keeps its
-    // callout.
-    row.yielded =
-      row.cardEntryId !== '' &&
-      isOverlayEntryQueued(row.cardSourceId, row.cardEntryId);
-    if (!row.yielded) paintDetectionCallout(ctx, row, row.alpha);
+    // Under the contact's own card (an ambient vessel card) the callout would
+    // show through the plate. Only a card painting this frame counts.
+    const cardAlpha =
+      row.cardEntryId === ''
+        ? 0
+        : getQueuedOverlayEntryAlpha(row.cardSourceId, row.cardEntryId);
+    row.paintAlpha =
+      row.alpha * Math.max(0, 1 - cardAlpha / CARD_ALPHA_HIDING_CALLOUT);
+    if (row.paintAlpha > 0.001) paintDetectionCallout(ctx, row, row.paintAlpha);
   }
   ctx.globalAlpha = 1;
 }

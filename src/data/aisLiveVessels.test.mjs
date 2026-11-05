@@ -1821,6 +1821,7 @@ test('detection objects name the vessel card their callout gives way to', () => 
       'vessel:unkeyed:NO MMSI:37.80000:-122.40000',
       'the same identity the vessel card is published under',
     );
+    assert.equal(keyed.overlayEntryId, 'vessel:200', 'cached on the record for later frames');
   } finally {
     _setVesselStateForTest({ enabled: false });
   }
