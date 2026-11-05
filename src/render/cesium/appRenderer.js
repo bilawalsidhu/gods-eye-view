@@ -1,23 +1,30 @@
 /**
- * @module app/renderer
+ * @module render/cesium/appRenderer
  * @description The application's default renderer plugin: today's Cesium
  * viewer, set up exactly as before, behind the contract's `RendererPlugin`
  * (`src/render/contract/renderer.d.ts`).
  *
- * The renderer it makes is transitional: it has only the members it really
- * has, and the contract's ports arrive one layer family at a time (phase 2
- * of the renderer plan); `checkRendererShape` lists what is still missing.
+ * The renderer it makes is transitional. Its ports are the shared Cesium
+ * ports (`ports.js`), the ones the conformance renderer is checked with,
+ * less the members that would not be true of the application yet: the
+ * globe (it draws photoreal tiles the port does not know), `whenSettled`
+ * (it would not wait for them) and `frame.setTime` (it would stop the
+ * application's clock). Those arrive with the layer families that need
+ * them (phase 2 of the renderer plan); `checkRendererShape` lists what is
+ * still missing.
  * Until a family is ported, its code reaches the Cesium viewer through
  * `cesiumViewerOf`, never through a renderer member, so no engine type
  * crosses the contract and each call marks code still to port.
  */
-import { CONTRACT_VERSION } from '../render/contract/index.js';
-import { createApplicationViewer } from './viewer.js';
+import { createApplicationViewer } from '../../app/viewer.js';
+import { CONTRACT_VERSION } from '../contract/index.js';
+import { createCesiumPorts } from './ports.js';
 
 /**
  * The members a transitional renderer has today.
- * @typedef {Pick<import('../render/contract/renderer').Renderer,
- *   'id' | 'contractVersion' | 'capabilities' | 'canvas' | 'resize' | 'destroy'>}
+ * @typedef {Pick<import('../contract/renderer').Renderer,
+ *   'id' | 'contractVersion' | 'capabilities' | 'canvas' | 'frame' | 'draw'
+ *   | 'camera' | 'query' | 'capture' | 'resize' | 'destroy'>}
  *   TransitionalRenderer
  */
 
@@ -75,22 +82,31 @@ export function createCesiumRendererPlugin({
       creditContainer.id = 'cesium-credits';
       document.body.appendChild(creditContainer);
       let viewer;
+      let ports;
       try {
         viewer = createViewer({ container, creditContainer });
+        ports = createCesiumPorts(viewer);
       } catch (error) {
+        if (viewer && !viewer.isDestroyed()) viewer.destroy();
         creditContainer.remove();
         throw error;
       }
       const renderer = Object.freeze({
         id: 'cesium',
         contractVersion: CONTRACT_VERSION,
-        capabilities: new ReadonlySet(),
+        capabilities: new ReadonlySet(['models']),
         canvas: viewer.canvas,
+        frame: ports.frame,
+        draw: ports.draw,
+        camera: ports.camera,
+        query: ports.query,
+        capture: ports.capture,
         resize() {
           viewer.resize();
         },
         destroy() {
           try {
+            ports.dispose();
             if (!viewer.isDestroyed()) viewer.destroy();
           } finally {
             creditContainer.remove();

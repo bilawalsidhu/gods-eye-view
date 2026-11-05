@@ -1,15 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  CONTRACT_VERSION,
-  checkRendererShape,
-} from '../render/contract/index.js';
+import * as Cesium from 'cesium';
+import { CONTRACT_VERSION, checkRendererShape } from '../contract/index.js';
 import {
   ReadonlySet,
   cesiumRenderer,
   cesiumViewerOf,
   createCesiumRendererPlugin,
-} from './renderer.js';
+} from './appRenderer.js';
 
 /** A document with just a body, recording what is attached. */
 function fakeDocument() {
@@ -32,9 +30,29 @@ function fakeDocument() {
   };
 }
 
+/** A Cesium event: listeners added, and removed by the returned function. */
+function fakeEvent(listeners) {
+  return {
+    addEventListener(cb) {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+  };
+}
+
 function fakeViewer(log, { failDestroy = false } = {}) {
   let destroyed = false;
+  const listeners = new Set();
   return {
+    listeners,
+    scene: {
+      camera: {},
+      primitives: { add() {}, remove() {} },
+      requestRender() {},
+      preUpdate: fakeEvent(listeners),
+      preRender: fakeEvent(listeners),
+      postRender: fakeEvent(listeners),
+    },
     canvas: { tag: 'canvas' },
     resize: () => log.push('resize'),
     isDestroyed: () => destroyed,
@@ -64,10 +82,12 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   withDocument(t, doc);
   const log = [];
   let given;
+  let viewer;
   const plugin = createCesiumRendererPlugin({
     createViewer(options) {
       given = options;
-      return fakeViewer(log);
+      viewer = fakeViewer(log);
+      return viewer;
     },
   });
   const container = { tag: 'container' };
@@ -94,12 +114,63 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   assert.ok(!('viewer' in renderer), 'no engine object is a member');
   assert.equal(cesiumViewerOf(renderer).canvas, renderer.canvas);
 
+  assert.ok(viewer.listeners.size > 0, 'the ports follow the frame phases');
+  assert.equal(typeof renderer.draw.icons, 'function');
+  assert.ok(renderer.capabilities.has('models'), 'draw.models is declared');
+
   renderer.resize();
   renderer.destroy();
+  assert.equal(viewer.listeners.size, 0, 'and stop on destroy');
   assert.deepEqual(log, ['resize', 'destroy']);
   assert.deepEqual(doc.children, [], 'credits leave with the renderer');
   renderer.destroy();
   assert.deepEqual(log, ['resize', 'destroy'], 'destroying twice is safe');
+});
+
+test('work pending at destroy settles and lets go of the scene', async (t) => {
+  withDocument(t, fakeDocument());
+  const viewers = [];
+  const plugin = createCesiumRendererPlugin({
+    createViewer: () => {
+      const viewer = fakeViewer([]);
+      viewers.push(viewer);
+      return viewer;
+    },
+  });
+
+  const renderer = await plugin.create({ container: {} });
+  const rendered = renderer.frame.renderOnce();
+  renderer.destroy();
+  await rendered;
+  assert.equal(viewers[0].listeners.size, 0, 'no one-shot render stays');
+  await renderer.frame.renderOnce();
+
+  // A model that finishes loading after destroy is destroyed, not added.
+  const load = Promise.withResolvers();
+  const saved = Cesium.Model.fromGltfAsync;
+  Cesium.Model.fromGltfAsync = () => load.promise;
+  t.after(() => {
+    Cesium.Model.fromGltfAsync = saved;
+  });
+  const again = await plugin.create({ container: {} });
+  again.draw.models({ id: 'm' }).set([
+    {
+      id: 'a',
+      url: 'a.glb',
+      pos: { lon: 0, lat: 0, height: 0 },
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+    },
+  ]);
+  again.destroy();
+  let destroyed = false;
+  load.resolve({
+    destroy: () => (destroyed = true),
+    readyEvent: fakeEvent(new Set()),
+    errorEvent: fakeEvent(new Set()),
+  });
+  await load.promise;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(destroyed, 'the late model is destroyed');
 });
 
 test('the credits leave even when the viewer fails to destroy', async (t) => {
@@ -151,7 +222,7 @@ test('an aborted creation builds nothing', async (t) => {
   assert.deepEqual(doc.children, []);
 });
 
-test('the transitional renderer lacks exactly the ports still to come', async (t) => {
+test('the transitional renderer lacks exactly the members still to come', async (t) => {
   withDocument(t, fakeDocument());
   const renderer = await createCesiumRendererPlugin({
     createViewer: () => fakeViewer([]),
@@ -174,9 +245,9 @@ test('only renderers this plugin made reach a Cesium viewer', () => {
 });
 
 test('the application refuses a renderer it cannot run on, and destroys it', async (t) => {
-  const { createApplicationScene } = await import('./scene.js');
+  const { createApplicationScene } = await import('../../app/scene.js');
   const { createApplicationRequestServices } =
-    await import('../services/requests.js');
+    await import('../../services/requests.js');
   const destroyed = [];
   const deferred = [];
   const plugin = {
@@ -218,18 +289,69 @@ test('the application refuses a renderer it cannot run on, and destroys it', asy
 });
 
 const EXPECTED_MISSING = [
-  'camera',
-  'capture',
-  'credits',
-  'draw',
-  'effects',
-  'frame',
-  'globe',
-  'input',
-  'on',
-  'quality',
-  'query',
-  'readPixels',
-  'releaseUnused',
-  'whenSettled',
-].map((member) => `renderer.${member} is missing`);
+  'camera.cancelFlight',
+  'camera.controls',
+  'camera.controls.coast',
+  'camera.controls.coast.drag',
+  'camera.controls.coast.zoom',
+  'camera.controls.collision',
+  'camera.controls.enableRotate',
+  'camera.controls.enableTilt',
+  'camera.controls.enableZoom',
+  'camera.controls.enabled',
+  'camera.controls.maxDistance',
+  'camera.controls.minDistance',
+  'camera.controls.pitchRange',
+  'camera.controls.suspend',
+  'camera.controls.zoomFactor',
+  'camera.controls.zoomInputs',
+  'camera.flyTo',
+  'camera.flyToBounds',
+  'camera.flying',
+  'camera.follow',
+  'camera.followFramed',
+  'camera.followOffset',
+  'camera.followOffset.get',
+  'camera.followOffset.set',
+  'camera.followed',
+  'camera.look',
+  'camera.lookAt',
+  'camera.matrices',
+  'camera.move',
+  'camera.on',
+  'camera.onCommand',
+  'camera.release',
+  'camera.rotateAround',
+  'camera.setFov',
+  'camera.viewRectangle',
+  'camera.zoom',
+  'draw.atlas',
+  'draw.clampState',
+  'draw.on',
+  'frame.diagnostics',
+  'frame.holdContinuous',
+  'frame.mode',
+  'frame.setTargetFps',
+  'frame.setTime',
+  'frame.suspend',
+  'query.clampToSurface',
+  'query.drillPick',
+  'query.isOccluded',
+  'query.pickGlobe',
+  'query.pickPosition',
+  'query.pickRay',
+  'query.projectMany',
+  'query.rayCast',
+  'query.sampleHeight',
+  'query.sampleHeightNow',
+  'query.sampleHeightNowMany',
+  'renderer.credits',
+  'renderer.effects',
+  'renderer.globe',
+  'renderer.input',
+  'renderer.on',
+  'renderer.quality',
+  'renderer.readPixels',
+  'renderer.releaseUnused',
+  'renderer.whenSettled',
+].map((member) => `${member} is missing`);
