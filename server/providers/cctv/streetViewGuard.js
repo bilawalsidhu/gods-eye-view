@@ -11,10 +11,16 @@ export function registeredStreetViewLocation(source) {
   const lat = Number(source.lat);
   const lon = Number(source.lon);
   if (
-    source.lat == null || source.lon == null ||
-    !Number.isFinite(lat) || !Number.isFinite(lon) ||
-    lat < -90 || lat > 90 || lon < -180 || lon > 180
-  ) return null;
+    source.lat == null ||
+    source.lon == null ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    lat < -90 ||
+    lat > 90 ||
+    lon < -180 ||
+    lon > 180
+  )
+    return null;
   const heading = Number(source.headingDeg);
   const fov = Number(source.fovDeg);
   const pitch = Number(source.pitchDeg);
@@ -36,8 +42,12 @@ export function createStreetViewBudget({
   windowMs = STREET_VIEW_WINDOW_MS,
   maxRequests = STREET_VIEW_MAX_REQUESTS,
 } = {}) {
-  if (!Number.isFinite(windowMs) || windowMs <= 0 ||
-      !Number.isSafeInteger(maxRequests) || maxRequests < 1) {
+  if (
+    !Number.isFinite(windowMs) ||
+    windowMs <= 0 ||
+    !Number.isSafeInteger(maxRequests) ||
+    maxRequests < 1
+  ) {
     throw new TypeError('Invalid Street View request budget');
   }
   let started = now();
