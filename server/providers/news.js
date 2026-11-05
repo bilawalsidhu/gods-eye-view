@@ -8,7 +8,8 @@ import { createKeyedNews } from './news/keyed.js';
 // is no plain origin, warned of once), Core answers the same routes itself
 // (news/keyed.js): Conflicts from GDELT's event exports with no key, and
 // Liveuamap's items beside them with LIVEUAMAP_API_KEY; Local from World
-// News API, "key required" while WORLDNEWSAPI_KEY is unset.
+// News API, "key required" while WORLDNEWSAPI_KEY is unset. A host that
+// serves news only from its own server mounts it with `builtIn: false`.
 
 const TIMEOUT_MS = 15_000;
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -63,8 +64,10 @@ function configuredOrigin(env, log) {
 
 /**
  * A thin, validated GET proxy for the news layer's three read routes, or
- * their keyed answers without a news server.
- * @param {{env?: () => object, log?: (message: string) => void, origin?: () => string|null, fetchImpl?: typeof fetch, timeoutMs?: number, keyed?: {answer: (path: string, params: URLSearchParams) => Promise<{status: number, body: object}>}}} [options]
+ * their keyed answers without a news server. A host that serves news only
+ * from its own server passes `builtIn: false`: without GEV_NEWS_ORIGIN the
+ * routes then answer "not configured" and Core reads nothing itself.
+ * @param {{env?: () => object, log?: (message: string) => void, origin?: () => string|null, fetchImpl?: typeof fetch, timeoutMs?: number, builtIn?: boolean, keyed?: {answer: (path: string, params: URLSearchParams) => Promise<{status: number, body: object}>}|null}} [options]
  */
 export function newsProxy({
   env = () => process.env,
@@ -72,7 +75,8 @@ export function newsProxy({
   origin = configuredOrigin(env, log),
   fetchImpl = (...args) => globalThis.fetch(...args),
   timeoutMs = TIMEOUT_MS,
-  keyed = createKeyedNews({ env, fetchImpl, log }),
+  builtIn = true,
+  keyed = builtIn ? createKeyedNews({ env, fetchImpl, log }) : null,
 } = {}) {
   const json = (res, status, value) => {
     if (res.destroyed) return;
@@ -96,6 +100,12 @@ export function newsProxy({
       return json(res, 400, { error: 'invalid_news_request' });
     const base = origin();
     if (!base) {
+      if (!keyed)
+        return json(res, 503, {
+          error: 'news_not_configured',
+          unavailable: true,
+          retryable: false,
+        });
       try {
         const { status, body } = await keyed.answer(
           local.pathname,

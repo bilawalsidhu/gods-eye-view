@@ -192,3 +192,29 @@ test('a built-in answer that throws is a 502, logged in one line without address
   assert.match(logs[0], /TypeError/);
   assert.doesNotMatch(logs[0], /key=abc|\n/);
 });
+
+test('a host that serves news only from its own server turns the built-in backend off', async () => {
+  let fetches = 0;
+  const call = mount({
+    origin: () => null,
+    builtIn: false,
+    fetchImpl: async () => {
+      fetches++;
+      throw new Error('unexpected');
+    },
+  });
+  for (const url of [
+    '/hotspots',
+    '/feed?hotspot=all',
+    '/outline?at=51.13,71.43&v=4',
+  ]) {
+    const answer = await call(url);
+    assert.equal(answer.status, 503, url);
+    assert.deepEqual(answer.json, {
+      error: 'news_not_configured',
+      unavailable: true,
+      retryable: false,
+    });
+  }
+  assert.equal(fetches, 0);
+});
