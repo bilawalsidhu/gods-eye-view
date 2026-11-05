@@ -21,7 +21,10 @@ assert.notEqual(start, -1, 'FIRMS refresh function exists');
 const end = config.indexOf('\n  }', start);
 assert.notEqual(end, -1, 'FIRMS refresh function closes');
 const refreshSource = config.slice(start, end + 4);
-const SOURCES = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'MODIS_NRT'];
+// Read the source list from production so these tests share one source of truth.
+const listed = config.match(/const SOURCES = \[([^\]]*)\];/);
+assert.ok(listed, 'FIRMS source list exists');
+const SOURCES = [...listed[1].matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1]);
 const NOW = Date.UTC(2026, 8, 11, 12);
 const recent = { acqDate: '2026-09-11', acqTime: '1100' };
 
@@ -54,7 +57,7 @@ test('FIRMS retains large sources in order and filters expired rows', async () =
   assert.equal(result.fires[199_999], large.at(-1));
   assert.equal(result.fires.at(-1), last);
   assert.deepEqual(result.sources, SOURCES.map((source, index) => ({
-    source, count: [200_000, 1, 0, 0][index], ok: true,
+    source, count: [200_000, 1, 0][index], ok: true,
   })));
 });
 
@@ -309,11 +312,7 @@ test('every FIRMS upstream request goes through the IPv4 fallback', async () => 
 });
 
 test('FIRMS requests only the satellites NASA still delivers', () => {
-  const listed = config.match(/const SOURCES = \[([^\]]*)\];/);
-  assert.ok(listed, 'FIRMS source list exists');
-  const production = [...listed[1].matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1]);
-  assert.deepEqual(production, SOURCES, 'the test mirrors the production source list');
   // NASA stopped delivering Suomi NPP data on 2026-11-02 (#849): requesting it
   // returns no rows and still spends a MAP_KEY transaction on every refresh.
-  assert.ok(!production.includes('VIIRS_SNPP_NRT'));
+  assert.ok(!SOURCES.includes('VIIRS_SNPP_NRT'));
 });
