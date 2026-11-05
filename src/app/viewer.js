@@ -112,10 +112,10 @@ export function installTrackpadPinchZoom(
  * Allow Cesium's free look only below `maxHeight` and return its disposer.
  * Orbit, tilt and zoom stay available at every height. A value other code
  * sets later is kept as the one to allow below that height, and restored on
- * dispose. `enableLook` gates the
- * Shift+drag binding only; a drag that starts on the stars below Cesium's
- * trackball height still turns the camera in place, which
- * `installGlobeInViewRecovery` catches.
+ * dispose. `enableLook` gates the Shift+drag binding only: below its trackball
+ * height Cesium also turns the camera in place for a drag that starts on the
+ * stars. That height is lowered to `maxHeight` too, so above it such a drag
+ * orbits the globe, as it does above Cesium's own 7,500 km.
  */
 export function installFreeLookHeightLimit(
   viewer,
@@ -127,6 +127,9 @@ export function installFreeLookHeightLimit(
   if (!controller || !camera || !scene?.preUpdate)
     throw new TypeError('A complete Cesium viewer is required');
 
+  const originalTrackBallHeight = controller.minimumTrackBallHeight;
+  const trackBallHeight = Math.min(originalTrackBallHeight, maxHeight);
+  controller.minimumTrackBallHeight = trackBallHeight;
   let wanted = controller.enableLook;
   let written;
   const sync = () => {
@@ -145,6 +148,8 @@ export function installFreeLookHeightLimit(
     active = false;
     removeListener();
     if (controller.enableLook === written) controller.enableLook = wanted;
+    if (controller.minimumTrackBallHeight === trackBallHeight)
+      controller.minimumTrackBallHeight = originalTrackBallHeight;
   };
 }
 
@@ -162,8 +167,8 @@ const SETTLE_GIVE_UP_MS = 5 * 60_000;
  * no surface on screen (`globeOutOfFrame`: limb glow and slivers up to about
  * one sample cell thick can count as none), and return the disposer. Views with
  * more surface, such as an oblique orbital shot, are left as they are. This
- * catches a saved or shared view that looked away, and a drag that Cesium turns
- * into an in-place look below its trackball height whatever `enableLook` says.
+ * catches a saved or shared view that looked away, or any other move that ends
+ * looking away from the planet.
  * Heading and position are kept. Tracked cameras, locked ones (non-identity
  * transform), a camera flight in progress, the 2D and Columbus modes, and any
  * time `paused` returns true (an authored scene playing) are left alone.

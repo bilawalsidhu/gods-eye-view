@@ -359,7 +359,7 @@ test('trackpad pinch falls back to the original event when relay construction fa
 
 function freeLookFixture({ enableLook = true, height = 0 } = {}) {
   const listeners = new Set();
-  const controller = { enableLook };
+  const controller = { enableLook, minimumTrackBallHeight: 7_500_000 };
   const camera = { positionCartographic: { height } };
   const viewer = {
     camera,
@@ -397,6 +397,27 @@ test('free look follows camera height and is restored on dispose', () => {
   dispose();
   assert.equal(f.controller.enableLook, true);
   assert.equal(f.listeners.size, 0);
+});
+
+test('drags that start on the stars orbit above the free-look height', () => {
+  // Below Cesium's trackball height such a drag turns the camera in place.
+  const f = freeLookFixture({ height: 500 });
+  const dispose = installFreeLookHeightLimit(f.viewer);
+  assert.equal(
+    f.controller.minimumTrackBallHeight,
+    FREE_LOOK_MAX_HEIGHT_METERS,
+  );
+  dispose();
+  assert.equal(f.controller.minimumTrackBallHeight, 7_500_000);
+
+  const lower = freeLookFixture({ height: 500 });
+  lower.controller.minimumTrackBallHeight = 500_000;
+  installFreeLookHeightLimit(lower.viewer)();
+  assert.equal(
+    lower.controller.minimumTrackBallHeight,
+    500_000,
+    'never raised',
+  );
 });
 
 test('free look keeps a setting other code makes after it is installed', () => {
