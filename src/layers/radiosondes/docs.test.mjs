@@ -46,7 +46,7 @@ test('documentation places counted balloon controls and launch guidance in the W
     /Weather balloons.*counts and launch guidance in the Weather group row/,
   );
   assert.match(
-    read('../../../changelog.d/1-radiosondes.md').replace(/\s+/g, ' '),
+    read('../../../changelog.d/1587-radiosondes.md').replace(/\s+/g, ' '),
     /layer row shows per-state counts and connection status or launch guidance/,
   );
 });
@@ -73,7 +73,7 @@ test('documentation pins flight-style sprites, retained contact labels and host-
     /`stateless: true` prevents the host's incumbent-overlap fallback/,
   ])
     assert.match(state, rule);
-  const change = read('../../../changelog.d/1-radiosondes.md').replace(
+  const change = read('../../../changelog.d/1587-radiosondes.md').replace(
     /\s+/g,
     ' ',
   );
