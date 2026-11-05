@@ -19,7 +19,10 @@ import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import { googleServerApiKey } from './places/google-key.js';
-import { createStreetViewBudget, registeredStreetViewLocation } from './cctv/streetViewGuard.js';
+import {
+  createStreetViewBudget,
+  registeredStreetViewLocation,
+} from './cctv/streetViewGuard.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -93,8 +96,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
    */
   const streetViewFallback = async ({ lat, lon, heading, fov, pitch }) => {
     const streetViewKey = googleServerApiKey();
-    if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon) ||
-        !streetViewBudget.consume()) return null;
+    if (
+      !streetViewKey ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      !streetViewBudget.consume()
+    )
+      return null;
     try {
       const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
       sv.searchParams.set('size', '960x540');
@@ -551,9 +559,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // The catalog, not the URL query, owns billable Street View locations.
         // Unknown IDs and invalid registered coordinates get a free SVG fallback.
         const registeredLocation = registeredStreetViewLocation(source);
-        const sv = forwarded || !registeredLocation
-          ? null
-          : await streetViewFallback(registeredLocation);
+        const sv =
+          forwarded || !registeredLocation
+            ? null
+            : await streetViewFallback(registeredLocation);
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',
