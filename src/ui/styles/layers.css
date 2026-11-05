@@ -3,7 +3,7 @@
   position: fixed;
   top: var(--left-stack-safe-top, var(--left-stack-top));
   bottom: var(--left-stack-safe-bottom, 4vh);
-  left: var(--left-stack-x);
+  inset-inline-start: var(--left-stack-x);
   z-index: 100;
   width: 360px;
   display: flex;
@@ -40,7 +40,8 @@
   transform: translateY(0);
 }
 
-#data-panel .panel-glow {
+#data-panel .panel-glow,
+#utilities-panel .panel-glow {
   position: absolute;
   inset: -20px;
   background: radial-gradient(
@@ -53,7 +54,8 @@
   pointer-events: none;
 }
 
-.data-panel-inner {
+.data-panel-inner,
+.utilities-panel-inner {
   position: relative;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
@@ -84,27 +86,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.5) rgba(255, 255, 255, 0.04);
   scrollbar-gutter: stable;
-}
-
-.data-toggle-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.data-toggle-list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 999px;
-}
-
-.data-toggle-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 212, 255, 0.65),
-    rgba(0, 212, 255, 0.2)
-  );
-  border-radius: 999px;
 }
 
 .data-layer-group-heading {
@@ -197,11 +179,11 @@
 #right-context-rail #weather-panel.collapsed,
 #right-context-rail #recent-imagery-panel.collapsed {
   width: var(--right-display-collapsed-width);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail > #pp-toggles.collapsed {
   width: var(--right-display-collapsed-width);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row {
   width: 100%;
@@ -240,7 +222,7 @@
   width: var(--right-context-collapsed-width);
   /* Keep the compact Context tab on the rail edge rather than leaving it
      stranded at the rail's expanded-width origin. */
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail
   #global-context-panel.collapsed
@@ -249,7 +231,7 @@
   box-sizing: border-box;
   justify-content: center;
   overflow: visible;
-  padding: 8px 10px 8px 14px;
+  padding: 8px 14px;
 }
 #right-context-rail #global-context-panel.collapsed .panel-header {
   margin: 0;
@@ -259,6 +241,42 @@
 }
 #right-context-rail.layout-exclusive > [data-panel-id].collapsed {
   display: none;
+}
+#left-panel-stack.layout-exclusive > [data-panel-id].collapsed {
+  display: none;
+}
+
+/* Panel rails (src/ui/panelNavigation.js). Each rail lives inside its stack,
+   so it shows and hides with the stack, and floats in the screen-edge gutter.
+   The stack's layout offsets it back to its resting top, so it holds still
+   when an opened panel moves the stack. */
+.gev-panel-rail {
+  position: absolute;
+  top: var(--panel-rail-offset, 0px);
+  z-index: 1;
+  pointer-events: auto;
+  transition: top var(--transition-fast);
+}
+/* Each rail keeps its outer edge at the screen-side clearance, so a rail that
+   widens (labelled pills while its side has no open panel) grows toward the
+   middle of the screen. Collapsed, it sits 6px outside its stack. */
+.gev-panel-rail--left {
+  inset-inline-start: calc(-1 * var(--panel-rail-clearance));
+}
+.gev-panel-rail--right {
+  inset-inline-end: calc(-1 * var(--panel-rail-clearance));
+}
+body.mobile-shell #left-panel-stack > .gev-panel-rail,
+body.mobile-shell #right-context-rail > .gev-panel-rail,
+body.cockpit-mode .gev-panel-rail {
+  display: none;
+}
+/* Clean view and recording hide the panels one by one, not their stacks. */
+body.ui-clean-view .gev-panel-rail,
+body.recording-mode .gev-panel-rail {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 #right-context-rail.layout-focus > [data-panel-id].collapsed {
   display: block;
@@ -281,8 +299,6 @@
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed) {
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.4) transparent;
 }
 #right-context-rail.layout-focus
   > #weather-panel:not(.collapsed)
@@ -385,7 +401,7 @@
   gap: 10px;
   padding: 1px 3px 7px;
   border-bottom: 1px solid rgba(34, 230, 230, 0.14);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 #space-mission-panel-host .space-mission-roster-header > div {
   display: grid;
@@ -415,8 +431,6 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding-right: 3px;
-  scrollbar-color: rgba(34, 230, 230, 0.38) transparent;
-  scrollbar-width: thin;
 }
 #space-mission-panel-host .space-mission-roster-item {
   position: relative;
@@ -431,7 +445,7 @@
   border-radius: 4px;
   color: #d8ffff;
   background: rgba(42, 113, 171, 0.045);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   text-align: left;
   cursor: pointer;
   transition:
@@ -989,13 +1003,6 @@
 #global-context-panel .panel-glow {
   display: none;
 }
-/* Expanded, its section titles (Context, Radio) stay legible over bright
-   imagery. Cyber keeps its own red titles; collapsed launchers match siblings. */
-:root:not([data-ui-theme='cyber'])
-  #global-context-panel:not(.collapsed)
-  .panel-title {
-  color: var(--text-secondary);
-}
 .global-context-panel-inner {
   position: relative;
   display: flex;
@@ -1010,6 +1017,15 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
+}
+
+/* Data Layers and Context share the 14px side padding of the other default
+   theme panels, so every title and toggle sits 19px from its edge. Cyber
+   keeps its own gutters. */
+:root:not([data-ui-theme='cyber'])
+  :is(.data-panel-inner, .global-context-panel-inner) {
+  padding-right: 14px;
+  padding-left: 14px;
 }
 .global-context-actions {
   display: grid;
@@ -1243,4 +1259,97 @@ body.recording-mode #right-context-rail > [data-panel-id] {
   #right-context-rail #recent-imagery-panel.collapsed {
     width: 100%;
   }
+}
+
+/* ── Utilities Panel ─────────────────────────── */
+/* Directions (from the layer list), Draw and Import. Draw and Import read as
+   rows like Directions above them (.data-toggle-row): icon and name, their
+   options indented under the name. */
+#utilities-panel {
+  --panel-expanded-width: 280px;
+  width: var(--panel-expanded-width);
+}
+
+/* The layer list takes its natural height; the panel scrolls as a whole. */
+.utilities-list {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.utilities-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.utilities-tools .pp-toggle-group {
+  width: 100%;
+}
+
+#utilities-panel .utilities-tools .pp-toggle-btn {
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  gap: 8px;
+  padding: 8px 10px 6px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background var(--transition-fast);
+}
+
+#utilities-panel .utilities-tools .pp-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+#utilities-panel .utilities-tools .pp-icon {
+  flex: none;
+  width: 16px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+#utilities-panel .utilities-tools .pp-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-transform: none;
+  color: var(--text-primary);
+}
+
+/* Draw marks its on state with an accent edge, like an active DISPLAY
+   button; Cyber swaps in its red edge (cyber.css). */
+#utilities-panel
+  .utilities-tools
+  .pp-toggle-btn:is([aria-pressed='true'], .active) {
+  background: var(--accent-dim);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+#utilities-panel
+  .utilities-tools
+  :is(.pp-slider-row, .geo-import-list, .geo-import-hint) {
+  margin-left: 34px;
+  margin-right: 10px;
+}
+
+/* Draw's options sit flat under its name, like a layer row's controls, not
+   as the card that hangs under a DISPLAY button. */
+#utilities-panel .utilities-tools .pp-slider-row {
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }

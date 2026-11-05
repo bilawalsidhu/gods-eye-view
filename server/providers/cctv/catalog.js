@@ -28,6 +28,8 @@ import {
   loadNycSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
   loadFloridaSourcesFromOpenData,
+  loadHoustonSourcesFromOpenData,
+  loadA22SourcesFromOpenDataHub,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -164,6 +166,16 @@ const LIVE_PACKS = [
     name: 'taiwan',
     enabled: () => envEnabled('CCTV_TAIWAN_ENABLED'),
     load: loadTaiwanSources,
+  },
+  {
+    name: 'houston',
+    enabled: () => envOptIn('CCTV_HOUSTON_ENABLED'),
+    load: loadHoustonSourcesFromOpenData,
+  },
+  {
+    name: 'a22',
+    enabled: () => envEnabled('CCTV_A22_ENABLED'),
+    load: loadA22SourcesFromOpenDataHub,
   },
 ];
 /**
