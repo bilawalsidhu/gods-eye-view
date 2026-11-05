@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
+import { parseFlightSearchQuery } from '../search/coordinateParser.js';
 
 /** Own destination selection, lookup, orbit and world-jump lifetime. */
 export class LocationNavigation {
@@ -92,10 +93,14 @@ export class LocationNavigation {
       this._setLocationSearchError(
         `${t('Location not found')}. ${t('Check the spelling and press Enter to search again.')}`,
       );
-    else if (change.type === 'failed')
+    else if (change.type === 'failed') {
+      const message = state.error?.message || '';
       this._setLocationSearchError(
-        `${t('Search failed')}. ${t('Press Enter to try again.')}`,
+        message.startsWith('Flight search: ')
+          ? message
+          : `${t('Search failed')}. ${t('Press Enter to try again.')}`,
       );
+    }
     else if (change.type === 'settled')
       this._settleLocationSearchUi(change.generation, {
         keepQuery: state.status === 'missing' || state.status === 'failed',
@@ -113,6 +118,50 @@ export class LocationNavigation {
     this._locationControls?.setSearchError(message);
   }
 
+  /**
+   * Fly to an exact observed aircraft without taking tracking ownership.
+   * A search does not silently select one of several matching contacts or
+   * imply a worldwide search outside the enabled layer's loaded coverage.
+   */
+  _searchObservedFlight(identity, { signal, beforeFly } = {}) {
+    signal?.throwIfAborted();
+    const lookup = this.services.flightsLayer?.findExactFlightMatches?.(identity);
+    const unavailable = (message) => {
+      throw new Error('Flight search: ' + message);
+    };
+    if (!lookup || lookup.status === 'unavailable')
+      unavailable('Live Flights has no loaded observations yet. Enable the layer and retry.');
+    if (lookup.status === 'disabled')
+      unavailable('Enable Live Flights to search observed aircraft.');
+    if (lookup.status === 'stale')
+      unavailable('Matching aircraft data is stale. Wait for a fresh observation.');
+    if (lookup.status === 'missing')
+      unavailable('No exact match in currently loaded flights. Coverage is regional, not worldwide.');
+    if (lookup.overflow || lookup.matches.length !== 1)
+      unavailable('Several aircraft match this callsign. Use "icao24: a1b2c3" with the specific transponder address.');
+    const match = lookup.matches[0];
+    if (!Number.isFinite(match.latitude) || !Number.isFinite(match.longitude) ||
+        Math.abs(match.latitude) > 90 || Math.abs(match.longitude) > 180)
+      unavailable('The reported position is unavailable.');
+    if (signal?.aborted || beforeFly?.() === false) return { cancelled: true };
+    this.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        match.longitude,
+        match.latitude,
+        Math.max(10_000, (Number.isFinite(match.altitudeM) ? match.altitudeM : 0) + 8_000),
+      ),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-85), roll: 0 },
+      duration: 2.3,
+    });
+    // User can click the aircraft to follow. This search only frames its
+    // last observed position; it must never promise continuous tracking.
+    return {
+      label: `${match.callsign || match.icao24} · observed aircraft (not following)`,
+      navigationMode: 'aircraft-snapshot',
+      rangeM: null,
+    };
+  }
+
   _initLocationBar() {
     const { CITY_POIS, searchAndFlyTo, LocationSearch } = this.services;
     // An open field stays open in the new controls.
@@ -127,16 +176,23 @@ export class LocationNavigation {
       isCurrent: (generation) =>
         !this._disposed && generation === this._navigationGeneration,
       beforeFly: (generation) => this._reassertNavigationHandoff(generation),
-      search: (query, options) =>
-        searchAndFlyTo(this.viewer, query, {
-          placeSearch: this.placeSearch,
-          ...options,
-        }),
+      search: (query, options) => {
+        const identity = parseFlightSearchQuery(query);
+        return identity
+          ? this._searchObservedFlight(identity, options)
+          : searchAndFlyTo(this.viewer, query, {
+              placeSearch: this.placeSearch,
+              ...options,
+            });
+      },
       onResult: (destination) => {
         if (destination.outlineUnavailable)
           this._showToast(t('Detailed outline unavailable'));
       },
-      onError: (error) => console.error('[Search] Geocoding failed:', error),
+      onError: (error) => {
+        if (!String(error?.message || '').startsWith('Flight search: '))
+          console.error('[Search] Geocoding failed:', error);
+      },
     });
     this._locationControls = new LocationControls({
       elements: {
