@@ -62,7 +62,7 @@ test('invalid budget settings fail closed', () => {
   assert.throws(() => createStreetViewBudget({ windowMs: 0 }), TypeError);
 });
 
-test('frame endpoint uses catalog location and a shared request cap', async (t) => {
+test('frame route pins location and caps billable requests', async (t) => {
   const names = [
     'CCTV_SOURCES_JSON',
     'CCTV_SOURCES_FILE',
@@ -137,10 +137,7 @@ test('frame endpoint uses catalog location and a shared request cap', async (t) 
       Promise.resolve(handler(request, response)).catch(reject);
     });
 
-  assert.equal(
-    await frame('unknown', '?lat=48.8584&lon=2.2945'),
-    'synthetic',
-  );
+  assert.equal(await frame('unknown', '?lat=48.8584&lon=2.2945'), 'synthetic');
   assert.equal(streetViewCalls.length, 0);
   assert.equal(
     await frame('camera-fixture', '?lat=48.8584&lon=2.2945'),
