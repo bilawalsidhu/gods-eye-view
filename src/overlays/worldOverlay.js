@@ -1076,8 +1076,14 @@ export function getOverlayPaintRect(sourceId, entryId) {
 export function isOverlayEntryQueued(sourceId, entryId) {
   if (_destroyed) return false;
   const record = _records.get(entryKey(String(sourceId), String(entryId)));
+  if (!record || record.queuedStamp !== _frameStamp) return false;
+  // Same channels as the paint, minus the per-frame keyhole and sonar fades.
   return (
-    !!record && record.queuedStamp === _frameStamp && record.queuedAlpha > 0.001
+    record.sourceAlpha *
+      record.queuedItem.temporalAlpha *
+      record.distanceAlpha *
+      record.altitudeAlpha >
+    0.001
   );
 }
 
@@ -1754,7 +1760,7 @@ function getProjectionRecord(entry) {
       altitudeAlpha: 1,
       sourceAlpha: 1,
       queuedStamp: 0,
-      queuedAlpha: 0,
+      queuedItem: null,
       protectedPlacement: null,
       distanceOptions: {},
       altitudeOptions: {},
@@ -2273,13 +2279,10 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
   item.key = record.key;
   _paintQueue[_paintCount++] = item;
   // Read by `isOverlayEntryQueued` while the custom lanes paint, before this
-  // item publishes its paint rect. Keyhole and sonar fades are left out.
+  // item publishes its paint rect. Only a stamp and a pointer: storing the
+  // item's alpha here would box a double per paint item per frame.
   record.queuedStamp = _frameStamp;
-  record.queuedAlpha =
-    record.sourceAlpha *
-    temporalAlpha *
-    record.distanceAlpha *
-    record.altitudeAlpha;
+  record.queuedItem = item;
 }
 
 function sourceCanPaint(sourceId) {
