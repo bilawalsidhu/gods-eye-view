@@ -15,6 +15,8 @@ export interface Hit {
   id: string;
   /** The item's `meta`, as it was given; absent when the item had none. */
   meta?: Meta;
+  /** The item's `lodGroup`, when it has one: the thing it is a detail level of. */
+  lodGroup?: string;
   /** The map itself (tiles or globe), rather than a drawn item. */
   surface: boolean;
   /** Where the hit is, when the renderer knows it. */
@@ -33,9 +35,13 @@ export interface PickWindow {
 }
 
 export interface HeightOptions {
-  /** `surface`: tiles where they are drawn, otherwise terrain. */
+  /**
+   * `surface`: tiles where they are drawn, otherwise terrain. Sets drawn
+   * with `includeInHeightQueries` count under `surface` and `tiles`, never
+   * under `terrain`.
+   */
   against?: 'surface' | 'terrain' | 'tiles';
-  /** Set ids to see through. */
+  /** Set ids to see through, of those drawn with `includeInHeightQueries`. */
   exclude?: string[];
 }
 
@@ -44,7 +50,8 @@ export interface HeightSample {
   height: number;
   /** 1 for the most detailed data, lower for a coarser level. */
   confidence: number;
-  source: 'tiles' | 'terrain' | 'ellipsoid';
+  /** `set`: a draw set drawn with `includeInHeightQueries`. */
+  source: 'tiles' | 'terrain' | 'ellipsoid' | 'set';
   /** The detail answered from: what is drawn now, or (`finestHeights`) the finest available. */
   lod: 'visible' | 'finest';
   /** Edge length of the tile answered from, metres, when known. */

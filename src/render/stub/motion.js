@@ -44,8 +44,12 @@ export function motionPosition(segment, pos, t) {
         east = (v / w) * (Math.cos(track) - Math.cos(track + w * dt));
         north = (v / w) * (Math.sin(track + w * dt) - Math.sin(track));
       }
+      const up = (segment.climbMps ?? 0) * dt;
       const enu = eastNorthUp(segment.fix);
-      return add(segment.fix, add(scale(enu.x, east), scale(enu.y, north)));
+      return add(
+        segment.fix,
+        add(add(scale(enu.x, east), scale(enu.y, north)), scale(enu.z, up)),
+      );
     }
     default:
       throw new Error(`unknown motion segment ${segment.kind}`);

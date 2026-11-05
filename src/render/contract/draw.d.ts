@@ -55,12 +55,16 @@ export interface SetSpec {
   drawOrder?: number;
   /** `false`: the set never takes part in picks. */
   pickable?: boolean;
-  /** Height queries see through this set. */
-  excludeFromHeightQueries?: boolean;
+  /**
+   * Height queries (`query.sampleHeight` and the rest) see this set as
+   * ground. Off by default: queries answer from tiles and terrain alone.
+   */
+  includeInHeightQueries?: boolean;
   /** What clamped items clamp to. */
   clampTo?: ClampTarget;
   /**
-   * `motionSegments`: the clock motion segments are evaluated on.
+   * `motionSegments` or `orbits`: the clock motion segments and orbits are
+   * evaluated on.
    * `live` (the default) is wall time minus `delayMs`, as a live feed is
    * drawn a little behind real time; `scene` is the frame port's scene time.
    */
@@ -79,8 +83,16 @@ export interface Placed {
   pickable?: boolean;
   scaleByDistance?: NearFar;
   fadeByDistance?: NearFar;
-  /** Shown only between these eye distances, metres. */
+  /** Shown only at eye distances in `[near, far)`, metres. */
   displayRange?: [near: number, far: number];
+  /**
+   * Items in different sets that share a `lodGroup` are one thing drawn at
+   * different detail (a model near, an icon far), each shown over its own
+   * `displayRange`. A renderer may draw the group as one entity; a pick on
+   * it names the member shown at that distance (`Hit.set`, `Hit.id`) and
+   * reports the group (`Hit.lodGroup`).
+   */
+  lodGroup?: string;
   /** Draw over depth within this many metres of the eye (`Infinity`: always). */
   disableDepthTest?: number;
 }
@@ -102,12 +114,14 @@ export type ImageRef =
  *   at both ends; the course runs from `course0Deg` by `courseSlopeDeg`
  *   across the segment.
  * - arc: a constant-rate turn in the plane tangent to the ellipsoid at `fix`
- *   (its east and north axes), at the fix's height, from `fix` at `t0`, at
- *   `speedMps` along `trackDeg` turning at `turnRateDps` (under 1e-4 rad/s is
- *   straight). The elapsed time is clamped to `[minDtS, maxDtS]`; a negative
- *   `minDtS` runs the fix backward before `t0` (a warm-up), `maxDtS` is how
- *   long it coasts.
- * `courseGlide` eases the displayed course onto the segment's at `rateDps`.
+ *   (its east and north axes), from `fix` at `t0`, at `speedMps` along
+ *   `trackDeg` turning at `turnRateDps` (under 1e-4 rad/s is straight), and
+ *   climbing along the fix's up axis at `climbMps` (default 0). The elapsed
+ *   time is clamped to `[minDtS, maxDtS]`; a negative `minDtS` runs the same
+ *   path backward before `t0` (a warm-up), `maxDtS` is how long it coasts.
+ * The drawn course eases onto a new one over the item's `courseBlendMs`; an
+ * item that also has `courseGlide` eases at its rate instead, on a renderer
+ * with the `courseGlide` capability.
  */
 export type MotionSegment =
   | { kind: 'hold'; courseDeg?: number }
@@ -129,6 +143,8 @@ export type MotionSegment =
       speedMps: number;
       trackDeg: number;
       turnRateDps: number;
+      /** Metres per second along the fix's up axis. */
+      climbMps?: number;
     };
 
 export interface CourseGlide {
@@ -147,7 +163,14 @@ export interface IconItem extends Placed {
   scale?: number;
   /** `motionSegments`: motion on the renderer's clock. */
   motion?: MotionSegment;
+  /** `courseGlide`: ease the drawn course at a rate, from `fromCourseDeg`. */
   courseGlide?: CourseGlide;
+  /**
+   * Ease the drawn course onto a new one over this long; 0 or omitted turns
+   * at once. Every renderer has it; with the `courseGlide` capability an
+   * item's `courseGlide`, when it has one, is used instead.
+   */
+  courseBlendMs?: number;
   /** Degrees clockwise from north. */
   course?: number;
   /**
@@ -389,7 +412,12 @@ export type CelestialSpec =
   | {
       kind: 'stars';
       id: string;
-      catalogue: Float32Array;
+      /**
+       * Packed stars; omitted draws the renderer's own catalogue (one it
+       * streams, say), down to `magnitudeLimit`, or no stars when it has
+       * none.
+       */
+      catalogue?: Float32Array;
       magnitudeLimit?: number;
     }
   | {
@@ -400,6 +428,29 @@ export type CelestialSpec =
       color: Color;
       widthPx: number;
     };
+
+/**
+ * `orbits`: a satellite from its elements. The renderer propagates it with
+ * SGP4 on its set's `motionClock` and draws the marker and, optionally, its
+ * ring. Without the capability Core propagates and draws the positions
+ * itself as icons and lines.
+ */
+export interface OrbitItem {
+  id: string;
+  /** A two-line element set. */
+  tle: [line1: string, line2: string];
+  marker:
+    | { image: ImageRef; size: [width: number, height: number] }
+    | { pixelSize: number; color: Color };
+  /** The orbit's ring over `periods` orbits (default 1), in the inertial frame. */
+  ring?: { color: Color; widthPx: number; periods?: number } | null;
+  meta?: Meta;
+  show?: boolean;
+  pickable?: boolean;
+  /** As on `Placed`. */
+  displayRange?: [near: number, far: number];
+  lodGroup?: string;
+}
 
 /** `agents`: dots moving along polylines (traffic flow). */
 export interface AgentPathItem {
@@ -426,6 +477,10 @@ export interface Columns {
   positions?: Float64Array;
   /** Degrees clockwise from north. */
   courses?: Float32Array;
+  /**
+   * 0 hides a row. A hidden row keeps its motion state (where it is on its
+   * segment, its eased course), so showing it again resumes, not restarts.
+   */
   shown?: Uint8Array;
   scales?: Float32Array;
   alphas?: Float32Array;
@@ -472,6 +527,18 @@ export interface DrawPort {
   celestial?(spec: CelestialSpec): Handle;
   /** `agents`. */
   agents?(spec: SetSpec): DrawSet<AgentPathItem>;
+  /** `orbits`. */
+  orbits?(spec: SetSpec): DrawSet<OrbitItem>;
+  /**
+   * Whether clamped items (`clampTo: 'tiles' | 'both'`, draped lines and
+   * shapes) are draped onto the 3D tiles now (`draped`), or drawn over them
+   * and hidden past the ellipsoid's horizon (`overlay`), the fallback a
+   * renderer uses where it cannot drape. Without tiles in the base it is
+   * `draped`: clamping to terrain or the ellipsoid always drapes.
+   */
+  clampState(): 'draped' | 'overlay';
+  /** Fires when `clampState()` changes (not on subscribing). */
+  on(event: 'clampState', cb: (state: 'draped' | 'overlay') => void): Off;
   /** Register an atlas of images icons refer to by slot. */
   atlas(id: string, images: Record<string, ImageRef>): void;
 }

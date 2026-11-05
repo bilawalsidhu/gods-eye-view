@@ -36,6 +36,8 @@ export const CAPABILITIES = Object.freeze([
   'fields',
   'celestial',
   'agents',
+  'orbits',
+  'courseGlide',
   'cluster',
   'styles',
   'bloom',
@@ -149,13 +151,22 @@ export const PORTS = deepFreeze({
     ['imagery.setSplit', 'splitSwipe'],
   ]),
   draw: Object.fromEntries([
-    ...required('icons', 'points', 'lines', 'shapes', 'atlas'),
+    ...required(
+      'icons',
+      'points',
+      'lines',
+      'shapes',
+      'atlas',
+      'clampState',
+      'on',
+    ),
     ['models', 'models'],
     ['quads', 'quads'],
     ['meshes', 'meshes'],
     ['field', 'fields'],
     ['celestial', 'celestial'],
     ['agents', 'agents'],
+    ['orbits', 'orbits'],
   ]),
   camera: Object.fromEntries(
     required(

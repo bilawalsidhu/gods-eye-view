@@ -5144,9 +5144,10 @@
       "src/render/stub/camera.js",
       "src/render/stub/geodesic.js",
       "src/render/stub/viewRectangle.js",
+      "src/render/stub/orbits.js",
       "src/render/conformance/goldens/camera.json",
       "src/render/conformance/checks/camera.js"
     ],
-    "external": []
+    "external": ["satellite.js"]
   }
 }

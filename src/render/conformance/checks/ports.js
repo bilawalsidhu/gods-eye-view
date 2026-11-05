@@ -11,7 +11,20 @@ import {
   checkRendererShape,
 } from '../../contract/index.js';
 import { AUSTIN, SCRIPT_VIEWPORT } from '../cameraScripts.js';
+import {
+  eciToEcf,
+  eciToGeodetic,
+  gstime,
+  propagate,
+  twoline2satrec,
+} from 'satellite.js';
 import { deepEqual, equal, near, nearVec, ok, throws } from '../expect.js';
+
+/** Elements for the orbit check: a station-like orbit, epoch 2026-01-04. */
+const ISS_TLE = Object.freeze([
+  '1 25544U 98067A   26004.50000000  .00016717  00000-0  10270-3 0  9992',
+  '2 25544  51.6400 208.9163 0006317  69.9862  25.2906 15.49560532 10009',
+]);
 
 const DOT = {
   svg: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="8" fill="#fff"/></svg>',
@@ -125,6 +138,7 @@ const SET_KINDS = [
   ['quads', 'quads'],
   ['meshes', 'meshes'],
   ['agents', 'agents'],
+  ['orbits', 'orbits'],
 ];
 
 export function portChecks() {
@@ -691,6 +705,311 @@ export function portChecks() {
       { capability: 'motionSegments' },
     ),
     check(
+      'draw.motion.climb',
+      'an arc climbs at climbMps, and a negative minDtS runs it backward',
+      async (h, r) => {
+        await overAustin(h, r, 30000);
+        const t0 = r.frame.time();
+        const fixAt = { ...AUSTIN, height: 12000 };
+        const fix = h.toEcef(fixAt);
+        const lon = (fixAt.lon * Math.PI) / 180;
+        const lat = (fixAt.lat * Math.PI) / 180;
+        const east = { x: -Math.sin(lon), y: Math.cos(lon), z: 0 };
+        const north = {
+          x: -Math.sin(lat) * Math.cos(lon),
+          y: -Math.sin(lat) * Math.sin(lon),
+          z: Math.cos(lat),
+        };
+        const up = {
+          x: Math.cos(lat) * Math.cos(lon),
+          y: Math.cos(lat) * Math.sin(lon),
+          z: Math.sin(lat),
+        };
+        // The contract's formula: the turn in the tangent plane, the climb up.
+        const at = (seg, dtS, climbs = true) => {
+          const track = (seg.trackDeg * Math.PI) / 180;
+          const w = (seg.turnRateDps * Math.PI) / 180;
+          const v = seg.speedMps;
+          const straight = Math.abs(w) < 1e-4;
+          const e = straight
+            ? v * dtS * Math.sin(track)
+            : (v / w) * (Math.cos(track) - Math.cos(track + w * dtS));
+          const n = straight
+            ? v * dtS * Math.cos(track)
+            : (v / w) * (Math.sin(track + w * dtS) - Math.sin(track));
+          const u = climbs ? seg.climbMps * dtS : 0;
+          return {
+            x: fix.x + east.x * e + north.x * n + up.x * u,
+            y: fix.y + east.y * e + north.y * n + up.y * u,
+            z: fix.z + east.z * e + north.z * n + up.z * u,
+          };
+        };
+        const segments = {
+          straight: {
+            kind: 'arc',
+            fix,
+            t0,
+            speedMps: 200,
+            trackDeg: 90,
+            turnRateDps: 0,
+            climbMps: 1000,
+            minDtS: -10,
+            maxDtS: 10,
+          },
+          turning: {
+            kind: 'arc',
+            fix,
+            t0,
+            speedMps: 150,
+            trackDeg: 0,
+            turnRateDps: 3,
+            climbMps: 1500,
+            minDtS: 0,
+            maxDtS: 20,
+          },
+        };
+        const set = r.draw.icons({
+          id: 'conf:climb',
+          motionClock: { kind: 'scene' },
+        });
+        const find = (id, p) => {
+          const s = r.query.project(p);
+          return r.query
+            .drillPick(s.x, s.y)
+            .find((x) => x.set === 'conf:climb' && x.id === id);
+        };
+        const apart = (a, b) => {
+          const sa = r.query.project(a);
+          const sb = r.query.project(b);
+          return Math.hypot(sa.x - sb.x, sa.y - sb.y);
+        };
+        for (const [id, seg, sceneDtS, dtS, name] of [
+          ['straight', segments.straight, 30, 10, 'climbed, clamped to maxDtS'],
+          ['straight', segments.straight, -30, -10, 'run backward to minDtS'],
+          ['turning', segments.turning, 8, 8, 'turning and climbing at 8 s'],
+        ]) {
+          set.set([{ id, pos: fix, image: DOT, size: [16, 16], motion: seg }]);
+          r.frame.setTime(t0 + sceneDtS * 1000);
+          await drawn(h, r);
+          const want = at(seg, dtS);
+          const flat = at(seg, dtS, false);
+          ok(apart(want, flat) > 20, `${name}: the test can tell`);
+          const hit = find(id, want);
+          ok(hit, `${name}: picked where the formula puts it`);
+          if (hit?.position)
+            nearVec(
+              hit.position,
+              want,
+              50,
+              `${name}: at the formula's position`,
+            );
+          ok(!find(id, flat), `${name}: not at the fix's height`);
+        }
+        set.dispose();
+      },
+      { capability: 'motionSegments' },
+    ),
+    check(
+      'draw.lodGroup',
+      'members of a lodGroup show over their own ranges and picks report the group',
+      async (h, r) => {
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const near = r.draw.points({ id: 'conf:lod-near' });
+        const far = r.draw.icons({ id: 'conf:lod-far' });
+        const members = (nearRange, farRange) => {
+          near.set([
+            {
+              id: 'a',
+              pos,
+              pixelSize: 20,
+              color: '#f00',
+              lodGroup: 'thing',
+              displayRange: nearRange,
+            },
+          ]);
+          far.set([
+            {
+              id: 'a',
+              pos,
+              image: DOT,
+              size: [20, 20],
+              lodGroup: 'thing',
+              displayRange: farRange,
+            },
+          ]);
+        };
+        const shown = () => {
+          const s = r.query.project(pos);
+          return r.query
+            .drillPick(s.x, s.y)
+            .filter(
+              (x) => x.set === 'conf:lod-near' || x.set === 'conf:lod-far',
+            );
+        };
+        members([0, 10000], [10000, Infinity]);
+        for (const [height, set] of [
+          [2000, 'conf:lod-near'],
+          [50000, 'conf:lod-far'],
+        ]) {
+          await overAustin(h, r, height);
+          await drawn(h, r);
+          const hits = shown();
+          deepEqual(
+            hits.map((x) => x.set),
+            [set],
+            `at ${height} m only ${set} is drawn`,
+          );
+          equal(hits[0]?.id, 'a', `at ${height} m the hit names the member`);
+          equal(hits[0]?.lodGroup, 'thing', `at ${height} m the group`);
+        }
+        members([0, 100000], [1000, Infinity]);
+        await drawn(h, r);
+        deepEqual(
+          shown()
+            .map((x) => x.set)
+            .sort(),
+          ['conf:lod-far', 'conf:lod-near'],
+          'overlapping ranges show both members',
+        );
+        const plain = r.draw.points({ id: 'conf:lod-none' });
+        plain.set([{ id: 'b', pos, pixelSize: 20, color: '#0f0' }]);
+        await drawn(h, r);
+        const s = r.query.project(pos);
+        const hit = r.query.drillPick(s.x, s.y).find((x) => x.id === 'b');
+        ok(hit && !('lodGroup' in hit), 'an item without a group has none');
+        near.dispose();
+        far.dispose();
+        plain.dispose();
+      },
+    ),
+    check(
+      'draw.orbits',
+      'an orbit is drawn where SGP4 puts it on its set’s motion clock',
+      async (h, r) => {
+        const t = Date.UTC(2026, 0, 4, 12);
+        const expected = (ms) => {
+          const date = new Date(ms);
+          const satrec = twoline2satrec(ISS_TLE[0], ISS_TLE[1]);
+          const eci = propagate(satrec, date).position;
+          const gmst = gstime(date);
+          const ecf = eciToEcf(eci, gmst);
+          const geo = eciToGeodetic(eci, gmst);
+          return {
+            ecef: { x: ecf.x * 1000, y: ecf.y * 1000, z: ecf.z * 1000 },
+            lon: (geo.longitude * 180) / Math.PI,
+            lat: (geo.latitude * 180) / Math.PI,
+            height: geo.height * 1000,
+          };
+        };
+        const set = r.draw.orbits({
+          id: 'conf:orbits',
+          motionClock: { kind: 'scene' },
+        });
+        set.set([
+          {
+            id: 'iss',
+            tle: ISS_TLE,
+            marker: { pixelSize: 16, color: '#fff' },
+            meta: { n: 1 },
+          },
+        ]);
+        const hitAt = (p) => {
+          const s = r.query.project(p);
+          return s
+            ? r.query
+                .drillPick(s.x, s.y)
+                .find((x) => x.set === 'conf:orbits' && x.id === 'iss')
+            : undefined;
+        };
+        const now = expected(t);
+        r.camera.setView({
+          destination: {
+            lon: now.lon,
+            lat: now.lat,
+            height: now.height + 2000000,
+          },
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        r.frame.setTime(t);
+        await drawn(h, r);
+        const hit = hitAt(now.ecef);
+        ok(hit, 'picked at its propagated position');
+        deepEqual(hit?.meta, { n: 1 }, 'Hit.meta');
+        if (hit?.position)
+          nearVec(hit.position, now.ecef, 1000, 'within a kilometre of SGP4');
+        r.frame.setTime(t + 60000);
+        await drawn(h, r);
+        const later = expected(t + 60000);
+        const laterHit = hitAt(later.ecef);
+        ok(laterHit, 'a minute on, where SGP4 puts it then');
+        if (laterHit?.position)
+          nearVec(
+            laterHit.position,
+            later.ecef,
+            1000,
+            'a minute on, within a kilometre',
+          );
+        ok(!hitAt(now.ecef), 'no longer where it was');
+        set.dispose();
+        // `orbits` alone, without `motionSegments`, still reads the clock.
+        const alone = await h.create({
+          viewport: SCRIPT_VIEWPORT,
+          capabilities: [...r.capabilities].filter(
+            (c) => c !== 'motionSegments',
+          ),
+        });
+        if (alone)
+          try {
+            const only = alone.draw.orbits({
+              id: 'conf:orbits-alone',
+              motionClock: { kind: 'scene' },
+            });
+            only.set([
+              {
+                id: 'iss',
+                tle: ISS_TLE,
+                marker: { pixelSize: 16, color: '#fff' },
+              },
+            ]);
+            alone.camera.setView({
+              destination: {
+                lon: now.lon,
+                lat: now.lat,
+                height: now.height + 2000000,
+              },
+              orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+            });
+            alone.frame.setTime(t);
+            await drawn(h, alone);
+            const s = alone.query.project(now.ecef);
+            ok(
+              alone.query
+                .drillPick(s.x, s.y)
+                .some((x) => x.set === 'conf:orbits-alone'),
+              'without motionSegments, on the scene clock it was given',
+            );
+            only.dispose();
+          } finally {
+            alone.destroy();
+          }
+      },
+      { capability: 'orbits' },
+    ),
+    check(
+      'draw.clampState',
+      'clampState says whether clamped items drape or overlay',
+      (h, r) => {
+        ok(
+          ['draped', 'overlay'].includes(r.draw.clampState()),
+          'draped or overlay',
+        );
+        const off = r.draw.on('clampState', () => {});
+        equal(typeof off, 'function', 'on returns an Off');
+        off();
+        off();
+      },
+    ),
+    check(
       'draw.columns',
       'column updates are rows: sized, picked, removed',
       async (h, r) => {
@@ -725,6 +1044,58 @@ export function portChecks() {
         deepEqual(hit?.meta, { k: 'b' }, 'meta from the columns');
         set.remove(['a']);
         equal(set.size(), 1, 'removed');
+        set.dispose();
+      },
+      { capability: 'columns' },
+    ),
+    check(
+      'draw.columns.shown',
+      'a row hidden by its column keeps its motion and resumes where it would be',
+      async (h, r) => {
+        if (!r.capabilities.has('motionSegments'))
+          return { skip: 'no motionSegments' };
+        await overAustin(h, r, 8000);
+        const t0 = r.frame.time();
+        const from = h.toEcef({ ...AUSTIN, lon: AUSTIN.lon - 0.02, height: 0 });
+        const to = h.toEcef({ ...AUSTIN, lon: AUSTIN.lon + 0.02, height: 0 });
+        const along = (f) => ({
+          x: from.x + (to.x - from.x) * f,
+          y: from.y + (to.y - from.y) * f,
+          z: from.z + (to.z - from.z) * f,
+        });
+        const set = r.draw.icons({
+          id: 'conf:shown',
+          motionClock: { kind: 'scene' },
+        });
+        set.set([
+          {
+            id: 'mover',
+            pos: from,
+            image: DOT,
+            size: [16, 16],
+            motion: { kind: 'lerp', from, to, t0, t1: t0 + 10000 },
+          },
+        ]);
+        const pickAt = (p) => {
+          const s = r.query.project(p);
+          return r.query
+            .drillPick(s.x, s.y)
+            .some((x) => x.set === 'conf:shown');
+        };
+        const shown = (on) =>
+          set.setColumns({ ids: ['mover'], shown: new Uint8Array([on]) });
+        r.frame.setTime(t0 + 2000);
+        await drawn(h, r);
+        ok(pickAt(along(0.2)), 'moving before it is hidden');
+        shown(0);
+        r.frame.setTime(t0 + 4000);
+        await drawn(h, r);
+        ok(!pickAt(along(0.4)), 'hidden');
+        r.frame.setTime(t0 + 7000);
+        shown(1);
+        await drawn(h, r);
+        ok(pickAt(along(0.7)), 'shown again where its segment puts it now');
+        ok(!pickAt(from), 'not restarted');
         set.dispose();
       },
       { capability: 'columns' },
@@ -879,6 +1250,51 @@ export function portChecks() {
           0.05,
           'clamped onto the surface',
         );
+      },
+      { capability: 'sampleHeight' },
+    ),
+    check(
+      'query.heights.sets',
+      'draw sets are not ground to height queries unless they ask to be',
+      async (h, r) => {
+        await overAustin(h, r);
+        await drawn(h, r);
+        const point = { ...AUSTIN };
+        const before = await r.query.sampleHeight([point]);
+        const shapes = r.draw.shapes({ id: 'conf:not-ground' });
+        shapes.set([
+          {
+            id: 'tower',
+            geometry: {
+              kind: 'box',
+              center: { ...AUSTIN, height: 500 },
+              dimensions: { x: 200, y: 200, z: 1000 },
+            },
+            fill: '#888',
+          },
+        ]);
+        const points = r.draw.points({ id: 'conf:not-ground-points' });
+        points.set([
+          {
+            id: 'p',
+            pos: { ...AUSTIN, height: 800 },
+            pixelSize: 40,
+            color: '#f00',
+          },
+        ]);
+        await drawn(h, r);
+        const after = await r.query.sampleHeight([point]);
+        equal(after[0] === null, before[0] === null, 'answered as before');
+        if (after[0] && before[0])
+          near(
+            after[0].height,
+            before[0].height,
+            0.5,
+            'the same height with sets drawn over the point',
+          );
+        ok(after[0]?.source !== 'set', 'not answered from a set');
+        shapes.dispose();
+        points.dispose();
       },
       { capability: 'sampleHeight' },
     ),

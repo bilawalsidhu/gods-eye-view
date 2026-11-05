@@ -186,6 +186,10 @@ export type Capability =
   | 'celestial'
   /** Agents moving along polylines (traffic flow). */
   | 'agents'
+  /** Satellites propagated by the renderer from their elements (`draw.orbits`). */
+  | 'orbits'
+  /** Rate-limited course easing (`IconItem.courseGlide`). */
+  | 'courseGlide'
   /** Screen-space clustering of icons. */
   | 'cluster'
   /** Post-processing styles. */
