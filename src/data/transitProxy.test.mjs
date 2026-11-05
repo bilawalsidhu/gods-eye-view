@@ -285,29 +285,14 @@ test('the snapshot builder fills timestamps from the header it decoded', () => {
   assert.equal(snapshot.feedTimestamp, 1_700_000_000);
 });
 
-test('a feed that publishes km/h has its speeds converted to m/s, and only that feed', () => {
-  // Rio's SMTR feeds put km/h in Position.speed; read as m/s, a 36 km/h bus
-  // would be reported at 130 km/h.
+test('Rio speeds pass through as the m/s they are published in', () => {
+  // SMTR publishes m/s, as the spec requires: checked against how far
+  // vehicles moved between reports on 2026-11-05.
   const bytes = encodeFeed({
-    entities: [
-      { id: 'moving', lat: -22.9, lon: -43.2, speed: 36 },
-      { id: 'still', lat: -22.9, lon: -43.2, speed: 0 },
-      { id: 'silent', lat: -22.9, lon: -43.2 },
-    ],
+    entities: [{ id: 'moving', lat: -22.9, lon: -43.2, speed: 10 }],
   });
   const rio = buildTransitSnapshot(getTransitFeed('smtr-rio-onibus'), bytes, 1);
-  const speeds = Object.fromEntries(
-    rio.vehicles.map((vehicle) => [vehicle.id, vehicle.speedMps]),
-  );
-  assert.ok(Math.abs(speeds.moving - 10) < 1e-6, '36 km/h is 10 m/s');
-  assert.equal(speeds.still, 0);
-  assert.equal(speeds.silent, null, 'an absent speed stays absent');
-  const mbta = buildTransitSnapshot(getTransitFeed('mbta'), bytes, 1);
-  assert.equal(
-    mbta.vehicles.find((vehicle) => vehicle.id === 'moving').speedMps,
-    36,
-    'a spec-conforming feed is left alone',
-  );
+  assert.equal(rio.vehicles[0].speedMps, 10);
 });
 
 test('conditional-request validators and gzip ride along with feed identification', () => {

@@ -4649,8 +4649,7 @@ Helsinki, the Netherlands, Norway, South East Queensland, Rio de Janeiro
 (municipal buses and the Mobi-Rio BRT, two feeds), and nine in
 Ontario — Toronto (TTC surface vehicles; the subway publishes no
 positions), MiWay, Hamilton HSR, Durham Region, YRT/Viva, Guelph,
-Burlington, Barrie and Kingston. Rio's feeds publish speed in km/h, which
-the proxy converts to m/s before any card reads it. Mode silhouettes
+Burlington, Barrie and Kingston. Mode silhouettes
 identify buses, trams, subways, trains, ferries and unclassified vehicles.
 
 Retained transit history uses the same outlier quarantine as live observations and

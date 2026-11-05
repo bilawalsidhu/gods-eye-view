@@ -398,12 +398,7 @@ function rioRouteLabel(routeId) {
  *   url: string, headers?: Record<string, string>,
  *   license: string, licenseUrl: string, attribution: string,
  *   defaultMode: string, routeMode?: (routeId: string|null) => string,
- *   speedUnit?: 'kmh',
  * }>>}
- *
- * `speedUnit: 'kmh'` marks a feed that publishes `Position.speed` in km/h
- * instead of the m/s the spec requires; the proxy converts it before anything
- * downstream reads `speedMps`.
  */
 export const TRANSIT_FEED_REGISTRY = Object.freeze([
   Object.freeze({
@@ -765,10 +760,9 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     terms: Object.freeze({
       quote:
         'This work is licensed under a Creative Commons Attribution 4.0 International License',
-      note: 'The data.rio catalog page labels the feed [beta] and states a gateway limit of 5 requests a second and 60 a minute behind a 10-second cache, which the 15-second proxy TTL stays inside. It is the named replacement for the JSON GPS endpoints SMTR deprecated on 2026-10-07 and says it will switch off by 2026-11-30. SMTR relays the concessionaires’ ITS data and repairs trips with its own matching; the page places accuracy with the suppliers. Speeds arrive in km/h, not m/s (a 2026-10-29 snapshot peaked at 89), hence `speedUnit`. Route ids are internal keys (`O0731AAN0A` is line SN731) and are joined to the line names in SMTR’s published GTFS `routes.txt`, under the same CC BY 4.0 terms.',
+      note: 'The data.rio catalog page labels the feed [beta] and states a gateway limit of 5 requests a second and 60 a minute behind a 10-second cache, which the 15-second proxy TTL stays inside. It is the named replacement for the JSON GPS endpoints SMTR deprecated on 2026-10-07 and says it will switch off by 2026-11-30. SMTR relays the concessionaires’ ITS data and repairs trips with its own matching; the page places accuracy with the suppliers. Speeds are m/s, as the spec requires: on 2026-11-05 they matched how far vehicles moved between reports, though a 2026-10-29 snapshot read as km/h. Route ids are internal keys (`O0731AAN0A` is line SN731) and are joined to the line names in SMTR’s published GTFS `routes.txt`, under the same CC BY 4.0 terms.',
     }),
     defaultMode: 'bus',
-    speedUnit: 'kmh',
     routeLabel: rioRouteLabel,
   }),
   Object.freeze({
@@ -788,10 +782,9 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     terms: Object.freeze({
       quote:
         'This work is licensed under a Creative Commons Attribution 4.0 International License',
-      note: 'Same catalog terms, [beta] label and gateway limits as the bus feed. The fleet is operated by Mobi-Rio and tracked by SONDA, whose data SMTR relays. Speeds are km/h here too (peak 62 in the same snapshot). Route ids are opaque (`20000501110` is line 50) and are joined to the same `routes.txt` as the buses.',
+      note: 'Same catalog terms, [beta] label and gateway limits as the bus feed. The fleet is operated by Mobi-Rio and tracked by SONDA, whose data SMTR relays. Speeds are m/s here too. Route ids are opaque (`20000501110` is line 50) and are joined to the same `routes.txt` as the buses.',
     }),
     defaultMode: 'bus',
-    speedUnit: 'kmh',
     routeLabel: rioRouteLabel,
   }),
 ]);

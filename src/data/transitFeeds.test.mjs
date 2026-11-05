@@ -535,14 +535,13 @@ test('the Rio route table is a clean join of published keys to names', () => {
   }
 });
 
-test('Rio feeds are CC BY 4.0, live, and declare the km/h speeds they publish', () => {
+test('Rio feeds are CC BY 4.0 and live', () => {
   for (const id of ['smtr-rio-onibus', 'smtr-rio-brt']) {
     const feed = getTransitFeed(id);
     assert.equal(feed.defaultEnabled, true, `${id} is live`);
     assert.equal(feed.license, 'CC BY 4.0');
     assert.match(feed.licenseUrl, /^https:\/\/www\.data\.rio\/documents\//);
     assert.match(feed.attribution, /Prefeitura da Cidade do Rio de Janeiro/);
-    assert.equal(feed.speedUnit, 'kmh', `${id} publishes km/h`);
     assert.equal(transitModeFor(feed, null), 'bus');
   }
   const sources = readFileSync(
