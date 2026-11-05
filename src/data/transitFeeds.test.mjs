@@ -15,6 +15,7 @@ import {
   transitModeResolved,
   transitRouteLabel,
 } from './transitFeeds.js';
+import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 
 test('every registered feed is keyless, https, licensed, and uniquely identified', () => {
   const ids = new Set();
@@ -502,6 +503,36 @@ test('Rio buses and BRT cover the city from Centro to Santa Cruz, and not São P
     [],
     'São Paulo, 360 km away, never polls Rio',
   );
+});
+
+test('Rio route keys read as the line on the front of the bus', () => {
+  // SMTR publishes internal keys. Plain keys carry the number (`O0868AAA0A`
+  // is 868), variants carry a prefix (`O0731AAN0A` is SN731), and some plain
+  // keys are traps: `O0014AAA0A` is LECD135, so the table is joined, not parsed.
+  const buses = getTransitFeed('smtr-rio-onibus');
+  assert.equal(transitRouteLabel(buses, 'O0868AAA0A'), '868');
+  assert.equal(transitRouteLabel(buses, 'O0731AAN0A'), 'SN731');
+  assert.equal(transitRouteLabel(buses, 'O0759AAP0A'), 'SP759');
+  assert.equal(transitRouteLabel(buses, 'O0014AAA0A'), 'LECD135');
+  assert.equal(transitRouteLabel(buses, 'E2303AAA0A'), '2303');
+  const brt = getTransitFeed('smtr-rio-brt');
+  assert.equal(transitRouteLabel(brt, '20000501110'), '50');
+  assert.equal(transitRouteLabel(brt, '20000EXEC1110'), 'ESP01');
+  // A route added after the table was built keeps its raw key, never a blank
+  // or a name borrowed from the prototype chain.
+  assert.equal(transitRouteLabel(buses, 'O9999AAA0A'), 'O9999AAA0A');
+  assert.equal(transitRouteLabel(buses, 'constructor'), 'constructor');
+  assert.equal(transitRouteLabel(brt, null), null);
+});
+
+test('the Rio route table is a clean join of published keys to names', () => {
+  const entries = Object.entries(RIO_ROUTE_NAMES);
+  assert.ok(entries.length > 400, 'the whole published table is carried');
+  for (const [id, name] of entries) {
+    assert.match(id, /^(?:[OE]\d{4}[A-Z0-9]{5}|2\d{4}[A-Z0-9]{4,8})$/, id);
+    assert.ok(name && name === name.trim(), `${id} has a name`);
+    assert.notEqual(name, id, `${id} is translated`);
+  }
 });
 
 test('Rio feeds are CC BY 4.0, live, and declare the km/h speeds they publish', () => {
