@@ -15,13 +15,14 @@ function fixture() {
     feed: {},
     _billboardCollection: { show: true },
     _billboards: new Map([['abc123', bb]]),
+    _scratchCarto: new Cesium.Cartographic(),
     _models: new Map(),
     _detectionObjects: new Map(),
-    records: { data: new Map([['abc123', info]]) },
+    records: { data: new Map([['abc123', info]]), missingPolls: new Map() },
   };
   let formats = 0;
   const services = {
-    aircraftPresentation: {},
+    aircraftPresentation: { tr3bTypeLabel: (_id, label) => label, tr3bAircraftClass: (_id, klass) => klass },
     militaryRegistry: {},
     camera: {},
     focus: {},
@@ -35,8 +36,8 @@ function fixture() {
   };
   const parts = {
     testing: {},
-    tracking: { _trackedModelRegimeActive: () => true },
-    motion: { _trackedVisualCached: () => null },
+    tracking: { _trackedModelRegimeActive: () => true, _routeIsPlausible: () => false },
+    motion: { _trackedVisualCached: () => null, _deadReckon: () => null },
   };
   parts.rendering = createRendering({ flightState, services, parts });
   const queries = createQueries({ flightState, services, parts }).methods;
@@ -146,4 +147,47 @@ test('tracked ownership and live anchors remain independent of fleet models', ()
   f.flightState._trackedModel = { ready: true, show: true };
   f.parts.tracking._trackedModelRegimeActive = () => false;
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123', null), false);
+});
+
+test('exact flight lookup scans all loaded contacts, not prefixes or the capped roster', () => {
+  const f = fixture();
+  f.bb.position = Cesium.Cartesian3.fromDegrees(-73, 40, 1000);
+  f.info.observedReceiptMs = 123456;
+  const one = f.queries.findExactFlightMatches({ kind: 'callsign', value: 'TEST123' });
+  assert.equal(one.status, 'found');
+  assert.equal(one.matches.length, 1);
+  assert.equal(one.matches[0].icao24, 'abc123');
+  assert.equal(one.matches[0].observedAtMs, 123456);
+  assert.ok(Math.abs(one.matches[0].latitude - 40) < 0.01);
+  assert.equal(f.queries.findExactFlightMatches({ kind: 'callsign', value: 'TEST' }).status, 'missing');
+  assert.equal(f.queries.findExactFlightMatches({ kind: 'icao24', value: 'abc123' }).matches.length, 1);
+});
+
+test('callsign collisions and hex/callsign collisions never auto-pick a first match', () => {
+  const f = fixture();
+  f.bb.position = Cesium.Cartesian3.fromDegrees(10, 20, 2500);
+  f.flightState.records.data.set('def456', { callsign: 'TEST123' });
+  f.flightState._billboards.set('def456', { position: Cesium.Cartesian3.fromDegrees(11, 21, 3200), show: true });
+  const same = f.queries.findExactFlightMatches({ kind: 'callsign', value: 'TEST123' });
+  assert.equal(same.status, 'found');
+  assert.equal(same.matches.length, 2);
+  f.info.callsign = 'ABC123';
+  const uncertain = f.queries.findExactFlightMatches({ kind: 'either', value: 'ABC123' });
+  assert.equal(uncertain.matches.length, 1);
+  f.flightState.records.data.set('abc124', { callsign: 'ABC123' });
+  f.flightState._billboards.set('abc124', { position: Cesium.Cartesian3.fromDegrees(12, 22, 3500), show: true });
+  assert.equal(f.queries.findExactFlightMatches({ kind: 'either', value: 'ABC123' }).matches.length, 2);
+});
+
+test('disabled, unloaded and stale flight data cannot look like a fresh selection', () => {
+  const f = fixture();
+  f.bb.position = Cesium.Cartesian3.fromDegrees(10, 20, 2300);
+  f.flightState._billboardCollection.show = false;
+  assert.equal(f.queries.findExactFlightMatches({ kind: 'callsign', value: 'TEST123' }).status, 'disabled');
+  f.flightState._billboardCollection.show = true;
+  f.flightState.records.missingPolls.set('abc123', 1);
+  assert.equal(f.queries.findExactFlightMatches({ kind: 'callsign', value: 'TEST123' }).status, 'stale');
+  f.flightState.records.missingPolls.clear();
+  f.flightState._billboards.clear();
+  assert.equal(f.queries.findExactFlightMatches({ kind: 'callsign', value: 'TEST123' }).status, 'unavailable');
 });
