@@ -622,6 +622,36 @@ for (const mode of ['ui-clean-view', 'recording-mode', 'cockpit-mode'])
       }
     }));
 
+test('in embed mode, which keeps Clean View on for its globe, EXPAND stays; the cockpit still ends it', () =>
+  withDom(async (dom) => {
+    const saved = globalThis.MutationObserver;
+    const watch = fakeMutationObserver();
+    globalThis.MutationObserver = watch.FakeObserver;
+    try {
+      dom.document.body.classList.add('ui-embed');
+      dom.document.body.classList.add('ui-clean-view');
+      const { layer, controls } = await stubPanel(
+        dom,
+        uiState({ open: false }),
+      );
+      await layer.publish(uiState({ open: true }));
+      dom.document.querySelector('#sl-viewer-expand').click();
+      await settle();
+      await settle();
+      watch.fire();
+      await settle();
+      assert.equal(controls.isViewerExpanded(), true, 'EXPAND stays open');
+      dom.document.body.classList.toggle('cockpit-mode', true);
+      watch.fire();
+      await settle();
+      await settle();
+      assert.equal(controls.isViewerExpanded(), false);
+      controls.destroy();
+    } finally {
+      globalThis.MutationObserver = saved;
+    }
+  }));
+
 /* ── Restores and keyboard rules ───────────────────────────────────────── */
 
 test('only an explicit switch-on opens the panel, unstored; a restore never does (P2-1)', () =>

@@ -223,7 +223,8 @@ export function createApplicationTools({
       shell: styleManager,
       viewer,
       dataManager,
-      run: (name, args) => voiceCommands.runner(name, args, { signal }),
+      run: (name, args, options = {}) =>
+        voiceCommands.runner(name, args, { ...options, signal }),
       signal,
     }),
   );

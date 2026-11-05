@@ -1222,6 +1222,8 @@ export class StyleManager extends ShellFacade {
   revealPanel(panelId) {
     const sheet = sheetForPanelId(panelId);
     if (sheet) this._mobileShell?.setSheet(sheet);
+    // The sheet opens at its top; a panel lower in the rail is scrolled to.
+    document.getElementById(panelId)?.scrollIntoView?.({ block: 'nearest' });
   }
 
   /**

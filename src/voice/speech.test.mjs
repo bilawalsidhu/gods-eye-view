@@ -536,6 +536,22 @@ test('labels are bounded and cleaned before they are spoken', () => {
   );
 });
 
+test('the street-level card says "the view centre" in the interface language', () => {
+  setLocale('de');
+  try {
+    const out = envelope('show_street_level', {
+      ok: true,
+      providerName: 'Mapillary',
+      label: 'the view centre',
+      atViewCentre: true,
+    });
+    assert.equal(out.display.lines[0], 'die Bildmitte');
+    assert.match(out.say, /the view centre/, 'speech stays English');
+  } finally {
+    setLocale('en');
+  }
+});
+
 test('street-level speech names the source and the place, and says which step failed', () => {
   const ok = envelope('show_street_level', {
     ok: true,
@@ -556,7 +572,8 @@ test('street-level speech names the source and the place, and says which step fa
     map: "Google Street View needs the Google 3D map, which isn't available.",
     key: 'Google Street View needs its key.',
     layer: "Couldn't turn on Street Level.",
-    imagery: 'No Google Street View imagery near Nowhere.',
+    // A service or viewer failure, not missing coverage.
+    imagery: 'Google Street View could not open imagery near Nowhere.',
   };
   for (const [stage, say] of Object.entries(stages)) {
     const out = envelope('show_street_level', {
@@ -570,6 +587,24 @@ test('street-level speech names the source and the place, and says which step fa
     assertSpeakable(out.say);
     assert.deepEqual(out.display.lines, ['detail']);
   }
+  const empty = envelope('show_street_level', {
+    ok: false,
+    stage: 'imagery',
+    noImagery: true,
+    label: 'Nowhere',
+    providerName: 'Mapillary',
+  });
+  assert.equal(empty.say, 'No Mapillary imagery near Nowhere.');
+  const sky = envelope('show_street_level', {
+    ok: false,
+    stage: 'imagery',
+    aim: 'sky',
+    atViewCentre: true,
+    label: 'the view centre',
+    providerName: 'Mapillary',
+  });
+  assert.equal(sky.say, 'Aim the middle of the view at a street first.');
+  assertSpeakable(sky.say);
   const armed = envelope('show_street_level', {
     ok: true,
     armed: true,

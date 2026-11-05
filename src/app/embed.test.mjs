@@ -32,14 +32,16 @@ const fakeLayers = (enabled) => ({
 });
 const recorder = (answers = {}) => {
   const calls = [];
-  const run = async (name, args) => {
+  const options = [];
+  const run = async (name, args, runOptions) => {
     calls.push([name, args]);
+    options.push([name, runOptions]);
     const answer = answers[name];
     return typeof answer === 'function'
       ? answer(calls)
       : (answer ?? { ok: true });
   };
-  return { calls, run };
+  return { calls, run, options };
 };
 
 test('embed mode is opt-in by query parameter', () => {
@@ -874,4 +876,128 @@ test('a passive link stands down when someone navigated while it waited behind i
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(quiet, ['annotate_map', 'show_street_level']);
+});
+
+test('a link replays the sender’s view: its street-level step never writes the recipient’s preferences', async () => {
+  const { calls, run, options } = recorder();
+  installViews({
+    shell: { initialRestorePromise: Promise.resolve() },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '',
+      hash: '#v=2&lat=1&lon=2&sl=mapillary,38.58000,-121.49000',
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(calls.length, 1);
+  assert.deepEqual(options, [
+    ['show_street_level', { origin: 'programmatic' }],
+  ]);
+});
+
+test('a start link whose restore a newer link superseded opens nothing', async () => {
+  const { calls, run } = recorder();
+  installViews({
+    shell: {
+      initialRestorePromise: Promise.resolve({ status: 'superseded' }),
+      _navigationGeneration: 4,
+    },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '',
+      hash: '#v=2&lat=1&lon=2&sl=mapillary,38.58000,-121.49000',
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [], 'start link A does not pull the camera from B');
+});
+
+test('a link pasted into the open tab opens or arms its photos once its restore settles', async () => {
+  const { calls, run, options } = recorder();
+  const windowRef = new EventTarget();
+  const location = { search: '', hash: '#v=2&lat=1&lon=2' };
+  const shell = {
+    initialRestorePromise: Promise.resolve(),
+    _navigationGeneration: 1,
+  };
+  const remove = installViews({
+    shell,
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location,
+    windowRef,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [], 'the start link has no photos');
+  const settled = (status) =>
+    windowRef.dispatchEvent(
+      Object.assign(new Event('gev:share-navigation-restore-settled'), {
+        detail: { status },
+      }),
+    );
+  location.hash = '#v=2&lat=3&lon=4&sl=mapillary,48.88740,2.34950';
+  shell._navigationGeneration = 2; // the restore's own flight
+  settled('failed');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [], 'a failed restore opens nothing');
+  settled('settled');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [
+    [
+      'show_street_level',
+      {
+        latitude: 48.8874,
+        longitude: 2.3495,
+        provider: 'mapillary',
+        fly: true,
+        autoOpen: false,
+      },
+    ],
+  ]);
+  assert.deepEqual(options.at(-1), [
+    'show_street_level',
+    { origin: 'programmatic' },
+  ]);
+  remove();
+  location.hash = '#v=2&lat=5&lon=6&sl=mapillary,1.00000,2.00000';
+  settled('settled');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(calls.length, 1, 'removed with the install');
+});
+
+test('a view whose photos fail closes the photo an earlier view opened', async () => {
+  const closed = [];
+  const dataManager = {
+    ...fakeLayers(new Set()),
+    layers: new Map([
+      ['street-level', { module: { closeViewer: () => closed.push(true) } }],
+    ]),
+  };
+  const { run } = recorder({
+    show_street_level: () => ({
+      ok: false,
+      stage: 'key',
+      error: 'needs its key',
+    }),
+  });
+  const view = createView({
+    camera: { lat: 1, lon: 2, altitude_m: 500 },
+    street_level: { provider: 'google' },
+  });
+  const viewer = fakeViewer();
+  await applyView(view, { viewer, dataManager, run });
+  assert.equal(closed.length, 1, 'closed before the view flies away');
+  assert.equal(viewer.flights.length, 1);
+  const opened = recorder({ show_street_level: () => ({ ok: true }) });
+  await applyView(view, { viewer, dataManager, run: opened.run });
+  assert.equal(closed.length, 1, 'an opened photo stays');
 });

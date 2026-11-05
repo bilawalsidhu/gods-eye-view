@@ -465,7 +465,7 @@ export function createGevActionRunner({
         const pending = dataManager.getAll?.().find((l) => l.id === layerId);
         reportProgress('layer', pending?.name || layerId);
       }
-      const changeOptions = { origin: 'voice' };
+      const changeOptions = { origin: actionIntentOrigin(runOptions) };
       if (runOptions.signal) changeOptions.signal = runOptions.signal;
       let changed = false;
       let changeError = null;
@@ -3446,6 +3446,18 @@ function normalizeStyle(value) {
   return null;
 }
 
+/** The application panel that holds the street-level photo. */
+const STREET_LEVEL_PANEL_ID = 'street-level-panel';
+
+/**
+ * The layer-state origin of an action's changes. The assistant's are the
+ * user's own choices and persist; a link replays someone else's view
+ * (`origin: 'programmatic'`) and never writes the recipient's preferences.
+ */
+function actionIntentOrigin(runOptions) {
+  return runOptions?.origin === 'programmatic' ? 'programmatic' : 'voice';
+}
+
 /**
  * "Show me <place> on Street View / on Mapillary": fly to the place, make sure
  * the imagery source's map is up, light that source in Street Level, turn the
@@ -3482,8 +3494,10 @@ export async function showStreetLevel(
     ...(provider ? { provider } : {}),
     ...(providerName ? { providerName } : {}),
     ...(label ? { label } : {}),
+    ...(atViewCentre ? { atViewCentre } : {}),
     ...extra,
   });
+  let atViewCentre = false;
   const query = String(args.query || '').trim();
   const latitude = Number(args.latitude);
   const longitude = Number(args.longitude);
@@ -3540,7 +3554,7 @@ export async function showStreetLevel(
     (entity ? String(entity.label || entity.id) : '') ||
     (hasCoordinates ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '') ||
     'the view centre';
-  const atViewCentre = !query && !hasCoordinates && !entity;
+  atViewCentre = !query && !hasCoordinates && !entity;
   let point = null;
   let location = null;
   if (args.fly === false || atViewCentre) {
@@ -3564,7 +3578,8 @@ export async function showStreetLevel(
       point = { lat: place.lat, lon: place.lng };
       label = place.label || query;
     }
-    // No place at all: the layer looks under the view centre.
+    // No place at all: the layer looks at the ground under the screen
+    // centre, as the OPEN button does.
   } else {
     location = await runGevAction(
       'fly_to_location',
@@ -3646,7 +3661,7 @@ export async function showStreetLevel(
   if (typeof dataManager.setLayerParams === 'function')
     accepted =
       dataManager.setLayerParams(STREET_LEVEL_LAYER_ID, switches, {
-        origin: 'voice',
+        origin: actionIntentOrigin(runOptions),
       }) !== false;
   else layerModule.setProviderEnabled?.(provider, true);
   if (!accepted)
@@ -3712,6 +3727,9 @@ export async function showStreetLevel(
   const opened = await layerModule.openNearest(point, {
     providerIds: [provider],
     frame: false,
+    // Under the screen centre, not the middle of a tilted view's footprint;
+    // this request is the user's own, not a link's armed one.
+    ...(point ? {} : { aim: 'screen-centre', armed: false }),
     ...(runOptions.signal ? { signal: runOptions.signal } : {}),
     ...(snapshot.groundClick === true
       ? { radiusM: STREET_LEVEL_WIDE_RADIUS_M }
@@ -3744,6 +3762,19 @@ export async function showStreetLevel(
         street.error || 'Street Level changed while it looked for imagery',
         { cancelled: true, location },
       );
+    // The screen centre is sky: nothing was looked up.
+    if (street.nearestOutcome === 'sky')
+      return fail('imagery', street.error || 'Aim the view at a street', {
+        location,
+        aim: 'sky',
+      });
+    // The source or the viewer failed: an error, not missing coverage.
+    if (street.nearestOutcome !== 'empty')
+      return fail(
+        'imagery',
+        street.error || `${providerName} imagery could not be opened`,
+        { location, imageryError: true },
+      );
     // An imagery filter the source honours can hide every photo here; say
     // so, or the answer reads as "no coverage" when one switch would do.
     const filter = activeImageryFilter(layerModule.getUIState?.());
@@ -3751,8 +3782,16 @@ export async function showStreetLevel(
     return fail(
       'imagery',
       filter ? `${reason} with the ${filter.label} on` : reason,
-      { location, ...(filter ? { filter } : {}) },
+      { location, noImagery: true, ...(filter ? { filter } : {}) },
     );
+  }
+  // Every explicit request shows its photo, also one replacing a photo whose
+  // panel or phone sheet the user had closed. Embed mode lifts the photo.
+  if (!globalThis.document?.body?.classList?.contains('ui-embed')) {
+    styleManager?.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
+      persist: false,
+    });
+    styleManager?.revealPanel?.(STREET_LEVEL_PANEL_ID);
   }
   return {
     ok: true,
@@ -3767,6 +3806,7 @@ export async function showStreetLevel(
     position: street.position ?? null,
     externalUrl: street.externalUrl ?? null,
     flew: location !== null,
+    ...(atViewCentre ? { atViewCentre } : {}),
     ...(location ? { location: location.label } : {}),
   };
 }

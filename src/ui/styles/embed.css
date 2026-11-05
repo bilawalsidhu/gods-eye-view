@@ -22,6 +22,14 @@ body.ui-embed .sl-viewer-wrap-embed {
   z-index: 1000;
 }
 
+/* Cockpit, recording and scene playback own the screen, as they hide the
+   panel elsewhere: the lifted photo steps out of their way. */
+body.ui-embed.cockpit-mode .sl-viewer-wrap-embed,
+body.ui-embed.recording-mode .sl-viewer-wrap-embed,
+body.ui-embed.scene-playback-mode .sl-viewer-wrap-embed {
+  display: none;
+}
+
 body.ui-embed .sl-viewer-wrap-embed .sl-viewer-stage,
 body.ui-embed .sl-viewer-wrap-embed .sl-viewer {
   flex: 1 1 auto;

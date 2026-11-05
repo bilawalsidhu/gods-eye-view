@@ -179,3 +179,44 @@ test('Graph endpoint errors keep their status', async () => {
     (error) => error.status === 503 && error.keyRequired === true,
   );
 });
+
+test('a nearest-image search that never answers is given up, body included', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { NEAREST_TIMEOUT_MS } = await import('./policy.js');
+  // Headers arrive; the body never ends, and the fetch ignores its signal.
+  const { fetchImpl } = fakeFetch(() => ({
+    ok: true,
+    status: 200,
+    json: () => new Promise(() => {}),
+  }));
+  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const pending = source.nearestImages({ lat: 1, lon: 2 });
+  const outcome = pending.then(
+    () => 'answered',
+    (error) => error,
+  );
+  await Promise.resolve();
+  t.mock.timers.tick(NEAREST_TIMEOUT_MS);
+  const error = await outcome;
+  assert.ok(error instanceof MapillarySourceError, String(error));
+  assert.equal(error.status, 504);
+  assert.equal(error.keyRequired, false, 'not a key problem');
+});
+
+test('the caller’s abort still ends a nearest-image search before its deadline', async () => {
+  const { fetchImpl } = fakeFetch(
+    (_url, init) =>
+      new Promise((_, reject) =>
+        init.signal.addEventListener('abort', () => reject(init.signal.reason)),
+      ),
+  );
+  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const controller = new AbortController();
+  const pending = source.nearestImages(
+    { lat: 1, lon: 2 },
+    { signal: controller.signal },
+  );
+  const reason = new Error('the turn moved on');
+  controller.abort(reason);
+  await assert.rejects(pending, (error) => error === reason);
+});

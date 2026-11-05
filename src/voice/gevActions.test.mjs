@@ -5715,8 +5715,13 @@ function createStreetLevelHarness({
   duringLookup = null,
   keyRejectedAtStart = false,
   lightFails = false,
+  imageryError = null,
+  sky = false,
 } = {}) {
   const order = [];
+  const lookups = [];
+  const origins = [];
+  const revealed = [];
   const { viewer, styleManager } = createVoiceNavigationHarness();
   let completeFlight = null;
   viewer.camera.lookAt = () => {};
@@ -5776,6 +5781,7 @@ function createStreetLevelHarness({
       order.push(`arm:${options.providerIds.join('+')}:${options.radiusM ?? 'default'}:${point ? `${point.lat},${point.lon}` : 'view-centre'}`);
     },
     async openNearest(point, options) {
+      lookups.push({ point, ...options });
       order.push(`open:${options.providerIds.join('+')}:${options.radiusM ?? 'default'}:${options.frame}${point ? '' : ':view-centre'}`);
       if (options.signal?.aborted) return false;
       if (duringLookup) {
@@ -5790,7 +5796,13 @@ function createStreetLevelHarness({
           return false;
         }
       }
+      if (imageryError) {
+        street.error = imageryError;
+        street.nearestOutcome = null;
+        return false;
+      }
       if (!nearest) {
+        street.nearestOutcome = options.aim === 'screen-centre' && sky ? 'sky' : 'empty';
         street.error = `No street-level imagery within ${options.radiusM ?? 50} m of ${point ? 'that point' : 'the view centre'}`;
         return false;
       }
@@ -5805,12 +5817,14 @@ function createStreetLevelHarness({
     isEnabled: () => enabled,
     getLayerParams: () => ({ ...params }),
     setLayerParams(id, next, { origin }) {
+      origins.push(origin);
       order.push(`params:${Object.entries(next).filter(([, on]) => on).map(([k]) => k).join('+')}:${origin}`);
       if (paramsAccepted === false) return false;
       if (!lightFails) params = { ...params, ...next };
       return true;
     },
-    async setEnabled(id) {
+    async setEnabled(id, _on, options) {
+      origins.push(options?.origin);
       order.push(`enable:${id}`);
       if (enableResult === false) return false;
       enabled = true;
@@ -5818,8 +5832,10 @@ function createStreetLevelHarness({
     },
     getAll: () => [{ id: 'street-level', name: 'Street Level', enabled }],
   };
+  styleManager.setPanelCollapsed = (id, collapsed) => revealed.push(`collapse:${id}:${collapsed}`);
+  styleManager.revealPanel = (id) => revealed.push(`reveal:${id}`);
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
-  return { runner, order, finishFlight: () => completeFlight?.(), layer, dataManager };
+  return { runner, order, finishFlight: () => completeFlight?.(), layer, dataManager, lookups, origins, revealed };
 }
 
 /** A loaded CCTV camera the entity branch can locate. */
@@ -6402,4 +6418,66 @@ test('show_street_level opens over the clean embedded globe but respects its oth
   } finally {
     globalThis.document = saved;
   }
+});
+
+test('show_street_level from a link keeps the recipient’s preferences: its switches are not the user’s', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const link = createStreetLevelHarness();
+  const linked = await link.runner(
+    'show_street_level',
+    { latitude: 1, longitude: 2, provider: 'mapillary', fly: false },
+    { origin: 'programmatic' },
+  );
+  assert.equal(linked.ok, true, linked.error);
+  assert.deepEqual(link.origins, ['programmatic', 'programmatic'], 'source switch and layer on');
+  const asked = createStreetLevelHarness();
+  await asked.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'mapillary', fly: false });
+  assert.deepEqual(asked.origins, ['voice', 'voice'], 'the assistant’s request is the user’s choice');
+});
+
+test('show_street_level with no place looks under the screen centre, not a link’s armed point', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const here = createStreetLevelHarness({ enabled: true });
+  const result = await here.runner('show_street_level', { provider: 'mapillary' });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.atViewCentre, true);
+  assert.equal(here.lookups[0].point, null);
+  assert.equal(here.lookups[0].aim, 'screen-centre');
+  assert.equal(here.lookups[0].armed, false);
+  const placed = createStreetLevelHarness({ enabled: true });
+  await placed.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'mapillary', fly: false });
+  assert.equal(placed.lookups[0].aim, undefined, 'a place is looked up where it is');
+  const sky = createStreetLevelHarness({ enabled: true, nearest: null, sky: true });
+  const refused = await sky.runner('show_street_level', { provider: 'mapillary' });
+  assert.deepEqual([refused.ok, refused.stage, refused.aim], [false, 'imagery', 'sky']);
+});
+
+test('show_street_level tells missing imagery from a failing source', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const empty = await createStreetLevelHarness({ enabled: true, nearest: null }).runner('show_street_level', {
+    latitude: 1, longitude: 2, provider: 'mapillary', fly: false,
+  });
+  assert.deepEqual([empty.stage, empty.noImagery, empty.imageryError], ['imagery', true, undefined]);
+  const broken = await createStreetLevelHarness({ enabled: true, imageryError: 'Mapillary graph HTTP 500' }).runner(
+    'show_street_level',
+    { latitude: 1, longitude: 2, provider: 'mapillary', fly: false },
+  );
+  assert.deepEqual([broken.stage, broken.noImagery, broken.imageryError], ['imagery', undefined, true]);
+  assert.equal(broken.error, 'Mapillary graph HTTP 500');
+});
+
+test('show_street_level shows every photo it opens, also over a panel the user had closed', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const harness = createStreetLevelHarness({ enabled: true });
+  await harness.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'mapillary', fly: false });
+  await harness.runner('show_street_level', { latitude: 3, longitude: 4, provider: 'mapillary', fly: false });
+  assert.deepEqual(harness.revealed, [
+    'collapse:street-level-panel:false',
+    'reveal:street-level-panel',
+    'collapse:street-level-panel:false',
+    'reveal:street-level-panel',
+  ]);
+  const missing = createStreetLevelHarness({ enabled: true, nearest: null });
+  await missing.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'mapillary', fly: false });
+  assert.deepEqual(missing.revealed, [], 'nothing opened, nothing revealed');
 });

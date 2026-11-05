@@ -285,8 +285,16 @@ export class StreetLevelControls {
       this._modesObserver = null;
       return;
     }
+    // Embed mode keeps Clean View on for its globe while the photo is lifted
+    // over it: there only recording and the cockpit end EXPAND.
     const leaveIfHiding = () => {
-      if (PANEL_HIDING_MODES.some((mode) => body.classList.contains(mode)))
+      if (
+        PANEL_HIDING_MODES.some(
+          (mode) =>
+            body.classList.contains(mode) &&
+            !(mode === 'ui-clean-view' && isEmbedPage()),
+        )
+      )
         this._exitExpanded();
     };
     if (!this._modesObserver && typeof MutationObserver === 'function') {

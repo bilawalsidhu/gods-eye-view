@@ -668,7 +668,10 @@ export function createStreetLevelLayer({
      * providers that can (a geocoded landmark is rarely within 50 m of a
      * street); clicks keep the default. A caller's `signal` retires the
      * lookup: nothing opens after it fires. Providers without
-     * `nearestImage` are skipped.
+     * `nearestImage` are skipped. `armed: false` (a request of its own, such
+     * as the assistant's) neither uses nor drops a link's armed point. Why
+     * nothing opened is left in `street.nearestOutcome`: 'empty' (no imagery
+     * in reach), 'sky' (the screen centre is not ground), or null (an error).
      */
     async openNearest(
       point,
@@ -678,18 +681,25 @@ export function createStreetLevelLayer({
         aim = 'view',
         radiusM = null,
         signal: callerSignal = null,
+        armed: useArmed = true,
       } = {},
     ) {
       if (callerSignal?.aborted) return false;
+      state.street.nearestOutcome = null;
       // An OPEN press after a link armed a lookup opens what the link asked;
       // any other lookup is a new request and drops the armed one.
-      const armed = state.street.armed;
-      state.street.armed = null;
+      const armed = useArmed ? state.street.armed : null;
+      if (useArmed) state.street.armed = null;
       if (!point && aim === 'screen-centre' && armed) {
         // The button promises the centre of the view: the link's spot only
-        // while the view still shows it.
+        // while the view still shows it, or when the view cannot be picked.
+        // Sky refuses below, as any OPEN press does.
         const centre = armed.point ? screenCentreGround() : null;
-        if (!centre || metresBetween(centre, armed.point) <= ARMED_REACH_M) {
+        if (!armed.point) radiusM ??= armed.radiusM;
+        else if (
+          centre === undefined ||
+          (centre && metresBetween(centre, armed.point) <= ARMED_REACH_M)
+        ) {
           point = armed.point;
           radiusM ??= armed.radiusM;
         }
@@ -704,6 +714,7 @@ export function createStreetLevelLayer({
           abortNearest();
           state.street.loading = false;
           state.street.error = AIM_AT_GROUND_MESSAGE;
+          state.street.nearestOutcome = 'sky';
           notify();
           return false;
         }
@@ -779,6 +790,8 @@ export function createStreetLevelLayer({
       );
       // A provider's own refusal is English data that the panel translates;
       // the core's refusal is built here, for the panel only, in the language.
+      if (state.enabled && stillOn && !lastError)
+        state.street.nearestOutcome = 'empty';
       if (state.enabled && stillOn)
         state.street.error =
           lastError?.message ||

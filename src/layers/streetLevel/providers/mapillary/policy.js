@@ -82,6 +82,12 @@ export const SEQUENCE_IMAGE_FIELDS =
  * the imagery filter then choose among the spot's photos, not a few of them.
  */
 export const NEAREST_LIMIT = 100;
+/**
+ * A nearest-image search that has not answered (headers and body) in this
+ * long is given up: a link or a posted view waits on it, and so does every
+ * view queued behind that one.
+ */
+export const NEAREST_TIMEOUT_MS = 12_000;
 /** Fields a nearest-image search needs: where each is, and the filter's. */
 export const NEAREST_IMAGE_FIELDS =
   'id,captured_at,geometry,computed_geometry,is_pano';

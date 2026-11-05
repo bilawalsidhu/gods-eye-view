@@ -123,6 +123,15 @@ test('embed mode shows an open photo over the globe, filling the overlay', () =>
   assert.ok(overlay, 'embed styles the viewer it moves over the globe');
   for (const rule of ['position: fixed', 'inset: 12px', 'z-index: 1000'])
     assert.ok(overlay[1].includes(rule), rule);
+  // Cockpit, recording and scene playback own the screen: the photo hides.
+  for (const mode of ['cockpit-mode', 'recording-mode', 'scene-playback-mode'])
+    assert.match(
+      css,
+      new RegExp(
+        `body\\.ui-embed\\.${mode} \\.sl-viewer-wrap-embed[^{]*\\{[^}]*display: none`,
+      ),
+      mode,
+    );
   // The photo takes the overlay's height, as it does full screen.
   assert.match(
     css,

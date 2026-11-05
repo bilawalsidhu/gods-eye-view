@@ -198,6 +198,8 @@ function streetLevelArgs(streetLevel, { autoOpen = true } = {}) {
 }
 
 const STREET_LEVEL_PANEL_ID = 'street-level-panel';
+/** Dispatched on the window when a link opened after start-up has restored. */
+const SHARE_NAVIGATION_RESTORED_EVENT = 'gev:share-navigation-restore-settled';
 
 /** The armed link's toast, naming the OPEN button as the panel shows it. */
 function armedToast() {
@@ -258,8 +260,12 @@ export async function applyView(
       'show_street_level',
       streetLevelArgs(view.street_level),
     );
-    if (result?.ok !== true && !result?.location)
-      steps.push({ step: 'camera', ok: await flyTo(viewer, view.camera) });
+    if (result?.ok !== true) {
+      // An earlier view's photo must not stay over a place this view left.
+      dataManager.layers?.get?.(STREET_LEVEL_LAYER)?.module?.closeViewer?.();
+      if (!result?.location)
+        steps.push({ step: 'camera', ok: await flyTo(viewer, view.camera) });
+    }
     return steps;
   }
   if (!view.follow) {
@@ -317,13 +323,16 @@ export function installViews({
   // The camera's owner at restore: anyone who navigates while the link's
   // steps wait (a gesture, a search, the assistant) takes it, and a passive
   // link must not fly over them.
+  // A start-up restore that a newer link superseded hands the camera to that
+  // link: its own steps never run.
   let generationAtRestore = null;
-  let queue = ready.then(() => {
+  let startSuperseded = false;
+  let queue = ready.then((outcome) => {
     generationAtRestore = shell._navigationGeneration;
+    startSuperseded = outcome?.status === 'superseded';
   });
-  const navigatedSinceRestore = () =>
-    Number.isFinite(generationAtRestore) &&
-    shell._navigationGeneration !== generationAtRestore;
+  const navigatedSince = (generation) =>
+    Number.isFinite(generation) && shell._navigationGeneration !== generation;
   const linkStep = (work) =>
     queue.then(async () => {
       if (signal?.aborted) return;
@@ -341,29 +350,64 @@ export function installViews({
   // click; only the panel page's own link for a result issued just now is
   // the client's request (a host remounting the panel hands back old ones).
   // A link that follows an entity keeps the camera on it.
-  const streetLevel = followFromParams(hashParams)
-    ? null
-    : streetLevelFromParams(hashParams);
-  if (streetLevel)
-    queue = linkStep(async () => {
-      if (navigatedSinceRestore()) return;
-      const result = await run(
-        'show_street_level',
-        streetLevelArgs(streetLevel, { autoOpen: isFreshPanelResult() }),
-      );
-      // The restore window keeps the panel collapsed; OPEN must be in view.
-      // Embed mode hides the rail that holds it, so there the link only arms
-      // (a posted view is the way to open a photo in a frame).
-      if (result?.armed === true && !isEmbedded(location)) {
-        shell.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
-          explicit: true,
-        });
-        // On a phone the panel sits in a tab sheet: open it so OPEN shows.
-        shell.revealPanel?.(STREET_LEVEL_PANEL_ID);
-        shell._showToast?.(armedToast());
-      }
-    });
-  if (!isEmbedded(location)) return () => {};
+  const linkedStreetLevel = (params) =>
+    followFromParams(params) ? null : streetLevelFromParams(params);
+  const openLinkedStreetLevel = async (
+    streetLevel,
+    { generation, autoOpen = false },
+  ) => {
+    if (navigatedSince(generation)) return;
+    // The link replays the sender's view: nothing it switches becomes the
+    // recipient's own preference.
+    const result = await run(
+      'show_street_level',
+      streetLevelArgs(streetLevel, { autoOpen }),
+      { origin: 'programmatic' },
+    );
+    // The restore window keeps the panel collapsed; OPEN must be in view.
+    // Embed mode hides the rail that holds it, so there the link only arms
+    // (a posted view is the way to open a photo in a frame).
+    if (result?.armed === true && !isEmbedded(location)) {
+      shell.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
+        explicit: true,
+      });
+      // On a phone the panel sits in a tab sheet: open it so OPEN shows.
+      shell.revealPanel?.(STREET_LEVEL_PANEL_ID);
+      shell._showToast?.(armedToast());
+    }
+  };
+  const startStreetLevel = linkedStreetLevel(hashParams);
+  if (startStreetLevel)
+    queue = linkStep(() =>
+      startSuperseded
+        ? undefined
+        : openLinkedStreetLevel(startStreetLevel, {
+            generation: generationAtRestore,
+            autoOpen: isFreshPanelResult(),
+          }),
+    );
+  // A link pasted into the open tab restores camera and layers on its own;
+  // its photos follow once that restore settles, under the same rule: a plain
+  // link never loads a billed photo by itself.
+  const onNavigatedRestore = (event) => {
+    if (event?.detail?.status !== 'settled') return;
+    const streetLevel = linkedStreetLevel(
+      new URLSearchParams(String(location?.hash || '').replace(/^#/, '')),
+    );
+    if (!streetLevel) return;
+    const generation = shell._navigationGeneration;
+    queue = linkStep(() => openLinkedStreetLevel(streetLevel, { generation }));
+  };
+  windowRef?.addEventListener?.(
+    SHARE_NAVIGATION_RESTORED_EVENT,
+    onNavigatedRestore,
+  );
+  const stopNavigatedRestores = () =>
+    windowRef?.removeEventListener?.(
+      SHARE_NAVIGATION_RESTORED_EVENT,
+      onNavigatedRestore,
+    );
+  if (!isEmbedded(location)) return stopNavigatedRestores;
 
   windowRef.document.body.classList.add('ui-embed');
   shell.setCleanView?.(true);
@@ -423,6 +467,7 @@ export function installViews({
   });
   return () => {
     stopRendering();
+    stopNavigatedRestores();
     windowRef.removeEventListener('message', onMessage);
   };
 }

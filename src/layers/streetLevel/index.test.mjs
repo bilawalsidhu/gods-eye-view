@@ -1942,3 +1942,115 @@ test('the panel says why a lit Street View draws nothing off Google 3D', async (
   const view = presentStreetLevelPanel(layer.getUIState());
   assert.match(view.meta, /Google Street View needs the Google 3D map/);
 });
+
+test('OPEN aimed at the sky after a link armed opens nothing: never the far link point', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const scenePick = await import('../../data/scenePick.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point) => {
+      lookups.push(point);
+      return null;
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  // Every pick misses the ground: the screen centre is sky.
+  Object.assign(viewer.scene, {
+    pickPositionSupported: true,
+    pickPosition: () => undefined,
+  });
+  viewer.globe = { pick: () => undefined };
+  viewer.scene.canvas.clientWidth = 1000;
+  viewer.scene.canvas.clientHeight = 600;
+  const layer = create({ providers: [provider], services: { scenePick } });
+  layer.init(viewer);
+  layer.enable(viewer);
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  layer.armNearest({ lat: 48.8584, lon: 2.2945 }, { radiusM: 250 });
+  assert.equal(
+    await layer.openNearest(undefined, { aim: 'screen-centre' }),
+    false,
+  );
+  assert.deepEqual(lookups, [], 'no paid Paris lookup from another city’s sky');
+  const street = layer.getUIState().street;
+  assert.equal(street.nearestOutcome, 'sky');
+  assert.match(street.error, /Aim the middle of the view/);
+});
+
+test('a request of its own (armed: false) neither uses nor drops the link’s armed point', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const scenePick = await import('../../data/scenePick.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point, options) => {
+      lookups.push({ point, radiusM: options?.radiusM ?? null });
+      return null;
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  Object.assign(viewer.scene, {
+    pickPositionSupported: true,
+    pickPosition: (at) => (at.x === 500 && at.y === 300 ? centre : undefined),
+  });
+  viewer.scene.canvas.clientWidth = 1000;
+  viewer.scene.canvas.clientHeight = 600;
+  const layer = create({ providers: [provider], services: { scenePick } });
+  layer.init(viewer);
+  layer.enable(viewer);
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  // About 120 m away: an OPEN press would take the link's spot.
+  layer.armNearest({ lat: 38.5808, lon: -121.494 }, { radiusM: 250 });
+  await layer.openNearest(undefined, { aim: 'screen-centre', armed: false });
+  const asked = lookups.at(-1);
+  assert.ok(Math.abs(asked.point.lat - 38.5799) < 1e-9, 'the screen centre');
+  assert.equal(asked.radiusM, null, 'its own radius');
+  assert.equal(layer.getUIState().street.nearestOutcome, 'empty');
+  assert.deepEqual(
+    layer.getUIState().street.armed?.point,
+    { lat: 38.5808, lon: -121.494 },
+    'still armed for the OPEN press',
+  );
+});
+
+test('a failing source is not reported as missing imagery', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const provider = fakeProvider({
+    nearestImage: async () => {
+      throw new Error('Mapillary graph HTTP 500');
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  const layer = create({ providers: [provider] });
+  layer.init(viewer);
+  layer.enable(viewer);
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  assert.equal(await layer.openNearest({ lat: 1, lon: 2 }), false);
+  const street = layer.getUIState().street;
+  assert.equal(street.nearestOutcome, null);
+  assert.equal(street.error, 'Mapillary graph HTTP 500');
+});

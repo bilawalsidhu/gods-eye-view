@@ -626,7 +626,11 @@ function showStreetLevel(result) {
   const shownSource = result?.providerName
     ? spokenLabel(result.providerName)
     : t('Street Level');
-  const shown = spokenLabel(localizePlaceName(result?.label || '')) || place;
+  // The view centre is a phrase, not a place name: the card says it in the
+  // interface language.
+  const shown = result?.atViewCentre
+    ? t('the view centre')
+    : spokenLabel(localizePlaceName(result?.label || '')) || place;
   if (result?.cancelled) return null;
   if (!result?.ok) {
     let say;
@@ -640,10 +644,15 @@ function showStreetLevel(result) {
     else if (result?.stage === 'layer') say = "Couldn't turn on Street Level.";
     else if (result?.stage === 'view')
       say = 'Street-level photos are hidden in this view. Leave it first.';
+    else if (result?.stage === 'imagery' && result?.aim === 'sky')
+      say = 'Aim the middle of the view at a street first.';
+    else if (result?.stage === 'imagery' && result?.filter?.label)
+      say = `No ${source} imagery near ${place} with the ${result.filter.label} on.`;
+    else if (result?.stage === 'imagery' && result?.noImagery === true)
+      say = `No ${source} imagery near ${place}.`;
+    // A service or viewer failure is not missing coverage.
     else if (result?.stage === 'imagery')
-      say = result?.filter?.label
-        ? `No ${source} imagery near ${place} with the ${result.filter.label} on.`
-        : `No ${source} imagery near ${place}.`;
+      say = `${source} could not open imagery near ${place}.`;
     else say = `Couldn't open ${source}.`;
     return {
       say,

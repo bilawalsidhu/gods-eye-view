@@ -21,5 +21,12 @@
   honours is on, the answer names the filter. Cancelled lookups clear their
   loading state over an existing photo and release their caller abort listeners.
   Embedded photos show loading errors inside the overlay, and the OPEN prompt
-  uses the recipient's selected language (Said Turksever, @asturksever,
+  uses the recipient's selected language. A link's photos never save its
+  layers as the recipient's preferences, and a link pasted into an open tab
+  opens or arms them too. With no place named, the action looks under the
+  screen centre as OPEN does; an armed OPEN aimed at the sky opens nothing; a
+  failing source is reported as an error, not as missing imagery; and
+  Mapillary's nearest search gives up after 12 seconds. On a phone the panel
+  scrolls into view, and in embed mode EXPAND stays open while cockpit,
+  recording and scene playback hide the photo (Said Turksever, @asturksever,
   #1113).
