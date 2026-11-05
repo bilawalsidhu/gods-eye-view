@@ -203,8 +203,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 35);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 35);
+  assert.equal(REGISTERED_LAYER_IDS.length, 36);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 36);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -243,19 +243,17 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '9');
+  assert.equal(nextLayerStateToken(), '00');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '9',
-      bravo: '00',
+      alpha: '00',
+      bravo: '01',
     }),
-    '01',
+    '02',
   );
-  const digitsExhausted = {
-    ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries([...'9'].map((digit) => [`prior-${digit}`, digit])),
-  };
+  // river-levels took the last single digit, 9.
+  const digitsExhausted = { ...LAYER_STATE_TOKEN_RESERVATIONS };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
     nextLayerStateToken({ ...digitsExhausted, retired: '00', used: '01' }),
@@ -306,8 +304,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '9',
-      next: '00',
+      future: '00',
+      next: '01',
     }),
     true,
   );
@@ -315,12 +313,12 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     () =>
       validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
         ...LAYER_STATE_TOKEN_RESERVATIONS,
-        future: '00',
+        future: '01',
       }),
-    /next free token 9/,
+    /next free token 00/,
   );
   const beforeLastDigit = { ...digitsExhausted };
-  delete beforeLastDigit['prior-9'];
+  delete beforeLastDigit['river-levels'];
   assert.equal(
     validateLayerStateAllocations(beforeLastDigit, {
       ...beforeLastDigit,
@@ -340,10 +338,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9', competing: '9' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '00' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '00', competing: '00' },
       ),
-    /next free token 00/,
+    /next free token 01/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -2704,6 +2702,22 @@ test('drone restrictions uses digit 8 without colliding with fire perimeters', (
   assert.equal(
     LAYER_STATE_REGISTRY.find(({ id }) => id === 'drone-airspace').token,
     '8',
+  );
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
+  );
+});
+
+test('river levels uses digit 9 without colliding with drone restrictions', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=9.8'));
+  assert.deepEqual(decoded.enabledLayerIds, [
+    'drone-airspace',
+    'river-levels',
+  ]);
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'river-levels').token,
+    '9',
   );
   assert.deepEqual(
     decodeLayerStateParams(new URLSearchParams(encode(decoded))),

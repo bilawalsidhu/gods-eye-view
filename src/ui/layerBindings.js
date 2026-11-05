@@ -147,6 +147,14 @@ export class LayerBindings {
       fires.attachShellServices({ imageryHost: this.services.imageryHost });
       this._weatherShellModules.push(fires);
     }
+    // River gauge alerts speak through the page toast.
+    const rivers = this._dataManager?.layers?.get('river-levels')?.module;
+    if (typeof rivers?.attachShellServices === 'function') {
+      rivers.attachShellServices({
+        showToast: (message) => this._showToast(message),
+      });
+      this._weatherShellModules.push(rivers);
+    }
   }
 
   _persistAwarenessSelection(event, cleared = false) {
