@@ -197,6 +197,8 @@ export const DATA_CREDITS = [
       '<a href="https://www.govdata.de/dl-de/zero-2-0" target="_blank" rel="noopener">DL-DE Zero 2.0</a>' +
       ' · Water Resources Agency, Ministry of Economic Affairs (Taiwan), ' +
       '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, version 1.0</a>' +
+      ' · Water Survey of Canada, Environment and Climate Change Canada: contains information licensed under the ' +
+      '<a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>' +
       ' (raw data, not quality controlled; informational only)' +
       ' · river lines: OpenStreetMap contributors via OpenFreeMap',
   },

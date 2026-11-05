@@ -8,7 +8,8 @@
  * Taiwanese hill station say nothing about each other. A reading therefore
  * never gets a colour from its value. It gets one only from the references
  * its own operator publishes for that gauge (Germany's lowest-ever and mean
- * levels and flood alert stages, Taiwan's three alert levels), mapped into
+ * levels and flood alert stages, Taiwan's three alert levels, Canada's means
+ * of the yearly lowest and highest daily levels), mapped into
  * one shared set of bands. A gauge without references stays grey.
  */
 // A portable export: no i18n here. The labels stay English data; the layer
@@ -263,11 +264,18 @@ export const RIVER_LEVEL_PROVIDERS = Object.freeze({
     coverage: msg('Taiwan · central rivers'),
     licence: 'Open Government Data License, version 1.0',
   }),
+  eccc: Object.freeze({
+    id: 'eccc',
+    country: 'CA',
+    network: 'Water Survey of Canada (ECCC)',
+    coverage: msg('Canada · real-time hydrometric network'),
+    licence: 'ECCC Data Servers End-use Licence',
+  }),
 });
 
 /** Same stable id shape the server publishes: `<provider>:<code>`. */
 export const STATION_ID_PATTERN =
-  /^(pegelonline:[0-9a-f-]{36}|wra:[0-9A-Z]{4,12})$/;
+  /^(pegelonline:[0-9a-f-]{36}|wra:[0-9A-Z]{4,12}|eccc:[0-9]{2}[A-Z]{2}[0-9]{3})$/;
 
 /**
  * The official page for a gauge, built from its validated code only.
@@ -277,6 +285,8 @@ export function stationPageUrl(station) {
   const code = String(station?.code ?? '');
   if (station?.provider === 'pegelonline' && /^[0-9]{5,10}$/.test(code))
     return `https://www.pegelonline.wsv.de/gast/stammdaten?pegelnr=${code}`;
+  if (station?.provider === 'eccc' && /^[0-9]{2}[A-Z]{2}[0-9]{3}$/.test(code))
+    return `https://wateroffice.ec.gc.ca/report/real_time_e.html?stn=${code}`;
   return null;
 }
 

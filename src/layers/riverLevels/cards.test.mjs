@@ -61,6 +61,33 @@ test('the card shows level, trend, references, plot and caveats', () => {
   assert.ok(card.details.some((line) => /Local gauge zero/.test(line)));
 });
 
+test('a Canadian card lists the mean yearly low and high it is coloured by', () => {
+  const medicineHat = {
+    ...bonn,
+    id: 'eccc:05AJ001',
+    provider: 'eccc',
+    code: '05AJ001',
+    name: 'South Saskatchewan River at Medicine Hat',
+    river: 'South Saskatchewan River',
+    level: 2.2,
+    refs: { low: 1.95, high: 5.6 },
+    band: 'normal',
+  };
+  const card = buildRiverLevelCard(medicineHat, null, NOW);
+  assert.equal(
+    card.details[0],
+    'South Saskatchewan River · Water Survey of Canada (ECCC)',
+  );
+  assert.equal(
+    card.details[2],
+    'Mean yearly low 1.95 m · Mean yearly high 5.60 m',
+  );
+  // Beside a long-term mean (Bonn) the yearly means stay off the line.
+  assert.ok(
+    !buildRiverLevelCard(bonn, null, NOW).details[2].includes('yearly'),
+  );
+});
+
 test('the series trend stands in until the snapshot carries one', () => {
   const card = buildRiverLevelCard(
     { ...bonn, trend: null },

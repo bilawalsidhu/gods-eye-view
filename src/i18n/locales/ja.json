@@ -3041,7 +3041,7 @@
   "Raw data · not quality controlled": "未検証の生データ",
   "River levels request failed": "河川水位の取得に失敗しました",
   "River levels": "河川水位",
-  "Germany and Taiwan · official gauges": "ドイツと台湾 · 公式水位観測所",
+  "Germany, Taiwan and Canada · official gauges": "ドイツ・台湾・カナダ · 公式水位観測所",
   "{count} gauges · {network} unavailable": "{count} 観測所 · {network} 利用不可",
   "{count} gauges reporting": {
     "other": "{count} か所の観測所が報告中"
@@ -3056,8 +3056,11 @@
   "No reference levels": "基準水位なし",
   "Germany · federal waterways": "ドイツ · 連邦水路",
   "Taiwan · central rivers": "台湾 · 中央管理河川",
+  "Canada · real-time hydrometric network": "カナダ · リアルタイム水文観測網",
   "Record low {value}": "最低記録 {value}",
   "Mean {value}": "平均 {value}",
+  "Mean yearly low {value}": "年最低水位の平均 {value}",
+  "Mean yearly high {value}": "年最高水位の平均 {value}",
   "Watch {value}": "注意 {value}",
   "Warning {value}": "警戒 {value}",
   "Flood {value}": "氾濫 {value}",

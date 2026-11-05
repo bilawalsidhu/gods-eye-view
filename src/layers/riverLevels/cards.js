@@ -37,7 +37,9 @@ const ageText = (observedMs, now) => {
 /** Reference lines, in the order a reader scans a gauge board. */
 const REFERENCE_LABELS = Object.freeze([
   ['recordLow', msg('Record low {value}')],
+  ['low', msg('Mean yearly low {value}')],
   ['mean', msg('Mean {value}')],
+  ['high', msg('Mean yearly high {value}')],
   ['watch', msg('Watch {value}')],
   ['warning', msg('Warning {value}')],
   ['flood', msg('Flood {value}')],
@@ -128,8 +130,13 @@ export function buildRiverLevelCard(
   );
   details.push(reading.join(' · '));
 
+  // The mean yearly low and high are shown only for a gauge whose board has
+  // no long-term mean (ECCC's): beside a mean and records they crowd the line.
+  const showYearly = station.refs?.mean === undefined;
   const refs = REFERENCE_LABELS.filter(
-    ([key]) => station.refs?.[key] !== undefined,
+    ([key]) =>
+      station.refs?.[key] !== undefined &&
+      (showYearly || (key !== 'low' && key !== 'high')),
   )
     .map(([key, label]) => t(label, { value: formatLevel(station.refs[key]) }))
     .join(' · ');

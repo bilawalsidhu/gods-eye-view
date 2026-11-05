@@ -3041,7 +3041,7 @@
   "Raw data · not quality controlled": "原始数据 · 未经质量控制",
   "River levels request failed": "获取河流水位失败",
   "River levels": "河流水位",
-  "Germany and Taiwan · official gauges": "德国和台湾 · 官方水文站",
+  "Germany, Taiwan and Canada · official gauges": "德国、台湾和加拿大 · 官方水文站",
   "{count} gauges · {network} unavailable": "{count} 个水文站 · {network} 不可用",
   "{count} gauges reporting": {
     "other": "{count} 个水文站有数据"
@@ -3056,8 +3056,11 @@
   "No reference levels": "无参考水位",
   "Germany · federal waterways": "德国 · 联邦水道",
   "Taiwan · central rivers": "台湾 · 中央管河川",
+  "Canada · real-time hydrometric network": "加拿大 · 实时水文监测网",
   "Record low {value}": "历史最低 {value}",
   "Mean {value}": "平均 {value}",
+  "Mean yearly low {value}": "多年平均年最低水位 {value}",
+  "Mean yearly high {value}": "多年平均年最高水位 {value}",
   "Watch {value}": "关注 {value}",
   "Warning {value}": "警戒 {value}",
   "Flood {value}": "洪水 {value}",

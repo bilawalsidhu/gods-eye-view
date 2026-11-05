@@ -153,4 +153,9 @@ test('official station pages are built from a validated code only', () => {
     null,
   );
   assert.equal(stationPageUrl({ provider: 'wra', code: '1010H006' }), null);
+  assert.equal(
+    stationPageUrl({ provider: 'eccc', code: '05AJ001' }),
+    'https://wateroffice.ec.gc.ca/report/real_time_e.html?stn=05AJ001',
+  );
+  assert.equal(stationPageUrl({ provider: 'eccc', code: '05AJ001&x' }), null);
 });

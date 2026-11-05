@@ -7,6 +7,16 @@ import {
 } from './pegelonline.js';
 import { normalizeWraReadings, normalizeWraRegister } from './wra.js';
 import { twd97ToWgs84 } from './twd97.js';
+import {
+  ECCC_MAX_PAGES,
+  ECCC_PAGE_SIZE,
+  buildEcccStations,
+  ecccReferences,
+  ecccRiverName,
+  normalizeEcccReadings,
+  normalizeEcccRegister,
+  normalizeEcccStats,
+} from './eccc.js';
 
 const BONN_UUID = '593647aa-9fea-43ec-a7d6-6476a76ae868';
 
@@ -326,4 +336,169 @@ test('station series: PEGELONLINE upstream, Taiwan from memory, bad ids refused'
   assert.equal((await h.call('/station/pegelonline/../../etc')).status, 404);
   assert.equal((await h.call('/station/other/1')).status, 404);
   assert.ok(h.calls.every((url) => url.startsWith('https://')));
+});
+
+const ECCC_REGISTER = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      geometry: { type: 'Point', coordinates: [-110.67754, 50.04209] },
+      properties: {
+        STATION_NUMBER: '05AJ001',
+        STATION_NAME: 'SOUTH SASKATCHEWAN RIVER AT MEDICINE HAT',
+        PROV_TERR_STATE_LOC: 'AB',
+      },
+    },
+    {
+      geometry: { type: 'Point', coordinates: [-114.40054, 49.60185] },
+      properties: {
+        STATION_NUMBER: '05AA030',
+        STATION_NAME: 'GOLD CREEK NEAR FRANK',
+        PROV_TERR_STATE_LOC: 'AB',
+      },
+    },
+    { geometry: null, properties: { STATION_NUMBER: '05AA031' } },
+    {
+      geometry: { type: 'Point', coordinates: [0, 0] },
+      properties: { STATION_NUMBER: 'bad' },
+    },
+  ],
+};
+
+/** Yearly daily extremes at Medicine Hat; Frank has too few years. */
+const ECCC_STATS = {
+  features: [
+    ...[0, 1, 2, 3, 4, 5].map((i) => ({
+      properties: {
+        STATION_NUMBER: '05AJ001',
+        MIN_VALUE: 1.8 + i * 0.04,
+        MAX_VALUE: 5.2 + i * 0.1,
+      },
+    })),
+    {
+      properties: {
+        STATION_NUMBER: '05AJ001',
+        MIN_VALUE: null,
+        MAX_VALUE: null,
+      },
+    },
+    {
+      properties: { STATION_NUMBER: '05AA030', MIN_VALUE: 0.9, MAX_VALUE: 1.6 },
+    },
+  ],
+};
+
+const ecccReading = (code, at, level) => ({
+  properties: { STATION_NUMBER: code, DATETIME: at, LEVEL: level },
+});
+
+test('ECCC names, statistics and readings become referenced Canadian gauges', () => {
+  const register = normalizeEcccRegister(ECCC_REGISTER.features);
+  assert.deepEqual([...register.keys()], ['05AJ001', '05AA030']);
+  assert.equal(
+    register.get('05AJ001').name,
+    'South Saskatchewan River at Medicine Hat',
+  );
+  assert.equal(register.get('05AJ001').river, 'South Saskatchewan River');
+  assert.equal(register.get('05AA030').river, 'Gold Creek');
+  assert.equal(
+    ecccRiverName('RIVIERE CHAUDIERE A SAINT-LAMBERT'),
+    'Riviere Chaudiere',
+  );
+
+  const stats = normalizeEcccStats(ECCC_STATS.features);
+  assert.deepEqual([...stats.keys()], ['05AJ001']);
+  assert.equal(stats.get('05AJ001').low, 1.9);
+  assert.equal(stats.get('05AJ001').high, 5.45);
+
+  const readings = normalizeEcccReadings([
+    ecccReading('05AJ001', '2026-11-05T12:55:00Z', 2.205),
+    ecccReading('05AJ001', '2026-11-05T12:00:00Z', 2.25),
+    ecccReading('05AJ001', '2026-11-05T13:00:00Z', null),
+    ecccReading('05AA030', '2026-11-05T12:55:00Z', 1.119),
+    ecccReading('99ZZ999', '2026-11-05T12:55:00Z', 1),
+  ]);
+  assert.deepEqual(readings.get('05AJ001'), [
+    [Date.parse('2026-11-05T12:00:00Z'), 2.25],
+    [Date.parse('2026-11-05T12:55:00Z'), 2.205],
+  ]);
+  const [hat, frank] = buildEcccStations(register, stats, readings);
+  assert.equal(hat.id, 'eccc:05AJ001');
+  assert.equal(hat.level, 2.205);
+  assert.deepEqual(hat.refs, { low: 1.9, high: 5.45 });
+  assert.equal(hat.band, 'normal');
+  assert.equal(frank.band, 'unknown');
+  assert.deepEqual(frank.refs, {});
+
+  // Over its mean yearly high a gauge is on watch, never in flood.
+  const over = buildEcccStations(
+    register,
+    stats,
+    new Map([['05AJ001', [[Date.parse('2026-11-05T12:55:00Z'), 7]]]]),
+  );
+  assert.equal(over[0].band, 'watch');
+  // A reading on another datum (535 m against a 2-6 m archive) gets none.
+  assert.deepEqual(ecccReferences(535, stats.get('05AJ001')), {});
+});
+
+test('the Canadian network pages GeoMet, trends at once and serves a series', async () => {
+  const h = harness([
+    [/hydrometric-stations/, ECCC_REGISTER],
+    [/hydrometric-annual-statistics/, ECCC_STATS],
+    [
+      /hydrometric-realtime.*STATION_NUMBER=05AJ001/,
+      {
+        features: [
+          { properties: { DATETIME: '2026-11-04T19:00:00Z', LEVEL: 2.3 } },
+          { properties: { DATETIME: '2026-11-04T20:55:00Z', LEVEL: 2.2 } },
+        ],
+      },
+    ],
+    [
+      /hydrometric-realtime/,
+      {
+        features: [
+          ecccReading('05AJ001', '2026-11-04T19:55:00Z', 2.3),
+          ecccReading('05AJ001', '2026-11-04T20:55:00Z', 2.2),
+        ],
+      },
+    ],
+  ]);
+  const answer = await h.call('/');
+  assert.equal(answer.status, 200);
+  assert.equal(answer.body.providers.eccc.count, 1);
+  const hat = answer.body.stations.find((s) => s.provider === 'eccc');
+  assert.equal(hat.band, 'normal');
+  // 10 cm down in an hour, from the window's own readings.
+  assert.equal(hat.trend, -10);
+  const realtime = h.calls.find((url) => /hydrometric-realtime/.test(url));
+  assert.match(realtime, /datetime=2026-11-04T19%3A30%3A00Z%2F\.\./);
+  assert.match(realtime, /offset=0/);
+
+  const series = await h.call('/station/eccc/05AJ001');
+  assert.equal(series.status, 200);
+  assert.equal(series.body.partial, false);
+  assert.equal(series.body.points.length, 2);
+  assert.equal(series.body.trend, -10);
+  assert.equal((await h.call('/station/eccc/99ZZ999')).status, 404);
+  assert.equal((await h.call('/station/eccc/05aj001')).status, 404);
+});
+
+test('a GeoMet page loop stops at the page cap', async () => {
+  const full = {
+    features: Array.from({ length: ECCC_PAGE_SIZE }, () =>
+      ecccReading('05AJ001', '2026-11-04T20:55:00Z', 2.2),
+    ),
+  };
+  const h = harness([
+    [/hydrometric-stations/, ECCC_REGISTER],
+    [/hydrometric-annual-statistics/, ECCC_STATS],
+    [/hydrometric-realtime/, full],
+  ]);
+  const answer = await h.call('/');
+  assert.equal(answer.status, 502);
+  assert.equal(
+    h.calls.filter((url) => /hydrometric-realtime/.test(url)).length,
+    ECCC_MAX_PAGES,
+  );
 });
