@@ -3,6 +3,10 @@ import test from 'node:test';
 import { twoline2satrec } from 'satellite.js';
 import { composeCatalog, coreTools } from '../index.js';
 import {
+  findNextSatellitePass,
+  lookAnglesAt,
+} from '../../data/satellitePass.js';
+import {
   noradIdFromSatnum,
   parseTleText,
   tleCatalogNumber,
@@ -301,7 +305,20 @@ test('satellite azimuths that round to 360 read as 0', async () => {
     tools: coreTools,
     services: { satellites: satellites(), clock: CLOCK },
   });
-  // From these points the ISS rises at 359.7° and stands at 359.8° at CLOCK.
+  // These points are chosen so the ISS's raw azimuths fall just below 360°;
+  // pin that first, so the test cannot pass on a raw value already near 0.
+  const [, line1, line2] = TLE.split('\n');
+  const iss = twoline2satrec(line1, line2);
+  const nearNorth = (deg) => deg > 359.5 && deg < 360;
+  const rawPass = findNextSatellitePass({
+    satrec: iss,
+    latDeg: 10,
+    lonDeg: 30,
+    fromMs: CLOCK.now(),
+  });
+  assert.ok(nearNorth(rawPass.riseAzDeg), `rise ${rawPass.riseAzDeg}°`);
+  const rawLook = lookAnglesAt(iss, CLOCK.now(), 39.25, 65.75);
+  assert.ok(nearNorth(rawLook.azDeg), `azimuth ${rawLook.azDeg}°`);
   const pass = await catalog.call('next_satellite_pass', {
     location: { lat: 10, lon: 30 },
   });
