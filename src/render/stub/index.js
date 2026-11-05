@@ -733,6 +733,16 @@ export function createStubRenderer(options = {}) {
     };
   }
 
+  /** Each lease's `grab`, or null when it takes every press. */
+  const leaseGrab = new WeakMap();
+  /**
+   * The presses under way, by button, from their `down`: `owner` is the
+   * lease each went to, or null when it went to everyone else. A press's
+   * click and double-click go where its down went (an ended owner's to no
+   * one).
+   */
+  const presses = new Map();
+
   const leaseOf = (entry) =>
     typeof entry.lease === 'function' ? entry.lease() : entry.lease;
 
@@ -746,9 +756,10 @@ export function createStubRenderer(options = {}) {
         if (i >= 0) pointerListeners.splice(i, 1);
       };
     },
-    claimPointer(owner) {
+    claimPointer(owner, opts = {}) {
       if (currentLease) currentLease.release();
       let released = false;
+      const grab = typeof opts.grab === 'function' ? opts.grab : null;
       const lease = {
         owner: String(owner),
         get current() {
@@ -761,6 +772,7 @@ export function createStubRenderer(options = {}) {
         },
       };
       currentLease = lease;
+      leaseGrab.set(lease, grab);
       return lease;
     },
     isPointerFree: () => currentLease === null,
@@ -774,8 +786,91 @@ export function createStubRenderer(options = {}) {
     ctrlWheelZoom: false,
   };
 
+  /** Who a new press belongs to, decided from its `down`. */
+  function pressFor(down) {
+    const lease = currentLease;
+    if (!lease) return { owner: null, clicked: false };
+    const grab = leaseGrab.get(lease);
+    let grabbed = !grab;
+    if (grab)
+      try {
+        grabbed = grab(down) === true;
+      } catch (error) {
+        report(error);
+      }
+    return { owner: grabbed ? lease : null, clicked: false };
+  }
+
+  /**
+   * Where an event goes: to one lease's listeners (`lease`), to everyone
+   * without a lease (`ambient`), or both (`move` and `up`).
+   */
+  function recipients(type, ev) {
+    const button = ev.button;
+    // A click comes straight after its press's up, and a double-click
+    // straight after that click, by the same button at the same spot;
+    // anything else after the up ends the press.
+    for (const [b, p] of presses) {
+      if (!p.up) continue;
+      const continues =
+        b === button &&
+        ((type === 'click' &&
+          !p.clicked &&
+          Math.hypot(p.at.x - ev.position.x, p.at.y - ev.position.y) <= 4) ||
+          (type === 'dblclick' &&
+            p.clicked &&
+            Math.hypot(p.at.x - ev.position.x, p.at.y - ev.position.y) <= 4));
+      if (!continues) presses.delete(b);
+    }
+    if (type === 'up' && presses.has(button)) {
+      const p = presses.get(button);
+      p.up = true;
+      p.at = ev.position;
+    }
+    if (type === 'move' || type === 'up')
+      return { lease: currentLease, ambient: true };
+    if (type === 'wheel' || type === 'pinch') {
+      const exclusive = currentLease && !leaseGrab.get(currentLease);
+      return exclusive
+        ? { lease: currentLease, ambient: false }
+        : { lease: null, ambient: true };
+    }
+    // `grab` sees a click with no press of its own as the down it stands
+    // for: no pick, no gesture.
+    const asDown = () => ({
+      ...pressFor({
+        type: 'down',
+        position: ev.position,
+        button: ev.button,
+        modifiers: ev.modifiers,
+        timestamp: ev.timestamp,
+        pointerType: ev.pointerType,
+      }),
+      up: true,
+    });
+    let current;
+    if (type === 'down') {
+      current = pressFor(ev);
+      presses.set(button, current);
+    } else {
+      // Only a press the loop above kept, at the right step, continues;
+      // anything else is a press of its own and leaves a held one alone.
+      const held = presses.get(button);
+      const continues =
+        held?.up && (type === 'click' ? !held.clicked : held.clicked);
+      current = continues ? held : asDown();
+      if (type === 'click' && (continues || !held)) {
+        current.clicked = true;
+        presses.set(button, current);
+      } else if (continues) presses.delete(button);
+    }
+    current.at = ev.position;
+    return current.owner
+      ? { lease: current.owner, ambient: false }
+      : { lease: null, ambient: true };
+  }
+
   function dispatchPointer(type, x, y, extra = {}) {
-    const free = currentLease === null;
     let picked;
     const ev = {
       type,
@@ -801,13 +896,13 @@ export function createStubRenderer(options = {}) {
         opts.limit === undefined ? hits().slice() : hits().slice(0, opts.limit);
       ev.ground = () => rayEllipsoid(pickRay(x, y));
     }
-    const ambientAlways = type === 'move' || type === 'up';
+    const to = recipients(type, ev);
     for (const entry of pointerListeners.slice()) {
       if (!entry.live || entry.type !== type) continue;
       if (entry.lease) {
         const lease = leaseOf(entry);
-        if (!lease?.current) continue;
-      } else if (!free && !ambientAlways) continue;
+        if (!to.lease || lease !== to.lease || !lease.current) continue;
+      } else if (!to.ambient) continue;
       try {
         entry.cb(ev);
       } catch (error) {
@@ -982,6 +1077,8 @@ export function createStubRenderer(options = {}) {
     modulation: null,
   };
   const effectListeners = [];
+  /** Styles Core defined, by id. */
+  const defined = new Map();
   const STYLES = Object.freeze([
     {
       id: 'retro',
@@ -997,7 +1094,40 @@ export function createStubRenderer(options = {}) {
   }
   const effects = {
     styles: () =>
-      capabilities.has('styles') ? STYLES.map((s) => ({ ...s })) : [],
+      capabilities.has('styles')
+        ? [
+            ...STYLES.filter((s) => !defined.has(s.id)),
+            ...defined.values(),
+          ].map(({ id, params, animated }) => ({
+            id,
+            params: params.map((p) => ({ ...p })),
+            animated,
+          }))
+        : [],
+    defineStyle(definition) {
+      // The stub runs GLSL only, as the default renderer does.
+      if (
+        !capabilities.has('styles') ||
+        typeof definition?.shader?.glsl !== 'string'
+      )
+        return null;
+      const entry = {
+        id: String(definition.id),
+        params: (definition.params ?? []).map((p) => ({ ...p })),
+        animated: Boolean(definition.animated),
+      };
+      defined.set(entry.id, entry);
+      effectsChanged();
+      let removed = false;
+      return () => {
+        if (removed) return;
+        removed = true;
+        if (defined.get(entry.id) !== entry) return;
+        defined.delete(entry.id);
+        if (effectState.style === entry.id) effectState.style = null;
+        effectsChanged();
+      };
+    },
     setStyle(id, params) {
       effectState.style = id;
       if (params) effectState.params[id] = { ...params };

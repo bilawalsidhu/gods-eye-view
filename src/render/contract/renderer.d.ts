@@ -30,8 +30,6 @@ export interface RendererPlugin {
 export interface CreateOptions {
   /** The element the renderer fills. It creates its own canvas inside. */
   container: HTMLElement;
-  /** Where Core renders credits, when it has a place for them. */
-  creditContainer?: HTMLElement;
   /** Google Maps Platform key for photorealistic tiles. */
   googleApiKey?: string;
   /** Short-lived Google session tokens, when the key is held server-side. */

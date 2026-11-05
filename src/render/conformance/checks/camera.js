@@ -242,6 +242,26 @@ export function cameraChecks() {
           [-1.2, -0.1],
           'pitchRange is settable',
         );
+        const { coast } = r.camera.controls;
+        for (const key of ['drag', 'zoom'])
+          ok(
+            Number.isFinite(coast[key]) && coast[key] >= 0,
+            `coast.${key} is seconds`,
+          );
+        r.camera.controls.coast = { drag: 0.25, zoom: 0 };
+        // Within rounding: an engine may keep it as a decay coefficient.
+        near(
+          r.camera.controls.coast.drag,
+          0.25,
+          1e-9,
+          'coast.drag is settable',
+        );
+        near(
+          r.camera.controls.coast.zoom,
+          0,
+          1e-9,
+          'a coast of 0 stops at once',
+        );
         r.destroy();
       },
     },

@@ -3,9 +3,26 @@
  *
  * A tool takes the pointer with a lease; while a lease is out, ambient
  * subscribers (those without a lease) get only `move` and `up`: no presses,
- * clicks, double-clicks, wheel or pinch. Suspending camera
- * input is separate and counted, and takes effect on the same pointerdown
- * that asked for it.
+ * clicks, double-clicks, wheel or pinch. A lease with `grab` takes only the
+ * presses it grabs: `grab` is asked on each `down`, and a grabbed press (its
+ * `down`, and the `click` and `dblclick` it ends in) goes to the lease's
+ * listeners alone. Every other press, and wheel and pinch, go to ambient
+ * subscribers and the camera as if the pointer were free; `move` and `up`
+ * go to both.
+ *
+ * Every event of a press goes where its `down` went, even when the lease
+ * ends or changes before the press is over (an ended lease's to no one), so
+ * a claim never takes a press already under way. Each button's presses
+ * are separate. A press runs from its `down` through its `up`, the `click`
+ * straight after it where it went up, and a `dblclick` straight after that
+ * at the same spot;
+ * any other event after its `up` ends it. A click or double-click with no
+ * press of its own is decided as a press, `grab` seeing it as a `down`
+ * (without `pick`, `drill` or `ground`).
+ *
+ * Suspending camera input is separate and counted, and takes effect on the
+ * same pointerdown that asked for it, so a tool that grabs a press suspends
+ * the camera in its `down` listener.
  *
  * A click is delivered with its pick already made, once, and shared by
  * every subscriber (`PointerEv.pick`). A renderer whose picks answer a frame
@@ -70,8 +87,19 @@ export interface InputPort {
     cb: (ev: PointerEv) => void,
     options?: { lease?: Lease | (() => Lease | null) },
   ): Off;
-  /** Take the pointer for a tool. A new claim ends the previous lease. */
-  claimPointer(owner: string): Lease;
+  /**
+   * Take the pointer for a tool. A new claim ends the previous lease.
+   * `grab` decides each press from its `down` event, synchronously: true
+   * makes it the tool's, anything else leaves it. A `down` carries no pick,
+   * so `grab` decides from the position, button and modifiers (and the
+   * tool's own hit test, through `query`). Omitted, every press is the
+   * tool's. A `grab` that throws is reported and leaves the press to the
+   * others.
+   */
+  claimPointer(
+    owner: string,
+    options?: { grab?: (down: PointerEv) => boolean },
+  ): Lease;
   isPointerFree(): boolean;
   /** Suspend user camera input until released. Holds are counted. */
   suspendCameraControls(reason: string): Release;

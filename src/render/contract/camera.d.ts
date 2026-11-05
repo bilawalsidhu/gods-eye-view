@@ -172,9 +172,13 @@ export interface CameraControls {
   enableZoom: boolean;
   minDistance: number;
   maxDistance: number;
-  inertiaSpin: number;
-  inertiaTranslate: number;
-  inertiaZoom: number;
+  /**
+   * How long a motion the user lets go of coasts: seconds for its speed to
+   * fall to 1/e. `drag` is moving the globe under the pointer and tilting
+   * (one motion in the default renderer), `zoom` is zooming; 0 stops at
+   * once. Set the whole object to change it.
+   */
+  coast: { drag: number; zoom: number };
   /** What the eye cannot pass below. */
   collision: 'none' | 'terrain' | 'tiles' | 'both';
   zoomFactor: number;

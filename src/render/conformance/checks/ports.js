@@ -275,7 +275,7 @@ export function portChecks() {
             'credits.on(change)',
             (cb) => r.credits.on('change', cb),
             () => {
-              credits.push(r.credits.addStatic({ html: 'Conformance data' }));
+              credits.push(r.credits.addStatic({ text: 'Conformance data' }));
             },
           ],
           [
@@ -1364,6 +1364,251 @@ export function portChecks() {
       },
     ),
     check(
+      'input.lease.grab',
+      'a lease with grab takes only the presses it grabs; wheel and the rest stay free',
+      async (h, r) => {
+        if (!h.pointer) return { skip: 'no pointer in this harness' };
+        const heard = [];
+        for (const type of POINTER_TYPES) {
+          r.input.on(type, () => heard.push(`ambient:${type}`));
+        }
+        const errors = [];
+        r.on('error', (e) => errors.push(e));
+        let throwing = false;
+        const lease = r.input.claimPointer('draw', {
+          grab: (down) => {
+            if (throwing) throw new Error('conformance grab');
+            return down.type === 'down' && down.position.x < 640;
+          },
+        });
+        for (const type of POINTER_TYPES)
+          r.input.on(type, () => heard.push(`tool:${type}`), { lease });
+        const press = async (x) => {
+          heard.length = 0;
+          for (const type of ['down', 'move', 'up', 'click'])
+            await h.pointer(r, type, x, 360);
+          return heard.slice();
+        };
+        deepEqual(
+          await press(100),
+          [
+            'tool:down',
+            'ambient:move',
+            'tool:move',
+            'ambient:up',
+            'tool:up',
+            'tool:click',
+          ],
+          'a grabbed press is the tool’s; move and up go to both',
+        );
+        heard.length = 0;
+        await h.pointer(r, 'wheel', 100, 360, { delta: 1 });
+        deepEqual(
+          heard,
+          ['ambient:wheel'],
+          'wheel is never grabbed, even after a grabbed press',
+        );
+        heard.length = 0;
+        await h.pointer(r, 'pinch', 100, 360, { delta: 1.1 });
+        deepEqual(heard, ['ambient:pinch'], 'nor is pinch');
+        deepEqual(
+          await press(1000),
+          [
+            'ambient:down',
+            'ambient:move',
+            'tool:move',
+            'ambient:up',
+            'tool:up',
+            'ambient:click',
+          ],
+          'a press left alone goes to the others',
+        );
+        ok(lease.current, 'the lease stays out');
+        ok(!r.input.isPointerFree(), 'the pointer is not free');
+        throwing = true;
+        deepEqual(
+          (await press(100)).filter((x) => x.endsWith(':down')),
+          ['ambient:down'],
+          'a throwing grab leaves the press to the others',
+        );
+        equal(errors.length, 1, 'and is reported');
+        lease.release();
+      },
+    ),
+    check(
+      'input.lease.press',
+      'every event of a press goes where its down went, whatever the lease does meanwhile',
+      async (h, r) => {
+        if (!h.pointer) return { skip: 'no pointer in this harness' };
+        const heard = [];
+        for (const type of ['down', 'click', 'dblclick'])
+          r.input.on(type, () => heard.push(`ambient:${type}`));
+        const left = (down) => down.type === 'down' && down.position.x < 640;
+        const listen = (lease, name) => {
+          for (const type of ['down', 'up', 'click', 'dblclick'])
+            r.input.on(type, () => heard.push(`${name}:${type}`), { lease });
+        };
+        const at = async (x, ...types) => {
+          for (const type of types) await h.pointer(r, type, x, 360);
+        };
+
+        let lease = r.input.claimPointer('a', { grab: left });
+        listen(lease, 'a');
+        r.input.on('up', () => lease.release(), { lease });
+        heard.length = 0;
+        await at(100, 'down', 'up', 'click');
+        deepEqual(
+          heard,
+          ['a:down', 'a:up'],
+          'a lease that ends on up takes the click with it: no one hears it',
+        );
+
+        heard.length = 0;
+        await at(1000, 'down');
+        lease = r.input.claimPointer('b', { grab: () => true });
+        listen(lease, 'b');
+        await at(1000, 'up', 'click');
+        deepEqual(
+          heard,
+          ['ambient:down', 'b:up', 'ambient:click'],
+          'a press left to the others stays theirs when a lease is claimed mid-press (up goes to both)',
+        );
+
+        heard.length = 0;
+        await at(100, 'down', 'up', 'click', 'down', 'up', 'click', 'dblclick');
+        deepEqual(
+          heard.filter((x) => !x.endsWith(':up')),
+          ['b:down', 'b:click', 'b:down', 'b:click', 'b:dblclick'],
+          'a grabbed double-click is the lease’s',
+        );
+        lease.release();
+
+        lease = r.input.claimPointer('c', { grab: left });
+        listen(lease, 'c');
+        heard.length = 0;
+        await at(100, 'down', 'up', 'click');
+        await at(1000, 'click');
+        deepEqual(
+          heard.filter((x) => !x.endsWith(':up')),
+          ['c:down', 'c:click', 'ambient:click'],
+          'a click with no press of its own is decided afresh',
+        );
+        lease.release();
+
+        let latest = r.input.claimPointer('d', { grab: () => true });
+        r.input.on(
+          'down',
+          () => {
+            heard.push('d:down');
+            latest = r.input.claimPointer('e', { grab: () => false });
+          },
+          { lease: latest },
+        );
+        r.input.on('down', () => heard.push('latest:down'), {
+          lease: () => latest,
+        });
+        heard.length = 0;
+        await at(100, 'down');
+        deepEqual(
+          heard,
+          ['d:down'],
+          'a lease claimed during delivery does not inherit the press',
+        );
+        latest.release();
+
+        let replacement = null;
+        const first = r.input.claimPointer('f', {
+          grab: () => {
+            replacement = r.input.claimPointer('g');
+            return true;
+          },
+        });
+        listen(first, 'f');
+        heard.length = 0;
+        await at(100, 'down');
+        listen(replacement, 'g');
+        await at(100, 'up', 'click');
+        deepEqual(
+          heard.filter((x) => !x.endsWith(':up')),
+          [],
+          'a press grabbed by a lease its grab replaced belongs to that ended lease: no one',
+        );
+        replacement.release();
+
+        const downs = [];
+        lease = r.input.claimPointer('h', {
+          grab: (down) => {
+            downs.push(down);
+            return down.button === 0 && down.position.x < 640;
+          },
+        });
+        listen(lease, 'h');
+        const step = (type, x, button = 0) =>
+          h.pointer(r, type, x, 360, { button });
+        heard.length = 0;
+        await step('down', 100);
+        await step('move', 300);
+        await step('up', 300);
+        await step('move', 1000);
+        await step('click', 1000);
+        deepEqual(
+          heard.filter((x) => !x.endsWith(':up')),
+          ['h:down', 'ambient:click'],
+          'after a drag, a later click is a press of its own',
+        );
+        heard.length = 0;
+        await step('down', 100);
+        await step('move', 300);
+        await step('up', 300);
+        await step('click', 1000);
+        deepEqual(
+          heard.filter((x) => !x.endsWith(':up')),
+          ['h:down', 'ambient:click'],
+          'a click straight after a drag, elsewhere, is a press of its own',
+        );
+        heard.length = 0;
+        await step('down', 100, 0);
+        await step('down', 100, 2);
+        await step('up', 100, 0);
+        await step('click', 100, 0);
+        await step('up', 100, 2);
+        await step('click', 100, 2);
+        deepEqual(
+          heard.filter((x) => !x.endsWith(':up')),
+          ['h:down', 'ambient:down', 'h:click', 'ambient:click'],
+          'each button’s press is its own',
+        );
+        heard.length = 0;
+        await at(100, 'down', 'up', 'click');
+        await at(1000, 'dblclick');
+        deepEqual(
+          heard.filter((x) => !x.endsWith(':up')),
+          ['h:down', 'h:click', 'ambient:dblclick'],
+          'a double-click elsewhere is not the click’s',
+        );
+        heard.length = 0;
+        await at(100, 'down');
+        await at(1000, 'dblclick');
+        await at(100, 'up', 'click');
+        deepEqual(
+          heard.filter((x) => !x.endsWith(':up')),
+          ['h:down', 'ambient:dblclick', 'h:click'],
+          'a stray double-click during a press leaves the press its owner\u2019s',
+        );
+        downs.length = 0;
+        await at(100, 'click');
+        equal(downs.length, 1, 'an isolated click asks grab');
+        equal(downs[0]?.type, 'down', 'as a down');
+        ok(
+          !('pick' in downs[0]) &&
+            !('drill' in downs[0]) &&
+            !('ground' in downs[0]),
+          'with no pick',
+        );
+        lease.release();
+      },
+    ),
+    check(
       'input.clickPick',
       'a click carries one pick shared by every subscriber',
       async (h, r) => {
@@ -1477,6 +1722,64 @@ export function portChecks() {
       { capability: 'styles' },
     ),
     check(
+      'effects.defineStyle',
+      'Core defines a style: listed, set, replaced and removed',
+      (h, r) => {
+        const definition = {
+          id: 'conf:tint',
+          params: [{ key: 'amount', min: 0, max: 1, default: 0.5 }],
+          animated: false,
+          shader: {
+            glsl: `uniform sampler2D colorTexture;
+uniform float intensity;
+uniform float amount;
+in vec2 v_textureCoordinates;
+void main() {
+  vec4 c = texture(colorTexture, v_textureCoordinates);
+  out_FragColor = vec4(mix(c.rgb, c.rgb * vec3(1.0, amount, amount), intensity), 1.0);
+}`,
+            wgsl: `@fragment
+fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+  let c = textureSample(colorTexture, colorSampler, uv);
+  let tinted = c.rgb * vec3f(1.0, params.amount, params.amount);
+  return vec4f(mix(c.rgb, tinted, params.intensity), 1.0);
+}`,
+          },
+        };
+        const off = r.effects.defineStyle(definition);
+        equal(typeof off, 'function', 'an Off, with a GLSL and a WGSL source');
+        const listed = r.effects.styles().filter((s) => s.id === 'conf:tint');
+        equal(listed.length, 1, 'listed once');
+        deepEqual(listed[0].params, definition.params, 'with its parameters');
+        r.effects.setStyle('conf:tint', { amount: 0.2 });
+        equal(r.effects.diagnostics().style, 'conf:tint', 'set');
+        const offAgain = r.effects.defineStyle({
+          ...definition,
+          animated: true,
+        });
+        equal(
+          r.effects.styles().filter((s) => s.id === 'conf:tint').length,
+          1,
+          'a second definition replaces the first',
+        );
+        equal(
+          r.effects.diagnostics().style,
+          'conf:tint',
+          'the style stays on through its replacement',
+        );
+        off();
+        ok(
+          r.effects.styles().some((s) => s.id === 'conf:tint'),
+          'the replaced definition’s Off leaves the new one',
+        );
+        offAgain();
+        ok(!r.effects.styles().some((s) => s.id === 'conf:tint'), 'removed');
+        equal(r.effects.diagnostics().style, null, 'and turned off');
+        offAgain();
+      },
+      { capability: 'styles' },
+    ),
+    check(
       'effects.withoutStyles',
       'without styles, styles() is empty',
       async (h) => {
@@ -1487,6 +1790,16 @@ export function portChecks() {
         if (!r) return { skip: 'this harness cannot drop capabilities' };
         try {
           deepEqual(r.effects.styles(), [], 'styles()');
+          equal(
+            r.effects.defineStyle({
+              id: 'x',
+              params: [],
+              animated: false,
+              shader: { glsl: 'void main() {}' },
+            }),
+            null,
+            'defineStyle() answers null',
+          );
         } finally {
           r.destroy();
         }
@@ -1499,10 +1812,17 @@ export function portChecks() {
         const events = [];
         r.credits.on('change', (list) => events.push(list.length));
         const base = r.credits.list().length;
-        const off = r.credits.addStatic({ html: 'Conformance data' });
-        ok(
-          r.credits.list().some((c) => c.html === 'Conformance data'),
-          'listed',
+        const credit = {
+          text: 'Conformance <data>',
+          href: 'https://example.invalid/data',
+          logoUrl: 'https://example.invalid/logo.png',
+          inline: true,
+        };
+        const off = r.credits.addStatic(credit);
+        deepEqual(
+          r.credits.list().find((c) => c.text === credit.text),
+          credit,
+          'listed as given, text left as text',
         );
         off();
         equal(r.credits.list().length, base, 'removed');

@@ -5,9 +5,14 @@
  */
 import type { Off } from './common';
 
+/** One credit, as plain data: Core renders and escapes it. */
 export interface Credit {
-  /** Sanitised HTML: text, links and images only. */
-  html: string;
+  /** Plain text, never markup. */
+  text: string;
+  /** Where the credit links to. */
+  href?: string;
+  /** A logo drawn before the text. */
+  logoUrl?: string;
   /** Shown on the map itself, rather than in the expanded list. */
   inline?: boolean;
 }

@@ -10,7 +10,11 @@
  * move detection (`moveStart` / `moveEnd`) → `preRender` → render →
  * `postRender`. `preUpdate` fires on every frame the loop ticks, including
  * frames that end up drawing nothing, so owners that write the camera there
- * (a cockpit, a follow clamp) see each one.
+ * (a cockpit, a follow clamp) see each one. This is the default renderer's
+ * own order. `changed` is measured before follow and `preUpdate` move the
+ * camera, so a move made there is reported by `changed` on the next frame;
+ * move detection runs after them and sees it in the same frame. The
+ * default renderer's `postUpdate` has no place here: Core does not use it.
  */
 import type { Off, Release } from './common';
 
