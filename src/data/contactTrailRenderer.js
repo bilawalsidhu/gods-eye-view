@@ -6,10 +6,11 @@ const ALPHA_STOPS = [
   [600000, 0.2],
   [900000, 0.08],
 ];
+
+/** Interpolate the trail opacity from its age in milliseconds. */
 export function trailAlpha(ageMs) {
   const stops = ALPHA_STOPS;
   for (let i = 1; i < stops.length; i++) {
-    if (ageMs === stops[i][0]) return stops[i][1];
     if (ageMs < stops[i][0]) {
       const [a, x] = stops[i - 1],
         [b, y] = stops[i];
@@ -19,9 +20,13 @@ export function trailAlpha(ageMs) {
   return 0.08;
 }
 
-/** One static history batch and one frequently updated head. Never entities. */
-export function createContactTrailRenderer(scene) {
+/** Render batched history and a clipped head, with optional fading and draping. */
+export function createContactTrailRenderer(
+  scene,
+  { fade = true, drape = true } = {},
+) {
   const ground =
+    drape &&
     !!scene.frameState?.context &&
     Cesium.GroundPolylinePrimitive.isSupported(scene);
   const collection = ground ? scene.groundPrimitives : scene.primitives;
@@ -47,21 +52,23 @@ export function createContactTrailRenderer(scene) {
       },
       translucent: true,
     });
-  const material = headMaterial(0.8),
-    depthMaterial = headMaterial(0.55);
-  depthMaterial.uniforms.backing = false;
+  const alpha = fade ? 0.8 : 1;
+  const depthAlpha = fade ? 0.55 : 1;
+  const material = headMaterial(alpha),
+    depthMaterial = headMaterial(depthAlpha);
+  depthMaterial.uniforms.backing = !fade;
   const head = { positions: [], show: false, width: 3, material };
   const backing = { positions: [], show: false, width: 5 };
   let headPrimitive = null,
     headRebuilds = 0;
-  function geometry(positions, width, material = false) {
+  function geometry(positions, width, useMaterial = false) {
     return ground
       ? new Cesium.GroundPolylineGeometry({ positions, width, granularity: 0 })
       : new Cesium.PolylineGeometry({
           positions,
           width,
           arcType: Cesium.ArcType.NONE,
-          vertexFormat: material
+          vertexFormat: useMaterial
             ? Cesium.PolylineMaterialAppearance.VERTEX_FORMAT
             : Cesium.PolylineColorAppearance.VERTEX_FORMAT,
         });
@@ -94,7 +101,22 @@ export function createContactTrailRenderer(scene) {
     completed = -1,
     active = null;
   const styleColor = Cesium.Color.fromCssColorString(style);
-  const attributeIds = [];
+  // One outlined stroke keeps translucent backing from painting over the color.
+  const outlinedMaterial = fade
+    ? null
+    : Cesium.Material.fromType('PolylineOutline', {
+        color: Cesium.Color.clone(styleColor),
+        outlineColor: new Cesium.Color(0.02, 0.03, 0.05, 0.9),
+        outlineWidth: 2,
+      });
+  const lanes = fade ? 2 : 1;
+  const bodyAppearance = () =>
+    fade
+      ? new Cesium.PolylineColorAppearance({ translucent: true })
+      : new Cesium.PolylineMaterialAppearance({
+          material: outlinedMaterial,
+          translucent: true,
+        });
   const color = new Cesium.Color(),
     endpoint = new Cesium.Cartesian3();
   const headPositions = [new Cesium.Cartesian3(), endpoint];
@@ -121,36 +143,32 @@ export function createContactTrailRenderer(scene) {
     if (body) collection.remove(body);
     body = null;
     const instances = [];
-    attributeIds.length = 0;
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
-      attributeIds.push([`${i}:0`, `${i}:1`]);
       if (segment.positions.length < 2) continue;
-      for (let lane = 0; lane < 2; lane++) {
+      for (let lane = 0; lane < lanes; lane++) {
+        const attributes = {
+          show: new Cesium.ShowGeometryInstanceAttribute(false),
+        };
+        if (fade) {
+          attributes.color = Cesium.ColorGeometryInstanceAttribute.fromColor(
+            tint(alpha, !lane),
+          );
+          attributes.depthFailColor =
+            Cesium.ColorGeometryInstanceAttribute.fromColor(tint(depthAlpha));
+        }
         instances.push(
           new Cesium.GeometryInstance({
             id: `${i}:${lane}`,
-            geometry: geometry(segment.positions, lane ? 3 : 5),
-            attributes: {
-              color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                tint(0.8, !lane),
-              ),
-              depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                tint(0.55),
-              ),
-              show: new Cesium.ShowGeometryInstanceAttribute(false),
-            },
+            geometry: geometry(segment.positions, lane ? 3 : 5, !fade),
+            attributes,
           }),
         );
       }
     }
     if (instances.length) {
       body = collection.add(
-        primitive(
-          instances,
-          new Cesium.PolylineColorAppearance({ translucent: true }),
-          new Cesium.PolylineColorAppearance({ translucent: true }),
-        ),
+        primitive(instances, bodyAppearance(), bodyAppearance()),
       );
       rebuilds++;
     }
@@ -185,10 +203,8 @@ export function createContactTrailRenderer(scene) {
         i <= Math.max(done, completed);
         i++
       ) {
-        for (let lane = 0; lane < 2; lane++) {
-          const attributes = body.getGeometryInstanceAttributes(
-            attributeIds[i][lane],
-          );
+        for (let lane = 0; lane < lanes; lane++) {
+          const attributes = body.getGeometryInstanceAttributes(`${i}:${lane}`);
           if (!attributes) continue;
           // Cesium getters return copies. Write back the array we changed.
           const show = attributes.show;
@@ -198,13 +214,11 @@ export function createContactTrailRenderer(scene) {
       }
       completed = done;
     }
-    if (body?.ready && second !== lastSecond) {
+    if (fade && body?.ready && second !== lastSecond) {
       for (let i = 0; i < segments.length; i++) {
         const alpha = trailAlpha(sample.displayT - segments[i].toT);
         for (let lane = 0; lane < 2; lane++) {
-          const attributes = body.getGeometryInstanceAttributes(
-            attributeIds[i][lane],
-          );
+          const attributes = body.getGeometryInstanceAttributes(`${i}:${lane}`);
           if (!attributes) continue;
           const rgba = attributes.color;
           Cesium.ColorGeometryInstanceAttribute.toValue(
@@ -215,7 +229,7 @@ export function createContactTrailRenderer(scene) {
           if (!ground) {
             const depthRgba = attributes.depthFailColor;
             Cesium.ColorGeometryInstanceAttribute.toValue(
-              tint(0.55),
+              tint(depthAlpha),
               depthRgba,
             );
             attributes.depthFailColor = depthRgba;
@@ -262,8 +276,8 @@ export function createContactTrailRenderer(scene) {
       ),
     );
     depthMaterial.uniforms.fraction = material.uniforms.fraction;
-    Cesium.Color.clone(tint(0.8), material.uniforms.color);
-    Cesium.Color.clone(tint(0.55), depthMaterial.uniforms.color);
+    Cesium.Color.clone(tint(alpha), material.uniforms.color);
+    Cesium.Color.clone(tint(depthAlpha), depthMaterial.uniforms.color);
   }
   return {
     replaceHistory,
@@ -272,6 +286,8 @@ export function createContactTrailRenderer(scene) {
       if (next === style) return;
       style = next;
       Cesium.Color.fromCssColorString(style, styleColor);
+      if (outlinedMaterial)
+        Cesium.Color.clone(styleColor, outlinedMaterial.uniforms.color);
       lastSecond = -1;
     },
     setVisible(next) {
@@ -285,6 +301,7 @@ export function createContactTrailRenderer(scene) {
       headPrimitive = null;
       material.destroy();
       depthMaterial.destroy();
+      outlinedMaterial?.destroy();
       body = null;
       segments = [];
     },

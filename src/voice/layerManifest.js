@@ -451,6 +451,8 @@ const layers = [
  * pair belong to a scripted scene and are driven by `control_scene`.
  */
 export const VOICE_OFF_LAYERS = Object.freeze({
+  radiosondes:
+    'live balloon layer; no room in the prompt budget; tracking needs a new TRACKABLE_FAMILIES kind',
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
   // The Realtime prompt is at its 52,000-character budget; voice toggle and

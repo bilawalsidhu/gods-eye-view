@@ -19,6 +19,7 @@ import { createWeatherSource } from '../layers/weather/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
+import { createRadiosondeSource } from '../layers/radiosondes/source.js';
 import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
@@ -60,6 +61,7 @@ export function createStandaloneLayerSources(
     alpr: createAlprTileSource(),
     firms: createFirmsSource(),
     's2-ghostmaps': createGhostMapsSource(),
+    radiosondes: createRadiosondeSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),

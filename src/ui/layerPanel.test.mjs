@@ -313,9 +313,9 @@ test('the unavailable chip may abbreviate, but its accessible name keeps the ful
   assert.match(toggle.ariaLabel, /^Active Fires: UNAVAILABLE\./);
 });
 
-test('the Weather readout receives enabled air-quality alongside weather layers', async () => {
+test('the Weather readout receives enabled air-quality and weather layers, excluding radiosondes', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
-  const layers = ['wind', 'air-quality', 'other'].map((id) => ({
+  const layers = ['wind', 'air-quality', 'radiosondes', 'other'].map((id) => ({
     id,
     icon: '*',
     enabled: true,
@@ -339,6 +339,61 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
       ['air-quality', 'air-quality'],
     ],
   );
+});
+
+test('the radiosondes row renders counts and one info line in the Weather group without a readout', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const legend = [
+    { label: 'Ascending', count: 2, color: '#ff8fb1' },
+    { label: 'Descending', count: 3, color: '#ff8fb1' },
+    { label: 'Landed', count: 0, color: '#b499a2' },
+    { label: 'Signal lost', count: 1, color: '#a2a9b0' },
+  ];
+  const info = 'Next launch window 11:00–12:00 UTC · in 3h';
+  const layer = {
+    id: 'radiosondes',
+    name: 'Weather balloons',
+    source: 'SondeHub',
+    enabled: true,
+    showInTogglePanel: true,
+    stats: { count: 5 },
+  };
+  const panel = new LayerPanel({
+    getLayers: () => [layer],
+    hasRowControls: () => true,
+    subscribeRowControls: () => {},
+    getRowControls: () => ({ legend, info }),
+  });
+  try {
+    panel.mount(container);
+    assert.equal(
+      container.querySelector('.data-layer-group-heading').textContent,
+      'Weather',
+    );
+    const row = container.querySelector('[data-layer-id="radiosondes"]');
+    assert.ok(row.querySelector('.data-count'));
+    assert.deepEqual(
+      [...row.querySelectorAll('.data-toggle-legend-item')].map((item) =>
+        item.textContent.trim(),
+      ),
+      ['Ascending 2', 'Descending 3', 'Landed 0', 'Signal lost 1'],
+    );
+    assert.equal(row.querySelectorAll('.data-toggle-controls-info').length, 1);
+    assert.equal(
+      row.querySelector('.data-toggle-controls-info').textContent,
+      info,
+    );
+    panel._refreshTogglePanel();
+    assert.equal(
+      row.querySelector('.data-toggle-controls-info').textContent,
+      info,
+    );
+  } finally {
+    panel.destroy();
+    document.body.replaceChildren();
+  }
 });
 
 // Directions renders in the Utilities panel's list; Data Layers keeps the rest.
@@ -430,4 +485,29 @@ test('without the Utilities list, Directions stays in Data Layers under Utilitie
   } finally {
     restore();
   }
+});
+
+test('Weather balloons appear once, appended to the Weather group', () => {
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const groups = JSON.parse(
+    runInNewContext(
+      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_GROUPS)`,
+    ),
+  );
+  assert.equal(
+    groups.flatMap((group) => group.ids).filter((id) => id === 'radiosondes')
+      .length,
+    1,
+  );
+  assert.equal(
+    groups.find((group) => group.label === 'Weather').ids.at(-1),
+    'radiosondes',
+  );
 });

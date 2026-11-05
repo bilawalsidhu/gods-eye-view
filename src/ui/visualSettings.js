@@ -224,6 +224,7 @@ export class VisualSettings {
     this._preCyberStyle = null;
     this._cyberStyleUserSelected = false;
     document.documentElement.dataset.gevStyle = this.activeStyle;
+    document.documentElement.dataset.gevVisionStyle = this.activeStyle;
     this._detectionUserOverridden = false;
     this._cockpitVisionMode = 'optical';
     this._cockpitVisionRestore = null;
@@ -408,6 +409,7 @@ export class VisualSettings {
     // Layers whose in-scene sprites restyle for a sensor preset need the
     // EFFECTIVE style — a cockpit vision override sets no map style, so the
     // map's own style event never fires for it.
+    document.documentElement.dataset.gevVisionStyle = effective;
     window.dispatchEvent(
       new CustomEvent('gev:vision-change', {
         detail: {

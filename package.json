@@ -47,6 +47,7 @@
     "build:panel": "node scripts/build-panel.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
+    "test:perf": "node scripts/run-perf-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:street-level": "node scripts/qa-street-level.mjs",
@@ -292,6 +293,8 @@
     "./tools/panel": "./src/tools/panel.js",
     "./tools/services": "./src/tools/services.js",
     "./view": "./src/view/index.js",
-    "./agent/world-packet": "./src/agent/worldPacket.js"
+    "./agent/world-packet": "./src/agent/worldPacket.js",
+    "./layers/radiosondes": "./src/layers/radiosondes/index.js",
+    "./layers/radiosondes/source": "./src/layers/radiosondes/source.js"
   }
 }

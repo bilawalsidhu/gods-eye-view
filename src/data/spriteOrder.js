@@ -7,6 +7,8 @@ export const SPRITE_LAYER_ORDER = Object.freeze([
   'transit-motion',
   'directions',
   'ais',
+  'radiosondes',
+  'radiosondes-burst',
   'military',
   'flights',
 ]);

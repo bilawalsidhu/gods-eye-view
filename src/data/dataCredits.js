@@ -188,6 +188,13 @@ export const DATA_CREDITS = [
       '<a href="https://adds-faa.opendata.arcgis.com/" target="_blank" rel="noopener">FAA Special Use Airspace</a>' +
       ' (prohibited and restricted zones; informational only)',
   },
+  {
+    key: 'sondehub',
+    html:
+      'Weather balloons: © <a href="https://sondehub.org/" target="_blank" rel="noopener">SondeHub</a> contributors' +
+      ' (<a href="https://creativecommons.org/licenses/by-sa/2.0/" target="_blank" rel="noopener">CC BY-SA 2.0</a>;' +
+      ' volunteer receivers, coverage varies by region)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

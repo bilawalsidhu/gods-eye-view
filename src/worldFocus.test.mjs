@@ -141,7 +141,7 @@ test('fires frame wider than vessels — a fire is read by its surroundings', ()
 
 test('every framing is a real oblique standoff, not a nadir or an inside-out sphere', () => {
   const kinds = Object.keys(WORLD_FOCUS_FRAMING);
-  assert.deepEqual(kinds.sort(), ['fire', 'vessel']);
+  assert.deepEqual(kinds.sort(), ['fire', 'radiosonde', 'vessel']);
   for (const kind of kinds) {
     const framing = WORLD_FOCUS_FRAMING[kind];
     // Looking DOWN at the target, but obliquely — a nadir drop reads as a map.
@@ -153,7 +153,7 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
       framing.rangeM > framing.radiusM,
       `${kind}: range ${framing.rangeM} must stand off outside radius ${framing.radiusM}`,
     );
-    assert.ok(framing.rangeM <= 10000, `${kind}: range must stay close-in, got ${framing.rangeM}`);
+    assert.ok(framing.rangeM <= (kind === 'radiosonde' ? 45000 : 10000), `${kind}: range must stay close-in, got ${framing.rangeM}`);
   }
   // Exact shipped values — a silent retune must show up as a failing test.
   assert.deepEqual({ ...WORLD_FOCUS_FRAMING.vessel }, { radiusM: 150, rangeM: 1200, pitchDeg: -30 });
@@ -166,4 +166,13 @@ test('unknown kinds and missing viewers issue no flight', () => {
   assert.equal(flyToWorldTarget({ camera }, { kind: 'vessel' }), false);
   assert.equal(flyToWorldTarget(null, { kind: 'vessel', position: POSITION }), false);
   assert.equal(camera.calls.flights.length, 0);
+});
+
+test('balloons focus at altitude with a wider oblique range', () => {
+  const camera = stubCamera();
+  const position = Cesium.Cartesian3.fromDegrees(10, 50, 30000);
+  assert.equal(flyToWorldTarget({ camera }, { kind: 'radiosonde', id: 'radiosonde:TEST123', position }), true);
+  assert.deepEqual(camera.calls.flights[0].sphere.center, position);
+  assert.deepEqual({ ...WORLD_FOCUS_FRAMING.radiosonde }, { radiusM: 2000, rangeM: 45000, pitchDeg: -20 });
+  assert.equal(camera.calls.flights[0].options.offset.range, 45000);
 });

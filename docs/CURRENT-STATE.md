@@ -98,6 +98,90 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Weather balloons — SondeHub
+
+The Weather group includes **Weather balloons** (`radiosondes`, share-link token `9`),
+off by default. One SondeHub MQTT-over-WSS `batch` subscription feeds a bounded
+3 h in-memory store. `/api/radiosondes/stream` sends 2 s SSE diffs after the first
+snapshot, with the first useful frame batch sent immediately. Each client's
+queued output (`MAX_SSE_QUEUED_BYTES`), including the next event or heartbeat, is
+limited to 2 MiB; slow clients reconnect. The upstream closes 10 min after the
+last subscriber and 180 s polling lease expire.
+
+`/api/radiosondes/snapshot` is a 60 s backstop; `/track?serial=` seeds the selected
+trail from the store. Cold start returns 202 `building` with Retry-After of 1 s
+until frames arrive or MQTT is live. The client's acquisition retry is bounded
+to 1 s; SSE data cancels it. MQTT connects alongside sequential REST backfill:
+`last=1800` (30 min), then `last=10800` (3 h), once per connect and at most once
+per 15 min. There is no REST polling. Either source's first frames are served as
+200. Until both windows succeed, envelopes carry `partial: true`, propagated to
+`stats.partial`. Partial snapshots merge membership; failed backfill retains
+the partial sample, and completion sends an event even without new contacts.
+`/history?serial=` fetches full history on selection, cached for 10 min with a
+3 h stale cap. REST 429 cooldown honors Retry-After (5 s–1 h); other failures
+wait 15 s. Stale data keeps its receipt time.
+
+Cached balloon-silhouette sprites mark ascent and unknown direction; parachutes
+mark descent, ground dots mark both landed states, and hollow dashed grey
+balloons mark signal loss. Symbols have dark outlines, a 20 px base size and
+aircraft distance scaling `(1000, 3, 8e6, 0.5)`. They remain north-up and retain
+their phase shape when selected. Rose aloft sprites draw at altitude with drop
+lines below 3,000 km camera height; unknown direction reduces alpha. Ground
+marks are muted rose-grey.
+A single reused `BillboardCollection` updates changed membership and visuals
+in place. `MAX_SONDES_RENDERED = 2000` bounds drawing; selection, aloft state
+and recency rank excess contacts.
+
+After ten minutes without a fix, sondes below 2,000 m MSL with descent or
+stillness evidence become Landed (inferred); others become Signal lost.
+Landed marks draw at the surface at alpha 0.55; lost marks stay at the last fix
+without drop lines or arrows. These contacts stay visible for the retained
+store's lifetime, with no additional one-hour retirement. Their ambient labels
+appear only at or below 1,500 km camera height, at the lowest priority.
+Every periodic refresh reclassifies records, including failed snapshots.
+
+Labels show serial and altitude (`TEST123 23.0 km`), including unknown-direction
+or still fixes and altitudes below 1 km. Only evidence beyond the 0.5 m/s
+velocity or 100 m track noise thresholds adds an ↑/↓ arrow. Terminal labels
+read `TEST123 landed` and `TEST123 lost`. `RADIOSONDE_LABEL_CANDIDATE_CAP = 150`
+bounds ranked on-screen, front-side candidates; the overlay host owns declutter.
+Aloft labels rank before descending, then landed/signal-lost, with altitude,
+recency and serial breaking ties. Ambient labels share a collision group and
+12 px gaps; `stateless: true` prevents the host's incumbent-overlap fallback
+and exit fades. A zero solve interval keeps labels separate during camera
+movement. Horizon and label admission run on camera `moveEnd` or a data batch,
+with no per-frame scan.
+
+`RADIOSONDE_DATA_BATCH_MS = 500` coalesces pushes after the first useful data.
+Content signatures skip unchanged input; unchanged visuals produce zero
+billboard writes. Requests go through the render governor once per batch.
+The layer panel's Weather group row counts ascending, descending, landed and
+lost contacts, adding unknown direction only when non-zero. Both landed states
+count as Landed. Its single info line shows connection status first, otherwise
+the launch reminder when no balloons are loaded, or the next launch window.
+Release windows cover the hour before 00:00 and 12:00 UTC. Selection shows a
+rose altitude trail with a dark outline, an observed burst marker and 10/20/30 km
+drop-line ticks below the current or known burst altitude. The selected card
+shows all available metadata: short grouped lines show phase, altitude, vertical
+and horizontal speed, heading, temperature, humidity, pressure, drift-derived
+wind, burst maximum, type/subtype, frequency when present, heard/launched ages
+and source attribution. Landed and lost cards show last-fix age once beside
+the phase; their telemetry has no repeated prefixes. They show heard age only
+when receipt and fix timestamps differ by at least one minute. The final line
+is `SondeHub tracker ↗ · CC BY-SA 2.0`; clicking or keyboard-activating the card
+opens `https://sondehub.org/<encoded-serial>` for a validated SondeHub serial.
+Portable hosts without `openExternal` keep the card inert. The card hides while
+its sprite anchor is horizon-culled or off-screen, retaining the selection and
+returning when visible. It reuses the sprite pass's shared horizon verdict and
+the overlay host's viewport checks, with no additional per-frame scan or
+listener. The volunteer-coverage disclaimer stays in the data credit and docs.
+Text is localized in all 11 locales. The `radiosonde:` pick owner requests world
+focus without camera follow. Voice is off for this layer; there are no analyst
+records or detection brackets. Coverage depends on volunteer receivers, densest
+in Europe, the US and Australia; there are no landing predictions or launch
+sites. Ingest strips
+`uploader_*`, `rssi` and `snr`. Data is never bundled or written to disk.
+
 ## Prohibited & Restricted Airspace — FAA special-use airspace
 
 The Infrastructure group includes **Prohibited & Restricted Airspace** (`drone-airspace`,
@@ -517,7 +601,7 @@ global mosaic). Wind shows forecast valid and issue times and does not follow
 history. Satellite clouds uses Clouds only / Full controls, a continuous cloud
 filter slider and Soft/Vivid opacity presets in its right-rail settings.
 
-Left weather rows retain only the toggle and one status line with a source
+Rows for these products retain only the toggle and one status line with a source
 tooltip. Configuration and the cyclone Storms list live in the cards, as do the
 cyclone advisory, position time, wind, pressure, geometry status and the
 official advisory link. The panel hides when empty, auto-expands once per page
@@ -4212,6 +4296,7 @@ its criteria cannot be silently ignored.
 | Ski Pistes ⛷ (`ski-pistes`) | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 | Prohibited & Restricted Airspace 🚫 | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry) | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js` | `/api/drone-airspace` | 1 h (server cache 1 h; stale-on-error) |
+| Weather balloons 🎈 | SondeHub (MQTT over WSS; keyless, CC BY-SA 2.0) | `src/layers/radiosondes/` via `src/app/layers/radiosondes.js` | `/api/radiosondes/stream` (SSE) + `/snapshot` | push ~2 s; 60 s backstop (server store 3 h; stale while upstream not live) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;

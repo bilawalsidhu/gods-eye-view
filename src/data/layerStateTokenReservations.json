@@ -19,6 +19,7 @@
   ["military-awareness", "g"],
   ["military-installations", "i"],
   ["radio", "r"],
+  ["radiosondes", "9"],
   ["recent-imagery", "1"],
   ["rocket-launches", "x"],
   ["s2-ghostmaps", "5"],
