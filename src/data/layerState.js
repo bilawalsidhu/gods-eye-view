@@ -298,6 +298,13 @@ function satelliteFilterOption() {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  'severe-weather-outlooks': Object.freeze([
+    enumOption('day', 'd', 'day1', ['day1', 'day2'], { day1: '1', day2: '2' }),
+    enumOption('type', 't', 'categorical', ['categorical', 'tornado'], {
+      categorical: 'c',
+      tornado: 't',
+    }),
+  ]),
   // Active Fires intensity filter (HAL-676). `minFrp` is whole megawatts on
   // the codec side; the panel's log slider rounds to it. Both default to
   // "show everything": many of the strongest fires are rated low confidence.
@@ -691,6 +698,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'satellites',
   }),
   Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'severe-weather-outlooks',
+    token: '9',
+    disposition: 'enabled+options',
+    optionOwner: 'severe-weather-outlooks',
+  }),
   Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'street-level',

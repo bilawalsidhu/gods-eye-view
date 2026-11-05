@@ -17,6 +17,7 @@ import { createLaunchSource } from '../layers/launches/source.js';
 import { createAlprTileSource } from '../layers/alpr/source.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
+import { createSpcOutlookSource } from '../layers/spc/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
 import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
@@ -63,6 +64,7 @@ export function createStandaloneLayerSources(
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),
+    'spc-outlooks': createSpcOutlookSource(),
     mapillary: createMapillarySource({
       token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',
     }),
