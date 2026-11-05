@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   RADIO_OVERLAY_SOURCE_ID,
   DEFAULT_RADIO_VOLUME,
@@ -11,24 +10,50 @@ export function createLifecycle({
   services,
   parts,
   source,
+  rendererFactory,
 }) {
   const { clearOverlaySource, setOverlaySourceVisible } = services.overlays;
 
   const methods = {
-    /** Initialize the Cesium data source and the single audio element. */
-    init(viewer) {
+    /** Initialize scene resources and the single audio element. */
+    init(viewer, options = {}) {
+      this.attachRenderer(viewer, options);
       layerState._sessionGeneration += 1;
-      layerState._viewer = viewer;
       parts.clustering.resetRadioClusterOverlayIdentities();
       parts.playback.installAudio();
-      if (!layerState._dataSource) {
-        layerState._dataSource = new Cesium.CustomDataSource('Radio stations');
-        viewer.dataSources.add(layerState._dataSource);
-        parts.rendering.installClusterStyling();
-      }
-      layerState._dataSource.show = false;
       clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
       setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
+    },
+
+    attachRenderer(viewer, options = {}) {
+      if (parts.renderer?.ready)
+        throw new Error('Radio layer is already initialized');
+      if (typeof rendererFactory !== 'function')
+        throw new TypeError('A radio renderer factory is required');
+      parts.renderer = rendererFactory({
+        state: layerState,
+        services,
+        parts,
+        source,
+        engine: options.engine,
+      });
+      parts.renderer.init(viewer, options);
+      if (layerState._enabled) {
+        parts.rendering.drawStations(layerState._stations);
+        parts.interaction.syncRadioLifecyclePresentation();
+      }
+    },
+
+    detachRenderer() {
+      parts.interaction.removeInteraction();
+      clearTimeout(layerState._overlayPublishTimer);
+      layerState._overlayPublishTimer = null;
+      parts.renderer?.destroy();
+      parts.renderer = null;
+      layerState._renderById.clear();
+      layerState._selectedPosition = null;
+      layerState._lastHorizonCameraPosition = null;
+      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
     },
 
     /** Show stations. Enabling or preset restoration never starts audio. */
@@ -55,10 +80,9 @@ export function createLifecycle({
       layerState._cancelledTuningPresentationStation = null;
       layerState._tuningUnavailableStationId = null;
       parts.playback.stopRadioPlayback({ origin: 'layer-disable' });
-      if (layerState._dataSource) layerState._dataSource.show = false;
-      if (layerState._selectedEntity && layerState._viewer)
-        layerState._viewer.entities.remove(layerState._selectedEntity);
-      layerState._selectedEntity = null;
+      parts.renderer?.setVisible(false);
+      parts.renderer?.clearSelected();
+      layerState._selectedPosition = null;
       if (layerState._overlayPublishTimer)
         clearTimeout(layerState._overlayPublishTimer);
       layerState._overlayPublishTimer = null;
@@ -83,11 +107,8 @@ export function createLifecycle({
       if (layerState._audio) layerState._audio.volume = DEFAULT_RADIO_VOLUME;
       layerState._audio = null;
       layerState._userVolume = DEFAULT_RADIO_VOLUME;
-      layerState._removeClusterListener?.();
-      layerState._removeClusterListener = null;
-      if (layerState._dataSource && layerState._viewer)
-        layerState._viewer.dataSources.remove(layerState._dataSource, true);
-      layerState._dataSource = null;
+      parts.renderer?.destroy();
+      parts.renderer = null;
       clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
       layerState._stations = [];
       layerState._acceptedCatalogSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
@@ -112,7 +133,6 @@ export function createLifecycle({
       layerState._error = null;
       layerState._updatedAt = null;
       layerState._managerLifecyclePresentation = null;
-      layerState._viewer = null;
       parts.presentation.emitState();
       layerState._listeners.clear();
       layerState._playbackControlListeners.clear();

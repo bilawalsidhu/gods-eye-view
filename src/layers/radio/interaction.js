@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import {
   RADIO_PREFIX,
@@ -13,12 +12,7 @@ export function createInteraction({
   parts,
   source,
 }) {
-  const {
-    resolvePickId,
-    isOwnedByOtherLayer,
-    registerPickOwner,
-    unregisterPickOwner,
-  } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
   const { setOverlaySourceVisible } = services.overlays;
 
   /** Resolve a station id from ordinary, selected, or Cesium cluster pick shapes. */
@@ -47,8 +41,8 @@ export function createInteraction({
   }
 
   function pickedRadioStationAt(position) {
-    const scene = layerState._viewer?.scene;
-    if (!scene || !position) return null;
+    const renderer = parts.renderer;
+    if (!renderer?.ready || !position) return null;
 
     const stationFromPick = (picked) => {
       const stationId = radioStationIdFromPick(picked);
@@ -56,14 +50,14 @@ export function createInteraction({
         ? stationId
         : null;
     };
-    const primaryPick = scene.pick(position);
+    const primaryPick = renderer.pick(position);
     const primaryStationId = stationFromPick(primaryPick);
     if (primaryStationId) return primaryStationId;
     const primaryId = resolvePickId(primaryPick);
     if (primaryId && isOwnedByOtherLayer('radio', primaryId)) return null;
 
-    if (typeof scene.drillPick === 'function') {
-      const drilled = scene.drillPick(position, 16) || [];
+    if (typeof renderer.drillPick === 'function') {
+      const drilled = renderer.drillPick(position, 16) || [];
       for (const picked of drilled) {
         const stationId = stationFromPick(picked);
         if (stationId) return stationId;
@@ -71,11 +65,11 @@ export function createInteraction({
     }
 
     for (const [offsetX, offsetY] of RADIO_PICK_OFFSETS) {
-      const offsetPosition = new Cesium.Cartesian2(
-        position.x + offsetX,
-        position.y + offsetY,
-      );
-      const picked = scene.pick(offsetPosition);
+      const offsetPosition = {
+        x: position.x + offsetX,
+        y: position.y + offsetY,
+      };
+      const picked = renderer.pick(offsetPosition);
       const pickedId = resolvePickId(picked);
       if (pickedId && isOwnedByOtherLayer('radio', pickedId)) continue;
       const stationId = stationFromPick(picked);
@@ -96,7 +90,7 @@ export function createInteraction({
 
   function syncRadioLifecyclePresentation() {
     const visible = radioPresentationAllowed();
-    if (layerState._dataSource) layerState._dataSource.show = visible;
+    parts.renderer?.setVisible(visible);
     setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, visible);
     if (visible) {
       installInteraction();
@@ -105,23 +99,18 @@ export function createInteraction({
       parts.rendering.scheduleRadioOverlayPublish();
     } else {
       removeInteraction();
-      if (layerState._selectedEntity && layerState._viewer)
-        layerState._viewer.entities.remove(layerState._selectedEntity);
-      layerState._selectedEntity = null;
+      parts.renderer?.clearSelected();
+      layerState._selectedPosition = null;
     }
   }
 
   function installInteraction() {
-    if (!layerState._viewer || layerState._clickHandler) return;
-    registerPickOwner('radio', (id) => id.startsWith(RADIO_PREFIX));
-    layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      layerState._viewer.scene.canvas,
-    );
-    layerState._clickHandler.setInputAction((click) => {
+    if (!parts.renderer?.ready || layerState._clickHandler) return;
+    layerState._clickHandler = parts.renderer.installClick((position) => {
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree()) return;
       if (!radioPresentationAllowed()) return;
-      const stationId = pickedRadioStationAt(click.position);
+      const stationId = pickedRadioStationAt(position);
       if (!stationId) return;
       layerState._playFallbackId = null;
       layerState._playFallbackFocus = null;
@@ -134,7 +123,7 @@ export function createInteraction({
           new CustomEvent('gev:radio-selected', { detail: { stationId } }),
         );
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
     // Polling remains bounded during flights, but a stationary camera no longer
     // rewrites every station's visibility four times per second while voice and
     // audio processing share the main thread.
@@ -145,8 +134,7 @@ export function createInteraction({
   }
 
   function removeInteraction() {
-    unregisterPickOwner('radio');
-    layerState._clickHandler?.destroy();
+    layerState._clickHandler?.();
     layerState._clickHandler = null;
     if (layerState._horizonTimer) clearInterval(layerState._horizonTimer);
     layerState._horizonTimer = null;

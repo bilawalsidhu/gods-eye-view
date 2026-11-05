@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { DEFAULT_FIRE_FILTER } from '../../data/firmsIntensity.js';
 
 export function createFirmsState({ services, config }) {
@@ -8,17 +8,19 @@ export function createFirmsState({ services, config }) {
 
   layerState.glowSpriteCache = new Map();
 
-  layerState.scratchViewRect = new Cesium.Rectangle();
+  layerState.scratchViewRect = { west: 0, south: 0, east: 0, north: 0 };
 
-  layerState.scratchCenterA = new Cesium.Cartographic();
+  layerState.scratchCenterA = geo.cartographic.create();
 
-  layerState.scratchCenterB = new Cesium.Cartographic();
+  layerState.scratchCenterB = geo.cartographic.create();
 
-  layerState.scratchWindowCoord = new Cesium.Cartesian2();
+  layerState.scratchWindowCoord = geo.cartesian2.create();
 
   layerState._viewer = null;
 
   layerState._dataSource = null;
+
+  layerState._renderer = null;
 
   layerState._billboards = null;
 
@@ -158,9 +160,9 @@ export function createFirmsState({ services, config }) {
 
   layerState._camSnapValid = false;
 
-  layerState._camPos = new Cesium.Cartesian3();
+  layerState._camPos = geo.cartesian3.create();
 
-  layerState._camDir = new Cesium.Cartesian3();
+  layerState._camDir = geo.cartesian3.create();
   layerState.request = null;
   return layerState;
 }

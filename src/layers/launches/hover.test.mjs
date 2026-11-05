@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Event } from 'cesium';
-import { createLaunchHover } from './lifecycle.js';
+import { createLaunchHover } from './render/cesium.js';
 
 function fakeTimers() {
   const timers = new Map();

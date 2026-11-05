@@ -17,6 +17,8 @@ export function createFirmsHelpers({ services }) {
 export function createFirmsHeatmapLayer({ services, feed, ...config }) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Fires require a snapshot source');
+  if (typeof config.renderer?.create !== 'function')
+    throw new TypeError('Fires require a renderer factory');
   const layerState = createFirmsState({ services, config });
   const components = {};
   const context = { layerState, services, config, components, feed };

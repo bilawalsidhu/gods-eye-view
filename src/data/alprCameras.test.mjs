@@ -1,3 +1,4 @@
+import { createAlprCesiumRenderer } from '../layers/alpr/render/cesium.js';
 // src/data/alprCameras.test.mjs
 // Pure helpers and actual layer lifecycle with a minimal viewer/input harness.
 import { test } from 'node:test';
@@ -879,6 +880,7 @@ test('two factories keep their requests, records and destruction independent', a
   };
   let resolveFirst, firstSignal;
   const first = createAlprCamerasLayer({
+    rendererFactory: createAlprCesiumRenderer,
     services,
     source: {
       fetch: (_box, signal) => {
@@ -890,6 +892,7 @@ test('two factories keep their requests, records and destruction independent', a
     },
   });
   const second = createAlprCamerasLayer({
+    rendererFactory: createAlprCesiumRenderer,
     services,
     source: {
       label: 'Test camera directory',
@@ -963,6 +966,7 @@ test('markers sit on the cached floor; unknown floors clamp only until they reso
     },
   };
   const layer = createAlprCamerasLayer({
+    rendererFactory: createAlprCesiumRenderer,
     services,
     source: {
       fetch: async () => ({
@@ -1330,6 +1334,7 @@ test('slow ALPR floors share real terrain requests across preparation, render an
     longitude: -97.749 + (i % 15) * 0.001,
   }));
   const layer = createAlprCamerasLayer({
+    rendererFactory: createAlprCesiumRenderer,
     source: {
       fetch: async () => ({ records, stale: false, saturated: false }),
     },
@@ -1415,6 +1420,7 @@ test('map-source changes reposition all ALPR entities and saved native appearanc
     directionDeg: i === 0 ? null : 90,
   }));
   const layer = createAlprCamerasLayer({
+    rendererFactory: createAlprCesiumRenderer,
     source: {
       fetch: async () => ({ records, stale: false, saturated: false }),
     },

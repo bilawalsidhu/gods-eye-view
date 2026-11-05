@@ -4,6 +4,9 @@ import { SdrController } from '../../sdr/controller.js';
 import * as render from '../../renderGovernor.js';
 import * as context from '../../data/contextStore.js';
 import * as picking from '../../data/pickRegistry.js';
+import * as selection from '../../data/selectionDispatcher.js';
+import { rendererFor } from './renderers.js';
+import { createLocalAdsbCesiumRenderer } from '../../layers/localAdsb/render/cesium.js';
 import * as trails from '../../data/trailRenderer.js';
 import * as geoid from '../../data/geoid.js';
 import { markDetectionSourcesChanged } from '../../data/detection.js';
@@ -27,6 +30,13 @@ export function createApplicationLocalAdsb({
   displayParams = null,
   resolveAsset = (url) =>
     `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
+  // Test seam: the renderer factory (default: the engine's, from the registry).
+  renderer = {
+    create: ({ engine = null, ...options }) =>
+      engine
+        ? rendererFor('local-adsb', engine, options)
+        : createLocalAdsbCesiumRenderer(null, options),
+  },
 } = {}) {
   return createLocalAdsbLayer({
     receiver,
@@ -36,6 +46,11 @@ export function createApplicationLocalAdsb({
       render,
       context,
       picking,
+      selection,
+      // The engine's Local ADS-B renderer from the registry (render/cesium.js
+      // on Cesium); a bare viewer without an engine (unit tests) draws on
+      // Cesium.
+      renderer,
       trails,
       geoid,
       groundSnap: surface?.groundSnap || null,

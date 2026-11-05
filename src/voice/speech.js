@@ -423,6 +423,13 @@ function setLayerVisibility(result, args = {}) {
   if (result?.cancelled) return null;
   if (!result?.ok) {
     const wanted = args.enabled === false ? 'off' : 'on';
+    // An engine without the layer says why and what to do (the refusal's
+    // own sentence), not only that it failed.
+    if (result?.code === 'UNAVAILABLE_ON_ENGINE' && result.error)
+      return {
+        say: result.error,
+        display: { title: label, lines: [result.error] },
+      };
     return {
       say: `Couldn't turn ${wanted} ${label}.`,
       display: { title: shownLayerLabel(result), lines: errorLines(result) },

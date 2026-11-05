@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as context from '../../data/contextStore.js';
-import { createSelection } from './selection.js';
-import { createRendering } from './rendering.js';
-import { createNamedMarkers } from './namedMarkers.js';
+import { createSelection } from './render/cesium/selection.js';
+import { createRendering } from './render/cesium/rendering.js';
+import { createNamedMarkers } from './render/cesium/namedMarkers.js';
 
 function harness(t) {
   const previousWindow = globalThis.window;

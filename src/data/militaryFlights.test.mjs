@@ -413,7 +413,7 @@ test('real military track path creates no native label and publishes every cache
       tracked: false,
       history: [
         {
-          time: now,
+          timeMs: Cesium.JulianDate.toDate(now).getTime(),
           epochMs: Date.now(),
           position,
           velocity: 231.5,

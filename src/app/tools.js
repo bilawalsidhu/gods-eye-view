@@ -1,12 +1,17 @@
 import { SceneDirector } from '../scenes/director.js';
-import { initAnnotations } from '../annotations/index.js';
-import { initDrawTool } from '../annotations/drawTool.js';
-import { initGeoFileImport } from '../ui/geoFileImport.js';
-import { useDisplayStore } from '../ui/stores/display.js';
-import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
-import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { attachSessionVoice } from './sessionVoice.js';
+import {
+  sessionAnnotations,
+  sessionDrawTool,
+  sessionGeoImport,
+} from './sessionTools.js';
+import {
+  attachScenePart,
+  currentSceneOf,
+  detachPartsOnTeardown,
+} from './sceneParts.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
@@ -18,8 +23,17 @@ import {
   releaseContinuousRender,
 } from '../renderGovernor.js';
 
-/** Attach scene tools, rendering listeners and the application debug handle. */
-export function createApplicationTools({
+/**
+ * Attach scene tools, rendering listeners and the application debug handle.
+ * The Director, the annotation board, Draw, Import, voice and the debug
+ * handle belong to the application; the tools bound to one globe (render
+ * governor, release trim, scope mask, imagery box, tracking and visibility
+ * listeners, embedded views, the debug handle's globe fields) attach to each
+ * engine the page shows (src/app/sceneParts.js). Navara attaches the shared
+ * annotation board, Draw, Import, scope mask and voice through its engine
+ * adapters (src/app/navaraMode.js); the Director follows the attached engine.
+ */
+export async function createApplicationTools({
   scene,
   controls,
   data,
@@ -29,66 +43,240 @@ export function createApplicationTools({
   startChrome,
   onSceneDirector,
   sceneDataPacks,
+  layerSession,
   signal,
   defer,
 }) {
-  const { viewer, tileset, mapStackController, operations } = scene;
-  const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
+  const { operations } = scene;
+  const first = currentSceneOf(scene);
+  const { styleManager } = controls;
   const { dataManager } = data;
-  const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
-    dataPacks: sceneDataPacks,
-    isMapStackAvailable: (id) =>
-      mapStackController?.isStackAvailable(id) === true,
-  });
+  // The shell leaves its globe before the data layers detach (registered
+  // after them, so it detaches first): its share restoration and Context
+  // transactions end while the layers and the viewer still exist.
+  await attachScenePart(
+    scene,
+    {
+      name: 'shell-release',
+      detachScene: (options) => styleManager.detachScene?.(options),
+    },
+    { defer },
+  );
+  const isStackAvailable = (mapStackController) => (id) =>
+    mapStackController?.isStackAvailable(id) === true;
+  const sceneDirector =
+    layerSession?.director ??
+    new SceneDirector(first.viewer, styleManager, dataManager, {
+      engine: first.engine,
+      dataPacks: { ...sceneDataPacks, native: first.packRenderer },
+      isMapStackAvailable: isStackAvailable(first.mapStackController),
+    });
+  // The Director built on this globe is attached to it already.
+  let directorScene = layerSession?.director ? null : first;
+  if (layerSession) layerSession.director = sceneDirector;
   dataManager.layers
     .get('bhote-koshi-2026')
     ?.module.attachSceneController(sceneDirector);
-  defer(() => sceneDirector.destroy());
+  defer(() => {
+    if (layerSession?.handoffLayers && !layerSession.lifetime.signal.aborted) {
+      sceneDirector.suspendScene();
+    } else {
+      if (layerSession) layerSession.director = null;
+      return sceneDirector.destroy();
+    }
+  });
   onSceneDirector?.(sceneDirector);
-  const annotations = initAnnotations({
-    viewer,
-    tileset,
+  await attachScenePart(
+    scene,
+    {
+      name: 'director',
+      attachScene(next) {
+        if (next === directorScene) return;
+        directorScene = null;
+        sceneDirector.attachScene(
+          next.viewer,
+          next.engine,
+          styleManager,
+          next.packRenderer,
+          isStackAvailable(next.mapStackController),
+        );
+      },
+      // The session keeps the Director; the page teardown destroys it.
+      detachScene: () => sceneDirector.suspendScene(),
+    },
+    { defer },
+  );
+
+  // The application's debug handle, the same object on every globe; its
+  // globe fields follow the engine.
+  const debug = {
+    viewer: null,
+    engine: null,
+    styleManager,
+    tileset: null,
+    dataManager,
+    sceneDirector,
+    mapStackController: null,
+    annotations: null,
+    weatherEffects: controls.weatherEffects ?? null,
+    cockpitCloudEffects: null,
+    voiceCommands: null,
+    getRenderGovernorDiagnostics,
+    surfaceServices: operations.surface,
+    requestRender: governorRequestRender,
+  };
+  defer(() => {
+    if (window.__godsEyeView === debug) delete window.__godsEyeView;
+  });
+
+  // The attached engine's tools; `annotations` and the voice handle answer
+  // for the engine attached now.
+  const attached = { annotations: null, voiceCommands: null };
+  const context = {
+    controls,
+    data,
+    operations,
+    placeSearch,
+    voice,
+    sceneDirector,
+    layerSession,
+    styleManager,
+    dataManager,
+  };
+  await attachScenePart(
+    scene,
+    {
+      name: 'tools',
+      async attachScene(next, attachment) {
+        const tools = next.viewer
+          ? attachViewerTools(next, context, attachment)
+          : await import('./navaraMode.js').then(({ attachViewerlessTools }) =>
+              attachViewerlessTools(next, context, attachment),
+            );
+        attached.annotations = tools.annotations;
+        attached.voiceCommands = tools.voiceCommands;
+        attachment.defer(() => {
+          attached.annotations = null;
+        });
+      },
+    },
+    { defer },
+  );
+  // The debug handle names the attached globe once every part is on it.
+  await attachScenePart(
+    scene,
+    {
+      name: 'debug-handle',
+      attachScene(next) {
+        Object.assign(debug, {
+          viewer: next.viewer ?? null,
+          engine: next.engine,
+          tileset: next.tileset ?? null,
+          mapStackController: next.mapStackController ?? null,
+          annotations: attached.annotations,
+          cockpitCloudEffects: controls.cockpitCloudEffects ?? null,
+          voiceCommands: attached.voiceCommands,
+        });
+        // Present only while a globe is attached, as when every engine
+        // built its own application: scripts read `engine.kind` from it.
+        window.__godsEyeView = debug;
+      },
+      detachScene() {
+        if (window.__godsEyeView === debug) delete window.__godsEyeView;
+        Object.assign(debug, {
+          viewer: null,
+          engine: null,
+          tileset: null,
+          mapStackController: null,
+          annotations: null,
+          cockpitCloudEffects: null,
+        });
+      },
+    },
+    { defer },
+  );
+  detachPartsOnTeardown(scene, defer, () => ({
+    handoff: Boolean(
+      layerSession?.handoffLayers && !layerSession.lifetime.signal.aborted,
+    ),
+  }));
+  // The startup chrome belongs to the page: no first-run welcome on Navara
+  // (its choices turn on data layers).
+  if (startChrome)
+    defer(
+      startChrome({
+        loadingScreen,
+        styleManager,
+        dataManager,
+        signal,
+        ...(first.viewer ? {} : { initializeWelcome: null }),
+      }),
+    );
+  return {
+    sceneDirector,
+    get annotations() {
+      return attached.annotations;
+    },
+    get voiceCommands() {
+      return attached.voiceCommands;
+    },
+  };
+}
+
+/** The tools bound to a Cesium viewer. Returns its annotations and voice. */
+function attachViewerTools(
+  scene,
+  {
+    controls,
+    data,
+    operations,
+    placeSearch,
+    voice,
+    sceneDirector,
+    layerSession,
+    styleManager,
+    dataManager,
+  },
+  { signal, defer },
+) {
+  const { viewer, engine, tileset, mapStackController } = scene;
+  // The annotation board belongs to the page session when there is one: an
+  // engine switch only takes its drawing off this viewer.
+  const annotations = sessionAnnotations({
+    layerSession,
     placeSearch,
     resolver: operations.annotationResolver,
+    defer,
   });
-  defer(() => {
-    if (window.__gevAnnotations === annotations) delete window.__gevAnnotations;
-    annotations.destroy();
-  });
-  const displayStore = useDisplayStore(applicationPinia());
-  // The Display panel's controls answer through the store; returns the
-  // disconnect.
-  const connectDisplay = (actions) => {
-    const token = displayStore.connect(actions);
-    return () => displayStore.detach(token);
-  };
-  // UTILITIES ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
-  // while a session is open, so its teardown belongs to the application
-  // lifetime rather than to whoever last pressed the button. A row's fly-to
-  // goes through the shell's navigation policy, as Import's does.
-  const drawTool = initDrawTool({
-    viewer,
+  annotations.attachScene({ viewer, tileset });
+  defer(() => annotations.detachScene());
+  // UTILITIES ▸ Draw on this viewer (src/app/sessionTools.js): the tool
+  // claims this viewer's pointer while a sketch is open.
+  const drawTool = sessionDrawTool({
+    layerSession,
     annotations,
-    navigation: styleManager,
-    publish: (view) => displayStore.publishDraw(view),
-    connect: connectDisplay,
+    styleManager,
+    defer,
   });
-  defer(() => drawTool?.destroy());
-  // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
-  // own data source. They live for the page session, so the application
-  // lifetime removes them and the drop listeners on the viewer container.
-  const geoFileImport = initGeoFileImport({
+  drawTool?.attachScene({ viewer, navigation: styleManager });
+  defer(() => drawTool?.detachScene());
+  // UTILITIES ▸ Import on this viewer: the next Cesium viewer reads the
+  // session's files again. The drop listeners belong to this viewer.
+  const geoFileImport = sessionGeoImport({
+    layerSession,
+    styleManager,
+    operations,
+    defer,
+  });
+  geoFileImport?.attachScene({
     viewer,
     navigation: styleManager,
-    ground: operations.surface?.groundFloor,
     subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
-    publish: (view) => displayStore.publishGeoImport(view),
-    connect: connectDisplay,
   });
-  defer(() => geoFileImport?.destroy());
+  defer(() => geoFileImport?.detachScene());
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
-  // panel lives on the right rail, so both belong to the application
-  // lifetime. The tileset lets the layer drape while the globe is hidden.
+  // panel lives on the right rail, so both belong to this globe. The tileset
+  // lets the layer drape while the globe is hidden.
   const recentImagery = dataManager.layers.get('recent-imagery')?.module;
   if (recentImagery) {
     recentImagery.attachTileset(tileset);
@@ -123,11 +311,10 @@ export function createApplicationTools({
       imageryBoxTool?.destroy();
     });
   }
-  if (startChrome)
-    defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
   // Idle render governor: flips the scene into requestRenderMode whenever
   // nothing animates per frame. Installed AFTER every module above has had
-  // its chance to register pre-install holds. (perf wave 2)
+  // its chance to register pre-install holds. (perf wave 2) A parked viewer
+  // uninstalls it (src/app/scene.js suspend).
   installRenderGovernor(viewer);
   // Cesium keeps a turned-off layer's draw commands (and so all its entities)
   // alive in reused per-pass arrays; trim them after each disable.
@@ -140,7 +327,7 @@ export function createApplicationTools({
   );
 
   // Install the explicit scope mask used by the DISPLAY controls.
-  installScopeMask(viewer);
+  installScopeMask(engine);
   defer(() => destroyScopeMask());
 
   // The follow camera recomputes the tracked target's dead-reckon position
@@ -162,7 +349,7 @@ export function createApplicationTools({
     // keeps drawing itself (see keepPanelRendering in embed.js).
     const hidden = document.hidden && !isEmbeddedInline();
     viewer.useDefaultRenderLoop = !hidden;
-    cockpitCloudEffects?.setSuspended?.(hidden);
+    controls.cockpitCloudEffects?.setSuspended?.(hidden);
     if (!hidden) {
       data.presentation.flushVisible();
       governorRequestRender('visibility-restore');
@@ -181,43 +368,16 @@ export function createApplicationTools({
   // loop burning behind a hidden tab. (perf wave 2 fix)
   syncVisibilitySuspension();
 
-  window.__godsEyeView = {
-    viewer,
-    styleManager,
-    tileset,
-    dataManager,
-    sceneDirector,
-    mapStackController,
-    annotations,
-    weatherEffects,
-    cockpitCloudEffects,
-    getRenderGovernorDiagnostics,
-    surfaceServices: operations.surface,
-    requestRender: governorRequestRender,
-  };
-  const debug = window.__godsEyeView;
-  defer(() => {
-    if (window.__godsEyeView === debug) delete window.__godsEyeView;
-  });
-  const voiceCommands = initGevVoiceCommands({
-    ...voice,
-    floorServices: operations.surface.groundFloor,
-    annotationResolver: operations.annotationResolver,
-    searchNavigation: operations.searchAndFlyTo,
-    signal,
+  const voiceCommands = attachSessionVoice({
+    layerSession,
+    voice,
+    operations,
     placeSearch,
-    viewer,
-    styleManager,
     dataManager,
-    sceneDirector,
-    annotations,
+    scene: { viewer, engine, styleManager, sceneDirector, annotations },
+    signal,
+    defer,
   });
-  defer(() => {
-    voiceCommands.stop({ removeUi: true });
-    if (window.__gevVoiceCommands === voiceCommands)
-      delete window.__gevVoiceCommands;
-  });
-  debug.voiceCommands = voiceCommands;
   defer(
     installViews({
       shell: styleManager,
@@ -227,5 +387,5 @@ export function createApplicationTools({
       signal,
     }),
   );
-  return { sceneDirector, annotations, voiceCommands };
+  return { annotations, voiceCommands };
 }

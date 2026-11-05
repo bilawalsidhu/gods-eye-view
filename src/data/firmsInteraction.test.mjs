@@ -80,6 +80,8 @@ function harness({
   const viewer = {
     scene: {
       pick: () => picked,
+      frameState: { mode: Cesium.SceneMode.SCENE3D },
+      primitives: new Cesium.PrimitiveCollection(),
       canvas: { clientWidth: 1280, clientHeight: 800 },
       camera: cameraPosition ? { positionWC: cameraPosition } : undefined,
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
@@ -103,6 +105,7 @@ function harness({
     fires,
     click: () => handler.click({ position: { x: 400, y: 300 } }),
     cleanup() {
+      layer.destroy();
       Cesium.SceneTransforms.worldToWindowCoordinates = priorProjection;
       if (hadWindow) globalThis.window = priorWindow;
       else delete globalThis.window;
@@ -328,6 +331,12 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
   const cleared = [];
   h.windowTarget.addEventListener('gev:entity-selection-cleared', (e) => cleared.push(e.detail));
   const priorFetch = globalThis.fetch;
+  // The far band keeps the markers built under the heatmap for the hand-off
+  // fade; their glow sprites need a canvas.
+  const priorDocument = globalThis.document;
+  globalThis.document = {
+    createElement: () => ({ getContext: () => null }),
+  };
 
   try {
     h.click();
@@ -357,6 +366,11 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
       }),
     });
     await h.layer.update();
+    assert.equal(
+      h.layer.getStats().error,
+      null,
+      'the refreshed geometry must succeed too',
+    );
 
     assert.equal(
       cleared.length,
@@ -372,6 +386,8 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
   } finally {
     if (priorFetch === undefined) delete globalThis.fetch;
     else globalThis.fetch = priorFetch;
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
     h.cleanup();
   }
 });

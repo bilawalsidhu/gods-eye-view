@@ -2,6 +2,7 @@ import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
+import * as geo from '../../geo/index.js';
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
@@ -317,7 +318,8 @@ export function createShellSurface({
 }
 
 function fitTexture(cesium, { width, height }) {
-  const limit = cesium.ContextLimits?.maximumTextureSize;
+  // Cesium's limit once its context exists; a Navara shell has no SDK.
+  const limit = cesium?.ContextLimits?.maximumTextureSize;
   // Halve, down to 1024 px wide, on devices with a smaller texture limit.
   while (limit > 0 && width > limit && width > 1024) {
     width /= 2;
@@ -405,10 +407,14 @@ export function createWeatherShell({
   decodeImage,
   createCanvas = () => document.createElement('canvas'),
   cacheBytes = WEATHER_SHELL_CACHE_BYTES,
+  createSurface = createShellSurface,
+  requestRender = () => viewer.scene.requestRender(),
+  viewRectangle = () =>
+    viewer.camera?.computeViewRectangle?.(viewer.scene.globe?.ellipsoid),
+  moveEnd = viewer?.camera?.moveEnd,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
     throw new TypeError('Unknown weather product');
-  const scene = viewer.scene;
   const size = fitTexture(cesium, WEATHER_IMAGE_SIZES[product]);
   const detailSize = fitTexture(cesium, WEATHER_DETAIL_SIZE);
   const infrared = product === 'clouds' || product === 'clouds-regional';
@@ -524,14 +530,14 @@ export function createWeatherShell({
     detail = { box: job.box, key: job.key, image, stale: false };
     syncDetail();
     evict();
-    scene.requestRender();
+    requestRender();
   }
   function failDetail(job) {
     if (detailJob !== job) return;
     clearTimeout(job.timeout);
     detailJob = null;
     if (detail?.stale) dropDetail();
-    scene.requestRender();
+    requestRender();
   }
   /** Bring the detail to the shown frame and window. The previous detail image
    * stays until the next is decoded unless the window itself moved, and over at
@@ -569,10 +575,8 @@ export function createWeatherShell({
   }
   /** Recompute the window from the camera's ground footprint; returns whether it changed. */
   function computeView() {
-    const rectangle = detailed
-      ? viewer.camera?.computeViewRectangle?.(scene.globe?.ellipsoid)
-      : null;
-    const degrees = cesium.Math.toDegrees;
+    const rectangle = detailed ? viewRectangle() : null;
+    const degrees = geo.math.toDegrees;
     const footprint = rectangle && {
       west: degrees(rectangle.west),
       south: degrees(rectangle.south),
@@ -592,7 +596,7 @@ export function createWeatherShell({
   function watchCamera() {
     if (offCamera || !detailed) return;
     offCamera =
-      viewer.camera?.moveEnd?.addEventListener(() => {
+      moveEnd?.addEventListener(() => {
         if (current && computeView()) refreshDetail();
       }) ?? null;
   }
@@ -607,7 +611,7 @@ export function createWeatherShell({
     frame.owned = true;
     const abort = () => {
       if (incoming === frame) cancelIncoming();
-      scene.requestRender();
+      requestRender();
     };
     signal.addEventListener('abort', abort, { once: true });
     frame.offAbort = () => signal.removeEventListener('abort', abort);
@@ -633,7 +637,7 @@ export function createWeatherShell({
     close(frame);
     lastError = msg('Weather tiles unavailable · previous frame retained');
     frame.resolve(false);
-    scene.requestRender();
+    requestRender();
     onChange();
   }
   function commit(frame) {
@@ -668,7 +672,7 @@ export function createWeatherShell({
     if (detail?.stale && detail.key !== wantedDetail()) dropDetail();
     refreshDetail();
     frame.resolve(true);
-    scene.requestRender();
+    requestRender();
     onChange();
   }
   function install(frame, image) {
@@ -682,11 +686,19 @@ export function createWeatherShell({
     // First frame or a new extent: stage an invisible surface and keep the
     // previous one until the new geometry and texture are drawable.
     const { west, south, east, north } = frame.snapshot.bounds;
-    const next = createShellSurface({
+    const next = createSurface({
       viewer,
       cesium,
       height,
-      rectangle: cesium.Rectangle.fromDegrees(west, south, east, north),
+      // A Navara surface reads the four radians; Cesium gets its Rectangle.
+      rectangle: cesium
+        ? cesium.Rectangle.fromDegrees(west, south, east, north)
+        : {
+            west: geo.math.toRadians(west),
+            south: geo.math.toRadians(south),
+            east: geo.math.toRadians(east),
+            north: geo.math.toRadians(north),
+          },
       onSettled: () => commit(frame),
     });
     next.bounds = frame.bounds;
@@ -708,7 +720,7 @@ export function createWeatherShell({
         computeView();
         refreshDetail();
       }
-      if (changed) scene.requestRender();
+      if (changed) requestRender();
       return changed;
     },
     cancelPrefetch,
@@ -805,7 +817,7 @@ export function createWeatherShell({
           install(frame, texture);
         })
         .catch(() => fail(frame));
-      scene.requestRender();
+      requestRender();
       onChange();
       return frame.result;
     },
@@ -818,12 +830,12 @@ export function createWeatherShell({
       }
       applyVisibility();
       if (!hidden) refreshDetail();
-      scene.requestRender();
+      requestRender();
     },
     setAlpha(value) {
       alpha = value;
       surface?.setAlpha(alpha);
-      scene.requestRender();
+      requestRender();
     },
     clear() {
       cancelPrefetch();
@@ -841,7 +853,7 @@ export function createWeatherShell({
       lastError = null;
       images.clear();
       imageBytes = 0;
-      scene.requestRender();
+      requestRender();
     },
     getDiagnostics() {
       const drawn = surface?.getDiagnostics();

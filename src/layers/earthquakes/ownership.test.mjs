@@ -1,3 +1,4 @@
+import { createEarthquakesCesiumRenderer } from './render/cesium.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEarthquakesLayer } from './index.js';
@@ -17,6 +18,9 @@ function harness(source) {
   };
   const layer = createEarthquakesLayer({
     source,
+    renderer: {
+      create: ({ viewer }) => createEarthquakesCesiumRenderer(null, { viewer }),
+    },
     overlayHost: {
       setEntries(...args) {
         events.push(args);
@@ -87,4 +91,34 @@ test('USGS body completion honors cancellation even with an uncooperative transp
   await assert.rejects(source.getSnapshot({ signal: abort.signal }), {
     name: 'AbortError',
   });
+});
+
+test('an observation received between scenes is queryable and draws without a second fetch', async () => {
+  let resolve,
+    polls = 0;
+  const h = harness({
+    getSnapshot() {
+      polls++;
+      return new Promise((done) => {
+        resolve = done;
+      });
+    },
+  });
+  try {
+    const pending = h.layer.update();
+    h.layer.detachRenderer();
+    assert.equal(h.sources.length, 0);
+    resolve([row]);
+    assert.equal(await pending, true);
+    const [record] = h.layer.getAnalystRecords();
+    assert.equal(record.id, row.usgsId);
+    assert.equal(record.lat, row.lat);
+    assert.equal(h.events.length, 0);
+    h.layer.attachRenderer(h.viewer);
+    assert.equal(h.sources[0].entities.values.length, 1);
+    assert.equal(h.events.length, 1);
+    assert.equal(polls, 1);
+  } finally {
+    h.layer.destroy();
+  }
 });

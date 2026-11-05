@@ -1,3 +1,4 @@
+import { viewerEngine } from './testSupport/viewerEngine.mjs';
 // The HUD's place lookups are paid Google requests made only to feed the AI
 // summary, so a server without one must not be asked to make them.
 //
@@ -72,7 +73,8 @@ function installPage() {
 function createHud(t, summaryService) {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const page = installPage();
-  const hud = new IntelHUD(page.viewer, {
+  const hud = new IntelHUD(viewerEngine(page.viewer), {
+    viewer: page.viewer,
     summaryService,
     publish: page.publish,
   });

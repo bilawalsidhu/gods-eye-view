@@ -9,7 +9,15 @@ export function createCredits() {
   const shown = new Map();
 
   function show(viewer, def) {
-    if (shown.has(def.id) || !viewer?.creditDisplay) return;
+    if (shown.has(def.id)) return;
+    if (viewer?.engine) {
+      shown.set(
+        def.id,
+        viewer.engine.credits.addStatic(def.credit.html, { onScreen: true }),
+      );
+      return;
+    }
+    if (!viewer?.creditDisplay) return;
     try {
       const credit = new Cesium.Credit(def.credit.html, true);
       viewer.creditDisplay.addStaticCredit(credit);
@@ -23,7 +31,8 @@ export function createCredits() {
     const credit = shown.get(def.id);
     if (!credit) return;
     try {
-      viewer?.creditDisplay?.removeStaticCredit?.(credit);
+      if (typeof credit === 'function') credit();
+      else viewer?.creditDisplay?.removeStaticCredit?.(credit);
     } catch {
       /* credit display already torn down */
     }

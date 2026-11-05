@@ -6,11 +6,11 @@
  * awareness policy of its own: the publisher passes radius, pulse timing and
  * echo styling in, so the overlay never imports awareness internals.
  */
-import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 
 /**
  * @typedef {object} AwarenessEchoField
- * @property {Cesium.Cartesian3} center Subject's ground point. The publisher
+ * @property {{x: number, y: number, z: number}} center Subject's ground point. The publisher
  *   may move it in place; it is read on every query.
  * @property {number} radiusM Range the pulses grow to.
  * @property {{count: number, periodMs: number, startFraction: number, fadeInFraction?: number}} pulse
@@ -22,7 +22,7 @@ import * as Cesium from 'cesium';
 /** @type {AwarenessEchoField|null} */
 let field = null;
 let layerIds = new Set();
-const groundScratch = new Cesium.Cartesian3();
+const groundScratch = geo.cartesian3.create();
 
 /**
  * Start (or replace) the echo field.
@@ -104,7 +104,7 @@ export function awarenessEchoStrength(nowMs, distanceM, radiusM, pulse, echo) {
  * field is set or the layer does not echo. Distance is measured between
  * ground points, so an aircraft's altitude does not shift its echo.
  * @param {string} layerId Owning layer of the contact.
- * @param {Cesium.Cartesian3} position Contact's world position.
+ * @param {{x: number, y: number, z: number}} position Contact's world position.
  * @param {number} nowMs Monotonic clock in milliseconds.
  * @returns {number} 0 to 1.
  */
@@ -112,7 +112,7 @@ export function awarenessEchoAt(layerId, position, nowMs) {
   if (!field || !position || !layerIds.has(layerId)) return 0;
   const level = field.level?.(nowMs) ?? 1;
   if (!(level > 0)) return 0;
-  const ground = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(
+  const ground = geo.ellipsoid.WGS84.scaleToGeodeticSurface(
     position,
     groundScratch,
   );
@@ -121,7 +121,7 @@ export function awarenessEchoAt(layerId, position, nowMs) {
     level *
     awarenessEchoStrength(
       nowMs,
-      Cesium.Cartesian3.distance(field.center, ground),
+      geo.cartesian3.distance(field.center, ground),
       field.radiusM,
       field.pulse,
       field.echo,
@@ -138,7 +138,7 @@ export function awarenessEchoAt(layerId, position, nowMs) {
  * outside the contact's bracket, 0 as the front arrives, growing to the
  * field's `spreadPx` as it fades.
  * @param {string} layerId Owning layer of the contact.
- * @param {Cesium.Cartesian3} position Contact's world position.
+ * @param {{x: number, y: number, z: number}} position Contact's world position.
  * @param {number} nowMs Monotonic clock in milliseconds.
  * @param {number} bracketAlpha The contact bracket's drawn alpha, 0 to 1.
  * @param {number} steps Alpha bands the overlay batches by.

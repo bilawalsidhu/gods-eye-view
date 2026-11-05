@@ -137,6 +137,7 @@ test('the actual native tracked label hides the wrong leg and keeps a healthy ro
       'readout',
       'camera',
       'picking',
+      'selection',
     ].map((name) => [name, {}]),
   );
   services.aircraftPresentation = { isTr3b: () => false };

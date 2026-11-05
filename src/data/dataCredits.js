@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { isGlobeEngine } from '../globe/contract.js';
+import { createCesiumCredits } from '../globe/cesium/credits.js';
 
 /**
  * Per-layer data attribution registered into Cesium's credit display.
@@ -33,10 +34,39 @@ export const OPENMAPTILES_CREDIT = {
   key: 'openfreemap',
   html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
 };
+const GOOGLE_PLACES_CREDIT = {
+  key: 'google-maps-places',
+  html: 'Google Maps Places: <a href="https://developers.google.com/maps/documentation/places/web-service/policies" target="_blank" rel="noopener">Google Maps</a>',
+};
 
 const osmDisplays = new WeakMap();
+const googlePlacesDisplays = new WeakMap();
+const viewerCredits = new WeakMap();
 
-function updateOsmDisplay(viewer, state) {
+/**
+ * Credits of a globe engine, or of a Cesium viewer's credit display for
+ * callers that still hold a viewer (Cesium layers); null without one.
+ * @returns {{ addStatic: Function, request: () => void } | null}
+ */
+function creditsOf(target) {
+  if (isGlobeEngine(target))
+    return {
+      addStatic: (html, options) => target.credits.addStatic(html, options),
+      request: () => target.render.request('credits'),
+    };
+  if (typeof target?.creditDisplay?.addStaticCredit !== 'function') return null;
+  let credits = viewerCredits.get(target);
+  if (!credits) {
+    credits = {
+      addStatic: createCesiumCredits(target).credits.addStatic,
+      request: () => target.scene?.requestRender?.(),
+    };
+    viewerCredits.set(target, credits);
+  }
+  return credits;
+}
+
+function updateOsmDisplay(credits, state) {
   const osm = state.owners.size > 0;
   let tiles = false;
   for (const usesTiles of state.owners.values()) tiles ||= usesTiles;
@@ -44,50 +74,78 @@ function updateOsmDisplay(viewer, state) {
     ['osm', osm],
     ['tiles', tiles],
   ]) {
-    if (state[key].visible === visible) continue;
-    state[key].visible = visible;
-    viewer.creditDisplay[visible ? 'addStaticCredit' : 'removeStaticCredit'](
-      state[key].credit,
-    );
-    viewer.scene?.requestRender?.();
+    const entry = state[key];
+    if ((entry.remove !== null) === visible) continue;
+    if (visible)
+      entry.remove = credits.addStatic(entry.html, { onScreen: true });
+    else {
+      entry.remove();
+      entry.remove = null;
+    }
+    credits.request();
   }
 }
 
 /** Keep one short inline credit while an OSM display owner has visible data. */
-export function showOsmCredit(viewer, owner, { openMapTiles = false } = {}) {
-  if (!viewer?.creditDisplay?.addStaticCredit || !owner) return false;
-  let state = osmDisplays.get(viewer);
+export function showOsmCredit(target, owner, { openMapTiles = false } = {}) {
+  const credits = creditsOf(target);
+  if (!credits || !owner) return false;
+  let state = osmDisplays.get(target);
   if (!state) {
     state = {
       owners: new Map(),
       osm: {
-        visible: false,
-        credit: new Cesium.Credit(
-          '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>',
-          true,
-        ),
+        remove: null,
+        html: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>',
       },
       tiles: {
-        visible: false,
-        credit: new Cesium.Credit(
-          '<a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a>',
-          true,
-        ),
+        remove: null,
+        html: '<a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a>',
       },
     };
-    osmDisplays.set(viewer, state);
+    osmDisplays.set(target, state);
   }
   if (state.owners.get(owner) === openMapTiles) return false;
   state.owners.set(owner, openMapTiles);
-  updateOsmDisplay(viewer, state);
+  updateOsmDisplay(credits, state);
   return true;
 }
 
 /** Release only this owner's credit; other displayed OSM sources retain theirs. */
-export function hideOsmCredit(viewer, owner) {
-  const state = osmDisplays.get(viewer);
+export function hideOsmCredit(target, owner) {
+  const state = osmDisplays.get(target);
   if (!state?.owners.delete(owner)) return false;
-  updateOsmDisplay(viewer, state);
+  updateOsmDisplay(creditsOf(target), state);
+  return true;
+}
+
+/** Keep Places attribution visible only while a layer displays Places results. */
+export function showGooglePlacesCredit(target, owner) {
+  const credits = creditsOf(target);
+  if (!credits || !owner) return false;
+  let state = googlePlacesDisplays.get(target);
+  if (!state) {
+    state = { owners: new Set(), remove: null };
+    googlePlacesDisplays.set(target, state);
+  }
+  if (state.owners.has(owner)) return false;
+  state.owners.add(owner);
+  state.remove ||= credits.addStatic(GOOGLE_PLACES_CREDIT.html, {
+    onScreen: true,
+  });
+  credits.request();
+  return true;
+}
+
+/** Release this layer's Places attribution when it stops displaying results. */
+export function hideGooglePlacesCredit(target, owner) {
+  const state = googlePlacesDisplays.get(target);
+  if (!state?.owners.delete(owner)) return false;
+  if (!state.owners.size) {
+    state.remove?.();
+    state.remove = null;
+  }
+  creditsOf(target)?.request();
   return true;
 }
 
@@ -636,26 +694,26 @@ export const BHOTE_KOSHI_LOCATOR_CREDIT = {
     '(CC BY-NC 4.0)',
 };
 
-/** @type {Set<string>} Keys of dynamic credits already registered this session. */
-const _dynamicCreditKeys = new Set();
+/** Keys registered in each globe's attribution display. */
+const dynamicCreditKeys = new WeakMap();
 
 /**
  * Register a conditional credit at the moment its data source activates.
  * Idempotent per `credit.key`; lands in the same "Data attribution" popover
  * as the static credits (showOnScreen=false).
- * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
+ * @param {object} target — the globe engine, or the initialized Cesium viewer
  * @param {{ key: string, html: string }} credit — e.g. `TOMTOM_CREDIT`
  * @returns {boolean} True when the credit is (now) registered.
  */
-export function registerDynamicCredit(viewer, credit) {
-  const creditDisplay = viewer?.creditDisplay;
-  if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
-    return false;
-  }
+export function registerDynamicCredit(target, credit) {
+  const credits = creditsOf(target);
+  if (!credits) return false;
   if (!credit?.key || !credit?.html) return false;
-  if (_dynamicCreditKeys.has(credit.key)) return true;
-  creditDisplay.addStaticCredit(new Cesium.Credit(credit.html, false));
-  _dynamicCreditKeys.add(credit.key);
+  let keys = dynamicCreditKeys.get(target);
+  if (!keys) dynamicCreditKeys.set(target, (keys = new Set()));
+  if (keys.has(credit.key)) return true;
+  credits.addStatic(credit.html, { onScreen: false });
+  keys.add(credit.key);
   return true;
 }
 
@@ -663,16 +721,14 @@ export function registerDynamicCredit(viewer, credit) {
  * Register every per-layer data credit into the viewer's credit display.
  * Idempotent: safe to call once at init. Credits are static and always
  * present in the "Data attribution" popover.
- * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
+ * @param {object} target — the globe engine, or the initialized Cesium viewer
  */
-export function registerDataCredits(viewer, credits = DATA_CREDITS) {
-  const creditDisplay = viewer?.creditDisplay;
-  if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
-    return;
-  }
+export function registerDataCredits(target, credits = DATA_CREDITS) {
+  const display = creditsOf(target);
+  if (!display) return;
   for (const { html } of credits) {
-    // showOnScreen=false → lives in the expandable "Data attribution" popover,
+    // onScreen false → lives in the expandable "Data attribution" popover,
     // not the on-globe credit line.
-    creditDisplay.addStaticCredit(new Cesium.Credit(html, false));
+    display.addStatic(html, { onScreen: false });
   }
 }

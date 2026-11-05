@@ -1,3 +1,4 @@
+import { createAwarenessCesiumRenderer } from './render/cesium.js';
 import { cameraPoseSignature } from '../../data/iconOrientation.js';
 import { AWARENESS_RANGE_PULSE } from './policy.js';
 
@@ -11,7 +12,7 @@ export function createLifecycle({
 
   /**
    * Note the user handling the map's camera (pointer, wheel or touch on the
-   * Cesium canvas, where its camera controller listens), so a camera move the
+   * globe's canvas, where its camera controller listens), so a camera move the
    * user made can wake the range pulses and one the app made (tracking,
    * cockpit, orbit, a fly-to) does not. Keys are left out: Cesium's camera
    * controller reads none, and typing elsewhere must not count. Nor does
@@ -77,8 +78,7 @@ export function createLifecycle({
   }
 
   function cameraInputsEnabled() {
-    const controller = layerState.viewer?.scene?.screenSpaceCameraController;
-    return controller?.enableInputs !== false;
+    return layerState.display?.cameraInputsEnabled?.() !== false;
   }
 
   const CAMERA_INPUT_EVENTS = [
@@ -117,7 +117,7 @@ export function createLifecycle({
   }
 
   function attachRuntimeListeners() {
-    if (layerState.runtimeListenersAttached || !layerState.viewer) return;
+    if (layerState.runtimeListenersAttached || !layerState.display) return;
     window.addEventListener(
       'gev:awareness-subject-selected',
       layerState.subjectListener,
@@ -131,59 +131,58 @@ export function createLifecycle({
       'gev:awareness-subject-cleared',
       layerState.subjectClearListener,
     );
-    const input = layerState.viewer.canvas ?? layerState.viewer.scene?.canvas;
+    const input = layerState.display.canvas;
     for (const type of CAMERA_INPUT_EVENTS)
       input?.addEventListener?.(type, noteCameraInput, { passive: true });
     layerState.cameraInputTarget = input ?? null;
-    layerState.preRenderRemover =
-      layerState.viewer.scene.preRender.addEventListener(() => {
-        if (!layerState.enabled) return;
-        const now = Date.now();
-        // Another owner took the camera: a gesture begun before it did must
-        // not wake the pulses on that owner's first move.
-        if (!cameraInputsEnabled())
-          layerState.lastCameraInputMs = Number.NEGATIVE_INFINITY;
-        // "Did the camera move" uses the SAME quantized pose signature the fleet
-        // rotation pass gates on (iconOrientation.cameraPoseSignature) rather than
-        // camera.changed, whose granularity is globally degraded by other layers
-        // mutating camera.percentageChanged.
-        const poseSig = cameraMotionSignature(layerState.viewer.camera);
-        if (poseSig !== layerState.lastCameraPoseSig) {
-          layerState.lastCameraPoseSig = poseSig;
-          layerState.lastCameraPoseChangeMs = now;
-          // A camera move the user made runs the range pulses again; parked,
-          // or moved by the app (tracking, cockpit, orbit, a fly-to), they
-          // rest.
-          if (
-            now - layerState.lastCameraInputMs <
-            AWARENESS_RANGE_PULSE.inputWakeMs
-          )
-            parts.rendering.wakePulses();
-        }
-        const decision = parts.model.awarenessRefreshDecision({
-          nowMs: now,
-          lastRefreshMs: layerState.lastSubjectRefreshMs,
-          lastPoseChangeMs: layerState.lastCameraPoseChangeMs,
-          wasMoving: layerState.cameraMoving,
-        });
-        layerState.cameraMoving = decision.moving;
-        syncAwarenessRenderHold();
-        if (!decision.refresh) return;
-        layerState.lastSubjectRefreshMs = now;
+    layerState.preRenderRemover = layerState.display.onFrame(() => {
+      if (!layerState.enabled) return;
+      const now = Date.now();
+      // Another owner took the camera: a gesture begun before it did must
+      // not wake the pulses on that owner's first move.
+      if (!cameraInputsEnabled())
+        layerState.lastCameraInputMs = Number.NEGATIVE_INFINITY;
+      // "Did the camera move" uses the SAME quantized pose signature the fleet
+      // rotation pass gates on (iconOrientation.cameraPoseSignature) rather than
+      // camera.changed, whose granularity is globally degraded by other layers
+      // mutating camera.percentageChanged.
+      const poseSig = cameraMotionSignature(layerState.display.camera);
+      if (poseSig !== layerState.lastCameraPoseSig) {
+        layerState.lastCameraPoseSig = poseSig;
+        layerState.lastCameraPoseChangeMs = now;
+        // A camera move the user made runs the range pulses again; parked,
+        // or moved by the app (tracking, cockpit, orbit, a fly-to), they
+        // rest.
         if (
-          layerState.subject &&
-          ['flights', 'military', 'ais-live-vessels'].includes(
-            layerState.subject.layerId,
-          )
-        ) {
-          parts.subject.refreshSelectedSubject();
-        } else if (!layerState.passive && layerState.autoFocusRetryPending) {
-          layerState.autoFocusRetryPending = false;
-          parts.focus.focusAttentionTarget();
-        } else {
-          parts.rendering.scheduleDirectionOverlayUpdate();
-        }
+          now - layerState.lastCameraInputMs <
+          AWARENESS_RANGE_PULSE.inputWakeMs
+        )
+          parts.rendering.wakePulses();
+      }
+      const decision = parts.model.awarenessRefreshDecision({
+        nowMs: now,
+        lastRefreshMs: layerState.lastSubjectRefreshMs,
+        lastPoseChangeMs: layerState.lastCameraPoseChangeMs,
+        wasMoving: layerState.cameraMoving,
       });
+      layerState.cameraMoving = decision.moving;
+      syncAwarenessRenderHold();
+      if (!decision.refresh) return;
+      layerState.lastSubjectRefreshMs = now;
+      if (
+        layerState.subject &&
+        ['flights', 'military', 'ais-live-vessels'].includes(
+          layerState.subject.layerId,
+        )
+      ) {
+        parts.subject.refreshSelectedSubject();
+      } else if (!layerState.passive && layerState.autoFocusRetryPending) {
+        layerState.autoFocusRetryPending = false;
+        parts.focus.focusAttentionTarget();
+      } else {
+        parts.rendering.scheduleDirectionOverlayUpdate();
+      }
+    });
     layerState.runtimeListenersAttached = true;
   }
 
@@ -225,9 +224,7 @@ export function createLifecycle({
     layerState.runtimeListenersAttached = false;
   }
   const methods = {
-    init(viewer) {
-      detachRuntimeListeners();
-      layerState.viewer = viewer;
+    init(viewer, { engine = null } = {}) {
       layerState.subjectListener = (event) => {
         if (!layerState.enabled) return;
         parts.subject.selectSubject(event.detail);
@@ -281,6 +278,29 @@ export function createLifecycle({
           parts.subject.clearAwarenessSubject();
         }
       };
+      if (viewer || engine) this.attachRenderer(viewer, { engine });
+    },
+
+    attachRenderer(viewer, { engine = null } = {}) {
+      detachRuntimeListeners();
+      layerState.display?.destroy?.();
+      layerState.display = viewer
+        ? createAwarenessCesiumRenderer(viewer)
+        : (services.renderer?.(engine) ?? null);
+      if (layerState.enabled) {
+        attachRuntimeListeners();
+        if (layerState.subject)
+          parts.rendering.renderVisual(layerState.subject);
+        parts.rendering.scheduleDirectionOverlayUpdate(true);
+      }
+    },
+
+    detachRenderer() {
+      detachRuntimeListeners();
+      parts.rendering.clearVisual();
+      parts.rendering.removeDirectionOverlay();
+      layerState.display?.destroy?.();
+      layerState.display = null;
     },
 
     enable() {
@@ -339,7 +359,8 @@ export function createLifecycle({
       layerState.contextListener = null;
       layerState.clearListener = null;
       layerState.subjectClearListener = null;
-      layerState.viewer = null;
+      layerState.display?.destroy?.();
+      layerState.display = null;
       layerState.dataManager = null;
     },
   };

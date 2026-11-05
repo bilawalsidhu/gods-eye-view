@@ -691,8 +691,11 @@ export async function selectAnalystRows(
  * Create an engine bound to live providers. All spatial/text/number logic is
  * in the pure helpers above; this closure only sequences and remembers.
  */
-export function createAnalystEngine(providers) {
-  let lastResult = null;
+export function createAnalystEngine(providers, { memory = null } = {}) {
+  // The follow-up memory. A caller may own it (`memory`, an object whose
+  // `lastResult` this engine reads and writes) so a replacement engine over
+  // another globe keeps the last answer; otherwise it is this engine's.
+  memory ??= { lastResult: null };
 
   /**
    * Run one query.
@@ -712,7 +715,7 @@ export function createAnalystEngine(providers) {
   ) {
     const cancelled = () =>
       refusal('CANCELLED', 'This query was superseded.', { cancelled: true });
-    if (spec.followUp && !lastResult)
+    if (spec.followUp && !memory.lastResult)
       return refusal(
         'NO_RESULT_CONTEXT',
         'There is no previous answer to follow up on. Ask the full question.',
@@ -724,7 +727,7 @@ export function createAnalystEngine(providers) {
     // must be that set: "those hospitals" after an aircraft answer is a new
     // question, never a filter over the old aircraft.
     if (followUp && Array.isArray(spec.layers) && spec.layers.length) {
-      const remembered = new Set(lastResult.layerKeys);
+      const remembered = new Set(memory.lastResult.layerKeys);
       const named = new Set(spec.layers);
       const same =
         remembered.size === named.size &&
@@ -732,16 +735,16 @@ export function createAnalystEngine(providers) {
       if (!same)
         return refusal(
           'FOLLOW_UP_MISMATCH',
-          `The last answer was about ${lastResult.layerKeys.join(', ')}, not ${spec.layers.join(', ')}. Ask again without followUp.`,
+          `The last answer was about ${memory.lastResult.layerKeys.join(', ')}, not ${spec.layers.join(', ')}. Ask again without followUp.`,
           {
             layers: [...spec.layers],
-            remembered: [...lastResult.layerKeys],
+            remembered: [...memory.lastResult.layerKeys],
             coverage: { layersQueried: [], scope: 'none' },
           },
         );
     }
     const layers = followUp
-      ? lastResult.layerKeys
+      ? memory.lastResult.layerKeys
       : Array.isArray(spec.layers) && spec.layers.length
         ? spec.layers
         : ['flights'];
@@ -776,10 +779,11 @@ export function createAnalystEngine(providers) {
     let queriedSnapshots;
     let unanswered = [];
     if (followUp) {
-      groups = lastResult.matched;
-      layersQueried = lastResult.coverage.layersQueried;
-      queriedSnapshots = lastResult.coverage.feedProvenance?.layers || [];
-      unanswered = [...(lastResult.unanswered || [])];
+      groups = memory.lastResult.matched;
+      layersQueried = memory.lastResult.coverage.layersQueried;
+      queriedSnapshots =
+        memory.lastResult.coverage.feedProvenance?.layers || [];
+      unanswered = [...(memory.lastResult.unanswered || [])];
     } else {
       groups = [];
       layersQueried = [];
@@ -863,22 +867,24 @@ export function createAnalystEngine(providers) {
 
     // 2) Spatial scope
     const rememberedPresentation = inheritsRememberedScope
-      ? lastResult.presentation || null
+      ? memory.lastResult.presentation || null
       : null;
     const rememberedCoverageNote =
       rememberedPresentation?.coverageNote ||
-      (inheritsRememberedScope ? lastResult.coverage?.note : null);
+      (inheritsRememberedScope ? memory.lastResult.coverage?.note : null);
     const rememberedDistanceOf = inheritsRememberedScope
-      ? lastResult.distanceOf || null
+      ? memory.lastResult.distanceOf || null
       : null;
     let resolvedScope = null;
     let scopeNote =
       rememberedPresentation?.coverageScope ||
-      (inheritsRememberedScope ? lastResult.coverage?.scope : null) ||
+      (inheritsRememberedScope ? memory.lastResult.coverage?.scope : null) ||
       'anywhere';
     let scopeSource =
       rememberedPresentation?.coverageScopeSource ||
-      (inheritsRememberedScope ? lastResult.coverage?.scopeSource : null) ||
+      (inheritsRememberedScope
+        ? memory.lastResult.coverage?.scopeSource
+        : null) ||
       null;
     // Human phrasing for the same scope, so every spoken count can name what it
     // measured ("8 in view", "about 30 within 250 km of Austin") instead of
@@ -1145,7 +1151,7 @@ export function createAnalystEngine(providers) {
         ? (await beforeCommit(result)) || null
         : null;
     if (!isCurrent()) return cancelled();
-    lastResult = {
+    memory.lastResult = {
       matched: memoryOverride?.matched || selection.matched,
       distanceOf: memoryOverride?.distanceOf || rememberedDistanceOf,
       layerKeys: [...(memoryOverride?.layerKeys || layers)],
@@ -1197,7 +1203,7 @@ export function createAnalystEngine(providers) {
       const capped = truncated === true;
       // A capped set's true size is unknown.
       const total = capped ? null : rows.length;
-      lastResult = {
+      memory.lastResult = {
         ...(presentation
           ? { presentation: structuredClone(presentation) }
           : {}),
@@ -1225,10 +1231,10 @@ export function createAnalystEngine(providers) {
       return true;
     },
     reset() {
-      lastResult = null;
+      memory.lastResult = null;
     },
     hasMemory() {
-      return Boolean(lastResult);
+      return Boolean(memory.lastResult);
     },
   };
 }

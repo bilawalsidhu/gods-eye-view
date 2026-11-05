@@ -6,11 +6,11 @@
  * Turn-rate estimation + constant-rate-turn arc integration are adapted from
  * skylight (https://github.com/cpaczek/skylight, MIT) shared/src/aim.ts.
  */
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 
 const DEG = Math.PI / 180;
-const _mmCarto = new Cesium.Cartographic();
-const _mmCandidateCarto = new Cesium.Cartographic();
+const _mmCarto = geo.cartographic.create();
+const _mmCandidateCarto = geo.cartographic.create();
 
 export function norm360(deg) {
   return ((deg % 360) + 360) % 360;
@@ -28,22 +28,22 @@ export function norm360(deg) {
  */
 export function liftRepeatedGroundFix(newest, candidatePosition, onGround) {
   if (!onGround || !newest?.position || !candidatePosition) return false;
-  const stored = Cesium.Cartographic.fromCartesian(
+  const stored = geo.cartographic.fromCartesian(
     newest.position,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _mmCarto,
   );
-  const candidate = Cesium.Cartographic.fromCartesian(
+  const candidate = geo.cartographic.fromCartesian(
     candidatePosition,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _mmCandidateCarto,
   );
   if (!stored || !candidate || candidate.height <= stored.height) return false;
-  Cesium.Cartesian3.fromRadians(
+  geo.cartesian3.fromRadians(
     stored.longitude,
     stored.latitude,
     candidate.height,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     newest.position,
   );
   return true;
@@ -66,9 +66,9 @@ export function courseBetweenCartesians(from, to, minChordM = 25) {
   const dy = to.y - from.y;
   const dz = to.z - from.z;
   if (dx * dx + dy * dy + dz * dz < minChordM * minChordM) return null;
-  const carto = Cesium.Cartographic.fromCartesian(
+  const carto = geo.cartographic.fromCartesian(
     from,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _mmCarto,
   );
   if (!carto) return null;
@@ -256,17 +256,17 @@ export function estimateTurnRateDps(
   return Math.max(-maxDps, Math.min(maxDps, rate));
 }
 
-/** Adapter: fix history [{time: JulianDate, track, velocity}] →
+/** Adapter: fix history [{timeMs, track, velocity}] →
  *  estimateTurnRateDps, guarded by TURN_MIN_SPEED_MPS (low-speed fix-track
  *  jitter must not manufacture a turn rate). */
 export function turnRateFromFixHistory(history) {
   if (!history || history.length < 2) return 0;
-  const t0 = history[0].time;
+  const t0 = history[0].timeMs;
   const samples = [];
   for (const s of history) {
     if (!Number.isFinite(s.track)) continue;
     samples.push({
-      tSec: Cesium.JulianDate.secondsDifference(s.time, t0),
+      tSec: (s.timeMs - t0) / 1000,
       trackDeg: s.track,
       speedMps: s.velocity,
     });
@@ -436,8 +436,8 @@ export function arcOffsetEnu(speedMps, trackDeg, turnRateDps, dtSec, result) {
 }
 
 const _forwardFixArc = { east: 0, north: 0, endCourseDeg: 0 };
-const _forwardFixEnu = new Cesium.Matrix4();
-const _forwardFixOffset = new Cesium.Cartesian3();
+const _forwardFixEnu = geo.matrix4.create();
+const _forwardFixOffset = geo.cartesian3.create();
 
 /**
  * Create a forward-only synthetic fix when a repeated position epoch carries
@@ -446,19 +446,23 @@ const _forwardFixOffset = new Cesium.Cartesian3();
  * kinematics. This prevents a late course change from reprojecting the entire
  * stale interval and snapping the rendered contact by kilometres.
  *
- * @param {{time: Cesium.JulianDate, epochMs?: number, position: Cesium.Cartesian3,
+ * @param {{timeMs: number, epochMs?: number, position: Cesium.Cartesian3,
  *   velocity?: number, track?: number}} newest Existing immutable history fix.
  * @param {{epochMs: number, velocity: number, track: number, turnRateDps?: number}} next
  *   New kinematics and the wall/source epoch at which they become authoritative.
- * @returns {{time: Cesium.JulianDate, epochMs: number, position: Cesium.Cartesian3,
+ * @returns {{timeMs: number, epochMs: number, position: Cesium.Cartesian3,
  *   velocity: number, track: number}|null} Forward synthetic fix, or null.
  */
 export function synthesizeForwardKinematicsFix(newest, next = {}) {
-  if (!newest?.position || !newest?.time || !Number.isFinite(next.epochMs))
+  if (
+    !newest?.position ||
+    newest?.timeMs == null ||
+    !Number.isFinite(next.epochMs)
+  )
     return null;
   const startEpochMs = Number.isFinite(newest.epochMs)
     ? newest.epochMs
-    : Cesium.JulianDate.toDate(newest.time).getTime();
+    : newest.timeMs;
   if (!Number.isFinite(startEpochMs) || next.epochMs <= startEpochMs)
     return null;
 
@@ -474,24 +478,25 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
     dtSec,
     _forwardFixArc,
   );
-  Cesium.Cartesian3.fromElements(
+  geo.cartesian3.fromElements(
     _forwardFixArc.east,
     _forwardFixArc.north,
     0,
     _forwardFixOffset,
   );
-  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+  const enu = geo.transforms.eastNorthUpToFixedFrame(
     newest.position,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _forwardFixEnu,
   );
-  const position = Cesium.Matrix4.multiplyByPoint(
+  const position = geo.matrix4.multiplyByPoint(
     enu,
     _forwardFixOffset,
-    new Cesium.Cartesian3(),
+    geo.cartesian3.create(),
   );
   return {
-    time: Cesium.JulianDate.fromDate(new Date(next.epochMs)),
+    // Whole milliseconds, as a Date holds the fix time.
+    timeMs: Math.trunc(next.epochMs),
     epochMs: next.epochMs,
     position,
     velocity: Number.isFinite(next.velocity)

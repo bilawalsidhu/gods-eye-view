@@ -37,6 +37,11 @@ export function createRendering({
   /** Remove both heat-line ground primitives from the scene. */
 
   function removeHeatLines() {
+    if (layerState._native) {
+      layerState._heatJamPrim?.destroy();
+      layerState._heatSlowPrim?.destroy();
+      layerState._heatJamPrim = layerState._heatSlowPrim = null;
+    }
     if (layerState._heatJamPrim) {
       layerState._viewer?.scene.groundPrimitives.remove(
         layerState._heatJamPrim,
@@ -68,11 +73,12 @@ export function createRendering({
   function rebuildHeatLines(roads) {
     removeHeatLines();
     if (
-      !layerState._viewer ||
+      (!layerState._viewer && !layerState._native) ||
       !layerState._liveMode ||
       !parts.style.heatlineOn()
     )
       return;
+    if (layerState._native) layerState._heatSupported = true;
     if (layerState._heatSupported === null) {
       layerState._heatSupported = Cesium.GroundPolylinePrimitive.isSupported(
         layerState._viewer.scene,
@@ -122,6 +128,25 @@ export function createRendering({
       ? new Cesium.Color(0.7, 0.7, 0.7, HEAT_SLOW_COLOR.alpha)
       : HEAT_SLOW_COLOR;
 
+    if (layerState._native) {
+      const roadsFor = (bucket) =>
+        kept.filter((item) => item.bucket === bucket).map((item) => item.road);
+      layerState._heatJamPrim = layerState._native.makeHeat(
+        roadsFor('jam'),
+        jamLineColor,
+        HEAT_LINE_JAM_WIDTH,
+        HEAT_JAM_BASE_ALPHA,
+      );
+      layerState._heatSlowPrim = layerState._native.makeHeat(
+        roadsFor('slow'),
+        slowLineColor,
+        HEAT_LINE_SLOW_WIDTH,
+        slowLineColor.alpha,
+      );
+      layerState._heatLineCount = kept.length;
+      parts.animation.syncRenderDemand();
+      return;
+    }
     const jamInstances = instancesFor('jam', HEAT_LINE_JAM_WIDTH);
     if (jamInstances.length) {
       layerState._heatJamPrim = layerState._viewer.scene.groundPrimitives.add(
@@ -202,7 +227,7 @@ export function createRendering({
     // nadir view: oblique pitches put the loaded roads many km away even at
     // low altitude. Probe three roads and stretch the curves accordingly.
     let areaDist = altitude;
-    if (layerState._viewer && filteredRoads.length) {
+    if ((layerState._viewer || layerState._engine) && filteredRoads.length) {
       const probes = [
         filteredRoads[0],
         filteredRoads[Math.floor(filteredRoads.length / 2)],
@@ -214,7 +239,8 @@ export function createRendering({
           areaDist = Math.max(
             areaDist,
             Cesium.Cartesian3.distance(
-              layerState._viewer.camera.positionWC,
+              layerState._engine?.camera.livePosition ??
+                layerState._viewer.camera.positionWC,
               wp,
             ),
           );
@@ -233,10 +259,18 @@ export function createRendering({
       : null;
     parts.retention.reconcile(filteredRoads, altitude, replace);
     if (layerState._dots.length && filteredRoads.some((r) => !r.directFlow))
-      services.credits?.showOsmCredit?.(layerState._viewer, 'traffic', {
-        openMapTiles: true,
-      });
-    else services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
+      services.credits?.showOsmCredit?.(
+        layerState._engine ?? layerState._viewer,
+        'traffic',
+        {
+          openMapTiles: true,
+        },
+      );
+    else
+      services.credits?.hideOsmCredit?.(
+        layerState._engine ?? layerState._viewer,
+        'traffic',
+      );
     parts.model.recolorDotsInPlace(label);
 
     const renderMetrics = state

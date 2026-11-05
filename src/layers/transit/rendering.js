@@ -1,8 +1,5 @@
-import * as Cesium from 'cesium';
-import {
-  cameraPoseSignature,
-  perspectiveProjectedRotation,
-} from '../../data/iconOrientation.js';
+import { Rgba, rgbaFromCss } from '../shared/color.js';
+import * as geo from '../../geo/index.js';
 import {
   updatePlayback,
   applyDisplayCourse,
@@ -31,7 +28,7 @@ import {
 export const MODE_CESIUM_COLORS = Object.fromEntries(
   Object.entries(TRANSIT_MODE_COLORS).map(([mode, css]) => [
     mode,
-    Cesium.Color.fromCssColorString(css),
+    rgbaFromCss(css),
   ]),
 );
 
@@ -55,13 +52,7 @@ export function createRendering({ state, services, parts }) {
   function cartesianFor(lat, lon, heightM, out) {
     // `heightM` already carries the shared floor's own lift, so nothing is
     // added here: two lifts stacked is a vehicle hovering.
-    return Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      heightM || 0,
-      undefined,
-      out,
-    );
+    return geo.cartesian3.fromDegrees(lon, lat, heightM || 0, undefined, out);
   }
 
   /** Heights are aligned to work with Google 3D tiles. Rebuild both ends. */
@@ -73,13 +64,13 @@ export function createRendering({ state, services, parts }) {
       entry.from.lat,
       entry.from.lon,
       entry.from.h,
-      entry.fromCart || new Cesium.Cartesian3(),
+      entry.fromCart || geo.cartesian3.create(),
     );
     entry.toCart = cartesianFor(
       entry.to.lat,
       entry.to.lon,
       entry.to.h,
-      entry.toCart || new Cesium.Cartesian3(),
+      entry.toCart || geo.cartesian3.create(),
     );
     entry.endpointRevision = entry.sample.revision;
     entry.endpointFromSeq = entry.sample.fromSeq;
@@ -100,6 +91,7 @@ export function createRendering({ state, services, parts }) {
     );
     entry.surfaceReady = !!known;
     entry.heightPending = !known;
+    if (!entry.marker) return;
     entry.marker.show = !!known && vehicleInView(entry);
     if (known) {
       entry.marker.position = state._scratchCartesian;
@@ -202,12 +194,7 @@ export function createRendering({ state, services, parts }) {
     const key = `${transitStyleProfile(style)}:${mode}`;
     let color = _presetColors.get(key);
     if (!color) {
-      color = new Cesium.Color(
-        rgba[0] / 255,
-        rgba[1] / 255,
-        rgba[2] / 255,
-        rgba[3],
-      );
+      color = new Rgba(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3]);
       _presetColors.set(key, color);
     }
     return color;
@@ -253,6 +240,7 @@ export function createRendering({ state, services, parts }) {
   }
 
   function addMarker(key, entry) {
+    if (!state._markers) return null;
     const marker = state._markers.add({
       id: key,
       position: entry.toCart,
@@ -261,7 +249,7 @@ export function createRendering({ state, services, parts }) {
       height: MARKER_PIXEL_SIZE,
       color: MODE_CESIUM_COLORS[entry.mode],
       rotation: 0,
-      alignedAxis: Cesium.Cartesian3.ZERO,
+      alignedAxis: geo.cartesian3.ZERO,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     });
     entry.marker = marker;
@@ -307,11 +295,10 @@ export function createRendering({ state, services, parts }) {
    * changed somebody's heading.
    */
   function refreshRotations(now) {
-    const scene = state._viewer?.scene;
-    if (!scene?.camera) return;
+    if (!parts.renderer?.ready) return;
     if (now - state._rotationAt < ROTATION_REFRESH_MS) return;
     state._rotationAt = now;
-    const pose = cameraPoseSignature(scene.camera);
+    const pose = parts.renderer.cameraSignature();
     const cameraChanged =
       state._rotationPose !== pose ||
       state._rotationRevision !== state._cameraRevision;
@@ -349,8 +336,7 @@ export function createRendering({ state, services, parts }) {
       // camera-basis helper aircraft use is orthographic — fine at altitude,
       // and wrong by twenty-odd degrees for a street-level contact away from
       // the centre of an obliquely pitched view, which is most of them.
-      entry.marker.rotation = perspectiveProjectedRotation(
-        scene,
+      entry.marker.rotation = parts.renderer.rotation(
         entry.marker.position,
         course,
         entry.marker.rotation,
@@ -428,8 +414,7 @@ export function createRendering({ state, services, parts }) {
     const selected = state._vehicles.get(state._selectedKey);
     if (selected && state._visible.has(selected)) {
       selected.marker.rotation = Number.isFinite(selected.courseDeg)
-        ? perspectiveProjectedRotation(
-            state._viewer.scene,
+        ? parts.renderer.rotation(
             selected.marker.position,
             selected.courseDeg,
             selected.marker.rotation,
@@ -440,10 +425,7 @@ export function createRendering({ state, services, parts }) {
     syncRenderHold();
   }
 
-  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);
-  const sphere = new Cesium.BoundingSphere(undefined, 5);
-  const cameraPosition = new Cesium.Cartesian3();
-  const candidatePosition = new Cesium.Cartesian3();
+  const candidatePosition = geo.cartesian3.create();
   /** Visibility work runs off the frame path, coalesced at four sweeps/second. */
   function requestVisibility() {
     state._visibilityDirty = true;
@@ -465,22 +447,8 @@ export function createRendering({ state, services, parts }) {
     }
     state._visibilityAt = now;
     state._visibilityDirty = false;
-    const viewer = state._viewer,
-      camera = viewer?.camera;
-    if (!camera) return 0;
-    const position =
-      camera.positionWC ||
-      Cesium.Ellipsoid.WGS84.cartographicToCartesian(
-        camera.positionCartographic,
-        cameraPosition,
-      );
-    occluder.cameraPosition = position;
-    const frustum = camera.frustum?.computeCullingVolume(
-      position,
-      camera.directionWC,
-      camera.upWC,
-    );
-    const planes = frustum?.planes;
+    const visibilityTest = parts.renderer?.visibilityTester();
+    if (!visibilityTest) return 0;
     let changed = false;
     for (const entry of state._vehicles.values()) {
       if (!entry.marker) continue;
@@ -491,7 +459,7 @@ export function createRendering({ state, services, parts }) {
         entry.sample ||= {};
         updatePlayback(entry, now, performance.now());
       }
-      sphere.center =
+      const position =
         state._visible.has(entry) || !entry.sample
           ? entry.marker.position
           : cartesianFor(
@@ -504,24 +472,12 @@ export function createRendering({ state, services, parts }) {
       // view. The current frustum is authoritative; the horizon still rejects
       // the far side when the rectangle is missing or stale.
       const bounds = vehicleNearView(state._viewBounds, entry);
-      const horizon = occluder.isPointVisible(sphere.center);
-      let inFrustum = true;
-      if (planes) {
-        for (let i = 0; i < planes.length; i++) {
-          const p = planes[i],
-            c = sphere.center;
-          if (p.x * c.x + p.y * c.y + p.z * c.z + p.w < -sphere.radius) {
-            inFrustum = false;
-            break;
-          }
-        }
-      } else if (frustum)
-        inFrustum =
-          frustum.computeVisibility(sphere) !== Cesium.Intersect.OUTSIDE;
-      const visible = (frustum || bounds) && horizon && inFrustum;
+      const { horizon, inFrustum } = visibilityTest.test(position);
+      const visible =
+        (visibilityTest.hasFrustum || bounds) && horizon && inFrustum;
       const visibility = (entry.visibility ||= {});
       visibility.bounds = bounds;
-      visibility.boundsApplied = !frustum;
+      visibility.boundsApplied = !visibilityTest.hasFrustum;
       visibility.occluder = horizon;
       visibility.frustum = inFrustum;
       visibility.noSample = noSample;

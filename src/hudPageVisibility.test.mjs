@@ -1,3 +1,4 @@
+import { viewerEngine } from './testSupport/viewerEngine.mjs';
 // The HUD's 250 ms telemetry readout skips ticks in a hidden page, except in
 // an inline panel, whose host may report it hidden while it is on screen.
 //
@@ -65,7 +66,7 @@ test('the HUD readout pauses in a hidden page but keeps updating in an inline pa
   const page = installHiddenPage();
   let hud;
   try {
-    hud = new IntelHUD(page.viewer, { publish: page.publish });
+    hud = new IntelHUD(viewerEngine(page.viewer), { viewer: page.viewer, publish: page.publish });
     hud._visible = true;
 
     t.mock.timers.tick(250);

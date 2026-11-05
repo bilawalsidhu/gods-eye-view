@@ -23,7 +23,7 @@ export function createIngestion({
   setSourceLabel,
 }) {
   async function loadLivePositions(viewer) {
-    if (!viewer || feed.loading) return;
+    if (!feed.enabled || feed.loading) return;
     feed.loading = true;
     feed.loadingLabel = feed.loaded ? 'refreshing...' : 'loading...';
     const requestController = new AbortController();
@@ -41,7 +41,7 @@ export function createIngestion({
             ])
           : requestController.signal;
       // Ask for the vessels in view; a wide view asks for every vessel.
-      const area = readArea(viewer);
+      const area = viewer ? readArea(viewer) : feed.lastArea;
       feed.lastArea = area;
       const snapshot = await readSource().getSnapshot(
         { maxRows: getRowLimit(), ...(area ? { area } : {}) },
@@ -50,7 +50,7 @@ export function createIngestion({
       if (!ownsAisRequest(requestController, requestSessionId)) return;
       setSourceLabel(snapshot.source);
       // Map observations into the existing display store; source fields stop here.
-      applyAisFeedSnapshot(viewer, {
+      applyAisFeedSnapshot(readViewer(), {
         rows: snapshot.records.map(vesselDisplayRow),
         observedAtMs: snapshot.observedAtMs,
         freshness: snapshot.freshness,

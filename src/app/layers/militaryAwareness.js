@@ -1,3 +1,4 @@
+import { rendererFor } from './renderers.js';
 import { createAwarenessLayer } from '../../layers/awareness/index.js';
 import * as navigation from '../../navigationPolicy.js';
 import * as geometry from '../../celestialRing.js';
@@ -17,6 +18,7 @@ export function createApplicationAwareness({
       installations,
       navigation,
       geometry,
+      renderer: (engine) => rendererFor('military-awareness', engine),
       render,
     },
   });

@@ -6,6 +6,7 @@ import {
   restoreRetainedTransit,
   sampleTransitPixels,
   readTransitFleetStyle,
+  transitQaBase,
 } from './qa-transit-browser.mjs';
 import {
   BOSTON,
@@ -22,7 +23,7 @@ import {
 /**
  * Browser proof for the Transit layer against a running app.
  *
- *   npm run qa:transit                       (defaults to http://localhost:4173)
+ *   QA_BASE_URL=http://localhost:4305 npm run qa:transit
  *   QA_BASE_URL=http://localhost:4305 node scripts/qa-transit.mjs
  *
  * Drives the real layer toggle and the real CONTEXT chooser, watches the real
@@ -36,6 +37,7 @@ import {
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { chromeExecutablePath, captureQaScreenshot } from './qa-chrome.mjs';
 import { createTransitHistory } from '../server/providers/transitHistory.js';
 import { DETECTION_THEME_MAP } from '../src/overlays/worldOverlayTokens.js';
@@ -50,9 +52,9 @@ import {
   reduceScriptedMotion,
 } from '../src/layers/transit/qaMetrics.js';
 
-const BASE = process.env.QA_BASE_URL || 'http://localhost:4173';
+const BASE = transitQaBase(process.env.QA_BASE_URL);
 const SHOTS = process.env.QA_SHOTS || 'qa-shots/transit';
-const TAG = process.env.QA_TAG || 'keyed';
+const TAG = process.env.QA_TAG || 'keyless';
 /** Which sections to run: all, or a comma list of cities,playback,disable,context. */
 const SECTIONS = new Set((process.env.QA_SECTIONS || 'all').split(','));
 const runs = (section) => SECTIONS.has('all') || SECTIONS.has(section);
@@ -260,12 +262,13 @@ historyProbe.clear();
 await mkdir(SHOTS, { recursive: true });
 
 const browser = await puppeteer.launch({
-  headless: false,
+  headless: true,
   protocolTimeout: 150000,
   executablePath: chromeExecutablePath(),
   args: [
     '--no-sandbox',
-    '--disable-backgrounding-occluded-windows',
+    '--use-angle=metal',
+    '--enable-gpu',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--window-size=1920,1080',
@@ -273,6 +276,7 @@ const browser = await puppeteer.launch({
   ],
 });
 const page = await browser.newPage();
+await blockPaidQaMaps(page);
 // This gate measures visible-page motion. OS minimization must not silently
 // switch it into the app's intentional hidden-tab polling pause.
 const focus = await page.createCDPSession();
@@ -1045,6 +1049,7 @@ try {
   if (runs('history')) {
     console.log('\n== retained history reload ==');
     const recovery = await browser.newPage();
+    await blockPaidQaMaps(recovery);
     boundPageEvaluations(recovery);
     try {
       await recovery.goto(view(BOSTON), { waitUntil: 'domcontentloaded' });

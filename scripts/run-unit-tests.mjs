@@ -31,7 +31,7 @@ export function assertNode24AllocationRuntime(version = process.versions.node) {
  * outside dependencies, build output and dot-directories, so adding a tree
  * without adding it here fails.
  */
-export const UNIT_TEST_ROOTS = Object.freeze(['src', 'server']);
+export const UNIT_TEST_ROOTS = Object.freeze(['src', 'server', 'scripts']);
 
 /** Discover repository unit tests in stable path order. */
 export function discoverUnitTestFiles(root = process.cwd()) {

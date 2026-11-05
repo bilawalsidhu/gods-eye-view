@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { t } from '../../i18n/index.js';
 import {
   EARTH_ROTATION_RAD_PER_SEC,
@@ -32,7 +32,7 @@ export function createPaths({ state: layerState, services, parts, source }) {
     if (!orbitPath?.length) return 5400;
     const meanRadius =
       orbitPath.reduce(
-        (total, point) => total + Cesium.Cartesian3.magnitude(point),
+        (total, point) => total + geo.cartesian3.magnitude(point),
         0,
       ) / orbitPath.length;
     return 2 * Math.PI * Math.sqrt(meanRadius ** 3 / 3.986004418e14);
@@ -52,20 +52,20 @@ export function createPaths({ state: layerState, services, parts, source }) {
         : orbitName.includes('medium')
           ? 20200000
           : 550000;
-    const radius = Cesium.Ellipsoid.WGS84.maximumRadius + altitude;
-    const longitude = Cesium.Math.toRadians(launch.lon);
-    const latitude = Cesium.Math.toRadians(launch.lat);
-    const up = new Cesium.Cartesian3(
+    const radius = geo.ellipsoid.WGS84.maximumRadius + altitude;
+    const longitude = geo.math.toRadians(launch.lon);
+    const latitude = geo.math.toRadians(launch.lat);
+    const up = geo.cartesian3.create(
       Math.cos(latitude) * Math.cos(longitude),
       Math.cos(latitude) * Math.sin(longitude),
       Math.sin(latitude),
     );
-    const east = new Cesium.Cartesian3(
+    const east = geo.cartesian3.create(
       -Math.sin(longitude),
       Math.cos(longitude),
       0,
     );
-    const north = new Cesium.Cartesian3(
+    const north = geo.cartesian3.create(
       -Math.sin(latitude) * Math.cos(longitude),
       -Math.sin(latitude) * Math.sin(longitude),
       Math.cos(latitude),
@@ -83,60 +83,56 @@ export function createPaths({ state: layerState, services, parts, source }) {
       : isWesternNorthAmerica
         ? 190
         : 90;
-    const launchAzimuth = Cesium.Math.toRadians(launchAzimuthDeg);
-    const forward = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.add(
-        Cesium.Cartesian3.multiplyByScalar(
+    const launchAzimuth = geo.math.toRadians(launchAzimuthDeg);
+    const forward = geo.cartesian3.normalize(
+      geo.cartesian3.add(
+        geo.cartesian3.multiplyByScalar(
           north,
           Math.cos(launchAzimuth),
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         ),
-        Cesium.Cartesian3.multiplyByScalar(
+        geo.cartesian3.multiplyByScalar(
           east,
           Math.sin(launchAzimuth),
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         ),
-        new Cesium.Cartesian3(),
+        geo.cartesian3.create(),
       ),
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
     // A reconstructed orbit is an estimate, not a claim that the vehicle was
     // inserted directly above the pad. Offset the orbital plane downrange by a
     // small launch-to-insertion arc so a top-down view does not draw the entire
     // orbit on top of the launch site. The ascent still joins this ring at its
     // propagated insertion reference.
-    const insertionArc = Cesium.Math.toRadians(isPolar ? 8 : 12);
-    const orbitAnchor = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.add(
-        Cesium.Cartesian3.multiplyByScalar(
+    const insertionArc = geo.math.toRadians(isPolar ? 8 : 12);
+    const orbitAnchor = geo.cartesian3.normalize(
+      geo.cartesian3.add(
+        geo.cartesian3.multiplyByScalar(
           up,
           Math.cos(insertionArc),
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         ),
-        Cesium.Cartesian3.multiplyByScalar(
+        geo.cartesian3.multiplyByScalar(
           forward,
           Math.sin(insertionArc),
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         ),
-        new Cesium.Cartesian3(),
+        geo.cartesian3.create(),
       ),
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const planeNormal = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.cross(orbitAnchor, forward, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3(),
+    const planeNormal = geo.cartesian3.normalize(
+      geo.cartesian3.cross(orbitAnchor, forward, geo.cartesian3.create()),
+      geo.cartesian3.create(),
     );
-    const crossTrack = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.cross(
-        planeNormal,
-        orbitAnchor,
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
+    const crossTrack = geo.cartesian3.normalize(
+      geo.cartesian3.cross(planeNormal, orbitAnchor, geo.cartesian3.create()),
+      geo.cartesian3.create(),
     );
     return Array.from({ length: 97 }, (_, index) => {
       const angle = (index / 96) * Math.PI * 2;
-      return new Cesium.Cartesian3(
+      return geo.cartesian3.create(
         radius *
           (Math.cos(angle) * orbitAnchor.x + Math.sin(angle) * crossTrack.x),
         radius *
@@ -152,21 +148,21 @@ export function createPaths({ state: layerState, services, parts, source }) {
     // Degenerate returns clone into `result` when provided — handing back a
     // path vertex would let an in-place caller mutate the path geometry.
     if (path.length === 1)
-      return result ? Cesium.Cartesian3.clone(path[0], result) : path[0];
+      return result ? geo.cartesian3.clone(path[0], result) : path[0];
     let distances = layerState._pathDistanceCache.get(path);
     if (!distances) {
       distances = new Float64Array(path.length);
       for (let index = 1; index < path.length; index++) {
         distances[index] =
           distances[index - 1] +
-          Cesium.Cartesian3.distance(path[index - 1], path[index]);
+          geo.cartesian3.distance(path[index - 1], path[index]);
       }
       layerState._pathDistanceCache.set(path, distances);
     }
     const totalDistance = distances.at(-1);
     if (!(totalDistance > 0))
-      return result ? Cesium.Cartesian3.clone(path[0], result) : path[0];
-    const targetDistance = Cesium.Math.clamp(progress, 0, 1) * totalDistance;
+      return result ? geo.cartesian3.clone(path[0], result) : path[0];
+    const targetDistance = geo.math.clamp(progress, 0, 1) * totalDistance;
     let low = 1;
     let high = distances.length - 1;
     while (low < high) {
@@ -180,11 +176,11 @@ export function createPaths({ state: layerState, services, parts, source }) {
       segmentDistance > 0
         ? (targetDistance - distances[index]) / segmentDistance
         : 0;
-    return Cesium.Cartesian3.lerp(
+    return geo.cartesian3.lerp(
       path[index],
       path[index + 1],
       segmentProgress,
-      result || new Cesium.Cartesian3(),
+      result || geo.cartesian3.create(),
     );
   }
 
@@ -199,7 +195,7 @@ export function createPaths({ state: layerState, services, parts, source }) {
 
   function orbitProgressAtTime(nowMs, periodSec) {
     const period = Math.max(1, Number(periodSec) || 1);
-    return Cesium.Math.mod((Number(nowMs) || 0) / 1000, period) / period;
+    return geo.math.mod((Number(nowMs) || 0) / 1000, period) / period;
   }
 
   /**
@@ -217,13 +213,13 @@ export function createPaths({ state: layerState, services, parts, source }) {
     insertionPosition,
     samples = 512,
   ) {
-    const ellipsoid = Cesium.Ellipsoid.WGS84;
+    const ellipsoid = geo.ellipsoid.WGS84;
     const origin = ellipsoid.cartesianToCartographic(launchPosition);
     const insertion = ellipsoid.cartesianToCartographic(insertionPosition);
     if (!origin || !insertion) return [launchPosition, insertionPosition];
-    const geodesic = new Cesium.EllipsoidGeodesic(
-      new Cesium.Cartographic(origin.longitude, origin.latitude),
-      new Cesium.Cartographic(insertion.longitude, insertion.latitude),
+    const geodesic = geo.ellipsoidGeodesic.create(
+      geo.cartographic.create(origin.longitude, origin.latitude),
+      geo.cartographic.create(insertion.longitude, insertion.latitude),
       ellipsoid,
     );
     return Array.from({ length: samples + 1 }, (_, index) => {
@@ -233,7 +229,7 @@ export function createPaths({ state: layerState, services, parts, source }) {
       const horizontalProgress = progress ** 4;
       const cartographic = geodesic.interpolateUsingFraction(
         horizontalProgress,
-        new Cesium.Cartographic(),
+        geo.cartographic.create(),
       );
       // Approximate the inertial eastward lead accumulated during a ten-minute
       // ascent. The p³ envelope keeps liftoff nearly vertical, peaks during the
@@ -242,13 +238,13 @@ export function createPaths({ state: layerState, services, parts, source }) {
         EARTH_ROTATION_RAD_PER_SEC *
         PROJECTED_ASCENT_ROTATION_SEC *
         Math.sin(Math.PI * progress ** 3);
-      cartographic.longitude = Cesium.Math.negativePiToPi(
+      cartographic.longitude = geo.math.negativePiToPi(
         cartographic.longitude + rotationalLead,
       );
-      cartographic.height = Cesium.Math.lerp(
+      cartographic.height = geo.math.lerp(
         Math.max(0, origin.height),
         Math.max(0, insertion.height),
-        Math.sin(progress * Cesium.Math.PI_OVER_TWO),
+        Math.sin(progress * geo.math.PI_OVER_TWO),
       );
       return ellipsoid.cartographicToCartesian(cartographic);
     });
@@ -256,18 +252,18 @@ export function createPaths({ state: layerState, services, parts, source }) {
 
   function nearestOrbitIndex(orbitPath, referencePosition) {
     if (!orbitPath?.length || !referencePosition) return 0;
-    const referenceDirection = Cesium.Cartesian3.normalize(
+    const referenceDirection = geo.cartesian3.normalize(
       referencePosition,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
     let bestIndex = 0;
     let bestDot = -Number.MAX_VALUE;
     orbitPath.forEach((candidate, index) => {
-      const direction = Cesium.Cartesian3.normalize(
+      const direction = geo.cartesian3.normalize(
         candidate,
-        new Cesium.Cartesian3(),
+        geo.cartesian3.create(),
       );
-      const dot = Cesium.Cartesian3.dot(referenceDirection, direction);
+      const dot = geo.cartesian3.dot(referenceDirection, direction);
       if (dot > bestDot) {
         bestDot = dot;
         bestIndex = index;
@@ -281,29 +277,29 @@ export function createPaths({ state: layerState, services, parts, source }) {
     const first = orbitPath[0];
     const last = orbitPath.at(-1);
     const isClosed =
-      orbitPath.length > 2 && Cesium.Cartesian3.distance(first, last) < 1000;
+      orbitPath.length > 2 && geo.cartesian3.distance(first, last) < 1000;
     const core = isClosed ? orbitPath.slice(0, -1) : orbitPath.slice();
     if (!core.length) return orbitPath.slice();
-    const index = Cesium.Math.mod(insertionIndex, core.length);
+    const index = geo.math.mod(insertionIndex, core.length);
     const rotated = [...core.slice(index), ...core.slice(0, index)];
     rotated.push(rotated[0]);
     return rotated;
   }
 
   function surfaceSafeSegment(startPosition, endPosition) {
-    const ellipsoid = Cesium.Ellipsoid.WGS84;
+    const ellipsoid = geo.ellipsoid.WGS84;
     const start = ellipsoid.cartesianToCartographic(startPosition);
     const end = ellipsoid.cartesianToCartographic(endPosition);
     if (!start || !end) return [startPosition, endPosition];
-    const geodesic = new Cesium.EllipsoidGeodesic(
-      new Cesium.Cartographic(start.longitude, start.latitude),
-      new Cesium.Cartographic(end.longitude, end.latitude),
+    const geodesic = geo.ellipsoidGeodesic.create(
+      geo.cartographic.create(start.longitude, start.latitude),
+      geo.cartographic.create(end.longitude, end.latitude),
       ellipsoid,
     );
     // Replay advances in real time across this path. Keep the geometry
     // surface-safe, but give the animated marker and chase camera enough
     // samples that they do not visibly pause at long segment boundaries.
-    const steps = Cesium.Math.clamp(
+    const steps = geo.math.clamp(
       Math.ceil(geodesic.surfaceDistance / 75000),
       2,
       256,
@@ -314,9 +310,9 @@ export function createPaths({ state: layerState, services, parts, source }) {
       const eased = fraction * fraction * (3 - 2 * fraction);
       const cartographic = geodesic.interpolateUsingFraction(
         fraction,
-        new Cesium.Cartographic(),
+        geo.cartographic.create(),
       );
-      cartographic.height = Cesium.Math.lerp(start.height, end.height, eased);
+      cartographic.height = geo.math.lerp(start.height, end.height, eased);
       positions.push(ellipsoid.cartographicToCartesian(cartographic));
     }
     positions[0] = startPosition;
@@ -341,24 +337,14 @@ export function createPaths({ state: layerState, services, parts, source }) {
   function blendAscentIntoOrbitTangent(ascentPath, orbitPath, insertionIndex) {
     if (!ascentPath?.length || ascentPath.length < 4 || !orbitPath?.length)
       return ascentPath;
-    const ellipsoid = Cesium.Ellipsoid.WGS84;
+    const ellipsoid = geo.ellipsoid.WGS84;
     const transferEnd = orbitPath[insertionIndex];
     const nextOrbit = orbitPath[(insertionIndex + 1) % orbitPath.length];
-    const orbitTangent = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.subtract(
-        nextOrbit,
-        transferEnd,
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
+    const orbitTangent = geo.cartesian3.normalize(
+      geo.cartesian3.subtract(nextOrbit, transferEnd, geo.cartesian3.create()),
+      geo.cartesian3.create(),
     );
-    if (
-      Cesium.Cartesian3.equalsEpsilon(
-        orbitTangent,
-        Cesium.Cartesian3.ZERO,
-        1e-8,
-      )
-    )
+    if (geo.cartesian3.equalsEpsilon(orbitTangent, geo.cartesian3.ZERO, 1e-8))
       return ascentPath;
 
     // Replace a substantial final section with one cubic Bézier transition.
@@ -373,62 +359,62 @@ export function createPaths({ state: layerState, services, parts, source }) {
       .map((position) =>
         Math.max(0, ellipsoid.cartesianToCartographic(position)?.height || 0),
       );
-    const ascentTangent = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.subtract(start, previous, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3(),
+    const ascentTangent = geo.cartesian3.normalize(
+      geo.cartesian3.subtract(start, previous, geo.cartesian3.create()),
+      geo.cartesian3.create(),
     );
     const chordLength = Math.max(
-      Cesium.Cartesian3.distance(start, transferEnd),
+      geo.cartesian3.distance(start, transferEnd),
       1000,
     );
     const handleLength = chordLength * 0.28;
-    const controlA = Cesium.Cartesian3.add(
+    const controlA = geo.cartesian3.add(
       start,
-      Cesium.Cartesian3.multiplyByScalar(
+      geo.cartesian3.multiplyByScalar(
         ascentTangent,
         handleLength,
-        new Cesium.Cartesian3(),
+        geo.cartesian3.create(),
       ),
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const controlB = Cesium.Cartesian3.add(
+    const controlB = geo.cartesian3.add(
       transferEnd,
-      Cesium.Cartesian3.multiplyByScalar(
+      geo.cartesian3.multiplyByScalar(
         orbitTangent,
         -handleLength,
-        new Cesium.Cartesian3(),
+        geo.cartesian3.create(),
       ),
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
     for (let index = 0; index <= blendCount; index++) {
       const progress = index / blendCount;
       const inverse = 1 - progress;
-      const point = new Cesium.Cartesian3();
-      Cesium.Cartesian3.multiplyByScalar(start, inverse ** 3, point);
-      Cesium.Cartesian3.add(
+      const point = geo.cartesian3.create();
+      geo.cartesian3.multiplyByScalar(start, inverse ** 3, point);
+      geo.cartesian3.add(
         point,
-        Cesium.Cartesian3.multiplyByScalar(
+        geo.cartesian3.multiplyByScalar(
           controlA,
           3 * inverse ** 2 * progress,
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         ),
         point,
       );
-      Cesium.Cartesian3.add(
+      geo.cartesian3.add(
         point,
-        Cesium.Cartesian3.multiplyByScalar(
+        geo.cartesian3.multiplyByScalar(
           controlB,
           3 * inverse * progress ** 2,
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         ),
         point,
       );
-      Cesium.Cartesian3.add(
+      geo.cartesian3.add(
         point,
-        Cesium.Cartesian3.multiplyByScalar(
+        geo.cartesian3.multiplyByScalar(
           transferEnd,
           progress ** 3,
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         ),
         point,
       );
@@ -499,11 +485,11 @@ export function createPaths({ state: layerState, services, parts, source }) {
       return { lat: launch.lat, lon: launch.lon, accuracy: 'PAD / RTLS' };
     }
     if (!(stage.downrangeKm > 0) || !insertionPosition) return null;
-    const ellipsoid = Cesium.Ellipsoid.WGS84;
-    const start = Cesium.Cartographic.fromDegrees(launch.lon, launch.lat);
+    const ellipsoid = geo.ellipsoid.WGS84;
+    const start = geo.cartographic.fromDegrees(launch.lon, launch.lat);
     const insertion = ellipsoid.cartesianToCartographic(insertionPosition);
     if (!insertion) return null;
-    const geodesic = new Cesium.EllipsoidGeodesic(start, insertion, ellipsoid);
+    const geodesic = geo.ellipsoidGeodesic.create(start, insertion, ellipsoid);
     const bearing = geodesic.startHeading;
     const angularDistance =
       (stage.downrangeKm * 1000) / ellipsoid.maximumRadius;
@@ -520,8 +506,8 @@ export function createPaths({ state: layerState, services, parts, source }) {
         Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat),
       );
     return {
-      lat: Cesium.Math.toDegrees(lat),
-      lon: Cesium.Math.toDegrees(Cesium.Math.negativePiToPi(lon)),
+      lat: geo.math.toDegrees(lat),
+      lon: geo.math.toDegrees(geo.math.negativePiToPi(lon)),
       accuracy: t('EST. DOWNRANGE'),
     };
   }
@@ -533,13 +519,13 @@ export function createPaths({ state: layerState, services, parts, source }) {
     stageCount,
   ) {
     if (!ascentPath?.length || !endpoint) return [];
-    const progress = Cesium.Math.clamp(
+    const progress = geo.math.clamp(
       0.28 + (stageIndex / Math.max(stageCount, 1)) * 0.34,
       0.28,
       0.68,
     );
     const separation = samplePath(ascentPath, progress);
-    const destination = Cesium.Cartesian3.fromDegrees(
+    const destination = geo.cartesian3.fromDegrees(
       endpoint.lon,
       endpoint.lat,
       12,
@@ -549,7 +535,7 @@ export function createPaths({ state: layerState, services, parts, source }) {
 
   function atmosphericReentryIndex(path) {
     if (!path?.length) return 0;
-    const ellipsoid = Cesium.Ellipsoid.WGS84;
+    const ellipsoid = geo.ellipsoid.WGS84;
     for (let index = 1; index < path.length; index++) {
       const previousHeight = ellipsoid.cartesianToCartographic(
         path[index - 1],

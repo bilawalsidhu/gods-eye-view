@@ -671,3 +671,28 @@ test('retained road density follows the settled view without requiring a toggle'
     'fresh toggle and retained view have the same budget',
   );
 });
+
+test('flow that lands after a publication re-allocates the retained population', (t) => {
+  const h = setup(t);
+  const [road] = h.roads();
+  // A refresh clears the road's flow before it is published again.
+  road.flow = null;
+  h.parts.retention.reconcile([road], 450, true);
+  h.settle();
+  const uncongested = h.state._count;
+  const ids = new Set(h.state._dots.map((dot) => dot.id));
+  assert.ok(uncongested > 1);
+  road.flow = { level: 0.4, closure: false };
+  h.parts.model.recolorDotsInPlace('late flow');
+  h.parts.retention.retarget();
+  h.settle();
+  assert.ok(
+    h.state._count > 2 * uncongested,
+    `slow flow carries more vehicles: ${uncongested} -> ${h.state._count}`,
+  );
+  assert.ok(
+    [...ids].every((id) => h.state._dots.some((dot) => dot.id === id)),
+    'the vehicles already on the road keep moving',
+  );
+  assert.equal(h.state._motion.rebuilds, 0);
+});

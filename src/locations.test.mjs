@@ -21,25 +21,28 @@ import {
   GLOBE_VIEW,
   searchAndFlyTo,
 } from './locations.js';
+import * as geo from './geo/index.js';
+import { createFakeEngine } from './globe/testing/fakeEngine.js';
 
+/**
+ * A globe engine over Austin at 1200 m. `flights` lists the flights asked of
+ * it in order: flyTo options, and flyToSphere options with their `sphere`.
+ */
 function stubViewer() {
-  const flights = [];
-  return {
-    flights,
-    scene: { globe: null, canvas: { clientWidth: 0, clientHeight: 0 } },
-    camera: {
-      positionCartographic: {
-        longitude: Cesium.Math.toRadians(-97.7431),
-        latitude: Cesium.Math.toRadians(30.2672),
-        height: 1200,
-      },
-      cancelFlight() {},
-      flyTo(options) { flights.push(options); },
-      flyToBoundingSphere(sphere, options) { flights.push({ sphere, ...options }); },
-      lookAt() {},
-      lookAtTransform() {},
-    },
-  };
+  const engine = createFakeEngine();
+  engine.fake.setPose({
+    position: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 1200),
+  });
+  // No globe terrain answers, as with the globe hidden under photoreal tiles.
+  engine.fake.script('terrainHeight', undefined);
+  return Object.defineProperty(engine, 'flights', {
+    get: () =>
+      engine.fake.calls
+        .filter(({ method }) => method === 'camera.flyTo' || method === 'camera.flyToSphere')
+        .map(({ method, args }) =>
+          method === 'camera.flyTo' ? args[0] : { sphere: args[0], ...args[1] },
+        ),
+  });
 }
 
 const AUSTIN_RESULT = {
@@ -73,8 +76,14 @@ async function runSearch(viewer, options, { result = AUSTIN_RESULT, query = 'aus
 
 /** Read a recorded viewport flight back as a degrees rectangle. */
 function flownRectangleDegrees(viewer, index = 0) {
-  const rectangle = viewer.flights[index]?.destination;
-  assert.ok(rectangle instanceof Cesium.Rectangle, 'expected a rectangle (viewport) flight');
+  const destination = viewer.flights[index]?.destination;
+  assert.ok(destination && 'west' in destination, 'expected a rectangle (viewport) flight');
+  const rectangle = new Cesium.Rectangle(
+    destination.west,
+    destination.south,
+    destination.east,
+    destination.north,
+  );
   return {
     south: Cesium.Math.toDegrees(rectangle.south),
     north: Cesium.Math.toDegrees(rectangle.north),
@@ -176,7 +185,7 @@ test('search retains main geocode authority for Gold Coast, Australia', async ()
 
 function alpsViewer() {
   const viewer = stubViewer();
-  Object.assign(viewer.camera.positionCartographic, {
+  viewer.fake.setPose({
     latitude: Cesium.Math.toRadians(46.5),
     longitude: Cesium.Math.toRadians(10),
     height: 248_000,
@@ -659,11 +668,11 @@ test('geocoded Location branches forward the resolved-navigation ownership hook'
 test('globe and city-overview flights name the world frame explicitly', () => {
   const globeViewer = stubViewer();
   flyToGlobeView(globeViewer);
-  assert.equal(globeViewer.flights[0].endTransform, Cesium.Matrix4.IDENTITY);
+  assert.deepEqual([...globeViewer.flights[0].endTransform], [...geo.matrix4.IDENTITY]);
 
   const cityViewer = stubViewer();
   flyToPresetLocation(cityViewer, 'austin', { viewMode: 'overview' });
-  assert.equal(cityViewer.flights[0].endTransform, Cesium.Matrix4.IDENTITY);
+  assert.deepEqual([...cityViewer.flights[0].endTransform], [...geo.matrix4.IDENTITY]);
 });
 
 test('city and landmark flights expose completion and cancellation hooks', () => {
@@ -775,6 +784,6 @@ test('a precise search without an outline frames against the resolved ground, no
   const flight = viewer.flights[0];
   const target = Cesium.Cartographic.fromCartesian(flight.sphere.center);
   assert.ok(Math.abs(target.height - (171 + 30)) < 0.5, `target ${target.height}`);
-  const eye = target.height + flight.offset.range * Math.sin(-flight.offset.pitch);
+  const eye = target.height + flight.range * Math.sin(-flight.pitch);
   assert.ok(eye > 171 + 100, `eye ${eye} must clear the 171 m surface`);
 });

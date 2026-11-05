@@ -297,7 +297,7 @@ export function createCalibration({
    */
 
   function ensureGizmo() {
-    if (layerState._gizmo || !layerState._viewer) return;
+    if (layerState._gizmo || !parts.renderer?.ready) return;
     // Both patch callbacks receive the gizmo's PINNED drag record — never
     // re-resolve the active camera here: a mid-drag voice select or auto-hop
     // would route the captured offsets onto a camera with a different basePose.
@@ -306,7 +306,7 @@ export function createCalibration({
         ? record
         : null;
     layerState._gizmo = createCalibrationGizmo({
-      viewer: layerState._viewer,
+      renderer: parts.renderer.createGizmoRenderer(),
       getActiveRecord: () =>
         layerState._enabled && layerState._calibrationMode
           ? parts.selection.getActiveRecord()

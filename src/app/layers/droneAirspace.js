@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
-import { createDroneAirspaceLayer } from '../../layers/droneAirspace/index.js';
+import {
+  createDroneAirspaceLayer,
+  createDroneAirspaceCesiumRenderer,
+} from '../../layers/droneAirspace/index.js';
+import { rendererFor } from './renderers.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
@@ -15,6 +19,16 @@ export function createApplicationDroneAirspace(options) {
     },
     screenSpaceEventHandlerFactory: (viewer) =>
       new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
+    createRenderer: ({ viewer, engine, screenSpaceEventHandlerFactory }) =>
+      engine
+        ? rendererFor('drone-airspace', engine, {
+            viewer,
+            screenSpaceEventHandlerFactory,
+          })
+        : createDroneAirspaceCesiumRenderer({
+            viewer,
+            screenSpaceEventHandlerFactory,
+          }),
     picking,
     pointer: { isPointerFree },
     ...options,

@@ -1,10 +1,10 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { GROUND_CLICK_MAX_HEIGHT_M } from './policy.js';
-import { cameraHeightAboveGround } from './view.js';
+import { cameraHeightAboveGround, cameraLocation } from './view.js';
 
 /** Whether the camera is low enough for a click on the ground to mean a street. */
 export function groundClickHeightOk(viewer) {
-  if (!viewer?.camera?.positionCartographic) return false;
+  if (!cameraLocation(viewer)) return false;
   return cameraHeightAboveGround(viewer) <= GROUND_CLICK_MAX_HEIGHT_M;
 }
 
@@ -32,13 +32,15 @@ export function createGroundClick({ state, openNearest, isAvailable }) {
       )
       .map((entry) => entry.def.id);
     if (!providerIds.length) return false;
-    const position = scenePick.pickGroundPosition(state.viewer, screenPosition);
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
+    const position = state.viewer.engine
+      ? state.viewer.engine.picker.pickGlobe(screenPosition)
+      : scenePick.pickGroundPosition(state.viewer, screenPosition);
+    const carto = position && geo.cartographic.fromCartesian(position);
     if (!carto) return false;
     return openNearest(
       {
-        lon: Cesium.Math.toDegrees(carto.longitude),
-        lat: Cesium.Math.toDegrees(carto.latitude),
+        lon: geo.math.toDegrees(carto.longitude),
+        lat: geo.math.toDegrees(carto.latitude),
       },
       { providerIds, frame: false },
     );

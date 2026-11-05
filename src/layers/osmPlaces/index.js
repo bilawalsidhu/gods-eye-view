@@ -1,13 +1,51 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { msg } from '../../i18n/marker.js';
-import { OSM_PLACES_LAYER_ID } from './model.js';
+import { OSM_PLACES_LAYER_ID, OSM_PLACE_COLOR } from './model.js';
 import { createNominatimStatus } from '../../sources/nominatimStatus.js';
 export * from './model.js';
 
 const OVERLAY_SOURCE_ID = OSM_PLACES_LAYER_ID;
 /** Named results that get a map label; the rest are points. */
 const LABEL_LIMIT = 48;
-const COLOR = '#7fe3ff';
+const COLOR = OSM_PLACE_COLOR;
+
+/**
+ * The places' points on a Cesium globe (the default renderer):
+ * `{ setVisible, replace(records), destroy }`.
+ */
+export function createOsmPlacesCesiumRenderer({ viewer }) {
+  const dataSource = new Cesium.CustomDataSource(OSM_PLACES_LAYER_ID);
+  dataSource.show = false;
+  viewer.dataSources.add(dataSource);
+  return {
+    setVisible(show) {
+      dataSource.show = show;
+    },
+    replace(records) {
+      dataSource.entities.removeAll();
+      const color = Cesium.Color.fromCssColorString(COLOR);
+      for (const record of records)
+        dataSource.entities.add({
+          id: `osm-place:${record.id}`,
+          position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
+          point: {
+            pixelSize: 9,
+            color,
+            outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
+            outlineWidth: 2,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            // On top only up close (as bikeshare stations): beyond that the
+            // depth test keeps far-side points from showing through the globe.
+            disableDepthTestDistance: 2500,
+          },
+        });
+    },
+    destroy() {
+      viewer.dataSources.remove(dataSource, true);
+    },
+  };
+}
 
 /**
  * OSM Places: the results of the last voice OpenStreetMap search ("hospitals
@@ -22,10 +60,11 @@ export function createOsmPlacesLayer({
   overlayHost,
   // The same once-per-page capability probe as Nominatim's, on Overpass.
   overpassConfigured = createNominatimStatus({ url: '/api/overpass/status' }),
+  createRenderer = createOsmPlacesCesiumRenderer,
 } = {}) {
   if (!overlayHost) throw new TypeError('OSM Places requires an overlay host');
-  let viewer = null;
-  let dataSource = null;
+  let initialized = false;
+  let renderer = null;
   let enabled = false;
   let records = [];
   let meta = null;
@@ -34,44 +73,28 @@ export function createOsmPlacesLayer({
   let configured = null;
 
   function render() {
-    if (!dataSource) return;
-    dataSource.entities.removeAll();
-    const color = Cesium.Color.fromCssColorString(COLOR);
+    if (!renderer) return;
+    renderer.replace(records);
     const overlay = [];
     for (const record of records) {
-      const position = Cesium.Cartesian3.fromDegrees(record.lon, record.lat);
-      dataSource.entities.add({
-        id: `osm-place:${record.id}`,
-        position,
-        point: {
-          pixelSize: 9,
-          color,
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
-          outlineWidth: 2,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          // On top only up close (as bikeshare stations): beyond that the
-          // depth test keeps far-side points from showing through the globe.
-          disableDepthTestDistance: 2500,
-        },
+      if (!record.name || overlay.length >= LABEL_LIMIT) continue;
+      overlay.push({
+        id: record.id,
+        position: geo.cartesian3.fromDegrees(record.lon, record.lat),
+        variant: 'label',
+        title: record.name.slice(0, 40),
+        accent: COLOR,
+        priority: LABEL_LIMIT - overlay.length,
+        collisionGroup: 'ambient-label',
+        paintLane: 'ambient-label',
+        interactive: false,
+        edgeFade: 'keyhole',
+        horizonCull: true,
+        terrainOcclusion: false,
+        gapPx: 12,
+        verticalOnly: true,
+        placement: 'above',
       });
-      if (record.name && overlay.length < LABEL_LIMIT)
-        overlay.push({
-          id: record.id,
-          position,
-          variant: 'label',
-          title: record.name.slice(0, 40),
-          accent: COLOR,
-          priority: LABEL_LIMIT - overlay.length,
-          collisionGroup: 'ambient-label',
-          paintLane: 'ambient-label',
-          interactive: false,
-          edgeFade: 'keyhole',
-          horizonCull: true,
-          terrainOcclusion: false,
-          gapPx: 12,
-          verticalOnly: true,
-          placement: 'above',
-        });
     }
     if (enabled)
       overlayHost.setEntries(OVERLAY_SOURCE_ID, overlay, {
@@ -99,22 +122,38 @@ export function createOsmPlacesLayer({
         : { available: true, source: OSM_PLACES_LAYER_ID, reason: null };
     },
 
-    init(nextViewer) {
-      viewer = nextViewer;
+    init(viewer, { engine = null } = {}) {
+      if (initialized) return;
+      initialized = true;
       Promise.resolve(overpassConfigured?.())
         .then((answer) => {
           if (typeof answer === 'boolean') configured = answer;
         })
         .catch(() => {});
-      dataSource = new Cesium.CustomDataSource(OSM_PLACES_LAYER_ID);
-      dataSource.show = false;
-      viewer.dataSources.add(dataSource);
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
+      if (viewer || engine) this.attachRenderer(viewer, { engine });
+    },
+
+    /** Draw on a globe; the results stay for the next one. */
+    attachRenderer(viewer, { engine = null } = {}) {
+      if (!initialized || renderer)
+        throw new Error('Invalid OSM Places scene attachment');
+      renderer = createRenderer({ viewer, engine });
+      renderer.setVisible(enabled);
+      if (enabled) overlayHost.setVisible(OVERLAY_SOURCE_ID, true);
+      render();
+    },
+
+    detachRenderer() {
+      overlayHost.clearSource(OVERLAY_SOURCE_ID);
+      overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
+      renderer?.destroy();
+      renderer = null;
     },
 
     enable() {
       enabled = true;
-      if (dataSource) dataSource.show = true;
+      renderer?.setVisible(true);
       overlayHost.setVisible(OVERLAY_SOURCE_ID, true);
       render();
       return true;
@@ -122,7 +161,7 @@ export function createOsmPlacesLayer({
 
     disable() {
       enabled = false;
-      if (dataSource) dataSource.show = false;
+      renderer?.setVisible(false);
       overlayHost.clearSource(OVERLAY_SOURCE_ID);
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
       return true;
@@ -135,11 +174,8 @@ export function createOsmPlacesLayer({
 
     destroy() {
       enabled = false;
-      overlayHost.clearSource(OVERLAY_SOURCE_ID);
-      overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
-      if (dataSource && viewer) viewer.dataSources.remove(dataSource, true);
-      dataSource = null;
-      viewer = null;
+      this.detachRenderer();
+      initialized = false;
       records = [];
       meta = null;
       lastUpdate = null;

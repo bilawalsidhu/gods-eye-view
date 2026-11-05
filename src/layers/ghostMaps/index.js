@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/cartesian3.js';
+import { createGhostMapsCesiumRenderer } from './render/cesium.js';
 import {
   decodeXml,
   kmzImageResolver,
@@ -14,7 +15,6 @@ import {
   t,
   tn,
 } from '../../i18n/index.js';
-import { createHorizonCull } from '../streetLevel/view.js';
 import { readGhostMapsKml } from './kml.js';
 import { fieldLabel, parseDescriptionFields, wrapCardText } from './records.js';
 export * from './catalog.js';
@@ -106,11 +106,6 @@ function markerImage(color) {
   return url;
 }
 
-const cesiumColor = (rgba, fallback, alpha) =>
-  rgba
-    ? new Cesium.Color(rgba[0], rgba[1], rgba[2], alpha ?? rgba[3])
-    : Cesium.Color.fromCssColorString(fallback).withAlpha(alpha ?? 1);
-
 function anchorOf(geometry) {
   if (geometry.type === 'point') return geometry.position;
   const ring =
@@ -133,6 +128,7 @@ export function createGhostMapsLayer({
   source,
   overlayHost = null,
   screenSpaceEventHandlerFactory = null,
+  createRenderer = null,
   picking = null,
   pointer = null,
   openExternal = null,
@@ -140,7 +136,7 @@ export function createGhostMapsLayer({
 } = {}) {
   if (typeof source?.getCatalog !== 'function')
     throw new TypeError('GhostMaps layer requires a catalog source');
-  let _viewer = null;
+  let _display = null;
   let _enabled = false;
   let _catalog = null;
   let _lastError = null;
@@ -154,7 +150,7 @@ export function createGhostMapsLayer({
   let _selectedLink = null;
   let _lifetime = new AbortController();
   let _selection = readStoredSelection(storage);
-  /** productId → {version, dataSource, urls, count, features} */
+  /** Product editions own the decoded features and their packed image URLs. */
   const _loaded = new Map();
   /** productId → in-flight version */
   const _loading = new Map();
@@ -162,18 +158,11 @@ export function createGhostMapsLayer({
   const _failed = new Map();
 
   const notifyRow = () => _rowListener?.();
-  const render = () => _viewer?.scene?.requestRender?.();
-  // Pins skip the depth test, and with Google 3D tiles the globe is hidden,
-  // so nothing else stops far-side pins drawing through the planet.
-  const _horizon = createHorizonCull({
-    getViewer: () => _viewer,
-    items: function* () {
-      for (const item of _loaded.values()) yield* item.pins;
-    },
-    onChange: render,
-  });
+  const render = () => _display?.requestRender();
   const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+    overlayHost &&
+    picking &&
+    (screenSpaceEventHandlerFactory || createRenderer);
 
   function wanted(product) {
     return _selection ? _selection.has(product.id) : product.defaultOn;
@@ -187,12 +176,13 @@ export function createGhostMapsLayer({
     const item = _loaded.get(id);
     if (!item) return;
     _loaded.delete(id);
-    _viewer?.dataSources?.remove(item.dataSource, true);
+    item.removed = true;
+    item.paint?.destroy();
     item.urls.forEach((url) => URL.revokeObjectURL(url));
     if (_selectedKey?.startsWith(`${id}:`)) clearSelection();
   }
 
-  /** Build one product's data source off-scene, then swap it in. */
+  /** Decode one product without a scene. */
   async function load(product, signal) {
     const bytes = await source.getFile(product.id, product.version, { signal });
     signal.throwIfAborted();
@@ -219,117 +209,47 @@ export function createGhostMapsLayer({
       );
       entries.clear();
       signal.throwIfAborted();
-      const color = PRODUCT_COLORS[product.id] || ACCENT;
-      const dataSource = new Cesium.CustomDataSource(
-        `${GHOSTMAPS_LAYER_ID}:${product.id}`,
-      );
-      const features = [];
-      const pins = [];
-      dataSource.entities.suspendEvents();
-      parsed.features.forEach((feature, index) => {
-        const key = `${product.id}:${index}`;
-        const { style } = feature;
-        feature.geometries.forEach((geometry, part) => {
-          const id = `${PICK_PREFIX}${key}:${part}`;
-          if (geometry.type === 'point') {
-            const position = Cesium.Cartesian3.fromDegrees(
-              ...geometry.position,
-            );
-            const entity = dataSource.entities.add({
-              id,
-              position,
-              billboard: {
-                image: style.icon || markerImage(color),
-                scale: Math.min(
-                  1.5,
-                  Math.max(0.35, (style.iconScale ?? 1) * 0.7),
-                ),
-                color:
-                  style.icon && style.iconColor
-                    ? cesiumColor(style.iconColor)
-                    : undefined,
-                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-                verticalOrigin: Cesium.VerticalOrigin.CENTER,
-                // Ground-clamped icons would sink into terrain and 3D tiles; the
-                // horizon cull hides the far side instead (see `_horizon`).
-                disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              },
-            });
-            pins.push({
-              position,
-              get show() {
-                return entity.show;
-              },
-              set show(value) {
-                entity.show = value;
-              },
-            });
-          } else if (geometry.type === 'line') {
-            dataSource.entities.add({
-              id,
-              polyline: {
-                positions: Cesium.Cartesian3.fromDegreesArray(
-                  geometry.positions.flat(),
-                ),
-                width: Math.min(8, Math.max(1.5, style.lineWidth ?? 2)),
-                material: cesiumColor(style.lineColor, color),
-                clampToGround: true,
-              },
-            });
-          } else {
-            const ring = (points) =>
-              Cesium.Cartesian3.fromDegreesArray(points.flat());
-            dataSource.entities.add({
-              id,
-              polygon: {
-                hierarchy: new Cesium.PolygonHierarchy(
-                  ring(geometry.outer),
-                  geometry.holes.map(
-                    (hole) => new Cesium.PolygonHierarchy(ring(hole)),
-                  ),
-                ),
-                material:
-                  style.fill === false
-                    ? Cesium.Color.TRANSPARENT
-                    : cesiumColor(
-                        style.polyColor,
-                        color,
-                        style.polyColor ? undefined : 0.25,
-                      ),
-                classificationType: Cesium.ClassificationType.BOTH,
-              },
-            });
-            if (style.outline !== false)
-              dataSource.entities.add({
-                id: `${id}:outline`,
-                polyline: {
-                  positions: ring([...geometry.outer, geometry.outer[0]]),
-                  width: Math.min(6, Math.max(1.5, style.lineWidth ?? 2)),
-                  material: cesiumColor(style.lineColor, color),
-                  clampToGround: true,
-                },
-              });
-          }
-        });
-        features.push({
-          name: feature.name,
-          folder: feature.folder,
-          description: feature.description,
-          anchor: anchorOf(feature.geometries[0]),
-        });
-      });
-      dataSource.entities.resumeEvents();
-      return { version: product.version, dataSource, urls, features, pins };
+      const features = parsed.features.map((feature) => ({
+        ...feature,
+        anchor: anchorOf(feature.geometries[0]),
+      }));
+      return { version: product.version, urls, features, paint: null };
     } catch (error) {
       urls.forEach((url) => URL.revokeObjectURL(url));
       throw error;
     }
   }
 
+  async function paint(id, item, signal) {
+    while (_display && !signal.aborted && !item.removed) {
+      const owner = _display;
+      const next = owner.draw(
+        id,
+        item.features,
+        PRODUCT_COLORS[id] || ACCENT,
+        markerImage,
+      );
+      try {
+        await next.ready;
+        if (owner === _display && !signal.aborted && !item.removed) {
+          item.paint = next;
+          return;
+        }
+      } catch (error) {
+        next.destroy();
+        if (owner === _display && !signal.aborted && !item.removed) throw error;
+        if (_loaded.get(id) === item) return;
+        continue;
+      }
+      next.destroy();
+      if (_loaded.get(id) === item) return;
+    }
+  }
+
   /** Bring the globe in line with the catalog and the chip selection. */
   function sync() {
     const run = _queue.then(async () => {
-      if (!_enabled || !_viewer || !_catalog) return;
+      if (!_enabled || !_catalog) return;
       const signal = _lifetime.signal;
       const products = new Map(_catalog.products.map((p) => [p.id, p]));
       for (const id of [..._loaded.keys()]) {
@@ -348,9 +268,17 @@ export function createGhostMapsLayer({
             next.urls.forEach((url) => URL.revokeObjectURL(url));
             return;
           }
-          // Cull before the first frame so far-side pins never flash.
-          _horizon.update(next.pins);
-          await _viewer.dataSources.add(next.dataSource);
+          try {
+            await paint(product.id, next, signal);
+          } catch (error) {
+            next.urls.forEach((url) => URL.revokeObjectURL(url));
+            throw error;
+          }
+          if (signal.aborted) {
+            next.paint?.destroy();
+            next.urls.forEach((url) => URL.revokeObjectURL(url));
+            return;
+          }
           // The new edition is on the globe before the old one leaves.
           unload(product.id);
           _loaded.set(product.id, next);
@@ -457,7 +385,7 @@ export function createGhostMapsLayer({
       // when its marker turns behind the planet.
       stateless: true,
       horizonCull: true,
-      position: Cesium.Cartesian3.fromDegrees(...feature.anchor),
+      position: fromDegrees(...feature.anchor),
     };
     if (card.interactive) {
       const link = _selectedLink;
@@ -496,14 +424,13 @@ export function createGhostMapsLayer({
   }
 
   function installClickHandler() {
-    if (!canSelect() || _clickHandler || !_viewer) return;
+    if (!canSelect() || _clickHandler || !_display) return;
     picking.registerPickOwner?.(
       GHOSTMAPS_LAYER_ID,
       (pickedId) =>
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
+    _clickHandler = _display.onClick((click, pick) => {
       if (pointer && !pointer.isPointerFree()) return;
       const cardHit = overlayHost.hitTest?.(
         click.position?.x,
@@ -514,7 +441,7 @@ export function createGhostMapsLayer({
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
       }
-      const picked = _viewer.scene.pick(click.position);
+      const picked = pick();
       const key = picked ? pickedKey(picked) : null;
       if (key) {
         _selectedKey = key;
@@ -531,11 +458,11 @@ export function createGhostMapsLayer({
         clearSelection();
         render();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    _clickHandler?.destroy();
+    _clickHandler?.();
     _clickHandler = null;
     picking?.unregisterPickOwner?.(GHOSTMAPS_LAYER_ID);
   }
@@ -555,15 +482,53 @@ export function createGhostMapsLayer({
     // the backstop if the stream is down.
     updateInterval: 300000,
 
-    init(viewer) {
-      if (_viewer) throw new Error('GhostMaps layer is already initialized');
-      _viewer = viewer;
+    init(viewer, options = {}) {
+      if (viewer || options.engine) return this.attachRenderer(viewer, options);
+    },
+
+    attachRenderer(viewer, { engine = null, signal = null } = {}) {
+      if (_display) throw new Error('GhostMaps display is already attached');
+      _display = viewer
+        ? createGhostMapsCesiumRenderer(
+            viewer,
+            screenSpaceEventHandlerFactory,
+            markerImage,
+          )
+        : createRenderer(engine);
+      if (!_enabled) return;
+      installClickHandler();
+      publishCard();
+      // A paint that outlives its scene destroys what it drew (see paint).
+      // The parsed products stay loaded for the next scene.
+      const paintSignal = signal
+        ? AbortSignal.any([_lifetime.signal, signal])
+        : _lifetime.signal;
+      const painted = Promise.all(
+        [..._loaded].map(([id, item]) => paint(id, item, paintSignal)),
+      );
+      if (!signal) return painted;
+      // Released scene: stop waiting; the paints keep their own clean-up.
+      const released = new Promise((resolve) => {
+        if (signal.aborted) resolve();
+        else signal.addEventListener('abort', resolve, { once: true });
+      });
+      return Promise.race([painted, released]);
+    },
+
+    detachRenderer() {
+      removeClickHandler();
+      for (const item of _loaded.values()) {
+        item.paint?.destroy();
+        item.paint = null;
+      }
+      overlayHost?.clearSource?.(GHOSTMAPS_OVERLAY_SOURCE_ID);
+      _display?.destroy();
+      _display = null;
     },
 
     enable() {
       _enabled = true;
       _lifetime = new AbortController();
-      for (const item of _loaded.values()) item.dataSource.show = true;
       installClickHandler();
       if (!_unsubscribe && typeof source.subscribe === 'function')
         _unsubscribe = source.subscribe(
@@ -586,7 +551,6 @@ export function createGhostMapsLayer({
       _stream = 'closed';
       removeClickHandler();
       clearSelection();
-      _horizon.stop();
       for (const id of [..._loaded.keys()]) unload(id);
       render();
     },
@@ -610,7 +574,7 @@ export function createGhostMapsLayer({
 
     destroy() {
       layer.disable();
-      _viewer = null;
+      layer.detachRenderer();
       _catalog = null;
       _rowListener = null;
     },

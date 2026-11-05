@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { REQUEST_DEBOUNCE_MS } from './policy.js';
 import { installationAnchorBox } from './source.js';
 
@@ -19,18 +19,23 @@ export function createViewport({ state: layerState, services, parts, source }) {
         return { box: bounds, coverage: { kind: 'subject', radiusM } };
       }
     }
-    return { box: viewportBox(viewer), coverage: { kind: 'viewport' } };
+    if (viewer || layerState.engine)
+      layerState.lastViewBox = viewportBox(viewer);
+    return {
+      box: layerState.lastViewBox ?? null,
+      coverage: { kind: 'viewport' },
+    };
   }
 
   function viewportBox(viewer) {
-    const rectangle = viewer?.camera?.computeViewRectangle(
-      viewer.scene.globe.ellipsoid,
-    );
+    const rectangle =
+      layerState.engine?.camera?.viewRectangle?.() ??
+      viewer?.camera?.computeViewRectangle(viewer.scene.globe.ellipsoid);
     if (!rectangle) return null;
-    const south = Cesium.Math.toDegrees(rectangle.south);
-    const north = Cesium.Math.toDegrees(rectangle.north);
-    const west = Cesium.Math.toDegrees(rectangle.west);
-    const east = Cesium.Math.toDegrees(rectangle.east);
+    const south = geo.math.toDegrees(rectangle.south);
+    const north = geo.math.toDegrees(rectangle.north);
+    const west = geo.math.toDegrees(rectangle.west);
+    const east = geo.math.toDegrees(rectangle.east);
     // Wide and dateline views use the bundled point index.
     if (
       !Number.isFinite(south + north + west + east) ||
@@ -89,14 +94,17 @@ export function createViewport({ state: layerState, services, parts, source }) {
   function scheduleLoad() {
     if (!layerState.enabled) return;
     const { box, coverage } = loadArea(layerState.viewer);
-    const camera = layerState.viewer.camera;
+    const pose = layerState.engine?.camera?.pose?.();
+    const camera = layerState.viewer?.camera;
+    const position = pose?.position ?? camera?.positionWC;
+    const direction = pose?.direction ?? camera?.directionWC;
     const widePose =
       coverage.kind === 'viewport' &&
       box &&
       (box.east < box.west ||
         box.east - box.west > 10 ||
         box.north - box.south > 10)
-        ? [camera.positionWC, camera.directionWC]
+        ? [position, direction]
             .map((v) =>
               v ? [v.x, v.y, v.z].map((n) => n.toFixed(4)).join(',') : '',
             )

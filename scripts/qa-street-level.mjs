@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 /**
  * Browser QA for the Street Level layer against a running server:
  * `npm run qa:street-level -- --url http://localhost:4173`.
@@ -124,7 +125,7 @@ const KEYLESS_HOSTS = [
  * `fixture`, which steps may change mid-run. `configured: undefined` lets the
  * server's real status route answer.
  */
-async function serveFixtures(page, fixture) {
+export async function serveFixtures(page, fixture) {
   // CDP Fetch on just these URLs: page-wide interception stalls Cesium workers.
   const cdp = await page.createCDPSession();
   await cdp.send('Fetch.enable', {
@@ -205,7 +206,7 @@ async function serveFixtures(page, fixture) {
   });
 }
 
-function newFixture(overrides = {}) {
+export function newFixture(overrides = {}) {
   return {
     configured: undefined,
     rejected: false,
@@ -426,6 +427,7 @@ async function main() {
   // The layer only warns on listener exceptions, so count those as errors.
   const open = async (name, fixture) => {
     const page = await browser.newPage();
+    await blockPaidQaMaps(page);
     monitors.push(
       watchPage(page, {
         name,

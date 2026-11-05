@@ -375,3 +375,72 @@ test('busy traffic completion is polled promptly without accelerating idle or gl
     f.restore();
   }
 });
+
+test('a finite notice covers the persistent engine notice only for its dwell', () => {
+  const f = fixture();
+  const realNow = performance.now;
+  let now = 1_000;
+  performance.now = () => now;
+  try {
+    const owner = new ShellFeedback({ readLayers: () => [] });
+    const detail = () => owner.store.loading.detail;
+    owner._showGlobalStatusNotice('Experimental Navara engine', {
+      state: 'retry',
+      detail: 'No data layers on this engine yet',
+      persistent: true,
+    });
+    assert.equal(detail(), 'No data layers on this engine yet');
+    owner._showGlobalStatusNotice('NOT ON THIS ENGINE', {
+      state: 'retry',
+      detail: 'Kept in the link: CCTV',
+      dwellMs: 15_000,
+    });
+    assert.equal(detail(), 'Kept in the link: CCTV');
+    now += 14_000;
+    owner._updateGlobalLoadingFeedback(now);
+    assert.equal(detail(), 'Kept in the link: CCTV', 'still up after 14 s');
+    now += 2_000;
+    owner._updateGlobalLoadingFeedback(now);
+    owner._updateGlobalLoadingFeedback(now);
+    assert.equal(
+      detail(),
+      'No data layers on this engine yet',
+      'the engine notice comes back',
+    );
+    assert.equal(owner._globalStatusNotice?.persistent, true);
+    owner.destroy();
+  } finally {
+    performance.now = realNow;
+    f.restore();
+  }
+});
+
+test('a persistent notice that arrives under a finite one waits for it', () => {
+  const f = fixture();
+  const realNow = performance.now;
+  let now = 1_000;
+  performance.now = () => now;
+  try {
+    const owner = new ShellFeedback({ readLayers: () => [] });
+    const detail = () => owner.store.loading.detail;
+    owner._showGlobalStatusNotice('NOT ON THIS ENGINE', {
+      state: 'retry',
+      detail: 'Kept in the link: Earthquakes',
+      dwellMs: 15_000,
+    });
+    owner._showGlobalStatusNotice('Experimental Navara engine', {
+      state: 'retry',
+      detail: 'No data layers on this engine yet',
+      persistent: true,
+    });
+    assert.equal(detail(), 'Kept in the link: Earthquakes');
+    now += 16_000;
+    owner._updateGlobalLoadingFeedback(now);
+    owner._updateGlobalLoadingFeedback(now);
+    assert.equal(detail(), 'No data layers on this engine yet');
+    owner.destroy();
+  } finally {
+    performance.now = realNow;
+    f.restore();
+  }
+});

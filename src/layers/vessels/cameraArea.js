@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { viewAreaRadiusKm } from './viewArea.js';
 
 /**
@@ -18,16 +18,16 @@ export function vesselViewArea(viewer) {
   if (canvas?.clientWidth && canvas?.clientHeight) {
     try {
       const hit = camera.pickEllipsoid(
-        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+        geo.cartesian2.create(canvas.clientWidth / 2, canvas.clientHeight / 2),
         scene.globe?.ellipsoid,
       );
-      if (hit) center = Cesium.Cartographic.fromCartesian(hit);
+      if (hit) center = geo.cartographic.fromCartesian(hit);
     } catch {
       /* the camera position stands in */
     }
   }
-  const lat = Cesium.Math.toDegrees(center.latitude);
-  const lon = Cesium.Math.toDegrees(center.longitude);
+  const lat = geo.math.toDegrees(center.latitude);
+  const lon = geo.math.toDegrees(center.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   return { lat, lon, radiusKm };
 }

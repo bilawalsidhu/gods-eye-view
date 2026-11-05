@@ -18,10 +18,12 @@ export function createSceneInteractions(
   viewer,
   {
     execute,
+    engine = null,
     available = () => true,
     store = useSceneInteractionsStore(applicationPinia()),
   },
 ) {
+  let container = engine?.host?.container ?? viewer?.container;
   let panel = null,
     handler,
     items = [],
@@ -76,10 +78,65 @@ export function createSceneInteractions(
       });
     return ok;
   }
+  function bindInput(owner) {
+    if (!engine && !viewer) return;
+    const click = (event) => {
+      if (
+        panel?.owner !== owner ||
+        !shown() ||
+        !isPointerFree() ||
+        !available()
+      )
+        return;
+      const picked = engine
+        ? event.picked?.id
+        : viewer.scene.pick(event.position)?.id;
+      const matches = items.filter(
+        (item) =>
+          targets.get(
+            JSON.stringify([item.target.packId, item.target.featureId]),
+          ) === picked,
+      );
+      if (!matches.length) return;
+      update({
+        outlined: matches.map((item) => item.id),
+        status: t('Selected feature: {feature}. Choose an action.', {
+          feature: matches[0].target.featureId,
+        }),
+      });
+      // Focus the first match once the panel shows the selection.
+      void nextTick(() => {
+        if (panel?.owner !== owner || !shown()) return;
+        const id = globalThis.CSS?.escape?.(matches[0].id) ?? matches[0].id;
+        (engine?.host.container ?? viewer?.container)
+          ?.querySelector?.(
+            `[data-director-interactions] [data-director-action="${id}"]`,
+          )
+          ?.focus({ preventScroll: true });
+      });
+    };
+    if (engine) {
+      handler = { destroy: engine.input.on('click', click, { pick: true }) };
+    } else {
+      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      handler.setInputAction(click, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }
+  }
   return {
     clear,
     destroy: clear,
     getState: session.getState,
+    setScene(nextViewer, nextEngine, registered) {
+      handler?.destroy();
+      handler = null;
+      viewer = nextViewer;
+      engine = nextEngine;
+      if (registered) targets = registered;
+      if (!panel || (!engine && !viewer)) return;
+      container = engine?.host?.container ?? viewer?.container ?? container;
+      update({ container });
+      bindInput(panel.owner);
+    },
     activate(shot, registered) {
       clear();
       items = shot.interactions || [];
@@ -102,7 +159,7 @@ export function createSceneInteractions(
       panel = {
         id: ++activations,
         owner,
-        container: viewer.container,
+        container,
         items: items.map(({ id, label }) => ({ id, label })),
         status: t('Select a feature or use Tab and Enter to choose an action.'),
         busy: false,
@@ -117,40 +174,7 @@ export function createSceneInteractions(
         },
       });
       session.activate(items);
-      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      handler.setInputAction((event) => {
-        if (
-          panel?.owner !== owner ||
-          !shown() ||
-          !isPointerFree() ||
-          !available()
-        )
-          return;
-        const picked = viewer.scene.pick(event.position)?.id;
-        const matches = items.filter(
-          (item) =>
-            targets.get(
-              JSON.stringify([item.target.packId, item.target.featureId]),
-            ) === picked,
-        );
-        if (!matches.length) return;
-        update({
-          outlined: matches.map((item) => item.id),
-          status: t('Selected feature: {feature}. Choose an action.', {
-            feature: matches[0].target.featureId,
-          }),
-        });
-        // Focus the first match once the panel shows the selection.
-        void nextTick(() => {
-          if (panel?.owner !== owner || !shown()) return;
-          const id = globalThis.CSS?.escape?.(matches[0].id) ?? matches[0].id;
-          viewer.container
-            ?.querySelector?.(
-              `[data-director-interactions] [data-director-action="${id}"]`,
-            )
-            ?.focus({ preventScroll: true });
-        });
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      bindInput(owner);
     },
   };
 }

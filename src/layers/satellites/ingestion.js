@@ -1,5 +1,7 @@
 import { twoline2satrec } from 'satellite.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { appClock } from '../../time/clock.js';
+import { nearFarScale } from '../shared/color.js';
 import { msg } from '../../i18n/index.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
@@ -9,6 +11,7 @@ export function createIngestion({
   services,
   parts,
   source,
+  getRenderer,
 }) {
   const methods = {
     async update(viewer, { signal = null } = {}) {
@@ -83,11 +86,15 @@ export function createIngestion({
           ? `${failed.length} CelesTrak group${failed.length === 1 ? '' : 's'} unavailable`
           : null;
 
+        if (layerState._waitForRenderer) {
+          await layerState._waitForRenderer;
+          updateSignal.throwIfAborted();
+        }
         // Clear existing
         layerState._pointCollection.removeAll();
         layerState._points.clear();
         for (const path of layerState._orbitPaths.values())
-          viewer.scene.primitives.remove(path.primitive);
+          getRenderer().removeOrbit(path.primitive);
         layerState._orbitPaths.clear();
         layerState._catalog.clear();
         // The detection overlay caches one record per satellite and stamps its
@@ -103,7 +110,7 @@ export function createIngestion({
         layerState._denseLoadToken++; // cancel any in-flight dense load against the old catalog
         parts.labels._syncIssOverlay();
 
-        const now = new Date();
+        const now = new Date(appClock.now());
 
         // Process all TLE entries in CATALOG_GROUPS order
         const allEntries = [];
@@ -139,7 +146,7 @@ export function createIngestion({
           const pos = parts.orbits.propagatePosition(satrec, now);
           if (!pos) continue;
 
-          const cartesian = Cesium.Cartesian3.fromDegrees(
+          const cartesian = geo.cartesian3.fromDegrees(
             pos.longitude,
             pos.latitude,
             pos.altitude,
@@ -153,7 +160,7 @@ export function createIngestion({
             color: style.color,
             outlineColor: style.outlineColor,
             outlineWidth: style.outlineWidth,
-            scaleByDistance: new Cesium.NearFarScalar(1e6, 1.5, 2e7, 0.6),
+            scaleByDistance: nearFarScale(1e6, 1.5, 2e7, 0.6),
             id: noradId,
           });
 

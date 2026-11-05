@@ -85,6 +85,32 @@ test('startup shares one promise and teardown keeps data alive for controls', as
   await assert.rejects(app.start(), /destroyed/);
 });
 
+test('later components receive the scene engine beside its viewer', async () => {
+  const viewer = { name: 'viewer' };
+  const engine = { kind: 'cesium' };
+  const seen = [];
+  const receive =
+    (phase) =>
+    ({ scene }) => {
+      seen.push([phase, scene.viewer, scene.engine]);
+      return { name: phase };
+    };
+  const { app } = fixture({
+    createScene: () => ({ viewer, engine }),
+    createControls: receive('Controls'),
+    createData: receive('Data'),
+    createTools: receive('Tools'),
+  });
+  const components = await app.start();
+  assert.equal(components.scene.engine, engine);
+  assert.deepEqual(seen, [
+    ['Controls', viewer, engine],
+    ['Data', viewer, engine],
+    ['Tools', viewer, engine],
+  ]);
+  await app.destroy();
+});
+
 for (const phase of phases) {
   test(`failure during ${phase} releases partially acquired resources`, async () => {
     const { app, events } = fixture({
@@ -169,6 +195,34 @@ test('cleanup errors are reported after all remaining resources are attempted', 
     'stop:Scene',
   ]);
   assert.equal(app.getState().status, 'failed');
+});
+
+test('a failed teardown can be retried and repeats only the failed release', async () => {
+  let failures = 1;
+  const { app, events } = fixture({
+    createData({ defer }) {
+      defer(() => events.push('data:released'));
+      defer(() => {
+        events.push('data:detach');
+        if (failures-- > 0) throw new Error('detach failed');
+      });
+      return {};
+    },
+  });
+  await app.start();
+  await assert.rejects(app.destroy(), AggregateError);
+  assert.equal(app.getState().status, 'failed');
+  const firstAttempt = events.splice(0);
+  assert.deepEqual(firstAttempt.slice(-4), [
+    'stop:Controls',
+    'data:detach',
+    'data:released',
+    'stop:Scene',
+  ]);
+  await app.destroy();
+  assert.deepEqual(events, ['data:detach']);
+  assert.equal(app.getState().status, 'destroyed');
+  await assert.rejects(app.start(), /destroyed/);
 });
 
 test('subscribers can destroy during startup without allowing the next constructor', async () => {

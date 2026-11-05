@@ -78,7 +78,7 @@ export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
  */
 
 export const CABLE_GLOBE_STACK_IDS = Object.freeze(
-  new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']),
+  new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm', 'sentinel2']),
 );
 
 /** EntityCluster's private marker collections and their required types. */
@@ -86,11 +86,15 @@ export const CABLE_GLOBE_STACK_IDS = Object.freeze(
 export const MARKER_COLLECTION_EXPECTATIONS = Object.freeze([
   Object.freeze({
     key: '_billboardCollection',
-    type: Cesium.BillboardCollection,
+    get type() {
+      return Cesium.BillboardCollection;
+    },
   }),
   Object.freeze({
     key: '_pointCollection',
-    type: Cesium.PointPrimitiveCollection,
+    get type() {
+      return Cesium.PointPrimitiveCollection;
+    },
   }),
 ]);
 

@@ -1,0 +1,90 @@
+// The engine-neutral QA probe: window.__godsEyeView.layers. QA scripts ask
+// it what a layer shows and where, the same way on Cesium and Navara,
+// instead of reading Cesium objects. Read-only apart from enable/disable,
+// which go through the layer manager as a user toggle would.
+//
+//   list()                 [{ id, name, enabled, available }] (the catalog)
+//   unavailable()          [{ id, name }] layers this engine leaves out
+//   available(id)          whether this engine can show layer `id`
+//   enable(id) / disable(id)   → Promise<boolean>
+//   objects(id, max?)      [{ id, label, position, screen }] (position a
+//                          plain { x, y, z }, screen a window point or null)
+//   screenOf(id, objectId) the window point of one object, or null
+//   selected(id)           the layer's tracked/selected info, or null
+//   drawn(id)              what the layer draws per object (glyph, model),
+//                          as plain data, or null (layers with qaDrawn)
+//   following()            { label, native } of engine.camera.following()
+//   movers()               engine.movers.list() ([] without movers: Cesium)
+//   framesDrawn()          frames drawn since the probe started
+
+const plain = (position) =>
+  position ? { x: position.x, y: position.y, z: position.z } : null;
+
+/**
+ * @param {{
+ *   engine: import('../globe/contract.js').GlobeEngine,
+ *   dataManager: object,
+ *   availability: import('./layers/renderers.js').LayerAvailability,
+ * }} options
+ */
+export function createQaProbe({ engine, dataManager, availability }) {
+  let frames = 0;
+  const removeFrames = engine.frames.postRender.addEventListener(() => {
+    frames++;
+  });
+  const moduleOf = (layerId) => dataManager.layers.get(layerId)?.module;
+  const screenOf = (position) => {
+    if (!position || !engine.projector.horizonVisible(position)) return null;
+    const screen = engine.projector.worldToWindow(position);
+    return screen ? { x: screen.x, y: screen.y } : null;
+  };
+  const objects = (layerId, max = 500) => {
+    const rows = moduleOf(layerId)?.getAllPositions?.(max) ?? [];
+    return rows.map((row) => ({
+      id: row.id,
+      label: row.label ?? null,
+      position: plain(row.position),
+      screen: screenOf(row.position),
+    }));
+  };
+  return {
+    list: () =>
+      dataManager.getAll().map(({ id, name, enabled }) => ({
+        id,
+        name,
+        enabled: Boolean(enabled),
+        available: availability.isAvailable(id),
+      })),
+    unavailable: () => availability.unavailable(),
+    available: (layerId) => availability.isAvailable(layerId),
+    enable: (layerId) =>
+      dataManager.setEnabled(layerId, true, { origin: 'user' }),
+    disable: (layerId) =>
+      dataManager.setEnabled(layerId, false, { origin: 'user' }),
+    objects,
+    screenOf(layerId, objectId) {
+      const row = (moduleOf(layerId)?.getAllPositions?.(1_000_000) ?? []).find(
+        ({ id }) => String(id) === String(objectId),
+      );
+      return row ? screenOf(row.position) : null;
+    },
+    // The tracked object, or the selected one of a layer that selects
+    // without tracking (vessels).
+    selected: (layerId) => {
+      const module = moduleOf(layerId);
+      return module?.getTrackedInfo?.() ?? module?.getSelectedInfo?.() ?? null;
+    },
+    drawn: (layerId) => moduleOf(layerId)?.qaDrawn?.() ?? null,
+    following() {
+      const handle = engine.camera.following();
+      if (!handle) return null;
+      return {
+        label: handle.label?.id ?? null,
+        native: handle.native?.id ?? null,
+      };
+    },
+    movers: () => engine.movers?.list() ?? [],
+    framesDrawn: () => frames,
+    destroy: () => removeFrames(),
+  };
+}

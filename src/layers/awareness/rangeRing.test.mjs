@@ -31,6 +31,7 @@ import {
 } from './rendering.js';
 import { getAwarenessEchoField } from '../../awarenessEcho.js';
 import { createLifecycle } from './lifecycle.js';
+import { createAwarenessCesiumRenderer } from './render/cesium.js';
 import { createState } from './state.js';
 
 /** WCAG relative luminance of a Cesium colour, ignoring alpha. */
@@ -99,7 +100,7 @@ function ringRendering(t, { reducedMotion = false, legacyQuery = false } = {}) {
     preRender: new Cesium.Event(),
     postRender: new Cesium.Event(),
   };
-  state.viewer = { entities, scene };
+  state.display = createAwarenessCesiumRenderer({ entities, scene });
   const reasons = [];
   const rendering = createRendering({
     state,
@@ -507,10 +508,10 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
   const loop = frameLoop(t, ring, { date: true });
   const { activeMs, inputWakeMs } = AWARENESS_RANGE_PULSE;
   state.enabled = true;
-  state.viewer.canvas = new EventTarget();
+  state.display.viewer.canvas = new EventTarget();
   const touch = () =>
-    state.viewer.canvas.dispatchEvent(new Event('pointerdown'));
-  state.viewer.camera = {
+    state.display.viewer.canvas.dispatchEvent(new Event('pointerdown'));
+  state.display.viewer.camera = {
     positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
     heading: 0,
     pitch: -1,
@@ -541,7 +542,7 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
   // The user drags the camera 50 km: the next frame wakes them for another
   // run.
   touch();
-  state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+  state.display.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
     3.5,
     20,
     800_000,
@@ -558,7 +559,7 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
   // tracking follow, the cockpit view, an orbit or a fly-to all move it on
   // every frame.
   const follow = (lon) => {
-    state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+    state.display.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
       lon,
       20,
       800_000,
@@ -572,7 +573,7 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
   // without a button pressed is not handling the camera.
   touch();
   loop.advance(inputWakeMs + 100);
-  state.viewer.canvas.dispatchEvent(
+  state.display.viewer.canvas.dispatchEvent(
     Object.assign(new Event('pointermove'), { buttons: 0 }),
   );
   follow(5.7);
@@ -587,7 +588,8 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
     loop.advance(activeMs);
     return pulseFrames() > before;
   };
-  const onCanvas = (event) => () => state.viewer.canvas.dispatchEvent(event);
+  const onCanvas = (event) => () =>
+    state.display.viewer.canvas.dispatchEvent(event);
   assert.equal(panWith(onCanvas(new Event('wheel')), 5.8), true, 'wheel');
   assert.equal(panWith(onCanvas(new Event('touchstart')), 5.9), true, 'touch');
   assert.equal(
@@ -618,9 +620,11 @@ function inputLifecycle(t, ring) {
   const { state, rendering } = ring;
   const loop = frameLoop(t, ring, { date: true });
   state.enabled = true;
-  state.viewer.canvas = new EventTarget();
-  state.viewer.scene.screenSpaceCameraController = { enableInputs: true };
-  state.viewer.camera = {
+  state.display.viewer.canvas = new EventTarget();
+  state.display.viewer.scene.screenSpaceCameraController = {
+    enableInputs: true,
+  };
+  state.display.viewer.camera = {
     positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
     heading: 0,
     pitch: -1,
@@ -647,12 +651,14 @@ function inputLifecycle(t, ring) {
   return {
     loop,
     lifecycle,
-    controller: state.viewer.scene.screenSpaceCameraController,
+    controller: state.display.viewer.scene.screenSpaceCameraController,
     dispatch: (type, init = {}) =>
-      state.viewer.canvas.dispatchEvent(Object.assign(new Event(type), init)),
+      state.display.viewer.canvas.dispatchEvent(
+        Object.assign(new Event(type), init),
+      ),
     pan(stepDeg = 0.1) {
       lon += stepDeg;
-      state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+      state.display.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
         lon,
         20,
         800_000,
@@ -828,7 +834,7 @@ test('disabling the layer tears the pulses down completely', (t) => {
   const ring = ringRendering(t);
   const { state, scene, rendering, motion, pulseFrames } = ring;
   const loop = frameLoop(t, ring);
-  state.viewer.camera = {
+  state.display.viewer.camera = {
     positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
     heading: 0,
     pitch: -1,
@@ -926,7 +932,7 @@ test('a scene without primitives or preRender gets the static ring only', (t) =>
     { primitives: { add() {} }, preRender: new Cesium.Event() },
     undefined,
   ]) {
-    state.viewer = { entities, scene };
+    state.display = createAwarenessCesiumRenderer({ entities, scene });
     rendering.clearVisual();
     rendering.renderVisual(flight(3));
     // No usable primitive collection: the ring falls back to an entity.

@@ -13,6 +13,7 @@ import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
 export class LayerBindings {
   constructor({
     viewer,
+    engine,
     services,
     readControls,
     operations,
@@ -23,6 +24,7 @@ export class LayerBindings {
       this,
       {
         viewer,
+        engine,
         services,
         readControls,
         _feedback: feedback,
@@ -74,17 +76,22 @@ export class LayerBindings {
       routeWorldFocusRequest(
         event,
         (detail, fly) => this._runExplicitWorldFocus(detail, fly),
-        (detail) => flyToWorldTarget(this.viewer, detail),
+        (detail) => flyToWorldTarget(this.engine ?? this.viewer, detail),
       );
     this._removeWorldRequestFocusListener = registerWorldFocusRequestListener(
       window,
       this._worldRequestFocusHandler,
     );
-    this._navigationOwnerChangedRemover =
-      this.viewer.trackedEntityChanged.addEventListener((entity) => {
-        if (entity && !this._disposed)
-          this._stampNavigation({ cancelPendingSelection: false });
-      });
+    // Cesium's trackedEntity changes announce navigation through this event.
+    if (this.viewer)
+      this._navigationOwnerChangedRemover =
+        this.viewer.trackedEntityChanged.addEventListener((entity) => {
+          // Rebinding the session's subject (a resumed renderer, a share
+          // restore) is part of the pending restoration, not a new navigation
+          // that supersedes it. The mark lasts only while the follow starts.
+          if (entity && !this._disposed && !entity.gevRestoring)
+            this._stampNavigation({ cancelPendingSelection: false });
+        });
     // Vessel/installation focus flies without ever assigning a tracked entity,
     // so it cannot reach the listener above. It announces instead.
     this._removeNavigationAuthorityListener =

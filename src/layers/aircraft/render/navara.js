@@ -1,0 +1,848 @@
+// The aircraft renderer on the Navara engine (contract: ./contract.js),
+// built only on the engine contract: engine.movers (the fleet glyphs, the
+// tracked glyph, the 3D models), engine.lines (the trail and its live head),
+// engine.camera.follow (the follow camera), engine.projector and
+// engine.camera.pose() (the view the logic reads). No three, no Cesium: the
+// engine draws. Loaded only through the Navara mode's import().
+//
+// Handles keep the Cesium field vocabulary the logic writes (contract.js) as
+// setters that write the engine's instance stores; the writes of a frame are
+// committed once, at the end of the frame listener that made them (or in a
+// microtask for writes outside a frame), so a fleet tick draws in its frame.
+//
+// Sprites go in banks: one mover set per distance scale and depth mode the
+// handles ask for (flights: one), growing by doubling. Models go in banks per
+// glTF and look (url, minimum pixels, blend, unlit). The glyph atlas holds
+// every aircraftIcon() kind at the fleet and tracked raster sizes, drawn
+// once from the same SVGs Cesium's billboards load.
+
+import * as geo from '../../../geo/index.js';
+import {
+  aircraftIconAtlasLayout,
+  aircraftIconCells,
+  drawAircraftIconAtlas,
+} from '../../../data/aircraftIcons.js';
+import { createEngineLayerView } from '../../shared/render/engineView.js';
+import { rgbaFromCss } from '../../shared/color.js';
+import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
+import {
+  createMoverBank,
+  StoredColor,
+  writeFields,
+} from '../../shared/render/navaraMoverBank.js';
+
+const BASE_SIZE_PX = 20;
+
+/**
+ * The model frame → glTF scene axes on Navara: Cesium's own glTF axis
+ * correction, Y_UP_TO_Z_UP × Z_UP_TO_X_UP (data/modelVisualAnchor.js).
+ * Navara's glTF loader is three's GLTFLoader, which keeps the scene Y-up,
+ * so Z_UP_TO_X_UP alone would draw every model 90° off its heading.
+ */
+// Cesium's Axis.Y_UP_TO_Z_UP × Axis.Z_UP_TO_X_UP, column-major.
+const NAVARA_GLTF_AXIS = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
+const ATLAS_PAD = 2;
+const TRAIL_ALPHA = 0.85;
+const TRAIL_OCCLUDED_ALPHA = 0.4;
+const MIN_SEGMENT_DISTANCE_SQ = 0.01;
+
+// ---------------------------------------------------------------------------
+// Sprite fields
+// ---------------------------------------------------------------------------
+
+const scratchColor = new Float64Array(4);
+// Sprite setters write synchronously into the mover store; reuse their
+// field records rather than allocating one per contact and assignment.
+const spritePositionField = { position: null };
+const spriteShowField = { show: true };
+const spriteRotationField = { rotation: 0 };
+const spriteScaleField = { scale: 1 };
+const spriteColorField = { color: scratchColor };
+
+const rgbaOf = (color, result = scratchColor) => {
+  result[0] = color?.red ?? 1;
+  result[1] = color?.green ?? 1;
+  result[2] = color?.blue ?? 1;
+  result[3] = color?.alpha ?? 1;
+  return result;
+};
+
+const depthKey = (distance) =>
+  distance === Number.POSITIVE_INFINITY
+    ? 'always'
+    : Number.isFinite(distance) && distance > 0
+      ? { disableWithinM: distance }
+      : 'normal';
+
+const scalarKey = (scalar) =>
+  scalar
+    ? `${scalar.near},${scalar.nearValue},${scalar.far},${scalar.farValue}`
+    : 'none';
+
+// Follow handle → the tracked handle it follows, for every aircraft layer on
+// the engine: a layer whose follow another aircraft layer took reads the
+// new owner's tracked handle (its gevSelectionOrigin), as Cesium's
+// viewer.trackedEntity gives it the other layer's entity.
+const FOLLOWED_TRACKED = new WeakMap();
+// The tracked handle whose follow is being started (any aircraft layer):
+// the engine raises followChanged inside follow(), before the follow
+// handle is known, and every layer's listener must see the new owner.
+let followStarting = null;
+
+// ---------------------------------------------------------------------------
+// The renderer
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {object} options
+ * @param {import('../../../globe/contract.js').GlobeEngine} options.engine
+ * @param {string} options.layerId Names the layer's mover sets and lines.
+ * @param {number} [options.order=0] Draw order of the layer's sprites.
+ * @param {number} [options.headingOffsetDeg=0] Model nose vs heading 0.
+ * @param {() => Promise<{ canvas: object, cells: object }>} [options.drawAtlas]
+ *   Test seam: the glyph atlas.
+ * @returns {import('./contract.js').AircraftRenderer}
+ */
+export function createAircraftNavaraRenderer({
+  engine,
+  layerId,
+  order = 0,
+  headingOffsetDeg = 0,
+  drawAtlas = drawAircraftIconAtlas,
+}) {
+  let destroyed = false;
+  const removers = [];
+  const iconCells = aircraftIconCells();
+  const defaultIcon = [...iconCells.keys()][0];
+
+  // --- commits: once per frame listener, or in a microtask -----------------
+  const pending = new Set();
+  let inFrame = 0;
+  let microtask = false;
+  const flush = () => {
+    microtask = false;
+    for (const bank of pending) bank.commit();
+    pending.clear();
+  };
+  const onCommit = (bank) => {
+    pending.add(bank);
+    if (inFrame === 0 && !microtask) {
+      microtask = true;
+      queueMicrotask(flush);
+    }
+  };
+  const inFrameDo = (run) => {
+    inFrame++;
+    try {
+      return run();
+    } finally {
+      inFrame--;
+      if (inFrame === 0) flush();
+    }
+  };
+
+  // --- the view ------------------------------------------------------------
+  const layerView = createEngineLayerView(engine, {
+    layerId,
+    wrap: (run) => inFrameDo(run),
+    isDestroyed: () => destroyed,
+  });
+  removers.push(layerView.destroy);
+  const { view, freshCamera } = layerView;
+
+  // --- fleet sprites ---------------------------------------------------------
+  let atlas = null;
+  let fleetVisible = true;
+  const spriteBanks = new Map();
+  const unbanked = new Set(); // sprites added before the atlas
+  const spriteWrite = (sprite, set, index) => {
+    writeFields(set, index, {
+      position: sprite.position,
+      rotation: sprite.rotation,
+      scale: sprite.drawnScale(),
+      color: rgbaOf(sprite.color),
+      cell: sprite.cell,
+      show: sprite.show,
+    });
+    set.set(index, { pickId: sprite.id });
+  };
+  const spriteBankFor = (sprite) => {
+    if (!atlas) return null;
+    const depth = depthKey(sprite.disableDepthTestDistance);
+    const key = `${scalarKey(sprite.scaleByDistance)}|${JSON.stringify(depth)}`;
+    let bank = spriteBanks.get(key);
+    if (!bank) {
+      const scalar = sprite.scaleByDistance;
+      const index = spriteBanks.size;
+      bank = createMoverBank(engine, {
+        options: (capacity, generation) => ({
+          id: `${layerId}-sprites-${index}-${generation}`,
+          kind: 'sprite',
+          capacity,
+          order,
+          depthTest: depth,
+          pickable: true,
+          sprite: {
+            atlas,
+            sizePx: BASE_SIZE_PX,
+            scaleByDistance: scalar
+              ? [scalar.near, scalar.nearValue, scalar.far, scalar.farValue]
+              : undefined,
+          },
+        }),
+        write: spriteWrite,
+        onCommit,
+      });
+      bank.setVisible(fleetVisible);
+      spriteBanks.set(key, bank);
+    }
+    return bank;
+  };
+  const placeSprite = (sprite) => {
+    const bank = spriteBankFor(sprite);
+    if (!bank) {
+      unbanked.add(sprite);
+      return;
+    }
+    bank.add(sprite);
+  };
+  const atlasReady = Promise.resolve()
+    .then(() => drawAtlas())
+    .then((drawn) => {
+      if (destroyed) return;
+      atlas = drawn;
+      const waiting = [...unbanked];
+      unbanked.clear();
+      for (const sprite of waiting) if (sprite.live) placeSprite(sprite);
+      for (const sprite of trackedSprites)
+        if (sprite.live) placeTracked(sprite);
+      engine.render.request(layerId);
+    })
+    .catch((error) =>
+      console.warn(`[${layerId}] aircraft atlas failed`, error),
+    );
+
+  class Sprite {
+    constructor(spec, bankFor) {
+      this.gevBank = null;
+      this.gevIndex = -1;
+      this.live = true;
+      this.bankFor = bankFor;
+      this._position = geo.cartesian3.clone(
+        spec.position ?? geo.cartesian3.ZERO,
+      );
+      this._show = spec.show !== false;
+      this._rotation = spec.rotation ?? 0;
+      this._scale = spec.scale ?? 1;
+      this._width = spec.width ?? BASE_SIZE_PX;
+      this._height = spec.height ?? BASE_SIZE_PX;
+      this._color = new StoredColor(spec.color);
+      this._image = spec.image;
+      this.cell = iconCells.get(spec.image) ?? iconCells.get(defaultIcon);
+      this._scaleByDistance = spec.scaleByDistance
+        ? { ...spec.scaleByDistance }
+        : undefined;
+      this.disableDepthTestDistance = spec.disableDepthTestDistance ?? 0;
+      this.id = spec.id;
+      this.alignedAxis = spec.alignedAxis;
+      this.sizeInMeters = false;
+    }
+
+    drawnScale() {
+      return Math.max(0, this._scale * (this._width / BASE_SIZE_PX));
+    }
+
+    write(fields) {
+      this.gevBank?.update(this, fields);
+    }
+
+    get position() {
+      return this._position;
+    }
+
+    set position(value) {
+      geo.cartesian3.clone(value, this._position);
+      spritePositionField.position = this._position;
+      this.write(spritePositionField);
+    }
+
+    get show() {
+      return this._show;
+    }
+
+    set show(value) {
+      const next = value !== false;
+      if (next === this._show) return;
+      this._show = next;
+      spriteShowField.show = next;
+      this.write(spriteShowField);
+    }
+
+    get rotation() {
+      return this._rotation;
+    }
+
+    set rotation(value) {
+      if (value === this._rotation) return;
+      this._rotation = value;
+      spriteRotationField.rotation = value;
+      this.write(spriteRotationField);
+    }
+
+    get scale() {
+      return this._scale;
+    }
+
+    set scale(value) {
+      if (value === this._scale) return;
+      this._scale = value;
+      spriteScaleField.scale = this.drawnScale();
+      this.write(spriteScaleField);
+    }
+
+    get width() {
+      return this._width;
+    }
+
+    set width(value) {
+      if (value === this._width) return;
+      this._width = value;
+      spriteScaleField.scale = this.drawnScale();
+      this.write(spriteScaleField);
+    }
+
+    get height() {
+      return this._height;
+    }
+
+    set height(value) {
+      this._height = value;
+    }
+
+    get color() {
+      return this._color;
+    }
+
+    set color(value) {
+      if (
+        value !== this._color &&
+        (value?.red ?? 1) === this._color.red &&
+        (value?.green ?? 1) === this._color.green &&
+        (value?.blue ?? 1) === this._color.blue &&
+        (value?.alpha ?? 1) === this._color.alpha
+      )
+        return;
+      this._color = new StoredColor(value);
+      rgbaOf(this._color);
+      this.write(spriteColorField);
+    }
+
+    get image() {
+      return this._image;
+    }
+
+    set image(value) {
+      this._image = value;
+      const cell = iconCells.get(value);
+      if (!cell || cell === this.cell) return;
+      this.cell = cell;
+      this.write({ cell });
+    }
+
+    get scaleByDistance() {
+      return this._scaleByDistance;
+    }
+
+    set scaleByDistance(value) {
+      const next = value ? { ...value } : undefined;
+      if (scalarKey(next) === scalarKey(this._scaleByDistance)) return;
+      this._scaleByDistance = next;
+      // Another distance scale is another set.
+      if (this.gevBank) this.bankFor(this);
+    }
+  }
+
+  const fleet = {
+    attach() {},
+    detach() {
+      for (const bank of spriteBanks.values()) bank.destroy();
+      spriteBanks.clear();
+      unbanked.clear();
+    },
+    attached: () => !destroyed,
+    visible: () => !destroyed && fleetVisible,
+    setVisible(visible) {
+      fleetVisible = visible;
+      for (const bank of spriteBanks.values()) bank.setVisible(visible);
+    },
+    add(spec) {
+      const sprite = new Sprite(spec, (s) => placeSprite(s));
+      placeSprite(sprite);
+      return sprite;
+    },
+    remove(sprite) {
+      if (!sprite) return;
+      sprite.live = false;
+      unbanked.delete(sprite);
+      sprite.gevBank?.remove(sprite);
+    },
+    restoreOrder() {},
+    restoreOrderOnEnable() {},
+  };
+
+  // --- models ----------------------------------------------------------------
+  let modelsVisible = true;
+  const modelBanks = new Map();
+  const scratchMatrix3 = geo.matrix3.create();
+  const scratchCorrected = geo.matrix4.create();
+  const scratchQuaternion = geo.quaternion.create();
+  const scratchHpr = { heading: 0, pitch: 0, roll: 0 };
+  const modelWrite = (model, set, index) => {
+    writeFields(set, index, {
+      position: model.translation,
+      orientation: model.orientation,
+      scale: model.scale,
+      color: rgbaOf(model.color),
+      show: model.show && model.placed,
+    });
+    set.set(index, { pickId: model.id });
+  };
+  const modelBankFor = (model) => {
+    const { url, minimumPixelSize, blendAmount, unlit } = model.spec;
+    const key = `${url}|${minimumPixelSize}|${blendAmount}|${unlit}`;
+    let bank = modelBanks.get(key);
+    if (!bank) {
+      const index = modelBanks.size;
+      bank = createMoverBank(engine, {
+        options: (capacity, generation) => ({
+          id: `${layerId}-models-${index}-${generation}`,
+          kind: 'model',
+          capacity: Math.min(capacity, 512),
+          order,
+          pickable: true,
+          model: {
+            url,
+            minimumPixelSize,
+            colorBlend: { mode: 'mix', amount: blendAmount ?? 0.5 },
+            unlit: unlit === true,
+          },
+        }),
+        write: modelWrite,
+        onCommit,
+      });
+      bank.setVisible(modelsVisible);
+      modelBanks.set(key, bank);
+    }
+    return bank;
+  };
+
+  const scratchOffset = geo.cartesian3.create();
+
+  class ModelHandle {
+    constructor(spec) {
+      this.spec = spec;
+      this.gevBank = null;
+      this.gevIndex = -1;
+      this.placed = false;
+      this._show = true;
+      this._scale = spec.scale ?? 1;
+      this._color = new StoredColor(spec.color);
+      this.id = spec.id;
+      this.modelMatrix = geo.matrix4.create();
+      this.translation = geo.cartesian3.create();
+      this.orientation = geo.quaternion.create(0, 0, 0, 1);
+      this.radiusM = spec.radiusM ?? 1;
+    }
+
+    get ready() {
+      return this.placed && Boolean(this.gevBank?.ready());
+    }
+
+    /** The scale drawn: Cesium's minimumPixelSize kept on the CPU. */
+    get computedScale() {
+      const minimum = this.spec.minimumPixelSize ?? 0;
+      if (!(minimum > 0)) return this._scale;
+      const cam = freshCamera();
+      // Cesium's distance (Camera distanceToBoundingSphere): the depth
+      // along the view less the radius at the model's own scale.
+      geo.cartesian3.subtract(this.translation, cam.positionWC, scratchOffset);
+      const distance = Math.max(
+        0,
+        Math.abs(geo.cartesian3.dot(scratchOffset, cam.directionWC)) -
+          this.radiusM * this._scale,
+      );
+      const height = engine.host.size().height;
+      if (!(distance > 0) || !(height > 0)) return this._scale;
+      const pixels =
+        (2 * this.radiusM * this._scale * height) /
+        (2 * Math.tan(cam.frustum.fovy / 2) * distance);
+      return pixels < minimum ? this._scale * (minimum / pixels) : this._scale;
+    }
+
+    get show() {
+      return this._show;
+    }
+
+    set show(value) {
+      this._show = value !== false;
+      this.gevBank?.update(this, { show: this._show && this.placed });
+    }
+
+    get scale() {
+      return this._scale;
+    }
+
+    set scale(value) {
+      this._scale = value;
+      this.gevBank?.update(this, { scale: value });
+    }
+
+    get color() {
+      return this._color;
+    }
+
+    set color(value) {
+      this._color = new StoredColor(value);
+      this.gevBank?.update(this, { color: rgbaOf(this._color) });
+    }
+  }
+
+  const models = {
+    live: () => !destroyed,
+    setVisible(visible) {
+      modelsVisible = visible;
+      for (const bank of modelBanks.values()) bank.setVisible(visible);
+    },
+    loadFleet: (spec) => Promise.resolve(new ModelHandle(spec)),
+    loadTracked: (spec) => Promise.resolve(new ModelHandle(spec)),
+    // The engine loads each glTF once per bank; nothing to warm.
+    preload: (url) => Promise.resolve({ url, destroy() {} }),
+    add(model) {
+      modelBankFor(model).add(model);
+    },
+    remove(model) {
+      model?.gevBank?.remove(model);
+    },
+    destroy(model) {
+      model?.gevBank?.remove(model);
+    },
+    /** The same HPR frame as Cesium (modelMatrix); the instance turned by
+     *  Navara's glTF axes (NAVARA_GLTF_AXIS). `offsetDeg`: this model's
+     *  nose offset when the layer's models differ (default: the layer's). */
+    setPose(model, position, headingDeg, offsetDeg = headingOffsetDeg) {
+      scratchHpr.heading = geo.math.toRadians((headingDeg || 0) + offsetDeg);
+      geo.transforms.headingPitchRollToFixedFrame(
+        position,
+        scratchHpr,
+        geo.ellipsoid.WGS84,
+        undefined,
+        model.modelMatrix,
+      );
+      geo.matrix4.multiplyTransformation(
+        model.modelMatrix,
+        NAVARA_GLTF_AXIS,
+        scratchCorrected,
+      );
+      geo.quaternion.fromRotationMatrix(
+        geo.matrix4.getMatrix3(scratchCorrected, scratchMatrix3),
+        scratchQuaternion,
+      );
+      model.orientation.x = scratchQuaternion.x;
+      model.orientation.y = scratchQuaternion.y;
+      model.orientation.z = scratchQuaternion.z;
+      model.orientation.w = scratchQuaternion.w;
+      geo.cartesian3.clone(position, model.translation);
+      model.placed = true;
+      model.gevBank?.update(model, {
+        position: model.translation,
+        orientation: model.orientation,
+        show: model._show,
+      });
+      return model.modelMatrix;
+    },
+  };
+
+  // --- the tracked glyph -----------------------------------------------------
+  const trackedSprites = new Set();
+  let trackedBank = null;
+  const trackedBankFor = () => {
+    if (!atlas) return null;
+    trackedBank ??= createMoverBank(engine, {
+      options: (capacity, generation) => ({
+        id: `${layerId}-tracked-${generation}`,
+        kind: 'sprite',
+        capacity: Math.max(capacity, 4),
+        order: order + 0.5,
+        depthTest: 'always',
+        pickable: true,
+        sprite: {
+          atlas,
+          sizePx: BASE_SIZE_PX,
+          scaleByDistance: [1000, 3.0, 8000000, 0.5],
+        },
+      }),
+      write: spriteWrite,
+      onCommit,
+    });
+    return trackedBank;
+  };
+  const placeTracked = (sprite) => trackedBankFor()?.add(sprite);
+  let trackedSeq = 0;
+  // Each frame (before drawing): the tracked glyphs read their callbacks.
+  removers.push(
+    engine.frames.preRender.addEventListener(() =>
+      inFrameDo(() => {
+        for (const sprite of trackedSprites) {
+          const { spec } = sprite;
+          const position = spec.position();
+          if (position) sprite.position = position;
+          sprite.rotation = spec.rotation();
+          sprite.color = spec.color();
+        }
+      }),
+    ),
+  );
+
+  const tracked = {
+    create(spec) {
+      const sprite = new Sprite(
+        {
+          position: spec.position() ?? geo.cartesian3.ZERO,
+          image: spec.image,
+          width: spec.width,
+          height: spec.height,
+          scale: spec.scale,
+          color: spec.color(),
+          rotation: spec.rotation(),
+          disableDepthTestDistance: spec.disableDepthTestDistance,
+          id: `${layerId}-tracked-${++trackedSeq}`,
+        },
+        () => {},
+      );
+      // The tracked glyph's distance scale is its bank's (as Cesium's).
+      sprite._scaleByDistance = spec.scaleByDistance;
+      sprite.spec = spec;
+      sprite.resumeAircraftFollow = () => follow.start(sprite);
+      sprite.viewFrom = null;
+      trackedSprites.add(sprite);
+      placeTracked(sprite);
+      return sprite;
+    },
+    remove(handle) {
+      if (!handle) return;
+      handle.live = false;
+      trackedSprites.delete(handle);
+      handle.gevBank?.remove(handle);
+      if (
+        handle.gevFollowHandle &&
+        engine.camera.following() === handle.gevFollowHandle
+      )
+        handle.gevFollowHandle.stop();
+    },
+    isLive: (handle) => trackedSprites.has(handle),
+    setImage(handle, image) {
+      if (handle) handle.image = image;
+    },
+    setViewFrom(handle, offset) {
+      handle.viewFrom = geo.cartesian3.create(offset.x, offset.y, offset.z);
+    },
+    billboardSize: (handle) =>
+      handle
+        ? {
+            width: handle.width,
+            height: handle.height,
+            scale: handle.scale,
+            scaleByDistance: handle.scaleByDistance,
+          }
+        : null,
+  };
+
+  // --- follow ---------------------------------------------------------------
+  const ownFollows = FOLLOWED_TRACKED; // follow handle → tracked handle
+  // The follow carries the tracked readout's card as plain data (the
+  // handle's annotation fields, read when the card paints).
+  const followOf = (handle) => {
+    const card = {
+      id: handle.gevTrackedId,
+      model: () => handle.gevLabelModel,
+      position: () => handle.gevDisplayPosition?.() ?? handle.spec.position(),
+    };
+    return engine.camera.follow({
+      native: handle,
+      position: () => handle.spec.position(),
+      viewFrom: () => handle.viewFrom,
+      label: card,
+    });
+  };
+  const follow = {
+    start(handle) {
+      const outer = followStarting;
+      followStarting = handle;
+      let followHandle;
+      try {
+        followHandle = followOf(handle);
+      } finally {
+        followStarting = outer;
+      }
+      handle.gevFollowHandle = followHandle;
+      ownFollows.set(followHandle, handle);
+      // Cesium returns the one-frame camera framing's disposer; the engine's
+      // follow frames itself.
+      return () => {};
+    },
+    refocus(handle) {
+      return follow.start(handle);
+    },
+    release() {
+      engine.camera.following()?.stop();
+    },
+    isFollowing: (handle) =>
+      Boolean(handle?.gevFollowHandle) &&
+      engine.camera.following() === handle.gevFollowHandle,
+    current() {
+      if (followStarting) return followStarting;
+      const handle = engine.camera.following();
+      return handle ? (ownFollows.get(handle) ?? handle) : undefined;
+    },
+    onChanged: (listener) =>
+      engine.camera.followChanged.addEventListener(listener),
+  };
+
+  // --- trails ----------------------------------------------------------------
+  let lineSeq = 0;
+  const trails = {
+    create({ color, width = 2.5 }) {
+      const [r, g, b] = rgbaFromCss(color).rgba();
+      const id = `gev-trail:${layerId}-${++lineSeq}`;
+      let line = null;
+      let visible = true;
+      let current = [];
+      const ensure = () =>
+        (line ??= engine.lines.createLine({
+          id,
+          widthPx: width,
+          color: [r, g, b, TRAIL_ALPHA],
+          depthFailAlpha: TRAIL_OCCLUDED_ALPHA / TRAIL_ALPHA,
+          arc: 'geodesic',
+          pickId: id,
+        }));
+      return {
+        setPositions(cartesians) {
+          if (destroyed) return;
+          const positions = [];
+          for (const position of Array.isArray(cartesians) ? cartesians : []) {
+            if (!position) continue;
+            const last = positions[positions.length - 1];
+            if (
+              last &&
+              geo.cartesian3.distanceSquared(last, position) <
+                MIN_SEGMENT_DISTANCE_SQ
+            )
+              continue;
+            positions.push(position);
+          }
+          current = positions.length >= 2 ? positions : [];
+          ensure().setPositions(current);
+          line.show(visible);
+        },
+        setVisible(next) {
+          visible = next !== false;
+          line?.show(visible);
+        },
+        clear() {
+          current = [];
+          line?.setPositions(current);
+        },
+        destroy() {
+          line?.destroy();
+          line = null;
+        },
+      };
+    },
+    createHead({ id, show, positions, color, width = 2.5 }) {
+      const [r, g, b] = rgbaFromCss(color).rgba();
+      const line = engine.lines.createLine({
+        id: `${id}`,
+        widthPx: width,
+        color: [r, g, b, 0.9],
+        depthFailAlpha: 0.5,
+        arc: 'geodesic',
+        pickId: id,
+      });
+      let shown = show !== false;
+      line.show(shown);
+      const remove = engine.frames.preRender.addEventListener(() => {
+        if (!shown) return;
+        line.setPositions(positions());
+      });
+      return {
+        id,
+        get show() {
+          return shown;
+        },
+        set show(value) {
+          shown = value !== false;
+          line.show(shown);
+        },
+        remove() {
+          remove();
+          line.destroy();
+        },
+      };
+    },
+    removeHead(head) {
+      head?.remove();
+    },
+  };
+
+  return {
+    kind: 'navara',
+    engine,
+    view,
+    fleet,
+    models,
+    tracked,
+    follow,
+    trails,
+    /** The atlas is drawn (tests, QA). */
+    whenReady: () => atlasReady,
+    /** A vertical surface probe skips the layer's own mover sets (by id). */
+    surfaceExclusions: () =>
+      [...spriteBanks.values(), ...modelBanks.values(), trackedBank]
+        .map((bank) => bank?.set?.id)
+        .filter(Boolean),
+    destroy() {
+      if (destroyed) return;
+      flush();
+      destroyed = true;
+      for (const remove of removers.splice(0)) remove?.();
+      fleet.detach();
+      for (const bank of modelBanks.values()) bank.destroy();
+      modelBanks.clear();
+      trackedBank?.destroy();
+      trackedBank = null;
+      trackedSprites.clear();
+    },
+  };
+}
+
+/**
+ * The Navara registry factory (src/app/layers/renderers.js) of one aircraft
+ * layer: its sprite slot (data/spriteOrder's order on Cesium) and its
+ * model's nose offset.
+ * @param {string} layerId
+ * @param {number} headingOffsetDeg
+ */
+export function aircraftLayerNavaraRenderer(layerId, headingOffsetDeg) {
+  /** @param {import('../../../globe/contract.js').GlobeEngine} engine */
+  return (engine) =>
+    createAircraftNavaraRenderer({
+      engine,
+      layerId,
+      order: SPRITE_LAYER_ORDER.indexOf(layerId),
+      headingOffsetDeg,
+    });
+}
+
+// The glyph atlas helpers, re-exported for tests.
+export { aircraftIconAtlasLayout as aircraftAtlasLayout, aircraftIconCells };

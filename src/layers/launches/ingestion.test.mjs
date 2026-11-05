@@ -1,3 +1,4 @@
+import { createLaunchesCesiumRenderer } from './render/cesium.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -65,6 +66,10 @@ async function fixture({ legacySource = false } = {}) {
     },
     render: { holdContinuousRender: noop, releaseContinuousRender: noop },
   };
+  services.renderer = {
+    create: ({ viewer, engine }) =>
+      createLaunchesCesiumRenderer(engine, { viewer }),
+  };
   const state = createState({ services });
   state._enabled = true;
   state._lifecycleToken = 1;
@@ -121,7 +126,14 @@ async function fixture({ legacySource = false } = {}) {
       },
     },
   };
-  const context = { state, services, parts, source };
+  const renderer = createLaunchesCesiumRenderer(null, { viewer });
+  const context = {
+    state,
+    services,
+    parts,
+    source,
+    getRenderer: () => renderer,
+  };
   parts.model = createModel(context);
   parts.ingestion = createIngestion(context);
   parts.controls = createControls(context);
@@ -299,15 +311,11 @@ test('destroy followed by actual init starts a clean instance with owned handler
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 1);
     const click = f.state._clickHandler;
     const move = f.state._moveHandler;
-    assert.ok(click instanceof Cesium.ScreenSpaceEventHandler);
-    assert.ok(move instanceof Cesium.ScreenSpaceEventHandler);
-    assert.equal(
-      typeof click.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK),
-      'function',
-    );
+    assert.equal(typeof click.destroy, 'function');
+    assert.equal(typeof move.destroy, 'function');
     await f.destroy();
-    assert.equal(click.isDestroyed(), true);
-    assert.equal(move.isDestroyed(), true);
+    assert.equal(f.state._clickHandler, null);
+    assert.equal(f.state._moveHandler, null);
     assert.equal(f.viewer.dataSources.length, 0);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 0);
   } finally {

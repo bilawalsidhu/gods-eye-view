@@ -1,6 +1,8 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { isGlobeEngine } from '../globe/contract.js';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
@@ -22,8 +24,13 @@ import { formatDistanceText } from '../data/distanceFormat.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
-if (typeof window !== 'undefined' && !window.__CESIUM__)
-  window.__CESIUM__ = Cesium;
+// A getter, because the production build's Cesium global loads only with the
+// first Cesium globe.
+if (typeof window !== 'undefined' && !('__CESIUM__' in window))
+  Object.defineProperty(window, '__CESIUM__', {
+    configurable: true,
+    get: () => Cesium,
+  });
 
 /**
  * Annotation engine — the voice agent's "whiteboard" over the 3D world.
@@ -129,10 +136,20 @@ export function normalizeTargetKey(target) {
   return head || raw;
 }
 
+// While no globe draws the marks (an engine without annotation drawing, or
+// between two engines) they stay on the board and this draws nothing.
+const DETACHED_RENDERER = Object.freeze({
+  add() {},
+  update() {},
+  remove() {},
+  sync() {},
+  destroy() {},
+});
+
 export function createAnnotationEngine({
   placeSearch = defaultGeospatial,
-  viewer,
-  renderer,
+  viewer = null,
+  renderer = DETACHED_RENDERER,
   outlineRetryDelaysMs = OUTLINE_RETRY_DELAYS_MS,
   resolveTarget = resolveAnnotationTarget,
 }) {
@@ -411,14 +428,16 @@ export function createAnnotationEngine({
    * @returns {Promise<{ok, drawn, failed, ids, results}>}
    */
   async function annotate(requests, opts = {}) {
-    if (destroyed)
+    if (destroyed || !viewer)
       return {
         ok: false,
         drawn: 0,
         failed: 0,
         ids: [],
         results: [],
-        error: 'destroyed',
+        error: destroyed
+          ? 'destroyed'
+          : 'Annotations are drawn on the Cesium globe only.',
       };
     const list = (Array.isArray(requests) ? requests : [requests]).map(
       promoteStreetHighlight,
@@ -1650,7 +1669,7 @@ export function createAnnotationEngine({
   /** Fly the camera to one mark; a line is framed whole, not by its start. */
   function frame(id) {
     const anno = annotations.get(id);
-    if (!anno) return false;
+    if (!anno || !viewer) return false;
     if (anno.type === 'route' && anno.path?.length) {
       const ring = anno.path.map((p) => [p.lon, p.lat]);
       // Unwrap around the first vertex, as ringRange does, so a line across
@@ -1718,15 +1737,12 @@ export function createAnnotationEngine({
         return;
       }
       const cart = points.map((p) =>
-        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
+        geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
       );
       const sphere = Cesium.BoundingSphere.fromPoints(cart);
-      viewer.camera.flyToBoundingSphere(sphere, {
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          Cesium.Math.toRadians(-35),
-          Math.max(900, sphere.radius * 2.6),
-        ),
+      flyToSphere(sphere.center, sphere.radius, {
+        pitch: geo.math.toRadians(-35),
+        range: Math.max(900, sphere.radius * 2.6),
         duration: 1.6,
       });
     } catch {
@@ -1738,8 +1754,9 @@ export function createAnnotationEngine({
    *  globe. On any API hiccup, report visible — bad data must never move the camera. */
   function isPointOnScreen(p) {
     try {
+      const pos = geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
+      if (isGlobeEngine(viewer)) return engineSeesPoint(viewer, pos);
       const camera = viewer.camera;
-      const pos = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
       const cv = camera.frustum.computeCullingVolume(
         camera.position,
         camera.direction,
@@ -1778,27 +1795,44 @@ export function createAnnotationEngine({
               : anno.ring,
           )
         : viewportRange(anno.viewport) || 600;
-      viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
-            target.lon,
-            target.lat,
-            anno.anchor.height || 0,
-          ),
-          range,
+      flyToSphere(
+        geo.cartesian3.fromDegrees(
+          target.lon,
+          target.lat,
+          anno.anchor.height || 0,
         ),
-        {
-          offset: new Cesium.HeadingPitchRange(
-            viewer.camera.heading,
-            Cesium.Math.toRadians(-35),
-            range * 2.4,
-          ),
-          duration: 1.8,
-        },
+        range,
+        { pitch: geo.math.toRadians(-35), range: range * 2.4, duration: 1.8 },
       );
     } catch {
       /* framing is best-effort */
     }
+  }
+
+  /**
+   * Fly to a sphere keeping the camera's heading: Cesium's
+   * flyToBoundingSphere on a viewer, the contract's flyToSphere on a globe
+   * engine (the same offset semantics).
+   */
+  function flyToSphere(center, radius, { pitch, range, duration }) {
+    if (isGlobeEngine(viewer)) {
+      viewer.camera.flyToSphere(
+        { center, radius },
+        { heading: viewer.camera.pose().heading, pitch, range, duration },
+      );
+      return;
+    }
+    viewer.camera.flyToBoundingSphere(
+      new Cesium.BoundingSphere(center, radius),
+      {
+        offset: new Cesium.HeadingPitchRange(
+          viewer.camera.heading,
+          pitch,
+          range,
+        ),
+        duration,
+      },
+    );
   }
 
   const engine = {
@@ -1813,6 +1847,60 @@ export function createAnnotationEngine({
       if (destroyed || typeof listener !== 'function') return () => {};
       changeListeners.add(listener);
       return () => changeListeners.delete(listener);
+    },
+    /**
+     * The globe leaves: take every mark off it and release its drawing. The
+     * marks stay on the board (list, count, Draw's rows) for attachRenderer.
+     */
+    detachRenderer() {
+      if (destroyed || renderer === DETACHED_RENDERER) return;
+      // Work begun for this globe (outline lookups, a flight to a mark) ends
+      // with it; the marks already on the board stay.
+      abortPending();
+      dropQueuedOutlineUpgrades();
+      generation++;
+      const previous = renderer;
+      renderer = DETACHED_RENDERER;
+      viewer = null;
+      for (const anno of annotations.values()) {
+        anno.pendingOutline = false;
+        try {
+          previous.remove(anno);
+        } catch {
+          /* the globe is going; its drawing goes with it */
+        }
+      }
+      try {
+        previous.destroy();
+      } finally {
+        releaseContinuousRender('annotations');
+      }
+    },
+    /**
+     * Draw the board on a globe: `viewer` and the `renderer` built for it.
+     * Marks kept while no globe drew them appear again as they were.
+     */
+    attachRenderer({ viewer: nextViewer, renderer: nextRenderer }) {
+      if (destroyed) return;
+      engine.detachRenderer();
+      viewer = nextViewer;
+      renderer = nextRenderer ?? DETACHED_RENDERER;
+      for (const anno of annotations.values()) {
+        try {
+          const completion = renderer.add(anno);
+          completion?.catch?.(() => {});
+        } catch {
+          rollbackRendererState(anno);
+        }
+      }
+      renderer.sync(annotations);
+      syncAnnotationHold();
+      ensureTicking();
+      governorRequestRender('annotations');
+    },
+    /** Whether a globe draws the marks now. */
+    get attached() {
+      return renderer !== DETACHED_RENDERER;
     },
     destroy() {
       if (destroyed) return;
@@ -2005,11 +2093,11 @@ export function createAnnotationEngine({
   }) {
     if (destroyed) return;
     try {
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+      viewer?.camera.flyTo({
+        destination: geo.cartesian3.fromDegrees(lon, lat, height),
         orientation: {
-          heading: Cesium.Math.toRadians(heading),
-          pitch: Cesium.Math.toRadians(pitch),
+          heading: geo.math.toRadians(heading),
+          pitch: geo.math.toRadians(pitch),
           roll: 0,
         },
         duration,
@@ -2179,9 +2267,9 @@ const VIEWPORT_ASSIST_RANGE_CAP_M = 120000;
 function viewportRange(vp) {
   if (!vp?.low || !vp?.high) return null;
   try {
-    const span = Cesium.Cartesian3.distance(
-      Cesium.Cartesian3.fromDegrees(vp.low.longitude, vp.low.latitude),
-      Cesium.Cartesian3.fromDegrees(vp.high.longitude, vp.high.latitude),
+    const span = geo.cartesian3.distance(
+      geo.cartesian3.fromDegrees(vp.low.longitude, vp.low.latitude),
+      geo.cartesian3.fromDegrees(vp.high.longitude, vp.high.latitude),
     );
     return Number.isFinite(span) && span > 0
       ? Math.max(300, Math.min(span * 0.7, VIEWPORT_ASSIST_RANGE_CAP_M))
@@ -2206,9 +2294,9 @@ function ringRange(ring) {
     if (lon < minLon) minLon = lon;
     if (lon > maxLon) maxLon = lon;
   }
-  const span = Cesium.Cartesian3.distance(
-    Cesium.Cartesian3.fromDegrees(minLon, minLat),
-    Cesium.Cartesian3.fromDegrees(maxLon, maxLat),
+  const span = geo.cartesian3.distance(
+    geo.cartesian3.fromDegrees(minLon, minLat),
+    geo.cartesian3.fromDegrees(maxLon, maxLat),
   );
   return Math.max(300, span * 0.7);
 }
@@ -2398,4 +2486,17 @@ function appendDistance(baseLabel, distM) {
   const dist = formatDistance(distM);
   if (!dist) return baseLabel;
   return baseLabel ? `${baseLabel} — ${dist}` : dist;
+}
+
+/**
+ * Whether a globe engine shows a world point: in front of the camera, inside
+ * the canvas and on the near side of the globe (what the Cesium path's
+ * culling volume and ellipsoid occluder answer).
+ */
+function engineSeesPoint(engine, position) {
+  if (!engine.projector.horizonVisible(position)) return false;
+  const win = engine.projector.worldToWindow(position);
+  if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y)) return false;
+  const { width, height } = engine.host.size();
+  return win.x >= 0 && win.x <= width && win.y >= 0 && win.y <= height;
 }

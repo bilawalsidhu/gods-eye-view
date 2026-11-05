@@ -130,7 +130,7 @@ export function createLoadingFeedbackState() {
 export function createGlobalStatusNotice(
   message,
   nowMs = 0,
-  { state = 'error', detail = '', persistent = false } = {},
+  { state = 'error', detail = '', persistent = false, dwellMs } = {},
 ) {
   const label = String(message || '').trim();
   if (!label) return null;
@@ -139,7 +139,11 @@ export function createGlobalStatusNotice(
     label,
     detail: String(detail || '').trim(),
     persistent: !!persistent,
-    dwellMs: persistent ? null : LOADING_FAILURE_DWELL_MS,
+    dwellMs: persistent
+      ? null
+      : Number.isFinite(dwellMs) && dwellMs > 0
+        ? dwellMs
+        : LOADING_FAILURE_DWELL_MS,
     // A finite notice starts its dwell only when it first wins presentation.
     // Otherwise a higher-priority manager failure could consume the whole
     // deadline while this notice remained queued and invisible.

@@ -1,6 +1,6 @@
-import { createRendering as createFirmsRendering } from '../layers/firms/rendering.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   registerSpriteCollection,
   restoreSpriteOrder,
@@ -8,7 +8,6 @@ import {
   unregisterSpriteCollection,
 } from './spriteOrder.js';
 import flightsLayer from './flights.js';
-import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { createFirmsHeatmapLayer } from './firmsHeatmap.js';
 
 const ORDER = ['cctv', 'firms', 'bikeshare', 'ais', 'military', 'flights'];
@@ -110,12 +109,35 @@ test('flights, AIS, and FIRMS enable paths are wired through the shared sprite r
   assert.deepEqual(calls, [viewer, viewer, viewer]);
 
   const firmsLayer = createFirmsHeatmapLayer({ id: 'firms', name: 'FIRMS' });
-  assert.match(flightsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('flights', viewer\)/);
-  assert.match(aisLiveVesselsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('ais', activeViewer\)/);
-  assert.match(firmsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('firms', viewer\)/);
+  // Flights draws through its renderer: enable asks the fleet to
+  // restore its order, which the Cesium aircraft renderer wires to the shared
+  // restorer under the flights' sprite slot.
+  assert.match(flightsLayer.enable.toString(), /fleet\.restoreOrderOnEnable\(\)/);
   assert.match(
-    createFirmsRendering.toString(),
-    /registerSpriteCollection\('firms', layerState\._billboards\);\s*restoreSpriteOrder\(layerState\._viewer\);/,
+    readFileSync(new URL('../layers/aircraft/render/cesium.js', import.meta.url), 'utf8'),
+    /restoreOrderOnEnable: \(\) => restoreSpriteOrderOnEnable\(spriteLayer, viewer\)/,
+  );
+  assert.match(
+    readFileSync(new URL('../layers/flights/render/cesium.js', import.meta.url), 'utf8'),
+    /spriteLayer: 'flights'/,
+  );
+  assert.match(
+    firmsLayer.enable.toString(),
+    /renderer\.onEnable\(\)/,
+  );
+  assert.match(
+    readFileSync(
+      new URL('../layers/firms/render/cesium.js', import.meta.url),
+      'utf8',
+    ),
+    /restoreSpriteOrderOnEnable\('firms', viewer\)/,
+  );
+  assert.match(
+    readFileSync(
+      new URL('../layers/firms/render/cesium.js', import.meta.url),
+      'utf8',
+    ),
+    /registerSpriteCollection\('firms', sprites\);\s*spriteServices\.restoreSpriteOrder\(viewer\);/,
     'lazy FIRMS registration must restore order immediately',
   );
 });

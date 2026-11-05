@@ -54,13 +54,15 @@ export function windStats(manifest) {
 export function createWindLayer({
   feed,
   clock,
-  cesium = Cesium,
+  cesium = null,
   container,
   createRendering = createWindRendering,
+  createNativeRendering,
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Wind requires a snapshot source');
   let viewer = null;
+  let engine = null;
   let request = null;
   let enabled = false;
   let rendering = null;
@@ -81,7 +83,14 @@ export function createWindLayer({
     inspectionMarker?.clear();
   };
   const sample = (position) => {
-    reading = inspectWindAtCenter(manifest, viewer, cesium, {
+    if (!position && engine && !viewer) {
+      const canvas = engine.host.canvas;
+      position = engine.camera.pickEllipsoid({
+        x: canvas.clientWidth / 2,
+        y: canvas.clientHeight / 2,
+      });
+    }
+    reading = inspectWindAtCenter(manifest, viewer, {
       position,
       units,
       overlay,
@@ -110,27 +119,50 @@ export function createWindLayer({
     icon: '🌬',
     source: 'GFS / ECMWF IFS · FORECAST',
     updateInterval: 3600_000,
-    init(nextViewer) {
+    init(nextViewer, options) {
+      layer.attachRenderer(nextViewer, options);
+    },
+    attachRenderer(nextViewer, { engine: nextEngine = null } = {}) {
       viewer = nextViewer;
-      rendering = createRendering({
-        cesium,
-        container: container ?? nextViewer.container,
-        getViewer: () => viewer,
-        getHost: () =>
-          imageryHost?.() ?? {
-            collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-            kind: 'globe',
-          },
-        onStatusChange: notify,
-      });
+      engine = nextEngine;
+      rendering =
+        engine?.kind === 'navara'
+          ? createNativeRendering(engine)
+          : createRendering({
+              // Read on Cesium only: the production build's Cesium global
+              // loads with the first Cesium globe.
+              cesium: cesium ?? Cesium,
+              container: container ?? nextViewer.container,
+              getViewer: () => viewer,
+              getHost: () =>
+                imageryHost?.() ?? {
+                  collection:
+                    viewer.imageryLayers ?? viewer.scene?.imageryLayers,
+                  kind: 'globe',
+                },
+              onStatusChange: notify,
+            });
       rendering.attach();
       rendering.setOptions?.({ overlay, paused });
-      const target = container ?? nextViewer.container;
+      const target =
+        container ?? nextViewer?.container ?? engine?.host.container;
       inspectionMarker = createWindInspectionMarker({
         container: target,
         viewer,
-        cesium,
+        cesium: engine ? null : (cesium ?? Cesium),
+        engine,
       });
+      if (enabled && manifest && !manifest.unavailable) {
+        rendering.setField(manifest);
+        rendering.start();
+      }
+      if (sampledPosition) inspectionMarker.show(sampledPosition);
+    },
+    detachRenderer() {
+      inspectionMarker?.destroy();
+      inspectionMarker = null;
+      rendering?.destroy();
+      rendering = imageryHost = viewer = engine = null;
     },
     attachShellServices(services) {
       imageryHost =
@@ -182,12 +214,12 @@ export function createWindLayer({
         error = null;
         if (sampledPosition) sample(sampledPosition);
         if (snapshot.unavailable) {
-          rendering.stop();
-          rendering.clear();
+          rendering?.stop();
+          rendering?.clear();
         } else {
-          rendering.setOptions?.({ overlay, paused });
-          rendering.setField(snapshot);
-          rendering.start();
+          rendering?.setOptions?.({ overlay, paused });
+          rendering?.setField(snapshot);
+          rendering?.start();
         }
         return true;
       } catch (cause) {
@@ -438,13 +470,8 @@ export function createWindLayer({
     destroy() {
       layer.disable();
       unsubscribeClock?.();
-      rendering?.destroy();
-      rendering = null;
-      imageryHost = null;
-      viewer = null;
+      layer.detachRenderer();
       rowControlsListener = null;
-      inspectionMarker?.destroy();
-      inspectionMarker = null;
     },
     getStats() {
       const diagnostic = rendering?.getDiagnostics?.();

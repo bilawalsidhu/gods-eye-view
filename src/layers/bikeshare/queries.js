@@ -30,12 +30,7 @@ export function createQueries({ state: layerState, services, parts, source }) {
    */
 
   function collectDetectableStations(options = {}) {
-    if (
-      !layerState._enabled ||
-      !layerState._pointCollection ||
-      !layerState._pointCollection.show ||
-      layerState._stationRenderMap.size === 0
-    )
+    if (!layerState._enabled || layerState._stationRenderMap.size === 0)
       return [];
 
     // Gather all visible station records (include selected even though its point is hidden)

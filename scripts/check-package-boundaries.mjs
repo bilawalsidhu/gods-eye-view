@@ -37,7 +37,11 @@ export async function checkPackageBoundaries(root) {
     ) {
       throw new Error(`Invalid package boundary: ${name}`);
     }
+    // A module entry ending in "/" owns every file under that directory.
     const allowed = new Set();
+    const allowedDirectories = [];
+    const owns = (id) =>
+      allowed.has(id) || allowedDirectories.some((dir) => id.startsWith(dir));
     for (const module of group.modules) {
       if (
         typeof module !== 'string' ||
@@ -56,7 +60,11 @@ export async function checkPackageBoundaries(root) {
       ) {
         throw new Error(`Boundary module escapes repository: ${name}`);
       }
-      allowed.add(normalizePath(resolved));
+      if (module.endsWith('/')) {
+        allowedDirectories.push(`${normalizePath(resolved)}/`);
+      } else {
+        allowed.add(normalizePath(resolved));
+      }
     }
     for (const external of group.external) {
       if (
@@ -82,7 +90,7 @@ export async function checkPackageBoundaries(root) {
       if (
         typeof target !== 'string' ||
         !target.startsWith('./') ||
-        !allowed.has(normalizePath(path.resolve(root, target)))
+        !owns(normalizePath(path.resolve(root, target)))
       ) {
         throw new Error(`Export must point to an owned module: ${key}`);
       }
@@ -109,7 +117,7 @@ export async function checkPackageBoundaries(root) {
             // template blocks belong to the component file itself.
             if (info.id.startsWith('\0')) return;
             const id = info.id.split('?')[0];
-            if (!allowed.has(id)) {
+            if (!owns(id)) {
               throw new Error(
                 `Package boundary ${name} imports an unowned module: ${path.relative(root, id)}`,
               );

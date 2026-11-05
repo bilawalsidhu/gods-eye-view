@@ -1,4 +1,11 @@
 import * as Cesium from 'cesium';
+import { rendererFor } from './renderers.js';
+import {
+  createFirmsCesiumRenderer,
+  projectFirmsWindow,
+  firmsHorizonOccluder,
+  FIRMS_LEFT_CLICK,
+} from '../../layers/firms/render/cesium.js';
 import { createFirmsHeatmapLayer as createLayer } from '../../layers/firms/index.js';
 import * as render from '../../renderGovernor.js';
 import * as sprites from '../../data/spriteOrder.js';
@@ -23,6 +30,15 @@ export function createApplicationFirms({ surface, ...options }) {
     source: options.source ?? 'NASA FIRMS',
     feed: options.feed,
     services: { ...firmsServices, anchors: surface.anchors },
+    renderer: options.renderer ?? {
+      create: ({ engine = null, ...renderOptions }) =>
+        engine
+          ? rendererFor('local-firms', engine, renderOptions)
+          : createFirmsCesiumRenderer(null, renderOptions),
+    },
+    projectToWindow: options.projectToWindow ?? projectFirmsWindow,
+    horizonOccluder: options.horizonOccluder ?? firmsHorizonOccluder,
+    leftClickEventType: options.leftClickEventType ?? FIRMS_LEFT_CLICK,
     overlayHost: options.overlayHost ?? {
       setEntries: overlays.setOverlayEntries,
       setVisible: overlays.setOverlaySourceVisible,

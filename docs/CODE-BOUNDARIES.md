@@ -32,6 +32,8 @@ export inventory. Use declared exports rather than reaching into internal files.
 | `src/data/`            | Lifecycle, context and feed state; legacy default-layer facades                                         |
 | `src/layers/<family>/` | Source acquisition, records and Cesium resources with explicit controller/renderer owners               |
 | `src/sources/`         | Portable protocols and source contracts; request state belongs to each factory instance                 |
+| `src/geo/`             | Engine-neutral WGS84 maths, ported from Cesium, never imports Cesium                                    |
+| `src/globe/`           | Engine-neutral globe contract and its test support; engines only in `globe/cesium`, `globe/navara`      |
 | `src/services/`        | Supplied application operations; scene construction owns caches and cancellation                        |
 | `src/voice/`           | Portable action schemas/session, common controls, action execution and separate protocol adapters       |
 | `server/providers/`    | Node route factories, process-scoped provider caches and shutdown cleanup                               |
@@ -53,15 +55,25 @@ See [application construction](APPLICATION.md) and the
 2. `scripts/check-package-boundaries.mjs` builds every declared export without
    app Vite configuration or environment files. `scripts/package-boundaries.json`
    assigns each export exactly once and lists its owned modules and external
-   dependencies. Unused imports still count. Node exports have only a `node`
+   dependencies; a module entry ending in `/` (such as `src/geo/`) owns every
+   file under that directory. Unused imports still count. Node exports have only a `node`
    condition; browser groups cannot use build-only dependency exceptions.
 
 Portable source graphs cannot reach application/rendering, Node, Cesium or
 browser globals. This includes `sources/*`, dedicated `layers/*/source` exports,
 flight/military/vessel record and ingestion exports, action schemas, the session
-interface, lifecycle and feed state. The browser-global rule reserves platform
-names such as `document` and `window` in these modules; it is an architectural
-check, not a JavaScript sandbox. Common voice controls cannot depend on a
+interface, lifecycle and feed state, and every runtime file in `src/geo/` (the
+engine-neutral geometry ported from Cesium). The browser-global rule reserves
+platform names such as `document` and `window` in these modules; it is an
+architectural check, not a JavaScript sandbox. The globe contract
+(`src/globe/*.js` and `src/globe/testing/**`) cannot reach `cesium`,
+`@cesium/*`, `three`, `postprocessing` or `@navaramap/*`, directly or through
+helpers, nor import an engine implementation; the `src/globe/cesium/**` graph
+reaches no Navara/three package or `src/globe/navara/**` module, and the
+`src/globe/navara/**` graph no Cesium package or `src/globe/cesium/**` module,
+through helpers too. Outside its own directory, `src/globe/navara/**` is
+reached only through a literal `import()` (the app's `?engine=navara` mode), so
+Navara stays out of the Cesium-mode bundle. Common voice controls cannot depend on a
 Realtime protocol implementation. Negative fixtures cover indirect helpers,
 self-package imports, symlinks and unreachable files.
 

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
+import { createVesselsCesiumRenderer } from './render/cesium.js';
 
 const noop = () => {};
 function services() {
@@ -29,6 +30,9 @@ function services() {
       forgetSpriteFocus: noop,
     },
     worldFocus: {},
+    renderer: {
+      create: (options) => createVesselsCesiumRenderer(null, options),
+    },
     render: {
       holdContinuousRender: noop,
       releaseContinuousRender: noop,

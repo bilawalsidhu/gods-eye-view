@@ -1,3 +1,4 @@
+import * as geo from '../../geo/index.js';
 import { createPolicyHelpers } from './policyHelpers.js';
 import { createIngestion } from './ingestion.js';
 import { createOrbitRendering } from './orbitRendering.js';
@@ -21,7 +22,15 @@ export function createRocketLaunchesLayer({ services, source }) {
     throw new TypeError('A launches source is required');
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const getRenderer = () => {
+    if (!state._renderer || state._renderer.view !== state._viewer)
+      state._renderer = services.renderer.create({
+        viewer: state._viewer,
+        engine: state._engine,
+      });
+    return state._renderer;
+  };
+  const context = { state, services, parts, source, getRenderer };
   parts.policyHelpers = createPolicyHelpers(context);
   parts.ingestion = createIngestion(context);
   parts.orbitRendering = createOrbitRendering(context);
@@ -44,6 +53,89 @@ export function createRocketLaunchesLayer({ services, source }) {
     parts.ingestion.methods,
     parts.panel.commands,
     {
+      qaDrawn() {
+        if (!state._viewer || !state._dataSource) return null;
+        const value = (v) =>
+          typeof v?.getValue === 'function'
+            ? v.getValue(state._declutterTime)
+            : v;
+        const plain = (p) => (p ? { x: p.x, y: p.y, z: p.z } : null);
+        const anchors = (positions) =>
+          !positions?.length
+            ? []
+            : Array.from({ length: 8 }, (_, i) =>
+                plain(positions[Math.floor((i * (positions.length - 1)) / 8)]),
+              );
+        const track = state._replayTracks.get(state._selectedLaunchId);
+        const frame = track?.getReplayState();
+        return {
+          enabled: state._enabled,
+          selected: state._selectedLaunchId,
+          speed: state._replaySpeed,
+          paused: state._replayPaused,
+          records: state._launches.map((l) => ({
+            id: l.id,
+            name: l.name,
+            longitude: l.lon,
+            latitude: l.lat,
+            orbit: l.orbit?.name,
+          })),
+          points: state._dataSource.entities.values
+            .filter((e) => e.point && e.position)
+            .map((e) => {
+              const color = value(e.point.color);
+              return {
+                id: e.id,
+                position: plain(value(e.position)),
+                show:
+                  state._dataSource.show &&
+                  e.show &&
+                  value(e.point.show) !== false,
+                size: value(e.point.pixelSize),
+                color: color
+                  ? [color.red, color.green, color.blue, color.alpha]
+                  : null,
+              };
+            }),
+          paths: state._dataSource.entities.values
+            .filter((e) => e.polyline)
+            .map((e) => ({
+              id: e.id,
+              show: state._dataSource.show && e.show,
+              anchors: anchors(value(e.polyline.positions)),
+            })),
+          rings: [...state._missionOrbitPrimitives].map(([id, path]) => ({
+            id,
+            show: path.primitive.show,
+            anchors: anchors(path.basePositions).map((p) =>
+              plain(
+                geo.matrix4.multiplyByPoint(
+                  path.primitive.modelMatrix,
+                  p,
+                  geo.cartesian3.create(),
+                ),
+              ),
+            ),
+          })),
+          replay: frame
+            ? {
+                ...frame,
+                active: state._replayCameraLaunchId === state._selectedLaunchId,
+                ascentDurationSec: track.ascentDurationSec,
+                position: plain(
+                  parts.paths.samplePath(
+                    frame.ascending
+                      ? track.ascentPath
+                      : track.animatedOrbitPath,
+                    frame.phaseProgress,
+                  ),
+                ),
+              }
+            : null,
+          padVisible: state._launchPadZonePrimitive?.show === true,
+          padHeightM: state._launchPadZonePrimitive?.heightM ?? null,
+        };
+      },
       subscribePanel: parts.panel.subscribePanel,
       subscribeReplayOverlay: parts.overlays.subscribeReplayOverlay,
       satelliteParamsForSpaceMissions:

@@ -11,7 +11,7 @@
  * embedded or not.
  */
 
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
 import { annotationsFromParams, createView } from '../view/index.js';
 
@@ -148,14 +148,14 @@ function flyTo(viewer, camera) {
   announceNavigationAuthority('embed-view');
   return new Promise((resolve) => {
     viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
+      destination: geo.cartesian3.fromDegrees(
         camera.lon,
         camera.lat,
         camera.altitude_m,
       ),
       orientation: {
-        heading: Cesium.Math.toRadians(camera.heading_deg),
-        pitch: Cesium.Math.toRadians(camera.pitch_deg),
+        heading: geo.math.toRadians(camera.heading_deg),
+        pitch: geo.math.toRadians(camera.pitch_deg),
         roll: 0,
       },
       duration: FLIGHT_SECONDS,

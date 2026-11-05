@@ -53,9 +53,15 @@ const getOpt = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 
-const APP_URL = getOpt('--url', 'http://localhost:4173');
+const BASE_URL = getOpt('--url', 'http://localhost:4173');
+// --engine=cesium|navara: without a viewer the layer is read through
+// the QA probe (window.__godsEyeView.layers.drawn) and the military checks are
+// skipped where the engine has no military layer.
+const ENGINE = (argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=cesium').slice(9);
+const APP_URL =
+  ENGINE === 'cesium' ? BASE_URL : `${BASE_URL.replace(/\/$/, '')}/?engine=${ENGINE}`;
 const HEADFUL = getFlag('--headful');
-const SHOT_DIR = path.resolve('qa-shots/b5');
+const SHOT_DIR = path.resolve(ENGINE === 'cesium' ? 'qa-shots/b5' : `qa-shots/b5-${ENGINE}`);
 
 const FL_MODEL_SCALE = 1;         // flights.js (airplane.glb is transform-applied and meter-scale)
 const MIL_PLANE_MODEL_SCALE = 1;  // military heavy classes share the same baked airplane.glb
@@ -173,7 +179,7 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--use-gl=angle',
-      '--use-angle=swiftshader',
+      `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -200,6 +206,7 @@ async function main() {
 
     // ---- Straight-flight fetch shim (installed before any app code runs) ----
     await page.evaluateOnNewDocument((spec) => {
+      localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
       window.__SPR = spec;
       window.__SPR.epochMs = Date.now();
       window.__SPR_HITS = { opensky: 0, mil: 0 };
@@ -275,9 +282,12 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
+      () => window.__godsEyeView && window.__godsEyeView.engine && window.__godsEyeView.dataManager && window.__godsEyeView.layers,
       { timeout: 60000, polling: 200 }
     );
+    await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise);
+    await page.waitForFunction(() => document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 180000 });
+    await page.evaluate(() => window.__godsEyeView.styleManager.orbitController.stop());
     console.log('  App globals ready.');
 
     // ---- In-page probes: billboard walk, model walk, tracked-model finder ---
@@ -285,6 +295,10 @@ async function main() {
       // Every billboard (image + alignedAxis + id) in every collection.
       window.__collectBillboards = function () {
         const v = window.__godsEyeView.viewer;
+        if (!v)
+          return ['flights', 'military'].flatMap((id) => window.__godsEyeView.layers.drawn(id) ?? [])
+            .filter((row) => !row.trackedModel)
+            .map(({ id, image, scale, show }) => ({ id, image, scale, show }));
         const out = [];
         const walk = (coll) => {
           const n = coll.length;
@@ -304,6 +318,10 @@ async function main() {
       // Every glTF model primitive (modelMatrix + ready flag), with id + scale.
       window.__collectModels = function () {
         const v = window.__godsEyeView.viewer;
+        if (!v)
+          return ['flights', 'military'].flatMap((id) => window.__godsEyeView.layers.drawn(id) ?? [])
+            .filter((row) => row.model && (row.trackedModel || !row.tracked))
+            .map(({ id, model }) => ({ id, ...model, radius: null }));
         const out = [];
         const walk = (coll) => {
           const n = coll.length;
@@ -331,14 +349,14 @@ async function main() {
       };
       // Canvas coordinates of every synthetic plane at its displayed position —
       // ground truth for identifying which glyph is which in a screenshot.
-      window.__planeCanvasCoords = function (layer, renderDelaySec, altOf) {
-        const v = window.__godsEyeView.viewer;
+      window.__planeCanvasCoords = async function (layer, renderDelaySec, altOf) {
+        const geo = await import('/src/geo/index.js');
+        const { engine } = window.__godsEyeView;
         const S = window.__SPR;
-        const C3 = v.camera.position.constructor;
         return S[layer].map((p, i) => {
           const s = window.__displayedState(layer, i, renderDelaySec);
-          const pos = C3.fromDegrees(s.lon, s.lat, altOf === 'ft' ? p.altFt * 0.3048 : p.altM);
-          const c = v.scene.cartesianToCanvasCoordinates(pos);
+          const pos = geo.cartesian3.fromDegrees(s.lon, s.lat, altOf === 'ft' ? p.altFt * 0.3048 : p.altM);
+          const c = engine.projector.worldToWindow(pos);
           return `${p.icao || p.hex}=(${c ? Math.round(c.x) : '-'},${c ? Math.round(c.y) : '-'})`;
         }).join(' ');
       };
@@ -348,26 +366,29 @@ async function main() {
     console.log('Priming straight-flight history through the render delay (30 s / 15 s)...');
     const primed = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
+      const v = window.__godsEyeView.viewer ?? null;
+      const hasMil = dm.layers.has('military');
       window.__SPR.timeOffsetSec = -32;
       await dm.setEnabled('flights', true);
-      await dm.setEnabled('military', true);
+      if (hasMil) await dm.setEnabled('military', true);
       const fl = dm.layers.get('flights').module;
-      const mil = dm.layers.get('military').module;
+      const mil = hasMil ? dm.layers.get('military').module : null;
       for (const off of [-24, -16, -8, 0]) {
         window.__SPR.timeOffsetSec = off;
         await fl.update(v);
-        await mil.update(v);
+        await mil?.update(v);
       }
       window.__SPR.timeOffsetSec = 0;
-      window.__SPR_DRIVER = setInterval(() => { fl.update(v); mil.update(v); }, 15000);
-      return { fl: fl.getStats().count, mil: mil.getStats().count, hits: window.__SPR_HITS };
+      window.__SPR_DRIVER = setInterval(() => { fl.update(v); mil?.update(v); }, 15000);
+      return { fl: fl.getStats().count, mil: mil ? mil.getStats().count : null, hits: window.__SPR_HITS };
     });
     console.log(`  flights count=${primed.fl} military count=${primed.mil} | shim hits opensky=${primed.hits.opensky} mil=${primed.hits.mil}`);
+    const hasMilitary = primed.mil !== null;
+    if (!hasMilitary) console.log(`  [SKIP] the military rows — no military layer on ${ENGINE}`);
     record('B1 ingest: synthetic planes in both layers',
-      primed.fl === SPRITES.flights.length && primed.mil === SPRITES.military.length,
-      `flights=${primed.fl}/${SPRITES.flights.length} military=${primed.mil}/${SPRITES.military.length}`);
-    if (!(primed.fl > 0 && primed.mil > 0)) { finish(); return; }
+      primed.fl === SPRITES.flights.length && (!hasMilitary || primed.mil === SPRITES.military.length),
+      `flights=${primed.fl}/${SPRITES.flights.length} military=${hasMilitary ? `${primed.mil}/${SPRITES.military.length}` : 'n/a'}`);
+    if (!(primed.fl > 0 && (!hasMilitary || primed.mil > 0))) { finish(); return; }
 
     // ========================================================================
     // B2 — billboard glyph + scale per class (machine check)
@@ -379,37 +400,38 @@ async function main() {
     let scaleBad = [];
     for (const [id, klass] of expectedFlights) {
       const bb = bbById.get(id);
-      const wantImg = aircraftIcon(klass);
+      const wantImg = [aircraftIcon(klass), aircraftIcon(klass, 192)];
       const wantScale = CLASS_SCALE_2D[klass] || 1;
-      if (!bb || bb.image !== wantImg) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
+      if (!bb || !wantImg.includes(bb.image)) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
       if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${id}: ${bb.scale} != ${wantScale}`);
     }
-    for (const [id, klass] of expectedMilitary) {
+    for (const [id, klass] of hasMilitary ? expectedMilitary : []) {
       const bb = bbById.get(id);
-      const wantImg = aircraftIcon(klass);
+      const wantImg = [aircraftIcon(klass), aircraftIcon(klass, 192)];
       const wantScale = MIL_BILLBOARD_SCALE * (CLASS_SCALE_2D[klass] || 1);
-      if (!bb || bb.image !== wantImg) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
+      if (!bb || !wantImg.includes(bb.image)) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
       if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${id}: ${bb.scale} != ${wantScale}`);
     }
     record('B2a: every synthetic billboard has its class glyph (data-URI match)',
-      glyphBad.length === 0, glyphBad.length ? glyphBad.join(' ') : `${expectedFlights.size + expectedMilitary.size} billboards matched`);
+      glyphBad.length === 0, glyphBad.length ? glyphBad.join(' ') : `${expectedFlights.size + (hasMilitary ? expectedMilitary.size : 0)} billboards matched`);
     record('B2b: every synthetic billboard has its class scale',
       scaleBad.length === 0, scaleBad.length ? scaleBad.join(' ') : 'all scales exact');
-    const distinctGlyphs = new Set([...expectedFlights.values(), ...expectedMilitary.values()].map((k) => aircraftIcon(k)));
-    record('B2c: all 8 classes exercised with 8 distinct glyphs',
-      distinctGlyphs.size === 8, `${distinctGlyphs.size} distinct data URIs`);
+    const distinctGlyphs = new Set([...expectedFlights.values(), ...(hasMilitary ? expectedMilitary.values() : [])].map((k) => aircraftIcon(k)));
+    const wantGlyphs = hasMilitary ? 8 : new Set(expectedFlights.values()).size;
+    record(`B2c: all ${wantGlyphs} classes exercised with ${wantGlyphs} distinct glyphs`,
+      distinctGlyphs.size === wantGlyphs, `${distinctGlyphs.size} distinct data URIs`);
 
     // ========================================================================
     // 2D screenshots
     // ========================================================================
     console.log('\n2D screenshots → qa-shots/b5/');
     const topDown = async (lat, lon, height) => {
-      await page.evaluate(({ lat, lon, height }) => {
-        const v = window.__godsEyeView.viewer;
-        v.camera.cancelFlight(); // the boot fly-to-Austin otherwise stomps setView
-        const C3 = v.camera.position.constructor;
-        v.camera.setView({
-          destination: C3.fromDegrees(lon, lat, height),
+      await page.evaluate(async ({ lat, lon, height }) => {
+        const camera = window.__godsEyeView.engine.camera;
+        camera.cancelFlight(); // the boot fly-to-Austin otherwise stomps setView
+        const geo = await import('/src/geo/index.js');
+        camera.setView({
+          destination: geo.cartesian3.fromDegrees(lon, lat, height),
           orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         });
       }, { lat, lon, height });
@@ -422,6 +444,7 @@ async function main() {
     const zoomToRange = async (want) => {
       await page.evaluate((want) => {
         const v = window.__godsEyeView.viewer;
+        if (!v) return; // the engine follow keeps its own range (screenshots only)
         const p = v.camera.position;
         const d = Math.hypot(p.x, p.y, p.z);
         if (d > 1e6) return; // not in a tracked reference frame — leave it alone
@@ -441,10 +464,12 @@ async function main() {
 
     // Row widths: military spans 7 steps (~8.1 km) → frame ~13.9 km at 12 km up;
     // flights spans 5 steps (~5.8 km, +caa004's eastward drift) → ~10.4 km at 9 km up.
-    await topDown(await rowLat('military', 4, 15), ROW_LON0 + 3.5 * ROW_STEP_DEG, 17000);
-    await page.screenshot({ path: path.join(SHOT_DIR, 'b5-2d-military-row.png') });
-    console.log('  saved b5-2d-military-row.png (8 classes, amber)');
-    console.log(`    glyph positions: ${await page.evaluate(() => window.__planeCanvasCoords('military', 15, 'ft'))}`);
+    if (hasMilitary) {
+      await topDown(await rowLat('military', 4, 15), ROW_LON0 + 3.5 * ROW_STEP_DEG, 17000);
+      await page.screenshot({ path: path.join(SHOT_DIR, 'b5-2d-military-row.png') });
+      console.log('  saved b5-2d-military-row.png (8 classes, amber)');
+      console.log(`    glyph positions: ${await page.evaluate(() => window.__planeCanvasCoords('military', 15, 'ft'))}`);
+    }
 
     await topDown(await rowLat('flights', 2, 30), ROW_LON0 + 2.5 * ROW_STEP_DEG, 12000);
     await page.screenshot({ path: path.join(SHOT_DIR, 'b5-2d-flights-row.png') });
@@ -507,6 +532,9 @@ async function main() {
     // ========================================================================
     // B3 + 3D screenshots — military cluster
     // ========================================================================
+    if (!hasMilitary) {
+      console.log(`  [SKIP] 3D military — no military layer on ${ENGINE}`);
+    } else {
     console.log('\n3D — military cluster (jet.glb, per-class scale)');
     await page.evaluate(() => {
       const dm = window.__godsEyeView.dataManager;
@@ -550,6 +578,7 @@ async function main() {
       await zoomToRange(450);
       await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-military-close.png') });
       console.log('  saved b5-3d-military-close.png (450 m range: C17 left, F16 center, B744 right)');
+    }
     }
 
     record('B4: no console errors during QA run', consoleErrors.length === 0,

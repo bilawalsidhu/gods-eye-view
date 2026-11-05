@@ -1,6 +1,26 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
-export function createTesting({ state: layerState, services, parts, source }) {
+export function createTesting({
+  state: layerState,
+  services,
+  parts,
+  source,
+  rendererFactory,
+}) {
+  let testViewer;
+  function useRenderer(viewer) {
+    if (parts.renderer && testViewer === viewer) return;
+    parts.renderer?.destroy();
+    parts.renderer = rendererFactory({
+      state: layerState,
+      services,
+      parts,
+      source,
+    });
+    parts.renderer.attach(viewer);
+    testViewer = viewer;
+  }
+
   /** Test seam: republishes host entries through the real push path, so tests
    * can observe the pristine module default without touching the setter. */
 
@@ -25,7 +45,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
    */
 
   function _createCctvProjectionPlaneForTest(viewer, record) {
-    layerState._viewer = viewer;
+    useRenderer(viewer);
     const geometry =
       record.frustumGeometry ||
       parts.geometry.computeFrustumGeometry(
@@ -40,9 +60,9 @@ export function createTesting({ state: layerState, services, parts, source }) {
     const runtime = {
       cameraId: String(record.camera.id),
       planeEntity: null,
-      labelPosition: new Cesium.Cartesian3(),
+      labelPosition: geo.cartesian3.create(),
       overlayEntry: null,
-      planeMaterial: new Cesium.ColorMaterialProperty(Cesium.Color.WHITE),
+      planeMaterial: parts.renderer.createTestPlaneMaterial(),
     };
     parts.projection.createProjectionPlane(
       record,
@@ -92,7 +112,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     showProjection = false,
     healthById = new Map(),
   } = {}) {
-    layerState._viewer = viewer;
+    useRenderer(viewer);
     layerState._records = Array.isArray(records) ? records : [];
     layerState._recordById = new Map(
       layerState._records
@@ -101,7 +121,6 @@ export function createTesting({ state: layerState, services, parts, source }) {
     );
     layerState._coverageEntities = [];
     layerState._projectionEntities = [];
-    layerState._billboards = null;
     layerState._activeCameraId = activeCameraId;
     layerState._autoHopSuspended = false;
     layerState._enabled = !!enabled;
@@ -117,6 +136,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._neighborCountCache = null;
   }
   return {
+    _cctvRecordsForTest: () => layerState._records,
     _pushAmbientCardEntriesForTest,
     _setCctvOverlayHostForTest,
     _createCctvProjectionPlaneForTest,

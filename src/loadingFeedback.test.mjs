@@ -210,7 +210,11 @@ test('universal notice lifecycle clears on dispose and uses the one top-center l
   const dispose = ui.slice(disposeStart, disposeEnd);
 
   assert.match(dispose, /this\._feedback\.clearLoadingStatus\(\);/);
-  assert.match(dispose, /this\._shareRestoration\.destroy\(\)/);
+  // The globe-bound parts, share restoration included, go with the scene.
+  assert.match(dispose, /await this\.detachScene\(/);
+  const detachStart = ui.indexOf('  async _detachScene({');
+  const detach = ui.slice(detachStart, ui.indexOf('\n  }\n', detachStart));
+  assert.match(detach, /this\._shareRestoration\.destroy\(\)/);
   assert.match(ShareRestoration.prototype.destroy.toString(), /this\._shareTrackingNoticeGeneration \+= 1;/);
   assert.match(html, /<div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>/);
 });

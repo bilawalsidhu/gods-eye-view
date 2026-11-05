@@ -153,3 +153,110 @@ test('controls bind catalog instances rather than similarly named defaults', () 
     /Control layer missing/,
   );
 });
+
+test('data setup without a viewer registers an empty catalog and no sonar scene', async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  const releases = [];
+  let attached = null;
+  const { dataManager } = createApplicationData({
+    scene: { viewer: null, mapStackController: null },
+    controls: {
+      styleManager: {
+        attachDataManager(manager) {
+          attached = manager;
+        },
+      },
+    },
+    catalog: createLayerCatalog([], []),
+    defer: (release) => releases.push(release),
+  });
+  assert.equal(attached, dataManager);
+  assert.equal(dataManager.viewer, null);
+  assert.equal(dataManager.layers.size, 0);
+  assert.equal(dataManager.registrationsFinalized, true);
+  for (const release of releases.reverse()) await release();
+});
+
+test('a catalog for an engine gives stand-ins only for the layers it leaves out', () => {
+  const flights = { id: 'flights' };
+  const catalog = {
+    ...createLayerCatalog(
+      [flights],
+      [{ id: 'flights', disposition: 'enabled-only' }],
+    ),
+    unavailableMetadata: Object.keys({
+      traffic: 1,
+      military: 1,
+      satellites: 1,
+      cctv: 1,
+      'street-level': 1,
+      radio: 1,
+      bikeshare: 1,
+      transit: 1,
+      'ais-live-vessels': 1,
+      'military-awareness': 1,
+      'military-installations': 1,
+      'rocket-launches': 1,
+      'local-adsb': 1,
+    }).map((id) => ({ id })),
+  };
+  const services = catalogControlServices(catalog);
+  assert.equal(services.flightsLayer, flights);
+  assert.deepEqual(services.trafficLayer, {});
+  assert.notEqual(services.trafficLayer, services.militaryFlightsLayer);
+  const missing = {
+    ...catalog,
+    unavailableMetadata: catalog.unavailableMetadata.slice(1),
+  };
+  assert.throws(
+    () => catalogControlServices(missing),
+    /Control layer missing from catalog: traffic/,
+  );
+});
+
+test('a teardown during startup ends the wait for a stalled layer attachment', async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  const layer = {
+    id: 'slow',
+    init: () => true,
+    enable: () => true,
+    update: () => true,
+    disable: () => true,
+    destroy: () => true,
+    attachRenderer: (viewer) =>
+      viewer?.second ? new Promise(() => {}) : undefined,
+    detachRenderer() {},
+  };
+  const layerSession = { lifetime: new AbortController() };
+  const start = (viewer, signal = null) => {
+    const releases = [];
+    const data = createApplicationData({
+      scene: { viewer },
+      controls: { styleManager: { attachDataManager() {} } },
+      catalog: createLayerCatalog([layer], metadata([layer])),
+      layerSession,
+      signal,
+      defer: (release) => releases.push(release),
+    });
+    return { data, releases };
+  };
+  const first = start({ first: true });
+  assert.equal(await layerSession.manager.setEnabled('slow', true), true);
+  for (const release of first.releases.reverse()) await release();
+
+  const application = new AbortController();
+  const second = start({ second: true }, application.signal);
+  application.abort();
+  const { dataManager } = await second.data;
+  assert.equal(dataManager, layerSession.manager);
+});

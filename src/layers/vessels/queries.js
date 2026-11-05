@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t, msg } from '../../i18n/index.js';
 
 // ingestion.js is a portable export (package.json) and writes English labels
@@ -14,6 +13,7 @@ function localizeFeedLabel(raw) {
   const key = FEED_STATE_LABEL_KEYS[raw.trim()];
   return key ? t(key) : raw;
 }
+import * as geo from '../../geo/index.js';
 import {
   AIS_DEGRADED_STATUSES,
   AIS_HEALTHY_STATUSES,
@@ -333,7 +333,7 @@ export function createQueries({
           continue;
         const position = visual.billboard?.position || visual.position;
         if (!position) continue;
-        const distanceM = Cesium.Cartesian3.distance(centerCartesian, position);
+        const distanceM = geo.cartesian3.distance(centerCartesian, position);
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         entries.push({
           mmsi: record.mmsi,

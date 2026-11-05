@@ -218,6 +218,7 @@
 
 .hud-summary-wrap {
   margin-top: 6px;
+  width: 420px;
   max-width: 420px;
 }
 
@@ -229,7 +230,7 @@
 
 .hud-summary {
   margin-top: 2px;
-  min-height: 16px;
+  min-height: max(16px, 1lh);
   font-size: 11px;
   letter-spacing: 1.2px;
   opacity: 0.88;

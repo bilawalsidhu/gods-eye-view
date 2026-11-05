@@ -99,6 +99,15 @@ test('ownership: unregister removes the predicate', () => {
   assert.equal(isOwnedByOtherLayer('flights', 'station:1'), false);
 });
 
+test('engine pick results (input payloads) resolve like scene picks', () => {
+  assert.equal(
+    resolvePickId({ id: 'ae01ce', owner: 'flights-fleet', instance: 3 }),
+    'ae01ce',
+  );
+  assert.equal(resolvePickId({ id: 25544, owner: 'satellites' }), '25544');
+  assert.equal(resolvePickId({ id: undefined, owner: 'tiles' }), null);
+});
+
 function primaryPointer(t, coarse) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia');
   Object.defineProperty(globalThis, 'matchMedia', {

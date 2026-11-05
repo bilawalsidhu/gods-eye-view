@@ -17,6 +17,12 @@
  * Usage:
  *   node scripts/qa-vessel-datum.mjs
  *   node scripts/qa-vessel-datum.mjs --ports rotterdam --url http://localhost:4173
+ *   node scripts/qa-vessel-datum.mjs --engine navara --url 'http://localhost:PORT/?qaFeed=vessels:fixture'
+ *
+ * --engine cesium|navara: the engine-neutral path on either engine,
+ * through window.__godsEyeView.engine and the QA probe (layers.drawn: each
+ * chevron's drawn position and depth-test flag) instead of the Cesium
+ * viewer's primitives; the URL gets ?engine=. Without it, as before.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,6 +37,13 @@ const getOpt = (name, dflt) => {
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const PORT_KEYS = getOpt('--ports', 'rotterdam,houston').split(',').map((s) => s.trim()).filter(Boolean);
 const OUT_DIR = getOpt('--out', 'qa-shots');
+const ENGINE = getOpt('--engine', null);
+const PAGE_URL = (() => {
+  if (!ENGINE) return APP_URL;
+  const url = new URL(APP_URL);
+  url.searchParams.set('engine', ENGINE);
+  return url.href;
+})();
 
 /**
  * Camera framings match qa-vessel-cards.mjs; heightBand is the expected
@@ -132,9 +145,63 @@ function probeVessels({ portLat, portLon, nearDeg, sampleCap }) {
   };
 }
 
+/**
+ * In-page probe on either engine (the QA probe): the chevrons the layer
+ * draws, their depth-test flag and the ellipsoidal heights of those near the
+ * port.
+ */
+async function probeVesselsEngine({ portLat, portLon, nearDeg, sampleCap }) {
+  const gev = window.__godsEyeView;
+  const drawn = gev?.layers?.drawn('ais-live-vessels');
+  if (!drawn) return { error: 'vessels layer not drawn' };
+  const geo = await import('/src/geo/index.js');
+  const chevrons = drawn.chevrons;
+  let depthFreeCount = 0;
+  let depthTestedCount = 0;
+  const nearHeights = [];
+  const step = Math.max(1, Math.floor(chevrons.length / sampleCap));
+  for (let i = 0; i < chevrons.length; i += step) {
+    const row = chevrons[i];
+    if (row.depthFree) depthFreeCount += 1;
+    else depthTestedCount += 1;
+    const carto = geo.cartographic.fromCartesian(row.position);
+    if (!carto) continue;
+    const lat = geo.math.toDegrees(carto.latitude);
+    const lon = geo.math.toDegrees(carto.longitude);
+    if (Math.abs(lat - portLat) <= nearDeg && Math.abs(lon - portLon) <= nearDeg)
+      nearHeights.push(carto.height);
+  }
+  nearHeights.sort((a, b) => a - b);
+  const median = nearHeights.length ? nearHeights[Math.floor(nearHeights.length / 2)] : null;
+  return {
+    total: chevrons.length,
+    sampled: depthFreeCount + depthTestedCount,
+    depthFreeCount,
+    depthTestedCount,
+    nearCount: nearHeights.length,
+    medianHeight: median,
+    minHeight: nearHeights[0] ?? null,
+    maxHeight: nearHeights[nearHeights.length - 1] ?? null,
+  };
+}
+
+/** Frames a port through the engine (either engine). */
+async function frameEngine(p, enable) {
+  const geo = await import('/src/geo/index.js');
+  const gev = window.__godsEyeView;
+  gev.engine.camera.cancelFlight?.();
+  gev.engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(p.lon, p.lat, p.height),
+    orientation: { heading: p.heading, pitch: p.pitch, roll: 0 },
+  });
+  if (enable) await gev.dataManager.setEnabled('ais-live-vessels', true);
+  gev.engine.render.request('qa-vessel-datum');
+}
+
 async function main() {
   console.log(`\nAIS Vessel Datum — assertion harness`);
   console.log(`  App URL : ${APP_URL}`);
+  console.log(`  Engine  : ${ENGINE ?? 'viewer (Cesium)'}`);
   console.log(`  Ports   : ${PORT_KEYS.join(', ')}\n`);
 
   try {
@@ -156,7 +223,7 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--use-gl=angle',
-      '--use-angle=swiftshader',
+      '--use-angle=metal',
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
@@ -179,11 +246,15 @@ async function main() {
       await page.setViewport({ width: 1600, height: 900 });
       page.on('pageerror', (err) => console.error(`    [page-error] ${err.message}`));
 
-      await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 60000 });
+      await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      if (ENGINE)
+        await page.waitForFunction(() => !!window.__godsEyeView?.layers, { timeout: 180000 });
+      else
+        await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 60000 });
 
       // Frame the port (kill the intro flight first) and enable the layer.
-      await page.evaluate(async (p) => {
+      if (ENGINE) await page.evaluate(frameEngine, port, true);
+      else await page.evaluate(async (p) => {
         const gev = window.__godsEyeView;
         const v = gev.viewer;
         v.camera.cancelFlight?.();
@@ -208,7 +279,7 @@ async function main() {
       let probe = null;
       let settled = false;
       while (Date.now() < deadline) {
-        probe = await page.evaluate(probeVessels, probeArgs);
+        probe = await page.evaluate(ENGINE ? probeVesselsEngine : probeVessels, probeArgs);
         if (probe && !probe.error && probe.nearCount >= 3
             && probe.medianHeight !== null
             && probe.medianHeight >= port.heightBand[0]
@@ -245,7 +316,8 @@ async function main() {
 
       // Visual proof — re-assert the framing (the app's intro flight can land
       // mid-probe on slow runs), wait for the photoreal tileset, screenshot.
-      await page.evaluate((p) => {
+      if (ENGINE) await page.evaluate(frameEngine, port, false);
+      else await page.evaluate((p) => {
         const v = window.__godsEyeView.viewer;
         v.camera.cancelFlight?.();
         v.scene.tweens?.removeAll?.();
@@ -260,10 +332,17 @@ async function main() {
         });
       }, port);
       await page
-        .waitForFunction(() => window.__godsEyeView?.tileset?.tilesLoaded, { timeout: 60000, polling: 500 })
+        .waitForFunction(
+          (engineNeutral) =>
+            engineNeutral
+              ? window.__godsEyeView?.engine?.surface?.tilesLoaded?.()
+              : window.__godsEyeView?.tileset?.tilesLoaded,
+          { timeout: 60000, polling: 500 },
+          Boolean(ENGINE),
+        )
         .catch(() => console.log('    (tileset settle timeout — screenshotting anyway)'));
       await new Promise((r) => setTimeout(r, 2500));
-      const outPath = path.join(OUT_DIR, `vessel-datum-${key}.png`);
+      const outPath = path.join(OUT_DIR, `vessel-datum-${ENGINE ? `${ENGINE}-` : ''}${key}.png`);
       await page.screenshot({ path: outPath });
       console.log(`    [SHOT] ${outPath}`);
       await page.close();

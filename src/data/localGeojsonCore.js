@@ -307,6 +307,7 @@ export function createLocalGeoJsonLayer(
     icon = '📍',
     source = 'Local JSONL',
     osmDerived = false,
+    readFeatures = null,
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
@@ -584,7 +585,9 @@ export function createLocalGeoJsonLayer(
             // windows (before vs after the add settles) need different cleanup.
             let addedToScene = false;
             try {
-              let features = _cachedFeatures;
+              let features =
+                _cachedFeatures ?? (readFeatures ? await readFeatures() : null);
+              if (_destroyed) return;
               if (!features) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
@@ -1063,6 +1066,16 @@ export function createLocalGeoJsonLayer(
       viewer.scene.requestRender?.();
     },
 
+    restoreFeatureSelection(viewer, featureId) {
+      const entity = _dataSource?.entities.values.find(
+        (item) => String(item.id) === featureId,
+      );
+      if (!entity) return false;
+      viewer.selectedEntity = entity;
+      selectEntityContext(entity);
+      return true;
+    },
+
     disable: disableLayer,
 
     destroy: (viewer) => {
@@ -1131,24 +1144,24 @@ function refreshLocalTerrainFloor(viewer, record) {
   return true;
 }
 
-const groundSampleOccluder = new Cesium.EllipsoidalOccluder(
-  Cesium.Ellipsoid.WGS84,
-);
-
-const groundSampleCarto = new Cesium.Cartographic();
-const groundSampleLow = new Cesium.Cartesian3();
-const groundSampleHigh = new Cesium.Cartesian3();
+// Made on first use: on a page that starts on Navara the Cesium SDK loads
+// only with the first Cesium globe, after this module.
+let groundScratch = null;
+const groundSample = () =>
+  (groundScratch ??= {
+    occluder: new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84),
+    carto: new Cesium.Cartographic(),
+    low: new Cesium.Cartesian3(),
+    high: new Cesium.Cartesian3(),
+  });
 
 /** The record's vertical at `height` metres above the ellipsoid. */
 function groundSamplePoint(record, height, result) {
-  groundSampleCarto.longitude = record.carto.longitude;
-  groundSampleCarto.latitude = record.carto.latitude;
-  groundSampleCarto.height = height;
-  return Cesium.Cartographic.toCartesian(
-    groundSampleCarto,
-    Cesium.Ellipsoid.WGS84,
-    result,
-  );
+  const { carto } = groundSample();
+  carto.longitude = record.carto.longitude;
+  carto.latitude = record.carto.latitude;
+  carto.height = height;
+  return Cesium.Cartographic.toCartesian(carto, Cesium.Ellipsoid.WGS84, result);
 }
 
 /**
@@ -1165,6 +1178,7 @@ function groundSamplePoint(record, height, result) {
  * sees it.
  */
 function groundSampleInView(viewer, record) {
+  const scratch = groundSample();
   const camera = viewer.camera;
   const globe = viewer.scene.globe;
   const terrain = globe?.show ? globe.getHeight?.(record.carto) : undefined;
@@ -1174,15 +1188,11 @@ function groundSampleInView(viewer, record) {
   const low = groundSamplePoint(
     record,
     known ? terrain : -GROUND_SAMPLE_MAX_ABS_HEIGHT_M,
-    groundSampleLow,
+    scratch.low,
   );
   const high = known
     ? low
-    : groundSamplePoint(
-        record,
-        GROUND_SAMPLE_MAX_ABS_HEIGHT_M,
-        groundSampleHigh,
-      );
+    : groundSamplePoint(record, GROUND_SAMPLE_MAX_ABS_HEIGHT_M, scratch.high);
   // The vertical is unseen only when both ends are outside the same plane.
   const { planes } = camera.frustum.computeCullingVolume(
     camera.positionWC,
@@ -1202,9 +1212,9 @@ function groundSampleInView(viewer, record) {
   const horizonHeight = known
     ? Math.max(terrain, 0)
     : GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
-  groundSampleOccluder.cameraPosition = camera.positionWC;
-  return groundSampleOccluder.isPointVisible(
-    groundSamplePoint(record, horizonHeight, groundSampleHigh),
+  scratch.occluder.cameraPosition = camera.positionWC;
+  return scratch.occluder.isPointVisible(
+    groundSamplePoint(record, horizonHeight, scratch.high),
   );
 }
 
@@ -1313,7 +1323,7 @@ function featureLabelFromProperties(props, layerId) {
   return clampLabel(text || layerTitle(layerId));
 }
 
-function labelPriorityFromProperties(props, layerId) {
+export function labelPriorityFromProperties(props, layerId) {
   const tags = props.tags || {};
 
   let score = 0;

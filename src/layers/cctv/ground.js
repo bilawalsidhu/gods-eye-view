@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   SUPPORT_KEYS,
   planeSupportPoints,
@@ -44,7 +44,7 @@ export function createGround({ state: layerState, services, parts, source }) {
    */
 
   function currentSurfaceRegime() {
-    return surfaceRegimeKey(layerState._viewer?.scene?.globe?.show);
+    return surfaceRegimeKey(parts.renderer?.globeVisible());
   }
 
   /**
@@ -231,7 +231,7 @@ export function createGround({ state: layerState, services, parts, source }) {
       // stall a large one.
       if (!record.frustumGeometry) {
         if (record.position) {
-          Cesium.Cartesian3.fromDegrees(
+          geo.cartesian3.fromDegrees(
             record.camera.lon,
             record.camera.lat,
             record.camera.absoluteHeightM,
@@ -277,7 +277,7 @@ export function createGround({ state: layerState, services, parts, source }) {
    */
 
   function handleMapStackChanged() {
-    if (!layerState._viewer || !layerState._records.length) return;
+    if (!parts.renderer?.ready || !layerState._records.length) return;
     const regime = currentSurfaceRegime();
     if (regime === layerState._lastAppliedRegime) return;
     layerState._lastAppliedRegime = regime;

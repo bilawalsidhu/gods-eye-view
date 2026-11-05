@@ -28,7 +28,10 @@ for (const layer of LAYERS) {
   const source = readLayerSource(layer.path);
 
   test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
-    const calls = [...source.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
+    // The aircraft renderer loads through its `loadModel`, Cesium.Model.fromGltfAsync
+    // unless a test injects a loader.
+    assert.match(source, /loadModel = \(options\) => Cesium\.Model\.fromGltfAsync\(options\)/);
+    const calls = [...source.matchAll(/(?:Cesium\.Model\.fromGltfAsync|\bloadModel)\(\{([\s\S]*?)\}\)/g)];
     assert.ok(calls.length >= 3, `expected fleet, tracked, and preload model calls; found ${calls.length}`);
     for (const [index, call] of calls.entries()) {
       assert.match(call[1], /\basynchronous:\s*false\b/,

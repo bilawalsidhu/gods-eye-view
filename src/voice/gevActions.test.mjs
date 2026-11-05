@@ -3,6 +3,7 @@ import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { CCTV_FOCUS_RESULT } from '../data/cctv.js';
 import {
   getContextStore,
@@ -32,6 +33,12 @@ import {
 import { MAP_STACKS } from '../mapStackController.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
+import {
+  engineFromViewer,
+  registerViewerEngine,
+} from '../globe/cesium/engineFromViewer.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -163,6 +170,9 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       positionCartographic: Cesium.Cartographic.fromCartesian(position),
       heading: Cesium.Math.toRadians(28),
       pitch: Cesium.Math.toRadians(-45),
+      // The rest of the pose the engine camera reads (camera.pose()).
+      roll: 0,
+      frustum: { fovy: 1, aspectRatio: 1.5 },
       cancelFlight() {
         order.push('cancel');
       },
@@ -174,6 +184,11 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       lookAtTransform() {},
     },
   };
+  // A Viewer's canvas is its scene's.
+  viewer.canvas = viewer.scene.canvas;
+  // Location flights run on the globe engine registered for the viewer, as
+  // the app's scene engine is (src/app/globeEngine.js).
+  registerViewerEngine(viewer, createCesiumEngine(viewer));
   const styleManager = {
     runImmediateNavigation(noun, navigate, releaseOptions = undefined) {
       return runExplicitNavigation({
@@ -3525,6 +3540,9 @@ function createPrewarmHarness({ pickPosition, positionCartographic } = {}) {
     positionWC: position,
     heading: Cesium.Math.toRadians(28),
     pitch: Cesium.Math.toRadians(-45),
+    // The rest of the pose the engine camera reads (camera.pose()).
+    roll: 0,
+    frustum: { fovy: 1, aspectRatio: 1.5 },
     pickEllipsoid() {
       calls.pickEllipsoid += 1;
       return surface;
@@ -3561,6 +3579,8 @@ function createPrewarmHarness({ pickPosition, positionCartographic } = {}) {
       },
     },
   };
+  // A Viewer's canvas is its scene's.
+  viewer.canvas = viewer.scene.canvas;
   return {
     viewer,
     calls,
@@ -3875,7 +3895,8 @@ test('a nested Cockpit rollback result is translated too', async () => {
  * analyst's 2 000-record last-fix slice). These pin the unified engine.
  */
 function awarenessSubjectHarness({ subject, flights = [], military = [] }) {
-  const position = subject ? { __subject: true } : null;
+  // The Contacts subject sits at 29.9 N, 97.9 W, 9 000 m.
+  const position = subject ? geo.cartesian3.fromDegrees(-97.9, 29.9, 9000) : null;
   const snapshotFlights = flights.slice(0, 20_000);
   const snapshotMilitary = military.slice(0, 20_000);
   return {
@@ -3926,7 +3947,6 @@ async function withAwareness(harness, run) {
     aircraftSnapshot: awareness.getAircraftQuerySnapshot,
     flightsNearby: flightsLayer.getNearby,
     militaryNearby: militaryLayer.getNearby,
-    cartoFrom: Cesium.Cartographic.fromCartesian,
   };
   awareness.getContextSnapshot = () => harness.snapshot;
   awareness.getAircraftQuerySnapshot = () => {
@@ -3959,14 +3979,6 @@ async function withAwareness(harness, run) {
   };
   flightsLayer.getNearby = () => harness.flights.slice();
   militaryLayer.getNearby = () => harness.military.slice();
-  Cesium.Cartographic.fromCartesian = (value) =>
-    value?.__subject
-      ? {
-          latitude: Cesium.Math.toRadians(29.9),
-          longitude: Cesium.Math.toRadians(-97.9),
-          height: 9000,
-        }
-      : originals.cartoFrom(value);
   try {
     return await run(awareness);
   } finally {
@@ -3974,7 +3986,6 @@ async function withAwareness(harness, run) {
     awareness.getAircraftQuerySnapshot = originals.aircraftSnapshot;
     flightsLayer.getNearby = originals.flightsNearby;
     militaryLayer.getNearby = originals.militaryNearby;
-    Cesium.Cartographic.fromCartesian = originals.cartoFrom;
   }
 }
 
@@ -4416,7 +4427,32 @@ const testPlaceSearch = () =>
     resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__,
   });
 function createGevActionRunner(options) {
+  registerTestEngine(options.viewer);
   return createActionRunner({ placeSearch: testPlaceSearch(), ...options });
+}
+/**
+ * The runner drives the globe engine registered for its viewer, as the app's
+ * scene engine is (src/app/globeEngine.js): a test viewer gets the Cesium
+ * engine over it or, when its camera only states where it is
+ * (positionCartographic), a fake engine at that place.
+ */
+function registerTestEngine(viewer) {
+  if (!viewer || engineFromViewer(viewer)) return;
+  const camera = viewer.camera ?? {};
+  const place = Object.getOwnPropertyDescriptor(
+    camera,
+    'positionCartographic',
+  )?.value;
+  registerViewerEngine(
+    viewer,
+    !camera.positionWC && place
+      ? createFakeEngine({
+          longitude: place.longitude,
+          latitude: place.latitude,
+          altitude: place.height,
+        })
+      : createCesiumEngine(viewer),
+  );
 }
 function controlRadio(viewer, manager, args, options) {
   return runControlRadio(viewer, manager, args, {

@@ -16,21 +16,48 @@ export function initAnnotations({
   placeSearch,
   resolver,
 }) {
-  // World-space footprint draping; clamped marks can use the photoreal tiles.
-  if (tileset) {
-    try {
-      tileset.enableCollision = true;
-    } catch {
-      /* older tileset */
-    }
-  }
-  const renderer = createHybridAnnotationRenderer(viewer);
+  const engine = createSessionAnnotations({ placeSearch, resolver });
+  engine.attachScene({ viewer, tileset });
+  return engine;
+}
+
+/**
+ * The page's annotation board, kept across globe engine switches: the marks
+ * belong to the page session, their drawing to the attached globe.
+ * `attachScene({ viewer, tileset })` draws the board on a Cesium viewer;
+ * `attachScene({ engine, renderer })` on a globe engine without a viewer
+ * (Navara: src/annotations/navaraAnnotationRenderer.js, built by the caller
+ * so this module never loads it); with neither the marks stay undrawn.
+ * `detachScene()` releases the drawing and keeps the marks.
+ */
+export function createSessionAnnotations({ placeSearch, resolver }) {
   const engine = createAnnotationEngine({
-    viewer,
-    renderer,
     placeSearch,
     resolveTarget: resolver?.resolveAnnotationTarget,
   });
+  engine.attachScene = ({
+    viewer = null,
+    tileset = null,
+    engine: globe = null,
+    renderer = null,
+  } = {}) => {
+    if (!viewer && globe && renderer)
+      return engine.attachRenderer({ viewer: globe, renderer });
+    if (!viewer) return engine.detachRenderer();
+    // World-space footprint draping; clamped marks can use the photoreal tiles.
+    if (tileset) {
+      try {
+        tileset.enableCollision = true;
+      } catch {
+        /* older tileset */
+      }
+    }
+    engine.attachRenderer({
+      viewer,
+      renderer: createHybridAnnotationRenderer(viewer),
+    });
+  };
+  engine.detachScene = () => engine.detachRenderer();
   window.__gevAnnotations = engine;
   return engine;
 }

@@ -1,3 +1,4 @@
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 // The HUD's passive place lookup spends paid Google requests on its own, so
 // it must look up the view center and one more point, and only again once the
 // view shows a different area.
@@ -25,7 +26,8 @@ function createViewer({ latitude, longitude, heightM, groundM = 0 }) {
   const camera = {
     heading: 0,
     pitch: -Math.PI / 2,
-    frustum: { fov: Math.PI / 3, aspectRatio: 1.5 },
+    roll: 0,
+    frustum: { fovy: Math.PI / 3, aspectRatio: 1.5 },
     pickEllipsoid(point) {
       return Cesium.Cartesian3.fromDegrees(
         state.longitude +
@@ -63,7 +65,11 @@ function createViewer({ latitude, longitude, heightM, groundM = 0 }) {
         state.groundM,
       ),
   };
-  return { viewer: { camera, scene }, state, degreesPerPixel };
+  return {
+    viewer: createCesiumEngine({ camera, canvas, scene }),
+    state,
+    degreesPerPixel,
+  };
 }
 
 /** Answers every lookup with a label naming the point it was asked about. */

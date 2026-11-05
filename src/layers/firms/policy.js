@@ -1,6 +1,6 @@
 import { FIRMS_AMBIENT_COHORT_LIMIT } from '../../data/firmsLabels.js';
+import { rgbaFromCss } from '../shared/color.js';
 import { FRP_RAMP } from '../../data/firmsIntensity.js';
-import * as Cesium from 'cesium';
 
 /** Client poll interval; the proxy's 30 min TTL is what guards upstream quota. */
 
@@ -136,6 +136,6 @@ export const DETECTION_COLOR_STOPS = FRP_RAMP.map((stop) =>
   Object.freeze({
     name: stop.name,
     minFrp: stop.minFrp,
-    color: Cesium.Color.fromCssColorString(stop.hex),
+    color: rgbaFromCss(stop.hex),
   }),
 );

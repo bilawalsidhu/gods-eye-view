@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { LocationNavigation } from './locationNavigation.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { LayerBindings } from './layerBindings.js';
 
 function replaceWindow(t, value) {
@@ -17,11 +18,9 @@ function location(t) {
   replaceWindow(t, { setTimeout });
   const calls = [];
   let hooks;
+  const engine = createFakeEngine({ altitude: 20000000 });
   const owner = new LocationNavigation({
-    viewer: { camera: {
-      cancelFlight() {}, lookAtTransform() {},
-      positionCartographic: { latitude: 0, longitude: 0, height: 20000000 },
-    } },
+    engine,
     services: {
       OrbitController: class { stop() { calls.push('orbit-stop'); } },
       GLOBE_VIEW: { heightM: 20000000 },
@@ -160,4 +159,22 @@ test('weather shell supplies live imagery hosts to wind and observations and rel
   for (const id of ids) assert.equal(attached.get(id).imageryHost(), host);
   owner.disconnect();
   for (const id of ids) assert.equal(attached.get(id), null);
+});
+
+
+test('world focus uses the engine when the shell has no Cesium viewer', async (t) => {
+  const { requestWorldFocus } = await import('../worldFocus.js');
+  replaceWindow(t, new EventTarget());
+  const engine = createFakeEngine();
+  let target;
+  engine.camera.flyToSphere = (sphere) => { target = sphere.center; };
+  const owner = new LayerBindings({
+    viewer: null, engine, services: {}, readControls: () => ({}),
+    operations: { _runExplicitWorldFocus: (_detail, fly) => fly() },
+  });
+  owner.observeCamera();
+  const position = { x: 6378137, y: 0, z: 0 };
+  requestWorldFocus({ kind: 'vessel', id: '111', position });
+  assert.deepEqual(target, position);
+  owner.stop();
 });

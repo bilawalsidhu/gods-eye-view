@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { initDrawTool } from './drawTool.js';
+import { createSessionDrawTool, initDrawTool } from './drawTool.js';
 import {
   isPointerFree,
   pointerOwner,
@@ -68,9 +68,17 @@ class FakeElement {
   }
   closest(selector) {
     // Only what the tool asks: "am I inside an activatable control?"
-    const activatable = ['button', 'a', 'select', '[role="button"]', '[role="radio"]'];
+    const activatable = [
+      'button',
+      'a',
+      'select',
+      '[role="button"]',
+      '[role="radio"]',
+    ];
     if (!activatable.some((part) => selector.includes(part))) return null;
-    return this.tagName === 'BUTTON' || this.tagName === 'A' || this.tagName === 'SELECT'
+    return this.tagName === 'BUTTON' ||
+      this.tagName === 'A' ||
+      this.tagName === 'SELECT'
       ? this
       : null;
   }
@@ -175,7 +183,14 @@ function fakeViewer() {
 }
 
 function fakeAnnotations() {
-  const calls = { annotate: [], clear: 0, restyle: [], setHidden: [], frame: [], remove: [] };
+  const calls = {
+    annotate: [],
+    clear: 0,
+    restyle: [],
+    setHidden: [],
+    frame: [],
+    remove: [],
+  };
   const marks = [];
   const listeners = new Set();
   const changed = () => listeners.forEach((listener) => listener());
@@ -223,7 +238,7 @@ function fakeAnnotations() {
 }
 
 /** Stand up a tool against fresh doubles, with globals restored afterwards. */
-function harness({ navigation = null } = {}) {
+function harness({ navigation = null, session = false } = {}) {
   resetPointerOwnership();
   const { byId, documentDouble } = fakeDom();
   const viewer = fakeViewer();
@@ -235,8 +250,7 @@ function harness({ navigation = null } = {}) {
   const shown = { view: null };
   // The controls' actions, as the display store holds them.
   const controls = { actions: null };
-  const tool = initDrawTool({
-    viewer,
+  const options = {
     annotations,
     navigation,
     publish: (view) => (shown.view = view),
@@ -244,7 +258,11 @@ function harness({ navigation = null } = {}) {
       controls.actions = actions;
       return () => (controls.actions = null);
     },
-  });
+  };
+  const tool = session
+    ? createSessionDrawTool(options)
+    : initDrawTool({ viewer, ...options });
+  if (session) tool.attachScene({ viewer });
   return {
     tool,
     shown,
@@ -299,7 +317,11 @@ test('Draw refuses to start when something else holds the pointer', async () => 
       h.shown.view.hint,
       'Directions is using the pointer — close it first.',
     );
-    assert.equal(h.tool.diagnostics().sceneHandler, false, 'no handler was bound');
+    assert.equal(
+      h.tool.diagnostics().sceneHandler,
+      false,
+      'no handler was bound',
+    );
 
     releasePointer(other);
     h.act('toggleDraw');
@@ -341,7 +363,10 @@ test('both stock viewer click actions are borrowed for the session and given bac
     const stockClick = () => 'viewer picks and selects';
     const stockDouble = () => 'viewer tracks';
     h.viewer.screenSpaceEventHandler.setInputAction(stockClick, LEFT_CLICK);
-    h.viewer.screenSpaceEventHandler.setInputAction(stockDouble, LEFT_DOUBLE_CLICK);
+    h.viewer.screenSpaceEventHandler.setInputAction(
+      stockDouble,
+      LEFT_DOUBLE_CLICK,
+    );
 
     h.act('toggleDraw');
     assert.equal(
@@ -379,20 +404,34 @@ test('Enter finishes from the canvas and the label field, never from a focused b
     h.tool.addVertex(-97.74, 30.27);
 
     // Enter while the Clear button has keyboard focus means "press Clear".
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.element('draw-clear') });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.element('draw-clear'),
+    });
     await Promise.resolve();
     assert.equal(
       h.annotations.calls.annotate.length,
       0,
       'a focused button keeps its own Enter',
     );
-    assert.equal(h.tool.session.vertices.length, 3, 'and the shape is untouched');
+    assert.equal(
+      h.tool.session.vertices.length,
+      3,
+      'and the shape is untouched',
+    );
 
     // Enter from the page body (the canvas has focus in practice) finishes it.
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.documentDouble.body,
+    });
     await Promise.resolve();
     await Promise.resolve();
-    assert.equal(h.annotations.calls.annotate.length, 1, 'Enter on the map finishes');
+    assert.equal(
+      h.annotations.calls.annotate.length,
+      1,
+      'Enter on the map finishes',
+    );
     assert.equal(h.annotations.calls.annotate[0].specs[0].type, 'area');
   } finally {
     h.restore();
@@ -421,7 +460,10 @@ test('the live preview hangs at the height the click landed on', async () => {
 
     // …and the finished shape is still flattened, deliberately: the renderer
     // drapes, so a height carried further would be discarded out of sight.
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.documentDouble.body,
+    });
     await Promise.resolve();
     await Promise.resolve();
     const spec = h.annotations.calls.annotate[0].specs[0];
@@ -477,8 +519,16 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
       stockClick,
       'the viewer got its selecting click back',
     );
-    assert.equal(h.viewer._attached.length, 0, 'the preview data source is detached');
-    assert.equal(h.annotations.listeners.size, 0, 'and it no longer follows the board');
+    assert.equal(
+      h.viewer._attached.length,
+      0,
+      'the preview data source is detached',
+    );
+    assert.equal(
+      h.annotations.listeners.size,
+      0,
+      'and it no longer follows the board',
+    );
 
     // Idempotent: a second destroy is harmless.
     await h.tool.destroy();
@@ -497,7 +547,11 @@ test('Clear wipes the board and the shape in progress', async () => {
 
     h.act('clearDraw');
     assert.equal(h.annotations.calls.clear, 1, 'placed marks are removed');
-    assert.equal(h.tool.session.vertices.length, 0, 'and so is the shape in progress');
+    assert.equal(
+      h.tool.session.vertices.length,
+      0,
+      'and so is the shape in progress',
+    );
   } finally {
     h.restore();
   }
@@ -511,7 +565,13 @@ test('the controls choose the shape and colour the next shape is drawn with; it 
     h.act('setDrawColor', 'amber');
     assert.deepEqual(
       { ...h.shown.view, hint: undefined },
-      { active: true, shape: 'line', color: 'amber', hint: undefined, marks: [] },
+      {
+        active: true,
+        shape: 'line',
+        color: 'amber',
+        hint: undefined,
+        marks: [],
+      },
       'the view shows what the controls chose',
     );
     h.act('setDrawColor', 'purple');
@@ -523,7 +583,10 @@ test('the controls choose the shape and colour the next shape is drawn with; it 
     assert.equal(h.tool.session.vertices.length, 0);
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.documentDouble.body,
+    });
     await Promise.resolve();
     await Promise.resolve();
     const spec = h.annotations.calls.annotate[0].specs[0];
@@ -548,12 +611,31 @@ test('each drawn shape is a row whose actions reach the board, and fly-to is a n
   try {
     const board = h.annotations;
     board.marks.push(
-      { id: 'a1', type: 'route', manual: true, name: null, label: '950 m', color: 'amber', hidden: false },
-      { id: 'a2', type: 'pin', manual: false, label: 'Voice pin', color: 'primary', hidden: false },
+      {
+        id: 'a1',
+        type: 'route',
+        manual: true,
+        name: null,
+        label: '950 m',
+        color: 'amber',
+        hidden: false,
+      },
+      {
+        id: 'a2',
+        type: 'pin',
+        manual: false,
+        label: 'Voice pin',
+        color: 'primary',
+        hidden: false,
+      },
     );
     board.changed();
     assert.deepEqual(
-      h.shown.view.marks.map(({ id, placeholder, hidden }) => ({ id, placeholder, hidden })),
+      h.shown.view.marks.map(({ id, placeholder, hidden }) => ({
+        id,
+        placeholder,
+        hidden,
+      })),
       [{ id: 'a1', placeholder: 'Line · 950 m', hidden: false }],
       'only hand-drawn marks are listed, an unnamed line by its length',
     );
@@ -568,7 +650,11 @@ test('each drawn shape is a row whose actions reach the board, and fly-to is a n
     ]);
     assert.deepEqual(board.calls.setHidden, [['a1', true]]);
     assert.deepEqual(board.calls.frame, ['a1']);
-    assert.deepEqual(navigations, ['drawing'], 'fly-to goes through the navigation policy');
+    assert.deepEqual(
+      navigations,
+      ['drawing'],
+      'fly-to goes through the navigation policy',
+    );
     assert.deepEqual(board.calls.remove, ['a1']);
     assert.deepEqual(h.shown.view.marks, [], 'the row goes with its mark');
   } finally {
@@ -582,30 +668,49 @@ test('Backspace on the page removes the last vertex', () => {
     h.act('toggleDraw');
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
-    h.documentDouble.emit('keydown', { key: 'Backspace', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Backspace',
+      target: h.documentDouble.body,
+    });
     assert.equal(h.tool.session.vertices.length, 1);
   } finally {
     h.restore();
   }
 });
 
-test('keys on the shape list are the list\'s, not the drawing\'s', async () => {
+test("keys on the shape list are the list's, not the drawing's", async () => {
   const h = harness();
   try {
     const listButton = new FakeElement('BUTTON');
-    listButton.closest = (selector) => (selector === '#draw-mark-list' ? {} : null);
+    listButton.closest = (selector) =>
+      selector === '#draw-mark-list' ? {} : null;
     const elsewhere = new FakeElement('INPUT', 'location-search');
     h.act('toggleDraw');
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
     h.documentDouble.emit('keydown', { key: 'Escape', target: listButton });
-    assert.equal(h.tool.session.vertices.length, 2, 'Escape in the list keeps the shape');
+    assert.equal(
+      h.tool.session.vertices.length,
+      2,
+      'Escape in the list keeps the shape',
+    );
     assert.equal(h.tool.active, true, 'and keeps Draw on');
     h.documentDouble.emit('keydown', { key: 'Enter', target: elsewhere });
     await Promise.resolve();
-    assert.equal(h.annotations.calls.annotate.length, 0, 'another field keeps its Enter');
-    h.documentDouble.emit('keydown', { key: 'Escape', target: h.documentDouble.body });
-    assert.equal(h.tool.session.vertices.length, 0, 'Escape on the page drops the open shape');
+    assert.equal(
+      h.annotations.calls.annotate.length,
+      0,
+      'another field keeps its Enter',
+    );
+    h.documentDouble.emit('keydown', {
+      key: 'Escape',
+      target: h.documentDouble.body,
+    });
+    assert.equal(
+      h.tool.session.vertices.length,
+      0,
+      'Escape on the page drops the open shape',
+    );
   } finally {
     h.restore();
   }
@@ -630,5 +735,38 @@ test('a page without the Draw controls gets no draw tool', () => {
   } finally {
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
+  }
+});
+
+test('an engine switch ends an open sketch and keeps the chosen shape and colour', async () => {
+  const h = harness({ session: true });
+  try {
+    const handle = h.tool;
+    assert.equal(globalThis.window.__gevDrawTool, handle);
+    h.act('setDrawShape', 'line');
+    h.act('setDrawColor', 'amber');
+    h.act('toggleDraw');
+    assert.equal(pointerOwner(), 'draw');
+    assert.equal(handle.active, true);
+
+    await handle.detachScene();
+    assert.equal(isPointerFree(), true, 'the sketch gave the pointer back');
+    assert.equal(handle.active, false);
+    assert.equal(handle.attached, false);
+    assert.equal(h.controls.actions, null, 'no viewer answers the controls');
+    assert.equal(globalThis.window.__gevDrawTool, handle);
+
+    handle.attachScene({ viewer: fakeViewer() });
+    assert.equal(handle.attached, true);
+    assert.equal(handle.shape, 'line');
+    assert.equal(handle.color, 'amber');
+    assert.equal(h.shown.view.shape, 'line');
+    h.act('toggleDraw');
+    assert.equal(handle.active, true);
+    await handle.destroy();
+    assert.equal(isPointerFree(), true);
+    assert.equal(globalThis.window.__gevDrawTool, undefined);
+  } finally {
+    h.restore();
   }
 });

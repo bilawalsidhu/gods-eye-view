@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -113,9 +114,16 @@ test('civilian and military click handlers apply duration only at the deselect b
     readLayerSource(new URL('./flights.js', import.meta.url)),
     readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
   ];
-  for (const source of sources) {
-    assert.match(source, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);
-    assert.match(source, /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/);
+  // Flights and military use the selection dispatcher, whose
+  // source applies the same two rules: the selection gesture before a
+  // select, the full click classifier before the empty-space deselect, which
+  // each layer answers with a user-origin clear.
+  const dispatcher = readFileSync(new URL('./selectionDispatcher.js', import.meta.url), 'utf8');
+  assert.match(dispatcher, /if \(!isTrackingSelectionGesture\(gesture\)\) return;[\s\S]+onSelect/);
+  assert.match(dispatcher, /if \(!isTrackingClickGesture\(gesture\)\) return;\s*for \(const owner of \[\.\.\.owners\.values\(\)\]\.filter\(plain\)\)\s*owner\.onEmptyClick/);
+  for (const [layer, source] of [['flights', sources[0]], ['military', sources[1]]]) {
+    assert.match(source, new RegExp(`dispatcher\\.register\\('${layer}', \\{[\\s\\S]+onEmptyClick: _onEmptyClick`));
+    assert.match(source, /function _onEmptyClick\(\) \{[\s\S]+?_clearTracking\(false, \{ origin: 'user' \}\)/);
   }
   assert.doesNotMatch(
     sources[0],

@@ -1,5 +1,6 @@
 /** Session-local geodata loading with bounded geometry and local-only file references. */
 import * as Cesium from 'cesium';
+import { cesiumSdkReady, loadCesiumSdk } from '../app/loadCesium.js';
 import { createImportImageBudget } from './geoImportImages.js';
 import { createImportedPins } from './geoImportPins.js';
 import { msg } from '../i18n/marker.js';
@@ -1197,14 +1198,16 @@ function checkLocalImages(doc, entries = new Map(), main = '') {
 
 // Cesium also processes KML in deferred tasks; an exception there does not
 // reject its load promise. Keep a failed file from blocking the serial queue.
-async function loadKml(doc, viewer, signal) {
+// The camera and canvas only feed network links, which sanitizing removed; a
+// globe engine without a Cesium camera (Navara) passes its canvas alone.
+async function loadKml(doc, { viewer, engine }, signal) {
   let removeError;
   try {
     return await boundedImport(
       Promise.race([
         Cesium.KmlDataSource.load(doc, {
-          camera: viewer.scene.camera,
-          canvas: viewer.scene.canvas,
+          camera: viewer?.scene.camera,
+          canvas: viewer?.scene.canvas ?? engine?.host.canvas,
           clampToGround: true,
         }),
         new Promise((_, reject) => {
@@ -1225,7 +1228,7 @@ async function loadKml(doc, viewer, signal) {
 // Resolve a static file's ground pins in batches before they are visualized.
 // Per-billboard CLAMP_TO_GROUND subscriptions scale poorly on large imports.
 const groundPins = new WeakMap();
-async function settleGroundPins(dataSource, viewer, signal) {
+async function settleGroundPins(dataSource, { viewer, engine }, signal) {
   let pins = groundPins.get(dataSource);
   if (!pins) {
     pins = [];
@@ -1264,6 +1267,31 @@ async function settleGroundPins(dataSource, viewer, signal) {
       ({ cartographic: c }) =>
         new Cesium.Cartographic(c.longitude, c.latitude, 0),
     );
+    // A globe engine without a viewer: its terrain under each pin.
+    if (!viewer && engine) {
+      for (let i = 0; i < batch.length; i++) {
+        const item = batch[i];
+        const sampled = engine.surface.terrainHeightSupported
+          ? engine.surface.terrainHeight(positions[i])
+          : undefined;
+        const ground = Number.isFinite(sampled)
+          ? sampled
+          : (item.groundHeight ?? 0);
+        item.groundHeight = ground;
+        const height = ground + item.offset;
+        item.entity.position =
+          Math.abs(height - item.cartographic.height) < 1e-6
+            ? item.original
+            : Cesium.Cartesian3.fromRadians(
+                item.cartographic.longitude,
+                item.cartographic.latitude,
+                height,
+              );
+      }
+      if (at + batch.length < pins.length)
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      continue;
+    }
     const mesh =
       viewer.scene?.globe?.show === false &&
       viewer.scene?.clampToHeightSupported;
@@ -1359,14 +1387,18 @@ async function boundedImport(promise, signal) {
  * Load a ground footprint, retaining explicit KML altitude modes. Call mount after
  * adding the source; revoke owns pin and blob cleanup.
  * @param {File|Blob & {name?: string}} file
- * @param {{viewer: Cesium.Viewer, color?: string}} options `color` is a CSS color.
+ * @param {{viewer?: Cesium.Viewer, engine?: object, color?: string}} options
+ *   `color` is a CSS color. Without a viewer, `engine` (a globe engine:
+ *   Navara) supplies the ground under the pins, and the pins stay entities
+ *   for that engine's own drawing (src/layers/shared/render/navaraStory.js).
  * @returns {Promise<{dataSource: Cesium.DataSource, name: string,
  *   format: string, entityCount: number, removed: number, mount: Function, revoke: Function}>}
  */
 export async function loadGeoFile(
   file,
-  { viewer, color = '#39d0ff', signal } = {},
+  { viewer = null, engine = null, color = '#39d0ff', signal } = {},
 ) {
+  const globe = { viewer, engine };
   signal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(60_000)])
     : AbortSignal.timeout(60_000);
@@ -1385,6 +1417,9 @@ export async function loadGeoFile(
     throw new GeoImportError(
       msg('Only GeoJSON, KML, KMZ and GPX files can be imported.'),
     );
+  // The import builds Cesium data sources on either globe: a Navara page
+  // loads the Cesium SDK first.
+  if (!cesiumSdkReady()) await boundedImport(loadCesiumSdk(), signal);
   const stroke = Cesium.Color.fromCssColorString(color);
   const urls = [];
   let pins;
@@ -1449,7 +1484,7 @@ export async function loadGeoFile(
       deduplicateKmlStyles(doc);
       const normalizedSize = countKmlGeometry(doc);
       if (normalizedSize.over) throw overLimitError(normalizedSize);
-      dataSource = await loadKml(doc, viewer, signal);
+      dataSource = await loadKml(doc, globe, signal);
     }
   } catch (error) {
     revoke();
@@ -1488,7 +1523,7 @@ export async function loadGeoFile(
   }
   scrubImportedEntities(dataSource);
   try {
-    await settleGroundPins(dataSource, viewer, signal);
+    await settleGroundPins(dataSource, globe, signal);
   } catch (error) {
     revoke();
     throw error instanceof GeoImportError
@@ -1501,7 +1536,9 @@ export async function loadGeoFile(
   // already been stripped and all supported geometries are static.
   detachImportedTime(dataSource);
   try {
-    pins = createImportedPins(dataSource, viewer);
+    pins = viewer
+      ? createImportedPins(dataSource, viewer)
+      : { mount() {}, sync() {}, destroy() {} };
   } catch {
     revoke();
     throw new GeoImportError(msg('That file has invalid point graphics.'));
@@ -1519,7 +1556,7 @@ export async function loadGeoFile(
     refreshGround: (refreshSignal) =>
       settleGroundPins(
         dataSource,
-        viewer,
+        globe,
         refreshSignal
           ? AbortSignal.any([refreshSignal, AbortSignal.timeout(15_000)])
           : AbortSignal.timeout(15_000),

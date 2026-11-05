@@ -45,11 +45,7 @@ export class DisplayBindings {
   _initUI() {
     const { cycleDetectionMode, isScopeMaskEnabled } = this.services;
     this._applicationShortcuts?.destroy();
-    this._frameRateMonitor?.destroy();
-    this._frameRateMonitor = createFrameRateMonitor({
-      viewer: this.viewer,
-      documentRef: document,
-    });
+    this.attachViewer(this.viewer);
     this._applicationShortcuts = bindApplicationShortcuts({
       documentRef: document,
       searchInput: this._locationSearch,
@@ -170,6 +166,18 @@ export class DisplayBindings {
       setModelsMode: (mode) => this._setModels3dMode(mode),
     });
     this._detachDisplayControls = () => store.detach(token);
+  }
+  /**
+   * Count the frames of another viewer (an engine switch), or none. The
+   * shortcuts and the Display controls stay bound.
+   */
+  attachViewer(viewer) {
+    this.viewer = viewer ?? null;
+    this._frameRateMonitor?.destroy();
+    this._frameRateMonitor = createFrameRateMonitor({
+      viewer: this.viewer,
+      documentRef: document,
+    });
   }
   destroy() {
     this._applicationShortcuts?.destroy();

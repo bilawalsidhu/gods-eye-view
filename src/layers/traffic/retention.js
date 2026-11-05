@@ -12,11 +12,12 @@ export function roadIdentity(road) {
 /** Retain one road and its dot population across tile and surface publications. */
 export function createRetention({ state, parts }) {
   const records = new Map();
-  const heightStep = new Cesium.Cartesian3();
-  const screenFrom = new Cesium.Cartesian2();
-  const screenTo = new Cesium.Cartesian2();
-  const eye = new Cesium.Cartesian3();
+  const heightStep = { x: 0, y: 0, z: 0 };
+  const screenFrom = { x: 0, y: 0 };
+  const screenTo = { x: 0, y: 0 };
+  const eye = { x: 0, y: 0, z: 0 };
   function projectSafely(scene, point, screen) {
+    if (scene.project) return Boolean(scene.project(point, screen));
     if (scene.camera.viewMatrix) {
       Cesium.Matrix4.multiplyByPoint(scene.camera.viewMatrix, point, eye);
       if (eye.z >= -(scene.camera.frustum?.near || 0)) return false;
@@ -50,7 +51,7 @@ export function createRetention({ state, parts }) {
   };
   function pump() {
     timer = null;
-    if (!state._enabled) return;
+    if (!state._enabled || !state._pointCollection) return;
     let budget = DOT_CHANGE_BUDGET;
     let pending = false;
     const now = Date.now();
@@ -189,11 +190,35 @@ export function createRetention({ state, parts }) {
     if (!state._dots.length && timer === null) pump();
     else schedule();
   }
+  /**
+   * Re-allocate the published roads' dot budgets from their current flow.
+   * Flow that lands after a publication changes each road's density (slow and
+   * jammed roads carry more vehicles); recoloring alone kept the budgets the
+   * roads had while their flow was cleared for the refresh.
+   */
+  function retarget() {
+    const wanted = [];
+    for (const record of records.values()) {
+      if (!record.wanted) continue;
+      record.road.flow = record.road.source.flow;
+      wanted.push(record.road);
+    }
+    if (!wanted.length) return;
+    const budgets = parts.model.allocateRoadDotBudgets(
+      wanted,
+      altitude,
+      roadDotBudget(altitude),
+    );
+    for (let i = 0; i < wanted.length; i++)
+      records.get(wanted[i].key).target = budgets[i];
+    schedule();
+  }
   function easeHeights(dt) {
     const blend = Math.min(1, dt * 12);
-    const scene = state._viewer?.scene;
+    const scene = state._trafficScene?.() ?? state._viewer?.scene;
     const canProject =
-      scene?.canvas?.clientHeight && scene.camera && scene.frameState;
+      scene?.canvas?.clientHeight &&
+      (scene.project || (scene.camera && scene.frameState));
     state._heightPending = false;
     for (let r = 0; r < state._roads.length; r++) {
       const road = state._roads[r];
@@ -276,5 +301,13 @@ export function createRetention({ state, parts }) {
     state._populationPending = false;
     state._heightPending = false;
   }
-  return { reconcile, easeHeights, finishHeights, clear, refreshCounts };
+  return {
+    reconcile,
+    retarget,
+    easeHeights,
+    finishHeights,
+    clear,
+    refreshCounts,
+    resume: schedule,
+  };
 }

@@ -1,4 +1,11 @@
-import * as Cesium from 'cesium';
+export {
+  GROUND_FLOOR_WARM_MAX_ALT_M,
+  POSITION_HISTORY_LIMIT,
+  LANDED_MISSING_POLL_LIMIT,
+  MISSING_POLL_LIMIT,
+  ERROR_BACKOFF_INTERVAL,
+} from './recordPolicy.js';
+import { constantRgba, nearFarScale, rgbaFromCss } from '../shared/color.js';
 import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 /**
@@ -26,18 +33,17 @@ import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 export const BILLBOARD_SCALE = 0.7;
 
-/** @constant {Cesium.Color} Default amber tint for untracked military billboards */
+/** @constant {import('../shared/color.js').Rgba} Default amber tint for untracked military billboards */
 
-export const MIL_ICON_COLOR = Cesium.Color.fromCssColorString('#FFB800');
+export const MIL_ICON_COLOR = Object.freeze(rgbaFromCss('#FFB800'));
 
-/** @constant {Cesium.Color} Lighter amber tint applied to the actively tracked aircraft */
+/** @constant {import('../shared/color.js').Rgba} Lighter amber tint applied to the actively tracked aircraft */
 
-export const TRACKED_ICON_COLOR = Cesium.Color.fromCssColorString('#FFD166');
+export const TRACKED_ICON_COLOR = Object.freeze(rgbaFromCss('#FFD166'));
 
 /** @constant {Cesium.Color} Red tint for aircraft broadcasting an emergency (mirror of flights) */
 
-export const EMERGENCY_ICON_COLOR =
-  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
+export const EMERGENCY_ICON_COLOR = rgbaFromCss(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03; mirror of flights.js) ---------------
 // adsb.lol/readsb flags ground traffic with alt_baro === "ground" (no separate
@@ -148,15 +154,17 @@ export const MODEL_BELLY_OFFSET_NATIVE = 5.631;
 
 /** Amber fade target for the tracked billboard once the model takes over (mirrors flights.js CYAN_TRANSPARENT). */
 
-export const AMBER_TRANSPARENT = MIL_ICON_COLOR.withAlpha(0);
+export const AMBER_TRANSPARENT = constantRgba(
+  MIL_ICON_COLOR.red,
+  MIL_ICON_COLOR.green,
+  MIL_ICON_COLOR.blue,
+  0,
+);
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
-export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
-  1000,
-  3.0,
-  8000000,
-  0.5,
+export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze(
+  nearFarScale(1000, 3.0, 8000000, 0.5),
 );
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,9 @@
 import * as Cesium from 'cesium';
+import {
+  SENTINEL2_CREDIT,
+  SENTINEL2_MAX_ZOOM,
+  SENTINEL2_URL,
+} from './sentinel2.js';
 
 // Attribution and service rights are documented in DATA_SOURCES.md.
 export const ESRI_ATTRIBUTION_HTML =
@@ -32,6 +37,26 @@ export function createIonImagery(style, accessToken) {
     return createBingIonImagery(style, accessToken);
   }
   return Cesium.IonImageryProvider.fromAssetId(style, { accessToken });
+}
+
+/**
+ * The imagery factory a globe stack descriptor names: ion styles, OSM, or
+ * Esri. Shared by the default map sources and the Cesium globe engine.
+ * @param {{ kind: string, style?: number }} descriptor
+ * @param {string} [ionToken]
+ * @returns {(request?: { signal?: AbortSignal }) => object | Promise<object>}
+ */
+export function imageryFactoryFor(descriptor, ionToken = '') {
+  if (descriptor.kind === 'sentinel2')
+    return () =>
+      new Cesium.UrlTemplateImageryProvider({
+        url: SENTINEL2_URL,
+        maximumLevel: SENTINEL2_MAX_ZOOM,
+        credit: new Cesium.Credit(SENTINEL2_CREDIT, true),
+      });
+  if (descriptor.kind === 'ion')
+    return () => createIonImagery(descriptor.style, ionToken);
+  return descriptor.kind === 'osm' ? createOsmImagery : createEsriImagery;
 }
 
 async function createBingIonImagery(style, accessToken) {

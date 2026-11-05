@@ -67,37 +67,46 @@ const PREVIEW = DRAW_COLOR_CSS;
  * through the actions it gives `connect`, which returns their disconnect.
  * A row's fly-to is an immediate navigation through `navigation`, like
  * Import's, so Cockpit can refuse it and a running orbit or follow lets go.
- * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
+ * The globe it draws on is a Cesium `viewer` or a draw `surface` factory
+ * (`surface({ session, cursor })`: the input and preview of a globe without
+ * a viewer, src/annotations/drawInputNavara.js), which gets the open shape
+ * and the rubber band's end as live getters.
+ * @param {{viewer?: Cesium.Viewer, surface?: Function, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
  * @returns {{destroy: Function}|null}
  */
 export function initDrawTool({
-  viewer,
+  viewer = null,
+  surface: makeSurface = null,
   annotations,
   navigation = null,
   publish = () => {},
   connect = () => () => {},
+  initialShape = 'area',
+  initialColor = 'primary',
 }) {
   // A page without the Draw controls (the Display controls view omitted) has
   // no draw tool.
-  if (!viewer || !annotations || !document.getElementById('draw-toggle'))
+  if (
+    (!viewer && !makeSurface) ||
+    !annotations ||
+    !document.getElementById('draw-toggle')
+  )
     return null;
 
   let active = false;
   let destroyed = false;
   let session = null;
-  let shape = 'area';
-  let color = 'primary';
+  let shape = normalizeShape(initialShape);
+  let color = DRAW_COLORS.includes(initialColor) ? initialColor : 'primary';
   let hint = '';
-  let handler = null;
   let lease = null;
-  let savedDoubleClick = null;
-  let savedSingleClick = null;
-  let cursor = null; // last mouse position on the canvas, for the rubber band
+  // The last pointer position on the globe ({ lon, lat, height }), for the
+  // rubber band.
+  let cursor = null;
   // Bumped by anything that supersedes an in-flight finish: cancelling, clearing
   // the board, leaving draw mode, teardown. An `annotate()` that resolves after
   // one of those must not write its outcome over the newer state.
   let generation = 0;
-  const previewEntities = [];
   // Every DOM listener this tool adds (the session's keydown), so teardown is
   // one loop rather than a list that can fall out of step with the bindings.
   const domListeners = [];
@@ -106,14 +115,11 @@ export function initDrawTool({
     domListeners.push([target, type, listener, options]);
   };
 
-  const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
-  // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
-  // remove a source that had not been attached yet and leave the attachment to
-  // land afterwards — a preview data source nobody owns. Chain the removal onto
-  // the attachment instead of racing it.
-  let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
-    () => null,
-  );
+  // The globe's input and preview: Cesium's here, or the surface's.
+  const live = { session: () => session, cursor: () => cursor };
+  const surface = makeSurface
+    ? makeSurface(live)
+    : cesiumDrawSurface(viewer, live);
 
   const present = () =>
     publish({
@@ -136,75 +142,14 @@ export function initDrawTool({
   });
 
   // ---- preview ---------------------------------------------------------
-  const vertexPositions = () =>
-    session.vertices.map((v) =>
-      Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height || 0),
-    );
-  const previewLine = dataSource.entities.add({
-    show: false,
-    polyline: {
-      positions: new Cesium.CallbackProperty(() => {
-        if (!session) return [];
-        const pts = vertexPositions();
-        if (cursor && session.shape !== 'pin') pts.push(cursor);
-        if (session.shape === 'area' && pts.length >= 3) pts.push(pts[0]);
-        return pts;
-      }, false),
-      width: 3,
-      material: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.9),
-        dashLength: 16,
-      }),
-      depthFailMaterial: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.35),
-        dashLength: 16,
-      }),
-      clampToGround: false,
-    },
-  });
   const syncPreview = () => {
     if (destroyed) return;
-    previewEntities.forEach((e) => dataSource.entities.remove(e));
-    previewEntities.length = 0;
-    if (!session) {
-      previewLine.show = false;
-      setHint(() => drawHint(null));
-      viewer.scene.requestRender();
-      return;
-    }
-    const stroke = Cesium.Color.fromCssColorString(
-      PREVIEW[color] || PREVIEW.primary,
-    );
-    previewLine.polyline.material = new Cesium.PolylineDashMaterialProperty({
-      color: stroke.withAlpha(0.9),
-      dashLength: 16,
-    });
-    previewLine.show = session.shape !== 'pin';
-    for (const v of session.vertices) {
-      previewEntities.push(
-        dataSource.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height || 0),
-          point: {
-            pixelSize: 8,
-            color: stroke,
-            outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
-            outlineWidth: 2,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-        }),
-      );
-    }
+    surface.sync(session, color);
     setHint(() => drawHint(session));
-    viewer.scene.requestRender();
   };
 
   // ---- vertices from clicks --------------------------------------------
-  const worldAt = (position) => {
-    const canvas = viewer.scene.canvas;
-    const w = canvas.clientWidth || canvas.width || 1;
-    const h = canvas.clientHeight || canvas.height || 1;
-    return pickWorldFromScreen(viewer, position.x / w, position.y / h);
-  };
+  const worldAt = (position) => surface.pick(position);
   const onClick = (event) => {
     if (!session || destroyed) return;
     const p = worldAt(event.position);
@@ -229,10 +174,8 @@ export function initDrawTool({
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
     const p = worldAt(event.endPosition);
-    cursor = p
-      ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0)
-      : null;
-    viewer.scene.requestRender();
+    cursor = p ? { lon: p.lon, lat: p.lat, height: p.height || 0 } : null;
+    surface.moved();
   };
 
   // ---- finish / cancel -------------------------------------------------
@@ -313,7 +256,7 @@ export function initDrawTool({
     )
       return false;
     return (
-      t === document.body || t === viewer.scene.canvas || t.tagName === 'CANVAS'
+      t === document.body || t === surface.canvas || t.tagName === 'CANVAS'
     );
   };
   const onKey = (event) => {
@@ -384,49 +327,19 @@ export function initDrawTool({
   }
 
   function bindSceneHandler() {
-    if (handler) return;
-    handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction(onClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    handler.setInputAction(onMove, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-    handler.setInputAction(() => {
-      void finish();
-    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-    // Cesium's Viewer binds BOTH stock click actions on its own handler: the
-    // single click picks an entity into `viewer.selectedEntity`, the double
-    // click tracks it. Neither goes through a layer, so neither can be fixed by
-    // the shared pointer claim — they have to be borrowed outright for the
-    // session and given back on the way out. Borrowing the single click is what
-    // stops a vertex placed on a contact from also selecting it.
-    const stock = viewer.screenSpaceEventHandler;
-    savedSingleClick =
-      stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null;
-    savedDoubleClick =
-      stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
-      null;
-    stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    if (surface.bound()) return;
+    surface.bind({
+      click: onClick,
+      move: onMove,
+      doubleClick: () => {
+        void finish();
+      },
+    });
     listen(document, 'keydown', onKey, true);
   }
 
   function releaseSceneHandler() {
-    if (handler) {
-      handler.destroy();
-      handler = null;
-    }
-    if (savedSingleClick) {
-      viewer.screenSpaceEventHandler.setInputAction(
-        savedSingleClick,
-        Cesium.ScreenSpaceEventType.LEFT_CLICK,
-      );
-      savedSingleClick = null;
-    }
-    if (savedDoubleClick) {
-      viewer.screenSpaceEventHandler.setInputAction(
-        savedDoubleClick,
-        Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-      );
-      savedDoubleClick = null;
-    }
+    surface.unbind();
     // Drop the keydown listener bound alongside this handler.
     for (let i = domListeners.length - 1; i >= 0; i -= 1) {
       const [target, type, listener, options] = domListeners[i];
@@ -494,6 +407,9 @@ export function initDrawTool({
     get shape() {
       return shape;
     },
+    get color() {
+      return color;
+    },
     get session() {
       return session;
     },
@@ -523,34 +439,19 @@ export function initDrawTool({
       return {
         active,
         destroyed,
-        sceneHandler: Boolean(handler),
         domListeners: domListeners.length,
-        previewDataSources: countPreviewDataSources(viewer),
-        previewEntities: destroyed ? 0 : dataSource.entities.values.length,
         pointerOwner: pointerOwner(),
-        // The viewer's OWN click actions. While a session is open both are
-        // borrowed (absent here); after it closes both are back. A harness can
-        // compare the restored functions by identity with what it captured
-        // before, which is the only way to prove they were given back rather
-        // than replaced.
-        stockSingleClick: Boolean(
-          viewer.screenSpaceEventHandler?.getInputAction?.(
-            Cesium.ScreenSpaceEventType.LEFT_CLICK,
-          ),
-        ),
-        stockDoubleClick: Boolean(
-          viewer.screenSpaceEventHandler?.getInputAction?.(
-            Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-          ),
-        ),
+        // The globe's handler, preview and (Cesium) the viewer's OWN click
+        // actions: see the surface's diagnostics.
+        ...surface.diagnostics({ destroyed }),
       };
     },
     /** Resolves once every deferred teardown step has run. */
     whenSettled() {
-      return attaching;
+      return surface.settled();
     },
     destroy() {
-      if (destroyed) return attaching;
+      if (destroyed) return surface.settled();
       // Supersede any finish still in flight before anything is torn down.
       generation += 1;
       if (active) setActive(false);
@@ -564,11 +465,182 @@ export function initDrawTool({
       for (const [target, type, listener, options] of domListeners.splice(0)) {
         target.removeEventListener(type, listener, options);
       }
+      // The preview leaves once the globe's pending attachment has landed.
+      const settled = surface.destroy();
+      document.body.classList.remove('gev-drawing');
+      hint = '';
+      present();
+      if (window.__gevDrawTool === api) delete window.__gevDrawTool;
+      return settled;
+    },
+  };
+  window.__gevDrawTool = api;
+  return api;
+}
+
+/**
+ * The Draw tool's input and preview on a Cesium viewer: a dashed rubber band
+ * and a dot per vertex in a preview data source, and a ScreenSpaceEventHandler
+ * for clicks, moves and the double click. Cesium's Viewer binds BOTH stock
+ * click actions on its own handler (select, track); they are borrowed while a
+ * sketch is open and given back on the way out.
+ */
+function cesiumDrawSurface(viewer, live) {
+  const previewEntities = [];
+  const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
+  // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
+  // remove a source that had not been attached yet and leave the attachment to
+  // land afterwards — a preview data source nobody owns. Chain the removal onto
+  // the attachment instead of racing it.
+  let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
+    () => null,
+  );
+  let handler = null;
+  let savedSingleClick = null;
+  let savedDoubleClick = null;
+  const toCartesian = (v) =>
+    Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height || 0);
+  const previewLine = dataSource.entities.add({
+    show: false,
+    polyline: {
+      positions: new Cesium.CallbackProperty(() => {
+        const session = live.session();
+        if (!session) return [];
+        const pts = session.vertices.map(toCartesian);
+        const cursor = live.cursor();
+        if (cursor && session.shape !== 'pin') pts.push(toCartesian(cursor));
+        if (session.shape === 'area' && pts.length >= 3) pts.push(pts[0]);
+        return pts;
+      }, false),
+      width: 3,
+      material: new Cesium.PolylineDashMaterialProperty({
+        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.9),
+        dashLength: 16,
+      }),
+      depthFailMaterial: new Cesium.PolylineDashMaterialProperty({
+        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.35),
+        dashLength: 16,
+      }),
+      clampToGround: false,
+    },
+  });
+  return {
+    canvas: viewer.scene.canvas,
+    /** The world point under a canvas position, or null. */
+    pick(position) {
+      const canvas = viewer.scene.canvas;
+      const w = canvas.clientWidth || canvas.width || 1;
+      const h = canvas.clientHeight || canvas.height || 1;
+      return pickWorldFromScreen(viewer, position.x / w, position.y / h);
+    },
+    /** Show the open shape (null: none) in `color`. */
+    sync(session, color) {
+      previewEntities.forEach((e) => dataSource.entities.remove(e));
+      previewEntities.length = 0;
+      if (!session) {
+        previewLine.show = false;
+        viewer.scene.requestRender();
+        return;
+      }
+      const stroke = Cesium.Color.fromCssColorString(
+        PREVIEW[color] || PREVIEW.primary,
+      );
+      previewLine.polyline.material = new Cesium.PolylineDashMaterialProperty({
+        color: stroke.withAlpha(0.9),
+        dashLength: 16,
+      });
+      previewLine.show = session.shape !== 'pin';
+      for (const v of session.vertices) {
+        previewEntities.push(
+          dataSource.entities.add({
+            position: toCartesian(v),
+            point: {
+              pixelSize: 8,
+              color: stroke,
+              outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+              outlineWidth: 2,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          }),
+        );
+      }
+      viewer.scene.requestRender();
+    },
+    /** The rubber band's end moved (read live by the preview line). */
+    moved() {
+      viewer.scene.requestRender();
+    },
+    bound: () => Boolean(handler),
+    bind({ click, move, doubleClick }) {
+      if (handler) return;
+      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      handler.setInputAction(click, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      handler.setInputAction(move, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+      handler.setInputAction(
+        doubleClick,
+        Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+      );
+      // Neither stock action goes through a layer, so neither can be fixed by
+      // the shared pointer claim — they are borrowed outright for the session.
+      // Borrowing the single click is what stops a vertex placed on a contact
+      // from also selecting it.
+      const stock = viewer.screenSpaceEventHandler;
+      savedSingleClick =
+        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null;
+      savedDoubleClick =
+        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
+        null;
+      stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    },
+    unbind() {
+      if (handler) {
+        handler.destroy();
+        handler = null;
+      }
+      if (savedSingleClick) {
+        viewer.screenSpaceEventHandler.setInputAction(
+          savedSingleClick,
+          Cesium.ScreenSpaceEventType.LEFT_CLICK,
+        );
+        savedSingleClick = null;
+      }
+      if (savedDoubleClick) {
+        viewer.screenSpaceEventHandler.setInputAction(
+          savedDoubleClick,
+          Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+        );
+        savedDoubleClick = null;
+      }
+    },
+    diagnostics: ({ destroyed }) => ({
+      sceneHandler: Boolean(handler),
+      previewDataSources: countPreviewDataSources(viewer),
+      previewEntities: destroyed ? 0 : dataSource.entities.values.length,
+      // The viewer's OWN click actions. While a session is open both are
+      // borrowed (absent here); after it closes both are back. A harness can
+      // compare the restored functions by identity with what it captured
+      // before, which is the only way to prove they were given back rather
+      // than replaced.
+      stockSingleClick: Boolean(
+        viewer.screenSpaceEventHandler?.getInputAction?.(
+          Cesium.ScreenSpaceEventType.LEFT_CLICK,
+        ),
+      ),
+      stockDoubleClick: Boolean(
+        viewer.screenSpaceEventHandler?.getInputAction?.(
+          Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+        ),
+      ),
+    }),
+    /** Resolves once every deferred teardown step has run. */
+    settled: () => attaching,
+    destroy() {
       previewEntities.length = 0;
       dataSource.entities.removeAll();
       // Wait for the pending add() before removing: a destroy() in the same
-      // tick as init would otherwise remove nothing and let the attachment land
-      // behind it.
+      // tick as init would otherwise remove nothing and let the attachment
+      // land behind it.
       attaching = attaching.then(() => {
         try {
           viewer.dataSources.remove(dataSource, true);
@@ -576,15 +648,119 @@ export function initDrawTool({
           /* viewer already disposed — nothing to detach from */
         }
       });
-      document.body.classList.remove('gev-drawing');
-      hint = '';
-      present();
-      if (window.__gevDrawTool === api) delete window.__gevDrawTool;
       return attaching;
     },
   };
-  window.__gevDrawTool = api;
-  return api;
+}
+
+/**
+ * The Draw control for the page session. The marks live on the annotation
+ * board and the chosen shape and colour here; the drawing tool itself (its
+ * preview, click handler and Escape/Enter keys) belongs to the attached
+ * globe. `attachScene({ viewer, navigation })` starts the tool on a Cesium
+ * viewer, `attachScene({ surface, navigation })` on a globe without one
+ * (Navara: src/annotations/drawInputNavara.js), with the shape and colour
+ * last chosen; `detachScene()` ends it, an open shape included. Without a
+ * globe the controls answer nothing. Same handle as initDrawTool's
+ * (`window.__gevDrawTool`), kept across switches.
+ */
+export function createSessionDrawTool({
+  annotations,
+  navigation = null,
+  publish = () => {},
+  connect = () => () => {},
+}) {
+  if (!annotations || !document.getElementById('draw-toggle')) return null;
+  let inner = null;
+  let shape = 'area';
+  let color = 'primary';
+  let destroyed = false;
+  let settled = Promise.resolve();
+  const detachScene = () => {
+    if (!inner) return settled;
+    shape = inner.shape;
+    color = inner.color;
+    const previous = inner;
+    inner = null;
+    settled = previous.destroy();
+    if (window.__gevDrawTool === previous) window.__gevDrawTool = wrapper;
+    return settled;
+  };
+  const wrapper = {
+    get active() {
+      return inner?.active ?? false;
+    },
+    get shape() {
+      return inner?.shape ?? shape;
+    },
+    get color() {
+      return inner?.color ?? color;
+    },
+    get session() {
+      return inner?.session ?? null;
+    },
+    get attached() {
+      return Boolean(inner);
+    },
+    setActive: (next) => inner?.setActive(next) ?? false,
+    setShape(next) {
+      shape = normalizeShape(next);
+      inner?.setShape(next);
+    },
+    setColor(next) {
+      color = DRAW_COLORS.includes(next) ? next : 'primary';
+      inner?.setColor(next);
+    },
+    marks: () => presentDrawMarks(annotations.list?.() || []),
+    flyToMark: (id) => inner?.flyToMark(id) ?? false,
+    addVertex: (...args) => inner?.addVertex(...args) ?? false,
+    finish: () => inner?.finish() ?? Promise.resolve(null),
+    cancel: () => inner?.cancel(),
+    clearAll: () => (inner ? inner.clearAll() : annotations.clear?.()),
+    shapes: DRAW_SHAPES,
+    diagnostics: () =>
+      inner?.diagnostics() ?? {
+        active: false,
+        destroyed,
+        sceneHandler: false,
+        domListeners: 0,
+        previewDataSources: 0,
+        previewEntities: 0,
+        pointerOwner: pointerOwner(),
+      },
+    whenSettled: () => inner?.whenSettled() ?? settled,
+    attachScene({
+      viewer = null,
+      surface = null,
+      navigation: next = navigation,
+    } = {}) {
+      if (destroyed) return;
+      detachScene();
+      navigation = next;
+      if (!viewer && !surface) return;
+      inner = initDrawTool({
+        viewer,
+        surface,
+        annotations,
+        navigation,
+        publish,
+        connect,
+        initialShape: shape,
+        initialColor: color,
+      });
+      window.__gevDrawTool = wrapper;
+    },
+    detachScene,
+    destroy() {
+      if (destroyed) return settled;
+      const done = detachScene();
+      destroyed = true;
+      if (window.__gevDrawTool === wrapper) delete window.__gevDrawTool;
+      return done;
+    },
+  };
+  window.__gevDrawTool = wrapper;
+  return wrapper;
 }
 
 /** How many draw previews are attached — more than one means a leaked tool. */

@@ -1,4 +1,7 @@
 {
+  "Experimental Navara engine": "實驗性 Navara 引擎",
+  "Loading the experimental Navara engine...": "正在載入實驗性 Navara 引擎...",
+  "Globe Engine": "地球渲染引擎",
   "Pick a shape, then click the map.": "先選擇形狀，再在地圖上點擊。",
   "Enter to place the pin, Esc to cancel.": "按 Enter 放置圖釘，按 Esc 取消。",
   "Click where the pin goes.": "點擊圖釘的放置位置。",
@@ -1692,6 +1695,7 @@
     "other": "{count} 個文件無法添加（{name}：{error}）"
   },
   "Some KML content was left out.": "部分 KML 內容未被導入。",
+  "Map objects this engine leaves out of {name}: {count}.": "此引擎未顯示的 {name} 地圖對象：{count}。",
   "Press on the ground, not the sky": "請按在地面，而不是天空",
   "Drag to size the box": "拖動以調整框選大小",
   "light {source} to use your {name} key": "開啟 {source} 以使用你的 {name} 密鑰",

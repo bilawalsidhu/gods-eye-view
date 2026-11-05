@@ -47,6 +47,22 @@ function fixture(t) {
   return { controls, requests };
 }
 
+test('settled CCTV sync chip does not mutate occluder attributes on polling', (t) => {
+  const { controls } = fixture(t);
+  const publish = t.mock.method(controls.statusStore, 'publishCctv');
+  const settled = { active: false, total: 25, loaded: 25 };
+  controls._updateCctvSyncChip(settled, true);
+  const count = publish.mock.callCount();
+  controls._updateCctvSyncChip(settled, true);
+  assert.equal(publish.mock.callCount(), count);
+  controls._publishCctvChip({ visible: true });
+  controls._updateCctvSyncChip(settled, false);
+  assert.equal(controls._cctvChip.visible, false);
+  const hidden = publish.mock.callCount();
+  controls._updateCctvSyncChip(settled, false);
+  assert.equal(publish.mock.callCount(), hidden);
+});
+
 test('a late image completion cannot replace a newer camera preview', (t) => {
   const { controls, requests } = fixture(t);
   controls._queueCctvFrame('first.jpg', 'a', true);

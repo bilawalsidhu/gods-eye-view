@@ -5,20 +5,25 @@ import { governorRequestRender } from '../renderGovernor.js';
 export const MAXIMUM_ZOOM_DISTANCE_M = 40_000_000;
 /** Below this, oblique browsing is left alone. */
 export const PITCH_CLAMP_MIN_HEIGHT_M = 300_000;
+// Plain numbers: on a page that starts on Navara the Cesium SDK loads only
+// with the first Cesium globe, after this module (src/app/loadCesium.js).
+const RADIANS_PER_DEGREE = Math.PI / 180;
 /** Look this far below the Earth's limb, so the globe stays on screen. */
-export const LIMB_MARGIN_RAD = Cesium.Math.toRadians(8);
+const LIMB_MARGIN_RAD = 8 * RADIANS_PER_DEGREE;
 const PITCH_EASE = 0.35;
-const PITCH_SNAP_RAD = Cesium.Math.toRadians(0.1);
+const PITCH_SNAP_RAD = 0.1 * RADIANS_PER_DEGREE;
 const HEIGHT_EPSILON_M = 0.0001;
 const EARTH_RADIUS_M = 6_371_000;
-const INPUT_BINDINGS = Object.values(Cesium.CameraEventType).flatMap((type) =>
-  [undefined, ...Object.values(Cesium.KeyboardEventModifier)].map(
-    (modifier) => ({
-      type,
-      modifier,
-    }),
-  ),
-);
+let bindings = null;
+const inputBindings = () =>
+  (bindings ??= Object.values(Cesium.CameraEventType).flatMap((type) =>
+    [undefined, ...Object.values(Cesium.KeyboardEventModifier)].map(
+      (modifier) => ({
+        type,
+        modifier,
+      }),
+    ),
+  ));
 
 /**
  * The shallowest pitch (radians, negative is down) that still keeps the Earth
@@ -44,7 +49,7 @@ function matchesZoomBinding(bindings, type, modifier) {
 function readInput(aggregator, bindings) {
   let outward = false;
   let cancel = false;
-  for (const { type, modifier } of INPUT_BINDINGS) {
+  for (const { type, modifier } of inputBindings()) {
     if (!aggregator.isMoving(type, modifier)) continue;
     const movement = aggregator.getMovement(type, modifier);
     const pinch = type === Cesium.CameraEventType.PINCH;
@@ -215,7 +220,7 @@ export function installZoomOutGuard(
   const removePostUpdate = scene.postUpdate.addEventListener(() => {
     followCeiling();
     if (
-      INPUT_BINDINGS.some(({ type, modifier }) =>
+      inputBindings().some(({ type, modifier }) =>
         aggregator.isMoving(type, modifier),
       )
     )

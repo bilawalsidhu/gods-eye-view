@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { whenCesiumSdk } from '../../app/loadCesium.js';
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFraming } from './cameraFraming.js';
@@ -71,6 +72,7 @@ export function createStreetLevelLayer({
     isAvailable: (entry) => providerAvailable(entry),
   });
 
+  let waitingForView = false;
   let notifyQueued = false;
   function notify() {
     if (notifyQueued) return;
@@ -96,11 +98,17 @@ export function createStreetLevelLayer({
       getFilter: () => resolveFilter(state.filter),
       /** The layer and this provider's switch are both on. */
       isActive: () => state.enabled && entry.on,
+      waitingForView: () => waitingForView,
       notify,
       actions: {
-        /** `{frame: false}` opens it without moving the camera. */
+        /**
+         * `{frame: false}` opens it without moving the camera. A provider
+         * switched off (or a layer turned off) answers late: ignored.
+         */
         openImage: (imageId, options) =>
-          openImage(entry.def.id, imageId, options),
+          state.enabled && entry.on
+            ? openImage(entry.def.id, imageId, options)
+            : Promise.resolve(false),
         /** This provider's image nearest a point the user picked on the map. */
         openNearest: (point) =>
           layer.openNearest(point, {
@@ -113,6 +121,8 @@ export function createStreetLevelLayer({
          */
         reportError: (message) => {
           if (message) {
+            // Another source owns the panel now; its late failure is not news.
+            if (!state.enabled || !entry.on) return;
             state.street.error = entry.reportedError = message;
           } else {
             if (!entry.reportedError) return;
@@ -187,6 +197,7 @@ export function createStreetLevelLayer({
     const ready = state.enabled && groundClickHeightOk(state.viewer);
     if (
       state.enabled &&
+      state.viewer &&
       !ready &&
       groundRetries < GROUND_RETRY_LIMIT &&
       groundUnderCamera(state.viewer) === null
@@ -257,19 +268,20 @@ export function createStreetLevelLayer({
 
   /** Ground under the screen centre; null for sky, undefined when it cannot aim. */
   function screenCentreGround() {
-    const canvas = state.viewer?.scene?.canvas;
+    const canvas =
+      state.viewer?.engine?.host.canvas ?? state.viewer?.scene?.canvas;
     const pick = state.services.scenePick?.pickGroundPosition;
     if (!pick || !canvas?.clientWidth || !canvas?.clientHeight)
       return undefined;
-    const position = pick(state.viewer, {
-      x: canvas.clientWidth / 2,
-      y: canvas.clientHeight / 2,
-    });
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
+    const center = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
+    const position = state.viewer.engine
+      ? state.viewer.engine.picker.pickGlobe(center)
+      : pick(state.viewer, center);
+    const carto = position && geo.cartographic.fromCartesian(position);
     return carto
       ? {
-          lon: Cesium.Math.toDegrees(carto.longitude),
-          lat: Cesium.Math.toDegrees(carto.latitude),
+          lon: geo.math.toDegrees(carto.longitude),
+          lat: geo.math.toDegrees(carto.latitude),
         }
       : null;
   }
@@ -477,26 +489,80 @@ export function createStreetLevelLayer({
       };
     },
 
-    init(viewer) {
-      state.viewer = viewer;
-      parts.marker.ensure(viewer);
-      parts.marker.setVisible(false);
-      for (const entry of state.providers.values()) {
-        entry.instance.init(viewer);
-        checkStatus(entry);
-      }
-      console.log('[Data:StreetLevel] Initialized');
+    init(viewer, options) {
+      this.attachRenderer(viewer, options);
+      for (const entry of state.providers.values()) checkStatus(entry);
     },
-
-    enable(viewer) {
-      state.enabled = true;
-      state.viewer = viewer;
-      parts.marker.setVisible(true);
-      parts.selection.install(viewer);
-      for (const entry of activeEntries()) activate(entry);
-      watchCamera(viewer);
-      remeasureGround();
-      notify();
+    attachRenderer(
+      viewer,
+      { engine = null, waitForCameraRestore = false } = {},
+    ) {
+      const map = viewer ?? services.nativeRenderer?.(engine);
+      state.viewer = map;
+      waitingForView = waitForCameraRestore;
+      if (!map) return;
+      parts.marker.ensure(map);
+      parts.marker.setVisible(state.enabled);
+      for (const entry of state.providers.values()) {
+        entry.instance.init(map);
+        if (state.enabled && entry.on) {
+          entry.instance.activate(map);
+          entry.instance.repaintMap?.();
+          if (providerAvailable(entry)) parts.credits.show(map, entry.def);
+        }
+      }
+      if (state.enabled) {
+        parts.selection.install(map);
+        watchCamera(map);
+        parts.marker.set(
+          state.street.position,
+          state.street.bearing,
+          state.providers.get(state.street.providerId)?.def.marker,
+        );
+        remeasureGround();
+      }
+    },
+    resumeViewport() {
+      if (!waitingForView) return;
+      waitingForView = false;
+      if (state.enabled && state.viewer) {
+        for (const entry of activeEntries()) entry.instance.refreshCoverage?.();
+        remeasureGround();
+      }
+    },
+    detachRenderer() {
+      const map = state.viewer;
+      if (!map) return;
+      waitingForView = true;
+      removeCameraListener?.();
+      removeCameraListener = null;
+      cancelGroundRetry();
+      parts.framing.cancel();
+      parts.selection.uninstall();
+      for (const entry of state.providers.values()) {
+        if (entry.instance.detachMap) entry.instance.detachMap();
+        else if (entry.on) entry.instance.deactivate();
+      }
+      parts.marker.destroy(map);
+      parts.credits.hideAll(map);
+      unsubscribeMapStack?.();
+      unsubscribeMapStack = null;
+      mapStack = null;
+      state.viewer = null;
+    },
+    enable(viewer, { signal } = {}) {
+      // The marker, cones, coverage and ground picks use Cesium's math and
+      // primitives on either globe: a Navara page loads the Cesium SDK first.
+      return whenCesiumSdk(() => {
+        state.enabled = true;
+        if (viewer) state.viewer = viewer;
+        parts.marker.setVisible(true);
+        parts.selection.install(state.viewer);
+        for (const entry of activeEntries()) activate(entry);
+        watchCamera(state.viewer);
+        remeasureGround();
+        notify();
+      }, signal);
     },
 
     disable() {
@@ -518,7 +584,8 @@ export function createStreetLevelLayer({
       return state.enabled;
     },
 
-    destroy(viewer = state.viewer) {
+    destroy() {
+      const viewer = state.viewer;
       layer.disable();
       for (const entry of state.providers.values())
         entry.instance.destroy(viewer);

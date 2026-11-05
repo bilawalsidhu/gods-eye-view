@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { appClock } from '../../time/clock.js';
+import { CYAN } from '../shared/color.js';
 import { gstime } from 'satellite.js';
 import { ISS_NORAD, POSITION_UPDATE_MS, RING_ROTATION_MS } from './policy.js';
 
@@ -7,6 +9,7 @@ export function createRendering({
   services,
   parts,
   source,
+  getRenderer,
 }) {
   const {
     focusNowMs,
@@ -42,39 +45,22 @@ export function createRendering({
     const sat = layerState._catalog.get(noradId);
     if (!sat || !layerState._viewer) return;
 
-    const bakeDate = new Date();
+    const bakeDate = new Date(appClock.now());
     const basePositions = parts.orbits.computeOrbitPath(sat.satrec, bakeDate);
     if (basePositions.length < 2) return;
 
-    const pathColor = color || Cesium.Color.CYAN;
+    const pathColor = color || CYAN;
 
-    const primitive = new Cesium.Primitive({
-      geometryInstances: new Cesium.GeometryInstance({
-        geometry: new Cesium.PolylineGeometry({
-          positions: basePositions,
-          width: noradId === ISS_NORAD ? 2.5 : 2.0,
-          vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
-        }),
-        attributes: {
-          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-            pathColor.withAlpha(0.6),
-          ),
-          depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(
-            pathColor.withAlpha(0.35),
-          ),
-        },
-      }),
-      appearance: new Cesium.PolylineColorAppearance({ translucent: true }),
-      depthFailAppearance: new Cesium.PolylineColorAppearance({
-        translucent: true,
-      }),
-      asynchronous: false, // build this frame — no async-rebuild blink window
-      allowPicking: false, // ring clicks fall through to satellites/deselect
+    const primitive = getRenderer().createOrbit({
+      positions: basePositions,
+      width: noradId === ISS_NORAD ? 2.5 : 2.0,
+      color: pathColor,
     });
-    layerState._viewer.scene.primitives.add(primitive);
 
     layerState._orbitPaths.set(noradId, {
       primitive,
+      basePositions,
+      color: pathColor,
       // Same Date object as computeOrbitPath's internal fixedGmst → identical
       // GMST value (gstime is pure), so delta starts at exactly 0 and the
       // initial identity modelMatrix is correct until the first ring tick.
@@ -120,6 +106,7 @@ export function createRendering({
         nowDate,
         path.primitive.modelMatrix,
       );
+      getRenderer().commitOrbit(path.primitive);
     }
   }
 
@@ -130,8 +117,7 @@ export function createRendering({
   function _hideOrbitPath(noradId) {
     const path = layerState._orbitPaths.get(noradId);
     if (path) {
-      if (layerState._viewer)
-        layerState._viewer.scene.primitives.remove(path.primitive); // remove() destroys
+      if (layerState._viewer) getRenderer().removeOrbit(path.primitive); // remove() destroys
       layerState._orbitPaths.delete(noradId);
     }
   }
@@ -143,7 +129,7 @@ export function createRendering({
    */
 
   function _propagateAll() {
-    const now = new Date();
+    const now = new Date(appClock.now());
     let updated = 0;
 
     for (const [noradId, sat] of layerState._catalog) {
@@ -151,7 +137,7 @@ export function createRendering({
       const pos = parts.orbits.propagatePosition(sat.satrec, now);
       if (!pos) continue;
 
-      const cartesian = Cesium.Cartesian3.fromDegrees(
+      const cartesian = geo.cartesian3.fromDegrees(
         pos.longitude,
         pos.latitude,
         pos.altitude,
@@ -211,7 +197,7 @@ export function createRendering({
       layerState._params.showOrbits &&
       now - layerState._lastRingRotation >= RING_ROTATION_MS
     ) {
-      _updateOrbitPathRotations(new Date(now));
+      _updateOrbitPathRotations(new Date(appClock.now()));
       layerState._lastRingRotation = now;
     }
   }
@@ -236,13 +222,9 @@ export function createRendering({
       previousActiveCount: layerState._activeFocusCount,
       nowMs,
       screenPositionFor: (position) =>
-        Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          position,
-          layerState._scratchFocusScreen,
-        ),
+        getRenderer().project(position, layerState._scratchFocusScreen),
       cameraDistanceFor: (position) =>
-        Cesium.Cartesian3.distance(camera.positionWC, position),
+        geo.cartesian3.distance(camera.positionWC, position),
       baseColorFor: (noradId) =>
         parts.controls._pointStyleFor(
           noradId,

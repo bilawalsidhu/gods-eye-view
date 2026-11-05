@@ -8,7 +8,10 @@ import {
   photoImages,
   THUMB_HOST,
 } from '../../scripts/fixtures/street-level/mapillaryGraph.mjs';
-import { redact } from '../../scripts/qa-browserEvidence.mjs';
+import {
+  redact,
+  isExpectedPreviewSetupError,
+} from '../../scripts/qa-browserEvidence.mjs';
 import {
   answerKartaViewRequest,
   describeKartaViewCall,
@@ -406,4 +409,42 @@ test('KartaView fixtures filter like KartaView: PNG tiles by view and upload dat
   assert.ok(panos.length > 0);
   assert.ok(panos.every((record) => record.projection === 'SPHERE'));
   assert.deepEqual(search('&startDate=2099-01-01'), []);
+});
+
+test('preview setup API 404 is expected only with explicit preview mode', () => {
+  const message = {
+    type: () => 'error',
+    text: () =>
+      'Failed to load resource: the server responded with a status of 404 (Not Found)',
+    location: () => ({ url: 'http://127.0.0.1:4195/api/setup/status' }),
+  };
+  const options = { preview: true, baseUrl: 'http://127.0.0.1:4195/' };
+  assert.equal(isExpectedPreviewSetupError(message, options), true);
+  assert.equal(
+    isExpectedPreviewSetupError(message, { ...options, preview: false }),
+    false,
+  );
+});
+
+test('preview mode never waives other errors, origins, paths or missing locations', () => {
+  const options = { preview: true, baseUrl: 'http://127.0.0.1:4195/' };
+  for (const [text, url] of [
+    ['Failed to load resource: 404', 'http://127.0.0.1:4195/api/flights'],
+    ['Failed to load resource: 404', 'https://example.com/api/setup/status'],
+    ['Failed to load resource: 500', 'http://127.0.0.1:4195/api/setup/status'],
+    ['Unhandled TypeError: 404', 'http://127.0.0.1:4195/api/setup/status'],
+    ['Failed to load resource: 404', undefined],
+  ]) {
+    assert.equal(
+      isExpectedPreviewSetupError(
+        {
+          type: () => 'error',
+          text: () => text,
+          location: () => ({ url }),
+        },
+        options,
+      ),
+      false,
+    );
+  }
 });

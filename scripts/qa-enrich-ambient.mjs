@@ -28,15 +28,15 @@
  *   E3 requests  : the sweep requested all 12 hexes, each exactly once
  *   E4 diversity : ≥5 distinct glyph data-URIs displayed ambiently after
  *                  enrichment (expected: 8)
- *   E5 glyphs    : every billboard's image === aircraftIcon(classify(typeCode))
+ *   E5 glyphs    : exact classified silhouette at its registered 64/192 px raster
  *   E6 scales    : every billboard's scale === CLASS_SCALE_2D[klass]
  *   E7 bounds    : ≤4 concurrent requests, ≥185 ms between dispatches (≤5/s
  *                  drip), total ≤300 (budget ceiling)
  *   E8 next poll : another poll neither reverts glyphs nor re-requests hexes
  *   E10 exhaust  : the ROLLING ambient budget exhausts — new on-screen planes
- *                  stop being requested once the bucket is empty (shrunk via
- *                  the __GEV_ENRICH_AMBIENT_QA seam; a real 5-min window can't
- *                  be waited out headlessly)
+ *                  stop at the real 300-token initial ceiling; the QA seam
+ *                  shortens only the refill window (a real 5-min window
+ *                  cannot be waited out headlessly)
  *   E11 resume   : after a refill window passes, ambient enrichment RESUMES
  *                  for the still-unrequested planes (the 2026-07-03 field bug:
  *                  the old one-shot session cap never refilled, so hours-long
@@ -66,9 +66,14 @@ const getOpt = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 
-const APP_URL = getOpt('--url', 'http://localhost:4173');
+const BASE_URL = getOpt('--url', 'http://localhost:4173');
+// --engine=cesium|navara: Navara reads the layer through the QA
+// probe (window.__godsEyeView.layers.drawn) and moves the engine camera.
+const ENGINE = (argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=cesium').slice(9);
+const APP_URL =
+  ENGINE === 'cesium' ? BASE_URL : `${BASE_URL.replace(/\/$/, '')}/?engine=${ENGINE}`;
 const HEADFUL = getFlag('--headful');
-const SHOT_DIR = path.resolve('qa-shots/enrich-ambient');
+const SHOT_DIR = path.resolve(ENGINE === 'cesium' ? 'qa-shots/enrich-ambient' : `qa-shots/enrich-ambient-${ENGINE}`);
 
 // Client-side bounds under test (flights.js constants):
 const MAX_INFLIGHT = 4;        // ENRICH_MAX_INFLIGHT
@@ -76,13 +81,13 @@ const DISPATCH_GAP_MS = 200;   // ENRICH_DISPATCH_GAP_MS (≤5 req/s)
 const GAP_TOLERANCE_MS = 15;   // clock-quantization allowance on the gap check
 const SESSION_CAP = 300;       // ENRICH_AMBIENT_BUDGET_CEIL (rolling-bucket ceiling)
 
-// Rolling-budget QA seam (window.__GEV_ENRICH_AMBIENT_QA in flights.js):
-// shrunk so the exhaust→refill cycle is observable headlessly. windowMs starts
+// Rolling-budget QA seam: exercise the real initial ceiling and shorten
+// only the refill window so the exhaust→refill cycle is observable. windowMs starts
 // effectively-infinite (1 h) so E10 exhausts deterministically (no refill can
 // land mid-phase); E11 then shortens it in-page so refill windows have
-// "passed" and the bucket refills (clamped at ceil). ceil=20 leaves 8 tokens
-// after the 12 baseline planes — E10's batch exhausts those 8 and stalls.
-const BUDGET_QA = { ceil: 20, refillTokens: 6, windowMs: 3600000 };
+// "passed" and the bucket refills (clamped at ceil). The initial production
+// ceiling of 300 is exercised without assuming the override resets state.
+const BUDGET_QA = { ceil: SESSION_CAP, refillTokens: 6, windowMs: 3600000 };
 const RESUME_WINDOW_MS = 1000; // E11 swaps windowMs to this to unlock refills
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -160,6 +165,9 @@ const expected = new Map(Object.entries(TYPES).map(([hex, tc]) => [
   hex, classifyAircraft(tc ? { typeCode: tc } : { category: 0 }),
 ]));
 const AIRLINER_ICON = aircraftIcon(classifyAircraft({ category: 0 })); // pre-enrichment default
+// Adaptive raster resolution preserves the classified silhouette. Compare
+// exact registered assets at either supported resolution, never another class.
+const matchesClassIcon = (image, klass) => image === aircraftIcon(klass) || image === aircraftIcon(klass, 192);
 
 // ---------------------------------------------------------------------------
 async function main() {
@@ -185,7 +193,7 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--use-gl=angle',
-      '--use-angle=swiftshader',
+      `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -208,6 +216,7 @@ async function main() {
 
     // ---- Fetch shim: synthetic fleet + instrumented, holdable adsbdb -------
     await page.evaluateOnNewDocument((spec) => {
+      localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
       window.__ENR = spec;
       window.__ENR.epochMs = Date.now();
       // Rolling-budget QA seam — must exist BEFORE flights.js initializes so
@@ -289,15 +298,24 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
+      () => window.__godsEyeView && window.__godsEyeView.engine && window.__godsEyeView.dataManager && window.__godsEyeView.layers,
       { timeout: 60000, polling: 200 }
     );
+    await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise);
+    await page.waitForFunction(() => document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 180000 });
+    await page.evaluate(() => window.__godsEyeView.styleManager.orbitController.stop());
     console.log('  App globals ready.');
 
     // ---- In-page billboard probe (same walk as qa-sprites-b5.mjs) ----------
     await page.evaluate(() => {
       window.__collectBillboards = function () {
         const v = window.__godsEyeView.viewer;
+        // Without a viewer (Navara): what the flights layer draws, through
+        // the engine-neutral probe.
+        if (!v)
+          return (window.__godsEyeView.layers.drawn('flights') ?? [])
+            .filter((row) => !row.trackedModel)
+            .map(({ id, image, scale, show }) => ({ id, image, scale, show }));
         const out = [];
         const walk = (coll) => {
           const n = coll.length;
@@ -321,12 +339,12 @@ async function main() {
     // framing the fleet when the layer polls — otherwise the frustum test
     // (correctly) skips off-screen planes.
     const centerLon = ROW_LON0 + ((SPEC.planes.length - 1) / 2) * ROW_STEP_DEG;
-    await page.evaluate(({ lat, lon, height }) => {
-      const v = window.__godsEyeView.viewer;
-      v.camera.cancelFlight(); // the boot fly-to-Austin otherwise stomps setView
-      const C3 = v.camera.position.constructor;
-      v.camera.setView({
-        destination: C3.fromDegrees(lon, lat, height),
+    await page.evaluate(async ({ lat, lon, height }) => {
+      const camera = window.__godsEyeView.engine.camera;
+      camera.cancelFlight(); // the boot fly-to-Austin otherwise stomps setView
+      const geo = await import('/src/geo/index.js');
+      camera.setView({
+        destination: geo.cartesian3.fromDegrees(lon, lat, height),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     }, { lat: ROW_LAT, lon: centerLon, height: 20000 });
@@ -334,8 +352,9 @@ async function main() {
     console.log('Priming straight-flight history through the render delay (30 s)...');
     const primed = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
+      const v = window.__godsEyeView.viewer ?? null;
       window.__ENR.timeOffsetSec = -32;
+      dm.setLayerParams('flights', { models3d: false }); // ambient budget excludes model-priority enrichment
       await dm.setEnabled('flights', true);
       const fl = dm.layers.get('flights').module;
       for (const off of [-24, -16, -8, 0]) {
@@ -344,11 +363,11 @@ async function main() {
       }
       window.__ENR.timeOffsetSec = 0;
       window.__ENR_DRIVER = setInterval(() => { fl.update(v); }, 15000);
-      return { count: fl.getStats().count, starts: window.__ENRICH_LOG.starts.length };
+      return { count: fl.getStats().count, starts: window.__ENRICH_LOG.starts.length, models3d: fl.getParams().models3d };
     });
     console.log(`  flights count=${primed.count} | adsbdb requests started (held): ${primed.starts}`);
     record('E1 ingest: all synthetic category-0 planes in the flights layer',
-      primed.count === SPEC.planes.length, `count=${primed.count}/${SPEC.planes.length}`);
+      primed.count === SPEC.planes.length && primed.models3d === false, `count=${primed.count}/${SPEC.planes.length}, ambient-only models3d=${primed.models3d}`);
     if (primed.count === 0) { finish(); return; }
 
     // ========================================================================
@@ -414,12 +433,11 @@ async function main() {
     const scaleBad = [];
     for (const [hex, klass] of expected) {
       const bb = afterById.get(hex);
-      const wantImg = aircraftIcon(klass);
       const wantScale = CLASS_SCALE_2D[klass] || 1;
-      if (!bb || bb.image !== wantImg) glyphBad.push(`${hex}(${klass})${bb ? ':wrong-image' : ':missing'}`);
+      if (!bb || !matchesClassIcon(bb.image, klass)) glyphBad.push(`${hex}(${klass})${bb ? ':wrong-image' : ':missing'}`);
       if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${hex}: ${bb.scale} != ${wantScale}`);
     }
-    record('E5 glyphs: every billboard matches aircraftIcon(classify(typeCode))',
+    record('E5 glyphs: every billboard matches its classified 64/192 px asset',
       glyphBad.length === 0, glyphBad.length ? glyphBad.join(' ') : `${expected.size} matched (incl. the found:false miss staying airliner)`);
     record('E6 scales: every billboard has its per-class CLASS_SCALE_2D',
       scaleBad.length === 0, scaleBad.length ? scaleBad.join(' ') : 'all scales exact (composes with scaleByDistance)');
@@ -456,7 +474,7 @@ async function main() {
     console.log('\nE8 — next poll after enrichment');
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
+      const v = window.__godsEyeView.viewer ?? null;
       await dm.layers.get('flights').module.update(v);
     });
     await sleep(500);
@@ -468,7 +486,7 @@ async function main() {
     const pollBad = [];
     for (const [hex, klass] of expected) {
       const bb = afterPollById.get(hex);
-      if (!bb || bb.image !== aircraftIcon(klass)) pollBad.push(`${hex}(${klass})${bb ? ':reverted' : ':missing'}`);
+      if (!bb || !matchesClassIcon(bb.image, klass)) pollBad.push(`${hex}(${klass})${bb ? ':reverted' : ':missing'}`);
       else if (Math.abs(bb.scale - (CLASS_SCALE_2D[klass] || 1)) > 1e-9) pollBad.push(`${hex}:scale-reverted`);
     }
     const noReRequests = afterPoll.starts === Object.keys(TYPES).length;
@@ -480,20 +498,19 @@ async function main() {
     // E10 — rolling-budget exhaustion (2026-07-03 field bug, red/green): the
     // old ONE-SHOT session cap burned out and never refilled, so every new
     // region after the first polls showed airliner monoculture. With the seam
-    // ceil=20 and 12 tokens spent above, only 8 remain — a batch of 26 fresh
-    // on-screen planes must stall at exactly 8 new requests, and further polls
+    // initial ceiling=300 and 12 tokens spent above, 288 remain. More than
+    // 300 total candidates must stall at exactly 300 requests; further polls
     // must enqueue NOTHING while the bucket is empty (windowMs is 1 h here, so
-    // no refill can land mid-phase). Pre-fix code fails this phase: there is
-    // no rolling bucket to exhaust (the seam is unread and the 300 cap simply
-    // admits the whole batch).
+    // no refill can land mid-phase). E10 verifies the initial limit; E11
+    // distinguishes a rolling refill from the old one-shot session cap.
     // ========================================================================
-    console.log('\nE10 — rolling budget exhausts (batch of 26 new planes, 8 tokens left)');
-    const BATCH_COUNT = 26;
-    const batchHexes = Array.from({ length: BATCH_COUNT }, (_, i) => `ab00${(i + 1).toString(16).padStart(2, '0')}`);
+    console.log('\nE10 — rolling budget exhausts (real 300-request initial bucket)');
+    const BATCH_COUNT = BUDGET_QA.ceil + 26;
+    const batchHexes = Array.from({ length: BATCH_COUNT }, (_, i) => (0xab0000 + i + 1).toString(16).padStart(6, '0'));
     const startsBeforeBatch = await page.evaluate(() => window.__ENRICH_LOG.starts.length);
     await page.evaluate(async ({ hexes, rowLat, rowLon0, stepDeg }) => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer;
+      const v = window.__godsEyeView.viewer ?? null;
       // Two fresh rows just north of the original one — still inside the
       // top-down 20 km frame, so the sweep's frustum test keeps them.
       // STATIONARY (speed 0): moving planes drift north out of the frustum at
@@ -506,33 +523,47 @@ async function main() {
           lat0: rowLat + (i < 13 ? 0.02 : 0.04),
           courseDeg: 0,
           speedMps: 0,
-          altM: 2600 + i * 15,
+          altM: 2600 + (i % 26) * 15,
         });
       });
+      const geo = await import('/src/geo/index.js');
+      const engine = window.__godsEyeView.engine;
+      engine.camera.cancelFlight();
+      engine.camera.setView({
+        destination: geo.cartesian3.fromDegrees(rowLon0 + 5.5 * stepDeg, rowLat, 20000),
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      for (let frame = 0; frame < 30; frame++) {
+        engine.render.request('qa-enrich-budget');
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
       const fl = dm.layers.get('flights').module;
-      await fl.update(v); // sweep enqueues the last 8 tokens
-      await fl.update(v); // bucket empty — must enqueue nothing more
+      await fl.update(v); // sweep enqueues up to 150 ambient jobs
+      await fl.update(v); // spend the remaining initial tokens; later polls must stall
     }, { hexes: batchHexes, rowLat: ROW_LAT, rowLon0: ROW_LON0, stepDeg: ROW_STEP_DEG });
     // Wait for the drip to drain whatever was enqueued, then settle.
     await page.waitForFunction(
       (min) => window.__ENRICH_LOG.starts.length >= min && window.__ENRICH_LOG.inflight === 0,
-      { timeout: 20000, polling: 100 }, startsBeforeBatch + (BUDGET_QA.ceil - startsBeforeBatch)
+      { timeout: 90000, polling: 100 }, BUDGET_QA.ceil
     ).catch(() => { /* asserted below */ });
     await sleep(1500); // any illegal post-exhaustion enqueue would dispatch within ~200 ms
     // One more poll while exhausted — still nothing new.
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer);
+      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer ?? null);
     });
     await sleep(1000);
     const exhausted = await page.evaluate(() => ({
       starts: window.__ENRICH_LOG.starts.length,
       inflight: window.__ENRICH_LOG.inflight,
+      sourceCount: window.__godsEyeView.dataManager.layers.get('flights').module.getStats().count,
+      fixtureCount: window.__ENR.planes.length,
+      cameraHeightM: window.__godsEyeView.engine.camera.pose().cartographic.height,
     }));
     record(`E10 exhaust: requests stall at the budget ceiling (${BUDGET_QA.ceil}) with unrequested planes on-screen`,
-      exhausted.starts === BUDGET_QA.ceil && exhausted.inflight === 0,
+      exhausted.starts === BUDGET_QA.ceil && exhausted.inflight === 0 && exhausted.sourceCount === startsBeforeBatch + BATCH_COUNT,
       `starts=${exhausted.starts} (want ${BUDGET_QA.ceil}: ${startsBeforeBatch} baseline + ${BUDGET_QA.ceil - startsBeforeBatch} tokens; `
-      + `${BATCH_COUNT - (BUDGET_QA.ceil - startsBeforeBatch)} planes left waiting) inflight=${exhausted.inflight}`);
+      + `${BATCH_COUNT - (BUDGET_QA.ceil - startsBeforeBatch)} planes left waiting) inflight=${exhausted.inflight}, source=${exhausted.sourceCount}/${exhausted.fixtureCount}, camera=${exhausted.cameraHeightM.toFixed(1)}m`);
 
     // ========================================================================
     // E11 — refill window passes → enrichment RESUMES. Shorten windowMs so the
@@ -544,7 +575,7 @@ async function main() {
     await sleep(RESUME_WINDOW_MS + 200); // a full (shortened) refill window elapses
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer);
+      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer ?? null);
     });
     const expectedTotal = startsBeforeBatch + BATCH_COUNT; // every batch plane eventually requested
     const resumed = await page.waitForFunction(

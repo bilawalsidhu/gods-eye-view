@@ -19,7 +19,7 @@ const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 function testFilesOnDisk(root) {
   // Build outputs and dependencies are not places a contributor writes a test,
   // and walking them would be slow enough to matter. Everything else counts.
-  const skip = new Set(['node_modules', 'dist', 'build', 'public']);
+  const skip = new Set(['node_modules', 'dist', 'build', 'public', 'qa-artifacts']);
   const found = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {

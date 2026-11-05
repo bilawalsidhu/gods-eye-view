@@ -21,23 +21,30 @@ const tool = () => read('src/annotations/drawTool.js');
 
 test('the application composition wires the draw tool and owns its teardown', () => {
   const tools = read('src/app/tools.js');
-  const engineAt = tools.indexOf('const annotations = initAnnotations({');
+  const session = read('src/app/sessionTools.js');
+  const engineAt = tools.indexOf('const annotations = sessionAnnotations({');
   const drawAt = tools.indexOf(
-    'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    navigation: styleManager,\n    publish: (view) => displayStore.publishDraw(view),',
+    'const drawTool = sessionDrawTool({\n    layerSession,\n    annotations,',
   );
-  assert.ok(engineAt >= 0, 'initAnnotations call missing');
+  assert.ok(engineAt >= 0, 'the session annotation board is missing');
   assert.ok(
     drawAt > engineAt,
-    'initDrawTool must follow initAnnotations and receive its engine',
+    'the draw tool must follow the annotation board and receive it',
+  );
+  // The page session owns the tool; its rows answer through the store.
+  assert.match(
+    session,
+    /import \{ createSessionDrawTool \} from '\.\.\/annotations\/drawTool\.js';/,
   );
   assert.match(
-    tools,
-    /import \{ initDrawTool \} from '\.\.\/annotations\/drawTool\.js';/,
+    session,
+    /sessionTool\(layerSession, 'draw', defer, \(\) =>\s*createSessionDrawTool\(\{\s*annotations,\s*navigation: styleManager,\s*publish: \(view\) => displayStore\.publishDraw\(view\),/,
   );
-  // The tool holds a pointer claim, DOM listeners and a data source, so the
-  // application lifetime disposes it — not whoever last pressed the button.
-  const deferAt = tools.indexOf('defer(() => drawTool?.destroy());');
-  assert.ok(deferAt > drawAt, 'the shell must defer the draw tool teardown');
+  // The tool holds a pointer claim, DOM listeners and a data source on the
+  // viewer, so the viewer's attachment ends it — not whoever last pressed the
+  // button; the session tool ends with the page.
+  const detachAt = tools.indexOf('defer(() => drawTool?.detachScene());');
+  assert.ok(detachAt > drawAt, 'the scene must end the draw tool');
 });
 
 test('the engine resolves manual geometry before any name resolution', () => {

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { trackingEventTypes } from './render/cesiumConstants.js';
 import { isPointerFree } from './inputOwnership.js';
 
 export const MAX_TRACKING_CLICK_TRAVEL_PX = 6;
@@ -47,7 +47,7 @@ export function isTrackingClickGesture(gesture = {}) {
  */
 export function bindTrackingClickGesture(handler, onClick, options = {}) {
   const now = options.now || (() => performance.now());
-  const eventTypes = options.eventTypes || Cesium.ScreenSpaceEventType;
+  const eventTypes = options.eventTypes || trackingEventTypes();
   let pressActive = false;
   let pressStartedAt = 0;
   let previousPosition = null;

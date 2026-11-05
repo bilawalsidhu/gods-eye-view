@@ -1,14 +1,15 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
   const state = {};
 
-  state.distanceEndpointScratch = new Cesium.Cartographic();
+  state.distanceEndpointScratch = geo.cartographic.create();
 
-  state.distanceGeodesicScratch = new Cesium.EllipsoidGeodesic();
+  state.distanceGeodesicScratch = geo.ellipsoidGeodesic.create();
 
   Object.assign(state, {
     viewer: null,
+    engine: null,
     dataSource: null,
     enabled: false,
     records: [],

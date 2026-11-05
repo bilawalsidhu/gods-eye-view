@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createAlprOverlay } from './overlay.js';
+import { createAlprOverlay } from './render/cesiumOverlay.js';
 import { normalizeAlprNode } from './records.js';
 import {
   directionWedgePositions,
@@ -47,6 +47,7 @@ function harness(t, count = 2, { floor = null } = {}) {
     paints = 0;
   const overlay = createAlprOverlay({
     state,
+    native: state,
     services: {
       groundFloor: { cachedGroundFloor: () => floor },
       overlays: {
@@ -196,8 +197,8 @@ test('an unresolved surface preserves the native marker; the horizon removes ove
 });
 
 test('repeated paints of a still view never rewrite marker properties', (t) => {
-  // Each Entity write raises definitionChanged; paint used to hide then show
-  // every overlay camera's native marker on every frame.
+  // Each Entity write raises definitionChanged, so a still view must not hide
+  // and re-show every overlay camera's native marker on every frame.
   const h = harness(t, 3);
   h.overlay.sync(h.records);
   h.paint();

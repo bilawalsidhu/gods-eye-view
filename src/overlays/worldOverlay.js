@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { isGlobeEngine } from '../globe/contract.js';
 import {
   createCyberSonarSampler,
   isCyberContactSonarActive as isCyberSonarActive,
@@ -28,6 +29,11 @@ import { t } from '../i18n/index.js';
  * @description Shared screen-space renderer/scheduler for world-anchored
  * labels and cards. Sources own data, business rules, and bounded candidate
  * generation; this host owns projection, final placement, paint, and hits.
+ *
+ * It runs on the page's globe engine (src/globe/contract.js): frames, camera
+ * events, canvas size, projection matrix, horizon test and render requests
+ * all come from the engine. Sources still hand it world positions they
+ * computed themselves.
  */
 
 const ROOT_ID = 'world-overlay-root';
@@ -128,7 +134,7 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
  * @typedef {object} WorldOverlayEntry
  * @property {string} id Stable identity within the source.
  * @property {string} source Owning source id.
- * @property {Cesium.Cartesian3|function():Cesium.Cartesian3} position
+ * @property {{x: number, y: number, z: number}|function():{x: number, y: number, z: number}} position
  * @property {'label'|'track'|'card'|'thumbnail'|'selected'|'tracked'} variant
  * @property {string} [accessibilityLabel] Accessible name for an actionable card.
  * @property {function():*} [activate] Keyboard/assistive activation callback.
@@ -145,8 +151,8 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
  * @property {number} [solveIntervalMs=125]
  */
 
-/** @type {Cesium.Viewer|null} */
-let _viewer = null;
+/** @type {import('../globe/contract.js').GlobeEngine|null} */
+let _engine = null;
 /** @type {HTMLElement|null} */
 let _root = null;
 /** @type {HTMLCanvasElement|null} */
@@ -219,13 +225,14 @@ const _domains = new Map();
 const _domainList = [];
 /** @type {Map<string, object>} */
 const _records = new Map();
-const _scratchViewProjection = new Cesium.Matrix4();
+const _scratchViewProjection = geo.matrix4.create();
 const _viewProjectionScalars = {};
 const _viewport = { width: 0, height: 0 };
+/** `{ isPointVisible }` over the engine's horizon test, for painters too. */
 let _occluder = null;
-let _occluderCameraX = Number.NaN;
-let _occluderCameraY = Number.NaN;
-let _occluderCameraZ = Number.NaN;
+/** The engine's live camera position and the camera height, per frame. */
+let _cameraPosition = null;
+let _cameraHeight = Number.NaN;
 /** Cached keyhole geometry, versioned by both its box and shared tuning. */
 let _keyhole = null;
 let _keyholeWidth = -1;
@@ -409,7 +416,8 @@ export function paintLaneForOverlayEntry(entry = {}) {
  *   point) to the per-frame occluder.
  *
  * @param {object} entry - Raw source entry.
- * @returns {?Cesium.Cartesian3} Host-owned lifted anchor, or null.
+ * @returns {?{x: number, y: number, z: number}} Host-owned lifted anchor
+ *   (a geo Cartesian3), or null.
  */
 function snapshotCullPosition(entry) {
   let candidate;
@@ -422,7 +430,7 @@ function snapshotCullPosition(entry) {
   const { x, y, z } = candidate;
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z))
     return null;
-  return new Cesium.Cartesian3(x, y, z);
+  return geo.cartesian3.create(x, y, z);
 }
 
 export function normalizeOverlayEntry(sourceId, entry) {
@@ -861,7 +869,11 @@ function invalidateHost({ solve = true, layout = false } = {}) {
   _paintRectCount = 0;
   _hitRectCount = 0;
   _paintRectByKey.clear();
-  _viewer?.scene?.requestRender?.();
+  requestRender();
+}
+
+function requestRender() {
+  _engine?.render.request('world-overlay');
 }
 
 function inertPaintLaneHandle() {
@@ -940,6 +952,14 @@ export function registerWorldOverlayPaintLane(laneId, painter, options = {}) {
   };
 }
 
+// Removed entries cannot paint an exit fade: their source no longer owns
+// them. Release the arbiter identity too, so later layout changes cannot
+// wake the idle renderer for an invisible minimum-lifetime/fade state.
+function forgetOverlayEntry(entry) {
+  _records.delete(entry._overlayKey);
+  _domains.get(entry.collisionGroup)?.arbiter.remove(entry._overlayKey);
+}
+
 /**
  * Replace all entries owned by a source atomically.
  * @param {string} sourceId
@@ -957,7 +977,7 @@ export function setOverlayEntries(sourceId, entries, options = {}) {
   const next = new Map();
   for (const entry of normalized) next.set(entry.id, entry);
   for (const entry of source.entries.values()) {
-    if (!next.has(entry.id)) _records.delete(entry._overlayKey);
+    if (!next.has(entry.id)) forgetOverlayEntry(entry);
     const replacement = next.get(entry.id);
     if (replacement && isProtected(entry) !== isProtected(replacement))
       getOrCreateDomain(entry.collisionGroup).arbiter.remove(entry._overlayKey);
@@ -994,9 +1014,10 @@ export function removeOverlayEntry(sourceId, entryId) {
   const source = _sources.get(assertSourceId(sourceId));
   if (!source) return false;
   const id = String(entryId);
-  const removed = source.entries.delete(id);
-  if (!removed) return false;
-  _records.delete(entryKey(source.id, id));
+  const entry = source.entries.get(id);
+  if (!entry) return false;
+  source.entries.delete(id);
+  forgetOverlayEntry(entry);
   rebuildSourceCohorts(source);
   updateEntryDiagnostics();
   invalidateHost();
@@ -1012,8 +1033,7 @@ export function clearOverlaySource(sourceId) {
   if (_destroyed) return false;
   const source = _sources.get(assertSourceId(sourceId));
   if (!source) return false;
-  for (const entry of source.entries.values())
-    _records.delete(entry._overlayKey);
+  for (const entry of source.entries.values()) forgetOverlayEntry(entry);
   source.entries.clear();
   source.cohortDomainIds.length = 0;
   source.cohortLists.length = 0;
@@ -1224,9 +1244,10 @@ function ensureOverlayDom() {
     _root = document.createElement('div');
     _root.id = ROOT_ID;
     _root.setAttribute('aria-hidden', 'true');
-    const parent = _viewer.container?.parentElement || document.body;
-    if (_viewer.container?.nextSibling)
-      parent.insertBefore(_root, _viewer.container.nextSibling);
+    const container = _engine.host.container;
+    const parent = container?.parentElement || document.body;
+    if (container?.nextSibling)
+      parent.insertBefore(_root, container.nextSibling);
     else parent.appendChild(_root);
   }
   _canvas =
@@ -1246,7 +1267,7 @@ function ensureOverlayDom() {
   // the browser silently discard the blend while the CSS string stayed
   // `'screen'`. Paint order is expressed purely by z-index: this surface is
   // z5, the shared card canvas inside the root is z6.
-  const detectionParent = _viewer?.container || document.body;
+  const detectionParent = _engine?.host.container || document.body;
   _detectionSurface =
     detectionParent.querySelector?.(`#${DETECTION_SURFACE_ID}`) ||
     document.getElementById(DETECTION_SURFACE_ID);
@@ -1294,15 +1315,10 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
  * that actually has paint work.
  */
 function ensureCanvasSize() {
-  if (!_canvas || !_viewer?.canvas) return false;
-  const width = Math.max(
-    0,
-    Math.round(Number(_viewer.canvas.clientWidth) || 0),
-  );
-  const height = Math.max(
-    0,
-    Math.round(Number(_viewer.canvas.clientHeight) || 0),
-  );
+  if (!_canvas || !_engine) return false;
+  const size = _engine.host.size();
+  const width = Math.max(0, Math.round(Number(size.width) || 0));
+  const height = Math.max(0, Math.round(Number(size.height) || 0));
   const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
   const changed =
     _canvas.width !== Math.round(width * dpr) ||
@@ -1427,7 +1443,7 @@ function refreshUiOccluders(timestamp, force = false) {
       _occluderRefreshTimer = setTimeout(
         () => {
           _occluderRefreshTimer = null;
-          _viewer?.scene?.requestRender?.();
+          requestRender();
         },
         Math.max(0, OCCLUDER_REFRESH_MS - elapsed),
       );
@@ -1671,12 +1687,7 @@ function overlayHasPaintWork(timestamp = nowMs()) {
 }
 
 function prepareProjectionMatrix() {
-  const camera = _viewer.camera;
-  const matrix = Cesium.Matrix4.multiply(
-    camera.frustum.projectionMatrix,
-    camera.viewMatrix,
-    _scratchViewProjection,
-  );
+  const matrix = _engine.projector.viewProjection(_scratchViewProjection);
   _viewProjectionScalars.m0 = matrix[0];
   _viewProjectionScalars.m1 = matrix[1];
   _viewProjectionScalars.m3 = matrix[3];
@@ -1694,17 +1705,9 @@ function prepareProjectionMatrix() {
 
 function prepareCustomPaintFrame(timestamp, keyhole) {
   const viewProjection = prepareProjectionMatrix();
-  const camera = _viewer.camera.positionWC;
-  if (
-    camera.x !== _occluderCameraX ||
-    camera.y !== _occluderCameraY ||
-    camera.z !== _occluderCameraZ
-  ) {
-    _occluder.cameraPosition = camera;
-    _occluderCameraX = camera.x;
-    _occluderCameraY = camera.y;
-    _occluderCameraZ = camera.z;
-  }
+  const camera = _engine.camera.livePosition;
+  _cameraPosition = camera;
+  _cameraHeight = _engine.camera.height();
   _customPaintFrame.canvas = _canvas;
   _customPaintFrame.surface = _canvas;
   _customPaintFrame.ctx = _ctx;
@@ -1726,7 +1729,7 @@ function getProjectionRecord(entry) {
     record = {
       key: entry._overlayKey,
       entry,
-      position: new Cesium.Cartesian3(),
+      position: geo.cartesian3.create(),
       screen: { x: 0, y: 0 },
       layout: entry._overlayLayout,
       placements: [],
@@ -1910,7 +1913,7 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
   // scalar steps stay local: the range is computed inline, and the common
   // "no far limit" fade policy resolves without calling out at all. Both are
   // exact restatements of `Cartesian3.distance` / `distanceFade`.
-  const cameraPosition = _viewer.camera.positionWC;
+  const cameraPosition = _cameraPosition;
   const rangeX = cameraPosition.x - record.position.x;
   const rangeY = cameraPosition.y - record.position.y;
   const rangeZ = cameraPosition.z - record.position.z;
@@ -1923,7 +1926,7 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
         ? 1
         : 0
       : distanceFade(distance, record.distanceOptions);
-  const cameraAltitude = _viewer.camera.positionCartographic?.height;
+  const cameraAltitude = _cameraHeight;
   record.paintScale = entry.distanceScale
     ? distanceScale(distance, entry.distanceScale)
     : 1;
@@ -2599,7 +2602,7 @@ function drawWorldOverlay() {
     clearTimeout(_sonarRenderTimer);
     _sonarRenderTimer = null;
   }
-  if (_destroyed || !_viewer || !_canvas || !_ctx) return;
+  if (_destroyed || !_engine || !_canvas || !_ctx) return;
   const timestamp = nowMs();
   if (!overlayHasPaintWork(timestamp)) {
     resetFrameDiagnostics();
@@ -2645,52 +2648,50 @@ function drawWorldOverlay() {
   if (_paintRectCount > 0 && isCyberSonarActive()) {
     _sonarRenderTimer = setTimeout(() => {
       _sonarRenderTimer = null;
-      if (!_destroyed && isCyberSonarActive())
-        _viewer?.scene?.requestRender?.();
+      if (!_destroyed && isCyberSonarActive()) requestRender();
     }, CYBER_SONAR_RENDER_INTERVAL_MS);
   }
   const animationsRemaining =
     activeFadeCount(timestamp) + activeLeaderAnimationCount(timestamp);
-  if (animationsRemaining > 0) _viewer.scene.requestRender?.();
+  if (animationsRemaining > 0) requestRender();
 }
 
 function createDevFacade() {
   if (typeof window === 'undefined' || import.meta.env?.DEV !== true) return;
-  window.__gevWorldOverlay = { getDiagnostics: getWorldOverlayDiagnostics };
+  window.__gevWorldOverlay = {
+    getDiagnostics: getWorldOverlayDiagnostics,
+    getPaintRect: getOverlayPaintRect,
+  };
 }
 
 /**
- * Initialize the singleton host. Repeated calls for the same viewer are no-op.
- * @param {Cesium.Viewer} viewer
+ * Initialize the singleton host. Repeated calls for the same engine are no-op.
+ * @param {import('../globe/contract.js').GlobeEngine} engine
  */
-export function initWorldOverlay(viewer) {
-  if (!viewer?.scene?.postRender?.addEventListener) {
-    throw new TypeError(
-      'initWorldOverlay requires a Cesium viewer with scene.postRender',
-    );
-  }
-  if (_viewer === viewer && _canvas && _removePostRender) return;
-  if (_viewer) destroyWorldOverlay();
+export function initWorldOverlay(engine) {
+  if (!isGlobeEngine(engine))
+    throw new TypeError('initWorldOverlay requires a globe engine');
+  if (_engine === engine && _canvas && _removePostRender) return;
+  if (_engine) destroyWorldOverlay();
   _destroyed = false;
-  _viewer = viewer;
+  _engine = engine;
   ensureOverlayDom();
-  _occluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    viewer.camera?.positionWC || new Cesium.Cartesian3(),
-  );
+  const { projector } = engine;
+  _occluder = {
+    isPointVisible: (position) => projector.horizonVisible(position),
+  };
   _cockpitActive = !!document.body?.classList?.contains('cockpit-mode');
   _cockpitModeHandler = (event) => {
     _cockpitActive = event?.detail?.active === true;
     invalidateHost();
   };
   window.addEventListener('gev:cockpit-mode-changed', _cockpitModeHandler);
-  _removePostRender =
-    viewer.scene.postRender.addEventListener(drawWorldOverlay);
-  if (viewer.camera?.moveEnd?.addEventListener) {
-    _removeMoveEnd = viewer.camera.moveEnd.addEventListener(() =>
-      invalidateHost(),
-    );
-  }
+  _removePostRender = engine.frames.postRender.addEventListener(() =>
+    drawWorldOverlay(),
+  );
+  _removeMoveEnd = engine.camera.moveEnd.addEventListener(() =>
+    invalidateHost(),
+  );
   installUiOccluderObservers();
   // The backing store and the occluder inventory are both deferred to the
   // first frame with real paint work: a dormant host must not hold a
@@ -2711,7 +2712,7 @@ export function destroyWorldOverlay() {
   // Tearing down a host that was never initialized must not arm the
   // post-destroy guard: sources are allowed to publish before the first
   // `initWorldOverlay`, and that buffering has to survive a stray destroy.
-  const hadHost = _viewer !== null;
+  const hadHost = _engine !== null;
   _removePostRender?.();
   _removePostRender = null;
   _removeMoveEnd?.();
@@ -2776,7 +2777,7 @@ export function destroyWorldOverlay() {
   _uiOcclusionRects.length = 0;
   _uiOcclusionRectPool.length = 0;
   _destroyed = hadHost || _destroyed;
-  _viewer = null;
+  _engine = null;
   _root = null;
   _canvas = null;
   _ctx = null;
@@ -2784,9 +2785,8 @@ export function destroyWorldOverlay() {
   _detectionSurface = null;
   _detectionCtx = null;
   _occluder = null;
-  _occluderCameraX = Number.NaN;
-  _occluderCameraY = Number.NaN;
-  _occluderCameraZ = Number.NaN;
+  _cameraPosition = null;
+  _cameraHeight = Number.NaN;
   _keyhole = null;
   _keyholeWidth = -1;
   _keyholeHeight = -1;

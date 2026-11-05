@@ -33,7 +33,8 @@ export function createAnimation({
     if (needed) {
       layerState._lastAnimTime = 0;
       services.render.holdContinuousRender('traffic');
-      layerState._viewer?.scene?.requestRender?.();
+      if (layerState._engine) layerState._engine.render.request('traffic');
+      else layerState._viewer?.scene?.requestRender?.();
     } else services.render.releaseContinuousRender('traffic');
   }
 
@@ -318,6 +319,11 @@ export function createAnimation({
 
     // Jam heat-lines throb (~1.6 s period) — one shared material uniform for
     // the whole jam batch, no geometry rebuild. Null outside live heatline mode.
+    if (layerState._native && layerState._heatJamPrim) {
+      layerState._heatJamPrim.setAlpha(
+        HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260),
+      );
+    }
     if (layerState._heatJamPrim?.appearance) {
       layerState._heatJamPrim.appearance.material.uniforms.color.alpha =
         HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260);
@@ -349,7 +355,10 @@ export function createAnimation({
   /** Remove all point primitives and reset dot/road arrays and counters. */
 
   function clearDots() {
-    services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
+    services.credits?.hideOsmCredit?.(
+      layerState._engine ?? layerState._viewer,
+      'traffic',
+    );
     parts.retention.clear();
     if (layerState._dots.length) layerState._motion.rebuilds++;
     if (layerState._pointCollection) layerState._pointCollection.removeAll();

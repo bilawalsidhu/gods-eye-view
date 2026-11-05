@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -7,52 +6,9 @@ import {
   CAMERA_DEBOUNCE_MS,
 } from './policy.js';
 
-export function createViewport({ state: layerState, services, parts, source }) {
+export function createViewport({ state: layerState, services, parts, camera }) {
+  const { getCameraAltitude, getCameraCenterLatLon } = camera;
   const { governorRequestRender } = services.render;
-
-  /**
-   * Get the camera's current altitude in meters above the ellipsoid.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
-   * @returns {number} Altitude in meters, or Infinity if unavailable.
-   */
-
-  function getCameraAltitude(viewer) {
-    const carto = viewer?.camera?.positionCartographic;
-    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
-  }
-
-  /**
-   * Determine the lat/lon the camera is currently looking at.
-   * Prefers the center of the computed view rectangle; falls back to the
-   * camera's own cartographic position when the rectangle is unavailable.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
-   * @returns {{ lat: number, lon: number }|null} Center coordinates in degrees, or null.
-   */
-
-  function getCameraCenterLatLon(viewer) {
-    // Try view rectangle center first (more accurate for tilted views)
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
-    if (rect) {
-      const center = Cesium.Rectangle.center(rect);
-      return {
-        lat: Cesium.Math.toDegrees(center.latitude),
-        lon: Cesium.Math.toDegrees(center.longitude),
-      };
-    }
-
-    // Fallback: use the camera's own position
-    const carto = viewer?.camera?.positionCartographic;
-    if (carto) {
-      return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
-      };
-    }
-
-    return null;
-  }
 
   /**
    * Determine whether the layer should be active at the given camera altitude.
@@ -113,7 +69,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     governorRequestRender('bikeshare-deactivate');
     parts.ingestion.abortInFlight(layerState._inFlightInfo, cityId);
     parts.ingestion.abortInFlight(layerState._inFlightStatus, cityId);
-    parts.rendering.removeCityPoints(cityId);
+    parts.rendering?.removeCityPoints(cityId);
   }
 
   /** Deactivate all currently active cities and clear the active set. */
@@ -138,6 +94,8 @@ export function createViewport({ state: layerState, services, parts, source }) {
   async function activateCity(cityId, generation) {
     if (!layerState._enabled || !layerState._activeCityIds.has(cityId)) return;
 
+    // Set once the city's last known stations and status are back on the map.
+    let showingLastKnown = false;
     try {
       const stationMap = await parts.ingestion.loadCityStationInfo(
         cityId,
@@ -151,12 +109,13 @@ export function createViewport({ state: layerState, services, parts, source }) {
       )
         return;
 
-      parts.rendering.ensureCityPoints(cityId, stationMap);
+      parts.rendering?.ensureCityPoints(cityId, stationMap);
 
       // Apply any cached status immediately for snappier initial rendering
       const cachedStatus = layerState._statusCache.get(cityId)?.statusMap;
       if (cachedStatus) {
-        parts.rendering.applyStatusToPoints(cityId, cachedStatus);
+        parts.rendering?.applyStatusToPoints(cityId, cachedStatus);
+        showingLastKnown = layerState._cityRuntime.has(cityId);
       }
 
       const statusMap = await parts.ingestion.loadCityStationStatus(
@@ -169,21 +128,21 @@ export function createViewport({ state: layerState, services, parts, source }) {
         generation !== layerState._proximityGeneration
       )
         return;
-      parts.rendering.applyStatusToPoints(cityId, statusMap);
+      parts.rendering?.applyStatusToPoints(cityId, statusMap);
       layerState._lastUpdate = Date.now();
       layerState._failedCityIds.delete(cityId);
     } catch (error) {
-      if (error?.name === 'AbortError') return;
-      // A rejection from superseded work must not mark (or tear down) a city
-      // that a newer proximity check or re-enable now owns.
       if (
+        error?.name === 'AbortError' ||
         !layerState._enabled ||
-        !layerState._activeCityIds.has(cityId) ||
         generation !== layerState._proximityGeneration
       )
         return;
       console.warn(`[Data:Bikeshare] ${cityId} activate error:`, error);
       layerState._failedCityIds.add(cityId);
+      // During a source outage a city coming back into range keeps its last
+      // known stations and status, marked stale; the status poll retries it.
+      if (showingLastKnown) return;
       deactivateCity(cityId);
       layerState._activeCityIds.delete(cityId);
     } finally {
@@ -199,7 +158,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   async function runProximityCheck() {
-    if (!layerState._enabled || !layerState._viewer) return;
+    if (!layerState._enabled || layerState._restoringViewport) return;
 
     const generation = ++layerState._proximityGeneration;
     const altitude = getCameraAltitude(layerState._viewer);
@@ -247,6 +206,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
   function scheduleProximityCheck() {
     clearTimeout(layerState._cameraDebounceTimer);
     layerState._cameraDebounceTimer = setTimeout(() => {
+      layerState._cameraDebounceTimer = null;
       void runProximityCheck();
     }, CAMERA_DEBOUNCE_MS);
   }
@@ -254,7 +214,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
   /** Camera change event handler — triggers a debounced proximity check. */
 
   function onCameraChanged() {
-    if (!layerState._enabled) return;
+    if (!layerState._enabled || layerState._restoringViewport) return;
     scheduleProximityCheck();
   }
   return {

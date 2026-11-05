@@ -56,7 +56,7 @@ test('focus de-emphasis fades each icon from its own color', () => {
   const { refreshCctvFocusStyles } = createRendering({
     state,
     services: { focus },
-    parts: { model: { isVideoFeedType } },
+    parts: { renderer: { ready: true }, model: { isVideoFeedType } },
     source: {},
   });
 

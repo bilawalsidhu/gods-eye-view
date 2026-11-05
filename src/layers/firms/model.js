@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { rectangleWidth, rectangleHeight } from './rectangle.js';
+import * as geo from '../../geo/index.js';
 import { formatNumber, getLocale, isolate, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
@@ -64,30 +65,30 @@ export function createModel({
    */
 
   function paddedDegreeBounds(rect) {
-    const width = Cesium.Rectangle.computeWidth(rect);
-    const height = Cesium.Rectangle.computeHeight(rect);
+    const width = rectangleWidth(rect);
+    const height = rectangleHeight(rect);
     if (width >= Math.PI * 1.85) return null;
     const padLon = width * VIEW_PADDING;
     const padLat = height * VIEW_PADDING;
-    const south = Math.max(-Cesium.Math.PI_OVER_TWO, rect.south - padLat);
-    const north = Math.min(Cesium.Math.PI_OVER_TWO, rect.north + padLat);
+    const south = Math.max(-geo.math.PI_OVER_TWO, rect.south - padLat);
+    const north = Math.min(geo.math.PI_OVER_TWO, rect.north + padLat);
     let west = rect.west - padLon;
     let east = rect.east + padLon;
     let wraps;
-    if (width + padLon * 2 >= Cesium.Math.TWO_PI) {
+    if (width + padLon * 2 >= geo.math.TWO_PI) {
       west = -Math.PI;
       east = Math.PI;
       wraps = false;
     } else {
-      west = Cesium.Math.negativePiToPi(west);
-      east = Cesium.Math.negativePiToPi(east);
+      west = geo.math.negativePiToPi(west);
+      east = geo.math.negativePiToPi(east);
       wraps = west > east;
     }
     return {
-      west: Cesium.Math.toDegrees(west),
-      south: Cesium.Math.toDegrees(south),
-      east: Cesium.Math.toDegrees(east),
-      north: Cesium.Math.toDegrees(north),
+      west: geo.math.toDegrees(west),
+      south: geo.math.toDegrees(south),
+      east: geo.math.toDegrees(east),
+      north: geo.math.toDegrees(north),
       wraps,
     };
   }
@@ -225,7 +226,7 @@ export function createModel({
   function firePosition(fire) {
     const height = fireAnchorHeight(fire.lat, fire.lon);
     if (!fire.position || fire.positionHeight !== height) {
-      fire.position = Cesium.Cartesian3.fromDegrees(fire.lon, fire.lat, height);
+      fire.position = geo.cartesian3.fromDegrees(fire.lon, fire.lat, height);
       fire.positionHeight = height;
     }
     return fire.position;
@@ -258,7 +259,7 @@ export function createModel({
   function fireCullPosition(fire, position = firePosition(fire)) {
     if (fire.positionHeight >= CULL_LIFT_THRESHOLD_M) return position;
     if (!fire.cullPosition) {
-      fire.cullPosition = Cesium.Cartesian3.fromDegrees(
+      fire.cullPosition = geo.cartesian3.fromDegrees(
         fire.lon,
         fire.lat,
         CULL_LIFT_M,
@@ -277,7 +278,7 @@ export function createModel({
    */
 
   function cellCullPosition(lon, lat) {
-    return Cesium.Cartesian3.fromDegrees(lon, lat, CULL_LIFT_M);
+    return geo.cartesian3.fromDegrees(lon, lat, CULL_LIFT_M);
   }
 
   /**

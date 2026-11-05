@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createHistoryBudget } from '../../data/contactPlayback.js';
 
 /**
@@ -37,6 +37,7 @@ export function createState({ services }) {
   state._generation = 0;
 
   state._cameraChangedAttached = false;
+  state._cameraChangedRemove = null;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
   /** Camera sensitivity as we found it, so disable() can hand it back. */
@@ -120,7 +121,7 @@ export function createState({ services }) {
   state._error = null;
   state._limitWarned = false;
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  state._scratchCartesian = geo.cartesian3.create();
 
   return state;
 }

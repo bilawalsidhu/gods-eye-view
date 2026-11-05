@@ -1,4 +1,7 @@
 {
+  "Experimental Navara engine": "Експериментальний рушій Navara",
+  "Loading the experimental Navara engine...": "Завантаження експериментального рушія Navara...",
+  "Globe Engine": "Рушій глобуса",
   "Pick a shape, then click the map.": "Виберіть фігуру й клацніть на карті.",
   "Enter to place the pin, Esc to cancel.": "Enter — поставити мітку, Esc — скасувати.",
   "Click where the pin goes.": "Клацніть там, де має бути мітка.",
@@ -1817,6 +1820,7 @@
     "other": "Не вдалося додати {count} файлу ({name}: {error})"
   },
   "Some KML content was left out.": "Частину вмісту KML пропущено.",
+  "Map objects this engine leaves out of {name}: {count}.": "Обʼєктів із {name}, які цей рушій не показує: {count}.",
   "Press on the ground, not the sky": "Натисніть на землю, а не на небо",
   "Drag to size the box": "Потягніть, щоб задати розмір області",
   "light {source} to use your {name} key": "увімкніть {source}, щоб використати свій ключ {name}",

@@ -54,6 +54,11 @@ export const useDisplayStore = defineStore('gev-display', () => {
 
   /** The map source chips and status; null until the controls first render. */
   const mapSource = shallowRef(null);
+  // Connected only by the standalone app. Embedded hosts own their engine.
+  const globeEngine = shallowRef(null);
+  function presentGlobeEngine(next) {
+    globeEngine.value = next;
+  }
 
   /** @param {object} next A fresh presentation of the map source row. */
   function publishMapSource(next) {
@@ -120,6 +125,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishCockpitPortal,
     phoneShell,
     publishPhoneShell,
+    globeEngine,
+    presentGlobeEngine,
     mapSource,
     publishMapSource,
     mapSourceControls,

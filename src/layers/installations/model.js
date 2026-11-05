@@ -1,5 +1,6 @@
 import { installationResponseSaturated } from './source.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { rgbaFromCss } from '../shared/color.js';
 import {
   EARTH_MEAN_RADIUS_M,
   COLOR_BY_CLASS,
@@ -18,8 +19,8 @@ export function createModel({ state: layerState, services, parts, source }) {
     latitudeBDeg,
     longitudeBDeg,
   ) {
-    const latitudeBRad = Cesium.Math.toRadians(latitudeBDeg);
-    const longitudeBRad = Cesium.Math.toRadians(longitudeBDeg);
+    const latitudeBRad = geo.math.toRadians(latitudeBDeg);
+    const longitudeBRad = geo.math.toRadians(longitudeBDeg);
     const latitudeDelta = latitudeBRad - latitudeARad;
     const longitudeDelta = Math.atan2(
       Math.sin(longitudeBRad - longitudeARad),
@@ -39,9 +40,15 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   function colorFor(record) {
-    return Cesium.Color.fromCssColorString(
-      COLOR_BY_CLASS[record.class] || '#9ca6b0',
+    return rgbaFromCss(COLOR_BY_CLASS[record.class] || '#9ca6b0');
+  }
+
+  function installationSurfaceHeightM(record) {
+    const floor = services?.ground?.cachedGroundFloor?.(
+      record?.latitude,
+      record?.longitude,
     );
+    return services?.ground?.floorAltitudeM?.(null, floor) ?? 0;
   }
 
   /**
@@ -145,6 +152,7 @@ export function createModel({ state: layerState, services, parts, source }) {
   return {
     approximateSurfaceDistanceM,
     colorFor,
+    installationSurfaceHeightM,
     classifyGoogleMilitaryPlace,
     installationSourceLabel,
     installationWithinViewport,

@@ -73,7 +73,7 @@ export function createIngestion({
   }
 
   async function loadInstallations() {
-    if (!layerState.enabled || !layerState.viewer) return;
+    if (!layerState.enabled) return;
     const { box, coverage } = parts.viewport.loadArea(layerState.viewer);
     // Guidance, not a fault: the layer chose not to query because the view is
     // unbounded (a global view, or Cockpit looking at the horizon). Keep it out
@@ -260,8 +260,8 @@ export function createIngestion({
               ? msg('Too many mapped sites in view to list them all')
               : placesError,
         );
-        parts.rendering.renderRecords();
-        parts.rendering.warmInstallationFloors(
+        parts.rendering?.renderRecords();
+        parts.rendering?.warmInstallationFloors(
           layerState.records.filter((r) => !r.pointOnly),
         );
       };

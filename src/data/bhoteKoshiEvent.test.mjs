@@ -2992,3 +2992,108 @@ test('Bhote Koshi corridor remains ordered downstream and inside the imagery rec
     priorChainage = point.chainageM;
   }
 });
+
+for (const stop of ['detach', 'scene-abort']) {
+  test(`Bhote Koshi attach resumed after a ${stop} leaves the next scene untouched`, async () => {
+    const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    installEventDom();
+    globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+    const first = eventViewer();
+    const second = eventViewer();
+    const layer = createBhoteKoshiEventLayer({
+      eventLoader: async () => event,
+      imageryProviderFactory: async (url) => ({ url }),
+      embeddedMediaFactory: () => ({ show() {}, hide() {}, pause() {}, destroy() {} }),
+      overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+      renderHost: { request() {}, hold() {}, release() {} },
+    });
+    const stack = (initial, gate = null) => {
+      let active = initial;
+      let generation = 1;
+      return {
+        getActiveId: () => active,
+        getSwitchGeneration: () => generation,
+        async setStack(id) {
+          await gate;
+          active = id;
+          generation += 1;
+        },
+      };
+    };
+    layer.attachMapStackController(stack('esri-imagery'));
+    const manager = new LayerLifecycle(first);
+    manager.register(layer);
+    try {
+      assert.equal(await manager.setEnabled(layer.id, true, { origin: 'local-restore' }), true);
+      await layer.detachRenderer();
+
+      // The incoming map has to switch first: the attachment waits on it.
+      let openGate;
+      const gate = new Promise((resolve) => { openGate = resolve; });
+      layer.attachMapStackController(stack('photoreal', gate));
+      const scene = new AbortController();
+      const attaching = layer.attachRenderer(second, { signal: scene.signal });
+      let detaching = null;
+      if (stop === 'detach') detaching = layer.detachRenderer();
+      else scene.abort();
+      openGate();
+      await attaching;
+      await detaching;
+      assert.deepEqual(second._test.imagery, []);
+      assert.deepEqual(second._test.dataSources, []);
+      if (stop === 'scene-abort') await layer.detachRenderer();
+    } finally {
+      await manager.destroyLayer(layer.id);
+      globalThis.document = originalDocument;
+      globalThis.window = originalWindow;
+    }
+  });
+}
+
+test('Bhote Koshi stops waiting for a stalled map switch when its scene is released', async () => {
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  const first = eventViewer();
+  const second = eventViewer();
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imageryProviderFactory: async (url) => ({ url }),
+    embeddedMediaFactory: () => ({ show() {}, hide() {}, pause() {}, destroy() {} }),
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+  });
+  layer.attachMapStackController({
+    getActiveId: () => 'esri-imagery',
+    getSwitchGeneration: () => 1,
+    async setStack() {},
+  });
+  const manager = new LayerLifecycle(first);
+  manager.register(layer);
+  try {
+    assert.equal(await manager.setEnabled(layer.id, true, { origin: 'local-restore' }), true);
+    await layer.detachRenderer();
+    // The incoming map's switch to Esri never finishes; restoring returns.
+    let active = 'photoreal';
+    layer.attachMapStackController({
+      getActiveId: () => active,
+      getSwitchGeneration: () => 1,
+      setStack: (id) => (id === 'esri-imagery' ? new Promise(() => {}) : Promise.resolve()),
+    });
+    const scene = new AbortController();
+    const attaching = layer.attachRenderer(second, { signal: scene.signal });
+    scene.abort();
+    await attaching;
+    await layer.detachRenderer();
+    assert.deepEqual(second._test.imagery, []);
+    assert.deepEqual(second._test.dataSources, []);
+  } finally {
+    await manager.destroyLayer(layer.id);
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});

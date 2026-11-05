@@ -9,6 +9,7 @@ import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
 export class CockpitCoordinator {
   constructor({
     viewer,
+    engine,
     services,
     elements,
     operations,
@@ -23,6 +24,7 @@ export class CockpitCoordinator {
       this,
       {
         viewer,
+        engine,
         services,
         readDataManager,
         readContext,
@@ -34,6 +36,13 @@ export class CockpitCoordinator {
       elements,
       operations,
     );
+    this._cockpitDisplayPortal = null;
+    this.cockpitView =
+      viewer || (engine?.frames?.preUpdate && engine?.camera?.followChanged)
+        ? this._createCockpitView(viewer, services)
+        : null;
+  }
+  _createCockpitView(viewer, services) {
     const {
       flightsLayer,
       militaryFlightsLayer,
@@ -52,8 +61,8 @@ export class CockpitCoordinator {
       regionalDistanceM,
       weatherCodeLabel,
     } = services;
-    this._cockpitDisplayPortal = null;
-    this.cockpitView = new CockpitViewController(viewer, {
+    return new CockpitViewController(viewer, {
+      engine: this.engine,
       services: {
         flightsLayer,
         militaryFlightsLayer,
@@ -80,6 +89,7 @@ export class CockpitCoordinator {
         this._stampNavigation({ cancelPendingSelection: false }),
       isEntryAllowed: () =>
         cockpitEntryAllowed({
+          standaloneAircraft: true,
           contextMode: this._contextMode,
           contextModeChanging: this._contextModeChanging,
           flightsEnabled: !!this._dataManager?.isEnabled('flights'),
@@ -117,7 +127,7 @@ export class CockpitCoordinator {
   }
   getCockpitState() {
     const { militaryAwarenessLayer } = this.services;
-    const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
+    const snapshot = militaryAwarenessLayer?.getContextSnapshot?.();
     const info = this.cockpitView?.readAircraftInfo?.();
     const active = Boolean(this.cockpitView?.active);
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
@@ -127,8 +137,7 @@ export class CockpitCoordinator {
     // flip true/false between calls while `active` stayed true; readers
     // (including the voice model) read that as a broken half-entered state.
     const entryAllowed =
-      !active &&
-      Boolean(gateOpen && info && this.viewer?.trackedEntity?.position);
+      !active && Boolean(gateOpen && info && this.cockpitView?.host.current());
     return {
       active,
       entryAllowed,
@@ -270,7 +279,9 @@ export class CockpitCoordinator {
           action: 'control_cockpit',
           error: this._contextModeChanging
             ? 'Contacts is still starting up — try Cockpit again in a moment'
-            : 'Contacts must be active to enter Cockpit — say "open contacts" first',
+            : !this._contextMode
+              ? 'Enable an aircraft layer and track a flight to enter Cockpit'
+              : 'Contacts must be active to enter Cockpit — say "open contacts" first',
           state: this.getCockpitState(),
         };
       }

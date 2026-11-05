@@ -48,7 +48,7 @@ const SITE = {
   lon: Number.isFinite(Number(argv.lon)) ? Number(argv.lon) : -97.6660,
 };
 const ICAO = 'aa0f01';
-const OUT_DIR = 'qa-shots/floorhold';
+const OUT_DIR = new URL(APP_URL).searchParams.get('engine') === 'navara' ? 'qa-shots/floorhold/navara' : 'qa-shots/floorhold';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const results = [];
@@ -107,7 +107,7 @@ await page.evaluateOnNewDocument((site, icao) => {
 
 console.log(`\nFloor hold through a terrain outage\n  App  : ${APP_URL}\n  GPU  : ANGLE/${ANGLE}\n  Site : ${SITE.lat}, ${SITE.lon}\n`);
 await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
-await page.waitForFunction(() => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+await page.waitForFunction(() => window.__godsEyeView?.layers && window.__godsEyeView?.dataManager,
   { timeout: 150000 });
 await sleep(12000); // let the boot fly-to settle before pinning
 await page.evaluate(() => {
@@ -116,8 +116,19 @@ await page.evaluate(() => {
 await sleep(600); // let the launcher dismissal finish before taking evidence
 
 await page.evaluate((site) => { window.__SITE = site; }, SITE);
-const pin = () => page.evaluate(() => {
-  const v = window.__godsEyeView.viewer;
+const pin = () => page.evaluate(async () => {
+  const app = window.__godsEyeView;
+  if (!app.viewer) {
+    const geo = await import('/src/geo/index.js');
+    app.engine.camera.cancelFlight();
+    app.engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(window.__SITE.lon, window.__SITE.lat - 0.008, 900),
+      orientation: { heading: 0, pitch: -0.45, roll: 0 },
+    });
+    app.engine.camera.moveEnd.raiseEvent();
+    return;
+  }
+  const v = app.viewer;
   const C = v.camera.positionCartographic.constructor;
   v.camera.cancelFlight();
   v.camera.setView({
@@ -142,7 +153,24 @@ record('the billboard floor test is explicitly in 2D aircraft mode', billboardMo
 
 /** Reads the contact's rendered height and the rendered mesh beneath it. */
 const measure = () => page.evaluate(async (icao) => {
-  const v = window.__godsEyeView.viewer;
+  const app = window.__godsEyeView;
+  if (!app.viewer) {
+    const geo = await import('/src/geo/index.js');
+    const bb = app.layers.drawn('flights').find((row) => row.id === icao && !row.trackedModel);
+    if (!bb?.position) return { error: 'contact billboard not found' };
+    const carto = geo.cartographic.fromCartesian(bb.position);
+    let mesh = null;
+    for (let attempt = 0; attempt < 10 && mesh == null; attempt++) {
+      app.engine.render.request('floor-hold');
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const height = app.engine.surface.sampleHeight(carto);
+      if (Number.isFinite(height)) mesh = height;
+      else await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    return { spriteH: carto.height, meshH: mesh, shown: bb.show === true,
+      lat: +(carto.latitude * 180 / Math.PI).toFixed(5), lon: +(carto.longitude * 180 / Math.PI).toFixed(5), terrain: { ...window.__TERRAIN } };
+  }
+  const v = app.viewer;
   const C = v.camera.positionCartographic.constructor;
   const sprites = []; const models = []; let bb = null;
   const walk = (coll) => {
@@ -201,7 +229,9 @@ async function demTruth(lat, lon) {
   if (truth.has(key)) return truth.get(key);
   let h = null;
   try {
-    const res = await fetch(`${APP_URL}/api/terrain/heights?points=${lon.toFixed(5)},${lat.toFixed(5)}`);
+    const url = new URL('/api/terrain/heights', APP_URL);
+    url.searchParams.set('points', `${lon.toFixed(5)},${lat.toFixed(5)}`);
+    const res = await fetch(url);
     if (res.ok) {
       const v = Number((await res.json())?.results?.[0]?.ellipsoid);
       if (Number.isFinite(v)) h = v;

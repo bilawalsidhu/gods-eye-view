@@ -29,7 +29,7 @@ export function createCivilFlightLayer({
   parts.evidence = createEvidence(context);
   parts.testing = createTesting(context);
   parts.queries = createQueries(context);
-  const applySnapshot = createFlightSnapshotRenderer({
+  parts.snapshots = createFlightSnapshotRenderer({
     flightState,
     records: flightState.records,
     militaryRegistry: services.militaryRegistry,
@@ -44,8 +44,8 @@ export function createCivilFlightLayer({
   parts.ingestion = createIngestion({
     feed: flightState.feed,
     getQuery: (viewer) =>
-      parts.controller._flightQuery(viewer || flightState._viewer),
-    applySnapshot,
+      parts.controller._flightQuery(viewer || flightState._renderer?.view),
+    applySnapshot: (snapshot) => parts.snapshots.applySnapshot(snapshot),
     setSourceLabel: (source) => {
       layer.source = source;
     },

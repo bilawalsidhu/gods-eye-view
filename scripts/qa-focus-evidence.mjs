@@ -17,6 +17,7 @@
  * --headful drops those flags and is the real-GPU visual sign-off path.
  */
 
+import { redact } from './qa-browserEvidence.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,7 +30,13 @@ const getOpt = (name, fallback = null) => {
 };
 const hasFlag = (name) => argv.includes(name);
 
-const APP_URL = getOpt('--url', 'http://localhost:4173');
+const appUrl = new URL(getOpt('--url', 'http://localhost:4173'));
+const requestedEngine = argv.find((value) => value.startsWith('--engine='))?.slice(9) || getOpt('--engine');
+if (requestedEngine) {
+  if (!['cesium', 'navara'].includes(requestedEngine)) throw new Error('Unknown engine');
+  appUrl.searchParams.set('engine', requestedEngine);
+}
+const APP_URL = appUrl.href;
 const JSON_PATH = path.resolve(getOpt('--json', 'qa-shots/focus-evidence/report.json'));
 const SCREENSHOTS_DIR = path.resolve(getOpt('--screenshots-dir', 'qa-shots/focus-evidence'));
 const HEADFUL = hasFlag('--headful');
@@ -125,6 +132,10 @@ async function readTileReadiness(page) {
     const activeStack = controller?.getActiveId?.() || null;
     const tileset = controller?.googleTileset || gev.tileset || null;
     const applicable = activeStack === 'photoreal' && tileset?.show !== false;
+    if (!gev.viewer) return {
+      tilesSettled: null, tileSettleApplicable: false, activeStack,
+      reason: 'Navara exposes view idle, not tile readiness independently of animated layers',
+    };
     return {
       tilesSettled: !applicable || tileset?.tilesLoaded === true,
       tileSettleApplicable: applicable,
@@ -142,6 +153,10 @@ async function awaitTilesSettled(page, scenario) {
     // the bootstrap field is retained only as a compatibility fallback.
     const tileset = controller?.googleTileset || gev.tileset || null;
     const applicable = activeStack === 'photoreal' && tileset?.show !== false;
+    if (!gev.viewer) return {
+      tilesSettled: null, tileSettleApplicable: false, activeStack,
+      reason: 'Navara exposes view idle, not tile readiness independently of animated layers',
+    };
     if (!applicable) {
       return {
         tilesSettled: true,
@@ -166,7 +181,8 @@ async function awaitTilesSettled(page, scenario) {
     const deadline = Date.now() + timeoutMs;
     try {
       while (Date.now() < deadline) {
-        gev.viewer.scene.render(gev.viewer.clock.currentTime);
+        if (gev.viewer) gev.viewer.scene.render(gev.viewer.clock.currentTime);
+        else gev.engine.render.request('focus-evidence');
         if (tileset.tilesLoaded === true || allTilesLoadedObserved) {
           return {
             tilesSettled: true,
@@ -203,7 +219,7 @@ async function capture(page, scenario, frame) {
   // WebGL surface is paused. Reading the explicitly rendered canvas captures
   // that same frame without handing frame ownership back to the browser.
   const dataUrl = await page.evaluate(() => (
-    window.__godsEyeView.viewer.scene.canvas.toDataURL('image/png')
+    window.__godsEyeView.engine.host.canvas.toDataURL('image/png')
   ));
   fs.writeFileSync(out, Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'));
   return { file: out, ...tileReadiness };
@@ -232,6 +248,14 @@ async function advanceEvidenceFrame(page, deltaMs = FRAME_MS) {
     const viewer = gev.viewer;
     const seam = gev.dataManager.layers.get('flights').module.__focusEvidence;
     const nowMs = seam.advanceFrameClock(stepMs);
+    if (!viewer) return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { remove(); reject(new Error('Evidence frame timeout')); }, 5000);
+      const remove = gev.engine.frames.postRender.addEventListener(() => {
+        remove(); clearTimeout(timer);
+        setTimeout(() => resolve(nowMs), 0);
+      });
+      gev.engine.render.request('focus-evidence');
+    });
     const JulianDate = viewer.clock.currentTime.constructor;
     JulianDate.addSeconds(viewer.clock.currentTime, stepMs / 1000, viewer.clock.currentTime);
     viewer.dataSourceDisplay?.update(viewer.clock.currentTime);
@@ -266,6 +290,7 @@ async function installSyntheticFetches(page) {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     }));
+    localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
     window.fetch = (input, init) => {
       const url = typeof input === 'string' ? input : input?.url || '';
       if (url.includes('/api/flights/track')) return json({ path: [] });
@@ -281,9 +306,10 @@ async function installSyntheticFetches(page) {
 async function waitForApp(page) {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(
-    () => Boolean(window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager),
+    () => Boolean(window.__godsEyeView?.layers && window.__godsEyeView?.dataManager),
     { timeout: 60_000, polling: 200 },
   );
+  await page.evaluate(async () => { window.__focusGeo = await import('/src/geo/index.js'); });
 }
 
 async function setBasemap(page, stackId) {
@@ -317,7 +343,18 @@ async function requireEvidenceSeams(page) {
 
 async function setCamera(page, values) {
   await page.evaluate(([lon, lat, height, heading, pitch]) => {
-    const viewer = window.__godsEyeView.viewer;
+    const app = window.__godsEyeView;
+    if (!app.viewer) {
+      const geo = window.__focusGeo;
+      app.engine.camera.following()?.stop();
+      app.engine.camera.cancelFlight();
+      app.engine.camera.setView({
+        destination: geo.cartesian3.fromDegrees(lon, lat, height),
+        orientation: { heading, pitch, roll: 0 },
+      });
+      return;
+    }
+    const viewer = app.viewer;
     const ellipsoid = viewer.scene.globe.ellipsoid;
     viewer.trackedEntity = undefined;
     viewer.camera.cancelFlight?.();
@@ -345,7 +382,7 @@ async function injectAndTrackTarget(page, extraAircraft = [], target = TARGET) {
     throw new Error(`Synthetic target setup failed: ${JSON.stringify(result)}`);
   }
   await page.waitForFunction(
-    () => Boolean(window.__godsEyeView.viewer.trackedEntity),
+    () => Boolean(window.__godsEyeView.engine.camera.following()),
     { timeout: 10_000 },
   );
   await advanceEvidenceDuration(page, 400);
@@ -356,7 +393,8 @@ async function readTrackedBasis(page) {
     const gev = window.__godsEyeView;
     const layer = gev.dataManager.layers.get('flights').module;
     const target = layer.getAllPositions(100).find((entry) => entry.id === targetId)?.position;
-    const camera = gev.viewer.camera;
+    const pose = gev.engine.camera.pose();
+    const camera = gev.viewer?.camera ?? { positionWC: pose.position, rightWC: pose.right, upWC: pose.up, frustum: { fovy: pose.fovy } };
     if (!target) throw new Error('Tracked target position unavailable');
     const toTarget = {
       x: target.x - camera.positionWC.x,
@@ -364,7 +402,7 @@ async function readTrackedBasis(page) {
       z: target.z - camera.positionWC.z,
     };
     const distance = Math.hypot(toTarget.x, toTarget.y, toTarget.z);
-    const canvasHeight = gev.viewer.scene.canvas.clientHeight;
+    const canvasHeight = gev.engine.host.size().height;
     const metresPerPixel = (2 * distance * Math.tan(camera.frustum.fovy / 2)) / canvasHeight;
     return {
       target: [target.x, target.y, target.z],
@@ -427,8 +465,8 @@ async function vesselRowsAroundTarget(page) {
     const gev = window.__godsEyeView;
     const layer = gev.dataManager.layers.get('flights').module;
     const target = layer.getAllPositions(100).find((entry) => entry.id === 'f0c001')?.position;
-    const Cartographic = gev.viewer.camera.positionCartographic.constructor;
-    const ellipsoid = gev.viewer.scene.globe.ellipsoid;
+    const Cartographic = { fromCartesian: window.__focusGeo.cartographic.fromCartesian };
+    const ellipsoid = window.__focusGeo.ellipsoid.WGS84;
     const rows = [];
     for (let i = 0; i < 12; i += 1) {
       const angle = (i / 12) * Math.PI * 2;
@@ -624,7 +662,9 @@ async function browserContext(page, browser) {
     },
     caveat: HEADFUL
       ? 'Headful capture omits SwiftShader flags and is the real-GPU visual sign-off path.'
-      : 'SwiftShader/headless output is relative-only; rerun with --headful for real-GPU sign-off.',
+      : process.env.QA_ANGLE === 'metal'
+        ? 'Headless ANGLE/Metal capture; renderer and DPR recorded above.'
+        : 'SwiftShader/headless output is relative-only.',
   };
 }
 
@@ -641,7 +681,7 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     protocolTimeout: 300000,
     args: [
-      ...(HEADFUL ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
+      ...(HEADFUL ? [] : process.env.QA_ANGLE ? ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE}`] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -655,10 +695,10 @@ async function main() {
   const consoleMessages = [];
   page.on('console', (message) => {
     if (['error', 'warning', 'warn'].includes(message.type())) {
-      consoleMessages.push({ type: message.type(), text: message.text() });
+      consoleMessages.push({ type: message.type(), text: redact(message.text()) });
     }
   });
-  page.on('pageerror', (error) => consoleMessages.push({ type: 'pageerror', text: error.message }));
+  page.on('pageerror', (error) => consoleMessages.push({ type: 'pageerror', text: redact(error.message) }));
 
   const report = {
     generatedAt: new Date().toISOString(),

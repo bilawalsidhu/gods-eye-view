@@ -1,6 +1,10 @@
 import * as Cesium from 'cesium';
 import { wrapLon } from './tileMath.js';
 
+export const cameraLocation = (view) =>
+  view?.engine?.camera.pose().cartographic ??
+  view?.camera?.positionCartographic;
+const canvasOf = (view) => view?.engine?.host.canvas ?? view?.scene?.canvas;
 /** Equirectangular metres between {lon, lat} points, the short way round ±180°; street scale. */
 export function metresBetween(a, b) {
   const lat = (((a.lat + b.lat) / 2) * Math.PI) / 180;
@@ -36,8 +40,13 @@ export function sampledSurfaceHeight(scene, carto) {
  * the camera.
  */
 export function groundUnderCamera(viewer) {
-  const carto = viewer?.camera?.positionCartographic;
+  const carto = cameraLocation(viewer);
   const scene = viewer?.scene;
+  if (carto && viewer?.engine) {
+    const surface = viewer.engine.surface;
+    const h = surface.sampleHeight(carto) ?? surface.terrainHeight(carto);
+    return plausibleSurfaceHeight(h) && h < carto.height ? h : null;
+  }
   if (!carto || !scene) return null;
   const globe = scene.globe;
   if (globe && globe.show !== false) {
@@ -59,26 +68,36 @@ function raisedEllipsoid(ellipsoid, height) {
  * Where a screen point's ray meets the ground, as a Cartographic, or null.
  * `maxRange` (metres from the camera) drops hits near the horizon.
  */
-function groundHit(camera, point, ellipsoid, maxRange) {
+function groundHit(camera, point, ellipsoid, maxRange, engine) {
   let cartesian = null;
   try {
-    cartesian = camera.pickEllipsoid(point, ellipsoid);
+    cartesian = engine
+      ? engine.picker.pickGlobe(point)
+      : camera.pickEllipsoid(point, ellipsoid);
   } catch {
     cartesian = null;
   }
   if (!cartesian) return null;
   if (
     Number.isFinite(maxRange) &&
-    camera.positionWC &&
-    Cesium.Cartesian3.distance(cartesian, camera.positionWC) > maxRange
+    (engine?.camera.livePosition || camera.positionWC) &&
+    Cesium.Cartesian3.distance(
+      cartesian,
+      engine?.camera.livePosition ?? camera.positionWC,
+    ) > maxRange
   )
     return null;
-  return Cesium.Cartographic.fromCartesian(cartesian, ellipsoid) || null;
+  return (
+    Cesium.Cartographic.fromCartesian(
+      cartesian,
+      engine ? Cesium.Ellipsoid.WGS84 : ellipsoid,
+    ) || null
+  );
 }
 
 /** Camera height (m) above the ground under it. */
 export function cameraHeightAboveGround(viewer) {
-  const carto = viewer?.camera?.positionCartographic;
+  const carto = cameraLocation(viewer);
   if (!carto) return null;
   return carto.height - (groundUnderCamera(viewer) ?? 0);
 }
@@ -97,13 +116,14 @@ export function visibleBbox(
 ) {
   const scene = viewer?.scene;
   const camera = viewer?.camera;
-  if (!scene || !camera) return null;
-  const width = scene.canvas?.clientWidth || scene.canvas?.width || 0;
-  const height = scene.canvas?.clientHeight || scene.canvas?.height || 0;
+  if ((!scene && !viewer?.engine) || !camera) return null;
+  const canvas = canvasOf(viewer);
+  const width = canvas?.clientWidth || canvas?.width || 0;
+  const height = canvas?.clientHeight || canvas?.height || 0;
   const hits = [];
   if (width > 0 && height > 0) {
     const ellipsoid = raisedEllipsoid(
-      scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
+      scene?.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
       groundHeight,
     );
     const point = new Cesium.Cartesian2();
@@ -111,7 +131,13 @@ export function visibleBbox(
       for (let j = 0; j <= BBOX_GRID; j++) {
         point.x = (width * i) / BBOX_GRID;
         point.y = (height * j) / BBOX_GRID;
-        const carto = groundHit(camera, point, ellipsoid, maxRange);
+        const carto = groundHit(
+          camera,
+          point,
+          ellipsoid,
+          maxRange,
+          viewer.engine,
+        );
         if (carto) hits.push(carto);
       }
     }
@@ -153,7 +179,7 @@ export function visibleBbox(
 
 /** The point on the ground under the camera, as {lon, lat} degrees. */
 export function cameraNadir(viewer) {
-  const carto = viewer?.camera?.positionCartographic;
+  const carto = cameraLocation(viewer);
   if (!carto) return null;
   return {
     lon: Cesium.Math.toDegrees(carto.longitude),
@@ -171,17 +197,19 @@ export function viewFocus(
 ) {
   const nadir = cameraNadir(viewer);
   const scene = viewer?.scene;
-  const width = scene?.canvas?.clientWidth || scene?.canvas?.width || 0;
-  const height = scene?.canvas?.clientHeight || scene?.canvas?.height || 0;
+  const canvas = canvasOf(viewer);
+  const width = canvas?.clientWidth || canvas?.width || 0;
+  const height = canvas?.clientHeight || canvas?.height || 0;
   if (!nadir || !width || !height) return nadir;
   const hit = groundHit(
     viewer.camera,
     new Cesium.Cartesian2(width / 2, height / 2),
     raisedEllipsoid(
-      scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
+      scene?.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
       groundHeight,
     ),
     maxRange,
+    viewer.engine,
   );
   if (!hit) return nadir;
   const ahead = {
@@ -199,11 +227,7 @@ export function viewFocus(
  * (NYC −22 m), and an occluder at 0 m would hide the cones around it.
  */
 const HORIZON_CULL_DEPTH_M = 1000;
-const HORIZON_CULL_ELLIPSOID = new Cesium.Ellipsoid(
-  Cesium.Ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
-  Cesium.Ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
-  Cesium.Ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
-);
+let HORIZON_CULL_ELLIPSOID;
 
 /**
  * Hide billboards and points behind the horizon: they skip the depth test, so
@@ -212,12 +236,18 @@ const HORIZON_CULL_ELLIPSOID = new Cesium.Ellipsoid(
  * @param {{getViewer: () => object|null, items: () => Iterable<{position: object, show: boolean}>, onChange?: () => void}} options
  */
 export function createHorizonCull({ getViewer, items, onChange }) {
-  const occluder = new Cesium.EllipsoidalOccluder(HORIZON_CULL_ELLIPSOID);
+  let occluder;
   let from = null;
   let stopListening = null;
 
   /** Show what is in front of the horizon, hide the rest; the count seen. */
   function cull(list, position) {
+    HORIZON_CULL_ELLIPSOID ??= new Cesium.Ellipsoid(
+      Cesium.Ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
+      Cesium.Ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
+      Cesium.Ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
+    );
+    occluder ??= new Cesium.EllipsoidalOccluder(HORIZON_CULL_ELLIPSOID);
     occluder.cameraPosition = position;
     let seen = 0;
     let changed = false;
@@ -275,7 +305,7 @@ export function viewCentre(viewer) {
     if (lon > 180) lon -= 360;
     return { lat: (bbox[1] + bbox[3]) / 2, lon };
   }
-  const carto = viewer.camera?.positionCartographic;
+  const carto = cameraLocation(viewer);
   if (!carto) return null;
   return {
     lat: Cesium.Math.toDegrees(carto.latitude),

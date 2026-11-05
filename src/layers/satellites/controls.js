@@ -1,9 +1,10 @@
+import { appClock } from '../../time/clock.js';
 import {
   tallySatelliteClasses,
   satelliteClassLabel,
   satelliteClassLegend,
 } from '../../data/satelliteClass.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { t } from '../../i18n/index.js';
 import { ISS_NORAD, POINT_STYLES } from './policy.js';
 
@@ -190,13 +191,16 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (noradId === null) return null;
 
       const sat = layerState._catalog.get(noradId);
-      const pos = parts.orbits.propagatePosition(sat.satrec, new Date());
+      const pos = parts.orbits.propagatePosition(
+        sat.satrec,
+        new Date(appClock.now()),
+      );
       if (!pos) return null;
 
       return {
         noradId,
         name: sat.name.trim(),
-        position: Cesium.Cartesian3.fromDegrees(
+        position: geo.cartesian3.fromDegrees(
           pos.longitude,
           pos.latitude,
           pos.altitude,
@@ -228,15 +232,15 @@ export function createControls({ state: layerState, services, parts, source }) {
           layerState._catalog.get(noradId)?.group === 'dense'
         )
           continue;
-        const carto = Cesium.Cartographic.fromCartesian(point.position);
+        const carto = geo.cartographic.fromCartesian(point.position);
         if (!carto) continue;
         const sat = layerState._catalog.get(noradId);
         result.push({
           id: noradId,
           label: sat ? sat.name.trim() : String(noradId),
           position: point.position,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: geo.math.toDegrees(carto.latitude),
+          longitude: geo.math.toDegrees(carto.longitude),
           altitudeM: carto.height,
         });
       }
@@ -249,6 +253,10 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {string|number} noradId NORAD catalog number.
      * @returns {boolean} True if tracking started.
      */
+    hasContact(id) {
+      return layerState._points.has(Number(id));
+    },
+
     trackById(noradId, { origin = 'programmatic' } = {}) {
       const id = Number(noradId);
       if (
@@ -258,6 +266,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         !layerState._points.has(id)
       )
         return false;
+      if (layerState._restoringViewport && layerState._trackedNorad === id)
+        return true;
       parts.tracking._cancelPendingTrackingRestore();
       parts.tracking._trackSatellite(id, { origin });
       return layerState._trackedNorad === id;

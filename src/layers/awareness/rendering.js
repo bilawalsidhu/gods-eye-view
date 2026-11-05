@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { t } from '../../i18n/index.js';
 import {
   CYBER_SONAR_RENDER_INTERVAL_MS,
@@ -367,10 +368,10 @@ export function createRendering({
    * viewer's container. Each part keeps its last placement while hidden.
    */
   function ensureDirectionOverlay() {
-    if (layerState.directionView || !layerState.viewer)
+    if (layerState.directionView || !layerState.display)
       return layerState.directionView;
     presentDirection({
-      container: layerState.viewer.container,
+      container: layerState.display.container,
       hidden: true,
       ring: null,
       heading: { text: '', left: null, top: null },
@@ -460,7 +461,7 @@ export function createRendering({
       return;
     }
 
-    const canvas = layerState.viewer.scene.canvas;
+    const canvas = layerState.display.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     const sonar = isCyberSonarActive()
@@ -478,9 +479,9 @@ export function createRendering({
       120,
       Math.min(geometry.radius - 48, geometry.radius * 0.66),
     );
-    const cameraHeading = layerState.viewer.camera.heading || 0;
+    const cameraHeading = layerState.display.camera.heading || 0;
     const headingDeg =
-      (Math.round(Cesium.Math.toDegrees(cameraHeading)) + 360) % 360;
+      (Math.round(geo.math.toDegrees(cameraHeading)) + 360) % 360;
     const ring = {
       left: `${geometry.centerX - compassRadius}px`,
       top: `${geometry.centerY - compassRadius}px`,
@@ -496,8 +497,8 @@ export function createRendering({
       top: `${geometry.centerY - compassRadius + 39}px`,
     };
     const labels = root.labels.map((label) => {
-      const bearing = Cesium.Math.toRadians(label.bearing);
-      const angle = bearing - cameraHeading - Cesium.Math.PI_OVER_TWO;
+      const bearing = geo.math.toRadians(label.bearing);
+      const angle = bearing - cameraHeading - geo.math.PI_OVER_TWO;
       const labelRadius = compassRadius - 17;
       return {
         ...label,
@@ -525,19 +526,19 @@ export function createRendering({
         marker.hidden = true;
         continue;
       }
-      const direction = Cesium.Cartesian3.subtract(
+      const direction = geo.cartesian3.subtract(
         item.position,
         layerState.subject.position,
         layerState.DIRECTION_SCRATCH[index],
       );
-      if (Cesium.Cartesian3.magnitudeSquared(direction) < 1) {
+      if (geo.cartesian3.magnitudeSquared(direction) < 1) {
         marker.hidden = true;
         continue;
       }
-      Cesium.Cartesian3.normalize(direction, direction);
+      geo.cartesian3.normalize(direction, direction);
       const projection = celestialScreenAngle(
-        Cesium.Cartesian3.dot(direction, layerState.viewer.camera.rightWC),
-        Cesium.Cartesian3.dot(direction, layerState.viewer.camera.upWC),
+        geo.cartesian3.dot(direction, layerState.display.camera.rightWC),
+        geo.cartesian3.dot(direction, layerState.display.camera.upWC),
         layerState.directionAngles[index],
       );
       if (projection.stable)
@@ -565,12 +566,12 @@ export function createRendering({
         transform: `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`,
       };
       const label = formatAwarenessLabel(item);
-      const subjectCartographic = Cesium.Cartographic.fromCartesian(
+      const subjectCartographic = geo.cartographic.fromCartesian(
         layerState.subject.position,
         undefined,
         layerState.SUBJECT_CARTOGRAPHIC_SCRATCH,
       );
-      const targetCartographic = Cesium.Cartographic.fromCartesian(
+      const targetCartographic = geo.cartographic.fromCartesian(
         item.position,
         undefined,
         layerState.TARGET_CARTOGRAPHIC_SCRATCH[index],
@@ -578,10 +579,10 @@ export function createRendering({
       const bearing =
         subjectCartographic && targetCartographic
           ? bearingBetweenCoordinates(
-              Cesium.Math.toDegrees(subjectCartographic.latitude),
-              Cesium.Math.toDegrees(subjectCartographic.longitude),
-              Cesium.Math.toDegrees(targetCartographic.latitude),
-              Cesium.Math.toDegrees(targetCartographic.longitude),
+              geo.math.toDegrees(subjectCartographic.latitude),
+              geo.math.toDegrees(subjectCartographic.longitude),
+              geo.math.toDegrees(targetCartographic.latitude),
+              geo.math.toDegrees(targetCartographic.longitude),
             )
           : null;
       const bearingText = Number.isFinite(bearing)
@@ -637,7 +638,7 @@ export function createRendering({
       );
       return;
     }
-    const primitives = layerState.viewer.scene.primitives;
+    const primitives = layerState.display.viewer.scene.primitives;
     layerState.visual.gradient = primitives.add(
       createPulseGradient(center, gradient.appearance.material),
     );
@@ -648,31 +649,187 @@ export function createRendering({
   }
 
   function clearVisual() {
-    layerState.visual?.stopPulses?.();
-    layerState.visual?.removeMotionListener?.();
-    if (layerState.visual?.gradient && layerState.viewer)
-      layerState.viewer.scene.primitives.remove(layerState.visual.gradient);
-    if (layerState.visual?.ringPrimitive && layerState.viewer) {
-      layerState.viewer.scene.primitives.remove?.(
-        layerState.visual.ringPrimitive,
-      );
+    const visual = layerState.visual;
+    const viewer = layerState.display?.viewer;
+    visual?.stopPulses?.();
+    visual?.removeMotionListener?.();
+    if (visual?.gradient && viewer)
+      viewer.scene.primitives.remove(visual.gradient);
+    if (visual?.ringPrimitive && viewer) {
+      viewer.scene.primitives.remove?.(visual.ringPrimitive);
       governorRequestRender('awareness-visual');
     }
     clearAwarenessEchoField();
-    if (layerState.visual?.entities && layerState.viewer) {
-      for (const entity of layerState.visual.entities)
-        layerState.viewer.entities.remove(entity);
+    if (visual?.rim || (visual?.entities && viewer)) {
+      visual.rim?.destroy();
+      visual.disc?.destroy();
+      for (const entity of visual.entities ?? [])
+        viewer.entities.remove(entity);
       // Idle mode renders only on request; a removed ring must not linger.
       governorRequestRender('awareness-visual');
     }
     layerState.visual = null;
   }
 
+  /** A fresh pulse window, running from now. */
+  function newWake() {
+    return wakeAwarenessPulses(
+      { startMs: -Infinity, untilMs: -Infinity },
+      performance.now(),
+    );
+  }
+
+  /**
+   * How far the pulses are on at a time (0 at rest or while `belowRim()`),
+   * and the ring's opacity: while pulses run it flashes as each one arrives
+   * and otherwise dims to `restOpacity`; as they settle it returns to full.
+   */
+  function pulseClock(wake, belowRim) {
+    const levelAt = (nowMs) =>
+      wake && !belowRim() ? awarenessPulseLevel(nowMs, wake) : 0;
+    const ringAlpha = (nowMs) => {
+      const pulsed = Math.max(
+        AWARENESS_RANGE_RING_STYLE.restOpacity,
+        awarenessRingFlash(nowMs),
+      );
+      return 1 - levelAt(nowMs) * (1 - pulsed);
+    };
+    return { levelAt, ringAlpha, belowRim };
+  }
+
+  /**
+   * Run the pulses on a globe: each frame `draw` gets the level, the ring's
+   * opacity and the fronts (fractions of the range, opacities). Each drawn
+   * frame, whoever asked for it, arms one request a Cyber sonar interval
+   * later, as the Cyber sonar scene does. Requests never land within 80 ms
+   * of a frame, so they cannot beat the detection lane's 80 ms gate, and
+   * they stop once the pulses rest. The detection overlay pulses the
+   * brackets of flights and vessels a front crosses; it reads `center` in
+   * place, so it follows the subject too. Returns the stop.
+   */
+  function runPulses({
+    center,
+    wake,
+    levelAt,
+    ringAlpha,
+    belowRim,
+    onFrame,
+    onFrameEnd,
+    draw,
+  }) {
+    const pulse = AWARENESS_RANGE_PULSE;
+    const count = Math.min(pulse.count, AWARENESS_PULSE_GRADIENT_MAX);
+    const radii = [0, 0, 0, 0];
+    const alphas = [0, 0, 0, 0];
+    const removeFrame = onFrame(() => {
+      const nowMs = performance.now();
+      const level = levelAt(nowMs);
+      for (let index = 0; index < count; index++) {
+        const state = awarenessPulseState(nowMs, index);
+        radii[index] = state.radiusM / AWARENESS_RADIUS_M;
+        alphas[index] = state.alpha * level;
+      }
+      draw({ level, alpha: ringAlpha(nowMs), radii, alphas });
+    });
+    let timer = null;
+    const removeFrameEnd = onFrameEnd(() => {
+      globalThis.clearTimeout(timer);
+      timer = null;
+      if (performance.now() < wake.untilMs && !belowRim())
+        timer = globalThis.setTimeout(() => {
+          timer = null;
+          governorRequestRender('awareness-pulse');
+        }, CYBER_SONAR_RENDER_INTERVAL_MS);
+    });
+    setAwarenessEchoField({
+      center,
+      radiusM: AWARENESS_RADIUS_M,
+      pulse,
+      echo: AWARENESS_RANGE_ECHO,
+      level: levelAt,
+    });
+    return () => {
+      removeFrame?.();
+      removeFrameEnd?.();
+      globalThis.clearTimeout(timer);
+      timer = null;
+    };
+  }
+
+  /**
+   * Rebuild the visual when reduced motion is turned on or off mid-session.
+   * Returns the listener's removal.
+   */
+  function watchReducedMotion() {
+    const motionQuery = globalThis.matchMedia?.(REDUCED_MOTION_QUERY);
+    const onMotionChange = () => {
+      if (layerState.subject) renderVisual(layerState.subject);
+    };
+    // Safari before 14 has only the older addListener / removeListener.
+    if (motionQuery?.addEventListener)
+      motionQuery.addEventListener('change', onMotionChange);
+    else motionQuery?.addListener?.(onMotionChange);
+    return () => {
+      if (motionQuery?.removeEventListener)
+        motionQuery.removeEventListener('change', onMotionChange);
+      else motionQuery?.removeListener?.(onMotionChange);
+    };
+  }
+
+  /**
+   * The visual through the display of an engine without a Cesium viewer:
+   * its range ring and, unless reduced motion is on or it cannot draw them,
+   * the pulses and their echoes, timed as on Cesium.
+   */
+  function renderDisplayVisual(key, groundCenter, reducedMotion) {
+    const display = layerState.display;
+    const animate = Boolean(
+      !reducedMotion &&
+      display.createPulses &&
+      display.onFrameEnd &&
+      display.cameraHeight,
+    );
+    const wake = animate ? newWake() : null;
+    const { levelAt, ringAlpha, belowRim } = pulseClock(
+      wake,
+      () => display.cameraHeight() < CONTEXT_RIM_HEIGHT_M,
+    );
+    const center = geo.cartesian3.clone(groundCenter);
+    const rim = display.createRim(groundCenter);
+    const disc = animate ? display.createPulses(groundCenter) : null;
+    const stopPulses = animate
+      ? runPulses({
+          center,
+          wake,
+          levelAt,
+          ringAlpha,
+          belowRim,
+          onFrame: display.onFrame,
+          onFrameEnd: display.onFrameEnd,
+          draw({ level, alpha, radii, alphas }) {
+            rim.setAlpha?.(alpha);
+            disc.draw({ level, radii, alphas });
+          },
+        })
+      : null;
+    layerState.visual = {
+      key,
+      rim,
+      disc,
+      center,
+      reducedMotion,
+      wake,
+      stopPulses,
+      removeMotionListener: watchReducedMotion(),
+    };
+    governorRequestRender('awareness-visual');
+  }
+
   function renderVisual(subject) {
-    if (!layerState.viewer || !subject?.position) return;
-    const cartographic = Cesium.Cartographic.fromCartesian(subject.position);
+    if (!layerState.display || !subject?.position) return;
+    const cartographic = geo.cartographic.fromCartesian(subject.position);
     if (!cartographic) return;
-    const groundCenter = Cesium.Cartesian3.fromRadians(
+    const groundCenter = geo.cartesian3.fromRadians(
       cartographic.longitude,
       cartographic.latitude,
       0,
@@ -687,30 +844,35 @@ export function createRendering({
       // Move the ring only after a meaningful displacement so live tracking
       // does not rebuild its geometry for sub-pixel motion every 750 ms.
       if (
-        Cesium.Cartesian3.distance(layerState.visual.center, groundCenter) >=
-        250
+        geo.cartesian3.distance(layerState.visual.center, groundCenter) >= 250
       ) {
-        const positions = awarenessRangeRingPositions(
-          groundCenter,
-          AWARENESS_RADIUS_M,
-          CONTEXT_RIM_HEIGHT_M,
-        );
-        // The echo field reads `visual.center` in place and follows on its
-        // own. The pulse disc follows by its model matrix and is rebuilt only
-        // every `gradientRebuildM`: a build costs a few milliseconds.
-        layerState.visual.ringPositions = positions;
-        const { ringPrimitive } = layerState.visual;
-        if (ringPrimitive) {
-          const primitives = layerState.viewer.scene.primitives;
-          layerState.visual.ringPrimitive = primitives.add(
-            createRingPrimitive(positions, ringPrimitive.appearance.material),
+        if (layerState.visual.rim) {
+          layerState.visual.rim.move(groundCenter);
+          layerState.visual.disc?.move(groundCenter);
+          geo.cartesian3.clone(groundCenter, layerState.visual.center);
+        } else {
+          const positions = awarenessRangeRingPositions(
+            groundCenter,
+            AWARENESS_RADIUS_M,
+            CONTEXT_RIM_HEIGHT_M,
           );
-          primitives.remove(ringPrimitive);
-        } else layerState.visual.ring.polyline.positions.setValue(positions);
-        Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
-        // A resting disc is hidden, so it catches up when the pulses wake.
-        if (performance.now() < layerState.visual.wake?.untilMs)
-          followPulseDisc();
+          // The echo field reads `visual.center` in place and follows on its
+          // own. The pulse disc follows by its model matrix and is rebuilt only
+          // every `gradientRebuildM`: a build costs a few milliseconds.
+          layerState.visual.ringPositions = positions;
+          const { ringPrimitive } = layerState.visual;
+          if (ringPrimitive) {
+            const primitives = layerState.display.viewer.scene.primitives;
+            layerState.visual.ringPrimitive = primitives.add(
+              createRingPrimitive(positions, ringPrimitive.appearance.material),
+            );
+            primitives.remove(ringPrimitive);
+          } else layerState.visual.ring.polyline.positions.setValue(positions);
+          Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
+          // A resting disc is hidden, so it catches up when the pulses wake.
+          if (performance.now() < layerState.visual.wake?.untilMs)
+            followPulseDisc();
+        }
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
       }
@@ -718,8 +880,15 @@ export function createRendering({
     }
     clearVisual();
 
+    // A Cesium globe draws the ring and the pulse disc as primitives below;
+    // another engine through its display: a ring, and pulses when it can.
+    const viewer = layerState.display.viewer;
+    if (!viewer) {
+      renderDisplayVisual(key, groundCenter, reducedMotion);
+      return;
+    }
     const entities = [];
-    const scene = layerState.viewer.scene;
+    const scene = viewer.scene;
     // A viewer without a primitive collection or a preRender hook (headless
     // tools, partial stubs) gets the static ring only, as the Cyber sonar
     // scene does. So does a viewer who prefers reduced motion.
@@ -730,18 +899,14 @@ export function createRendering({
       scene?.postRender?.addEventListener,
     );
     // Pulses run from now until `wake.untilMs`, then rest.
-    const wake = animate
-      ? wakeAwarenessPulses(
-          { startMs: -Infinity, untilMs: -Infinity },
-          performance.now(),
-        )
-      : null;
+    const wake = animate ? newWake() : null;
     // From a camera below the rim height the disc would sweep across the sky,
     // so it is hidden there, and the pulses rest with it: no flash, no
     // echoes, no frames.
-    const belowRim = () => cameraHeightM(scene) < CONTEXT_RIM_HEIGHT_M;
-    const levelAt = (nowMs) =>
-      wake && !belowRim() ? awarenessPulseLevel(nowMs, wake) : 0;
+    const { levelAt, ringAlpha, belowRim } = pulseClock(
+      wake,
+      () => cameraHeightM(scene) < CONTEXT_RIM_HEIGHT_M,
+    );
 
     // A polyline, not an ellipse outline: WebGL draws ellipse outlines at
     // 1 px whatever `outlineWidth` says, and the ring needs a halo.
@@ -753,12 +918,6 @@ export function createRendering({
       AWARENESS_RADIUS_M,
       CONTEXT_RIM_HEIGHT_M,
     );
-    // While pulses run, the ring flashes as each one arrives and otherwise
-    // dims to `restOpacity`; as they settle it returns to full and stays.
-    const ringAlpha = (nowMs) => {
-      const pulsed = Math.max(ring.restOpacity, awarenessRingFlash(nowMs));
-      return 1 - levelAt(nowMs) * (1 - pulsed);
-    };
     let ringEntity = null;
     let ringMaterial = null;
     let ringPrimitive = null;
@@ -776,7 +935,7 @@ export function createRendering({
     if (!ringPrimitive) {
       // Headless tools and partial stubs have no primitive collection; they
       // get the static ring as an entity.
-      ringEntity = layerState.viewer.entities.add({
+      ringEntity = viewer.entities.add({
         polyline: {
           positions: new Cesium.ConstantProperty(ringPositions),
           width: ring.width,
@@ -824,65 +983,25 @@ export function createRendering({
       gradient = scene.primitives.add(
         createPulseGradient(groundCenter, material),
       );
-      const radii = [0, 0, 0, 0];
-      const alphas = [0, 0, 0, 0];
-      const removePreRender = scene.preRender.addEventListener(() => {
-        const nowMs = performance.now();
-        const level = levelAt(nowMs);
-        const alpha = ringAlpha(nowMs);
-        ringMaterial.uniforms.color.alpha = core.alpha * alpha;
-        ringMaterial.uniforms.outlineColor.alpha = halo.alpha * alpha;
-        // The disc is looked up each frame: a subject move swaps it.
-        const disc = layerState.visual?.gradient;
-        if (disc) disc.show = level > 0;
-        for (let index = 0; index < count; index++) {
-          const state = awarenessPulseState(nowMs, index);
-          radii[index] = state.radiusM / AWARENESS_RADIUS_M;
-          alphas[index] = state.alpha * level;
-        }
-        Cesium.Cartesian4.fromArray(radii, 0, material.uniforms.radii);
-        Cesium.Cartesian4.fromArray(alphas, 0, material.uniforms.alphas);
-      });
-      // Each drawn frame, whoever asked for it, arms one request a Cyber
-      // sonar interval later, as the Cyber sonar scene does. Requests never
-      // land within 80 ms of a frame, so they cannot beat the detection
-      // lane's 80 ms gate, and they stop once the pulses rest.
-      let timer = null;
-      const removePostRender = scene.postRender.addEventListener(() => {
-        globalThis.clearTimeout(timer);
-        timer = null;
-        if (performance.now() < wake.untilMs && !belowRim())
-          timer = globalThis.setTimeout(() => {
-            timer = null;
-            governorRequestRender('awareness-pulse');
-          }, CYBER_SONAR_RENDER_INTERVAL_MS);
-      });
-      stopPulses = () => {
-        removePreRender();
-        removePostRender();
-        globalThis.clearTimeout(timer);
-        timer = null;
-      };
-      // The detection overlay pulses the brackets of flights and vessels a
-      // front crosses; it reads the centre in place, so it follows too.
-      setAwarenessEchoField({
+      stopPulses = runPulses({
         center,
-        radiusM: AWARENESS_RADIUS_M,
-        pulse,
-        echo: AWARENESS_RANGE_ECHO,
-        level: levelAt,
+        wake,
+        levelAt,
+        ringAlpha,
+        belowRim,
+        onFrame: (run) => scene.preRender.addEventListener(run),
+        onFrameEnd: (run) => scene.postRender.addEventListener(run),
+        draw({ level, alpha, radii, alphas }) {
+          ringMaterial.uniforms.color.alpha = core.alpha * alpha;
+          ringMaterial.uniforms.outlineColor.alpha = halo.alpha * alpha;
+          // The disc is looked up each frame: a subject move swaps it.
+          const disc = layerState.visual?.gradient;
+          if (disc) disc.show = level > 0;
+          Cesium.Cartesian4.fromArray(radii, 0, material.uniforms.radii);
+          Cesium.Cartesian4.fromArray(alphas, 0, material.uniforms.alphas);
+        },
       });
     }
-
-    // Turning reduced motion on or off mid-session rebuilds the visual.
-    const motionQuery = globalThis.matchMedia?.(REDUCED_MOTION_QUERY);
-    const onMotionChange = () => {
-      if (layerState.subject) renderVisual(layerState.subject);
-    };
-    // Safari before 14 has only the older addListener / removeListener.
-    if (motionQuery?.addEventListener)
-      motionQuery.addEventListener('change', onMotionChange);
-    else motionQuery?.addListener?.(onMotionChange);
 
     layerState.visual = {
       key,
@@ -896,11 +1015,7 @@ export function createRendering({
       reducedMotion,
       wake,
       stopPulses,
-      removeMotionListener: () => {
-        if (motionQuery?.removeEventListener)
-          motionQuery.removeEventListener('change', onMotionChange);
-        else motionQuery?.removeListener?.(onMotionChange);
-      },
+      removeMotionListener: watchReducedMotion(),
     };
     governorRequestRender('awareness-visual');
   }

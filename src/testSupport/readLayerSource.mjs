@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,9 +45,19 @@ export function readLayerSource(file) {
                         ? '../layers/cctv'
                         : '../layers/vessels',
   );
-  return readdirSync(directory)
-    .filter((name) => name.endsWith('.js'))
-    .sort()
-    .map((name) => readFileSync(join(directory, name), 'utf8'))
+  // A layer's code includes its renderers (render/*.js) and, for
+  // the aircraft layers, the shared aircraft renderer they draw through:
+  // checks on what the layer does keep finding it where it moved.
+  const directories = [directory, join(directory, 'render')];
+  if (['flights.js', 'militaryFlights.js'].includes(basename(path)))
+    directories.push(join(directory, '../aircraft/render'));
+  return directories
+    .filter((dir) => existsSync(dir))
+    .flatMap((dir) =>
+      readdirSync(dir)
+        .filter((name) => name.endsWith('.js'))
+        .sort()
+        .map((name) => readFileSync(join(dir, name), 'utf8')),
+    )
     .join('\n');
 }

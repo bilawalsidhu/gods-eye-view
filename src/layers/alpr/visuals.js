@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { destinationPointDeg } from './model.js';
 import {
   DIRECTION_CONE_M,
@@ -96,13 +96,9 @@ export function directionWedgePositions(record, heightM = 0, heightAt = null) {
     return Number.isFinite(height) ? height : heightM;
   };
   return [
-    Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, heightM),
-    Cesium.Cartesian3.fromDegrees(left.longitude, left.latitude, corner(left)),
-    Cesium.Cartesian3.fromDegrees(
-      right.longitude,
-      right.latitude,
-      corner(right),
-    ),
+    geo.cartesian3.fromDegrees(record.longitude, record.latitude, heightM),
+    geo.cartesian3.fromDegrees(left.longitude, left.latitude, corner(left)),
+    geo.cartesian3.fromDegrees(right.longitude, right.latitude, corner(right)),
   ];
 }
 

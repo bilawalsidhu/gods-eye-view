@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as credits from '../../data/dataCredits.js';
-import { createLifecycle } from './lifecycle.js';
+import { createLifecycle } from './render/cesium/lifecycle.js';
 import { LAYER_ID } from './policy.js';
 
 for (const source of [

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -100,6 +100,11 @@ export function createState({ services }) {
 
   state._focusAfterActiveLookup = false;
 
+  // The mission whose orbit view the user asked for last; any later camera
+  // command of this layer (a flyover, a launch-site view) clears it, so a late
+  // active-satellite answer can reframe only a view nobody has left.
+  state._missionFocusIntentId = null;
+
   state._satelliteStateBeforeMission = null;
 
   state._satelliteActivationPromise = null;
@@ -138,16 +143,12 @@ export function createState({ services }) {
 
   state._missionOrbitPrimitives = new Map();
 
-  state._declutterTime = new Cesium.JulianDate();
-
-  state._declutterOccluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    new Cesium.Cartesian3(),
-  );
+  state._renderer = null;
+  state._engine = null;
+  state._declutterTime = null;
+  state._declutterOccluder = null;
 
   state._missionRingDate = new Date(0);
-
-  state._missionOrbitPatternRegistered = false;
 
   state._pathDistanceCache = new WeakMap();
   state._sourceController = new AbortController();

@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { appClock } from '../../time/clock.js';
+import * as geo from '../../geo/index.js';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
 import { ISS_NORAD } from './policy.js';
 
@@ -64,11 +65,11 @@ export function createRecords({ state, parts }) {
     }
     const point = state._points.get(noradId);
     if (!point?.position) return null;
-    const carto = Cesium.Cartographic.fromCartesian(point.position);
+    const carto = geo.cartographic.fromCartesian(point.position);
     if (!carto) return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: geo.math.toDegrees(carto.latitude),
+      lon: geo.math.toDegrees(carto.longitude),
       altitudeM: carto.height,
       speedMps: null,
     };
@@ -79,7 +80,7 @@ export function createRecords({ state, parts }) {
     const limit = Number.isFinite(maxCount)
       ? Math.max(1, Math.floor(maxCount))
       : 2000;
-    const now = new Date();
+    const now = new Date(appClock.now());
     const result = [];
     const emit = (noradId, sat) => {
       if (result.length >= limit) return false;

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -49,6 +49,8 @@ export function createState({ services }) {
   state._denseLoadController = null;
 
   state._viewer = null;
+  state._renderer = null;
+  state._engine = null;
 
   state._preRenderListener = null;
 
@@ -62,7 +64,7 @@ export function createState({ services }) {
 
   state._activeFocusCount = 0;
 
-  state._scratchFocusScreen = new Cesium.Cartesian2();
+  state._scratchFocusScreen = geo.cartesian2.create();
 
   state._enabled = false;
 
@@ -145,7 +147,7 @@ export function createState({ services }) {
   state._trackedFrameGeo = null;
   // { longitude, latitude, altitude } or null
 
-  state._trackedFrameCartesian = new Cesium.Cartesian3();
+  state._trackedFrameCartesian = geo.cartesian3.create();
 
   /** Optional deterministic clock used only by the production-frame test seam. */
 
@@ -153,9 +155,9 @@ export function createState({ services }) {
 
   // Scratch variables
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  state._scratchCartesian = geo.cartesian3.create();
 
-  state._scratchRingRotation = new Cesium.Matrix3();
+  state._scratchRingRotation = geo.matrix3.create();
 
   /** Update the explicit model only when the rounded altitude line changes. */
   /** Epoch of the last shared-context refresh for the tracked satellite. */

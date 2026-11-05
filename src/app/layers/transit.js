@@ -1,4 +1,6 @@
 import { createTransitLayer } from '../../layers/transit/index.js';
+import { createTransitCesiumRenderer } from '../../layers/transit/render/cesium.js';
+import { rendererFor } from './renderers.js';
 import * as render from '../../renderGovernor.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as picking from '../../data/pickRegistry.js';
@@ -22,12 +24,20 @@ import {
  * @param {{surface: object}} options
  * @returns {object}
  */
-export function createApplicationTransit({ surface, source }) {
+export function createApplicationTransit({
+  surface,
+  source,
+  rendererFactory = ({ engine, ...context }) =>
+    engine?.kind === 'navara'
+      ? rendererFor('transit', engine, context)
+      : createTransitCesiumRenderer(context),
+}) {
   if (!surface?.groundFloor || !surface?.meshFloor)
     throw new TypeError('Transit needs the application surface services');
   const { groundFloor, meshFloor } = surface;
   return createTransitLayer({
     source,
+    rendererFactory,
     services: {
       render,
       sprites,

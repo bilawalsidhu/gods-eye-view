@@ -1,16 +1,21 @@
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { createStateChannel } from '../app/stateChannel.js';
-import * as Cesium from 'cesium';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import {
   beginDeferredNavigation,
   reassertNavigationHandoff,
   runExplicitNavigation,
 } from '../navigationPolicy.js';
 
-/** Own camera authority generations, pending search UI and tracking handoff. */
+/**
+ * Own camera authority generations, pending search UI and tracking handoff.
+ * The camera is the globe `engine`'s. `viewer` is optional and only clears
+ * Cesium's tracked entity.
+ */
 export class NavigationController {
   constructor({
-    viewer,
+    viewer = null,
+    engine = engineFromViewer(viewer),
     tracking,
     settleSearch = () => {},
     interruptCameraMotion,
@@ -25,6 +30,7 @@ export class NavigationController {
   }) {
     Object.assign(this, {
       viewer,
+      engine,
       tracking,
       settleSearch,
       interruptCameraMotion,
@@ -49,7 +55,7 @@ export class NavigationController {
     clearSearchedLocation = true,
   } = {}) {
     this.interruptGlobeRotation('navigation-intent');
-    cancelCameraArrival(this.viewer);
+    cancelCameraArrival(this.engine);
     this.cancelOrientation();
     const { flightsLayer, militaryFlightsLayer, satellitesLayer } =
       this.tracking;
@@ -141,6 +147,10 @@ export class NavigationController {
     } = this.tracking;
     let contactSelected = false;
     try {
+      // A layer an engine leaves out (military awareness on Navara) has no
+      // controls: release the trackers it would release, below.
+      if (typeof militaryAwarenessLayer?.releaseCameraOwnership !== 'function')
+        throw new Error('no military awareness controls');
       contactSelected = Boolean(
         militaryAwarenessLayer.releaseCameraOwnership?.({
           preserveVesselSelection,
@@ -176,12 +186,13 @@ export class NavigationController {
     } catch {
       /* best-effort release */
     }
-    this.viewer.trackedEntity = undefined;
+    if (this.viewer) this.viewer.trackedEntity = undefined;
     this.interruptCameraMotion('explicit-navigation');
     this.stopOrbit();
-    if (!preserveCameraFlight) this.viewer.camera.cancelFlight();
+    const camera = this.engine?.camera;
+    if (!preserveCameraFlight) camera?.cancelFlight();
     try {
-      this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      camera?.release();
     } catch {
       /* teardown race */
     }
@@ -215,7 +226,10 @@ export class NavigationController {
       release: () => {
         this.interruptCameraMotion('camera-orientation');
         this.stopOrbit();
-        this.viewer.camera.cancelFlight();
+        // Only a running flight: a cancel is a camera command, which ends an
+        // engine's own follow (Navara) that the orientation keeps.
+        if (this.engine?.camera.flightActive?.() !== false)
+          this.engine?.camera.cancelFlight();
       },
       navigate,
     });
@@ -240,7 +254,10 @@ export class NavigationController {
     });
   }
 
-  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool' } = {}) {
+  _reassertNavigationHandoff(
+    generation,
+    { trackingOrigin = 'tool', keepTracking = false } = {},
+  ) {
     return reassertNavigationHandoff({
       generation,
       currentGeneration: this._navigationGeneration,
@@ -252,22 +269,40 @@ export class NavigationController {
       // was refused by the cockpit leaves the old readout standing.
       release: () => {
         this.clearLocation();
-        return this._releaseFollowCamera({ trackingOrigin });
+        if (!keepTracking) return this._releaseFollowCamera({ trackingOrigin });
       },
     });
+  }
+  /**
+   * The globe the camera authority applies to (an engine switch), or none.
+   * Leaving a globe retires every deferred navigation started on it: its
+   * flight cannot land on the next one. `retainScene` keeps the selection a
+   * handoff carries across.
+   */
+  setScene({ viewer = null, engine = null } = {}, { retainScene = true } = {}) {
+    if (this._disposed) return;
+    if (this.engine && engine !== this.engine) {
+      cancelCameraArrival(this.engine);
+      this._stampNavigation({
+        cancelPendingSelection: !retainScene,
+        clearSearchedLocation: false,
+      });
+    }
+    this.viewer = viewer;
+    this.engine = engine ?? engineFromViewer(viewer);
   }
   /** Subscribe to ownership changes without claiming the camera or exposing mutable state. */
   subscribeCameraHandoff(listener) {
     return this._cameraHandoffs.subscribe(listener, { emitCurrent: false });
   }
   stop() {
-    cancelCameraArrival(this.viewer);
+    cancelCameraArrival(this.engine);
     this._disposed = true;
     this._cameraHandoffs?.publish();
     this._cameraHandoffs?.destroy();
   }
-  destroy() {
+  destroy({ retainScene = false } = {}) {
     this.stop();
-    this._stampNavigation();
+    this._stampNavigation({ cancelPendingSelection: !retainScene });
   }
 }

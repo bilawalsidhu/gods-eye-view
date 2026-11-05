@@ -1,3 +1,4 @@
+import { CYAN } from '../layers/shared/color.js';
 import * as Cesium from 'cesium';
 import { TRACKED_ICON_COLOR } from '../layers/military/policy.js';
 import { createRendering as civilRendering } from '../layers/flights/rendering.js';
@@ -454,7 +455,7 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
     flightState._trackedIcao = 'civil';
     assert.equal(
       rendering._modelColor('civil'),
-      factory === civilRendering ? Cesium.Color.CYAN : TRACKED_ICON_COLOR,
+      factory === civilRendering ? CYAN : TRACKED_ICON_COLOR,
     );
     flightState._trackedIcao = null;
     flightState.records.data.set('civil', { emergency: null });
@@ -481,7 +482,8 @@ test('GERMAN: an existing untracked military billboard repaints each poll withou
     floorAltitudeM: (value) => value,
   });
   flightState.records = records;
-  const apply = createMilitarySnapshotRenderer({
+  flightState._renderer = { view: {}, surfaceExclusions: () => [] };
+  const { applySnapshot: apply } = createMilitarySnapshotRenderer({
     flightState,
     records,
     groundFloor: { warmGroundFloor() {}, cachedGroundFloor: () => null },

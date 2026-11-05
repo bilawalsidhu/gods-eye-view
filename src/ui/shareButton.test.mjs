@@ -1,3 +1,4 @@
+import { viewerEngine } from '../testSupport/viewerEngine.mjs';
 // The share button copies by default; a host's `services.shareLink` shares the
 // link its own way and reports how it went.
 import test from 'node:test';
@@ -28,7 +29,7 @@ function makeManager(href, { positioned = true } = {}) {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(viewerEngine(viewer));
 }
 
 function installClipboard(writeText) {
@@ -199,6 +200,7 @@ test('the shell’s camera controls answer tilt and north-up and publish their s
     },
     _showToast() {},
   };
+  owner.engine ??= viewerEngine(owner.viewer);
   StyleManager.prototype._initCameraOrientationControls.call(owner);
   assert.deepEqual(store.camera, { tilted: false, heading: 0 });
   store.act('tilt');
@@ -207,6 +209,7 @@ test('the shell’s camera controls answer tilt and north-up and publish their s
 
   // Initialised again, the shell replaces its own owner.
   const first = owner._orientationToken;
+  owner.engine ??= viewerEngine(owner.viewer);
   StyleManager.prototype._initCameraOrientationControls.call(owner);
   assert.notEqual(owner._orientationToken, first);
   assert.equal(store.owns(first, 'tilt'), false);
@@ -236,6 +239,7 @@ test('a shell that goes after a newer one leaves the newer one’s bar state', (
       clearSelectedLayers: async () => {},
     };
     StyleManager.prototype._initClearSelectedLayersButton.call(owner);
+    owner.engine ??= viewerEngine(owner.viewer);
     StyleManager.prototype._initCameraOrientationControls.call(owner);
     return owner;
   };
@@ -274,6 +278,7 @@ test('an older shell that answers again shows its clear and its unchanged camera
       clearSelectedLayers: async () => {},
     };
     StyleManager.prototype._initClearSelectedLayersButton.call(owner);
+    owner.engine ??= viewerEngine(owner.viewer);
     StyleManager.prototype._initCameraOrientationControls.call(owner);
     return owner;
   };

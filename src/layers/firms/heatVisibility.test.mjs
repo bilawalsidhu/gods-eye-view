@@ -12,6 +12,8 @@ test('reenabling an empty filtered layer never reveals the retained pre-filter h
     _fires: [],
     _loading: true,
     _pickIndexById: new Map(),
+    // The layer's renderer on the current globe (render/cesium.js).
+    _renderer: { setVisible: noop, onEnable: noop },
     _heatImagery: {
       setShow(v) {
         shown = v;
@@ -27,7 +29,7 @@ test('reenabling an empty filtered layer never reveals the retained pre-filter h
     },
     config: { id: 'local-firms', overlayHost: { setVisible: noop } },
     components: {
-      rendering: { applyHandoffFade: noop },
+      rendering: { applyHandoffFade: noop, renderCurrentLod: noop },
       viewport: { installLodWatcher: noop, installMoveEndWatcher: noop },
       selection: { installClickHandler: noop },
     },

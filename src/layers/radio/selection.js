@@ -57,12 +57,7 @@ export function createSelection({
     }
     if (changed && parts.interaction.radioPresentationAllowed()) {
       parts.rendering.updateRenderVisibility();
-      if (filterChanged && layerState._dataSource?.clustering?.enabled) {
-        const clusterPoints = layerState._dataSource.clustering.clusterPoints;
-        layerState._dataSource.clustering.clusterPoints = !clusterPoints;
-        layerState._dataSource.clustering.clusterPoints = clusterPoints;
-        layerState._viewer?.scene?.requestRender();
-      }
+      if (filterChanged) parts.renderer?.invalidateClusters();
       parts.rendering.scheduleRadioOverlayPublish();
     }
     parts.presentation.emitState();
@@ -275,15 +270,7 @@ export function createSelection({
     if (clearsCancelledPresentation) parts.rendering.updateSelectionEntity();
     if (changed) parts.clustering.resetRadioClusterOverlayIdentities();
     parts.rendering.updateRenderVisibility();
-    if (changed && layerState._dataSource?.clustering?.enabled) {
-      // Entity visibility changes do not invalidate Cesium's existing cluster
-      // primitives. Toggle a public clustering input twice to mark the current
-      // cluster set dirty without changing its effective configuration.
-      const clusterPoints = layerState._dataSource.clustering.clusterPoints;
-      layerState._dataSource.clustering.clusterPoints = !clusterPoints;
-      layerState._dataSource.clustering.clusterPoints = clusterPoints;
-      layerState._viewer?.scene?.requestRender();
-    }
+    if (changed) parts.renderer?.invalidateClusters();
     parts.rendering.scheduleRadioOverlayPublish();
     parts.presentation.emitState();
     return true;

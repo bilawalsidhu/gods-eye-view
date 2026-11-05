@@ -1,3 +1,4 @@
+import { viewerEngine } from '../../testSupport/viewerEngine.mjs';
 // src/ui/views/intelHudView.test.mjs — the Intel HUD view renders what
 // IntelHUD publishes: its readouts, visibility, layout variant and colors.
 //
@@ -44,7 +45,7 @@ function mount(t) {
   const app = createApp(IntelHudView).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
   const hud = new IntelHUD(
-    {
+    viewerEngine({
       camera: {
         pitch: -Math.PI / 2,
         positionCartographic: { latitude: 0.7, longitude: -1.2, height: 500 },
@@ -52,7 +53,7 @@ function mount(t) {
         moveStart: listeners(),
         moveEnd: listeners(),
       },
-    },
+    }),
     {
       // No AI summary: the readouts are what this test renders.
       summaryService: { configured: async () => false },

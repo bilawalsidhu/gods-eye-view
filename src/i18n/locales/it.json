@@ -1,4 +1,7 @@
 {
+  "Experimental Navara engine": "Motore sperimentale Navara",
+  "Loading the experimental Navara engine...": "Caricamento del motore sperimentale Navara...",
+  "Globe Engine": "Motore del globo",
   "Pick a shape, then click the map.": "Scegli una forma, poi fai clic sulla mappa.",
   "Enter to place the pin, Esc to cancel.": "Premi Enter per posizionare il segnaposto, Esc per annullare.",
   "Click where the pin goes.": "Fai clic dove va il segnaposto.",
@@ -1787,6 +1790,7 @@
     "other": "Impossibile aggiungere {count} file ({name}: {error})"
   },
   "Some KML content was left out.": "Una parte del contenuto KML è stata esclusa.",
+  "Map objects this engine leaves out of {name}: {count}.": "Oggetti della mappa di {name} che questo motore non mostra: {count}.",
   "Press on the ground, not the sky": "Premi sul terreno, non sul cielo",
   "Drag to size the box": "Trascina per dimensionare il riquadro",
   "light {source} to use your {name} key": "attiva {source} per usare la tua chiave {name}",

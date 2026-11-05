@@ -1,4 +1,6 @@
 import { LayerBindings } from './ui/layerBindings.js';
+import { ScreenSpaceEventType } from 'cesium';
+import { FIRMS_LEFT_CLICK } from './layers/firms/render/cesium.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { enter as cockpitEnter, navigateContext } from './ui/cockpitTrackingController.js';
@@ -42,10 +44,10 @@ function ordered(source, needles, label) {
 test('Cockpit takeover invalidates deferred work before camera cancellation', () => {
   const enter = cockpitEnter.toString();
   ordered(enter, [
-    'if (!info || !entity?.position) return false;',
+    'if (!info || !entity) return false;',
     'this.onCameraTakeover?.();',
-    'this.viewer.camera.cancelFlight();',
-    'this.viewer.trackedEntity = undefined;',
+    'this.host.camera.cancelFlight();',
+    'this.host.release();',
   ], 'Cockpit takeover');
   assert.match(
     ui,
@@ -114,10 +116,10 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
   assert.doesNotMatch(cockpitTracking, /trackedEntity\s*=/);
   assert.doesNotMatch(cockpitTracking, /flyTo/);
 
-  // Seam 1: any tracker handoff stamps, so the adoption step is covered.
+  // Seam 1: a new tracker handoff stamps; restoring the session does not.
   assert.match(
     ui,
-    /viewer\.trackedEntityChanged\.addEventListener\(\s*\(entity\) => \{\s*if \(entity && !this\._disposed\)\s*this\._stampNavigation\(\{\s*cancelPendingSelection: false,?\s*\}\);/,
+    /viewer\.trackedEntityChanged\.addEventListener\(\s*\(entity\) => \{[\s\S]*?if \(entity && !this\._disposed && !entity\.gevRestoring\)\s*this\._stampNavigation\(\{\s*cancelPendingSelection: false,?\s*\}\);/,
     'tracker handoff must stamp',
   );
   // Seam 2 is pinned by "Cockpit takeover invalidates deferred work" above.
@@ -190,10 +192,10 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
     'origin: trackingOrigin',
     'satellitesLayer.stopTracking?.({ origin: trackingOrigin })',
     'rocketLaunchesLayer.releaseCameraOwnership?.()',
-    'this.viewer.trackedEntity = undefined;',
+    'if (this.viewer) this.viewer.trackedEntity = undefined;',
     "interruptCameraMotion('explicit-navigation')",
-    'this.viewer.camera.cancelFlight();',
-    'this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);',
+    'camera?.cancelFlight();',
+    'camera?.release();',
   ], 'follow release');
   assert.match(release, /flightsLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)/);
   assert.match(release, /militaryFlightsLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)/);
@@ -231,7 +233,7 @@ test('validated voice camera destinations share the UI navigation authority faca
 
   const route = body(
     cameraVerbs,
-    /export function flyRoute\(\s*annoList,\s*args = \{\},\s*floorFn = null,\s*runNavigation = null,\s*warmFn = null,?\s*\) \{([\s\S]*?)\n\}/,
+    /export function flyRoute\(\s*annoList,\s*args = \{\},\s*floorFn = null,\s*runNavigation = null,\s*warmFn = null,\s*engine = null,?\s*\) \{([\s\S]*?)\n\}/,
     'fly route',
   );
   ordered(route, [
@@ -272,11 +274,11 @@ test('a direct globe gesture retires delayed camera and selection restore only',
   );
   assert.match(
     ui,
-    /viewer\?\.canvas\?\.addEventListener\(\s*'pointerdown',\s*this\._initialShareGestureHandler/,
+    /this\.canvas\?\.addEventListener\(\s*'pointerdown',\s*this\._initialShareGestureHandler/,
   );
   assert.match(
     ui,
-    /viewer\?\.canvas\?\.addEventListener\(\s*'wheel',\s*this\._initialShareGestureHandler/,
+    /this\.canvas\?\.addEventListener\(\s*'wheel',\s*this\._initialShareGestureHandler/,
   );
   assert.match(
     ui,
@@ -302,20 +304,30 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
-    'this._layerBindings.stop();',
-    'this._navigation.destroy();',
-    'await this._contextControls.restoreForDisposal();',
+    'await this.detachScene(',
+    'this._navigation.stop();',
   ], 'dispose invalidation');
-  assert.match(shellMethod('destroy').toString(), /this\._stampNavigation\(\)/);
+  // An engine switch retires the outgoing globe's navigation the same way.
+  const detach = body(ui, /async _detachScene\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/, 'detach');
+  ordered(detach, [
+    'this._navigation.setScene(',
+    'this._layerBindings.stop();',
+    'await this._contextControls.restoreForDisposal();',
+  ], 'detach invalidation');
+  assert.match(shellMethod('destroy').toString(), /this\._stampNavigation\(\{\s*cancelPendingSelection: !retainScene\s*\}\)/);
 });
 
 test('teardown synchronously closes immediate camera entry points', () => {
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
+    'await this.detachScene(',
+  ], 'synchronous teardown barrier');
+  const detach = body(ui, /async _detachScene\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/, 'detach');
+  ordered(detach, [
     'this._layerBindings.stop();',
     'await this._contextControls.restoreForDisposal();',
-  ], 'synchronous teardown barrier');
+  ], 'synchronous detach barrier');
   ordered(LayerBindings.prototype.stop.toString(), [
     'this._disposed = true;',
     'this._removeCctvRequestFocusListener?.();',
@@ -377,7 +389,7 @@ test('refused canned destinations commit no location or POI state', () => {
 test('world-focus listener lifecycle is symmetric and idempotent', () => {
   assert.match(ui, /registerWorldFocusRequestListener\(\s*window,/);
   assert.match(ui, /routeWorldFocusRequest\(/);
-  assert.match(ui, /flyToWorldTarget\(this\.viewer, detail\)/);
+  assert.match(ui, /flyToWorldTarget\(this\.engine \?\? this\.viewer, detail\)/);
   assert.match(ui, /this\._removeWorldRequestFocusListener\?\.\(\);/);
   assert.match(ui, /this\._removeWorldRequestFocusListener = null;/);
 });
@@ -387,9 +399,11 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
     assert.match(source, /requestWorldFocus\(\{/);
     assert.doesNotMatch(source, /camera\.flyTo/);
   }
+  // Vessels' click rule is a function the engine's selection dispatcher
+  // calls: the same body, out of the old LEFT_CLICK handler.
   const vesselClick = body(
     vessels,
-    /handler\.setInputAction\(\s*\(click\) => \{([\s\S]*?)\n\s*\},\s*Cesium\.ScreenSpaceEventType\.LEFT_CLICK,?\s*\);/,
+    /function handleClick\(click\) \{([\s\S]*?)\n  \}/,
     'vessel click',
   );
   ordered(vesselClick, [
@@ -403,9 +417,11 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
     'vessel focus helper',
   );
   assert.match(vesselFocus, /requestWorldFocus\(\{/);
+  assert.match(firms, /const clickType\s*=\s*layerState\._renderer\?\.clickType\s*\?\?\s*config\.leftClickEventType/);
+  assert.equal(FIRMS_LEFT_CLICK, ScreenSpaceEventType.LEFT_CLICK);
   const fireClick = body(
     firms,
-    /_clickHandler\.setInputAction\(\(click\) => \{([\s\S]*?)\n    \}, Cesium\.ScreenSpaceEventType\.LEFT_CLICK\);/,
+    /_clickHandler\.setInputAction\(\(click\) => \{([\s\S]*?)\n    \}, clickType\);/,
     'fire click',
   );
   ordered(fireClick, [

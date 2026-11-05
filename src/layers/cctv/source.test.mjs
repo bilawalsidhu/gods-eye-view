@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCctvSource, createCctvLayer } from './index.js';
+import { createCctvCesiumRenderer } from './render/cesium.js';
 
 const camera = {
   id: 'pack/camera ?x',
@@ -131,8 +132,16 @@ test('camera construction is inert and destruction cancels a pending catalog and
       });
     },
   };
-  const a = createCctvLayer({ services, source });
-  const b = createCctvLayer({ services, source });
+  const a = createCctvLayer({
+    services,
+    source,
+    rendererFactory: createCctvCesiumRenderer,
+  });
+  const b = createCctvLayer({
+    services,
+    source,
+    rendererFactory: createCctvCesiumRenderer,
+  });
   assert.equal(listeners.size, 0);
   const viewer = {
     scene: { primitives: { add: (value) => value, remove: () => true } },

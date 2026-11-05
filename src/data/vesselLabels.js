@@ -46,6 +46,35 @@ const TYPE_STYLES = [
 ];
 const DEFAULT_STYLE = { css: '#39d5ff', accent: '57, 213, 255' };
 
+/** Every chevron hue vesselTypeCss() can return, once each. */
+export const VESSEL_TYPE_CSS_COLORS = Object.freeze([
+  ...new Set([...TYPE_STYLES, DEFAULT_STYLE].map(({ css }) => css)),
+]);
+
+const NUMERIC_TYPE_SPECIALS = {
+  30: 'FISHING',
+  31: 'TOWING',
+  32: 'TOWING',
+  33: 'DREDGER',
+  34: 'DIVE OPS',
+  35: 'MILITARY',
+  36: 'SAILING',
+  37: 'PLEASURE',
+  50: 'PILOT',
+  51: 'SAR',
+  52: 'TUG',
+  53: 'PORT TENDER',
+  54: 'ANTI-POLLUTION',
+  55: 'LAW ENFORCE',
+  58: 'MEDICAL',
+};
+const NUMERIC_TYPE_FAMILIES = {
+  4: 'HIGH-SPEED',
+  6: 'PASSENGER',
+  7: 'CARGO',
+  8: 'TANKER',
+  9: 'OTHER',
+};
 // Card text for the type tokens above. The tokens stay English: TYPE_STYLES
 // and tests match on them.
 const TYPE_DISPLAY_KEYS = Object.freeze({

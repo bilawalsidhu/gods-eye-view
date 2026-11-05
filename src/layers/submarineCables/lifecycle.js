@@ -68,7 +68,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       // The gate is dirty-only; ask for the frame its sweep needs in case the
       // camera is parked and nothing else is rendering.
       (viewer || state._viewer)?.scene?.requestRender?.();
-      void parts.ingestion.load(viewer || state._viewer);
+      return parts.ingestion.load(viewer || state._viewer);
     },
 
     disable() {

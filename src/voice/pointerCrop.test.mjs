@@ -96,21 +96,25 @@ test('crop: a slow render gets one bounded fresh-frame recovery request', async 
   let listener = null;
   try {
     globalThis.document = { hidden: false };
-    const scene = {
-      postRender: {
-        addEventListener(next) {
-          listener = next;
-          return () => {
-            if (listener === next) listener = null;
-          };
+    const engine = {
+      frames: {
+        postRender: {
+          addEventListener(next) {
+            listener = next;
+            return () => {
+              if (listener === next) listener = null;
+            };
+          },
         },
       },
-      requestRender() {
-        requests += 1;
-        if (requests === 2) queueMicrotask(() => listener?.());
+      render: {
+        request() {
+          requests += 1;
+          if (requests === 2) queueMicrotask(() => listener?.());
+        },
       },
     };
-    assert.equal(await renderFreshPointerFrame({ scene }), true);
+    assert.equal(await renderFreshPointerFrame(engine), true);
     assert.equal(requests, 2, 'only the pointer path retries once');
     assert.equal(listener, null, 'the successful listener is removed');
   } finally {
@@ -123,13 +127,15 @@ test('crop: a hidden document never starts the recovery request', async () => {
   let requests = 0;
   try {
     globalThis.document = { hidden: true };
-    const scene = {
-      postRender: { addEventListener: () => () => {} },
-      requestRender() {
-        requests += 1;
+    const engine = {
+      frames: { postRender: { addEventListener: () => () => {} } },
+      render: {
+        request() {
+          requests += 1;
+        },
       },
     };
-    assert.equal(await renderFreshPointerFrame({ scene }), false);
+    assert.equal(await renderFreshPointerFrame(engine), false);
     assert.equal(requests, 0);
   } finally {
     globalThis.document = originalDocument;

@@ -1,0 +1,6 @@
+{
+  "gzipBytes": 2021566,
+  "allowanceBytes": 20216,
+  "measuredAt": "merge of origin/main ac28a11e, keyless build (GOOGLE_MAPS_API_KEY and CESIUM_ION_TOKEN empty), entry index-ChmLBAMR.js, 6 220 779 bytes, gzip level 9; main itself grew 93 873 bytes gzip-9 from the merge base (1 853 283 to 1 947 156)",
+  "allowance": "1% of the baseline; growth past it fails npm run check:main-chunk until the baseline is raised on purpose"
+}

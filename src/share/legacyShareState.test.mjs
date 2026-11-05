@@ -1,3 +1,4 @@
+import { viewerEngine } from '../testSupport/viewerEngine.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShareLinkManager } from '../sharelink.js';
@@ -26,7 +27,7 @@ import {
 const DEG = Math.PI / 180;
 
 function stubViewer(camera = {}) {
-  return {
+  return viewerEngine({
     camera: {
       changed: { addEventListener: () => () => {} },
       positionCartographic: camera.position ?? {
@@ -38,7 +39,7 @@ function stubViewer(camera = {}) {
       pitch: camera.pitch ?? 0,
       roll: camera.roll ?? 0,
     },
-  };
+  });
 }
 
 /** The long form's own parser, run on `hash`. */

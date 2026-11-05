@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { initGeoFileImport, summarize } from './geoFileImport.js';
+import { createGeoFileImport, summarize } from './geoFileImport.js';
 import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
 
 class FakeClassList {
@@ -105,8 +105,7 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
       revoke: () => revoked.push(file.name),
     };
   };
-  const tool = initGeoFileImport({
-    viewer,
+  const tool = createGeoFileImport({
     load: load || defaultLoad,
     document,
     ...(navigation ? { navigation } : {}),
@@ -120,6 +119,7 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
       return () => (actions = null);
     },
   });
+  tool?.attachScene({ viewer });
   return {
     tool,
     els,
@@ -148,16 +148,9 @@ const ROW_ACTIONS = {
 };
 const press = (t, row, name) => t.act(ROW_ACTIONS[name], row.id);
 
-test('returns null without its markup or viewer', () => {
+test('returns null without its markup', () => {
   const document = { getElementById: () => null };
-  assert.equal(initGeoFileImport({ viewer: {}, document }), null);
-  assert.equal(
-    initGeoFileImport({
-      viewer: null,
-      document: { getElementById: () => new FakeElement() },
-    }),
-    null,
-  );
+  assert.equal(createGeoFileImport({ document }), null);
 });
 
 test('a pick imports each file', async () => {
@@ -328,19 +321,30 @@ test('the application composition wires the import and owns its teardown', () =>
     new URL('../app/tools.js', import.meta.url),
     'utf8',
   );
-  const drawAt = tools.indexOf('const drawTool = initDrawTool({');
-  const importAt = tools.indexOf('const geoFileImport = initGeoFileImport({');
+  const session = fs.readFileSync(
+    new URL('../app/sessionTools.js', import.meta.url),
+    'utf8',
+  );
+  const drawAt = tools.indexOf('const drawTool = sessionDrawTool({');
+  const importAt = tools.indexOf('const geoFileImport = sessionGeoImport({');
   assert.ok(importAt > drawAt && drawAt >= 0);
   // Fly-to goes through the application shell's navigation policy.
   assert.match(
-    tools.slice(importAt, importAt + 200),
+    tools.slice(importAt, importAt + 400),
     /navigation: styleManager/,
   );
-  assert.ok(tools.indexOf('defer(() => geoFileImport?.destroy());') > importAt);
+  // The session owns the files; this viewer only their drawing.
+  assert.ok(
+    tools.indexOf('defer(() => geoFileImport?.detachScene());') > importAt,
+  );
   // The list renders from the store and its controls answer through it.
+  const sessionAt = session.indexOf(
+    "sessionTool(layerSession, 'geoImport', defer, () =>",
+  );
+  assert.ok(sessionAt >= 0);
   assert.match(
-    tools.slice(importAt, importAt + 400),
-    /publish: \(view\) => displayStore\.publishGeoImport\(view\),\s*connect: connectDisplay,/,
+    session.slice(sessionAt, sessionAt + 400),
+    /navigation: styleManager,[\s\S]*publish: \(view\) => displayStore\.publishGeoImport\(view\),\s*connect: connectDisplay,/,
   );
   const markup = fs.readFileSync(
     new URL('./views/panels/GeoImport.vue', import.meta.url),
@@ -622,5 +626,164 @@ test('a refusal shows its counts in the languageâ€™s numerals, not the browserâ€
     out.error,
     'That file has 60,000 map objects; the limit is 50,000.',
   );
+  t.tool.destroy();
+});
+
+test('an engine switch keeps the files and draws them again on the next viewer', async () => {
+  const t = setup();
+  await t.tool.importFiles([file('a.geojson'), file('b.geojson')]);
+  const [a, b] = rows(t);
+  press(t, b, 'toggle');
+  t.tool.detachScene();
+  // The drawing left the viewer; the list and its rows stayed.
+  assert.equal(t.removed.length, 2);
+  assert.deepEqual(t.revoked.sort(), ['a.geojson', 'b.geojson']);
+  assert.deepEqual(
+    rows(t).map((row) => row.id),
+    [a.id, b.id],
+  );
+  assert.equal(t.viewer.container.listeners.length, 0);
+  assert.equal(t.document.listeners.length, 0);
+  assert.equal(t.tool.flyTo(a.id), false);
+  const refused = await t.tool.importFiles([file('c.geojson')]);
+  assert.equal(refused[0].ok, false);
+  assert.equal(t.tool.list().length, 2);
+
+  // The next viewer reads the kept files again, as they were.
+  const next = {
+    container: new FakeElement('div', 'cesiumContainer'),
+    scene: { requestRender() {} },
+    dataSources: {
+      added: [],
+      add: async (ds) => next.dataSources.added.push(ds),
+      remove() {},
+    },
+  };
+  t.loads.length = 0;
+  t.tool.attachScene({ viewer: next });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(
+    t.loads.map(({ file, opts }) => [file.name, opts.viewer === next]),
+    [
+      ['a.geojson', true],
+      ['b.geojson', true],
+    ],
+  );
+  assert.equal(next.dataSources.added.length, 2);
+  assert.equal(next.dataSources.added[1].show, false, 'b stays hidden');
+  assert.deepEqual(
+    t.tool.list().map(({ id, visible }) => [id, visible]),
+    [
+      [a.id, true],
+      [b.id, false],
+    ],
+  );
+  assert.ok(next.container.listeners.length > 0);
+  assert.equal(t.tool.diagnostics().drawn, 2);
+  t.tool.destroy();
+});
+
+test('on Navara the files draw through the engine drawing, report what it leaves out and switch back to Cesium', async () => {
+  const t = setup();
+  await t.tool.importFiles([file('a.geojson')]);
+  t.tool.detachScene();
+  const canvas = new FakeElement('canvas');
+  const container = new FakeElement('div', 'cesiumContainer');
+  const moveEnd = new Set();
+  const requests = [];
+  const engine = {
+    host: { canvas, container },
+    camera: {
+      moveEnd: {
+        addEventListener: (fn) => (moveEnd.add(fn), () => moveEnd.delete(fn)),
+      },
+    },
+    render: { request: (reason) => requests.push(reason) },
+  };
+  const drawings = [];
+  const draw = async (dataSource) => {
+    const drawing = {
+      dataSource,
+      shown: [],
+      destroyed: false,
+      report: { drawn: 2, undrawn: 3, kinds: { label: 3 } },
+      setShow: (show) => drawing.shown.push(show),
+      refresh() {},
+      destroy() {
+        drawing.destroyed = true;
+      },
+    };
+    drawings.push(drawing);
+    return drawing;
+  };
+  t.loads.length = 0;
+  t.tool.attachScene({ engine, draw });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The kept file is read again for the engine and drawn by it.
+  assert.deepEqual(
+    t.loads.map(({ opts }) => [opts.viewer, opts.engine === engine]),
+    [[null, true]],
+  );
+  assert.equal(drawings.length, 1);
+  assert.match(t.shown().hint, /leaves out of a\.geojson: 3/);
+  assert.equal(t.tool.list()[0].undrawn, 3);
+  assert.ok(canvas.listeners.length > 0, 'gestures on the engine canvas');
+  assert.ok(container.listeners.length > 0, 'drops on its container');
+  assert.equal(moveEnd.size, 1);
+  // A new file: drawn, counted, reported in the batch hint.
+  const outcomes = await t.tool.importFiles([file('b.geojson')]);
+  assert.deepEqual(
+    outcomes.map(({ ok, undrawn }) => [ok, undrawn]),
+    [[true, 3]],
+  );
+  assert.match(t.shown().hint, /Added 1 file\. .*leaves out of b\.geojson: 3/);
+  const [a] = rows(t);
+  press(t, a, 'toggle');
+  assert.deepEqual(drawings[0].shown, [false]);
+  // Fly-to goes to the engine.
+  assert.equal(t.tool.flyTo(a.id), true);
+  assert.equal(t.flights.length > 0, true);
+  // A switch to Cesium takes the drawing off the engine.
+  t.tool.detachScene();
+  assert.ok(drawings.every((drawing) => drawing.destroyed));
+  assert.equal(canvas.listeners.length, 0);
+  assert.equal(moveEnd.size, 0);
+  t.tool.attachScene({ viewer: t.viewer });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(t.tool.diagnostics().drawn, 2);
+  t.tool.destroy();
+});
+
+test('an engine drawing that fails reports the file instead of stopping the batch', async () => {
+  const t = setup();
+  t.tool.detachScene();
+  const engine = {
+    host: { canvas: new FakeElement('canvas'), container: new FakeElement() },
+    camera: { moveEnd: { addEventListener: () => () => {} } },
+    render: { request() {} },
+  };
+  let calls = 0;
+  t.tool.attachScene({
+    engine,
+    draw: async () => {
+      if (calls++ === 0) throw new Error('no GPU');
+      return { report: { undrawn: 0 }, setShow() {}, destroy() {} };
+    },
+  });
+  const outcomes = await t.tool.importFiles([
+    file('bad.geojson'),
+    file('good.geojson'),
+  ]);
+  assert.deepEqual(
+    outcomes.map(({ name, ok }) => [name, ok]),
+    [
+      ['bad.geojson', false],
+      ['good.geojson', true],
+    ],
+  );
+  assert.deepEqual(t.revoked, ['bad.geojson'], 'the failed read is released');
   t.tool.destroy();
 });

@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
   FIRMS_OVERLAY_SOURCE_ID,
@@ -31,6 +30,10 @@ export function createCards({
   function rebuildAmbientLabels() {
     if (!layerState._viewer) return;
     const scene = layerState._viewer.scene;
+    const project = (position, result) =>
+      layerState._renderer
+        ? layerState._renderer.project(position, result)
+        : config.projectToWindow(scene, position, result);
     const now = Date.now();
     const entries = [];
     /** @type {Array<{x: number, y: number}>} Screen positions of accepted labels. */
@@ -53,8 +56,7 @@ export function createCards({
       );
       layerState._fireByCardId.set(selectedCard.id, layerState._selectedFire);
       entries.push(selectedCard);
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
+      const screen = project(
         components.model.firePosition(layerState._selectedFire),
         layerState.scratchWindowCoord,
       );
@@ -83,11 +85,7 @@ export function createCards({
       // LOD, far-side cells can still project on-canvas; accepting those first
       // starves front-side cards before the host applies its authoritative cull.
       if (beyondHorizon(candidate.cullPosition || candidate.position)) continue;
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        candidate.position,
-        layerState.scratchWindowCoord,
-      );
+      const screen = project(candidate.position, layerState.scratchWindowCoord);
       if (!screen) continue; // projection failed (e.g. behind camera) — drop silently
       if (
         screen.x < -LABEL_VIEW_MARGIN_PX ||

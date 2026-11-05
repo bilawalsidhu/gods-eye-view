@@ -1,4 +1,7 @@
 {
+  "Experimental Navara engine": "Экспериментальный движок Navara",
+  "Loading the experimental Navara engine...": "Загрузка экспериментального движка Navara...",
+  "Globe Engine": "Движок глобуса",
   "Flying to Austin, TX...": "Перелёт в Остин, Техас...",
   "Restoring shared view...": "Восстановление общего вида...",
   "Initializing systems...": "Инициализация систем...",
@@ -2230,6 +2233,7 @@
     "other": "Не удалось добавить {count} файла ({name}: {error})"
   },
   "Some KML content was left out.": "Часть содержимого KML пропущена.",
+  "Map objects this engine leaves out of {name}: {count}.": "Объектов из {name}, которые этот движок не показывает: {count}.",
   "GNSS Integrity": "Целостность GNSS",
   "Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). File bytes stay on this device; overlays can appear in map screenshots shared with voice.": "Показать на глобусе свои файлы GeoJSON, KML, KMZ или GPX (или перетащите их на глобус). Содержимое файлов остаётся на этом устройстве; наложения могут попасть в снимки карты, которые передаются голосовому ассистенту.",
   "Import": "Импорт",

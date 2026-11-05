@@ -46,6 +46,24 @@ function currentLayerOutcome(dataManager, layerId) {
 }
 
 /**
+ * Whether a layer handed off by an engine switch runs on the incoming engine.
+ * The handoff records the layer's running state and whether the outgoing
+ * address listed it. Where the incoming address agrees with that, the layer
+ * keeps running as it was, operational intents included (a Contacts session
+ * runs layers its address never lists). Where it differs, the person visited
+ * an entry with another layer set (Back/Forward), and the entry wins, as it
+ * does for a same-engine Back.
+ * @param {{enabled?: boolean, durable?: boolean}|undefined} live
+ * @param {boolean} addressEnabled
+ */
+export function handoffTargetEnabled(live, addressEnabled) {
+  if (typeof live?.enabled !== 'boolean') return addressEnabled;
+  if (typeof live.durable === 'boolean' && live.durable !== addressEnabled)
+    return addressEnabled;
+  return live.enabled;
+}
+
+/**
  * Owns durable user layer preferences independently from transient runtime
  * choreography, and coordinates passive post-registration restoration.
  */
@@ -102,6 +120,7 @@ export class LayerStateCoordinator {
   start({
     shareLayerState = null,
     allowLocalState = true,
+    handoffLayers = null,
     shareCreatedAtMs = null,
   } = {}) {
     if (this._destroyed)
@@ -139,11 +158,12 @@ export class LayerStateCoordinator {
     );
     this.shareLinkManager?.onLayerStateChange?.();
     this._notifyDurableState();
-    if (!selected) return this.restorePromise;
+    if (!selected && !handoffLayers) return this.restorePromise;
     this.restorePromise = this._restoreSelectedState(
       this._source === 'share'
         ? LAYER_RESTORE_ORIGINS.share
         : LAYER_RESTORE_ORIGINS.local,
+      handoffLayers,
     );
     return this.restorePromise;
   }
@@ -365,7 +385,7 @@ export class LayerStateCoordinator {
       : this.restoreGate);
   }
 
-  async _restoreSelectedState(origin) {
+  async _restoreSelectedState(origin, handoffLayers = null) {
     // One controller set per run: a superseded run must not clear the newer
     // run's controllers when it settles.
     const controllers = new Map();
@@ -379,7 +399,30 @@ export class LayerStateCoordinator {
       const settled = await Promise.allSettled(
         LAYER_STATE_REGISTRY.map(async (entry) => {
           const controller = controllers.get(entry.id);
-          const targetEnabled = enabled.has(entry.id);
+          const live = handoffLayers?.get(entry.id);
+          const targetEnabled = handoffTargetEnabled(
+            live,
+            enabled.has(entry.id),
+          );
+          // A same-document engine choice retains operational layer intents.
+          // The share still owns durable preferences and later history visits.
+          if (
+            live &&
+            this.dataManager.layers.get(entry.id) === live.entry &&
+            !live.entry.lifecycleUncertain &&
+            live.entry.enabled === targetEnabled
+          ) {
+            return {
+              layerId: entry.id,
+              targetEnabled,
+              origin,
+              phase: 'retained',
+              ...currentLayerOutcome(this.dataManager, entry.id),
+              appliedOptions: {},
+              persistenceWrite: false,
+              succeeded: true,
+            };
+          }
           const options = layerOptionsForRestore(this._durableState, entry.id);
           if (origin === LAYER_RESTORE_ORIGINS.share && options) {
             for (const trackingKey of Object.values(
@@ -468,6 +511,45 @@ export class LayerStateCoordinator {
       }
     }
     return null;
+  }
+
+  // On an in-page engine switch, an attached session model can already own
+  // this exact contact. Ordinary shared links must still verify the source.
+  retainedTrackingTarget() {
+    const selected = this._selectedShareTrackingTarget();
+    if (!selected || !this.dataManager.isEnabled(selected.layerId)) return null;
+    const model = this.dataManager.layers.get(selected.layerId)?.module;
+    if (
+      model?.attachRenderer &&
+      String(model.getParams?.()[selected.optionKey]) ===
+        String(selected.targetId) &&
+      model.hasContact?.(selected.targetId) === true
+    )
+      return selected;
+    return null;
+  }
+
+  resumeRetainedTracking(previous) {
+    const selected = this.retainedTrackingTarget();
+    if (
+      !selected ||
+      selected.layerId !== previous.layerId ||
+      selected.targetId !== previous.targetId
+    )
+      return null;
+    const model = this.dataManager.layers.get(selected.layerId).module;
+    const followed = model.trackById(selected.targetId, {
+      origin: LAYER_RESTORE_ORIGINS.share,
+    });
+    if (!followed) return null;
+    const result = {
+      ...selected,
+      status: 'found',
+      classification: 'followed',
+      cleared: false,
+    };
+    this._publishTrackingRestoreStatus(result);
+    return result;
   }
 
   _passivelyClearTrackingSelection(selected) {

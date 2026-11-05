@@ -1658,21 +1658,13 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
   // disable() hides the collection but keeps the records, so a map lookup
   // alone would report a preserved subject as FRESH from hidden stale data.
   for (const [name, source, guard] of [
-    [
-      'flights',
-      readLayerSource(new URL('./flights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-    [
-      'militaryFlights',
-      readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-    [
-      'aisLiveVessels',
-      readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
-      /hasContact\(\s*mmsi,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byMmsi\s*\|\|\s*state\.records\.byMmsi\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
+    // Both aircraft layers answer from enabled observation models.
+    ['flights', readLayerSource(new URL('./flights.js', import.meta.url)),
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*if\s*\(\s*!flightState\.enabled\s*\|\|\s*flightState\.records\.data\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+    ['militaryFlights', readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*if\s*\(\s*!flightState\.enabled\s*\|\|\s*flightState\.records\.data\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+    ['aisLiveVessels', readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
+      /hasContact\(\s*mmsi,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byMmsi\s*\|\|\s*state\.records\.byMmsi\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
   ]) {
     assert.match(
       source,
@@ -1990,18 +1982,6 @@ test('cockpit blocks only non-aircraft Context camera flights', () => {
     }),
     true,
   );
-});
-
-test('vessel entry and selection framing both use the 3 km focus radius', () => {
-  assert.match(
-    militaryAwarenessSource,
-    /const\s*VESSEL_FOCUS_RADIUS_M\s*=\s*3000;/,
-  );
-  const focusRadiusUses =
-    militaryAwarenessSource.match(
-      /new\s*Cesium\.BoundingSphere\(\s*vessel\.position,\s*VESSEL_FOCUS_RADIUS_M,?\s*\)/g,
-    ) || [];
-  assert.equal(focusRadiusUses.length, 2);
 });
 
 test('awareness rescans only for invalidation, source change, or meaningful movement', () => {
@@ -3089,6 +3069,7 @@ test('every Context camera flight without a tracked entity takes navigation auth
     assert.deepEqual(taken, ['context-vessel-focus']);
     // The announcement precedes the flight, never trails it.
     assert.equal(runtime.cameraFlights.length, 1);
+    assert.equal(runtime.cameraFlights[0].sphere.radius, 3000);
 
     militaryAwarenessLayer.focusTarget('military-installations', 'inst-1');
     assert.deepEqual(taken, [
@@ -3127,6 +3108,7 @@ test('Contacts vessel autofocus takes navigation authority before it frames', as
     // Activation enables dependencies before it auto-focuses.
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(runtime.cameraFlights.length, 1, 'autofocus framed a vessel');
+    assert.equal(runtime.cameraFlights[0].sphere.radius, 3000);
     assert.deepEqual(taken, [
       {
         reason: 'context-vessel-autofocus',

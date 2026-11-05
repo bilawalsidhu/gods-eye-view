@@ -166,6 +166,7 @@ export function createLineCoverage({
   }
 
   function ensureTerrainReady() {
+    if (state.viewer?.engine) return;
     return (state.coverage.terrainReady ||=
       Cesium.GroundPolylinePrimitive.initializeTerrainHeights());
   }
@@ -232,10 +233,11 @@ export function createLineCoverage({
   function highlight(sequenceId = state.sequence.selectedId) {
     const scene = state.viewer?.scene;
     if (state.coverage.highlight) {
-      scene?.groundPrimitives?.remove(state.coverage.highlight);
+      if (state.viewer?.engine) state.coverage.highlight.destroy();
+      else scene?.groundPrimitives?.remove(state.coverage.highlight);
       state.coverage.highlight = null;
     }
-    if (!sequenceId || !scene) return;
+    if (!sequenceId || (!state.viewer?.engine && !scene)) return;
     // From every loaded line, drawn or not: a sequence selected after its
     // tiles were drawn may have been left out by their caps.
     const current = filter();
@@ -243,6 +245,16 @@ export function createLineCoverage({
     for (const entry of state.coverage.tiles.values()) {
       const sequence = entry.sequenceList.find(({ id }) => id === sequenceId);
       if (sequence && passes(sequence, current)) parts.push(...sequence.parts);
+    }
+    if (state.viewer?.engine) {
+      state.coverage.highlight = state.viewer.lines(
+        [{ id: sequenceId, parts }],
+        colors.selected,
+        tuning.lineWidthPx + 1,
+        pickPrefix,
+      );
+      requestRender();
+      return;
     }
     const instances = lineInstances(
       [{ id: sequenceId, parts }],
@@ -259,10 +271,20 @@ export function createLineCoverage({
 
   function attachPrimitive(entry) {
     const scene = state.viewer?.scene;
-    if (!scene) return;
+    if (!scene && !state.viewer?.engine) return;
     // Lookup, picking and counts follow what is drawn, not the whole tile.
     const sequences = drawnSequences(entry);
     entry.sequences = new Map(sequences.map((s) => [s.id, s]));
+    if (state.viewer?.engine) {
+      const group = state.viewer.lines(
+        sequences,
+        colors.coverage,
+        tuning.lineWidthPx,
+        pickPrefix,
+      );
+      entry.primitives = group ? [group] : [];
+      return;
+    }
     entry.primitives = buildSequencePrimitives(sequences);
     for (const primitive of entry.primitives)
       scene.groundPrimitives.add(primitive);
@@ -272,7 +294,8 @@ export function createLineCoverage({
     const scene = state.viewer?.scene;
     for (const primitive of entry.primitives || []) {
       try {
-        scene?.groundPrimitives?.remove(primitive);
+        if (state.viewer?.engine) primitive.destroy();
+        else scene?.groundPrimitives?.remove(primitive);
       } catch {
         /* already gone */
       }
@@ -396,7 +419,9 @@ export function createLineCoverage({
    */
   function wantedTiles(viewer) {
     const ground = groundUnderCamera(viewer);
-    const cameraHeight = viewer.camera?.positionCartographic?.height;
+    const cameraHeight =
+      viewer.engine?.camera.pose().cartographic.height ??
+      viewer.camera?.positionCartographic?.height;
     const height = Number.isFinite(cameraHeight)
       ? cameraHeight - (ground ?? 0)
       : null;
@@ -425,7 +450,13 @@ export function createLineCoverage({
   /** Recompute the tile set for the current camera and reconcile primitives. */
   function refresh() {
     const viewer = state.viewer;
-    if (!viewer || !state.context.isActive() || state.coverage.blocked) return;
+    if (
+      !viewer ||
+      state.context.waitingForView?.() ||
+      !state.context.isActive() ||
+      state.coverage.blocked
+    )
+      return;
     const { zoom, tiles, hint } = wantedTiles(viewer);
     if (hint) {
       state.coverage.hint = hint;
@@ -534,6 +565,11 @@ export function createLineCoverage({
   return {
     attach,
     detach,
+    releaseGraphics() {
+      detach();
+      highlight(null);
+      for (const entry of state.coverage.tiles.values()) detachPrimitive(entry);
+    },
     refresh,
     clear,
     unblock,

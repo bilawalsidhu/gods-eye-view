@@ -1,14 +1,18 @@
-import * as Cesium from 'cesium';
 import { msg } from '../../i18n/index.js';
+import { rgbaFromCss } from '../shared/color.js';
+import * as geo from '../../geo/index.js';
+import { appClock } from '../../time/clock.js';
 import { WINDOW_DAYS } from './policy.js';
 
-/**
- * Fallback when Launch Library sends no status. English in the record
- * (launchStatusAllowsOrbit, analyst records); the mission panel translates it.
- */
 export const UNKNOWN_LAUNCH_STATUS = msg('Unknown');
 
-export function createModel({ state: layerState, services, parts, source }) {
+export function createModel({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   function finiteCoordinate(value) {
     // Number(null), Number('') and Number(false) are 0: absent is not zero.
     if (value == null || typeof value === 'boolean') return null;
@@ -147,23 +151,20 @@ export function createModel({ state: layerState, services, parts, source }) {
     const identity =
       `${launch.provider || ''} ${launch.name || ''} ${launch.missionName || ''}`.toLowerCase();
     if (/nasa|national aeronautics/.test(identity))
-      return Cesium.Color.fromCssColorString('#ff9f43');
+      return rgbaFromCss('#ff9f43');
     if (/starlink|spacex|space exploration/.test(identity))
-      return Cesium.Color.fromCssColorString('#4cc9f0');
-    if (/rocket lab/.test(identity))
-      return Cesium.Color.fromCssColorString('#7bed9f');
-    if (/isro|indian space/.test(identity))
-      return Cesium.Color.fromCssColorString('#ff66c4');
+      return rgbaFromCss('#4cc9f0');
+    if (/rocket lab/.test(identity)) return rgbaFromCss('#7bed9f');
+    if (/isro|indian space/.test(identity)) return rgbaFromCss('#ff66c4');
     if (/cnsa|china national|long march/.test(identity))
-      return Cesium.Color.fromCssColorString('#ffd166');
-    if (/blue origin/.test(identity))
-      return Cesium.Color.fromCssColorString('#a78bfa');
+      return rgbaFromCss('#ffd166');
+    if (/blue origin/.test(identity)) return rgbaFromCss('#a78bfa');
     if (/ula|united launch alliance/.test(identity))
-      return Cesium.Color.fromCssColorString('#f97316');
+      return rgbaFromCss('#f97316');
     if (/arianespace|esa|european space/.test(identity))
-      return Cesium.Color.fromCssColorString('#60a5fa');
-    if (launch.provider) return Cesium.Color.fromCssColorString('#c084fc');
-    return Cesium.Color.fromCssColorString('#22e6e6');
+      return rgbaFromCss('#60a5fa');
+    if (launch.provider) return rgbaFromCss('#c084fc');
+    return rgbaFromCss('#22e6e6');
   }
 
   /**
@@ -175,7 +176,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @returns {Array<object>}
    */
 
-  function normalizeRocketLaunches(payload, now = new Date()) {
+  function normalizeRocketLaunches(payload, now = new Date(appClock.now())) {
     const launches = Array.isArray(payload) ? payload : payload?.results;
     if (!Array.isArray(launches)) return [];
     const cutoff = now.getTime() - WINDOW_DAYS * 86400000;

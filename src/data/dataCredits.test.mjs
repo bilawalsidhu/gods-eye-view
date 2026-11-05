@@ -121,6 +121,95 @@ test('tile attribution follows source changes and viewers have independent owner
   assert.equal(b.credits.size, 1);
 });
 
+test('data credits go through the globe engine credits', async () => {
+  const {
+    registerDataCredits,
+    registerDynamicCredit,
+    showOsmCredit,
+    hideOsmCredit,
+  } = await import('./dataCredits.js');
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine();
+  registerDataCredits(engine, [{ html: 'A' }, { html: 'B' }]);
+  assert.deepEqual(engine.fake.credits, [
+    { html: 'A', onScreen: false },
+    { html: 'B', onScreen: false },
+  ]);
+  assert.equal(
+    registerDynamicCredit(engine, { key: 'engine-dyn', html: 'D' }),
+    true,
+  );
+  assert.equal(
+    registerDynamicCredit(engine, { key: 'engine-dyn', html: 'D' }),
+    true,
+  );
+  assert.equal(
+    engine.fake.credits.filter(({ html }) => html === 'D').length,
+    1,
+  );
+  const other = createFakeEngine();
+  registerDynamicCredit(other, { key: 'engine-dyn', html: 'D' });
+  assert.equal(other.fake.credits.filter(({ html }) => html === 'D').length, 1);
+  engine.fake.resetCalls();
+  assert.equal(showOsmCredit(engine, 'alpr', { openMapTiles: true }), true);
+  const inline = engine.fake.credits.filter(({ onScreen }) => onScreen);
+  assert.equal(inline.length, 2);
+  assert.match(inline[0].html, /© OpenStreetMap/);
+  assert.ok(engine.fake.callsOf('render.request').length > 0);
+  assert.equal(hideOsmCredit(engine, 'alpr'), true);
+  assert.equal(
+    engine.fake.credits.filter(({ onScreen }) => onScreen).length,
+    0,
+  );
+});
+
+test('Google Places attribution is visible only while a layer displays Places data', async () => {
+  const { showGooglePlacesCredit, hideGooglePlacesCredit } =
+    await import('./dataCredits.js');
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine();
+  assert.equal(showGooglePlacesCredit(engine, 'installations'), true);
+  assert.equal(showGooglePlacesCredit(engine, 'installations'), false);
+  assert.equal(showGooglePlacesCredit(engine, 'other-layer'), true);
+  const visible = engine.fake.credits.filter(({ onScreen }) => onScreen);
+  assert.equal(visible.length, 1);
+  assert.match(visible[0].html, /Google Maps Places/);
+  assert.match(
+    visible[0].html,
+    /developers\.google\.com\/maps\/documentation\/places/,
+  );
+  assert.ok(engine.fake.callsOf('render.request').length > 0);
+  assert.equal(hideGooglePlacesCredit(engine, 'installations'), true);
+  assert.equal(
+    engine.fake.credits.filter(({ onScreen }) => onScreen).length,
+    1,
+  );
+  assert.equal(hideGooglePlacesCredit(engine, 'other-layer'), true);
+  assert.equal(hideGooglePlacesCredit(engine, 'installations'), false);
+  assert.equal(
+    engine.fake.credits.filter(({ onScreen }) => onScreen).length,
+    0,
+  );
+});
+
+test('without a viewer or engine the OSM and dynamic credits skip cleanly', async () => {
+  const {
+    registerDataCredits,
+    registerDynamicCredit,
+    showOsmCredit,
+    hideOsmCredit,
+    showGooglePlacesCredit,
+    hideGooglePlacesCredit,
+  } = await import('./dataCredits.js');
+  // The Navara mode has no viewer; a layer-side call with it must not throw.
+  assert.doesNotThrow(() => registerDataCredits(null, [{ html: 'A' }]));
+  assert.equal(showOsmCredit(null, 'owner'), false);
+  assert.equal(hideOsmCredit(null, 'owner'), false);
+  assert.equal(showGooglePlacesCredit(null, 'owner'), false);
+  assert.equal(hideGooglePlacesCredit(null, 'owner'), false);
+  assert.equal(registerDynamicCredit(null, { key: 'k', html: 'K' }), false);
+});
+
 test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
   const credit = DATA_CREDITS.find((entry) => entry.key === 'nyc-cctv');
   assert.ok(credit, 'NYC DOT camera frames must be credited');

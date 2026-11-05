@@ -57,12 +57,12 @@ const finite = finiteOrNull;
  * Camera pose identity: position to 1 m, orientation to about 0.06 degrees.
  * A pixel read under one key names nothing under another. Reads plain
  * numbers only, so it needs no Cesium import.
- * @param {object} viewer Cesium viewer.
+ * @param {object} engine The globe engine (its camera pose).
  * @returns {string|null}
  */
-export function cameraPoseKey(viewer) {
-  const camera = viewer?.camera;
-  const p = camera?.positionWC;
+export function cameraPoseKey(engine) {
+  const camera = engine?.camera?.pose?.();
+  const p = camera?.position;
   if (!p || !Number.isFinite(p.x)) return null;
   const angle = (value) => Math.round((Number(value) || 0) * 1000);
   return [
@@ -269,7 +269,8 @@ export function createPointerTracker({
   let held = null;
   let active = null;
   let destroyed = false;
-  const listeners = new AbortController();
+  // The element's own listeners; replaced with the element (setElement).
+  let listeners = new AbortController();
 
   function size() {
     return {
@@ -321,12 +322,14 @@ export function createPointerTracker({
     cancelDwell();
   }
 
-  if (element?.addEventListener) {
+  function listen() {
+    if (!element?.addEventListener) return;
     const options = { passive: true, signal: listeners.signal };
     element.addEventListener('pointermove', onMove, options);
     element.addEventListener('pointerdown', onMove, options);
     element.addEventListener('pointerleave', onLeave, options);
   }
+  listen();
 
   /** Is the pointer a referent right now? */
   function isFresh(recentMs = POINTER_FRESH_MS) {
@@ -365,7 +368,21 @@ export function createPointerTracker({
   }
 
   return {
-    element,
+    get element() {
+      return element;
+    },
+    /**
+     * Follow another element (the next globe's canvas after an engine
+     * switch), or none. The pointer starts outside it.
+     */
+    setElement(next) {
+      if (destroyed || next === element) return;
+      listeners.abort();
+      listeners = new AbortController();
+      element = next ?? null;
+      onLeave();
+      listen();
+    },
     capture,
     isFresh,
     /** Push-to-talk keydown: snapshot now, keep it for the hold. */

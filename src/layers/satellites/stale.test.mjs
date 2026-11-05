@@ -1,3 +1,4 @@
+import { createSatellitesCesiumRenderer } from './render/cesium.js';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { EventEmitter, once } from 'node:events';
@@ -68,6 +69,10 @@ async function fixture(t) {
   // input handler, events, SGP4, ingestion and lifecycle run without a WebGL scene.
   const noop = () => {};
   const services = {
+    renderer: {
+      create: ({ viewer, engine }) =>
+        createSatellitesCesiumRenderer(engine, { viewer }),
+    },
     overlays: {
       setOverlayEntries: noop,
       setOverlaySourceVisible: noop,
@@ -93,7 +98,13 @@ async function fixture(t) {
   globalThis.document = new EventTarget();
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const context = {
+    state,
+    services,
+    parts,
+    source,
+    getRenderer: () => state._renderer,
+  };
   for (const [name, factory] of Object.entries({
     controls: createControls,
     orbits: createOrbits,

@@ -17,7 +17,7 @@ import VoiceControl from './panels/VoiceControl.vue';
 // their chip row; until they do, the dock shows its initial markup. A style
 // button calls the Display controls' owner, a chip the map source controls.
 const display = useDisplayStore();
-const { style, mapSource, mapSourceControls } = storeToRefs(display);
+const { style, mapSource, mapSourceControls, globeEngine } = storeToRefs(display);
 // LocationControls publishes the location tray; pills call the controls,
 // and the search field keeps their listeners.
 const { view: loc, controls: locationControls } = storeToRefs(useLocationStore());
@@ -111,6 +111,16 @@ function selectMapSource(chip) {
           <span class="btn-label">{{ t('Noir') }}</span>
           <span class="btn-key">6</span>
         </button>
+      </div>
+      <div v-if="globeEngine" id="globe-engine-control">
+        <label class="map-source-heading" for="globe-engine">
+          {{ t('Globe Engine') }}
+          <select id="globe-engine" class="pp-select" translate="no" :value="globeEngine.kind" :disabled="globeEngine.busy"
+            @change="globeEngine.select($event.target.value)">
+            <option value="cesium">Cesium</option>
+            <option value="navara">Navara</option>
+          </select>
+        </label>
       </div>
       <section class="map-source-section" aria-labelledby="map-source-label">
         <div class="map-source-heading">

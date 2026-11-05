@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = path.join(repoRoot, 'qa-shots', 'cockpit-utility');
@@ -29,6 +30,7 @@ const browser = await puppeteer.launch({
   ],
 });
 const page = await browser.newPage();
+await blockPaidQaMaps(page);
 const failures = [];
 const consoleErrors = [];
 const localHttpErrors = [];
@@ -827,6 +829,7 @@ try {
   const readinessPage = await browser.newPage();
   let deferredInstallationReadiness;
   try {
+    await blockPaidQaMaps(readinessPage);
     await readinessPage.setViewport({ width: 1440, height: 900 });
     readinessPage.on('pageerror', (error) => consoleErrors.push(error.message));
     await readinessPage.setRequestInterception(true);
@@ -1150,6 +1153,14 @@ try {
     },
     { timeout: 10_000 },
   );
+  const startsClear = await page.evaluate(() => {
+    const hidden = ['left-panel-stack', 'intel-hud', 'corner-actions',
+      'cockpit-context', 'cockpit-signal-stream', 'cockpit-utility-controls'];
+    return hidden.every((id) => document.getElementById(id)?.getClientRects().length === 0)
+      && document.getElementById('cockpit-speed-value').getClientRects().length > 0;
+  });
+  check('Cockpit starts with flight instruments and hides the map panels', startsClear);
+  await page.click('#cockpit-panels-toggle');
   const firstCockpitContact = await page.evaluate(() => {
     const awareness = window.__godsEyeView.dataManager.layers
       .get('military-awareness')?.module;
@@ -1511,6 +1522,9 @@ try {
     const before = read();
     document.getElementById('cockpit-entry')?.click();
     await new Promise((resolve) => setTimeout(resolve, 120));
+    const startsClear = document.getElementById('cockpit-panels-toggle').getAttribute('aria-pressed') === 'false';
+    document.getElementById('cockpit-panels-toggle').click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const during = read();
     manager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false });
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -1531,6 +1545,7 @@ try {
       before,
       during,
       after: read(),
+      startsClear,
       exited,
       clearancePx,
       contactAutoCollapsed,
@@ -1540,7 +1555,7 @@ try {
   });
   check(
     'Cockpit temporarily collapses standard panels and restores the exact map layout on exit',
-    cockpitPanelRoundTrip.exited
+    cockpitPanelRoundTrip.exited && cockpitPanelRoundTrip.startsClear
       && Object.values(cockpitPanelRoundTrip.during).every(Boolean)
       && JSON.stringify(cockpitPanelRoundTrip.after)
         === JSON.stringify(cockpitPanelRoundTrip.before)
@@ -1605,6 +1620,7 @@ try {
     const states = [read()];
     for (let index = 0; index < 6; index += 1) {
       current.click();
+      await Promise.resolve();
       states.push(read());
     }
     const originalStyle = manager.activeStyle;
@@ -1616,8 +1632,10 @@ try {
     const enteredOnNoir = await reenter();
     const entryNoir = read();
     cockpit.setVisionMode('optical');
+    await Promise.resolve();
     const normalInsideNoir = read();
     cockpit.setVisionMode('crt');
+    await Promise.resolve();
     const cockpitOnlyCrt = read();
     const exitedNoir = cockpit.exit({ restoreTracking: true }) === true;
     await settle();
@@ -1692,6 +1710,9 @@ try {
   await page.screenshot({ path: path.join(shotsDir, 'vision-noir.png') });
   await page.evaluate(() => window.__godsEyeView.styleManager.cockpitView.setVisionMode('optical'));
 
+  await page.$eval('#cockpit-panels-toggle', button => {
+    if (button.getAttribute('aria-pressed') === 'false') button.click();
+  });
   const desktopState = async (variant, openKind) => page.evaluate(async ({ variantName, kind }) => {
     const manager = window.__godsEyeView.styleManager;
     const hud = document.getElementById('cockpit-hud');
@@ -1877,7 +1898,7 @@ try {
     // the wall Cockpit actually solves against — not by injecting an anchor.
     // The card is bottom-anchored, so an explicit height moves its top edge.
     const minTop = Math.max(96, window.innerHeight * 0.12);
-    const moveSignalTopTo = (wantTop) => {
+    const moveSignalTopTo = async (wantTop) => {
       for (let pass = 0; pass < 8; pass += 1) {
         const rect = signal.getBoundingClientRect();
         const delta = wantTop - rect.top;
@@ -1890,9 +1911,11 @@ try {
       // the now-shorter strip, so idempotence is asserted where the strip's
       // composition is unchanged.)
       manager.cockpitView.syncSignalLayout();
+      await Promise.resolve();
       const firstPassTop = hud.style.getPropertyValue('--cockpit-utility-top');
       const firstPassPrimaryOnly = utility.classList.contains('layout-primary-only');
       manager.cockpitView.syncSignalLayout();
+      await Promise.resolve();
       return {
         firstPassTop,
         firstPassPrimaryOnly,
@@ -1903,6 +1926,7 @@ try {
     signal.style.maxHeight = 'none';
     signal.style.height = '150px';
     manager.cockpitView.syncSignalLayout();
+    await Promise.resolve();
     const expandedHeight = Math.max(displayControl.scrollHeight, displayControl.getBoundingClientRect().height);
     const collapsedHeight = Math.max(50, radioControl.scrollHeight);
     const stripHeight = expandedHeight + collapsedHeight + 7;
@@ -1927,11 +1951,11 @@ try {
     // because 150 px of card leaves a corridor sized for the OLD strip. Seed from
     // the measured requirement instead, which holds for any future panel height,
     // and assert the precondition rather than assuming it.
-    const roomySeed = moveSignalTopTo(exactSignalTop + 80);
+    const roomySeed = await moveSignalTopTo(exactSignalTop + 80);
     const roomySeedExpanded = !utility.classList.contains('layout-primary-only')
       && roomySeed.firstPassPrimaryOnly === false;
     const exact = {
-      ...moveSignalTopTo(exactSignalTop),
+      ...await moveSignalTopTo(exactSignalTop),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
       siblingVisible: getComputedStyle(radioControl).display !== 'none',
@@ -1941,7 +1965,7 @@ try {
     const constrained = {
       // One pixel on the far side of the same fit (`exactSignalTop` already sits
       // one pixel inside it), so this is still the one-pixel constraint it claims.
-      ...moveSignalTopTo(exactSignalTop - 2 * BOUNDARY_EPSILON_PX),
+      ...await moveSignalTopTo(exactSignalTop - 2 * BOUNDARY_EPSILON_PX),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
       siblingDisplay: getComputedStyle(radioControl).display,
@@ -1952,7 +1976,7 @@ try {
         <= signal.getBoundingClientRect().top - 7,
     };
     const restored = {
-      ...moveSignalTopTo(exactSignalTop + 80),
+      ...await moveSignalTopTo(exactSignalTop + 80),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
       siblingVisible: getComputedStyle(radioControl).display !== 'none',

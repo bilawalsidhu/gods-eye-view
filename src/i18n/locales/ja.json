@@ -1,4 +1,7 @@
 {
+  "Experimental Navara engine": "実験版 Navara エンジン",
+  "Loading the experimental Navara engine...": "実験版 Navara エンジンを読み込み中...",
+  "Globe Engine": "地球儀エンジン",
   "Pick a shape, then click the map.": "図形を選んでから、地図をクリックしてください。",
   "Enter to place the pin, Esc to cancel.": "Enterでピンを配置、Escでキャンセル。",
   "Click where the pin goes.": "ピンを置く場所をクリックしてください。",
@@ -1725,6 +1728,7 @@
     "other": "{count}個のファイルを追加できませんでした（{name}：{error}）"
   },
   "Some KML content was left out.": "KMLの一部の内容は読み込まれませんでした。",
+  "Map objects this engine leaves out of {name}: {count}.": "このエンジンで表示されない {name} の地図オブジェクト: {count}。",
   "Press on the ground, not the sky": "空ではなく地表を押してください",
   "Drag to size the box": "ドラッグして範囲の大きさを決めてください",
   "light {source} to use your {name} key": "{source}をオンにして{name}キーを使う",

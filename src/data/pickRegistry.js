@@ -115,17 +115,24 @@ export function isOwnedByOtherLayer(layerId, pickedId) {
  * @returns {object|null|undefined} Original pick or the first registered touch hit.
  */
 export function pickContact(scene, position) {
-  const picked = scene.pick(position);
+  return nearbyContact(
+    scene.pick(position),
+    position,
+    scene.drillPick?.bind(scene),
+  );
+}
+
+export function nearbyContact(picked, position, drillPick) {
   if (
     !globalThis.matchMedia?.('(pointer: coarse)').matches ||
     findPickOwner(resolvePickId(picked)) ||
     !isSurfacePick(picked) ||
-    typeof scene.drillPick !== 'function'
+    typeof drillPick !== 'function'
   )
     return picked;
   let hits;
   try {
-    hits = scene.drillPick(position, 8, 14, 14) || [];
+    hits = drillPick(position, 8, 14, 14) || [];
   } catch {
     return picked;
   }

@@ -6,10 +6,13 @@ import { INFRASTRUCTURE_DATA_URLS } from '../sources/infrastructureData.js';
  * @param {object} services Caller-owned context, overlay and render operations.
  * @returns {object[]} Datacenters then dams, with stable standalone identities.
  */
-export function createInfrastructureLayers(services) {
+export function createInfrastructureLayers(
+  services,
+  createLayer = createLocalGeoJsonLayer,
+) {
   const datacentersUrl = INFRASTRUCTURE_DATA_URLS['local-datacenters'];
   const damsUrl = INFRASTRUCTURE_DATA_URLS['local-dams'];
-  const datacenters = createLocalGeoJsonLayer(
+  const datacenters = createLayer(
     {
       id: 'local-datacenters',
       url: datacentersUrl,
@@ -25,7 +28,7 @@ export function createInfrastructureLayers(services) {
     services,
   );
 
-  const dams = createLocalGeoJsonLayer(
+  const dams = createLayer(
     {
       id: 'local-dams',
       url: damsUrl,

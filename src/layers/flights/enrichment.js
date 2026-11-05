@@ -1,6 +1,5 @@
 import { classifyAircraft } from '../../data/aircraftClass.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   ENRICH_MAX_INFLIGHT,
   ENRICH_DISPATCH_GAP_MS,
@@ -180,38 +179,24 @@ export function createEnrichment({
     _refillAmbientBudget(Date.now());
     if (
       flightState._enrichAmbientBudget <= 0 ||
-      !flightState._viewer ||
-      !flightState._billboardCollection ||
-      !flightState._billboardCollection.show
+      !flightState._renderer?.fleet.visible()
     )
       return;
     try {
-      const camera = flightState._viewer.camera;
-      const camPos = camera.positionWC;
-      const occluder = horizonOccluder(camera);
-      const cull = camera.frustum.computeCullingVolume(
-        camPos,
-        camera.directionWC,
-        camera.upWC,
-      );
+      const view = flightState._renderer.view;
+      const camPos = view.camera.positionWC;
+      const occluder = view.horizon();
+      const inFrustum = view.frustumTester();
       const cand = [];
       for (const [icao24, bb] of flightState._billboards) {
         if (flightState._enrichSeen.has(`t:${icao24}`)) continue; // answered / queued / negative this session
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
         if (!bb.position || !occluder.isPointVisible(bb.position)) continue; // beyond the limb
-        Cesium.Cartesian3.clone(
-          bb.position,
-          flightState._scratchModelBS.center,
-        );
-        if (
-          cull.computeVisibility(flightState._scratchModelBS) ===
-          Cesium.Intersect.OUTSIDE
-        )
-          continue; // off-screen
+        if (!inFrustum(bb.position)) continue; // off-screen
         cand.push([
           icao24,
-          Cesium.Cartesian3.distanceSquared(camPos, bb.position),
+          geo.cartesian3.distanceSquared(camPos, bb.position),
         ]);
       }
       cand.sort((a, b) => a[1] - b[1]); // nearest first — what the user is looking at resolves first

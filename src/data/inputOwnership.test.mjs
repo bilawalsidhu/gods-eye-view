@@ -117,27 +117,35 @@ test('every scene click handler consults ownership before it picks', () => {
     ['src/data/trackingClickGesture.js', 'onClick(click, gesture);'],
     ['src/data/localGeojsonCore.js', 'viewer.scene.pick(click.position)'],
     ['src/data/cctvGizmo.js', 'pickGizmoPart(event.position)'],
-    ['src/layers/alpr/presentation.js', 'viewer.scene.pick(click.position)'],
-    ['src/layers/bikeshare/selection.js', 'viewer.scene.pick(click.position)'],
-    ['src/layers/firms/selection.js', 'scene.pick(click.position)'],
     [
-      'src/layers/installations/selection.js',
+      'src/layers/alpr/render/cesiumPresentation.js',
       'viewer.scene.pick(click.position)',
     ],
-    ['src/layers/launches/lifecycle.js', 'drillPick(movement.position'],
-    ['src/layers/radio/interaction.js', 'pickedRadioStationAt(click.position)'],
     [
-      'src/layers/satellites/interaction.js',
+      'src/layers/bikeshare/render/cesium/selection.js',
+      'viewer.scene.pick(click.position)',
+    ],
+    ['src/layers/firms/selection.js', 'scene.pick(click.position)'],
+    [
+      'src/layers/installations/render/cesium/selection.js',
+      'viewer.scene.pick(click.position)',
+    ],
+    ['src/layers/launches/render/cesium.js', 'drillPick(movement.position'],
+    [
+      'src/layers/radio/interaction.js',
+      'const stationId = pickedRadioStationAt(position);',
+    ],
+    [
+      'src/layers/satellites/render/cesium.js',
       'viewer.scene.pick(click.position)',
     ],
     [
       'src/layers/submarineCables/interaction.js',
       'viewer.scene.pick(click.position)',
     ],
-    [
-      'src/layers/vessels/selection.js',
-      'pickContact(viewer.scene, click.position)',
-    ],
+    // Vessels take the engine dispatcher's pick: the guard
+    // comes before the click rule reads it.
+    ['src/layers/vessels/selection.js', 'resolvePickId(picked)'],
   ];
   for (const [file, firstPick] of guarded) {
     const source = read(file);

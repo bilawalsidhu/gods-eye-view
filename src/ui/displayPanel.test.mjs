@@ -11,7 +11,7 @@ import DrawControls from './views/panels/DrawControls.vue';
 import GeoImport from './views/panels/GeoImport.vue';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { VisualSettings } from './visualSettings.js';
-import { initGeoFileImport } from './geoFileImport.js';
+import { createGeoFileImport } from './geoFileImport.js';
 import { CockpitDisplayPortal } from './cockpitDisplayPortal.js';
 // Core's classes on an element, without the kit's `ui-` classes.
 const coreClasses = (el) =>
@@ -413,8 +413,7 @@ test('the imported files render what the file import publishes and keep focus', 
     scene: { requestRender() {} },
     dataSources: { add: async (ds) => ds, remove: () => true },
   };
-  const tool = initGeoFileImport({
-    viewer,
+  const tool = createGeoFileImport({
     load: async (file) => ({
       dataSource: { show: true },
       name: file.name,
@@ -430,6 +429,7 @@ test('the imported files render what the file import publishes and keep focus', 
       return () => store.detach(token);
     },
   });
+  tool.attachScene({ viewer });
   t.after(() => tool.destroy());
   await tool.importFiles([{ name: '<b>a</b>.geojson' }, { name: 'b.kml' }]);
   await nextTick();

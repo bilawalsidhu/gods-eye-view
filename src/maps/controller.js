@@ -1,6 +1,7 @@
 import { indexMapSources } from './registry.js';
 import * as Cesium from 'cesium';
-import { createMapCredits } from './credits.js';
+import { createMapScene } from './sceneApply.js';
+import { applyTerrain } from './terrain.js';
 import { acquireImageryComparison } from './imageryComparison.js';
 
 /**
@@ -21,7 +22,24 @@ const resolved = (provider, effectiveStackId) => ({
   fallbackMessage: null,
 });
 
-/** Coordinate source lifetimes and scene changes; the registry owns provider choices. */
+/**
+ * Coordinate source lifetimes and scene changes; the registry owns provider
+ * choices.
+ *
+ * With `engine` (the page's globe engine) every scene change goes through
+ * `engine.maps` as an engine-neutral description of the registry source
+ * (imagery `kind`/`style`/`accessToken`, terrain `kind`/`accessToken`,
+ * photoreal credentials, credit). The registry's factories build Cesium
+ * objects, so only a Cesium engine also gets them prebuilt (`provider`,
+ * `tileset`, terrain `create`): the controller then keeps resolving, caching
+ * and watching them as before (supplied tilesets must be ones the engine
+ * knows, i.e. its startup tileset, or has shown). Any other engine builds
+ * its own sources from the descriptions; the controller constructs nothing
+ * for it, falls back by description when a setter rejects, and has no tile
+ * failure watch. On destroy the engine keeps what it shows; owned tilesets
+ * are released and disposed. Without an engine the controller applies
+ * sources to the viewer itself (standalone use and tests).
+ */
 export class MapSourceController {
   constructor(
     viewer,
@@ -30,7 +48,10 @@ export class MapSourceController {
       initialStack,
       onChange = null,
       onError = null,
-      requestRender = () => viewer?.scene?.requestRender?.(),
+      engine = null,
+      requestRender = engine
+        ? () => engine.render.request('map-stack')
+        : () => viewer?.scene?.requestRender?.(),
       createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
     },
   ) {
@@ -43,8 +64,14 @@ export class MapSourceController {
     this._onChange = onChange;
     this._onError = onError;
     this._requestRender = requestRender;
-    this._createImageryLayer = createImageryLayer;
-    this._credits = createMapCredits(viewer);
+    this._engine = engine;
+    /** Whether the engine takes the registry's prebuilt Cesium objects. */
+    this._prebuilt = engine?.kind === 'cesium';
+    this._scene = engine
+      ? null
+      : createMapScene(viewer, { createImageryLayer });
+    /** Engine mode: the provider last handed to engine.maps as base imagery. */
+    this._baseProvider = null;
     this._abort = new AbortController();
     this._imageryProviders = new Map();
     this._terrainProviders = new Map();
@@ -56,8 +83,6 @@ export class MapSourceController {
     this._switchOrigin = 'manual';
     this._isSwitching = false;
     this._lastError = null;
-    this._imageryLayer = null;
-    this._activeImageryProvider = null;
     this._activeResolution = null;
     this._removeImageryErrorListener = null;
     this._terrainMode = null;
@@ -256,6 +281,11 @@ export class MapSourceController {
   }
 
   async _activateTileset(source, gen) {
+    if (this._engine && !this._prebuilt) {
+      this._removeImageryLayer();
+      await this._engine.maps.setPhotorealTiles(this._describeTiles(source));
+      return;
+    }
     let tileset = source.tileset;
     if (!tileset) {
       if (!source.createTileset)
@@ -265,49 +295,59 @@ export class MapSourceController {
       );
     }
     if (gen !== this._switchGen) return;
+    if (this._engine) {
+      // The engine adds an owned tileset to the scene when it shows it.
+      if (!source.tileset) this._ownedTilesets.add(tileset);
+      this._removeImageryLayer();
+      await this._engine.maps.setPhotorealTiles(
+        this._describeTiles(source, tileset),
+      );
+      return;
+    }
     if (!source.tileset && !this._ownedTilesets.has(tileset)) {
       tileset.show = false;
       this.viewer.scene.primitives.add(tileset);
       this._ownedTilesets.add(tileset);
     }
     this._removeImageryLayer();
-    this._credits.show(source.credit || null);
+    this._scene.showCredit(source.credit);
     this._showTileset(tileset);
-    this.viewer.scene.globe.show = false;
+    this._scene.showGlobe(false);
     // Terrain is intentionally untouched while the globe is hidden.
   }
 
   _showTileset(active) {
+    const tilesets = [];
     for (const source of this._sources.values())
-      if (source.tileset) source.tileset.show = source.tileset === active;
-    for (const tileset of this._ownedTilesets)
-      tileset.show = tileset === active;
+      if (source.tileset) tilesets.push(source.tileset);
+    this._scene.showTileset(active, [...tilesets, ...this._ownedTilesets]);
   }
 
   async _activateGlobeStack(stack, gen) {
+    if (this._engine && !this._prebuilt)
+      return this._activateDescribedGlobeStack(stack, gen);
     const resolution = await this._getImageryProvider(stack);
     if (gen !== this._switchGen) return;
-    // Scene shots reapply their map stack at every handoff. Keep the live
-    // layer (and its loaded tiles) when the resolved provider is unchanged;
-    // rebuilding it exposes the bare globe while imagery loads again.
-    if (
-      !this._imageryLayer ||
-      this._activeImageryProvider !== resolution.provider
-    ) {
+    if (this._engine) return this._activateEngineGlobeStack(resolution, gen);
+    // Scene shots reapply their map stack at every handoff; the map scene
+    // keeps the live layer when the resolved provider is unchanged.
+    if (this._scene.baseProvider !== resolution.provider) {
       this._removeImageryLayer();
-      this._imageryLayer = this._createImageryLayer(resolution.provider);
-      this._activeImageryProvider = resolution.provider;
-      this.viewer.imageryLayers.add(this._imageryLayer, 0);
+      this._scene.showBaseImagery(resolution.provider);
     }
     const source = this._sources.get(resolution.effectiveStackId);
-    this._credits.show(source?.credit || null);
+    this._scene.showCredit(source?.credit);
     // A repeated request still owns a new switch generation. Rebind its
     // failure listener so fallback remains live without accumulating listeners.
     this._removeImageryErrorListener?.();
     this._removeImageryErrorListener = null;
     this._watchProvider(resolution, gen);
     this._showTileset(null);
-    this.viewer.scene.globe.show = true;
+    this._scene.showGlobe(true);
+    return this._finishGlobeStack(resolution, source, gen);
+  }
+
+  async _finishGlobeStack(resolution, source, gen) {
     this._activeId = resolution.effectiveStackId;
     this._activeResolution = resolution;
     if (source?.terrain && source.terrain.id !== this._terrainMode) {
@@ -321,16 +361,118 @@ export class MapSourceController {
       const latest = this._terrainProviders.get(terrain.id);
       if (latest !== pending) result = await latest;
       if (gen !== this._switchGen) return;
-      this._applyTerrain(result);
+      await this._applyTerrain(terrain, result, gen);
+      if (gen !== this._switchGen) return;
       this._terrainMode = terrain.id;
     }
     if (resolution.fallbackFor || this._terrainFallback) this._scheduleRetry();
     return resolution;
   }
 
-  _applyTerrain(result) {
-    if (result.terrain) this.viewer.scene.setTerrain(result.terrain);
-    else this.viewer.terrainProvider = result.provider;
+  // engine.maps in the order the viewer path applies them: base imagery and
+  // its credit, no photoreal tiles (the globe shows), then terrain.
+  async _activateEngineGlobeStack(resolution, gen) {
+    const { maps } = this._engine;
+    const source = this._sources.get(resolution.effectiveStackId);
+    this._removeImageryErrorListener?.();
+    this._removeImageryErrorListener = null;
+    await maps.setBaseImagery(
+      this._describeImagery(source, resolution.provider),
+    );
+    if (gen !== this._switchGen) return;
+    this._baseProvider = resolution.provider;
+    this._watchProvider(resolution, gen);
+    await maps.setPhotorealTiles(null);
+    if (gen !== this._switchGen) return;
+    return this._finishGlobeStack(resolution, source, gen);
+  }
+
+  // A non-Cesium engine builds every source from its description. A source it
+  // cannot build falls back as the construction fallback says.
+  async _activateDescribedGlobeStack(stack, gen, visited = new Set()) {
+    const { maps } = this._engine;
+    const source = this._sources.get(stack.id);
+    try {
+      await maps.setBaseImagery(this._describeImagery(source));
+    } catch (error) {
+      const fallback = source.constructionFallback;
+      if (
+        this._destroyed ||
+        !fallback ||
+        visited.has(stack.id) ||
+        !this.isStackAvailable(fallback.id)
+      )
+        throw error;
+      const resolution = await this._activateDescribedGlobeStack(
+        this.getStack(fallback.id),
+        gen,
+        new Set(visited).add(stack.id),
+      );
+      return resolution && { ...resolution, fallbackMessage: fallback.message };
+    }
+    if (gen !== this._switchGen) return;
+    await maps.setPhotorealTiles(null);
+    if (gen !== this._switchGen) return;
+    this._activeId = stack.id;
+    if (source.terrain && source.terrain.id !== this._terrainMode) {
+      await maps.setTerrain(this._describeTerrain(source.terrain));
+      if (gen !== this._switchGen) return;
+      this._terrainMode = source.terrain.id;
+    }
+    return { effectiveStackId: stack.id, fallbackMessage: null };
+  }
+
+  /** Engine description of an imagery source (+ a prebuilt Cesium provider). */
+  _describeImagery(source, provider) {
+    const { descriptor } = source;
+    return {
+      descriptor,
+      kind: descriptor.kind,
+      ...(descriptor.style !== undefined && { style: descriptor.style }),
+      ...(source.accessToken !== undefined && {
+        accessToken: source.accessToken,
+      }),
+      credit: source.credit ?? null,
+      ...(provider && { provider }),
+    };
+  }
+
+  /** Engine description of a terrain source (+ the cached Cesium result). */
+  _describeTerrain(terrain, result) {
+    return {
+      id: terrain.id,
+      kind: terrain.kind ?? terrain.id,
+      ...(terrain.accessToken !== undefined && {
+        accessToken: terrain.accessToken,
+      }),
+      ...(result && { create: () => result }),
+    };
+  }
+
+  /** Engine description of a photoreal source (+ a prebuilt Cesium tileset). */
+  _describeTiles(source, tileset) {
+    return {
+      descriptor: source.descriptor,
+      kind: source.descriptor.kind,
+      credit: source.credit ?? null,
+      ...(source.googleApiKey && { googleApiKey: source.googleApiKey }),
+      ...(source.cesiumToken && { cesiumToken: source.cesiumToken }),
+      ...(tileset && { tileset }),
+    };
+  }
+
+  /** The live base imagery provider, or null. */
+  _liveBaseProvider() {
+    return this._engine ? this._baseProvider : this._scene.baseProvider;
+  }
+
+  async _applyTerrain(terrain, result, gen) {
+    if (this._engine) {
+      await this._engine.maps.setTerrain(
+        this._describeTerrain(terrain, result),
+      );
+      if (gen !== this._switchGen) return;
+    } else applyTerrain(this.viewer, result);
     this._terrainFallback = result.fallback ? result : null;
     if (this._replacedTerrain && this._replacedTerrain !== result) {
       this._dispose(this._replacedTerrain.provider);
@@ -359,7 +501,7 @@ export class MapSourceController {
 
   async _retryFallbacks() {
     const resolution = this._activeResolution;
-    const flat = this.viewer.scene.globe.show ? this._terrainFallback : null;
+    const flat = resolution ? this._terrainFallback : null;
     const id = resolution?.fallbackFor;
     let terrain = flat && this._sources.get(this._activeId)?.terrain;
     if (terrain?.id !== this._terrainMode) terrain = null;
@@ -440,8 +582,8 @@ export class MapSourceController {
         return Boolean(real && !real.fallback);
       }
       this._terrainProviders.set(terrain.id, Promise.resolve(real));
-      if (this._terrainFallback === flat && this.viewer.scene.globe.show) {
-        this._applyTerrain(real);
+      if (this._terrainFallback === flat && this._activeResolution) {
+        await this._applyTerrain(terrain, real, this._switchGen);
         this._dispose(flat.provider);
         this._requestRender('map-stack');
       } else {
@@ -527,7 +669,7 @@ export class MapSourceController {
     this._removeImageryErrorListener = errorEvent.addEventListener((error) => {
       if (
         gen !== this._switchGen ||
-        this._activeImageryProvider !== resolution.provider
+        this._liveBaseProvider() !== resolution.provider
       )
         return;
       const retryCount = Number(error?.timesRetried);
@@ -562,10 +704,9 @@ export class MapSourceController {
   _removeImageryLayer() {
     this._removeImageryErrorListener?.();
     this._removeImageryErrorListener = null;
-    if (this._imageryLayer)
-      this.viewer.imageryLayers.remove(this._imageryLayer, true);
-    this._imageryLayer = null;
-    this._activeImageryProvider = null;
+    // Engine mode: engine.maps drops the base layer when tiles replace it.
+    if (this._engine) this._baseProvider = null;
+    else this._scene.removeBaseImagery();
     this._activeResolution = null;
   }
   _dispose(value) {
@@ -588,7 +729,7 @@ export class MapSourceController {
     this._replacedTerrain = null;
     this._isSwitching = false;
     this._removeImageryLayer();
-    this._credits.destroy();
+    this._scene?.destroy();
     for (const promise of this._imageryProviders.values())
       void Promise.resolve(promise).then(
         (value) => this._dispose(value.provider),
@@ -600,7 +741,8 @@ export class MapSourceController {
         () => {},
       );
     for (const tileset of this._ownedTilesets) {
-      this.viewer.scene.primitives.remove(tileset);
+      if (this._engine) this._engine.maps.releasePhotorealTiles({ tileset });
+      else this.viewer.scene.primitives.remove(tileset);
       this._dispose(tileset);
     }
     for (const promise of this._tilesets.values())

@@ -2,7 +2,7 @@
 /**
  * qa-alpr-journey.mjs — ALPR cameras on a realistic Austin camera journey.
  *
- * Run: node scripts/qa-alpr-journey.mjs http://localhost:4173 [--headful]
+ * Run: node scripts/qa-alpr-journey.mjs <dev-server-url> [--fixture]
  *      [--passes off,on,on] [--out qa-shots/alpr-journey] [--no-assert]
  *
  * Drives the same eased camera path several times: a neighbourhood by Camp
@@ -14,7 +14,7 @@
  *
  * Per stop it records: time from the camera stopping to cameras shown (or an
  * explicit "zoom in" state), the camera count and row status, rAF interval and
- * Cesium render CPU time (mean / p50 / p95) while moving and while holding, and
+ * engine render CPU time (mean / p50 / p95) while moving and while holding, and
  * marker stability while the camera is still (camera-set changes after the stop
  * has settled). Asserts, unless --no-assert: neighbourhood and downtown show
  * cameras within 2 s on the warm pass; the whole-city stop shows cameras or a
@@ -39,7 +39,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import sharp from 'sharp';
+import { installAlprFixture } from './fixtures/w2/alpr.mjs';
+import { redact, isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 import {
   createScreencast,
   frameStats,
@@ -60,12 +63,20 @@ const option = (name, fallback) => {
   const i = argv.indexOf(name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const appUrl =
-  argv.find((arg) => /^https?:/.test(arg)) || 'http://localhost:4173';
+const appUrl = argv.find((arg) => /^https?:/.test(arg));
+if (!appUrl) throw new Error('An explicit dev-server URL is required');
+if (
+  ['4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
+    new URL(appUrl).port,
+  )
+)
+  throw new Error('ALPR QA may not use a reserved port');
 const outDir = path.resolve(option('--out', 'qa-shots/alpr-journey'));
 const passes = option('--passes', 'off,on,on').split(',');
 const assertOn = !argv.includes('--no-assert');
 const dropRenders = argv.includes('--self-test-drop-renders');
+if (dropRenders && new URL(appUrl).searchParams.get('engine') === 'navara')
+  throw new Error('The legacy render-drop self-test requires Cesium');
 fs.mkdirSync(outDir, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const cyanCount = async (file) => {
@@ -170,6 +181,8 @@ const result = {
   startedAt: new Date().toISOString(),
   passes: [],
   consoleErrors: [],
+  expectedPreviewErrors: [],
+  failedRequests: [],
   failures: [],
 };
 const fail = (message) => {
@@ -179,14 +192,44 @@ const fail = (message) => {
 let page;
 try {
   page = await browser.newPage();
+  await blockPaidQaMaps(page);
+  if (argv.includes('--fixture')) await installAlprFixture(page);
   await page.setViewport({ width: 1440, height: 900 });
   await page.evaluateOnNewDocument(() =>
     sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed'),
   );
   page.on('console', (message) => {
-    if (message.type() === 'error') result.consoleErrors.push(message.text());
+    if (
+      isExpectedPreviewSetupError(message, {
+        preview: argv.includes('--preview'),
+        baseUrl: appUrl,
+      })
+    ) {
+      result.expectedPreviewErrors.push('/api/setup/status: 404');
+      return;
+    }
+    if (message.type() === 'error') {
+      let resource = '(location unavailable)';
+      try {
+        const url = new URL(message.location()?.url);
+        resource = url.origin + url.pathname;
+      } catch {
+        /* no resource location */
+      }
+      result.consoleErrors.push(redact(`${message.text()} — ${resource}`));
+    }
   });
-  page.on('pageerror', (error) => result.consoleErrors.push(error.message));
+  page.on('pageerror', (error) =>
+    result.consoleErrors.push(redact(error.message)),
+  );
+  page.on('requestfailed', (request) => {
+    if (result.failedRequests.length >= 200) return;
+    const url = new URL(request.url());
+    result.failedRequests.push({
+      resource: redact(url.origin + url.pathname),
+      error: request.failure()?.errorText,
+    });
+  });
   const url = new URL(appUrl);
   url.searchParams.set('welcome', '0');
   await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 90_000 });
@@ -252,6 +295,8 @@ try {
     await page
       .waitForFunction(
         () => {
+          if (window.__godsEyeView.engine.kind === 'navara')
+            return window.__godsEyeView.engine.surface.tilesLoaded();
           const { scene } = window.__godsEyeView.viewer;
           if (scene.globe.show) return scene.globe.tilesLoaded;
           for (let i = 0; i < scene.primitives.length; i++) {
@@ -308,8 +353,31 @@ try {
       // changed state without asking for a render.
       let staleFrame = null;
       if (alpr) {
-        const shown = await cyanCount(await page.screenshot({ type: 'png' }));
+        const shownImage = await page.screenshot({ type: 'png' });
+        const shown = await cyanCount(shownImage);
         await page.evaluate(async () => {
+          const { engine } = window.__godsEyeView;
+          if (engine.kind === 'navara') {
+            await new Promise((resolve, reject) => {
+              let count = 4;
+              const timeout = setTimeout(() => {
+                remove();
+                reject(new Error('ALPR forced-frame deadline'));
+              }, 10000);
+              const remove = engine.frames.postRender.addEventListener(() => {
+                if (--count === 0) {
+                  remove();
+                  clearTimeout(timeout);
+                  resolve();
+                } else
+                  requestAnimationFrame(() =>
+                    engine.render.request('alpr-qa-frame'),
+                  );
+              });
+              engine.render.request('alpr-qa-frame');
+            });
+            return;
+          }
           const { scene } = window.__godsEyeView.viewer;
           const mode = scene.requestRenderMode;
           scene.requestRenderMode = false;
@@ -317,12 +385,23 @@ try {
             await new Promise((resolve) => requestAnimationFrame(resolve));
           scene.requestRenderMode = mode;
         });
-        const forced = await cyanCount(await page.screenshot({ type: 'png' }));
+        const forcedImage = await page.screenshot({ type: 'png' });
+        const forced = await cyanCount(forcedImage);
         staleFrame = {
           shown,
           forced,
           stale: Math.abs(forced - shown) > Math.max(8, forced * 0.15),
         };
+        if (staleFrame.stale) {
+          fs.writeFileSync(
+            path.join(outDir, `${passName}-${stop.name}-shown.png`),
+            shownImage,
+          );
+          fs.writeFileSync(
+            path.join(outDir, `${passName}-${stop.name}-forced.png`),
+            forcedImage,
+          );
+        }
       }
       const moving = frameStats(await readFrames(page, moveStart, holdStart));
       const holding = frameStats(await readFrames(page, holdStart, holdEnd));

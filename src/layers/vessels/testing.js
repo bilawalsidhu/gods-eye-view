@@ -48,7 +48,16 @@ export function createTesting({
         .map((record) => [record.mmsi, record]),
     );
     state.selectedRecord = options.selectedRecord || null;
-    state.billboardCollection = options.billboardCollection || { remove() {} };
+    // The Cesium renderer over the test viewer, adopting the test collection.
+    state.renderer =
+      services.renderer?.create({
+        viewer: state.viewer,
+        engine: null,
+        createTrail: services.trails?.createTrail ?? null,
+        adopt: {
+          billboardCollection: options.billboardCollection || { remove() {} },
+        },
+      }) ?? null;
     state.trail = options.trail || null;
     state.trailMmsi = options.trailMmsi || null;
     state.trailPositions = Array.isArray(options.trailPositions)

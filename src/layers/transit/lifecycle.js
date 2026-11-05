@@ -1,13 +1,5 @@
 import { destroyTrack } from '../../data/contactPlayback.js';
-import * as Cesium from 'cesium';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
-import {
-  CAMERA_PERCENTAGE_CHANGED,
-  TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
-} from './policy.js';
+import { TRANSIT_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { TRANSIT_ENABLED_FEEDS } from '../../data/transitFeeds.js';
 
 /**
@@ -18,12 +10,13 @@ import { TRANSIT_ENABLED_FEEDS } from '../../data/transitFeeds.js';
  * @param {object} context
  * @returns {object}
  */
-export function createLifecycle({ state, services, parts }) {
-  const {
-    registerSpriteCollection,
-    unregisterSpriteCollection,
-    restoreSpriteOrder,
-  } = services.sprites;
+export function createLifecycle({
+  state,
+  services,
+  parts,
+  source,
+  rendererFactory,
+}) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const { releaseContinuousRender } = services.render;
 
@@ -38,17 +31,13 @@ export function createLifecycle({ state, services, parts }) {
    * default while Bikeshare was still relying on a fine one was exactly the
    * bug that produced.
    */
-  function borrowCameraSensitivity(viewer) {
-    claimCameraSensitivity(
-      viewer?.camera,
-      'transit',
-      CAMERA_PERCENTAGE_CHANGED,
-    );
+  function borrowCameraSensitivity() {
+    parts.renderer.claimCamera();
   }
 
   /** Give the claim up. The camera keeps whatever anyone else still asks for. */
-  function returnCameraSensitivity(viewer) {
-    releaseCameraSensitivity(viewer?.camera, 'transit');
+  function returnCameraSensitivity() {
+    parts.renderer?.releaseCamera();
   }
 
   /**
@@ -125,42 +114,47 @@ export function createLifecycle({ state, services, parts }) {
      * Create the point collection. Called once at bootstrap.
      * @param {Cesium.Viewer} viewer
      */
-    init(viewer) {
+    init(viewer, options) {
+      this.attachRenderer(viewer, options);
+    },
+    attachRenderer(viewer, options = {}) {
+      state._restoringViewport = Boolean(options.waitForCameraRestore);
+      if (parts.renderer)
+        throw new Error('Transit layer is already initialized');
+      if (typeof rendererFactory !== 'function')
+        throw new TypeError('A transit renderer factory is required');
+      const renderer = rendererFactory({
+        state,
+        services,
+        parts,
+        source,
+        engine: options.engine,
+      });
       state._viewer = viewer;
-      state._markers = new Cesium.BillboardCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(state._markers);
-      registerSpriteCollection('transit', state._markers);
-      state._animatedMarkers = new Cesium.BillboardCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(state._animatedMarkers);
-      registerSpriteCollection('transit-motion', state._animatedMarkers);
-      state._animatedMarkers.show = false;
-      state._markers.show = false;
-      state._enabled = false;
-      state._activeFeeds.clear();
-      state._feedStatus.clear();
-      state._inFlight.clear();
-      for (const entry of state._vehicles.values()) {
-        entry.detectContact = null;
-        parts.rendering.cancelWake(entry);
-        destroyTrack(entry.track);
+      parts.renderer = renderer;
+      try {
+        renderer.attach(viewer);
+        [state._markers, state._animatedMarkers] = renderer.createMarkers();
+      } catch (error) {
+        renderer.destroy();
+        parts.renderer = null;
+        state._viewer = null;
+        throw error;
       }
-      state._vehicles.clear();
-      parts.height.clear();
-      state._selectedKey = null;
-      state._lastUpdate = null;
-      state._error = null;
-      state._limitWarned = false;
-      state._altitudeGateOpen = false;
-      state._moving.clear();
-      state._heightDirty.clear();
-      state._rotationPose = null;
-      state._rotationDirty = false;
-      state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
-      restoreSpriteOrder(viewer);
+      state._overlayHost.setVisible(
+        TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
+        state._enabled,
+      );
+      if (state._enabled) {
+        for (const [key, entry] of state._vehicles) {
+          parts.rendering.addMarker(key, entry);
+          entry.detectContact = null;
+          entry.pathRevision = -1;
+        }
+        this.bindScene(viewer);
+        if (!state._restoringViewport) this.repaint();
+      }
+      parts.renderer.restoreOrder();
       bindStyleEvents();
       console.log(
         `[Data:Transit] Initialized with ${TRANSIT_ENABLED_FEEDS.length} GTFS-RT feeds`,
@@ -173,9 +167,13 @@ export function createLifecycle({ state, services, parts }) {
      */
     enable(viewer) {
       state._enabled = true;
-      bindVisibility();
       state._generation += 1;
       state._error = null;
+      this.bindScene(viewer);
+    },
+
+    bindScene(viewer) {
+      bindVisibility();
       state._markers.show = true;
       state._animatedMarkers.show = true;
       state._maintenanceTimer = setInterval(
@@ -186,17 +184,72 @@ export function createLifecycle({ state, services, parts }) {
       parts.selection.installClickHandler(viewer);
       registerPickOwner('transit', (pickedId) => state._vehicles.has(pickedId));
       if (!state._cameraChangedAttached) {
-        viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
+        state._cameraChangedRemove = parts.renderer.onCameraChanged(
+          parts.viewport.onCameraChanged,
+        );
         borrowCameraSensitivity(viewer);
         state._cameraChangedAttached = true;
       }
       if (!state._preRenderRemove) {
-        state._preRenderRemove = viewer.scene.preRender.addEventListener(
+        state._preRenderRemove = parts.renderer.onPreRender(
           parts.rendering.onPreRender,
         );
       }
       parts.viewport.runProximityCheck();
-      restoreSpriteOrder(viewer);
+      parts.renderer.restoreOrder();
+    },
+
+    repaint() {
+      state._visibilityAt = 0;
+      state._rotationDirty = true;
+      parts.viewport.runProximityCheck();
+      parts.rendering.refreshVisibility();
+      parts.trails.rebind();
+      parts.selection.refreshSelectedCard(true);
+      for (const feed of state._activeFeeds.values())
+        parts.renderer.addCredit(feed);
+    },
+    resumeViewport() {
+      if (!state._restoringViewport) return;
+      state._restoringViewport = false;
+      if (state._enabled && parts.renderer) this.repaint();
+    },
+    detachRenderer() {
+      if (!parts.renderer) return;
+      state._restoringViewport = true;
+      unbindVisibility();
+      clearInterval(state._maintenanceTimer);
+      clearTimeout(state._cameraDebounceTimer);
+      clearTimeout(state._visibilityTimer);
+      state._maintenanceTimer =
+        state._cameraDebounceTimer =
+        state._visibilityTimer =
+          null;
+      parts.selection.removeClickHandler();
+      unregisterPickOwner('transit');
+      state._cameraChangedRemove?.();
+      state._cameraChangedRemove = null;
+      if (state._cameraChangedAttached) returnCameraSensitivity();
+      state._cameraChangedAttached = false;
+      state._preRenderRemove?.();
+      state._preRenderRemove = null;
+      parts.trails.detachRenderer();
+      for (const entry of state._vehicles.values()) {
+        parts.rendering.cancelWake(entry);
+        entry.marker = entry.markerCollection = entry.detectContact = null;
+      }
+      state._detectCache = null;
+      state._detectBuiltAt = -Infinity;
+      state._visible.clear();
+      state._moving.clear();
+      if (state._renderHeld) releaseContinuousRender('transit');
+      state._renderHeld = false;
+      parts.renderer.destroy();
+      parts.renderer =
+        state._markers =
+        state._animatedMarkers =
+        state._viewer =
+          null;
     },
 
     /**
@@ -223,9 +276,8 @@ export function createLifecycle({ state, services, parts }) {
       parts.selection.removeClickHandler();
       unregisterPickOwner('transit');
       if (state._cameraChangedAttached) {
-        viewer.camera.changed.removeEventListener(
-          parts.viewport.onCameraChanged,
-        );
+        state._cameraChangedRemove?.();
+        state._cameraChangedRemove = null;
         returnCameraSensitivity(viewer);
         state._cameraChangedAttached = false;
       }
@@ -282,16 +334,9 @@ export function createLifecycle({ state, services, parts }) {
      */
     destroy(viewer) {
       this.disable(viewer);
-      if (state._markers) {
-        unregisterSpriteCollection('transit', state._markers);
-        viewer?.scene?.primitives?.remove(state._markers);
-        state._markers = null;
-      }
-      if (state._animatedMarkers) {
-        unregisterSpriteCollection('transit-motion', state._animatedMarkers);
-        viewer?.scene?.primitives?.remove(state._animatedMarkers);
-        state._animatedMarkers = null;
-      }
+      parts.renderer?.destroy();
+      parts.renderer = null;
+      state._markers = state._animatedMarkers = null;
       state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
       parts.height.clear();
       unbindStyleEvents();

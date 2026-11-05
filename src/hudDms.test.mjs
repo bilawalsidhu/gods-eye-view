@@ -1,3 +1,4 @@
+import { viewerEngine } from './testSupport/viewerEngine.mjs';
 // The HUD's LAT/LON readout in degrees-minutes-seconds. Seconds are printed to
 // two decimals, so a value within 0.005" of the next whole minute rounds up.
 // That carry must reach the minutes (and degrees): `122°20'60.00"W` is not a
@@ -80,7 +81,7 @@ test('the telemetry tick paints the carried value into both readouts', () => {
   };
   let hud;
   try {
-    hud = new IntelHUD(viewer, { publish });
+    hud = new IntelHUD(viewerEngine(viewer), { viewer: viewer, publish });
     hud._updateCameraData();
     const latlon = elements.get('hud-latlon').textContent;
     const bottom = elements.get('hud-bottom-line').textContent;

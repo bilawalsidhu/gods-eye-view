@@ -1,4 +1,5 @@
-import { createTransitLayer } from '../layers/transit/index.js';
+import { createTransitLayer as createLayer } from '../layers/transit/index.js';
+import { createTransitCesiumRenderer } from '../layers/transit/render/cesium.js';
 import * as render from '../renderGovernor.js';
 import * as sprites from './spriteOrder.js';
 import * as picking from './pickRegistry.js';
@@ -12,6 +13,13 @@ import {
   warmGroundFloor,
 } from './groundFloor.js';
 import { sampleMeshFloorCells } from './meshFloorSampler.js';
+
+export function createTransitLayer(options) {
+  return createLayer({
+    rendererFactory: createTransitCesiumRenderer,
+    ...options,
+  });
+}
 
 const layer = createTransitLayer({
   services: {
@@ -51,6 +59,5 @@ export {
   transitDetectionMetric,
   transitVehicleKey,
   vehicleFixAgeMs,
-  createTransitLayer,
 } from '../layers/transit/index.js';
 export default layer;

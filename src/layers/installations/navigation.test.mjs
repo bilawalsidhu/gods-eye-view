@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createViewport } from './viewport.js';
-import { createLifecycle } from './lifecycle.js';
+import { createLifecycle } from './render/cesium/lifecycle.js';
 
 test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and recover from wide views', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -158,6 +158,49 @@ test('an aborting real ingestion cannot clear the next scheduled view key', asyn
   assert.equal(state.cameraLoadKey, nextKey);
 });
 
+test('Navara installation ingestion loads from its engine camera without a viewer', async () => {
+  const { createIngestion } = await import('./ingestion.js');
+  const rectangle = Cesium.Rectangle.fromDegrees(-123, 37, -122, 38);
+  const state = {
+    enabled: true,
+    viewer: null,
+    engine: { camera: { viewRectangle: () => rectangle } },
+    records: [],
+    recordById: new Map(),
+    coverage: { kind: 'viewport' },
+  };
+  const requests = [];
+  const parts = {
+    model: { installationWithinViewport: () => true },
+    rendering: { renderRecords() {}, warmInstallationFloors() {} },
+    namedMarkers: { sync() {} },
+  };
+  const context = {
+    state,
+    parts,
+    services: {
+      render: { governorRequestRender() {} },
+      ground: { resolveGroundFloorCellsBounded: async () => {} },
+    },
+    source: {
+      async getMappedSites(box) {
+        requests.push(box);
+        return { records: [], status: 'ready', wide: false, saturated: false };
+      },
+    },
+  };
+  parts.viewport = createViewport(context);
+  const ingestion = createIngestion(context);
+
+  await ingestion.loadInstallations();
+
+  assert.equal(requests.length, 1);
+  assert.ok(Math.abs(requests[0].west + 123) < 1e-10);
+  assert.ok(Math.abs(requests[0].south - 37) < 1e-10);
+  assert.equal(state.loading, false);
+  assert.ok(state.lastUpdate);
+});
+
 test('wide views refresh screen decluttering when the globe rectangle stays unchanged', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const camera = {
@@ -188,4 +231,46 @@ test('wide views refresh screen decluttering when the globe rectangle stays unch
   viewport.scheduleLoad();
   t.mock.timers.tick(200);
   assert.equal(loads, 2, 'a different continent needs fresh projected labels');
+});
+
+test('the engine camera drives installation viewport requests without a viewer', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const rectangle = {
+    west: Cesium.Math.toRadians(179),
+    south: Cesium.Math.toRadians(-12),
+    east: Cesium.Math.toRadians(-178),
+    north: Cesium.Math.toRadians(16),
+  };
+  const state = {
+    enabled: true,
+    viewer: null,
+    engine: {
+      camera: {
+        viewRectangle: () => rectangle,
+        pose: () => ({
+          position: { x: 1, y: 2, z: 3 },
+          direction: { x: -1, y: 0, z: 0 },
+        }),
+      },
+    },
+  };
+  const loads = [];
+  const parts = {
+    ingestion: {
+      loadInstallations() {
+        loads.push(parts.viewport.loadArea(null));
+      },
+    },
+  };
+  parts.viewport = createViewport({ state, parts, services: {}, source: {} });
+
+  parts.viewport.scheduleLoad();
+  t.mock.timers.tick(200);
+
+  assert.equal(loads.length, 1);
+  assert.ok(Math.abs(loads[0].box.south + 12) < 1e-10);
+  assert.equal(loads[0].box.west, 179);
+  assert.equal(loads[0].box.north, 16);
+  assert.equal(loads[0].box.east, -178);
+  assert.equal(loads[0].coverage.kind, 'viewport');
 });

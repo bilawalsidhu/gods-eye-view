@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { cloneRectangle } from './rectangle.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import { buildHeatRaster } from '../../data/firmsHeatRaster.js';
 import {
   LOD_LEVELS,
@@ -9,7 +9,6 @@ import {
   HEAT_RASTER,
   HEAT_REBUILD_MS,
 } from './policy.js';
-import { createHeatImagery } from './heatImagery.js';
 
 /** The markers drawn under the far bands' heatmap for the hand-off fade. */
 const HANDOFF_MARKER_LOD = LOD_LEVELS.find((lod) => lod.mode === 'detections');
@@ -25,7 +24,6 @@ export function createRendering({
   feed,
 }) {
   const { warmFireAnchorFloors } = services.anchors;
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
   const { overlayHost } = config;
 
   /**
@@ -61,9 +59,7 @@ export function createRendering({
       return false;
     layerState._currentLodIndex = lodIndex;
     layerState._currentLodId = lod.id;
-    layerState._lastViewRect = viewRect
-      ? Cesium.Rectangle.clone(viewRect)
-      : null;
+    layerState._lastViewRect = viewRect ? cloneRectangle(viewRect) : null;
     const bounds = viewRect
       ? components.model.paddedDegreeBounds(viewRect)
       : null;
@@ -86,8 +82,6 @@ export function createRendering({
     applyHandoffFade(true);
   }
 
-  const fadeColor = new Cesium.Color();
-
   /**
    * Cross-fade between markers and heatmap by camera height (HANDOFF_FADE),
    * on every rendered frame, so a fast zoom never outruns the throttled band
@@ -96,6 +90,7 @@ export function createRendering({
    */
 
   function applyHandoffFade(force = false) {
+    if (!layerState._heatImagery) return;
     const height = components.viewport.cameraHeight();
     const t = Math.min(
       1,
@@ -107,13 +102,11 @@ export function createRendering({
     const heat = Math.round(t * t * (3 - 2 * t) * FADE_STEPS) / FADE_STEPS;
     if (!force && heat === layerState._handoffHeat) return;
     layerState._handoffHeat = heat;
-    layerState._heatImagery?.setOpacity(heat);
-    const billboards = layerState._billboards;
-    if (!billboards) return;
-    billboards.show = layerState._enabled && heat < 1;
-    const color = Cesium.Color.WHITE.withAlpha(1 - heat, fadeColor);
-    for (let i = 0; i < billboards.length; i += 1)
-      billboards.get(i).color = color;
+    layerState._heatImagery.setOpacity(heat);
+    layerState._renderer?.fadeSprites(
+      1 - heat,
+      layerState._enabled && heat < 1,
+    );
   }
 
   /**
@@ -175,19 +168,13 @@ export function createRendering({
     return clipped;
   }
 
-  /** The heat imagery adapter, created on first use. */
+  /** The renderer's heat imagery adapter, created on first use. */
 
   function heatImagery() {
-    if (!layerState._heatImagery) {
-      layerState._heatImagery = createHeatImagery({
-        cesium: Cesium,
-        getHost: () =>
-          layerState._imageryHost?.() ?? {
-            collection: layerState._viewer?.imageryLayers ?? null,
-            kind: 'globe',
-          },
-      });
-    }
+    layerState._heatImagery ??=
+      layerState._renderer?.createHeatImagery?.(
+        () => layerState._imageryHost?.() ?? null,
+      ) ?? null;
     return layerState._heatImagery;
   }
 
@@ -196,9 +183,9 @@ export function createRendering({
   function rebuildHeatRaster() {
     clearTimeout(layerState._heatRebuildTimer);
     layerState._heatRebuildTimer = null;
-    if (layerState._destroyed) return;
+    if (layerState._destroyed || !layerState._heatImagery) return;
     layerState._heatRaster = buildHeatRaster(layerState._fires, HEAT_RASTER);
-    heatImagery().setRaster(layerState._heatRaster);
+    layerState._heatImagery.setRaster(layerState._heatRaster);
   }
 
   /**
@@ -238,11 +225,11 @@ export function createRendering({
 
   /**
    * Far bands (global/regional): a Snap Map–style heatmap draped over the
-   * globe, transparent where nothing burns, plus the decluttered "N FIRES"
-   * cards from the coarse aggregation. The nearest band's markers are kept
-   * built underneath for the hand-off fade and hidden once it completes;
-   * cards go through the same screen-space label pipeline as detections
-   * (see {@link rebuildAmbientLabels}).
+   * globe, transparent where nothing
+   * burns, plus the decluttered "N FIRES" cards from the coarse aggregation.
+   * The nearest band's markers are kept built underneath for the hand-off
+   * fade and hidden once it completes; cards go through the same
+   * screen-space label pipeline as detections (see {@link rebuildAmbientLabels}).
    * @param {Object} lod - Active LOD descriptor.
    * @param {?Object} bounds - Padded view bounds in degrees, or null.
    */
@@ -260,7 +247,7 @@ export function createRendering({
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
       layerState._labelCandidates.push({
-        position: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0),
+        position: geo.cartesian3.fromDegrees(centerLon, centerLat, 0),
         cullPosition: components.model.cellCullPosition(centerLon, centerLat),
         fire: null,
         cell,
@@ -330,7 +317,7 @@ export function createRendering({
 
   function paintMarkers(lod, bounds) {
     ensureDetectionCollections();
-    layerState._dataSource.entities.removeAll();
+    layerState._renderer.clearCells();
     if (!layerState._billboards) return null;
     layerState._billboards.removeAll();
     layerState._pickIndexById.clear();
@@ -367,16 +354,13 @@ export function createRendering({
       layerState._pickIndexById.set(pickId, fire);
       layerState._cullPositions.push(cullPosition);
       markers.push({ position, cullPosition, fire, cell: null });
-      layerState._billboards.add({
+      layerState._renderer.addSprite({
         id: pickId,
         position,
         image: components.model.glowSprite(
           components.model.detectionColorStop(fire),
           components.model.sizeBucket(coreSize),
         ),
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       });
     }
 
@@ -389,27 +373,12 @@ export function createRendering({
 
   function ensureDetectionCollections() {
     if (!layerState._viewer || layerState._billboards) return;
-    layerState._billboards = new Cesium.BillboardCollection({
-      scene: layerState._viewer.scene,
-      blendOption: Cesium.BlendOption.TRANSLUCENT,
-    });
-    layerState._billboards.show = layerState._enabled;
-    layerState._viewer.scene.primitives.add(layerState._billboards);
-    registerSpriteCollection('firms', layerState._billboards);
-    restoreSpriteOrder(layerState._viewer);
+    layerState._billboards = layerState._renderer.ensureSprites();
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, layerState._enabled);
   }
 
   function removeDetectionCollections(viewer) {
-    const scene = viewer?.scene || layerState._viewer?.scene;
-    if (scene && !scene.isDestroyed?.()) {
-      try {
-        if (layerState._billboards)
-          scene.primitives.remove(layerState._billboards);
-      } catch {
-        /* already torn down */
-      }
-    }
+    layerState._renderer?.removeSprites();
     layerState._billboards = null;
     overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
@@ -425,11 +394,12 @@ export function createRendering({
    */
 
   function fireHorizonOccluder() {
+    if (layerState._renderer) return layerState._renderer.horizon();
     const camera = layerState._viewer?.camera?.positionWC
       ? layerState._viewer.camera
       : layerState._viewer?.scene?.camera;
     if (!camera?.positionWC) return null;
-    return horizonOccluder(camera);
+    return config.horizonOccluder(camera);
   }
 
   /**

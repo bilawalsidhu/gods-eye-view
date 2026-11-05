@@ -1,3 +1,4 @@
+import { viewerEngine } from '../testSupport/viewerEngine.mjs';
 // Short share links: `/share/<code>` opens through the start-up restore
 // pipeline, the address then follows the live view, and the share button
 // makes `/share/<code>` links (following an entity when the camera does).
@@ -126,7 +127,7 @@ function openPage(t, href, { managerOptions = {}, tracking = null } = {}) {
   const clock = installManualTimers(t);
   const viewer = fakeViewer();
   const restores = [];
-  const manager = new ShareLinkManager(viewer, {
+  const manager = new ShareLinkManager(viewerEngine(viewer), {
     onRestore: async (state) => restores.push(state),
     isNavigationCurrent: () => true,
     ...managerOptions,
@@ -401,9 +402,28 @@ test('a shared vessel is selected once the vessel feed has it', async (t) => {
   assert.match(page.notices.at(-1), /^366999712 isn't reporting now/);
 });
 
+test('the live preset follows the engine while a copied link keeps its rendered sharpness', (t) => {
+  const { location } = installPage(t, 'https://gev.example/?engine=navara');
+  const manager = new ShareLinkManager(viewerEngine(fakeViewer()));
+  t.after(() => manager.destroy());
+  manager.onToggleChange(false, true, {
+    sharpenIntensity: 80,
+    sharpenFollowsEngine: true,
+  });
+  manager.flush();
+  assert.equal(new URLSearchParams(location.hash.slice(1)).get('siAuto'), '1');
+  const code = parseSharePath(new URL(manager.buildLink()).pathname).code;
+  assert.equal(decodeShareView(code).state.sharpenIntensity, 80);
+  manager.onToggleChange(false, true, { sharpenIntensity: 80 });
+  manager.flush();
+  const params = new URLSearchParams(location.hash.slice(1));
+  assert.equal(params.has('siAuto'), false);
+  assert.equal(params.get('si'), '80');
+});
+
 test('the share button links to /share/<code>, following the followed entity', (t) => {
   installPage(t, 'https://gev.example/?lang=ru#v=2&lat=1&lon=2');
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(viewerEngine(fakeViewer()));
   // A fresh session's look, as the app reports it at start-up.
   manager.onToggleChange(false, true, {
     hudVisible: true,

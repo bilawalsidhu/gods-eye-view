@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as geo from '../../geo/index.js';
 import {
   windFrom,
   formatWindSpeed,
@@ -27,21 +28,10 @@ test('center inspection uses a fixed forecast reading without double-converting 
     },
   };
   const viewer = {
-    camera: { pickEllipsoid: () => ({ longitude: 0, latitude: 0 }) },
+    camera: { pickEllipsoid: () => geo.cartesian3.fromDegrees(0, 0) },
     scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
   };
-  const cesium = {
-    Cartesian2: class {
-      constructor(x, y) {
-        this.x = x;
-        this.y = y;
-      }
-    },
-    Ellipsoid: { WGS84: {} },
-    Cartographic: { fromCartesian: (p) => p },
-    Math: { toDegrees: (x) => (x * 180) / Math.PI },
-  };
-  const result = inspectWindAtCenter(snapshot, viewer, cesium, {
+  const result = inspectWindAtCenter(snapshot, viewer, {
     overlay: 'temperature',
     units: 'km/h',
     model: 'GFS',
@@ -54,7 +44,7 @@ test('center inspection uses a fixed forecast reading without double-converting 
   assert.equal(result.coordinates, '0.00°N · 0.00°E');
   viewer.camera.pickEllipsoid = () => null;
   assert.equal(
-    inspectWindAtCenter(snapshot, viewer, cesium).coordinates,
+    inspectWindAtCenter(snapshot, viewer).coordinates,
     'No surface reading',
   );
 });

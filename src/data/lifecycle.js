@@ -1,3 +1,4 @@
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { cancelCameraArrival } from './cameraArrival.js';
 
 function cloneLayerParams(value) {
@@ -14,6 +15,9 @@ function cloneLayerParams(value) {
 }
 
 const SUPERSEDED_VISIBILITY_INTENT = Symbol('superseded-visibility-intent');
+// A scene bind or detach waits this long for asynchronous layer attachments.
+// A late attachment sees its scene signal aborted and releases its own work.
+const ATTACH_SETTLE_TIMEOUT_MS = 5000;
 const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
   'enabled-only',
   'enabled+options',
@@ -76,17 +80,29 @@ function refreshFailureFromStats(stats, label) {
  * listener methods. Without one, periodic work retains its headless behavior.
  */
 export class LayerLifecycle {
+  /**
+   * @param {object | null} viewer The Cesium viewer (null on Navara).
+   * @param {{ engine?: import('../globe/contract.js').GlobeEngine,
+   *   allowQaRegistration?: boolean, getSourceAvailability?: Function }} [options]
+   *   `engine` (default: the viewer's registered engine): every module call
+   *   gets `{ signal, engine }` as its second argument.
+   *   `attachSettleTimeoutMs`: how long a scene bind or detach waits for
+   *   asynchronous layer attachments before it continues without them.
+   */
   constructor(
     viewer,
     {
       allowQaRegistration = false,
       getSourceAvailability,
+      engine,
       visibilityTarget = null,
+      attachSettleTimeoutMs = ATTACH_SETTLE_TIMEOUT_MS,
     } = {},
   ) {
     this._catalogSourceAvailability = getSourceAvailability;
     this._visibilityTarget = visibilityTarget;
     this.viewer = viewer;
+    this.engine = engine ?? engineFromViewer(viewer) ?? null;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
     this._listeners = new Set();
@@ -97,6 +113,22 @@ export class LayerLifecycle {
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
     this._qaLayerIds = new Set();
+    // The bound scene: its signal reaches every attachRenderer() call and is
+    // aborted when the scene detaches. Asynchronous attachments still running
+    // are kept here so the detach releases them only after they stopped.
+    this._sceneController = null;
+    this._sceneDetached = false;
+    this._pendingAttachments = new Set();
+    this._attachSettleTimeoutMs = attachSettleTimeoutMs;
+    // Lifecycle work and explicit refreshes that wait for the next scene.
+    // detachScene() does not wait for parked work, which waits for it.
+    this._sceneWaiters = new Set();
+    this._parkListeners = new Set();
+  }
+
+  /** The second argument of every layer module call: `{ signal, engine }`. */
+  _moduleContext(signal = null) {
+    return { signal, engine: this.engine };
   }
 
   register(layerModule) {
@@ -104,6 +136,244 @@ export class LayerLifecycle {
       throw new Error('Data-layer registrations are finalized');
     }
     this._registerLayer(layerModule);
+  }
+
+  /**
+   * Release the scene only. Models with an explicit renderer lifetime keep
+   * their entry, polling interval, visibility intents and in-flight source.
+   * Legacy modules use their ordinary teardown until they gain that contract.
+   *
+   * Every layer is released even when another one fails, and the manager is
+   * always left unbound, so the next bindCatalog() can attach a scene. The
+   * failures are reported together. A layer whose release failed keeps it
+   * pending: a repeated detachScene(), or the next bindCatalog(), retries it.
+   * Periodic refreshes, explicit refreshes and enables requested while no
+   * scene is bound wait for the next one.
+   */
+  async detachScene() {
+    // Attachments still in flight stop at their next checkpoint; their
+    // partial work is released below like a finished attachment.
+    this._sceneController?.abort();
+    this._sceneController = null;
+    this._sceneDetached = true;
+    const viewer = this.viewer;
+    const errors = [];
+    const droppedQaLayers = [];
+    try {
+      await this._awaitAttachments([...this._pendingAttachments], 'detach');
+      for (const [id, entry] of [...this.layers]) {
+        try {
+          await this._lifecycleIdleOrParked(entry);
+          if (entry.module.attachRenderer && entry.module.detachRenderer) {
+            await this._detachEntryRenderer(entry, viewer);
+          } else {
+            const qaLayer = this._qaLayerIds.has(id);
+            if (!(await this.destroyLayer(id))) {
+              // The next catalog brings a fresh module for this id. A stale
+              // entry would refuse it, so the failed one is dropped here.
+              this._stopUpdateLoop(entry);
+              this.layers.delete(id);
+              this._qaLayerIds.delete(id);
+              throw new Error(`Cannot detach layer ${id}`);
+            }
+            if (qaLayer) droppedQaLayers.push(id);
+          }
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+    } finally {
+      this.viewer = null;
+      this.engine = null;
+      this._registrationsFinalized = false;
+      this._registrationDispositions = null;
+    }
+    if (droppedQaLayers.length)
+      console.warn(
+        `[Data] QA layers do not survive a scene switch; register them again: ${droppedQaLayers.join(', ')}`,
+      );
+    if (errors.length) {
+      for (const error of errors)
+        console.warn('[Data] scene detach error:', error);
+      throw new AggregateError(errors, 'Data layers could not detach');
+    }
+  }
+
+  /** Release one retained layer's renderer, keeping a failure for a retry. */
+  async _detachEntryRenderer(entry, viewer) {
+    const pending = entry.pendingSceneDetach;
+    if (!pending && (!entry.initialized || entry.sceneDetached)) return;
+    const target = pending ? pending.viewer : viewer;
+    entry.pendingSceneDetach = { viewer: target };
+    await entry.module.detachRenderer(target);
+    entry.pendingSceneDetach = null;
+    entry.sceneDetached = true;
+  }
+
+  /** Bind the next catalog only after the preceding scene released its entries. */
+  bindCatalog(viewer, engine, catalog, options = {}) {
+    if (this._registrationsFinalized) throw new Error('Scene already attached');
+    this.viewer = viewer;
+    this.engine = engine ?? engineFromViewer(viewer) ?? null;
+    this._catalogSourceAvailability = catalog.getSourceAvailability;
+    const scene = new AbortController();
+    this._sceneController = scene;
+    // An attachment that is still running when the scene detaches sees this
+    // signal aborted and must stop touching the scene.
+    const context = { ...this._moduleContext(scene.signal), ...options };
+    const attachments = [];
+    for (const layer of catalog.layers) {
+      const entry = this.layers.get(layer.id);
+      if (!entry) this.register(layer);
+      else {
+        if (entry.module !== layer)
+          throw new Error(`Layer owner changed: ${layer.id}`);
+        if (entry.initialized) {
+          attachments.push(this._attachEntryRenderer(entry, viewer, context));
+        }
+      }
+    }
+    // Retained entries may appear anywhere in the directory. Preserve both
+    // catalog order (panel/serialization) and each live entry's identity.
+    for (const { id } of catalog.layers) {
+      const entry = this.layers.get(id);
+      this.layers.delete(id);
+      this.layers.set(id, entry);
+    }
+    this.finalizeRegistrations(catalog.metadata);
+    const pending = attachments.filter((ready) => ready?.then);
+    // The scene counts as bound for refreshes and parked enables once its
+    // attachments settled (or the wait for them timed out).
+    const bound = () => {
+      if (this._sceneController !== scene) return;
+      this._sceneDetached = false;
+      this._runDeferredRefreshes();
+      this._settleSceneWaiters(true);
+    };
+    if (!pending.length) {
+      bound();
+      return undefined;
+    }
+    return this._awaitAttachments(pending, 'bind').then((settled) => {
+      bound();
+      const failure = settled?.find(({ status }) => status === 'rejected');
+      if (failure) throw failure.reason;
+    });
+  }
+
+  /**
+   * Wait for attachments to settle, at most attachSettleTimeoutMs. Returns
+   * their allSettled results, or null when the wait timed out.
+   */
+  async _awaitAttachments(attachments, phase) {
+    if (!attachments.length) return [];
+    let timer;
+    const timedOut = new Promise((resolve) => {
+      timer = setTimeout(resolve, this._attachSettleTimeoutMs, null);
+    });
+    const settled = await Promise.race([
+      Promise.allSettled(attachments),
+      timedOut,
+    ]);
+    clearTimeout(timer);
+    if (!settled)
+      console.warn(
+        `[Data] layer attachments still running after ${this._attachSettleTimeoutMs} ms; scene ${phase} continues without them`,
+      );
+    return settled;
+  }
+
+  /**
+   * Wait until a scene is bound. Resolves true then, or false when the
+   * signal aborts or the entry is destroyed. `refresh` marks an explicit
+   * refresh, which replaces the entry's deferred periodic one.
+   */
+  _waitForScene(entry, signal = null, { refresh = false } = {}) {
+    if (!this._sceneDetached) return Promise.resolve(true);
+    if (signal?.aborted) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const onAbort = () => waiter.settle(false);
+      const waiter = {
+        entry,
+        refresh,
+        settle: (bound) => {
+          if (!this._sceneWaiters.delete(waiter)) return;
+          if (refresh) entry.sceneRefreshWaiters -= 1;
+          signal?.removeEventListener?.('abort', onAbort);
+          resolve(bound);
+        },
+      };
+      if (refresh) entry.sceneRefreshWaiters += 1;
+      this._sceneWaiters.add(waiter);
+      signal?.addEventListener?.('abort', onAbort, { once: true });
+      for (const listener of [...this._parkListeners]) listener(entry);
+    });
+  }
+
+  _settleSceneWaiters(bound, entry = null) {
+    for (const waiter of [...this._sceneWaiters])
+      if (!entry || waiter.entry === entry) waiter.settle(bound);
+  }
+
+  /** The entry's queued lifecycle work settled, or is parked for a scene. */
+  _lifecycleIdleOrParked(entry) {
+    const parked = () =>
+      [...this._sceneWaiters].some(
+        (waiter) => waiter.entry === entry && !waiter.refresh,
+      );
+    if (parked()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        this._parkListeners.delete(listener);
+        resolve();
+      };
+      const listener = (parkedEntry) => {
+        if (parkedEntry === entry && parked()) done();
+      };
+      this._parkListeners.add(listener);
+      entry.toggleChain.catch(() => {}).then(done);
+    });
+  }
+
+  /**
+   * Attach one retained layer to the bound scene. A release that failed on
+   * the previous scene is retried first. Asynchronous attachments are tracked
+   * so detachScene() releases them only after they stopped.
+   */
+  _attachEntryRenderer(entry, viewer, context) {
+    let ready;
+    try {
+      const pending = entry.pendingSceneDetach;
+      entry.sceneDetached = false;
+      if (pending) {
+        ready = Promise.resolve()
+          .then(() => entry.module.detachRenderer(pending.viewer))
+          .then(() => {
+            entry.pendingSceneDetach = null;
+            if (context.signal.aborted) return undefined;
+            return entry.module.attachRenderer(viewer, context);
+          });
+      } else ready = entry.module.attachRenderer(viewer, context);
+    } catch (error) {
+      ready = Promise.reject(error);
+    }
+    if (!ready?.then) return ready;
+    const tracked = Promise.resolve(ready);
+    this._pendingAttachments.add(tracked);
+    const untrack = () => this._pendingAttachments.delete(tracked);
+    tracked.then(untrack, untrack);
+    return tracked;
+  }
+
+  /** Run the periodic refreshes that came due while no scene was bound. */
+  _runDeferredRefreshes() {
+    for (const [layerId, entry] of this.layers) {
+      if (!entry.refreshDeferred) continue;
+      entry.refreshDeferred = false;
+      // An explicit refresh waiting for this scene runs instead.
+      if (entry.sceneRefreshWaiters > 0) continue;
+      void this._runPeriodicUpdate(layerId, entry);
+    }
   }
 
   /** Register a synthetic layer after sealing in an explicitly dev-enabled manager. */
@@ -183,6 +453,13 @@ export class LayerLifecycle {
       // interval is armed after the user already turned the layer off, and a
       // subsequent enable arms a SECOND interval → 2× poll → OpenSky 429 (M1).
       toggleChain: Promise.resolve(),
+      // Scene handoff (detachScene/bindCatalog): whether this entry's
+      // renderer is released, a release that failed and is retried, and a
+      // periodic refresh that came due while no scene was bound.
+      sceneDetached: false,
+      pendingSceneDetach: null,
+      refreshDeferred: false,
+      sceneRefreshWaiters: 0,
     });
   }
 
@@ -278,6 +555,11 @@ export class LayerLifecycle {
   }
 
   async _runPeriodicUpdate(layerId, entry, { signal = null } = {}) {
+    if (this._sceneDetached) {
+      // No renderer to draw into: refresh as soon as the next scene binds.
+      if (entry.enabled && !entry.destroying) entry.refreshDeferred = true;
+      return false;
+    }
     if (
       !entry.enabled ||
       entry.lifecycleState !== 'enabled' ||
@@ -286,6 +568,7 @@ export class LayerLifecycle {
       signal?.aborted
     )
       return false;
+    entry.refreshDeferred = false;
     const refreshEpoch = ++entry.refreshEpoch;
     entry.refreshing = true;
     this._publishActivity({ type: 'status' });
@@ -299,10 +582,16 @@ export class LayerLifecycle {
     let result;
     let failure = null;
     try {
-      result = await entry.module.update(this.viewer, { signal });
+      result = await entry.module.update(
+        this.viewer,
+        this._moduleContext(signal),
+      );
       // Even a rejected/partial update may have changed the data exposed by
       // the layer. Publish before classifying its result so observers see it.
-      this._publishActivity({ type: 'data-updated', layerId });
+      // A layer may explicitly report unchanged scene data while still
+      // completing health/UI polling. Legacy void/boolean results keep waking.
+      if (result?.changed !== false)
+        this._publishActivity({ type: 'data-updated', layerId });
       if (result === false)
         failure = lifecycleRejectedError(layerId, 'refresh');
       if (!failure)
@@ -381,14 +670,19 @@ export class LayerLifecycle {
    */
   async refreshLayer(layerId, { signal = null } = {}) {
     const entry = this.layers.get(layerId);
-    if (
-      !entry ||
-      !entry.enabled ||
-      entry.lifecycleState !== 'enabled' ||
-      entry.destroying ||
-      signal?.aborted
-    )
-      return false;
+    const refreshable = () =>
+      this.layers.get(layerId) === entry &&
+      entry.enabled &&
+      entry.lifecycleState === 'enabled' &&
+      !entry.destroying &&
+      !signal?.aborted;
+    if (!entry || !refreshable()) return false;
+    // Between two scenes (an engine switch) the refresh runs once the next
+    // scene is bound, so callers never read the switch as a failed refresh.
+    if (this._sceneDetached) {
+      const bound = await this._waitForScene(entry, signal, { refresh: true });
+      if (!bound || !refreshable()) return false;
+    }
 
     if (entry.refreshing) {
       const settled = await new Promise((resolve) => {
@@ -427,6 +721,10 @@ export class LayerLifecycle {
         return false;
     }
 
+    if (this._sceneDetached) {
+      const bound = await this._waitForScene(entry, signal, { refresh: true });
+      if (!bound || !refreshable()) return false;
+    }
     return this._runPeriodicUpdate(layerId, entry, { signal });
   }
 
@@ -789,7 +1087,9 @@ export class LayerLifecycle {
         let compensated = false;
         let compensationError = null;
         try {
-          compensated = (await entry.module.enable(this.viewer)) !== false;
+          compensated =
+            (await entry.module.enable(this.viewer, this._moduleContext())) !==
+            false;
           if (!compensated) {
             compensationError = lifecycleRejectedError(
               layerId,
@@ -807,7 +1107,10 @@ export class LayerLifecycle {
         if (!compensated) {
           try {
             cleanupConfirmed =
-              (await entry.module.disable(this.viewer)) !== false;
+              (await entry.module.disable(
+                this.viewer,
+                this._moduleContext(),
+              )) !== false;
           } catch (error) {
             console.warn(
               `[Data] ${layerId} cancelled-disable final cleanup error:`,
@@ -854,7 +1157,10 @@ export class LayerLifecycle {
         return false;
       };
       try {
-        const disabled = await entry.module.disable(this.viewer, { signal });
+        const disabled = await entry.module.disable(
+          this.viewer,
+          this._moduleContext(signal),
+        );
         if (disabled === false)
           throw lifecycleRejectedError(layerId, 'disable');
       } catch (e) {
@@ -901,7 +1207,7 @@ export class LayerLifecycle {
         // where an asynchronous enable finishes after this callback.
         try {
           abortCleanup = Promise.resolve(
-            entry.module.disable(this.viewer),
+            entry.module.disable(this.viewer, this._moduleContext()),
           ).catch((error) => {
             console.warn(
               `[Data] ${layerId} cancelled-enable cleanup error:`,
@@ -929,7 +1235,8 @@ export class LayerLifecycle {
         let cleanupConfirmed = false;
         try {
           cleanupConfirmed =
-            (await entry.module.disable(this.viewer)) !== false;
+            (await entry.module.disable(this.viewer, this._moduleContext())) !==
+            false;
         } catch (error) {
           console.warn(
             `[Data] ${layerId} cancelled-enable final cleanup error:`,
@@ -969,7 +1276,8 @@ export class LayerLifecycle {
         let cleanupConfirmed = false;
         try {
           cleanupConfirmed =
-            (await entry.module.disable(this.viewer)) !== false;
+            (await entry.module.disable(this.viewer, this._moduleContext())) !==
+            false;
         } catch (cleanupError) {
           console.warn(
             `[Data] ${layerId} failed-enable cleanup error:`,
@@ -992,10 +1300,20 @@ export class LayerLifecycle {
         return false;
       };
       signal?.addEventListener('abort', cancelEnable, { once: true });
+      if (this._sceneDetached) {
+        // Between two scenes (an engine switch): init and enable get the
+        // next scene instead of a null viewer and engine.
+        this._setVisibilityIntentPhase(entry, intentEpoch, 'scene');
+        if (!(await this._waitForScene(entry, signal)))
+          return finishCancelledEnable('scene');
+      }
       if (!entry.initialized) {
         this._setVisibilityIntentPhase(entry, intentEpoch, 'init');
         try {
-          const initialized = await entry.module.init(this.viewer, { signal });
+          const initialized = await entry.module.init(
+            this.viewer,
+            this._moduleContext(signal),
+          );
           if (initialized === false)
             throw lifecycleRejectedError(layerId, 'init');
           entry.initialized = true;
@@ -1035,7 +1353,10 @@ export class LayerLifecycle {
       entry.lifecycleUncertain = false;
       this._setVisibilityIntentPhase(entry, intentEpoch, 'enable');
       try {
-        const enabled = await entry.module.enable(this.viewer, { signal });
+        const enabled = await entry.module.enable(
+          this.viewer,
+          this._moduleContext(signal),
+        );
         if (enabled === false) throw lifecycleRejectedError(layerId, 'enable');
       } catch (e) {
         if (signal?.aborted || isAbortError(e)) {
@@ -1051,7 +1372,10 @@ export class LayerLifecycle {
       // First update immediately
       this._setVisibilityIntentPhase(entry, intentEpoch, 'update');
       try {
-        const updated = await entry.module.update(this.viewer, { signal });
+        const updated = await entry.module.update(
+          this.viewer,
+          this._moduleContext(signal),
+        );
         if (updated === false) throw lifecycleRejectedError(layerId, 'update');
       } catch (e) {
         if (signal?.aborted || isAbortError(e)) {
@@ -2165,6 +2489,8 @@ export class LayerLifecycle {
     if (!entry || entry.destroying) return false;
     cancelCameraArrival(this.viewer);
     entry.destroying = true;
+    // Work parked for the next scene ends now; teardown waits for its queue.
+    this._settleSceneWaiters(false, entry);
     this._invalidateRefresh(layerId, entry, 'layer-destroyed');
     // Teardown becomes authoritative before the first await. Advancing the
     // intent epoch and aborting active work prevents a pending enable/update
@@ -2199,7 +2525,10 @@ export class LayerLifecycle {
     entry.latestQueuedAbsoluteIntent = null;
     if (entry.enabled) {
       try {
-        const disabled = await entry.module.disable(this.viewer);
+        const disabled = await entry.module.disable(
+          this.viewer,
+          this._moduleContext(),
+        );
         if (disabled === false)
           throw lifecycleRejectedError(layerId, 'destroy-disable');
       } catch (e) {
@@ -2217,7 +2546,10 @@ export class LayerLifecycle {
     }
     if (typeof entry.module.destroy === 'function') {
       try {
-        const destroyed = await entry.module.destroy(this.viewer);
+        const destroyed = await entry.module.destroy(
+          this.viewer,
+          this._moduleContext(),
+        );
         if (destroyed === false)
           throw lifecycleRejectedError(layerId, 'destroy');
       } catch (e) {

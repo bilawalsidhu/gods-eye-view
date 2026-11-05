@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { appClock } from '../../time/clock.js';
+import * as geo from '../../geo/index.js';
 import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
@@ -15,7 +16,13 @@ function accuracyLabel(accuracy) {
   return accuracy;
 }
 
-export function createPanel({ state: layerState, services, parts, source }) {
+export function createPanel({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   /**
    * Preserve the user's globe scale for roster previews while avoiding an
    * accidental surface-level fly-to when the list is opened from a close view.
@@ -323,10 +330,10 @@ export function createPanel({ state: layerState, services, parts, source }) {
       `rocket-satellite:${layerState._selectedLaunchId}`,
     );
     const position = satellite?.position?.getValue(
-      Cesium.JulianDate.now(layerState._declutterTime),
+      getRenderer().time(appClock.now()),
     );
     const altitudeM = position
-      ? Cesium.Cartographic.fromCartesian(position)?.height
+      ? geo.cartographic.fromCartesian(position)?.height
       : null;
     const speedMps = layerState._satelliteTelemetry.get(
       layerState._selectedLaunchId,

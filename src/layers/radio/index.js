@@ -19,10 +19,10 @@ import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
-export function createRadioLayer({ services, source }) {
+export function createRadioLayer({ services, source, rendererFactory }) {
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const context = { state, services, parts, source, rendererFactory };
   parts.catalogModel = createCatalogModel(context);
   parts.labels = createLabels(context);
   parts.clustering = createClustering(context);

@@ -236,6 +236,26 @@ test('push-to-talk starts from Cesium canvases and the document background', (t)
   assert.equal(f.key('keyup', background).defaultPrevented, true);
 });
 
+test('push-to-talk starts from the Navara canvas inside its renderer host', (t) => {
+  // src/standalone/rendererCache.js mounts each engine in a .globe-renderer
+  // div inside #cesiumContainer; Navara's canvas has no tabindex.
+  const f = createPushToTalkFixture(t);
+  const host = pushToTalkTarget({ tagName: 'DIV', id: 'cesiumContainer' });
+  const renderer = pushToTalkTarget({ tagName: 'DIV', parentElement: host });
+  const navaraCanvas = pushToTalkTarget({
+    tagName: 'CANVAS',
+    parentElement: renderer,
+  });
+  assert.equal(isPushToTalkSurface(navaraCanvas), true);
+  assert.equal(isInteractiveSpaceTarget(navaraCanvas), false);
+  assert.equal(f.key('keydown', navaraCanvas).defaultPrevented, true);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.starts.length, 1);
+  assert.equal(f.controller.pushToTalkKeyHeld, true);
+  assert.equal(f.key('keyup', navaraCanvas).defaultPrevented, true);
+  assert.equal(f.controller.pushToTalkKeyHeld, false);
+});
+
 test('short Space on a focused control preserves release activation', (t) => {
   const f = createPushToTalkFixture(t);
   const button = pushToTalkTarget({ tagName: 'BUTTON' });
@@ -2839,13 +2859,13 @@ test('isBenignViewportDeleteError is false for non-error payloads and junk', () 
 test('hidden document yields no fresh frame — capture must not label a stale canvas Current', async () => {
   const originalDocument = globalThis.document;
   let requested = 0;
-  const scene = {
-    postRender: { addEventListener() { return () => {}; } },
-    requestRender() { requested += 1; },
+  const engine = {
+    frames: { postRender: { addEventListener() { return () => {}; } } },
+    render: { request() { requested += 1; } },
   };
   try {
     globalThis.document = { hidden: true };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, false, 'hidden capture reports non-fresh');
     assert.equal(requested, 0, 'no secret render restart while hidden');
   } finally {
@@ -2858,11 +2878,11 @@ test('visible document with a rendering scene reports a fresh frame', async () =
   try {
     globalThis.document = { hidden: false };
     let fire = null;
-    const scene = {
-      postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
-      requestRender() { queueMicrotask(() => fire?.()); },
+    const engine = {
+      frames: { postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } } },
+      render: { request() { queueMicrotask(() => fire?.()); } },
     };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, true);
   } finally {
     globalThis.document = originalDocument;
@@ -2875,11 +2895,11 @@ test('a tab switch during the bounded render wait invalidates freshness', async 
     const doc = { hidden: false };
     globalThis.document = doc;
     let fire = null;
-    const scene = {
-      postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
-      requestRender() { doc.hidden = true; queueMicrotask(() => fire?.()); },
+    const engine = {
+      frames: { postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } } },
+      render: { request() { doc.hidden = true; queueMicrotask(() => fire?.()); } },
     };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, false, 'freshness rechecked after the await');
   } finally {
     globalThis.document = originalDocument;

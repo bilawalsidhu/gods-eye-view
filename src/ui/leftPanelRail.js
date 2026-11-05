@@ -54,13 +54,16 @@ export function layoutLeftPanelRail({
   // Keep this desktop lane engine from fighting those dedicated rules.
   const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
   if (isMobile) {
-    stack.classList.remove('layout-focus');
-    stack.classList.remove('layout-tail');
+    if (stack.classList.contains('layout-focus'))
+      stack.classList.remove('layout-focus');
+    if (stack.classList.contains('layout-tail'))
+      stack.classList.remove('layout-tail');
     stack.style.removeProperty('--left-stack-safe-top');
     stack.style.removeProperty('--left-stack-safe-bottom');
     stack.style.removeProperty('--left-stack-centered-height');
     stack.style.removeProperty('--panel-rail-offset');
-    stack.classList.remove('layout-exclusive');
+    if (stack.classList.contains('layout-exclusive'))
+      stack.classList.remove('layout-exclusive');
     stack.dataset.layoutMode = 'mobile';
     settleSideAccordion({ panels, enabled: false, onCollapse });
     for (const panel of panels) {

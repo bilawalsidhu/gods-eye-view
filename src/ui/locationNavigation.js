@@ -1,12 +1,19 @@
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { LocationControls } from './location.js';
 
-/** Own destination selection, lookup, orbit and world-jump lifetime. */
+/**
+ * Own destination selection, lookup, orbit and world-jump lifetime. The camera
+ * is the globe `engine`'s, and a world jump stops its follow
+ * (`engine.camera.following()`); `viewer` is optional and only clears a
+ * Cesium tracked entity that no registered engine reports.
+ */
 export class LocationNavigation {
   constructor({
-    viewer,
+    viewer = null,
+    engine = engineFromViewer(viewer),
     placeSearch,
     services,
     elements,
@@ -16,7 +23,7 @@ export class LocationNavigation {
   }) {
     Object.assign(
       this,
-      { viewer, placeSearch, services, navigation, readCockpit },
+      { viewer, engine, placeSearch, services, navigation, readCockpit },
       elements,
       operations,
     );
@@ -31,7 +38,8 @@ export class LocationNavigation {
     this._globeResetPromise = null;
     this._cancelGlobeReset = null;
     this._worldJumpActive = false;
-    this.orbitController = new services.OrbitController(viewer);
+    this.orbitController = new services.OrbitController(engine);
+    this._orbitIndicator = null;
     this._locationState = createStateChannel(
       () => this._locationLookup?.getState() || null,
     );
@@ -127,11 +135,16 @@ export class LocationNavigation {
       isCurrent: (generation) =>
         !this._disposed && generation === this._navigationGeneration,
       beforeFly: (generation) => this._reassertNavigationHandoff(generation),
+      // The engine the lookup ends on: an answer that lands after a switch
+      // flies the globe shown then; one started with none attached is
+      // cancelled.
       search: (query, options) =>
-        searchAndFlyTo(this.viewer, query, {
-          placeSearch: this.placeSearch,
-          ...options,
-        }),
+        this.engine
+          ? searchAndFlyTo(this.engine, query, {
+              placeSearch: this.placeSearch,
+              ...options,
+            })
+          : Promise.resolve({ cancelled: true }),
       onResult: (destination) => {
         if (destination.outlineUnavailable)
           this._showToast(t('Detailed outline unavailable'));
@@ -210,7 +223,7 @@ export class LocationNavigation {
     const isCityChanged =
       this._activeLocationId && this._activeLocationId !== cityId;
     const result = this._flyWithTransition(!!isCityChanged, (hooks) =>
-      flyToPresetLocation(this.viewer, cityId, hooks),
+      flyToPresetLocation(this.engine, cityId, hooks),
     );
     if (result === false) return;
     this._expandPOIRow(cityId);
@@ -231,7 +244,7 @@ export class LocationNavigation {
     const isCityChanged =
       this._activeLocationId && this._activeLocationId !== cityId;
     const result = this._flyWithTransition(!!isCityChanged, (hooks) =>
-      flyToPOI(this.viewer, cityId, poiIndex, hooks),
+      flyToPOI(this.engine, cityId, poiIndex, hooks),
     );
     if (result === false) return;
     this._setActiveLocation(cityId);
@@ -326,7 +339,9 @@ export class LocationNavigation {
       militaryAwarenessLayer,
       rocketLaunchesLayer,
     } = this.services;
-    if (this._disposed)
+    // Between two globe engines there is no camera to reset: nothing moves
+    // and no navigation is stamped.
+    if (this._disposed || !this.engine)
       return Promise.resolve({
         ok: false,
         action: 'zoom_to_globe',
@@ -338,6 +353,10 @@ export class LocationNavigation {
     this._stopOrbit();
     this.cockpitView?.exit({ restoreTracking: false });
     try {
+      // A layer an engine leaves out (military awareness on Navara) has no
+      // controls: release the trackers it would release, below.
+      if (typeof militaryAwarenessLayer?.releaseCameraOwnership !== 'function')
+        throw new Error('no military awareness controls');
       militaryAwarenessLayer.releaseCameraOwnership?.({ origin: 'tool' });
     } catch {
       // Keep reset available if Context has not initialized completely.
@@ -367,9 +386,10 @@ export class LocationNavigation {
     } catch {
       /* best-effort release */
     }
-    this.viewer.trackedEntity = undefined;
-    this.viewer.camera.cancelFlight();
-    this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    this.engine.camera.following()?.stop();
+    if (this.viewer) this.viewer.trackedEntity = undefined;
+    this.engine.camera.cancelFlight();
+    this.engine.camera.release();
     this._beginWorldJumpTransition();
 
     let resolveReset;
@@ -384,15 +404,15 @@ export class LocationNavigation {
       settled = true;
       clearTimeout(timer);
       this._endWorldJumpTransition();
-      const carto = this.viewer.camera.positionCartographic;
+      const carto = this.engine.camera.pose().cartographic;
       const result = {
         ok: !cancelled,
         action: 'zoom_to_globe',
         cancelled,
         heightKm: Math.round(GLOBE_VIEW.heightM / 1000),
         centeredOn: {
-          latitude: Number(Cesium.Math.toDegrees(carto.latitude).toFixed(2)),
-          longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(2)),
+          latitude: Number(geo.math.toDegrees(carto.latitude).toFixed(2)),
+          longitude: Number(geo.math.toDegrees(carto.longitude).toFixed(2)),
         },
       };
       this._publishGlobeResetting?.(false);
@@ -402,14 +422,14 @@ export class LocationNavigation {
     };
     this._cancelGlobeReset = () => finish(true);
     timer = window.setTimeout(() => {
-      const height = this.viewer.camera.positionCartographic?.height;
+      const height = this.engine.camera.height();
       finish(
         !Number.isFinite(height) ||
           Math.abs(height - GLOBE_VIEW.heightM) > 1000,
       );
     }, 4200);
     this._publishGlobeResetting?.(true);
-    const target = flyToGlobeView(this.viewer, {
+    const target = flyToGlobeView(this.engine, {
       onComplete: () => finish(false),
       onCancel: () => finish(true),
     });
@@ -430,6 +450,32 @@ export class LocationNavigation {
   }
 
   /** Revoke callbacks and settle owned camera work before the viewer is released. */
+  /**
+   * Leave the globe (an engine switch): its reset flight, world-jump
+   * transition and orbit end; the search, its text and the readout stay.
+   */
+  detachScene() {
+    if (!this._disposed) {
+      this._cancelGlobeReset?.();
+      this._cancelGlobeReset = null;
+      if (this._worldJumpActive) this._endWorldJumpTransition();
+      clearTimeout(this._trafficTransitionTimer);
+      this._trafficTransitionTimer = null;
+      this._stopOrbit();
+    }
+    this.orbitController?.attachEngine(null);
+    this.viewer = null;
+    this.engine = null;
+  }
+
+  /** Navigate on another globe (an engine switch). */
+  attachScene({ viewer = null, engine = engineFromViewer(viewer) } = {}) {
+    if (this._disposed) return;
+    this.viewer = viewer;
+    this.engine = engine;
+    this.orbitController?.attachEngine(engine);
+  }
+
   destroy() {
     if (this._disposed) return;
     this._disposed = true;

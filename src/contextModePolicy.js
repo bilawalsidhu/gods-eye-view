@@ -412,12 +412,11 @@ export function contextRestoreLayerIds(snapshot = {}) {
 }
 
 /**
- * Cockpit entry belongs to the operational Contacts context bundle. A tracked
- * aircraft alone is not sufficient: both observed-flight feeds must still be
- * active so the cockpit's surrounding-contact picture is not presented as a
- * complete context view when one source is disabled.
+ * Contacts mode requires both observed-flight feeds. Both globes support
+ * first-person flight directly from a single selected aircraft layer.
  *
  * @param {object} input Current context and dependency visibility.
+ * @param {boolean} [input.standaloneAircraft] Allow direct entry outside a Context mode.
  * @param {string|null} input.contextMode Active Context mode.
  * @param {boolean} input.contextModeChanging Whether the Context transaction is unsettled.
  * @param {boolean} input.flightsEnabled Whether Live Flights is enabled.
@@ -425,11 +424,14 @@ export function contextRestoreLayerIds(snapshot = {}) {
  * @returns {boolean} Whether cockpit entry may be offered or activated.
  */
 export function cockpitEntryAllowed({
+  standaloneAircraft = false,
   contextMode,
   contextModeChanging,
   flightsEnabled,
   militaryEnabled,
 }) {
+  if (standaloneAircraft && !contextMode)
+    return !contextModeChanging && Boolean(flightsEnabled || militaryEnabled);
   return (
     contextMode === 'flights' &&
     !contextModeChanging &&

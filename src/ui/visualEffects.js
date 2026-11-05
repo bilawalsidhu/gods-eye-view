@@ -8,16 +8,57 @@ import {
   STYLES,
   SHARPEN_SHADER,
   TRANSITION_DURATION_MS,
+  sharpenAmount,
 } from './visualPresets.js';
+
+/**
+ * A style stage drawn by the globe engine (render.setStyle) instead of a
+ * Cesium post stage: the same { uniforms, enabled } shape, so the owner of
+ * the stages writes its uniforms as it writes a Cesium stage's; each write
+ * reaches the engine. A value the engine refuses (NaN from an old link,
+ * say) stays here and is reported, as a Cesium uniform would just draw it.
+ */
+function engineStyleStage(render, name, shader) {
+  const values = { intensity: 0 };
+  if (shader.fragmentShader.includes('uniform float time')) values.time = 0;
+  for (const [uniform, meta] of Object.entries(shader.uniforms || {}))
+    values[uniform] = meta.default;
+  const { intensity, ...uniforms } = values;
+  render.setStyle(name, { intensity, uniforms });
+  const forward = (key, value) => {
+    try {
+      if (key === 'intensity') render.setStyle(name, { intensity: value });
+      else render.setStyle(name, { uniforms: { [key]: value } });
+    } catch (error) {
+      console.warn(`The ${name} style refused ${key}=${value}:`, error);
+    }
+  };
+  return {
+    name: `godsEyeView_${name}`,
+    enabled: false,
+    uniforms: new Proxy(values, {
+      set(target, key, value) {
+        target[key] = value;
+        if (typeof key === 'string' && Object.hasOwn(values, key))
+          forward(key, value);
+        return true;
+      },
+    }),
+  };
+}
 
 /** Own the post-process stages and their animation, without DOM dependencies. */
 export class VisualEffects {
   /**
    * @param {object} options - Viewer, render ownership callbacks and optional clocks.
-   * Construction is inert; initStyles/initPostProcess retain startup ordering.
+   * Without a viewer, `engine` (the globe engine) draws the sharpening
+   * through render.setSharpen, and the styles and bloom through
+   * render.setStyle and render.setBloom when it has them. Construction is inert; initStyles and
+   * initPostProcess retain startup ordering.
    */
   constructor({
     viewer,
+    engine = null,
     requestRender,
     holdRender,
     releaseRender,
@@ -28,6 +69,30 @@ export class VisualEffects {
     createStage = (options) => new PostProcessStage(options),
   }) {
     this.viewer = viewer;
+    // Cesium sharpens with its own post stage below, and the engine's
+    // render.sharpen() mirrors that stage (the Cesium engine keeps the state
+    // only); an engine without a viewer (Navara) sharpens in its pipeline.
+    this.engineRender =
+      typeof engine?.render?.setSharpen === 'function' ? engine.render : null;
+    // Without a viewer, an engine that draws the styles itself
+    // (render.setStyle) gets them through stand-in stages (initStyles).
+    // (The visualStyles and bloom capabilities of src/globe/contract.js
+    // engineCapabilities, read by member: this package stays engine-free.)
+    const render = engine?.render;
+    this.engineStyles =
+      !viewer &&
+      Array.isArray(render?.visualStyles) &&
+      typeof render.setStyle === 'function' &&
+      typeof render.style === 'function'
+        ? render
+        : null;
+    // Likewise the bloom (render.setBloom) for Cesium's bloom stage.
+    this.engineBloom =
+      !viewer &&
+      typeof render?.setBloom === 'function' &&
+      typeof render.bloom === 'function'
+        ? render
+        : null;
     this.requestRender = requestRender;
     this.holdRender = holdRender;
     this.releaseRender = releaseRender;
@@ -52,8 +117,21 @@ export class VisualEffects {
     this.previousBloom = null;
   }
 
+  // Post-process stages are Cesium's. Without a viewer (the Navara engine)
+  // an engine that draws the styles gets stand-in stages (engineStyleStage),
+  // which start every style at 0 on it; otherwise there are none and the
+  // style controls change nothing (the engine sharpens, see engineRender).
   initStyles() {
     if (this.stopped || this.stageEntries.length) return;
+    if (!this.viewer) {
+      if (!this.engineStyles) return;
+      const drawn = this.engineStyles.visualStyles;
+      for (const [name, shader] of Object.entries(STYLES))
+        if (drawn.includes(name))
+          this.stages[name] = engineStyleStage(this.engineStyles, name, shader);
+      this.stageEntries = Object.entries(this.stages);
+      return;
+    }
     for (const [name, shader] of Object.entries(STYLES)) {
       const uniforms = { intensity: 0.0 };
       if (shader.fragmentShader.includes('uniform float time'))
@@ -74,6 +152,15 @@ export class VisualEffects {
 
   initPostProcess(sharpenIntensity = this.sharpenIntensity) {
     if (this.stopped || this.sharpenStage) return;
+    // An engine that blooms starts from this owner's bloom (off), whatever
+    // a previous owner left on it.
+    if (!this.viewer) {
+      this.engineBloom?.setBloom({
+        enabled: false,
+        strength: bloomStrengthFromIntensity(this.bloomIntensity),
+      });
+      return;
+    }
     this.bloomStage = this.viewer.scene.postProcessStages.bloom;
     const names = [
       'glowOnly',
@@ -105,6 +192,7 @@ export class VisualEffects {
     });
     this.sharpenStage.enabled = false;
     this.viewer.scene.postProcessStages.add(this.sharpenStage);
+    this.engineRender?.setSharpen({ enabled: false });
     this.applySharpenIntensity(sharpenIntensity);
   }
 
@@ -114,9 +202,10 @@ export class VisualEffects {
     stage.enabled = value > 0.001;
     // Anime's bands turn the faint Milky Way into blotches, and depth cannot
     // tell the sky from far geometry, so the glow fades with the style.
+    // The engine fades its own stars with Anime (render.setStyle).
     if (
       stage === this.stages.anime &&
-      this.viewer.scene.skyBox?.milkyWayVisibility !== undefined
+      this.viewer?.scene.skyBox?.milkyWayVisibility !== undefined
     )
       this.viewer.scene.skyBox.milkyWayVisibility = 1 - value;
     if (stage.enabled && stage.uniforms.time !== undefined)
@@ -130,16 +219,24 @@ export class VisualEffects {
   }
 
   syncBloomEnabled() {
-    if (this.stopped || !this.bloomStage) return;
-    this.bloomStage.enabled =
+    if (this.stopped) return;
+    const enabled =
       this.bloomEnabled &&
       bloomStrengthFromIntensity(this.bloomIntensity) > 0.06;
+    if (this.bloomStage) this.bloomStage.enabled = enabled;
+    this.engineBloom?.setBloom({ enabled });
   }
 
   applyBloomIntensity(intensity) {
     if (this.stopped) return;
     this.bloomIntensity = clampBloomIntensity(intensity);
     this.requestRender('bloom');
+    if (this.engineBloom) {
+      this.engineBloom.setBloom({
+        strength: bloomStrengthFromIntensity(this.bloomIntensity),
+      });
+      this.syncBloomEnabled();
+    }
     if (!this.bloomStage) return;
     const rawStrength = bloomStrengthFromIntensity(this.bloomIntensity);
     const strength = rawStrength <= 0.06 ? 0.0 : (rawStrength - 0.06) / 0.94;
@@ -174,8 +271,9 @@ export class VisualEffects {
     if (this.stopped) return;
     this.sharpenIntensity = value;
     if (this.sharpenStage)
-      this.sharpenStage.uniforms.amount = 0.1 + value * 2.0;
+      this.sharpenStage.uniforms.amount = sharpenAmount(value);
     this.syncSharpenEnabled();
+    this.engineRender?.setSharpen({ amount: sharpenAmount(value) });
     this.requestRender('sharpen');
   }
 
@@ -183,6 +281,7 @@ export class VisualEffects {
     if (this.stopped) return;
     this.sharpenEnabled = !!enabled;
     this.syncSharpenEnabled();
+    this.engineRender?.setSharpen({ enabled: this.sharpenEnabled });
     this.requestRender('sharpen');
   }
 
@@ -243,6 +342,7 @@ export class VisualEffects {
     if (this.destroyed) return;
     this.stop();
     this.destroyed = true;
+    if (!this.viewer) return;
     const stages = this.viewer.scene.postProcessStages;
     for (const [, stage] of this.stageEntries) stages.remove(stage);
     if (this.sharpenStage) stages.remove(this.sharpenStage);

@@ -38,6 +38,10 @@ export function createMarker({ state }) {
 
   function ensure(viewer) {
     if (state.marker.collection) return;
+    if (viewer?.engine) {
+      state.marker.collection = viewer.billboards(SPRITE_ID);
+      return;
+    }
     state.marker.collection = new Cesium.BillboardCollection({
       scene: viewer.scene,
     });
@@ -80,7 +84,8 @@ export function createMarker({ state }) {
       state.marker.billboard.position = cartesian;
     }
     state.marker.billboard.rotation = -Cesium.Math.toRadians(bearing || 0);
-    horizon.update([state.marker.billboard]);
+    if (state.viewer?.engine) collection.changed();
+    else horizon.update([state.marker.billboard]);
     requestRender();
   }
 
@@ -94,7 +99,8 @@ export function createMarker({ state }) {
     const collection = state.marker.collection;
     if (!collection) return;
     sprites?.unregisterSpriteCollection?.(SPRITE_ID, collection);
-    viewer?.scene?.primitives?.remove(collection);
+    if (viewer?.engine) collection.destroy();
+    else viewer?.scene?.primitives?.remove(collection);
     state.marker.collection = null;
     state.marker.billboard = null;
   }

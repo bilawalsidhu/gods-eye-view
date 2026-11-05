@@ -19,6 +19,7 @@
  */
 
 import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 import { GLOBE_VIEW } from './locations.js';
 import {
   projectEarthDiscToViewport,
@@ -29,6 +30,7 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from './renderGovernor.js';
+import { isGlobeEngine } from './globe/contract.js';
 
 let _isCockpitActive = null;
 /** °/s by speed word — orbit; pan uses fractions of view height/s. */
@@ -46,8 +48,8 @@ const ONCE = {
   panViewFraction: 0.25,
   durationS: 0.9,
 };
-const PITCH_MIN = Cesium.Math.toRadians(-89);
-const PITCH_MAX = Cesium.Math.toRadians(-5);
+const PITCH_MIN = geo.math.toRadians(-89);
+const PITCH_MAX = geo.math.toRadians(-5);
 
 /* ── Route dolly: cinematic tuning ──────────────────────────────────────────
  * Every knob an owner may want to retune lives in this block. The shaping is
@@ -306,30 +308,30 @@ export const ROUTE_CINEMA = Object.freeze({
 
 /* ── Route dolly geometry ────────────────────────────────────────────────── */
 
-const _arcA = new Cesium.Cartesian3();
-const _arcB = new Cesium.Cartesian3();
-const _chordVertical = new Cesium.Cartesian3();
-const _turnCross = new Cesium.Cartesian3();
-const _framePos = new Cesium.Cartesian3();
-const _frameAheadPos = new Cesium.Cartesian3();
-const _frameUp = new Cesium.Cartesian3();
-const _frameIn = new Cesium.Cartesian3();
-const _frameOut = new Cesium.Cartesian3();
-const _frameGaze = new Cesium.Cartesian3();
-const _frameRight = new Cesium.Cartesian3();
-const _frameLevelUp = new Cesium.Cartesian3();
-const _frameDir = new Cesium.Cartesian3();
-const _frameEye = new Cesium.Cartesian3();
-const _frameBankedUp = new Cesium.Cartesian3();
-const _frameCarto = new Cesium.Cartographic();
-const _frameAheadCarto = new Cesium.Cartographic();
-const _bankQuat = new Cesium.Quaternion();
-const _bankMatrix = new Cesium.Matrix3();
-const _headingQuat = new Cesium.Quaternion();
-const _headingMatrix = new Cesium.Matrix3();
-const _warmPos = new Cesium.Cartesian3();
-const _warmCarto = new Cesium.Cartographic();
-const _probeCarto = new Cesium.Cartographic();
+const _arcA = geo.cartesian3.create();
+const _arcB = geo.cartesian3.create();
+const _chordVertical = geo.cartesian3.create();
+const _turnCross = geo.cartesian3.create();
+const _framePos = geo.cartesian3.create();
+const _frameAheadPos = geo.cartesian3.create();
+const _frameUp = geo.cartesian3.create();
+const _frameIn = geo.cartesian3.create();
+const _frameOut = geo.cartesian3.create();
+const _frameGaze = geo.cartesian3.create();
+const _frameRight = geo.cartesian3.create();
+const _frameLevelUp = geo.cartesian3.create();
+const _frameDir = geo.cartesian3.create();
+const _frameEye = geo.cartesian3.create();
+const _frameBankedUp = geo.cartesian3.create();
+const _frameCarto = geo.cartographic.create();
+const _frameAheadCarto = geo.cartographic.create();
+const _bankQuat = geo.quaternion.create();
+const _bankMatrix = geo.matrix3.create();
+const _headingQuat = geo.quaternion.create();
+const _headingMatrix = geo.matrix3.create();
+const _warmPos = geo.cartesian3.create();
+const _warmCarto = geo.cartographic.create();
+const _probeCarto = geo.cartographic.create();
 
 /** Point at arc length `s` along the polyline (binary search — queries jump
  *  backwards for the inbound chord, so a forward cursor would not do). */
@@ -346,23 +348,23 @@ function arcPoint(state, s, result) {
   const segLen = cumM[lo + 1] - cumM[lo];
   const t =
     segLen > 1e-6 ? Math.min(1, Math.max(0, (clamped - cumM[lo]) / segLen)) : 0;
-  return Cesium.Cartesian3.lerp(pts[lo], pts[lo + 1], t, result);
+  return geo.cartesian3.lerp(pts[lo], pts[lo + 1], t, result);
 }
 
 /** Unit horizontal direction from arc `sA` to arc `sB`, or null when degenerate. */
 function horizontalChord(state, sA, sB, up, result) {
   const a = arcPoint(state, sA, _arcA);
   const b = arcPoint(state, sB, _arcB);
-  Cesium.Cartesian3.subtract(b, a, result);
-  const vertical = Cesium.Cartesian3.multiplyByScalar(
+  geo.cartesian3.subtract(b, a, result);
+  const vertical = geo.cartesian3.multiplyByScalar(
     up,
-    Cesium.Cartesian3.dot(result, up),
+    geo.cartesian3.dot(result, up),
     _chordVertical,
   );
-  Cesium.Cartesian3.subtract(result, vertical, result);
-  const len = Cesium.Cartesian3.magnitude(result);
+  geo.cartesian3.subtract(result, vertical, result);
+  const len = geo.cartesian3.magnitude(result);
   if (!(len > 1e-3)) return null;
-  return Cesium.Cartesian3.divideByScalar(result, len, result);
+  return geo.cartesian3.divideByScalar(result, len, result);
 }
 
 /**
@@ -378,9 +380,9 @@ function horizontalChord(state, sA, sB, up, result) {
  * @returns {number} Radians, + = right.
  */
 export function signedTurnRad(a, b, up) {
-  const cross = Cesium.Cartesian3.cross(a, b, _turnCross);
-  const sinLeft = Cesium.Cartesian3.dot(cross, up);
-  const cosTurn = Cesium.Cartesian3.dot(a, b);
+  const cross = geo.cartesian3.cross(a, b, _turnCross);
+  const sinLeft = geo.cartesian3.dot(cross, up);
+  const cosTurn = geo.cartesian3.dot(a, b);
   if (cosTurn <= -1 + ANTIPODAL_EPS && Math.abs(sinLeft) < ANTIPODAL_EPS)
     return Math.PI;
   return -Math.atan2(sinLeft, cosTurn);
@@ -413,13 +415,13 @@ export function routeCorridorCells(
     s += ROUTE_WARM_STEP_M
   ) {
     const point = arcPoint(state, s, _warmPos);
-    const carto = Cesium.Cartographic.fromCartesian(
+    const carto = geo.cartographic.fromCartesian(
       point,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       _warmCarto,
     );
-    const lat = Number(Cesium.Math.toDegrees(carto.latitude).toFixed(3));
-    const lon = Number(Cesium.Math.toDegrees(carto.longitude).toFixed(3));
+    const lat = Number(geo.math.toDegrees(carto.latitude).toFixed(3));
+    const lon = Number(geo.math.toDegrees(carto.longitude).toFixed(3));
     const key = `${lat},${lon}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -565,7 +567,7 @@ export function probeMeshFloorM(scene, cells) {
   let sampled = 0;
   for (const cell of cells) {
     try {
-      const carto = Cesium.Cartographic.fromDegrees(
+      const carto = geo.cartographic.fromDegrees(
         cell.lon,
         cell.lat,
         0,
@@ -614,9 +616,9 @@ export function createRouteFlight({
   // the mean: routes under 10 m (slow) / 20 m (normal) / 45 m (fast) fly slower
   // than asked. Those are shorter than the camera is tall — nothing to see.
   const durationS = Math.max(0.5, totalM / cruiseMps);
-  const pathHeightM = Cesium.Cartographic.fromCartesian(
+  const pathHeightM = geo.cartographic.fromCartesian(
     pts[0],
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _warmCarto,
   ).height;
   const state = {
@@ -712,12 +714,12 @@ export function advanceRouteFlight(state, dt) {
   state.groundSpeedMps = cruiseMps * profile.speed;
 
   const pos = arcPoint(state, traveled, _framePos);
-  const carto = Cesium.Cartographic.fromCartesian(
+  const carto = geo.cartographic.fromCartesian(
     pos,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _frameCarto,
   );
-  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormalCartographic(
+  const up = geo.ellipsoid.WGS84.geodeticSurfaceNormalCartographic(
     carto,
     _frameUp,
   );
@@ -741,7 +743,7 @@ export function advanceRouteFlight(state, dt) {
   );
   const turnRateDegS =
     inbound && outbound
-      ? Cesium.Math.toDegrees(signedTurnRad(inbound, outbound, up)) /
+      ? geo.math.toDegrees(signedTurnRad(inbound, outbound, up)) /
         ROUTE_BANK_WINDOW_S
       : 0;
   const bankTarget = routeBankTargetDeg(turnRateDegS, state.reducedMotion);
@@ -773,8 +775,7 @@ export function advanceRouteFlight(state, dt) {
     horizontalChord(state, traveled, traveled + lookaheadM, up, _frameGaze) ||
     outbound ||
     inbound;
-  if (gaze && !state.headingDir)
-    state.headingDir = Cesium.Cartesian3.clone(gaze);
+  if (gaze && !state.headingDir) state.headingDir = geo.cartesian3.clone(gaze);
   else if (gaze) {
     // Rotate the heading TOWARD the gaze about the local up, rather than
     // lerping the two vectors. A Cartesian lerp cannot cross an antipodal pair
@@ -785,66 +786,62 @@ export function advanceRouteFlight(state, dt) {
     const turnToGaze = signedTurnRad(state.headingDir, gaze, up);
     // signedTurnRad is + for a RIGHT turn; a positive rotation about up is a
     // LEFT turn, so the step is negated.
-    const rotation = Cesium.Matrix3.fromQuaternion(
-      Cesium.Quaternion.fromAxisAngle(up, -turnToGaze * k, _headingQuat),
+    const rotation = geo.matrix3.fromQuaternion(
+      geo.quaternion.fromAxisAngle(up, -turnToGaze * k, _headingQuat),
       _headingMatrix,
     );
-    const turned = Cesium.Matrix3.multiplyByVector(
+    const turned = geo.matrix3.multiplyByVector(
       rotation,
       state.headingDir,
       _frameDir,
     );
-    const vertical = Cesium.Cartesian3.multiplyByScalar(
+    const vertical = geo.cartesian3.multiplyByScalar(
       up,
-      Cesium.Cartesian3.dot(turned, up),
+      geo.cartesian3.dot(turned, up),
       _chordVertical,
     );
-    Cesium.Cartesian3.subtract(turned, vertical, turned);
-    if (Cesium.Cartesian3.magnitude(turned) > 1e-6) {
-      Cesium.Cartesian3.normalize(turned, state.headingDir);
+    geo.cartesian3.subtract(turned, vertical, turned);
+    if (geo.cartesian3.magnitude(turned) > 1e-6) {
+      geo.cartesian3.normalize(turned, state.headingDir);
     }
   }
   // A path with no horizontal extent (identical lat/lon, differing heights)
   // has no azimuth to fly: point east so the frame stays orthonormal.
   if (!state.headingDir) {
-    const east = Cesium.Cartesian3.fromElements(-pos.y, pos.x, 0, _frameGaze);
+    const east = geo.cartesian3.fromElements(-pos.y, pos.x, 0, _frameGaze);
     state.headingDir =
-      Cesium.Cartesian3.magnitude(east) > 1e-6
-        ? Cesium.Cartesian3.normalize(east, new Cesium.Cartesian3())
-        : Cesium.Cartesian3.fromElements(1, 0, 0, new Cesium.Cartesian3());
+      geo.cartesian3.magnitude(east) > 1e-6
+        ? geo.cartesian3.normalize(east, geo.cartesian3.create())
+        : geo.cartesian3.fromElements(1, 0, 0, geo.cartesian3.create());
   }
   const heading = state.headingDir;
 
   // Locked pitch: heading gives the azimuth, the pitch never wanders.
-  const pitch = Cesium.Math.toRadians(ROUTE_PITCH_DEG);
-  const direction = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.add(
-      Cesium.Cartesian3.multiplyByScalar(heading, Math.cos(pitch), _frameDir),
-      Cesium.Cartesian3.multiplyByScalar(up, Math.sin(pitch), _frameLevelUp),
+  const pitch = geo.math.toRadians(ROUTE_PITCH_DEG);
+  const direction = geo.cartesian3.normalize(
+    geo.cartesian3.add(
+      geo.cartesian3.multiplyByScalar(heading, Math.cos(pitch), _frameDir),
+      geo.cartesian3.multiplyByScalar(up, Math.sin(pitch), _frameLevelUp),
       _frameDir,
     ),
     _frameDir,
   );
   // Orthonormal camera frame, then roll it about its own forward axis: a
   // positive rotation drops the right wing, which is what a right turn wants.
-  const right = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.cross(direction, up, _frameRight),
+  const right = geo.cartesian3.normalize(
+    geo.cartesian3.cross(direction, up, _frameRight),
     _frameRight,
   );
-  const levelUp = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.cross(right, direction, _frameLevelUp),
+  const levelUp = geo.cartesian3.normalize(
+    geo.cartesian3.cross(right, direction, _frameLevelUp),
     _frameLevelUp,
   );
-  const bankRad = Cesium.Math.toRadians(appliedBankDeg);
+  const bankRad = geo.math.toRadians(appliedBankDeg);
   let bankedUp = levelUp;
   if (Math.abs(bankRad) > 1e-6) {
-    const quat = Cesium.Quaternion.fromAxisAngle(direction, bankRad, _bankQuat);
-    const rotation = Cesium.Matrix3.fromQuaternion(quat, _bankMatrix);
-    bankedUp = Cesium.Matrix3.multiplyByVector(
-      rotation,
-      levelUp,
-      _frameBankedUp,
-    );
+    const quat = geo.quaternion.fromAxisAngle(direction, bankRad, _bankQuat);
+    const rotation = geo.matrix3.fromQuaternion(quat, _bankMatrix);
+    bankedUp = geo.matrix3.multiplyByVector(rotation, levelUp, _frameBankedUp);
   }
 
   // Keep the corridor ahead of the camera warm. The batch dedupes to coarse
@@ -860,19 +857,19 @@ export function advanceRouteFlight(state, dt) {
   let sampledFloor = Number.NaN;
   if (typeof state.floorFn === 'function') {
     const aheadPos = arcPoint(state, traveled + lookaheadM / 2, _frameAheadPos);
-    const aheadCarto = Cesium.Cartographic.fromCartesian(
+    const aheadCarto = geo.cartographic.fromCartesian(
       aheadPos,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       _frameAheadCarto,
     );
     try {
       const here = state.floorFn(
-        Cesium.Math.toDegrees(carto.latitude),
-        Cesium.Math.toDegrees(carto.longitude),
+        geo.math.toDegrees(carto.latitude),
+        geo.math.toDegrees(carto.longitude),
       );
       const ahead = state.floorFn(
-        Cesium.Math.toDegrees(aheadCarto.latitude),
-        Cesium.Math.toDegrees(aheadCarto.longitude),
+        geo.math.toDegrees(aheadCarto.latitude),
+        geo.math.toDegrees(aheadCarto.longitude),
       );
       const warm = [here, ahead].filter((value) => Number.isFinite(value));
       if (warm.length) sampledFloor = Math.max(...warm);
@@ -936,11 +933,11 @@ export function advanceRouteFlight(state, dt) {
     );
   }
   state.appliedHeightM = heightM;
-  const eye = Cesium.Cartesian3.fromRadians(
+  const eye = geo.cartesian3.fromRadians(
     carto.longitude,
     carto.latitude,
     heightM,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _frameEye,
   );
 
@@ -958,28 +955,571 @@ export function advanceRouteFlight(state, dt) {
   };
 }
 
+/* ── Camera rigs ────────────────────────────────────────────────────────────
+ * A motion drives one camera through a rig, and remembers which one.
+ *
+ * The VIEWER rig is a Cesium viewer's own camera, exactly as the verbs were
+ * proven on it: exact basis writes (setView's heading/pitch conversion is
+ * singular at nadir), the scene's tween queue, the frustum's depth planes and
+ * the scene modes. Its clock and input listeners are installed once per viewer.
+ *
+ * The ENGINE rig speaks only the engine-neutral globe contract
+ * (src/globe/contract.js): camera.pose/height/setView/lookAt/release/
+ * transform/flightActive/following/followChanged/cancelFlight, frames.preRender,
+ * host.canvas/size, projector.worldToWindow, surface and render.request. The
+ * same verbs therefore run on Navara, on the fake engine and on Cesium through
+ * engineFromViewer. Its listeners exist only while one of its motions runs, so
+ * an engine that is parked or destroyed holds nothing of ours.
+ * -------------------------------------------------------------------------- */
+
+/** Manual camera input that reclaims control (the cancelFlight reflex). */
+const MANUAL_INPUT_EVENTS = Object.freeze([
+  'pointerdown',
+  'touchstart',
+  'wheel',
+]);
+/** Cesium's PerspectiveFrustum defaults: the depth planes an engine rig admits
+ *  a globe rotation against, as a default Cesium camera would. */
+const ENGINE_FRUSTUM = Object.freeze({ near: 1, far: 500_000_000 });
+
+const newVector = () => geo.cartesian3.create();
+
+/** Vectors rotated about `axis` by `angle` (right-handed), as fresh values. */
+function rotateVectors(axis, angle, vectors) {
+  const rotation = geo.matrix3.fromQuaternion(
+    geo.quaternion.fromAxisAngle(axis, angle, geo.quaternion.create()),
+    geo.matrix3.create(),
+  );
+  return vectors.map((vector) =>
+    geo.matrix3.multiplyByVector(rotation, vector, newVector()),
+  );
+}
+
+/** Direction and up for heading/pitch/roll at `position`, as Cesium's setView
+ *  builds them (heading 0 looks north, negative pitch looks down). */
+function orientationVectors(position, heading, pitch, roll) {
+  const frame = geo.transforms.eastNorthUpToFixedFrame(
+    position,
+    geo.ellipsoid.WGS84,
+  );
+  const east = geo.cartesian3.create(frame[0], frame[1], frame[2]);
+  const north = geo.cartesian3.create(frame[4], frame[5], frame[6]);
+  const up = geo.cartesian3.create(frame[8], frame[9], frame[10]);
+  const combine = (e, n, u) =>
+    geo.cartesian3.add(
+      geo.cartesian3.add(
+        geo.cartesian3.multiplyByScalar(east, e, newVector()),
+        geo.cartesian3.multiplyByScalar(north, n, newVector()),
+        newVector(),
+      ),
+      geo.cartesian3.multiplyByScalar(up, u, newVector()),
+      newVector(),
+    );
+  const cosPitch = Math.cos(pitch);
+  const direction = geo.cartesian3.normalize(
+    combine(
+      Math.sin(heading) * cosPitch,
+      Math.cos(heading) * cosPitch,
+      Math.sin(pitch),
+    ),
+    newVector(),
+  );
+  const levelRight = combine(Math.cos(heading), -Math.sin(heading), 0);
+  const levelUp = geo.cartesian3.cross(levelRight, direction, newVector());
+  const rolledUp = geo.cartesian3.add(
+    geo.cartesian3.multiplyByScalar(levelUp, Math.cos(roll), newVector()),
+    geo.cartesian3.multiplyByScalar(levelRight, Math.sin(roll), newVector()),
+    newVector(),
+  );
+  return {
+    direction,
+    up: geo.cartesian3.normalize(rolledUp, newVector()),
+  };
+}
+
+/** The keyhole admission's view of a Cesium camera (live or a probe clone). */
+function viewerKeyholeView(camera) {
+  const frustum = camera.frustum;
+  return {
+    position: camera.positionWC,
+    direction: camera.directionWC,
+    right: camera.rightWC,
+    up: camera.upWC,
+    perspective: frustum instanceof Cesium.PerspectiveFrustum,
+    // Read only once the depth planes passed: Cesium's frustum getters throw
+    // on invalid planes.
+    get fovy() {
+      return frustum?.fovy;
+    },
+    get aspectRatio() {
+      return frustum?.aspectRatio;
+    },
+    near: frustum?.near,
+    far: frustum?.far,
+    xOffset: frustum?.xOffset,
+    yOffset: frustum?.yOffset,
+  };
+}
+
+/** The keyhole admission's view of a contract camera pose. */
+function engineKeyholeView(pose) {
+  return {
+    position: pose.position,
+    direction: pose.direction,
+    right:
+      pose.right ??
+      geo.cartesian3.normalize(
+        geo.cartesian3.cross(pose.direction, pose.up, newVector()),
+        newVector(),
+      ),
+    up: pose.up,
+    perspective: true,
+    fovy: pose.fovy,
+    aspectRatio: pose.aspectRatio,
+    near: ENGINE_FRUSTUM.near,
+    far: ENGINE_FRUSTUM.far,
+    xOffset: 0,
+    yOffset: 0,
+  };
+}
+
+/**
+ * Put the horizon back.
+ *
+ * The route dolly is the only motion that rolls the camera, and Cesium keeps
+ * whatever world-space up vector it was last handed — so releasing a flight
+ * mid-bank leaves the user holding a tilted horizon until some later motion
+ * happens to level it. Heading, pitch and position are preserved; only the
+ * roll is taken out.
+ * @param {Cesium.Viewer} viewer
+ * @returns {boolean} Whether a roll was actually removed.
+ */
+function levelViewerRoll(viewer) {
+  try {
+    const cam = viewer?.camera;
+    if (!cam || typeof cam.setView !== 'function') return false;
+    const roll = geo.math.negativePiToPi(cam.roll || 0);
+    if (Math.abs(roll) < 1e-5) return false;
+    cam.setView({
+      orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },
+    });
+    return true;
+  } catch {
+    return false; // teardown race
+  }
+}
+
+/** A Cesium viewer's own camera (see the block comment above). */
+function createViewerRig(viewer) {
+  const cam = () => viewer.camera;
+  const ellipsoid = () =>
+    viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
+  return {
+    kind: 'viewer',
+    owner: viewer,
+    viewer,
+    engine: null,
+    position: () => cam().positionWC,
+    pitch: () => cam().pitch,
+    heightM: () => cam().positionCartographic.height,
+    orbitPose: () => ({ position: cam().positionWC, heading: cam().heading }),
+    // Camera flights are scene tweens, including ones started straight on
+    // the Cesium camera rather than through the engine.
+    flightBusy: () => viewer.scene.tweens.length > 0,
+    tracking: () => Boolean(viewer.trackedEntity),
+    trackedLabel() {
+      const entity = viewer.trackedEntity;
+      return entity ? entity.name || entity.id || 'the tracked target' : null;
+    },
+    is3D: () => viewer.scene.mode === Cesium.SceneMode.SCENE3D,
+    unlocked: () =>
+      Cesium.Matrix4.equals(cam().transform, Cesium.Matrix4.IDENTITY),
+    lookAt: (target, hpr) => cam().lookAt(target, hpr),
+    release: () => cam().lookAtTransform(Cesium.Matrix4.IDENTITY),
+    move(direction, amount) {
+      const c = cam();
+      if (direction === 'left') c.moveLeft(amount);
+      else if (direction === 'right') c.moveRight(amount);
+      else if (direction === 'up') c.moveUp(amount);
+      else c.moveDown(amount);
+    },
+    look(direction, angle) {
+      const c = cam();
+      if (direction === 'up') c.lookUp(angle);
+      else if (direction === 'down') c.lookDown(angle);
+      else if (direction === 'left') c.lookLeft(angle);
+      else c.lookRight(angle);
+    },
+    rotate: (axis, angle) => cam().rotate(axis, angle),
+    setFrame: (eye, direction, up) =>
+      cam().setView({ destination: eye, orientation: { direction, up } }),
+    levelRoll: () => levelViewerRoll(viewer),
+    surface: () => viewer.scene,
+    ellipsoid,
+    supportedEllipsoid: () =>
+      Cesium.Cartesian3.equals(ellipsoid().radii, Cesium.Ellipsoid.WGS84.radii),
+    viewport: () => ({
+      width: viewer.scene.canvas.clientWidth,
+      height: viewer.scene.canvas.clientHeight,
+    }),
+    keyholeView: () => viewerKeyholeView(cam()),
+    earthDiscProjects: (width, height) =>
+      Boolean(projectEarthDiscToViewport(viewer, width, height)),
+    resetView() {
+      // The unchanged Globe View destination, on a clone: the live camera
+      // never moves for the check.
+      const camera = Cesium.Camera.clone(cam());
+      const { longitude, latitude } = cam().positionCartographic;
+      camera.setView({
+        destination: Cesium.Cartesian3.fromRadians(
+          longitude,
+          latitude,
+          GLOBE_VIEW.heightM,
+        ),
+        orientation: {
+          heading: 0,
+          pitch: Cesium.Math.toRadians(GLOBE_VIEW.pitchDeg),
+          roll: 0,
+        },
+        endTransform: Cesium.Matrix4.IDENTITY,
+      });
+      return viewerKeyholeView(camera);
+    },
+    captureGlobePose() {
+      const c = cam();
+      return {
+        position: Cesium.Cartesian3.clone(c.positionWC),
+        direction: Cesium.Cartesian3.clone(c.directionWC),
+        up: Cesium.Cartesian3.normalize(c.upWC, new Cesium.Cartesian3()),
+        right: Cesium.Cartesian3.clone(c.rightWC),
+      };
+    },
+    takeGlobePose(pose) {
+      // Convert an inherited ground-target frame without changing the world
+      // pose. Rotation must pivot about Earth, never the previous local target.
+      const c = cam();
+      c.cancelFlight();
+      c.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      // Handoff may level a route's bank. Keep the caller's exact world pose.
+      // Copy the basis directly: setView's heading/pitch conversion is singular
+      // at nadir and can change the captured orientation near the poles.
+      Cesium.Cartesian3.clone(pose.position, c.position);
+      Cesium.Cartesian3.clone(pose.direction, c.direction);
+      Cesium.Cartesian3.clone(pose.up, c.up);
+      Cesium.Cartesian3.clone(pose.right, c.right);
+    },
+  };
+}
+
+/** The globe contract's camera (see the block comment above). */
+function createEngineRig(engine) {
+  const camera = engine.camera;
+  const pose = () => camera.pose();
+  const place = (position, direction, up) =>
+    camera.setView({ destination: position, orientation: { direction, up } });
+  return {
+    kind: 'engine',
+    owner: engine,
+    viewer: null,
+    engine,
+    position: () => pose().position,
+    pitch: () => pose().pitch,
+    heightM: () => camera.height(),
+    orbitPose: pose,
+    flightBusy: () => camera.flightActive(),
+    tracking: () => Boolean(camera.following()),
+    trackedLabel() {
+      const handle = camera.following();
+      return handle ? handle.label?.id || 'the tracked target' : null;
+    },
+    // Both engines draw only the 3D globe.
+    is3D: () => true,
+    unlocked: () =>
+      camera
+        .transform()
+        .every((value, index) => value === geo.matrix4.IDENTITY[index]),
+    lookAt: (target, hpr) =>
+      camera.lookAt(target, {
+        heading: hpr.heading,
+        pitch: hpr.pitch,
+        range: hpr.range,
+      }),
+    release: () => camera.release(),
+    // Cesium's moveLeft/moveRight translate along the camera's right vector
+    // and moveUp/moveDown along its up vector.
+    move(direction, amount) {
+      const p = pose();
+      const sideways = direction === 'left' || direction === 'right';
+      const sign = direction === 'left' || direction === 'down' ? -1 : 1;
+      const step = geo.cartesian3.multiplyByScalar(
+        sideways ? p.right : p.up,
+        sign * amount,
+        newVector(),
+      );
+      place(
+        geo.cartesian3.add(p.position, step, newVector()),
+        p.direction,
+        p.up,
+      );
+    },
+    // Cesium's lookUp/lookDown turn the view about the camera's right vector
+    // and lookLeft/lookRight about its up vector; the position stays.
+    look(direction, angle) {
+      const p = pose();
+      const vertical = direction === 'up' || direction === 'down';
+      const sign = direction === 'up' || direction === 'left' ? 1 : -1;
+      const [nextDirection, nextUp] = rotateVectors(
+        vertical ? p.right : p.up,
+        sign * angle,
+        [p.direction, p.up],
+      );
+      place(p.position, nextDirection, nextUp);
+    },
+    // Cesium's camera.rotate: position and basis turn about an axis through
+    // Earth's centre; a positive angle turns the camera clockwise about it.
+    rotate(axis, angle) {
+      const p = pose();
+      const [position, direction, turnedUp] = rotateVectors(axis, -angle, [
+        p.position,
+        p.direction,
+        p.up,
+      ]);
+      const right = geo.cartesian3.cross(direction, turnedUp, newVector());
+      place(
+        position,
+        direction,
+        geo.cartesian3.cross(right, direction, newVector()),
+      );
+    },
+    setFrame: (eye, direction, up) => place(eye, direction, up),
+    levelRoll() {
+      const p = pose();
+      if (Math.abs(geo.math.negativePiToPi(p.roll)) <= 1e-5) return false;
+      camera.setView({
+        destination: p.position,
+        orientation: { heading: p.heading, pitch: p.pitch, roll: 0 },
+      });
+      return true;
+    },
+    surface: () => engine.surface,
+    ellipsoid: () => geo.ellipsoid.WGS84,
+    supportedEllipsoid: () => true,
+    viewport: () => engine.host.size(),
+    keyholeView: () => engineKeyholeView(pose()),
+    // projectEarthDiscToViewport's test on the contract: Earth's centre in
+    // front of the camera and on screen, with a disc of finite size.
+    earthDiscProjects(width, height) {
+      const p = pose();
+      const distance = geo.cartesian3.magnitude(p.position);
+      if (
+        !Number.isFinite(distance) ||
+        distance <= geo.ellipsoid.WGS84.maximumRadius
+      )
+        return false;
+      const toCenter = geo.cartesian3.negate(p.position, newVector());
+      if (geo.cartesian3.dot(p.direction, toCenter) <= 0) return false;
+      const center = engine.projector.worldToWindow(geo.cartesian3.ZERO);
+      if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y))
+        return false;
+      return Boolean(earthDiscScreenRadius(distance, height, p.fovy));
+    },
+    resetView() {
+      const p = pose();
+      const position = geo.cartesian3.fromRadians(
+        p.cartographic.longitude,
+        p.cartographic.latitude,
+        GLOBE_VIEW.heightM,
+        geo.ellipsoid.WGS84,
+      );
+      const { direction, up } = orientationVectors(
+        position,
+        0,
+        geo.math.toRadians(GLOBE_VIEW.pitchDeg),
+        0,
+      );
+      return engineKeyholeView({
+        position,
+        direction,
+        up,
+        fovy: p.fovy,
+        aspectRatio: p.aspectRatio,
+      });
+    },
+    captureGlobePose() {
+      const p = pose();
+      return {
+        position: p.position,
+        direction: p.direction,
+        up: geo.cartesian3.normalize(p.up, newVector()),
+        right: p.right,
+      };
+    },
+    takeGlobePose(globePose) {
+      camera.cancelFlight();
+      camera.release();
+      place(globePose.position, globePose.direction, globePose.up);
+    },
+  };
+}
+
+const engineRigs = new WeakMap();
+/** One rig per engine, so a motion's rig compares by identity. */
+function engineRigFor(engine) {
+  let rig = engineRigs.get(engine);
+  if (!rig) engineRigs.set(engine, (rig = createEngineRig(engine)));
+  return rig;
+}
+
+/** The members an engine rig reads, as paths on the engine. */
+const ENGINE_RIG_MEMBERS = Object.freeze([
+  'camera.pose',
+  'camera.height',
+  'camera.setView',
+  'camera.lookAt',
+  'camera.release',
+  'camera.transform',
+  'camera.flightActive',
+  'camera.following',
+  'camera.cancelFlight',
+  'frames.preRender.addEventListener',
+  'camera.followChanged.addEventListener',
+  'host.size',
+  'projector.worldToWindow',
+  'render.request',
+]);
+
+/**
+ * Whether the camera verbs (move_camera, and fly_route over a route list) can
+ * drive this target: a Cesium viewer, or a globe engine with every contract
+ * member the engine rig reads. The voice gate asks this instead of "is there
+ * a viewer".
+ * @param {object|null|undefined} target A Cesium viewer or a globe engine.
+ * @returns {boolean}
+ */
+export function cameraVerbsSupported(target) {
+  if (!target) return false;
+  if (!isGlobeEngine(target))
+    return Boolean(target.camera && target.scene && target.clock?.onTick);
+  if (target.isDestroyed?.()) return false;
+  return ENGINE_RIG_MEMBERS.every(
+    (path) =>
+      typeof path
+        .split('.')
+        .reduce(
+          (value, key) => (value == null ? value : value[key]),
+          target,
+        ) === 'function',
+  );
+}
+
+/* ── Motion state ───────────────────────────────────────────────────────── */
+
+/** The rig new motions start on: the latest initCameraVerbs target. */
+let _rig = null;
+/** The viewer whose clock and input listeners are installed (viewer rig). */
 let _viewer = null;
 let _getTarget = null;
-let _active = null; // { kind, motion, direction, speed, mode, motionId, ...state }
+let _active = null; // { kind, rig, direction, speed, mode, motionId, ...state }
 let _tickRemover = null;
 let _trackingRemover = null;
 let _inputRemovers = [];
+/** The engine listeners of the running engine-rig motion, or null. */
+let _engineBinding = null;
+
+function unbindEngineMotion() {
+  const binding = _engineBinding;
+  _engineBinding = null;
+  binding?.remove();
+}
+
+/**
+ * Bind the running motion to its engine: a frame listener that advances it,
+ * the manual-input reflex on the engine's canvas and the follow-camera yield.
+ * A Directions dolly can move between engines (suspendRouteFlight /
+ * resumeRouteFlight): geometry and flight time stay with the motion, the
+ * listeners belong only to the engine it runs on now.
+ */
+function bindEngineMotion(rig) {
+  unbindEngineMotion();
+  const { engine } = rig;
+  const removers = [];
+  const canvas = engine.host?.canvas;
+  if (typeof canvas?.addEventListener === 'function') {
+    const cancel = () => interruptCameraMotion('manual-input');
+    for (const event of MANUAL_INPUT_EVENTS) {
+      canvas.addEventListener(event, cancel, { passive: true });
+      removers.push(() => canvas.removeEventListener(event, cancel));
+    }
+  }
+  // As the viewer rig's trackedEntityChanged: a follow taking the camera
+  // yields a globe rotation at once, before its next frame.
+  removers.push(
+    engine.camera.followChanged.addEventListener((handle) => {
+      if (handle && _active?.rig === rig && _active.kind === 'rotate_globe')
+        interruptCameraMotion('globe-camera-owner-changed');
+    }),
+  );
+  removers.push(
+    engine.frames.preRender.addEventListener(() => {
+      tickMotion(rig);
+      if (_active?.rig === rig) engine.render.request('camera-verb');
+    }),
+  );
+  // Its first frame takes the minimum step, as a viewer rig's first tick
+  // does (a resumed flight must not jump across the time it was parked).
+  if (_active?.rig === rig) _active.lastMs = undefined;
+  _engineBinding = {
+    rig,
+    remove: () => {
+      for (const remove of removers) remove();
+    },
+  };
+  engine.render.request('camera-verb');
+}
+
+/**
+ * Park the Directions route flight `id` (an engine-rig flight) for an engine
+ * switch: its listeners go, its state is returned for resumeRouteFlight.
+ * @param {number} id The flight's motion id.
+ * @returns {object|null} The parked state, or null when `id` is not running.
+ */
+export function suspendRouteFlight(id) {
+  if (!id || _active?.motionId !== id || _active.rig?.kind !== 'engine')
+    return null;
+  const state = _active;
+  _active = null;
+  unbindEngineMotion();
+  releaseContinuousRender('camera-verb');
+  return state;
+}
+
+/**
+ * Continue a parked route flight on `engine`.
+ * @returns {boolean} Whether it runs again.
+ */
+export function resumeRouteFlight(state, engine) {
+  if (!state || !engine || _active) return false;
+  state.rig = engineRigFor(engine);
+  _active = state;
+  bindEngineMotion(state.rig);
+  holdContinuousRender('camera-verb');
+  return true;
+}
 /** Monotonic id for the motion currently running; 0 means "no motion". */
 let _motionSeq = 0;
 
 /**
  * Install a motion and stamp it with a fresh id. The id is what lets a caller
  * that started a flight stop THAT flight later without stopping whatever has
- * replaced it in the meantime.
- * @param {object|null} state Motion state, or null to clear.
- * @returns {object|null} The installed state.
+ * replaced it in the meantime. An engine-rig motion binds its listeners here.
+ * @param {object} state Motion state (with its rig).
+ * @returns {object} The installed state.
  */
 function setActiveMotion(state) {
-  if (state) {
-    _motionSeq += 1;
-    state.motionId = _motionSeq;
-  }
+  _motionSeq += 1;
+  state.motionId = _motionSeq;
   _active = state;
+  if (state.rig?.kind === 'engine') bindEngineMotion(state.rig);
   return state;
 }
 
@@ -1008,56 +1548,46 @@ export function interruptCameraMotionIfActive(
   return interruptCameraMotion(reason);
 }
 
-function clearLookAt() {
-  try {
-    _viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-  } catch {
-    /* teardown race */
-  }
-}
-
-/**
- * Put the horizon back.
- *
- * The route dolly is the only motion that rolls the camera, and Cesium keeps
- * whatever world-space up vector it was last handed — so releasing a flight
- * mid-bank leaves the user holding a tilted horizon until some later motion
- * happens to level it. Heading, pitch and position are preserved; only the
- * roll is taken out.
- * @returns {boolean} Whether a roll was actually removed.
- */
-function levelCameraRoll() {
-  try {
-    const cam = _viewer?.camera;
-    if (!cam || typeof cam.setView !== 'function') return false;
-    const roll = Cesium.Math.negativePiToPi(cam.roll || 0);
-    if (Math.abs(roll) < 1e-5) return false;
-    cam.setView({
-      orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },
-    });
-    return true;
-  } catch {
-    return false; // teardown race
-  }
-}
-
 /** Stop any active motion. Returns whether one was running. */
 export function interruptCameraMotion(reason = 'interrupt') {
-  const wasActive = Boolean(_active);
-  // While an entity is TRACKED, the follow camera owns the reference frame —
-  // resetting the lookAt transform here flings the camera into space (field
-  // finding). Leave the transform to the tracker; it re-asserts every frame.
-  const tracking = Boolean(_viewer?.trackedEntity);
-  const wasRoute = wasActive && _active.kind === 'route';
-  if (
-    wasActive &&
-    !tracking &&
-    (_active.kind === 'orbit' || _active.kind === 'route')
-  )
-    clearLookAt();
-  // Instant, not eased: the user grabbed the camera, or the flight is over.
-  // Either way the next thing they hold must be a level horizon.
-  const leveled = wasRoute && !tracking ? levelCameraRoll() : false;
+  const motion = _active;
+  const wasActive = Boolean(motion);
+  const rig = motion?.rig ?? null;
+  let leveled = false;
+  if (rig) {
+    // While an entity is TRACKED, the follow camera owns the reference frame —
+    // resetting the lookAt transform here flings the camera into space (field
+    // finding). Leave the transform to the tracker; it re-asserts every frame.
+    let tracking = false;
+    try {
+      tracking = rig.tracking();
+    } catch {
+      /* teardown race */
+    }
+    // An engine dolly only ever sets views; it never locks a transform.
+    const engineRoute = motion.kind === 'route' && rig.kind === 'engine';
+    if (
+      !tracking &&
+      !engineRoute &&
+      (motion.kind === 'orbit' || motion.kind === 'route')
+    ) {
+      try {
+        rig.release();
+      } catch {
+        /* teardown race */
+      }
+    }
+    // Instant, not eased: the user grabbed the camera, or the flight is over.
+    // Either way the next thing they hold must be a level horizon.
+    if (motion.kind === 'route' && (engineRoute || !tracking)) {
+      try {
+        leveled = rig.levelRoll();
+      } catch {
+        leveled = false; // teardown race
+      }
+    }
+  }
+  unbindEngineMotion();
   _active = null;
   releaseContinuousRender('camera-verb');
   return { wasActive, reason, leveled };
@@ -1071,6 +1601,7 @@ export function getActiveCameraMotion() {
     mode: _active.mode,
     speed: _active.speed,
     motionId: _active.motionId || 0,
+    rig: _active.rig?.kind ?? null,
   };
   if (_active.kind === 'route') {
     info.progress = _active.u;
@@ -1087,28 +1618,38 @@ export function getActiveCameraMotion() {
   return info;
 }
 
+/** The viewer clock's tick: advance a viewer-rig motion. */
 function onTick() {
-  if (!_active || !_viewer) return;
+  if (_rig?.kind === 'viewer') tickMotion(_rig);
+}
+
+/** Advance the running motion one frame, when it runs on `rig`. */
+function tickMotion(rig) {
+  const m = _active;
+  if (!m || m.rig !== rig) return;
   // Wall-clock dt: clock.currentTime FREEZES when the app clock isn't
   // animating, which starved motion to the 1 ms floor (harness catch).
   const nowMs = performance.now();
   const dt = Math.min(
     0.25,
-    Math.max(0.001, (nowMs - (_active.lastMs ?? nowMs)) / 1000),
+    Math.max(0.001, (nowMs - (m.lastMs ?? nowMs)) / 1000),
   );
-  _active.lastMs = nowMs;
-  const cam = _viewer.camera;
-  const m = _active;
+  m.lastMs = nowMs;
+  stepMotion(m, rig, dt);
+}
 
-  // `once` motions ease out and self-stop on budget exhaustion.
+/** One frame of motion `m` on `rig`. */
+function stepMotion(m, rig, dt) {
+  // `once` motions ease out and self-stop on budget exhaustion. The budget
+  // starts when the motion does: an orbit still armed for its target spends
+  // none of it.
   let scale = 1;
-  if (m.mode === 'once') {
+  let finishing = false;
+  if (m.mode === 'once' && !m.pending) {
     m.elapsed = (m.elapsed || 0) + dt;
     const t = Math.min(1, m.elapsed / ONCE.durationS);
     scale = 1 - (1 - t) * (1 - t); // ease-out progress share
-    if (t >= 1) {
-      interruptCameraMotion('once-complete');
-    }
+    finishing = t >= 1;
   }
 
   try {
@@ -1125,54 +1666,42 @@ function onTick() {
       // flights have GAPS between tweens: require the tween queue quiet for a
       // continuous 0.8 s before capturing the orbit framing at the REAL
       // destination (field finding: Eiffel chain orbited from mid-flight).
-      if (_viewer.scene.tweens.length > 0) {
+      if (rig.flightBusy()) {
         m.settledS = 0;
         return;
       }
       m.settledS = (m.settledS || 0) + dt;
       if (m.settledS < 0.8) return;
-      const target = _getTarget?.(_viewer);
+      const target = _getTarget?.(rig.owner);
       if (!target) return;
-      const cam2 = _viewer.camera;
-      const range = Cesium.Cartesian3.distance(cam2.positionWC, target);
-      const carto2 = Cesium.Cartographic.fromCartesian(cam2.positionWC);
-      const tCarto2 = Cesium.Cartographic.fromCartesian(target);
-      const dh2 = carto2.height - tCarto2.height;
+      const { position, heading } = rig.orbitPose();
       m.target = target;
-      m.hpr = new Cesium.HeadingPitchRange(
-        cam2.heading,
-        -Math.asin(Math.min(1, Math.max(-1, dh2 / Math.max(1, range)))),
-        range,
-      );
-      m.hprStartHeading = cam2.heading;
+      m.hpr = orbitOffset(position, heading, target);
+      m.hprStartHeading = heading;
       m.pending = false;
       m.elapsed = 0; // once-mode budget starts when the orbit actually begins
       return;
     }
     if (m.kind === 'orbit') {
       const rate =
-        Cesium.Math.toRadians(ORBIT_DEG_S[m.speed]) *
+        geo.math.toRadians(ORBIT_DEG_S[m.speed]) *
         (m.direction === 'left' ? -1 : 1);
       if (m.mode === 'once') {
         const total =
-          Cesium.Math.toRadians(ONCE.orbitDeg) *
-          (m.direction === 'left' ? -1 : 1);
+          geo.math.toRadians(ONCE.orbitDeg) * (m.direction === 'left' ? -1 : 1);
         m.hpr.heading = m.hprStartHeading + total * scale;
       } else {
         m.hpr.heading += rate * dt;
       }
-      cam.lookAt(m.target, m.hpr);
+      rig.lookAt(m.target, m.hpr);
     } else if (m.kind === 'pan') {
-      const heightM = Math.max(50, cam.positionCartographic.height);
+      const heightM = Math.max(50, rig.heightM());
       const step =
         m.mode === 'once'
           ? heightM * ONCE.panViewFraction * (scale - (m.lastScale || 0))
           : heightM * PAN_VIEW_FRACTION_S[m.speed] * dt;
       m.lastScale = scale;
-      if (m.direction === 'left') cam.moveLeft(step);
-      else if (m.direction === 'right') cam.moveRight(step);
-      else if (m.direction === 'up') cam.moveUp(step);
-      else cam.moveDown(step);
+      rig.move(m.direction, step);
     } else if (
       m.kind === 'tilt' ||
       m.kind === 'rotate' ||
@@ -1181,55 +1710,52 @@ function onTick() {
       const degS = TILT_DEG_S[m.speed];
       const stepRad =
         m.mode === 'once'
-          ? Cesium.Math.toRadians(
+          ? geo.math.toRadians(
               m.kind === 'tilt' ? ONCE.tiltDeg : ONCE.rotateDeg,
             ) *
             (scale - (m.lastScale || 0))
-          : Cesium.Math.toRadians(degS) * dt;
+          : geo.math.toRadians(degS) * dt;
       m.lastScale = scale;
       if (m.kind === 'rotate_globe') {
         // Tracking can acquire the camera without going through navigation.
         // Yield without resetting its pose/frame: the world-space arc proof
-        // only describes Cesium's rotation while the frame is identity.
+        // only describes the rotation while the frame is identity.
         if (
-          _viewer.scene.mode !== Cesium.SceneMode.SCENE3D ||
-          _viewer.trackedEntity ||
+          !rig.is3D() ||
+          rig.tracking() ||
           _isCockpitActive?.() ||
-          !Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY)
+          !rig.unlocked()
         ) {
           interruptCameraMotion('globe-camera-owner-changed');
           return;
         }
-        // Cesium rotates both position and basis about the reference-frame
-        // origin. The captured screen-up axis keeps left/right horizontal even
-        // in a tilted or rolled view; a positive angle moves the globe right.
+        // The camera rotates position and basis about Earth's centre. The
+        // captured screen-up axis keeps left/right horizontal even in a tilted
+        // or rolled view; a positive angle moves the globe right.
         const angle = m.direction === 'left' ? -stepRad : stepRad;
-        if (globeRotationFitsKeyhole() !== true) {
+        if (globeRotationFitsKeyhole(rig) !== true) {
           interruptCameraMotion('globe-framing-changed');
           return;
         }
+        const position = rig.position();
         if (
-          !globeRotationHasClearance(cam.positionWC) ||
-          Math.abs(
-            Cesium.Cartesian3.magnitude(cam.positionWC) - m.rotationRadius,
-          ) > 0.01
+          !globeRotationHasClearance(rig, position) ||
+          Math.abs(geo.cartesian3.magnitude(position) - m.rotationRadius) > 0.01
         ) {
           interruptCameraMotion('globe-surface-limit');
           return;
         }
-        cam.rotate(m.rotationAxis, angle);
+        rig.rotate(m.rotationAxis, angle);
       } else if (m.kind === 'tilt') {
         const up = m.direction === 'up';
         // Clamp pitch to [-89°, -5°]: never through the ground, never at the sky.
-        const next = cam.pitch + (up ? stepRad : -stepRad);
+        const next = rig.pitch() + (up ? stepRad : -stepRad);
         if (next > PITCH_MAX || next < PITCH_MIN) {
           interruptCameraMotion('tilt-clamp');
           return;
         }
-        if (up) cam.lookUp(stepRad);
-        else cam.lookDown(stepRad);
-      } else if (m.direction === 'left') cam.lookLeft(stepRad);
-      else cam.lookRight(stepRad);
+        rig.look(m.direction, stepRad);
+      } else rig.look(m.direction === 'left' ? 'left' : 'right', stepRad);
     } else if (m.kind === 'route') {
       // The dolly's shaping lives in advanceRouteFlight(); the tick only
       // applies the pose and honours the same completion path as before.
@@ -1238,10 +1764,7 @@ function onTick() {
       // user left it rather than teleporting to an altitude derived from
       // nothing. An interrupt during the arm is still instant.
       if (frame.arming) return;
-      cam.setView({
-        destination: frame.eye,
-        orientation: { direction: frame.direction, up: frame.up },
-      });
+      rig.setFrame(frame.eye, frame.direction, frame.up);
       if (frame.finished) {
         interruptCameraMotion('route-complete');
         return;
@@ -1249,14 +1772,33 @@ function onTick() {
     }
   } catch {
     interruptCameraMotion('tick-error');
+    return;
   }
+  // The last eased step lands first, then the motion lets go: a finished
+  // orbit leaves no lookAt lock behind.
+  if (finishing && _active === m) interruptCameraMotion('once-complete');
+}
+
+/** Heading/pitch/range that lookAt turns into the CURRENT framing exactly. */
+function orbitOffset(position, heading, target) {
+  const range = geo.cartesian3.distance(position, target);
+  // Pitch from geometry so lookAt reproduces the CURRENT framing exactly.
+  const carto = geo.cartographic.fromCartesian(position);
+  const tCarto = geo.cartographic.fromCartesian(target);
+  const dh = carto.height - tCarto.height;
+  // A plain heading/pitch/range: Cesium's lookAt reads the fields, and the
+  // Cesium SDK is not loaded on a Navara page.
+  return {
+    heading,
+    pitch: -Math.asin(Math.min(1, Math.max(-1, dh / Math.max(1, range)))),
+    range,
+  };
 }
 
 /** Rigid origin-centred rotation stays outside the actual ellipsoid's bounding sphere. */
-function globeRotationHasClearance(position) {
-  const ellipsoid = _viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
-  const { minimumRadius, maximumRadius } = ellipsoid;
-  const radius = Cesium.Cartesian3.magnitude(position);
+function globeRotationHasClearance(rig, position) {
+  const { minimumRadius, maximumRadius } = rig.ellipsoid();
+  const radius = geo.cartesian3.magnitude(position);
   return (
     Number.isFinite(minimumRadius) &&
     minimumRadius > 0 &&
@@ -1267,44 +1809,39 @@ function globeRotationHasClearance(position) {
   );
 }
 
-/** Use the existing WGS84/CSS-pixel projection; null means unsupported, not close-up. */
-function globeRotationFitsKeyhole(camera = _viewer.camera) {
-  const ellipsoid = _viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
-  if (!Cesium.Cartesian3.equals(ellipsoid.radii, Cesium.Ellipsoid.WGS84.radii))
-    return null;
-  const canvas = _viewer.scene.canvas;
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  const frustum = camera.frustum;
+/**
+ * Use the existing WGS84/CSS-pixel projection; null means unsupported, not
+ * close-up. `view` is the rig's keyhole view of a camera; `live` says it is
+ * the camera on screen (a reset probe is not).
+ */
+function globeRotationFitsKeyhole(rig, view = rig.keyholeView(), live = true) {
+  if (!rig.supportedEllipsoid()) return null;
+  const sphereRadius = rig.ellipsoid().maximumRadius;
+  const { width, height } = rig.viewport();
   if (
     !Number.isFinite(width) ||
     !Number.isFinite(height) ||
     width <= 0 ||
     height <= 0 ||
-    !(frustum instanceof Cesium.PerspectiveFrustum) ||
-    !Number.isFinite(frustum.near) ||
-    frustum.near <= 0 ||
-    !Number.isFinite(frustum.far) ||
-    frustum.far <= frustum.near ||
-    frustum.xOffset !== 0 ||
-    frustum.yOffset !== 0
+    !view?.perspective ||
+    !Number.isFinite(view.near) ||
+    view.near <= 0 ||
+    !Number.isFinite(view.far) ||
+    view.far <= view.near ||
+    view.xOffset !== 0 ||
+    view.yOffset !== 0
   )
     return null;
   try {
-    const cam = camera;
-    const distance = Cesium.Cartesian3.magnitude(cam.positionWC);
-    const sphereRadius = ellipsoid.maximumRadius;
+    const distance = geo.cartesian3.magnitude(view.position);
     if (!Number.isFinite(distance) || distance <= 0) return null;
     if (distance <= sphereRadius) return false; // Near-surface polar views are close-up too.
-    const radiusPx = earthDiscScreenRadius(distance, height, frustum.fovy);
+    const radiusPx = earthDiscScreenRadius(distance, height, view.fovy);
     if (!radiusPx) return null;
     const keyhole = getKeyholeGeometry(width, height);
     // The known nadir reset probe uses the same exact cone below; projecting
-    // through SceneTransforms would read the live scene.camera instead.
-    if (
-      camera === _viewer.camera &&
-      !projectEarthDiscToViewport(_viewer, width, height)
-    ) {
+    // through the live projection would read the camera on screen instead.
+    if (live && !rig.earthDiscProjects(width, height)) {
       // A near-surface horizon view cannot fit even when pointed at Earth;
       // an orbital camera looking away is unsupported, not a close-up offer.
       return radiusPx > Math.min(keyhole.radius, width / 2, height / 2)
@@ -1315,16 +1852,12 @@ function globeRotationFitsKeyhole(camera = _viewer.camera) {
     // against the existing keyhole cone. Canvas-edge clipping does not change
     // framing during rigid globe rotation and is not a clearance condition,
     // without changing the UI projection or defining another keyhole/mask.
-    const toCenter = Cesium.Cartesian3.negate(
-      cam.positionWC,
-      new Cesium.Cartesian3(),
-    );
-    const depth = Cesium.Cartesian3.dot(toCenter, cam.directionWC);
-    const right = Math.abs(Cesium.Cartesian3.dot(toCenter, cam.rightWC));
-    const up = Math.abs(Cesium.Cartesian3.dot(toCenter, cam.upWC));
-    const focalY = height / (2 * Math.tan(frustum.fovy / 2));
-    const focalX =
-      width / (2 * Math.tan(frustum.fovy / 2) * frustum.aspectRatio);
+    const toCenter = geo.cartesian3.negate(view.position, newVector());
+    const depth = geo.cartesian3.dot(toCenter, view.direction);
+    const right = Math.abs(geo.cartesian3.dot(toCenter, view.right));
+    const up = Math.abs(geo.cartesian3.dot(toCenter, view.up));
+    const focalY = height / (2 * Math.tan(view.fovy / 2));
+    const focalX = width / (2 * Math.tan(view.fovy / 2) * view.aspectRatio);
     if (
       ![depth, right, up, focalX, focalY].every(Number.isFinite) ||
       focalX <= 0 ||
@@ -1338,10 +1871,7 @@ function globeRotationFitsKeyhole(camera = _viewer.camera) {
     const framed = centerAngle + halfAngle <= keyholeAngle;
     if (!framed) return false;
     // Projection alone does not prove that a tiny globe is within depth planes.
-    if (
-      depth - sphereRadius < frustum.near ||
-      depth + sphereRadius > frustum.far
-    )
+    if (depth - sphereRadius < view.near || depth + sphereRadius > view.far)
       return null;
     return true;
   } catch {
@@ -1350,24 +1880,9 @@ function globeRotationFitsKeyhole(camera = _viewer.camera) {
 }
 
 /** Check the unchanged reset destination without moving the live camera. */
-function globeResetFitsKeyhole() {
+function globeResetFitsKeyhole(rig) {
   try {
-    const camera = Cesium.Camera.clone(_viewer.camera);
-    const { longitude, latitude } = _viewer.camera.positionCartographic;
-    camera.setView({
-      destination: Cesium.Cartesian3.fromRadians(
-        longitude,
-        latitude,
-        GLOBE_VIEW.heightM,
-      ),
-      orientation: {
-        heading: 0,
-        pitch: Cesium.Math.toRadians(GLOBE_VIEW.pitchDeg),
-        roll: 0,
-      },
-      endTransform: Cesium.Matrix4.IDENTITY,
-    });
-    return globeRotationFitsKeyhole(camera) === true;
+    return globeRotationFitsKeyhole(rig, rig.resetView(), false) === true;
   } catch {
     return false;
   }
@@ -1379,20 +1894,47 @@ export function interruptGlobeRotation(reason = 'camera-intent') {
   return { wasActive: false, reason, leveled: false };
 }
 
+function detachViewerListeners() {
+  _tickRemover?.();
+  _trackingRemover?.();
+  for (const remove of _inputRemovers) remove();
+  _inputRemovers = [];
+  _tickRemover = _trackingRemover = _viewer = null;
+}
+
 /**
- * Wire the module to the viewer once (idempotent). The view-target getter is
- * optional so a non-voice caller (the Directions FLY chip) can arm route
- * flights before any voice session exists; a later call with a real getter
- * installs it, and a call without one, FOR THE SAME VIEWER, never clears an
- * installed getter.
+ * Release what the verbs hold on a departing viewer or engine: a motion
+ * running on it stops, and when it is the one new motions start on, its
+ * listeners and getters go too.
+ * @param {object} target The Cesium viewer or globe engine.
+ */
+export function releaseCameraVerbs(target) {
+  if (target == null) return;
+  if (target === _viewer) {
+    if (_active) interruptCameraMotion('viewer-released');
+    detachViewerListeners();
+  } else if (_active?.rig?.owner === target) {
+    interruptCameraMotion('engine-released');
+  }
+  if (_rig?.owner === target) _rig = _getTarget = _isCockpitActive = null;
+}
+
+/**
+ * Wire the module to the camera once (idempotent). `target` is a Cesium
+ * viewer (its own camera: the viewer rig) or a globe engine (the contract:
+ * the engine rig; Navara, or Cesium through engineFromViewer). The
+ * view-target getter is optional so a non-voice caller (the Directions FLY
+ * chip) can arm route flights before any voice session exists; a later call
+ * with a real getter installs it, and a call without one, FOR THE SAME
+ * TARGET, never clears an installed getter.
  *
- * A getter closes over the viewer it was built for. When the viewer changes —
- * a new application lifetime — the previous getter is dropped even if this
- * call brings none, so a callback from the old viewer can never answer for the
- * new one.
+ * A getter closes over the camera it was built for. When the target changes —
+ * a new application lifetime, or another engine — the previous getter is
+ * dropped even if this call brings none, so a callback from the old camera can
+ * never answer for the new one.
  */
 export function initCameraVerbs(
-  viewer,
+  target,
   getViewTargetCartesian = null,
   { isCockpitActive } = {},
 ) {
@@ -1400,33 +1942,45 @@ export function initCameraVerbs(
     typeof getViewTargetCartesian === 'function'
       ? getViewTargetCartesian
       : null;
-  if (_viewer === viewer) {
+  if (target != null && _rig?.owner === target) {
     if (nextTarget) _getTarget = nextTarget;
     if (typeof isCockpitActive === 'function')
       _isCockpitActive = isCockpitActive;
     return;
   }
-  // A globe motion belongs to the viewer whose world pose it captured.
-  if (_active?.kind === 'rotate_globe')
-    interruptCameraMotion('viewer-replaced');
+  const previous = _rig;
+  const next = isGlobeEngine(target)
+    ? engineRigFor(target)
+    : createViewerRig(target);
+  if (_active && (_active.rig === previous || previous === null)) {
+    // A globe motion belongs to the camera whose world pose it captured. Any
+    // other motion carries on with a new Cesium viewer (its state is world
+    // geometry), but never crosses to another kind of camera.
+    if (_active.kind === 'rotate_globe')
+      interruptCameraMotion('viewer-replaced');
+    else if (_active.rig?.kind === 'viewer' && next.kind === 'viewer')
+      _active.rig = next;
+    else if (_active.rig === previous && previous !== null)
+      interruptCameraMotion('camera-replaced');
+  }
   _getTarget = nextTarget;
   _isCockpitActive =
     typeof isCockpitActive === 'function' ? isCockpitActive : null;
+  _rig = next;
+  detachViewerListeners();
+  if (next.kind !== 'viewer') return;
+  const viewer = target;
   _viewer = viewer;
-  if (_tickRemover) _tickRemover();
   _tickRemover = viewer.clock.onTick.addEventListener(onTick);
-  if (_trackingRemover) _trackingRemover();
   // Cockpit can acquire then clear tracking before the next clock tick.
   // Yield on acquisition itself without changing legacy camera motions.
   _trackingRemover = viewer.trackedEntityChanged?.addEventListener((entity) => {
     if (entity && _active?.kind === 'rotate_globe')
       interruptCameraMotion('globe-camera-owner-changed');
   });
-  for (const rm of _inputRemovers) rm();
-  _inputRemovers = [];
   const canvas = viewer.scene.canvas;
   // ANY manual camera input reclaims control — the cancelFlight reflex.
-  for (const evt of ['pointerdown', 'touchstart', 'wheel']) {
+  for (const evt of MANUAL_INPUT_EVENTS) {
     const h = () => interruptCameraMotion('manual-input');
     canvas.addEventListener(evt, h, { passive: true });
     _inputRemovers.push(() => canvas.removeEventListener(evt, h));
@@ -1501,11 +2055,20 @@ export function moveCamera(args = {}, runNavigation = null) {
       error: 'rotate_globe needs left or right.',
     };
   }
+  const rig = _rig;
+  if (!rig) {
+    return {
+      ok: false,
+      action: 'move_camera',
+      reason: 'no-camera',
+      error: 'Camera motion needs a globe, and none is attached.',
+    };
+  }
   if (motion === 'tilt') {
     // Honest limits: at the clamp a tilt is a no-op — say so instead of
     // reporting success and letting the model gaslight itself (field test).
-    const pitch = _viewer.camera.pitch;
-    if (direction === 'up' && pitch >= PITCH_MAX - Cesium.Math.toRadians(0.5)) {
+    const pitch = rig.pitch();
+    if (direction === 'up' && pitch >= PITCH_MAX - geo.math.toRadians(0.5)) {
       return {
         ok: false,
         action: 'move_camera',
@@ -1513,10 +2076,7 @@ export function moveCamera(args = {}, runNavigation = null) {
           'Already at the upper tilt limit (near the horizon) — tilt down, or zoom/pan instead.',
       };
     }
-    if (
-      direction === 'down' &&
-      pitch <= PITCH_MIN + Cesium.Math.toRadians(0.5)
-    ) {
+    if (direction === 'down' && pitch <= PITCH_MIN + geo.math.toRadians(0.5)) {
       return {
         ok: false,
         action: 'move_camera',
@@ -1527,15 +2087,12 @@ export function moveCamera(args = {}, runNavigation = null) {
   if (
     (motion === 'rotate_globe' ||
       (motion === 'orbit' && typeof runNavigation !== 'function')) &&
-    _viewer?.trackedEntity
+    rig.tracking()
   ) {
     // The follow camera owns a tracked view; a lookAt orbit fights it frame
     // by frame and stop rips the camera out (field finding). Honest refusal
     // until tracked-orbit rides the follow camera natively (roadmap).
-    const label =
-      _viewer.trackedEntity?.name ||
-      _viewer.trackedEntity?.id ||
-      'the tracked target';
+    const label = rig.trackedLabel();
     return {
       ok: false,
       action: 'move_camera',
@@ -1544,20 +2101,14 @@ export function moveCamera(args = {}, runNavigation = null) {
   }
   let globePose;
   if (motion === 'rotate_globe') {
-    if (_viewer.scene.mode !== Cesium.SceneMode.SCENE3D) {
+    if (!rig.is3D()) {
       return {
         ok: false,
         action: 'move_camera',
         error: 'Globe rotation requires a 3D view.',
       };
     }
-    const cam = _viewer.camera;
-    globePose = {
-      position: Cesium.Cartesian3.clone(cam.positionWC),
-      direction: Cesium.Cartesian3.clone(cam.directionWC),
-      up: Cesium.Cartesian3.normalize(cam.upWC, new Cesium.Cartesian3()),
-      right: Cesium.Cartesian3.clone(cam.rightWC),
-    };
+    globePose = rig.captureGlobePose();
     if (_isCockpitActive?.())
       return {
         ok: false,
@@ -1565,13 +2116,13 @@ export function moveCamera(args = {}, runNavigation = null) {
         reason: 'camera-owned',
         error: 'Exit Cockpit before rotating the globe.',
       };
-    const ellipsoid = _viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
+    const ellipsoid = rig.ellipsoid();
     if (!(
       Number.isFinite(ellipsoid.minimumRadius) &&
       ellipsoid.minimumRadius > 0 &&
       Number.isFinite(ellipsoid.maximumRadius) &&
       ellipsoid.maximumRadius >= ellipsoid.minimumRadius &&
-      Number.isFinite(Cesium.Cartesian3.magnitude(globePose.position))
+      Number.isFinite(geo.cartesian3.magnitude(globePose.position))
     ))
       return {
         ok: false,
@@ -1580,7 +2131,7 @@ export function moveCamera(args = {}, runNavigation = null) {
         error:
           'Globe rotation requires a finite supported ellipsoid and a clear globe view.',
       };
-    const fits = globeRotationFitsKeyhole();
+    const fits = globeRotationFitsKeyhole(rig);
     if (fits === null)
       return {
         ok: false,
@@ -1589,7 +2140,7 @@ export function moveCamera(args = {}, runNavigation = null) {
         error: 'Globe rotation requires a supported perspective view.',
       };
     if (!fits) {
-      const canReset = globeResetFitsKeyhole();
+      const canReset = globeResetFitsKeyhole(rig);
       return {
         ok: false,
         action: 'move_camera',
@@ -1599,7 +2150,7 @@ export function moveCamera(args = {}, runNavigation = null) {
           : 'Zoom out further to fit the globe inside the keyhole; the Globe View preset does not fit this viewport.',
       };
     }
-    if (!globeRotationHasClearance(globePose.position))
+    if (!globeRotationHasClearance(rig, globePose.position))
       return {
         ok: false,
         action: 'move_camera',
@@ -1611,55 +2162,27 @@ export function moveCamera(args = {}, runNavigation = null) {
     interruptCameraMotion('replaced');
     const state = {
       kind: motion,
+      rig,
       direction: direction || 'right',
       speed,
       mode,
     };
     if (motion === 'rotate_globe') {
-      // Convert an inherited ground-target frame without changing the world
-      // pose. Rotation must pivot about Earth, never the previous local target.
-      const cam = _viewer.camera;
-      cam.cancelFlight();
-      cam.lookAtTransform(Cesium.Matrix4.IDENTITY);
-      // Handoff may level a route's bank. Keep the caller's exact world pose.
-      // Copy the basis directly: setView's heading/pitch conversion is singular
-      // at nadir and can change the captured orientation near the poles.
-      Cesium.Cartesian3.clone(globePose.position, cam.position);
-      Cesium.Cartesian3.clone(globePose.direction, cam.direction);
-      Cesium.Cartesian3.clone(globePose.up, cam.up);
-      Cesium.Cartesian3.clone(globePose.right, cam.right);
+      rig.takeGlobePose(globePose);
       state.rotationAxis = globePose.up;
-      state.rotationRadius = Cesium.Cartesian3.magnitude(globePose.position);
+      state.rotationRadius = geo.cartesian3.magnitude(globePose.position);
     }
     if (motion === 'orbit') {
-      if (_viewer.scene.tweens.length > 0) {
-        // A camera flight is in progress ("fly to X and orbit it") — ALWAYS arm
-        // and capture at the destination; a target existing right now is
-        // meaningless (the globe is always under the crosshair).
-        setActiveMotion({
-          kind: 'orbit',
-          direction: direction || 'right',
-          speed,
-          mode,
-          pending: true,
-        });
-        holdContinuousRender('camera-verb');
-        return {
-          ok: true,
-          action: 'move_camera',
-          motion,
-          direction: direction || 'right',
-          speed,
-          mode,
-          armed: 'waiting-for-arrival',
-        };
-      }
-      const target = _getTarget?.(_viewer);
+      // A camera flight in progress ("fly to X and orbit it") ALWAYS arms and
+      // captures at the destination: a target existing right now is
+      // meaningless (the globe is always under the crosshair). Without a
+      // target (mid-flight chain) the orbit arms too: the tick loop keeps
+      // trying for a ground target as the flight settles.
+      const target = rig.flightBusy() ? null : _getTarget?.(rig.owner);
       if (!target) {
-        // Mid-flight chain ("fly to X and orbit it"): ARM the orbit — the tick
-        // loop keeps trying for a ground target as the flight settles.
         setActiveMotion({
           kind: 'orbit',
+          rig,
           direction: direction || 'right',
           speed,
           mode,
@@ -1676,21 +2199,13 @@ export function moveCamera(args = {}, runNavigation = null) {
           armed: 'waiting-for-arrival',
         };
       }
-      const cam = _viewer.camera;
-      const range = Cesium.Cartesian3.distance(cam.positionWC, target);
-      // Pitch from geometry so lookAt reproduces the CURRENT framing exactly.
-      const carto = Cesium.Cartographic.fromCartesian(cam.positionWC);
-      const tCarto = Cesium.Cartographic.fromCartesian(target);
-      const dh = carto.height - tCarto.height;
-      const pitch = -Math.asin(
-        Math.min(1, Math.max(-1, dh / Math.max(1, range))),
-      );
+      const { position, heading } = rig.orbitPose();
       state.target = target;
-      state.hpr = new Cesium.HeadingPitchRange(cam.heading, pitch, range);
-      state.hprStartHeading = cam.heading;
+      state.hpr = orbitOffset(position, heading, target);
+      state.hprStartHeading = heading;
     }
     setActiveMotion(state);
-    // Verb motion drives the camera per clock tick — hold until interrupted;
+    // Verb motion drives the camera per frame — hold until interrupted;
     // interruptCameraMotion is the single release path. (perf wave 2)
     holdContinuousRender('camera-verb');
     return {
@@ -1703,9 +2218,7 @@ export function moveCamera(args = {}, runNavigation = null) {
     };
   };
   const preserveCameraFlight =
-    motion === 'orbit' &&
-    _viewer.scene.tweens.length > 0 &&
-    !_viewer.trackedEntity;
+    motion === 'orbit' && rig.flightBusy() && !rig.tracking();
   return typeof runNavigation === 'function'
     ? runNavigation(start, { preserveCameraFlight })
     : start();
@@ -1735,6 +2248,8 @@ export function adjustOrbitRange(factor) {
  * @param {Function|null} warmFn  (cells) => void — batch-warms the floor cells
  * along the route corridor. Without it a cold cache has no protection: route
  * vertices carry height 0, so an unwarmed mountain corridor reads as sea level.
+ * @param {object|null} engine The globe engine to fly on (its contract
+ * camera); by default the camera initCameraVerbs installed.
  */
 export function flyRoute(
   annoList,
@@ -1742,6 +2257,7 @@ export function flyRoute(
   floorFn = null,
   runNavigation = null,
   warmFn = null,
+  engine = null,
 ) {
   const speed = ROUTE_M_S[String(args.speed || 'normal').toLowerCase()]
     ? String(args.speed || 'normal').toLowerCase()
@@ -1798,11 +2314,11 @@ export function flyRoute(
     };
   }
   const pts = route.path.map((p) =>
-    Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
+    geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
   );
   const cumM = [0];
   for (let i = 1; i < pts.length; i += 1) {
-    cumM.push(cumM[i - 1] + Cesium.Cartesian3.distance(pts[i - 1], pts[i]));
+    cumM.push(cumM[i - 1] + geo.cartesian3.distance(pts[i - 1], pts[i]));
   }
   if (!Number.isFinite(cumM.at(-1)) || cumM.at(-1) <= 0) {
     return {
@@ -1811,32 +2327,45 @@ export function flyRoute(
       error: 'The selected route has no flyable distance.',
     };
   }
+  const rig = engine ? engineRigFor(engine) : _rig;
+  if (!rig) {
+    return {
+      ok: false,
+      action: 'fly_route',
+      reason: 'no-camera',
+      error: 'Route flying needs a globe, and none is attached.',
+    };
+  }
   const start = () => {
     interruptCameraMotion('replaced');
-    setActiveMotion(
-      createRouteFlight({
-        pts,
-        cumM,
-        speed,
-        floorFn,
-        warmFn,
-        probeFn: (cells) => probeMeshFloorM(_viewer?.scene, cells),
-        cameraHeightM: _viewer?.camera?.positionCartographic?.height,
-        reducedMotion: prefersReducedMotion(),
-      }),
-    );
+    let flight = null;
+    flight = createRouteFlight({
+      pts,
+      cumM,
+      speed,
+      floorFn,
+      warmFn,
+      // The camera the flight runs on NOW (a parked flight may resume on
+      // another engine before its one probe fires).
+      probeFn: (cells) =>
+        probeMeshFloorM((flight?.rig ?? rig).surface(), cells),
+      cameraHeightM: rig.heightM(),
+      reducedMotion: prefersReducedMotion(),
+    });
+    flight.rig = rig;
+    setActiveMotion(flight);
     holdContinuousRender('camera-verb');
     return {
       ok: true,
       action: 'fly_route',
       label: route.label || null,
       speed,
-      distanceM: Math.round(_active.totalM),
-      durationS: Math.round(_active.durationS),
+      distanceM: Math.round(flight.totalM),
+      durationS: Math.round(flight.durationS),
       waypoints: pts.length,
       // The caller keeps this so it can stop ITS flight later without stopping
       // whatever has replaced it (see interruptCameraMotionIfActive).
-      motionId: _active.motionId,
+      motionId: flight.motionId,
     };
   };
   return typeof runNavigation === 'function' ? runNavigation(start) : start();

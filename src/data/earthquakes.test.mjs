@@ -294,7 +294,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
 });
 
 test('the earthquakes layer installs no per-frame callback and no continuous-render hold', () => {
-  const source = ['index', 'model', 'source'].map(name =>
+  const source = ['index', 'model', 'source', 'render/cesium'].map(name =>
     readFileSync(new URL(`../layers/earthquakes/${name}.js`, import.meta.url), 'utf8')).join('\n');
   assert.doesNotMatch(
     source,

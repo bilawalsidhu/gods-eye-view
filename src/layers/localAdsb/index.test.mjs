@@ -12,6 +12,14 @@ import {
   localAdsbReceiverLine,
   localAdsbStatus,
 } from './index.js';
+import { createLocalAdsbCesiumRenderer } from './render/cesium.js';
+import * as selection from '../../data/selectionDispatcher.js';
+import { registerViewerEngine } from '../../globe/cesium/engineFromViewer.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import {
+  registerPickOwner,
+  unregisterPickOwner,
+} from '../../data/pickRegistry.js';
 
 function fakeReceiver(initial = {}) {
   const state = {
@@ -73,6 +81,13 @@ function fakeServices() {
         },
       },
       picking: { registerPickOwner() {}, unregisterPickOwner() {} },
+      // As src/app/layers/localAdsb.js composes them: the layer's Cesium
+      // renderer, and the engine's selection dispatcher (clicks).
+      selection,
+      renderer: {
+        create: ({ engine = null, ...options }) =>
+          createLocalAdsbCesiumRenderer(engine, options),
+      },
       detection: { markSourcesChanged() {} },
       overlays: { refreshReadout() {} },
     },
@@ -198,9 +213,6 @@ async function enabledLayer(receiver, clock, feeds = null, options = {}) {
     services: { ...services, ...options.services },
     now: () => clock.now,
     loadModel: options.loadModel,
-    ...(options.createInputHandler
-      ? { createInputHandler: options.createInputHandler }
-      : {}),
   });
   layer.init(viewer);
   await layer.enable();
@@ -598,6 +610,30 @@ test('markers drop when the position is 60 s old and records when silent 60 s', 
   await layer.update();
   assert.deepEqual(entities(), [], 'a stale position is not drawn');
   assert.deepEqual(layer.getDetectableObjects(), []);
+});
+
+test('selectById selects a heard aircraft by the id its position rows carry, like a click', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, calls } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  const [row] = layer.getAllPositions();
+  assert.equal(row.id, 'abc123');
+  assert.equal(layer.selectById(row.id), true);
+  assert.equal(layer.selectById(' ABC123 '), true, 'any case, trimmed');
+  assert.equal(layer.selectById('local-adsb:abc123'), true, 'the marker id');
+  assert.deepEqual(calls.selected, [
+    'local-adsb:abc123',
+    'local-adsb:abc123',
+    'local-adsb:abc123',
+  ]);
+  for (const missing of ['ffffff', '', null, undefined, 'local-adsb:'])
+    assert.equal(layer.selectById(missing), false, String(missing));
+  await layer.disable();
+  assert.equal(layer.selectById('abc123'), false, 'nothing while off');
+  assert.equal(calls.selected.length, 3);
 });
 
 test('selecting a marker publishes the readout card and eviction clears it', async (t) => {
@@ -1051,35 +1087,29 @@ test('the last aircraft expiring removes its 3D model and cancels a pending load
   assert.equal(late.destroyed, true);
 });
 
-/** A viewer with a canvas and scripted picks, plus the layer's click action. */
+/**
+ * A viewer whose engine (a fake globe engine registered for it) scripts the
+ * picks under a click; clicks reach the layer through the engine's
+ * selection dispatcher, as in the app.
+ */
 function clickHarness() {
   const base = fakeViewer();
-  const scene = {
-    ...base.viewer.scene,
-    canvas: {},
-    pickResult: null,
-    drillResult: [],
-    pick() {
-      return scene.pickResult;
-    },
-    drillPick() {
-      return scene.drillResult;
-    },
-  };
-  const handler = { actions: new Map() };
+  const engine = createFakeEngine();
+  const scene = { pickResult: null, drillResult: [] };
+  engine.fake.script('pick', () => scene.pickResult ?? undefined);
+  engine.fake.script('drillPick', () => scene.drillResult);
+  const unregister = registerViewerEngine(base.viewer, engine);
   return {
     scene,
-    viewer: { ...base, viewer: { ...base.viewer, scene } },
-    createInputHandler: () => ({
-      setInputAction(action, type) {
-        handler.actions.set(type, action);
-      },
-      destroy() {},
-    }),
+    viewer: base,
+    release() {
+      unregister();
+      engine.destroy();
+    },
     click() {
-      handler.actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK)({
-        position: new Cesium.Cartesian2(10, 10),
-      });
+      engine.fake.input('down', { position: { x: 10, y: 10 } });
+      engine.fake.input('up', { position: { x: 10, y: 10 } });
+      engine.fake.input('click', { position: { x: 10, y: 10 } });
     },
   };
 }
@@ -1090,9 +1120,11 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   const harness = clickHarness();
   const { layer, calls } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
-    createInputHandler: harness.createInputHandler,
   });
-  t.after(() => layer.destroy());
+  t.after(() => {
+    layer.destroy();
+    harness.release();
+  });
   receiver.set({ aircraft: [record()] });
   await layer.update();
   const entity =
@@ -1111,26 +1143,18 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const harness = clickHarness();
-  const owners = new Map();
-  const { resolvePickId } = await import('../../data/pickRegistry.js');
   const { layer, calls } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
-    createInputHandler: harness.createInputHandler,
-    services: {
-      picking: {
-        registerPickOwner: (id, predicate) => owners.set(id, predicate),
-        unregisterPickOwner: (id) => owners.delete(id),
-        resolvePickId,
-        isOwnedByOtherLayer: (layerId, pickedId) =>
-          [...owners].some(
-            ([owner, predicate]) => owner !== layerId && predicate(pickedId),
-          ),
-      },
-    },
   });
-  owners.set('trails', (id) => String(id).startsWith('gev-trail:'));
-  owners.set('flights', (id) => id === 'abc123');
-  t.after(() => layer.destroy());
+  // The app's pick owners: the trails, and a Flights contact.
+  registerPickOwner('trails', (id) => String(id).startsWith('gev-trail:'));
+  registerPickOwner('flights', (id) => id === 'abc123');
+  t.after(() => {
+    unregisterPickOwner('trails');
+    unregisterPickOwner('flights');
+    layer.destroy();
+    harness.release();
+  });
   receiver.set({
     aircraft: [record(), record({ icao: 'def456', lat: 0.01 })],
   });
@@ -1164,4 +1188,35 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   ];
   harness.click();
   assert.equal(calls.selected.length, 2, 'the Flights contact is not taken');
+});
+
+test('globe handoff retains the receiver, feed, trail fixes and selection', async (t) => {
+  const receiver = fakeReceiver({ aircraft: [record()] });
+  const feeds = fakeFeeds();
+  let closes = 0;
+  receiver.destroy = () => {
+    closes++;
+  };
+  const clock = { now: 100_000 };
+  const { layer, calls } = await enabledLayer(receiver, clock, feeds);
+  t.after(() => layer.destroy());
+  assert.ok(layer.selectAircraft('abc123'));
+  layer.detachRenderer();
+  clock.now += 1000;
+  receiver.set({
+    aircraft: [
+      record({
+        lon: 0.001,
+        lastPositionAt: clock.now,
+        lastMessageAt: clock.now,
+      }),
+    ],
+  });
+  await layer.update();
+  assert.equal(layer.getAnalystRecords()[0].icao24, 'abc123');
+  layer.attachRenderer(fakeViewer().viewer);
+  assert.deepEqual(receiver.modeCalls, ['adsb']);
+  assert.deepEqual(feeds.calls, ['start']);
+  assert.equal(closes, 0);
+  assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:abc123']);
 });
