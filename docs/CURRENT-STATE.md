@@ -5729,6 +5729,18 @@ nearby place whose whole name is the query (one with a comma in it) comes next,
 then the unbiased name match. Invalid or wrapped bounds returned by providers
 are omitted rather than framing the wrong part of the globe.
 
+The location search also recognizes exact *broadcast ICAO* flight callsigns
+(`UAL123`, `UAL 123`, `flight UAL123`) and explicitly scoped transponder
+addresses (`icao24: a1b2c3`). It inspects the enabled Civil Flights layer's
+currently loaded contacts only; it does **not** fetch worldwide flights or
+claim IATA/airline-name code conversion. A unique, freshly observed contact
+moves the camera to its last reported location but does **not** start
+following it. Stale feeds, disabled or empty layers, no matches and duplicate
+exact callsigns return an explanatory error under the search input; ambiguous
+six-hex tokens never silently prefer a callsign over the ICAO24 address.
+Place names and coordinates keep their existing geocoder path. This is an
+incremental, not complete, implementation of #1562.
+
 A location search that finds nothing, or fails, leaves the field open with the
 query still in it, focused and selected, so it can be corrected and resubmitted
 without reopening search. The miss is shown under the field as a persistent
