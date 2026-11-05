@@ -1,5 +1,5 @@
 import { formatDate, formatNumber, msg, t } from '../../i18n/index.js';
-import { CENIPA_REPORTS_URL } from './records.js';
+import { ASN_RECORD_URL, CENIPA_REPORTS_URL } from './records.js';
 
 export const KIND_LABELS = Object.freeze({
   accident: msg('Accident'),
@@ -91,6 +91,17 @@ function aircraftName(plane) {
     : model;
 }
 
+/** "PR-NDN · Piper PA-42 (PAY4) · built in 1981" for one aircraft. */
+function aircraftText(plane) {
+  return [
+    formatRegistration(plane.registration),
+    aircraftName(plane),
+    plane.year ? t('built in {year}', { year: String(plane.year) }) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function formatDay(date) {
   const match = /^(-?\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
   if (!match) return '';
@@ -128,43 +139,93 @@ export function describeAirAccident(record) {
     if (plane.model) titleParts.push(plane.model);
   }
   const details = [];
+  // Deaths first, right under the title: the fact readers look for.
+  const toll = [];
+  if (record.fatalities !== null && record.fatalities !== undefined)
+    toll.push(
+      t('Fatalities: {count}', { count: formatNumber(record.fatalities) }),
+    );
+  if (record.injuries)
+    toll.push(t('Injured: {count}', { count: formatNumber(record.injuries) }));
+  if (record.survivors)
+    toll.push(
+      t('Survivors: {count}', { count: formatNumber(record.survivors) }),
+    );
+  if (toll.length) details.push(toll.join(' · '));
   const where = [
     formatDay(record.date),
-    record.time || '',
+    // CENIPA records the time in UTC.
+    record.time ? `${record.time} UTC` : '',
     [nameText(record.city), record.state].filter(Boolean).join('/'),
     record.aerodrome,
   ].filter(Boolean);
   if (where.length) details.push(where.join(' · '));
-  for (const item of record.aircraft || []) {
-    const name = aircraftName(item);
-    const mark = formatRegistration(item.registration);
-    if (name || mark)
+  const route =
+    record.origin && record.destination
+      ? `${record.origin} → ${record.destination}`
+      : record.origin
+        ? t('departed from {value}', { value: record.origin })
+        : record.destination
+          ? t('bound for {value}', { value: record.destination })
+          : '';
+  if (record.flight || route)
+    details.push(
+      [
+        record.flight ? t('Flight {value}', { value: record.flight }) : '',
+        route ? t('Route: {value}', { value: route }) : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    );
+  // Wikidata gives one registration for the event; it names the aircraft
+  // only when there is a single one.
+  const listed = record.aircraft || [];
+  const aircraft =
+    record.registration && listed.length <= 1
+      ? [{ ...listed[0], registration: record.registration }]
+      : listed;
+  const planes = aircraft.filter(
+    (item) => aircraftText(item) || item.operation || item.phase || item.damage,
+  );
+  if (planes.length === 1) {
+    const [item] = planes;
+    const name = aircraftText(item);
+    if (name) details.push(t('Aircraft: {value}', { value: name }));
+    if (item.operation)
       details.push(
-        t('Aircraft: {value}', {
-          value: [mark, name].filter(Boolean).join(' · '),
+        t('Operation: {value}', { value: sourceText(item.operation) }),
+      );
+    if (item.phase)
+      details.push(
+        t('Flight phase: {value}', { value: sourceText(item.phase) }),
+      );
+    if (item.damage)
+      details.push(t('Damage: {value}', { value: sourceText(item.damage) }));
+  } else {
+    // Several aircraft (a collision): one line each, with its own facts.
+    planes.forEach((item, index) => {
+      const facts = [
+        aircraftText(item),
+        item.operation
+          ? t('Operation: {value}', { value: sourceText(item.operation) })
+          : '',
+        item.phase
+          ? t('Flight phase: {value}', { value: sourceText(item.phase) })
+          : '',
+        item.damage
+          ? t('Damage: {value}', { value: sourceText(item.damage) })
+          : '',
+      ].filter(Boolean);
+      details.push(
+        t('Aircraft {number}: {value}', {
+          number: formatNumber(index + 1),
+          value: facts.join(' · '),
         }),
       );
+    });
   }
-  if (plane?.operation)
-    details.push(
-      t('Operation: {value}', { value: sourceText(plane.operation) }),
-    );
-  if (plane?.phase)
-    details.push(
-      t('Flight phase: {value}', { value: sourceText(plane.phase) }),
-    );
-  if (plane?.damage)
-    details.push(t('Damage: {value}', { value: sourceText(plane.damage) }));
   if (record.operator)
     details.push(t('Operator: {value}', { value: record.operator }));
-  if (record.fatalities !== null && record.fatalities !== undefined)
-    details.push(
-      t('Fatalities: {count}', { count: formatNumber(record.fatalities) }),
-    );
-  if (record.injuries)
-    details.push(
-      t('Injured: {count}', { count: formatNumber(record.injuries) }),
-    );
   if (record.events?.length)
     details.push(
       t('What happened: {value}', {
@@ -195,7 +256,9 @@ export function describeAirAccident(record) {
     details.push(
       link === CENIPA_REPORTS_URL
         ? t('Click the card to open CENIPA final reports ↗')
-        : t('Click the card to open the article ↗'),
+        : link.startsWith(ASN_RECORD_URL)
+          ? t('Click the card to open the Aviation Safety Network record ↗')
+          : t('Click the card to open the article ↗'),
     );
   return { title: titleParts.join(' · '), details, link };
 }

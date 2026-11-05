@@ -109,7 +109,8 @@ stale for up to seven days when a refresh fails. One source failing still
 serves the other. CENIPA rows are kept only for accidents and serious incidents
 with a position (about 3,400 since 2007); Wikidata adds about 1,900 accidents
 worldwide. A Wikidata item on the same day and within about 50 km of a CENIPA
-accident is merged into it, which gains the article name and link. Only
+accident is merged into it, which gains the article name and link, the flight
+number, the route and the survivor count. Only
 technical columns are read; neither source is asked for people.
 
 The globe draws ground-clamped points with the depth test off and the
@@ -118,13 +119,15 @@ sized by fatalities. Two row chips show or hide each class. A period filter unde
 start year and an end year side by side (two pickers over the years present in
 the data; a reversed pair is swapped); undated items show only when every year
 is selected. The filter is session-only (not in the share link). Clicking a point
-opens a `stateless` card with the date, place and aerodrome, each aircraft
-(registration, maker, model, ICAO type), operation type, phase of flight,
-damage, fatalities, injuries (Wikidata), CENIPA's occurrence types, the
+opens a `stateless` card that leads with fatalities, injuries and survivors,
+then the date, time (UTC) and place, flight number and route (Wikidata), each
+aircraft (registration, maker, model, ICAO type, year built), operation type,
+phase of flight, damage (one line per aircraft in a collision), CENIPA's occurrence types, the
 investigation status and the final report number. CENIPA values are shown in
 CENIPA's Portuguese wording. When several occurrences share one point (the
 aerodrome reference position) the card says the position is approximate.
-Clicking the card opens the Wikipedia article, else CENIPA's final-report
+Clicking the card opens the Wikipedia article, else the Aviation Safety
+Network record (Wikidata P1755), else CENIPA's final-report
 page when a report is published. Voice does not toggle this layer yet (prompt
 budget, as for the airspace layer).
 

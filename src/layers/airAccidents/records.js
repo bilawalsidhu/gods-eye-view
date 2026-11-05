@@ -207,12 +207,23 @@ export function normalizeCenipaTables({
 }
 
 /** Wikidata items that are aviation accidents (Q744913) and have a position. */
-export const WIKIDATA_QUERY = `SELECT ?item ?itemLabel ?date ?coord ?deaths ?injured ?operatorLabel ?enwiki ?ptwiki WHERE {
+/** Aviation Safety Network record page for its accident id (Wikidata P1755). */
+export const ASN_RECORD_URL =
+  'https://aviation-safety.net/database/record.php?id=';
+
+export const WIKIDATA_QUERY = `SELECT ?item ?itemLabel ?date ?coord ?deaths ?injured ?survivors ?operatorLabel ?vehicleLabel ?originLabel ?destinationLabel ?flight ?registration ?asn ?enwiki ?ptwiki WHERE {
   ?item wdt:P31/wdt:P279* wd:Q744913 ; wdt:P625 ?coord .
   OPTIONAL { ?item wdt:P585 ?date }
   OPTIONAL { ?item wdt:P1120 ?deaths }
   OPTIONAL { ?item wdt:P1339 ?injured }
+  OPTIONAL { ?item wdt:P1561 ?survivors }
   OPTIONAL { ?item wdt:P137 ?operator }
+  OPTIONAL { ?item wdt:P1876|wdt:P121 ?vehicle }
+  OPTIONAL { ?item wdt:P1427 ?origin }
+  OPTIONAL { ?item wdt:P1444 ?destination }
+  OPTIONAL { ?item wdt:P3090 ?flight }
+  OPTIONAL { ?item wdt:P426 ?registration }
+  OPTIONAL { ?item wdt:P1755 ?asn }
   OPTIONAL { ?enwiki schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> }
   OPTIONAL { ?ptwiki schema:about ?item ; schema:isPartOf <https://pt.wikipedia.org/> }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,pt,mul". }
@@ -232,6 +243,11 @@ function wikiUrl(value) {
   }
 }
 
+function asnUrl(value) {
+  const id = clean(value, 20);
+  return id && /^\d{8}-\d{1,2}$/.test(id) ? `${ASN_RECORD_URL}${id}` : null;
+}
+
 /**
  * One record per Wikidata accident item from a SPARQL JSON result. Only the
  * event's own properties are read (never victims or crew items).
@@ -242,10 +258,23 @@ export function normalizeWikidataResults(payload) {
   const bindings = payload?.results?.bindings;
   if (!Array.isArray(bindings)) return [];
   const byItem = new Map();
+  const models = new Map();
   for (const binding of bindings) {
     const value = (key) => binding?.[key]?.value;
     const qid = /\/entity\/(Q\d{1,12})$/.exec(value('item') || '')?.[1];
-    if (!qid || byItem.has(qid)) continue;
+    if (!qid) continue;
+    const label = (key) => {
+      const text = clean(value(key), 80);
+      // An unlabelled item reads back as its Q-id; that is no name.
+      return text && !/^Q\d+$/.test(text) ? text : null;
+    };
+    const known = byItem.get(qid);
+    if (known) {
+      // Each extra row carries another value of a many-valued property.
+      const model = label('vehicleLabel');
+      if (model) models.get(qid).add(model);
+      continue;
+    }
     const point = /^Point\(([-\d.eE]+) ([-\d.eE]+)\)$/.exec(
       value('coord') || '',
     );
@@ -260,6 +289,8 @@ export function normalizeWikidataResults(payload) {
       continue;
     const name = clean(value('itemLabel'));
     const date = /^(-?\d{4})-(\d{2})-(\d{2})T/.exec(value('date') || '');
+    const model = label('vehicleLabel');
+    models.set(qid, new Set(model ? [model] : []));
     byItem.set(qid, {
       id: `wikidata:${qid}`,
       source: 'wikidata',
@@ -275,20 +306,45 @@ export function normalizeWikidataResults(payload) {
       approximate: false,
       fatalities: int(String(value('deaths') ?? '').replace(/\.0+$/, '')),
       injuries: int(String(value('injured') ?? '').replace(/\.0+$/, '')),
+      survivors: int(String(value('survivors') ?? '').replace(/\.0+$/, '')),
       aircraft: [],
       events: [],
       investigation: null,
       report: null,
       // An unlabelled item reads back as its own Q-id; that is no name.
       name: name && name !== qid ? name : null,
-      operator: clean(value('operatorLabel'), 80),
+      operator: label('operatorLabel'),
+      flight: clean(value('flight'), 20),
+      registration: clean(value('registration'), 20),
+      origin: label('originLabel'),
+      destination: label('destinationLabel'),
       url:
         wikiUrl(value('enwiki')) ||
         wikiUrl(value('ptwiki')) ||
+        asnUrl(value('asn')) ||
         `https://www.wikidata.org/wiki/${qid}`,
     });
   }
+  for (const [qid, record] of byItem) {
+    const model = vehicleText([...models.get(qid)]);
+    if (model) record.aircraft = [{ model }];
+  }
   return [...byItem.values()];
+}
+
+/**
+ * Wikidata often names one aircraft at several levels ("Boeing 747-100" and
+ * "Boeing 747"), so the values read as one line, and a name that only starts
+ * another one is dropped.
+ * @param {string[]} models
+ * @returns {string|null}
+ */
+function vehicleText(models) {
+  const kept = models.filter(
+    (model) =>
+      !models.some((other) => other !== model && other.startsWith(model)),
+  );
+  return kept.length ? kept.join(' / ') : null;
 }
 
 /**
@@ -317,7 +373,12 @@ export function mergeAirAccidentRecords(cenipa = [], wikidata = []) {
       match.name = item.name;
       match.url = item.url;
       if (match.fatalities === null) match.fatalities = item.fatalities;
-      match.injuries = item.injuries;
+      match.injuries = match.injuries ?? item.injuries;
+      // Flight facts CENIPA does not record.
+      match.survivors = item.survivors ?? null;
+      match.flight = item.flight ?? null;
+      match.origin = item.origin ?? null;
+      match.destination = item.destination ?? null;
     } else rest.push(item);
   }
   return [...cenipa, ...rest];

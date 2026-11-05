@@ -85,11 +85,21 @@ const WIKIDATA = {
         coord: { value: 'Point(9.173888888 47.778333333)' },
         deaths: { value: '71' },
         injured: { value: '0' },
+        vehicleLabel: { value: 'Tupolev Tu-154M' },
+        originLabel: { value: 'Moscow Domodedovo Airport' },
+        destinationLabel: { value: 'Barcelona Airport' },
+        flight: { value: 'BTC 2937' },
+        asn: { value: '20020701-0' },
         enwiki: { value: 'javascript:alert(1)' },
       },
       {
         item: { value: 'http://www.wikidata.org/entity/Q163107' },
         coord: { value: 'Point(9 47)' },
+        vehicleLabel: { value: 'Boeing 757-23APF' },
+      },
+      {
+        item: { value: 'http://www.wikidata.org/entity/Q163107' },
+        vehicleLabel: { value: 'Q99999' },
       },
       {
         item: { value: 'http://www.wikidata.org/entity/Q9' },
@@ -107,7 +117,19 @@ test('Wikidata items become one record each, with only safe article links', () =
   assert.equal(uberlingen.lat, 47.778333333);
   assert.equal(uberlingen.fatalities, 71);
   assert.equal(uberlingen.injuries, 0);
-  assert.equal(uberlingen.url, 'https://www.wikidata.org/wiki/Q163107');
+  // The unsafe article link is dropped; the ASN record is the next best.
+  assert.equal(
+    uberlingen.url,
+    'https://aviation-safety.net/database/record.php?id=20020701-0',
+  );
+  // Extra rows add more aircraft names on one line; a bare Q-id is no name.
+  assert.deepEqual(uberlingen.aircraft, [
+    { model: 'Tupolev Tu-154M / Boeing 757-23APF' },
+  ]);
+  assert.equal(uberlingen.flight, 'BTC 2937');
+  assert.equal(uberlingen.origin, 'Moscow Domodedovo Airport');
+  assert.equal(uberlingen.destination, 'Barcelona Airport');
+  assert.equal(rows[0].url.startsWith('https://en.wikipedia.org/'), true);
 });
 
 test('a Wikidata item on a CENIPA accident is merged into it', () => {

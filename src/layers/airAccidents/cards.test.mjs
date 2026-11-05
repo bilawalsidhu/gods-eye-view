@@ -33,6 +33,7 @@ const RECORD = {
       phase: 'DECOLAGEM',
       operation: 'PRIVADA',
       damage: 'DESTRUÍDA',
+      year: 1981,
     },
   ],
   events: [{ label: 'PERDA DE CONTROLE EM VOO', icao: 'LOC-I' }],
@@ -62,8 +63,13 @@ test('the card carries the technical facts and the report link', () => {
   const { title, details, link } = describeAirAccident(RECORD);
   assert.equal(title, 'Accident · PR-NDN · PA-42-1000');
   const text = details.join('\n');
-  assert.match(text, /Gramado\/RS · NCAD/);
-  assert.match(text, /Aircraft: PR-NDN · Piper Aircraft PA-42-1000 \(PAY4\)/);
+  // Deaths lead the card; CENIPA's time is UTC.
+  assert.equal(details[0], 'Fatalities: 10');
+  assert.match(text, /12:15 UTC · Gramado\/RS · NCAD/);
+  assert.match(
+    text,
+    /Aircraft: PR-NDN · Piper Aircraft PA-42-1000 \(PAY4\) · built in 1981/,
+  );
   assert.match(text, /Flight phase: Decolagem/);
   assert.match(text, /Damage: Destruída/);
   assert.match(text, /Fatalities: 10/);
@@ -92,4 +98,44 @@ test('markers grow with the death toll, within bounds', () => {
   assert.equal(markerPixelSize(0), 6);
   assert.ok(markerPixelSize(10) > markerPixelSize(1));
   assert.equal(markerPixelSize(5000), 14);
+});
+
+test('a collision lists each aircraft; Wikidata adds flight, route and ASN', () => {
+  const { details, link } = describeAirAccident({
+    id: 'wikidata:Q163107',
+    source: 'wikidata',
+    kind: 'accident',
+    date: '2002-07-01',
+    time: null,
+    fatalities: 71,
+    survivors: 0,
+    aircraft: [{ model: 'Tupolev Tu-154M' }, { model: 'Boeing 757-23APF' }],
+    events: [],
+    flight: 'BTC 2937',
+    origin: 'Moscow Domodedovo Airport',
+    destination: 'Barcelona Airport',
+    registration: 'RA-85816',
+    name: 'Überlingen mid-air collision',
+    url: 'https://aviation-safety.net/database/record.php?id=20020701-0',
+  });
+  const text = details.join('\n');
+  assert.match(text, /Aircraft 1: Tupolev Tu-154M/);
+  assert.match(text, /Aircraft 2: Boeing 757-23APF/);
+  // One registration for two aircraft names neither.
+  assert.doesNotMatch(text, /RA-85816/);
+  assert.match(
+    text,
+    /Flight BTC 2937 · Route: Moscow Domodedovo Airport → Barcelona Airport/,
+  );
+  assert.match(text, /Aviation Safety Network record/);
+  assert.equal(link.startsWith('https://aviation-safety.net/'), true);
+  const single = describeAirAccident({
+    source: 'wikidata',
+    kind: 'accident',
+    aircraft: [{ model: 'Boeing 737 MAX 8' }],
+    registration: 'PK-LQP',
+    origin: 'Soekarno–Hatta International Airport',
+  }).details.join('\n');
+  assert.match(single, /Aircraft: PK-LQP · Boeing 737 MAX 8/);
+  assert.match(single, /Route: departed from Soekarno–Hatta/);
 });
