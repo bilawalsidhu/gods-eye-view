@@ -938,6 +938,80 @@ test('a motion follows a newer fly-to that lands while its own lookup stalls', a
 // flies: the search stamps a deferred navigation without stopping the flight.
 // Run where the flight landed, the orbit took navigation and the search's
 // reassert failed, so the search was silently dropped.
+// Gemini runs one reply's calls one after another: by the time "pan left"
+// runs, "fly to Xyzzyville" has already found nothing, so there is no flight
+// to wait on, and the pan moved the old view with ok: true.
+test('a motion run after its reply\'s fly-to found nothing is not run', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: async () => null,
+  });
+  const reply = { turn: 1 };
+  const fly = await runner('fly_to_location', { query: 'Xyzzyville' }, { reply });
+  assert.equal(fly.ok, false);
+  const pan = await runner(
+    'move_camera',
+    { motion: 'pan', direction: 'left' },
+    { reply },
+  );
+  assert.equal(pan.ok, false);
+  assert.match(pan.error, /Not run: the fly-to in this reply found nothing/);
+  assert.equal(getActiveCameraMotion(), null);
+  // The same holds for OpenAI's reply identity.
+  const group = 'response-1';
+  await runner('fly_to_location', { query: 'Xyzzyville' }, { authorityGroup: group });
+  const tilt = await runner(
+    'move_camera',
+    { motion: 'tilt', pitchDeg: -45 },
+    { authorityGroup: group },
+  );
+  assert.equal(tilt.ok, false);
+  assert.match(tilt.error, /found nothing/);
+});
+
+test('a motion in a later reply runs after a fly-to that found nothing', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: async () => null,
+  });
+  await runner('fly_to_location', { query: 'Xyzzyville' }, { reply: { turn: 1 } });
+  const pan = await runner(
+    'move_camera',
+    { motion: 'pan', direction: 'left' },
+    { reply: { turn: 2 } },
+  );
+  assert.equal(pan.ok, true, pan.error);
+});
+
+test('a motion runs at a flight of its reply that landed after another lookup found nothing', async (t) => {
+  t.after(() => interruptCameraMotion('test-cleanup'));
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: async () => null,
+  });
+  const reply = { turn: 1 };
+  await runner('fly_to_location', { query: 'Xyzzyville' }, { reply });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' }, { reply })).ok, true);
+  flights[0].complete();
+  const pan = await runner(
+    'move_camera',
+    { motion: 'pan', direction: 'left' },
+    { reply },
+  );
+  assert.equal(pan.ok, true, pan.error);
+});
+
 test('a motion queued behind a fly-to yields to a search started during the flight', async (t) => {
   t.after(() => interruptCameraMotion('test-cleanup'));
   const { viewer, styleManager, flights, panelSearch, currentGeneration } =

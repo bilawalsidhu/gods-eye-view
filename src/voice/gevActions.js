@@ -299,6 +299,11 @@ export function createGevActionRunner({
   // Camera handoffs (navigation stamps) seen, and how many of them voice
   // fly-tos made. A search, share link or import that stamps during a flight
   // leaves it flying; the motion queued behind it then yields to that one.
+  // The voice fly-tos of the latest reply that sent one: whether any moved
+  // the camera, and whether one found nothing. A motion of that reply run
+  // after its fly-to found nothing (Gemini runs a reply's calls one by one)
+  // has no flight to wait on, and must not move the old view instead.
+  let replyFlights = null;
   let cameraHandoffs = 0;
   let voiceFlightHandoffs = 0;
   const otherHandoffs = () => cameraHandoffs - voiceFlightHandoffs;
@@ -1168,6 +1173,10 @@ export function createGevActionRunner({
       // Navigation by anything but a voice fly-to since this one began.
       flight.handoffs = otherHandoffs();
       voiceFlight = flight;
+      const reply = voiceReplyOf(runOptions);
+      if (reply !== null && replyFlights?.reply !== reply)
+        replyFlights = { reply, moved: false, foundNothing: false };
+      const replyRecord = reply !== null ? replyFlights : null;
       for (const notify of [...voiceFlightWatchers]) notify();
       // A motion already running (one the model sent before this fly-to) is
       // stopped when the flight takes navigation; the result says so.
@@ -1239,6 +1248,13 @@ export function createGevActionRunner({
           flight.settle('failed');
         else notStarted();
       }, notStarted);
+      // After the outcome above, which marks a lookup that moved nothing.
+      const noteReply = (result) => {
+        if (!replyRecord) return;
+        if (result?.ok === true) replyRecord.moved = true;
+        else if (flight.movedNothing) replyRecord.foundNothing = true;
+      };
+      flown.then(noteReply, () => noteReply(null));
       return flown.then((result) =>
         stoppedMotion && result && typeof result === 'object'
           ? { ...result, stoppedMotion }
@@ -1349,6 +1365,21 @@ export function createGevActionRunner({
       // A lookup that already found nothing does not hide the last flight
       // that moved: running now would cancel that flight mid-air.
       const pending = voiceFlightTarget(voiceFlight);
+      const reply = voiceReplyOf(runOptions);
+      if (
+        VOICE_FLIGHT_WAITING_MOTIONS.has(motion) &&
+        !(pending && !pending.done) &&
+        reply !== null &&
+        replyFlights?.reply === reply &&
+        replyFlights.foundNothing &&
+        !replyFlights.moved
+      )
+        return {
+          ok: false,
+          action: 'move_camera',
+          motion,
+          error: `Not run: the fly-to in this reply found nothing, so the ${motion} was not run at the old view.`,
+        };
       if (
         VOICE_FLIGHT_WAITING_MOTIONS.has(motion) &&
         pending &&
@@ -1724,6 +1755,7 @@ export function createGevActionRunner({
    * forget the analyst's "last answer". Area handles stay (page lifetime).
    */
   runVoiceAction.resetConversation = () => {
+    replyFlights = null;
     conversationAbort.abort();
     conversationAbort = new AbortController();
     conversation++;
@@ -3011,6 +3043,15 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
 }
 
 let voiceFlightCount = 0;
+
+/**
+ * The model reply a voice call belongs to: Gemini's turn (`reply`), or the
+ * OpenAI response its sibling calls share (`authorityGroup`). Null when the
+ * caller names none.
+ */
+function voiceReplyOf(options) {
+  return options?.reply ?? options?.authorityGroup ?? null;
+}
 
 /**
  * A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once.
