@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../../geo/index.js';
+import { setLocale } from '../../../i18n/index.js';
+import { shownEntityLabel } from '../../../voice/speech.js';
 import { createAlprNavaraRenderer } from './navara.js';
 
 function event() {
@@ -309,6 +311,16 @@ test('ALPR preserves selected metadata and releases an evicted or replaced selec
   h.load(records(1));
   assert.equal(h.state.selectedId, null);
   assert.equal(h.contexts.has('alpr:1'), false);
+});
+
+test('the camera label stays English data in a translated interface, as on Cesium', (t) => {
+  const h = harness(t);
+  setLocale('ru');
+  t.after(() => setLocale('en'));
+  h.load(records(1));
+  const { label } = h.contexts.get('alpr:0');
+  assert.equal(label, 'ALPR camera');
+  assert.equal(shownEntityLabel(label), 'Камера ALPR');
 });
 
 test('ten ALPR toggles clear contexts, picks and credits without allocating new sets', (t) => {

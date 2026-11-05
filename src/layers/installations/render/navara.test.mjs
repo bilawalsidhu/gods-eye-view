@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Mesh } from 'three';
+import { setLocale } from '../../../i18n/index.js';
+import { installationClassLabel, installationTitle } from '../classLabel.js';
 import { createInstallationsNavaraRenderer } from './navara.js';
 
 test('selected installation fill is reused and removed with its scene resources', () => {
@@ -156,4 +158,83 @@ test('selected installation fill is reused and removed with its scene resources'
   renderer.lifecycle.methods.destroy();
   assert.equal(deletedEffects, 1, 'destroy deletes the public effect handle');
   assert.equal(effectConfig.gevInstallationsDrape.owner.meshes.size, 0);
+});
+
+test('the card label reads in the UI language, as on Cesium', () => {
+  const record = {
+    id: 'osm:node:4',
+    longitude: 10,
+    latitude: 50,
+    class: 'naval_base',
+    name: 'Firing range',
+  };
+  const state = {
+    enabled: true,
+    records: [record],
+    recordById: new Map([[record.id, record]]),
+    selectedId: null,
+  };
+  const contexts = new Map();
+  const set = { setCount() {}, set() {}, commit() {}, destroy() {} };
+  const renderer = createInstallationsNavaraRenderer(
+    {
+      movers: { createSet: () => set },
+      camera: { height: () => 1_000 },
+      render: { request() {} },
+    },
+    {
+      state,
+      services: {
+        context: {
+          getSelectedEntityContext: () => null,
+          registerEntityContext: (entity, value) =>
+            contexts.set(value.id, entity),
+          selectEntityContext() {},
+          removeEntityContextsForLayer() {},
+          clearSelectedEntityContextForLayer() {},
+        },
+        picking: { registerPickOwner() {}, unregisterPickOwner() {} },
+      },
+      parts: {
+        model: {
+          colorFor: () => ({
+            red: 0.6,
+            green: 0.6,
+            blue: 0.6,
+            alpha: 1,
+            toCssColorString: () => '#9ca6b0',
+          }),
+          installationSurfaceHeightM: () => 0,
+          installationSourceLabel: () => 'OpenStreetMap',
+        },
+        namedMarkers: { sync() {}, enable() {}, hide() {}, destroy() {} },
+        viewport: { clearUnavailableRetry() {} },
+        ingestion: { setInstallationStatus() {} },
+      },
+      source: {},
+      overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+      view: {
+        canvas: { clientHeight: 800 },
+        camera: { raw: { fov: 60 } },
+        registerEffect() {},
+        addEffect: () => ({ update() {}, delete() {} }),
+      },
+      EffectDesc: class {},
+      NavaraEffect: class {},
+      DrapedMesh: Mesh,
+      setupMaterialForDrape() {},
+    },
+  );
+  try {
+    setLocale('ru');
+    renderer.lifecycle.methods.enable();
+    const label = contexts.get(record.id).gevLabelModel;
+    assert.equal(label.title, installationTitle('Firing range'));
+    assert.notEqual(label.title, 'Firing range');
+    assert.equal(label.details[0], installationClassLabel('naval_base'));
+    assert.notEqual(label.details[0], 'NAVAL BASE');
+  } finally {
+    setLocale('en');
+    renderer.lifecycle.methods.destroy();
+  }
 });

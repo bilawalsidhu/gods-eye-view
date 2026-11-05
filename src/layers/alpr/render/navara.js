@@ -1,4 +1,4 @@
-import { t } from '../../../i18n/index.js';
+import { msg } from '../../../i18n/index.js';
 import * as geo from '../../../geo/index.js';
 import { distanceScale } from '../../../globe/cpuPicks.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
@@ -341,7 +341,7 @@ export function createAlprNavaraRenderer(engine, { state, services, source }) {
       layerName: 'ALPR Cameras',
       source:
         source.attribution?.description || source.label || 'Camera source',
-      label: t('ALPR camera'),
+      label: msg('ALPR camera'),
       latitude: record.latitude,
       longitude: record.longitude,
       properties: {

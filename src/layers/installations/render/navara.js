@@ -7,6 +7,7 @@ import {
   MILITARY_LABEL_CAP,
   MILITARY_POINT_CAP,
 } from '../../../data/militaryNames.js';
+import { installationClassLabel, installationTitle } from '../classLabel.js';
 import { COLOR_BY_CLASS, LAYER_ID, MAX_RENDERED } from '../policy.js';
 import {
   createInstallationDrapedMesh,
@@ -278,11 +279,9 @@ export function createInstallationsNavaraRenderer(
     }
     context.gevContextId = record.id;
     context.gevLabelModel = {
-      title: record.name || t('MAPPED INSTALLATION'),
+      title: installationTitle(record.name) || t('MAPPED INSTALLATION'),
       details: [
-        String(record.class || 'installation')
-          .replaceAll('_', ' ')
-          .toUpperCase(),
+        installationClassLabel(record.class),
         ...(record.memberNames || []).slice(0, 3),
       ],
       accent: COLOR_BY_CLASS[record.class] || '#9ca6b0',
