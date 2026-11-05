@@ -711,7 +711,7 @@ export function createStrict({
     },
     /**
      * Switch with real input in the same document and wait until `kind`
-     * runs (the picker counterpart of qa-switch-globe.mjs).
+     * runs.
      */
     async switchTo(page, kind) {
       const origin = await page.evaluate(() => performance.timeOrigin);

@@ -5,7 +5,7 @@
 // its look. This test keeps the mesh in the transparent pass and drops every
 // fragment that lies behind the depth Navara packs after its opaque pass
 // (globe, 3D tiles, MRT and opaque meshes): an unhidden fragment is drawn
-// exactly as before. scripts/qa-edge-occlusion.mjs checks it in a browser.
+// exactly as before.
 import { RGBADepthPacking, Vector2 } from 'three';
 
 const KEY = 'gevSceneDepth';

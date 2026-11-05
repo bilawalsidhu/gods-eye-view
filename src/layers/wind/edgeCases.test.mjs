@@ -1,4 +1,4 @@
-// Edge cases from docs/migration/planet-separation/layers.md (wind): on a fixed
+// Edge cases for wind: on a fixed
 // grid direction, speed and legend agree whichever way the centre is picked,
 // and an empty field is never presented as calm.
 import test from 'node:test';

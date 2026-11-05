@@ -3,8 +3,8 @@ import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
 
 /** Answers from tiles larger than this are too coarse to latch (m).
- *  Measured on Navara (scripts/qa-surface-heights.mjs): from 800 m the
- *  answering tiles were 112-314 m and within 2 m of Cesium; from 15 km, cold,
+ *  Measured on Navara: from 800 m the answering tiles were 112-314 m and
+ *  within 2 m of Cesium; from 15 km, cold,
  *  3.5-4 km tiles were off by -16.2 to +6.2 m; while streaming a 27.9 km tile
  *  read 143.2 m at Austin where the ground is 122.5 m. A 1.8 km tile at
  *  Austin (the hidden tile under a 600 m camera looking ahead) read the

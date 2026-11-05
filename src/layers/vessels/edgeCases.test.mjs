@@ -1,4 +1,4 @@
-// Edge case for ais-live-vessels from docs/migration/planet-separation/layers.md:
+// Edge case for ais-live-vessels:
 // a vessel crosses into the next area cell while AIS is interrupted. There is
 // never a second request in flight and the card comes back by MMSI.
 import test from 'node:test';

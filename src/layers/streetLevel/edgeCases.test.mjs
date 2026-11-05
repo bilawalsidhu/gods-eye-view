@@ -1,4 +1,4 @@
-// Edge cases from docs/migration/planet-separation/layers.md (street-level):
+// Edge cases for street-level:
 // without a paid source, a late answer from a provider the user switched away
 // from is ignored and the lit provider keeps the panel.
 import assert from 'node:assert/strict';

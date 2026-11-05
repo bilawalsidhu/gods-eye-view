@@ -1,4 +1,4 @@
-// Edge cases from docs/migration/planet-separation/layers.md (s2-ghostmaps):
+// Edge cases for s2-ghostmaps:
 // change the KMZ edition and the engine before parsing finishes; only the
 // selected edition is shown, and a bad archive does not erase the working one.
 import assert from 'node:assert/strict';

@@ -1,4 +1,4 @@
-// Edge cases for military-awareness from docs/migration/planet-separation/layers.md:
+// Edge cases for military-awareness:
 // with no scene the same nearest contacts come back, and NEXT/PREV, a type
 // filter and an exhausted list lead to the same ID whatever scene is attached
 // and whatever order the feeds list equally distant contacts in.

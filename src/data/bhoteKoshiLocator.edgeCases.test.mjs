@@ -1,7 +1,6 @@
-// Edge cases from docs/migration/planet-separation/layers.md
-// (bhote-koshi-locator): a boundary that resolves late, after its request was
-// cancelled, does not change the live scene; both engines show the same area
-// and the same target.
+// Edge cases for bhote-koshi-locator: a boundary that resolves late, after its
+// request was cancelled, does not change the live scene; both engines show the
+// same area and the same target.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';

@@ -1,4 +1,4 @@
-// Edge cases for the local-adsb layer from docs/migration/planet-separation/layers.md:
+// Edge cases for the local-adsb layer:
 // a scene switch does not reopen the USB device, decoder stream or tuner
 // permission; an unplugged device ends exactly one session; and no local ID
 // reaches a public share link.

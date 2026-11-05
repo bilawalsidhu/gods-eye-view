@@ -1,4 +1,4 @@
-// Edge case for the satellites layer from docs/migration/planet-separation/layers.md:
+// Edge case for the satellites layer:
 // with the clock stopped at a known epoch, switching the scene while a
 // satellite is followed leaves the pass list and the coordinates unchanged.
 import test from 'node:test';

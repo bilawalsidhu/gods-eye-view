@@ -2,9 +2,8 @@
 // states), the /api/military snapshot (readsb rows), 12 000 AIS vessels on /api/vessels (with and without an area) and
 // the local receivers' 1090 MHz and 978 MHz UAT aircraft near JFK, timed
 // relative to one instant, so every run sees the same objects at the same
-// places. Pure: Node and browser, no I/O. Used by the W1 baseline recordings
-// (src/tooling/w1Feeds.js) and the app's QA fixture sources
-// (src/app/layers/qaSources.js).
+// places. Pure: Node and browser, no I/O. Used by the app's QA fixture
+// sources (src/app/layers/qaSources.js).
 
 import { createSyntheticFlights } from './syntheticFlights.js';
 

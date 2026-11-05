@@ -1,4 +1,4 @@
-// Edge cases from docs/migration/planet-separation/layers.md (transit): a stop,
+// Edge cases for transit: a stop,
 // a turn, a feed loss and its return keep the heading and the data age
 // continuous, and the selection stays bound to the vehicle/trip identity.
 import test from 'node:test';

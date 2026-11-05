@@ -1,4 +1,4 @@
-// Edge cases for the military layer from docs/migration/planet-separation/layers.md:
+// Edge cases for the military layer:
 // one ICAO present in both feeds yields one target with the military card, and
 // when the owning feed loses the contact the follow camera is released.
 import { test } from 'node:test';
