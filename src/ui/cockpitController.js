@@ -51,6 +51,7 @@ import {
 } from './cockpitBriefing.js';
 import {
   dropCockpitSignal,
+  dropContextSnapshotSignals,
   handleSignalClick,
   publishCockpitSignals,
   pushCockpitSignal,
@@ -82,6 +83,7 @@ export class CockpitViewController {
       isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
+      onRide = null,
       restoreTrackingFrame = null,
       publish = {},
     } = {},
@@ -121,6 +123,7 @@ export class CockpitViewController {
     this.onCameraTakeover = onCameraTakeover;
     this.onEntered = onEntered;
     this.onExited = onExited;
+    this.onRide = onRide;
     this.restoreTrackingFrame =
       typeof restoreTrackingFrame === 'function'
         ? restoreTrackingFrame
@@ -393,6 +396,9 @@ export class CockpitViewController {
   }
   dropCockpitSignal(key) {
     return dropCockpitSignal.call(this, key);
+  }
+  dropContextSnapshotSignals() {
+    return dropContextSnapshotSignals.call(this);
   }
   updateCockpitSignals(snapshot, unknownCount, partialPicture) {
     return updateCockpitSignals.call(

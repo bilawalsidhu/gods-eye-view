@@ -74,6 +74,27 @@ export function dropCockpitSignal(key) {
   this.publishCockpitSignals();
 }
 
+/** Whether a row is one a Contacts snapshot builds, with its status rows. */
+const isContextSnapshotRow = (key) =>
+  key.startsWith('flight:') ||
+  ['input-status', 'feed-status', 'context-status'].includes(key);
+
+/**
+ * Take off every row a Contacts snapshot built, as when Contacts goes off:
+ * its contacts, distances and CURRENT would otherwise read as live. Rows the
+ * session made without Contacts, such as TRACK ACQUIRED, stay.
+ */
+export function dropContextSnapshotSignals() {
+  for (const key of [...this.signalSignatures.keys()])
+    if (isContextSnapshotRow(key)) this.signalSignatures.delete(key);
+  const kept = this.signalItems.filter(
+    (item) => !isContextSnapshotRow(item.key),
+  );
+  if (kept.length === this.signalItems.length) return;
+  this.signalItems = kept;
+  this.publishCockpitSignals();
+}
+
 /**
  * Rebuild the rows from a Contacts snapshot: the nearest flights, a row for
  * unknown inputs and, first, a row naming an air feed that is off.

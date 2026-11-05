@@ -155,6 +155,7 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
   this.lastContextUpdateMs = 0;
   this.lastCameraUpdateMs = 0;
   this.contextNavigationDeadlineMs = 0;
+  this.onRide?.(info.layerId);
   this.dispatchCockpitModeChanged(true, info);
   return true;
 }
@@ -230,6 +231,7 @@ export function enter() {
       this.mapViewButton?.focus({ preventScroll: true });
   });
   this.onEntered?.();
+  this.onRide?.(info.layerId);
   this.dispatchCockpitModeChanged(true, info);
   return true;
 }

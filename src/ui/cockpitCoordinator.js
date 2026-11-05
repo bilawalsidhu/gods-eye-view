@@ -97,6 +97,7 @@ export class CockpitCoordinator {
       isUtilityDisclosureOpen: () => !!this.readUtilityDisclosureOpen?.(),
       onEntered: () => this.enterPanels(),
       onExited: () => this.exitPanels(),
+      onRide: (layerId) => this._adoptRiddenLayer(layerId),
       restoreTrackingFrame: (entity) => {
         const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(
           ':',
@@ -126,6 +127,22 @@ export class CockpitCoordinator {
   /** Whether a data layer is enabled; false for no layer. */
   _isLayerEnabled(layerId) {
     return Boolean(layerId) && !!this._dataManager?.isEnabled(layerId);
+  }
+  /**
+   * Make the ridden aircraft's layer the user's own while Contacts is on.
+   * Contacts may have turned that layer on, and it releases the layers it
+   * owns when it goes off; the Cockpit must outlive Contacts, so riding an
+   * aircraft adopts its layer as a direct selection does. Contacts then stops
+   * owning it and the Context restore keeps it (session `userAdded`).
+   * @param {string|null} layerId The ridden aircraft's layer.
+   */
+  _adoptRiddenLayer(layerId) {
+    if (!COCKPIT_AIRCRAFT_LAYER_IDS.includes(layerId)) return;
+    if (!this._isLayerEnabled('military-awareness')) return;
+    this._dataManager?.adoptLayerVisibility?.(layerId, true, {
+      origin: 'user',
+      adoptedFromSelection: true,
+    });
   }
   /** Whether either aircraft layer is on, so there is an aircraft to ride. */
   get _aircraftLayerEnabled() {

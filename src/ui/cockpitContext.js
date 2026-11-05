@@ -75,6 +75,9 @@ export function updateContext(info, heading) {
   const readout = resolveCockpitContextReadout({ snapshot, info });
   const partial = readPartialPicture.call(this);
   if (!readout.visible) {
+    // Contacts just went off: the rows its snapshot built stop being
+    // measured, so they go before the standby rows replace them.
+    if (this.presence.context) this.dropContextSnapshotSignals?.();
     this.showContextCard(false);
     this.contextLayoutStamp = null;
     this.pushCockpitSignal(

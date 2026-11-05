@@ -1,13 +1,17 @@
 // src/ui/cockpitEntryGate.test.mjs — first person needs only the layer of
 // the vehicle it rides: Contacts and the other feeds may be off before or
-// during a session, turning the ridden layer off ends it, and the voice gate
-// and state say so without claiming Contacts is required. Over happy-dom.
+// during a session, turning the ridden layer off ends it, Contacts ending
+// keeps the ridden layer it had turned on, and the voice gate and state say
+// so without claiming Contacts is required. Over happy-dom.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
+import { DataLayerManager } from '../data/manager.js';
+import { createDependencies } from '../layers/awareness/dependencies.js';
 import { CockpitCoordinator } from './cockpitCoordinator.js';
+import { ContextControls } from './contextControls.js';
 import { _handleContextLayerChange } from './contextLayerChanges.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useHudStore } from './stores/hud.js';
@@ -34,6 +38,8 @@ function fixture(
     tracked = null,
     contextMode = null,
     changing = false,
+    dataManager: suppliedManager = null,
+    readContext = null,
   } = {},
 ) {
   document.body.replaceChildren();
@@ -45,22 +51,29 @@ function fixture(
   app.mount(host);
   const store = useCockpitStore(pinia);
   const layers = new Set(enabled);
-  const dataManager = { isEnabled: (layerId) => layers.has(layerId) };
+  const dataManager = suppliedManager || {
+    isEnabled: (layerId) => layers.has(layerId),
+  };
   // A layer that is off has no tracked aircraft, as the flight layers clear
   // tracking on disable.
   const trackedFrom = (layerId) => () =>
-    tracked?.layerId === layerId && layers.has(layerId) ? tracked.info : null;
-  const entity = {
+    tracked?.layerId === layerId && dataManager.isEnabled(layerId)
+      ? tracked.info
+      : null;
+  const entityFor = (subject) => ({
     position: { getValue: () => null },
     show: true,
-    gevTrackedId: tracked ? `${tracked.layerId}:${tracked.info.icao24}` : '',
-  };
+    gevTrackedId: subject ? `${subject.layerId}:${subject.info.icao24}` : '',
+  });
+  const entities = new Set();
+  const entity = entityFor(tracked);
+  entities.add(entity);
   const listeners = () => ({ addEventListener: () => () => {} });
   const viewer = {
     trackedEntity: tracked ? entity : undefined,
     clock: { currentTime: null },
     camera: { cancelFlight() {}, frustum: { fov: 1, aspectRatio: 1 } },
-    entities: { contains: (candidate) => candidate === entity },
+    entities: { contains: (candidate) => entities.has(candidate) },
     scene: {
       preUpdate: listeners(),
       screenSpaceCameraController: { enableInputs: true },
@@ -86,7 +99,7 @@ function fixture(
         tracked ? { layerId: tracked.layerId, id: tracked.info.icao24 } : null,
     },
     readDataManager: () => dataManager,
-    readContext: () => context,
+    readContext: readContext || (() => context),
     readActiveStyle: () => 'normal',
     readUtilityDisclosureOpen: () => false,
     enterPanels() {},
@@ -125,8 +138,14 @@ function fixture(
       { type: 'visibility', layerId, enabled: false, origin: 'user' },
     );
   };
+  /** Track another aircraft, as Contacts navigation does mid-session. */
+  const retrack = (subject) => {
+    tracked = subject;
+    viewer.trackedEntity = entityFor(subject);
+    entities.add(viewer.trackedEntity);
+  };
   const $ = (selector) => document.querySelector(selector);
-  return { $, coordinator, cockpit, store, layers, disable, pinia };
+  return { $, coordinator, cockpit, store, layers, disable, retrack, pinia };
 }
 
 test('a civilian aircraft enters with Live Flights alone: no Contacts, no Military', (t) => {
@@ -231,4 +250,218 @@ test('the readout offers the same entry, labelled by kind, and enters on click',
   await nextTick();
   assert.equal(cockpit.active, true);
   assert.equal(readoutEntry.hidden, true, 'inside, there is nothing to enter');
+});
+
+const AIR_AND_SEA = [
+  'flights',
+  'military',
+  'ais-live-vessels',
+  'military-installations',
+];
+
+/** A source layer that settles at once, as the data manager drives it. */
+function sourceLayer(id) {
+  return {
+    id,
+    name: id,
+    icon: '',
+    source: 'test',
+    updateInterval: -1,
+    init() {},
+    enable() {},
+    disable() {},
+    update() {},
+    getStats: () => ({ count: 0, lastUpdate: null }),
+  };
+}
+
+/**
+ * Contacts as the manager sees it: a coordinator whose real dependency
+ * ownership (src/layers/awareness/dependencies.js) turns on the air and sea
+ * layers it finds off and releases them when it goes off.
+ */
+function contactsCoordinator() {
+  const state = {
+    dataManager: null,
+    enabled: false,
+    passive: true,
+    activationId: 0,
+    ownedDependencies: new Set(),
+    subject: null,
+    autoFocusRetryPending: false,
+  };
+  const dependencies = createDependencies({
+    state,
+    services: {},
+    parts: { subject: {}, focus: {} },
+    source: null,
+  });
+  return {
+    id: 'military-awareness',
+    name: 'Contacts',
+    icon: '',
+    source: 'test',
+    showInTogglePanel: false,
+    updateInterval: -1,
+    attachDataManager(dataManager) {
+      state.dataManager = dataManager;
+      dependencies.watchAdoptions(dataManager);
+    },
+    setParams(params = {}) {
+      if (typeof params.passive === 'boolean') state.passive = params.passive;
+    },
+    getParams: () => ({ passive: state.passive }),
+    init() {},
+    enable() {
+      state.enabled = true;
+      if (!state.passive) return dependencies.enableDependencies();
+      return true;
+    },
+    disable() {
+      state.enabled = false;
+      state.passive = true;
+      return dependencies.releaseOwnedDependencies(++state.activationId);
+    },
+    update() {},
+    getStats: () => ({ count: 0, lastUpdate: null }),
+  };
+}
+
+/**
+ * The Cockpit beside the real Context owner and data manager, so a Contacts
+ * exit runs its whole restore: the coordinator's releases, then the snapshot.
+ */
+async function liveFixture(t, { enabled = [], tracked = null } = {}) {
+  const manager = new DataLayerManager({});
+  for (const layerId of AIR_AND_SEA) manager.register(sourceLayer(layerId));
+  const coordinatorModule = contactsCoordinator();
+  manager.register(coordinatorModule);
+  coordinatorModule.attachDataManager(manager);
+  for (const layerId of enabled) await manager.setEnabled(layerId, true);
+  let cockpit = null;
+  const controls = new ContextControls({
+    elements: {},
+    installations: {},
+    actions: {
+      getCockpit: () => cockpit,
+      claimVisualAuthority() {},
+      showToast() {},
+      setClearBusy() {},
+      syncDetection() {},
+      scheduleLayout() {},
+      refreshRadio() {},
+      setPanelCollapsed() {},
+    },
+  });
+  controls.connect(manager);
+  t.after(() => {
+    controls.stop();
+    controls.disconnect();
+  });
+  const base = fixture(t, {
+    tracked,
+    dataManager: manager,
+    readContext: () => controls.getContextModeState(),
+  });
+  cockpit = base.cockpit;
+  /** Let every Context reaction the last change started settle. */
+  const settle = async () => {
+    for (let turn = 0; turn < 5; turn += 1) {
+      await controls._waitForContextLayerSettlement();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+  return { ...base, manager, controls, settle };
+}
+
+const on = (manager) =>
+  [...AIR_AND_SEA, 'military-awareness'].filter((layerId) =>
+    manager.isEnabled(layerId),
+  );
+
+test('Contacts ending in a Cockpit session keeps the ridden layer it had turned on', async (t) => {
+  for (const [label, endContacts] of [
+    [
+      'Military Flights off',
+      ({ manager }) =>
+        manager.setEnabled('military', false, { origin: 'user' }),
+    ],
+    [
+      'Contacts off by its own layer',
+      ({ manager }) =>
+        manager.setEnabled('military-awareness', false, { origin: 'user' }),
+    ],
+    [
+      'Contacts off from its chooser',
+      ({ controls }) => controls._selectContextMode(null),
+    ],
+  ]) {
+    await t.test(label, async (t) => {
+      // Live Flights is off on the map; Contacts turns it on as its own.
+      const live = await liveFixture(t, {
+        tracked: { layerId: 'flights', info: CIVIL },
+      });
+      const { manager, controls, cockpit, settle } = live;
+      assert.equal(await controls._selectContextMode('flights'), true);
+      await settle();
+      assert.deepEqual(on(manager), [...AIR_AND_SEA, 'military-awareness']);
+      assert.equal(cockpit.enter(), true);
+      await endContacts(live);
+      await settle();
+      assert.equal(controls.getContextModeState().mode, null, 'Contacts ended');
+      assert.equal(cockpit.active, true, 'the Cockpit rides on');
+      assert.deepEqual(
+        on(manager),
+        ['flights'],
+        'only the ridden layer outlives the pre-Contacts restore',
+      );
+    });
+  }
+});
+
+test('a ride handed to an aircraft on a layer Contacts turned on keeps that layer', async (t) => {
+  const live = await liveFixture(t, {
+    enabled: ['flights'],
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  const { manager, controls, cockpit, retrack, settle } = live;
+  assert.equal(await controls._selectContextMode('flights'), true);
+  await settle();
+  assert.equal(cockpit.enter(), true);
+  // NEXT hands the view to a military aircraft; Contacts turned its layer on.
+  retrack({ layerId: 'military', info: MILITARY });
+  assert.equal(cockpit._adoptTrackedEntity(performance.now()), true);
+  assert.equal(cockpit.readSubjectLayerId(), 'military');
+  await manager.setEnabled('ais-live-vessels', false, { origin: 'user' });
+  await settle();
+  assert.equal(controls.getContextModeState().mode, null);
+  assert.equal(cockpit.active, true);
+  assert.deepEqual(on(manager), ['flights', 'military']);
+});
+
+test('the ridden layer still ends the Cockpit while Contacts is on', async (t) => {
+  const live = await liveFixture(t, {
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  const { manager, controls, cockpit, settle } = live;
+  assert.equal(await controls._selectContextMode('flights'), true);
+  await settle();
+  assert.equal(cockpit.enter(), true);
+  await manager.setEnabled('flights', false, { origin: 'user' });
+  await settle();
+  assert.equal(cockpit.active, false);
+  assert.equal(manager.isEnabled('flights'), false);
+});
+
+test('without a Cockpit, ending Contacts restores the layers it found', async (t) => {
+  const live = await liveFixture(t, {
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  const { manager, controls, settle } = live;
+  assert.equal(await controls._selectContextMode('flights'), true);
+  await settle();
+  await manager.setEnabled('military', false, { origin: 'user' });
+  await settle();
+  assert.equal(controls.getContextModeState().mode, null);
+  assert.deepEqual(on(manager), [], 'Live Flights goes back off');
 });
