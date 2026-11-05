@@ -790,6 +790,7 @@
   "server/providers/transit.js",
   "server/providers/transitHistory.js",
   "server/providers/transitHistory.test.mjs",
+  "src/data/rioRouteNames.js",
   "src/data/transitFeeds.js",
   "src/data/transitFeeds.test.mjs",
   "src/data/transitProxy.js",
