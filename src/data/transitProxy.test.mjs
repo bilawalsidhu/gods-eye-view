@@ -286,8 +286,7 @@ test('the snapshot builder fills timestamps from the header it decoded', () => {
 });
 
 test('Rio speeds pass through as the m/s they are published in', () => {
-  // SMTR publishes m/s, as the spec requires: checked against how far
-  // vehicles moved between reports on 2026-11-05.
+  // Checked against vehicle movement on 2026-11-05.
   const bytes = encodeFeed({
     entities: [{ id: 'moving', lat: -22.9, lon: -43.2, speed: 10 }],
   });

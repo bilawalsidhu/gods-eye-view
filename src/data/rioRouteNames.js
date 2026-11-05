@@ -1,21 +1,11 @@
-// src/data/rioRouteNames.js
 /**
  * Rio de Janeiro route ids to the line a rider would say.
  *
- * SMTR's realtime feeds publish internal route keys: the bus feed sends
- * `O0868AAA0A` for line 868 and `O0731AAN0A` for SN731, and the BRT feed
- * sends `20000501110` for line 50. The keys look decodable but are not:
- * `O0014AAA0A` is LECD135, not 14, and nineteen of the plain-looking keys in
- * the published table break the pattern. The join is the only correct route.
- *
- * Generated verbatim (`route_id` to `route_short_name`, 494 routes) from
- * `routes.txt` in SMTR's static GTFS, https://dados.mobilidade.rio/gtfs/schedule
- * (CC BY 4.0, the same publisher and terms as the realtime feeds; file dated
- * 2026-06-10, feed valid 2024-01-01 to 2026-12-31). A 2026-11-04 snapshot of
- * both realtime feeds, 282 bus and 21 BRT routes in service, found every one
- * of its route ids here. An id missing from this table falls through
- * unchanged, so a route added later degrades to its raw key rather than
- * disappearing.
+ * SMTR's realtime feeds send internal keys (`O0731AAN0A` is SN731,
+ * `20000501110` is BRT line 50). They look decodable but are not:
+ * `O0014AAA0A` is LECD135, not 14. The table is copied from `routes.txt` in
+ * SMTR's static GTFS (https://dados.mobilidade.rio/gtfs/schedule, CC BY 4.0),
+ * valid to 2026-12-31. An id missing here renders as its raw key.
  */
 export const RIO_ROUTE_NAMES = Object.freeze({
   20000101130: '10',

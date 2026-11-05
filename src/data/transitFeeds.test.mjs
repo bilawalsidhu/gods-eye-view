@@ -506,9 +506,7 @@ test('Rio buses and BRT cover the city from Centro to Santa Cruz, and not São P
 });
 
 test('Rio route keys read as the line on the front of the bus', () => {
-  // SMTR publishes internal keys. Plain keys carry the number (`O0868AAA0A`
-  // is 868), variants carry a prefix (`O0731AAN0A` is SN731), and some plain
-  // keys are traps: `O0014AAA0A` is LECD135, so the table is joined, not parsed.
+  // Some keys look parseable and are not (`O0014AAA0A` is LECD135).
   const buses = getTransitFeed('smtr-rio-onibus');
   assert.equal(transitRouteLabel(buses, 'O0868AAA0A'), '868');
   assert.equal(transitRouteLabel(buses, 'O0731AAN0A'), 'SN731');
@@ -518,8 +516,7 @@ test('Rio route keys read as the line on the front of the bus', () => {
   const brt = getTransitFeed('smtr-rio-brt');
   assert.equal(transitRouteLabel(brt, '20000501110'), '50');
   assert.equal(transitRouteLabel(brt, '20000EXEC1110'), 'ESP01');
-  // A route added after the table was built keeps its raw key, never a blank
-  // or a name borrowed from the prototype chain.
+  // Unknown ids, prototype names included, keep their raw key.
   assert.equal(transitRouteLabel(buses, 'O9999AAA0A'), 'O9999AAA0A');
   assert.equal(transitRouteLabel(buses, 'constructor'), 'constructor');
   assert.equal(transitRouteLabel(brt, null), null);

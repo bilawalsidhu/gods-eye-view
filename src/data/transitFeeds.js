@@ -378,8 +378,8 @@ function burlingtonRouteLabel(routeId) {
 }
 
 /**
- * Rio route key to the line a rider would say, for both SMTR feeds: one
- * published `routes.txt` covers the buses and the BRT (see rioRouteNames.js).
+ * Rio route key to the line a rider would say. One SMTR `routes.txt` covers
+ * both feeds (see rioRouteNames.js).
  * @param {string|null} routeId
  * @returns {string|null}
  */
@@ -755,12 +755,12 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     license: 'CC BY 4.0',
     licenseUrl:
       'https://www.data.rio/documents/997bc16cc4344a5cb0e48ab06cbdfd1f',
-    attribution: 'SMTR / Prefeitura da Cidade do Rio de Janeiro (CC BY 4.0)',
+    attribution: 'SMTR / Prefeitura da Cidade do Rio de Janeiro — buses (SPPO)',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
         'This work is licensed under a Creative Commons Attribution 4.0 International License',
-      note: 'The data.rio catalog page labels the feed [beta] and states a gateway limit of 5 requests a second and 60 a minute behind a 10-second cache, which the 15-second proxy TTL stays inside. It is the named replacement for the JSON GPS endpoints SMTR deprecated on 2026-10-07 and says it will switch off by 2026-11-30. SMTR relays the concessionaires’ ITS data and repairs trips with its own matching; the page places accuracy with the suppliers. Speeds are m/s, as the spec requires: on 2026-11-05 they matched how far vehicles moved between reports, though a 2026-10-29 snapshot read as km/h. Route ids are internal keys (`O0731AAN0A` is line SN731) and are joined to the line names in SMTR’s published GTFS `routes.txt`, under the same CC BY 4.0 terms.',
+      note: 'The data.rio catalog page labels the feed [beta] and states a gateway limit of 5 requests a second and 60 a minute behind a 10-second cache, which the 15-second proxy TTL stays inside. SMTR relays the concessionaires’ ITS data and repairs trips with its own matching; the page places accuracy with the suppliers. Speeds are m/s, as the spec requires: checked against vehicle movement on 2026-11-05, though a 2026-10-29 snapshot read as km/h. Line names come from SMTR’s GTFS `routes.txt`, under the same CC BY 4.0 terms.',
     }),
     defaultMode: 'bus',
     routeLabel: rioRouteLabel,
@@ -777,12 +777,13 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     license: 'CC BY 4.0',
     licenseUrl:
       'https://www.data.rio/documents/8bb196cc02174d25b77437bb2f6443d4',
-    attribution: 'SMTR / Prefeitura da Cidade do Rio de Janeiro (CC BY 4.0)',
+    attribution:
+      'SMTR / Prefeitura da Cidade do Rio de Janeiro — BRT (Mobi-Rio)',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
         'This work is licensed under a Creative Commons Attribution 4.0 International License',
-      note: 'Same catalog terms, [beta] label and gateway limits as the bus feed. The fleet is operated by Mobi-Rio and tracked by SONDA, whose data SMTR relays. Speeds are m/s here too. Route ids are opaque (`20000501110` is line 50) and are joined to the same `routes.txt` as the buses.',
+      note: 'Same catalog terms, [beta] label and gateway limits as the bus feed. The fleet is operated by Mobi-Rio and tracked by SONDA, whose data SMTR relays. Speeds are m/s too. Line names come from the same `routes.txt`.',
     }),
     defaultMode: 'bus',
     routeLabel: rioRouteLabel,
