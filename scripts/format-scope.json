@@ -671,7 +671,7 @@
   "src/services/application.js",
   "src/services/requests.js",
   "src/app/scene.js",
-  "src/app/renderer.test.mjs",
+  "src/render/cesium/appRenderer.test.mjs",
   "src/render/noCesiumOutsideRender.test.mjs",
   "src/render/cesiumAllowList.json",
   "src/geo/geo.test.mjs",

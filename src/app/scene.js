@@ -1,7 +1,10 @@
 import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
 import { installTrackpadPinchZoom } from '../app/viewer.js';
-import { cesiumRenderer, cesiumViewerOf } from './renderer.js';
+import {
+  cesiumRenderer,
+  cesiumViewerOf,
+} from '../render/cesium/appRenderer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
