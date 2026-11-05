@@ -766,9 +766,12 @@ each side, and the empty Voice Preview suggests things to say until voice
 starts. Settings opened from chat keep chat's frame and show the shared AI
 provider, the quick-commands option and then the voice preferences (Voice
 Preview, inactivity timeout and model tier), so they stay in reach while
-Preview is off, with Back to chat; voice Settings show Back to voice. Escape steps back from either Settings view, closes Voice
+Preview is off, with Back to chat; voice Settings show Back to voice. Switching
+AI Provider keeps that view: Settings opened from chat stay chat's Settings,
+in chat's frame, for the new provider. Escape steps back from either Settings view, closes Voice
 Preview, and does nothing in chat. Closing chat ends a typed session, and the
-voice panel's close turns voice off. Asking the assistant from chat to open
+voice panel's close turns voice off. Opening chat or closing the voice panel
+also clears a voice error left on the dock. Asking the assistant from chat to open
 Voice Settings or Voice Preview puts chat away, minimized or not, and shows the
 voice panel; the typed conversation and its running reply carry on, and the
 chat button brings them back.
@@ -2322,6 +2325,62 @@ Scope, Bloom, Sharpen and location search have explicit accessible names.
 Generated style sliders use the same name as their visible parameter label.
 The first-run suppression checkbox keeps its native wrapping label, so its
 accessible name remains "Don't show this again". Control behavior is unchanged.
+
+## Active Fires intensity filter and color ramp
+
+Every FIRMS detection is colored by fire radiative power on a six-stop ember →
+white-hot ramp: dark ember from 0 MW, red from 5, flame from 20, orange from
+50, gold from 100 and pale white-hot from 300 MW (`FRP_RAMP` in
+`src/data/firmsIntensity.js`). Each stop is lighter than the one below and
+none is a cold hue, so the brightest marks are the strongest fires; ~90% of
+detections are under 20 MW and stay dim red. Glow sprites and fire-card
+accents read that ramp; confidence and brightness do not affect the color.
+
+At far zoom (camera above ~4,500 km) the layer drapes a Snap Map–style
+heatmap instead of individual markers: the shown detections are linearly binned
+(each detection's weight shared between the four nearest pixel centres, so spots
+sit at the true position and stay round) on a
+global 4096 × 2048 grid (≈10 km per pixel), each weighted by its FRP in megawatts (so heat is
+radiated power, and raising the FRP slider does not dim areas where strong fires
+burn, and a cluster of detections reads brighter than one), Gaussian-blurred by one
+pixel so each fire stays a distinct spot about the size of its marker,
+normalized on a log scale against the 99.5th percentile and mapped through the
+same hues, from a bright red edge through orange and gold to a pale
+white-hot core. The edge starts more than half opaque, so regions far below
+the hottest ones still read over forest and savanna imagery. Nothing is painted where
+nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
+tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
+on each data refresh or filter change (the first far-band paint at once,
+later ones 150 ms after the last change). Heatmap and markers are both kept
+built at every zoom and cross-fade by camera height between 3,600 and
+5,400 km, every frame, so a fast zoom never shows a gap: the heatmap fades by
+imagery `alpha` (a hidden Cesium imagery layer is unmapped from the globe
+tiles and re-mapped late when shown), the markers by sprite alpha, and the
+marker collection is hidden once the heatmap is whole. The 750–4,500 km
+markers band draws up to 40,000 detections (the strongest in the padded
+view), so the weak fires the heatmap shows stay on screen as markers when it
+fades out; it reads each marker's already-built anchor instead of the ground
+floor cache, which only the close band warms. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
+areas; their accent is the strongest fire's FRP color.
+Re-enabling Active Fires keeps the retained heat imagery hidden when the current
+filtered set is empty, including while a new snapshot is pending.
+
+The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale
+whose track is painted with the ramp and ticked at the same six values (its
+value reads "All" or "≥ N MW"), a "Confidence" switch with All / Nominal+ /
+High, and an "N of M shown" counter. The default is 0 MW and
+All, because many of the strongest detections are rated low confidence. The
+filter runs once in `ingestion.applyFilter()` before rendering, so markers,
+cards, the heatmap, the shared context store, the top-fires query and the
+analyst records all see one filtered set; a selected fire that no longer passes
+is deselected. The layer state keeps both options under the `w` (`local-firms`)
+share token as `f` (whole megawatts, 0–10,000) and `c` (`a`, `n`, `h`),
+including the short share codec; a link without them restores the defaults.
+
+The `get_active_fires` tool accepts its own `min_frp_mw` and `confidence`
+(`all`, `nominal`, `high`) arguments, independent of the panel's setting, and
+names the applied criteria in its notes. Stale-snapshot and missing-source
+reporting are unchanged.
 
 ## FIRMS source status
 
@@ -4588,8 +4647,9 @@ Transit is off by default, and share links use token `j`. The movement panel ord
 places Transit directly after Street Traffic and before Bike Share. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
-gate. Sixteen keyless regions are available: Boston, Austin, Minneapolis–St Paul,
-Helsinki, the Netherlands, Norway, South East Queensland, and nine in
+gate. Seventeen keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+Helsinki, the Netherlands, Norway, South East Queensland, Rio de Janeiro
+(municipal buses and the Mobi-Rio BRT, two feeds), and nine in
 Ontario — Toronto (TTC surface vehicles; the subway publishes no
 positions), MiWay, Hamilton HSR, Durham Region, YRT/Viva, Guelph,
 Burlington, Barrie and Kingston. Mode silhouettes
@@ -5117,6 +5177,7 @@ silently demoting every later lookup for the session.
 - Enabled Data Layer controls report normalized feed health on the button (`LOADING`, `DEGRADED`, `STALE`, `FALLBACK`, or `UNAVAILABLE`) while the metadata line retains the source and reason. A partial CelesTrak group failure keeps the usable catalog and reports `DEGRADED`; a total outage keeps last-good catalog data visible but reports `UNAVAILABLE`.
 - On activation it focuses the nearest currently observed aircraft across the civilian and military feeds, with military winning an exact distance tie; if none are available, it focuses an observed AIS vessel. The aircraft search is deliberately uncapped and one refresh-tick retry handles initially empty feeds. This is an attention-priority navigation shortcut, not a high-risk, affiliation, or threat classification.
 - A selected aircraft, AIS vessel, or mapped installation gets a 250 km **context window** with nearby cohort counts, nearest examples, source labels, and stale/unavailable reasons. It emits `NEARBY` or `UNKNOWN`; no detection, engagement, affiliation, or sensor-activity conclusion is calculated.
+- Contacts rows and the Cockpit Contact counts name each cohort's provider: the source of the last snapshot, marked `FALLBACK` or `STALE` as its layer row would be. A poll in flight keeps the mark, where the layer row shows `LOADING`. A flight snapshot from the adsb.lol regional fallback reads `adsb.lol · FALLBACK`, not `OpenSky`.
 - The window's edge is drawn on the globe as a 250 km range ring: a 4 px polyline with a 2 px Context-blue core inside a 1 px dark halo on each side, 2.5 km above the ellipsoid (`AWARENESS_RANGE_RING_STYLE` in `src/layers/awareness/policy.js`). The halo keeps it legible over bright desert and snow, dark ocean and forest, and under the FLIR, NVG and CRT styles, where the earlier 1 px ellipse outline disappeared. It is a polyline because WebGL draws ellipse outlines at 1 px whatever width is asked for, drawn as an unpickable primitive rather than an entity so a click or tap on its edge reaches the contact underneath (headless viewers without a primitive collection get a static entity instead); it is rebuilt when the subject moves. Three dim sonar pulses (3 px with a 1 px dark outline, same colours, at most 60% opacity) grow slowly from the subject at constant speed, one every 3 s and each taking 9 s, and arrive at the ring at about a third of that. Behind each pulse a radial gradient in the same blue fades inward over 35% of the radius. One unpickable 250 km disc draws both the pulse lines and the gradient, its shader reading the pulse radii and opacities each frame, so a click or tap near a pulse still reaches the contact underneath; the disc follows the subject by a model-matrix rotation and is rebuilt only after the subject moves 20 km, and not at all while the pulses rest. While the camera is below the disc's 2.5 km height, where it would sweep across the sky, the pulses rest: the disc is hidden and there is no ring flash, no echo and no frame request. Terrain or 3D tiles higher than 2.5 km (the Alps, Andes, Rockies) still cut through the disc and the ring when seen from above, as the ring alone already did; the height check uses the camera's height above the ellipsoid, not above the ground. While pulses run, the ring dims to 40% and flashes to full strength as each pulse reaches it, fading over 1.8 s. As a pulse front crosses a flight, military aircraft or AIS vessel, the detection overlay draws a second bracket around that contact's own bracket, in the pulse blue on the default detection style and in the style's own line colour under NVG, FLIR and CRT, which spreads outward as it fades over 1.4 s (`AWARENESS_RANGE_ECHO`, read through `src/awarenessEcho.js`; no layer's icon is restyled, and mapped installations have no detection bracket). Pulses are born 5 km out, so the subject itself and anything nearer never echo. Pulses run for 9 s (three ring flashes) after a selection or a camera move, fading in and out over 1.2 s, then rest: the ring stays on screen at full strength, the pulses, gradient and echoes are hidden, and nothing asks for frames, so a parked Contacts view is quiet again. Only a camera move within 1.5 s of the user handling the map (pointer, wheel or touch on the Cesium canvas, which covers a drag's inertia, and a drag or touch begun there keeps counting until its last finger or button lifts, even outside the canvas, unless the window loses focus or the page is hidden first; keys typed elsewhere do not count, nor does input while Cesium's camera controls are off, as in the cockpit view, and a gesture still pending when the cockpit or another owner takes the camera is dropped) wakes them; a moving subject and the app's own camera moves (a tracked aircraft, the cockpit view, an orbit, a fly-to) do not, since they move on every refresh. While they run they never hold continuous rendering: each drawn frame arms one render request 80 ms later (the Cyber sonar cadence, `CYBER_SONAR_RENDER_INTERVAL_MS`), so they repaint at about 12.5 fps and never beat the detection lane's 80 ms gate. Under `prefers-reduced-motion`, or in a scene without primitives or preRender and postRender hooks, there are no pulses or echoes and the ring stays on screen; changing the preference mid-session rebuilds the ring. The ring follows a moving subject once it has moved 250 m.
 - For a selected live aircraft or vessel, the context window refreshes from the existing tracker/feed position every 750 ms, so nearest distances and cohort counts follow the subject without introducing a duplicate poll loop.
 - Aircraft cohort membership uses every locally loaded, selectable contact inside the 250 km window, including a plane hidden only by horizon culling or because its 3D model owns the visual. Counts and navigation therefore do not change with the current camera angle or billboard/model handoff.
@@ -5160,6 +5221,10 @@ silently demoting every later lookup for the session.
   multi-sensor datasheets publish a capability range, not the lens's current zoom, so those
   cameras keep their estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it. Public
   camera state carries `fovSource`, `specFovMinDeg`, `specFovMaxDeg` and `spec` (#452).
+  The table also has Bosch MIC-7130, MIC-7502 and MIC-7522 records for the Amsterdam
+  register proposed in #251, with its `x` colour aliases (#1319). Their datasheet FOV names
+  no axis, so it neither gives a capability range nor replaces the estimate. The records
+  alone do not enable that source pack.
 - **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP. Fire-power labels share display rounding before localization: one decimal below the rounded 10 MW boundary, then whole megawatts (for example, 9.96 MW reads 10 MW).
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's
