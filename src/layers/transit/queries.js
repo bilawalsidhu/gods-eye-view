@@ -240,17 +240,20 @@ export function createQueries({ state, parts }) {
       const health = aggregateTransitFeedHealth(statuses, now);
       const count = state._vehicles.size;
       if (state._enabled && active.length === 0) {
+        // English data (the analyst's empty note to the model, and the Layers
+        // row's prompt); both show it through translateStatusMessage
+        // (ui/statusText.js).
+        const note = state._altitudeGateOpen
+          ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
+          : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
         return {
           count: 0,
           lastUpdate: state._lastUpdate,
           error: null,
           source: 'GTFS-RT',
           status: 'zoom-in',
-          // English data (the analyst's empty note to the model); the voice
-          // card shows it through NOTE_PATTERNS (voice/resultDisplay.js).
-          coverage: state._altitudeGateOpen
-            ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
-            : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`,
+          statusMessage: note,
+          coverage: note,
         };
       }
       // Age is shown by the same rule the row state uses, so the text and the

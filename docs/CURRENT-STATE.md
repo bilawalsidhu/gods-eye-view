@@ -1817,6 +1817,19 @@ Mapped-installation zoom guidance appears in the layer row without counting as
 a global loading failure. Guidance statuses do not suppress independent refresh
 errors.
 
+Transit and Bike Share report the same kind of guidance when no feed or system
+covers the view, instead of an undated `never`. Above their altitude gates the
+rows read `GTFS-RT · Fly below 3,000 km to a covered region` and
+`GBFS · Fly below 48 km to a covered city`; lower down over a city neither
+covers (London, Tokyo) they read `GTFS-RT · No feed here yet · N regions
+available` and `GBFS · No bike share here yet · N systems available`, N being
+the enabled feeds and the catalogued systems. The
+chip stays ON. A Bike Share city that is loading or failed keeps its own
+loading or error text. Leaving every covered feed or system clears the layer's
+last-update time, so the row never dates data it no longer draws. The same
+English notes are the voice analyst's empty-result notes; both surfaces show
+them translated through `translateStatusMessage` (`src/ui/statusText.js`).
+
 ## Places and CCTV request bounds
 
 With a Google key configured, nearby and text search reject missing, blank,

@@ -108,6 +108,9 @@ export function createViewport({ state, services, parts }) {
         parts.ingestion.removeFeedVehicles(feedId);
       }
     }
+    // Leaving coverage leaves nothing on the map to date: a row that read
+    // "26s ago" over an empty view would claim a feed that is no longer here.
+    if (desired.size === 0) state._lastUpdate = null;
     for (const [feedId, feed] of desired) {
       if (!state._activeFeeds.has(feedId)) {
         state._activeFeeds.set(feedId, feed);

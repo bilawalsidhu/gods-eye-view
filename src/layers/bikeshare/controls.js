@@ -1,5 +1,6 @@
 import { msg, t } from '../../i18n/index.js';
-import { STATUS_POLL_MS } from './policy.js';
+import { ACTIVATION_ENTER_ALTITUDE_M, STATUS_POLL_MS } from './policy.js';
+import { GBFS_CITY_REGISTRY } from './registry.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -57,7 +58,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Return current layer statistics for the UI status display.
-     * @returns {{ count: number, lastUpdate: number|null, loading: boolean, loadingLabel?: string, error?: string, degraded?: boolean, stale?: boolean }}
+     * @returns {{ count: number, lastUpdate: number|null, loading: boolean, loadingLabel?: string, error?: string, degraded?: boolean, stale?: boolean, status?: string, statusMessage?: string }}
      */
     getStats() {
       const stats = {
@@ -65,6 +66,23 @@ export function createControls({ state: layerState, services, parts, source }) {
         lastUpdate: layerState._lastUpdate,
         loading: layerState._loading,
       };
+      // No system in range is guidance, not an empty feed: the camera is too
+      // high, or no catalogued system is near the view. A city that failed
+      // leaves range empty too, and reports its failure below instead.
+      if (
+        layerState._enabled &&
+        !layerState._loading &&
+        layerState._activeCityIds.size === 0 &&
+        layerState._failedCityIds.size === 0
+      ) {
+        // English data (the analyst's empty note to the model, and the Layers
+        // row's prompt); both show it through translateStatusMessage
+        // (ui/statusText.js).
+        const note = layerState._altitudeGateEnabled
+          ? `No bike share here yet · ${GBFS_CITY_REGISTRY.length} systems available`
+          : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered city`;
+        return { ...stats, status: 'zoom-in', statusMessage: note };
+      }
       if (layerState._loading) {
         stats.loadingLabel =
           layerState._activeCityIds.size > 0

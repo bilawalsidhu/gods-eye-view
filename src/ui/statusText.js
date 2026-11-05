@@ -265,3 +265,66 @@ export function translateStatusLine(text) {
     .map(translateStatusPiece)
     .join(STATUS_SEPARATOR);
 }
+
+/** Thousands separators out of an English number ("3,000" → 3000). */
+const englishNumber = (text) => Number(text.replace(/,/g, ''));
+
+// Coverage notes of a layer whose view has no feed, whole lines with a number
+// in them: transit (transit/queries.js) and bikeshare (bikeshare/controls.js).
+// Their " · " is part of one sentence, so they are matched before the line is
+// split into pieces. Keep these in step with the producers.
+const COVERAGE_NOTE_PATTERNS = [
+  [
+    /^Fly below ([\d,]+) km to a covered region$/,
+    ([, km]) =>
+      t('Fly below {km} km to a covered region', {
+        km: formatNumber(englishNumber(km)),
+      }),
+  ],
+  [
+    /^No feed here yet · ([\d,]+) regions available$/,
+    ([, regions]) => {
+      const count = englishNumber(regions);
+      return tn(
+        count,
+        'No feed here yet · {n} region available',
+        'No feed here yet · {n} regions available',
+        { n: formatNumber(count) },
+      );
+    },
+  ],
+  [
+    /^Fly below ([\d,]+) km to a covered city$/,
+    ([, km]) =>
+      t('Fly below {km} km to a covered city', {
+        km: formatNumber(englishNumber(km)),
+      }),
+  ],
+  [
+    /^No bike share here yet · ([\d,]+) systems available$/,
+    ([, systems]) => {
+      const count = englishNumber(systems);
+      return tn(
+        count,
+        'No bike share here yet · {n} system available',
+        'No bike share here yet · {n} systems available',
+        { n: formatNumber(count) },
+      );
+    },
+  ],
+];
+
+/**
+ * A layer's status message in the UI language: its catalog entry, a coverage
+ * note by its shape, or a status line translated piece by piece.
+ */
+export function translateStatusMessage(text) {
+  if (typeof text !== 'string') return text;
+  const known = translateKnown(text);
+  if (known !== text) return known;
+  for (const [pattern, format] of COVERAGE_NOTE_PATTERNS) {
+    const match = pattern.exec(text);
+    if (match) return format(match);
+  }
+  return translateStatusLine(text);
+}

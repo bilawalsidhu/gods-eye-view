@@ -125,6 +125,8 @@ export function createViewport({ state: layerState, services, parts, source }) {
     // A failure belongs to a city in range; none are once everything is off.
     layerState._failedCityIds.clear();
     layerState._count = 0;
+    // Nothing is left on the map to date.
+    layerState._lastUpdate = null;
   }
 
   /**
@@ -227,6 +229,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     layerState._activeCityIds = nextActive;
     if (layerState._activeCityIds.size === 0) {
       layerState._count = 0;
+      layerState._lastUpdate = null;
       return;
     }
 
