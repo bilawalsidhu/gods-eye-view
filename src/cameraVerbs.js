@@ -1090,6 +1090,23 @@ function lookWithinFrame(cam, m, look, angle) {
   if (allowed < angle) interruptCameraMotion('globe-out-of-frame');
 }
 
+/**
+ * The in-place look a pitch change from `fromPitch` to `goalPitch` makes:
+ * 'lookUp', 'lookDown', or null when it does not move. A tilt is judged by
+ * the way its pitch moves, whatever form or direction word it came in.
+ */
+function tiltLook(fromPitch, goalPitch) {
+  if (!Number.isFinite(fromPitch) || !Number.isFinite(goalPitch)) return null;
+  if (goalPitch > fromPitch) return 'lookUp';
+  return goalPitch < fromPitch ? 'lookDown' : null;
+}
+
+/** Tilt `m` in place to `goalPitch`, as far as the frame limit allows. */
+function tiltInPlaceWithinFrame(cam, m, goalPitch) {
+  const look = tiltLook(cam.pitch, goalPitch);
+  if (look) lookWithinFrame(cam, m, look, Math.abs(goalPitch - cam.pitch));
+}
+
 /** True when the pre-check proved a half-degree `look` from `cam`'s pose. */
 function lookProven(cam, look) {
   return (
@@ -1358,7 +1375,7 @@ function onTick() {
           interruptCameraMotion('tilt-clamp');
           return;
         }
-        lookWithinFrame(cam, m, up ? 'lookUp' : 'lookDown', stepRad);
+        tiltInPlaceWithinFrame(cam, m, next);
       } else {
         lookWithinFrame(
           cam,
@@ -1662,15 +1679,20 @@ export function moveCamera(args = {}, runNavigation = null) {
       };
     }
   }
+  // A tilt is judged by the way its pitch will move (any direction other
+  // than up tilts down); a rotate turns left only when told to, as it runs.
   const look =
-    motion === 'tilt' || motion === 'rotate'
-      ? {
-          up: 'lookUp',
-          down: 'lookDown',
-          left: 'lookLeft',
-          right: 'lookRight',
-        }[direction]
-      : null;
+    motion === 'tilt'
+      ? tiltLook(
+          _viewer.camera.pitch,
+          _viewer.camera.pitch +
+            Cesium.Math.toRadians(ONCE.tiltDeg) * (direction === 'up' ? 1 : -1),
+        )
+      : motion === 'rotate'
+        ? direction === 'left'
+          ? 'lookLeft'
+          : 'lookRight'
+        : null;
   // Honest limits from orbit too: a stopped turn rests within 0.05° of its
   // limit, so one that cannot go half a degree further is refused rather than
   // run and reported as done, and one that can is then turned at least that

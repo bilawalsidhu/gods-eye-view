@@ -1426,6 +1426,26 @@ test('voice tilt from orbit stops with the planet still on screen and then says 
   assert.ok(camera.pitch > radians(-68.5) && camera.pitch < radians(-66));
 });
 
+// The frame limit judges a tilt by the way its pitch moves, not by the
+// direction word: a tilt sent as left or right turns down.
+for (const direction of ['left', 'right']) {
+  test(`a tilt ${direction} from the frame limit is judged as the look down it is`, (t) => {
+    withScope(t, false);
+    const { camera, finishOnce } = harness(t, {
+      pitch: -80,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    assert.equal(moveCamera({ motion: 'tilt', direction: 'up' }).ok, true);
+    finishOnce();
+    const atLimit = camera.pitch;
+    const result = moveCamera({ motion: 'tilt', direction });
+    assert.equal(result.ok, true, result.error);
+    finishOnce();
+    assert.ok(camera.pitch < atLimit - radians(5), 'the tilt turned down');
+  });
+}
+
 test('voice turn in place from orbit stops with the planet still on screen', (t) => {
   withScope(t, false); // the whole frame is visible
   const { camera, tick } = harness(t, { pitch: -75 });
