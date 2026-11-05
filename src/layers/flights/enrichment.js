@@ -118,15 +118,14 @@ export function createEnrichment({
       { kind: 'route', id: cs },
       (data) => {
         const meta = flightState.records.data.get(icao24);
-        // The request can complete after another poll assigns this ICAO24 a
-        // different callsign. A delayed route must never attach to that flight.
-        if (
-          !meta ||
-          String(meta.callsign || '').trim().toUpperCase() !== cs
-        )
-          return;
+        // A delayed lookup cannot attach its previous callsign's route
+        // to a new flight carried by the same ICAO24 identity.
+        const currentCallsign = String(meta?.callsign || '')
+          .trim()
+          .toUpperCase();
+        if (currentCallsign !== cs) return;
         meta.airline = data.airline || meta.airline;
-        if (data.origin && data.destination)
+        if (data.origin && data.destination) {
           meta.route = {
             origin: data.origin,
             destination: data.destination,
@@ -137,6 +136,7 @@ export function createEnrichment({
             operatingDate: null,
             verification: 'unverified-reference',
           };
+        }
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity)
           parts.tracking._updateTrackedLabelModel(icao24);
       },
