@@ -81,8 +81,8 @@ export class LayerOpacity {
     for (const listener of [...this._listeners]) {
       try {
         listener(id, next);
-      } catch (error) {
-        console.warn('[Opacity] listener error:', error);
+      } catch {
+        console.warn('[Opacity] listener error');
       }
     }
     return true;
@@ -118,8 +118,8 @@ export class LayerOpacity {
   _apply(id, fraction) {
     try {
       this._manager.layers.get(id)?.module?.setOpacity?.(fraction);
-    } catch (error) {
-      console.warn(`[Opacity] ${id} setOpacity error:`, error);
+    } catch {
+      console.warn('[Opacity] setOpacity error');
     }
     this._requestRender();
   }
@@ -142,8 +142,8 @@ export class LayerOpacity {
       const next = writeLayerOpacityToUrl(this._location.href, this._values);
       if (next !== this._location.href)
         this._history.replaceState(this._history.state, '', next);
-    } catch (error) {
-      console.warn('[Opacity] address update failed:', error?.name);
+    } catch {
+      console.warn('[Opacity] address update failed');
     }
   }
 
