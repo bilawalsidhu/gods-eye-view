@@ -295,6 +295,7 @@
     "./tools/services": "./src/tools/services.js",
     "./view": "./src/view/index.js",
     "./agent/world-packet": "./src/agent/worldPacket.js",
+    "./geo": "./src/geo/index.js",
     "./render/contract": "./src/render/contract/index.js",
     "./render/stub": "./src/render/stub/index.js",
     "./render/conformance": "./src/render/conformance/index.js"

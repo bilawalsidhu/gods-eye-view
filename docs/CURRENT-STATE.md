@@ -6008,6 +6008,12 @@ in Node, plus camera traces recorded from Cesium's own `Camera` into
 checked against `goldens/visual/` on the `/dev/conformance/` page. See
 [RENDERER-CONTRACT.md](RENDERER-CONTRACT.md).
 
+`src/geo/` (export `./geo`) is the renderer-neutral maths: WGS84, ECEF and
+geodetic conversions, surface normals and east-north-up frames, as plain
+`{x, y, z}` objects. It follows Cesium's formulas step for step, and
+`geo.test.mjs` checks it against Cesium. The stub renderer's maths is built
+on it.
+
 ## Operational Notes
 
 - **Earthquake discs are STATIC geometry.** Every quake is a `CLAMP_TO_GROUND`
