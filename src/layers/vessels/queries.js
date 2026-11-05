@@ -21,6 +21,7 @@ import {
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
 } from './policy.js';
+import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
 export function createQueries({
   vesselState,
@@ -469,7 +470,7 @@ export function createQueries({
      * @param {Object} [options={}] - Options from the detection system.
      * @param {number} [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number} [options.seed] - Seed offset for stride sampling.
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
+     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean, cardSourceId: string, cardEntryId: string}>}
      */
     getDetectableObjects(options = {}) {
       if (
@@ -504,6 +505,10 @@ export function createQueries({
           id: record.name || record.mmsi || 'VESSEL',
           type: 'SEA',
           skipLabel: record === selected,
+          // The vessel's ambient card: while the overlay paints it, detection
+          // draws no callout under it.
+          cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
+          cardEntryId: components.cards.vesselOverlayEntryId(record),
           klass: record.type
             ? String(record.type).toUpperCase().slice(0, 14)
             : undefined,

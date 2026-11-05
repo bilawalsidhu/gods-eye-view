@@ -19,9 +19,11 @@ import {
   suspendDetection,
 } from './detection.js';
 import {
+  clearOverlaySource,
   destroyWorldOverlay,
   initWorldOverlay,
   setOverlayEntries,
+  setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
 import { DETECTION_THEME_MAP } from '../overlays/worldOverlayTokens.js';
 import {
@@ -575,6 +577,66 @@ test('every style paints its OWN plate token through the production callout path
       }
     }
   } finally {
+    env.cleanup();
+  }
+});
+
+test('a callout gives way to its contact\'s own card only while that card paints', () => {
+  // A vessel's ambient card already shows its name, speed and course, and the
+  // callout drawn beneath it shows through the card's plate. The host paints
+  // only part of the published cards (shared budget, collisions, UI chrome),
+  // so a contact whose card was published but not painted keeps its callout.
+  const env = installEnvironment({ width: 900, height: 600, dpr: 1 });
+  try {
+    const ships = [
+      { x: -0.3, sourceId: 'carded', id: 'SHIP-CARDED', card: 'vessel:carded' },
+      { x: 0.3, sourceId: 'dropped', id: 'SHIP-DROPPED', card: 'vessel:dropped' },
+    ].map(({ x, sourceId, id, card }) => ({
+      position: new Cesium.Cartesian3(x, 0, 6_356_752),
+      sourceId,
+      id,
+      metric: '6 kn',
+      type: 'SEA',
+      cardSourceId: card === 'vessel:carded' ? 'vessel-cards' : 'dropped-cards',
+      cardEntryId: card,
+    }));
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => ships }], () => {});
+    const card = (id, title, x) => ({
+      id,
+      position: new Cesium.Cartesian3(x, 0, 6_356_752),
+      variant: 'label',
+      title,
+      selected: true,
+      protected: true,
+      horizonCull: false,
+      edgeFade: 'none',
+    });
+    setOverlayEntries('vessel-cards', [card('vessel:carded', 'CARD-CARDED', -0.3)]);
+    // Published, but the host does not paint it this frame.
+    setOverlayEntries('dropped-cards', [card('vessel:dropped', 'CARD-DROPPED', 0.3)]);
+    setOverlaySourceVisible('dropped-cards', false);
+    setMode('DENSE');
+    settleFrame(env);
+    env.ctx.calls.length = 0;
+    settleFrame(env);
+
+    const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+    assert.ok(painted('CARD-CARDED'), 'the fixture card reached the frame');
+    assert.ok(!painted('CARD-DROPPED'), 'the hidden source paints no card');
+    assert.ok(!painted('SHIP-CARDED'), 'no callout under the painted card');
+    assert.ok(painted('SHIP-DROPPED'), 'the contact whose card did not paint keeps its callout');
+    assert.equal(getDetectionDiagnostics().calloutRects.length, 1,
+      'only the callout that painted is reported');
+
+    // The card leaves the host: the callout comes back on the next frame.
+    clearOverlaySource('vessel-cards');
+    env.ctx.calls.length = 0;
+    settleFrame(env);
+    assert.ok(painted('SHIP-CARDED'), 'the callout returns once its card stops painting');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
     env.cleanup();
   }
 });

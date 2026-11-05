@@ -21,7 +21,10 @@ import {
   getKeyholeFadeTuning,
   keyholeLabelAlphaFromGeometry,
 } from '../celestialRing.js';
-import { registerWorldOverlayPaintLane } from '../overlays/worldOverlay.js';
+import {
+  isOverlayEntryQueued,
+  registerWorldOverlayPaintLane,
+} from '../overlays/worldOverlay.js';
 import {
   DETECTION_STYLE,
   DETECTION_THEME_MAP,
@@ -576,6 +579,7 @@ export function getDetectionDiagnostics() {
   // sprites/strokes. Nothing is copied on the production paint path.
   result.calloutRects = _calloutPool
     .slice(0, _calloutCount)
+    .filter((row) => !row.yielded)
     .map(({ x, y, w, h, alpha }) => ({ x, y, w, h, alpha }));
   return result;
 }
@@ -1077,6 +1081,9 @@ function _stashCallout(entry, acquireFade, keyhole) {
       font: FONT,
       microFont: MICRO_FONT,
       alpha: 1,
+      cardSourceId: '',
+      cardEntryId: '',
+      yielded: false,
     };
     _calloutPool[_calloutCount] = row;
   }
@@ -1103,6 +1110,9 @@ function _stashCallout(entry, acquireFade, keyhole) {
   row.font = FONT;
   row.microFont = MICRO_FONT;
   row.alpha = alpha;
+  row.cardSourceId = candidate.cardSourceId;
+  row.cardEntryId = candidate.cardEntryId;
+  row.yielded = false;
   _calloutCount++;
 }
 
@@ -1134,7 +1144,15 @@ function _paintCalloutLane(frame) {
   ctx.textBaseline = 'alphabetic';
   for (let i = 0; i < _calloutCount; i++) {
     const row = _calloutPool[i];
-    paintDetectionCallout(ctx, row, row.alpha);
+    // The contact's own card (an ambient vessel card) already names it, and
+    // this callout would show through the card's plate. Checked every frame
+    // against the cards queued for THIS frame: the host paints only part of
+    // the published cards, and a contact whose card did not paint keeps its
+    // callout.
+    row.yielded =
+      row.cardEntryId !== '' &&
+      isOverlayEntryQueued(row.cardSourceId, row.cardEntryId);
+    if (!row.yielded) paintDetectionCallout(ctx, row, row.alpha);
   }
   ctx.globalAlpha = 1;
 }
@@ -1211,6 +1229,8 @@ function _materializeCandidate(
     primary,
     micro,
     hasMicro: card.hasMicro,
+    cardSourceId: obj.cardSourceId ? String(obj.cardSourceId) : '',
+    cardEntryId: obj.cardEntryId ? String(obj.cardEntryId) : '',
   };
 }
 
