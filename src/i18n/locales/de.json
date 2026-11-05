@@ -3104,5 +3104,10 @@
   "The provider rejected the API key. Check it in Provider Settings.": "Der Anbieter hat den API-Schlüssel abgelehnt. Den Schlüssel in den Anbieter-Einstellungen prüfen.",
   "Too many chat requests. Try again in {seconds} s.": "Zu viele Chat-Anfragen. In {seconds} s erneut versuchen.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Der Anbieter hat den Zugriff für diesen Schlüssel verweigert. Projekt, Region oder Berechtigungen des Schlüssels prüfen.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "Das Anbieterkonto hat kein Guthaben mehr. Die Abrechnung prüfen oder in den Einstellungen einen anderen KI-Anbieter wählen."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "Das Anbieterkonto hat kein Guthaben mehr. Die Abrechnung prüfen oder in den Einstellungen einen anderen KI-Anbieter wählen.",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude antwortet nur im Chat; Sprachsteuerung ist für diesen Anbieter nicht verfügbar.",
+  "Claude has no voice. Open CHAT to type instead.": "Claude hat keine Sprachsteuerung. CHAT öffnen, um stattdessen zu schreiben.",
+  "Claude typed chat": "Text-Chat mit Claude",
+  "Open chat": "Chat öffnen",
+  "This provider answers in chat only": "Dieser Anbieter antwortet nur im Chat"
 }

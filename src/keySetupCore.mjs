@@ -74,6 +74,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'metered',
   }),
   Object.freeze({
+    id: 'anthropic',
+    title: 'ANTHROPIC', // i18n-ignore: provider product name
+    unlocks: msg('Claude typed chat'),
+    getUrl: 'https://console.anthropic.com/settings/keys',
+    envVars: Object.freeze(['ANTHROPIC_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
     id: 'aisstream',
     title: 'AISSTREAM', // i18n-ignore: provider product name
     unlocks: msg('Live ships, worldwide'),

@@ -733,6 +733,10 @@ provider and runs the same map actions as voice through each provider's text
 API: OpenAI uses `OPENAI_CHAT_MODEL` (default `gpt-4.1-mini`) and needs an API
 key; Gemini sends a text-only `generateContent` request with
 `GEMINI_CHAT_MODEL` (default `gemini-3.5-flash-lite`) and never starts Live.
+Claude is chat only: it sends a Messages API request with
+`ANTHROPIC_CHAT_MODEL` (default `claude-haiku-5-5`) and thinking disabled, so
+the model must accept `thinking: {type: "disabled"}`; a `stop_reason` of
+`end_turn` ends a turn.
 Only one mode runs at a time: the microphone closes chat, and opening chat
 stops voice. Enter sends, Shift+Enter adds a line, and Up or Down at the start
 of the field recall recent messages and restore the draft. Attachments are up
@@ -744,14 +748,16 @@ stay in memory for the page.
 The chat routes answer a missing key with `503` and code `API_KEY_MISSING`.
 OpenAI chat can only bill `OPENAI_API_KEY`, so while `GEV_PREFER_CODEX_OAUTH`
 pins OpenAI to ChatGPT OAuth it answers `503` with code `CODEX_OAUTH_REQUIRED`
-instead; Gemini chat is unaffected. An upstream `429` or `503` keeps its status
-and passes on a `Retry-After` given in seconds, capped at an hour; the chat
+instead; Gemini and Claude chat are unaffected. An upstream `429` or `503` keeps
+its status, and Anthropic's overload `529` is answered as `503`; each passes on
+a `Retry-After` given in seconds, capped at an hour; the chat
 names the wait, and a throttled reply carries code `RATE_LIMITED`. A refused
 key or account stops reaching the provider for a minute, unless the configured
 key changes: `API_KEY_REJECTED` for a `401` or Gemini's `400` with reason
 `API_KEY_INVALID`, `ACCESS_DENIED` for a `403`, and `QUOTA_EXCEEDED` for
-OpenAI's `429` `insufficient_quota`. Each refusal answers `502` with its code,
-and the chat shows a matching message.
+OpenAI's `429` `insufficient_quota`. The same codes apply to Claude: `401` is
+`API_KEY_REJECTED` and `403` is `ACCESS_DENIED`. Each refusal answers `502`
+with its code, and the chat shows a matching message.
 
 Chat and the voice panel sit above the dock or dock into the right rail's lane,
 which hides the rail until the panel minimizes or closes, or a rail panel opens.
@@ -915,7 +921,7 @@ Source factories have dedicated `layers/<family>/source` exports. ALPR and earth
 
 Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/progress/result, interruption, completion and turn-metrics events; stopping or replacing a session cancels pending actions. An active session's normal Stop publishes one idle transition, including adapters that emit their own terminal state; a restart triggered by that transition keeps ownership of its new startup state. Alternate adapters can use the same controls and action runner.
 
-The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
+The standalone app offers OpenAI, Gemini Live and Claude through the **AI Provider** setting, shared by voice and typed chat. Claude has no voice: with it selected, the mic button opens chat and a voice start reports an error without requesting the microphone. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
 Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 33 tools using separate description-only metadata; a session is offered 32 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
 
@@ -1832,10 +1838,12 @@ unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` ov
 those; exactly `0` disables the limiter, while a value that cannot be read as a
 number falls back to the default rather than to unlimited. Over-limit requests
 receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
-Typed chat (`/api/openai/chat`, `/api/gemini/chat`) counts in its own window,
-set by `GEV_RATELIMIT_OPENAI_CHAT_PER_MIN` and `GEV_RATELIMIT_GEMINI_CHAT_PER_MIN`.
-Left unset, each takes its provider's resolved cap — `GEV_RATELIMIT_OPENAI_PER_MIN`
-or `GEV_RATELIMIT_GEMINI_PER_MIN`, both 30 by default — so lowering a provider
+Typed chat (`/api/openai/chat`, `/api/gemini/chat`, `/api/anthropic/chat`)
+counts in its own window, set by `GEV_RATELIMIT_OPENAI_CHAT_PER_MIN`,
+`GEV_RATELIMIT_GEMINI_CHAT_PER_MIN` and `GEV_RATELIMIT_ANTHROPIC_CHAT_PER_MIN`.
+Left unset, each takes its provider's resolved cap — `GEV_RATELIMIT_OPENAI_PER_MIN`,
+`GEV_RATELIMIT_GEMINI_PER_MIN` or `GEV_RATELIMIT_ANTHROPIC_PER_MIN`, all 30 by
+default — so lowering a provider
 throttle lowers chat too; an explicit chat value, including `0`, wins. Its
 over-limit reply carries `Retry-After: 60`.
 The client key is the socket peer address only — a forwarded-for header is not

@@ -3254,5 +3254,10 @@
   "The provider rejected the API key. Check it in Provider Settings.": "Постачальник відхилив ключ API. Перевірте його в «Налаштуваннях постачальників».",
   "Too many chat requests. Try again in {seconds} s.": "Забагато запитів до чату. Спробуйте ще раз через {seconds} с.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Постачальник відмовив цьому ключу в доступі. Перевірте проєкт, регіон або дозволи ключа.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашому рахунку в постачальника закінчилися кошти. Перевірте оплату або виберіть іншого постачальника ШІ в налаштуваннях."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашому рахунку в постачальника закінчилися кошти. Перевірте оплату або виберіть іншого постачальника ШІ в налаштуваннях.",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude відповідає лише в чаті; голосовий режим для цього постачальника недоступний.",
+  "Claude has no voice. Open CHAT to type instead.": "Claude не має голосового режиму. Відкрийте ЧАТ, щоб писати текстом.",
+  "Claude typed chat": "Текстовий чат із Claude",
+  "Open chat": "Відкрити чат",
+  "This provider answers in chat only": "Цей постачальник відповідає лише в чаті"
 }

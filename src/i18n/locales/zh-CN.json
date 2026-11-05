@@ -3029,5 +3029,10 @@
   "The provider rejected the API key. Check it in Provider Settings.": "服务商拒绝了 API 密钥。请在服务商设置中检查。",
   "Too many chat requests. Try again in {seconds} s.": "聊天请求过多。请在 {seconds} 秒后重试。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "服务商拒绝了此密钥的访问请求。请检查该密钥所属的项目、区域或权限。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服务商账户余额不足。请检查账户的计费信息，或在设置中选择其他 AI 服务商。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服务商账户余额不足。请检查账户的计费信息，或在设置中选择其他 AI 服务商。",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude 仅在聊天中回复；此服务商不支持语音。",
+  "Claude has no voice. Open CHAT to type instead.": "Claude 不支持语音。请打开聊天改为输入文字。",
+  "Claude typed chat": "Claude 文字聊天",
+  "Open chat": "打开聊天",
+  "This provider answers in chat only": "此服务商仅在聊天中回复"
 }

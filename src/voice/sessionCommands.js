@@ -99,6 +99,11 @@ export function createVoiceCommands({
     ui.update('button', { label: () => t('Toggle voice control') });
     ui.update('help', { text: () => t('Activate to toggle voice') });
   }
+  // A chat-only provider's mic button opens the typed chat.
+  if (capabilities.textOnly) {
+    ui.update('button', { label: () => t('Open chat') });
+    ui.update('help', { text: () => t('This provider answers in chat only') });
+  }
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
   controls.session = session;
@@ -270,6 +275,14 @@ export function createVoiceCommands({
   };
   const buttonHandler = () => {
     if (adapter.ignoreButtonClick?.()) return;
+    // There is no voice to start: open chat, or without a chat panel start
+    // the typed session the way chat's first message does.
+    if (capabilities.textOnly) {
+      if (chat) chat.restore();
+      else if (!session.isActive())
+        void session.start({ textOnly: true, pushToTalk: true });
+      return;
+    }
     chat?.close();
     if (session.isActive() && adapter.getStartOptions?.().textOnly) {
       session.stop();
