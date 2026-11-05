@@ -5,16 +5,21 @@ import {
   registeredStreetViewLocation,
 } from './streetViewGuard.js';
 
-test('only server-registered cameras with valid coordinates qualify', () => {
-  assert.equal(registeredStreetViewLocation(null), null);
-  assert.equal(registeredStreetViewLocation({ id: 'x', lat: null, lon: 0 }), null);
-  assert.equal(registeredStreetViewLocation({ id: 'x', lat: 91, lon: 0 }), null);
-  assert.equal(registeredStreetViewLocation({ id: 'x', lat: 0, lon: 181 }), null);
-  assert.equal(
-    registeredStreetViewLocation({ id: 'x', lat: 'bad', lon: 0 }),
+test('registered cameras require valid geographic coordinates', () => {
+  for (const invalid of [
     null,
-  );
-  assert.equal(registeredStreetViewLocation({ lat: 10, lon: 20 }), null);
+    { id: 'x', lat: null, lon: 0 },
+    { id: 'x', lat: '', lon: 0 },
+    { id: 'x', lat: '  ', lon: 0 },
+    { id: 'x', lat: 0, lon: '' },
+    { id: 'x', lat: 91, lon: 0 },
+    { id: 'x', lat: 0, lon: 181 },
+    { id: 'x', lat: 'bad', lon: 0 },
+    { id: 'x', lat: Infinity, lon: 0 },
+    { lat: 10, lon: 20 },
+  ]) {
+    assert.equal(registeredStreetViewLocation(invalid), null);
+  }
   assert.deepEqual(
     registeredStreetViewLocation({
       id: 'registered',
@@ -32,7 +37,7 @@ test('only server-registered cameras with valid coordinates qualify', () => {
   );
 });
 
-test('all cameras share a bounded budget; failed requests also consume slots', () => {
+test('a shared budget counts attempts and resets at the window', () => {
   let now = 100;
   const budget = createStreetViewBudget({
     now: () => now,
