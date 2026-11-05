@@ -11,10 +11,14 @@ import {
   readResponseBytesCapped,
   readResponseJsonCapped,
 } from './common/http.js';
+import { createNtsbStore } from './airAccidentsNtsb.js';
 import { clientKey, makeRateLimiter } from './common/rate-limit.js';
 
 const MIB = 1024 * 1024;
-/** CENIPA republishes a few times a year; Wikidata changes daily at most. */
+/**
+ * CENIPA republishes a few times a year, NTSB weekly; Wikidata changes daily
+ * at most.
+ */
 const REFRESH_MS = 24 * 60 * 60 * 1000;
 /** A failed refresh keeps serving the last snapshot this long, marked stale. */
 const STALE_MAX_MS = 7 * REFRESH_MS;
@@ -30,12 +34,24 @@ const WIKIDATA_URL =
 const USER_AGENT =
   "God's Eye View air-accidents layer (https://github.com/bilawalsidhu/gods-eye-view)";
 
-/** Fixed-origin, cached CENIPA + Wikidata accident snapshot for dev and preview. */
+/** Fixed-origin, cached CENIPA + NTSB + Wikidata accident snapshot for dev and preview. */
 export function airAccidentsProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
+  createNtsb = createNtsbStore,
 } = {}) {
   let snapshot = null;
+  // Set when the NTSB store finishes its first build, so the next request
+  // rebuilds the snapshot instead of waiting for the daily refresh.
+  let dirty = false;
+  const ntsbStore = createNtsb({
+    fetchImpl,
+    now,
+    userAgent: USER_AGENT,
+    onChange: () => {
+      dirty = true;
+    },
+  });
   const inFlight = new Map();
   const allow = makeRateLimiter({ windowMs: 60_000, max: 30, globalMax: 600 });
 
@@ -79,14 +95,23 @@ export function airAccidentsProxy({
 
   /** One source failing still serves the other; both failing is an error. */
   async function load() {
-    const [cenipa, wikidata] = await Promise.allSettled([
+    const [cenipa, wikidata, us] = await Promise.allSettled([
       fetchCenipa(),
       fetchWikidata(),
+      ntsbStore.records(),
     ]);
-    if (cenipa.status === 'rejected' && wikidata.status === 'rejected')
+    const usRecords = us.status === 'fulfilled' ? us.value : null;
+    if (
+      cenipa.status === 'rejected' &&
+      wikidata.status === 'rejected' &&
+      !usRecords
+    )
       throw new Error('air_accidents_unavailable');
     const records = mergeAirAccidentRecords(
-      cenipa.status === 'fulfilled' ? cenipa.value : [],
+      [
+        ...(cenipa.status === 'fulfilled' ? cenipa.value : []),
+        ...(usRecords || []),
+      ],
       wikidata.status === 'fulfilled' ? wikidata.value : [],
     );
     return {
@@ -94,15 +119,18 @@ export function airAccidentsProxy({
       sources: {
         cenipa: cenipa.status === 'fulfilled',
         wikidata: wikidata.status === 'fulfilled',
+        // null while the first NTSB build is still running.
+        ntsb: usRecords ? true : null,
       },
       records,
     };
   }
 
   async function acquire() {
-    if (snapshot && now() - snapshot.fetchedAt < REFRESH_MS)
+    if (snapshot && !dirty && now() - snapshot.fetchedAt < REFRESH_MS)
       return { value: snapshot, stale: false };
     try {
+      dirty = false;
       const { promise } = coalesceProxyRequest(inFlight, 'snapshot', load);
       snapshot = await promise;
       return { value: snapshot, stale: false };
@@ -123,7 +151,13 @@ export function airAccidentsProxy({
         ...(status === 429 ? { 'Retry-After': '60' } : {}),
         ...(stale ? { 'X-Data-Stale': 'true' } : {}),
       });
-      res.end(JSON.stringify(value));
+      // Empty fields are left out: with tens of thousands of records, the
+      // nulls alone would add megabytes.
+      res.end(
+        JSON.stringify(value, (_key, item) =>
+          item === null ? undefined : item,
+        ),
+      );
     };
     if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' });
     const path = (req.url || '/').split('?')[0];

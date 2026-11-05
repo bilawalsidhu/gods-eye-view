@@ -328,7 +328,7 @@ export function createAirAccidentsLayer({
     id: AIR_ACCIDENTS_LAYER_ID,
     name: 'Air accidents',
     icon: '✈️',
-    source: 'CENIPA · Wikidata',
+    source: 'CENIPA · NTSB · Wikidata',
     // The proxy refreshes once a day; this only notices a new snapshot.
     updateInterval: 6 * 60 * 60 * 1000,
 
@@ -442,9 +442,9 @@ export function createAirAccidentsLayer({
         })),
         ...periodControls(),
         legend: [],
-        info: t('CENIPA (Brazil, since 2007) · Wikidata (worldwide)'),
+        info: t('CENIPA (Brazil) · NTSB (USA) · Wikidata (worldwide)'),
         infoTitle: t(
-          'Brazilian accidents and serious incidents come from CENIPA open data; notable accidents worldwide come from Wikidata. Marker size grows with fatalities. Click a marker for its card.',
+          'Brazilian accidents and serious incidents since 2007 come from CENIPA open data; US accidents and serious incidents since 2008 from the NTSB; notable accidents worldwide from Wikidata. Marker size grows with fatalities. Click a marker for its card.',
         ),
       };
     },

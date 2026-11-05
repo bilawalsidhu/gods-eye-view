@@ -13,7 +13,7 @@ export function createAirAccidentsSource({
         throw new Error(`Air accidents unavailable (HTTP ${response.status})`);
       const payload = await readResponseJsonCapped(
         response,
-        16 * 1024 * 1024,
+        48 * 1024 * 1024,
         signal,
       );
       signal?.throwIfAborted();
@@ -28,6 +28,8 @@ export function createAirAccidentsSource({
         sources: {
           cenipa: payload.sources?.cenipa !== false,
           wikidata: payload.sources?.wikidata !== false,
+          // null while the server is still building its first NTSB cache.
+          ntsb: payload.sources?.ntsb === true,
         },
       };
     },

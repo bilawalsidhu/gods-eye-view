@@ -64,6 +64,7 @@
     "egm96-universal": "^1.1.1",
     "hls.js": "^1.7.3",
     "mapillary-js": "^4.1.2",
+    "mdb-reader": "3.2.0",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
     "pinia": "^2.3.1",

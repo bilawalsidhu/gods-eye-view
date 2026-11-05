@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { airAccidentsProxy } from '../../server/providers/airAccidents.js';
 
+// The NTSB store is tested on its own; here it has no records yet.
+const NO_NTSB = () => ({ records: async () => null });
+
 const OCCURRENCE_CSV =
   'codigo_ocorrencia;codigo_ocorrencia1;codigo_ocorrencia2;ocorrencia_classificacao;ocorrencia_latitude;ocorrencia_longitude;ocorrencia_dia\r\n' +
   '1;1;1;ACIDENTE;-10.5;-50.5;01/02/2025\r\n';
@@ -64,13 +67,21 @@ function request(handler, { method = 'GET', url = '/' } = {}) {
 
 test('serves one cached snapshot from fixed upstreams', async () => {
   const { fetchImpl, calls } = fakeFetch();
-  const handler = handlerOf(airAccidentsProxy({ fetchImpl }));
+  const handler = handlerOf(
+    airAccidentsProxy({
+      createNtsb: NO_NTSB,
+      fetchImpl,
+    }),
+  );
   const first = await request(handler);
   assert.equal(first.status, 200);
   assert.equal(first.body.records.length, 1);
   assert.equal(first.body.records[0].aircraft[0].registration, 'PTABC');
   assert.equal(first.body.records[0].fatalities, 2);
-  assert.deepEqual(first.body.sources, { cenipa: true, wikidata: true });
+  assert.deepEqual(first.body.sources, {
+    cenipa: true,
+    wikidata: true,
+  });
   for (const { url } of calls)
     assert.match(
       url,
@@ -84,15 +95,20 @@ test('serves one cached snapshot from fixed upstreams', async () => {
 test('one failing source still serves the other; both failing is a 502', async () => {
   const partial = handlerOf(
     airAccidentsProxy({
+      createNtsb: NO_NTSB,
       fetchImpl: fakeFetch({ wikidataFails: true }).fetchImpl,
     }),
   );
   const ok = await request(partial);
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.body.sources, { cenipa: true, wikidata: false });
+  assert.deepEqual(ok.body.sources, {
+    cenipa: true,
+    wikidata: false,
+  });
 
   const down = handlerOf(
     airAccidentsProxy({
+      createNtsb: NO_NTSB,
       fetchImpl: fakeFetch({ wikidataFails: true, cenipaFails: true })
         .fetchImpl,
     }),
@@ -111,6 +127,7 @@ test('a failed refresh serves the last snapshot as stale', async () => {
   });
   const handler = handlerOf(
     airAccidentsProxy({
+      createNtsb: NO_NTSB,
       fetchImpl: (...args) => (fail ? bad : good)(...args),
       now: () => clock,
     }),
@@ -126,8 +143,47 @@ test('a failed refresh serves the last snapshot as stale', async () => {
 
 test('rejects other methods and routes', async () => {
   const handler = handlerOf(
-    airAccidentsProxy({ fetchImpl: fakeFetch().fetchImpl }),
+    airAccidentsProxy({
+      createNtsb: NO_NTSB,
+      fetchImpl: fakeFetch().fetchImpl,
+    }),
   );
   assert.equal((await request(handler, { method: 'POST' })).status, 405);
   assert.equal((await request(handler, { url: '/x' })).status, 404);
+});
+
+test('NTSB records join the snapshot once the store has them', async () => {
+  let ready = null;
+  let changed = () => {};
+  const handler = handlerOf(
+    airAccidentsProxy({
+      createNtsb: ({ onChange }) => {
+        changed = onChange;
+        return { records: async () => ready };
+      },
+      fetchImpl: fakeFetch().fetchImpl,
+    }),
+  );
+  const before = await request(handler);
+  assert.equal(before.body.sources.ntsb, undefined);
+  ready = [
+    {
+      id: 'ntsb:1',
+      source: 'ntsb',
+      kind: 'accident',
+      lat: 40,
+      lon: -100,
+      date: '2025-01-01',
+    },
+  ];
+  // The daily snapshot is still fresh, so the rows wait for it...
+  assert.equal((await request(handler)).body.sources.ntsb, undefined);
+  // ...unless the store says its first build finished.
+  changed();
+  const after = await request(handler);
+  assert.equal(after.body.sources.ntsb, true);
+  assert.equal(
+    after.body.records.some((record) => record.id === 'ntsb:1'),
+    true,
+  );
 });

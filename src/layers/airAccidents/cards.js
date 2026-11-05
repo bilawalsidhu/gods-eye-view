@@ -1,5 +1,9 @@
 import { formatDate, formatNumber, msg, t } from '../../i18n/index.js';
-import { ASN_RECORD_URL, CENIPA_REPORTS_URL } from './records.js';
+import {
+  ASN_RECORD_URL,
+  CENIPA_REPORTS_URL,
+  NTSB_SEARCH_URL,
+} from './records.js';
 
 export const KIND_LABELS = Object.freeze({
   accident: msg('Accident'),
@@ -111,15 +115,43 @@ function formatDay(date) {
   );
 }
 
+/** NTSB damage codes (aircraft table `damage`). */
+const NTSB_DAMAGE = Object.freeze({
+  DEST: msg('Destroyed'),
+  SUBS: msg('Substantial'),
+  MINR: msg('Minor'),
+});
+
+/** NTSB operation rules (`far_part`), for the ones most accidents fall under. */
+const NTSB_OPERATIONS = Object.freeze({
+  '091': msg('General aviation (Part 91)'),
+  121: msg('Airline (Part 121)'),
+  135: msg('Commuter or on-demand (Part 135)'),
+  137: msg('Agricultural (Part 137)'),
+  PUBU: msg('Public use'),
+});
+
+function damageText(value, source) {
+  if (source !== 'ntsb') return sourceText(value);
+  return NTSB_DAMAGE[value] ? t(NTSB_DAMAGE[value]) : '';
+}
+
+function operationText(value, source) {
+  if (source !== 'ntsb') return sourceText(value);
+  return NTSB_OPERATIONS[value] ? t(NTSB_OPERATIONS[value]) : '';
+}
+
 /**
  * The link a click on the card opens: the Wikipedia article when there is
- * one, else CENIPA's final-report page when a report is published.
+ * one, else the agency's report page (CENIPA final reports, NTSB case
+ * search) when the record has a report or case number.
  * @param {object} record
  * @returns {string|null}
  */
 export function cardLink(record) {
   if (record?.url) return record.url;
   if (record?.source === 'cenipa' && record.report) return CENIPA_REPORTS_URL;
+  if (record?.source === 'ntsb' && record.report) return NTSB_SEARCH_URL;
   return null;
 }
 
@@ -154,8 +186,15 @@ export function describeAirAccident(record) {
   if (toll.length) details.push(toll.join(' · '));
   const where = [
     formatDay(record.date),
-    // CENIPA records the time in UTC.
-    record.time ? `${record.time} UTC` : '',
+    // CENIPA records the time in UTC; NTSB names its time zone (or none).
+    record.time
+      ? [
+          record.time,
+          record.timeZone || (record.source === 'cenipa' ? 'UTC' : ''),
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : '',
     [nameText(record.city), record.state].filter(Boolean).join('/'),
     record.aerodrome,
   ].filter(Boolean);
@@ -184,42 +223,36 @@ export function describeAirAccident(record) {
     record.registration && listed.length <= 1
       ? [{ ...listed[0], registration: record.registration }]
       : listed;
+  // Operation, phase and damage of one aircraft, in the source's words (or,
+  // for NTSB codes, translated labels).
+  const factsOf = (item) => {
+    const operation = operationText(item.operation, record.source);
+    const damage = damageText(item.damage, record.source);
+    return [
+      operation ? t('Operation: {value}', { value: operation }) : '',
+      item.phase
+        ? t('Flight phase: {value}', { value: sourceText(item.phase) })
+        : '',
+      damage ? t('Damage: {value}', { value: damage }) : '',
+    ].filter(Boolean);
+  };
   const planes = aircraft.filter(
-    (item) => aircraftText(item) || item.operation || item.phase || item.damage,
+    (item) => aircraftText(item) || factsOf(item).length,
   );
   if (planes.length === 1) {
     const [item] = planes;
     const name = aircraftText(item);
     if (name) details.push(t('Aircraft: {value}', { value: name }));
-    if (item.operation)
-      details.push(
-        t('Operation: {value}', { value: sourceText(item.operation) }),
-      );
-    if (item.phase)
-      details.push(
-        t('Flight phase: {value}', { value: sourceText(item.phase) }),
-      );
-    if (item.damage)
-      details.push(t('Damage: {value}', { value: sourceText(item.damage) }));
+    details.push(...factsOf(item));
   } else {
     // Several aircraft (a collision): one line each, with its own facts.
     planes.forEach((item, index) => {
-      const facts = [
-        aircraftText(item),
-        item.operation
-          ? t('Operation: {value}', { value: sourceText(item.operation) })
-          : '',
-        item.phase
-          ? t('Flight phase: {value}', { value: sourceText(item.phase) })
-          : '',
-        item.damage
-          ? t('Damage: {value}', { value: sourceText(item.damage) })
-          : '',
-      ].filter(Boolean);
       details.push(
         t('Aircraft {number}: {value}', {
           number: formatNumber(index + 1),
-          value: facts.join(' · '),
+          value: [aircraftText(item), ...factsOf(item)]
+            .filter(Boolean)
+            .join(' · '),
         }),
       );
     });
@@ -244,21 +277,27 @@ export function describeAirAccident(record) {
     );
   else if (record.investigation === 'active')
     details.push(t('Investigation in progress'));
+  if (record.source === 'ntsb' && record.report)
+    details.push(t('NTSB case {number}', { number: record.report }));
   if (record.approximate)
     details.push(t('Approximate position (aerodrome reference point)'));
   const link = cardLink(record);
   details.push(
     record.source === 'cenipa'
       ? t('Source: CENIPA (Brazil)')
-      : t('Source: Wikidata'),
+      : record.source === 'ntsb'
+        ? t('Source: NTSB (USA)')
+        : t('Source: Wikidata'),
   );
   if (link)
     details.push(
       link === CENIPA_REPORTS_URL
         ? t('Click the card to open CENIPA final reports ↗')
-        : link.startsWith(ASN_RECORD_URL)
-          ? t('Click the card to open the Aviation Safety Network record ↗')
-          : t('Click the card to open the article ↗'),
+        : link === NTSB_SEARCH_URL
+          ? t('Click the card to open the NTSB case search ↗')
+          : link.startsWith(ASN_RECORD_URL)
+            ? t('Click the card to open the Aviation Safety Network record ↗')
+            : t('Click the card to open the article ↗'),
     );
   return { title: titleParts.join(' · '), details, link };
 }

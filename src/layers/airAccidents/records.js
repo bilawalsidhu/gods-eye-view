@@ -207,6 +207,9 @@ export function normalizeCenipaTables({
 }
 
 /** Wikidata items that are aviation accidents (Q744913) and have a position. */
+/** NTSB's public case search (CAROL); its case pages have no stable link. */
+export const NTSB_SEARCH_URL = 'https://my.ntsb.gov/basic';
+
 /** Aviation Safety Network record page for its accident id (Wikidata P1755). */
 export const ASN_RECORD_URL =
   'https://aviation-safety.net/database/record.php?id=';
@@ -400,7 +403,7 @@ export function normalizeAirAccidentSnapshot(payload) {
       typeof record.id !== 'string' ||
       ids.has(record.id) ||
       !AIR_ACCIDENT_KINDS.includes(record.kind) ||
-      !['cenipa', 'wikidata'].includes(record.source) ||
+      !['cenipa', 'ntsb', 'wikidata'].includes(record.source) ||
       !Number.isFinite(record.lat) ||
       !Number.isFinite(record.lon) ||
       Math.abs(record.lat) > 90 ||

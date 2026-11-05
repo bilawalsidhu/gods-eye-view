@@ -7,7 +7,7 @@ import {
   nameText,
   sourceText,
 } from './cards.js';
-import { CENIPA_REPORTS_URL } from './records.js';
+import { CENIPA_REPORTS_URL, NTSB_SEARCH_URL } from './records.js';
 import { accidentMarkerImage, markerPixelSize } from './index.js';
 
 const RECORD = {
@@ -146,4 +146,43 @@ test('a collision lists each aircraft; Wikidata adds flight, route and ASN', () 
   }).details.join('\n');
   assert.match(single, /Aircraft: PK-LQP · Boeing 737 MAX 8/);
   assert.match(single, /Route: departed from Soekarno–Hatta/);
+});
+
+test('an NTSB card translates its codes and links the case search', () => {
+  const { title, details, link } = describeAirAccident({
+    id: 'ntsb:20260921203845',
+    source: 'ntsb',
+    kind: 'accident',
+    date: '2026-09-20',
+    time: '13:56',
+    timeZone: 'PDT',
+    city: 'Yosemite Valley',
+    state: 'CA',
+    fatalities: 2,
+    injuries: null,
+    aircraft: [
+      {
+        registration: 'N332N',
+        maker: 'AIRBUS',
+        model: 'AS332',
+        year: 1994,
+        operation: 'PUBU',
+        damage: 'DEST',
+      },
+    ],
+    events: [],
+    report: 'WPR26FA346',
+    origin: 'Oakhurst',
+    url: null,
+  });
+  assert.equal(title, 'Accident · N332N · AS332');
+  const text = details.join('\n');
+  assert.match(text, /13:56 PDT · Yosemite Valley\/CA/);
+  assert.match(text, /Aircraft: N332N · Airbus AS332 · built in 1994/);
+  assert.match(text, /Operation: Public use/);
+  assert.match(text, /Damage: Destroyed/);
+  assert.match(text, /NTSB case WPR26FA346/);
+  assert.match(text, /Source: NTSB \(USA\)/);
+  assert.match(text, /NTSB case search/);
+  assert.equal(link, NTSB_SEARCH_URL);
 });

@@ -498,6 +498,7 @@ export const DATA_CREDITS = [
       'Air accidents (Brazil): ' +
       '<a href="https://dados.gov.br/dados/conjuntos-dados/ocorrencias-aeronauticas-da-aviacao-civil-brasileira" target="_blank" rel="noopener">CENIPA – Ocorrências Aeronáuticas</a>, ' +
       'licensed under the <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>' +
+      ' · Air accidents (USA): <a href="https://data.ntsb.gov/avdata" target="_blank" rel="noopener">NTSB aviation accident database</a> (US public domain)' +
       ' · Air accidents (worldwide): <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)',
   },
   {
