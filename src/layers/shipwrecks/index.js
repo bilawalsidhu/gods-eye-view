@@ -411,7 +411,8 @@ export function createShipwrecksLayer({
         ...periodControls(),
         // The colours are a legend: when the ship sank.
         legend: SHIPWRECK_ERAS.map((era) => ({
-          text: t(ERA_LABELS[era]),
+          label: t(ERA_LABELS[era]),
+          count: countOf(era),
           color: ERA_COLORS[era],
           blurb: tn(countOf(era), '{count} wreck', '{count} wrecks', {
             count: formatNumber(countOf(era)),
