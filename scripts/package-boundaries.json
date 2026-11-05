@@ -2359,6 +2359,7 @@
       "src/geo/vector.js",
       "src/geo/ellipsoid.js",
       "src/geo/frames.js",
+      "src/geo/celestial.js",
       "src/layers/flights/icons.js",
       "src/data/aircraftIconLayer.js",
       "src/data/aircraftModelLayer.js",
@@ -5120,6 +5121,7 @@
       "src/geo/vector.js",
       "src/geo/ellipsoid.js",
       "src/geo/frames.js",
+      "src/geo/celestial.js",
       "src/agent/worldPacket.js",
       "src/data/layerSnapshot.js",
       "src/data/feedState.js",
@@ -5141,7 +5143,8 @@
       "src/geo/index.js",
       "src/geo/vector.js",
       "src/geo/ellipsoid.js",
-      "src/geo/frames.js"
+      "src/geo/frames.js",
+      "src/geo/celestial.js"
     ],
     "external": []
   },
@@ -5162,6 +5165,7 @@
       "src/geo/vector.js",
       "src/geo/ellipsoid.js",
       "src/geo/frames.js",
+      "src/geo/celestial.js",
       "src/render/stub/motion.js",
       "src/render/stub/camera.js",
       "src/render/stub/geodesic.js",
