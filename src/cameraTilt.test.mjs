@@ -460,10 +460,10 @@ test('from globe range a tilt happens in place', (t) => {
   assert.ok(Cesium.Cartesian3.distance(h.camera.positionWC, before) < 1e-3);
 });
 
-for (const height of [100_000, 400_000, 900_000])
+for (const height of [100_000, 400_000])
   test(`from ${height / 1000} km a tilt to -5° ends with the camera at -5°`, (t) => {
-    // The pivot pitch is shallower than the camera's by up to 8° at this
-    // range; the camera reached only -5.9° to -12.9° when the swing stopped
+    // The pivot pitch is shallower than the camera's by up to 4° at this
+    // range; the camera reached only -5.9° and -8.6° when the swing stopped
     // at a pivot pitch of -5°.
     const h = harness(t, { height });
     const result = moveCamera({ motion: 'tilt', pitchDeg: 5 });
@@ -478,6 +478,61 @@ for (const height of [100_000, 400_000, 900_000])
     assert.equal(nudge.ok, false);
     assert.match(nudge.error, /upper tilt limit/);
   });
+
+// From 550 km out the camera's -5° lies beyond the place's own horizon: the
+// swing ran into its clearance, let go of the pivot and tilted the rest in
+// place, which put the crosshair on the sky (28 to 63 km up), and a return
+// to top-down then landed 600 to 900 km from the place.
+for (const height of [600_000, 700_000, 900_000]) {
+  test(`from ${height / 1000} km a tilt to -5° keeps the place centred`, (t) => {
+    const h = harness(t, { height });
+    const result = moveCamera({ motion: 'tilt', pitchDeg: 5 });
+    assert.equal(result.ok, true);
+    h.finish();
+    assert.ok(h.viewTarget(), 'the crosshair is on the sky');
+    assert.ok(centreDrift(h) < 100, `centre drifted ${centreDrift(h)} m`);
+    assert.ok(heightM(h.camera) > 149, `camera at ${heightM(h.camera)} m`);
+    // The reply names the angle the camera reached, not the one asked for.
+    assert.ok(result.pitchDeg < -5, `reported ${result.pitchDeg}°`);
+    assert.ok(
+      Math.abs(pitchDeg(h.camera) - result.pitchDeg) < 0.5,
+      `camera at ${pitchDeg(h.camera)}°, reported ${result.pitchDeg}°`,
+    );
+    assert.match(result.note, /horizon/);
+    const nudge = moveCamera({ motion: 'tilt', direction: 'up' });
+    assert.equal(nudge.ok, false);
+    assert.match(nudge.error, /upper tilt limit/);
+    assert.equal(moveCamera({ motion: 'tilt', pitchDeg: -89 }).ok, true);
+    h.finish();
+    assert.ok(centreDrift(h) < 100, `centre drifted ${centreDrift(h)} m`);
+    // Back over the place at the range it began with (-89° is ~1° off nadir).
+    const range = Cesium.Cartesian3.distance(h.camera.positionWC, h.target);
+    assert.ok(
+      Math.abs(range - height) < height * 0.01,
+      `top-down ${range} m from the place`,
+    );
+  });
+
+  test(`a continuous tilt up from ${height / 1000} km stops with the place centred`, (t) => {
+    const h = harness(t, { height });
+    moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
+    for (let i = 0; i < 1200 && getActiveCameraMotion(); i += 1) {
+      h.tick();
+      assert.ok(h.viewTarget(), `the crosshair is on the sky at frame ${i}`);
+    }
+    assert.equal(getActiveCameraMotion(), null, 'tilt must stop at its limit');
+    assert.ok(centreDrift(h) < 100, `centre drifted ${centreDrift(h)} m`);
+  });
+}
+
+test('a pitchDeg tilt toward the horizon limit says it is already there', (t) => {
+  const h = harness(t, { height: 900_000 });
+  moveCamera({ motion: 'tilt', pitchDeg: 5 });
+  h.finish();
+  const again = moveCamera({ motion: 'tilt', pitchDeg: 5 });
+  assert.equal(again.ok, false);
+  assert.match(again.error, /upper tilt limit/);
+});
 
 test('a regional tilt-up nudge goes to the camera horizon limit', (t) => {
   // 20 km up at -7°: the pivot 186 km out sits at -5.3°, but the camera can

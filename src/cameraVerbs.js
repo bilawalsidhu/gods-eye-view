@@ -62,6 +62,13 @@ const TILT_MIN_CLEARANCE_M = 150;
  * crosshair point, so the tilt happens in place instead.
  */
 const TILT_PIVOT_MAX_RANGE_M = 1_000_000;
+/**
+ * The shallowest a pivot swing goes when its clearance is not what stops it.
+ * From several hundred km the camera's own horizon limit lies past the
+ * place's horizon; tilting the rest in place there would lift the crosshair
+ * onto the sky, so the swing stops with the place this far above it.
+ */
+const TILT_MIN_PIVOT_ELEVATION = Cesium.Math.toRadians(0.5);
 
 /* ── Route dolly: cinematic tuning ──────────────────────────────────────────
  * Every knob an owner may want to retune lives in this block. The shaping is
@@ -1273,7 +1280,10 @@ function onTick() {
  * is clamped to [-89°, -5°] only in the direction of travel: a top-down view
  * sits at -90°, below the limit, and must still be able to tilt up out of it.
  * A pivot swing toward the horizon lowers the camera, so it stops at
- * TILT_MIN_CLEARANCE_M and the rest tilts in place.
+ * TILT_MIN_CLEARANCE_M and the rest tilts in place. Farther out it stops with
+ * the camera TILT_MIN_PIVOT_ELEVATION above the place's horizon instead, and
+ * keeps the place centred: tilting in place there would lift the crosshair
+ * onto the sky.
  */
 function tickTilt(cam, m, scale, dt) {
   const from = cam.pitch;
@@ -1288,11 +1298,13 @@ function tickTilt(cam, m, scale, dt) {
   const limited = up
     ? Math.min(want, Math.max(from, PITCH_MAX))
     : Math.max(want, Math.min(from, PITCH_MIN));
+  let atLimit = false;
   if (m.hpr) {
     // Apply a range a zoom set since the last frame, even when the pitch
     // then has nowhere to go (a zoom in to the clearance ends the pivot).
     cam.lookAt(m.target, m.hpr);
-    // Up toward the horizon the swing lowers the camera: hold the clearance.
+    // Up toward the horizon the swing lowers the camera: hold the clearance,
+    // and keep the place below the horizon.
     const cap = up
       ? Math.max(m.hpr.pitch, tiltPivotPitchMax(m.hpr.range))
       : Infinity;
@@ -1309,21 +1321,77 @@ function tickTilt(cam, m, scale, dt) {
     // this last step re-took it.
     if (_active !== m) clearLookAt();
     if (up && m.hpr.pitch >= cap && cam.pitch < limited - 1e-6) {
-      // Down to its clearance: let go of the pivot and tilt the rest in
-      // place, which keeps the height.
-      if (_active === m) clearLookAt();
-      m.hpr = null;
-      m.target = null;
+      if (tiltClearanceBinds(m.hpr.range)) {
+        // Down to its clearance: let go of the pivot and tilt the rest in
+        // place, which keeps the height.
+        if (_active === m) clearLookAt();
+        m.hpr = null;
+        m.target = null;
+      } else {
+        // The place is at its horizon limit: stop here, still centred.
+        atLimit = true;
+      }
     }
   }
   if (!m.hpr) cam.lookUp(limited - cam.pitch);
-  if (m.mode !== 'once' && limited !== want)
+  if (m.mode !== 'once' && (limited !== want || atLimit))
     interruptCameraMotion('tilt-clamp');
+}
+
+/** The refusal for a tilt up the camera has no room left for. */
+function tiltUpLimitRefusal() {
+  return {
+    ok: false,
+    action: 'move_camera',
+    error:
+      'Already at the upper tilt limit (near the horizon) — tilt down, or zoom/pan instead.',
+  };
 }
 
 /** Shallowest pivot pitch that keeps the clearance at this range. */
 function tiltPivotPitchMax(range) {
-  return -Math.asin(Math.min(1, TILT_MIN_CLEARANCE_M / range));
+  return Math.min(
+    -Math.asin(Math.min(1, TILT_MIN_CLEARANCE_M / range)),
+    -TILT_MIN_PIVOT_ELEVATION,
+  );
+}
+
+/**
+ * Whether the clearance, not the horizon, stops a swing at this range. Only
+ * then does the rest of the tilt happen in place: that close in (under ~17
+ * km) the camera's -5° limit stays well below its own horizon.
+ */
+function tiltClearanceBinds(range) {
+  return TILT_MIN_CLEARANCE_M / range >= Math.sin(TILT_MIN_PIVOT_ELEVATION);
+}
+
+/**
+ * The shallowest camera pitch a tilt starting from this frame can reach with
+ * the place under the crosshair still in view: PITCH_MAX, or less where a
+ * far pivot meets its horizon limit first.
+ */
+function tiltUpLimit({ target, pivot }) {
+  if (!pivot || tiltClearanceBinds(pivot.range)) return PITCH_MAX;
+  const pitch = Math.max(pivot.pitch, tiltPivotPitchMax(pivot.range));
+  // The camera's position for that pivot pitch, as lookAt places it.
+  const offset = new Cesium.Cartesian3(
+    -pivot.range * Math.cos(pitch) * Math.sin(pivot.heading),
+    -pivot.range * Math.cos(pitch) * Math.cos(pivot.heading),
+    -pivot.range * Math.sin(pitch),
+  );
+  const eye = Cesium.Matrix4.multiplyByPoint(
+    Cesium.Transforms.eastNorthUpToFixedFrame(target),
+    offset,
+    new Cesium.Cartesian3(),
+  );
+  const look = Cesium.Cartesian3.subtract(target, eye, new Cesium.Cartesian3());
+  Cesium.Cartesian3.normalize(look, look);
+  const ellipsoid = _viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
+  const upAtEye = ellipsoid.geodeticSurfaceNormal(eye, new Cesium.Cartesian3());
+  return Math.min(
+    PITCH_MAX,
+    Math.asin(Cesium.Math.clamp(Cesium.Cartesian3.dot(look, upAtEye), -1, 1)),
+  );
 }
 
 /**
@@ -1710,17 +1778,22 @@ export function moveCamera(args = {}, runNavigation = null) {
         error: `pitchDeg is an absolute angle, not a step: ${target}° from ${now}° tilts ${towards}, not ${direction}. Send direction alone for a nudge, or pitchDeg alone for an angle.`,
       };
     }
+    if (
+      towards === 'up' &&
+      from >=
+        tiltUpLimit(tiltStartFrame(_viewer.camera)) - Cesium.Math.toRadians(0.5)
+    )
+      return tiltUpLimitRefusal();
   } else if (motion === 'tilt') {
     // Honest limits: at the clamp a tilt is a no-op — say so instead of
     // reporting success and letting the model gaslight itself (field test).
     const pitch = _viewer.camera.pitch;
-    if (direction === 'up' && pitch >= PITCH_MAX - Cesium.Math.toRadians(0.5)) {
-      return {
-        ok: false,
-        action: 'move_camera',
-        error:
-          'Already at the upper tilt limit (near the horizon) — tilt down, or zoom/pan instead.',
-      };
+    if (
+      direction === 'up' &&
+      pitch >=
+        tiltUpLimit(tiltStartFrame(_viewer.camera)) - Cesium.Math.toRadians(0.5)
+    ) {
+      return tiltUpLimitRefusal();
     }
     if (
       direction === 'down' &&
@@ -1816,6 +1889,7 @@ export function moveCamera(args = {}, runNavigation = null) {
         error: 'Globe rotation requires a clear ellipsoid bounding sphere.',
       };
   }
+  let horizonLimited = null;
   const start = () => {
     interruptCameraMotion('replaced');
     const state = {
@@ -1825,27 +1899,36 @@ export function moveCamera(args = {}, runNavigation = null) {
       mode,
     };
     if (motion === 'tilt') {
-      const { target, pivot, from } = tiltStartFrame(_viewer.camera);
+      const frame = tiltStartFrame(_viewer.camera);
+      const { target, pivot, from } = frame;
       if (pivot) {
         state.target = target;
         state.hpr = pivot;
       }
       state.startPitch = from;
+      const upLimit = tiltUpLimit(frame);
       if (tiltToPitch !== null) {
+        // From far out the place reaches its horizon before the camera
+        // reaches the asked angle: stop there, and say so.
+        const goal =
+          tiltToPitch > from
+            ? Math.min(tiltToPitch, Math.max(from, upLimit))
+            : tiltToPitch;
         state.mode = 'once';
-        state.direction = tiltToPitch > from ? 'up' : 'down';
-        state.goalPitch = tiltToPitch;
+        state.direction = goal > from ? 'up' : 'down';
+        state.goalPitch = goal;
         state.durationS = Math.max(
           ONCE.durationS,
-          Math.abs(Cesium.Math.toDegrees(tiltToPitch - from)) / TILT_TO_DEG_S,
+          Math.abs(Cesium.Math.toDegrees(goal - from)) / TILT_TO_DEG_S,
         );
+        if (goal !== tiltToPitch) horizonLimited = goal;
       } else {
         // A nudge stops at the limit it travels toward.
         const step =
           Cesium.Math.toRadians(ONCE.tiltDeg) * (direction === 'up' ? 1 : -1);
         state.goalPitch =
           step > 0
-            ? Math.min(from + step, Math.max(from, PITCH_MAX))
+            ? Math.min(from + step, Math.max(from, upLimit))
             : Math.max(from + step, Math.min(from, PITCH_MIN));
       }
     }
@@ -1937,7 +2020,12 @@ export function moveCamera(args = {}, runNavigation = null) {
       speed,
       mode: state.mode,
       ...(tiltToPitch !== null && {
-        pitchDeg: Math.round(Cesium.Math.toDegrees(tiltToPitch)),
+        pitchDeg: Math.round(
+          Cesium.Math.toDegrees(horizonLimited ?? tiltToPitch),
+        ),
+      }),
+      ...(horizonLimited !== null && {
+        note: `Stopped at ${Math.round(Cesium.Math.toDegrees(horizonLimited))}°: from this range a shallower angle puts the place past the horizon. Zoom in to tilt further.`,
       }),
     };
   };
