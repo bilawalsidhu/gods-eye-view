@@ -112,7 +112,9 @@ export function installTrackpadPinchZoom(
  * Allow Cesium's free look only below `maxHeight` and return its disposer.
  * Orbit, tilt and zoom stay available at every height. A value other code
  * sets later is kept as the one to allow below that height, and restored on
- * dispose. `enableLook` gates the Shift+drag binding only: below its trackball
+ * dispose; a `false` written while the camera is above `maxHeight` cannot be
+ * told apart from this limit's own write, so dispose restores the earlier
+ * value then. `enableLook` gates the Shift+drag binding only: below its trackball
  * height Cesium also turns the camera in place for a drag that starts on the
  * stars. That height is lowered to `maxHeight` too, so above it such a drag
  * orbits the globe, as it does above Cesium's own 7,500 km.
@@ -171,7 +173,8 @@ const SETTLE_GIVE_UP_MS = 5 * 60_000;
  * looking away from the planet.
  * Heading and position are kept. Tracked cameras, locked ones (non-identity
  * transform), a camera flight in progress, the 2D and Columbus modes, and any
- * time `paused` returns true (an authored scene playing) are left alone.
+ * time `paused` returns true (an authored scene playing) are left alone; a
+ * check they defer runs again once they end, within the settle check's bound.
  * `keyholeRadius`
  * returns the radius of the visible circle when a scope mask hides the rest of
  * the frame (see `globeFrameShare`), or 0; it is read at every check.
@@ -202,16 +205,18 @@ export function installGlobeInViewRecovery(
   if (!scene || !camera?.moveEnd || !camera?.moveStart)
     throw new TypeError('A complete Cesium viewer is required');
 
+  // Returns false while a flight or a paused scene defers the check, so the
+  // caller can try again once it ends.
   const recover = () => {
-    if (!isFreeGlobeCamera(viewer)) return;
+    if (!isFreeGlobeCamera(viewer)) return true;
     // Cesium has no public running-flight flag.
-    if (camera._currentFlight || paused()) return;
+    if (camera._currentFlight || paused()) return false;
     const height = camera.positionCartographic?.height;
     if (
       !(height > minHeight) ||
       !globeOutOfFrame(camera, { keyholeRadius: keyholeRadius() })
     )
-      return;
+      return true;
     camera.setView({
       orientation: {
         heading: camera.heading,
@@ -220,6 +225,7 @@ export function installGlobeInViewRecovery(
       },
     });
     scene.requestRender?.();
+    return true;
   };
 
   const lastPosition = new Cesium.Cartesian3();
@@ -255,10 +261,8 @@ export function installGlobeInViewRecovery(
     }
     // Two quiet samples in a row after a move: at rest for half a second, as
     // for moveEnd.
-    if (restingSamples >= 2 && movedSinceCheck) {
+    if (restingSamples >= 2 && movedSinceCheck && recover())
       movedSinceCheck = false;
-      recover();
-    }
     if (settleElapsed >= SETTLE_GIVE_UP_MS) return;
     Cesium.Cartesian3.clone(camera.positionWC, lastPosition);
     Cesium.Cartesian3.clone(camera.directionWC, lastDirection);
@@ -274,8 +278,9 @@ export function installGlobeInViewRecovery(
     settleTimer = schedule(sample, SETTLE_SAMPLE_MS);
   };
   const removeMoveEnd = camera.moveEnd.addEventListener(() => {
-    stopSettling();
-    recover();
+    if (recover()) stopSettling();
+    // Deferred: keep sampling so the check runs once the flight or scene ends.
+    else if (settleTimer === null) startSettling();
   });
   const removeMoveStart = camera.moveStart.addEventListener(startSettling);
 

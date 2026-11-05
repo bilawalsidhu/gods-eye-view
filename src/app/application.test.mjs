@@ -412,11 +412,23 @@ test('drags that start on the stars orbit above the free-look height', () => {
 
   const lower = freeLookFixture({ height: 500 });
   lower.controller.minimumTrackBallHeight = 500_000;
-  installFreeLookHeightLimit(lower.viewer)();
+  const disposeLower = installFreeLookHeightLimit(lower.viewer);
   assert.equal(
     lower.controller.minimumTrackBallHeight,
     500_000,
     'never raised',
+  );
+  disposeLower();
+  assert.equal(lower.controller.minimumTrackBallHeight, 500_000);
+
+  const later = freeLookFixture({ height: 500 });
+  const disposeLater = installFreeLookHeightLimit(later.viewer);
+  later.controller.minimumTrackBallHeight = 2_000_000;
+  disposeLater();
+  assert.equal(
+    later.controller.minimumTrackBallHeight,
+    2_000_000,
+    'dispose keeps a value set after install',
   );
 });
 
@@ -737,6 +749,31 @@ test('the recovery leaves a camera flight and an authored scene alone', () => {
   camera.cancelFlight();
   camera.moveEnd.raiseEvent();
   assert.ok(Cesium.Math.equalsEpsilon(camera.pitch, -Math.PI / 2, 1e-6));
+});
+
+test('a check a scene or flight defers runs once it ends', () => {
+  for (const viaMoveEnd of [false, true]) {
+    let playing = true;
+    const timers = fakeTimers();
+    const { camera, viewer } = realCamera({ width: 1225, height: 923 });
+    installGlobeInViewRecovery(viewer, {
+      paused: () => playing,
+      ...timers,
+    });
+    aim(camera, reportedStuckView);
+    camera.moveStart.raiseEvent();
+    // A hold on a stars-only shot: quiet, with or without Cesium's moveEnd.
+    for (let i = 0; i < 4; i += 1) timers.tick();
+    if (viaMoveEnd) camera.moveEnd.raiseEvent();
+    assert.equal(globeOutOfFrame(camera), true, 'left alone while it plays');
+    assert.equal(timers.pending(), 1, 'still watching');
+    playing = false;
+    timers.tick();
+    assert.ok(
+      Cesium.Math.equalsEpsilon(camera.pitch, -Math.PI / 2, 1e-6),
+      `recovered once the scene ends (${viaMoveEnd ? 'after moveEnd' : 'no moveEnd'})`,
+    );
+  }
 });
 
 function fakeTimers() {
