@@ -25,7 +25,10 @@ export function createContextState() {
     canPrevious: true,
     canNext: true,
     cohorts: Object.fromEntries(
-      COCKPIT_CONTEXT_COHORTS.map((id) => [id, { count: '—', unknown: false }]),
+      COCKPIT_CONTEXT_COHORTS.map((id) => [
+        id,
+        { count: '—', unknown: false, source: '—' },
+      ]),
     ),
     nearest: { label: t('NO AVAILABLE EXAMPLE'), ariaLabel: null },
     distance: { text: '—', ariaLabel: null },

@@ -35,6 +35,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'recent-imagery': msg('Recent Imagery'),
   'fire-perimeters': msg('Fire Perimeters'),
   'gnss-integrity': msg('GNSS Integrity'),
+  'drone-airspace': msg('Prohibited & Restricted Airspace'),
   's2-ghostmaps': msg('S2 GhostMaps'),
   wind: msg('Wind'),
   'weather-radar': msg('Rain radar'),
@@ -139,4 +140,18 @@ export function sourceLabel(source) {
   return source.includes(' · ')
     ? source.split(' · ').map(translateKnown).join(' · ')
     : translateKnown(source);
+}
+
+/**
+ * A provider name with the feed state it answered in, so a fallback or stale
+ * snapshot does not read as the live primary feed.
+ * @param {string} source English source name.
+ * @param {'fallback'|'stale'|null} status Feed state from `layerFeedState`.
+ * @returns {string}
+ */
+export function sourceStatusLabel(source, status) {
+  const name = sourceLabel(source);
+  if (status === 'fallback') return `${name} · ${t('FALLBACK')}`;
+  if (status === 'stale') return `${name} · ${t('STALE')}`;
+  return name;
 }
