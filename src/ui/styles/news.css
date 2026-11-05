@@ -116,6 +116,10 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+/* What Local reads, in the primary colour so it reads before the list. */
+.news-readout__area {
+  color: var(--text-primary);
+}
 .news-readout__sections,
 .news-readout__chips {
   display: flex;
@@ -168,6 +172,11 @@
 .news-readout__empty {
   color: var(--text-dim);
   font: 10px var(--font-mono);
+}
+/* A missing key's next step, under what it holds back. */
+.news-readout__empty .ui-empty__hint {
+  display: block;
+  margin-top: 2px;
 }
 .news-readout__footer {
   display: flex;
@@ -305,6 +314,11 @@
 .news-card__marker.solid svg {
   fill: var(--news-color);
   stroke: none;
+}
+/* The service a report came through: credited, and kept quiet. */
+.news-card__via {
+  color: var(--text-dim);
+  font: 9px var(--font-mono);
 }
 .news-card__severity {
   flex: none;

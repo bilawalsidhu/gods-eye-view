@@ -7,12 +7,7 @@
   "{count} reports today": {
     "other": "本日の報道 {count}件"
   },
-  "Last 24 h from curated hotspots. Each report links to its publisher; places and categories are read from the text automatically and can be wrong. Side labels describe the source, not whether a report is true.": "厳選したホットスポットの直近24時間。各報道は発信元にリンクします。場所とカテゴリは本文から自動で読み取るため誤りがあり得ます。陣営ラベルは情報源を示すもので、報道の真偽ではありません。",
   "Disputed: {name}": "係争地: {name}",
-  "Administered by {holder} · claimed by {claimant}": "{holder}が施政 · {claimant}が領有を主張",
-  "Self-administered · claimed by {claimant}": "自治 · {claimant}が領有を主張",
-  "UN-patrolled zone": "国連が巡回する地域",
-  "Claimed by neither neighbour": "どちらの隣国も領有を主張していない",
   "Video": "動画",
   "Photos": "写真",
   "Claimed by {who}": "{who}の主張",
@@ -3122,5 +3117,20 @@
   "The provider rejected the API key. Check it in Provider Settings.": "プロバイダーがAPIキーを拒否しました。プロバイダー設定で確認してください。",
   "Too many chat requests. Try again in {seconds} s.": "チャットのリクエストが多すぎます。{seconds}秒後にもう一度お試しください。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "プロバイダーがこのキーでのアクセスを拒否しました。キーのプロジェクト、リージョン、権限を確認してください。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーアカウントのクレジットが不足しています。課金状況を確認するか、設定で別のAIプロバイダーを選んでください。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーアカウントのクレジットが不足しています。課金状況を確認するか、設定で別のAIプロバイダーを選んでください。",
+  "Last 24 h of news. Each report links to its publisher; places and categories are read from the text and data automatically and can be wrong. Side labels, where shown, describe the source, not whether a report is true.": "直近24時間のニュース。各報道は発信元にリンクします。場所とカテゴリは本文とデータから自動で読み取るため誤りがあり得ます。陣営ラベルは、表示される場合、情報源を示すもので、報道の真偽ではありません。",
+  "Economy": "経済",
+  "News from {area}": "{area}のニュース",
+  "Within {km} km of the view centre": "表示中心から{km} km以内",
+  "{region}, {country}": "{country}・{region}",
+  "via {source}": "{source}経由",
+  "Local in the News layer: the day’s news from the outlets of the country in view": "ニュースレイヤーのローカル：表示中の国のメディアによる今日のニュース",
+  "{provider} refused its key": "{provider}がキーを拒否しました",
+  "Check {envVars} in Provider Settings": "プロバイダー設定で{envVars}を確認してください",
+  "{provider} key required": "{provider}のキーが必要です",
+  "{provider} limit reached for today": "{provider}の本日の上限に達しました",
+  "News resumes tomorrow, or with a paid plan": "ニュースは明日、または有料プランで再開します",
+  "News key required": "ニュースのキーが必要です",
+  "Precise conflict points in the News layer, beside GDELT’s articles": "ニュースレイヤーの正確な紛争地点（GDELTの記事に加えて）",
+  "Worldwide": "世界"
 }

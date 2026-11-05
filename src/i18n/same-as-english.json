@@ -197,6 +197,7 @@
     "view band|GLOBAL",
     "{city} CCTV",
     "{county} County",
+    "{region}, {country}",
     "{source} HTTP {status}",
     "{speed} kn",
     "{type}  SPD: {speed}  HDG: {heading}",
@@ -335,6 +336,7 @@
     "{hours} h",
     "{minutes} min",
     "{rate} msg/s",
+    "{region}, {country}",
     "{speed} kn",
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
@@ -517,6 +519,7 @@
     "satellite",
     "standard",
     "station",
+    "via {source}",
     "voice|OFF",
     "{count} MSGS",
     "{count} SOURCES",
@@ -527,6 +530,7 @@
     "{n} cyclones",
     "{n} satellites",
     "{rate} msg/s",
+    "{region}, {country}",
     "{value} KM",
     "{value} KM/H",
     "{value} KM/S",
@@ -703,6 +707,7 @@
     "{hours} h",
     "{minutes} min",
     "{rate} msg/s",
+    "{region}, {country}",
     "{scene} / {pack}: {status}. File: {path}. {attribution} · {license}",
     "{source} HTTP {status}",
     "{speed} kn",
@@ -892,10 +897,12 @@
     "mini",
     "mph",
     "nominal",
+    "via {source}",
     "view band|GLOBAL",
     "{hours} h",
     "{minutes} min",
     "{rate} msg/s",
+    "{region}, {country}",
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
     "{value} KM/H",
@@ -920,7 +927,8 @@
     "S2 GhostMaps",
     "S2 · {name}",
     "VS",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "{region}, {country}"
   ],
   "uk": [
     "AIS: --",
@@ -933,7 +941,8 @@
     "NVG",
     "REC",
     "S2 GhostMaps",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "{region}, {country}"
   ],
   "zh-CN": [
     "1090 MHz",

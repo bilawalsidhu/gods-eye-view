@@ -5,12 +5,14 @@ import UiButton from '../kit/UiButton.vue';
 
 // One event in the News panel: the publisher's
 // picture when the event has one, the headline, a mono meta line (severity
-// marker, category, place, sources, age), who reported it, and its
-// attestation and media chips. A click chooses it (the layer flies there and
-// opens its card on the globe); open, it plays the post's clip when it has
-// one (on request, with sound and controls), and shows the summary, the other
-// sides' reports and the link to the original article. The layer computes every
-// value shown (feedCardView in src/layers/news/model.js).
+// marker, category, place, sources, age), who reported it, its attestation
+// and media chips, and the service it came through ("via …"), which some ask
+// to be credited wherever their reports show. A click chooses it (the layer
+// flies there and opens its card on the globe); open, it plays the post's
+// clip when it has one (on request, with sound and controls), and shows the
+// summary, the other sides' reports and the link to the original article.
+// The layer computes every value shown (feedCardView in
+// src/layers/news/model.js).
 const props = defineProps({
   item: { type: Object, required: true },
   open: { type: Boolean, default: false },
@@ -108,6 +110,7 @@ const meta = () =>
           >{{ chip.label }}</span
         ></span
       >
+      <span v-if="item.via" class="news-card__via ui-mono">{{ item.via }}</span>
     </button>
     <div v-if="open" class="news-card__open">
       <video

@@ -13,6 +13,11 @@ import {
   removeEntityContextsForLayer,
   selectEntityContext,
 } from '../../data/contextStore.js';
+import {
+  LIVEUAMAP_CREDIT,
+  NATURAL_EARTH_CREDIT,
+  registerDynamicCredit,
+} from '../../data/dataCredits.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { createHorizonCull, viewCentre } from '../streetLevel/view.js';
 import {
@@ -22,6 +27,7 @@ import {
   NEWS_FEED_PAGE,
   NEWS_FOCUS_HEIGHT_M,
   NEWS_IN_VIEW_MAX_HEIGHT_M,
+  NEWS_IN_VIEW_RADIUS_KM,
   NEWS_LOCAL_LIMIT,
   NEWS_LAYER_ID,
   NEWS_MAP_LIMIT,
@@ -32,7 +38,9 @@ import {
   NEWS_SEVERITY,
   NEWS_WINDOW_MS,
   ageWords,
+  areaLabel,
   attestation,
+  attributionLabel,
   beaconPixelSize,
   cardEvents,
   cardView,
@@ -42,6 +50,7 @@ import {
   feedQueryFor,
   hotspotLabel,
   hotspotTrend,
+  inPolygons,
   isPressing,
   markerStyle,
   mediaLabels,
@@ -68,15 +77,54 @@ export * from './model.js';
 export { createNewsSource } from './source.js';
 
 const FEED_UNAVAILABLE = msg('News feed unavailable');
+// The providers a server without a news pipeline reads each section from,
+// by the key registry's ids (keySetupCore.mjs): name and variable. A copy, so
+// the layer pulls in no registry; a test holds the two together.
+export const NEWS_KEY_PROVIDERS = Object.freeze({
+  liveuamap: { name: 'Liveuamap', envVar: 'LIVEUAMAP_API_KEY' }, // i18n-ignore: provider product name
+  worldnewsapi: { name: 'World News API', envVar: 'WORLDNEWSAPI_KEY' }, // i18n-ignore: provider product name
+});
+// A read refused for want of a key, or its day's allowance spent:
+// `{id, rejected, quota}`, else null.
+const keyNeed = (cause) =>
+  cause?.keyRequired && Object.hasOwn(NEWS_KEY_PROVIDERS, cause.keyId)
+    ? {
+        id: cause.keyId,
+        rejected: cause.keyRejected === true,
+        quota: cause.keyQuota === true,
+      }
+    : null;
+/** What the News panel says of a section's missing, refused or spent key. */
+function keyNotice(need) {
+  if (!need) return null;
+  const { name: provider, envVar: envVars } = NEWS_KEY_PROVIDERS[need.id];
+  if (need.quota)
+    return {
+      title: t('{provider} limit reached for today', { provider }),
+      hint: t('News resumes tomorrow, or with a paid plan'),
+    };
+  return need.rejected
+    ? {
+        title: t('{provider} refused its key', { provider }),
+        hint: t('Check {envVars} in Provider Settings', { envVars }),
+      }
+    : {
+        title: t('{provider} key required', { provider }),
+        hint: t('Needs {envVars} — add it in Provider Settings', { envVars }),
+      };
+}
 const REPORT_PREFIX = `${NEWS_PICK_PREFIX}report:`;
 const HOTSPOT_PREFIX = `${NEWS_PICK_PREFIX}hotspot:`;
 const DEVELOPING_PREFIX = `${NEWS_PICK_PREFIX}developing:`;
+const LOCAL_PREFIX = `${NEWS_PICK_PREFIX}local:`;
 // Outlines in GEV's own colours, apart from the severity ramp: hotspots in
 // the accent, developing places in its lighter tint, disputed areas dotted
-// in the primary text colour.
+// in the primary text colour, the Local section's area a faint line of it.
 const DEVELOPING_COLOR = '#9defff';
 const DISPUTED_COLOR = '#e8eaed';
 const HOTSPOT_COLOR = '#00d4ff';
+// Disputed areas' names are context, not news.
+const DISPUTED_LABEL_SCALE = 0.75;
 // A filtered feed page that shows almost nothing reads the next page by
 // itself, a few times, so a strict severity floor still fills the list.
 const AUTO_PAGES = 3;
@@ -88,8 +136,11 @@ const emptyFeed = () => ({
   error: null,
 });
 // Local: `active` while the camera is low enough to have a "near here";
-// `minor` holds the day's reports with minor news included, read once while
-// the Local section is chosen.
+// `minor` holds the day's reports for the area, minor news included, read
+// once per area while the Local section is chosen (and with each refresh);
+// `area` is the area named at the view centre (`{key, name, kind, country}`,
+// null at sea), `areaPolygons` its outline and `areaAt` the point it was
+// named at; `readKey` the area `minor` is of.
 const emptyInView = () => ({
   active: false,
   cell: null,
@@ -97,15 +148,20 @@ const emptyInView = () => ({
   minor: null,
   loading: false,
   error: null,
+  area: null,
+  areaPolygons: null,
+  areaAt: null,
+  areaLoading: false,
+  readKey: null,
 });
 
 /**
- * News from curated hotspots, real time only (the last 24 hours). Zoomed out:
- * one beacon per hotspot with its daily count and trend, and a breathing
- * beacon per developing situation. Close up or with a hotspot chosen:
- * outlines (disputed areas dotted) and the geocoded reports as markers, the
- * big events as picture cards. The News panel renders the feed this layer
- * publishes through getRowControls().feed.
+ * News from the hotspots a news server names, real time only (the last 24
+ * hours). Zoomed out: one beacon per hotspot with its daily count and trend,
+ * and a breathing beacon per developing situation. Close up or with a hotspot
+ * chosen: outlines (disputed areas dotted) and the geocoded reports as
+ * markers, the big events as picture cards. The News panel renders the feed
+ * this layer publishes through getRowControls().feed.
  */
 export function createNewsLayer({
   source,
@@ -116,6 +172,7 @@ export function createNewsLayer({
   hitTestOverlay = hitTestWorldOverlay,
   openUrl = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
   getViewCentre = viewCentre,
+  registerCredit = registerDynamicCredit,
 } = {}) {
   if (
     typeof source?.getHotspots !== 'function' ||
@@ -133,6 +190,7 @@ export function createNewsLayer({
     request = null,
     feedRequest = null,
     inViewRequest = null,
+    areaRequest = null,
     settleTimer = null,
     pulseTimer = null,
     removeCameraListener = null;
@@ -143,8 +201,13 @@ export function createNewsLayer({
     error = null,
     lastUpdate = null,
     lastRunAt = null,
-    autoPages = 0;
+    autoPages = 0,
+    // A server without the area route (/outline?at=) answers so once; Local
+    // then keeps to the radius until the layer is turned off.
+    noAreaRoute = false;
   let hotspots = [];
+  // Each section's missing or refused key (keyNeed), while its reads say so.
+  let needs = { conflicts: null, local: null };
   // The window the server serves (newsWindowMs): a host may serve
   // fewer hours than the day. `windowMs` is the one shown: that window, or a
   // shorter one chosen in the panel (filters.hours).
@@ -159,6 +222,19 @@ export function createNewsLayer({
   let shownDetail = null;
   let cullTargets = [];
   const contextEntities = new Map();
+  // Credits are registered once what they credit first shows; the registry
+  // keeps them for the session (as TomTom's) and has no removal.
+  const credited = new Set();
+  function credit(entry, shown) {
+    if (shown && !credited.has(entry.key) && registerCredit(viewer, entry))
+      credited.add(entry.key);
+  }
+  // Liveuamap asks to be credited wherever its mapped reports show.
+  const creditReports = (reports) =>
+    credit(
+      LIVEUAMAP_CREDIT,
+      reports.some((r) => r?.kind === 'liveuamap'),
+    );
   const notify = () => listener?.();
   const requestRender = () => viewer?.scene?.requestRender?.();
   const reducedMotion = () =>
@@ -189,6 +265,7 @@ export function createNewsLayer({
       now(),
       limit,
       windowMs,
+      inView.areaPolygons,
     );
   const shownWindowMs = () =>
     Math.min(maxWindowMs, (filters.hours ?? Infinity) * 3_600_000);
@@ -389,20 +466,21 @@ export function createNewsLayer({
           priority: 10_000 + hotspot.last24h,
         }),
       );
-      // Each disputed area is named, with who holds it and who claims it.
+      // Each disputed area is named, smaller than the news labels and below
+      // them in priority. Its title only: a label paints no detail line, yet
+      // the overlay sizes the label for one, which left a wide empty box.
       for (const area of outlineDisputed.get(hotspot.id) || []) {
         const ring = area.rings[0];
         const lon = ring.reduce((sum, p) => sum + p[0], 0) / ring.length;
         const lat = ring.reduce((sum, p) => sum + p[1], 0) / ring.length;
-        const label = disputedLabel(area);
         labels.push(
           ambientLabel({
             id: `disputed:${hotspot.id}:${area.name}`,
             position: cesium.Cartesian3.fromDegrees(lon, lat),
-            title: label.title,
-            details: [label.detail],
+            title: disputedLabel(area),
             accent: DISPUTED_COLOR,
             priority: 8_000,
+            presentationScale: DISPUTED_LABEL_SCALE,
           }),
         );
       }
@@ -538,8 +616,9 @@ export function createNewsLayer({
     }
   }
 
-  // The selected report's card: what, where, how attested, and the link to
-  // the original article ("Source: host ↗"), which a click on it opens.
+  // The selected report's card: what, where, how attested, the link to the
+  // original article ("Source: host ↗"), which a click on it opens, and the
+  // service it came through.
   function selectedCard(report, labels) {
     if (!report?.pins.length) return;
     const pin = report.pins[selectedPin] ? selectedPin : 0;
@@ -567,6 +646,7 @@ export function createNewsLayer({
         attestation(report)?.label || '',
         mediaLabels(report).join(' · '),
         sourceLinkLabel(report.url),
+        attributionLabel(report),
       ].filter(Boolean),
       accent: severityStyle(report).color,
       selected: true,
@@ -612,6 +692,7 @@ export function createNewsLayer({
         ? [...shown, current]
         : shown;
     renderMarkers(entities, drawn);
+    if (enabled) creditReports(drawn.filter((r) => r.pins.length && onMap(r)));
     entities.resumeEvents();
     showOutlines(detail);
     const at = cesium.JulianDate.now();
@@ -724,7 +805,7 @@ export function createNewsLayer({
   function addOutline(
     key,
     { polygons, borders, disputed = [] },
-    { color, fillAlpha, pickId },
+    { color, fillAlpha, pickId, lineAlpha = 0.85, width = 2 },
   ) {
     if (!outlineSource || outlineParts.has(key)) return;
     const css = cesium.Color.fromCssColorString(color);
@@ -761,8 +842,8 @@ export function createNewsLayer({
         line(
           `${pickId}~line${index}.${k}`,
           closed(points),
-          2,
-          css.withAlpha(0.85),
+          width,
+          css.withAlpha(lineAlpha),
         );
     }
     // National borders inside a multi-country hotspot: thin and dashed.
@@ -829,10 +910,21 @@ export function createNewsLayer({
     const developing = new Set(
       hotspots.flatMap((h) => (h.developing || []).map((d) => d.key)),
     );
+    const localKey =
+      localMode() && inView.area ? `local:${inView.area.key}` : null;
+    // The built-in server's area outlines are Natural Earth's.
+    credit(NATURAL_EARTH_CREDIT, enabled && outlineParts.has(localKey));
     for (const [key, parts] of outlineParts) {
       const country = key.startsWith('developing:') ? key.slice(11) : null;
-      const visible = enabled && (country ? developing.has(country) : detail);
-      const fill = visible && !country && filters.hotspot !== key;
+      const isLocal = key.startsWith('local:');
+      const visible =
+        enabled &&
+        (isLocal
+          ? key === localKey
+          : country
+            ? developing.has(country)
+            : detail);
+      const fill = visible && !country && !isLocal && filters.hotspot !== key;
       for (const entity of parts.fills)
         if (entity.show !== fill) entity.show = fill;
       for (const entity of parts.borders)
@@ -862,6 +954,9 @@ export function createNewsLayer({
       );
       if (controller.signal.aborted || feedRequest !== controller || !enabled)
         return;
+      // Any news server may refuse a section for a key; a read that passes
+      // clears it, not only the next refresh.
+      needs = { ...needs, conflicts: null };
       feed = {
         ...mergeFeedPage(feed, page, mode, now(), undefined, windowMs),
         loading: false,
@@ -869,10 +964,12 @@ export function createNewsLayer({
       };
     } catch (cause) {
       if (controller.signal.aborted || feedRequest !== controller) return;
+      const need = keyNeed(cause);
+      if (need) needs = { ...needs, conflicts: need };
       feed = {
         ...feed,
         loading: false,
-        error: cause?.message || FEED_UNAVAILABLE,
+        error: need ? null : cause?.message || FEED_UNAVAILABLE,
       };
     } finally {
       if (feedRequest === controller) feedRequest = null;
@@ -890,11 +987,11 @@ export function createNewsLayer({
     }
   }
 
-  // "In view": below 3,000 km, the reports within 500 km of the view centre,
-  // placed again once the camera has settled for 0.8 s in another half-degree
-  // cell. The feed has no area query: the layer already holds the last day's
-  // geocoded reports (the map's), kept here by distance. Only "Include minor
-  // news" needs its own read, once per refresh, never per pan.
+  // "In view" (the Local section): below 3,000 km, the reports in the area
+  // named at the view centre (else, at sea, within 500 km of it), placed
+  // again once the camera has settled for 0.8 s in another half-degree cell.
+  // Each area is read once (its reports, minor news included, by the `at`
+  // query) and again with each refresh; a pan inside it reads nothing.
   function scheduleInView() {
     clearTimeout(settleTimer);
     settleTimer = setTimeout(() => {
@@ -908,7 +1005,8 @@ export function createNewsLayer({
     if (!(height < NEWS_IN_VIEW_MAX_HEIGHT_M)) {
       if (inView.active) {
         inViewRequest?.abort();
-        inViewRequest = null;
+        areaRequest?.abort();
+        inViewRequest = areaRequest = null;
         inView = emptyInView();
         if (local()) render();
         notify();
@@ -921,13 +1019,31 @@ export function createNewsLayer({
     if (!force && inView.active && cell === inView.cell) return;
     inView = { ...inView, active: true, cell, centre };
     if (!local()) {
+      // Conflicts reads neither the area nor its reports.
       inViewRequest?.abort();
-      inViewRequest = null;
-      inView = { ...inView, minor: null, loading: false, error: null };
+      areaRequest?.abort();
+      inViewRequest = areaRequest = null;
+      inView = {
+        ...inView,
+        minor: null,
+        loading: false,
+        error: null,
+        areaLoading: false,
+      };
       notify();
       return;
     }
-    if (!force && (inView.minor || inViewRequest)) {
+    // The area first: the read asks for its reports (and wakes its
+    // country's national feeds on the server).
+    if ((await refreshArea(centre)) === 'superseded') return;
+    // The section changed, or the layer went off, while the area was read.
+    if (!local() || !enabled) return;
+    const readKey = inView.area?.key ?? '';
+    if (
+      !force &&
+      inView.readKey === readKey &&
+      (inView.minor || inViewRequest)
+    ) {
       render();
       notify();
       return;
@@ -946,12 +1062,15 @@ export function createNewsLayer({
           events: true,
           relevance: '',
           limit: NEWS_MAP_LIMIT,
+          at: inView.area ? inView.areaAt : undefined,
         },
         { signal: controller.signal },
       );
       if (controller.signal.aborted || inViewRequest !== controller) return;
+      needs = { ...needs, local: null };
       inView = {
         ...inView,
+        readKey,
         minor: page.reports.filter((r) =>
           withinNewsWindow(r, now(), maxWindowMs),
         ),
@@ -960,10 +1079,15 @@ export function createNewsLayer({
       };
     } catch (cause) {
       if (controller.signal.aborted || inViewRequest !== controller) return;
+      const need = keyNeed(cause);
+      needs = { ...needs, local: need };
       inView = {
         ...inView,
+        // A missing key is read again with the next refresh, not each pan.
+        readKey: need ? readKey : inView.readKey,
+        minor: need ? [] : inView.minor,
         loading: false,
-        error: cause?.message || FEED_UNAVAILABLE,
+        error: need ? null : cause?.message || FEED_UNAVAILABLE,
       };
     } finally {
       if (inViewRequest === controller) {
@@ -972,6 +1096,67 @@ export function createNewsLayer({
       }
       notify();
     }
+  }
+
+  // The area named at the view centre, read again only once the centre has
+  // left the one shown. Without one (at sea, or a server that names none)
+  // Local keeps to the radius. 'superseded' when a later look took over.
+  async function refreshArea(centre) {
+    if (!source.getAreaOutline || noAreaRoute) return 'none';
+    if (inView.areaPolygons && inPolygons(inView.areaPolygons, centre)) {
+      // Back inside the area shown: a read still out for where the camera
+      // was must not land over it.
+      if (areaRequest) {
+        areaRequest.abort();
+        areaRequest = null;
+        inView = { ...inView, areaLoading: false };
+      }
+      return 'same';
+    }
+    areaRequest?.abort();
+    const controller = new AbortController();
+    areaRequest = controller;
+    inView = { ...inView, areaLoading: true };
+    notify();
+    let found = null;
+    try {
+      found = await source.getAreaOutline(centre, {
+        signal: controller.signal,
+      });
+    } catch (cause) {
+      // No area: the radius stands in for it. A server without the route
+      // (or one that refuses the query) is not asked again.
+      if (cause?.unavailable === true || cause?.status === 400)
+        noAreaRoute = true;
+    }
+    if (controller.signal.aborted || areaRequest !== controller)
+      return 'superseded';
+    areaRequest = null;
+    // The camera moved on while this was read, and no later read replaced it.
+    if (inView.centre !== centre) {
+      inView = { ...inView, areaLoading: false };
+      notify();
+      return 'superseded';
+    }
+    const area = found?.area && found.polygons.length ? found.area : null;
+    if (area)
+      addOutline(`local:${area.key}`, found, {
+        color: DISPUTED_COLOR,
+        fillAlpha: 0,
+        lineAlpha: 0.45,
+        width: 1.5,
+        pickId: `${LOCAL_PREFIX}${area.key}`,
+      });
+    inView = {
+      ...inView,
+      area,
+      areaPolygons: area ? found.polygons : null,
+      areaAt: area ? centre : null,
+      areaLoading: false,
+    };
+    render();
+    notify();
+    return 'read';
   }
 
   function installSelection() {
@@ -1037,6 +1222,11 @@ export function createNewsLayer({
     const at = now();
     const report = selected();
     const total = hotspots.reduce((sum, h) => sum + h.last24h, 0);
+    const listed = feed.items.filter((r) =>
+      passesFilters(r, filters, at, windowMs),
+    );
+    const nearby = localReports(NEWS_LOCAL_LIMIT);
+    if (enabled) creditReports([...(local() ? nearby : listed), report]);
     return {
       filters,
       hotspots: [
@@ -1056,14 +1246,19 @@ export function createNewsLayer({
         label: t(level.label),
         color: level.color,
       })),
-      items: feed.items
-        .filter((r) => passesFilters(r, filters, at, windowMs))
-        .map((r) => feedCardView(r, at)),
+      items: listed.map((r) => feedCardView(r, at)),
       inView: {
         active: inView.active,
-        loading: inView.loading,
+        loading: inView.loading || inView.areaLoading,
+        // What Local reads: the named area, else the radius at sea.
+        area: inView.area ? areaLabel(inView.area) : null,
+        // Until the first area is named, the panel names neither it nor the radius.
+        areaLoading: inView.areaLoading,
+        radiusKm: NEWS_IN_VIEW_RADIUS_KM,
         error: inView.error ? t(FEED_UNAVAILABLE) : null,
-        items: localReports(NEWS_LOCAL_LIMIT).map((r) => feedCardView(r, at)),
+        // Local's key, when the server reads it from one and has none.
+        key: keyNotice(needs.local),
+        items: nearby.map((r) => feedCardView(r, at)),
       },
       selected:
         report && withinNewsWindow(report, at, windowMs)
@@ -1074,6 +1269,8 @@ export function createNewsLayer({
       loading: feed.loading || loading,
       // Read failures are English data; the panel shows them translated.
       error: error || feed.error ? t(error || feed.error) : null,
+      // Conflicts' key, likewise.
+      key: keyNotice(needs.conflicts),
       lastRunAt,
       windowHours: windowMs / 3_600_000,
       windowChoices: newsWindowChoices(maxWindowMs / 3_600_000),
@@ -1125,11 +1322,13 @@ export function createNewsLayer({
     disable() {
       enabled = false;
       unavailable = false;
+      noAreaRoute = false;
       error = null;
       request?.abort();
       feedRequest?.abort();
       inViewRequest?.abort();
-      request = feedRequest = inViewRequest = null;
+      areaRequest?.abort();
+      request = feedRequest = inViewRequest = areaRequest = null;
       clearTimeout(settleTimer);
       settleTimer = null;
       loading = false;
@@ -1148,6 +1347,7 @@ export function createNewsLayer({
       contextEntities.clear();
       feed = emptyFeed();
       inView = emptyInView();
+      needs = { conflicts: null, local: null };
       mapReports = [];
       if (dataSource) {
         dataSource.entities.removeAll();
@@ -1190,6 +1390,7 @@ export function createNewsLayer({
         if (!enabled || controller.signal.aborted || request !== controller)
           return false;
         hotspots = index.hotspots;
+        needs = { ...needs, conflicts: null };
         loadOutlines();
         lastRunAt = index.lastRunAt;
         // A server that names no limit serves the window its counts cover
@@ -1212,6 +1413,19 @@ export function createNewsLayer({
         return true;
       } catch (cause) {
         if (controller.signal.aborted || request !== controller) return false;
+        const need = keyNeed(cause);
+        if (need) {
+          // Conflicts has no key: nothing of its own, and Local still reads.
+          needs = { ...needs, conflicts: need };
+          hotspots = [];
+          mapReports = [];
+          feed = emptyFeed();
+          filters = normalizeFilters({}, hotspots, filters);
+          error = null;
+          render();
+          void refreshInView({ force: inView.active });
+          return true;
+        }
         unavailable = cause?.unavailable === true;
         error = cause?.message || FEED_UNAVAILABLE;
         return true;
@@ -1272,7 +1486,7 @@ export function createNewsLayer({
         chips: [],
         legend: [],
         info: t(
-          'Last 24 h from curated hotspots. Each report links to its publisher; places and categories are read from the text automatically and can be wrong. Side labels describe the source, not whether a report is true.',
+          'Last 24 h of news. Each report links to its publisher; places and categories are read from the text and data automatically and can be wrong. Side labels, where shown, describe the source, not whether a report is true.',
         ),
         // A ready-to-render view for the News panel (src/ui/newsPanel.js),
         // which takes no layer imports: labels and colours are resolved here.

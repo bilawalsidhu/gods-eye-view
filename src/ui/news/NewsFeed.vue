@@ -11,9 +11,13 @@ import NewsCard from './NewsCard.vue';
 // fewer where the host serves less), or a shorter one chosen at the
 // top (24/12/6/3/1 h), and two sections. Conflicts: hotspot chips, the
 // severity floor, the chosen event and a continuous feed, newest first.
-// Local: every report near the view centre while the camera is low, which the
-// map then shows instead of the hotspots' news. It renders the `feed` view the news
-// layer publishes and acts only through `onParams`.
+// Local: every report in the area at the view centre (its country, a large
+// country's state; within a radius at sea) while the camera is low, named at
+// the top, which the map then shows, outlined, instead of the hotspots' news.
+// A section read from a key the server lacks (or whose allowance for the day
+// is spent) says which key instead. It
+// renders the `feed` view the news layer publishes and acts only through
+// `onParams`.
 const props = defineProps({
   view: { type: Object, default: null },
   onParams: { type: Function, default: () => {} },
@@ -74,6 +78,15 @@ const selectedApart = computed(() => {
     ? props.view.inView.items.some((item) => item.id === chosen.id)
     : props.view.items.some((item) => item.id === chosen.id);
   return listed ? null : chosen;
+});
+// What Local reads: the area named, else the radius; neither while the
+// first area is being named, so the radius does not flash before it.
+const areaHead = computed(() => {
+  const inView = props.view?.inView;
+  if (!inView?.active) return '';
+  if (inView.area) return t('News from {area}', { area: inView.area });
+  if (inView.areaLoading) return '';
+  return t('Within {km} km of the view centre', { km: inView.radiusKm });
 });
 const status = computed(() => {
   const view = props.view;
@@ -162,10 +175,19 @@ const clear = () => props.onParams({ clear: true });
       class="news-readout__section"
       :aria-label="t('Local')"
     >
+      <p v-if="areaHead" class="news-readout__head news-readout__area ui-mono">
+        {{ areaHead }}
+      </p>
       <UiEmpty
         v-if="!view.inView.active"
         class="news-readout__empty"
         :title="t('Zoom in to see local news')"
+      />
+      <UiEmpty
+        v-else-if="view.inView.key"
+        class="news-readout__empty"
+        :title="view.inView.key.title"
+        :hint="view.inView.key.hint"
       />
       <p v-else-if="view.inView.error" class="news-readout__status">
         {{ view.inView.error }}
@@ -202,8 +224,14 @@ const clear = () => props.onParams({ clear: true });
       :aria-label="t('Latest news')"
     >
       <h3 class="news-readout__head ui-mono">{{ t('Latest') }}</h3>
+      <UiEmpty
+        v-if="view.key"
+        class="news-readout__empty"
+        :title="view.key.title"
+        :hint="view.key.hint"
+      />
       <ol
-        v-if="view.items.length"
+        v-else-if="view.items.length"
         class="news-readout__list news-readout__feed"
       >
         <li v-for="item in view.items" :key="item.id">

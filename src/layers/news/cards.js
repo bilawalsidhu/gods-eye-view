@@ -128,7 +128,7 @@ function paint(canvas, view, look, pic) {
   ctx.strokeStyle = WORLD_OVERLAY_STYLE.border;
   ctx.lineWidth = 1;
   ctx.stroke();
-  // Severity down the left edge, where Breaking marks a Live report.
+  // Severity down the left edge.
   ctx.save();
   roundRect(ctx, 0.5, 0.5, CARD_W - 1, CARD_H - 1, WORLD_OVERLAY_STYLE.radius);
   ctx.clip();

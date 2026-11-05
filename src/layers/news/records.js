@@ -291,14 +291,17 @@ function normalizeRing(ring) {
 }
 
 /**
- * `/api/news/outline` → `{polygons, borders, disputed}`: the dissolved extent
- * (`{outer, holes}`), the national borders inside it (rings) and its disputed
- * areas, invalid parts dropped.
+ * `/api/news/outline` → `{polygons, borders, disputed, area}`: the dissolved
+ * extent (`{outer, holes}`), the national borders inside it (rings), its
+ * disputed areas and, answering a point, the area named there (else null),
+ * invalid parts dropped.
  */
 export function normalizeOutlinePayload(payload) {
   const polygons = [];
+  // Above every country's island count (Indonesia's is 208): an outline cut
+  // short leaves islands outside the area, read again on each settle there.
   for (const raw of Array.isArray(payload?.polygons)
-    ? payload.polygons.slice(0, 200)
+    ? payload.polygons.slice(0, 300)
     : []) {
     const outer = normalizeRing(raw?.outer);
     if (!outer) continue;
@@ -332,7 +335,23 @@ export function normalizeOutlinePayload(payload) {
       rings,
     });
   }
-  return { polygons, borders, disputed };
+  return { polygons, borders, disputed, area: outlineArea(payload?.area) };
+}
+
+const AREA_KINDS = ['country', 'region', 'disputed'];
+function outlineArea(raw) {
+  const key = text(raw?.key, 80);
+  const name = text(raw?.name, 80);
+  if (!key || !name) return null;
+  return {
+    key,
+    name,
+    kind: AREA_KINDS.includes(raw.kind) ? raw.kind : 'country',
+    country:
+      typeof raw.country === 'string' && /^[A-Z]{2}$/.test(raw.country)
+        ? raw.country
+        : null,
+  };
 }
 
 /** `/api/news/feed` → `{reports, nextBefore}`, or null without a report list. */

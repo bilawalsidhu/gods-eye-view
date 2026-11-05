@@ -54,6 +54,8 @@ test('reads validated hotspots, feed and outlines from the same-origin routes', 
   assert.deepEqual((await source.getOutline('ua')).polygons, []);
   await source.getCountryOutline('SD');
   await source.getHotspots({ hours: 6 });
+  await source.getAreaOutline({ lat: 30.26666, lon: -97.7 });
+  await source.getFeed({ hotspot: 'all', at: { lat: 30.26666, lon: -97.7 } });
   assert.deepEqual(
     calls.map((c) => c.url),
     [
@@ -62,6 +64,8 @@ test('reads validated hotspots, feed and outlines from the same-origin routes', 
       '/api/news/outline?hotspot=ua&v=4',
       '/api/news/outline?country=SD&v=4',
       '/api/news/hotspots?hours=6',
+      '/api/news/outline?at=30.27,-97.7&v=4',
+      '/api/news/feed?hotspot=all&at=30.27%2C-97.7',
     ],
   );
   for (const { url, init } of calls) {
@@ -110,6 +114,50 @@ test('malformed, failed and unconfigured reads reject; a server without news is 
     fetchImpl: async () => new Response('{', { status: 200 }),
   });
   await assert.rejects(broken.getHotspots(), SyntaxError);
+});
+
+test('a section read from a key the server lacks names the key and is asked again', async () => {
+  const answer = (body) =>
+    createNewsSource({
+      fetchImpl: async () =>
+        new Response(JSON.stringify(body), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+  await assert.rejects(
+    answer({ error: 'no_key', key: 'liveuamap' }).getHotspots(),
+    (error) => {
+      assert.equal(error.keyRequired, true);
+      assert.equal(error.keyRejected, false);
+      assert.equal(error.keyId, 'liveuamap');
+      assert.equal(error.unavailable, false);
+      assert.equal(error.retryable, true);
+      return true;
+    },
+  );
+  await assert.rejects(
+    answer({ error: 'key_rejected', key: 'worldnewsapi' }).getFeed({
+      at: { lat: 51.13, lon: 71.43 },
+    }),
+    { keyRequired: true, keyRejected: true, keyId: 'worldnewsapi' },
+  );
+  // The day's allowance spent: still the key's matter, back tomorrow.
+  await assert.rejects(
+    answer({ error: 'key_quota', key: 'worldnewsapi' }).getFeed(),
+    {
+      keyRequired: true,
+      keyRejected: false,
+      keyQuota: true,
+      keyId: 'worldnewsapi',
+      unavailable: false,
+    },
+  );
+  // A key name not in the registry's form is an ordinary failure.
+  await assert.rejects(
+    answer({ error: 'no_key', key: '<script>' }).getHotspots(),
+    (error) => error.keyRequired === undefined && error.code === 'http',
+  );
 });
 
 test('reads time out and follow the caller signal', async () => {
@@ -174,6 +222,10 @@ test('the host allowlist admits the client routes and refuses anything else', ()
     '/api/news/outline?hotspot=ua',
     '/api/news/outline?hotspot=ua&v=2',
     '/api/news/outline?country=ukraine&v=4',
+    '/api/news/outline?at=30.267,-97.7&v=4',
+    '/api/news/outline?at=30.27&v=4',
+    '/api/news/outline?at=30.27,-97.7&country=US&v=4',
+    '/api/news/feed?at=30.267,-97.7',
   ])
     assert.equal(allowed(path), false, path);
 });

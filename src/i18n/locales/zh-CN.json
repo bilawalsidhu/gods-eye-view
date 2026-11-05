@@ -7,12 +7,7 @@
   "{count} reports today": {
     "other": "今日 {count} 条报道"
   },
-  "Last 24 h from curated hotspots. Each report links to its publisher; places and categories are read from the text automatically and can be wrong. Side labels describe the source, not whether a report is true.": "精选热点的最近 24 小时。每条报道都链接到其发布者；地点和类别由文本自动读取，可能有误。阵营标签描述的是来源，而非报道是否属实。",
   "Disputed: {name}": "争议地区：{name}",
-  "Administered by {holder} · claimed by {claimant}": "由{holder}管辖 · {claimant}主张主权",
-  "Self-administered · claimed by {claimant}": "自治 · {claimant}主张主权",
-  "UN-patrolled zone": "联合国巡逻区",
-  "Claimed by neither neighbour": "两个邻国均未主张",
   "Video": "视频",
   "Photos": "照片",
   "Claimed by {who}": "{who}声称",
@@ -3122,5 +3117,20 @@
   "The provider rejected the API key. Check it in Provider Settings.": "服务商拒绝了 API 密钥。请在服务商设置中检查。",
   "Too many chat requests. Try again in {seconds} s.": "聊天请求过多。请在 {seconds} 秒后重试。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "服务商拒绝了此密钥的访问请求。请检查该密钥所属的项目、区域或权限。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服务商账户余额不足。请检查账户的计费信息，或在设置中选择其他 AI 服务商。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服务商账户余额不足。请检查账户的计费信息，或在设置中选择其他 AI 服务商。",
+  "Last 24 h of news. Each report links to its publisher; places and categories are read from the text and data automatically and can be wrong. Side labels, where shown, describe the source, not whether a report is true.": "最近 24 小时的新闻。每条报道都链接到其发布者；地点和类别由文本和数据自动读取，可能有误。阵营标签（如有显示）描述的是来源，而非报道是否属实。",
+  "Economy": "经济",
+  "News from {area}": "{area}新闻",
+  "Within {km} km of the view centre": "视图中心 {km} 公里范围内",
+  "{region}, {country}": "{country}{region}",
+  "via {source}": "来自 {source}",
+  "Local in the News layer: the day’s news from the outlets of the country in view": "新闻图层的本地：视野中国家的媒体当天的新闻",
+  "{provider} refused its key": "{provider} 拒绝了密钥",
+  "Check {envVars} in Provider Settings": "请在服务商设置中检查 {envVars}",
+  "{provider} key required": "需要 {provider} 密钥",
+  "{provider} limit reached for today": "{provider} 已达今日上限",
+  "News resumes tomorrow, or with a paid plan": "新闻将于明天恢复，或升级付费套餐",
+  "News key required": "需要新闻密钥",
+  "Precise conflict points in the News layer, beside GDELT’s articles": "新闻图层中精确的冲突地点，与 GDELT 的文章并列",
+  "Worldwide": "全球"
 }

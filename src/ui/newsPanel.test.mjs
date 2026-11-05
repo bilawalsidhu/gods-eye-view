@@ -250,6 +250,80 @@ test('filters, the Local section and empty or failed reads', () => {
   news.destroy();
 });
 
+test('each section says which key it lacks; Local names the area it reads', () => {
+  const { news, panel } = fixture();
+  const key = {
+    title: 'Liveuamap key required',
+    hint: 'Needs LIVEUAMAP_API_KEY — add it in Provider Settings',
+  };
+  news.update(view({ key, items: [], hasMore: false }));
+  const latest = panel.querySelector('[aria-label="Latest news"]');
+  assert.match(latest.textContent, /Liveuamap key required/);
+  assert.match(latest.textContent, /Needs LIVEUAMAP_API_KEY/);
+  assert.doesNotMatch(latest.textContent, /No news matches/);
+
+  const localView = (inView) =>
+    view({
+      filters: normalizeFilters({ section: 'local' }),
+      inView: {
+        active: true,
+        loading: false,
+        error: null,
+        items: [],
+        radiusKm: 500,
+        ...inView,
+      },
+    });
+  const section = () => panel.querySelector('[aria-label="Local"]');
+  const heading = () => section().querySelector('.news-readout__area');
+  news.update(
+    localView({
+      key: {
+        title: 'World News API limit reached for today',
+        hint: 'News resumes tomorrow, or with a paid plan',
+      },
+    }),
+  );
+  assert.match(section().textContent, /World News API limit reached for today/);
+  assert.match(section().textContent, /News resumes tomorrow/);
+  assert.doesNotMatch(section().textContent, /Nothing reported near here/);
+
+  // The area named, else the radius at sea.
+  news.update(localView({ area: 'Ukraine' }));
+  assert.equal(heading().textContent.trim(), 'News from Ukraine');
+  news.update(localView({ area: null }));
+  assert.equal(
+    heading().textContent.trim(),
+    'Within 500 km of the view centre',
+  );
+  // While the first area is named, neither: the radius does not flash.
+  news.update(localView({ area: null, areaLoading: true, loading: true }));
+  assert.equal(heading(), null);
+  // A new area on the way keeps the one shown.
+  news.update(localView({ area: 'Ukraine', areaLoading: true, loading: true }));
+  assert.equal(heading().textContent.trim(), 'News from Ukraine');
+  news.destroy();
+});
+
+test('a card credits the service its report came through', () => {
+  const { news, panel } = fixture();
+  news.update(
+    view({
+      items: [
+        feedCardView(report('gdelt', { attribution: 'GDELT Project' }), NOW),
+        feedCardView(report('own'), NOW),
+      ],
+    }),
+  );
+  const [credited, own] = panel.querySelectorAll('.news-card');
+  assert.equal(
+    credited.querySelector('.news-card__via').textContent,
+    'via GDELT Project',
+  );
+  assert.equal(own.querySelector('.news-card__via'), null);
+  news.destroy();
+});
+
 test('scrolling to the end asks once per page, again after a filter change or a failed read', () => {
   const { news, calls } = fixture();
   const body = document.getElementById('news-panel-body');

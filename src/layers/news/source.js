@@ -29,10 +29,15 @@ const FEED_KEYS = Object.freeze([
   'limit',
   'category',
   'relevance',
+  'at',
 ]);
 const FLAG_KEYS = Object.freeze(['geo', 'today', 'events']);
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?Z$/;
 const LIST = /^[a-z][a-z,-]{0,127}$/;
+// A point to two decimals (~1 km), as areaPoint writes it.
+const AT = /^-?\d{1,2}(?:\.\d{1,2})?,-?\d{1,3}(?:\.\d{1,2})?$/;
+// A coordinate to two decimals, without trailing zeros ("50.4", "-97.74").
+const areaPoint = (value) => String(Math.round(value * 100) / 100);
 const FEED_VALUE = {
   hotspot: (v) => /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(v),
   before: (v) => ISO.test(v),
@@ -40,13 +45,20 @@ const FEED_VALUE = {
   limit: (v) => /^\d{1,3}$/.test(v) && Number(v) >= 1 && Number(v) <= 500,
   category: (v) => LIST.test(v),
   relevance: (v) => LIST.test(v),
+  at: (v) => AT.test(v),
 };
 
-/** Feed query string from a plain object; unknown keys and empty values are dropped. */
+/**
+ * Feed query string from a plain object; unknown keys and empty values are
+ * dropped. `at` is a point (`{lat, lon}`), the Local section's area there.
+ */
 export function newsFeedQuery(query = {}) {
   const params = new URLSearchParams();
   for (const key of FEED_KEYS) {
-    const value = query[key];
+    const value =
+      key === 'at' && query.at
+        ? `${areaPoint(query.at.lat)},${areaPoint(query.at.lon)}`
+        : query[key];
     if (value !== undefined && value !== null && value !== '')
       params.set(key, String(value));
   }
@@ -81,7 +93,8 @@ export function newsQueryAllowed(url) {
       value.get('v') === OUTLINE_VERSION &&
       ((keys[0] === 'hotspot' && FEED_VALUE.hotspot(value.get('hotspot'))) ||
         (keys[0] === 'country' &&
-          /^[A-Z]{2}(?:-[A-Z0-9]{1,3})?$/.test(value.get('country'))))
+          /^[A-Z]{2}(?:-[A-Z0-9]{1,3})?$/.test(value.get('country'))) ||
+        (keys[0] === 'at' && AT.test(value.get('at'))))
     );
   }
   if (url.pathname !== `${BASE_PATH}/feed`) return false;
@@ -92,7 +105,12 @@ export function newsQueryAllowed(url) {
   );
 }
 
-/** A failed read: a server without the news routes is a permanent miss. */
+/**
+ * A failed read: a server without the news routes is a permanent miss; one
+ * that reads a section from a key it lacks (503 `no_key`, `key_rejected` or,
+ * its allowance for the day spent, `key_quota`, naming the key registry's id)
+ * says which, and is asked again later.
+ */
 async function responseError(response) {
   let body = null;
   try {
@@ -100,6 +118,22 @@ async function responseError(response) {
   } catch {
     await response.body?.cancel?.().catch?.(() => {});
   }
+  if (
+    response.status === 503 &&
+    ['no_key', 'key_rejected', 'key_quota'].includes(body?.error) &&
+    typeof body.key === 'string' &&
+    /^[a-z][a-z0-9-]{0,31}$/.test(body.key)
+  )
+    return Object.assign(new Error(msg('News key required')), {
+      status: 503,
+      code: body.error,
+      keyRequired: true,
+      keyRejected: body.error === 'key_rejected',
+      keyQuota: body.error === 'key_quota',
+      keyId: body.key,
+      unavailable: false,
+      retryable: true,
+    });
   const unavailable =
     response.status === 404 ||
     (response.status === 503 && isUnavailableCapability(body));
@@ -158,6 +192,15 @@ export function createNewsSource({
       return normalizeOutlinePayload(
         await get(
           `/outline?country=${encodeURIComponent(country)}&v=${OUTLINE_VERSION}`,
+          { signal },
+        ),
+      );
+    },
+    // The area the Local section reads at a point, with its outline.
+    async getAreaOutline({ lat, lon }, { signal } = {}) {
+      return normalizeOutlinePayload(
+        await get(
+          `/outline?at=${areaPoint(lat)},${areaPoint(lon)}&v=${OUTLINE_VERSION}`,
           { signal },
         ),
       );

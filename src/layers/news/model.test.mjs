@@ -8,6 +8,7 @@ import {
 import {
   NEWS_IN_VIEW_RADIUS_KM,
   ageWords,
+  areaLabel,
   beaconPixelSize,
   cardEvents,
   cardView,
@@ -17,6 +18,7 @@ import {
   feedQueryFor,
   hotspotLabel,
   hotspotTrend,
+  inPolygons,
   isPressing,
   markerStyle,
   mergeFeedPage,
@@ -218,7 +220,61 @@ test('outlines keep valid rings, borders and named disputed areas', () => {
     polygons: [],
     borders: [],
     disputed: [],
+    area: null,
   });
+  // Indonesia's 208 islands are all kept.
+  const islands = Array.from({ length: 208 }, () => ({ outer: ring }));
+  assert.equal(
+    normalizeOutlinePayload({ polygons: islands }).polygons.length,
+    208,
+  );
+});
+
+test('a point outline names its area, and Local keeps to it', () => {
+  const box = [
+    [35, 48],
+    [37, 48],
+    [37, 50.5],
+    [35, 50.5],
+  ];
+  const { area, polygons } = normalizeOutlinePayload({
+    area: { key: 'US-TX', name: 'Texas', kind: 'region', country: 'US' },
+    polygons: [{ outer: box, holes: [] }],
+  });
+  assert.deepEqual(area, {
+    key: 'US-TX',
+    name: 'Texas',
+    kind: 'region',
+    country: 'US',
+  });
+  assert.equal(areaLabel(area), 'Texas, United States');
+  assert.equal(
+    areaLabel({ ...area, kind: 'country', country: 'UA' }),
+    'Ukraine',
+  );
+  // A disputed area is named as itself, never as either side's.
+  assert.equal(
+    areaLabel({ key: 'disputed:Crimea', name: 'Crimea', kind: 'disputed' }),
+    'Crimea',
+  );
+  assert.equal(normalizeOutlinePayload({ area: { key: 'X' } }).area, null);
+  const at = (id, lat, lon) =>
+    report(id, '2026-10-28T09:00:00Z', {
+      pins: [{ lat, lon, mappable: true }],
+    });
+  const reports = [at('inside', 50, 36), at('beyond', 49, 39)];
+  const filters = normalizeFilters({ minSeverity: 0 });
+  const centre = { lat: 49, lon: 36 };
+  const now = Date.parse('2026-10-28T10:00:00Z');
+  const ids = (area) =>
+    reportsInView(reports, centre, filters, now, 10, undefined, area).map(
+      (r) => r.id,
+    );
+  // Within 500 km both; inside the area only the one.
+  assert.deepEqual(ids(null), ['inside', 'beyond']);
+  assert.deepEqual(ids(polygons), ['inside']);
+  assert.ok(inPolygons(polygons, { lat: 49, lon: 36 }));
+  assert.ok(!inPolygons([{ outer: box, holes: [box] }], { lat: 49, lon: 36 }));
 });
 
 test('feed pages merge newest first without duplicates', () => {
@@ -427,6 +483,10 @@ test('beacons carry a focus, a size by activity and a trend only against a prior
     hotspotLabel({ id: 'x', name: 'X', catchAll: true }),
     'Elsewhere',
   );
+  assert.equal(
+    hotspotLabel({ id: 'worldwide', name: 'Worldwide', catchAll: true }),
+    'Worldwide',
+  );
 });
 
 test('marker style: severity fill, attestation rim, size by sources, fading with age', () => {
@@ -476,7 +536,7 @@ test('picture cards: physical, two or more sources, major or pressing, at most t
   assert.equal(cardView(lone, NOW).image, null);
 });
 
-test('feed cards read like Breaking: headline, meta parts, sides and chips', () => {
+test('feed cards: headline, meta parts, sides and chips', () => {
   const r = report('fc', '2026-10-28T09:00:00Z', {
     title: 'Удар по Харкову',
     titleEn: 'Strike on Kharkiv',

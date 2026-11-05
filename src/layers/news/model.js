@@ -43,6 +43,8 @@ export const NEWS_FEED_MAX = 600;
 export const NEWS_DETAIL_MAX_HEIGHT_M = 2_500_000;
 // "In view": reports near the view centre, only once the camera is low enough
 // for "here" to mean a region, read again when it settles in a new cell.
+// Near is inside the area the server names there (a country, a large
+// country's state, a disputed area), else, at sea, within the radius.
 export const NEWS_IN_VIEW_MAX_HEIGHT_M = 3_000_000;
 export const NEWS_IN_VIEW_RADIUS_KM = 500;
 export const NEWS_IN_VIEW_LIMIT = 12;
@@ -63,12 +65,7 @@ export const NEWS_RELEVANT = 'core,related';
 
 const SOURCE_LABEL = msg('Source');
 const DISPUTED = msg('Disputed: {name}');
-const DISPUTE_TEXT = {
-  held: msg('Administered by {holder} · claimed by {claimant}'),
-  self: msg('Self-administered · claimed by {claimant}'),
-  un: msg('UN-patrolled zone'),
-  unclaimed: msg('Claimed by neither neighbour'),
-};
+const VIA = msg('via {source}');
 const MEDIA_LABELS = { video: msg('Video'), photo: msg('Photos') };
 const CLAIMED_BY = msg('Claimed by {who}');
 const CLAIMED = msg('Claimed');
@@ -102,6 +99,8 @@ export const NEWS_HOTSPOT_LABELS = Object.freeze({
   'sudan-war': msg('Sudan'),
   sahel: msg('Sahel'),
   elsewhere: msg('Elsewhere'),
+  // Core's own news (no news server): the world is one hotspot.
+  worldwide: msg('Worldwide'),
 });
 
 /** A hotspot's chip label in the interface language. */
@@ -124,16 +123,24 @@ export function countryName(code) {
   }
 }
 
-/** Label for a disputed area: its name, who administers it, who claims it. */
-export function disputedLabel(area) {
-  return {
-    title: t(DISPUTED, { name: area.name }),
-    detail: t(DISPUTE_TEXT[area.kind] || DISPUTE_TEXT.held, {
-      holder: countryName(area.heldBy),
-      claimant: countryName(area.claimedBy),
-    }),
-  };
+const AREA_IN_COUNTRY = msg('{region}, {country}');
+
+/**
+ * The Local section's area in the interface language: a country by its code,
+ * a state with its country, a disputed area by its own name only.
+ */
+export function areaLabel(area) {
+  if (!area) return '';
+  if (area.kind === 'disputed' || !area.country) return area.name;
+  if (area.kind === 'country') return countryName(area.country);
+  return t(AREA_IN_COUNTRY, {
+    region: area.name,
+    country: countryName(area.country),
+  });
 }
+
+/** Label for a disputed area on the map: its name, marked as disputed. */
+export const disputedLabel = (area) => t(DISPUTED, { name: area.name });
 
 // A category is told by its icon (a 16-unit SVG path, filled or stroked). On
 // the map and in the feed colour is severity (NEWS_SEVERITY), never the type
@@ -183,6 +190,11 @@ export const NEWS_CATEGORIES = Object.freeze({
   political: {
     label: msg('Political'),
     icon: 'M2 14 H14 M2.5 5.5 H13.5 M8 1.8 L14 4.8 H2 Z M4.2 6.5 V12 M8 6.5 V12 M11.8 6.5 V12',
+  },
+  // Business, trade and industry: a national feed's news in Local.
+  economy: {
+    label: msg('Economy'),
+    icon: 'M2 13.5 H14 M2.5 11 L6 7.5 L8.5 9.5 L13.5 4.5 M10.5 4.5 H13.5 V7.5',
   },
   other: {
     label: msg('Other'),
@@ -507,6 +519,14 @@ export function sourceLinkLabel(url) {
   return `${t(SOURCE_LABEL)}: ${host} ↗`;
 }
 
+/**
+ * "via GDELT Project": the service a report was read through, which asks to
+ * be credited where its reports show; '' when the server names none.
+ */
+export function attributionLabel(report) {
+  return report?.attribution ? t(VIA, { source: report.attribution }) : '';
+}
+
 /** The places a report is pinned at, joined, or null. */
 function placeLine(report) {
   return (
@@ -519,8 +539,8 @@ function placeLine(report) {
 
 /**
  * One event card in the News panel: picture,
- * headline, a mono meta line (severity, category, place, sources, age), the
- * sides line, then attestation and media chips. Labels and colours are
+ * headline, a mono meta line (severity, category, place, sources, age, the
+ * service it came through), the sides line, then attestation and media chips. Labels and colours are
  * resolved here so the panel imports no layer code.
  */
 export function feedCardView(report, now = Date.now()) {
@@ -548,6 +568,7 @@ export function feedCardView(report, now = Date.now()) {
     sources: tn(size, '{count} source', '{count} sources'),
     age: ageWords(report.event?.lastAt || report.publishedAt, now),
     publisher: report.publisher,
+    via: attributionLabel(report),
     sides: sidesLine(report, now),
     sourceLink: sourceLinkLabel(report.url),
     picture: eventPicture(report),
@@ -718,9 +739,32 @@ export function distanceKm(a, b) {
   return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
+function inRing(ring, { lat, lon }) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (
+      yi > lat !== yj > lat &&
+      lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
+    )
+      inside = !inside;
+  }
+  return inside;
+}
+
+/** Whether a point lies in an outline's polygons (`{outer, holes}`). */
+export function inPolygons(polygons, point) {
+  return polygons.some(
+    ({ outer, holes }) =>
+      inRing(outer, point) && !holes.some((hole) => inRing(hole, point)),
+  );
+}
+
 /**
- * The reports near `centre` (any pin within NEWS_IN_VIEW_RADIUS_KM) that pass
- * the filters, most severe and newest first.
+ * The reports near `centre` that pass the filters, most severe and newest
+ * first: any pin inside `area` (outline polygons), or without one within
+ * NEWS_IN_VIEW_RADIUS_KM.
  */
 export function reportsInView(
   reports,
@@ -729,16 +773,18 @@ export function reportsInView(
   now = Date.now(),
   limit = NEWS_IN_VIEW_LIMIT,
   windowMs = NEWS_WINDOW_MS,
+  area = null,
 ) {
   if (!centre) return [];
+  const near = area?.length
+    ? (pin) => inPolygons(area, pin)
+    : (pin) => distanceKm(pin, centre) <= NEWS_IN_VIEW_RADIUS_KM;
   return reports
     .filter(
       (r) =>
         passesFilters(r, filters, now, windowMs) &&
         (filters.category === 'all' || r.category === filters.category) &&
-        r.pins?.some(
-          (pin) => distanceKm(pin, centre) <= NEWS_IN_VIEW_RADIUS_KM,
-        ),
+        r.pins?.some(near),
     )
     .sort(
       (a, b) =>
