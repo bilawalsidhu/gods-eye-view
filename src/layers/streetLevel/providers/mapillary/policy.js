@@ -4,8 +4,6 @@ import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
 // i18n import: the messages stay English data, translated where shown.
 const msg = (text) => text;
 
-export { NEAREST_RADIUS_M } from '../../policy.js';
-
 /** Identity and tuning for the Mapillary street-level provider. */
 export const MAPILLARY_PROVIDER_ID = 'mapillary';
 export const MAPILLARY_NAME = 'Mapillary';
@@ -13,12 +11,11 @@ export const MAPILLARY_LABEL = 'MAPILLARY';
 export const MAPILLARY_KEY_ID = 'mapillary';
 export const MAPILLARY_GRAPH_HOST = 'https://graph.mapillary.com';
 
-/** Methods a source (./source.js or a stand-in) must have for the provider. */
+/** What the provider needs from its source (source.js or a stand-in). */
 export const MAPILLARY_SOURCE_METHODS = Object.freeze([
   'getStatus',
   'getTile',
   'getSequenceImages',
-  'nearestImages',
 ]);
 
 /** Stable id prefixes for picked primitives; every one starts with `mly:`. */
@@ -28,17 +25,12 @@ export const PICK_PREFIX = Object.freeze({
   image: 'mly:img:',
 });
 
-/** Mapillary green for lines, points and cones; GEV cyan for selection. */
+/** Mapillary green for lines and cones; GEV cyan for the selection. */
 export const COLORS = Object.freeze({
   coverage: PROVIDER_COLORS.mapillary,
   selected: SHARED_COLORS.selected,
 });
 
-/** Camera-driven coverage refresh. */
-export const COVERAGE_MOVE_DEBOUNCE_MS = 320;
-export const COVERAGE_MAX_TILES = 9;
-/** Overview (z0–5) coverage points seen from orbit. */
-export const COVERAGE_OVERVIEW_MAX_TILES = 16;
 /** Shown when Mapillary refuses the server's token (401/403). */
 export const KEY_REJECTED_MESSAGE = msg(
   'Mapillary rejected MAPILLARY_CLIENT_TOKEN — replace it in Provider Settings',
@@ -47,23 +39,24 @@ export const KEY_REJECTED_MESSAGE = msg(
 export const RATE_LIMITED_MESSAGE = msg(
   'Coverage requests are being rate-limited — they resume on their own',
 );
-/**
- * Street-zoom coverage reaches this far from the camera: camera height times
- * the factor, never below the floor, even when a tilted view sees further.
- */
-export const SEQUENCE_VIEW_RANGE_MIN_M = 2_500;
-export const SEQUENCE_VIEW_RANGE_PER_HEIGHT = 10;
-/** Ground always covered around the camera at street zooms, in metres. */
-export const SEQUENCE_VIEW_NEAR_M = 1_000;
-export const COVERAGE_OVERVIEW_POINT_PX = 2.5;
-export const COVERAGE_MAX_SEQUENCES = 6000;
-export const COVERAGE_LINE_WIDTH_PX = 2.5;
+
+/** Coverage tuning (see LineCoverageTuning in lineCoverage.js). */
+export const COVERAGE_TUNING = Object.freeze({
+  maxTiles: 9,
+  maxSequences: 6000,
+  lineWidthPx: 2.5,
+  moveDebounceMs: 320,
+  /**
+   * Street-zoom coverage reaches this far from the camera: camera height
+   * times the factor, never below the floor, even when a tilted view sees
+   * further.
+   */
+  viewRangeMinM: 2_500,
+  viewRangePerHeight: 10,
+});
 
 /** Per-sequence image cones after a sequence is selected. */
 export const SEQUENCE_IMAGES_LIMIT = 2000;
-
-/** Images asked for in a nearest-image search (radius: NEAREST_RADIUS_M). */
-export const NEAREST_LIMIT = 8;
 
 /** On-globe credit: Mapillary imagery is CC BY-SA 4.0 and needs attribution. */
 export const MAPILLARY_CREDIT_HTML =
@@ -76,8 +69,6 @@ export function mapillaryImageUrl(imageId) {
   return `https://www.mapillary.com/app/?pKey=${encodeURIComponent(id)}&focus=photo`;
 }
 
-/** Fields requested from the graph API. */
-export const IMAGE_FIELDS =
-  'id,captured_at,compass_angle,computed_compass_angle,geometry,computed_geometry,computed_altitude,is_pano,sequence,thumb_256_url,creator,quality_score';
+/** Fields requested for a sequence's images. */
 export const SEQUENCE_IMAGE_FIELDS =
-  'id,captured_at,compass_angle,geometry,is_pano,computed_altitude';
+  'id,captured_at,compass_angle,geometry,is_pano';

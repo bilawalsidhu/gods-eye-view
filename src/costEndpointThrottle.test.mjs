@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import { readPinokioEnvironment } from '../scripts/pinokio-environment.mjs';
 import { openAiRealtimeProxy } from 'gods-eye-view/server/providers/openai';
+import { geminiLiveProxy } from '../server/providers/gemini.js';
+import { GEMINI_DEFAULT_PER_MIN } from '../server/providers/gemini/chat.js';
 import {
   makeCostRateLimiter,
   resolvePerMinuteCap,
@@ -166,6 +170,92 @@ test('the realtime token route throttles by default, and says so in a 429', asyn
     upstreamCalls <= OPENAI_DEFAULT_PER_MIN,
     'a throttled request must be refused before it reaches OpenAI, or it still costs money',
   );
+});
+
+function chatRequest(handler, input) {
+  const req = Readable.from([Buffer.from(JSON.stringify(input))]);
+  Object.assign(req, {
+    method: 'POST',
+    url: '/',
+    headers: {
+      host: 'localhost:4173',
+      origin: 'http://localhost:4173',
+      'content-type': 'application/json',
+    },
+    socket: { remoteAddress: '127.0.0.1' },
+  });
+  const headers = {};
+  const res = Object.assign(new EventEmitter(), {
+    statusCode: 200,
+    setHeader(name, value) {
+      headers[name.toLowerCase()] = value;
+    },
+  });
+  return new Promise((resolve, reject) => {
+    res.end = (body = '') => {
+      res.writableEnded = true;
+      resolve({ status: res.statusCode, headers, body: String(body) });
+    };
+    Promise.resolve(handler(req, res)).catch(reject);
+  });
+}
+
+test('typed chat follows each provider throttle by default, before upstream', async (t) => {
+  for (const name of [
+    'GEV_RATELIMIT_OPENAI_CHAT_PER_MIN',
+    'GEV_RATELIMIT_OPENAI_PER_MIN',
+    'GEV_RATELIMIT_GEMINI_CHAT_PER_MIN',
+    'GEV_RATELIMIT_GEMINI_PER_MIN',
+    'GEV_PREFER_CODEX_OAUTH',
+  ])
+    env(t, name, undefined);
+  env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  env(t, 'GEMINI_API_KEY', 'fixture-upstream-secret');
+  let upstreamCalls = 0;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    upstreamCalls += 1;
+    return Response.json(
+      String(url).includes('openai')
+        ? { choices: [{ message: { role: 'assistant', content: 'Hi' } }] }
+        : {
+            candidates: [
+              { content: { role: 'model', parts: [{ text: 'Hi' }] } },
+            ],
+          },
+    );
+  });
+  // The chat fallback must track the Gemini token route's own default.
+  const tokenDefault = readFileSync(
+    new URL('../server/providers/gemini/realtime.js', import.meta.url),
+    'utf8',
+  ).match(/GEV_RATELIMIT_GEMINI_PER_MIN \?\? '(\d+)'/)?.[1];
+  assert.equal(Number(tokenDefault), GEMINI_DEFAULT_PER_MIN);
+
+  for (const [route, handler, cap, input] of [
+    [
+      '/api/openai/chat',
+      install(openAiRealtimeProxy({})).get('/api/openai/chat'),
+      OPENAI_DEFAULT_PER_MIN,
+      { messages: [{ role: 'user', content: 'Hello' }] },
+    ],
+    [
+      '/api/gemini/chat',
+      install(geminiLiveProxy({})).get('/api/gemini/chat'),
+      GEMINI_DEFAULT_PER_MIN,
+      { contents: [{ role: 'user', parts: [{ text: 'Hello' }] }] },
+    ],
+  ]) {
+    upstreamCalls = 0;
+    const statuses = [];
+    for (let i = 0; i < cap; i += 1)
+      statuses.push((await chatRequest(handler, input)).status);
+    assert.deepEqual(statuses, Array(cap).fill(200), route);
+    const overLimit = await chatRequest(handler, input);
+    assert.equal(overLimit.status, 429, route);
+    assert.equal(overLimit.headers['retry-after'], '60');
+    assert.equal(overLimit.body.includes('fixture-upstream-secret'), false);
+    assert.equal(upstreamCalls, cap, `${route} refuses before upstream`);
+  }
 });
 
 test('the HUD summary route throttles the paid path, never the free one', async (t) => {

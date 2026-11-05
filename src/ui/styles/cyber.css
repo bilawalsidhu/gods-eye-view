@@ -41,8 +41,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
 }
 
 :root[data-ui-theme='cyber'] .cctv-panel-inner > .cyber-panel-body {
@@ -68,8 +66,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
 }
 
 :root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body > * {
@@ -82,6 +78,8 @@
 
 :root[data-ui-theme='cyber'] {
   color-scheme: dark;
+  --scroll-thumb: rgba(165, 188, 199, 0.35);
+  --scroll-track: transparent;
   --cyber-red: #c45454;
   --cyber-red-bright: #e16666;
   --cyber-slate: #26343a;
@@ -171,6 +169,7 @@
     .dock-tray-toggle,
     .dock-popover,
     .scene-btn,
+    .gev-action-button:not(.gev-action-button--compact),
     .context-mode-button,
     .map-stack-chip,
     .key-setup-chip,
@@ -202,6 +201,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner,
     #pp-toggles:not(.collapsed),
@@ -223,6 +223,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner
   )
@@ -246,7 +247,7 @@
     .street-level-panel-inner,
     .global-context-panel-inner
   ) {
-  padding-right: 8px;
+  padding-inline-end: 8px;
 }
 
 /* Collapsed right-rail panels otherwise inherit different legacy gutters:
@@ -305,6 +306,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner
   )
@@ -321,6 +323,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner
   )
@@ -345,6 +348,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner
   )
@@ -506,14 +510,24 @@
     0 0 12px rgba(196, 84, 84, 0.14);
 }
 
+:root[data-ui-theme='cyber'] .gev-segmented,
 :root[data-ui-theme='cyber'] .pp-mode-seg {
   border-color: rgba(206, 222, 226, 0.24);
   border-radius: 1px;
 }
 
+:root[data-ui-theme='cyber'] .gev-segment[aria-checked='true'],
 :root[data-ui-theme='cyber'] .pp-mode-btn.active {
   background: var(--cyber-red);
   color: #f7f8f7;
+}
+
+:root[data-ui-theme='cyber']
+  #utilities-panel
+  .utilities-tools
+  .pp-toggle-btn:is([aria-pressed='true'], .active) {
+  background: rgba(64, 45, 46, 0.94);
+  box-shadow: 3px 0 0 var(--cyber-red) inset;
 }
 
 :root[data-ui-theme='cyber'] .pp-toggle-btn.active .pp-label {
@@ -541,10 +555,19 @@
   text-shadow: none;
 }
 
-:root[data-ui-theme='cyber'] :where(.pp-select, select, input, textarea) {
+:root[data-ui-theme='cyber']
+  :where(.pp-select, select, input, textarea):where(:not(.gev-field)) {
   border-color: rgba(206, 222, 226, 0.24);
   background-color: rgba(26, 35, 39, 0.96);
   color: var(--text-primary);
+}
+
+/* Shared fields consume theme palettes through their own surface rule.
+   Feature palettes (Radio) retain precedence without restyling native fields. */
+:root[data-ui-theme='cyber'] .gev-field {
+  --gev-field-border-color: rgba(206, 222, 226, 0.24);
+  --gev-field-background: rgba(26, 35, 39, 0.96);
+  --gev-field-color: var(--text-primary);
 }
 
 :root[data-ui-theme='cyber']
@@ -735,12 +758,6 @@
   .btn-icon::before {
   content: '◐';
 }
-:root[data-ui-theme='cyber']
-  #command-dock
-  .style-btn[data-style='snow']
-  .btn-icon::before {
-  content: '❄︎';
-}
 
 :root[data-ui-theme='cyber'] :where(#bloom-toggle, #sharpen-toggle) {
   font-size: 0;
@@ -788,6 +805,12 @@
 :root[data-ui-theme='cyber']
   :where(input[type='range'], input[type='checkbox'], input[type='radio']) {
   accent-color: var(--cyber-red);
+}
+
+/* Street Level's range wears Cyber's slider accent like every other range. */
+:root[data-ui-theme='cyber'] .sl-range {
+  --accent: inherit;
+  --accent-glow: inherit;
 }
 
 :root[data-ui-theme='cyber']
@@ -1435,6 +1458,15 @@
   text-shadow: 0 0 6px var(--cyber-red);
 }
 
+/* Cyber frames each mode button itself; the shared segmented track would
+   draw a third, blue frame around them. */
+:root[data-ui-theme='cyber'] .global-context-modes {
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
 :root[data-ui-theme='cyber'] .dock-tray-toggle,
 :root[data-ui-theme='cyber'] .context-mode-button {
   background-color: rgba(38, 52, 58, 0.95);
@@ -1546,10 +1578,6 @@
   clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
 }
 
-#intel-hud[data-variant='cyber'] .hud-top-bar {
-  display: none;
-}
-
 /* Cyber keeps the useful style and locality readouts, not fictional IDs. */
 #intel-hud[data-variant='cyber'] .hud-top-left .hud-classification,
 #intel-hud[data-variant='cyber'] .hud-top-left .hud-system {
@@ -1639,18 +1667,33 @@
   }
 
   :root[data-ui-theme='cyber'] #left-panel-stack {
+    /* The stack holds still, so its rail needs no offset (leftPanelRail.js). */
+    --panel-stack-top-pinned: 1;
     top: var(--cyber-left-rail-top) !important;
     bottom: calc(2vh + 13rem);
-    left: 54px;
+    inset-inline-start: calc(54px + var(--panel-rail-clearance));
     width: 300px;
-    padding-left: 10px;
-    border-left: 1px solid rgba(196, 84, 84, 0.72);
+    padding-inline-start: 10px;
+    border-inline-start: 1px solid transparent;
+  }
+
+  /* An edge line marks each side's open panel, mirrored left and right. */
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    #left-panel-stack:has(> [data-panel-id]:not(.collapsed, [hidden])) {
+    border-inline-start-color: rgba(196, 84, 84, 0.72);
+  }
+
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    #right-context-rail:has(> [data-panel-id]:not(.collapsed, [hidden])) {
+    border-inline-end-color: rgba(196, 84, 84, 0.72);
   }
 
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
     #left-panel-stack:has(> [data-panel-id]:not(.collapsed))
-    > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed) {
+    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(.collapsed) {
     flex: 1 1 auto;
     height: auto;
     max-height: none;
@@ -1663,23 +1706,30 @@
     flex: 0 0 auto;
   }
 
+  /* The panel rail lists the collapsed panels. */
+  :root[data-ui-theme='cyber']
+    #left-panel-stack.layout-focus.layout-exclusive
+    > [data-panel-id].collapsed {
+    display: none;
+  }
+
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel) {
+    > :is(#data-panel, #utilities-panel, #scene-panel) {
     --panel-expanded-width: var(--cyber-panel-width);
     width: var(--panel-expanded-width);
   }
 
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel).collapsed {
+    > :is(#data-panel, #utilities-panel, #scene-panel).collapsed {
     width: var(--cyber-panel-collapsed-width);
   }
 
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel).collapsed
-    :is(.data-panel-inner, .scene-panel-inner) {
+    > :is(#data-panel, #utilities-panel, #scene-panel).collapsed
+    :is(.data-panel-inner, .utilities-panel-inner, .scene-panel-inner) {
     box-sizing: border-box;
     height: 50px;
     min-height: 50px;
@@ -1706,7 +1756,7 @@
 
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
-    :is(#data-panel, #scene-panel)
+    :is(#data-panel, #utilities-panel, #scene-panel)
     .panel-collapse-btn {
     width: var(--cyber-panel-control-size);
     min-width: var(--cyber-panel-control-size);
@@ -1716,8 +1766,11 @@
   :root[data-ui-theme='cyber'] #right-context-rail {
     --right-display-collapsed-width: var(--cyber-panel-collapsed-width);
     --right-context-collapsed-width: var(--cyber-panel-collapsed-width);
-    right: 62px;
-    width: 312px;
+    /* The edge line and its gap keep the panels where they were. */
+    right: calc(51px + var(--panel-rail-clearance));
+    width: 323px;
+    padding-inline-end: 10px;
+    border-inline-end: 1px solid transparent;
   }
 
   /* The map rails now use one visible expanded width. Keeping the rail itself
@@ -1786,8 +1839,11 @@
     isolation: isolate;
     min-height: 132px;
     flex: 1 1 auto;
-    border-style: solid;
-    border-color: rgba(206, 222, 226, 0.14);
+    place-content: center;
+    padding: 12px;
+    border: 1px solid rgba(206, 222, 226, 0.14);
+    border-radius: 7px;
+    text-align: center;
     overflow: hidden;
     background:
       linear-gradient(
@@ -1849,7 +1905,6 @@
     background-size: 78px 78px;
   }
 
-  #intel-hud[data-variant='cyber'] .hud-top-bar,
   #intel-hud[data-variant='cyber'] .hud-bottom-bar {
     display: none;
   }
@@ -2486,15 +2541,13 @@
   );
 }
 
-:root[data-ui-theme='cyber']
-  body.cockpit-mode
-  :is(.cockpit-context-header, .cockpit-signal-header) {
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-card-header {
   border-bottom-color: rgba(105, 203, 209, 0.25);
 }
 
 :root[data-ui-theme='cyber']
   body.cockpit-mode
-  :is(.cockpit-context-kicker, .cockpit-signal-kicker, .cockpit-route-kicker) {
+  :is(.cockpit-card-kicker, .cockpit-route-kicker) {
   color: var(--cockpit-caution);
 }
 
@@ -2709,13 +2762,19 @@
 :root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack {
   top: clamp(164px, 19vh, 204px) !important;
   bottom: auto;
+  /* The cockpit keeps its physical sides in every language (rtl.css): the
+     utility controls hold the right edge. */
+  right: auto;
   left: 30px;
   width: var(--cyber-panel-width);
-  padding-left: 0;
-  border-left: 0;
+  padding-inline-start: 0;
+  border-inline-start: 0;
 }
 
-:root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack > #data-panel {
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  #left-panel-stack
+  > :is(#data-panel, #utilities-panel) {
   --panel-expanded-width: var(--cyber-panel-width);
   width: var(--cyber-panel-width);
   max-height: min(64vh, 610px);
@@ -2724,7 +2783,7 @@
 :root[data-ui-theme='cyber']
   body.cockpit-mode
   #left-panel-stack
-  > #data-panel.collapsed {
+  > :is(#data-panel, #utilities-panel).collapsed {
   width: var(--cyber-panel-collapsed-width);
 }
 
@@ -2757,7 +2816,7 @@
   :root[data-ui-theme='cyber']
     body.cockpit-mode
     #left-panel-stack
-    > #data-panel:not(.collapsed) {
+    > :is(#data-panel, #utilities-panel):not(.collapsed) {
     flex: 0 0 var(--cyber-cockpit-panel-height, 40vh);
     height: var(--cyber-cockpit-panel-height, 40vh);
     max-height: var(--cyber-cockpit-panel-height, 40vh);

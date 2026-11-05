@@ -1,6 +1,6 @@
+import { interruptGlobeRotation } from '../cameraVerbs.js';
 import {
   layerSnapshot,
-  layerSnapshots,
   feedProvenanceEnvelope,
 } from '../data/layerSnapshot.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
@@ -9,9 +9,16 @@ import { resolveDeicticArgs } from './deixis.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
+import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import * as Cesium from 'cesium';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
+import {
+  hudViewportSamples,
+  placeLookupView,
+  placeLookupViewChanged,
+} from '../hudPlaceLookup.js';
 import {
   findPoiByName,
   flyToGlobeView,
@@ -27,7 +34,6 @@ import {
   isContextRecordActive,
 } from '../data/contextStore.js';
 import { CCTV_FOCUS_RESULT } from '../layers/cctv/index.js';
-import { contextModeWord } from '../contextModePolicy.js';
 import {
   createAnalystEngine,
   normalizeAnalystSpec,
@@ -48,6 +54,20 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
+import {
+  getWorldPacket,
+  withContextModeVocabulary,
+  activeContactsWindow,
+  TRACKABLE_FAMILIES,
+} from '../agent/worldPacket.js';
+import { createVoiceAreas } from './areaActions.js';
+import { findImagery } from './imageryActions.js';
+import { osmQuery } from './osmActions.js';
+import { createOsmFeatureSource } from '../sources/osmFeatures.js';
+import {
+  OSM_PLACES_CREDIT,
+  registerDynamicCredit,
+} from '../data/dataCredits.js';
 
 const ALLOWED_STYLES = new Set([
   'normal',
@@ -56,7 +76,6 @@ const ALLOWED_STYLES = new Set([
   'thermal',
   'anime',
   'noir',
-  'snow',
 ]);
 const PANEL_ALIASES = new Map([
   ['data', 'data-panel'],
@@ -69,8 +88,17 @@ const PANEL_ALIASES = new Map([
   ['styles', 'control-panel'],
   ['filters', 'control-panel'],
   ['visual styles', 'control-panel'],
+  ['visual preset', 'control-panel'],
+  ['visual presets', 'control-panel'],
+  ['provider settings', 'provider-settings'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
+  ['voice settings', 'voice-settings'],
+  ['voice-settings', 'voice-settings'],
+  ['voice preview', 'voice-preview'],
+  ['voice-preview', 'voice-preview'],
+  ['voice control', 'voice-preview'],
+  ['voice controls', 'voice-preview'],
   ['radio', 'radio-panel'],
   ['internet radio', 'radio-panel'],
   ['radio stations', 'radio-panel'],
@@ -79,6 +107,13 @@ const PANEL_ALIASES = new Map([
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],
   ['context right panel', 'global-context-panel'],
+  ['utilities', 'utilities-panel'],
+  ['utilities panel', 'utilities-panel'],
+  ['draw', 'utilities-panel'],
+  ['drawing', 'utilities-panel'],
+  ['import', 'utilities-panel'],
+  ['import files', 'utilities-panel'],
+  ['authoring', 'scene-panel'],
   ['scenes', 'scene-panel'],
   ['scene', 'scene-panel'],
   ['post processing', 'pp-toggles'],
@@ -101,10 +136,12 @@ const PANEL_IDS = new Set([
   'cctv-panel',
   'radio-panel',
   'global-context-panel',
+  'utilities-panel',
   'scene-panel',
   'pp-toggles',
   'weather-panel',
   'recent-imagery-panel',
+  'provider-settings',
 ]);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
@@ -119,64 +156,6 @@ const CONTEXT_MODE_ALIASES = new Map([
   ['space-missions', 'space-missions'],
   ['missions', 'space-missions'],
 ]);
-/**
- * Every model-readable field that carries a context-mode id, and what an
- * absent value means for each.
- *
- * `mode` always names a mode, so nothing is 'off'. `entering` and `priorMode`
- * are absent when there is no such mode at all — calling those 'off' would
- * assert a state that does not exist.
- */
-const CONTEXT_MODE_RESULT_FIELDS = Object.freeze([
-  { field: 'mode', emptyAs: 'off' },
-  { field: 'entering', emptyAs: null },
-  { field: 'priorMode', emptyAs: null },
-]);
-
-/** Nested results that are themselves context-mode payloads the model reads. */
-const NESTED_CONTEXT_RESULT_FIELDS = Object.freeze([
-  'context',
-  'contextRollback',
-]);
-
-/**
- * Report a context-mode payload in the tools' own vocabulary.
- *
- * `set_context_mode` accepts 'contacts' while the mode's internal id is
- * 'flights'. Reporting the internal id back made the model read
- * `mode:'flights'` as "Contacts is off" and refuse to answer from the Contacts
- * window counts sitting in the very same payload (owner field session
- * 2026-08-21). Secondary fields and nested transition/rollback results are
- * translated too — one leaked internal id is enough to recreate the confusion,
- * and a rollback result is exactly what the model reads when something went
- * wrong. Each internal id is kept alongside as `<field>Internal` for anything
- * reasoning about layers.
- * @param {object|null|undefined} state Any payload carrying context-mode fields.
- * @returns {object|null|undefined} The same payload, modes translated.
- */
-function withContextModeVocabulary(state) {
-  if (!state || typeof state !== 'object') return state;
-  let out = state;
-  const mutable = () => {
-    if (out === state) out = { ...state };
-    return out;
-  };
-  for (const { field, emptyAs } of CONTEXT_MODE_RESULT_FIELDS) {
-    if (!(field in state)) continue;
-    const internal = state[field] ?? null;
-    const target = mutable();
-    target[field] = contextModeWord(internal, { emptyAs });
-    target[`${field}Internal`] = internal;
-  }
-  for (const field of NESTED_CONTEXT_RESULT_FIELDS) {
-    const nested = state[field];
-    if (!nested || typeof nested !== 'object') continue;
-    const translated = withContextModeVocabulary(nested);
-    if (translated !== nested) mutable()[field] = translated;
-  }
-  return out;
-}
-
 const COCKPIT_ACTION_ALIASES = new Map([
   ['next', 'next'],
   ['previous', 'previous'],
@@ -246,14 +225,6 @@ const STACK_ALIASES = new Map([
   ['road map', 'osm'],
 ]);
 
-/** Search order for track_entity across entity layer families. */
-const TRACKABLE_FAMILIES = [
-  { layerId: 'flights', kind: 'aircraft' },
-  { layerId: 'military', kind: 'aircraft' },
-  { layerId: 'ais-live-vessels', kind: 'vessel' },
-  { layerId: 'satellites', kind: 'satellite' },
-];
-
 const FRAME_TARGETS = new Map([
   ['flights', 'flights'],
   ['planes', 'flights'],
@@ -304,6 +275,9 @@ export function createGevActionRunner({
   searchNavigation = searchAndFlyTo,
   speechBuilders = null,
   deixis = null,
+  readVoicePanelOperation = null,
+  osmSearch = null,
+  areaOptions = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -313,20 +287,109 @@ export function createGevActionRunner({
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
   let analystEngine;
-  const resolveRegionRing = (name, signal) =>
-    annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
+  // Area handles live for this runner (the page): resolve_area, the
+  // analyst's region/area/drawn scopes, find_imagery and osm_query all read
+  // the same store.
+  const voiceAreas = createVoiceAreas({
+    viewer,
+    annotations,
+    placeSearch,
+    annotationResolver,
+    ...(areaOptions || {}),
+  });
+  const searchOsmFeatures = osmSearch || createOsmFeatureSource();
+  const resolveRegionRing = (name, options) =>
+    voiceAreas.resolveRegion(name, options);
   const ensureAnalystEngine = () =>
     (analystEngine ||= createAnalystEngine(
       analystProviders(viewer, dataManager, {
         placeSearch,
         resolveRegionRing,
+        resolveAreaScope: voiceAreas.resolveAreaScope,
         isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
       }),
     ));
   installViewTargetPrewarm(viewer);
-  initCameraVerbs(viewer, getViewTargetCartesian);
+  initCameraVerbs(viewer, getViewTargetCartesian, {
+    isCockpitActive: () => Boolean(styleManager?.getCockpitState?.()?.active),
+  });
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.
+  const voiceUnavailable = (action) => ({
+    ok: false,
+    action,
+    applied: false,
+    unavailable: true,
+    error: 'Voice panel controls are unavailable in this host.',
+    say: 'Voice panel controls are unavailable in this host.',
+  });
+  async function showVoicePanel(
+    view,
+    open,
+    options,
+    operation = readVoicePanelOperation?.(),
+  ) {
+    const current = () =>
+      !options.signal?.aborted &&
+      (!options.isCurrent || options.isCurrent()) &&
+      operation?.isCurrent();
+    if (!operation) return voiceUnavailable('set_panel_open');
+    if (!current())
+      return {
+        ok: false,
+        action: 'set_panel_open',
+        applied: false,
+        cancelled: true,
+      };
+    let exit = null;
+    if (open) {
+      if (typeof styleManager?.getCockpitState !== 'function')
+        return voiceUnavailable('set_panel_open');
+      if (styleManager.getCockpitState()?.active) {
+        if (typeof styleManager.controlCockpit !== 'function')
+          return voiceUnavailable('set_panel_open');
+        exit = await styleManager.controlCockpit('exit');
+        if (styleManager.getCockpitState()?.active)
+          return {
+            ok: false,
+            action: 'set_panel_open',
+            applied: false,
+            exit,
+            error: exit?.error || 'Cockpit did not exit.',
+          };
+      }
+    }
+    if (!current())
+      return {
+        ok: false,
+        action: 'set_panel_open',
+        applied: false,
+        cancelled: true,
+        exit,
+        cockpitExited: Boolean(exit && !styleManager.getCockpitState()?.active),
+        say:
+          exit && !styleManager.getCockpitState()?.active
+            ? 'Cockpit exited; the voice panel was left as you last set it.'
+            : 'The voice panel was left as you last set it.',
+      };
+    const result = operation.show(view, open);
+    return {
+      ...result,
+      action: 'set_panel_open',
+      panelId: view === 'settings' ? 'voice-settings' : 'voice-preview',
+      exit,
+      state: styleManager?.getCockpitState?.() ?? null,
+      say: !result.ok
+        ? 'The voice panel was not changed.'
+        : result.settingsOpen
+          ? 'Voice Settings is open.'
+          : result.panelOpen
+            ? result.previewEnabled
+              ? 'Voice Preview is open.'
+              : 'Voice control is open; Preview remains off.'
+            : 'The voice panel is closed.',
+    };
+  }
   const runGevAction = async function runGevAction(
     name,
     rawArgs = {},
@@ -360,6 +423,7 @@ export function createGevActionRunner({
     // Zoom during an active orbit adjusts the orbit RADIUS (spiral in/out) —
     // a straight camera move would be snapped back by the per-frame lookAt.
     if (name === 'adjust_camera_zoom') {
+      interruptGlobeRotation('voice-zoom-intent');
       const zoomOut = String(args.direction || '').toLowerCase() === 'out';
       const amt = String(args.amount || 'medium').toLowerCase();
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
@@ -697,6 +761,25 @@ export function createGevActionRunner({
       return { ok: true, action: 'set_visual_style', style };
     }
 
+    if (name === 'set_voice_inactivity_timeout') {
+      const operation = readVoicePanelOperation?.();
+      if (!operation) return voiceUnavailable(name);
+      if (!current() || !operation.isCurrent())
+        return { ok: false, action: name, applied: false, cancelled: true };
+      const result = operation.setMinutes(args.minutes);
+      const duration =
+        result.minutes === 0 ? 'disabled' : `${result.minutes} minutes`;
+      return {
+        ...result,
+        action: name,
+        say: !result.applied
+          ? 'Voice inactivity was not changed.'
+          : result.persisted
+            ? `Voice inactivity is ${duration}, saved in this browser.`
+            : `Voice inactivity is ${duration} for now, but could not be saved in this browser.`,
+      };
+    }
+
     if (name === 'set_panel_open') {
       const panelId = normalizePanelId(args.panelId || args.panel);
       if (!panelId)
@@ -704,7 +787,76 @@ export function createGevActionRunner({
           `Unknown panel: ${args.panelId || args.panel || 'missing'}`,
         );
       const open = args.open !== false;
-      setPanelOpen(styleManager, panelId, open);
+      if (panelId === 'voice-settings' || panelId === 'voice-preview')
+        return showVoicePanel(
+          panelId === 'voice-settings' ? 'settings' : 'preview',
+          open,
+          runOptions,
+        );
+      if (panelId === 'provider-settings') {
+        if (!current())
+          return {
+            ok: false,
+            action: name,
+            panelId,
+            applied: false,
+            cancelled: true,
+          };
+        const doc = globalThis.document;
+        // The setup owner (src/keySetup.js) publishes the dialog and takes
+        // its open and close requests.
+        const settings = useProviderSettingsStore(applicationPinia());
+        const concealed =
+          open &&
+          [
+            'ui-clean-view',
+            'recording-mode',
+            'cockpit-mode',
+            'scene-playback-mode',
+          ].some((mode) => doc?.body?.classList?.contains(mode));
+        if (concealed || settings.view?.ready !== true || !settings.controls) {
+          const error = concealed
+            ? 'Provider Settings is hidden in the current view. Leave that view before opening it.'
+            : 'Provider Settings is unavailable in this runtime.';
+          return {
+            ok: false,
+            action: name,
+            panelId,
+            applied: false,
+            unavailable: true,
+            error,
+            say: error,
+          };
+        }
+        if (open) settings.controls.open();
+        else settings.controls.close();
+        // Opening unhides at once; closing drops visible before its fade ends.
+        const dialog = settings.view.dialog;
+        const applied = open ? !dialog.hidden : !dialog.visible;
+        const say = applied
+          ? `Provider Settings is ${open ? 'open' : 'closed'}.`
+          : 'Provider Settings did not change.';
+        return {
+          ok: applied,
+          action: name,
+          panelId,
+          applied,
+          open: applied ? open : !dialog.hidden,
+          say,
+          ...(!applied ? { error: say } : {}),
+        };
+      }
+      if (!setPanelOpen(styleManager, panelId, open)) {
+        const say = 'There is no panel to open here.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          say,
+          error: say,
+        };
+      }
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
@@ -790,6 +942,25 @@ export function createGevActionRunner({
           ok: false,
           action: 'control_cockpit',
           error: `Unknown cockpit action: ${args.action || args.command || 'missing'}`,
+        };
+      }
+      if (args.voicePanel !== undefined) {
+        if (
+          action !== 'exit' ||
+          !['preview', 'settings'].includes(args.voicePanel)
+        )
+          return {
+            ok: false,
+            action: 'control_cockpit',
+            applied: false,
+            error: 'Voice panel reveal requires exit and a valid view.',
+          };
+        const result = await showVoicePanel(args.voicePanel, true, runOptions);
+        return {
+          ...result,
+          action: 'control_cockpit',
+          cockpitAction: 'exit',
+          voicePanel: args.voicePanel,
         };
       }
       const inferred = normalizeCockpitNavigationHints(rawAction);
@@ -911,15 +1082,18 @@ export function createGevActionRunner({
 
     if (name === 'show_data_layers_menu') {
       const layerId = normalizeLayerId(args.layerId || args.layer);
-      setPanelOpen(styleManager, 'data-panel', true);
-      const focusedLayer =
+      const row =
         layerId && dataManager.layers.has(layerId)
-          ? focusDataLayerRow(layerId)
+          ? findDataLayerRow(layerId)
           : null;
+      // Open the panel that holds the row: Directions lives in Utilities.
+      const panelId = row?.closest('[data-panel-id]')?.id || 'data-panel';
+      setPanelOpen(styleManager, panelId, true);
+      const focusedLayer = row ? focusDataLayerRow(row, layerId) : null;
       return {
         ok: true,
         action: 'show_data_layers_menu',
-        panelId: 'data-panel',
+        panelId,
         focusedLayer,
         layers: dataManager
           .getAll()
@@ -1007,6 +1181,65 @@ export function createGevActionRunner({
 
     if (name === 'next_iss_pass') {
       return nextIssPass(viewer, dataManager, args);
+    }
+
+    if (name === 'resolve_area') {
+      return voiceAreas.resolveAreaAction(args, {
+        signal: runOptions.signal,
+        isCurrent: current,
+        progress: reportProgress,
+      });
+    }
+
+    if (name === 'find_imagery') {
+      return findImagery(
+        {
+          dataManager,
+          viewer,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'recent-imagery', enabled },
+              runOptions,
+            ),
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
+    }
+
+    if (name === 'osm_query') {
+      return osmQuery(
+        {
+          dataManager,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          viewBox: () => cameraViewBox(viewer),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'osm-places', enabled },
+              runOptions,
+            ),
+          search: searchOsmFeatures,
+          onCredit: () => registerDynamicCredit(viewer, OSM_PLACES_CREDIT),
+          // The listed places become the analyst's "last answer", so
+          // "which of those…" filters them and never an older set.
+          rememberResults: (rows, presentation, { truncated = false } = {}) => {
+            if (!current()) return;
+            if (rows)
+              ensureAnalystEngine().remember('osm-places', rows, {
+                presentation,
+                truncated,
+              });
+            else analystEngine?.reset();
+          },
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
     }
 
     if (name === 'analyst_query') {
@@ -1154,6 +1387,18 @@ export function createGevActionRunner({
     }
 
     if (name === 'control_cctv') {
+      const action = String(args.action || '').toLowerCase();
+      if (
+        (action === 'enable' || action === 'disable') &&
+        dataManager.layers.get('cctv')?.module
+      ) {
+        const result = await runGevAction(
+          'set_layer_visibility',
+          { layerId: 'cctv', enabled: action === 'enable' },
+          runOptions,
+        );
+        return { ...result, action: 'control_cctv' };
+      }
       return controlCctv(dataManager, args, styleManager);
     }
 
@@ -1188,10 +1433,31 @@ export function createGevActionRunner({
 
     throw new Error(`Unknown GEV tool: ${name}`);
   };
-  // Lifetimes: the runner lives for the page; conversation state — the
+  // Lifetimes: the runner lives for the page (area handles included, so an
+  // outline stays countable across mic sessions); conversation state — the
   // analyst's follow-up memory and any write still in flight — lives for one
   // voice session and is dropped by resetConversation().
   let conversation = 0;
+  // Calls emitted by one assistant response are siblings rather than newer
+  // user intent. The new spatial actions share mutable surfaces (area board,
+  // imagery panel, OSM layer/follow-up memory), so serialize those siblings in
+  // event order just as analyst_query already was. A genuinely newer group or
+  // direct call still invalidates the older attempt.
+  const serializedSiblingActions = new Set([
+    'analyst_query',
+    'resolve_area',
+    'find_imagery',
+    'osm_query',
+  ]);
+  let serializedAttempt = 0;
+  let serializedSiblingGroup = null;
+  let serializedSiblingTail = Promise.resolve();
+  // Direct/programmatic callers do not necessarily arrive through
+  // createVoiceSession, so the runner must own the conversation lifetime of
+  // its serialized spatial workflows as well. Reset/dispose abort the real
+  // provider/catalog work, not just the eventual commit, while area handles
+  // remain owned by voiceAreas for the page lifetime.
+  let conversationAbort = new AbortController();
   let disposed = false;
   async function runVoiceAction(name, rawArgs = {}, callerOptions = {}) {
     if (disposed)
@@ -1202,56 +1468,113 @@ export function createGevActionRunner({
         error: 'Voice ended.',
       };
     const epoch = conversation;
+    let attempt = null;
+    let releaseSerializedSibling = null;
+    if (serializedSiblingActions.has(name)) {
+      const siblingGroup = callerOptions.authorityGroup || null;
+      if (siblingGroup) {
+        if (siblingGroup !== serializedSiblingGroup) {
+          serializedSiblingGroup = siblingGroup;
+          serializedSiblingTail = Promise.resolve();
+          serializedAttempt++;
+        }
+        attempt = serializedAttempt;
+        const predecessor = serializedSiblingTail;
+        const completion = new Promise((resolve) => {
+          releaseSerializedSibling = resolve;
+        });
+        serializedSiblingTail = predecessor.then(() => completion);
+        await predecessor;
+      } else {
+        serializedSiblingGroup = null;
+        serializedSiblingTail = Promise.resolve();
+        attempt = ++serializedAttempt;
+      }
+    }
+    const runnerSignal = serializedSiblingActions.has(name)
+      ? conversationAbort.signal
+      : null;
+    const signal = runnerSignal
+      ? callerOptions.signal
+        ? AbortSignal.any([runnerSignal, callerOptions.signal])
+        : runnerSignal
+      : callerOptions.signal;
     const runOptions = {
       ...callerOptions,
+      ...(signal ? { signal } : {}),
       isCurrent: () =>
+        !signal?.aborted &&
         epoch === conversation &&
+        (attempt === null || attempt === serializedAttempt) &&
         !disposed &&
         (typeof callerOptions.isCurrent !== 'function' ||
           callerOptions.isCurrent()),
     };
-    const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
-    // Point-and-ask: 'pointer' and referent:n become real targets here, from
-    // the turn's pointer snapshot and the latest numbered result.
-    const deictic = resolveDeicticArgs(name, input, {
-      pointer: deixis?.pointer?.activeSnapshot?.() || null,
-      referents: deixis?.referents || null,
-      imageFrame: deixis?.imageFrame?.() || null,
-      cameraKey: deixis?.cameraKey?.() || null,
-    });
-    if (deictic.error) {
-      return attachVoiceResult(
-        name,
-        { ok: false, action: name, error: deictic.error },
-        input,
-        builders,
-      );
-    }
-    const referentGeneration = deixis?.referents?.generation?.();
-    let result = await runGevAction(name, deictic.args, runOptions);
-    if (deictic.used && result && typeof result === 'object')
-      result = { ...result, resolvedFrom: deictic.used };
-    const out = attachVoiceResult(name, result, deictic.args, builders);
-    // Only an accepted, still-current result may become "the last list": a
-    // cancelled turn or one finishing after the session ended must not
-    // repopulate a cleared registry.
-    const stillCurrent =
-      !runOptions.signal?.aborted &&
-      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
-    if (stillCurrent)
-      deixis?.referents?.recordResult?.(name, out, {
-        since: referentGeneration,
+    try {
+      const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+      if (attempt !== null && !runOptions.isCurrent()) {
+        return attachVoiceResult(
+          name,
+          {
+            ok: false,
+            action: name,
+            code: 'CANCELLED',
+            cancelled: true,
+            error: 'This request was superseded.',
+          },
+          input,
+          builders,
+        );
+      }
+      // Point-and-ask: 'pointer' and referent:n become real targets here, from
+      // the turn's pointer snapshot and the latest numbered result.
+      const deictic = resolveDeicticArgs(name, input, {
+        pointer: deixis?.pointer?.activeSnapshot?.() || null,
+        referents: deixis?.referents || null,
+        imageFrame: deixis?.imageFrame?.() || null,
+        cameraKey: deixis?.cameraKey?.() || null,
       });
-    if (stillCurrent && deictic.used?.source === 'pointer')
-      deixis?.onPointerUsed?.();
-    return out;
+      if (deictic.error) {
+        return attachVoiceResult(
+          name,
+          { ok: false, action: name, error: deictic.error },
+          input,
+          builders,
+        );
+      }
+      const referentGeneration = deixis?.referents?.generation?.();
+      let result = await runGevAction(name, deictic.args, runOptions);
+      if (deictic.used && result && typeof result === 'object')
+        result = { ...result, resolvedFrom: deictic.used };
+      const out = attachVoiceResult(name, result, deictic.args, builders);
+      // Only an accepted, still-current result may become "the last list": a
+      // cancelled turn or one finishing after the session ended must not
+      // repopulate a cleared registry.
+      const stillCurrent =
+        !runOptions.signal?.aborted &&
+        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+      if (stillCurrent)
+        deixis?.referents?.recordResult?.(name, out, {
+          since: referentGeneration,
+        });
+      if (stillCurrent && deictic.used?.source === 'pointer')
+        deixis?.onPointerUsed?.();
+      return out;
+    } finally {
+      releaseSerializedSibling?.();
+    }
   }
   /**
    * A voice session ended: invalidate every write still in flight, then
-   * forget the analyst's "last answer".
+   * forget the analyst's "last answer". Area handles stay (page lifetime).
    */
   runVoiceAction.resetConversation = () => {
+    conversationAbort.abort();
+    conversationAbort = new AbortController();
     conversation++;
+    serializedAttempt++;
+    serializedSiblingGroup = null;
+    serializedSiblingTail = Promise.resolve();
     analystEngine?.reset();
   };
   /** Voice was removed: nothing may run or write again. */
@@ -1259,6 +1582,7 @@ export function createGevActionRunner({
     if (disposed) return;
     runVoiceAction.resetConversation();
     disposed = true;
+    voiceAreas.dispose();
   };
   return runVoiceAction;
 }
@@ -1494,13 +1818,10 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
   }
 
   if (action === 'enable' || action === 'disable') {
-    await dataManager.setEnabled('cctv', action === 'enable', {
-      origin: 'voice',
-    });
     return {
-      ok: true,
+      ok: false,
       action: 'control_cctv',
-      enabled: dataManager.isEnabled('cctv'),
+      error: 'Enable or disable CCTV through set_layer_visibility',
     };
   }
   if (!dataManager.isEnabled('cctv')) {
@@ -1516,9 +1837,8 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
     return {
       activeCameraId: ui.activeCameraId || null,
       activeCamera: ui.activeCamera?.name || ui.activeCamera?.id || null,
-      cameraCount: Array.isArray(ui.cameras)
-        ? ui.cameras.length
-        : ui.count || 0,
+      // `count`, not `cameras.length`: reading `cameras` builds every camera.
+      cameraCount: Number.isFinite(ui.count) ? ui.count : 0,
       showCoverage: !!ui.showCoverage,
       coverageMode: ui.coverageMode || (ui.showCoverage ? 'on' : 'off'),
       showProjection: !!ui.showProjection,
@@ -2067,7 +2387,11 @@ export async function controlRadio(
     if (!radioActionIsCurrent(options)) return cancelled(summarize);
     const prepared = state.selected
       ? true
-      : radio.cycleStation?.(1, { focus: false, autoplay: false });
+      : radio.cycleStation?.(1, {
+          focus: false,
+          autoplay: false,
+          fallback: true,
+        });
     return {
       ok: Boolean(prepared),
       action: 'control_radio',
@@ -2091,6 +2415,7 @@ export async function controlRadio(
     const selected = radio.cycleStation?.(action === 'next' ? 1 : -1, {
       focus: false,
       autoplay: false,
+      fallback: true,
     });
     return {
       ok: Boolean(selected),
@@ -2553,33 +2878,20 @@ function runManagedVoiceNavigation(
   };
 }
 
-/** Gathers tracked/selected entities across layer families for read-back. */
-function collectTrackedEntities(dataManager) {
-  const tracked = [];
-  for (const family of TRACKABLE_FAMILIES) {
-    const module = dataManager.layers.get(family.layerId)?.module;
-    if (!module) continue;
-    try {
-      const info =
-        family.kind === 'vessel'
-          ? module.getSelectedInfo?.()
-          : module.getTrackedInfo?.();
-      if (info)
-        tracked.push({ kind: family.kind, layerId: family.layerId, ...info });
-    } catch {
-      // layer not ready
-    }
-  }
-  return tracked;
-}
-
+/**
+ * Place labels for the HUD's passive summary. It geocodes the view center
+ * and one more point. While the view still shows about the same area (see
+ * hudPlaceLookup.js) it answers for the points the last lookup asked about
+ * instead, so a settled camera does not buy a new set of Google requests for
+ * every small pan; those points are cache hits, and only what the last
+ * lookup did not get (a timeout, a failure, an empty answer) is asked again.
+ * `cachedOnly` reads the shared caches and makes no request.
+ */
 export async function getBasemapLabelContext(
   viewer,
   service = defaultGeospatial,
-  { cachedOnly = false } = {},
+  { cachedOnly = false, previous = null } = {},
 ) {
-  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
-  const samples = sampleViewportCartographics(viewer);
   const cameraHeightM = viewer.camera.positionCartographic.height;
   const target = getViewTargetCartographic(viewer);
   if (!target) {
@@ -2587,11 +2899,77 @@ export async function getBasemapLabelContext(
       placeLabels: [],
       streetLabels: [],
       nearbyPlaceLabels: [],
+      view: null,
+      lookup: null,
     };
   }
 
   const latitude = Number(Cesium.Math.toDegrees(target.latitude).toFixed(6));
   const longitude = Number(Cesium.Math.toDegrees(target.longitude).toFixed(6));
+  const view = placeLookupView({
+    latitude,
+    longitude,
+    rangeM: viewTargetRangeM(viewer, target, cameraHeightM),
+    fovRad: viewer.camera.frustum?.fov,
+    aspectRatio: viewer.camera.frustum?.aspectRatio,
+    tier: basemapLookupTier(cameraHeightM),
+  });
+  if (
+    !cachedOnly &&
+    previous?.lookup &&
+    !placeLookupViewChanged(previous.view, view)
+  ) {
+    // The same points again: what the last lookup got is a cache hit, and
+    // only what it did not (a timeout, a failure, an empty answer) is asked.
+    const labels = await basemapLabelsAt(previous.lookup, service, {
+      cachedOnly: false,
+    });
+    return { ...labels, view: previous.view, lookup: previous.lookup };
+  }
+  const samples = sampleViewportCartographics(viewer);
+  const lookup = {
+    latitude,
+    longitude,
+    cameraHeightM,
+    // Cache reads are free, so a cached-only host keeps every sample.
+    samples: cachedOnly
+      ? samples
+      : hudViewportSamples(samples, shouldReverseGeocode(cameraHeightM)),
+  };
+  return {
+    ...(await basemapLabelsAt(lookup, service, { cachedOnly })),
+    view,
+    lookup,
+  };
+}
+
+/** Which of the height-gated lookups a camera height calls for. */
+function basemapLookupTier(cameraHeightM) {
+  return [
+    shouldReverseGeocode(cameraHeightM),
+    shouldReverseGeocodeViewport(cameraHeightM) && cameraHeightM > 10000,
+    shouldFetchNearbyPlaces(cameraHeightM) &&
+      nearbyPlacesRadiusM(cameraHeightM),
+  ].join(':');
+}
+
+/** Camera distance to the view target, or the camera height without one. */
+function viewTargetRangeM(viewer, target, cameraHeightM) {
+  const position = viewer.camera.positionWC;
+  if (!position) return cameraHeightM;
+  const range = Cesium.Cartesian3.distance(
+    position,
+    Cesium.Cartographic.toCartesian(target),
+  );
+  return Number.isFinite(range) ? range : cameraHeightM;
+}
+
+async function basemapLabelsAt(
+  { latitude, longitude, cameraHeightM, samples },
+  service,
+  { cachedOnly },
+) {
+  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const cachedViewportPlaces = viewportPlacesFromCache(
     samples,
     cameraHeightM,
@@ -2629,7 +3007,6 @@ export async function getBasemapLabelContext(
     resolveWithin(placePromise, BASEMAP_CONTEXT_WAIT_MS, null),
     resolveWithin(nearbyPromise, BASEMAP_CONTEXT_WAIT_MS, []),
   ]);
-
   return {
     placeLabels: uniqueStrings([
       place?.formattedAddress,
@@ -2951,13 +3328,14 @@ function normalizeAircraftClassFilter(value) {
   return raw.replace(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
 }
 
+/**
+ * @returns {boolean} Whether a shell took the change: its panel chrome owns
+ *   panel state, so without one there is no panel to open.
+ */
 function setPanelOpen(styleManager, panelId, open) {
-  if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
-    styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
-  } else {
-    const panel = document.getElementById(panelId);
-    if (panel) panel.classList.toggle('collapsed', !open);
-  }
+  if (typeof styleManager?.setPanelCollapsed !== 'function') return false;
+  styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
+  return true;
 }
 
 function normalizeContextMode(value) {
@@ -2994,11 +3372,14 @@ function normalizeCockpitAction(value) {
   return null;
 }
 
-function focusDataLayerRow(layerId) {
-  const row = document.querySelector(
-    `#data-toggles [data-layer-id="${CSS.escape(layerId)}"]`,
+function findDataLayerRow(layerId) {
+  const selector = `[data-layer-id="${CSS.escape(layerId)}"]`;
+  return document.querySelector(
+    `#data-toggles ${selector}, #utilities-toggles ${selector}`,
   );
-  if (!row) return null;
+}
+
+function focusDataLayerRow(row, layerId) {
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;
@@ -3210,60 +3591,12 @@ function getCurrentViewState(
   dataManager,
   sceneDirector = null,
 ) {
-  const cartographic = Cesium.Cartographic.fromCartesian(
-    viewer.camera.positionWC,
-  );
-  return {
-    ok: true,
-    action: 'get_current_view_state',
-    camera: {
-      latitude: Cesium.Math.toDegrees(cartographic.latitude),
-      longitude: Cesium.Math.toDegrees(cartographic.longitude),
-      heightM: cartographic.height,
-    },
-    style: styleManager.activeStyle || 'normal',
-    context:
-      typeof styleManager.getContextModeState === 'function'
-        ? {
-            ...withContextModeVocabulary(styleManager.getContextModeState()),
-            // The numbers on the operator's Contacts panel, so a window/count
-            // question can be answered from what they are looking at.
-            ...(activeContactsWindow(dataManager)
-              ? { contactsWindow: activeContactsWindow(dataManager) }
-              : {}),
-          }
-        : null,
-    cockpit:
-      typeof styleManager.getCockpitState === 'function'
-        ? styleManager.getCockpitState()
-        : null,
-    controls:
-      typeof styleManager.getControlState === 'function'
-        ? styleManager.getControlState()
-        : null,
-    scenePlayback: sceneDirector?.getPlaybackStatus?.() || null,
-    tracked: collectTrackedEntities(dataManager),
-    // Enabled layers only: the full registry cost ~1k tokens per call and
-    // the model only reasons about what is on.
-    disabledLayerCount: dataManager.getAll().filter((layer) => !layer.enabled)
-      .length,
-    layers: dataManager
-      .getAll()
-      .filter((layer) => layer.enabled)
-      .map((layer) => ({
-        id: layer.id,
-        name: layer.name,
-        enabled: layer.enabled,
-        count: layer.stats?.count || 0,
-        error: layer.stats?.error || null,
-        feedState: layerSnapshot(layer).feedState,
-        source: layerSnapshot(layer).source,
-        lastUpdate: layerSnapshot(layer).lastUpdate,
-      })),
-    feedProvenance: feedProvenanceEnvelope(
-      layerSnapshots(dataManager.getAll()).filter((layer) => layer.enabled),
-    ),
-  };
+  return getWorldPacket({
+    viewer,
+    styleManager,
+    dataManager,
+    sceneDirector,
+  });
 }
 
 async function getEntityContext(
@@ -3708,8 +4041,14 @@ async function aircraftProximityWindowForQuery(
       layerKeys: wanted,
       coverage,
       unanswered: [...(result?.unanswered || [])],
-      scopeLabel: answer.scopeLabel,
-      scopeDetail: answer.display.scope,
+      presentation: {
+        scopeLabel: answer.scopeLabel,
+        display: answer.display,
+        coverageScope: coverage.scope,
+        coverageNote: coverage.note,
+        centeredOn: answer.window.centeredOn,
+        window: answer.window,
+      },
     },
   };
 }
@@ -4490,46 +4829,6 @@ function dominantValue(values) {
   };
 }
 
-function summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
-  const now = Cesium.JulianDate.now();
-  if (entity.__gevContextId) {
-    const store = window.__gevContextStore;
-    const record = store?.entities?.get(entity.__gevContextId);
-    if (record) return summarizeContextRecord(record, { includeProperties });
-  }
-  const props = propertyObject(entity);
-  const layerId = entity.__localLayerId || props.layerId || null;
-  const tags = props.tags || {};
-  const label = cleanText(
-    props.name ||
-      tags.name ||
-      tags['name:en'] ||
-      tags.official_name ||
-      tags.operator ||
-      props.operator ||
-      entity.name ||
-      layerTitle(layerId),
-  );
-  const position =
-    entity.__localBaseCartesian ||
-    entity.position?.getValue?.(now) ||
-    polygonCenter(entity, now);
-  const carto = position ? Cesium.Cartographic.fromCartesian(position) : null;
-  return {
-    id: String(entity.id || ''),
-    name: label || layerTitle(layerId),
-    layerId,
-    layerName: layerTitle(layerId),
-    latitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.latitude).toFixed(6))
-      : null,
-    longitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.longitude).toFixed(6))
-      : null,
-    properties: includeProperties ? compactProperties(props) : undefined,
-  };
-}
-
 function summarizeContextRecord(record, { includeProperties = false } = {}) {
   return {
     id: String(record.id || ''),
@@ -4546,31 +4845,6 @@ function summarizeContextRecord(record, { includeProperties = false } = {}) {
       : undefined,
     active: isContextRecordActive(record),
   };
-}
-
-function polygonCenter(entity, now) {
-  const hierarchy = entity.polygon?.hierarchy?.getValue?.(now);
-  const positions = hierarchy?.positions;
-  if (!positions?.length) return null;
-  return Cesium.BoundingSphere.fromPoints(positions).center;
-}
-
-function propertyObject(entity) {
-  const raw = entity?.properties?.getValue?.(Cesium.JulianDate.now()) || {};
-  return unwrapProperties(raw);
-}
-
-function unwrapProperties(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(unwrapProperties);
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    out[key] =
-      entry && typeof entry.getValue === 'function'
-        ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
-        : unwrapProperties(entry);
-  }
-  return out;
 }
 
 function compactProperties(props) {
@@ -4636,23 +4910,6 @@ function clampNumber(value, min, max, fallback) {
  */
 
 /**
- * The Contacts panel's own counts, or null when Contacts has no subject.
- * Read through the awareness snapshot the panel renders, so the two cannot
- * diverge no matter which surface asks.
- * @returns {object|null} Panel-equivalent window counts.
- */
-function activeContactsWindow(dataManager) {
-  try {
-    const layer = dataManager?.layers?.get('military-awareness')?.module;
-    return (
-      layer?.contactsWindowFromSnapshot?.(layer.getContextSnapshot?.()) ?? null
-    );
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Most records one layer hands a single query. Above every loaded feed seen
  * so far (flights ~8k, vessels ~12k, a 24 h global FIRMS day ~160k), so
  * answers count the whole loaded set; a feed past it reports
@@ -4680,6 +4937,7 @@ function analystProviders(
         placeSearch,
       ),
     isWarming = () => false,
+    resolveAreaScope = null,
   } = {},
 ) {
   // Per-layer truncation seen by the last getRecords call.
@@ -4734,6 +4992,7 @@ function analystProviders(
       return note ? note.trim() : null;
     },
     resolveRegionRing,
+    ...(resolveAreaScope ? { resolveAreaScope } : {}),
     /**
      * The active Contacts subject, when there is one — the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
@@ -4767,6 +5026,15 @@ function analystProviders(
       };
     },
   };
+}
+
+/** The camera's view rectangle as [west, south, east, north] degrees, or null. */
+function cameraViewBox(viewer) {
+  const rect = viewer?.camera?.computeViewRectangle?.();
+  if (!rect) return null;
+  return [rect.west, rect.south, rect.east, rect.north].map((radians) =>
+    Cesium.Math.toDegrees(radians),
+  );
 }
 
 /** Identity fields every compact analyst item keeps when present. */
@@ -4828,6 +5096,9 @@ const ANALYST_REFUSAL_FIELDS = Object.freeze([
   'layers',
   'layerStatus',
   'cancelled',
+  'needsClarification',
+  'candidates',
+  'query',
 ]);
 
 const VIEWPORT_COVERAGE_NOTE = 'the flights layer loads by viewport';
@@ -4876,7 +5147,7 @@ async function runAnalystQuery(
   args = {},
   _layerEnabledAt,
   isCurrent = () => true,
-  signal = undefined,
+  signal = null,
 ) {
   let entityWindow = null;
   const result = await analystEngine.query(
@@ -4890,8 +5161,8 @@ async function runAnalystQuery(
       followUp: Boolean(args.followUp),
     },
     {
-      isCurrent,
       signal,
+      isCurrent,
       beforeCommit: async (candidate) => {
         const projected = await aircraftProximityWindowForQuery(
           dataManager,
@@ -4920,8 +5191,8 @@ async function runAnalystQuery(
       code: result.code || null,
       error: result.error,
     };
-    // The engine's semantic fields pass through unchanged: a cancellation
-    // stays a cancellation.
+    // The engine's semantic fields pass through unchanged: a clarification
+    // keeps its candidates, a cancellation stays a cancellation.
     for (const key of ANALYST_REFUSAL_FIELDS)
       if (result[key] !== undefined) refusal[key] = result[key];
     if (result.coverage) refusal.coverage = result.coverage;
@@ -4994,7 +5265,9 @@ async function runAnalystQuery(
     ...(result.partial
       ? { partial: true, unanswered: result.unanswered || [] }
       : {}),
+    ...(result.areaId ? { areaId: result.areaId } : {}),
     ...(result.centeredOn ? { centeredOn: result.centeredOn } : {}),
+    ...(result.window ? { window: result.window } : {}),
     // Every count names its scope in words; a bare number is what made two
     // honest answers look like a contradiction.
     scopeLabel: result.scopeLabel,

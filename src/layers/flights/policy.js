@@ -1,11 +1,3 @@
-export {
-  GROUND_FLOOR_CLAMP_RADIUS_KM,
-  GROUND_FLOOR_WARM_MAX_ALT_M,
-  POSITION_HISTORY_LIMIT,
-  LANDED_MISSING_POLL_LIMIT,
-  MISSING_POLL_LIMIT,
-  ERROR_BACKOFF_INTERVAL,
-} from './recordPolicy.js';
 import * as Cesium from 'cesium';
 import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 

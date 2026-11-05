@@ -326,8 +326,10 @@ async function main() {
       'src/data/local_data/cctv_ground_heights/cctv_ground_heights.json',
   );
   let sidecar = await loadSidecar(output);
+  // A cold catalog waits for its slowest pack (Tarktee gets 30 s), so allow
+  // more than that.
   const response = await fetch(`${base}/api/cctv/sources`, {
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(60_000),
   });
   if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
   const catalog = await response.json();

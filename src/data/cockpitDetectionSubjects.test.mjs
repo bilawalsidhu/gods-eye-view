@@ -2,7 +2,6 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { dispatchCockpitModeChanged, enter, exit, _adoptTrackedEntity } from '../ui/cockpitTrackingController.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import flightsLayer, {
   _setCockpitDetectionSubjectForTest as setFlightsCockpitSubject,
