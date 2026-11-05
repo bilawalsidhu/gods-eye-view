@@ -34,8 +34,12 @@ export interface CreateOptions {
   googleApiKey?: string;
   /** Short-lived Google session tokens, when the key is held server-side. */
   googleTokens?: () => Promise<string>;
-  /** Cesium ion token, for ion-hosted terrain and fallback tiles. */
-  ionToken?: string;
+  /**
+   * The token for the renderer's world data: `world` terrain and imagery
+   * and the photoreal `fallback`. For the default renderer, a Cesium ion
+   * token.
+   */
+  worldDataToken?: string;
   /** Initial multisampling; quality can change it later. */
   msaa?: 0 | 2 | 4 | 8;
   /** Keep the drawing buffer after presenting, for capture. */

@@ -201,6 +201,9 @@ export function createStubRenderer(options = {}) {
     runPhase('preRender', t);
     step('render');
     rendered += 1;
+    // A frame each timed layer was asked to show is now drawn.
+    for (const [layer, flush] of [...frameFlushes])
+      if (frameFlushes.get(layer) === flush) flush();
     step('postRender');
     runPhase('postRender', t);
     for (const waiter of onceWaiters.splice(0)) waiter();
@@ -277,6 +280,7 @@ export function createStubRenderer(options = {}) {
     },
     setTime(ms) {
       sceneTime = ms;
+      for (const show of [...sceneFrameLayers.values()]) show(ms);
       requestRender('time');
     },
     time: () => sceneTime,
@@ -916,8 +920,10 @@ export function createStubRenderer(options = {}) {
 
   const imageryLayers = [];
   let split = 0.5;
-  let imageryHost = 'globe';
-  const hostListeners = [];
+  /** Layers whose frames follow scene time, each with its show-a-time function. */
+  const sceneFrameLayers = new Map();
+  /** Each timed layer's announcement of the frame it drew, run after a render. */
+  const frameFlushes = new Map();
   const progressListeners = [];
   const settled = { base: true, tiles: true, terrain: true, imagery: true };
   let sky = {
@@ -933,13 +939,21 @@ export function createStubRenderer(options = {}) {
   let photorealStatus = { route: 'none' };
 
   function addImagery(spec, index) {
+    if (
+      !capabilities.has('imageHooks') &&
+      (spec.tileTransform || spec.admit || spec.kind === 'canvas')
+    )
+      throw new TypeError(
+        'tileTransform, admit and canvas imagery need imageHooks',
+      );
     const listeners = { frameReady: [], tileError: [] };
     const layer = {
       spec: { ...spec },
       alpha: 1,
       show: true,
       split: 'none',
-      drapeOn: 'active',
+      drapeOn: 'all',
+      lit: true,
       on(event, cb) {
         listeners[event]?.push(cb);
         return () => {
@@ -967,23 +981,67 @@ export function createStubRenderer(options = {}) {
       remove() {
         const i = imageryLayers.indexOf(layer);
         if (i >= 0) imageryLayers.splice(i, 1);
+        sceneFrameLayers.delete(layer);
+        frameFlushes.delete(layer);
         requestRender('imagery');
       },
     };
     if (capabilities.has('imageryFrames')) {
-      let frames = [];
-      layer.setFrames = (list) => {
-        frames = list.slice();
+      let source = null;
+      let clockKind = 'scene';
+      /** The time the source shows for `ms`: the nearest frame, or within the videos. */
+      const shownTime = (ms) => {
+        if (source?.kind === 'video') {
+          let best = null;
+          let bestOff = Infinity;
+          for (const seg of source.segments) {
+            const t = Math.min(seg.end, Math.max(seg.start, ms));
+            if (Math.abs(t - ms) < bestOff) {
+              best = t;
+              bestOff = Math.abs(t - ms);
+            }
+          }
+          return best;
+        }
+        const frames = source?.frames ?? [];
+        let best = null;
+        for (const f of frames)
+          if (!best || Math.abs(f.time - ms) < Math.abs(best.time - ms))
+            best = f;
+        return best ? best.time : null;
+      };
+      // The stub has every frame at once, so the frame asked for is drawn
+      // by the next render; it is said once per change of the drawn frame.
+      let wanted = null;
+      let drawnTime = null;
+      const show = (ms) => {
+        wanted = shownTime(ms);
+        requestRender('imagery');
+      };
+      frameFlushes.set(layer, () => {
+        if (wanted === null || wanted === drawnTime) return;
+        drawnTime = wanted;
+        deliver(listeners.frameReady, drawnTime);
+      });
+      layer.setFrames = (next, opts = {}) => {
+        source =
+          next.kind === 'video'
+            ? { kind: 'video', segments: next.segments.map((s) => ({ ...s })) }
+            : { kind: 'frames', frames: next.frames.slice() };
+        wanted = null;
+        drawnTime = null;
+        clockKind = opts.clock ?? 'scene';
+        if (clockKind === 'scene') {
+          sceneFrameLayers.set(layer, show);
+          show(sceneTime);
+        } else sceneFrameLayers.delete(layer);
+        requestRender('imagery');
       };
       layer.setFrameTime = (ms) => {
-        const nearest = frames.reduce(
-          (best, f) =>
-            !best || Math.abs(f.time - ms) < Math.abs(best.time - ms)
-              ? f
-              : best,
-          null,
-        );
-        if (nearest) deliver(listeners.frameReady, nearest.time);
+        // On the scene clock the frame port's time decides.
+        if (clockKind !== 'own') return;
+        show(ms);
+        requestRender('imagery');
       };
     }
     if (index === undefined) imageryLayers.push(layer);
@@ -996,7 +1054,7 @@ export function createStubRenderer(options = {}) {
   const globe = {
     async setBase(base) {
       log('globe', 'setBase', [base]);
-      for (const layer of imageryLayers.splice(0)) void layer;
+      for (const layer of imageryLayers.slice()) layer.remove();
       if (base.photoreal !== undefined)
         await globe.setPhotoreal(base.photoreal);
       const layers = (base.imagery ?? []).map((spec) => addImagery(spec));
@@ -1008,11 +1066,6 @@ export function createStubRenderer(options = {}) {
         spec && capabilities.has('photoreal')
           ? { route: 'google' }
           : { route: 'none' };
-      const next = photorealStatus.route === 'none' ? 'globe' : 'tiles';
-      if (next !== imageryHost) {
-        imageryHost = next;
-        deliver(hostListeners, next);
-      }
       requestRender('base');
       return photorealStatus;
     },
@@ -1027,14 +1080,6 @@ export function createStubRenderer(options = {}) {
     imagery: {
       add: addImagery,
       list: () => imageryLayers.slice(),
-      host: () => imageryHost,
-      onHostChange(cb) {
-        hostListeners.push(cb);
-        return () => {
-          const i = hostListeners.indexOf(cb);
-          if (i >= 0) hostListeners.splice(i, 1);
-        };
-      },
     },
     sky: {
       get: () => ({ ...sky }),
@@ -1056,6 +1101,16 @@ export function createStubRenderer(options = {}) {
   if (capabilities.has('surfaceShading'))
     globe.setSurfaceShading = (shading) => {
       log('globe', 'setSurfaceShading', [shading]);
+      requestRender('base');
+    };
+  if (capabilities.has('clouds'))
+    globe.setClouds = (clouds) => {
+      log('globe', 'setClouds', [clouds]);
+      requestRender('base');
+    };
+  if (capabilities.has('water'))
+    globe.setWater = (water) => {
+      log('globe', 'setWater', [water]);
       requestRender('base');
     };
   if (capabilities.has('splitSwipe')) {
@@ -1328,6 +1383,8 @@ export function createStubRenderer(options = {}) {
       onceTimers.clear();
       sets.clear();
       satrecs.clear();
+      sceneFrameLayers.clear();
+      frameFlushes.clear();
     },
     testing: {
       /** Run one frame of the loop; true when it drew. */

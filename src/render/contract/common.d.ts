@@ -160,6 +160,12 @@ export type Capability =
   | 'imageryFrames'
   /** Wind-relief and similar shading of the globe surface. */
   | 'surfaceShading'
+  /** Volumetric clouds (`globe.setClouds`). */
+  | 'clouds'
+  /** A water surface on the oceans (`globe.setWater`). */
+  | 'water'
+  /** Main-thread tile hooks: `tileTransform`, `admit` and `canvas` imagery. */
+  | 'imageHooks'
   /** A screen-space sector modulation pass (a sweeping sonar band). */
   | 'screenModulation'
   /** GPU frame timing through timer queries. */
