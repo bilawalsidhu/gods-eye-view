@@ -24,8 +24,12 @@ export function normalize(a) {
   return vec(a.x / m, a.y / m, a.z / m);
 }
 
-export const toRadians = (degrees) => (degrees * Math.PI) / 180;
-export const toDegrees = (radians) => (radians * 180) / Math.PI;
+// As the default renderer converts: by a precomputed factor, so results are
+// bit for bit its own.
+export const RADIANS_PER_DEGREE = Math.PI / 180;
+export const DEGREES_PER_RADIAN = 180 / Math.PI;
+export const toRadians = (degrees) => degrees * RADIANS_PER_DEGREE;
+export const toDegrees = (radians) => radians * DEGREES_PER_RADIAN;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export const acosClamped = (v) => Math.acos(clamp(v, -1, 1));
 export const equalsEpsilon = (a, b, eps) => Math.abs(a - b) <= eps;
