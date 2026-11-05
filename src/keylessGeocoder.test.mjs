@@ -229,6 +229,7 @@ const HUE = {
     extent: [107.3763, 16.7739, 108.0518, 16.1276],
   },
 };
+
 /** Answers biased requests with `nearby`, unbiased ones with `anywhere`. */
 function photonPair(nearby, anywhere) {
   const urls = [];
@@ -277,11 +278,33 @@ test('toponym folding preserves non-Latin scripts', () => {
     ['القاهرة', 'القاهرة'],
     ['東京', '東京'],
     ['São 東京', 'sao 東京'],
+    ['Straße', 'strasse'],
+    ['Tromsø', 'tromso'],
+    ['Łódź', 'lodz'],
+    ['The Hague', 'the hague'],
   ];
 
   for (const [input, expected] of cases) {
     assert.equal(normalizeToponym(input), expected, input);
   }
+});
+
+test('a leading "the" is part of the name a nearby match must equal', async () => {
+  // "The Hague" over upstate New York means the Dutch city, not Hague, NY.
+  const hagueNy = {
+    geometry: { type: 'Point', coordinates: [-73.5004, 43.6967] },
+    properties: { osm_key: 'place', osm_value: 'town', type: 'city', name: 'Hague', country: 'United States' },
+  };
+  const theHague = {
+    geometry: { type: 'Point', coordinates: [4.3113, 52.0799] },
+    properties: { osm_key: 'place', osm_value: 'city', type: 'city', name: 'The Hague', country: 'Nederland' },
+  };
+  const fetchImpl = photonPair([hagueNy], [theHague]);
+
+  const result = await geocodeKeyless('The Hague', { bias: '43.65,-73.55|43.75,-73.45', fetchImpl });
+
+  assert.equal(Math.round(result.lat), 52, `got ${result.label}`);
+  assert.equal(fetchImpl.urls.length, 2);
 });
 
 test('a biased match that leads with the name is taken without a second request', async () => {

@@ -1,4 +1,4 @@
-import { foldPlaceName } from './data/placeNames.js';
+import { foldPlaceText } from './data/placeNames.js';
 
 /** Photon/OpenStreetMap place-search adapter. */
 const PHOTON_ENDPOINT = 'https://photon.komoot.io/api/';
@@ -243,7 +243,7 @@ export function photonSearchUrl(
  * @returns {string}
  */
 export function normalizeToponym(text) {
-  return foldPlaceName(text);
+  return foldPlaceText(text);
 }
 
 /**
