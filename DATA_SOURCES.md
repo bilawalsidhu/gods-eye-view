@@ -273,12 +273,13 @@ Bundled OSM-derived data is distributed under [ODbL 1.0](https://opendatacommons
 > We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Earth Observing System Data and Information System (EOSDIS).
 
 FIRMS active fires are **fetched live at runtime** (CC0 / U.S. public domain data): the
-`/api/firms` server-side proxy merges the three VIIRS NRT sources (NOAA-20, NOAA-21,
-Suomi-NPP) and MODIS NRT (Terra + Aqua), clamped to the trailing 24 h, cached 30 min to respect the shared MAP_KEY
+`/api/firms` server-side proxy merges the two VIIRS NRT sources (NOAA-20, NOAA-21)
+and MODIS NRT (Terra + Aqua), clamped to the trailing 24 h, cached 30 min to respect the shared MAP_KEY
 transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); without it the layer shows INPE's
 South American detections instead (below).
-The former bundled 2026-05-25 snapshot was removed 2026-07-16.
+The former bundled 2026-05-25 snapshot was removed 2026-07-16. Suomi NPP (`VIIRS_SNPP_NRT`)
+is no longer requested: NASA stopped delivering its data on 2026-11-02.
 
 ### INPE Programa Queimadas (keyless Active Fires, South America)
 
@@ -287,7 +288,7 @@ Citation: INPE. Programa Queimadas. Disponível em: https://data.inpe.br/queimad
 When no `FIRMS_MAP_KEY` is configured, `/api/firms` serves the near-real-time detections
 that Brazil's Instituto Nacional de Pesquisas Espaciais publishes every 10 minutes at
 https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/10min/, **fetched live at
-runtime**, nothing bundled: South America only, from VIIRS (NOAA-20, NOAA-21, Suomi-NPP),
+runtime**, nothing bundled: South America only, from VIIRS (NOAA-20, NOAA-21; Suomi-NPP until 2026-11-02),
 MODIS (Aqua, Terra), GOES-19, Meteosat (MSG-03) and MetOp-B/C, clamped to the trailing 24 h
 by pass time (GMT). No key. Each 10-minute file is downloaded once and kept until it leaves
 the 30-hour lookback, so a refresh asks INPE for the listing and one new file.
