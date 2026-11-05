@@ -355,6 +355,8 @@ test('a panel reports a render error in full and stops drawing', () => {
   try {
     let clock = 0;
     const stop = keepPanelRendering(viewer, { windowRef, now: () => clock });
+    // Cesium stops its render loop after a render error.
+    viewer.useDefaultRenderLoop = false;
     listener(viewer.scene, { name: 'RuntimeError', message: 'worker failed' });
     assert.match(logged[0], /render error: .*"message":"worker failed"/);
     clock = 1000;

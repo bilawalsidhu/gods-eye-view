@@ -105,10 +105,45 @@ export function installRenderFailureNotice(
   };
 
   const removeRenderError = scene.renderError.addEventListener(onRenderError);
+  // An error thrown outside Scene's own error handling (a preRender or
+  // postRender listener, the clock's onTick, a resize) also stops Cesium's
+  // render loop, but raises no renderError, and Cesium reports it only in the
+  // panel the app turns off. Raise it as a render error, so Cesium's handler,
+  // an inline panel's timer and this notice all see it.
+  const unguard = ['resize', 'render'].map((name) =>
+    reportThrown(viewer.cesiumWidget, name, (error) =>
+      scene.renderError.raiseEvent(scene, error),
+    ),
+  );
   canvas?.addEventListener?.('webglcontextlost', onContextLost);
   return () => {
     removeRenderError();
+    unguard.forEach((restore) => restore());
     canvas?.removeEventListener?.('webglcontextlost', onContextLost);
     clear();
+  };
+}
+
+/**
+ * Wrap `target[name]` so an error it throws is reported and thrown on, for
+ * the caller to handle as before. Returns a function that unwraps it.
+ */
+function reportThrown(target, name, report) {
+  const original = target?.[name];
+  if (typeof original !== 'function') return () => {};
+  const own = Object.hasOwn(target, name);
+  const guarded = function (...args) {
+    try {
+      return original.apply(this, args);
+    } catch (error) {
+      report(error);
+      throw error;
+    }
+  };
+  target[name] = guarded;
+  return () => {
+    if (target[name] !== guarded) return;
+    if (own) target[name] = original;
+    else delete target[name];
   };
 }

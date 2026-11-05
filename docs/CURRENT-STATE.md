@@ -1590,7 +1590,11 @@ the error and publishes a notice to the status store, which
 application scene creates its viewer with `showRenderLoopErrors: false`, so
 Cesium's own "Rendering has stopped" panel, which offers no way back, no longer
 appears; `applicationViewerOptions()` and `createApplicationViewer()` keep
-Cesium's panel by default for other callers.
+Cesium's panel by default for other callers. An error thrown outside Scene's
+own error handling (a `preRender` or `postRender` listener, the clock's
+`onTick`, a resize) also stops the loop without a `renderError`, so the notice
+wraps the widget's `render()` and `resize()` and raises such an error as a
+render error before Cesium's loop handles it as before.
 
 - **Retry** after a render error restarts the render loop. The notice stays
   until a frame starts and ends without a render error (Cesium raises
@@ -1603,8 +1607,15 @@ Cesium's panel by default for other callers.
 
 An inline conversation panel never reloads or navigates its host's page, so it
 offers Retry after a render error only, and nothing after a lost context, where
-the panel runtime's own notice applies. The listener does not
-`preventDefault()` the context loss or restore the context; it only reports it.
+the panel runtime's own notice applies. The panel's timer
+(`keepPanelRendering()`) draws only while Cesium's render loop is on, so it
+stops after a render error and draws again after Retry. An error in a frame
+the timer draws leaves the loop's next animation frame queued, and the timer
+keeps Cesium's loop marked running, so Retry does not start a second loop that
+would draw every frame twice once the host resumes frames.
+
+The `webglcontextlost` listener does not `preventDefault()` the context loss or
+restore the context; it only reports it.
 
 ## Map Source control ownership
 
