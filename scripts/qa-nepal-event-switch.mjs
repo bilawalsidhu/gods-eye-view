@@ -36,6 +36,22 @@ const strict = createStrict({
         body: '<!doctype html><title>QA player</title><body style="background:#111"></body>',
       }),
     },
+    // A Facebook post the playback reaches in a slower run: its SDK and
+    // post page, inert as well.
+    {
+      pattern: 'https://connect.facebook.net/*',
+      respond: () => ({
+        contentType: 'text/javascript',
+        body: '/* QA: Facebook SDK withheld */',
+      }),
+    },
+    {
+      pattern: 'https://www.facebook.com/*',
+      respond: () => ({
+        contentType: 'text/html',
+        body: '<!doctype html><title>QA post</title><body style="background:#111"></body>',
+      }),
+    },
   ],
 });
 await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
