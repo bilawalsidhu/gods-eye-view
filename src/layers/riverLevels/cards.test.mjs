@@ -88,6 +88,27 @@ test('a Canadian card lists the mean yearly low and high it is coloured by', () 
   );
 });
 
+test('a Dutch card reads metres above NAP, not a local gauge zero', () => {
+  const lobith = {
+    ...bonn,
+    id: 'rws:lobith.bovenrijn.tolkamer',
+    provider: 'rws',
+    code: 'lobith.bovenrijn.tolkamer',
+    name: 'Lobith, Bovenrijn, Tolkamer',
+    river: '',
+    level: 6.4,
+    refs: {},
+    band: 'unknown',
+  };
+  const card = buildRiverLevelCard(lobith, null, NOW);
+  assert.equal(card.details[0], 'Rijkswaterstaat');
+  assert.ok(
+    card.details.includes('Metres above NAP (Amsterdam Ordnance Datum)'),
+  );
+  assert.ok(!card.details.some((line) => /Local gauge zero/.test(line)));
+  assert.ok(!card.details.some((line) => /Level alert/.test(line)));
+});
+
 test('the series trend stands in until the snapshot carries one', () => {
   const card = buildRiverLevelCard(
     { ...bonn, trend: null },

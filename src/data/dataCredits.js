@@ -199,6 +199,9 @@ export const DATA_CREDITS = [
       '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, version 1.0</a>' +
       ' · Water Survey of Canada, Environment and Climate Change Canada: contains information licensed under the ' +
       '<a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>' +
+      ' · Netherlands: Rijkswaterstaat, ' +
+      '<a href="https://rijkswaterstaatdata.nl/" target="_blank" rel="noopener">rijkswaterstaatdata.nl</a>' +
+      ', taken live every 10 minutes; each card shows when its reading was taken' +
       ' (raw data, not quality controlled; informational only)' +
       ' · river lines: OpenStreetMap contributors via OpenFreeMap',
   },

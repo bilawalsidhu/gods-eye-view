@@ -167,7 +167,12 @@ export function buildRiverLevelCard(
   else if (alertLevelsFor(station).length)
     details.push(t('Level alert: Weather panel'));
 
-  details.push(t('Local gauge zero · not comparable between gauges'));
+  // Dutch levels are on the national datum, not on a local gauge zero.
+  details.push(
+    provider?.datum === 'NAP'
+      ? t('Metres above NAP (Amsterdam Ordnance Datum)')
+      : t('Local gauge zero · not comparable between gauges'),
+  );
   details.push(t('Raw data · not quality controlled'));
 
   return {

@@ -3038,10 +3038,11 @@
   "last {hours} h": "直近 {hours} 時間",
   "Loading recent readings…": "最近の観測値を読み込み中…",
   "Local gauge zero · not comparable between gauges": "水位標の零点は観測所ごとに異なり比較不可",
+  "Metres above NAP (Amsterdam Ordnance Datum)": "NAP（アムステルダム基準水位）からの高さ（m）",
   "Raw data · not quality controlled": "未検証の生データ",
   "River levels request failed": "河川水位の取得に失敗しました",
   "River levels": "河川水位",
-  "Germany, Taiwan and Canada · official gauges": "ドイツ・台湾・カナダ · 公式水位観測所",
+  "Germany, Taiwan, Canada and the Netherlands · official gauges": "ドイツ・台湾・カナダ・オランダ · 公式水位観測所",
   "{count} gauges · {network} unavailable": "{count} 観測所 · {network} 利用不可",
   "{count} gauges reporting": {
     "other": "{count} か所の観測所が報告中"
@@ -3057,6 +3058,7 @@
   "Germany · federal waterways": "ドイツ · 連邦水路",
   "Taiwan · central rivers": "台湾 · 中央管理河川",
   "Canada · real-time hydrometric network": "カナダ · リアルタイム水文観測網",
+  "Netherlands · national waters": "オランダ · 国の管理水域",
   "Record low {value}": "最低記録 {value}",
   "Mean {value}": "平均 {value}",
   "Mean yearly low {value}": "年最低水位の平均 {value}",

@@ -271,11 +271,19 @@ export const RIVER_LEVEL_PROVIDERS = Object.freeze({
     coverage: msg('Canada · real-time hydrometric network'),
     licence: 'ECCC Data Servers End-use Licence',
   }),
+  rws: Object.freeze({
+    id: 'rws',
+    country: 'NL',
+    network: 'Rijkswaterstaat',
+    coverage: msg('Netherlands · national waters'),
+    licence: 'Reuse with source and date (rijkswaterstaatdata.nl)',
+    datum: 'NAP',
+  }),
 });
 
 /** Same stable id shape the server publishes: `<provider>:<code>`. */
 export const STATION_ID_PATTERN =
-  /^(pegelonline:[0-9a-f-]{36}|wra:[0-9A-Z]{4,12}|eccc:[0-9]{2}[A-Z]{2}[0-9]{3})$/;
+  /^(pegelonline:[0-9a-f-]{36}|wra:[0-9A-Z]{4,12}|eccc:[0-9]{2}[A-Z]{2}[0-9]{3}|rws:[a-z0-9][a-z0-9._-]{1,80})$/;
 
 /**
  * The official page for a gauge, built from its validated code only.

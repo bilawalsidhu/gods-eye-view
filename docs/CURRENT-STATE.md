@@ -101,11 +101,13 @@ implementations.
 ## River levels — official river gauges
 
 The Weather group includes **River levels** (`river-levels`, share-link token
-`9`), off by default. `/api/river-levels` merges three keyless national networks
+`9`), off by default. `/api/river-levels` merges four keyless national networks
 into one station shape: PEGELONLINE (every German federal-waterway gauge),
 Taiwan's Water Resources Agency (real-time stage, register converted from
 TWD97) and the Water Survey of Canada through ECCC's GeoMet OGC API (real-time
-levels, referenced by the means of each gauge's yearly HYDAT low and high). Each gauge is coloured only from the references its operator publishes
+levels, referenced by the means of each gauge's yearly HYDAT low and high)
+and Rijkswaterstaat in the Netherlands (water height above NAP at non-tidal
+locations; no published references, so Dutch gauges stay grey). Each gauge is coloured only from the references its operator publishes
 for it — lowest on record, below normal, normal, watch, warning, flood, above
 record high — because gauge zeros are local and values never compare between
 gauges; a gauge without references stays grey. From afar each gauge is a dot
@@ -118,7 +120,7 @@ the colour of its nearest gauge, from the OpenStreetMap waterways in the
 OpenFreeMap tiles (detailed close up, generalized from afar). From afar the
 dots keep their distance on screen (the most severe wins), grey gauges
 drop out above 400 km, and labels thin with height. Selecting a gauge shows level,
-trend, references and a 72 h sparkline (PEGELONLINE and ECCC series; for WRA, what the
+trend, references and a 72 h sparkline (PEGELONLINE, ECCC and Rijkswaterstaat series; for WRA, what the
 server has seen), with "local gauge zero" and "raw data" caveats. The
 Weather panel readout lists the band legend and the most severe gauges in
 view. With a gauge selected, the readout also offers a level alert: chips for
@@ -4228,7 +4230,7 @@ its criteria cannot be silently ignored.
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
-| River levels ≈ | PEGELONLINE (WSV, Germany) + Water Resources Agency (Taiwan) + ECCC (Water Survey of Canada); raw gauge readings | `src/layers/riverLevels/` via `src/app/layers/riverLevels.js` | `/api/river-levels`, `/api/river-levels/station/…` | 10 min (server cache 10 min; stale-on-error up to 6 h; WRA and ECCC registers 24 h, ECCC yearly statistics 7 d) |
+| River levels ≈ | PEGELONLINE (WSV, Germany) + Water Resources Agency (Taiwan) + ECCC (Water Survey of Canada) + Rijkswaterstaat (Netherlands); raw gauge readings | `src/layers/riverLevels/` via `src/app/layers/riverLevels.js` | `/api/river-levels`, `/api/river-levels/station/…` | 10 min (server cache 10 min; stale-on-error up to 6 h; WRA, ECCC and Rijkswaterstaat registers 24 h, ECCC yearly statistics 7 d) |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |

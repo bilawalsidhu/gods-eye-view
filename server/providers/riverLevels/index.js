@@ -26,6 +26,17 @@ import {
   normalizeEcccStats,
 } from './eccc.js';
 import {
+  RWS_CATALOGUE_BODY,
+  RWS_CATALOGUE_URL,
+  RWS_LATEST_URL,
+  RWS_SERIES_URL,
+  normalizeRwsCatalogue,
+  normalizeRwsLatest,
+  normalizeRwsSeries,
+  rwsLatestBody,
+  rwsSeriesBody,
+} from './rws.js';
+import {
   WRA_REALTIME_URL,
   WRA_STATIONS_URL,
   normalizeWraReadings,
@@ -39,6 +50,8 @@ const SNAPSHOT_TTL_MS = 10 * 60_000;
 const REGISTER_TTL_MS = 24 * 60 * 60_000;
 /** ECCC's archived yearly statistics change a few times a year. */
 const STATS_TTL_MS = 7 * 24 * 60 * 60_000;
+/** Dutch locations per request; the batches go out in parallel. */
+const RWS_BATCH_SIZE = 150;
 /** Longest a network that stopped answering keeps its last readings. */
 const STALE_MAX_MS = 6 * 60 * 60_000;
 /** A network that failed is not asked again for this long. */
@@ -53,9 +66,9 @@ const TREND_MAX_MS = 3 * 60 * 60_000;
 const SERIES_TTL_MS = 10 * 60_000;
 const SERIES_CACHE_MAX = 256;
 
-const PROVIDER_IDS = Object.freeze(['pegelonline', 'wra', 'eccc']);
+const PROVIDER_IDS = Object.freeze(['pegelonline', 'wra', 'eccc', 'rws']);
 const STATION_PATH =
-  /^\/station\/(pegelonline\/[0-9a-f-]{36}|wra\/[0-9A-Z]{4,12}|eccc\/[0-9]{2}[A-Z]{2}[0-9]{3})\/?$/;
+  /^\/station\/(pegelonline\/[0-9a-f-]{36}|wra\/[0-9A-Z]{4,12}|eccc\/[0-9]{2}[A-Z]{2}[0-9]{3}|rws\/[a-z0-9][a-z0-9._-]{1,80})\/?$/;
 
 /**
  * Keyless river gauge routes for dev and preview:
@@ -63,7 +76,7 @@ const STATION_PATH =
  *   in the shared shape (`src/layers/riverLevels/model.js`) with its band and,
  *   once two readings are known, its trend in cm/h;
  * - `GET /api/river-levels/station/<provider>/<code>`: the gauge's recent
- *   series for its card (72 h from PEGELONLINE and ECCC; for Taiwan, which publishes
+ *   series for its card (72 h from PEGELONLINE, ECCC and Rijkswaterstaat; for Taiwan, which publishes
  *   only the newest reading, what this server has seen since it started).
  */
 export function riverLevelsProxy({
@@ -78,6 +91,7 @@ export function riverLevelsProxy({
   let register = null;
   let registerAt = 0;
   const eccc = { register: null, registerAt: 0, stats: null, statsAt: 0 };
+  const rws = { register: null, registerAt: 0 };
   /** @type {Map<string, Array<[number, number]>>} */
   const history = new Map();
   /** @type {Map<string, {savedAt: number, points: Array<[number, number]>}>} */
@@ -95,6 +109,68 @@ export function riverLevelsProxy({
       throw new Error('upstream_unavailable');
     }
     return readResponseJsonCapped(response, cap, signal);
+  }
+
+  async function upstreamPost(url, body, cap, timeout) {
+    const signal = AbortSignal.timeout(timeout);
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      signal,
+      redirect: 'error',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error('upstream_unavailable');
+    }
+    return readResponseJsonCapped(response, cap, signal);
+  }
+
+  /**
+   * Some 560 Dutch locations, asked in parallel batches: Rijkswaterstaat
+   * answers one request for all of them in about 25 s, four batches in 6 s.
+   */
+  async function loadRws() {
+    if (!rws.register || now() - rws.registerAt > REGISTER_TTL_MS) {
+      try {
+        const next = normalizeRwsCatalogue(
+          await upstreamPost(
+            RWS_CATALOGUE_URL,
+            RWS_CATALOGUE_BODY,
+            16 * MIB,
+            60_000,
+          ),
+        );
+        if (next.size) {
+          rws.register = next;
+          rws.registerAt = now();
+        }
+      } catch (error) {
+        if (!rws.register) throw error;
+      }
+    }
+    if (!rws.register) throw new Error('invalid_register');
+    const codes = [...rws.register.keys()];
+    const batches = [];
+    for (let i = 0; i < codes.length; i += RWS_BATCH_SIZE)
+      batches.push(codes.slice(i, i + RWS_BATCH_SIZE));
+    const answers = await Promise.all(
+      batches.map((batch) =>
+        upstreamPost(RWS_LATEST_URL, rwsLatestBody(batch), 8 * MIB, 45_000),
+      ),
+    );
+    // One merged answer, so a location that came back twice is one gauge.
+    const series = answers.map((answer) => answer?.WaarnemingenLijst);
+    if (!series.every(Array.isArray)) throw new Error('invalid_snapshot');
+    return normalizeRwsLatest(
+      rws.register,
+      { WaarnemingenLijst: series.flat() },
+      now(),
+    );
   }
 
   async function loadWra() {
@@ -179,6 +255,7 @@ export function riverLevelsProxy({
       ),
     wra: loadWra,
     eccc: loadEccc,
+    rws: loadRws,
   };
 
   /** Merge readings into the per-gauge history, newest last. */
@@ -279,21 +356,34 @@ export function riverLevelsProxy({
         trend: trendOf(id),
       };
     if (provider === 'eccc' && !eccc.register?.has(code)) return null;
+    if (provider === 'rws' && !rws.register?.has(code)) return null;
+    const fetchSeries = {
+      pegelonline: async () =>
+        normalizePegelonlineSeries(
+          await upstream(pegelonlineMeasurementsUrl(code), 2 * MIB, 20_000),
+        ),
+      eccc: async () =>
+        normalizeEcccSeries(
+          await upstream(
+            ecccSeriesUrl(code, now() - HISTORY_SPAN_MS),
+            4 * MIB,
+            20_000,
+          ),
+        ),
+      rws: async () =>
+        normalizeRwsSeries(
+          await upstreamPost(
+            RWS_SERIES_URL,
+            rwsSeriesBody(code, now() - HISTORY_SPAN_MS, now()),
+            4 * MIB,
+            20_000,
+          ),
+        ),
+    }[provider];
     const { promise } = coalesceProxyRequest(
       inFlight,
       `series:${id}`,
-      async () =>
-        provider === 'eccc'
-          ? normalizeEcccSeries(
-              await upstream(
-                ecccSeriesUrl(code, now() - HISTORY_SPAN_MS),
-                4 * MIB,
-                20_000,
-              ),
-            )
-          : normalizePegelonlineSeries(
-              await upstream(pegelonlineMeasurementsUrl(code), 2 * MIB, 20_000),
-            ),
+      fetchSeries,
     );
     const points = await promise;
     seriesCache.delete(id);

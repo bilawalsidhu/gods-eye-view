@@ -3038,10 +3038,11 @@
   "last {hours} h": "最近 {hours} 小時",
   "Loading recent readings…": "正在載入最近讀數…",
   "Local gauge zero · not comparable between gauges": "水尺零點因站而異 · 不可跨站比較",
+  "Metres above NAP (Amsterdam Ordnance Datum)": "高於 NAP（阿姆斯特丹基準面）的公尺數",
   "Raw data · not quality controlled": "原始資料 · 未經品質管制",
   "River levels request failed": "取得河川水位失敗",
   "River levels": "河川水位",
-  "Germany, Taiwan and Canada · official gauges": "德國、台灣與加拿大 · 官方水位站",
+  "Germany, Taiwan, Canada and the Netherlands · official gauges": "德國、台灣、加拿大與荷蘭 · 官方水位站",
   "{count} gauges · {network} unavailable": "{count} 個水位站 · {network} 無法使用",
   "{count} gauges reporting": {
     "other": "{count} 個水位站有資料"
@@ -3057,6 +3058,7 @@
   "Germany · federal waterways": "德國 · 聯邦水道",
   "Taiwan · central rivers": "台灣 · 中央管河川",
   "Canada · real-time hydrometric network": "加拿大 · 即時水文監測網",
+  "Netherlands · national waters": "荷蘭 · 國家水域",
   "Record low {value}": "歷史最低 {value}",
   "Mean {value}": "平均 {value}",
   "Mean yearly low {value}": "多年平均年最低水位 {value}",

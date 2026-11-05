@@ -17,6 +17,7 @@ import {
   normalizeEcccRegister,
   normalizeEcccStats,
 } from './eccc.js';
+import { normalizeRwsCatalogue, normalizeRwsLatest } from './rws.js';
 
 const BONN_UUID = '593647aa-9fea-43ec-a7d6-6476a76ae868';
 
@@ -178,8 +179,10 @@ test('WRA readings join the register, in Taiwan time, newest per gauge', () => {
 function harness(answers, start = Date.parse('2026-11-04T21:00:00Z')) {
   let clock = start;
   const calls = [];
-  const fetchImpl = async (url) => {
+  const inits = [];
+  const fetchImpl = async (url, init) => {
     calls.push(url);
+    inits.push([url, init]);
     for (const [pattern, body] of answers) {
       if (pattern.test(url)) {
         const value = typeof body === 'function' ? body() : body;
@@ -218,6 +221,7 @@ function harness(answers, start = Date.parse('2026-11-04T21:00:00Z')) {
   return {
     call,
     calls,
+    inits,
     advance: (ms) => {
       clock += ms;
     },
@@ -501,4 +505,174 @@ test('a GeoMet page loop stops at the page cap', async () => {
     h.calls.filter((url) => /hydrometric-realtime/.test(url)).length,
     ECCC_MAX_PAGES,
   );
+});
+
+const RWS_HEIGHT = {
+  Compartiment: { Code: 'OW' },
+  Grootheid: { Code: 'WATHTE' },
+  Hoedanigheid: { Code: 'NAP' },
+  ProcesType: 'meting',
+};
+
+const RWS_CATALOGUE = {
+  Succesvol: true,
+  AquoMetadataLijst: [
+    { AquoMetadata_MessageID: 294, ...RWS_HEIGHT },
+    {
+      AquoMetadata_MessageID: 292,
+      ...RWS_HEIGHT,
+      ProcesType: 'astronomisch',
+    },
+    {
+      AquoMetadata_MessageID: 1,
+      ...RWS_HEIGHT,
+      Grootheid: { Code: 'Hm0' },
+    },
+  ],
+  AquoMetadataLocatieLijst: [
+    { AquoMetaData_MessageID: 294, Locatie_MessageID: 10 },
+    { AquoMetaData_MessageID: 294, Locatie_MessageID: 11 },
+    { AquoMetaData_MessageID: 292, Locatie_MessageID: 11 },
+    { AquoMetaData_MessageID: 1, Locatie_MessageID: 12 },
+    { AquoMetaData_MessageID: 294, Locatie_MessageID: 13 },
+  ],
+  LocatieLijst: [
+    {
+      Locatie_MessageID: 10,
+      Code: 'lobith.bovenrijn.tolkamer',
+      Lat: 51.8495,
+      Lon: 6.1024,
+      Naam: 'Lobith, Bovenrijn, Tolkamer',
+    },
+    // Tidal: also publishes an astronomical tide.
+    {
+      Locatie_MessageID: 11,
+      Code: 'vlissingen',
+      Lat: 51.44,
+      Lon: 3.6,
+      Naam: 'Vlissingen',
+    },
+    // Waves only.
+    { Locatie_MessageID: 12, Code: 'k13a', Lat: 53.2, Lon: 3.2, Naam: 'K13a' },
+    // Outside the Netherlands.
+    { Locatie_MessageID: 13, Code: 'faraway', Lat: 10, Lon: 10, Naam: 'X' },
+  ],
+};
+
+const rwsSeries = (code, readings, metadata = RWS_HEIGHT) => ({
+  AquoMetadata: metadata,
+  Locatie: { Code: code },
+  MetingenLijst: readings.map(([Tijdstip, value]) => ({
+    Tijdstip,
+    Meetwaarde: { Waarde_Numeriek: value },
+  })),
+});
+
+test('the Rijkswaterstaat catalogue keeps non-tidal water height locations', () => {
+  const register = normalizeRwsCatalogue(RWS_CATALOGUE);
+  assert.deepEqual([...register.keys()], ['lobith.bovenrijn.tolkamer']);
+  assert.equal(
+    register.get('lobith.bovenrijn.tolkamer').name,
+    'Lobith, Bovenrijn, Tolkamer',
+  );
+  assert.throws(() => normalizeRwsCatalogue({}), /invalid_catalogue/);
+});
+
+test('Dutch readings: newest series wins, centimetres become metres, sentinels drop', () => {
+  const register = normalizeRwsCatalogue(RWS_CATALOGUE);
+  const now = Date.parse('2026-11-05T14:00:00Z');
+  const stations = normalizeRwsLatest(
+    register,
+    {
+      WaarnemingenLijst: [
+        // An archived method's last value, decades old.
+        rwsSeries('lobith.bovenrijn.tolkamer', [
+          ['1987-06-28T23:00:00.000+01:00', 1342],
+        ]),
+        rwsSeries('lobith.bovenrijn.tolkamer', [
+          ['2026-11-05T14:40:00.000+01:00', 640],
+        ]),
+        rwsSeries('lobith.bovenrijn.tolkamer', [
+          ['2026-11-05T14:50:00.000+01:00', 999999999],
+        ]),
+        rwsSeries('vlissingen', [['2026-11-05T14:40:00.000+01:00', 120]]),
+      ],
+    },
+    now,
+  );
+  assert.equal(stations.length, 1);
+  const [lobith] = stations;
+  assert.equal(lobith.id, 'rws:lobith.bovenrijn.tolkamer');
+  assert.equal(lobith.level, 6.4);
+  assert.equal(lobith.observedMs, Date.parse('2026-11-05T13:40:00Z'));
+  assert.equal(lobith.band, 'unknown');
+  assert.deepEqual(lobith.refs, {});
+});
+
+test('the Dutch network is asked in parallel batches and serves a series', async () => {
+  const many = {
+    ...RWS_CATALOGUE,
+    AquoMetadataLocatieLijst: [
+      ...RWS_CATALOGUE.AquoMetadataLocatieLijst,
+      ...Array.from({ length: 200 }, (_, i) => ({
+        AquoMetaData_MessageID: 294,
+        Locatie_MessageID: 100 + i,
+      })),
+    ],
+    LocatieLijst: [
+      ...RWS_CATALOGUE.LocatieLijst,
+      ...Array.from({ length: 200 }, (_, i) => ({
+        Locatie_MessageID: 100 + i,
+        Code: `meetpunt.${i}`,
+        Lat: 52,
+        Lon: 5,
+        Naam: `Meetpunt ${i}`,
+      })),
+    ],
+  };
+  const bodies = [];
+  const h = harness([
+    [/OphalenCatalogus/, many],
+    [
+      /OphalenLaatsteWaarnemingen/,
+      () => ({
+        WaarnemingenLijst: [
+          rwsSeries('lobith.bovenrijn.tolkamer', [
+            ['2026-11-04T21:40:00.000+01:00', 640],
+          ]),
+        ],
+      }),
+    ],
+    [
+      /OphalenWaarnemingen$/,
+      {
+        WaarnemingenLijst: [
+          rwsSeries('lobith.bovenrijn.tolkamer', [
+            ['2026-11-04T20:40:00.000+01:00', 650],
+            ['2026-11-04T21:40:00.000+01:00', 640],
+          ]),
+        ],
+      },
+    ],
+  ]);
+  const answer = await h.call('/');
+  assert.equal(answer.status, 200);
+  assert.equal(answer.body.providers.rws.count, 1);
+  // 201 locations in batches of 150: two requests, each a POST.
+  const latest = h.inits.filter(([url]) =>
+    /OphalenLaatsteWaarnemingen/.test(url),
+  );
+  assert.equal(latest.length, 2);
+  for (const [, init] of latest) {
+    assert.equal(init.method, 'POST');
+    bodies.push(JSON.parse(init.body).LocatieLijst.length);
+  }
+  assert.deepEqual(bodies.sort(), [150, 51]);
+
+  const series = await h.call('/station/rws/lobith.bovenrijn.tolkamer');
+  assert.equal(series.status, 200);
+  assert.equal(series.body.points.length, 2);
+  assert.equal(series.body.trend, -10);
+  assert.equal((await h.call('/station/rws/vlissingen')).status, 404);
+  assert.equal((await h.call('/station/rws/..%2F..')).status, 404);
 });

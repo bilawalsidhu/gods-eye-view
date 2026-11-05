@@ -954,7 +954,7 @@ export function createRiverLevelsLayer({
     id: 'river-levels',
     name: 'River levels',
     icon: '≈',
-    source: 'PEGELONLINE · WRA · ECCC',
+    source: 'PEGELONLINE · WRA · ECCC · RWS',
     updateInterval: 600_000,
 
     init(viewer) {
@@ -1079,9 +1079,11 @@ export function createRiverLevelsLayer({
         summary: {
           ...alerts,
           label: t('River levels'),
-          coverage: t('Germany, Taiwan and Canada · official gauges'),
+          coverage: t(
+            'Germany, Taiwan, Canada and the Netherlands · official gauges',
+          ),
           validTime: newest ? new Date(newest).toISOString() : undefined,
-          detail: 'PEGELONLINE (WSV) · WRA · ECCC',
+          detail: 'PEGELONLINE (WSV) · WRA · ECCC · Rijkswaterstaat',
           status: _lastError
             ? translateFeedError(_lastError)
             : _stations.length === 0
