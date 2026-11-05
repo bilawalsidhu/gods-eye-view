@@ -16,6 +16,7 @@ import {
 } from './labels.js';
 import {
   formatUtcDayMonth,
+  isolate,
   t,
   tn,
   msg,
@@ -25,9 +26,11 @@ import { formatQuantity } from '../../ui/unitLabels.js';
 
 // "10-12 15:00 UTC" never breaks across lines: no-break spaces, and a word
 // joiner after the hyphen (JetBrains Mono has no U+2011 non-breaking hyphen).
+// The clock is isolated (a no-op outside RTL): a no-break space between two
+// numbers joins them into one run, which in Arabic split the date around it.
 const utc = (value) =>
   value
-    ? `${formatUtcDayMonth(value).replace('-', '-\u2060')}\u00a0${value.slice(11, 16)}\u00a0UTC`
+    ? `${formatUtcDayMonth(value).replace('-', '-\u2060')}\u00a0${isolate(value.slice(11, 16))}\u00a0UTC`
     : t('Unavailable');
 const COVERAGE = msg(
   'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.',
@@ -41,13 +44,16 @@ const ADVISORIES_UNAVAILABLE = msg('Cyclone advisories unavailable');
 const SERVER_REASONS = new Set([msg('Cyclone data unavailable')]);
 const errorText = (error) =>
   error && (SERVER_REASONS.has(error) ? t(error) : translateKnown(error));
+// NHC's Tropical Cyclone Status JSON reference: PTC is post-tropical, PC is a
+// potential tropical cyclone, and subtropical systems are STS and STD.
 const CLASSIFICATION_NAMES = Object.freeze({
-  PTC: msg('Potential tropical cyclone'),
+  PC: msg('Potential tropical cyclone'),
+  PTC: msg('Post-tropical cyclone'),
   HU: msg('Hurricane'),
   TS: msg('Tropical storm'),
   TD: msg('Tropical depression'),
-  SS: msg('Subtropical storm'),
-  SD: msg('Subtropical depression'),
+  STS: msg('Subtropical storm'),
+  STD: msg('Subtropical depression'),
 });
 const classificationName = (code) =>
   Object.hasOwn(CLASSIFICATION_NAMES, code)

@@ -51,12 +51,13 @@ export function createAwarenessLayer({ services, source }) {
         parts.queries.collectAircraftProximityWindow,
       _getAwarenessNavigationStateForTest:
         parts.testing._getAwarenessNavigationStateForTest,
+      _getAwarenessPanelRendersForTest:
+        parts.testing._getAwarenessPanelRendersForTest,
       canNavigateAwarenessNext: parts.navigation.canNavigateAwarenessNext,
       historySubjectSnapshot: parts.history.historySubjectSnapshot,
       findCompatibleHistoryIndex: parts.history.findCompatibleHistoryIndex,
-      awarenessPanelControlKey: parts.panel.awarenessPanelControlKey,
-      captureAwarenessPanelFocus: parts.panel.captureAwarenessPanelFocus,
-      restoreAwarenessPanelFocus: parts.panel.restoreAwarenessPanelFocus,
+      subscribePanel: parts.panel.subscribePanel,
+      subscribeDirectionOverlay: parts.rendering.subscribeDirectionOverlay,
       awarenessResultsAreLive: parts.panel.awarenessResultsAreLive,
       awarenessNeedsContinuousRender:
         parts.model.awarenessNeedsContinuousRender,

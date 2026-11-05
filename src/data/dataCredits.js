@@ -151,6 +151,20 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'openseamap',
+    html:
+      'Sea marks overlay: ' +
+      '<a href="https://www.openseamap.org" target="_blank" rel="noopener">© OpenSeaMap contributors</a> (CC BY-SA 2.0) · ' +
+      'Data © OpenStreetMap contributors (ODbL)',
+  },
+  {
+    key: 'opensnowmap',
+    html:
+      'Ski pistes overlay: ' +
+      '<a href="https://www.opensnowmap.org" target="_blank" rel="noopener">© www.opensnowmap.org</a> (CC BY-SA) · ' +
+      'Data © OpenStreetMap contributors (ODbL)',
+  },
+  {
     key: 'nasa-gibs',
     html:
       'Recent imagery: We acknowledge the use of imagery provided by services from ' +
@@ -166,6 +180,13 @@ export const DATA_CREDITS = [
       '<a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">National Interagency Fire Center (WFIGS)</a>' +
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
+  },
+  {
+    key: 'faa-sua',
+    html:
+      'Prohibited & restricted airspace: ' +
+      '<a href="https://adds-faa.opendata.arcgis.com/" target="_blank" rel="noopener">FAA Special Use Airspace</a>' +
+      ' (prohibited and restricted zones; informational only)',
   },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
@@ -298,6 +319,14 @@ export const DATA_CREDITS = [
       'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
   },
   {
+    key: 'houston-cctv',
+    html:
+      'CCTV cameras &amp; frames (Houston, when enabled): ' +
+      '<a href="https://traffic.houstontranstar.org/cctv/transtar/" target="_blank" rel="noopener">Houston TranStar</a>. ' +
+      "Copying, distributing or framing its images needs TxDOT's written permission under the " +
+      '<a href="https://traffic.houstontranstar.org/disclaimer.aspx" target="_blank" rel="noopener">TranStar Content Usage terms</a>',
+  },
+  {
     key: 'hk-cctv',
     html:
       'Traffic snapshot cameras (Hong Kong): ' +
@@ -342,6 +371,13 @@ export const DATA_CREDITS = [
   {
     key: 'panoramax',
     html: 'Street Level: imagery © <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> contributors, licence per picture',
+  },
+  {
+    key: 'a22-cctv',
+    html:
+      'Motorway webcams (A22 Brennero–Modena): images © ' +
+      '<a href="https://www.autobrennero.it/" target="_blank" rel="noopener">Autostrada del Brennero S.p.A.</a>, ' +
+      'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
   },
   {
     key: 'gbfs',
@@ -449,6 +485,14 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 's2-ghostmaps',
+    html:
+      'S2 GhostMaps intel products: S2 Underground © by S2A1, ' +
+      '<a href="https://github.com/s2underground/GhostMaps" target="_blank" rel="noopener">github.com/s2underground/GhostMaps</a>, ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. ' +
+      'Shown as published; reports are S2 assessments, not verified fact.',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +
@@ -523,13 +567,33 @@ export const NATURAL_EARTH_CREDIT = {
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
 
-/** Registered when the first bundled US county outline resolves (public
- * domain — credited as a courtesy). */
+/** Registered when the first bundled US county or place outline resolves
+ * (public domain — credited as a courtesy). */
 export const US_CENSUS_CREDIT = {
   key: 'us-census-counties',
   html:
-    'US county boundaries from the ' +
+    'US county and place boundaries from the ' +
     '<a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">U.S. Census Bureau</a> (public domain)',
+};
+
+/** Registered when the first bundled Who's On First neighborhood outline
+ * resolves. The link leads to the pack's per-source credits and licences and
+ * says how the boundaries were modified. */
+export const WOF_CREDIT = {
+  key: 'wof-neighborhoods',
+  html:
+    'Neighborhood boundaries: ' +
+    '<a href="https://whosonfirst.org/docs/licenses/" target="_blank" rel="noopener">Who\'s On First</a> and contributors, simplified (' +
+    '<a href="https://github.com/bilawalsidhu/gods-eye-view/blob/main/src/data/local_data/wof_neighborhoods/ATTRIBUTION.md" target="_blank" rel="noopener">sources and licences</a>)',
+};
+
+/** Registered when a voice place search (a configured Overpass) first shows places. */
+export const OSM_PLACES_CREDIT = {
+  key: 'osm-places',
+  html:
+    'Places found by voice: ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+    '(ODbL 1.0)',
 };
 
 /**

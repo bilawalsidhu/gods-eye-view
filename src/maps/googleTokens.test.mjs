@@ -79,3 +79,12 @@ test('a server that does not offer tokens yields none', async () => {
     assert.equal(await createGoogleTokenSource({ fetchImpl }).token(), null);
   }
 });
+
+test('an empty 204 response explicitly means no Google token is available', async () => {
+  const { calls, fetchImpl } = server([
+    new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } }),
+  ]);
+  const tokens = createGoogleTokenSource({ fetchImpl });
+  assert.equal(await tokens.token(), null);
+  assert.deepEqual(calls, [GOOGLE_TOKEN_PATH]);
+});

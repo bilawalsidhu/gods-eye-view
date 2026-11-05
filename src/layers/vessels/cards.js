@@ -4,6 +4,7 @@ import {
   normalizeVesselType,
 } from '../../data/vesselLabels.js';
 import { formatNumber, t } from '../../i18n/index.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export function createCards({
   vesselState,
@@ -12,31 +13,24 @@ export function createCards({
   layer,
   options,
 }) {
-  const { state } = vesselState;
-
   function updateSelectedVesselHud(record) {
-    const el = document.getElementById('hud-ais-vessel');
-    if (!el) return;
-
     // Pinned vessels missing from recent refreshes get a stale marker
     const stale = (record.missedRefreshes || 0) > 0;
-    el.classList.add('active');
-    el.textContent = [
-      t('AIS: {name}', { name: trimHudValue(record.name, 32) }),
-      t('{type}  SPD: {speed}  HDG: {heading}', {
-        type: trimHudValue(record.type || t('VESSEL'), 24),
-        speed: formatSpeed(record.speed),
-        heading: formatHeading(record.heading ?? record.course),
-      }),
-      `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('STALE')}` : ''}`,
-    ].join('\n');
+    services.readouts?.presentSelectedVessel({
+      text: [
+        t('AIS: {name}', { name: trimHudValue(record.name, 32) }),
+        t('{type}  SPD: {speed}  HDG: {heading}', {
+          type: trimHudValue(record.type || t('VESSEL'), 24),
+          speed: formatSpeed(record.speed),
+          heading: formatHeading(record.heading ?? record.course),
+        }),
+        `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('STALE')}` : ''}`,
+      ].join('\n'),
+    });
   }
 
   function resetSelectedVesselHud() {
-    const el = document.getElementById('hud-ais-vessel');
-    if (!el) return;
-    el.classList.remove('active');
-    el.textContent = t('AIS: --');
+    services.readouts?.presentSelectedVessel(null);
   }
 
   function trimHudValue(value, maxLength) {
@@ -62,7 +56,8 @@ export function createCards({
     if (record.speed !== null && record.speed !== undefined)
       parts.push(formatSpeed(record.speed));
     const direction = record.heading ?? record.course;
-    if (Number.isFinite(direction)) parts.push(`${Math.round(direction)}°`);
+    if (Number.isFinite(direction))
+      parts.push(`${roundHeadingDegrees(direction)}°`);
     return {
       id: vesselOverlayEntryId(record),
       actionable: Boolean(record?.mmsi),
@@ -93,7 +88,9 @@ export function createCards({
       [
         vesselTypeShort(record) || t('VESSEL'),
         formatSpeed(record.speed),
-        Number.isFinite(direction) ? `${Math.round(direction)}°` : '--°',
+        Number.isFinite(direction)
+          ? `${roundHeadingDegrees(direction)}°`
+          : '--°',
       ].join(' · '),
     ];
     const destination = String(record.destination || '').trim();
@@ -183,7 +180,7 @@ export function createCards({
 
   function formatHeading(heading) {
     return t('{heading}DEG', {
-      heading: Number.isFinite(heading) ? Math.round(heading) : '--',
+      heading: roundHeadingDegrees(heading) ?? '--',
     });
   }
 

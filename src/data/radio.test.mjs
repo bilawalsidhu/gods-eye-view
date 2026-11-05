@@ -51,6 +51,7 @@ import {
   radioViewIsGlobal,
   stationMatchesRadioCategory,
 } from './radio.js';
+import { radioStationRow, withRadioLayer } from '../testSupport/radioLayerHarness.mjs';
 
 const stations = [
   { id: 'news', tags: ['News', 'Weather Radio', 'air traffic'] },
@@ -712,6 +713,58 @@ test('unusable directory responses preserve warm client state atomically', async
       assert.equal(getRadioUIState().stale, true);
       assert.equal(getRadioUIState().degraded, true);
     }
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      stations: [replacement, { id: 'malformed' }], stale: false, degraded: false,
+      acceptedGeneration: 2, catalogInstance: 'qa-instance-a', updatedAt: now,
+    }));
+    await radioLayer.update();
+    assert.equal(getRadioUIState().stationCount, 1);
+    assert.equal(getRadioUIState().rejectedStationCount, 1);
+    assert.equal(getRadioUIState().degraded, true);
+    assert.equal(getRadioUIState().stale, false);
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 2);
+    assert.equal(getRadioAcceptedCatalogSnapshot().stations[0].id, replacement.id);
+    // Server-side structural rejections are combined with client rejections
+    // after admission; the healthy generation is still accepted.
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      stations: [replacement, { id: 'malformed' }], stale: false, degraded: false,
+      acceptedGeneration: 3, catalogInstance: 'qa-instance-a', updatedAt: now,
+      rejectedStationCount: 2,
+    }));
+    await radioLayer.update();
+    assert.equal(getRadioUIState().rejectedStationCount, 3);
+    assert.equal(getRadioUIState().degraded, true);
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 3);
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      stations: [replacement], stale: false, degraded: false,
+      acceptedGeneration: 4, catalogInstance: 'qa-instance-a', updatedAt: now,
+      rejectedStationCount: 10_000,
+    }));
+    await radioLayer.update();
+    assert.equal(getRadioUIState().rejectedStationCount, 10_000);
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 4);
+    for (const rejectedStationCount of [-1, 1.5, '2', null, 10_001]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({
+        stations: [replacement], stale: false, degraded: false,
+        acceptedGeneration: 5, catalogInstance: 'qa-instance-a', updatedAt: now,
+        rejectedStationCount,
+      }));
+      await radioLayer.update();
+      assert.equal(getRadioAcceptedCatalogSnapshot().generation, 4);
+      assert.equal(getRadioUIState().stale, true);
+    }
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      stations: [{ id: 'malformed' }], stale: false, degraded: false,
+      acceptedGeneration: 5, catalogInstance: 'qa-instance-a', updatedAt: now,
+    }));
+    await radioLayer.update();
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 4);
+    assert.equal(getRadioUIState().stale, true);
+    assert.equal(getRadioUIState().rejectedStationCount, 10_000);
+    radioLayer.destroy();
+    radioLayer.init(viewer);
+    assert.equal(getRadioUIState().rejectedStationCount, 0);
+    assert.equal(getRadioUIState().degraded, false);
   } finally {
     globalThis.fetch = originalFetch;
     radioLayer.destroy();
@@ -831,88 +884,33 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
 });
 
 test('failed exact tuner release cannot consume a stale playback fallback', async () => {
-  const originalFetch = globalThis.fetch;
-  const originalAudio = globalThis.Audio;
-  const playUrls = [];
   const stationRows = [
-    {
+    radioStationRow({
       id: '00000000-0000-4000-8000-000000000071',
       name: 'Exact target',
-      lat: 30,
-      lon: -97,
       streamUrl: 'https://radio.example.com/exact.mp3',
-      homepage: null,
-      tags: ['news'],
-      languages: ['English'],
-      state: 'Texas',
-      country: 'United States',
-      countryCode: 'US',
-      metadataTrust: 'untrusted-community',
-      codec: 'MP3',
-      bitrate: 128,
-    },
-    {
+    }),
+    radioStationRow({
       id: '00000000-0000-4000-8000-000000000072',
       name: 'Stale fallback',
       lat: 31,
       lon: -98,
       streamUrl: 'https://radio.example.com/fallback.mp3',
-      homepage: null,
-      tags: ['news'],
-      languages: ['English'],
-      state: 'Texas',
-      country: 'United States',
-      countryCode: 'US',
-      metadataTrust: 'untrusted-community',
-      codec: 'MP3',
-      bitrate: 128,
-    },
+    }),
   ];
-  globalThis.Audio = class FakeAudio {
-    constructor() {
-      this.volume = 0.8;
-      this.src = '';
-    }
-
-    addEventListener() {}
-    pause() {}
-    play() {
-      playUrls.push(this.src);
-      if (this.src === stationRows[0].streamUrl) {
-        return Promise.reject(new DOMException('Exact target unavailable', 'NotSupportedError'));
-      }
-      return Promise.resolve();
-    }
-    removeAttribute() { this.src = ''; }
-    load() {}
-  };
-  globalThis.fetch = async (url) => String(url).startsWith('/api/radio/click/')
-    ? { ok: true }
-    : new Response(JSON.stringify({
-      stations: stationRows,
-      stale: false,
-      degraded: false,
-      acceptedGeneration: 1,
-      catalogInstance: 'qa-instance-a',
-      updatedAt: new Date().toISOString(),
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  const viewer = {
-    camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
-  };
-
-  radioLayer.destroy();
-  try {
-    radioLayer.init(viewer);
-    radioLayer.enable();
-    await radioLayer.update();
-    assert.equal(radioLayer.selectStation(stationRows[0].id, { autoplay: false }), true);
+  await withRadioLayer({
+    stations: stationRows,
+    failingUrls: [stationRows[0].streamUrl],
+  }, async ({ playUrls }) => {
+    // A playing stream, so the release plays.
+    assert.equal(radioLayer.selectStation(stationRows[1].id, { autoplay: true }), true);
+    await new Promise((resolve) => setTimeout(resolve));
     assert.equal(radioLayer.cycleStation(1, {
       stationIds: stationRows.map(({ id }) => id),
       autoplay: false,
-    }), true, 'non-playing cycle creates the stale-fallback precondition');
+      fallback: true,
+    }), true, 'a voice-style prepared cycle creates the stale-fallback precondition');
+    playUrls.length = 0;
     assert.equal(radioLayer.beginTuning(), true);
     assert.equal(radioLayer.previewTuningStation(stationRows[0].id, { rotate: false }), true);
     assert.equal(radioLayer.commitTuningStation(stationRows[0].id, { origin: 'user' }).ok, true);
@@ -923,12 +921,7 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
     assert.equal(state.audioState, 'error');
     assert.equal(state.tuningStatic, true);
     assert.equal(state.tuningAwaitingStationId, stationRows[0].id);
-  } finally {
-    globalThis.fetch = originalFetch;
-    if (originalAudio === undefined) delete globalThis.Audio;
-    else globalThis.Audio = originalAudio;
-    radioLayer.destroy();
-  }
+  });
 });
 
 test('tuner cancellation restores the frozen start marker after catalog removal', async () => {
@@ -1779,7 +1772,6 @@ test('voice playback confirmation waits for playing and requires a hard duck', a
 });
 
 test('voice playback confirmation accepts fallback buffering but times out safely', async () => {
-  let listener = () => {};
   const state = {
     audioState: 'loading',
     playingStationId: 'fallback',
@@ -1789,9 +1781,8 @@ test('voice playback confirmation accepts fallback buffering but times out safel
   const confirmed = await confirmRadioPlayback({
     startPlayback: async () => false,
     subscribe: (next) => {
-      listener = next;
       next(state);
-      return () => { listener = () => {}; };
+      return () => {};
     },
     getState: () => state,
     timeoutMs: 10,
