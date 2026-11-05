@@ -202,6 +202,7 @@
     "{value} KM/S",
     "ΔN",
     "Ⅱ PAUSE",
+    "≥ {value} MW",
     "▲ {frp} MW"
   ],
   "es": [
@@ -308,6 +309,7 @@
     "WX",
     "audio {state}",
     "dB",
+    "fire confidence filter|Nominal+",
     "fire confidence|nominal",
     "ft",
     "hPa",
@@ -331,6 +333,7 @@
     "{value} KM",
     "{value} KM/H",
     "{value} KM/S",
+    "≥ {value} MW",
     "ΔE",
     "ΔN",
     "▲ {frp} MW"
@@ -364,6 +367,7 @@
     "CCTV",
     "CCTV OFF",
     "CCTV ON",
+    "CHAT",
     "COCKPIT",
     "COMMERCIAL",
     "CONTACT",
@@ -520,6 +524,7 @@
     "ΔE",
     "ΔN",
     "Ⅱ PAUSE",
+    "≥ {value} MW",
     "▲ {frp} MW"
   ],
   "it": [
@@ -694,6 +699,7 @@
     "{value} KM/H",
     "{value} KM/S",
     "{value} conf",
+    "≥ {value} MW",
     "ΔE",
     "ΔN",
     "▲ {frp} MW"
@@ -745,6 +751,7 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "ΔE",
     "ΔN",
+    "≥ {value} MW",
     "▲ {frp} MW"
   ],
   "pt": [
@@ -859,6 +866,7 @@
     "WHOT/BHOT",
     "WX",
     "dB",
+    "fire confidence filter|Nominal+",
     "fire confidence|nominal",
     "ft",
     "hPa",
@@ -878,7 +886,8 @@
     "{value} KM/H",
     "{value} KM/S",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "≥ {value} MW"
   ],
   "ru": [
     "AIS: --",
@@ -937,9 +946,9 @@
     "MM",
     "NVG",
     "REC",
-    "SRC {value}",
     "S2 GhostMaps",
     "S2 · {name}",
+    "SRC {value}",
     "Sentinel-2",
     "Techno",
     "Trance",
@@ -964,6 +973,7 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
     "{value} KM/S",
+    "≥ {value} MW",
     "ΔE",
     "ΔN",
     "▲ {frp} MW"
@@ -1021,6 +1031,7 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
     "{value} KM/S",
+    "≥ {value} MW",
     "ΔE",
     "ΔN",
     "▲ {frp} MW"

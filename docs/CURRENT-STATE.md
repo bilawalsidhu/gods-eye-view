@@ -2191,7 +2191,12 @@ during continuous motion. Disable/re-enable resets selection cleanly.
 Close-up stem sizing uses camera-to-feature distance without a 5 km minimum.
 Unchanged overlay entries do not request another frame; moved positions,
 changed membership and re-enabling still publish. Ground sampling waits for
-visible globe tiles to settle and uses valid loaded terrain as a floor while
+visible globe tiles to settle, and skips markers whose ground the camera
+cannot see (unseen ground reads through the Earth and would retry every 2 s).
+Ground is tested at loaded globe terrain, or across -9,000 to 9,000 m when the
+globe is hidden, so photoreal views skip only ground well out of view. Until it is
+seen, a stem keeps its unsampled height, which can show for a stem whose base
+is just off screen. Sampling uses valid loaded terrain as a floor while
 retaining rooftop and below-sea-level elevations. A hidden globe does not
 constrain photoreal geometry, and retry work remains bounded. Already sampled
 nearby markers follow higher settled terrain on existing bounded walks, without
@@ -2317,6 +2322,62 @@ Scope, Bloom, Sharpen and location search have explicit accessible names.
 Generated style sliders use the same name as their visible parameter label.
 The first-run suppression checkbox keeps its native wrapping label, so its
 accessible name remains "Don't show this again". Control behavior is unchanged.
+
+## Active Fires intensity filter and color ramp
+
+Every FIRMS detection is colored by fire radiative power on a six-stop ember →
+white-hot ramp: dark ember from 0 MW, red from 5, flame from 20, orange from
+50, gold from 100 and pale white-hot from 300 MW (`FRP_RAMP` in
+`src/data/firmsIntensity.js`). Each stop is lighter than the one below and
+none is a cold hue, so the brightest marks are the strongest fires; ~90% of
+detections are under 20 MW and stay dim red. Glow sprites and fire-card
+accents read that ramp; confidence and brightness do not affect the color.
+
+At far zoom (camera above ~4,500 km) the layer drapes a Snap Map–style
+heatmap instead of individual markers: the shown detections are linearly binned
+(each detection's weight shared between the four nearest pixel centres, so spots
+sit at the true position and stay round) on a
+global 4096 × 2048 grid (≈10 km per pixel), each weighted by its FRP in megawatts (so heat is
+radiated power, and raising the FRP slider does not dim areas where strong fires
+burn, and a cluster of detections reads brighter than one), Gaussian-blurred by one
+pixel so each fire stays a distinct spot about the size of its marker,
+normalized on a log scale against the 99.5th percentile and mapped through the
+same hues, from a bright red edge through orange and gold to a pale
+white-hot core. The edge starts more than half opaque, so regions far below
+the hottest ones still read over forest and savanna imagery. Nothing is painted where
+nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
+tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
+on each data refresh or filter change (the first far-band paint at once,
+later ones 150 ms after the last change). Heatmap and markers are both kept
+built at every zoom and cross-fade by camera height between 3,600 and
+5,400 km, every frame, so a fast zoom never shows a gap: the heatmap fades by
+imagery `alpha` (a hidden Cesium imagery layer is unmapped from the globe
+tiles and re-mapped late when shown), the markers by sprite alpha, and the
+marker collection is hidden once the heatmap is whole. The 750–4,500 km
+markers band draws up to 40,000 detections (the strongest in the padded
+view), so the weak fires the heatmap shows stay on screen as markers when it
+fades out; it reads each marker's already-built anchor instead of the ground
+floor cache, which only the close band warms. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
+areas; their accent is the strongest fire's FRP color.
+Re-enabling Active Fires keeps the retained heat imagery hidden when the current
+filtered set is empty, including while a new snapshot is pending.
+
+The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale
+whose track is painted with the ramp and ticked at the same six values (its
+value reads "All" or "≥ N MW"), a "Confidence" switch with All / Nominal+ /
+High, and an "N of M shown" counter. The default is 0 MW and
+All, because many of the strongest detections are rated low confidence. The
+filter runs once in `ingestion.applyFilter()` before rendering, so markers,
+cards, the heatmap, the shared context store, the top-fires query and the
+analyst records all see one filtered set; a selected fire that no longer passes
+is deselected. The layer state keeps both options under the `w` (`local-firms`)
+share token as `f` (whole megawatts, 0–10,000) and `c` (`a`, `n`, `h`),
+including the short share codec; a link without them restores the defaults.
+
+The `get_active_fires` tool accepts its own `min_frp_mw` and `confidence`
+(`all`, `nominal`, `high`) arguments, independent of the panel's setting, and
+names the applied criteria in its notes. Stale-snapshot and missing-source
+reporting are unchanged.
 
 ## FIRMS source status
 
@@ -5155,6 +5216,10 @@ silently demoting every later lookup for the session.
   multi-sensor datasheets publish a capability range, not the lens's current zoom, so those
   cameras keep their estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it. Public
   camera state carries `fovSource`, `specFovMinDeg`, `specFovMaxDeg` and `spec` (#452).
+  The table also has Bosch MIC-7130, MIC-7502 and MIC-7522 records for the Amsterdam
+  register proposed in #251, with its `x` colour aliases (#1319). Their datasheet FOV names
+  no axis, so it neither gives a capability range nor replaces the estimate. The records
+  alone do not enable that source pack.
 - **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP. Fire-power labels share display rounding before localization: one decimal below the rounded 10 MW boundary, then whole megawatts (for example, 9.96 MW reads 10 MW).
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's
