@@ -1052,3 +1052,33 @@ test('a failing file gets one strike a round, not three within seconds', async (
     gdeltCalls(calls).filter((c) => String(c.url) === flaky).length >= 2,
   );
 });
+
+test("a country's own news keeps World News API's category and no severity, whatever its words", async () => {
+  const { worldNewsReport } = await import('./keyed.js');
+  const { countryByCode } = await import('./areas.js');
+  const country = countryByCode('KZ');
+  const read = (title, category) =>
+    worldNewsReport(
+      {
+        id: 1,
+        title,
+        url: 'https://times.example/x',
+        publisher: 'times.example',
+        publishedAt: '2026-11-05T08:00:00.000Z',
+        category,
+      },
+      country,
+    );
+  const rankings = read(
+    'Kazakhstan Advances in Global Digital Rankings as AI Infrastructure Expands',
+    'technology',
+  );
+  assert.equal(rankings.category, 'other');
+  assert.equal(rankings.severity, undefined);
+  assert.equal(
+    read('Startup advances to the next funding round', 'business').category,
+    'economy',
+  );
+  assert.equal(read('King visits Astana', 'politics').category, 'political');
+  assert.equal(read('Parliament session opens', null).category, 'other');
+});

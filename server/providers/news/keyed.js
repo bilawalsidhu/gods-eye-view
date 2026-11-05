@@ -5,8 +5,9 @@
 // (WORLDNEWSAPI_KEY) by the country at the view centre; without its key the
 // section answers 503 {error: 'no_key', key} and reads nothing, and past
 // its day's reads (WORLDNEWSAPI_DAILY_READS) 503 {error: 'key_quota', key}.
-// Categories, relevance and severity are the shared rules (categorize.js);
-// a news server may replace these readings with its own.
+// Conflicts' categories, relevance and severity are the shared rules
+// (categorize.js); a country's own news keeps World News API's category.
+// A news server may replace these readings with its own.
 //
 // A read that has something to serve is not waited for: what was read is
 // served while it is read again. A section that cannot be read answers 502,
@@ -93,17 +94,19 @@ const EMPTY_OUTLINE = Object.freeze({
   disputed: [],
   area: null,
 });
-// World News API's categories, where the rules find none of their own.
+// A country's own news keeps World News API's category: the rules read
+// fighting and crises, and in everyday news their words mislead ("advances
+// in the rankings" is no ground fighting). Fighting in the country reaches
+// Local as the Conflicts reports placed there.
 const WORLD_NEWS_CATEGORY = { politics: 'political', business: 'economy' };
 
 const list = (value) =>
   value ? new Set(value.split(',').filter(Boolean)) : null;
 
 /** The rules' reading of a headline: category, relevance and severity. */
-function readTitle(title, { dedicated, fallback = null }) {
+function readTitle(title, { dedicated }) {
   const read = categorizeText({ title });
-  const category =
-    read.category === 'other' && fallback ? fallback : read.category;
+  const { category } = read;
   return {
     category,
     relevance: relevanceOf({ category, tags: read.tags, title, dedicated }),
@@ -213,13 +216,10 @@ export function worldNewsReport(article, country) {
     source: { name: article.publisher, attribution: 'World News API' },
     kind: 'worldnewsapi',
     side: 'unknown',
-    ...readTitle(article.title, {
-      dedicated: false,
-      fallback: WORLD_NEWS_CATEGORY[article.category] || null,
-    }),
-    // Local news: what the country's own outlets publish.
+    category: WORLD_NEWS_CATEGORY[article.category] || 'other',
+    // Local news: what the country's own outlets publish, with no severity
+    // of its own.
     relevance: 'minor',
-    severityBy: 'rules',
     publishedAt: article.publishedAt,
     geo: {
       lat: anchor.lat,
