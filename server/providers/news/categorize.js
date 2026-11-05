@@ -29,7 +29,7 @@ export const CATEGORY_ORDER = Object.freeze([
   'disaster',
   'protest',
   'political',
-  // Rules only, for the Local section's national news.
+  // Business and trade: the rules' reading, or World News API's business.
   'economy',
 ]);
 

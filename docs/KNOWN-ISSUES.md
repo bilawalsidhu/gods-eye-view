@@ -142,9 +142,9 @@ Status: Open (limits)
   Natural Earth's default country lines apply, so a place in Western Sahara,
   for example, is named with the country those lines put it in. GDELT places a whole city at one point: Jerusalem's falls
   inside East Jerusalem, so it is named "Jerusalem" alone.
-- A country's own stories in Local keep World News API's category (political,
-  economy, else other) and carry no severity; fighting there shows through the
-  Conflicts reports placed in the area.
+- A country's own stories in Local keep World News API's category (politics as
+  political, business as economy, else other) and carry no severity; fighting
+  there shows through the Conflicts reports placed in the area.
 - Local needs a World News API key. Its free plan allows 50 points a day; Core
   stops at `WORLDNEWSAPI_DAILY_READS` reads (default 30) and Local then says the
   daily limit is reached.

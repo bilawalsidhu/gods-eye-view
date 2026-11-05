@@ -672,7 +672,7 @@ test('in view: half-degree cells and reports within 500 km of the centre', () =>
     reportsInView([near, far, old, major], centre, filters, NOW).map(
       (r) => r.id,
     ),
-    ['major', 'near'],
+    ['near', 'major'],
   );
   assert.deepEqual(reportsInView([near], null, filters, NOW), []);
   assert.deepEqual(reportsInView([], centre, filters, NOW), []);

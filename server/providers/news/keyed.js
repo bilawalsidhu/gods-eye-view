@@ -103,13 +103,18 @@ const WORLD_NEWS_CATEGORY = { politics: 'political', business: 'economy' };
 const list = (value) =>
   value ? new Set(value.split(',').filter(Boolean)) : null;
 
-/** The rules' reading of a headline: category, relevance and severity. */
-function readTitle(title, { dedicated }) {
+/** The rules' reading of a Conflicts headline: category, relevance, severity. */
+function readTitle(title) {
   const read = categorizeText({ title });
   const { category } = read;
   return {
     category,
-    relevance: relevanceOf({ category, tags: read.tags, title, dedicated }),
+    relevance: relevanceOf({
+      category,
+      tags: read.tags,
+      title,
+      dedicated: true,
+    }),
     severity: severityByRules({ category, tags: read.tags, title }),
   };
 }
@@ -146,7 +151,7 @@ export function liveuamapReport(item) {
     kind: 'liveuamap',
     side: 'unknown',
     // A conflict map: everything it posts is at least related.
-    ...readTitle(item.title, { dedicated: true }),
+    ...readTitle(item.title),
     severityBy: 'rules',
     publishedAt: item.publishedAt,
     geo: {

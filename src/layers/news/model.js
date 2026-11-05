@@ -762,9 +762,10 @@ export function inPolygons(polygons, point) {
 }
 
 /**
- * The reports near `centre` that pass the filters, most severe and newest
- * first: any pin inside `area` (outline polygons), or without one within
- * NEWS_IN_VIEW_RADIUS_KM.
+ * The reports near `centre` that pass the filters, newest first: any pin
+ * inside `area` (outline polygons), or without one within
+ * NEWS_IN_VIEW_RADIUS_KM. Newest, not most severe: an area's own news often
+ * carries no severity, and the area's fighting would otherwise crowd it out.
  */
 export function reportsInView(
   reports,
@@ -786,10 +787,6 @@ export function reportsInView(
         (filters.category === 'all' || r.category === filters.category) &&
         r.pins?.some(near),
     )
-    .sort(
-      (a, b) =>
-        reportSeverity(b) - reportSeverity(a) ||
-        b.publishedAt.localeCompare(a.publishedAt),
-    )
+    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
     .slice(0, limit);
 }

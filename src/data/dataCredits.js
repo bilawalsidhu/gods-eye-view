@@ -498,7 +498,7 @@ export const DATA_CREDITS = [
       'News: every report is credited to its own publisher and links to the original article; ' +
       'pictures are the publishers’ own, shown from their sites with the publisher named. ' +
       'Places, categories, severity and English headlines are derived automatically, by ' +
-      'bundled rules or by the configured news server, and can be wrong.',
+      'bundled rules, the news provider or the configured news server, and can be wrong.',
   },
   {
     // GDELT's terms ask for a citation and a link.
