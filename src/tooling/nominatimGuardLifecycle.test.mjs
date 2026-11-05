@@ -785,8 +785,8 @@ test('administrative boundaries must be at the asked level', () => {
   assert.equal(picked.outline.osm, 'relation/9');
 });
 
-test('outline selection does not publish child-owned admin geometry hooks', () => {
-  for (const [name, addresstype] of [
+test('admin identity comes only from unambiguous evidence on the selected row', () => {
+  for (const [name, addresstype, adminLevel] of [
     ['Nepal', 'country', 'country'],
     ['Bagmati Province', 'province', 'admin1'],
     ['Province of Bagmati', 'province', 'admin1'],
@@ -799,8 +799,8 @@ test('outline selection does not publish child-owned admin geometry hooks', () =
       kind: 'admin',
       query: name,
     });
-    assert.equal('adminArea' in outline, false);
-    assert.equal('adminLevel' in outline, false);
+    assert.equal(outline.adminArea, name);
+    assert.equal(outline.adminLevel, adminLevel);
   }
 
   for (const row of [
@@ -842,25 +842,53 @@ test('outline selection does not publish child-owned admin geometry hooks', () =
     [boundary({ name: 'Bagmati Zone', addresstype: 'state' })],
     { kind: 'admin', query: 'Bagmati Zone' },
   ).outline;
-  assert.equal('adminArea' in retired, false);
+  assert.equal(retired.adminArea, 'Bagmati Zone');
   assert.equal('adminLevel' in retired, false);
 
   const retiredPrefix = selectOutlineResult(
     [boundary({ name: 'Zone of Bagmati', addresstype: 'state' })],
     { kind: 'admin', query: 'Zone of Bagmati' },
   ).outline;
-  assert.equal('adminArea' in retiredPrefix, false);
+  assert.equal(retiredPrefix.adminArea, 'Zone of Bagmati');
   assert.equal('adminLevel' in retiredPrefix, false);
 });
 
-test('long admin names do not publish child-owned geometry hooks', () => {
+test('a Zone is retired only in Nepal, where zones were replaced', () => {
+  const current = selectOutlineResult(
+    [
+      boundary({
+        name: 'Gamo Zone',
+        addresstype: 'county',
+        display_name: 'Gamo Zone, South Ethiopia Regional State, Ethiopia',
+      }),
+    ],
+    { kind: 'admin', query: 'Gamo Zone' },
+  ).outline;
+  assert.equal(current.adminArea, 'Gamo Zone');
+  assert.equal(current.adminLevel, 'admin2');
+
+  const retired = selectOutlineResult(
+    [
+      boundary({
+        name: 'Bagmati Zone',
+        addresstype: 'state',
+        display_name: 'Bagmati Zone, Nepal',
+      }),
+    ],
+    { kind: 'admin', query: 'Bagmati Zone' },
+  ).outline;
+  assert.equal(retired.adminArea, 'Bagmati Zone');
+  assert.equal('adminLevel' in retired, false);
+});
+
+test('admin identity validates the full name before display truncation', () => {
   const longValidName = `Province of ${'Example '.repeat(24)}`.trim();
   const valid = selectOutlineResult(
     [boundary({ name: longValidName, addresstype: 'province' })],
     { kind: 'admin', query: longValidName },
   ).outline;
-  assert.equal('adminArea' in valid, false);
-  assert.equal('adminLevel' in valid, false);
+  assert.equal(valid.adminArea, longValidName.slice(0, 160));
+  assert.equal(valid.adminLevel, 'admin1');
 
   const longContradictoryName = `${'Very Long Administrative Name '.repeat(7)}County`;
   assert.ok(longContradictoryName.length > 160);
