@@ -12,6 +12,7 @@
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from './motion.js';
+import { orbitPosition } from './orbits.js';
 import { computeViewRectangle } from './viewRectangle.js';
 import {
   add,
@@ -408,6 +409,7 @@ export function createStubRenderer(options = {}) {
     return handle;
   }
 
+  const clampListeners = [];
   const draw = {
     icons: (spec) => makeSet('icons', spec),
     points: (spec) => makeSet('points', spec),
@@ -417,6 +419,18 @@ export function createStubRenderer(options = {}) {
       atlases.set(id, { ...images });
       log('draw', 'atlas', [id]);
     },
+    // The stub drapes wherever it is asked to: it never falls back.
+    clampState: () => 'draped',
+    on(event, cb) {
+      if (event !== 'clampState') return () => {};
+      const entry = { cb, live: true };
+      clampListeners.push(entry);
+      return () => {
+        entry.live = false;
+        const i = clampListeners.indexOf(entry);
+        if (i >= 0) clampListeners.splice(i, 1);
+      };
+    },
   };
   if (capabilities.has('models'))
     draw.models = (spec) => makeSet('models', spec);
@@ -425,6 +439,10 @@ export function createStubRenderer(options = {}) {
     draw.meshes = (spec) => makeSet('meshes', spec);
   if (capabilities.has('agents'))
     draw.agents = (spec) => makeSet('agents', spec);
+  /** Parsed orbit elements, by line pair; cleared on destroy. */
+  const satrecs = new Map();
+  if (capabilities.has('orbits'))
+    draw.orbits = (spec) => makeSet('orbits', spec);
   if (capabilities.has('fields'))
     draw.field = (spec) => {
       const handle = simpleHandle('field', spec);
@@ -528,6 +546,10 @@ export function createStubRenderer(options = {}) {
   }
 
   function itemPosition(set, item, aheadMs = 0) {
+    if (set.kind === 'orbits')
+      return item.tle
+        ? orbitPosition(satrecs, item.tle, motionTime(set) + aheadMs)
+        : null;
     if (!item.pos) return null;
     const base = toEcef(item.pos);
     if (
@@ -556,17 +578,25 @@ export function createStubRenderer(options = {}) {
       if (
         set.kind !== 'icons' &&
         set.kind !== 'points' &&
-        set.kind !== 'models'
+        set.kind !== 'models' &&
+        set.kind !== 'orbits'
       )
         continue;
       for (const item of set.items.values()) {
         if (item.show === false || item.pickable === false) continue;
         const p = itemPosition(set, item);
         if (!p || isOccluded(p)) continue;
+        if (item.displayRange) {
+          const distance = magnitude(sub(p, eye().position));
+          const [nearM, farM] = item.displayRange;
+          if (distance < nearM || distance >= farM) continue;
+        }
         const s = project(p);
         if (!s) continue;
+        const pixel = item.pixelSize ?? item.marker?.pixelSize ?? 10;
         const size = item.pickProxy?.size ??
-          item.size ?? [item.pixelSize ?? 10, item.pixelSize ?? 10];
+          item.size ??
+          item.marker?.size ?? [pixel, pixel];
         if (
           Math.abs(s.x - x) <= size[0] / 2 + halfW &&
           Math.abs(s.y - y) <= size[1] / 2 + halfH
@@ -575,6 +605,7 @@ export function createStubRenderer(options = {}) {
             set: setId,
             id: item.id,
             meta: item.meta,
+            ...(item.lodGroup !== undefined ? { lodGroup: item.lodGroup } : {}),
             surface: false,
             position: p,
             depth: magnitude(sub(p, eye().position)),
@@ -1166,6 +1197,7 @@ export function createStubRenderer(options = {}) {
       for (const clear of onceTimers) clear();
       onceTimers.clear();
       sets.clear();
+      satrecs.clear();
     },
     testing: {
       /** Run one frame of the loop; true when it drew. */
