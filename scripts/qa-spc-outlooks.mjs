@@ -476,7 +476,7 @@ try {
     });
   }
   await page.waitForFunction(
-    () => location.hash.includes('5.d.2') && location.hash.includes('5.t.t'),
+    () => location.hash.includes('9.d.2') && location.hash.includes('9.t.t'),
     { timeout: 10_000 },
   );
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -561,7 +561,7 @@ try {
       target.searchParams.set('welcome', '0');
       target.searchParams.set('lang', locale);
       target.hash =
-        'v=2&lat=37&lon=-98&alt=5000000&heading=0&pitch=-90&map=esri-imagery&l=5&lo=5.d.2_5.t.t';
+        'v=2&lat=37&lon=-98&alt=5000000&heading=0&pitch=-90&map=esri-imagery&l=9&lo=9.d.2_9.t.t';
       await page.goto(target.href, {
         waitUntil: 'domcontentloaded',
         timeout: 60_000,
@@ -580,6 +580,18 @@ try {
       await page.evaluate(() => document.fonts.ready);
       for (const width of [1440, 480]) {
         await page.setViewport({ width, height: 1000 });
+        if (width <= 720) {
+          await page.waitForSelector(
+            '#mobile-tab-bar [data-mobile-sheet="context"]',
+            {
+              visible: true,
+            },
+          );
+          await page.click('#mobile-tab-bar [data-mobile-sheet="context"]');
+          await page.waitForSelector(`${card} .rail-card-setting`, {
+            visible: true,
+          });
+        }
         const settings = await page.evaluate(
           (selector) =>
             [
