@@ -766,9 +766,12 @@ each side, and the empty Voice Preview suggests things to say until voice
 starts. Settings opened from chat keep chat's frame and show the shared AI
 provider, the quick-commands option and then the voice preferences (Voice
 Preview, inactivity timeout and model tier), so they stay in reach while
-Preview is off, with Back to chat; voice Settings show Back to voice. Escape steps back from either Settings view, closes Voice
+Preview is off, with Back to chat; voice Settings show Back to voice. Switching
+AI Provider keeps that view: Settings opened from chat stay chat's Settings,
+in chat's frame, for the new provider. Escape steps back from either Settings view, closes Voice
 Preview, and does nothing in chat. Closing chat ends a typed session, and the
-voice panel's close turns voice off. Asking the assistant from chat to open
+voice panel's close turns voice off. Opening chat or closing the voice panel
+also clears a voice error left on the dock. Asking the assistant from chat to open
 Voice Settings or Voice Preview puts chat away, minimized or not, and shows the
 voice panel; the typed conversation and its running reply carry on, and the
 chat button brings them back.
@@ -2191,7 +2194,12 @@ during continuous motion. Disable/re-enable resets selection cleanly.
 Close-up stem sizing uses camera-to-feature distance without a 5 km minimum.
 Unchanged overlay entries do not request another frame; moved positions,
 changed membership and re-enabling still publish. Ground sampling waits for
-visible globe tiles to settle and uses valid loaded terrain as a floor while
+visible globe tiles to settle, and skips markers whose ground the camera
+cannot see (unseen ground reads through the Earth and would retry every 2 s).
+Ground is tested at loaded globe terrain, or across -9,000 to 9,000 m when the
+globe is hidden, so photoreal views skip only ground well out of view. Until it is
+seen, a stem keeps its unsampled height, which can show for a stem whose base
+is just off screen. Sampling uses valid loaded terrain as a floor while
 retaining rooftop and below-sea-level elevations. A hidden globe does not
 constrain photoreal geometry, and retry work remains bounded. Already sampled
 nearby markers follow higher settled terrain on existing bounded walks, without
@@ -2317,6 +2325,62 @@ Scope, Bloom, Sharpen and location search have explicit accessible names.
 Generated style sliders use the same name as their visible parameter label.
 The first-run suppression checkbox keeps its native wrapping label, so its
 accessible name remains "Don't show this again". Control behavior is unchanged.
+
+## Active Fires intensity filter and color ramp
+
+Every FIRMS detection is colored by fire radiative power on a six-stop ember →
+white-hot ramp: dark ember from 0 MW, red from 5, flame from 20, orange from
+50, gold from 100 and pale white-hot from 300 MW (`FRP_RAMP` in
+`src/data/firmsIntensity.js`). Each stop is lighter than the one below and
+none is a cold hue, so the brightest marks are the strongest fires; ~90% of
+detections are under 20 MW and stay dim red. Glow sprites and fire-card
+accents read that ramp; confidence and brightness do not affect the color.
+
+At far zoom (camera above ~4,500 km) the layer drapes a Snap Map–style
+heatmap instead of individual markers: the shown detections are linearly binned
+(each detection's weight shared between the four nearest pixel centres, so spots
+sit at the true position and stay round) on a
+global 4096 × 2048 grid (≈10 km per pixel), each weighted by its FRP in megawatts (so heat is
+radiated power, and raising the FRP slider does not dim areas where strong fires
+burn, and a cluster of detections reads brighter than one), Gaussian-blurred by one
+pixel so each fire stays a distinct spot about the size of its marker,
+normalized on a log scale against the 99.5th percentile and mapped through the
+same hues, from a bright red edge through orange and gold to a pale
+white-hot core. The edge starts more than half opaque, so regions far below
+the hottest ones still read over forest and savanna imagery. Nothing is painted where
+nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
+tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
+on each data refresh or filter change (the first far-band paint at once,
+later ones 150 ms after the last change). Heatmap and markers are both kept
+built at every zoom and cross-fade by camera height between 3,600 and
+5,400 km, every frame, so a fast zoom never shows a gap: the heatmap fades by
+imagery `alpha` (a hidden Cesium imagery layer is unmapped from the globe
+tiles and re-mapped late when shown), the markers by sprite alpha, and the
+marker collection is hidden once the heatmap is whole. The 750–4,500 km
+markers band draws up to 40,000 detections (the strongest in the padded
+view), so the weak fires the heatmap shows stay on screen as markers when it
+fades out; it reads each marker's already-built anchor instead of the ground
+floor cache, which only the close band warms. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
+areas; their accent is the strongest fire's FRP color.
+Re-enabling Active Fires keeps the retained heat imagery hidden when the current
+filtered set is empty, including while a new snapshot is pending.
+
+The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale
+whose track is painted with the ramp and ticked at the same six values (its
+value reads "All" or "≥ N MW"), a "Confidence" switch with All / Nominal+ /
+High, and an "N of M shown" counter. The default is 0 MW and
+All, because many of the strongest detections are rated low confidence. The
+filter runs once in `ingestion.applyFilter()` before rendering, so markers,
+cards, the heatmap, the shared context store, the top-fires query and the
+analyst records all see one filtered set; a selected fire that no longer passes
+is deselected. The layer state keeps both options under the `w` (`local-firms`)
+share token as `f` (whole megawatts, 0–10,000) and `c` (`a`, `n`, `h`),
+including the short share codec; a link without them restores the defaults.
+
+The `get_active_fires` tool accepts its own `min_frp_mw` and `confidence`
+(`all`, `nominal`, `high`) arguments, independent of the panel's setting, and
+names the applied criteria in its notes. Stale-snapshot and missing-source
+reporting are unchanged.
 
 ## FIRMS source status
 
@@ -4584,8 +4648,9 @@ Transit is off by default, and share links use token `j`. The movement panel ord
 places Transit directly after Street Traffic and before Bike Share. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
-gate. Sixteen keyless regions are available: Boston, Austin, Minneapolis–St Paul,
-Helsinki, the Netherlands, Norway, South East Queensland, and nine in
+gate. Seventeen keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+Helsinki, the Netherlands, Norway, South East Queensland, Rio de Janeiro
+(municipal buses and the Mobi-Rio BRT, two feeds), and nine in
 Ontario — Toronto (TTC surface vehicles; the subway publishes no
 positions), MiWay, Hamilton HSR, Durham Region, YRT/Viva, Guelph,
 Burlington, Barrie and Kingston. Mode silhouettes
@@ -4795,7 +4860,7 @@ cannot claim full acceptance.
 
 **Lifecycle and proxy.** Contacts temporarily disables Transit and restores its
 prior state on exit; Space Missions refuses enablement while isolating replay
-data. Cockpit enters through Contacts and does not independently enable Transit.
+data. Cockpit does not need Contacts and does not independently enable Transit.
 The proxy fetches registered URLs only, validates redirect origins, bounds
 responses and decoding, caches successful snapshots, and backs off after failed
 refreshes. A 304 confirms contact without appending history. Missing vehicles
@@ -5113,6 +5178,7 @@ silently demoting every later lookup for the session.
 - Enabled Data Layer controls report normalized feed health on the button (`LOADING`, `DEGRADED`, `STALE`, `FALLBACK`, or `UNAVAILABLE`) while the metadata line retains the source and reason. A partial CelesTrak group failure keeps the usable catalog and reports `DEGRADED`; a total outage keeps last-good catalog data visible but reports `UNAVAILABLE`.
 - On activation it focuses the nearest currently observed aircraft across the civilian and military feeds, with military winning an exact distance tie; if none are available, it focuses an observed AIS vessel. The aircraft search is deliberately uncapped and one refresh-tick retry handles initially empty feeds. This is an attention-priority navigation shortcut, not a high-risk, affiliation, or threat classification.
 - A selected aircraft, AIS vessel, or mapped installation gets a 250 km **context window** with nearby cohort counts, nearest examples, source labels, and stale/unavailable reasons. It emits `NEARBY` or `UNKNOWN`; no detection, engagement, affiliation, or sensor-activity conclusion is calculated.
+- Contacts rows and the Cockpit Contact counts name each cohort's provider: the source of the last snapshot, marked `FALLBACK` or `STALE` as its layer row would be. A poll in flight keeps the mark, where the layer row shows `LOADING`. A flight snapshot from the adsb.lol regional fallback reads `adsb.lol · FALLBACK`, not `OpenSky`.
 - The window's edge is drawn on the globe as a 250 km range ring: a 4 px polyline with a 2 px Context-blue core inside a 1 px dark halo on each side, 2.5 km above the ellipsoid (`AWARENESS_RANGE_RING_STYLE` in `src/layers/awareness/policy.js`). The halo keeps it legible over bright desert and snow, dark ocean and forest, and under the FLIR, NVG and CRT styles, where the earlier 1 px ellipse outline disappeared. It is a polyline because WebGL draws ellipse outlines at 1 px whatever width is asked for, drawn as an unpickable primitive rather than an entity so a click or tap on its edge reaches the contact underneath (headless viewers without a primitive collection get a static entity instead); it is rebuilt when the subject moves. Three dim sonar pulses (3 px with a 1 px dark outline, same colours, at most 60% opacity) grow slowly from the subject at constant speed, one every 3 s and each taking 9 s, and arrive at the ring at about a third of that. Behind each pulse a radial gradient in the same blue fades inward over 35% of the radius. One unpickable 250 km disc draws both the pulse lines and the gradient, its shader reading the pulse radii and opacities each frame, so a click or tap near a pulse still reaches the contact underneath; the disc follows the subject by a model-matrix rotation and is rebuilt only after the subject moves 20 km, and not at all while the pulses rest. While the camera is below the disc's 2.5 km height, where it would sweep across the sky, the pulses rest: the disc is hidden and there is no ring flash, no echo and no frame request. Terrain or 3D tiles higher than 2.5 km (the Alps, Andes, Rockies) still cut through the disc and the ring when seen from above, as the ring alone already did; the height check uses the camera's height above the ellipsoid, not above the ground. While pulses run, the ring dims to 40% and flashes to full strength as each pulse reaches it, fading over 1.8 s. As a pulse front crosses a flight, military aircraft or AIS vessel, the detection overlay draws a second bracket around that contact's own bracket, in the pulse blue on the default detection style and in the style's own line colour under NVG, FLIR and CRT, which spreads outward as it fades over 1.4 s (`AWARENESS_RANGE_ECHO`, read through `src/awarenessEcho.js`; no layer's icon is restyled, and mapped installations have no detection bracket). Pulses are born 5 km out, so the subject itself and anything nearer never echo. Pulses run for 9 s (three ring flashes) after a selection or a camera move, fading in and out over 1.2 s, then rest: the ring stays on screen at full strength, the pulses, gradient and echoes are hidden, and nothing asks for frames, so a parked Contacts view is quiet again. Only a camera move within 1.5 s of the user handling the map (pointer, wheel or touch on the Cesium canvas, which covers a drag's inertia, and a drag or touch begun there keeps counting until its last finger or button lifts, even outside the canvas, unless the window loses focus or the page is hidden first; keys typed elsewhere do not count, nor does input while Cesium's camera controls are off, as in the cockpit view, and a gesture still pending when the cockpit or another owner takes the camera is dropped) wakes them; a moving subject and the app's own camera moves (a tracked aircraft, the cockpit view, an orbit, a fly-to) do not, since they move on every refresh. While they run they never hold continuous rendering: each drawn frame arms one render request 80 ms later (the Cyber sonar cadence, `CYBER_SONAR_RENDER_INTERVAL_MS`), so they repaint at about 12.5 fps and never beat the detection lane's 80 ms gate. Under `prefers-reduced-motion`, or in a scene without primitives or preRender and postRender hooks, there are no pulses or echoes and the ring stays on screen; changing the preference mid-session rebuilds the ring. The ring follows a moving subject once it has moved 250 m.
 - For a selected live aircraft or vessel, the context window refreshes from the existing tracker/feed position every 750 ms, so nearest distances and cohort counts follow the subject without introducing a duplicate poll loop.
 - Aircraft cohort membership uses every locally loaded, selectable contact inside the 250 km window, including a plane hidden only by horizon culling or because its 3D model owns the visual. Counts and navigation therefore do not change with the current camera angle or billboard/model handoff.
@@ -5156,6 +5222,10 @@ silently demoting every later lookup for the session.
   multi-sensor datasheets publish a capability range, not the lens's current zoom, so those
   cameras keep their estimate and show `SPEC FOV min–max° (CAPABILITY)` beside it. Public
   camera state carries `fovSource`, `specFovMinDeg`, `specFovMaxDeg` and `spec` (#452).
+  The table also has Bosch MIC-7130, MIC-7502 and MIC-7522 records for the Amsterdam
+  register proposed in #251, with its `x` colour aliases (#1319). Their datasheet FOV names
+  no axis, so it neither gives a capability range nor replaces the estimate. The records
+  alone do not enable that source pack.
 - **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP. Fire-power labels share display rounding before localization: one decimal below the rounded 10 MW boundary, then whole megawatts (for example, 9.96 MW reads 10 MW).
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's
@@ -6013,12 +6083,21 @@ apply to `public/` assets or built-preview serving.
 - Panoptic mode shows labels on ALL items (no stride skipping). Tracked/selected items keep bounding box but suppress label (skipLabel flag). Tracked items get enlarged bounding boxes (56×44 vs default 22×14).
 - The 3D aircraft toggle reveals `Proximity` and `All` modes and drives both commercial and military aircraft layers. It ships ON in `Proximity`, so the button paints lit and the mode row paints open from markup; the panel is therefore ~36 px taller than before, which Cockpit's Display/Radio strip absorbs through its existing primary-only corridor solver.
 - The host-painted tracked-target readout sits above the post-FX layer and follows tracked aircraft/satellites or selected mapped installations using each layer's display-position contract.
-- Cockpit entry is gated to the operational Contacts context bundle. The
-  Context chooser must be in Contacts mode, Live Flights and Military Flights must both
-  be enabled, and a civilian or military aircraft must be tracked. The visible
-  Cockpit actions and the `C` shortcut use the same gate, so ordinary standalone
-  flight-layer selection cannot enter a context-dependent cockpit.
-- **Aircraft cockpit view:** selecting a commercial or military aircraft reveals a `COCKPIT` action (`C`). Cockpit mode temporarily releases Cesium's orbit-follow transform and drives a first-person camera from the tracked aircraft's existing smoothed display position and course. Its concave helmet-visor HUD shows callsign, UTC time, coordinates, curved roll/pitch guides, and a seven-division heading tape. Ambient commercial and military AIR contacts use a Cockpit near/far band selected by the shared Display 3D mode: Proximity admits at 150 km and retains to 185 km; All admits at 400 km and retains to 450 km. The shared 3D toggle now applies in Cockpit: Off keeps in-range contacts as rotating 2D aircraft silhouettes, while On lets a ready admitted glTF take over without a drawing gap. The Cockpit model cap remains 60 and can only lower the map budget; in-range contacts that are capped or still loading remain 2D silhouettes instead of degrading to out-of-range dots. Contacts outside the selected band use small rotation-free cyan-white pips for civilian aircraft and amber pips for military. The pilot's own airframe is not drawn in first person, and exiting clears the Cockpit band and restores normal map silhouettes/models. The normal left accordion remains available for Layers and Authoring and keeps the same 26vh HUD-aligned anchor used in map mode, independent of whether the bottom-left Contact card is expanded or collapsed; the right-rail CCTV and Context chooser are hidden to avoid duplicating or overlapping the cockpit presentation. When the intelligence HUD is enabled, its classification, scene summary, collection/orbit metadata, coordinates, and imaging-status text remain visible as reduced peripheral cockpit telemetry; the optical center and flight instruments stay clear, and turning the HUD off still hides it. Ground speed, exact heading, and rendered altitude form one compact lower-center instrument cluster, keeping the horizon and peripheral view open. A second live altitude tape hugs the inside-right visor rim: its rail and nine moving ticks are derived from the same responsive keyhole radius, remain 20 px inside the circular edge even on wide displays, fade deeply at both vertical ends, and move continuously behind a fixed current-altitude pointer; its interval tightens automatically near the surface and it is suppressed on narrow screens. Cockpit mode also has a weather-backed transparent volumetric-cloud pass derived from the supplied FBM/domain-warped R&D shader. It renders at no more than 520×320, uses 24 ray steps/three FBM octaves at 12 FPS, is clipped to the visor, fails clear when Open-Meteo is unavailable, and stops its animation completely on cockpit exit. It does not restore the prior CPU weather canvases, precipitation, scene fog, or any map-mode effect. When Contacts is active for the tracked aircraft, the compact `CONTACT` rail adds the 250 km subject window, four cohort counts, nearest observed/mapped example with relative bearing and distance, freshness, explicit uncertainty, and Previous and Next controls plus its own collapse control. The mirrored right rail is a three-page **cockpit briefing carousel**: source-backed live signals, location-matched regional headlines, and physical-region/current-weather context from bundled Natural Earth polygons and Open-Meteo. It is manual-first: Previous, Next, and direct page controls are always available, and the visible `CYCLE OFF` / `CYCLE ON` control starts or stops the nine-second page cycle. The cycle pauses on hover or keyboard focus and stops while collapsed, hidden, or outside cockpit mode; live signal data continues refreshing either way. Empty news matches and unavailable news use compact text states rather than reserving an empty media frame; partial local data remains explicit. Article links open their original publisher, and no headline is treated as verified risk intelligence. On desktop both cockpit rails use the same width and share a bottom-aligned safe baseline in opposite corners above the peripheral MGRS/GSD/time telemetry, leaving both that text and the lower-center instrument cluster readable. They collapse independently to slim tabs without stopping live data updates. Narrow screens use separated top/bottom fallbacks. Empty-space globe clicks are inert while cockpit owns the camera; `C`, `Escape`, or `EXIT COCKPIT` explicitly exits and restores the same tracked entity and standard follow camera. Unknown feeds remain unknown, selection loss still exits safely without inventing a replacement track, and the cockpit never presents the summary as threat scoring or an all-clear. This is a desktop first-person presentation, not a WebXR session.
+- Cockpit entry needs only the layer of the aircraft it rides and that aircraft
+  tracked: Live Flights for a civilian, Military Flights for a military aircraft
+  (the tracked info's `layerId`; `cockpitEntryAllowed` in
+  `src/contextModePolicy.js`). Contacts is not required, and the other aircraft
+  layer, Live AIS Vessels and every other layer may be turned on or off before
+  or during a session. A Context mode change still in flight blocks entry until
+  it settles. Turning off the layer the view rides ends it. Riding an aircraft
+  while Contacts is on adopts its layer as the user's own, as a direct selection
+  does (`adoptLayerVisibility`), so Contacts ending, by its own switch or one of
+  its layers going off, restores the pre-Contacts layers but keeps the ridden
+  one and the view; Live Signals then drops the rows Contacts built and shows
+  `CONTEXT STANDBY`. The visible Cockpit actions, the `C` shortcut and voice use
+  the same gate; voice entry still opens Contacts first, as its layer-targeted
+  entry navigates through Contacts.
+- **Aircraft cockpit view:** selecting a commercial or military aircraft reveals a `COCKPIT` action (`C`) once that aircraft's own layer is on; Contacts is not required. The action shows in Contacts (`#cockpit-entry`) and under the Intel HUD's bottom-right readout (`#cockpit-entry-readout`, with the HUD on, in its Tactical and Cyber layouts), so entry needs no Contacts panel. Turning off the ridden aircraft's layer ends the view (the layer clears its tracking). When an air feed the surrounding picture uses is off, the Cockpit says so instead of blocking: Live Signals leads with `MILITARY FEED OFF · PARTIAL PICTURE` or `FLIGHTS FEED OFF · PARTIAL PICTURE`, and the Contact card shows that line in place of its inputs status, so a partial picture is never presented as complete. `control_cockpit` refuses entry with `entryBlockedReason` `contacts-starting` (a Context change in flight), `subject-layer-off` (the aircraft's layer, or with none tracked any aircraft layer, is off) or `no-tracked-aircraft`. Cockpit mode temporarily releases Cesium's orbit-follow transform and drives a first-person camera from the tracked aircraft's existing smoothed display position and course. Its concave helmet-visor HUD shows callsign, UTC time, coordinates, curved roll/pitch guides, and a seven-division heading tape. Ambient commercial and military AIR contacts use a Cockpit near/far band selected by the shared Display 3D mode: Proximity admits at 150 km and retains to 185 km; All admits at 400 km and retains to 450 km. The shared 3D toggle now applies in Cockpit: Off keeps in-range contacts as rotating 2D aircraft silhouettes, while On lets a ready admitted glTF take over without a drawing gap. The Cockpit model cap remains 60 and can only lower the map budget; in-range contacts that are capped or still loading remain 2D silhouettes instead of degrading to out-of-range dots. Contacts outside the selected band use small rotation-free cyan-white pips for civilian aircraft and amber pips for military. The pilot's own airframe is not drawn in first person, and exiting clears the Cockpit band and restores normal map silhouettes/models. The normal left accordion remains available for Layers and Authoring and keeps the same 26vh HUD-aligned anchor used in map mode, independent of whether the bottom-left Contact card is expanded or collapsed; the right-rail CCTV and Context chooser are hidden to avoid duplicating or overlapping the cockpit presentation. When the intelligence HUD is enabled, its classification, scene summary, collection/orbit metadata, coordinates, and imaging-status text remain visible as reduced peripheral cockpit telemetry; the optical center and flight instruments stay clear, and turning the HUD off still hides it. Ground speed, exact heading, and rendered altitude form one compact lower-center instrument cluster, keeping the horizon and peripheral view open. A second live altitude tape hugs the inside-right visor rim: its rail and nine moving ticks are derived from the same responsive keyhole radius, remain 20 px inside the circular edge even on wide displays, fade deeply at both vertical ends, and move continuously behind a fixed current-altitude pointer; its interval tightens automatically near the surface and it is suppressed on narrow screens. Cockpit mode also has a weather-backed transparent volumetric-cloud pass derived from the supplied FBM/domain-warped R&D shader. It renders at no more than 520×320, uses 24 ray steps/three FBM octaves at 12 FPS, is clipped to the visor, fails clear when Open-Meteo is unavailable, and stops its animation completely on cockpit exit. It does not restore the prior CPU weather canvases, precipitation, scene fog, or any map-mode effect. When Contacts is active for the tracked aircraft, the compact `CONTACT` rail adds the 250 km subject window, four cohort counts, nearest observed/mapped example with relative bearing and distance, freshness, explicit uncertainty, and Previous and Next controls plus its own collapse control. The mirrored right rail is a three-page **cockpit briefing carousel**: source-backed live signals, location-matched regional headlines, and physical-region/current-weather context from bundled Natural Earth polygons and Open-Meteo. It is manual-first: Previous, Next, and direct page controls are always available, and the visible `CYCLE OFF` / `CYCLE ON` control starts or stops the nine-second page cycle. The cycle pauses on hover or keyboard focus and stops while collapsed, hidden, or outside cockpit mode; live signal data continues refreshing either way. Empty news matches and unavailable news use compact text states rather than reserving an empty media frame; partial local data remains explicit. Article links open their original publisher, and no headline is treated as verified risk intelligence. On desktop both cockpit rails use the same width and share a bottom-aligned safe baseline in opposite corners above the peripheral MGRS/GSD/time telemetry, leaving both that text and the lower-center instrument cluster readable. They collapse independently to slim tabs without stopping live data updates. Narrow screens use separated top/bottom fallbacks. Empty-space globe clicks are inert while cockpit owns the camera; `C`, `Escape`, or `EXIT COCKPIT` explicitly exits and restores the same tracked entity and standard follow camera. Unknown feeds remain unknown, selection loss still exits safely without inventing a replacement track, and the cockpit never presents the summary as threat scoring or an all-clear. This is a desktop first-person presentation, not a WebXR session.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Authoring keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.
 - **Cockpit camera anchor:** first-person mode does not write feed-boundary corrections directly into the camera. A cockpit-only inertial anchor advances from the selected aircraft's displayed course and speed, then converges toward the authoritative delayed track with correction capped below forward motion. The displayed kinematics are derived from the same consecutive fix segment as the rendered position, with raw feed speed/course used only as fallback; a transient zero/missing feed speed therefore cannot freeze a visibly moving aircraft after layer enable or a map/cockpit handoff. Rendered altitude continues to come from that interpolated track position. Late ADS-B fixes and short render stalls can remove drift without accelerating or reversing the view. Camera placement runs before scene update/culling at a bounded 20 Hz so a moving cockpit does not force Photoreal 3D Tiles to retraverse on every display frame; textual instruments update at 10 Hz and context/layout work at 4 Hz. Every far Cockpit contact pip shares one stable Cesium texture-atlas entry and skips unused screen-projected course calculations, while only in-range 2D aircraft silhouettes pay the screen-projected rotation cost; ambient glTF collections are hidden/retained rather than synchronously destroyed at cockpit entry, and context rails lay out only on explicit content/state changes and viewport resize. The deliberate 15/30-second layer interpolation delays and per-Cesium-frame position caches remain unchanged.

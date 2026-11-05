@@ -26,6 +26,8 @@ export function createState({ services }) {
     // layers activate only after Contacts is explicitly selected.
     passive: true,
     ownedDependencies: new Set(),
+    /** Stops following the manager's adoptions (see watchAdoptions). */
+    unwatchAdoptions: null,
     subject: null,
     results: null,
     visual: null,

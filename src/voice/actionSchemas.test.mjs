@@ -55,7 +55,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
-    'e8e9ab13b08f71c49061e465b4d587a7db37488cebae0c5f55c2332e1dca48e8',
+    // control_cockpit states the own-layer entry rule (Contacts not required).
+    'bc28062957de393fc3d6ce488255e4ce7a20ff97170ac12605faa653c4258403',
   );
 });
 

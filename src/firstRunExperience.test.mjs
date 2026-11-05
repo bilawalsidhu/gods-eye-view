@@ -1039,10 +1039,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // The Utilities panel adds one set_panel_open target; Sea Marks and Ski
   // Pistes extend the generated layer enums and alias hint; voice geometry
   // adds the analyst area scopes and the osm-places layer.
-  assert.equal(block.length, 31425, 'serialized tool schema length drifted');
+  // control_cockpit states the own-layer entry rule (Contacts not required).
+  assert.equal(block.length, 31479, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'cc2ac8326bcfc2d630901ec13a38ba01b6e94bfc267506acb708d303539d05b3',
+    '10f22bb0bbc6c763a7429e3d2023d1e02e321abc2167e090f72e05998bd521a5',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
