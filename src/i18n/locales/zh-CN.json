@@ -3029,5 +3029,32 @@
   "The provider rejected the API key. Check it in Provider Settings.": "服务商拒绝了 API 密钥。请在服务商设置中检查。",
   "Too many chat requests. Try again in {seconds} s.": "聊天请求过多。请在 {seconds} 秒后重试。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "服务商拒绝了此密钥的访问请求。请检查该密钥所属的项目、区域或权限。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服务商账户余额不足。请检查账户的计费信息，或在设置中选择其他 AI 服务商。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服务商账户余额不足。请检查账户的计费信息，或在设置中选择其他 AI 服务商。",
+  "Accident": "事故",
+  "Serious incident": "严重征候",
+  "Aircraft: {value}": "航空器：{value}",
+  "Operation: {value}": "运行类型：{value}",
+  "Flight phase: {value}": "飞行阶段：{value}",
+  "Damage: {value}": "损坏：{value}",
+  "Operator: {value}": "运营人：{value}",
+  "Fatalities: {count}": "死亡：{count}",
+  "Injured: {count}": "受伤：{count}",
+  "What happened: {value}": "发生了什么：{value}",
+  "Investigation finished · final report {number}": "调查已结束 · 最终报告 {number}",
+  "Investigation finished": "调查已结束",
+  "Investigation in progress": "调查进行中",
+  "Approximate position (aerodrome reference point)": "大致位置（机场基准点）",
+  "Source: CENIPA (Brazil)": "来源：CENIPA（巴西）",
+  "Source: Wikidata": "来源：Wikidata",
+  "Click the card to open CENIPA final reports ↗": "点击卡片打开 CENIPA 最终报告 ↗",
+  "Click the card to open the article ↗": "点击卡片打开条目 ↗",
+  "Wikidata unavailable; showing CENIPA only": "Wikidata 不可用；仅显示 CENIPA",
+  "CENIPA unavailable; showing Wikidata only": "CENIPA 不可用；仅显示 Wikidata",
+  "Air accidents unavailable": "航空事故数据不可用",
+  "CENIPA (Brazil, since 2007) · Wikidata (worldwide)": "CENIPA（巴西，2007 年起）· Wikidata（全球）",
+  "Brazilian accidents and serious incidents come from CENIPA open data; notable accidents worldwide come from Wikidata. Marker size grows with fatalities. Click a marker for its card.": "巴西的事故和严重征候来自 CENIPA 开放数据；全球知名事故来自 Wikidata。标记大小随死亡人数增大。点击标记查看卡片。",
+  "Air accidents": "航空事故",
+  "{count} occurrences": {
+    "other": "{count} 起"
+  }
 }

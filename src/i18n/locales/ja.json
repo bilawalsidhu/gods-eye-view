@@ -3029,5 +3029,32 @@
   "The provider rejected the API key. Check it in Provider Settings.": "プロバイダーがAPIキーを拒否しました。プロバイダー設定で確認してください。",
   "Too many chat requests. Try again in {seconds} s.": "チャットのリクエストが多すぎます。{seconds}秒後にもう一度お試しください。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "プロバイダーがこのキーでのアクセスを拒否しました。キーのプロジェクト、リージョン、権限を確認してください。",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーアカウントのクレジットが不足しています。課金状況を確認するか、設定で別のAIプロバイダーを選んでください。"
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーアカウントのクレジットが不足しています。課金状況を確認するか、設定で別のAIプロバイダーを選んでください。",
+  "Accident": "事故",
+  "Serious incident": "重大インシデント",
+  "Aircraft: {value}": "航空機: {value}",
+  "Operation: {value}": "運航種別: {value}",
+  "Flight phase: {value}": "飛行段階: {value}",
+  "Damage: {value}": "損傷: {value}",
+  "Operator: {value}": "運航者: {value}",
+  "Fatalities: {count}": "死者: {count}",
+  "Injured: {count}": "負傷者: {count}",
+  "What happened: {value}": "発生事象: {value}",
+  "Investigation finished · final report {number}": "調査終了 · 最終報告書 {number}",
+  "Investigation finished": "調査終了",
+  "Investigation in progress": "調査中",
+  "Approximate position (aerodrome reference point)": "おおよその位置（飛行場の標点）",
+  "Source: CENIPA (Brazil)": "出典: CENIPA（ブラジル）",
+  "Source: Wikidata": "出典: Wikidata",
+  "Click the card to open CENIPA final reports ↗": "カードをクリックすると CENIPA の最終報告書を開きます ↗",
+  "Click the card to open the article ↗": "カードをクリックすると記事を開きます ↗",
+  "Wikidata unavailable; showing CENIPA only": "Wikidata を利用できません。CENIPA のみ表示",
+  "CENIPA unavailable; showing Wikidata only": "CENIPA を利用できません。Wikidata のみ表示",
+  "Air accidents unavailable": "航空事故データを利用できません",
+  "CENIPA (Brazil, since 2007) · Wikidata (worldwide)": "CENIPA（ブラジル、2007年以降）· Wikidata（世界）",
+  "Brazilian accidents and serious incidents come from CENIPA open data; notable accidents worldwide come from Wikidata. Marker size grows with fatalities. Click a marker for its card.": "ブラジルの事故と重大インシデントは CENIPA のオープンデータ、世界の主な事故は Wikidata から取得します。マーカーは死者数に応じて大きくなります。マーカーをクリックするとカードを表示します。",
+  "Air accidents": "航空事故",
+  "{count} occurrences": {
+    "other": "{count} 件"
+  }
 }

@@ -98,6 +98,33 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Air accidents — CENIPA and Wikidata
+
+The Events group includes **Air accidents** (`air-accidents`, share-link token
+`9`), off by default. `/api/air-accidents` downloads CENIPA's occurrence,
+aircraft and occurrence-type CSV tables (`dedalo.sti.fab.mil.br/dadosabertos/`,
+Latin-1, ODbL) and a Wikidata SPARQL query for aviation accidents with a
+coordinate (CC0), at most once a day, and serves the last good snapshot as
+stale for up to seven days when a refresh fails. One source failing still
+serves the other. CENIPA rows are kept only for accidents and serious incidents
+with a position (about 3,400 since 2007); Wikidata adds about 1,900 accidents
+worldwide. A Wikidata item on the same day and within about 50 km of a CENIPA
+accident is merged into it, which gains the article name and link. Only
+technical columns are read; neither source is asked for people.
+
+The globe draws ground-clamped points with the depth test off and the
+horizon cull GhostMaps uses: red for accidents, orange for serious incidents,
+sized by fatalities. Two row chips show or hide each class. Clicking a point
+opens a `stateless` card with the date, place and aerodrome, each aircraft
+(registration, maker, model, ICAO type), operation type, phase of flight,
+damage, fatalities, injuries (Wikidata), CENIPA's occurrence types, the
+investigation status and the final report number. CENIPA values are shown in
+CENIPA's Portuguese wording. When several occurrences share one point (the
+aerodrome reference position) the card says the position is approximate.
+Clicking the card opens the Wikipedia article, else CENIPA's final-report
+page when a report is published. Voice does not toggle this layer yet (prompt
+budget, as for the airspace layer).
+
 ## Prohibited & Restricted Airspace — FAA special-use airspace
 
 The Infrastructure group includes **Prohibited & Restricted Airspace** (`drone-airspace`,
@@ -4212,6 +4239,7 @@ its criteria cannot be silently ignored.
 | Ski Pistes ⛷ (`ski-pistes`) | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 | Prohibited & Restricted Airspace 🚫 | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry) | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js` | `/api/drone-airspace` | 1 h (server cache 1 h; stale-on-error) |
+| Air accidents ✈️ (`air-accidents`) | CENIPA open data (Brazilian accidents and serious incidents, keyless, ODbL) and Wikidata (worldwide accidents, keyless, CC0) | `src/layers/airAccidents/` via `src/app/layers/airAccidents.js` | `/api/air-accidents` | 6 h page check; server refresh once a day (stale-on-error up to 7 days) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
