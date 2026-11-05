@@ -59,6 +59,30 @@ test('civil records keep aviation units separate from render height and survive 
   assert.deepEqual(JSON.parse(JSON.stringify(second.meta)), second.meta);
 });
 
+test('route enrichment clears on callsign replacement but survives transient missing callsigns', () => {
+  const store = records();
+  const first = store.receive(observation({ callsign: 'UAL123' }), view());
+  first.meta.airline = 'United Airlines';
+  first.meta.route = {
+    origin: { code: 'SFO' },
+    destination: { code: 'EWR' },
+    verification: 'unverified-reference',
+  };
+  const missing = store.receive(observation({ callsign: '' }), view());
+  assert.equal(missing.meta.callsign, 'UAL123');
+  assert.equal(missing.meta.route, first.meta.route);
+  assert.equal(missing.meta.airline, 'United Airlines');
+
+  const changed = store.receive(observation({ callsign: 'DAL456' }), view());
+  assert.equal(changed.meta.callsign, 'DAL456');
+  assert.equal(changed.meta.route, null);
+  assert.equal(changed.meta.airline, null);
+  // Repeated identical callsigns are not treated as another route switch.
+  changed.meta.route = { origin: { code: 'ATL' }, destination: { code: 'ORD' } };
+  const same = store.receive(observation({ callsign: 'dal456' }), view());
+  assert.deepEqual(same.meta.route, changed.meta.route);
+});
+
 test('civil record owners isolate state and preserve partial, missing-poll and landed retention', () => {
   const store = records();
   const other = records();
