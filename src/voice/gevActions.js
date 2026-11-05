@@ -12,6 +12,7 @@ import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import * as Cesium from 'cesium';
+import { distance as chordM, toLonLatH } from '../geo/index.js';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
 import {
@@ -2626,7 +2627,7 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
       .filter((entry) => entry.position)
       .map((entry) => ({
         ...entry,
-        distance: Cesium.Cartesian3.distance(center, entry.position),
+        distance: chordM(center, entry.position),
       }))
       .filter((entry) => entry.distance <= radiusKm * 1000)
       .sort((a, b) => a.distance - b.distance)
@@ -2926,7 +2927,7 @@ function adjustCameraZoom(viewer, args) {
   const beforeHeightM = camera.positionCartographic.height;
   const target = getViewTargetCartesian(viewer);
   const targetDistanceM = target
-    ? Cesium.Cartesian3.distance(beforePosition, target)
+    ? chordM(beforePosition, target)
     : Math.max(100, beforeHeightM);
   const minimumDistanceM = direction === 'in' ? 20 : 50;
   const movementM = Math.max(minimumDistanceM, targetDistanceM * fraction);
@@ -2953,7 +2954,7 @@ function adjustCameraZoom(viewer, args) {
   viewer.scene.requestRender();
 
   const afterPosition = camera.positionWC;
-  const movedM = Cesium.Cartesian3.distance(beforePosition, afterPosition);
+  const movedM = chordM(beforePosition, afterPosition);
   const afterHeightM = camera.positionCartographic.height;
   const moved = movedM >= 0.5;
   return {
@@ -3751,11 +3752,10 @@ async function aircraftProximityWindowForQuery(
       let lat = record?.lat;
       let lon = record?.lon;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        const carto = item.position
-          ? Cesium.Cartographic.fromCartesian(item.position)
-          : null;
-        lat = carto ? Cesium.Math.toDegrees(carto.latitude) : null;
-        lon = carto ? Cesium.Math.toDegrees(carto.longitude) : null;
+        const at = item.position ? toLonLatH(item.position) : null;
+        const known = at && Number.isFinite(at.lat) && Number.isFinite(at.lon);
+        lat = known ? at.lat : null;
+        lon = known ? at.lon : null;
       }
       const row = {
         ...(record || {
@@ -3914,10 +3914,10 @@ const SUBJECT_CENTER_TOLERANCE_KM = 1;
 function centerMatchesSubject(center, subjectPosition) {
   if (!Number.isFinite(center?.lat) || !Number.isFinite(center?.lon))
     return false;
-  const carto = Cesium.Cartographic.fromCartesian(subjectPosition);
-  if (!carto) return false;
-  const subjectLat = Cesium.Math.toDegrees(carto.latitude);
-  const subjectLon = Cesium.Math.toDegrees(carto.longitude);
+  const at = toLonLatH(subjectPosition);
+  if (!at) return false;
+  const subjectLat = at.lat;
+  const subjectLon = at.lon;
   return (
     greatCircleKm(
       { lat: subjectLat, lon: subjectLon },
@@ -4368,11 +4368,11 @@ function sampleViewportCartographics(viewer) {
       Cesium.Ellipsoid.WGS84,
     );
     if (!isPickedWorldPosition(cartesian)) continue;
-    const carto = Cesium.Cartographic.fromCartesian(cartesian);
-    if (!carto) continue;
+    const at = toLonLatH(cartesian);
+    if (!at) continue;
     samples.push({
-      latitude: Number(Cesium.Math.toDegrees(carto.latitude).toFixed(4)),
-      longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(4)),
+      latitude: Number(at.lat.toFixed(4)),
+      longitude: Number(at.lon.toFixed(4)),
     });
   }
   return samples;
@@ -4840,11 +4840,12 @@ function analystProviders(
         ?.module?.getContextSnapshot?.();
       const subject = snapshot?.subject;
       if (!subject?.position) return null;
-      const carto = Cesium.Cartographic.fromCartesian(subject.position);
-      if (!carto) return null;
+      const at = toLonLatH(subject.position);
+      if (!at || !Number.isFinite(at.lat) || !Number.isFinite(at.lon))
+        return null;
       return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
+        lat: at.lat,
+        lon: at.lon,
         label: subject.label || subject.id || null,
       };
     },
