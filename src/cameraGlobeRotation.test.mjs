@@ -1526,7 +1526,7 @@ test('a voice turn after something else turned the camera starts over', (t) => {
   assert.ok(globeFrameShare(camera) >= start - 2 / (32 * 18) - 1e-9);
 });
 
-test('nudging the camera between voice turns cannot slide the planet away', (t) => {
+test('nudging the camera between voice turns cannot take the planet below the 1% floor', (t) => {
   withScope(t, false); // the whole frame is visible
   // A wheel notch or an orbit drag between requests starts each turn afresh;
   // the 1% floor still holds, and below it a turn may only keep what it has.
@@ -1808,6 +1808,32 @@ test('a refused voice turn leaves a tracked camera tracking', (t) => {
     assert.equal(viewer.trackedEntity, tracked, label);
     assert.ok(Cesium.Matrix4.equals(camera.transform, transform), label);
   }
+});
+
+test('a turn proven at one position is checked again after a release moves the camera', (t) => {
+  withScope(t, false);
+  const { camera, tick } = harness(t, {
+    pitch: -80,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  // Tilt up to the limit, then check from 4,000 km closer along the same view
+  // direction, where the next tilt fits; the release moves the camera back.
+  for (let i = 0; i < 40; i += 1) {
+    if (!moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' }).ok)
+      break;
+    for (let j = 0; j < 600 && getActiveCameraMotion(); j += 1) tick(1 / 60);
+  }
+  camera.moveForward(4_000_000);
+  const result = moveCamera(
+    { motion: 'tilt', direction: 'up', mode: 'once' },
+    (start) => {
+      camera.moveBackward(4_000_000);
+      return start();
+    },
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.error, /globe out of view/);
 });
 
 test('the voice frame limit leaves Columbus view alone', (t) => {

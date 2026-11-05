@@ -9,6 +9,18 @@ export const FREE_LOOK_MAX_HEIGHT_METERS = 1_000_000;
 // the planet's surface.
 export const MIN_GLOBE_FRAME_SHARE = 0.1;
 
+/**
+ * A free globe camera: the viewer is in 3D, follows no tracked entity, and its
+ * camera is not locked to a reference frame.
+ */
+export function isFreeGlobeCamera(viewer) {
+  return (
+    viewer.scene.mode === Cesium.SceneMode.SCENE3D &&
+    !viewer.trackedEntity &&
+    Cesium.Matrix4.equals(viewer.camera.transform, Cesium.Matrix4.IDENTITY)
+  );
+}
+
 const GRID_COLUMNS = 32;
 const GRID_ROWS = 18;
 // A turn across a sliver of planet moves its edge through sample points, so

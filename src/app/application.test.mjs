@@ -399,6 +399,26 @@ test('free look follows camera height and is restored on dispose', () => {
   assert.equal(f.listeners.size, 0);
 });
 
+test('free look keeps a setting other code makes after it is installed', () => {
+  const f = freeLookFixture({ height: 500 });
+  const dispose = installFreeLookHeightLimit(f.viewer);
+  f.controller.enableLook = false;
+  f.frame(10);
+  assert.equal(f.controller.enableLook, false, 'turned off stays off');
+  f.frame(FREE_LOOK_MAX_HEIGHT_METERS * 20);
+  f.frame(10);
+  assert.equal(f.controller.enableLook, false, 'and stays off after orbit');
+  f.controller.enableLook = true;
+  f.frame(10);
+  assert.equal(f.controller.enableLook, true, 'turned back on');
+  f.frame(FREE_LOOK_MAX_HEIGHT_METERS * 20);
+  assert.equal(f.controller.enableLook, false, 'still limited from orbit');
+  f.frame(10);
+  f.controller.enableLook = false;
+  dispose();
+  assert.equal(f.controller.enableLook, false, 'dispose keeps a later setting');
+});
+
 test('free look stays off when the viewer had it disabled', () => {
   const f = freeLookFixture({ enableLook: false, height: 500 });
   installFreeLookHeightLimit(f.viewer);
@@ -418,6 +438,7 @@ function realCamera({ width = 1600, height = 900, mode } = {}) {
     pixelRatio: 1,
     ellipsoid: Cesium.Ellipsoid.WGS84,
     mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
+    tweens: new Cesium.TweenCollection(),
     renders: 0,
     requestRender() {
       this.renders += 1;
@@ -672,6 +693,29 @@ test('the recovery follows the scope: corner-only views are turned back only beh
       `scope ${scopeOn ? 'on' : 'off'}`,
     );
   }
+});
+
+test('the recovery leaves a camera flight and an authored scene alone', () => {
+  let playing = true;
+  const { camera, scene, viewer } = realCamera({ width: 1225, height: 923 });
+  scene.camera = camera;
+  scene.screenSpaceCameraController = { enableInputs: true };
+  installGlobeInViewRecovery(viewer, { paused: () => playing });
+  aim(camera, reportedStuckView);
+  camera.moveEnd.raiseEvent();
+  assert.equal(globeOutOfFrame(camera), true, 'a playing scene is left alone');
+  playing = false;
+
+  // A flight that pauses looking away is left alone until it ends.
+  camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(10, 20, 18_000_000),
+    duration: 5,
+  });
+  camera.moveEnd.raiseEvent();
+  assert.equal(globeOutOfFrame(camera), true, 'a flight is left alone');
+  camera.cancelFlight();
+  camera.moveEnd.raiseEvent();
+  assert.ok(Cesium.Math.equalsEpsilon(camera.pitch, -Math.PI / 2, 1e-6));
 });
 
 function fakeTimers() {

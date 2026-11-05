@@ -4,6 +4,7 @@ import { StarrySky } from '../sky/starrySky.js';
 import {
   FREE_LOOK_MAX_HEIGHT_METERS,
   globeOutOfFrame,
+  isFreeGlobeCamera,
 } from '../globeInView.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
@@ -109,7 +110,9 @@ export function installTrackpadPinchZoom(
 
 /**
  * Allow Cesium's free look only below `maxHeight` and return its disposer.
- * Orbit, tilt and zoom stay available at every height. `enableLook` gates the
+ * Orbit, tilt and zoom stay available at every height. A value other code
+ * sets later is kept as the one to allow below that height, and restored on
+ * dispose. `enableLook` gates the
  * Shift+drag binding only; a drag that starts on the stars below Cesium's
  * trackball height still turns the camera in place, which
  * `installGlobeInViewRecovery` catches.
@@ -124,11 +127,14 @@ export function installFreeLookHeightLimit(
   if (!controller || !camera || !scene?.preUpdate)
     throw new TypeError('A complete Cesium viewer is required');
 
-  const originalEnableLook = controller.enableLook;
+  let wanted = controller.enableLook;
+  let written;
   const sync = () => {
+    if (written !== undefined && controller.enableLook !== written)
+      wanted = controller.enableLook;
     const height = camera.positionCartographic?.height;
-    controller.enableLook =
-      originalEnableLook && !(Number.isFinite(height) && height > maxHeight);
+    written = wanted && !(Number.isFinite(height) && height > maxHeight);
+    controller.enableLook = written;
   };
   sync();
   const removeListener = scene.preUpdate.addEventListener(sync);
@@ -138,7 +144,7 @@ export function installFreeLookHeightLimit(
     if (!active) return;
     active = false;
     removeListener();
-    controller.enableLook = originalEnableLook;
+    if (controller.enableLook === written) controller.enableLook = wanted;
   };
 }
 
@@ -159,7 +165,9 @@ const SETTLE_GIVE_UP_MS = 5 * 60_000;
  * catches a saved or shared view that looked away, and a drag that Cesium turns
  * into an in-place look below its trackball height whatever `enableLook` says.
  * Heading and position are kept. Tracked cameras, locked ones (non-identity
- * transform) and the 2D and Columbus modes are left alone. `keyholeRadius`
+ * transform), a camera flight in progress, the 2D and Columbus modes, and any
+ * time `paused` returns true (an authored scene playing) are left alone.
+ * `keyholeRadius`
  * returns the radius of the visible circle when a scope mask hides the rest of
  * the frame (see `globeFrameShare`), or 0; it is read at every check.
  *
@@ -179,6 +187,7 @@ export function installGlobeInViewRecovery(
   {
     minHeight = FREE_LOOK_MAX_HEIGHT_METERS,
     keyholeRadius = () => 0,
+    paused = () => false,
     setTimeout: schedule = globalThis.setTimeout,
     clearTimeout: unschedule = globalThis.clearTimeout,
   } = {},
@@ -189,9 +198,9 @@ export function installGlobeInViewRecovery(
     throw new TypeError('A complete Cesium viewer is required');
 
   const recover = () => {
-    if (scene.mode !== Cesium.SceneMode.SCENE3D || viewer.trackedEntity) return;
-    if (!Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY))
-      return;
+    if (!isFreeGlobeCamera(viewer)) return;
+    // Cesium has no public running-flight flag.
+    if (camera._currentFlight || paused()) return;
     const height = camera.positionCartographic?.height;
     if (
       !(height > minHeight) ||

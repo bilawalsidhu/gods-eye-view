@@ -22,6 +22,7 @@ import * as Cesium from 'cesium';
 import { GLOBE_VIEW } from './locations.js';
 import {
   globeFrameShare,
+  isFreeGlobeCamera,
   lookAngleWithinFrame,
   lookStepLosesGlobe,
 } from './globeInView.js';
@@ -1015,18 +1016,6 @@ export function interruptCameraMotionIfActive(
   return interruptCameraMotion(reason);
 }
 
-/**
- * A free globe camera: 3D, not tracking, not locked to a frame. The frame
- * limit for in-place turns applies to it alone, as the move-end recovery does.
- */
-function isFreeGlobeCamera(cam) {
-  return (
-    _viewer.scene.mode === Cesium.SceneMode.SCENE3D &&
-    !_viewer.trackedEntity &&
-    Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY)
-  );
-}
-
 // The frame share that in-place voice turns measure their limit against, with
 // the pose the last voice turn left the camera in. A turn that starts where
 // the last one left off keeps that baseline (raised if the planet now fills
@@ -1036,7 +1025,7 @@ function isFreeGlobeCamera(cam) {
 let _lookBaseline = null;
 
 // The pre-check's proof that a half-degree turn from this pose keeps the planet
-// in view: which way, from which direction. A motion that starts from that
+// in view: which way, from which position and direction. A motion that starts from that
 // pose turns at least that far, so a request reported as done really moves
 // even when a smaller first step lands in a dip of the sampled share.
 const PROVEN_TURN_RAD = Cesium.Math.toRadians(0.5);
@@ -1079,7 +1068,7 @@ function lookBaselineShare(cam) {
  */
 function lookWithinFrame(cam, m, look, angle) {
   let allowed = angle;
-  if (isFreeGlobeCamera(cam)) {
+  if (isFreeGlobeCamera(_viewer)) {
     if (m.globeShareAtStart === undefined) {
       m.globeShareAtStart = lookBaselineShare(cam);
       m.provenTurnRad = lookProven(cam, look) ? PROVEN_TURN_RAD : 0;
@@ -1106,6 +1095,12 @@ function lookProven(cam, look) {
   return (
     _provenLook?.look === look &&
     Cesium.Cartesian3.equalsEpsilon(
+      _provenLook.position,
+      cam.positionWC,
+      0,
+      1,
+    ) &&
+    Cesium.Cartesian3.equalsEpsilon(
       _provenLook.direction,
       cam.directionWC,
       0,
@@ -1129,7 +1124,7 @@ function checkLookFromOrbit(look, { released = false } = {}) {
   _provenLook = null;
   if (_viewer.scene.mode !== Cesium.SceneMode.SCENE3D) return null;
   const cam = _viewer.camera;
-  if (!released && !isFreeGlobeCamera(cam)) return null;
+  if (!released && !isFreeGlobeCamera(_viewer)) return null;
   if (
     lookStepLosesGlobe(cam, look, PROVEN_TURN_RAD, {
       ...visibleFrame(),
@@ -1142,7 +1137,11 @@ function checkLookFromOrbit(look, { released = false } = {}) {
       error:
         'From this height that would turn the globe out of view — zoom in first, or turn the other way.',
     };
-  _provenLook = { look, direction: Cesium.Cartesian3.clone(cam.directionWC) };
+  _provenLook = {
+    look,
+    position: Cesium.Cartesian3.clone(cam.positionWC),
+    direction: Cesium.Cartesian3.clone(cam.directionWC),
+  };
   return null;
 }
 
@@ -1329,12 +1328,7 @@ function onTick() {
         // Tracking can acquire the camera without going through navigation.
         // Yield without resetting its pose/frame: the world-space arc proof
         // only describes Cesium's rotation while the frame is identity.
-        if (
-          _viewer.scene.mode !== Cesium.SceneMode.SCENE3D ||
-          _viewer.trackedEntity ||
-          _isCockpitActive?.() ||
-          !Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY)
-        ) {
+        if (!isFreeGlobeCamera(_viewer) || _isCockpitActive?.()) {
           interruptCameraMotion('globe-camera-owner-changed');
           return;
         }

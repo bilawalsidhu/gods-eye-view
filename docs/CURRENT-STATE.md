@@ -100,8 +100,11 @@ away, such as a saved or shared view that did, or a drag
 that Cesium turns into an in-place look below its 7,500 km trackball height (one
 that starts on the stars, or a tilt drag with the screen centre off the planet).
 Views with more surface than that, such as the oblique orbital Director shots,
-are left as they are, and so are tracked or locked cameras and the 2D and
-Columbus modes. A voice turn requested while the camera is tracked is judged
+are left as they are, and so are tracked or locked cameras, a camera flight in
+progress, a Director scene while it plays (holds included) and the 2D and
+Columbus modes. A view that loses its surface without a camera move (a resize,
+or turning the scope on) is left as it is until the next move. A voice turn
+requested while the camera is tracked is judged
 by the pose voice's release of the follow camera will leave, before that
 release, so a refused turn keeps the tracking.
 
