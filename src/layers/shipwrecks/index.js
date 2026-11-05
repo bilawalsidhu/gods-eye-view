@@ -2,10 +2,17 @@ import * as Cesium from 'cesium';
 import { formatNumber, msg, t, tn } from '../../i18n/index.js';
 import { createHorizonCull } from '../streetLevel/view.js';
 import { ERA_COLORS, ERA_LABELS, describeShipwreck } from './cards.js';
-import { SHIPWRECK_ERAS, eraOf, normalizeEras } from './eras.js';
+import { SHIPWRECK_ERAS, eraOf } from './eras.js';
+import {
+  inPeriod,
+  normalizePeriod,
+  periodRange,
+  yearExtent,
+} from './period.js';
 export * from './records.js';
 export * from './cards.js';
 export * from './eras.js';
+export * from './period.js';
 export { createShipwrecksSource } from './source.js';
 
 export const SHIPWRECKS_LAYER_ID = 'shipwrecks';
@@ -28,13 +35,14 @@ export function markerPixelSize(casualties) {
 
 /**
  * A round marker in the era's colour with a sinking hull and mast in the
- * middle, as an SVG data URL.
+ * middle, as an SVG data URL. It is rasterized at 144 px, four times the
+ * largest marker, so big markers stay sharp on high-density screens.
  * @param {string} color CSS colour.
  * @returns {string}
  */
 export function wreckMarkerImage(color) {
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 36 36">` +
     `<circle cx="18" cy="18" r="16" fill="${color}" stroke="#ffffff" stroke-width="2"/>` +
     `<path d="M8 21h20l-3.5 5h-13z" fill="#0b1420"/>` +
     `<path d="M17 8v12M17 9l6 7h-6" fill="none" stroke="#0b1420" stroke-width="2.2" stroke-linejoin="round"/>` +
@@ -69,7 +77,9 @@ export function createShipwrecksLayer({
   let _selectedId = null;
   let _selectedCardId = null;
   let _selectedLink = null;
-  let _eras = new Set(SHIPWRECK_ERAS);
+  let _period = { from: null, to: null };
+  let _extent = null;
+  let _range = null;
   const _images = Object.fromEntries(
     SHIPWRECK_ERAS.map((era) => [era, wreckMarkerImage(ERA_COLORS[era])]),
   );
@@ -86,16 +96,16 @@ export function createShipwrecksLayer({
     onChange: render,
   });
 
-  /** Shown: its era chip is on. */
+  /** Shown: its year is inside the period (undated ones only for all years). */
   function visible(record) {
-    return Boolean(record) && _eras.has(eraOf(record));
+    return Boolean(record) && inPeriod(record, _range);
   }
 
   function applyPin(pin) {
     pin.entity.show = pin.inFront && visible(pin.record);
   }
 
-  /** Re-apply the era chips to every marker and the open card. */
+  /** Re-apply the period to every marker and the open card. */
   function applyFilter() {
     for (const pin of _pins) applyPin(pin);
     if (_selectedId && !visible(_records.get(_selectedId))) clearSelection();
@@ -105,6 +115,8 @@ export function createShipwrecksLayer({
 
   function rebuild(records) {
     _records = new Map(records.map((record) => [record.id, record]));
+    _extent = yearExtent(records);
+    _range = periodRange(_period, _extent);
     _pins = [];
     if (!_dataSource) return;
     _dataSource.entities.suspendEvents();
@@ -257,16 +269,44 @@ export function createShipwrecksLayer({
     picking?.unregisterPickOwner?.(SHIPWRECKS_LAYER_ID);
   }
 
-  function toggleEra(era) {
-    if (_eras.has(era)) _eras.delete(era);
-    else _eras.add(era);
-    applyFilter();
-  }
-
   function countOf(era) {
     let count = 0;
-    for (const record of _records.values()) if (eraOf(record) === era) count++;
+    for (const record of _records.values())
+      if (eraOf(record) === era && inPeriod(record, _range)) count++;
     return count;
+  }
+
+  /** The start and end year pickers, side by side, as on Air accidents. */
+  function periodControls() {
+    if (!_extent || _extent.min === _extent.max) return {};
+    const range = periodRange(_period, _extent);
+    const valueText = range.all
+      ? t('All years')
+      : range.from === range.to
+        ? String(range.from)
+        : `${range.from}–${range.to}`;
+    const options = [];
+    for (let year = _extent.max; year >= _extent.min; year--)
+      options.push({ value: year, label: String(year) });
+    return {
+      range: {
+        id: 'period',
+        label: t('Period'),
+        valueText,
+        from: {
+          label: t('From'),
+          ariaLabel: t('First year of the shipwreck period'),
+          value: range.from,
+        },
+        to: {
+          label: t('To'),
+          ariaLabel: t('Last year of the shipwreck period'),
+          value: range.to,
+        },
+        options,
+        params: (end, value) => ({ [end]: Number(value) }),
+      },
+    };
   }
 
   const layer = {
@@ -347,17 +387,16 @@ export function createShipwrecksLayer({
       _rowListener = null;
     },
 
-    /** The era filter: `eras` lists the era chips that are on. */
+    /** The period filter: `from` and `to` are years (null = oldest / latest in the data). */
     getParams() {
-      return { eras: SHIPWRECK_ERAS.filter((era) => _eras.has(era)) };
+      return { ..._period };
     },
 
     setParams(params = {}) {
-      if (!('eras' in params)) return true;
-      const next = normalizeEras(params.eras, _eras);
-      if (next.size === _eras.size && [...next].every((era) => _eras.has(era)))
-        return true;
-      _eras = next;
+      const next = normalizePeriod(params, _period);
+      if (next.from === _period.from && next.to === _period.to) return true;
+      _period = next;
+      _range = periodRange(_period, _extent);
       applyFilter();
       return true;
     },
@@ -368,17 +407,16 @@ export function createShipwrecksLayer({
 
     getRowControls() {
       return {
-        chips: SHIPWRECK_ERAS.map((era) => ({
-          id: era,
-          label: t(ERA_LABELS[era]),
-          active: _eras.has(era),
+        chips: [],
+        ...periodControls(),
+        // The colours are a legend: when the ship sank.
+        legend: SHIPWRECK_ERAS.map((era) => ({
+          text: t(ERA_LABELS[era]),
           color: ERA_COLORS[era],
-          title: tn(countOf(era), '{count} wreck', '{count} wrecks', {
+          blurb: tn(countOf(era), '{count} wreck', '{count} wrecks', {
             count: formatNumber(countOf(era)),
           }),
-          onClick: () => toggleEra(era),
         })),
-        legend: [],
         info: t('EMODnet (European waters) · Wikidata (worldwide)'),
         infoTitle: t(
           'European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.',

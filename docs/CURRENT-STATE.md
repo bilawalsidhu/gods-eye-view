@@ -116,14 +116,18 @@ read: EMODnet's long histories (`ship_char`, `obj_desc`) are not, and any
 sinking or cargo text that names a person (owner, master, a diver who reported
 it) is dropped whole; deaths appear only as a Wikidata count.
 
-The globe draws a small hull marker per wreck, ground-clamped with the depth
-test off and the horizon cull GhostMaps uses, coloured by era: before 1900
+The globe draws a round marker with a hull and mast per wreck, ground-clamped
+with the depth test off and the horizon cull GhostMaps uses, sized by deaths as
+on Air accidents and coloured by era (a legend under the row): before 1900
 (ancient wrecks dated only by period count here), 1900–1945, after 1945, and
-date unknown. Four row chips show or hide each era (session-only, not in the
-share link). Clicking a marker opens a `stateless` card with the name, vessel
-type, sinking date or year (or the archaeological dating), what happened, deaths,
+date unknown. A period filter under the row picks a start year and an end year
+side by side, the same control as Air accidents (two pickers over the years in
+the data; a reversed pair is swapped); undated wrecks show only when every year
+is selected. The filter is session-only (not in the share link). Clicking a marker opens a `stateless` card laid out like the air-accident card: deaths and
+survivors first, then the sinking date or year (or the archaeological dating) and
+waters, vessel type, what happened,
 least depth and its quality, how well the position is known, period notes or
-the Wikidata description, cargo or finds, protected status, waters and source.
+the Wikidata description, cargo or finds, protected status and source.
 Clicking the card opens the Wikipedia article (else the Wikidata item), the
 wreck's own web page when EMODnet lists one, else EMODnet's portal. Voice does
 not toggle this layer yet (prompt budget, as for the airspace layer).

@@ -3059,5 +3059,11 @@
   "Fatalities: {count}": "遇难：{count}",
   "Survivors: {count}": "幸存者：{count}",
   "Click the card to open the article ↗": "点击卡片打开文章 ↗",
-  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "欧洲历史沉船来自 EMODnet Human Activities；全球知名沉船来自 Wikidata。颜色表示船只沉没的时期，标记大小随遇难人数增加。点击标记查看卡片。"
+  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "欧洲历史沉船来自 EMODnet Human Activities；全球知名沉船来自 Wikidata。颜色表示船只沉没的时期，标记大小随遇难人数增加。点击标记查看卡片。",
+  "All years": "所有年份",
+  "Period": "时段",
+  "From": "起",
+  "To": "止",
+  "First year of the shipwreck period": "沉船时段的起始年份",
+  "Last year of the shipwreck period": "沉船时段的结束年份"
 }

@@ -3211,5 +3211,11 @@
   "Fatalities: {count}": "Mortos: {count}",
   "Survivors: {count}": "Sobreviventes: {count}",
   "Click the card to open the article ↗": "Clique na ficha para abrir o artigo ↗",
-  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "Os naufrágios históricos europeus vêm do EMODnet Human Activities; os naufrágios notáveis do mundo vêm do Wikidata. A cor mostra quando o navio afundou; o marcador cresce com o número de mortos. Clique num marcador para ver a ficha."
+  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "Os naufrágios históricos europeus vêm do EMODnet Human Activities; os naufrágios notáveis do mundo vêm do Wikidata. A cor mostra quando o navio afundou; o marcador cresce com o número de mortos. Clique num marcador para ver a ficha.",
+  "All years": "Todos os anos",
+  "Period": "Período",
+  "From": "Início",
+  "To": "Fim",
+  "First year of the shipwreck period": "Primeiro ano do período dos naufrágios",
+  "Last year of the shipwreck period": "Último ano do período dos naufrágios"
 }

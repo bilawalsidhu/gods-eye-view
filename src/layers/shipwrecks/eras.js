@@ -19,15 +19,3 @@ export function eraOf(record) {
   if (year <= 1945) return '1900-1945';
   return 'after-1945';
 }
-
-/**
- * Normalize a requested set of eras; unknown names are ignored and an empty
- * or missing request keeps the current set.
- * @param {unknown} value Array of era ids.
- * @param {Set<string>} current
- * @returns {Set<string>}
- */
-export function normalizeEras(value, current) {
-  if (!Array.isArray(value)) return new Set(current);
-  return new Set(value.filter((era) => SHIPWRECK_ERAS.includes(era)));
-}

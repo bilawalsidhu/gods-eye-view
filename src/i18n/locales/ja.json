@@ -3059,5 +3059,11 @@
   "Fatalities: {count}": "死者: {count}",
   "Survivors: {count}": "生存者: {count}",
   "Click the card to open the article ↗": "カードをクリックして記事を開く ↗",
-  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "欧州の歴史的な難破船はEMODnet Human Activities、世界の著名な難破船はWikidataによります。色は沈没した時期を示し、マーカーは死者数に応じて大きくなります。マーカーをクリックするとカードが開きます。"
+  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "欧州の歴史的な難破船はEMODnet Human Activities、世界の著名な難破船はWikidataによります。色は沈没した時期を示し、マーカーは死者数に応じて大きくなります。マーカーをクリックするとカードが開きます。",
+  "All years": "全期間",
+  "Period": "期間",
+  "From": "開始",
+  "To": "終了",
+  "First year of the shipwreck period": "難破の期間の開始年",
+  "Last year of the shipwreck period": "難破の期間の終了年"
 }

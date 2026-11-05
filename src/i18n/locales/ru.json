@@ -3287,5 +3287,11 @@
   "Fatalities: {count}": "Погибших: {count}",
   "Survivors: {count}": "Выживших: {count}",
   "Click the card to open the article ↗": "Нажмите на карточку, чтобы открыть статью ↗",
-  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "Исторические затонувшие суда Европы — из EMODnet Human Activities, известные кораблекрушения по всему миру — из Wikidata. Цвет показывает, когда судно затонуло; маркер растёт с числом погибших. Нажмите на маркер, чтобы открыть карточку."
+  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "Исторические затонувшие суда Европы — из EMODnet Human Activities, известные кораблекрушения по всему миру — из Wikidata. Цвет показывает, когда судно затонуло; маркер растёт с числом погибших. Нажмите на маркер, чтобы открыть карточку.",
+  "All years": "Все годы",
+  "Period": "Период",
+  "From": "С",
+  "To": "По",
+  "First year of the shipwreck period": "Первый год периода кораблекрушений",
+  "Last year of the shipwreck period": "Последний год периода кораблекрушений"
 }
