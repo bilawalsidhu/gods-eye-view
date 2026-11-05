@@ -5,7 +5,9 @@ import { createEnrichment } from './enrichment.js';
 function harness(callsign = 'UAL123') {
   let resolveLookup;
   let requests = 0;
-  const pending = new Promise(resolve => { resolveLookup = resolve; });
+  const pending = new Promise((resolve) => {
+    resolveLookup = resolve;
+  });
   const meta = { callsign, airline: null, route: null };
   const flightState = {
     lifetime: { signal: new AbortController().signal },
@@ -27,7 +29,11 @@ function harness(callsign = 'UAL123') {
     _trackedEntity: null,
   };
   const parts = {
-    tracking: { _updateTrackedLabelModel() { throw new Error('unexpected tracking update'); } },
+    tracking: {
+      _updateTrackedLabelModel() {
+        throw new Error('unexpected tracking update');
+      },
+    },
   };
   const enrich = createEnrichment({ flightState, parts });
   enrich._requestRouteEnrichment('abc123');
@@ -36,7 +42,7 @@ function harness(callsign = 'UAL123') {
 
 async function settle() {
   // Flush the promise chains in _drainEnrich, including onData and finally.
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 const result = {
