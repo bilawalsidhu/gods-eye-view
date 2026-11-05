@@ -23,6 +23,14 @@
  */
 export const NEAR_POI_MAX_KM = 150;
 
+/** The English locality line; the HUD passes hudLocalityFormat.js instead. */
+const ENGLISH_LOCALITY = Object.freeze({
+  near: ({ poi, city, distKm }) =>
+    `NEAR ${poi.toUpperCase()} (${city.toUpperCase()}) ${Math.round(distKm)}KM`,
+  sector: ({ latDeg, lonDeg }) =>
+    `SECTOR ${coordinateTag(latDeg, 'N', 'S')} ${coordinateTag(lonDeg, 'E', 'W')}`,
+});
+
 /**
  * Format one hemisphere-tagged coordinate, e.g. `21.33N` / `157.80W`.
  * @param {number} value Signed decimal degrees.
@@ -42,13 +50,25 @@ function coordinateTag(value, positive, negative) {
  *   catalogue is empty.
  * @param {number} latDeg Camera latitude in decimal degrees.
  * @param {number} lonDeg Camera longitude in decimal degrees.
+ * @param {{near: Function, sector: Function}} [format] Builds the line from
+ *   `{ poi, city, distKm }` or `{ latDeg, lonDeg }`; names arrive as
+ *   catalogued (`Tokyo`), not upper-cased.
  * @returns {string} `NEAR <POI> (<CITY>) <N>KM` within the bound (inclusive),
  *   otherwise `SECTOR <lat> <lon>`.
  */
-export function composeLocalityTag(nearest, latDeg, lonDeg) {
+export function composeLocalityTag(
+  nearest,
+  latDeg,
+  lonDeg,
+  format = ENGLISH_LOCALITY,
+) {
   const distKm = Number(nearest?.distKm);
   if (nearest && Number.isFinite(distKm) && distKm <= NEAR_POI_MAX_KM) {
-    return `NEAR ${String(nearest.poi).toUpperCase()} (${String(nearest.city).toUpperCase()}) ${Math.round(distKm)}KM`;
+    return format.near({
+      poi: String(nearest.poi),
+      city: String(nearest.city),
+      distKm,
+    });
   }
-  return `SECTOR ${coordinateTag(latDeg, 'N', 'S')} ${coordinateTag(lonDeg, 'E', 'W')}`;
+  return format.sector({ latDeg, lonDeg });
 }

@@ -12,29 +12,59 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import createViteConfig, { fetchOverpassPayload, overpassPayloadIsData, readOverpassDisk } from '../vite.config.js';
+import { resolveOverpassUpstreamTag } from '../server/providers/overpass/constants.js';
 
 const DATA = { status: 200, body: '{"elements":[]}' };
 
 test('disk cache rejects old refusals for fresh and stale reads but preserves last-good data', async () => {
   const key = `overpass-cache-regression-${randomUUID()}`;
   const directory = path.join(process.cwd(), '.gev-cache', 'overpass');
-  const file = path.join(directory, `${createHash('sha1').update(key).digest('hex')}.json`);
+  const file = path.join(
+    directory,
+    `${createHash('sha1').update(key).digest('hex')}.json`,
+  );
   await mkdir(directory, { recursive: true });
   try {
     for (const refusal of [
-      { status: 406 }, { status: 429 }, { status: 503 },
-      { status: 200, rateLimited: true }, { status: 200, runtimeError: true },
+      { status: 406 },
+      { status: 429 },
+      { status: 503 },
+      { status: 200, rateLimited: true },
+      { status: 200, runtimeError: true },
     ]) {
-      await writeFile(file, JSON.stringify({ ...DATA, cachedAt: Date.now(), ...refusal }));
-      assert.equal(await readOverpassDisk(key, 60000), null, `fresh ${JSON.stringify(refusal)}`);
-      assert.equal(await readOverpassDisk(key, Infinity), null, `stale ${JSON.stringify(refusal)}`);
+      await writeFile(
+        file,
+        JSON.stringify({ ...DATA, cachedAt: Date.now(), ...refusal }),
+      );
+      assert.equal(
+        await readOverpassDisk(key, 60000),
+        null,
+        `fresh ${JSON.stringify(refusal)}`,
+      );
+      assert.equal(
+        await readOverpassDisk(key, Infinity),
+        null,
+        `stale ${JSON.stringify(refusal)}`,
+      );
     }
     const good = { ...DATA, cachedAt: Date.now() - 120000 };
     await writeFile(file, JSON.stringify(good));
-    assert.equal(await readOverpassDisk(key, 60000), null, 'expired good data misses normal TTL');
-    assert.deepEqual(await readOverpassDisk(key, Infinity), good, 'last-good data survives an outage');
+    assert.equal(
+      await readOverpassDisk(key, 60000),
+      null,
+      'expired good data misses normal TTL',
+    );
+    assert.deepEqual(
+      await readOverpassDisk(key, Infinity),
+      good,
+      'last-good data survives an outage',
+    );
     await writeFile(file, '{invalid');
-    assert.equal(await readOverpassDisk(key, Infinity), null, 'corrupt cache is ignored');
+    assert.equal(
+      await readOverpassDisk(key, Infinity),
+      null,
+      'corrupt cache is ignored',
+    );
   } finally {
     await unlink(file);
   }
@@ -48,27 +78,45 @@ test('only a 2xx that is neither rate-limited nor a runtime error is data', () =
 
   // The measured refusal, and its neighbours. `< 500` admitted every one.
   for (const status of [400, 403, 406, 410, 429]) {
-    assert.equal(overpassPayloadIsData({ status }), false, `${status} is not data`);
+    assert.equal(
+      overpassPayloadIsData({ status }),
+      false,
+      `${status} is not data`,
+    );
   }
   assert.equal(overpassPayloadIsData({ status: 502 }), false);
   // A 200 can still not be data: Overpass reports runtime failures in the body.
-  assert.equal(overpassPayloadIsData({ status: 200, runtimeError: true }), false);
-  assert.equal(overpassPayloadIsData({ status: 200, rateLimited: true }), false);
+  assert.equal(
+    overpassPayloadIsData({ status: 200, runtimeError: true }),
+    false,
+  );
+  assert.equal(
+    overpassPayloadIsData({ status: 200, rateLimited: true }),
+    false,
+  );
   assert.equal(overpassPayloadIsData({}), false);
   assert.equal(overpassPayloadIsData(null), false);
 });
 
 // Configured endpoints replace defaults; refusals are sanitized and cooled down.
 test('configured failover accepts empty data and keeps the application identity', async () => {
-  const endpoints = ['https://first.example/query?secret=one', 'http://localhost:12345/api'];
+  const endpoints = [
+    'https://first.example/query?secret=one',
+    'http://localhost:12345/api',
+  ];
   const seen = [];
   const payload = await fetchOverpassPayload('data=x', 1024, {
     endpoints,
     fetchImpl: async (url, options) => {
       seen.push(url);
-      assert.equal(options.headers['User-Agent'], 'gods-eye-view/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)');
+      assert.equal(
+        options.headers['User-Agent'],
+        'gods-eye-view/0.1 (+https://github.com/bilawalsidhu/gods-eye-view)',
+      );
       assert.equal(options.redirect, 'error');
-      return new Response(seen.length === 1 ? url : DATA.body, { status: seen.length === 1 ? 406 : 200 });
+      return new Response(seen.length === 1 ? url : DATA.body, {
+        status: seen.length === 1 ? 406 : 200,
+      });
     },
   });
   assert.deepEqual(seen, endpoints);
@@ -79,11 +127,19 @@ test('configured failover accepts empty data and keeps the application identity'
 test('406 and 429 honor Retry-After across different queries without more egress', async () => {
   for (const status of [406, 429]) {
     const endpoint = `https://cooldown-${status}.example/private?token=secret`;
-    let count = 0, now = 1_000_000;
-    const options = { endpoints: [endpoint], now: () => now, fetchImpl: async () => {
-      count++;
-      return new Response(`Refused ${endpoint}`, { status, headers: { 'Retry-After': '90' } });
-    } };
+    let count = 0,
+      now = 1_000_000;
+    const options = {
+      endpoints: [endpoint],
+      now: () => now,
+      fetchImpl: async () => {
+        count++;
+        return new Response(`Refused ${endpoint}`, {
+          status,
+          headers: { 'Retry-After': '90' },
+        });
+      },
+    };
     const first = await fetchOverpassPayload('first', 1024, options);
     assert.equal(first.status, status);
     assert.equal(first.retryAfterMs, 90_000);
@@ -101,11 +157,23 @@ test('406 and 429 honor Retry-After across different queries without more egress
 test('HTTP-date Retry-After is respected, and absent delays use bounded backoff', async () => {
   let now = Date.parse('2026-09-23T12:00:00Z');
   const endpoint = 'https://dated.example/api';
-  const payload = await fetchOverpassPayload('x', 1024, { endpoints: [endpoint], now: () => now,
-    fetchImpl: async () => new Response('busy', { status: 429, headers: { 'Retry-After': 'Wed, 23 Sep 2026 12:02:00 GMT' } }) });
+  const payload = await fetchOverpassPayload('x', 1024, {
+    endpoints: [endpoint],
+    now: () => now,
+    fetchImpl: async () =>
+      new Response('busy', {
+        status: 429,
+        headers: { 'Retry-After': 'Wed, 23 Sep 2026 12:02:00 GMT' },
+      }),
+  });
   assert.equal(payload.retryAfterMs, 120_000);
-  const options = { endpoints: ['https://bounded.example'], now: () => now,
-    fetchImpl: async () => { throw new Error('https://bounded.example/secret'); } };
+  const options = {
+    endpoints: ['https://bounded.example'],
+    now: () => now,
+    fetchImpl: async () => {
+      throw new Error('https://bounded.example/secret');
+    },
+  };
   for (let i = 0; i < 8; i++) {
     const reply = await fetchOverpassPayload('x', 1024, options);
     assert.ok(reply.retryAfterMs <= 300_000);
@@ -115,30 +183,119 @@ test('HTTP-date Retry-After is respected, and absent delays use bounded backoff'
 });
 
 test('production reader rejects oversized, malformed and runtime-failure bodies', async () => {
-  for (const [i, body] of ['x'.repeat(200), '{"remark":"runtime error: timed out","elements":[]}', 'rate_limited', '{}', 'not json'].entries()) {
-    const endpoints = [`https://bad-${i}.example/`, `https://good-${i}.example/`];
+  for (const [i, body] of [
+    'x'.repeat(200),
+    '{"remark":"runtime error: timed out","elements":[]}',
+    'rate_limited',
+    '{}',
+    'not json',
+  ].entries()) {
+    const endpoints = [
+      `https://bad-${i}.example/`,
+      `https://good-${i}.example/`,
+    ];
     const seen = [];
-    const payload = await fetchOverpassPayload('data=x', 100, { endpoints, fetchImpl: async (url) => {
-      seen.push(url); return new Response(seen.length === 1 ? body : DATA.body);
-    } });
-    assert.equal(payload.body, DATA.body); assert.deepEqual(seen, endpoints);
+    const payload = await fetchOverpassPayload('data=x', 100, {
+      endpoints,
+      fetchImpl: async (url) => {
+        seen.push(url);
+        return new Response(seen.length === 1 ? body : DATA.body);
+      },
+    });
+    assert.equal(payload.body, DATA.body);
+    assert.deepEqual(seen, endpoints);
   }
 });
 
+test('element data that mentions a failure phrase is data, and sets no cooldown', async () => {
+  const names = ['Timed Out Escape Rooms', 'Runtime Error Bar', 'Out of Memory Lane', 'Too Many Requests Cafe', 'rate_limited'];
+  for (const [i, name] of names.entries()) {
+    const body = JSON.stringify({ elements: [{ type: 'node', id: 1, lat: 1, lon: 2, tags: { name } }] });
+    let count = 0;
+    const options = { endpoints: [`https://phrase-${i}.example/`], fetchImpl: async () => {
+      count++; return new Response(body);
+    } };
+    const payload = await fetchOverpassPayload('first', 1024, options);
+    assert.equal(payload.status, 200, name);
+    assert.ok(overpassPayloadIsData(payload), name);
+    assert.ok(payload.body.includes(name), name);
+    await fetchOverpassPayload('different', 1024, options);
+    assert.equal(count, 2, name);
+  }
+  const remark = JSON.stringify({ elements: [], remark: 'runtime error: rate_limited' });
+  const limited = await fetchOverpassPayload('x', 1024, { endpoints: ['https://remark.example/'],
+    fetchImpl: async () => new Response(remark, { headers: { 'Retry-After': '90' } }) });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.retryAfterMs, 90_000);
+  const error = await fetchOverpassPayload('x', 1024, { endpoints: ['https://error.example/'],
+    fetchImpl: async () => new Response('{"error":"rate_limited"}', { headers: { 'Retry-After': '120' } }) });
+  assert.equal(error.status, 429);
+  assert.equal(error.retryAfterMs, 120_000);
+});
+
+test('caller cancellation aborts transport without cooling down the upstream', async () => {
+  const endpoint = `https://cancelled-${randomUUID()}.example/api`;
+  const controller = new AbortController();
+  const entered = Promise.withResolvers();
+  const first = fetchOverpassPayload('data=x', 1024, {
+    endpoints: [endpoint],
+    signal: controller.signal,
+    fetchImpl: async (_url, { signal }) => {
+      entered.resolve();
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        });
+      });
+    },
+  });
+  await entered.promise;
+  controller.abort();
+  await assert.rejects(first);
+
+  let retried = 0;
+  const next = await fetchOverpassPayload('data=y', 1024, {
+    endpoints: [endpoint],
+    fetchImpl: async () => {
+      retried += 1;
+      return new Response(DATA.body, { status: 200 });
+    },
+  });
+  assert.equal(
+    retried,
+    1,
+    'the next live caller is not held behind a cooldown',
+  );
+  assert.equal(next.body, DATA.body);
+});
+
 function proxyHandler() {
-  const plugin = createViteConfig({ mode: 'test' }).plugins.find(p => p.name === 'overpass-proxy');
+  const plugin = createViteConfig({ mode: 'test' }).plugins.find(
+    (p) => p.name === 'overpass-proxy',
+  );
   const routes = new Map();
-  plugin.configureServer({ middlewares: { use: (route, handler) => routes.set(route, handler) } });
+  plugin.configureServer({
+    middlewares: { use: (route, handler) => routes.set(route, handler) },
+  });
   return routes.get('/api/overpass');
 }
 
 function invoke(handler, body) {
   const req = Readable.from([Buffer.from(body)]);
-  Object.assign(req, { method: 'POST', headers: {}, socket: { remoteAddress: '127.0.0.1' } });
+  Object.assign(req, {
+    method: 'POST',
+    headers: {},
+    socket: { remoteAddress: '127.0.0.1' },
+  });
   return new Promise((resolve, reject) => {
     const res = {
-      writeHead(status, headers) { this.status = status; this.headers = headers; },
-      end(body) { resolve({ status: this.status, headers: this.headers, body }); },
+      writeHead(status, headers) {
+        this.status = status;
+        this.headers = headers;
+      },
+      end(body) {
+        resolve({ status: this.status, headers: this.headers, body });
+      },
     };
     Promise.resolve(handler(req, res)).catch(reject);
   });
@@ -147,15 +304,27 @@ function invoke(handler, body) {
 test('coalesced outage callers both receive last-good data, never a cached refusal', async (t) => {
   const handler = proxyHandler();
   const prior = process.env.OVERPASS_UPSTREAMS;
-  t.after(() => { if (prior === undefined) delete process.env.OVERPASS_UPSTREAMS; else process.env.OVERPASS_UPSTREAMS = prior; });
+  t.after(() => {
+    if (prior === undefined) delete process.env.OVERPASS_UPSTREAMS;
+    else process.env.OVERPASS_UPSTREAMS = prior;
+  });
   for (const status of [406, 503, 429]) {
     process.env.OVERPASS_UPSTREAMS = `https://outage-${status}.example/api`;
     const query = `[out:json][timeout:12];node(around:10,30.27,-97.74)["name"="${randomUUID()}"];out;`;
     const body = `data=${encodeURIComponent(query)}`;
     const directory = path.join(process.cwd(), '.gev-cache', 'overpass');
-    const file = path.join(directory, `${createHash('sha1').update(body).digest('hex')}.json`);
+    const file = path.join(
+      directory,
+      `${createHash('sha1').update(body).digest('hex')}.json`,
+    );
     await mkdir(directory, { recursive: true });
-    const stale = { ...DATA, cachedAt: Date.now() - 40 * 86400000 };
+    // Last-good data was fetched from the instance configured above, so it
+    // carries that instance's tag the way the transport now writes it.
+    const stale = {
+      ...DATA,
+      cachedAt: Date.now() - 40 * 86400000,
+      upstreams: resolveOverpassUpstreamTag(),
+    };
     await writeFile(file, JSON.stringify(stale));
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
@@ -172,10 +341,14 @@ test('coalesced outage callers both receive last-good data, never a cached refus
       const second = invoke(handler, body);
       // The second request consumes its in-memory stream and joins the pending
       // promise before releasing upstream. No network or elapsed-time sleep.
-      await new Promise(resolve => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
       release.resolve();
       for (const response of await Promise.all([first, second])) {
-        assert.equal(response.status, 200, `${status}: both callers use last-good data`);
+        assert.equal(
+          response.status,
+          200,
+          `${status}: both callers use last-good data`,
+        );
         assert.equal(response.body, DATA.body);
         assert.equal(response.headers['X-Overpass-Cache'], 'STALE');
       }
@@ -186,5 +359,48 @@ test('coalesced outage callers both receive last-good data, never a cached refus
       mock.mock.restore();
       await unlink(file);
     }
+  }
+});
+
+test('a disk entry is not served after OVERPASS_UPSTREAMS is repointed', async (t) => {
+  const prior = process.env.OVERPASS_UPSTREAMS;
+  t.after(() => {
+    if (prior === undefined) delete process.env.OVERPASS_UPSTREAMS;
+    else process.env.OVERPASS_UPSTREAMS = prior;
+  });
+  const key = `overpass-upstream-switch-${randomUUID()}`;
+  const directory = path.join(process.cwd(), '.gev-cache', 'overpass');
+  const file = path.join(
+    directory,
+    `${createHash('sha1').update(key).digest('hex')}.json`,
+  );
+  await mkdir(directory, { recursive: true });
+  try {
+    // Written while one instance was configured...
+    process.env.OVERPASS_UPSTREAMS = 'https://first.example/api/interpreter';
+    const first = resolveOverpassUpstreamTag();
+    await writeFile(
+      file,
+      JSON.stringify({ ...DATA, cachedAt: Date.now(), upstreams: first }),
+    );
+    assert.ok(await readOverpassDisk(key, 60000), 'its own entry is a hit');
+
+    // ...is not an answer once the operator points at a different one, on the
+    // stale path either: the key is the query alone, so it would otherwise hit.
+    process.env.OVERPASS_UPSTREAMS = 'https://second.example/api/interpreter';
+    assert.notEqual(resolveOverpassUpstreamTag(), first, 'tag follows the env');
+    assert.equal(await readOverpassDisk(key, 60000), null, 'fresh read refused');
+    assert.equal(
+      await readOverpassDisk(key, Infinity),
+      null,
+      'stale read refused',
+    );
+
+    // With nothing configured there is no instance to contradict, and serving
+    // last-good data is what the not-configured path exists for.
+    delete process.env.OVERPASS_UPSTREAMS;
+    assert.ok(await readOverpassDisk(key, Infinity), 'unconfigured still serves');
+  } finally {
+    await unlink(file);
   }
 });

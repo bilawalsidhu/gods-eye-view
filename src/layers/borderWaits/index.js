@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { msg, t } from '../../i18n/index.js';
 import {
   BORDER_WAITS_OVERLAY_SOURCE_ID,
   BORDER_WAITS_LABEL_COHORT_LIMIT,
@@ -216,7 +217,7 @@ export function createBorderWaitsLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:BorderWaits] Fetch error:', e);
-        _lastError = e?.message || 'Border wait source unavailable';
+        _lastError = e?.message || msg('Border wait source unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -268,11 +269,15 @@ export function createBorderWaitsLayer({
     getRowControls() {
       const rows = [..._rowById.values()];
       const bands = [
-        ...DELAY_BANDS.map(({ key, label, color }) => ({ key, label, color })),
-        { key: 'closed', label: 'Closed', color: CLOSED_COLOR },
+        ...DELAY_BANDS.map(({ key, label, color }) => ({
+          key,
+          label: t(label),
+          color,
+        })),
+        { key: 'closed', label: t('Closed'), color: CLOSED_COLOR },
         {
           key: 'unreported',
-          label: 'No wait reported',
+          label: t('No wait reported'),
           color: UNREPORTED_COLOR,
         },
       ];
@@ -283,8 +288,9 @@ export function createBorderWaitsLayer({
           count: rows.filter((row) => delayBandKey(row) === key).length,
           ...(index === 0
             ? {
-                blurb:
+                blurb: t(
                   'Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.',
+                ),
               }
             : {}),
         })),

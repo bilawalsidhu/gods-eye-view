@@ -1,11 +1,19 @@
 import { createStandaloneCatalog } from './catalog.js';
 import { createStandalonePlaceSearch } from './placeSearch.js';
-import { CITY_POIS } from '../locations.js';
+import { CITY_POIS } from '../cityPois.js';
 import { createApplication } from '../app/application.js';
 import { createStandaloneScene } from './scene.js';
 import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
+import { resolveLocale, applyDocumentLanguage } from '../i18n/locale.js';
+import {
+  applyDocumentTranslations,
+  getLocale,
+  onLocaleChange,
+  setLocale,
+} from '../i18n/index.js';
+import { mountApplicationViews } from '../ui/views/index.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
 
 // The existing controls and layer catalog contain page-scoped state.
@@ -24,12 +32,30 @@ export function createStandaloneApplication({
   if (constructed)
     throw new Error('The standalone application already owns this page');
   constructed = true;
+  // Locale is resolved before any UI initialization so <html lang>/<html dir>
+  // and every catalog lookup agree from the first painted frame. Module
+  // scripts execute after parsing, so the DOM is ready here: the views
+  // translate as they render, and the page's static data-i18n* markup (the
+  // loading screen) is translated here and after every language switch.
+  const activeLocale = resolveLocale();
+  setLocale(activeLocale);
+  applyDocumentLanguage(document, activeLocale);
+  // Views render the page's markup; wiring reads it.
+  mountApplicationViews(document);
+  applyDocumentTranslations(document);
   const loadingScreen = document.getElementById('loading-screen');
   const loaderStatus = loadingScreen.querySelector('.loader-status');
   let placeSearch;
   let catalog;
   return createApplication({
     createScene: async (context) => {
+      // A language switch applies in place; the page's own markup follows.
+      context.defer(
+        onLocaleChange(() => {
+          applyDocumentLanguage(document, getLocale());
+          applyDocumentTranslations(document);
+        }),
+      );
       placeSearch = createStandalonePlaceSearch({
         // The bundled city and landmark data the offline name provider reads.
         // The search package takes it as plain data rather than importing it,

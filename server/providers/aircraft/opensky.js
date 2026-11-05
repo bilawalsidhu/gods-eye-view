@@ -1,7 +1,10 @@
+import fs from 'node:fs';
+import os from 'node:os';
 import { normalizeAdsbLolPointResponse } from '../../../src/data/adsbLolFallback.js';
 import {
   coalesceProxyRequest,
   readResponseJsonCapped,
+  readResponseTextCapped,
 } from '../common/http.js';
 import { requiredFiniteQueryNumber } from '../common/query.js';
 // ---------------------------------------------------------------------------
@@ -29,11 +32,34 @@ const OPENSKY_CACHE_MS = 9000;
 const OPENSKY_ATTEMPT_TIMEOUT_MS = 10_000;
 const OPENSKY_STATES_URL =
   'https://opensky-network.org/api/states/all?extended=1';
+/** states/all?extended=1 measures ~0.8 MB anonymously; bounded, not budgeted. */
+const OPENSKY_STATES_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Credit-governor cooldown for a 429: OpenSky's retry-after bounded to
+ * 30 s … 30 min, or 2 min when the header is absent.
+ * @param {Response} upstream Rate-limited response.
+ * @returns {number} Cooldown (ms).
+ */
+function openSkyRateLimitCooldownMs(upstream) {
+  // headers.get() gives null when absent, and Number(null) is 0, not NaN.
+  const header = upstream.headers.get('x-rate-limit-retry-after-seconds');
+  const retryAfterSec =
+    header == null || header.trim() === '' ? NaN : Number(header);
+  return Math.min(
+    Math.max(
+      Number.isFinite(retryAfterSec) ? retryAfterSec * 1000 : 120_000,
+      30_000,
+    ),
+    30 * 60_000,
+  );
+}
 
 /**
  * Fetch and read the global snapshot, giving each attempt
  * OPENSKY_ATTEMPT_TIMEOUT_MS and retrying once when an attempt times out or
- * the connection fails. A second failure throws, which the proxy answers
+ * the connection fails. An oversized body is not retried: it would fail again
+ * and spend more credits. A second failure throws, which the proxy answers
  * from its stale cache or the regional fallback.
  * @param {Record<string, string>} headers Request headers.
  * @returns {Promise<{upstream: Response, body: string}>}
@@ -41,13 +67,36 @@ const OPENSKY_STATES_URL =
 async function fetchOpenSkyStates(headers) {
   for (let attempt = 1; ; attempt++) {
     try {
-      const upstream = await fetch(OPENSKY_STATES_URL, {
-        headers,
-        signal: AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS),
-      });
-      return { upstream, body: await upstream.text() };
+      const signal = AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS);
+      const upstream = await fetch(OPENSKY_STATES_URL, { headers, signal });
+      if (upstream.status === 429 || upstream.status >= 500) {
+        // Start the cooldown from the headers and drop the rejected body
+        // unread, so a stalled or oversized 429 body cannot skip it.
+        _openskyCooldownUntil =
+          Date.now() +
+          (upstream.status === 429
+            ? openSkyRateLimitCooldownMs(upstream)
+            : 15000);
+        _openskyCooldownStatus = upstream.status;
+        void upstream.body?.cancel().catch(() => {});
+        return {
+          upstream,
+          body: JSON.stringify({
+            error:
+              upstream.status === 429
+                ? 'OpenSky rate limited.'
+                : 'OpenSky upstream unavailable.',
+          }),
+        };
+      }
+      const body = await readResponseTextCapped(
+        upstream,
+        OPENSKY_STATES_MAX_RESPONSE_BYTES,
+        signal,
+      );
+      return { upstream, body };
     } catch (error) {
-      if (attempt >= 2) throw error;
+      if (attempt >= 2 || error?.code === 'RESPONSE_TOO_LARGE') throw error;
       console.warn(
         '[OpenSky] global snapshot attempt failed, retrying:',
         error?.message || error,
@@ -71,6 +120,8 @@ async function fetchOpenSkyStates(headers) {
 let _openskyTtlMs = OPENSKY_CACHE_MS;
 /** @type {number} Epoch-ms before which no upstream fetch is attempted. */
 let _openskyCooldownUntil = 0;
+let _openskyCooldownStatus = 429;
+const _openskySnapshotInFlight = new Map();
 /**
  * Picks the cache TTL from the remaining daily credit budget.
  * Client polls every 30 s, so tiers ≤30 s cost the same 480 credits/h; the
@@ -88,6 +139,10 @@ function openskyAdaptiveTtlMs(remaining) {
 }
 /** @type {boolean} Guards duplicate auth-failure warnings in logs. */
 let _openskyAuthWarned = false;
+/** One warning per process when OPENSKY_CREDENTIALS_FILE cannot be read. */
+let _openskyCredentialsFileWarned = false;
+/** One warning per process when OPENSKY_AUTH_MODE=basic is requested. */
+let _openskyBasicRetiredWarned = false;
 /** @type {boolean} Guards duplicate invalid-auth-mode warnings. */
 let _openskyAuthModeWarned = false;
 /** Default auth mode when OPENSKY_AUTH_MODE env is unset. */
@@ -108,6 +163,48 @@ const ADSBLOL_POINT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const OPENSKY_SOURCE_STALE_MS = 120_000;
 
 /**
+ * The OpenSky API client for OAuth: OPENSKY_CLIENT_ID and
+ * OPENSKY_CLIENT_SECRET, or else the credentials.json that OpenSky's account
+ * page downloads, named by OPENSKY_CREDENTIALS_FILE ("~" is the home
+ * directory). The file is read on each token refresh, so a replaced file is
+ * picked up without a restart.
+ *
+ * @param {Record<string, string|undefined>} [env]
+ * @param {(path: string) => string} [readFile]
+ * @returns {{ clientId: string, clientSecret: string } | null}
+ */
+export function openSkyClientCredentials(
+  env = process.env,
+  readFile = (path) => fs.readFileSync(path, 'utf8'),
+) {
+  const clientId = String(env.OPENSKY_CLIENT_ID || '').trim();
+  const clientSecret = String(env.OPENSKY_CLIENT_SECRET || '').trim();
+  if (clientId && clientSecret) return { clientId, clientSecret };
+  const file = String(env.OPENSKY_CREDENTIALS_FILE || '').trim();
+  if (!file) return null;
+  const path = file.replace(/^~(?=$|[\\/])/, os.homedir());
+  let raw;
+  try {
+    raw = JSON.parse(readFile(path));
+  } catch {
+    if (!_openskyCredentialsFileWarned) {
+      console.warn(
+        '[OpenSky] OPENSKY_CREDENTIALS_FILE could not be read or parsed as JSON.',
+      );
+      _openskyCredentialsFileWarned = true;
+    }
+    return null;
+  }
+  const fileId = String(raw?.clientId ?? raw?.client_id ?? '').trim();
+  const fileSecret = String(
+    raw?.clientSecret ?? raw?.client_secret ?? '',
+  ).trim();
+  return fileId && fileSecret
+    ? { clientId: fileId, clientSecret: fileSecret }
+    : null;
+}
+
+/**
  * Obtain a valid OpenSky OAuth2 bearer token, refreshing if needed.
  *
  * Uses the client_credentials grant against the OpenSky Keycloak realm.
@@ -125,9 +222,9 @@ export async function getOpenSkyToken() {
   // return the same promise instead of issuing a duplicate token request
   if (_openskyTokenPromise) return _openskyTokenPromise;
 
-  const clientId = process.env.OPENSKY_CLIENT_ID;
-  const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
+  const credentials = openSkyClientCredentials();
+  if (!credentials) return null;
+  const { clientId, clientSecret } = credentials;
 
   // Wrap the async token fetch in a shared promise stored in _openskyTokenPromise
   _openskyTokenPromise = (async () => {
@@ -368,8 +465,10 @@ function openSkySourceIsStale(sourceEpochMs, now = Date.now()) {
  *
  * Supports four auth modes controlled by OPENSKY_AUTH_MODE env:
  *   - 'oauth'  (default) — client_credentials bearer token
- *   - 'basic'  — HTTP Basic with OPENSKY_USERNAME / OPENSKY_PASSWORD
- *   - 'auto'   — try OAuth first, fall back to Basic, then anon
+ *   - 'basic'  — retired: OpenSky stopped accepting HTTP Basic (username and
+ *                password) on 2026-03-18, so this requests anonymously and
+ *                warns once
+ *   - 'auto'   — try OAuth first, then anon
  *   - 'anon'   — no credentials
  *
  * Successful responses are cached for OPENSKY_CACHE_MS (~9 s). On
@@ -422,7 +521,9 @@ export function openSkyProxy() {
               requestedMode: cachedMeta.requestedMode || requestedMode,
               usedMode: cachedMeta.usedMode || 'unknown',
               reason: isStale
-                ? 'rate_limited_serving_stale'
+                ? _openskyCooldownStatus === 429
+                  ? 'rate_limited_serving_stale'
+                  : `upstream_http_${_openskyCooldownStatus}_serving_stale`
                 : cachedMeta.reason || 'cached',
               staleSeconds: isStale
                 ? (now - _openskyCacheTime) / 1000
@@ -449,80 +550,114 @@ export function openSkyProxy() {
           )
             return;
           res.writeHead(
-            429,
+            _openskyCooldownStatus,
             buildOpenSkyHeaders({
               cacheStatus: 'COOLDOWN',
               requestedMode,
               usedMode: 'none',
-              reason: 'rate_limited',
+              reason:
+                _openskyCooldownStatus === 429
+                  ? 'rate_limited'
+                  : `upstream_http_${_openskyCooldownStatus}`,
               retryAfterSeconds: (_openskyCooldownUntil - now) / 1000,
             }),
           );
           res.end(
             JSON.stringify({
-              error: 'OpenSky rate limited; proxy cooling down.',
+              error: 'OpenSky upstream unavailable; proxy cooling down.',
             }),
           );
           return;
         }
 
-        const basicUser = process.env.OPENSKY_USERNAME || '';
-        const basicPass = process.env.OPENSKY_PASSWORD || '';
-        const hasBasicCreds = Boolean(basicUser && basicPass);
-        const headers = { Accept: 'application/json' };
-        let usedMode = 'anon';
-        let reason = 'forced_anonymous';
+        const refresh = coalesceProxyRequest(
+          _openskySnapshotInFlight,
+          'global',
+          async () => {
+            const headers = { Accept: 'application/json' };
+            let usedMode = 'anon';
+            let reason = 'forced_anonymous';
 
-        if (requestedMode === 'basic') {
-          if (hasBasicCreds) {
-            headers.Authorization = `Basic ${Buffer.from(`${basicUser}:${basicPass}`).toString('base64')}`;
-            usedMode = 'basic';
-            reason = 'basic_credentials';
-          } else {
-            reason = 'missing_basic_creds';
-          }
-        } else if (requestedMode === 'oauth') {
-          const token = await getOpenSkyToken();
-          if (token) {
-            headers.Authorization = `Bearer ${token}`;
-            usedMode = 'oauth';
-            reason = 'oauth_token';
-          } else {
-            reason = 'oauth_invalid_or_missing';
-          }
-        } else if (requestedMode === 'auto') {
-          const token = await getOpenSkyToken();
-          if (token) {
-            headers.Authorization = `Bearer ${token}`;
-            usedMode = 'oauth';
-            reason = 'oauth_token';
-          } else if (hasBasicCreds) {
-            headers.Authorization = `Basic ${Buffer.from(`${basicUser}:${basicPass}`).toString('base64')}`;
-            usedMode = 'basic';
-            reason = 'oauth_unavailable_fallback_basic';
-          } else {
-            reason = 'missing_oauth_and_basic_creds';
-          }
-        }
+            if (requestedMode === 'basic') {
+              // OpenSky no longer accepts a Basic header, so sending
+              // OPENSKY_USERNAME / OPENSKY_PASSWORD would only fail; ask
+              // anonymously and say once what to configure instead.
+              if (!_openskyBasicRetiredWarned) {
+                console.warn(
+                  '[OpenSky] OPENSKY_AUTH_MODE=basic: OpenSky retired username/password sign-in on 2026-03-18, so flights load anonymously (rate-limited). Use OAuth client credentials: OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, or OPENSKY_CREDENTIALS_FILE.',
+                );
+                _openskyBasicRetiredWarned = true;
+              }
+              reason = 'basic_retired';
+            } else if (requestedMode === 'oauth') {
+              const token = await getOpenSkyToken();
+              if (token) {
+                headers.Authorization = `Bearer ${token}`;
+                usedMode = 'oauth';
+                reason = 'oauth_token';
+              } else {
+                reason = 'oauth_invalid_or_missing';
+              }
+            } else if (requestedMode === 'auto') {
+              const token = await getOpenSkyToken();
+              if (token) {
+                headers.Authorization = `Bearer ${token}`;
+                usedMode = 'oauth';
+                reason = 'oauth_token';
+              } else {
+                reason = 'missing_oauth_creds';
+              }
+            }
 
-        let { upstream, body } = await fetchOpenSkyStates(headers);
-        // Auto-mode fallback: if OAuth was rejected, retry with Basic credentials
-        if (
-          (upstream.status === 401 || upstream.status === 403) &&
-          requestedMode === 'auto' &&
-          usedMode === 'oauth' &&
-          hasBasicCreds
-        ) {
-          const retryHeaders = {
-            Accept: 'application/json',
-            Authorization: `Basic ${Buffer.from(`${basicUser}:${basicPass}`).toString('base64')}`,
-          };
-          ({ upstream, body } = await fetchOpenSkyStates(retryHeaders));
-          usedMode = 'basic';
-          reason = 'oauth_rejected_fallback_basic';
-        }
+            const { upstream, body } = await fetchOpenSkyStates(headers);
 
-        const sourceEpochMs = upstream.ok ? openSkySourceEpochMs(body) : null;
+            const sourceEpochMs = upstream.ok
+              ? openSkySourceEpochMs(body)
+              : null;
+            // Refine the reason string to reflect the actual outcome
+            if (upstream.ok && reason === 'forced_anonymous') {
+              reason = 'anonymous_ok';
+            } else if (
+              upstream.ok &&
+              usedMode === 'oauth' &&
+              reason === 'oauth_token'
+            ) {
+              reason = 'oauth_ok';
+            }
+
+            // Only cache successful responses — error responses (401/403/429/5xx)
+            // should not be served from cache on subsequent requests
+            if (upstream.ok) {
+              _openskyCacheBody = body;
+              _openskyCacheStatus = upstream.status;
+              _openskyCacheTime = now;
+              _openskyCacheSourceEpochMs = sourceEpochMs;
+              _openskyCacheMeta = {
+                requestedMode,
+                usedMode,
+                reason,
+              };
+              // Credit governor: adapt the cache TTL to the remaining daily
+              // budget so a continuously-open app stretches its polls instead of
+              // exhausting the quota mid-day. Success also clears any cooldown.
+              const remaining = Number(
+                upstream.headers.get('x-rate-limit-remaining'),
+              );
+              _openskyTtlMs = openskyAdaptiveTtlMs(remaining);
+              _openskyCooldownUntil = 0;
+            }
+
+            return {
+              upstream,
+              body,
+              usedMode,
+              reason,
+              sourceEpochMs,
+            };
+          },
+        );
+        let { upstream, body, usedMode, reason, sourceEpochMs } =
+          await refresh.promise;
         if (
           upstream.ok &&
           openSkySourceIsStale(sourceEpochMs, now) &&
@@ -533,30 +668,16 @@ export function openSkyProxy() {
             'opensky_snapshot_stale_regional_fallback',
           ))
         ) {
-          // Keep the last global snapshot available as a fail-soft cache,
-          // but do not label or render it as a fresh live result.
-          _openskyCacheBody = body;
-          _openskyCacheStatus = upstream.status;
-          _openskyCacheTime = now;
-          _openskyCacheSourceEpochMs = sourceEpochMs;
-          _openskyCacheMeta = { requestedMode, usedMode, reason };
           return;
         }
-        if (upstream.status === 429) {
-          reason = 'rate_limited';
-          // Credit governor: honor OpenSky's retry-after (bounded 30 s … 30 min;
-          // 2 min when the header is absent) — no upstream attempts until then.
-          const retryAfterSec = Number(
-            upstream.headers.get('x-rate-limit-retry-after-seconds'),
-          );
-          const cooldownMs = Math.min(
-            Math.max(
-              Number.isFinite(retryAfterSec) ? retryAfterSec * 1000 : 120_000,
-              30_000,
-            ),
-            30 * 60_000,
-          );
-          _openskyCooldownUntil = now + cooldownMs;
+        if (upstream.status === 429 || upstream.status >= 500) {
+          reason =
+            upstream.status === 429
+              ? 'rate_limited'
+              : `upstream_http_${upstream.status}`;
+          // Credit governor: fetchOpenSkyStates already started the cooldown
+          // from OpenSky's retry-after — no upstream attempts until then.
+          const cooldownMs = Math.max(0, _openskyCooldownUntil - Date.now());
           // Serve the last-good body instead of the 429 when we have one —
           // the layer keeps rendering (STALE-cued) instead of dying.
           if (_openskyCacheBody && _openskyCacheStatus === 200) {
@@ -566,7 +687,7 @@ export function openSkyProxy() {
                 cacheStatus: 'STALE',
                 requestedMode,
                 usedMode,
-                reason: 'rate_limited_serving_stale',
+                reason: `${reason}_serving_stale`,
                 staleSeconds: (now - _openskyCacheTime) / 1000,
                 retryAfterSeconds: cooldownMs / 1000,
               }),
@@ -587,80 +708,30 @@ export function openSkyProxy() {
         }
 
         if (upstream.status === 401 || upstream.status === 403) {
-          if (requestedMode === 'basic' && !hasBasicCreds) {
+          if (requestedMode === 'oauth' && usedMode !== 'oauth') {
             body = JSON.stringify({
               error:
-                'OpenSky auth missing. Basic mode requires OPENSKY_USERNAME and OPENSKY_PASSWORD.',
-            });
-            reason = 'missing_basic_creds';
-          } else if (requestedMode === 'oauth' && usedMode !== 'oauth') {
-            body = JSON.stringify({
-              error:
-                'OpenSky auth invalid. OAuth mode requires valid OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET.',
+                'OpenSky auth invalid. OAuth mode requires valid OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, or OPENSKY_CREDENTIALS_FILE.',
             });
             reason = 'oauth_invalid_or_missing';
-          } else if (usedMode === 'basic') {
-            body = JSON.stringify({
-              error: 'OpenSky auth invalid. Username/password were rejected.',
-            });
-            reason = 'basic_invalid_credentials';
           } else if (usedMode === 'oauth') {
             body = JSON.stringify({
               error:
                 'OpenSky auth invalid. OAuth client credentials were rejected.',
             });
             reason = 'oauth_invalid_credentials';
-          } else if (requestedMode === 'auto' && !hasBasicCreds) {
+          } else if (requestedMode === 'auto') {
             body = JSON.stringify({
               error:
-                'OpenSky auth missing. Provide basic credentials or valid OAuth client credentials.',
+                'OpenSky auth missing. Provide OAuth client credentials: OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, or OPENSKY_CREDENTIALS_FILE.',
             });
-            reason = 'missing_oauth_and_basic_creds';
+            reason = 'missing_oauth_creds';
           } else {
             body = JSON.stringify({
               error: 'OpenSky auth required.',
             });
             reason = 'auth_required';
           }
-        }
-
-        // Refine the reason string to reflect the actual outcome
-        if (upstream.ok && reason === 'forced_anonymous') {
-          reason = 'anonymous_ok';
-        } else if (
-          upstream.ok &&
-          usedMode === 'basic' &&
-          reason === 'basic_credentials'
-        ) {
-          reason = 'basic_ok';
-        } else if (
-          upstream.ok &&
-          usedMode === 'oauth' &&
-          reason === 'oauth_token'
-        ) {
-          reason = 'oauth_ok';
-        }
-
-        // Only cache successful responses — error responses (401/403/429/5xx)
-        // should not be served from cache on subsequent requests
-        if (upstream.ok) {
-          _openskyCacheBody = body;
-          _openskyCacheStatus = upstream.status;
-          _openskyCacheTime = now;
-          _openskyCacheSourceEpochMs = sourceEpochMs;
-          _openskyCacheMeta = {
-            requestedMode,
-            usedMode,
-            reason,
-          };
-          // Credit governor: adapt the cache TTL to the remaining daily
-          // budget so a continuously-open app stretches its polls instead of
-          // exhausting the quota mid-day. Success also clears any cooldown.
-          const remaining = Number(
-            upstream.headers.get('x-rate-limit-remaining'),
-          );
-          _openskyTtlMs = openskyAdaptiveTtlMs(remaining);
-          _openskyCooldownUntil = 0;
         }
 
         res.writeHead(

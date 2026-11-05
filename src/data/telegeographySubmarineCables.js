@@ -28,4 +28,3 @@ export {
   createCableReferenceSweepGate,
   updateCableReferenceStem,
 } from '../layers/submarineCables/index.js';
-export default createTeleGeographySubmarineCableLayer();

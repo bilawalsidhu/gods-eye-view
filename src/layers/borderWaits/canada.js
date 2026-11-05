@@ -47,6 +47,7 @@ const COLUMNS = Object.freeze({
  */
 export function parseCbsaFlow(value) {
   const text = String(value ?? '').trim();
+  // i18n-ignore: CBSA status code; cards.js words it
   if (/^no delay$/i.test(text)) return { status: 'no delay', delayMinutes: 0 };
   if (/^closed$/i.test(text)) return { status: 'closed', delayMinutes: null };
   const minutes = text.match(/^(\d{1,4}) minutes?$/i);

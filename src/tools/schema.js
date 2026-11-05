@@ -106,10 +106,20 @@ export function validateValue(schema, value, path = 'arguments') {
         fail('must be a string');
         break;
       }
-      if (schema.minLength != null && value.length < schema.minLength)
-        fail(`must be at least ${schema.minLength} characters`);
-      if (schema.maxLength != null && value.length > schema.maxLength)
-        fail(`must be at most ${schema.maxLength} characters`);
+      if (schema.minLength != null || schema.maxLength != null) {
+        // Code points, as JSON Schema counts. Counting stops once both bounds
+        // are decided, so a huge argument costs no more than its limit.
+        const limit = Math.max(
+          schema.minLength ?? 0,
+          schema.maxLength != null ? schema.maxLength + 1 : 0,
+        );
+        let length = 0;
+        for (const _ of value) if (++length >= limit) break;
+        if (schema.minLength != null && length < schema.minLength)
+          fail(`must be at least ${schema.minLength} characters`);
+        if (schema.maxLength != null && length > schema.maxLength)
+          fail(`must be at most ${schema.maxLength} characters`);
+      }
       if (
         schema.pattern !== undefined &&
         !new RegExp(schema.pattern, 'u').test(value)

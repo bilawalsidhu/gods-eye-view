@@ -117,4 +117,9 @@ test('a provider may narrow the filters it honours and pick a view-cone marker',
     () => validateProviders([def({ marker: { kind: 'pegman' } })]),
     /marker must be/,
   );
+  validateProviders([def({ sinceBasis: 'upload' })]);
+  assert.throws(
+    () => validateProviders([def({ sinceBasis: 'shot' })]),
+    /sinceBasis must be 'capture' or 'upload'/,
+  );
 });

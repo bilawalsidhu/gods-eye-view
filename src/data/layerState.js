@@ -1,3 +1,6 @@
+// Restore labels are marked with msg(); ui/shareRestoration.js translates them.
+// Local, not i18n/marker.js: the token-ledger tests run this file in isolation.
+const msg = (text) => text;
 import { normalizeIdSwitches, patchRequestedIdSwitches } from './idSwitches.js';
 import reservationRows from './layerStateTokenReservations.json' with { type: 'json' };
 
@@ -20,7 +23,7 @@ const NEW_SINGLE_CHARACTER_TOKEN_PATTERN = /^[0-9]$/;
  * out-of-grammar ID is rejected outright, because half an address is a
  * DIFFERENT aircraft, not a shorter name for the same one.
  */
-const TRACKING_ID_GRAMMAR = /^[0-9a-z~_-]{1,16}$/;
+export const TRACKING_ID_GRAMMAR = /^[0-9a-z~_-]{1,16}$/;
 /**
  * Ceilings for the untrusted v2 layer fields. The layer ceiling covers the
  * complete reserved one-character space plus every two-character base-36
@@ -154,26 +157,6 @@ function trackingIdOption(key, token, defaultValue = null) {
   });
 }
 
-function stringOption(key, token, defaultValue) {
-  return Object.freeze({
-    key,
-    token,
-    defaultValue,
-    normalize: (value) => {
-      if (typeof value === 'number' && Number.isFinite(value))
-        return String(value).trim().toLowerCase();
-      if (typeof value !== 'string') return null;
-      const normalized = value.trim().toLowerCase();
-      return normalized ? normalized : null;
-    },
-    encode: (value) => String(value),
-    decode: (value) =>
-      typeof value === 'string' && value.trim()
-        ? value.trim().toLowerCase()
-        : null,
-  });
-}
-
 function enumOption(
   key,
   token,
@@ -296,7 +279,39 @@ function imageryPinOption(key, token) {
   });
 }
 
+function satelliteFilterOption() {
+  const percentage = boundedIntegerOption('infrared', 'i', 100, {
+    min: 0,
+    max: 100,
+  });
+  return Object.freeze({
+    ...percentage,
+    normalize: (value) =>
+      value === 'filtered'
+        ? 100
+        : value === 'full'
+          ? 0
+          : percentage.normalize(value),
+    decode: (value) =>
+      value === 'f' ? 100 : value === 'a' ? 0 : percentage.decode(value),
+  });
+}
+
 const OPTION_GROUPS = Object.freeze({
+  // Active Fires intensity filter (HAL-676). `minFrp` is whole megawatts on
+  // the codec side; the panel's log slider rounds to it. Both default to
+  // "show everything": many of the strongest fires are rated low confidence.
+  // The bounds and modes mirror MIN_FRP_MW_MAX / FIRMS_CONFIDENCE_MODES in
+  // firmsIntensity.js (pinned by layerState.test); spelled out here because
+  // this file runs in isolation in the token-ledger tests.
+  'local-firms': Object.freeze([
+    boundedIntegerOption('minFrp', 'f', 0, { min: 0, max: 10000 }),
+    enumOption('confidence', 'c', 'all', ['all', 'nominal', 'high'], {
+      all: 'a',
+      nominal: 'n',
+      high: 'h',
+    }),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -317,10 +332,7 @@ const OPTION_GROUPS = Object.freeze({
     }),
   ]),
   'weather-satellite': Object.freeze([
-    enumOption('infrared', 'i', 'filtered', ['filtered', 'full'], {
-      filtered: 'f',
-      full: 'a',
-    }),
+    satelliteFilterOption(),
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
       light: 'l',
       strong: 's',
@@ -458,19 +470,19 @@ export const SHARE_TRACKING_RESTORE_POLICIES = Object.freeze({
     optionOwner: 'flights',
     optionKey: 'selectedFlightsTrackingId',
     expiryWindowMs: 90_000,
-    label: 'flight',
+    label: msg('flight'),
   }),
   military: Object.freeze({
     optionOwner: 'flights',
     optionKey: 'selectedMilitaryTrackingId',
     expiryWindowMs: 45_000,
-    label: 'military flight',
+    label: msg('military flight'),
   }),
   satellites: Object.freeze({
     optionOwner: 'satellites',
     optionKey: 'selectedSatTrackingId',
     expiryWindowMs: 300_000,
-    label: 'satellite',
+    label: msg('satellite'),
   }),
 });
 
@@ -568,6 +580,11 @@ export const LAYER_STATE_TOKEN_RESERVATIONS =
  */
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
+    id: 'air-quality',
+    token: '4',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'ais-live-vessels',
     token: 'a',
     disposition: 'enabled-only',
@@ -590,7 +607,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'bikeshare', token: 'b', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'border-waits',
-    token: '3',
+    token: '9',
     disposition: 'enabled-only',
   }),
   Object.freeze({
@@ -600,6 +617,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'cctv',
   }),
   Object.freeze({ id: 'directions', token: 'n', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'drone-airspace',
+    token: '8',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'fire-perimeters',
@@ -612,13 +634,23 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'flights',
   }),
+  Object.freeze({
+    id: 'gnss-integrity',
+    token: '3',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'local-datacenters',
     token: 'd',
     disposition: 'enabled-only',
   }),
-  Object.freeze({ id: 'local-firms', token: 'w', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'local-firms',
+    token: 'w',
+    disposition: 'enabled+options',
+    optionOwner: 'local-firms',
+  }),
   Object.freeze({
     id: 'military',
     token: 'm',
@@ -653,11 +685,18 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 's2-ghostmaps',
+    token: '5',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'satellites',
     token: 's',
     disposition: 'enabled+options',
     optionOwner: 'satellites',
   }),
+  Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'street-level',
     token: '0',

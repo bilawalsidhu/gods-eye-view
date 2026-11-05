@@ -28,6 +28,8 @@ module.exports = {
           LL2_API_TOKEN: '{{env.LL2_API_TOKEN || ""}}',
           GEV_RATELIMIT_OPENAI_PER_MIN: '{{env.GEV_RATELIMIT_OPENAI_PER_MIN || ""}}',
           GEV_RATELIMIT_GOOGLE_PER_MIN: '{{env.GEV_RATELIMIT_GOOGLE_PER_MIN || ""}}',
+          GEV_RATELIMIT_OPENAI_CHAT_PER_MIN: '{{env.GEV_RATELIMIT_OPENAI_CHAT_PER_MIN || ""}}',
+          GEV_RATELIMIT_GEMINI_CHAT_PER_MIN: '{{env.GEV_RATELIMIT_GEMINI_CHAT_PER_MIN || ""}}',
         },
         message: 'node scripts/pinokio-install.mjs',
       },

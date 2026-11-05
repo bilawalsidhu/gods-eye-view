@@ -1,6 +1,10 @@
 import { AIS_FIRST_CONNECT_LABEL } from './recordPolicy.js';
 import { viewAreaMovedEnough } from './viewArea.js';
 
+// A portable export (package.json): no i18n here. The text stays English data
+// and the layer panel shows it translated.
+const msg = (text) => text;
+
 /** Own source requests and classified feed state through explicit operations. */
 export function createIngestion({
   feed,
@@ -69,7 +73,7 @@ export function createIngestion({
         ownsAisRequest(requestController, requestSessionId) &&
         error?.name !== 'AbortError'
       ) {
-        markUnavailable(error?.message || 'AIS live load failed');
+        markUnavailable(error?.message || msg('AIS live load failed'));
         console.warn('[Data:ais-live-vessels]', feed.error, error);
       }
     } finally {

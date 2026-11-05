@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   coverageZoomForHeight,
-  overviewZoomForHeight,
   latToTileY,
   lonToTileX,
   normalizeBbox,
@@ -38,31 +37,21 @@ test('normalizeBbox orders and clamps coordinates', () => {
     north: 38.69,
   });
   assert.equal(normalizeBbox([0, 0, 0, 1]), null);
-  assert.equal(normalizeBbox('nope'), null);
+  assert.equal(normalizeBbox([1, 2, 3]), null);
   assert.equal(normalizeBbox([1, 2, Number.NaN, 3]), null);
 });
 
-test('city-scale boxes span many z14 tiles', () => {
-  const sacramento = [-121.56, 38.44, -121.36, 38.69];
-  assert.equal(tilesForBbox(sacramento, 14).total, 160);
-  const detroit = [-83.29, 42.25, -82.91, 42.45];
-  assert.equal(tilesForBbox(detroit, 14).total, 234);
-});
-
 test('tilesForBbox orders from the centre outwards and honours the cap', () => {
-  const result = tilesForBbox([-121.56, 38.44, -121.36, 38.69], 14, {
+  const tiles = tilesForBbox([-121.56, 38.44, -121.36, 38.69], 14, {
     limit: 5,
   });
-  assert.equal(result.total, 160);
-  assert.equal(result.truncated, true);
-  assert.equal(result.tiles.length, 5);
+  assert.equal(tiles.length, 5);
   const centreX = lonToTileX(-121.46, 14);
   const centreY = latToTileY(38.565, 14);
-  assert.ok(Math.abs(result.tiles[0].x - centreX) <= 1);
-  assert.ok(Math.abs(result.tiles[0].y - centreY) <= 1);
+  assert.ok(Math.abs(tiles[0].x - centreX) <= 1);
+  assert.ok(Math.abs(tiles[0].y - centreY) <= 1);
   const full = tilesForBbox([-121.56, 38.44, -121.36, 38.69], 14);
-  assert.equal(full.truncated, false);
-  assert.equal(full.tiles.length, 160);
+  assert.equal(full.length, 160);
 });
 
 test('coverageZoomForHeight steps from coarse to z14 as the camera descends', () => {
@@ -74,28 +63,18 @@ test('coverageZoomForHeight steps from coarse to z14 as the camera descends', ()
   assert.equal(coverageZoomForHeight(Number.NaN), null);
 });
 
-test('overviewZoomForHeight covers the globe above the sequence ceiling', () => {
-  assert.equal(overviewZoomForHeight(30_000), null);
-  assert.equal(overviewZoomForHeight(100_000), 5);
-  assert.equal(overviewZoomForHeight(900_000), 4);
-  assert.equal(overviewZoomForHeight(2_000_000), 3);
-  assert.equal(overviewZoomForHeight(5_000_000), 2);
-  assert.equal(overviewZoomForHeight(10_000_000), 1);
-  assert.equal(overviewZoomForHeight(25_000_000), 0);
-});
-
 test('longitude 180 is the last column, so a world view keeps the eastern hemisphere', () => {
   assert.equal(lonToTileX(180, 1), 1);
   assert.equal(lonToTileX(179.99, 1), 1);
   assert.equal(lonToTileX(-180, 1), 0);
   const columns = new Set(
-    tilesForBbox([-180, -85, 180, 85], 1).tiles.map((tile) => tile.x),
+    tilesForBbox([-180, -85, 180, 85], 1).map((tile) => tile.x),
   );
   assert.deepEqual([...columns].sort(), [0, 1]);
 });
 
 test('a box across the date line takes tiles on both sides of it, not the far side of the globe', () => {
-  const { tiles } = tilesForBbox([179, -1, -179, 1], 8);
+  const tiles = tilesForBbox([179, -1, -179, 1], 8);
   const columns = new Set(tiles.map((tile) => tile.x));
   assert.ok(columns.has(255), 'west of the line');
   assert.ok(columns.has(0), 'east of the line');
@@ -104,70 +83,49 @@ test('a box across the date line takes tiles on both sides of it, not the far si
     'nothing from the middle of the map',
   );
   // The limit keeps the tiles nearest the line.
-  const limited = tilesForBbox([170, -1, -170, 1], 8, { limit: 4 }).tiles;
+  const limited = tilesForBbox([170, -1, -170, 1], 8, { limit: 4 });
   assert.ok(limited.every((tile) => tile.x <= 8 || tile.x >= 247));
 });
 
-test('a box across the date line ranks the tiles at the line first, without and with a focus', () => {
+test('a box across the date line ranks from the line, or from the camera across it', () => {
   const z = 14;
   const n = 2 ** z;
   const bbox = [179.9, 0, -179.9, 0.1];
   const key = (t) => `${t.x}/${t.y}`;
-  const keys = (list) => new Set(list.map(key));
   const [north, south] = [latToTileY(0.1, z), latToTileY(0, z)];
   const plain = tilesForBbox(bbox, z);
-  assert.equal(plain.total, 10 * (south - north + 1), '5 columns either side');
+  assert.equal(plain.length, 10 * (south - north + 1), '5 columns either side');
   // The box centre is the date line itself, not the middle of the map: the
-  // middle two rows of the columns touching it come first, then the ring
-  // around them, all within two columns of the line.
-  const [mid1, mid2] = [(north + south - 1) / 2, (north + south + 1) / 2];
-  assert.deepEqual(
-    keys(plain.tiles.slice(0, 4)),
-    new Set([`${n - 1}/${mid1}`, `${n - 1}/${mid2}`, `0/${mid1}`, `0/${mid2}`]),
-  );
-  for (const tile of plain.tiles.slice(4, 12))
+  // columns touching it come first, then the ones beside them.
+  for (const tile of plain.slice(0, 4))
+    assert.ok([n - 1, 0].includes(tile.x), `${key(tile)} at the line`);
+  for (const tile of plain.slice(4, 12))
     assert.ok(
       [n - 2, n - 1, 0, 1].includes(tile.x),
       `${key(tile)} near the line`,
     );
-  // A line of sight across the date line just north of the equator: the two
-  // tiles it crosses come first, then the two in the row below them.
+  // From a camera metres from the line: its tile, then the one across it.
   const row = latToTileY(0.05, z);
-  const from = { lon: 179.99, lat: 0.05 };
-  const to = { lon: -179.99, lat: 0.05 };
-  for (const focus of [
-    { from, to },
-    { from: to, to: from },
-  ]) {
-    const ranked = tilesForBbox(bbox, z, { focus }).tiles;
-    assert.deepEqual(
-      keys(ranked.slice(0, 2)),
-      new Set([`${n - 1}/${row}`, `0/${row}`]),
-    );
-    assert.deepEqual(
-      keys(ranked.slice(2, 4)),
-      new Set([`${n - 1}/${row + 1}`, `0/${row + 1}`]),
-    );
-  }
+  const { south: rowSouth, north: rowNorth } = tileBounds(0, row, z);
+  const lat = (rowSouth + rowNorth) / 2;
+  const west = tilesForBbox(bbox, z, { from: { lon: 179.999, lat } });
+  assert.deepEqual(west.slice(0, 2).map(key), [`${n - 1}/${row}`, `0/${row}`]);
+  const east = tilesForBbox(bbox, z, { from: { lon: -179.999, lat } });
+  assert.deepEqual(east.slice(0, 2).map(key), [`0/${row}`, `${n - 1}/${row}`]);
 });
 
-test('a focus ranks tiles along the line of sight, not from the box centre', () => {
+test('ranking from the camera keeps the ground under it, not the box centre', () => {
   // A box that runs far north of the camera, as a tilted view's does: the
-  // box centre is kilometres from both the camera and the screen centre.
+  // box centre is kilometres from the camera.
   const from = { lon: -121.4944, lat: 38.5816 };
-  const to = { lon: -121.4944, lat: 38.596 };
   const bbox = [-121.6, 38.57, -121.38, 38.9];
   const z = 14;
   const key = (t) => `${t.x}/${t.y}`;
   const under = `${lonToTileX(from.lon, z)}/${latToTileY(from.lat, z)}`;
-  const centre = `${lonToTileX(to.lon, z)}/${latToTileY(to.lat, z)}`;
-  const plain = tilesForBbox(bbox, z, { limit: 9 }).tiles.map(key);
-  assert.equal(plain.includes(under), false, 'the old ranking drops them');
-  const ranked = tilesForBbox(bbox, z, { limit: 9, focus: { from, to } });
-  const keys = ranked.tiles.map(key);
-  assert.ok(keys.includes(under), 'the tile under the camera');
-  assert.ok(keys.includes(centre), 'the tile at the centre of the screen');
-  assert.equal(ranked.total > 9, true);
+  const plain = tilesForBbox(bbox, z, { limit: 9 }).map(key);
+  assert.equal(plain.includes(under), false, 'the box centre drops it');
+  const ranked = tilesForBbox(bbox, z, { limit: 9, from });
+  assert.equal(key(ranked[0]), under, 'the tile under the camera first');
 });
 
 test('wrapLon wraps longitudes and their differences into [-180, 180]', () => {

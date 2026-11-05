@@ -142,3 +142,19 @@ test('a retried load still reports a refusal once, and the page handler once', a
   assert.deepEqual(heard, ['a']);
   assert.equal(before, 1);
 });
+
+test('Google controls follow the UI language; English adds no parameter', async () => {
+  const language = (locale) => {
+    const page = fakePage();
+    const loader = createMapsLoader({
+      getApiKey: () => 'k-1',
+      getLanguage: () => locale,
+      ...page,
+    });
+    void loader.importLibrary('streetView').catch(() => {});
+    return new URL(page.scripts[0].src).searchParams.get('language');
+  };
+  assert.equal(language('es'), 'es');
+  assert.equal(language('ru'), 'ru');
+  assert.equal(language('en'), null);
+});

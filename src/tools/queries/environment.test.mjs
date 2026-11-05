@@ -227,6 +227,97 @@ test('fire perimeters are placed by their outline and sorted by size', async () 
   });
 });
 
+test('fire perimeter queries include dateline interiors and exclude the opposite meridian', async () => {
+  const perimeters = {
+    getSnapshot: async () => [
+      {
+        stableId: 'dateline',
+        name: 'Dateline Fire',
+        acres: 100,
+        polygons: [
+          [
+            [
+              [179, -2],
+              [-179, -2],
+              [-179, 2],
+              [179, 2],
+              [179, -2],
+            ],
+          ],
+        ],
+      },
+    ],
+  };
+  const catalog = catalogWith({ perimeters });
+  for (const area of [
+    { bbox: [179.4, -0.1, 179.6, 0.1] },
+    { bbox: [-179.6, -0.1, -179.4, 0.1] },
+    { lat: 0, lon: 180, radius_km: 10 },
+  ]) {
+    const result = await catalog.call('get_fire_perimeters', { area });
+    assert.deepEqual(
+      result.data.rows.map((row) => row.id),
+      ['dateline'],
+    );
+  }
+  const elsewhere = await catalog.call('get_fire_perimeters', {
+    area: { bbox: [-0.1, -0.1, 0.1, 0.1] },
+  });
+  assert.equal(elsewhere.data.total, 0);
+});
+
+test('fire perimeter coordinates stay at the dateline for closed and multipart outlines', async () => {
+  const perimeters = {
+    getSnapshot: async () => [
+      {
+        stableId: 'closed',
+        acres: 100,
+        polygons: [
+          [
+            [
+              [179, -2],
+              [-179, -2],
+              [-179, 2],
+              [179, 2],
+              [179, -2],
+            ],
+          ],
+        ],
+      },
+      {
+        stableId: 'multipart',
+        acres: 50,
+        polygons: [
+          [
+            [
+              [179, -1],
+              [179.5, -1],
+              [179.5, 1],
+              [179, 1],
+            ],
+          ],
+          [
+            [
+              [-179.5, -1],
+              [-179, -1],
+              [-179, 1],
+              [-179.5, 1],
+            ],
+          ],
+        ],
+      },
+    ],
+  };
+  const result = await catalogWith({ perimeters }).call('get_fire_perimeters', {
+    area: { bbox: [178, -3, -178, 3] },
+  });
+  assert.equal(result.data.total, 2);
+  for (const row of result.data.rows) {
+    assert.ok(Math.abs(row.lon) > 179, `${row.id}: ${row.lon}`);
+    assert.ok(Math.abs(row.lon) <= 180);
+  }
+});
+
 test('terrain heights are returned in request order', async () => {
   const terrain = {
     async getHeights(points) {
@@ -779,4 +870,40 @@ test('installation names wait for the name pack, briefly', async (t) => {
   assert.equal(slow.data.rows[0].name, 'Military area');
   assert.equal(slow.data.names_pending, true);
   assert.match(slow.summary, /site names are still loading\)\.$/);
+});
+
+test('stale fire perimeters say so, with when they were fetched', async () => {
+  const fetchedAt = Date.UTC(2026, 9, 22, 6);
+  const ring = [
+    [
+      [-118.5, 35.2],
+      [-118.4, 35.2],
+      [-118.4, 35.3],
+      [-118.5, 35.2],
+    ],
+  ];
+  const perimeters = {
+    getSnapshot: async () => [],
+    getSnapshotDetail: async () => ({
+      rows: [
+        {
+          stableId: 'held',
+          name: 'Held Fire',
+          acres: 300,
+          polygons: [ring],
+        },
+      ],
+      stale: true,
+      fetchedAt,
+    }),
+  };
+  const result = await catalogWith({ perimeters }).call('get_fire_perimeters', {
+    area: { bbox: [-120, 34, -117, 36] },
+  });
+  assert.equal(
+    result.summary,
+    '1 mapped wildfire perimeter in the requested box (data may be stale).',
+  );
+  assert.equal(result.data.stale, true);
+  assert.equal(result.data.retrieved_at, new Date(fetchedAt).toISOString());
 });

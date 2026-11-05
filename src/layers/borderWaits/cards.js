@@ -1,5 +1,7 @@
 /** Presentation model for border wait crossings. Pure — no Cesium types. */
 
+import { msg, t } from '../../i18n/index.js';
+
 export const BORDER_WAITS_OVERLAY_SOURCE_ID = 'border-waits';
 export const BORDER_WAITS_LABEL_COHORT_LIMIT = 96;
 export const BORDER_WAITS_LABEL_COLLISION_CAPACITY = 48;
@@ -8,25 +10,25 @@ export const BORDER_WAITS_LABEL_COLLISION_CAPACITY = 48;
 export const DELAY_BANDS = Object.freeze([
   Object.freeze({
     key: 'short',
-    label: 'Under 15 min',
+    label: msg('Under 15 min'),
     color: '#34c759',
     test: (minutes) => minutes < 15,
   }),
   Object.freeze({
     key: 'moderate',
-    label: '15–29 min',
+    label: msg('15–29 min'),
     color: '#ffcc00',
     test: (minutes) => minutes < 30,
   }),
   Object.freeze({
     key: 'long',
-    label: '30–59 min',
+    label: msg('30–59 min'),
     color: '#ff9500',
     test: (minutes) => minutes < 60,
   }),
   Object.freeze({
     key: 'severe',
-    label: '60 min or more',
+    label: msg('60 min or more'),
     color: '#ff3b30',
     test: () => true,
   }),
@@ -145,7 +147,7 @@ export function buildCrossingCard(row, { stale = false } = {}) {
     id: `border-waits-card:${row.id}`,
     selected: true,
     interactive: false,
-    title: `BORDER · ${crossingTitle(row)}`,
+    title: t('BORDER · {crossing}', { crossing: crossingTitle(row) }),
     details,
     accent: delayColor(row),
     priority: Number.MAX_SAFE_INTEGER,
