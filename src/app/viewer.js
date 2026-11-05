@@ -172,9 +172,10 @@ const SETTLE_GIVE_UP_MS = 5 * 60_000;
  * catches a saved or shared view that looked away, or any other move that ends
  * looking away from the planet.
  * Heading and position are kept. Tracked cameras, locked ones (non-identity
- * transform), a camera flight in progress, the 2D and Columbus modes, and any
- * time `paused` returns true (an authored scene playing) are left alone; a
- * check they defer runs once they end, however long they last.
+ * transform), a camera flight in progress, a pointer held down on the canvas
+ * (a drag held still), the 2D and Columbus modes, and any time `paused`
+ * returns true (an authored scene playing) are left alone; a check they defer
+ * runs once they end, however long they last.
  * `keyholeRadius`
  * returns the radius of the visible circle when a scope mask hides the rest of
  * the frame (see `globeFrameShare`), or 0; it is read at every check.
@@ -205,12 +206,27 @@ export function installGlobeInViewRecovery(
   if (!scene || !camera?.moveEnd || !camera?.moveStart)
     throw new TypeError('A complete Cesium viewer is required');
 
-  // Returns false while a flight or a paused scene defers the check, so the
-  // caller can try again once it ends.
+  // A pointer held on the globe is a gesture in progress, even when it holds
+  // still for half a second: the check waits for its release.
+  const canvas = scene.canvas;
+  const releaseTarget = canvas?.ownerDocument ?? canvas;
+  let pointerHeld = false;
+  const onPointerDown = () => {
+    pointerHeld = true;
+  };
+  const onPointerUp = () => {
+    pointerHeld = false;
+  };
+  canvas?.addEventListener?.('pointerdown', onPointerDown);
+  releaseTarget?.addEventListener?.('pointerup', onPointerUp);
+  releaseTarget?.addEventListener?.('pointercancel', onPointerUp);
+
+  // Returns false while a flight, a paused scene or a held pointer defers the
+  // check, so the caller can try again once it ends.
   const recover = () => {
     if (!isFreeGlobeCamera(viewer)) return true;
     // Cesium has no public running-flight flag.
-    if (camera._currentFlight || paused()) return false;
+    if (camera._currentFlight || paused() || pointerHeld) return false;
     const height = camera.positionCartographic?.height;
     if (
       !(height > minHeight) ||
@@ -294,6 +310,9 @@ export function installGlobeInViewRecovery(
     stopSettling();
     removeMoveEnd();
     removeMoveStart();
+    canvas?.removeEventListener?.('pointerdown', onPointerDown);
+    releaseTarget?.removeEventListener?.('pointerup', onPointerUp);
+    releaseTarget?.removeEventListener?.('pointercancel', onPointerUp);
   };
 }
 

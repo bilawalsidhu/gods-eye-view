@@ -778,6 +778,39 @@ test('a check a scene or flight defers runs once it ends', () => {
   }
 });
 
+// Holding a drag still for half a second on a view that already showed no
+// surface looked like a settled camera, and the view was turned down under
+// the user's hand.
+test('the recovery waits while a pointer is held on the globe', () => {
+  const timers = fakeTimers();
+  const { camera, scene, viewer } = realCamera({ width: 1225, height: 923 });
+  const document = new EventTarget();
+  scene.canvas = Object.assign(new EventTarget(), {
+    clientWidth: 1225,
+    clientHeight: 923,
+    ownerDocument: document,
+  });
+  const dispose = installGlobeInViewRecovery(viewer, timers);
+  aim(camera, reportedStuckView);
+  scene.canvas.dispatchEvent(new Event('pointerdown'));
+  camera.moveStart.raiseEvent();
+  for (let i = 0; i < 8; i += 1) timers.tick();
+  camera.moveEnd.raiseEvent();
+  for (let i = 0; i < 8; i += 1) timers.tick();
+  assert.equal(globeOutOfFrame(camera), true, 'left alone while held');
+  document.dispatchEvent(new Event('pointerup'));
+  for (let i = 0; i < 3; i += 1) timers.tick();
+  assert.ok(
+    Cesium.Math.equalsEpsilon(camera.pitch, -Math.PI / 2, 1e-6),
+    'recovered once the pointer is released',
+  );
+  dispose();
+  aim(camera, reportedStuckView);
+  scene.canvas.dispatchEvent(new Event('pointerdown'));
+  document.dispatchEvent(new Event('pointerup'));
+  assert.equal(timers.pending(), 0, 'disposed recovery holds no listeners');
+});
+
 function fakeTimers() {
   let next = 1;
   const pending = new Map();

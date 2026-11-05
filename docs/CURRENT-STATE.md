@@ -103,8 +103,9 @@ zoom-out guard above keeps wheel and pinch zoom-outs in view; this catches the
 other ways a move can end looking away, such as a saved or shared view that did.
 Views with more surface than that, such as the oblique orbital Director shots,
 are left as they are, and so are tracked or locked cameras, a camera flight in
-progress, a Director scene while it plays (holds included) and the 2D and
-Columbus modes; a check a flight or scene defers runs once it ends. A Director
+progress, a Director scene while it plays (holds included), a pointer held
+down on the globe (a drag held still) and the 2D and Columbus modes; a check a
+flight, scene or held pointer defers runs once it ends. A Director
 shot loaded or replayed outside a run is not a playing scene. A view that loses
 its surface without a camera move (a resize, or turning the scope on) is left as
 it is until the next move. A voice turn requested while the camera is tracked is
