@@ -120,7 +120,10 @@ export function createEnrichment({
         const meta = flightState.records.data.get(icao24);
         // The request can complete after another poll assigns this ICAO24 a
         // different callsign. A delayed route must never attach to that flight.
-        if (!meta || String(meta.callsign || '').trim().toUpperCase() !== cs)
+        if (
+          !meta ||
+          String(meta.callsign || '').trim().toUpperCase() !== cs
+        )
           return;
         meta.airline = data.airline || meta.airline;
         if (data.origin && data.destination)
