@@ -15,6 +15,7 @@ import {
   transitModeResolved,
   transitRouteLabel,
 } from './transitFeeds.js';
+import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 
 test('every registered feed is keyless, https, licensed, and uniquely identified', () => {
   const ids = new Set();
@@ -481,4 +482,73 @@ test('Burlington is live and carries its terms link, which its licence requires'
   assert.equal(bur.defaultEnabled, true);
   assert.match(bur.licenseUrl, /Open%20Data%20Terms%20of%20Use\.pdf$/);
   assert.match(bur.url, /^https:\/\//, 'port 80 has no listener at all');
+});
+
+test('Rio buses and BRT cover the city from Centro to Santa Cruz, and not São Paulo', () => {
+  const ids = (lat, lon) =>
+    transitFeedsInRange(lat, lon).map((feed) => feed.id);
+  for (const [place, lat, lon] of [
+    ['Centro', -22.9068, -43.1729],
+    ['Barra da Tijuca', -23.0004, -43.3659],
+    ['Santa Cruz', -22.9194, -43.6847],
+  ]) {
+    assert.ok(
+      ids(lat, lon).includes('smtr-rio-onibus'),
+      `buses reach ${place}`,
+    );
+    assert.ok(ids(lat, lon).includes('smtr-rio-brt'), `BRT reaches ${place}`);
+  }
+  assert.deepEqual(
+    ids(-23.5505, -46.6333).filter((id) => id.startsWith('smtr-rio')),
+    [],
+    'São Paulo, 360 km away, never polls Rio',
+  );
+});
+
+test('Rio route keys read as the line on the front of the bus', () => {
+  // Some keys look parseable and are not (`O0014AAA0A` is LECD135).
+  const buses = getTransitFeed('smtr-rio-onibus');
+  assert.equal(transitRouteLabel(buses, 'O0868AAA0A'), '868');
+  assert.equal(transitRouteLabel(buses, 'O0731AAN0A'), 'SN731');
+  assert.equal(transitRouteLabel(buses, 'O0759AAP0A'), 'SP759');
+  assert.equal(transitRouteLabel(buses, 'O0014AAA0A'), 'LECD135');
+  assert.equal(transitRouteLabel(buses, 'E2303AAA0A'), '2303');
+  const brt = getTransitFeed('smtr-rio-brt');
+  assert.equal(transitRouteLabel(brt, '20000501110'), '50');
+  assert.equal(transitRouteLabel(brt, '20000EXEC1110'), 'ESP01');
+  // Unknown ids, prototype names included, keep their raw key.
+  assert.equal(transitRouteLabel(buses, 'O9999AAA0A'), 'O9999AAA0A');
+  assert.equal(transitRouteLabel(buses, 'constructor'), 'constructor');
+  assert.equal(transitRouteLabel(brt, null), null);
+});
+
+test('the Rio route table is a clean join of published keys to names', () => {
+  const entries = Object.entries(RIO_ROUTE_NAMES);
+  assert.ok(entries.length > 400, 'the whole published table is carried');
+  for (const [id, name] of entries) {
+    assert.match(id, /^(?:[OE]\d{4}[A-Z0-9]{5}|2\d{4}[A-Z0-9]{4,8})$/, id);
+    assert.ok(name && name === name.trim(), `${id} has a name`);
+    assert.notEqual(name, id, `${id} is translated`);
+  }
+});
+
+test('Rio feeds are CC BY 4.0 and live', () => {
+  for (const id of ['smtr-rio-onibus', 'smtr-rio-brt']) {
+    const feed = getTransitFeed(id);
+    assert.equal(feed.defaultEnabled, true, `${id} is live`);
+    assert.equal(feed.license, 'CC BY 4.0');
+    assert.match(feed.licenseUrl, /^https:\/\/www\.data\.rio\/documents\//);
+    assert.match(feed.attribution, /Prefeitura da Cidade do Rio de Janeiro/);
+    assert.equal(transitModeFor(feed, null), 'bus');
+  }
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources
+      .split('\n')
+      .some((line) => line.startsWith('| **SMTR Rio de Janeiro')),
+    'Rio has a DATA_SOURCES row',
+  );
 });

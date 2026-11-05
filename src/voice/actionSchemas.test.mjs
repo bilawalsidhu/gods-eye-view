@@ -55,9 +55,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
+    // control_cockpit states the own-layer entry rule (Contacts not required).
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute, with steps sent as a direction.
-    'b192c42d1a1c59bea010da93ed0cfb1ce63d2e3ab5e5685921d3bf66e3f94e26',
+    '8698aee3cf691351f5c5a68e115a5913ec0f048067ecdf34b252a31afeeec737',
   );
 });
 
