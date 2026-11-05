@@ -3179,5 +3179,15 @@
   "The provider rejected the API key. Check it in Provider Settings.": "O provedor recusou a chave de API. Verifique-a em \"Configurações de provedores\".",
   "Too many chat requests. Try again in {seconds} s.": "Chat: limite de requisições atingido. Tente novamente em {seconds} s.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "O provedor negou o acesso para esta chave. Verifique o projeto, a região ou as permissões da chave.",
-  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "A conta do provedor está sem crédito. Verifique o faturamento ou escolha outro provedor de IA em \"Configurações\"."
+  "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "A conta do provedor está sem crédito. Verifique o faturamento ou escolha outro provedor de IA em \"Configurações\".",
+  "aircraft operation|Airline": "Companhia aérea",
+  "aircraft operation|Air taxi": "Táxi aéreo",
+  "aircraft operation|Government": "Governamental",
+  "aircraft operation|Private": "Particular",
+  "Built {year}": "Fabricado em {year}",
+  "{count} seats": {
+    "one": "{count} assento",
+    "many": "{count} de assentos",
+    "other": "{count} assentos"
+  }
 }

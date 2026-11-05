@@ -256,6 +256,8 @@ export class FlightRecords {
       typeCode: prevMeta?.typeCode ?? null,
       typeName: prevMeta?.typeName ?? null,
       registration: prevMeta?.registration ?? null,
+      // ANAC RAB build year, seats and operation for Brazilian registrations.
+      rab: prevMeta?.rab ?? null,
       airline: prevMeta?.airline ?? null,
       route: prevMeta?.route ?? null,
       // The RAW poll fix lat/lon (this tick's OpenSky state-vector
