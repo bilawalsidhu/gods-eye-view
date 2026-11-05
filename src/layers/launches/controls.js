@@ -12,6 +12,8 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /** Release only Space Mission camera ownership, preserving layer and selection state. */
     releaseCameraOwnership() {
+      // A failed entry no longer gives back the view it replaced.
+      layerState._entryCameraView = null;
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
       parts.selection.stopMissionZoomAnchor();

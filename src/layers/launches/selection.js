@@ -9,7 +9,8 @@ export function createSelection({
 }) {
   const { getKeyholeGeometry } = services.geometry;
 
-  function focusFullGlobe(viewer, duration = 2.4) {
+  /** @returns {boolean} Whether the flight started. */
+  function focusFullGlobe(viewer, { duration = 2.4, complete, cancel } = {}) {
     const canvas = viewer?.scene?.canvas;
     const height = canvas?.clientHeight || canvas?.height;
     const width = canvas?.clientWidth || canvas?.width;
@@ -23,7 +24,7 @@ export function createSelection({
       fovy <= 0 ||
       fovy >= Math.PI
     )
-      return;
+      return false;
     const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
     const keyholeRadius = getKeyholeGeometry(width, height).radius;
     const targetScreenRadius = keyholeRadius * 0.61;
@@ -45,7 +46,10 @@ export function createSelection({
       },
       duration,
       easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      complete,
+      cancel,
     });
+    return true;
   }
 
   function entityLaunchId(entity) {

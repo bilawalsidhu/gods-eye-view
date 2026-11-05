@@ -125,11 +125,29 @@ function captureCameraView(viewer) {
   };
 }
 
-/** Stop the full-globe flight and return to a captured pose. */
-function restoreCameraView(viewer, view) {
+function sameCameraView(camera, view) {
+  return (
+    Cesium.Cartesian3.equalsEpsilon(
+      camera.positionWC,
+      view.destination,
+      0,
+      1,
+    ) &&
+    ['heading', 'pitch', 'roll'].every((key) =>
+      Cesium.Math.equalsEpsilon(camera[key], view.orientation[key], 0, 1e-6),
+    )
+  );
+}
+
+/**
+ * Return to the pose before entry while the entry's full-globe flight still
+ * holds the camera: in flight, or landed with nothing moved since.
+ */
+function restoreCameraView(viewer, view, landedView) {
   const camera = viewer?.camera;
   if (!camera) return;
-  camera.cancelFlight?.();
+  if (!landedView) camera.cancelFlight?.();
+  else if (!sameCameraView(camera, landedView)) return;
   camera.setView(view);
 }
 
@@ -228,9 +246,21 @@ export function createLifecycle({
         parts.panel.renderMissionRoster();
       }
       // Kept until the mission index loads, so an entry that never does
-      // gives the view back.
+      // gives the view back. A newer flight takes the camera and drops it.
+      const token = layerState._lifecycleToken;
       layerState._entryCameraView = captureCameraView(layerState._viewer);
-      parts.selection.focusFullGlobe(layerState._viewer);
+      layerState._entryLandedView = null;
+      const flying = parts.selection.focusFullGlobe(layerState._viewer, {
+        complete: () => {
+          if (token === layerState._lifecycleToken)
+            layerState._entryLandedView = captureCameraView(layerState._viewer);
+        },
+        cancel: () => {
+          if (token === layerState._lifecycleToken)
+            layerState._entryCameraView = null;
+        },
+      });
+      if (!flying) layerState._entryCameraView = null;
       if (layerState._selectedLaunchId)
         parts.selection.setSelectedMission(
           layerState._selectedLaunchId,
@@ -246,7 +276,12 @@ export function createLifecycle({
       layerState._enabled = false;
       const entryView = layerState._entryCameraView;
       layerState._entryCameraView = null;
-      if (entryView) restoreCameraView(layerState._viewer, entryView);
+      if (entryView)
+        restoreCameraView(
+          layerState._viewer,
+          entryView,
+          layerState._entryLandedView,
+        );
       releaseContinuousRender('rocket-launches');
       layerState._lifecycleToken++;
       layerState._updateDirty = false;

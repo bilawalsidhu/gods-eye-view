@@ -57,17 +57,29 @@ function fakeCamera() {
     roll: 0,
     flights: 0,
     cancelled: 0,
+    flight: null,
     get positionWC() {
       return camera.position;
     },
-    flyTo({ destination }) {
+    // Like Cesium, a new flight cancels the one in progress.
+    flyTo({ destination, complete, cancel }) {
+      camera.flight?.cancel?.();
+      camera.flight = { complete, cancel };
       camera.flights += 1;
       camera.position = Cesium.Cartesian3.clone(destination);
       camera.heading = 0;
       camera.pitch = -Math.PI / 2;
     },
+    land() {
+      const flight = camera.flight;
+      camera.flight = null;
+      flight?.complete?.();
+    },
     cancelFlight() {
       camera.cancelled += 1;
+      const flight = camera.flight;
+      camera.flight = null;
+      flight?.cancel?.();
     },
     setView({ destination, orientation }) {
       camera.position = Cesium.Cartesian3.clone(destination);
@@ -81,11 +93,12 @@ function fakeCamera() {
 
 async function fixture(t) {
   const upstream = { status: 429, results: [launchRecord] };
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     if (req.url === '/api/celestrak/active') {
       res.end('');
       return;
     }
+    if (upstream.hold) await upstream.hold;
     if (upstream.status !== 200) {
       res.writeHead(upstream.status, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Launch Library 2 unavailable' }));
@@ -134,8 +147,13 @@ async function fixture(t) {
     },
     replay: { stopMissionReplay: noop, presentReplay: () => null },
     selection: {
-      focusFullGlobe: (target) =>
-        target.camera.flyTo({ destination: new Cesium.Cartesian3(9, 9, 9) }),
+      focusFullGlobe(target, flight) {
+        target.camera.flyTo({
+          destination: new Cesium.Cartesian3(9, 9, 9),
+          ...flight,
+        });
+        return true;
+      },
       setSelectedMission: noop,
       focusMission: noop,
       stopMissionZoomAnchor: noop,
@@ -282,6 +300,87 @@ test('a Context-panel Space Missions entry that gets HTTP 429 restores the previ
   assert.deepEqual(f.enabledIds(), ['earthquakes']);
   assert.equal(f.controls.getContextModeState().mode, null);
   assert.deepEqual(f.view(), before);
+});
+
+// Holds the /api/launches reply until the returned release is called.
+function holdReply(f) {
+  let release;
+  f.upstream.hold = new Promise((resolve) => {
+    release = resolve;
+  });
+  return () => {
+    f.upstream.hold = null;
+    release();
+  };
+}
+
+async function untilFlown(f) {
+  for (let i = 0; i < 200 && f.camera.flights === 0; i++)
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(f.camera.flights > 0, 'the entry started its full-globe flight');
+}
+
+test('a landed entry flight still gives the view back after a failed first load', async (t) => {
+  const f = await fixture(t);
+  await f.manager.setEnabled('earthquakes', true, { origin: 'user' });
+  const before = f.view();
+  const release = holdReply(f);
+
+  const entering = f.manager.setEnabled('rocket-launches', true, {
+    origin: 'user',
+  });
+  await untilFlown(f);
+  f.camera.land();
+
+  release();
+  assert.equal(await entering, false);
+  await f.settle();
+  assert.deepEqual(f.view(), before);
+});
+
+test('a camera move after the entry flight survives a failed first load', async (t) => {
+  const f = await fixture(t);
+  await f.manager.setEnabled('earthquakes', true, { origin: 'user' });
+  const release = holdReply(f);
+
+  const entering = f.manager.setEnabled('rocket-launches', true, {
+    origin: 'user',
+  });
+  await untilFlown(f);
+  f.camera.land();
+  // The user drags the globe while the mission index is still loading.
+  f.camera.setView({
+    destination: new Cesium.Cartesian3(7, 7, 7),
+    orientation: { heading: 0.3, pitch: -0.2, roll: 0 },
+  });
+  const moved = f.view();
+
+  release();
+  assert.equal(await entering, false);
+  await f.settle();
+  assert.deepEqual(f.view(), moved);
+});
+
+test('a navigation during a failed first load is not cancelled by the rollback', async (t) => {
+  const f = await fixture(t);
+  await f.manager.setEnabled('earthquakes', true, { origin: 'user' });
+  const release = holdReply(f);
+
+  const entering = f.manager.setEnabled('rocket-launches', true, {
+    origin: 'user',
+  });
+  await untilFlown(f);
+  // Search or Home: navigation releases mission camera ownership, then flies.
+  f.missions.releaseCameraOwnership();
+  f.camera.flyTo({ destination: new Cesium.Cartesian3(5, 5, 5) });
+  const cancelled = f.camera.cancelled;
+  const navigated = f.view();
+
+  release();
+  assert.equal(await entering, false);
+  await f.settle();
+  assert.equal(f.camera.cancelled, cancelled);
+  assert.deepEqual(f.view(), navigated);
 });
 
 test('the roster reports a failed mission index instead of loading forever', async (t) => {
