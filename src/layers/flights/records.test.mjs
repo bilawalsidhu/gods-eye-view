@@ -78,7 +78,10 @@ test('route enrichment clears on callsign replacement but survives transient mis
   assert.equal(changed.meta.route, null);
   assert.equal(changed.meta.airline, null);
   // Repeated identical callsigns are not treated as another route switch.
-  changed.meta.route = { origin: { code: 'ATL' }, destination: { code: 'ORD' } };
+  changed.meta.route = {
+    origin: { code: 'ATL' },
+    destination: { code: 'ORD' },
+  };
   const same = store.receive(observation({ callsign: 'dal456' }), view());
   assert.deepEqual(same.meta.route, changed.meta.route);
 });
