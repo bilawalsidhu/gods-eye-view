@@ -532,6 +532,52 @@ export function createQueries({
      * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
      *   Best match with a cloned, dead-reckoned position, or null if none.
      */
+    /**
+     * Exact-only flight lookup for the typed location bar. Unlike findByQuery,
+     * do not pick the first prefix/substring hit: shared callsigns and a
+     * six-hex token that also spells a callsign must be disambiguated. Scan
+     * all loaded contacts instead of getAllPositions' 500-row truncation.
+     * This is NOT a worldwide search and never follows a contact.
+     */
+    findExactFlightMatches({ kind, value }, limit = 8) {
+      if (!flightState._billboardCollection?.show)
+        return { status: 'disabled', matches: [], overflow: false };
+      if (!flightState._billboards.size || !flightState.records.data.size)
+        return { status: 'unavailable', matches: [], overflow: false };
+      const token = String(value || '').trim().toUpperCase();
+      const matches = [];
+      let stale = 0;
+      for (const [icao24, info] of flightState.records.data) {
+        if (!flightState._billboards.has(icao24)) continue;
+        const isHex = icao24.toUpperCase() === token;
+        const isCallsign =
+          String(info?.callsign || '').replace(/\s+/g, '').toUpperCase() === token;
+        if (!(
+          (kind === 'icao24' && isHex) ||
+          (kind === 'callsign' && isCallsign) ||
+          (kind === 'either' && (isHex || isCallsign))
+        )) continue;
+        const item = _describeFlight(icao24);
+        if (!item) continue;
+        if (item.stale) {
+          stale++;
+          continue;
+        }
+        matches.push({
+          ...item,
+          observedAtMs: Number.isFinite(info?.observedReceiptMs)
+            ? info.observedReceiptMs : null,
+          source: flightState.feed?._lastSource || null,
+        });
+        if (matches.length > limit) break;
+      }
+      return {
+        status: matches.length ? 'found' : stale ? 'stale' : 'missing',
+        matches: matches.slice(0, limit),
+        overflow: matches.length > limit,
+      };
+    },
+
     findByQuery(query) {
       if (!flightState.records.data || flightState.records.data.size === 0)
         return null;
