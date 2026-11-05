@@ -1582,6 +1582,33 @@ future driver fix restores the effect with no code change; iOS/iPadOS platform
 detection is the backstop for when no probe context can be created. Applied
 during viewer construction, before any tile builds a draw command.
 
+## Render failure notice
+
+When the globe stops drawing, the scene chrome says so instead of leaving a
+black globe behind controls that still respond. `installRenderFailureNotice()`
+(`src/ui/renderFailure.js`) listens for Cesium's `renderError`, after which
+Cesium stops its render loop, and for the canvas' `webglcontextlost`. It logs
+the error and publishes a notice to the status store, which
+`RenderFailure.vue` renders as an alert dialog that takes focus. The
+application scene creates its viewer with `showRenderLoopErrors: false`, so
+Cesium's own "Rendering has stopped" panel, which offers no way back, no longer
+appears; `applicationViewerOptions()` and `createApplicationViewer()` keep
+Cesium's panel by default for other callers.
+
+- **Retry** after a render error restarts the render loop. The notice stays
+  until a frame starts and ends without a render error (Cesium raises
+  `postRender` after a failed frame too), and a loop that fails again keeps it.
+- **Reload** after a lost context reloads the page: Cesium cannot draw into a
+  context it has lost, and the address keeps the view.
+- **Reset view** opens the app's root address (`appRootUrl()`), without the
+  hash or `/share/<code>` path the view was restored from; the query, such as
+  `?lang=`, is kept.
+
+An inline conversation panel never reloads or navigates its host's page, so it
+offers Retry after a render error only, and nothing after a lost context, where
+the panel runtime's own notice applies. The listener does not
+`preventDefault()` the context loss or restore the context; it only reports it.
+
 ## Map Source control ownership
 
 Map Source controls own chip listeners, source-state subscriptions and selection

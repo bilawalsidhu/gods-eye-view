@@ -545,6 +545,8 @@
   "src/ui/frameRateMonitor.js",
   "src/ui/frameRateMonitor.test.mjs",
   "src/ui/frameRateView.test.mjs",
+  "src/ui/renderFailure.test.mjs",
+  "src/ui/renderFailureView.test.mjs",
   "src/layers/cctv/lifecycle.js",
   "src/layers/cctv/controls.js",
   "src/layers/cctv/geometry.js",
