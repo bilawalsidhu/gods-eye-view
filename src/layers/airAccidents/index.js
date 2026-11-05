@@ -23,10 +23,31 @@ const CARD_HOST_OPTIONS = Object.freeze({
 });
 const MAX_CARD_LINES = 14;
 
-/** Marker size grows with the death toll, so the worst read first. */
+/**
+ * Marker size grows with the death toll, so the worst read first. The
+ * scale matches the shipwrecks layer, so both read alike side by side.
+ */
 export function markerPixelSize(fatalities) {
   const n = Number.isFinite(fatalities) && fatalities > 0 ? fatalities : 0;
-  return Math.round(6 + Math.min(8, Math.log2(1 + n) * 1.5));
+  return Math.round(16 + Math.min(20, Math.log2(1 + n) * 2));
+}
+
+/**
+ * A round marker in the class colour with an aircraft seen from above in
+ * the middle, as an SVG data URL: the shipwrecks layer's marker pattern
+ * (coloured disc, white rim, dark glyph), so a wreck and a crash are told
+ * apart at a glance when both layers are on. It is rasterized at 144 px,
+ * four times the largest marker, so big markers stay sharp.
+ * @param {string} color CSS colour.
+ * @returns {string}
+ */
+export function accidentMarkerImage(color) {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 36 36">` +
+    `<circle cx="18" cy="18" r="16" fill="${color}" stroke="#ffffff" stroke-width="2"/>` +
+    `<path d="M18 6.5c.9 0 1.5.9 1.5 2V15l8.5 5v2.3l-8.5-2.6V25l2.4 1.9v1.8L18 27.6l-3.9 1.1v-1.8l2.4-1.9v-5.3L8 22.3V20l8.5-5V8.5c0-1.1.6-2 1.5-2z" fill="#0b1420"/>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 /**
@@ -45,7 +66,15 @@ export function createAirAccidentsLayer({
     throw new TypeError('Air accidents require a snapshot source');
   let _viewer = null;
   let _enabled = false;
-  let _dataSource = null;
+  // One billboard collection: tens of thousands of entities would be far
+  // heavier to update every frame.
+  let _points = null;
+  const _images = Object.fromEntries(
+    Object.entries(KIND_COLORS).map(([kind, css]) => [
+      kind,
+      accidentMarkerImage(css),
+    ]),
+  );
   let _request = null;
   let _records = new Map();
   let _pins = [];
@@ -81,7 +110,7 @@ export function createAirAccidentsLayer({
   }
 
   function applyPin(pin) {
-    pin.entity.show = pin.inFront && visible(pin.record);
+    pin.marker.show = pin.inFront && visible(pin.record);
   }
 
   /** Re-apply the chips and the period to every marker and the open card. */
@@ -97,27 +126,29 @@ export function createAirAccidentsLayer({
     _extent = yearExtent(records);
     _range = periodRange(_period, _extent);
     _pins = [];
-    if (!_dataSource) return;
-    _dataSource.entities.suspendEvents();
-    _dataSource.entities.removeAll();
+    if (!_points) return;
+    _points.removeAll();
     for (const record of records) {
+      // On the ellipsoid, drawn over terrain (no depth test): clamping each
+      // marker to terrain would cost a terrain query per marker.
       const position = Cesium.Cartesian3.fromDegrees(record.lon, record.lat);
-      const entity = _dataSource.entities.add({
+      const size = markerPixelSize(record.fatalities);
+      const marker = _points.add({
         id: `${PICK_PREFIX}${record.id}`,
         position,
-        point: {
-          pixelSize: markerPixelSize(record.fatalities),
-          color: Cesium.Color.fromCssColorString(
-            KIND_COLORS[record.kind],
-          ).withAlpha(0.9),
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
-          outlineWidth: 1,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
+        image: _images[record.kind] || _images.accident,
+        width: size,
+        height: size,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        // Bigger toll, drawn on top of smaller neighbours.
+        eyeOffset: new Cesium.Cartesian3(
+          0,
+          0,
+          -Math.min(record.fatalities || 0, 5000),
+        ),
       });
       const pin = {
-        entity,
+        marker,
         record,
         position,
         inFront: true,
@@ -132,7 +163,6 @@ export function createAirAccidentsLayer({
       applyPin(pin);
       _pins.push(pin);
     }
-    _dataSource.entities.resumeEvents();
     _horizon.update();
     if (_selectedId && !_records.has(_selectedId)) clearSelection();
     else if (_selectedId) publishCard();
@@ -306,14 +336,15 @@ export function createAirAccidentsLayer({
       if (_viewer)
         throw new Error('Air accidents layer is already initialized');
       _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource(AIR_ACCIDENTS_LAYER_ID);
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
+      _points = viewer.scene.primitives.add(
+        new Cesium.BillboardCollection({ scene: viewer.scene }),
+      );
+      _points.show = false;
     },
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      if (_points) _points.show = true;
       installClickHandler();
       if (_pins.length) _horizon.update();
     },
@@ -322,7 +353,7 @@ export function createAirAccidentsLayer({
       _enabled = false;
       _request?.abort();
       _request = null;
-      if (_dataSource) _dataSource.show = false;
+      if (_points) _points.show = false;
       removeClickHandler();
       clearSelection();
       _horizon.stop();
@@ -330,7 +361,7 @@ export function createAirAccidentsLayer({
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled || !_points) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -362,9 +393,10 @@ export function createAirAccidentsLayer({
 
     destroy(viewer = _viewer) {
       layer.disable();
-      if (_dataSource) {
-        viewer?.dataSources?.remove(_dataSource, true);
-        _dataSource = null;
+      if (_points) {
+        // Removing a primitive from the scene also destroys it.
+        viewer?.scene?.primitives?.remove(_points);
+        _points = null;
       }
       _records = new Map();
       _pins = [];

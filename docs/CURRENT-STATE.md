@@ -113,9 +113,11 @@ accident is merged into it, which gains the article name and link, the flight
 number, the route and the survivor count. Only
 technical columns are read; neither source is asked for people.
 
-The globe draws ground-clamped points with the depth test off and the
-horizon cull GhostMaps uses: red for accidents, orange for serious incidents,
-sized by fatalities. Two row chips show or hide each class. A period filter under the row picks a
+The globe draws one billboard collection (markers on the ellipsoid, depth test
+off) with the horizon cull GhostMaps uses. Each marker follows the shipwrecks
+layer pattern: a disc with a white rim and a dark aircraft seen from above,
+red for accidents and orange for serious incidents, 16 to 36 px by fatalities
+(the shipwrecks scale), so both layers read apart when shown together. Two row chips show or hide each class. A period filter under the row picks a
 start year and an end year side by side (two pickers over the years present in
 the data; a reversed pair is swapped); undated items show only when every year
 is selected. The filter is session-only (not in the share link). Clicking a point

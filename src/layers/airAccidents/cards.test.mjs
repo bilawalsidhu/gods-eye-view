@@ -8,7 +8,7 @@ import {
   sourceText,
 } from './cards.js';
 import { CENIPA_REPORTS_URL } from './records.js';
-import { markerPixelSize } from './index.js';
+import { accidentMarkerImage, markerPixelSize } from './index.js';
 
 const RECORD = {
   id: 'cenipa:86202',
@@ -94,10 +94,18 @@ test('an article wins over the report page; no report, no link', () => {
 });
 
 test('markers grow with the death toll, within bounds', () => {
-  assert.equal(markerPixelSize(null), 6);
-  assert.equal(markerPixelSize(0), 6);
+  assert.equal(markerPixelSize(null), 16);
+  assert.equal(markerPixelSize(0), 16);
   assert.ok(markerPixelSize(10) > markerPixelSize(1));
-  assert.equal(markerPixelSize(5000), 14);
+  assert.equal(markerPixelSize(5000), 36);
+});
+
+test('the marker is a coloured disc with a white rim and an aircraft', () => {
+  const url = accidentMarkerImage('#ff4d4d');
+  assert.ok(url.startsWith('data:image/svg+xml;charset=utf-8,'));
+  const svg = decodeURIComponent(url.slice(url.indexOf(',') + 1));
+  assert.match(svg, /<circle [^>]*fill="#ff4d4d" stroke="#ffffff"/);
+  assert.ok(svg.includes('<path d="M18 6.5'));
 });
 
 test('a collision lists each aircraft; Wikidata adds flight, route and ASN', () => {
