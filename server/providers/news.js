@@ -1,11 +1,14 @@
 import { newsQueryAllowed } from '../../src/layers/news/source.js';
 import { readResponseTextCapped } from './common/http.js';
+import { createKeyedNews } from './news/keyed.js';
 
-// News (/api/news/*): Core serves no news of its own. With GEV_NEWS_ORIGIN
-// set (a news server such as https://news.example), this forwards exactly
-// the GET requests the news layer sends there and relays the JSON; without
-// it, every route answers "not configured" and the layer shows itself
-// unavailable without retrying.
+// News (/api/news/*). With GEV_NEWS_ORIGIN set (a news server such as
+// https://news.example), this forwards exactly the GET requests the news
+// layer sends there and relays the JSON. Without it (or with a value that
+// is no plain origin, warned of once), Core answers the same routes itself
+// (news/keyed.js): Conflicts from GDELT's event exports with no key, and
+// Liveuamap's items beside them with LIVEUAMAP_API_KEY; Local from World
+// News API, "key required" while WORLDNEWSAPI_KEY is unset.
 
 const TIMEOUT_MS = 15_000;
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -34,14 +37,42 @@ export function newsOrigin(raw = process.env.GEV_NEWS_ORIGIN) {
   }
 }
 
+/** Text for the log: no address (a key may ride in one), one short line. */
+const logText = (error) =>
+  `${error?.name || 'Error'}: ${String(error?.message ?? '')}`
+    .replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '<url>')
+    .replace(/\s+/g, ' ')
+    .slice(0, 200);
+
+/** GEV_NEWS_ORIGIN as newsOrigin reads it; a value it refuses is warned of once. */
+function configuredOrigin(env, log) {
+  let warned = null;
+  return () => {
+    const raw = String(env().GEV_NEWS_ORIGIN ?? '').trim();
+    const base = newsOrigin(raw);
+    if (!base && raw && warned !== raw) {
+      warned = raw;
+      // Not the value: it may carry credentials.
+      log(
+        '[news] GEV_NEWS_ORIGIN is not a plain http(s) origin; answering with the built-in news backend',
+      );
+    }
+    return base;
+  };
+}
+
 /**
- * A thin, validated GET proxy for the news layer's three read routes.
- * @param {{origin?: () => string|null, fetchImpl?: typeof fetch, timeoutMs?: number}} [options]
+ * A thin, validated GET proxy for the news layer's three read routes, or
+ * their keyed answers without a news server.
+ * @param {{env?: () => object, log?: (message: string) => void, origin?: () => string|null, fetchImpl?: typeof fetch, timeoutMs?: number, keyed?: {answer: (path: string, params: URLSearchParams) => Promise<{status: number, body: object}>}}} [options]
  */
 export function newsProxy({
-  origin = () => newsOrigin(),
+  env = () => process.env,
+  log = (message) => console.warn(message),
+  origin = configuredOrigin(env, log),
   fetchImpl = (...args) => globalThis.fetch(...args),
   timeoutMs = TIMEOUT_MS,
+  keyed = createKeyedNews({ env, fetchImpl, log }),
 } = {}) {
   const json = (res, status, value) => {
     if (res.destroyed) return;
@@ -64,12 +95,18 @@ export function newsProxy({
     if (!newsQueryAllowed(target))
       return json(res, 400, { error: 'invalid_news_request' });
     const base = origin();
-    if (!base)
-      return json(res, 503, {
-        error: 'news_not_configured',
-        unavailable: true,
-        retryable: false,
-      });
+    if (!base) {
+      try {
+        const { status, body } = await keyed.answer(
+          local.pathname,
+          target.searchParams,
+        );
+        return json(res, status, body);
+      } catch (error) {
+        log(`[news] built-in news answer failed: ${logText(error)}`);
+        return json(res, 502, { error: 'news_unavailable' });
+      }
+    }
     try {
       const upstream = await fetchImpl(
         new URL(`${target.pathname}${target.search}`, base),

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newsOrigin, newsProxy } from './news.js';
+import { createKeyedNews } from './news/keyed.js';
 
 /** Mount the proxy on a fake middleware stack and call it like Connect does. */
 function mount(options) {
@@ -33,7 +34,10 @@ function mount(options) {
 }
 
 test('the origin must be a plain http(s) origin', () => {
-  assert.equal(newsOrigin('https://news.example'), 'https://news.example');
+  assert.equal(
+    newsOrigin('http://news.example:8080'),
+    'http://news.example:8080',
+  );
   assert.equal(
     newsOrigin('https://news.example/base/'),
     'https://news.example',
@@ -51,23 +55,32 @@ test('the origin must be a plain http(s) origin', () => {
     assert.equal(newsOrigin(bad), null, String(bad));
 });
 
-test('without GEV_NEWS_ORIGIN every route answers not configured and nothing is fetched', async () => {
-  let fetches = 0;
+test('without GEV_NEWS_ORIGIN Core answers itself: Conflicts from GDELT, Local saying it needs its key', async () => {
+  const hosts = [];
+  const fetchImpl = async (url) => {
+    hosts.push(new URL(String(url)).host);
+    throw new Error('offline');
+  };
   const call = mount({
     origin: () => null,
-    fetchImpl: async () => {
-      fetches++;
-      throw new Error('unexpected');
-    },
+    fetchImpl,
+    keyed: createKeyedNews({ env: () => ({}), fetchImpl, log: () => {} }),
   });
-  const response = await call('/hotspots');
-  assert.equal(response.status, 503);
-  assert.deepEqual(response.json, {
-    error: 'news_not_configured',
-    unavailable: true,
-    retryable: false,
-  });
-  assert.equal(fetches, 0);
+  // GDELT's exports need no key; offline, the read fails like any upstream.
+  const hotspots = await call('/hotspots');
+  assert.equal(hotspots.status, 502);
+  assert.deepEqual(hotspots.json, { error: 'news_upstream_error' });
+  const local = await call('/feed?hotspot=all&at=51.13,71.43');
+  assert.equal(local.status, 503);
+  assert.deepEqual(local.json, { error: 'no_key', key: 'worldnewsapi' });
+  // The area is read from the bundled countries, with no key.
+  const area = await call('/outline?at=51.13,71.43&v=4');
+  assert.equal(area.status, 200);
+  assert.equal(area.json.area.name, 'Kazakhstan');
+  // The client's allowlist still holds.
+  assert.equal((await call('/feed?side=UA')).status, 400);
+  assert.ok(hosts.length > 0);
+  assert.ok(hosts.every((host) => host === 'data.gdeltproject.org'));
 });
 
 test('forwards only the client routes, by GET, and relays the JSON', async () => {
@@ -138,4 +151,44 @@ test('upstream failures, bad JSON and timeouts become bounded errors', async () 
   const timedOut = await slow('/hotspots');
   assert.equal(timedOut.status, 504);
   assert.deepEqual(timedOut.json, { error: 'news_unavailable' });
+});
+
+test('a GEV_NEWS_ORIGIN that is no plain origin is warned of once, and Core answers itself', async () => {
+  const logs = [];
+  const asked = [];
+  const call = mount({
+    env: () => ({ GEV_NEWS_ORIGIN: 'https://user:secret@news.example' }),
+    log: (line) => logs.push(line),
+    fetchImpl: async () => assert.fail('nothing is forwarded'),
+    keyed: {
+      answer: async (path) => {
+        asked.push(path);
+        return { status: 200, body: { reports: [], nextBefore: null } };
+      },
+    },
+  });
+  assert.equal((await call('/feed?hotspot=all')).status, 200);
+  assert.equal((await call('/feed?hotspot=all')).status, 200);
+  assert.deepEqual(asked, ['/feed', '/feed']);
+  assert.equal(logs.length, 1);
+  assert.doesNotMatch(logs[0], /secret|news\.example/);
+});
+
+test('a built-in answer that throws is a 502, logged in one line without addresses', async () => {
+  const logs = [];
+  const call = mount({
+    env: () => ({}),
+    log: (line) => logs.push(line),
+    keyed: {
+      answer: async () => {
+        throw new TypeError('bad https://api.example/?key=abc\nmore');
+      },
+    },
+  });
+  const failed = await call('/hotspots');
+  assert.equal(failed.status, 502);
+  assert.deepEqual(failed.json, { error: 'news_unavailable' });
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /TypeError/);
+  assert.doesNotMatch(logs[0], /key=abc|\n/);
 });
