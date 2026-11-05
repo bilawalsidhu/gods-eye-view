@@ -23,45 +23,50 @@ test('years come from the ISO date; the extent ignores undated records', () => {
 });
 
 test('the default period shows every record, undated ones included', () => {
-  const range = periodRange({ from: null, span: 'today' }, yearExtent(RECORDS));
+  const range = periodRange({ from: null, to: null }, yearExtent(RECORDS));
   assert.deepEqual(range, { from: 1956, to: 2024, all: true });
   assert.ok(RECORDS.every((record) => inPeriod(record, range)));
 });
 
-test('a start year and a length select the matching years only', () => {
+test('a start and an end year select the matching years only', () => {
   const extent = yearExtent(RECORDS);
-  const decade = periodRange({ from: 2000, span: 10 }, extent);
+  const decade = periodRange({ from: 2000, to: 2009 }, extent);
   assert.deepEqual(decade, { from: 2000, to: 2009, all: false });
   assert.deepEqual(
     RECORDS.filter((record) => inPeriod(record, decade)),
     [RECORDS[1]],
   );
-  const recent = periodRange({ from: 2010, span: 'today' }, extent);
+  const recent = periodRange({ from: 2010, to: null }, extent);
   assert.deepEqual(
     RECORDS.filter((record) => inPeriod(record, recent)),
     [RECORDS[2]],
   );
-  // Out-of-range years are clamped to the data.
-  assert.deepEqual(periodRange({ from: 3000, span: 5 }, extent), {
+  // Out-of-range years are clamped to the data; a reversed pair is swapped.
+  assert.deepEqual(periodRange({ from: 3000, to: null }, extent), {
     from: 2024,
     to: 2024,
+    all: false,
+  });
+  assert.deepEqual(periodRange({ from: 2010, to: 1990 }, extent), {
+    from: 1990,
+    to: 2010,
     all: false,
   });
 });
 
 test('requests merge into the current period; bad values are ignored', () => {
-  const current = { from: null, span: 'today' };
+  const current = { from: null, to: null };
   assert.deepEqual(normalizePeriod({ from: 2000 }, current), {
     from: 2000,
-    span: 'today',
+    to: null,
   });
-  assert.deepEqual(normalizePeriod({ span: '5' }, current), {
+  assert.deepEqual(normalizePeriod({ to: '2015' }, current), {
     from: null,
-    span: 5,
+    to: 2015,
   });
-  assert.deepEqual(normalizePeriod({ from: 1.5, span: 7 }, current), current);
-  assert.deepEqual(normalizePeriod({ from: null }, { from: 2000, span: 1 }), {
+  assert.deepEqual(normalizePeriod({ from: 1.5, to: 'x' }, current), current);
+  assert.deepEqual(normalizePeriod({ from: null }, { from: 2000, to: 2010 }), {
     from: null,
-    span: 1,
+    to: 2010,
   });
 });

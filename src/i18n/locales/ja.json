@@ -3060,10 +3060,7 @@
   "All years": "全期間",
   "Period": "期間",
   "First year of the accident period": "事故期間の最初の年",
-  "Length": "長さ",
-  "Length of the accident period": "事故期間の長さ",
-  "To the latest": "最新まで",
-  "{count} years": {
-    "other": "{count} 年"
-  }
+  "From": "開始",
+  "To": "終了",
+  "Last year of the accident period": "事故期間の最後の年"
 }

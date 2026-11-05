@@ -3060,10 +3060,7 @@
   "All years": "所有年份",
   "Period": "時段",
   "First year of the accident period": "事故時段的起始年份",
-  "Length": "長度",
-  "Length of the accident period": "事故時段的長度",
-  "To the latest": "至最新",
-  "{count} years": {
-    "other": "{count} 年"
-  }
+  "From": "起",
+  "To": "迄",
+  "Last year of the accident period": "事故時段的結束年份"
 }

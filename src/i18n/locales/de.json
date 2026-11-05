@@ -3136,11 +3136,7 @@
   "All years": "Alle Jahre",
   "Period": "Zeitraum",
   "First year of the accident period": "Erstes Jahr des Unfallzeitraums",
-  "Length": "Dauer",
-  "Length of the accident period": "Dauer des Unfallzeitraums",
-  "To the latest": "Bis zum neuesten",
-  "{count} years": {
-    "one": "{count} Jahr",
-    "other": "{count} Jahre"
-  }
+  "From": "Von",
+  "To": "Bis",
+  "Last year of the accident period": "Letztes Jahr des Unfallzeitraums"
 }

@@ -1,6 +1,7 @@
 <script setup>
 import RailChips from '../rail/RailChips.vue';
 import RailRowList from '../rail/RailRowList.vue';
+import RowRange from './RowRange.vue';
 import RowSlider from './RowSlider.vue';
 import RowSwitch from './RowSwitch.vue';
 import RowText from './RowText.vue';
@@ -15,6 +16,7 @@ defineProps({
   onChip: { type: Function, default: () => {} },
   onListItem: { type: Function, default: () => {} },
   onSlider: { type: Function, default: () => {} },
+  onRange: { type: Function, default: () => {} },
 });
 </script>
 
@@ -67,6 +69,13 @@ defineProps({
             :slider="item.controls.slider"
             :on-input="
               (value) => onSlider(item.id, item.controls.slider.id, value)
+            "
+          /><RowRange
+            v-if="item.controls.range"
+            :range="item.controls.range"
+            :on-select="
+              (end, value) =>
+                onRange(item.id, item.controls.range.id, end, value)
             "
           /><span
             v-for="(entry, index) in item.controls.legend"

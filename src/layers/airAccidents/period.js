@@ -1,6 +1,3 @@
-/** Period lengths offered under the row; "today" runs to the newest record. */
-export const PERIOD_SPANS = Object.freeze(['today', 1, 5, 10]);
-
 /** The record's year, or null when it has no usable date. */
 export function recordYear(record) {
   const match = /^(-?\d{4})-/.exec(record?.date || '');
@@ -20,42 +17,47 @@ export function yearExtent(records) {
   return Number.isFinite(min) ? { min, max } : null;
 }
 
+function yearParam(value) {
+  if (value === null) return null;
+  const year =
+    typeof value === 'string' && /^-?\d+$/.test(value) ? Number(value) : value;
+  return Number.isInteger(year) && Math.abs(year) < 10000 ? year : undefined;
+}
+
 /**
  * Merge a (partial) period request into the current one. `from: null` means
- * the first year in the data; an unknown span or year keeps the current one.
- * @param {{from?: number|null, span?: string|number}} params
- * @param {{from: number|null, span: string|number}} current
- * @returns {{from: number|null, span: string|number}}
+ * the first year in the data and `to: null` the latest; an invalid year keeps
+ * the current one.
+ * @param {{from?: number|string|null, to?: number|string|null}} params
+ * @param {{from: number|null, to: number|null}} current
+ * @returns {{from: number|null, to: number|null}}
  */
 export function normalizePeriod(
   params = {},
-  current = { from: null, span: 'today' },
+  current = { from: null, to: null },
 ) {
   const next = { ...current };
-  if (params.from === null) next.from = null;
-  else if (Number.isInteger(params.from) && Math.abs(params.from) < 10000)
-    next.from = params.from;
-  const span = /^\d+$/.test(String(params.span ?? ''))
-    ? Number(params.span)
-    : params.span;
-  if (PERIOD_SPANS.includes(span)) next.span = span;
+  for (const end of ['from', 'to']) {
+    if (!(end in params)) continue;
+    const year = yearParam(params[end]);
+    if (year !== undefined) next[end] = year;
+  }
   return next;
 }
 
 /**
- * The inclusive year range a period covers over the data's extent.
+ * The inclusive year range a period covers over the data's extent. Years are
+ * clamped to the data, and a start after the end is read as the reverse.
  * @returns {{from: number, to: number, all: boolean}|null}
  */
 export function periodRange(period, extent) {
   if (!extent) return null;
-  const from = Math.min(
-    extent.max,
-    Math.max(extent.min, period.from ?? extent.min),
-  );
-  const to =
-    period.span === 'today'
-      ? extent.max
-      : Math.min(extent.max, from + period.span - 1);
+  const clamp = (year, fallback) =>
+    Math.min(extent.max, Math.max(extent.min, year ?? fallback));
+  const start = clamp(period.from, extent.min);
+  const end = clamp(period.to, extent.max);
+  const from = Math.min(start, end);
+  const to = Math.max(start, end);
   return { from, to, all: from === extent.min && to === extent.max };
 }
 

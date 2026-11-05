@@ -114,9 +114,9 @@ technical columns are read; neither source is asked for people.
 
 The globe draws ground-clamped points with the depth test off and the
 horizon cull GhostMaps uses: red for accidents, orange for serious incidents,
-sized by fatalities. Two row chips show or hide each class. A period filter under the row picks the
-first year (slider over the years present in the data) and a length (1, 5 or
-10 years, or up to the newest record); undated items show only when every year
+sized by fatalities. Two row chips show or hide each class. A period filter under the row picks a
+start year and an end year side by side (two pickers over the years present in
+the data; a reversed pair is swapped); undated items show only when every year
 is selected. The filter is session-only (not in the share link). Clicking a point
 opens a `stateless` card with the date, place and aerodrome, each aircraft
 (registration, maker, model, ICAO type), operation type, phase of flight,

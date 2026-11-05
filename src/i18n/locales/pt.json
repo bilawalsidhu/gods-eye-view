@@ -3212,12 +3212,7 @@
   "All years": "Todos os anos",
   "Period": "Período",
   "First year of the accident period": "Primeiro ano do período de acidentes",
-  "Length": "Duração",
-  "Length of the accident period": "Duração do período de acidentes",
-  "To the latest": "Até o mais recente",
-  "{count} years": {
-    "one": "{count} ano",
-    "many": "{count} de anos",
-    "other": "{count} anos"
-  }
+  "From": "Início",
+  "To": "Fim",
+  "Last year of the accident period": "Último ano do período de acidentes"
 }

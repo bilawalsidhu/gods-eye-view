@@ -1214,6 +1214,7 @@
   "src/data/firmsIntensity.js",
   "src/data/firmsIntensity.test.mjs",
   "src/ui/layerPanel/RowSwitch.vue",
+  "src/ui/layerPanel/RowRange.vue",
   "src/ui/layerPanel/RowSlider.vue",
   "src/sources/phaseTiming.test.mjs",
   "scripts/build-census-places.mjs",

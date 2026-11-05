@@ -3,7 +3,6 @@ import { formatNumber, msg, t, tn } from '../../i18n/index.js';
 import { createHorizonCull } from '../streetLevel/view.js';
 import { KIND_COLORS, KIND_LABELS, describeAirAccident } from './cards.js';
 import {
-  PERIOD_SPANS,
   inPeriod,
   normalizePeriod,
   periodRange,
@@ -58,7 +57,7 @@ export function createAirAccidentsLayer({
   let _selectedCardId = null;
   let _selectedLink = null;
   const _kinds = new Set(['accident', 'serious-incident']);
-  let _period = { from: null, span: 'today' };
+  let _period = { from: null, to: null };
   let _extent = null;
   let _range = null;
 
@@ -262,7 +261,7 @@ export function createAirAccidentsLayer({
     return count;
   }
 
-  /** The year slider and the period-length switch under the row. */
+  /** The start and end year pickers, side by side under the row. */
   function periodControls() {
     if (!_extent || _extent.min === _extent.max) return {};
     const range = periodRange(_period, _extent);
@@ -271,39 +270,26 @@ export function createAirAccidentsLayer({
       : range.from === range.to
         ? String(range.from)
         : `${range.from}–${range.to}`;
-    const middle = Math.round((_extent.min + _extent.max) / 2);
-    const tick = (year) => ({
-      at: (year - _extent.min) / (_extent.max - _extent.min),
-      label: String(year),
-    });
+    const options = [];
+    for (let year = _extent.max; year >= _extent.min; year--)
+      options.push({ value: year, label: String(year) });
     return {
-      slider: {
-        id: 'from-year',
+      range: {
+        id: 'period',
         label: t('Period'),
-        ariaLabel: t('First year of the accident period'),
         valueText,
-        min: _extent.min,
-        max: _extent.max,
-        step: 1,
-        value: range.from,
-        ticks: [tick(_extent.min), tick(middle), tick(_extent.max)],
-        params: (value) => ({ from: Math.round(Number(value)) }),
-      },
-      segmented: {
-        id: 'span',
-        label: t('Length'),
-        ariaLabel: t('Length of the accident period'),
-        options: PERIOD_SPANS.map((span) => ({
-          id: `span-${span}`,
-          label:
-            span === 'today'
-              ? t('To the latest')
-              : tn(span, '{count} year', '{count} years', {
-                  count: formatNumber(span),
-                }),
-          active: _period.span === span,
-          params: { span },
-        })),
+        from: {
+          label: t('From'),
+          ariaLabel: t('First year of the accident period'),
+          value: range.from,
+        },
+        to: {
+          label: t('To'),
+          ariaLabel: t('Last year of the accident period'),
+          value: range.to,
+        },
+        options,
+        params: (end, value) => ({ [end]: Number(value) }),
       },
     };
   }
@@ -387,14 +373,14 @@ export function createAirAccidentsLayer({
       _rowListener = null;
     },
 
-    /** The period filter: `from` is the first year (null = oldest), `span` a PERIOD_SPANS value. */
+    /** The period filter: `from` and `to` are years (null = oldest / latest in the data). */
     getParams() {
       return { ..._period };
     },
 
     setParams(params = {}) {
       const next = normalizePeriod(params, _period);
-      if (next.from === _period.from && next.span === _period.span) return true;
+      if (next.from === _period.from && next.to === _period.to) return true;
       _period = next;
       _range = periodRange(_period, _extent);
       applyFilter();
