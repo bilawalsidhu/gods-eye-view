@@ -100,8 +100,8 @@ if its layer is later removed.
 
 New layers first use the remaining unreserved single-character digits (`0`
 through `9`), then the two-character base-36 namespace (`00` through `zz`). On the
-current published ledger, `0`, `1`, `2` and `3` are already owned, so the next
-choices are `4` through `9`, then `00`. After rebasing onto the latest `main`, run
+current ledger, consult the helper rather than copying a token from another PR.
+After rebasing onto the latest `main`, run
 `npm run layer-token:next -- <layer-id>`, add that result to both the permanent
 JSON reservation ledger and registry entry, and keep the exact registered-layer
 count assertion up to date. The token is assigned against the merge-time base, not
@@ -111,6 +111,13 @@ Run `npm run layer-token:check -- --base-ref origin/main` after the rebase;
 this checks that every published assignment remains reserved and that new
 assignments consume free digits before the two-character tokens, in order.
 Pull-request CI runs the same check against `main`.
+
+A maintainer-approved coordination batch can reserve tokens before the layers
+land; see [the coordinated allocation](docs/LAYER-TOKEN-COORDINATION.md).
+Keep all published ledger rows on feature branches. For a layer already reserved
+by that batch, use its assigned token in the registry; do not remove the row or
+rerun the helper for that ID. Reservations alone do not register or enable layers,
+so ledger counts and registered-layer counts can differ.
 
 The helper reads the local ledger; it does not run during a rebase or edit files.
 If another PR publishes your provisional token first, keep every published
