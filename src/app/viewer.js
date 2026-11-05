@@ -174,7 +174,7 @@ const SETTLE_GIVE_UP_MS = 5 * 60_000;
  * Heading and position are kept. Tracked cameras, locked ones (non-identity
  * transform), a camera flight in progress, the 2D and Columbus modes, and any
  * time `paused` returns true (an authored scene playing) are left alone; a
- * check they defer runs again once they end, within the settle check's bound.
+ * check they defer runs once they end, however long they last.
  * `keyholeRadius`
  * returns the radius of the visible circle when a scope mask hides the rest of
  * the frame (see `globeFrameShare`), or 0; it is read at every check.
@@ -261,8 +261,11 @@ export function installGlobeInViewRecovery(
     }
     // Two quiet samples in a row after a move: at rest for half a second, as
     // for moveEnd.
-    if (restingSamples >= 2 && movedSinceCheck && recover())
-      movedSinceCheck = false;
+    if (restingSamples >= 2 && movedSinceCheck) {
+      if (recover()) movedSinceCheck = false;
+      // A flight or a playing scene bounds its own deferral.
+      else settleElapsed = 0;
+    }
     if (settleElapsed >= SETTLE_GIVE_UP_MS) return;
     Cesium.Cartesian3.clone(camera.positionWC, lastPosition);
     Cesium.Cartesian3.clone(camera.directionWC, lastDirection);

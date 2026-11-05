@@ -765,6 +765,8 @@ test('a check a scene or flight defers runs once it ends', () => {
     // A hold on a stars-only shot: quiet, with or without Cesium's moveEnd.
     for (let i = 0; i < 4; i += 1) timers.tick();
     if (viaMoveEnd) camera.moveEnd.raiseEvent();
+    // Longer than the settle check's five-minute bound.
+    for (let i = 0; i < 1500; i += 1) timers.tick();
     assert.equal(globeOutOfFrame(camera), true, 'left alone while it plays');
     assert.equal(timers.pending(), 1, 'still watching');
     playing = false;
