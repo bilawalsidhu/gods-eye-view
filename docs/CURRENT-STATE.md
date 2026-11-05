@@ -98,6 +98,61 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Air accidents — CENIPA, NTSB and Wikidata
+
+The Events group includes **Air accidents** (`air-accidents`, share-link token
+`9`), off by default. `/api/air-accidents` downloads CENIPA's occurrence,
+aircraft and occurrence-type CSV tables (`dedalo.sti.fab.mil.br/dadosabertos/`,
+Latin-1, ODbL) and a Wikidata SPARQL query for aviation accidents with a
+coordinate (CC0), at most once a day, and serves the last good snapshot as
+stale for up to seven days when a refresh fails. One source failing still
+serves the other. CENIPA rows are kept only for accidents and serious incidents
+with a position (about 3,400 since 2007); Wikidata adds about 1,900 accidents
+worldwide. A Wikidata item on the same day and within about 50 km of a CENIPA
+accident is merged into it, which gains the article name and link, the flight
+number, the route and the survivor count. Only
+technical columns are read; no source is asked for people.
+
+NTSB data (every US accident and incident with a position since 2008, about
+26,000; incidents, which the NTSB records only when US rules make them
+reportable, are shown as serious incidents) comes
+from the NTSB's Access databases (`data.ntsb.gov/avdata`, US public domain),
+read with `mdb-reader` in `server/providers/airAccidentsNtsb.js`. The full
+database (`avall.zip`, about 97 MB, 560 MB unpacked) is read once, in the
+background: the first snapshot is served without NTSB, and the next request
+after the build includes it. The compact result is kept in
+`.gev-cache/air-accidents/ntsb.json`; each daily refresh then reads the
+download page and applies only the weekly update files (`upDDMMM.zip`, about
+1 MB) published since the cache's last one, replacing every event an update
+describes. Archives are streamed to disk and unpacked to a temporary file
+that is deleted after reading; reading `avall` holds the database in memory
+(about 700 MB peak) once per cache. Only event and aircraft technical columns
+are requested; owner and operator names and addresses and the crew tables are
+never read (the operator is named only for airline, Part 121, flights). NTSB
+case pages have no stable link, so an NTSB card shows its case number and
+opens the NTSB case search. With about 30,000 records in all, the snapshot leaves
+out empty (null) fields, and the page accepts a response of up to 48 MiB.
+
+The globe draws one billboard collection (markers on the ellipsoid, depth test
+off) with the horizon cull GhostMaps uses. Each marker follows the shipwrecks
+layer pattern: a disc with a white rim and a dark aircraft seen from above,
+red for accidents and orange for serious incidents, 16 to 36 px by fatalities
+(the shipwrecks scale), so both layers read apart when shown together. Two row chips show or hide each class. A period filter under the row picks a
+start year and an end year side by side (two pickers over the years present in
+the data; a reversed pair is swapped); undated items show only when every year
+is selected. The filter is session-only (not in the share link). Clicking a point
+opens a `stateless` card that leads with fatalities, injuries and survivors,
+then the date, time (UTC) and place, flight number and route (Wikidata), each
+aircraft (registration, maker, model, ICAO type, year built), operation type,
+phase of flight, damage (one line per aircraft in a collision), CENIPA's occurrence types, the
+investigation status and the final report number. CENIPA values are shown in
+CENIPA's Portuguese wording. When several occurrences share one point (the
+aerodrome reference position) the card says the position is approximate.
+Clicking the card opens the Wikipedia article, else the Aviation Safety
+Network record (Wikidata P1755), else CENIPA's final-report
+page when a report is published. Voice does not toggle this layer yet (prompt
+budget, as for the airspace layer).
+
 ## Prohibited & Restricted Airspace — FAA special-use airspace
 
 The Infrastructure group includes **Prohibited & Restricted Airspace** (`drone-airspace`,
@@ -4212,6 +4267,7 @@ its criteria cannot be silently ignored.
 | Ski Pistes ⛷ (`ski-pistes`) | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 | Prohibited & Restricted Airspace 🚫 | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry) | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js` | `/api/drone-airspace` | 1 h (server cache 1 h; stale-on-error) |
+| Air accidents ✈️ (`air-accidents`) | CENIPA open data (Brazilian accidents and serious incidents, keyless, ODbL), NTSB (US accidents and serious incidents, keyless, public domain) and Wikidata (worldwide accidents, keyless, CC0) | `src/layers/airAccidents/` via `src/app/layers/airAccidents.js` | `/api/air-accidents` | 6 h page check; server refresh once a day (stale-on-error up to 7 days); NTSB built once into `.gev-cache`, then weekly update files |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
