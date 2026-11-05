@@ -1,5 +1,5 @@
 import {
-  ACTIVATION_ALTITUDE_M,
+  ACTIVATION_ENTER_ALTITUDE_M,
   FEED_STALE_AFTER_MS,
   aggregateTransitFeedHealth,
   transitDetectionClass,
@@ -245,7 +245,7 @@ export function createQueries({ state, parts }) {
         // (ui/statusText.js).
         const note = state._altitudeGateOpen
           ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
-          : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
+          : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
         return {
           count: 0,
           lastUpdate: state._lastUpdate,

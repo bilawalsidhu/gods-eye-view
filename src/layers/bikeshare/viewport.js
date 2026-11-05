@@ -116,6 +116,14 @@ export function createViewport({ state: layerState, services, parts, source }) {
     parts.rendering.removeCityPoints(cityId);
   }
 
+  /**
+   * Repaint the layer's row now. Its text follows the camera (coverage
+   * prompt, station count), and the manager tick is 60 s.
+   */
+  function refreshRow() {
+    layerState._dataManager?.refreshLayerStats?.();
+  }
+
   /** Deactivate all currently active cities and clear the active set. */
 
   function deactivateAllCities() {
@@ -205,9 +213,11 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
     const generation = ++layerState._proximityGeneration;
     const altitude = getCameraAltitude(layerState._viewer);
+    const wasGateEnabled = layerState._altitudeGateEnabled;
     // Altitude gate: disable all cities when camera is too high
     if (!shouldActivateAtAltitude(altitude)) {
       deactivateAllCities();
+      if (wasGateEnabled) refreshRow();
       return;
     }
 
@@ -226,12 +236,18 @@ export function createViewport({ state: layerState, services, parts, source }) {
       if (!nextActive.has(cityId)) layerState._failedCityIds.delete(cityId);
     }
 
+    const changed =
+      !wasGateEnabled ||
+      nextActive.size !== layerState._activeCityIds.size ||
+      [...nextActive].some((cityId) => !layerState._activeCityIds.has(cityId));
     layerState._activeCityIds = nextActive;
     if (layerState._activeCityIds.size === 0) {
       layerState._count = 0;
       layerState._lastUpdate = null;
+      if (changed) refreshRow();
       return;
     }
+    if (changed) refreshRow();
 
     // Only activate cities that don't already have rendered points
     const toActivate = [];
@@ -243,6 +259,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     await Promise.all(
       toActivate.map((cityId) => activateCity(cityId, generation)),
     );
+    if (generation === layerState._proximityGeneration) refreshRow();
   }
 
   /** Schedule a debounced proximity check after camera movement. */

@@ -4018,6 +4018,6 @@ test('a view with no feed reads its coverage prompt, not an undated feed', async
   app.advance(1_000);
   assert.equal(
     app.layer.getStats().statusMessage,
-    'Fly below 3,000 km to a covered region',
+    'Fly below 2,850 km to a covered region',
   );
 });

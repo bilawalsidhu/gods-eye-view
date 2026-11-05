@@ -83,7 +83,7 @@ for (const locale of ['es', 'ru']) {
 // A layer's coverage note when no feed covers the view: one sentence with a
 // " · " in it (transit/queries.js, bikeshare/controls.js).
 const COVERAGE_NOTES = [
-  'Fly below 3,000 km to a covered region',
+  'Fly below 2,850 km to a covered region',
   'No feed here yet · 16 regions available',
   'Fly below 48 km to a covered city',
   'No bike share here yet · 61 systems available',

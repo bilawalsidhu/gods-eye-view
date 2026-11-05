@@ -15,6 +15,15 @@ export function createControls({ state: layerState, services, parts, source }) {
     updateInterval: STATUS_POLL_MS,
 
     /**
+     * Keep the manager so camera-driven coverage changes can repaint the row
+     * before the next status poll.
+     * @param {object} dataManager DataLayerManager instance.
+     */
+    attachDataManager(dataManager) {
+      layerState._dataManager = dataManager;
+    },
+
+    /**
      * Return a sampled array of detectable station objects for HUD overlay rendering.
      * @param {Object} [options] - Sampling options (maxCount, seed).
      * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}

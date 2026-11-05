@@ -423,7 +423,7 @@ function shownNote(text) {
     const shown = match ? show(match) : null;
     if (shown) return shown;
   }
-  // A layer's empty note can be its coverage note ("Fly below 3,000 km to a
+  // A layer's empty note can be its coverage note ("Fly below 2,850 km to a
   // covered region") or its status line, English pieces joined by " · "
   // ("feeds 1090, 978 stale · 0 heard", "TTC 0 (95s old)").
   return translateStatusMessage(text);

@@ -1819,7 +1819,7 @@ errors.
 
 Transit and Bike Share report the same kind of guidance when no feed or system
 covers the view, instead of an undated `never`. Above their altitude gates the
-rows read `GTFS-RT · Fly below 3,000 km to a covered region` and
+rows read `GTFS-RT · Fly below 2,850 km to a covered region` and
 `GBFS · Fly below 48 km to a covered city`; lower down over a city neither
 covers (London, Tokyo) they read `GTFS-RT · No feed here yet · N regions
 available` and `GBFS · No bike share here yet · N systems available`, N being

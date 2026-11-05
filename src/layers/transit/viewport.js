@@ -83,7 +83,9 @@ export function createViewport({ state, services, parts }) {
     if (!state._enabled || !state._viewer) return;
     refreshViewBounds();
     const altitude = getCameraAltitude();
+    const wasGateOpen = state._altitudeGateOpen;
     state._altitudeGateOpen = altitudeGateOpen(altitude);
+    let changed = state._altitudeGateOpen !== wasGateOpen;
     const center = state._altitudeGateOpen ? getCameraCenterLatLon() : null;
     const desired = new Map();
     if (center) {
@@ -106,6 +108,7 @@ export function createViewport({ state, services, parts }) {
         state._activeFeeds.delete(feedId);
         state._feedStatus.delete(feedId);
         parts.ingestion.removeFeedVehicles(feedId);
+        changed = true;
       }
     }
     // Leaving coverage leaves nothing on the map to date: a row that read
@@ -115,11 +118,15 @@ export function createViewport({ state, services, parts }) {
       if (!state._activeFeeds.has(feedId)) {
         state._activeFeeds.set(feedId, feed);
         void parts.ingestion.pollFeed(feed, state._generation);
+        changed = true;
       }
     }
     parts.ingestion.sweepAgedVehicles(Date.now());
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-proximity');
+    // The row's text follows the camera (coverage prompt, feed list), so it
+    // repaints now instead of at the next 15 s manager tick.
+    if (changed) state._dataManager?.refreshLayerStats?.();
   }
 
   function onCameraChanged() {
