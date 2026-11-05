@@ -1370,10 +1370,12 @@ pixel ratio.
 - **Governor.** It reads the smoothed interval between back-to-back frames:
   continuous render, or a moving camera. Request-mode frames on a parked camera
   carry no cost signal and are skipped, so an idle globe never changes
-  resolution and the governor never requests a frame. Frames under a
-  `viewer.targetFrameRate` below 50 are skipped for the same reason: the cap
-  sets their interval, not the GPU. The first 5 s after
-  start-up are skipped as well. Over 20 ms, without getting back to 18 ms, for
+  resolution and the governor never requests a frame. Under a
+  `viewer.targetFrameRate` below 50 the cap sets the interval, not the GPU, so
+  the budget follows the cap: 1.2 times its interval (40 ms at 30 fps), with
+  the on-time threshold scaled the same way. A frame on the cap shows no spare
+  GPU time, so a step up under a cap is a probe: a slow one steps back down and
+  doubles the wait below. The first 5 s after start-up are skipped as well. Over 20 ms, without getting back to 18 ms, for
   2 s of frames steps the ratio down by 0.25, never below 1; the gap keeps a
   frame time that hovers at the budget from resetting that window. 8 s of
   frames at or under 18 ms steps it back up. A step up that fails doubles that

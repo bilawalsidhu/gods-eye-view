@@ -534,6 +534,31 @@ test('a frame-rate cap under the budget is not read as a slow GPU (#1422)', () =
   assert.equal(viewer.resolutionScale, 0.875);
 });
 
+test('under a frame-rate cap the budget follows the cap interval', () => {
+  const viewer = makeViewer();
+  const clock = { t: 0 };
+  installResolutionGovernor(viewer, {
+    windowRef: { devicePixelRatio: 2 },
+    now: () => clock.t,
+  });
+  warmUp(viewer, clock);
+  viewer.targetFrameRate = 30;
+  // A GPU that cannot hold the cap: 20 fps is over 1.2 x 33 ms.
+  frames(viewer, clock, 50, 2_300);
+  assert.equal(viewer.resolutionScale, 0.875, 'steps down while capped');
+  // Frames on the cap: after the recovery wait, probe the ratio back up.
+  frames(viewer, clock, SLOW, RESOLUTION_POLICY.recoverMs + 1_000);
+  assert.equal(viewer.resolutionScale, 1, 'probes back up on the cap');
+  // The probe is still too slow: step down again, and wait twice as long.
+  frames(viewer, clock, 50, 2_300);
+  assert.equal(viewer.resolutionScale, 0.875);
+  const { stepsDown, stepsUp, recoverMs } = getResolutionDiagnostics(viewer);
+  assert.deepEqual(
+    { stepsDown, stepsUp, recoverMs },
+    { stepsDown: 2, stepsUp: 1, recoverMs: RESOLUTION_POLICY.recoverMs * 2 },
+  );
+});
+
 test('dispose gives Cesium its own resize back', () => {
   const viewer = makeViewer();
   const { resize } = viewer.cesiumWidget;

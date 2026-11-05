@@ -22,9 +22,8 @@
  * The policy watches the smoothed frame interval while frames are
  * back-to-back (continuous render, or the camera is moving). Discrete
  * request-mode frames and pauses longer than `gapMs` say nothing about GPU
- * cost and are skipped, so an idle globe never changes resolution. A
- * `viewer.targetFrameRate` below 1000 / `budgetMs` is skipped too: the cap
- * sets the interval then, not the GPU. Its windows count sampled frame time, not wall time: on-time frames from
+ * cost and are skipped, so an idle globe never changes resolution. Its
+ * windows count sampled frame time, not wall time: on-time frames from
  * several short pans add up to a step back up. The first `warmupMs` after
  * the viewer starts are skipped, because loading, not drawing, sets the
  * frame time then.
@@ -34,6 +33,13 @@
  *   frame time that hovers at the budget from resetting the slow window.
  * - At or under `onTimeMs` for the recovery wait (`recoverMs`, first 8 s):
  *   step up.
+ * - A `viewer.targetFrameRate` slower than 1000 / `budgetMs` sets the interval
+ *   itself, so the budget follows the cap: `capSlack` times the cap interval
+ *   (40 ms at 30 fps), with the on-time threshold scaled the same way. A
+ *   frame on the cap shows no spare GPU time, so a step up under a cap is a
+ *   probe like any other: if it is slow, it steps back down and the wait
+ *   doubles. Without it, loading stalls on a parked view would cost
+ *   resolution until the camera moved.
  * - A step up that is followed by a step down failed: the wait doubles, up
  *   to `maxRecoverMs`. A full on-time wait resets it.
  * - A devicePixelRatio change (window moved to another screen, browser zoom)
@@ -57,6 +63,8 @@ export const RESOLUTION_POLICY = Object.freeze({
   step: 0.25,
   budgetMs: 20,
   onTimeMs: 18,
+  // Budget under a slow frame-rate cap, as a multiple of the cap interval.
+  capSlack: 1.2,
   smoothing: 0.1,
   slowMs: 2000,
   recoverMs: 8000,
@@ -206,9 +214,10 @@ export function createResolutionPolicy(options = {}) {
     /**
      * Record one frame interval.
      * @param {number} intervalMs Time since the previous back-to-back frame.
+     * @param {number} [capMs] Frame interval set by a frame-rate cap; 0 if none.
      * @returns {boolean} True when `ratio` changed.
      */
-    frame(intervalMs) {
+    frame(intervalMs, capMs = 0) {
       if (!(intervalMs > 0) || intervalMs > config.gapMs) {
         smoothed = null;
         return false;
@@ -219,8 +228,11 @@ export function createResolutionPolicy(options = {}) {
         smoothed === null
           ? intervalMs
           : smoothed + config.smoothing * (intervalMs - smoothed);
-      if (smoothed > config.onTimeMs) onTimeSince = null;
-      if (smoothed > config.budgetMs) {
+      const capped = capMs > config.budgetMs;
+      const budgetMs = capped ? capMs * config.capSlack : config.budgetMs;
+      const onTimeMs = budgetMs * (config.onTimeMs / config.budgetMs);
+      if (smoothed > onTimeMs) onTimeSince = null;
+      if (smoothed > budgetMs) {
         slowSince ??= now;
         if (now - slowSince < config.slowMs || ratio <= floor) return false;
         if (probing) recoverMs = Math.min(recoverMs * 2, config.maxRecoverMs);
@@ -230,7 +242,7 @@ export function createResolutionPolicy(options = {}) {
         restartWindows();
         return true;
       }
-      if (smoothed > config.onTimeMs) return false;
+      if (smoothed > onTimeMs) return false;
       slowSince = null;
       onTimeSince ??= now;
       if (now - onTimeSince < recoverMs) return false;
@@ -368,6 +380,7 @@ export function installResolutionGovernor(
   const startedAt = now();
   let cameraMoving = false;
   let lastFrameAt = null;
+  let lastCapMs = 0;
 
   const syncViewport = () => {
     const nextDpr = readDpr();
@@ -390,9 +403,9 @@ export function installResolutionGovernor(
   };
   widget.resize = resizeInBounds;
 
-  const frameRateCapHidesCost = () => {
+  const frameRateCapMs = () => {
     const rate = Number(viewer.targetFrameRate);
-    return rate > 0 && 1000 / rate > RESOLUTION_POLICY.budgetMs;
+    return rate > 0 ? 1000 / rate : 0;
   };
 
   const removers = [
@@ -405,21 +418,24 @@ export function installResolutionGovernor(
     }),
     scene.postRender.addEventListener(() => {
       const at = now();
-      // Request-mode frames arrive on demand, and a low frame-rate cap paces
-      // them; in both cases their spacing is not cost.
-      if (
-        (scene.requestRenderMode && !cameraMoving) ||
-        frameRateCapHidesCost()
-      ) {
+      // Request-mode frames arrive on demand; their spacing is not cost.
+      if (scene.requestRenderMode && !cameraMoving) {
         lastFrameAt = null;
         policy.pause();
         return;
+      }
+      // A cap that starts or lifts changes the interval, not the cost.
+      const capMs = frameRateCapMs();
+      if (capMs !== lastCapMs) {
+        lastCapMs = capMs;
+        lastFrameAt = null;
+        policy.pause();
       }
       const previous = lastFrameAt;
       lastFrameAt = at;
       if (previous === null || at - startedAt < RESOLUTION_POLICY.warmupMs)
         return;
-      if (policy.frame(at - previous)) {
+      if (policy.frame(at - previous, capMs)) {
         lastFrameAt = null;
         apply();
       }
