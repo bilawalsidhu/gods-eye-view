@@ -5,5 +5,7 @@
   instead of turning the camera; a camera move that ends above it with no
   planet surface in view (inside the scope keyhole when the scope is on) turns
   straight down; and voice tilt and turns from orbit stop while the planet is
-  still on screen and say so instead of reporting a turn they could not make
-  (Manjunath, @manjunath22466, #1532).
+  still on screen and say so instead of reporting a turn they could not make.
+  Thanks to [Chad Elliott](https://github.com/THEtheChad) for the review that
+  closed the drag path and kept authored scenes framed (Manjunath,
+  @manjunath22466, #1532).
