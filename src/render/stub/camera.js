@@ -111,6 +111,7 @@ export function createStubCamera({
   let moving = false;
   let lastMovedAt = 0;
 
+  let coast = Object.freeze({ drag: 0.4, zoom: 0.2 });
   const controls = {
     get enabled() {
       return holds.size === 0;
@@ -125,9 +126,18 @@ export function createStubCamera({
     enableZoom: true,
     minDistance: 1,
     maxDistance: Infinity,
-    inertiaSpin: 0.9,
-    inertiaTranslate: 0.9,
-    inertiaZoom: 0.8,
+    // The default renderer's inertia as decay times: its speed falls as
+    // exp(-25 (1 - c) t), so c = 0.9 (spin, which drags and tilts in 3D)
+    // is 0.4 s and c = 0.8 (zoom) 0.2 s. Back: c = coast > 0 ? 1 - 1 / (25 coast) : 1.
+    get coast() {
+      return coast;
+    },
+    set coast(value) {
+      for (const key of ['drag', 'zoom'])
+        if (!(Number.isFinite(value?.[key]) && value[key] >= 0))
+          throw new TypeError(`coast.${key} must be seconds, 0 or more`);
+      coast = Object.freeze({ drag: value.drag, zoom: value.zoom });
+    },
     collision: 'none',
     zoomFactor: 5,
     pitchRange: [-Math.PI / 2, 0],

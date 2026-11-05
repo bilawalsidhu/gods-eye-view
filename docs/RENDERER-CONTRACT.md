@@ -53,7 +53,11 @@ The rules that hold everywhere:
   listeners, and the frame, still run.
 - **The frame order is fixed:** camera flight → input → camera `changed` →
   follow → `preUpdate` → move detection → `preRender` → render →
-  `postRender`.
+  `postRender`, the default renderer's own. A camera move made by follow or
+  in `preUpdate` is reported by `changed` on the next frame.
+- **Leases:** a tool takes the pointer with `claimPointer`. With `grab`, it
+  takes only the presses it grabs on `down`; the rest, and wheel and pinch,
+  stay with the camera and everyone else.
 
 `src/render/contract/index.js` lists every member of every port in `PORTS`,
 along with `CAPABILITIES`, `FRAME_STEPS` and `QUALITY_KEYS`.

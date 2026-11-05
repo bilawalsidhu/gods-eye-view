@@ -198,9 +198,9 @@ export const PORTS = deepFreeze({
       'controls.enableZoom',
       'controls.minDistance',
       'controls.maxDistance',
-      'controls.inertiaSpin',
-      'controls.inertiaTranslate',
-      'controls.inertiaZoom',
+      'controls.coast',
+      'controls.coast.drag',
+      'controls.coast.zoom',
       'controls.collision',
       'controls.zoomFactor',
       'controls.pitchRange',
@@ -247,6 +247,7 @@ export const PORTS = deepFreeze({
   effects: Object.fromEntries([
     ...required(
       'styles',
+      'defineStyle',
       'setStyle',
       'setStyleIntensity',
       'setStyleParams',
