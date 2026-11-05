@@ -130,3 +130,29 @@ export function parseCoordinateQuery(query) {
   if (lon < -180 || lon > 180) return null;
   return { lat, lon, label: formatCoordinateLabel(lat, lon) };
 }
+
+/**
+ * Recognize an explicitly flight-shaped lookup before sending it to a place
+ * geocoder. Only broadcast ICAO callsigns or transponder addresses are
+ * supported: guessing IATA-to-ICAO airline mappings risks selecting the wrong
+ * aircraft. Unrecognized text still follows the ordinary place search.
+ *
+ * A six-hex-character token can also be a callsign (ABC123), so the caller
+ * must check BOTH exact identities and disambiguate rather than assume hex.
+ */
+export function parseFlightSearchQuery(query) {
+  if (typeof query !== 'string') return null;
+  const text = query.trim();
+  const prefixedHex = /^(?:icao24|hex)\s*[: ]\s*([0-9a-f]{6})$/i.exec(text);
+  if (prefixedHex)
+    return { kind: 'icao24', value: prefixedHex[1].toLowerCase() };
+  const explicitCallsign = /^(?:flight|callsign)\s+([a-z]{3})\s*([0-9][a-z0-9]{0,3})$/i.exec(text);
+  if (explicitCallsign)
+    return { kind: 'callsign', value: (explicitCallsign[1] + explicitCallsign[2]).toUpperCase() };
+  const plain = /^([a-z]{3})\s*([0-9][a-z0-9]{0,3})$/i.exec(text);
+  if (!plain) return null;
+  const value = (plain[1] + plain[2]).toUpperCase();
+  return /^[0-9a-f]{6}$/i.test(value)
+    ? { kind: 'either', value }
+    : { kind: 'callsign', value };
+}
