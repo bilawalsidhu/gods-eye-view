@@ -23,8 +23,6 @@ export function normalizeVessel(row) {
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
     missedRefreshes: 0,
-    // Cached by `vesselOverlayEntryId`; the fields it reads never change.
-    overlayEntryId: null,
   };
 }
 

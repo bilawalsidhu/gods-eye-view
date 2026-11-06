@@ -1114,7 +1114,6 @@ function _stashCallout(entry, acquireFade, keyhole) {
   row.alpha = alpha;
   row.cardSourceId = candidate.cardSourceId;
   row.cardEntryId = candidate.cardEntryId;
-  row.paintAlpha = alpha;
   _calloutCount++;
 }
 
