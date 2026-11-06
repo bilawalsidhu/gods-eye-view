@@ -18,7 +18,7 @@ import {
 } from './pointerContext.js';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
-import { postDebugLog } from './realtimeDiagnostics.js';
+import { missingVoiceKeyText, postDebugLog } from './realtimeDiagnostics.js';
 
 export {
   readStoredVoiceTier,
@@ -437,6 +437,9 @@ export class GevRealtimeController extends RealtimeFacade {
         status === 'error'
           ? resolvedDetail() || t('Voice session could not be started.')
           : '',
+      // "Check microphone permission" is wrong advice for a missing key.
+      hint: () =>
+        !(status === 'error' && resolvedDetail() === missingVoiceKeyText()),
     });
     if (status === 'idle' || status === 'connecting' || status === 'error') {
       this.setVoiceSpeaker('idle');
