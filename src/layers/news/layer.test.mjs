@@ -799,6 +799,47 @@ test('without Liveuamap reports or a Local area, nothing is credited', async (t)
   assert.deepEqual(credits, []);
 });
 
+test('a failed Conflicts read leaves Local reading with each refresh', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const failure = () => new Error('News feed unavailable');
+  let local = failure();
+  const { layer } = fixture(t, {
+    height: 1_000_000,
+    source: {
+      getHotspots: async () => {
+        throw failure();
+      },
+      getFeed: async (query) => {
+        if (!query.at) throw failure();
+        if (local) throw local;
+        return {
+          reports: [report('inside', { relevance: 'minor' })],
+          nextBefore: null,
+        };
+      },
+      getAreaOutline: async () => ukraine,
+    },
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ filters: { section: 'local' } });
+  await flush();
+  assert.equal(
+    layer.getRowControls().feed.inView.error,
+    'News feed unavailable',
+  );
+  // The area's read lands meanwhile; Conflicts still fails.
+  local = null;
+  await layer.update();
+  await flush();
+  const view = layer.getRowControls().feed;
+  assert.deepEqual(
+    view.inView.items.map((item) => item.id),
+    ['inside'],
+  );
+  assert.equal(view.error, 'News feed unavailable');
+});
+
 test('a failed read keeps the layer on with an error; disable clears the overlay', async (t) => {
   const { layer, entries } = fixture(t, {
     source: { getFeed: async () => Promise.reject(new Error('boom')) },

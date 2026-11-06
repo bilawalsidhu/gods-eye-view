@@ -1428,6 +1428,8 @@ export function createNewsLayer({
         }
         unavailable = cause?.unavailable === true;
         error = cause?.message || FEED_UNAVAILABLE;
+        // Local is read apart: Conflicts failing leaves it reading.
+        void refreshInView({ force: inView.active });
         return true;
       } finally {
         signal?.removeEventListener('abort', abort);

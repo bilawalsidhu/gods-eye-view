@@ -1083,34 +1083,106 @@ test("a country's own news keeps World News API's category and no severity, what
   assert.equal(read('Parliament session opens', null).category, 'other');
 });
 
-test('a first read slower than the browser waits answers unavailable, and the next ask is served from it', async () => {
-  const fake = upstream();
-  let release;
-  const held = new Promise((resolve) => {
-    release = resolve;
-  });
-  const news = createKeyedNews({
-    env: () => ({ WORLDNEWSAPI_KEY: 'wna-key' }),
-    fetchImpl: async (url, init) => {
-      if (new URL(url).host === 'api.worldnewsapi.com') await held;
-      return fake.fetchImpl(url, init);
-    },
-    now: () => NOW,
-    log: () => {},
-    later: () => {},
-    firstAnswerMs: 20,
-  });
-  const local = () =>
-    news.answer('/feed', new URLSearchParams('hotspot=all&at=31.95,35.93'));
-  assert.deepEqual(await local(), UPSTREAM_ERROR);
-  // The read went on, and is not asked again.
-  release();
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  const served = await local();
-  assert.equal(served.status, 200);
-  assert.deepEqual(
-    served.body.reports.map((r) => r.id),
-    ['wna-9001', 'wna-9002'],
-  );
-  assert.equal(count(fake.calls, 'api.worldnewsapi.com'), 1);
-});
+test(
+  'a first read slower than the browser waits answers unavailable, and the next ask is served from it',
+  { timeout: 5_000 },
+  async () => {
+    const fake = upstream();
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    const news = createKeyedNews({
+      env: () => ({ WORLDNEWSAPI_KEY: 'wna-key' }),
+      fetchImpl: async (url, init) => {
+        if (new URL(url).host === 'api.worldnewsapi.com') await held;
+        return fake.fetchImpl(url, init);
+      },
+      now: () => NOW,
+      log: () => {},
+      later: () => {},
+      firstAnswerMs: 20,
+    });
+    const local = () =>
+      news.answer('/feed', new URLSearchParams('hotspot=all&at=31.95,35.93'));
+    assert.deepEqual(await local(), UPSTREAM_ERROR);
+    // The read went on, and is not asked again.
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const served = await local();
+    assert.equal(served.status, 200);
+    assert.deepEqual(
+      served.body.reports.map((r) => r.id),
+      ['wna-9001', 'wna-9002'],
+    );
+    assert.equal(count(fake.calls, 'api.worldnewsapi.com'), 1);
+  },
+);
+
+test(
+  'a first GDELT read slower than the browser waits answers unavailable, and the next is served from it',
+  { timeout: 5_000 },
+  async () => {
+    const fake = upstream();
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    const news = createKeyedNews({
+      env: () => ({}),
+      fetchImpl: async (url, init) => {
+        if (new URL(url).host === 'data.gdeltproject.org') await held;
+        return fake.fetchImpl(url, init);
+      },
+      now: () => NOW,
+      log: () => {},
+      later: () => {},
+      firstAnswerMs: 20,
+    });
+    const hotspots = () => news.answer('/hotspots', new URLSearchParams());
+    assert.deepEqual(await hotspots(), UPSTREAM_ERROR);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal((await hotspots()).status, 200);
+  },
+);
+
+test(
+  'a refused key stays refused while its next read is slow',
+  { timeout: 5_000 },
+  async () => {
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    let reads = 0;
+    const clock = { now: NOW };
+    const fake = upstream({
+      worldnews: async () => {
+        reads++;
+        if (reads > 1) await held;
+        return new Response('{"message":"bad key"}', { status: 401 });
+      },
+    });
+    const news = createKeyedNews({
+      env: () => ({ WORLDNEWSAPI_KEY: 'wna-key' }),
+      fetchImpl: fake.fetchImpl,
+      now: () => clock.now,
+      log: () => {},
+      later: () => {},
+      firstAnswerMs: 20,
+    });
+    const local = () =>
+      news.answer('/feed', new URLSearchParams('hotspot=all&at=31.95,35.93'));
+    const refused = {
+      status: 503,
+      body: { error: 'key_rejected', key: 'worldnewsapi' },
+    };
+    assert.deepEqual(await local(), refused);
+    // Past the retry wait it is read again, slowly: still refused meanwhile.
+    clock.now += 61_000;
+    assert.deepEqual(await local(), refused);
+    assert.equal(reads, 2);
+    release();
+  },
+);

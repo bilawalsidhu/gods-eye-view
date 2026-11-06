@@ -176,12 +176,24 @@ test('reads time out and follow the caller signal', async () => {
       );
     });
   const slow = createNewsSource({ fetchImpl: hang, timeoutMs: 20 });
-  // Out of time it reads unavailable, in the app's words, and is retried.
+  // Out of time it reads unavailable, in the app's words, as retryable.
   await assert.rejects(slow.getHotspots(), {
     message: 'News feed unavailable',
     code: 'timeout',
     retryable: true,
   });
+  // The caller's abort stays its own, even once the time is up too.
+  const late = (_url, { signal }) =>
+    new Promise((_, reject) => {
+      setTimeout(() => reject(signal.reason), 40);
+    });
+  const leaving = new AbortController();
+  const gone = createNewsSource({ fetchImpl: late, timeoutMs: 20 }).getFeed(
+    {},
+    { signal: leaving.signal },
+  );
+  leaving.abort(new Error('gone'));
+  await assert.rejects(gone, /gone/);
   const caller = new AbortController();
   const pending = createNewsSource({ fetchImpl: hang }).getFeed(
     {},

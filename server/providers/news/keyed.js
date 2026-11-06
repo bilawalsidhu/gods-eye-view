@@ -79,9 +79,9 @@ const COUNTRY_FRESH_MS = 30 * 60_000;
 // A failed read is not tried again for a minute; what was read before is
 // served meanwhile, up to these ages (GDELT's: since an export last came in).
 const RETRY_MS = 60_000;
-// A read with nothing to serve yet is waited for at most this long, under the
-// browser's own 15 s: it goes on, and the next ask is served from it.
-const FIRST_ANSWER_MS = 12_000;
+// A read with nothing to serve yet is waited for at most this long, well under
+// the browser's own 15 s: it goes on, and the next ask is served from it.
+const FIRST_ANSWER_MS = 10_000;
 const GDELT_STALE_MS = 2 * HOUR_MS;
 const LIVE_STALE_MS = HOUR_MS;
 const COUNTRY_STALE_MS = 6 * HOUR_MS;
@@ -270,7 +270,8 @@ const spentKey = (key) => ({ status: 503, body: { error: 'key_quota', key } });
  * for `/hotspots`, `/feed` and `/outline`, whose queries the proxy has
  * already checked against the client's allowlist. `later(run, ms)` runs
  * the next GDELT read of a day still filling in (an unref'd timer).
- * @param {{env?: () => object, fetchImpl?: typeof fetch, now?: () => number, log?: (message: string) => void, later?: (run: () => void, ms: number) => void}} [options]
+ * `firstAnswerMs` bounds the wait for a read with nothing to serve yet.
+ * @param {{env?: () => object, fetchImpl?: typeof fetch, now?: () => number, log?: (message: string) => void, later?: (run: () => void, ms: number) => void, firstAnswerMs?: number}} [options]
  */
 export function createKeyedNews({
   env = () => process.env,
@@ -376,7 +377,11 @@ export function createKeyedNews({
           .finally(() => inFlight.delete(flight)),
       );
     if (prior.value && at - prior.readAt < staleMs) return prior;
-    return firstAnswer(inFlight.get(flight), { ...prior, error: null });
+    // Meanwhile a refused key stays refused; an older failure is not this one.
+    return firstAnswer(inFlight.get(flight), {
+      ...prior,
+      error: prior.error?.rejected ? prior.error : null,
+    });
   }
 
   /** An entry stored as the most recently used (the countries are capped). */
@@ -386,7 +391,6 @@ export function createKeyedNews({
     while (store.size > MAX_COUNTRIES) store.delete(store.keys().next().value);
   }
 
-  /** An entry's reports while they may be served, else why there are none. */
   /** `read`, waited for at most firstAnswerMs; then `fallback`, as it goes on. */
   async function firstAnswer(read, fallback) {
     let timer;
@@ -403,6 +407,7 @@ export function createKeyedNews({
     }
   }
 
+  /** An entry's reports while they may be served, else why there are none. */
   function served(entry, staleMs, id) {
     if (entry.value && now() - entry.readAt < staleMs)
       return { reports: entry.value, readAt: entry.readAt };
