@@ -3,9 +3,12 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { entityRecord } from './entityRecords.js';
 import {
+  entityFollowTarget,
   followedOf,
+  followedPosition,
   isFollowing,
   onFollowChanged,
+  resumeFollowing,
   stopFollowing,
 } from './followed.js';
 import { bindRenderer } from '../render/rendererOf.js';
@@ -120,4 +123,53 @@ test('a renderer bound after subscribing is still heard', (t) => {
   camera.follow({ key: 'k' });
   camera.follow(null);
   assert.deepEqual(seen, ['k', null]);
+});
+
+test('an entity follow target reads its entity record live', () => {
+  const entity = new Cesium.Entity({ id: 'drawn', name: 'N2' });
+  const position = () => ({ x: 1, y: 2, z: 3 });
+  const target = entityFollowTarget(entity, { position, minRange: 150 });
+  assert.equal(target.key, 'entity:drawn');
+  entityRecord(entity).trackedId = 'flights:abc';
+  entityRecord(entity).labelModel = { title: 'N2' };
+  assert.equal(target.key, 'flights:abc');
+  assert.equal(target.labelModel.title, 'N2');
+  assert.equal(target.entity, entity);
+  assert.equal(target.position, position);
+  assert.equal(target.minRange, 150);
+  const keyed = entityFollowTarget(entity, { key: 'flights:given' });
+  assert.equal(keyed.key, 'flights:given', 'a camera field takes the place');
+  assert.equal(keyed.labelModel.title, 'N2');
+});
+
+test('resumeFollowing follows a port target again, or re-tracks an entity', (t) => {
+  const viewer = trackingViewer();
+  const entity = new Cesium.Entity({ id: 'legacy' });
+  viewer.trackedEntity = entity;
+  const legacy = followedOf(viewer);
+  stopFollowing(viewer);
+  resumeFollowing(viewer, legacy);
+  assert.equal(viewer.trackedEntity, entity);
+  assert.equal(followedOf(viewer), legacy);
+  viewer.trackedEntity = undefined;
+  const camera = followingPort();
+  t.after(bindRenderer(viewer, { camera }));
+  const target = entityFollowTarget(new Cesium.Entity({ id: 'p' }), {});
+  camera.follow(target);
+  stopFollowing(viewer);
+  resumeFollowing(viewer, target);
+  assert.equal(camera.followed, target);
+  resumeFollowing(viewer, null);
+  assert.equal(camera.followed, target);
+});
+
+test('followedPosition prefers the display cache over the entity position', () => {
+  const at = new Cesium.Cartesian3(4, 5, 6);
+  const viewer = { clock: { currentTime: Cesium.JulianDate.now() } };
+  const entity = new Cesium.Entity({ id: 'e', position: at });
+  const view = entityFollowTarget(entity, {});
+  assert.deepEqual(followedPosition(viewer, view), at);
+  entityRecord(entity).displayPosition = () => ({ x: 7, y: 8, z: 9 });
+  assert.deepEqual(followedPosition(viewer, view), { x: 7, y: 8, z: 9 });
+  assert.equal(followedPosition(viewer, null), null);
 });

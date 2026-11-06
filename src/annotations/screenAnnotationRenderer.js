@@ -1,3 +1,4 @@
+import { followedOf } from '../data/followed.js';
 import * as Cesium from 'cesium';
 import { getOverlayPaintRect } from '../overlays/worldOverlay.js';
 import {
@@ -8,7 +9,6 @@ import { t } from '../i18n/index.js';
 import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
-import { readEntityRecord } from '../data/entityRecords.js';
 import { heightsFor } from '../queries/heights.js';
 
 /** A label whose detailed outline could not be resolved. */
@@ -421,8 +421,8 @@ export function createScreenAnnotationRenderer(
     let top = painted?.y;
     let bottom = painted ? painted.y + painted.h : undefined;
 
-    const ent = viewer.trackedEntity;
-    const displayPosition = readEntityRecord(ent)?.displayPosition;
+    const followed = followedOf(viewer);
+    const displayPosition = followed?.displayPosition;
     const world =
       typeof displayPosition === 'function' ? displayPosition() : null;
     const win = world
@@ -435,7 +435,7 @@ export function createScreenAnnotationRenderer(
 
     // Billboard box — centered on the anchor, magnified by scaleByDistance, from
     // the size the tracking layer recorded for its sprite.
-    const sprite = readEntityRecord(ent)?.sprite;
+    const sprite = followed?.sprite;
     if (sprite && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
       const baseW = sprite.width ?? 28;
       const baseH = sprite.height ?? 28;

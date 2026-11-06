@@ -7,7 +7,14 @@
  * Until every layer does, a layer may still track an entity of its own
  * through Cesium's `trackedEntity`; that entity is seen here through the
  * same fields, read from its entity record. Readers ask this module, never
- * `trackedEntity`, so they work either way.
+ * `trackedEntity`, so they work either way. A layer that still draws its
+ * target as an entity follows through the port with `entityFollowTarget`,
+ * whose presentation fields read that same record.
+ *
+ * Core's readers (the tracked card, Cockpit, the share link's thing view,
+ * north-up) still read the drawn entity and its `displayPosition`: a port
+ * target without them is followed by the camera but not shown by them,
+ * until those readers move with the drawing to the renderer.
  */
 import { findCamera } from '../render/rendererOf.js';
 import { readEntityRecord } from './entityRecords.js';
@@ -124,4 +131,56 @@ export function stopFollowing(viewer) {
   const camera = findCamera(viewer);
   if (camera?.followed) camera.follow(null);
   else if (viewer.trackedEntity) viewer.trackedEntity = undefined;
+}
+
+/**
+ * A FollowTarget for a layer that draws its target as an entity of its own:
+ * the camera fields given (`position`, `viewFrom`, `frame`, `minRange`, ...)
+ * plus what Core shows about it, read live from the entity's record, so the
+ * layer keeps writing that record as before. `entity` is the drawn entity.
+ * @param {object} entity
+ * @param {object} camera The FollowTarget's camera fields.
+ * @returns {Followed & object}
+ */
+export function entityFollowTarget(entity, camera) {
+  const target = Object.create(entityView(entity));
+  // Defined, not assigned: the record's fields are getters, and a camera
+  // field of the same name (`key`, say) takes their place.
+  for (const [name, value] of Object.entries(camera))
+    Object.defineProperty(target, name, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  return target;
+}
+
+/**
+ * Follow `followed` again after `stopFollowing`: a port target through the
+ * camera port, a layer's own tracked entity through `trackedEntity`.
+ * @param {object} viewer
+ * @param {Followed|null} followed What `followedOf` gave.
+ */
+export function resumeFollowing(viewer, followed) {
+  if (!viewer || !followed) return;
+  if (entityViews.get(followed.entity) === followed)
+    viewer.trackedEntity = followed.entity;
+  else findCamera(viewer)?.follow(followed);
+}
+
+/**
+ * Where `followed` is shown this frame: the layer's display cache, else its
+ * entity's position at the viewer's time; null when neither answers.
+ * @param {object} viewer
+ * @param {Followed|null} followed
+ */
+export function followedPosition(viewer, followed) {
+  const display = followed?.displayPosition;
+  const shown = typeof display === 'function' ? display() : null;
+  return (
+    shown ||
+    followed?.entity?.position?.getValue?.(viewer?.clock?.currentTime) ||
+    null
+  );
 }

@@ -1,11 +1,11 @@
 import * as Cesium from 'cesium';
-import { trackedDisplayPositionForCamera } from '../data/trackedCamera.js';
+import { findCamera } from '../render/rendererOf.js';
+import { followedOf, followedPosition } from '../data/followed.js';
 import {
   SHARE_VIEW_ENTITY_KINDS,
   followOffsetFromEnu,
   followOffsetToEnu,
 } from '../share/follow.js';
-import { readEntityRecord } from '../data/entityRecords.js';
 
 /**
  * The bridge between the camera following an entity and a share link's thing
@@ -17,6 +17,12 @@ const KIND_BY_LAYER = new Map(
   SHARE_VIEW_ENTITY_KINDS.map((entry) => [entry.layerId, entry.kind]),
 );
 const MAX_FRAMES = 120;
+
+/** Where `followed` is shown now, as a Cesium position, or null. */
+function shownAt(viewer, followed) {
+  const p = followedPosition(viewer, followed);
+  return p ? new Cesium.Cartesian3(p.x, p.y, p.z) : null;
+}
 
 /** `position`'s local east/north/up offset from `origin`, in metres. */
 function enuOffset(origin, position) {
@@ -39,19 +45,13 @@ function enuOffset(origin, position) {
 export function readShareFollowSubject({ viewer, nowMs = Date.now() }) {
   const cameraPosition = viewer?.camera?.positionWC;
   if (!cameraPosition) return null;
-  const tracked = viewer.trackedEntity;
-  const trackedId = String(readEntityRecord(tracked)?.trackedId || '');
+  const followed = followedOf(viewer);
+  const trackedId = String(followed?.key || '');
   const separator = trackedId.indexOf(':');
   if (separator <= 0) return null;
   const kind = KIND_BY_LAYER.get(trackedId.slice(0, separator));
   const id = trackedId.slice(separator + 1);
-  const target = kind
-    ? trackedDisplayPositionForCamera(
-        tracked,
-        viewer.clock.currentTime,
-        new Cesium.Cartesian3(),
-      )
-    : null;
+  const target = kind ? shownAt(viewer, followed) : null;
   if (!kind || !id || !target) return null;
   const offset = followOffsetFromEnu(enuOffset(target, cameraPosition));
   const fix = Cesium.Cartographic.fromCartesian(target);
@@ -73,14 +73,14 @@ export function readShareFollowSubject({ viewer, nowMs = Date.now() }) {
 const MAX_TURN_PER_FRAME = Math.PI / 3;
 
 /**
- * Put the camera at a shared follow offset from `entity` once following it
- * has framed the camera. Cesium keeps the offset afterwards, as it keeps one
+ * Put the camera at a shared follow offset from `followed` (what
+ * `followedOf` gave) once following it has framed the camera. Cesium keeps the offset afterwards, as it keeps one
  * the user orbits to. The camera swings round the entity at most 60° a frame:
  * the follow's own guard treats a jump to the far side as the camera crossing
  * through the entity and puts it back. Returns a disposer.
  */
-export function applyShareFollowOffset(viewer, entity, offset) {
-  if (!viewer?.scene?.preUpdate || !entity || !(offset?.range > 0))
+export function applyShareFollowOffset(viewer, followed, offset) {
+  if (!viewer?.scene?.preUpdate || !followed || !(offset?.range > 0))
     return () => {};
   const local = followOffsetToEnu(offset);
   let frames = 0;
@@ -90,23 +90,20 @@ export function applyShareFollowOffset(viewer, entity, offset) {
     remove = null;
   };
   remove = viewer.scene.preUpdate.addEventListener(() => {
-    if (viewer.isDestroyed?.() || viewer.trackedEntity !== entity) {
+    if (viewer.isDestroyed?.() || followedOf(viewer) !== followed) {
       stop();
       return;
     }
     frames += 1;
     const camera = viewer.camera;
     // Let the follow frame the camera first (its first frame), then move it.
+    const port = findCamera(viewer);
     const framed =
       frames > 1 &&
-      !Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY);
-    const target = framed
-      ? trackedDisplayPositionForCamera(
-          entity,
-          viewer.clock.currentTime,
-          new Cesium.Cartesian3(),
-        )
-      : null;
+      (port?.followed === followed
+        ? port.followFramed
+        : !Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY));
+    const target = framed ? shownAt(viewer, followed) : null;
     if (!target) {
       if (frames >= MAX_FRAMES) stop();
       return;
@@ -136,8 +133,12 @@ export function applyShareFollowOffset(viewer, entity, offset) {
         : 0;
     const done = !(angle > MAX_TURN_PER_FRAME);
     const next = done ? goal : turnToward(from, goal, MAX_TURN_PER_FRAME);
-    camera.lookAtTransform(camera.transform, next);
-    viewer.scene.requestRender?.();
+    // Through the port when it follows: its close-range guard keeps the eye.
+    if (port?.followed === followed) port.followOffset.set(next);
+    else {
+      camera.lookAtTransform(camera.transform, next);
+      viewer.scene.requestRender?.();
+    }
     if (done) stop();
   });
   return stop;

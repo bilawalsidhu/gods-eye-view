@@ -1,4 +1,5 @@
 /** Coordinate Cockpit lifecycle through supplied aircraft, terrain, rendering and briefing operations. */
+import { onFollowChanged } from '../data/followed.js';
 import {
   readAircraftInfo,
   dispatchCockpitModeChanged,
@@ -87,6 +88,8 @@ export class CockpitViewController {
     /** Gives camera input back; held from enter to exit. */
     this.releaseCameraInput = null;
     this.trackedEntity = null;
+    /** What the camera followed before Cockpit took it, to follow again. */
+    this.trackedFollow = null;
     this.trackedEntityWasShown = true;
     this.heading = null;
     this.lastFrameMs = 0;
@@ -201,7 +204,7 @@ export class CockpitViewController {
     // create a self-sustaining refinement loop under a moving cockpit camera.
     this._listenerRemovers.push(
       viewer.scene.preUpdate.addEventListener(() => this.update()),
-      viewer.trackedEntityChanged.addEventListener(() => {
+      onFollowChanged(viewer, () => {
         if (this.active) this._adoptTrackedEntity(performance.now());
         else this.syncEntry();
       }),

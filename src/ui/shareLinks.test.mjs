@@ -20,6 +20,7 @@ import {
 } from '../share/viewCodec.js';
 import { entityRecord, withEntityRecord } from '../data/entityRecords.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { followedOf } from '../data/followed.js';
 
 const NOW_MS = Date.now();
 const FIX = { lat: 37.6213, lon: -122.379, alt: 3200 };
@@ -494,7 +495,7 @@ test('a shared offset on the far side swings round, never jumping through the en
   };
   // Looking south at the nose: the opposite side of the app's framing.
   const offset = { range: 5800, heading: 180, pitch: -35 };
-  applyShareFollowOffset(viewer, entity, offset);
+  applyShareFollowOffset(viewer, followedOf(viewer), offset);
   let previous = viewer.camera.position;
   for (let frame = 0; frame < 10 && listeners.length; frame += 1) {
     listeners[0]();

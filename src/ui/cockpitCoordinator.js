@@ -1,3 +1,4 @@
+import { followedOf } from '../data/followed.js';
 import { nextTick } from 'vue';
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
 import { cockpitEntryAllowed } from '../contextModePolicy.js';
@@ -124,12 +125,12 @@ export class CockpitCoordinator {
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
     // "Could Cockpit be ENTERED right now" — so it is false while already
     // inside, unconditionally. Cockpit takes the entity off
-    // `viewer.trackedEntity` on entry and NEXT puts one back, which made this
+    // the camera's follow on entry and NEXT puts one back, which made this
     // flip true/false between calls while `active` stayed true; readers
     // (including the voice model) read that as a broken half-entered state.
     const entryAllowed =
       !active &&
-      Boolean(gateOpen && info && this.viewer?.trackedEntity?.position);
+      Boolean(gateOpen && info && followedOf(this.viewer)?.entity?.position);
     return {
       active,
       entryAllowed,

@@ -6,17 +6,21 @@ import {
   normalizeHeading,
   resolveTrackedAircraftInfo,
 } from '../cockpitMath.js';
-import { readEntityRecord } from '../data/entityRecords.js';
+import {
+  followedOf,
+  resumeFollowing,
+  stopFollowing,
+} from '../data/followed.js';
 import { inputFor } from '../input/dispatcher.js';
 
 export function readAircraftInfo() {
-  // In cockpit mode the controller takes the entity off `viewer.trackedEntity`
-  // (see update()), so the cockpit's own handle is the tracked identity there.
-  const trackedEntity = this.viewer?.trackedEntity || this.trackedEntity;
+  // In cockpit mode the controller stops the camera following (see enter()),
+  // so the cockpit's own handle is the tracked identity there.
+  const followed = followedOf(this.viewer) || this.trackedFollow;
   return resolveTrackedAircraftInfo({
     civilian: this.services.flightsLayer.getTrackedInfo?.() || null,
     military: this.services.militaryFlightsLayer.getTrackedInfo?.() || null,
-    trackedId: readEntityRecord(trackedEntity)?.trackedId || '',
+    trackedId: followed?.key || '',
   });
 }
 
@@ -80,7 +84,7 @@ export function syncEntry() {
   if (this.destroyed) return false;
   if (this.active) return;
   const info = this.readAircraftInfo();
-  const trackedContact = !!(info && this.viewer.trackedEntity?.position);
+  const trackedContact = !!(info && followedOf(this.viewer)?.entity?.position);
   this.syncTr3bToggle(trackedContact ? info : null);
   const available = !!(this.isEntryAllowed() && trackedContact);
   // Change-only publishes: this runs on a preUpdate cadence, and a fresh
@@ -111,7 +115,8 @@ export function navigateContext(direction, options = {}) {
 }
 
 export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
-  const nextEntity = this.viewer.trackedEntity;
+  const nextFollowed = followedOf(this.viewer);
+  const nextEntity = nextFollowed?.entity;
   if (
     !this.active ||
     !nextEntity?.position ||
@@ -124,9 +129,10 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
     this.trackedEntity.show = this.trackedEntityWasShown;
   }
   this.trackedEntity = nextEntity;
+  this.trackedFollow = nextFollowed;
   this.trackedEntityWasShown = nextEntity.show;
   nextEntity.show = false;
-  this.viewer.trackedEntity = undefined;
+  stopFollowing(this.viewer);
   this.cockpitAnchorValid = false;
   this.heading = normalizeHeading(info.track ?? 0);
   this.lastFrameMs = nowMs;
@@ -143,7 +149,8 @@ export function enter() {
   if (this.active) return false;
   if (!this.isEntryAllowed()) return false;
   const info = this.readAircraftInfo();
-  const entity = this.viewer.trackedEntity;
+  const followed = followedOf(this.viewer);
+  const entity = followed?.entity;
   if (!info || !entity?.position) return false;
   this.entryFocusOrigin =
     document.activeElement instanceof HTMLElement
@@ -153,6 +160,7 @@ export function enter() {
   this.onCameraTakeover?.();
   cameraOf(this.viewer).cancelFlight();
   this.trackedEntity = entity;
+  this.trackedFollow = followed;
   this.trackedEntityWasShown = entity.show;
   entity.show = false;
   this.heading = normalizeHeading(info.track ?? 0);
@@ -172,7 +180,7 @@ export function enter() {
   // runs on rendered frames, so idle mode would freeze the cockpit solid.
   // (perf wave 2)
   this.services.holdContinuousRender('cockpit');
-  this.viewer.trackedEntity = undefined;
+  stopFollowing(this.viewer);
   this.releaseCameraInput?.();
   this.releaseCameraInput = inputFor(this.viewer).suspendCamera('cockpit');
   document.body.classList.add('cockpit-mode');
@@ -217,9 +225,11 @@ export function enter() {
 export function exit({ restoreTracking = true } = {}) {
   if (!this.active) return false;
   const entity = this.trackedEntity;
+  const followed = this.trackedFollow;
   this.active = false;
   this.services.releaseContinuousRender('cockpit');
   this.trackedEntity = null;
+  this.trackedFollow = null;
   this.heading = null;
   this.cockpitAnchorValid = false;
   this.surfaceWaitStartedMs = 0;
@@ -248,7 +258,7 @@ export function exit({ restoreTracking = true } = {}) {
   this.trackedEntityWasShown = true;
   this.dispatchCockpitModeChanged(false);
   if (restoreTracking && entity && this.viewer.entities.contains(entity)) {
-    this.viewer.trackedEntity = entity;
+    resumeFollowing(this.viewer, followed);
     this.restoreTrackingFrame(entity);
   }
   this.syncEntry();

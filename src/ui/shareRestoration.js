@@ -4,7 +4,7 @@ import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { t, msg, formatDate } from '../i18n/index.js';
 import { SHARE_VIEW_ENTITY_KINDS } from '../share/follow.js';
 import { UiLifetime } from './uiLifetime.js';
-import { readEntityRecord } from '../data/entityRecords.js';
+import { followedOf } from '../data/followed.js';
 
 /** How long a shared vessel may take to appear in the vessel feed. */
 export const SHARED_VESSEL_WAIT_MS = 120_000;
@@ -420,17 +420,16 @@ export class ShareRestoration {
   /** Frame a shared entity the camera now follows from the shared offset. */
   _applySharedFollowOffset(result) {
     const view = this._sharedThingFor(result);
-    const entity = this.viewer?.trackedEntity;
+    const followed = followedOf(this.viewer);
     // Only a link made while following carries a real offset (with the fix);
     // a long link's follow keeps the app's own framing.
     if (
       !view?.lastKnown ||
-      String(readEntityRecord(entity)?.trackedId || '') !==
-        `${result.layerId}:${result.targetId}`
+      String(followed?.key || '') !== `${result.layerId}:${result.targetId}`
     )
       return;
     this._stopFollowOffset?.();
-    this._stopFollowOffset = this.applyFollowOffset?.(entity, view.offset);
+    this._stopFollowOffset = this.applyFollowOffset?.(followed, view.offset);
   }
 
   cancelSelection() {
