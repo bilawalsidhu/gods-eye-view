@@ -1,20 +1,88 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAnalystEngine, applyScope, haversineKm } from './analystEngine.js';
+import {
+  createAnalystEngine,
+  applyScope,
+  haversineKm,
+} from './analystEngine.js';
 import { createAnnotationResolver } from '../annotations/resolver.js';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 
 // Stub world: a square "Texland" region, flights + ships + fires around it.
-const TEXLAND = { name: 'Texland', ring: [[-100, 28], [-94, 28], [-94, 33], [-100, 33]] };
+const TEXLAND = {
+  name: 'Texland',
+  ring: [
+    [-100, 28],
+    [-94, 28],
+    [-94, 33],
+    [-100, 33],
+  ],
+};
 const FLIGHTS = [
-  { id: 'SWA1', lat: 30.2, lon: -97.7, altitudeM: 11000, speedMps: 240, military: false, onGround: false, routeOrigin: 'AUS', routeDestination: 'LAX' },
-  { id: 'RCH01', lat: 31.0, lon: -97.0, altitudeM: 13500, speedMps: 250, military: true, onGround: false, routeOrigin: null, routeDestination: null },
-  { id: 'N123', lat: 45.0, lon: -122.0, altitudeM: 2000, speedMps: 80, military: false, onGround: false, routeOrigin: null, routeDestination: null },
-  { id: 'GND1', lat: 30.19, lon: -97.66, altitudeM: 150, speedMps: 5, military: false, onGround: true, routeOrigin: null, routeDestination: null },
+  {
+    id: 'SWA1',
+    lat: 30.2,
+    lon: -97.7,
+    altitudeM: 11000,
+    speedMps: 240,
+    military: false,
+    onGround: false,
+    routeOrigin: 'AUS',
+    routeDestination: 'LAX',
+  },
+  {
+    id: 'RCH01',
+    lat: 31.0,
+    lon: -97.0,
+    altitudeM: 13500,
+    speedMps: 250,
+    military: true,
+    onGround: false,
+    routeOrigin: null,
+    routeDestination: null,
+  },
+  {
+    id: 'N123',
+    lat: 45.0,
+    lon: -122.0,
+    altitudeM: 2000,
+    speedMps: 80,
+    military: false,
+    onGround: false,
+    routeOrigin: null,
+    routeDestination: null,
+  },
+  {
+    id: 'GND1',
+    lat: 30.19,
+    lon: -97.66,
+    altitudeM: 150,
+    speedMps: 5,
+    military: false,
+    onGround: true,
+    routeOrigin: null,
+    routeDestination: null,
+  },
 ];
 const SHIPS = [
-  { id: 'EVERGIVEN', lat: 29.5, lon: -94.9, speedKts: 12, shipType: 'Cargo', destination: 'OAKLAND', navStatus: 'under way' },
-  { id: 'SLOWBOAT', lat: 29.6, lon: -95.0, speedKts: 0.2, shipType: 'Tanker', destination: 'HOUSTON', navStatus: 'anchored' },
+  {
+    id: 'EVERGIVEN',
+    lat: 29.5,
+    lon: -94.9,
+    speedKts: 12,
+    shipType: 'Cargo',
+    destination: 'OAKLAND',
+    navStatus: 'under way',
+  },
+  {
+    id: 'SLOWBOAT',
+    lat: 29.6,
+    lon: -95.0,
+    speedKts: 0.2,
+    shipType: 'Tanker',
+    destination: 'HOUSTON',
+    navStatus: 'anchored',
+  },
 ];
 const FIRES = [
   { id: 'FIRE-1', lat: 30.5, lon: -98.2, frp: 1500 },
@@ -24,7 +92,10 @@ const FIRES = [
 
 function makeEngine() {
   return createAnalystEngine({
-    getRecords: (key) => ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS, 'local-firms': FIRES }[key] || []),
+    getRecords: (key) =>
+      ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS, 'local-firms': FIRES })[
+        key
+      ] || [],
     resolveRegionRing: async (name) => (/texland/i.test(name) ? TEXLAND : null),
     getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
   });
@@ -33,7 +104,10 @@ function makeEngine() {
 /** Same world, but Contacts is up with a subject far from the parked camera. */
 function makeContactsEngine(subject) {
   return createAnalystEngine({
-    getRecords: (key) => ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS, 'local-firms': FIRES }[key] || []),
+    getRecords: (key) =>
+      ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS, 'local-firms': FIRES })[
+        key
+      ] || [],
     resolveRegionRing: async (name) => (/texland/i.test(name) ? TEXLAND : null),
     // Parked far away, as a high-altitude camera often is.
     getViewContext: () => ({ lat: 45.0, lon: -122.0, viewRadiusKm: 150 }),
@@ -54,7 +128,11 @@ test('analyst: a radius query centers on the active contact, not the parked came
   assert.equal(r.ok, true);
   // Austin-area flights, not the Oregon one the camera is parked over.
   assert.equal(r.count, 3);
-  assert.equal(r.centeredOn, 'SWA1', 'the answer names the centre it measured from');
+  assert.equal(
+    r.centeredOn,
+    'SWA1',
+    'the answer names the centre it measured from',
+  );
   assert.ok(r.coverage.scope.includes('@SWA1'));
 });
 
@@ -65,7 +143,11 @@ test('analyst: an explicit center still wins over the active contact', async () 
     scope: { kind: 'radius', km: 250, center: { lat: 45.0, lon: -122.0 } },
     limit: 50,
   });
-  assert.equal(r.count, 1, 'only the Oregon flight is within 250 km of the given center');
+  assert.equal(
+    r.count,
+    1,
+    'only the Oregon flight is within 250 km of the given center',
+  );
   assert.equal(r.centeredOn, undefined, 'an explicit center is not relabelled');
 });
 
@@ -75,7 +157,11 @@ test('analyst: with Contacts off, radius still centers on the view', async () =>
     scope: { kind: 'radius', km: 250 },
     limit: 50,
   });
-  assert.equal(r.count, 1, 'view-centred behaviour is unchanged outside Contacts');
+  assert.equal(
+    r.count,
+    1,
+    'view-centred behaviour is unchanged outside Contacts',
+  );
   assert.equal(r.centeredOn, undefined);
   assert.equal(r.coverage.scope, 'radius:250km');
 });
@@ -85,13 +171,25 @@ test('analyst: a subject without usable coordinates cannot lend its name to a ca
   // number. A subject present but position-less fell back to the camera and
   // kept the contact's name on the answer, so a camera-centred count read as
   // contact-centred with nothing in the payload to catch it.
-  const r = await makeContactsEngine({ lat: null, lon: null, label: 'SWA1' }).query({
+  const r = await makeContactsEngine({
+    lat: null,
+    lon: null,
+    label: 'SWA1',
+  }).query({
     layers: ['flights'],
     scope: { kind: 'radius', km: 250 },
     limit: 50,
   });
-  assert.equal(r.count, 1, 'the count is the camera-centred one it actually measured');
-  assert.equal(r.centeredOn, undefined, 'and it must not claim a centre it did not use');
+  assert.equal(
+    r.count,
+    1,
+    'the count is the camera-centred one it actually measured',
+  );
+  assert.equal(
+    r.centeredOn,
+    undefined,
+    'and it must not claim a centre it did not use',
+  );
   assert.equal(r.coverage.scope, 'radius:250km');
   assert.equal(r.scopeLabel, 'within 250 km');
 });
@@ -101,33 +199,47 @@ test('analyst: every scope names itself in words', async () => {
   // answers look like a contradiction, so each scope carries its own phrasing.
   const subject = { lat: 30.2, lon: -97.7, label: 'DYNO11' };
   const centred = await makeContactsEngine(subject).query({
-    layers: ['flights'], scope: { kind: 'radius', km: 250 }, limit: 1,
+    layers: ['flights'],
+    scope: { kind: 'radius', km: 250 },
+    limit: 1,
   });
   assert.equal(centred.scopeLabel, 'within 250 km of DYNO11');
 
   const plainRadius = await makeContactsEngine(null).query({
-    layers: ['flights'], scope: { kind: 'radius', km: 250 }, limit: 1,
+    layers: ['flights'],
+    scope: { kind: 'radius', km: 250 },
+    limit: 1,
   });
   assert.equal(plainRadius.scopeLabel, 'within 250 km');
 
   const inView = await makeEngine().query({
-    layers: ['flights'], scope: { kind: 'view' }, limit: 1,
+    layers: ['flights'],
+    scope: { kind: 'view' },
+    limit: 1,
   });
   assert.equal(inView.scopeLabel, 'in view');
 
   const region = await makeEngine().query({
-    layers: ['flights'], scope: { kind: 'region', name: 'Texland' }, limit: 1,
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Texland' },
+    limit: 1,
   });
   assert.equal(region.scopeLabel, 'over Texland');
 
   const anywhere = await makeEngine().query({
-    layers: ['flights'], scope: { kind: 'anywhere' }, limit: 1,
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    limit: 1,
   });
   assert.equal(anywhere.scopeLabel, 'anywhere in the loaded data');
 });
 
 test('analyst: count flights over a region', async () => {
-  const r = await makeEngine().query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' }, limit: 50 });
+  const r = await makeEngine().query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Texland' },
+    limit: 50,
+  });
   assert.equal(r.ok, true);
   assert.equal(r.count, 3, 'Oregon flight excluded');
   assert.ok(r.coverage.scope.includes('Texland'));
@@ -175,7 +287,10 @@ test('analyst: filter-only follow-ups retain the region source without resolving
 
   assert.equal(first.count, 3);
   assert.equal(airborne.count, 2);
-  assert.deepEqual(military.items.map((item) => item.id), ['RCH01']);
+  assert.deepEqual(
+    military.items.map((item) => item.id),
+    ['RCH01'],
+  );
   for (const result of [first, airborne, military]) {
     assert.equal(result.coverage.scope, 'region:Texland');
     assert.equal(result.scopeLabel, 'over Texland');
@@ -187,13 +302,19 @@ test('analyst: filter-only follow-ups retain the region source without resolving
 test('analyst: an explicit replacement region replaces retained provenance', async () => {
   const engine = createAnalystEngine({
     getRecords: () => FLIGHTS,
-    resolveRegionRing: async (name) => name === 'Texland'
-      ? { ...TEXLAND, source: 'natural-earth' }
-      : {
-        name,
-        ring: [[-98, 30.5], [-96, 30.5], [-96, 31.5], [-98, 31.5]],
-        source: 'remote-boundary',
-      },
+    resolveRegionRing: async (name) =>
+      name === 'Texland'
+        ? { ...TEXLAND, source: 'natural-earth' }
+        : {
+            name,
+            ring: [
+              [-98, 30.5],
+              [-96, 30.5],
+              [-96, 31.5],
+              [-98, 31.5],
+            ],
+            source: 'remote-boundary',
+          },
   });
   await engine.query({
     layers: ['flights'],
@@ -206,7 +327,10 @@ test('analyst: an explicit replacement region replaces retained provenance', asy
   const followUp = await engine.query({ followUp: true });
 
   for (const result of [replacement, followUp]) {
-    assert.deepEqual(result.items.map((item) => item.id), ['RCH01']);
+    assert.deepEqual(
+      result.items.map((item) => item.id),
+      ['RCH01'],
+    );
     assert.equal(result.coverage.scope, 'region:Northern Texland');
     assert.equal(result.coverage.scopeSource, 'remote-boundary');
   }
@@ -239,27 +363,44 @@ test('analyst: an explicit scope without provenance clears the retained region s
     for (const result of [replacement, followUp]) {
       assert.equal(result.ok, true, scope.kind);
       assert.equal(result.count, 3, scope.kind);
-      assert.equal(Object.hasOwn(result.coverage, 'scopeSource'), false, scope.kind);
+      assert.equal(
+        Object.hasOwn(result.coverage, 'scopeSource'),
+        false,
+        scope.kind,
+      );
       assert.notEqual(result.coverage.scope, first.coverage.scope, scope.kind);
     }
   }
 });
 
 for (const [label, committedScope, scopeSource] of [
-  ['replacement boundary source', 'region:Presented Texland', 'remote-boundary'],
+  [
+    'replacement boundary source',
+    'region:Presented Texland',
+    'remote-boundary',
+  ],
   ['window without a boundary source', 'window:presented', null],
 ]) {
   test(`analyst: pre-commit displayed cohort retains ${label} and its feed provenance`, async () => {
     const committedSnapshot = {
-      id: 'flights', enabled: true, feedState: 'stale',
-      source: 'displayed-cohort-feed', lastUpdate: 1_800_000_000_000,
+      id: 'flights',
+      enabled: true,
+      feedState: 'stale',
+      source: 'displayed-cohort-feed',
+      lastUpdate: 1_800_000_000_000,
     };
     let reads = 0;
     let lookups = 0;
     const engine = createAnalystEngine({
-      getRecords: () => { reads++; return FLIGHTS; },
+      getRecords: () => {
+        reads++;
+        return FLIGHTS;
+      },
       getLayerSnapshot: () => ({
-        id: 'flights', enabled: true, feedState: 'nominal', source: 'current-feed',
+        id: 'flights',
+        enabled: true,
+        feedState: 'nominal',
+        source: 'current-feed',
       }),
       resolveRegionRing: async () => {
         lookups++;
@@ -293,30 +434,48 @@ for (const [label, committedScope, scopeSource] of [
     );
     const followUp = await engine.query({ followUp: true });
     assert.equal(followUp.count, 1);
-    assert.deepEqual(followUp.items.map((item) => item.id), ['RCH01']);
+    assert.deepEqual(
+      followUp.items.map((item) => item.id),
+      ['RCH01'],
+    );
     assert.equal(followUp.scopeLabel, 'the presented cohort');
     assert.equal(followUp.display.scope, 'the presented cohort window');
     assert.equal(followUp.coverage.scope, committedScope);
     if (scopeSource) assert.equal(followUp.coverage.scopeSource, scopeSource);
     else assert.equal(Object.hasOwn(followUp.coverage, 'scopeSource'), false);
     assert.equal(followUp.coverage.feedProvenance.overall, 'stale');
-    assert.deepEqual(followUp.coverage.feedProvenance.layers, [committedSnapshot]);
-    assert.equal(reads, 1, 'displayed cohort is not replaced by another feed read');
-    assert.equal(lookups, 1, 'follow-up retains the committed scope without resolving again');
+    assert.deepEqual(followUp.coverage.feedProvenance.layers, [
+      committedSnapshot,
+    ]);
+    assert.equal(
+      reads,
+      1,
+      'displayed cohort is not replaced by another feed read',
+    );
+    assert.equal(
+      lookups,
+      1,
+      'follow-up retains the committed scope without resolving again',
+    );
   });
 }
 
 test('analyst: attribute filter — above 40,000 ft (~12,192 m)', async () => {
   const r = await makeEngine().query({
-    layers: ['flights'], scope: { kind: 'anywhere' },
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
     filters: [{ field: 'altitudeM', op: 'gt', value: 12192 }],
   });
-  assert.deepEqual(r.items.map((i) => i.id), ['RCH01']);
+  assert.deepEqual(
+    r.items.map((i) => i.id),
+    ['RCH01'],
+  );
 });
 
 test('analyst: military flag + region compose', async () => {
   const r = await makeEngine().query({
-    layers: ['flights'], scope: { kind: 'region', name: 'Texland' },
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Texland' },
     filters: [{ field: 'military', op: 'eq', value: true }],
   });
   assert.equal(r.count, 1);
@@ -325,15 +484,22 @@ test('analyst: military flag + region compose', async () => {
 
 test('analyst: ships headed to Oakland (destination contains)', async () => {
   const r = await makeEngine().query({
-    layers: ['ais-live-vessels'], scope: { kind: 'anywhere' },
+    layers: ['ais-live-vessels'],
+    scope: { kind: 'anywhere' },
     filters: [{ field: 'destination', op: 'contains', value: 'oakland' }],
   });
-  assert.deepEqual(r.items.map((i) => i.id), ['EVERGIVEN']);
+  assert.deepEqual(
+    r.items.map((i) => i.id),
+    ['EVERGIVEN'],
+  );
 });
 
 test('analyst: superlative — biggest fire in view radius', async () => {
   const r = await makeEngine().query({
-    layers: ['local-firms'], scope: { kind: 'view' }, sortBy: 'frp', limit: 1,
+    layers: ['local-firms'],
+    scope: { kind: 'view' },
+    sortBy: 'frp',
+    limit: 1,
   });
   assert.equal(r.items[0].id, 'FIRE-1', 'BC monster is out of view scope');
   assert.equal(r.summary.frpMax, 1500);
@@ -341,7 +507,10 @@ test('analyst: superlative — biggest fire in view radius', async () => {
 
 test('analyst: nearest sorting attaches distanceKm ascending', async () => {
   const r = await makeEngine().query({
-    layers: ['flights'], scope: { kind: 'view' }, sortBy: 'distance', limit: 3,
+    layers: ['flights'],
+    scope: { kind: 'view' },
+    sortBy: 'distance',
+    limit: 3,
   });
   assert.ok(r.items[0].distanceKm <= r.items[1].distanceKm);
   assert.ok(Number.isFinite(r.items[0].distanceKm));
@@ -415,7 +584,10 @@ test('analyst: cancelled pre-commit work cannot replace follow-up memory', async
   );
   assert.equal(stale.code, 'CANCELLED');
   const followUp = await eng.query({ followUp: true });
-  assert.deepEqual(followUp.items.map((item) => item.id), ['SWA1']);
+  assert.deepEqual(
+    followUp.items.map((item) => item.id),
+    ['SWA1'],
+  );
 });
 
 test('analyst: failed pre-commit work cannot replace follow-up memory', async () => {
@@ -437,7 +609,10 @@ test('analyst: failed pre-commit work cannot replace follow-up memory', async ()
     /projection failed/,
   );
   const followUp = await eng.query({ followUp: true });
-  assert.deepEqual(followUp.items.map((item) => item.id), ['SWA1']);
+  assert.deepEqual(
+    followUp.items.map((item) => item.id),
+    ['SWA1'],
+  );
 });
 
 test('analyst: follow-ups preserve partial and unanswered coverage', async () => {
@@ -522,7 +697,10 @@ test('analyst: failed pre-commit work cannot replace follow-up memory', async ()
 });
 
 test('analyst: unresolved region is an honest failure, not empty success', async () => {
-  const r = await makeEngine().query({ layers: ['flights'], scope: { kind: 'region', name: 'Atlantis' } });
+  const r = await makeEngine().query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Atlantis' },
+  });
   assert.equal(r.ok, false);
   assert.match(r.error, /Atlantis/);
 });
@@ -530,10 +708,17 @@ test('analyst: unresolved region is an honest failure, not empty success', async
 test('analyst: a region lookup timeout is reported as region-timeout', async () => {
   const eng = createAnalystEngine({
     getRecords: () => FLIGHTS,
-    resolveRegionRing: async (name) => ({ name, ring: null, error: 'region-timeout' }),
+    resolveRegionRing: async (name) => ({
+      name,
+      ring: null,
+      error: 'region-timeout',
+    }),
     getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
   });
-  const r = await eng.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texas' } });
+  const r = await eng.query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Texas' },
+  });
   assert.equal(r.ok, false);
   assert.equal(r.code, 'region-timeout');
   assert.match(r.error, /Texas/);
@@ -584,10 +769,14 @@ for (const [label, reason, trackAuthority] of [
     const controller = new AbortController();
     const lookups = [];
     const { resolveRegionRingForQuery } = createAnnotationResolver({
-      featureSource: Object.fromEntries(FEATURE_SOURCE_METHODS.map((method) => [
-        method,
-        async () => { throw new Error('offline region query reached feature source'); },
-      ])),
+      featureSource: Object.fromEntries(
+        FEATURE_SOURCE_METHODS.map((method) => [
+          method,
+          async () => {
+            throw new Error('offline region query reached feature source');
+          },
+        ]),
+      ),
     });
     const placeSearch = {
       geocode(name, { signal }) {
@@ -599,43 +788,67 @@ for (const [label, reason, trackAuthority] of [
     };
     const engine = createAnalystEngine({
       getRecords: () => FLIGHTS,
-      resolveRegionRing: (name, { signal } = {}) => resolveRegionRingForQuery(
-        name, signal, placeSearch, { budgetMs: Infinity },
-      ),
+      resolveRegionRing: (name, { signal } = {}) =>
+        resolveRegionRingForQuery(name, signal, placeSearch, {
+          budgetMs: Infinity,
+        }),
     });
     const first = await engine.query({
-      layers: ['flights'], scope: { kind: 'region', name: 'Texas' },
+      layers: ['flights'],
+      scope: { kind: 'region', name: 'Texas' },
     });
     assert.equal(first.ok, true);
     assert.equal(first.coverage.scopeSource, 'bundled-admin');
-    assert.deepEqual(first.items.map((item) => item.id), ['SWA1', 'RCH01', 'GND1']);
+    assert.deepEqual(
+      first.items.map((item) => item.id),
+      ['SWA1', 'RCH01', 'GND1'],
+    );
     let commits = 0;
     const pending = engine.query(
-      { layers: ['flights'], scope: { kind: 'region', name: 'Cordillera Oriental' } },
+      {
+        layers: ['flights'],
+        scope: { kind: 'region', name: 'Cordillera Oriental' },
+      },
       {
         signal: controller.signal,
-        ...(trackAuthority ? { isCurrent: () => !controller.signal.aborted } : {}),
-        beforeCommit: async () => { commits++; },
+        ...(trackAuthority
+          ? { isCurrent: () => !controller.signal.aborted }
+          : {}),
+        beforeCommit: async () => {
+          commits++;
+        },
       },
     );
     await started.promise;
     controller.abort(reason);
     // Let an actual late geocode result cross the resolver's post-await check.
-    geocode.resolve({ place: {
-      lat: 5, lng: -73, label: 'Cordillera Oriental',
-      name: 'Cordillera Oriental', types: ['natural_feature'],
-    } });
+    geocode.resolve({
+      place: {
+        lat: 5,
+        lng: -73,
+        label: 'Cordillera Oriental',
+        name: 'Cordillera Oriental',
+        types: ['natural_feature'],
+      },
+    });
     const result = await pending;
     assert.equal(result.ok, false);
     assert.equal(result.code, 'CANCELLED');
     assert.equal(result.cancelled, true);
     assert.equal(commits, 0);
     const followUp = await engine.query({ followUp: true });
-    assert.deepEqual(followUp.items.map((item) => item.id), first.items.map((item) => item.id));
+    assert.deepEqual(
+      followUp.items.map((item) => item.id),
+      first.items.map((item) => item.id),
+    );
     assert.equal(followUp.coverage.scope, first.coverage.scope);
     assert.equal(followUp.coverage.scopeSource, 'bundled-admin');
     assert.equal(followUp.scopeLabel, first.scopeLabel);
-    assert.deepEqual(lookups, ['Cordillera Oriental'], 'follow-up does not resolve again');
+    assert.deepEqual(
+      lookups,
+      ['Cordillera Oriental'],
+      'follow-up does not resolve again',
+    );
   });
 }
 
@@ -644,11 +857,15 @@ test('analyst: a rejected superseded region lookup returns cancellation and reta
   let current = true;
   const engine = createAnalystEngine({
     getRecords: () => FLIGHTS,
-    resolveRegionRing: (name) => name === 'Texland'
-      ? { ...TEXLAND, source: 'natural-earth' }
-      : lookup.promise,
+    resolveRegionRing: (name) =>
+      name === 'Texland'
+        ? { ...TEXLAND, source: 'natural-earth' }
+        : lookup.promise,
   });
-  const first = await engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' } });
+  const first = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Texland' },
+  });
   const pending = engine.query(
     { layers: ['flights'], scope: { kind: 'region', name: 'Replacement' } },
     { isCurrent: () => current },
@@ -657,7 +874,10 @@ test('analyst: a rejected superseded region lookup returns cancellation and reta
   lookup.reject(new Error('late lookup failed'));
   assert.equal((await pending).code, 'CANCELLED');
   const followUp = await engine.query({ followUp: true });
-  assert.deepEqual(followUp.items.map((item) => item.id), first.items.map((item) => item.id));
+  assert.deepEqual(
+    followUp.items.map((item) => item.id),
+    first.items.map((item) => item.id),
+  );
   assert.equal(followUp.coverage.scopeSource, 'natural-earth');
   assert.equal(followUp.coverage.scope, first.coverage.scope);
 });
@@ -679,7 +899,10 @@ test('analyst: an aborted owner cannot commit a region provider that returns a l
   assert.equal(engine.hasMemory(), false);
 });
 
-for (const error of [new Error('live lookup failed'), new DOMException('resource stopped', 'AbortError')]) {
+for (const error of [
+  new Error('live lookup failed'),
+  new DOMException('resource stopped', 'AbortError'),
+]) {
   test(`analyst: live region ${error.name} propagates without changing memory`, async () => {
     const controller = new AbortController();
     const engine = createAnalystEngine({
@@ -689,7 +912,10 @@ for (const error of [new Error('live lookup failed'), new DOMException('resource
         throw error;
       },
     });
-    const first = await engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' } });
+    const first = await engine.query({
+      layers: ['flights'],
+      scope: { kind: 'region', name: 'Texland' },
+    });
     await assert.rejects(
       engine.query(
         { layers: ['flights'], scope: { kind: 'region', name: 'Replacement' } },
@@ -699,7 +925,10 @@ for (const error of [new Error('live lookup failed'), new DOMException('resource
     );
     assert.equal(controller.signal.aborted, false);
     const followUp = await engine.query({ followUp: true });
-    assert.deepEqual(followUp.items.map((item) => item.id), first.items.map((item) => item.id));
+    assert.deepEqual(
+      followUp.items.map((item) => item.id),
+      first.items.map((item) => item.id),
+    );
     assert.equal(followUp.coverage.scope, first.coverage.scope);
     assert.equal(followUp.coverage.scopeSource, 'natural-earth');
   });
@@ -707,32 +936,84 @@ for (const error of [new Error('live lookup failed'), new DOMException('resource
 
 test('analyst: route fields queryable from cached enrichment only', async () => {
   const r = await makeEngine().query({
-    layers: ['flights'], scope: { kind: 'anywhere' },
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
     filters: [{ field: 'routeDestination', op: 'eq', value: 'LAX' }],
   });
-  assert.deepEqual(r.items.map((i) => i.id), ['SWA1'], 'null route fields never match');
+  assert.deepEqual(
+    r.items.map((i) => i.id),
+    ['SWA1'],
+    'null route fields never match',
+  );
 });
 
 test('analyst: satellites and local infrastructure are queryable layers', async () => {
   const SATS = [
-    { id: 'ISS (ZARYA)', noradId: '25544', name: 'ISS (ZARYA)', lat: 30.3, lon: -97.7, altitudeM: 410000, satelliteClass: 'STATION · ISS', group: 'stations' },
-    { id: 'GPS BIIR-2', noradId: '24876', name: 'GPS BIIR-2', lat: 51.0, lon: 0.0, altitudeM: 20200000, satelliteClass: 'NAV · GPS', group: 'gps-ops' },
+    {
+      id: 'ISS (ZARYA)',
+      noradId: '25544',
+      name: 'ISS (ZARYA)',
+      lat: 30.3,
+      lon: -97.7,
+      altitudeM: 410000,
+      satelliteClass: 'STATION · ISS',
+      group: 'stations',
+    },
+    {
+      id: 'GPS BIIR-2',
+      noradId: '24876',
+      name: 'GPS BIIR-2',
+      lat: 51.0,
+      lon: 0.0,
+      altitudeM: 20200000,
+      satelliteClass: 'NAV · GPS',
+      group: 'gps-ops',
+    },
   ];
   const DAMS = [
-    { id: 'Austin Dam', name: 'Austin Dam', lat: 30.27, lon: -97.74, operator: 'LCRA', river: 'Colorado', output: '2 MW' },
-    { id: 'Far Dam', name: 'Far Dam', lat: 45.0, lon: -122.0, operator: 'USACE', river: 'Columbia', output: '1000 MW' },
+    {
+      id: 'Austin Dam',
+      name: 'Austin Dam',
+      lat: 30.27,
+      lon: -97.74,
+      operator: 'LCRA',
+      river: 'Colorado',
+      output: '2 MW',
+    },
+    {
+      id: 'Far Dam',
+      name: 'Far Dam',
+      lat: 45.0,
+      lon: -122.0,
+      operator: 'USACE',
+      river: 'Columbia',
+      output: '1000 MW',
+    },
   ];
   const DCS = [
-    { id: 'AUS-1', name: 'AUS-1', lat: 30.28, lon: -97.75, operator: 'Example Cloud', capacity: '27 MW' },
+    {
+      id: 'AUS-1',
+      name: 'AUS-1',
+      lat: 30.28,
+      lon: -97.75,
+      operator: 'Example Cloud',
+      capacity: '27 MW',
+    },
   ];
   const eng = createAnalystEngine({
-    getRecords: (key) => ({ satellites: SATS, 'local-dams': DAMS, 'local-datacenters': DCS }[key] || []),
+    getRecords: (key) =>
+      ({ satellites: SATS, 'local-dams': DAMS, 'local-datacenters': DCS })[
+        key
+      ] || [],
     resolveRegionRing: async (name) => (/texland/i.test(name) ? TEXLAND : null),
     getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
   });
 
   const sats = await eng.query({
-    layers: ['satellites'], scope: { kind: 'view' }, sortBy: 'distance', limit: 2,
+    layers: ['satellites'],
+    scope: { kind: 'view' },
+    sortBy: 'distance',
+    limit: 2,
   });
   assert.equal(sats.ok, true);
   assert.equal(sats.count, 1, 'GPS sat is out of the Austin view radius');
@@ -740,20 +1021,28 @@ test('analyst: satellites and local infrastructure are queryable layers', async 
   assert.ok(Number.isFinite(sats.items[0].distanceKm));
 
   const nav = await eng.query({
-    layers: ['satellites'], scope: { kind: 'anywhere' },
+    layers: ['satellites'],
+    scope: { kind: 'anywhere' },
     filters: [{ field: 'satelliteClass', op: 'contains', value: 'NAV' }],
   });
-  assert.deepEqual(nav.items.map((i) => i.id), ['GPS BIIR-2']);
+  assert.deepEqual(
+    nav.items.map((i) => i.id),
+    ['GPS BIIR-2'],
+  );
 
   const dams = await eng.query({
-    layers: ['local-dams'], scope: { kind: 'view' }, sortBy: 'distance', limit: 5,
+    layers: ['local-dams'],
+    scope: { kind: 'view' },
+    sortBy: 'distance',
+    limit: 5,
   });
   assert.equal(dams.count, 1);
   assert.equal(dams.items[0].id, 'Austin Dam');
   assert.equal(dams.items[0].river, 'Colorado');
 
   const dcs = await eng.query({
-    layers: ['local-datacenters'], scope: { kind: 'region', name: 'Texland' },
+    layers: ['local-datacenters'],
+    scope: { kind: 'region', name: 'Texland' },
     filters: [{ field: 'operator', op: 'contains', value: 'cloud' }],
   });
   assert.equal(dcs.count, 1);
@@ -763,7 +1052,11 @@ test('analyst: satellites and local infrastructure are queryable layers', async 
 test('helpers: haversine sanity + scope radius', () => {
   const km = haversineKm(30.2672, -97.7431, 29.7604, -95.3698); // Austin→Houston
   assert.ok(km > 200 && km < 280, `Austin-Houston ~235km, got ${km}`);
-  const scoped = applyScope(FLIGHTS, { kind: 'radius' }, { center: { lat: 30.27, lon: -97.74 }, km: 50 });
+  const scoped = applyScope(
+    FLIGHTS,
+    { kind: 'radius' },
+    { center: { lat: 30.27, lon: -97.74 }, km: 50 },
+  );
   assert.deepEqual(scoped.map((f) => f.id).sort(), ['GND1', 'SWA1']);
 });
 
@@ -773,55 +1066,126 @@ test('capped cohorts report returned/total/truncated and keep it on follow-up', 
     getRecordCoverage: () => ({ total: 3000, truncated: true }),
     getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
   });
-  const result = await engine.query({ layers: ['local-dams'], scope: { kind: 'anywhere' }, sortBy: 'distance' });
+  const result = await engine.query({
+    layers: ['local-dams'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'distance',
+  });
   assert.equal(result.count, 1);
   const layer = result.coverage.layersQueried[0];
-  assert.deepEqual({ returned: layer.returned, total: layer.total, truncated: layer.truncated }, { returned: 1, total: 3000, truncated: true });
-  assert.deepEqual(result.coverage.records, { returned: 1, total: 3000, truncated: true });
+  assert.deepEqual(
+    {
+      returned: layer.returned,
+      total: layer.total,
+      truncated: layer.truncated,
+    },
+    { returned: 1, total: 3000, truncated: true },
+  );
+  assert.deepEqual(result.coverage.records, {
+    returned: 1,
+    total: 3000,
+    truncated: true,
+  });
   assert.match(result.display.caveat, /counted 1 of 3,000 loaded records/);
   const followUp = await engine.query({ followUp: true });
   assert.equal(followUp.coverage.layersQueried[0].total, 3000);
 });
 
 test('an uncapped cohort is complete and carries no caveat', async () => {
-  const result = await makeEngine().query({ layers: ['flights'], scope: { kind: 'anywhere' } });
-  assert.deepEqual(result.coverage.records, { returned: 4, total: 4, truncated: false });
+  const result = await makeEngine().query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.deepEqual(result.coverage.records, {
+    returned: 4,
+    total: 4,
+    truncated: false,
+  });
   assert.equal(result.display.caveat, undefined);
   assert.equal(result.display.scope, 'anywhere in the loaded data');
 });
 
 test('unknown fields, operators, scopes and wrong-typed values are refused with the allowed values', async () => {
   const engine = makeEngine();
-  const field = await engine.query({ layers: ['flights'], filters: [{ field: 'time', op: 'gte', value: 5 }] });
+  const field = await engine.query({
+    layers: ['flights'],
+    filters: [{ field: 'time', op: 'gte', value: 5 }],
+  });
   assert.equal(field.ok, false);
   assert.equal(field.code, 'UNKNOWN_FIELD');
   assert.ok(field.allowed.includes('altitudeM'));
-  const op = await engine.query({ layers: ['flights'], filters: [{ field: 'altitudeM', op: 'wat', value: 5 }] });
+  const op = await engine.query({
+    layers: ['flights'],
+    filters: [{ field: 'altitudeM', op: 'wat', value: 5 }],
+  });
   assert.equal(op.code, 'BAD_OPERATOR');
   assert.deepEqual(op.allowed, ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']);
-  const flag = await engine.query({ layers: ['flights'], filters: [{ field: 'military', op: 'eq', value: 'false' }] });
-  assert.equal(flag.code, 'BAD_VALUE', 'the string "false" must not match the TRUE record');
-  const num = await engine.query({ layers: ['flights'], filters: [{ field: 'altitudeM', op: 'gt', value: 'high' }] });
+  const flag = await engine.query({
+    layers: ['flights'],
+    filters: [{ field: 'military', op: 'eq', value: 'false' }],
+  });
+  assert.equal(
+    flag.code,
+    'BAD_VALUE',
+    'the string "false" must not match the TRUE record',
+  );
+  const num = await engine.query({
+    layers: ['flights'],
+    filters: [{ field: 'altitudeM', op: 'gt', value: 'high' }],
+  });
   assert.equal(num.code, 'BAD_VALUE');
-  const scope = await engine.query({ layers: ['flights'], scope: { kind: 'polygon' } });
+  const scope = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'polygon' },
+  });
   assert.equal(scope.code, 'UNKNOWN_SCOPE');
-  assert.deepEqual(scope.allowed, ['view', 'region', 'radius', 'anywhere', 'area', 'drawn', 'annotation']);
-  const noId = await engine.query({ layers: ['flights'], scope: { kind: 'area' } });
+  assert.deepEqual(scope.allowed, [
+    'view',
+    'region',
+    'radius',
+    'anywhere',
+    'area',
+    'drawn',
+    'annotation',
+  ]);
+  const noId = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'area' },
+  });
   assert.equal(noId.code, 'BAD_SCOPE', 'an area scope needs its areaId');
   const sort = await engine.query({ layers: ['flights'], sortBy: 'loudness' });
   assert.equal(sort.code, 'UNKNOWN_FIELD');
-  assert.equal(engine.hasMemory(), false, 'refusals never become follow-up memory');
+  assert.equal(
+    engine.hasMemory(),
+    false,
+    'refusals never become follow-up memory',
+  );
 });
 
 test('a typed boolean filter still matches exactly', async () => {
-  const r = await makeEngine().query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'military', op: 'eq', value: false }] });
+  const r = await makeEngine().query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'military', op: 'eq', value: false }],
+  });
   assert.deepEqual(r.items.map((i) => i.id).sort(), ['GND1', 'N123', 'SWA1']);
 });
 
 test('distance honours sortDir: desc is farthest first', async () => {
-  const far = await makeEngine().query({ layers: ['flights'], scope: { kind: 'anywhere' }, sortBy: 'distance', sortDir: 'desc', limit: 1 });
+  const far = await makeEngine().query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'distance',
+    sortDir: 'desc',
+    limit: 1,
+  });
   assert.equal(far.items[0].id, 'N123');
-  const near = await makeEngine().query({ layers: ['flights'], scope: { kind: 'anywhere' }, sortBy: 'distance', limit: 1 });
+  const near = await makeEngine().query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'distance',
+    limit: 1,
+  });
   assert.equal(near.items[0].id, 'SWA1');
 });
 
@@ -836,42 +1200,93 @@ test('follow-ups never rewrite the remembered rows', async () => {
   await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' } });
   await engine.query({ followUp: true, sortBy: 'distance' });
   const again = await engine.query({ followUp: true });
-  assert.equal(again.count, 4, 'a follow-up keeps the remembered set, not the view');
+  assert.equal(
+    again.count,
+    4,
+    'a follow-up keeps the remembered set, not the view',
+  );
   assert.ok(again.items.every((item) => item.distanceKm === undefined));
 });
 
 test('a superseded slow region query cannot overwrite the newer follow-up memory', async () => {
   let releaseSlow;
   const engine = createAnalystEngine({
-    getRecords: (key) => ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS }[key] || []),
-    resolveRegionRing: () => new Promise((resolve) => { releaseSlow = () => resolve(TEXLAND); }),
+    getRecords: (key) =>
+      ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS })[key] || [],
+    resolveRegionRing: () =>
+      new Promise((resolve) => {
+        releaseSlow = () => resolve(TEXLAND);
+      }),
     getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
   });
   let generation = 0;
   const slowGeneration = ++generation;
-  const slow = engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' } }, { isCurrent: () => generation === slowGeneration });
+  const slow = engine.query(
+    { layers: ['flights'], scope: { kind: 'region', name: 'Texland' } },
+    { isCurrent: () => generation === slowGeneration },
+  );
   const newGeneration = ++generation;
-  const fresh = await engine.query({ layers: ['ais-live-vessels'], scope: { kind: 'anywhere' } }, { isCurrent: () => generation === newGeneration });
+  const fresh = await engine.query(
+    { layers: ['ais-live-vessels'], scope: { kind: 'anywhere' } },
+    { isCurrent: () => generation === newGeneration },
+  );
   assert.equal(fresh.ok, true);
   releaseSlow();
   const stale = await slow;
   assert.equal(stale.code, 'CANCELLED');
   const followUp = await engine.query({ followUp: true });
-  assert.deepEqual(followUp.items.map((i) => i.layerKey), ['ais-live-vessels', 'ais-live-vessels']);
+  assert.deepEqual(
+    followUp.items.map((i) => i.layerKey),
+    ['ais-live-vessels', 'ais-live-vessels'],
+  );
 });
 
 test('off, loading and unavailable layers are refused distinctly; a real zero stays ok', async () => {
-  const engineFor = (snapshot, rows = [], warming = false) => createAnalystEngine({
-    getRecords: () => rows,
-    getLayerSnapshot: () => snapshot,
-    isWarming: () => warming,
-    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  const engineFor = (snapshot, rows = [], warming = false) =>
+    createAnalystEngine({
+      getRecords: () => rows,
+      getLayerSnapshot: () => snapshot,
+      isWarming: () => warming,
+      getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+    });
+  assert.equal(
+    (
+      await engineFor({ enabled: false, feedState: 'off' }).query({
+        layers: ['earthquakes'],
+      })
+    ).code,
+    'LAYER_OFF',
+  );
+  assert.equal(
+    (
+      await engineFor({ enabled: true, feedState: 'loading' }).query({
+        layers: ['earthquakes'],
+      })
+    ).code,
+    'NOT_READY',
+  );
+  assert.equal(
+    (
+      await engineFor({ enabled: true, feedState: 'nominal' }, [], true).query({
+        layers: ['earthquakes'],
+      })
+    ).code,
+    'NOT_READY',
+  );
+  assert.equal(
+    (
+      await engineFor({ enabled: true, feedState: 'unavailable' }).query({
+        layers: ['earthquakes'],
+      })
+    ).code,
+    'FEED_UNAVAILABLE',
+  );
+  const zero = await engineFor({ enabled: true, feedState: 'nominal' }, [
+    { id: 'q', lat: 50, lon: 50, magnitude: 2 },
+  ]).query({
+    layers: ['earthquakes'],
+    filters: [{ field: 'magnitude', op: 'gte', value: 5 }],
   });
-  assert.equal((await engineFor({ enabled: false, feedState: 'off' }).query({ layers: ['earthquakes'] })).code, 'LAYER_OFF');
-  assert.equal((await engineFor({ enabled: true, feedState: 'loading' }).query({ layers: ['earthquakes'] })).code, 'NOT_READY');
-  assert.equal((await engineFor({ enabled: true, feedState: 'nominal' }, [], true).query({ layers: ['earthquakes'] })).code, 'NOT_READY');
-  assert.equal((await engineFor({ enabled: true, feedState: 'unavailable' }).query({ layers: ['earthquakes'] })).code, 'FEED_UNAVAILABLE');
-  const zero = await engineFor({ enabled: true, feedState: 'nominal' }, [{ id: 'q', lat: 50, lon: 50, magnitude: 2 }]).query({ layers: ['earthquakes'], filters: [{ field: 'magnitude', op: 'gte', value: 5 }] });
   assert.equal(zero.ok, true);
   assert.equal(zero.count, 0);
   assert.equal(zero.coverage.layersQueried[0].status, 'ok');
@@ -882,15 +1297,41 @@ test('time fields filter by ISO and derive ageHours; the feed window is exposed'
   const engine = createAnalystEngine({
     now: () => now,
     getRecords: () => [
-      { id: 'recent', lat: 0, lon: 0, magnitude: 4, timeMs: now - 2 * 3_600_000 },
-      { id: 'older', lat: 0, lon: 0, magnitude: 5, timeMs: now - 20 * 3_600_000 },
+      {
+        id: 'recent',
+        lat: 0,
+        lon: 0,
+        magnitude: 4,
+        timeMs: now - 2 * 3_600_000,
+      },
+      {
+        id: 'older',
+        lat: 0,
+        lon: 0,
+        magnitude: 5,
+        timeMs: now - 20 * 3_600_000,
+      },
     ],
     getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
   });
-  const iso = await engine.query({ layers: ['earthquakes'], scope: { kind: 'anywhere' }, filters: [{ field: 'timeMs', op: 'gte', value: '2026-09-23T06:00:00Z' }] });
-  assert.deepEqual(iso.items.map((i) => i.id), ['recent']);
-  const age = await engine.query({ layers: ['earthquakes'], scope: { kind: 'anywhere' }, filters: [{ field: 'ageHours', op: 'lte', value: 6 }] });
-  assert.deepEqual(age.items.map((i) => i.id), ['recent']);
+  const iso = await engine.query({
+    layers: ['earthquakes'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'timeMs', op: 'gte', value: '2026-09-23T06:00:00Z' }],
+  });
+  assert.deepEqual(
+    iso.items.map((i) => i.id),
+    ['recent'],
+  );
+  const age = await engine.query({
+    layers: ['earthquakes'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'ageHours', op: 'lte', value: 6 }],
+  });
+  assert.deepEqual(
+    age.items.map((i) => i.id),
+    ['recent'],
+  );
   assert.equal(age.items[0].ageHours, 2);
   assert.equal(age.display.window, 'last 24 h');
   assert.equal(age.coverage.layersQueried[0].window, 'last 24 h');
@@ -900,7 +1341,11 @@ test('follow-up provenance stays attached to old rows after a feed recovers', as
   let state = 'stale';
   const engine = createAnalystEngine({
     getRecords: () => [{ id: 'A', lat: 0, lon: 0 }],
-    getLayerSnapshot: () => ({ id: 'flights', enabled: true, feedState: state }),
+    getLayerSnapshot: () => ({
+      id: 'flights',
+      enabled: true,
+      feedState: state,
+    }),
     getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
   });
   const first = await engine.query();
@@ -910,16 +1355,29 @@ test('follow-up provenance stays attached to old rows after a feed recovers', as
   assert.equal(followUp.coverage.feedProvenance.overall, 'stale');
   engine.reset();
   assert.equal(engine.hasMemory(), false);
-  assert.equal((await engine.query()).coverage.feedProvenance.overall, 'nominal');
+  assert.equal(
+    (await engine.query()).coverage.feedProvenance.overall,
+    'nominal',
+  );
 });
 
 test('a large loaded set sorts and summarizes without overflowing the stack', async () => {
-  const rows = Array.from({ length: 200_000 }, (_, i) => ({ id: `FIRE-${i}`, lat: 0, lon: 0, frp: i }));
+  const rows = Array.from({ length: 200_000 }, (_, i) => ({
+    id: `FIRE-${i}`,
+    lat: 0,
+    lon: 0,
+    frp: i,
+  }));
   const engine = createAnalystEngine({
     getRecords: () => rows,
     getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
   });
-  const result = await engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'frp', limit: 1 });
+  const result = await engine.query({
+    layers: ['local-firms'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'frp',
+    limit: 1,
+  });
   assert.equal(result.count, 200_000);
   assert.equal(result.items[0].frp, 199_999);
   assert.equal(result.summary.frpMin, 0);
@@ -940,67 +1398,174 @@ test('an enabled but empty layer says why on screen', async () => {
 });
 
 test('a radius around a named place without a centre is refused, not measured around the camera', async () => {
-  const r = await makeEngine().query({ layers: ['ais-live-vessels'], scope: { kind: 'radius', name: 'Singapore', km: 200 } });
+  const r = await makeEngine().query({
+    layers: ['ais-live-vessels'],
+    scope: { kind: 'radius', name: 'Singapore', km: 200 },
+  });
   assert.equal(r.ok, false);
   assert.equal(r.code, 'BAD_SCOPE');
-  const ok = await makeEngine().query({ layers: ['ais-live-vessels'], scope: { kind: 'radius', name: 'Houston', km: 200, center: { lat: 29.6, lon: -95.0 } } });
+  const ok = await makeEngine().query({
+    layers: ['ais-live-vessels'],
+    scope: {
+      kind: 'radius',
+      name: 'Houston',
+      km: 200,
+      center: { lat: 29.6, lon: -95.0 },
+    },
+  });
   assert.equal(ok.ok, true);
 });
 
 test('a field copied with its hinted unit still resolves', async () => {
-  const r = await makeEngine().query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'frp(MW)', filters: [{ field: 'frp (MW)', op: 'gt', value: 100 }] });
+  const r = await makeEngine().query({
+    layers: ['local-firms'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'frp(MW)',
+    filters: [{ field: 'frp (MW)', op: 'gt', value: 100 }],
+  });
   assert.equal(r.ok, true);
-  assert.deepEqual(r.items.map((i) => i.id), ['FIRE-3', 'FIRE-1']);
+  assert.deepEqual(
+    r.items.map((i) => i.id),
+    ['FIRE-3', 'FIRE-1'],
+  );
 });
 
 test('a written unit converts to the field unit or is refused', async () => {
   const engine = makeEngine();
-  const feet = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'altitudeM(ft)', op: 'gt', value: 40000 }] });
+  const feet = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'altitudeM(ft)', op: 'gt', value: 40000 }],
+  });
   assert.equal(feet.ok, true);
-  assert.deepEqual(feet.items.map((i) => i.id), ['RCH01'], '40,000 ft is 12,192 m, not 40,000 m');
-  const same = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'altitudeM (m)', op: 'gt', value: 12192 }] });
-  assert.deepEqual(same.items.map((i) => i.id), ['RCH01']);
-  const knots = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'speedMps(kts)', op: 'gt', value: 470 }] });
-  assert.deepEqual(knots.items.map((i) => i.id), ['RCH01'], '470 kn is ~242 m/s');
-  const wrong = await engine.query({ layers: ['flights'], filters: [{ field: 'altitudeM(kts)', op: 'gt', value: 1 }] });
+  assert.deepEqual(
+    feet.items.map((i) => i.id),
+    ['RCH01'],
+    '40,000 ft is 12,192 m, not 40,000 m',
+  );
+  const same = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'altitudeM (m)', op: 'gt', value: 12192 }],
+  });
+  assert.deepEqual(
+    same.items.map((i) => i.id),
+    ['RCH01'],
+  );
+  const knots = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'speedMps(kts)', op: 'gt', value: 470 }],
+  });
+  assert.deepEqual(
+    knots.items.map((i) => i.id),
+    ['RCH01'],
+    '470 kn is ~242 m/s',
+  );
+  const wrong = await engine.query({
+    layers: ['flights'],
+    filters: [{ field: 'altitudeM(kts)', op: 'gt', value: 1 }],
+  });
   assert.equal(wrong.code, 'BAD_UNIT');
-  const unitless = await engine.query({ layers: ['flights'], filters: [{ field: 'callsign(ft)', op: 'eq', value: 'X' }] });
+  const unitless = await engine.query({
+    layers: ['flights'],
+    filters: [{ field: 'callsign(ft)', op: 'eq', value: 'X' }],
+  });
   assert.equal(unitless.code, 'BAD_UNIT');
-  const hinted = await engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'frp(MW)' });
+  const hinted = await engine.query({
+    layers: ['local-firms'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'frp(MW)',
+  });
   assert.equal(hinted.ok, true);
 });
 
 test('unambiguous numeric strings are numbers; blanks, booleans and words are not', async () => {
   const engine = makeEngine();
-  const text = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'altitudeM', op: 'gt', value: '12192' }] });
+  const text = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'altitudeM', op: 'gt', value: '12192' }],
+  });
   assert.equal(text.ok, true);
-  assert.deepEqual(text.items.map((i) => i.id), ['RCH01']);
+  assert.deepEqual(
+    text.items.map((i) => i.id),
+    ['RCH01'],
+  );
   for (const value of ['', '  ', true, 'high', '12k'])
-    assert.equal((await engine.query({ layers: ['flights'], filters: [{ field: 'altitudeM', op: 'gt', value }] })).code, 'BAD_VALUE', JSON.stringify(value));
+    assert.equal(
+      (
+        await engine.query({
+          layers: ['flights'],
+          filters: [{ field: 'altitudeM', op: 'gt', value }],
+        })
+      ).code,
+      'BAD_VALUE',
+      JSON.stringify(value),
+    );
 });
 
 test('any supplied centre must be a real coordinate', async () => {
   const engine = makeEngine();
-  for (const center of [{ lat: 0 }, { lat: 999, lon: 0 }, { lat: 10, lon: 200 }, { lat: '10', lon: 20 }])
-    assert.equal((await engine.query({ layers: ['flights'], scope: { kind: 'radius', km: 100, center } })).code, 'BAD_SCOPE', JSON.stringify(center));
-  assert.equal((await engine.query({ layers: ['flights'], scope: { kind: 'radius', km: 100, center: { lat: 30.2, lon: -97.7 } } })).ok, true);
+  for (const center of [
+    { lat: 0 },
+    { lat: 999, lon: 0 },
+    { lat: 10, lon: 200 },
+    { lat: '10', lon: 20 },
+  ])
+    assert.equal(
+      (
+        await engine.query({
+          layers: ['flights'],
+          scope: { kind: 'radius', km: 100, center },
+        })
+      ).code,
+      'BAD_SCOPE',
+      JSON.stringify(center),
+    );
+  assert.equal(
+    (
+      await engine.query({
+        layers: ['flights'],
+        scope: { kind: 'radius', km: 100, center: { lat: 30.2, lon: -97.7 } },
+      })
+    ).ok,
+    true,
+  );
 });
 
 test('mixed off/loading/unavailable layers refuse; a partly answerable query says so', async () => {
-  const snapshots = { earthquakes: { enabled: true, feedState: 'unavailable' }, 'local-firms': { enabled: true, feedState: 'loading' }, flights: { enabled: false, feedState: 'off' } };
+  const snapshots = {
+    earthquakes: { enabled: true, feedState: 'unavailable' },
+    'local-firms': { enabled: true, feedState: 'loading' },
+    flights: { enabled: false, feedState: 'off' },
+  };
   const engine = createAnalystEngine({
     getRecords: (key) => (key === 'ais-live-vessels' ? SHIPS : []),
-    getLayerSnapshot: (key) => snapshots[key] || { enabled: true, feedState: 'nominal' },
+    getLayerSnapshot: (key) =>
+      snapshots[key] || { enabled: true, feedState: 'nominal' },
     getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
   });
-  const none = await engine.query({ layers: ['earthquakes', 'local-firms', 'flights'] });
+  const none = await engine.query({
+    layers: ['earthquakes', 'local-firms', 'flights'],
+  });
   assert.equal(none.ok, false);
   assert.equal(none.code, 'NOT_READY');
-  assert.deepEqual(none.layerStatus.map((l) => l.status), ['error', 'loading', 'off']);
-  assert.equal(engine.hasMemory(), false, 'a refusal never becomes follow-up memory');
+  assert.deepEqual(
+    none.layerStatus.map((l) => l.status),
+    ['error', 'loading', 'off'],
+  );
+  assert.equal(
+    engine.hasMemory(),
+    false,
+    'a refusal never becomes follow-up memory',
+  );
   const down = await engine.query({ layers: ['earthquakes', 'flights'] });
   assert.equal(down.code, 'FEED_UNAVAILABLE');
-  const partial = await engine.query({ layers: ['ais-live-vessels', 'earthquakes'], scope: { kind: 'anywhere' } });
+  const partial = await engine.query({
+    layers: ['ais-live-vessels', 'earthquakes'],
+    scope: { kind: 'anywhere' },
+  });
   assert.equal(partial.ok, true);
   assert.equal(partial.partial, true);
   assert.deepEqual(partial.unanswered, ['earthquakes']);
@@ -1009,23 +1574,43 @@ test('mixed off/loading/unavailable layers refuse; a partly answerable query say
 
 test('returned items are copies: mutating them cannot change the remembered answer', async () => {
   const engine = makeEngine();
-  const first = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, sortBy: 'altitudeM' });
+  const first = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'altitudeM',
+  });
   for (const item of first.items) {
     item.altitudeM = -1;
     item.id = 'MUTATED';
   }
   const again = await engine.query({ followUp: true, sortBy: 'altitudeM' });
-  assert.deepEqual(again.items.map((i) => i.id), ['RCH01', 'SWA1', 'N123', 'GND1']);
+  assert.deepEqual(
+    again.items.map((i) => i.id),
+    ['RCH01', 'SWA1', 'N123', 'GND1'],
+  );
   assert.equal(FLIGHTS[1].altitudeM, 13500, 'the provider rows are untouched');
 });
 
 test('ranking 250k rows stays within a budget and yields to the page', async () => {
-  const rows = Array.from({ length: 250_000 }, (_, i) => ({ id: `F${i}`, lat: (i % 170) - 85, lon: (i % 350) - 175, frp: (i * 7919) % 100_003 }));
-  const engine = createAnalystEngine({ getRecords: () => rows, getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }) });
+  const rows = Array.from({ length: 250_000 }, (_, i) => ({
+    id: `F${i}`,
+    lat: (i % 170) - 85,
+    lon: (i % 350) - 175,
+    frp: (i * 7919) % 100_003,
+  }));
+  const engine = createAnalystEngine({
+    getRecords: () => rows,
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
   let ticks = 0;
   const timer = setInterval(() => ticks++, 0);
   const started = performance.now();
-  const result = await engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'frp', limit: 1 });
+  const result = await engine.query({
+    layers: ['local-firms'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'frp',
+    limit: 1,
+  });
   const elapsed = performance.now() - started;
   clearInterval(timer);
   assert.equal(result.count, 250_000);
@@ -1033,14 +1618,26 @@ test('ranking 250k rows stays within a budget and yields to the page', async () 
   assert.ok(elapsed < 400, `took ${Math.round(elapsed)} ms`);
   assert.ok(ticks > 0, 'the scan yielded between slices');
   let current = true;
-  const pending = engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'distance' }, { isCurrent: () => current });
+  const pending = engine.query(
+    {
+      layers: ['local-firms'],
+      scope: { kind: 'anywhere' },
+      sortBy: 'distance',
+    },
+    { isCurrent: () => current },
+  );
   current = false;
-  assert.equal((await pending).code, 'CANCELLED', 'a superseded scan stops at the next slice');
+  assert.equal(
+    (await pending).code,
+    'CANCELLED',
+    'a superseded scan stops at the next slice',
+  );
 });
 
 test('analyst: a follow-up naming other layers than the last answer is refused', async () => {
   const engine = createAnalystEngine({
-    getRecords: (key) => ({ flights: FLIGHTS, 'local-firms': FIRES }[key] || []),
+    getRecords: (key) =>
+      ({ flights: FLIGHTS, 'local-firms': FIRES })[key] || [],
     resolveRegionRing: async () => null,
     getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
   });
@@ -1048,16 +1645,27 @@ test('analyst: a follow-up naming other layers than the last answer is refused',
   const r = await engine.query({ layers: ['local-firms'], followUp: true });
   assert.equal(r.ok, false);
   assert.equal(r.code, 'FOLLOW_UP_MISMATCH');
-  assert.equal(engine.hasMemory(), true, 'the earlier answer is still the last answer');
+  assert.equal(
+    engine.hasMemory(),
+    true,
+    'the earlier answer is still the last answer',
+  );
 });
 
 // ── Area handles: region multipolygons and the area / drawn / annotation scopes ──
 
-const box = (w, s, e, n) => [[w, s], [e, s], [e, n], [w, n], [w, s]];
+const box = (w, s, e, n) => [
+  [w, s],
+  [e, s],
+  [e, n],
+  [w, n],
+  [w, s],
+];
 
 function makeAreaEngine(overrides = {}) {
   return createAnalystEngine({
-    getRecords: (key) => ({ flights: FLIGHTS, 'local-firms': FIRES }[key] || []),
+    getRecords: (key) =>
+      ({ flights: FLIGHTS, 'local-firms': FIRES })[key] || [],
     resolveRegionRing: async () => null,
     getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
     ...overrides,
@@ -1077,7 +1685,11 @@ test('analyst: a region counts every part of a multipolygon and skips its holes'
       source: 'osm',
     }),
   });
-  const r = await engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Archipelago' }, limit: 10 });
+  const r = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Archipelago' },
+    limit: 10,
+  });
   assert.equal(r.ok, true);
   assert.deepEqual(r.items.map((i) => i.id).sort(), ['N123', 'RCH01']);
   assert.equal(r.count, 2, 'SWA1 and GND1 sit in the hole');
@@ -1089,15 +1701,24 @@ test('analyst: an ambiguous region asks instead of counting', async () => {
     resolveRegionRing: async () => ({
       ok: false,
       needsClarification: true,
-      candidates: [{ candidateId: 'osm:r1', name: 'Georgia', level: 'country' }],
+      candidates: [
+        { candidateId: 'osm:r1', name: 'Georgia', level: 'country' },
+      ],
       error: '"Georgia" matches 2 places — ask which one.',
     }),
   });
-  const r = await engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Georgia' } });
+  const r = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Georgia' },
+  });
   assert.equal(r.ok, false);
   assert.equal(r.code, 'NEEDS_CLARIFICATION');
   assert.equal(r.candidates.length, 1);
-  assert.match(r.then, /resolve_area.*candidateId.*analyst_query.*kind.*area/, 'the model gets a route back');
+  assert.match(
+    r.then,
+    /resolve_area.*candidateId.*analyst_query.*kind.*area/,
+    'the model gets a route back',
+  );
   assert.equal(engine.hasMemory(), false);
 });
 
@@ -1129,13 +1750,32 @@ test('analyst: an area scope counts inside the stored handle and names it', asyn
     resolveAreaScope: async (scope) => {
       seen.push(scope);
       if (scope.kind === 'area' && scope.areaId === 'osm:r42')
-        return { ok: true, area: { areaId: 'osm:r42', name: 'Hill Country', prepared, source: 'osm' } };
+        return {
+          ok: true,
+          area: {
+            areaId: 'osm:r42',
+            name: 'Hill Country',
+            prepared,
+            source: 'osm',
+          },
+        };
       if (scope.kind === 'drawn')
-        return { ok: true, area: { areaId: 'anno:anno-7', name: 'the drawn area', prepared, source: 'drawn' } };
+        return {
+          ok: true,
+          area: {
+            areaId: 'anno:anno-7',
+            name: 'the drawn area',
+            prepared,
+            source: 'drawn',
+          },
+        };
       return { ok: false, code: 'AREA_UNKNOWN', error: 'No such area' };
     },
   });
-  const fires = await engine.query({ layers: ['local-firms'], scope: { kind: 'area', areaId: 'osm:r42' } });
+  const fires = await engine.query({
+    layers: ['local-firms'],
+    scope: { kind: 'area', areaId: 'osm:r42' },
+  });
   assert.equal(fires.ok, true);
   assert.equal(fires.count, 2);
   assert.equal(fires.scopeLabel, 'inside Hill Country');
@@ -1146,13 +1786,22 @@ test('analyst: an area scope counts inside the stored handle and names it', asyn
   assert.match(followUp.display.scope, /inside Hill Country/);
   assert.equal(followUp.coverage.scope, 'area:osm:r42');
   assert.equal(followUp.areaId, 'osm:r42');
-  const drawn = await engine.query({ layers: ['flights'], scope: { kind: 'drawn' } });
+  const drawn = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'drawn' },
+  });
   assert.equal(drawn.ok, true);
   assert.equal(drawn.count, 2, 'SWA1 and GND1 sit inside the drawn box');
-  const missing = await engine.query({ layers: ['flights'], scope: { kind: 'area', areaId: 'osm:r0' } });
+  const missing = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'area', areaId: 'osm:r0' },
+  });
   assert.equal(missing.ok, false);
   assert.equal(missing.code, 'AREA_UNKNOWN');
-  assert.deepEqual(seen.map((s) => s.kind), ['area', 'drawn', 'area']);
+  assert.deepEqual(
+    seen.map((s) => s.kind),
+    ['area', 'drawn', 'area'],
+  );
 });
 
 test('analyst: an area scope superseded while resolving is cancelled and leaves no memory', async () => {
@@ -1161,7 +1810,10 @@ test('analyst: an area scope superseded while resolving is cancelled and leaves 
   const engine = makeAreaEngine({
     resolveAreaScope: async () => {
       current = false; // a newer turn arrived while the area was looked up
-      return { ok: true, area: { name: 'X', prepared: prepareArea([[box(-100, 28, -94, 33)]]) } };
+      return {
+        ok: true,
+        area: { name: 'X', prepared: prepareArea([[box(-100, 28, -94, 33)]]) },
+      };
     },
   });
   const r = await engine.query(
@@ -1173,15 +1825,32 @@ test('analyst: an area scope superseded while resolving is cancelled and leaves 
 });
 
 test('analyst: without an area provider the area scopes refuse plainly', async () => {
-  const r = await makeAreaEngine().query({ layers: ['flights'], scope: { kind: 'drawn' } });
+  const r = await makeAreaEngine().query({
+    layers: ['flights'],
+    scope: { kind: 'drawn' },
+  });
   assert.equal(r.ok, false);
   assert.equal(r.code, 'AREA_UNAVAILABLE');
 });
 
 test('a follow-up on handed-off places keeps the area they were found in', async () => {
   const rows = [
-    { id: 'node/1', lat: 27.7, lon: 85.3, name: 'Bir Hospital', kind: 'hospital', emergency: 'yes' },
-    { id: 'node/2', lat: 27.71, lon: 85.31, name: 'Teaching Hospital', kind: 'hospital', emergency: 'no' },
+    {
+      id: 'node/1',
+      lat: 27.7,
+      lon: 85.3,
+      name: 'Bir Hospital',
+      kind: 'hospital',
+      emergency: 'yes',
+    },
+    {
+      id: 'node/2',
+      lat: 27.71,
+      lon: 85.31,
+      name: 'Teaching Hospital',
+      kind: 'hospital',
+      emergency: 'no',
+    },
   ];
   const engine = createAnalystEngine({
     getRecords: (key) => (key === 'osm-places' ? rows : []),
@@ -1190,7 +1859,11 @@ test('a follow-up on handed-off places keeps the area they were found in', async
   });
   assert.equal(
     engine.remember('osm-places', rows, {
-      presentation: { scopeLabel: 'inside Kathmandu', coverageScope: 'area:area-1', areaId: 'area-1' },
+      presentation: {
+        scopeLabel: 'inside Kathmandu',
+        coverageScope: 'area:area-1',
+        areaId: 'area-1',
+      },
     }),
     true,
   );
@@ -1206,7 +1879,14 @@ test('a follow-up on handed-off places keeps the area they were found in', async
 
 test('a follow-up on a capped handed-off set is not complete', async () => {
   const rows = [
-    { id: 'node/1', lat: 27.7, lon: 85.3, name: 'Bir Hospital', kind: 'hospital', emergency: 'yes' },
+    {
+      id: 'node/1',
+      lat: 27.7,
+      lon: 85.3,
+      name: 'Bir Hospital',
+      kind: 'hospital',
+      emergency: 'yes',
+    },
   ];
   const engine = createAnalystEngine({
     getRecords: (key) => (key === 'osm-places' ? rows : []),
@@ -1229,13 +1909,27 @@ test('a slow scan yields on a time budget, not only every 20,000 rows', async ()
     while (performance.now() < until);
     return 5;
   };
-  const rows = Array.from({ length: 4_000 }, (_, i) => ({ id: `S${i}`, lat: 0, lon: 0, get frp() { return slow(); } }));
-  const engine = createAnalystEngine({ getRecords: () => rows, getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }) });
+  const rows = Array.from({ length: 4_000 }, (_, i) => ({
+    id: `S${i}`,
+    lat: 0,
+    lon: 0,
+    get frp() {
+      return slow();
+    },
+  }));
+  const engine = createAnalystEngine({
+    getRecords: () => rows,
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
   // Count the scan's yields (other timers run only when it yields), not wall
   // gaps, so a loaded machine cannot fail it.
   let ticks = 0;
   const timer = setInterval(() => ticks++, 0);
-  const result = await engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, filters: [{ field: 'frp', op: 'gt', value: 1 }] });
+  const result = await engine.query({
+    layers: ['local-firms'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'frp', op: 'gt', value: 1 }],
+  });
   clearInterval(timer);
   assert.equal(result.count, 4_000);
   assert.ok(ticks >= 5, `the scan yielded ${ticks} times in ~200 ms of work`);

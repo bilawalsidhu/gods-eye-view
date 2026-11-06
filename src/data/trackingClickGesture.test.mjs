@@ -19,8 +19,12 @@ const TYPES = {
 function makeHandler() {
   const actions = new Map();
   return {
-    setInputAction(callback, type) { actions.set(type, callback); },
-    fire(type, event) { actions.get(type)?.(event); },
+    setInputAction(callback, type) {
+      actions.set(type, callback);
+    },
+    fire(type, event) {
+      actions.get(type)?.(event);
+    },
   };
 }
 
@@ -34,22 +38,36 @@ test('tracking click discrimination pins the travel/duration boundary matrix', (
     [{ travelPx: 0, durationMs: 1000 }, false],
   ];
   for (const [gesture, expected] of matrix) {
-    assert.equal(isTrackingClickGesture(gesture), expected, JSON.stringify(gesture));
+    assert.equal(
+      isTrackingClickGesture(gesture),
+      expected,
+      JSON.stringify(gesture),
+    );
   }
-  assert.equal(isTrackingSelectionGesture({ travelPx: 0, durationMs: 1000 }), true);
-  assert.equal(isTrackingSelectionGesture({ travelPx: 6.001, durationMs: 10 }), false);
+  assert.equal(
+    isTrackingSelectionGesture({ travelPx: 0, durationMs: 1000 }),
+    true,
+  );
+  assert.equal(
+    isTrackingSelectionGesture({ travelPx: 6.001, durationMs: 10 }),
+    false,
+  );
 });
 
 test('synthetic drag-then-click sequence does not reach the untrack callback', () => {
   let timeMs = 0;
   let untrackCalls = 0;
   const handler = makeHandler();
-  bindTrackingClickGesture(handler, (_click, gesture) => {
-    if (isTrackingClickGesture(gesture)) untrackCalls += 1;
-  }, {
-    now: () => timeMs,
-    eventTypes: TYPES,
-  });
+  bindTrackingClickGesture(
+    handler,
+    (_click, gesture) => {
+      if (isTrackingClickGesture(gesture)) untrackCalls += 1;
+    },
+    {
+      now: () => timeMs,
+      eventTypes: TYPES,
+    },
+  );
 
   handler.fire(TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
   timeMs = 20;
@@ -60,10 +78,18 @@ test('synthetic drag-then-click sequence does not reach the untrack callback', (
   handler.fire(TYPES.LEFT_UP, { position: { x: 10, y: 10 } });
   handler.fire(TYPES.LEFT_CLICK, { position: { x: 10, y: 10 } });
 
-  assert.equal(untrackCalls, 0, '8 px accumulated travel must suppress the click despite zero displacement');
+  assert.equal(
+    untrackCalls,
+    0,
+    '8 px accumulated travel must suppress the click despite zero displacement',
+  );
 
   handler.fire(TYPES.LEFT_CLICK, { position: { x: 10, y: 10 } });
-  assert.equal(untrackCalls, 1, 'suppression is consumed and cannot poison the next click');
+  assert.equal(
+    untrackCalls,
+    1,
+    'suppression is consumed and cannot poison the next click',
+  );
 });
 
 test('slow clean sprite clicks select, while long presses and orbit nudges cannot untrack', () => {
@@ -71,23 +97,31 @@ test('slow clean sprite clicks select, while long presses and orbit nudges canno
   let selections = 0;
   let untracks = 0;
   const handler = makeHandler();
-  bindTrackingClickGesture(handler, (click, gesture) => {
-    if (!isTrackingSelectionGesture(gesture)) return;
-    if (click.sprite) {
-      selections += 1;
-      return;
-    }
-    if (isTrackingClickGesture(gesture)) untracks += 1;
-  }, {
-    now: () => timeMs,
-    eventTypes: TYPES,
-  });
+  bindTrackingClickGesture(
+    handler,
+    (click, gesture) => {
+      if (!isTrackingSelectionGesture(gesture)) return;
+      if (click.sprite) {
+        selections += 1;
+        return;
+      }
+      if (isTrackingClickGesture(gesture)) untracks += 1;
+    },
+    {
+      now: () => timeMs,
+      eventTypes: TYPES,
+    },
+  );
 
   handler.fire(TYPES.LEFT_DOWN, { position: { x: 0, y: 0 } });
   timeMs = 401;
   handler.fire(TYPES.LEFT_UP, { position: { x: 0, y: 0 } });
   handler.fire(TYPES.LEFT_CLICK, { position: { x: 0, y: 0 }, sprite: true });
-  assert.equal(selections, 1, 'duration alone must not suppress entity selection');
+  assert.equal(
+    selections,
+    1,
+    'duration alone must not suppress entity selection',
+  );
   assert.equal(untracks, 0);
 
   timeMs = 500;
@@ -114,8 +148,14 @@ test('civilian and military click handlers apply duration only at the deselect b
     readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
   ];
   for (const source of sources) {
-    assert.match(source, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);
-    assert.match(source, /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/);
+    assert.match(
+      source,
+      /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/,
+    );
+    assert.match(
+      source,
+      /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/,
+    );
   }
   assert.doesNotMatch(
     sources[0],

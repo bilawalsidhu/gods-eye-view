@@ -64,17 +64,21 @@ test('resolveEllipsoidalGround: happy path maps results IN ORDER', async () => {
     async (url) => {
       capturedUrl = String(url);
       // Order in the URL must match the input coord order (lon,lat pairs).
-      return proxyResponse([[10, 1], [20, 2], [30, 3]]);
+      return proxyResponse([
+        [10, 1],
+        [20, 2],
+        [30, 3],
+      ]);
     },
     async () => {
       const out = await resolveEllipsoidalGround(coords);
       assert.equal(out.length, 3);
       assert.deepEqual(
         out.map((r) => r.ellipsoid),
-        [11, 22, 33] // lon+lat for each, in input order
+        [11, 22, 33], // lon+lat for each, in input order
       );
       for (const r of out) assert.equal(r.source, 'reearth');
-    }
+    },
   );
   assert.ok(capturedUrl.includes('/api/terrain/heights'));
   assert.ok(capturedUrl.includes('points='));
@@ -112,7 +116,13 @@ test('resolveEllipsoidalGround: a 300-point input issues exactly 5 fetches (chun
         json: async () => ({
           results: pts.map((p) => {
             const [lon, lat] = p.split(',').map(Number);
-            return { lon, lat, elevation: 0, geoid: 0, ellipsoid: oracle(lat, lon) };
+            return {
+              lon,
+              lat,
+              elevation: 0,
+              geoid: 0,
+              ellipsoid: oracle(lat, lon),
+            };
           }),
         }),
       };
@@ -129,11 +139,11 @@ test('resolveEllipsoidalGround: a 300-point input issues exactly 5 fetches (chun
         assert.equal(
           out[k].ellipsoid,
           oracle(lat, lon),
-          `out[${k}] must map to the oracle of coords[${k}] (order held within+across chunks)`
+          `out[${k}] must map to the oracle of coords[${k}] (order held within+across chunks)`,
         );
         assert.equal(out[k].source, 'reearth');
       }
-    }
+    },
   );
   assert.equal(fetchCount, 5);
   assert.deepEqual(chunkSizes, [64, 64, 64, 64, 44]);
@@ -143,7 +153,7 @@ test('resolveEllipsoidalGround: a 300-point input issues exactly 5 fetches (chun
   assert.equal(
     chunkSizes.reduce((a, b) => a + b, 0),
     300,
-    'chunk sizes must sum to the total input length'
+    'chunk sizes must sum to the total input length',
   );
 });
 
@@ -160,14 +170,14 @@ test('resolveEllipsoidalGround: proxy failure falls back to sourceOrthometricM +
       const expected = 150 + AUSTIN_GEOID_N; // ≈ 123.1
       assert.ok(
         Math.abs(out[0].ellipsoid - expected) <= 2.5,
-        `expected ≈${expected} (±2.5), got ${out[0].ellipsoid}`
+        `expected ≈${expected} (±2.5), got ${out[0].ellipsoid}`,
       );
       assert.ok(
         Math.abs(out[0].ellipsoid - 123) <= 2.5,
-        `expected ≈123 (±2.5) per the brief's worked example, got ${out[0].ellipsoid}`
+        `expected ≈123 (±2.5) per the brief's worked example, got ${out[0].ellipsoid}`,
       );
       assert.equal(out[0].source, 'geoid-fallback');
-    }
+    },
   );
 });
 
@@ -183,8 +193,11 @@ test('resolveEllipsoidalGround: proxy failure + no sourceOrthometricM falls back
       assert.equal(out[0].source, 'geoid-fallback');
       // H treated as 0 -> ellipsoid == geoidHeight(lat,lon) alone, finite and plausible.
       assert.ok(Number.isFinite(out[0].ellipsoid));
-      assert.ok(Math.abs(out[0].ellipsoid) < 200, 'geoid undulation should be within the -106..+85 m worldwide range (with margin)');
-    }
+      assert.ok(
+        Math.abs(out[0].ellipsoid) < 200,
+        'geoid undulation should be within the -106..+85 m worldwide range (with margin)',
+      );
+    },
   );
 });
 
@@ -195,7 +208,10 @@ test('resolveEllipsoidalGround: a repeated coord issues NO second fetch (in-memo
     async (url) => {
       fetchCount += 1;
       const u = new URL(String(url), 'http://internal');
-      const pts = u.searchParams.get('points').split(';').map((p) => p.split(',').map(Number));
+      const pts = u.searchParams
+        .get('points')
+        .split(';')
+        .map((p) => p.split(',').map(Number));
       return proxyResponse(pts);
     },
     async () => {
@@ -203,9 +219,13 @@ test('resolveEllipsoidalGround: a repeated coord issues NO second fetch (in-memo
       const second = await resolveEllipsoidalGround([point]);
       assert.equal(first[0].ellipsoid, second[0].ellipsoid);
       assert.equal(second[0].source, 'reearth');
-    }
+    },
   );
-  assert.equal(fetchCount, 1, `expected exactly 1 fetch across both calls (cache hit on the 2nd), got ${fetchCount}`);
+  assert.equal(
+    fetchCount,
+    1,
+    `expected exactly 1 fetch across both calls (cache hit on the 2nd), got ${fetchCount}`,
+  );
 });
 
 test('resolveEllipsoidalGround: repeated coord within the SAME batch also only fetches once', async () => {
@@ -226,10 +246,14 @@ test('resolveEllipsoidalGround: repeated coord within the SAME batch also only f
       assert.equal(out.length, 3);
       assert.equal(out[0].ellipsoid, out[1].ellipsoid);
       assert.equal(out[1].ellipsoid, out[2].ellipsoid);
-    }
+    },
   );
   assert.equal(fetchCount, 1);
-  assert.equal(lastPointCount, 1, 'the duplicate point should be de-duplicated before hitting the network');
+  assert.equal(
+    lastPointCount,
+    1,
+    'the duplicate point should be de-duplicated before hitting the network',
+  );
 });
 
 test('resolveEllipsoidalGround: rounds coordinates to 5 decimals for the cache key (near-identical points share one fetch)', async () => {
@@ -240,31 +264,45 @@ test('resolveEllipsoidalGround: rounds coordinates to 5 decimals for the cache k
     async (url) => {
       fetchCount += 1;
       const u = new URL(String(url), 'http://internal');
-      const pts = u.searchParams.get('points').split(';').map((p) => p.split(',').map(Number));
+      const pts = u.searchParams
+        .get('points')
+        .split(';')
+        .map((p) => p.split(',').map(Number));
       return proxyResponse(pts);
     },
     async () => {
       await resolveEllipsoidalGround([a]);
       await resolveEllipsoidalGround([b]);
-    }
+    },
   );
-  assert.equal(fetchCount, 1, 'points identical at 5-decimal rounding should share the in-memory cache');
+  assert.equal(
+    fetchCount,
+    1,
+    'points identical at 5-decimal rounding should share the in-memory cache',
+  );
 });
 
 test('cachedEllipsoidalGround: returns the prior resolved ellipsoid value synchronously', async () => {
   const point = { lat: 9.87654, lon: 8.76543 };
-  assert.equal(cachedEllipsoidalGround(point.lat, point.lon), null, 'cold cache must return null');
+  assert.equal(
+    cachedEllipsoidalGround(point.lat, point.lon),
+    null,
+    'cold cache must return null',
+  );
   await withFakeFetch(
     async (url) => {
       const u = new URL(String(url), 'http://internal');
-      const pts = u.searchParams.get('points').split(';').map((p) => p.split(',').map(Number));
+      const pts = u.searchParams
+        .get('points')
+        .split(';')
+        .map((p) => p.split(',').map(Number));
       return proxyResponse(pts);
     },
     async () => {
       const [result] = await resolveEllipsoidalGround([point]);
       const cached = cachedEllipsoidalGround(point.lat, point.lon);
       assert.equal(cached, result.ellipsoid);
-    }
+    },
   );
 });
 
@@ -282,21 +320,25 @@ test('cachedEllipsoidalGround: also populated by the geoid-fallback path (cache 
       const [result] = await resolveEllipsoidalGround([point]);
       const cached = cachedEllipsoidalGround(point.lat, point.lon);
       assert.equal(cached, result.ellipsoid);
-    }
+    },
   );
 });
 
 test('resolveEllipsoidalGround: a non-ok HTTP response is treated as failure and falls back', async () => {
   const point = { lat: 61.001, lon: -149.001 }; // distinct coord
   await withFakeFetch(
-    async () => ({ ok: false, status: 500, json: async () => ({ error: 'boom' }) }),
+    async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'boom' }),
+    }),
     async () => {
       const out = await resolveEllipsoidalGround([
         { ...point, sourceOrthometricM: 10 },
       ]);
       assert.equal(out[0].source, 'geoid-fallback');
       assert.ok(Number.isFinite(out[0].ellipsoid));
-    }
+    },
   );
 });
 
@@ -312,7 +354,10 @@ test('resolveEllipsoidalGround: geoid fallback cools down retries, then self-hea
         fetchCount += 1;
         if (fetchCount === 1) throw new Error('simulated outage');
         const u = new URL(String(url), 'http://internal');
-        const points = u.searchParams.get('points').split(';').map((pair) => pair.split(',').map(Number));
+        const points = u.searchParams
+          .get('points')
+          .split(';')
+          .map((pair) => pair.split(',').map(Number));
         return proxyResponse(points);
       },
       async () => {
@@ -321,7 +366,11 @@ test('resolveEllipsoidalGround: geoid fallback cools down retries, then self-hea
 
         const cooling = await resolveEllipsoidalGround([point]);
         assert.equal(cooling[0].source, 'geoid-fallback');
-        assert.equal(fetchCount, 1, 'a warm request during cooldown must not hit the failing proxy');
+        assert.equal(
+          fetchCount,
+          1,
+          'a warm request during cooldown must not hit the failing proxy',
+        );
 
         now += 60_001;
         const healed = await resolveEllipsoidalGround([point]);
@@ -329,8 +378,12 @@ test('resolveEllipsoidalGround: geoid fallback cools down retries, then self-hea
         assert.equal(healed[0].source, 'reearth');
 
         await resolveEllipsoidalGround([point]);
-        assert.equal(fetchCount, 2, 'a successful retry replaces fallback and clears retry work');
-      }
+        assert.equal(
+          fetchCount,
+          2,
+          'a successful retry replaces fallback and clears retry work',
+        );
+      },
     );
   } finally {
     Date.now = originalNow;
@@ -347,7 +400,7 @@ test('resolveEllipsoidalGround: an empty input array resolves to an empty array 
     async () => {
       const out = await resolveEllipsoidalGround([]);
       assert.deepEqual(out, []);
-    }
+    },
   );
   assert.equal(fetchCount, 0);
 });
@@ -355,11 +408,16 @@ test('resolveEllipsoidalGround: an empty input array resolves to an empty array 
 test('resolveEllipsoidalGround: null and string heights cannot become real zeroes', async () => {
   for (const [index, value] of [null, '', '0'].entries()) {
     await withFakeFetch(
-      async () => ({ ok: true, json: async () => ({ results: [{ ellipsoid: value }] }) }),
+      async () => ({
+        ok: true,
+        json: async () => ({ results: [{ ellipsoid: value }] }),
+      }),
       async () => {
-        const out = await resolveEllipsoidalGround([{ lat: 11 + index, lon: 41 }]);
+        const out = await resolveEllipsoidalGround([
+          { lat: 11 + index, lon: 41 },
+        ]);
         assert.equal(out[0].source, 'geoid-fallback');
-      }
+      },
     );
   }
 });
@@ -375,7 +433,8 @@ test('resolveEllipsoidalGround: a 502 keeps the real heights it carries and fall
       ok: false,
       status: 502,
       json: async () => ({
-        error: 'terrain heights fetch failed and no cache available for every point',
+        error:
+          'terrain heights fetch failed and no cache available for every point',
         partial: [{ ellipsoid: 412.5 }, null, { ellipsoid: 'x' }],
       }),
     }),
@@ -383,8 +442,12 @@ test('resolveEllipsoidalGround: a 502 keeps the real heights it carries and fall
       const out = await resolveEllipsoidalGround(coords);
       assert.deepEqual(out[0], { ellipsoid: 412.5, source: 'reearth' });
       assert.equal(out[1].source, 'geoid-fallback');
-      assert.equal(out[2].source, 'geoid-fallback', 'a non-numeric height is not real');
-    }
+      assert.equal(
+        out[2].source,
+        'geoid-fallback',
+        'a non-numeric height is not real',
+      );
+    },
   );
   assert.equal(cachedRealEllipsoidalGround(62.001, -150.001), 412.5);
   assert.equal(cachedRealEllipsoidalGround(62.002, -150.002), null);
@@ -403,7 +466,10 @@ test('resolveEllipsoidalGround: a partial list of the wrong length is ignored', 
     }),
     async () => {
       const out = await resolveEllipsoidalGround(coords);
-      assert.deepEqual(out.map((r) => r.source), ['geoid-fallback', 'geoid-fallback']);
-    }
+      assert.deepEqual(
+        out.map((r) => r.source),
+        ['geoid-fallback', 'geoid-fallback'],
+      );
+    },
   );
 });

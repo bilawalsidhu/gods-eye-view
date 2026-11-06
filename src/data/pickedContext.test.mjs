@@ -11,13 +11,20 @@ globalThis.CustomEvent ||= class CustomEvent {
 globalThis.dispatchEvent ||= () => true;
 
 const { registerEntityContext } = await import('./contextStore.js');
-const { registerPickOwner, unregisterPickOwner, findPickOwner } = await import('./pickRegistry.js');
-const { resolvePickedContext, pickedKindForLayer } = await import('./pickedContext.js');
+const { registerPickOwner, unregisterPickOwner, findPickOwner } =
+  await import('./pickRegistry.js');
+const { resolvePickedContext, pickedKindForLayer } =
+  await import('./pickedContext.js');
 
-function manager({ enabled = new Set(['flights', 'local-datacenters']), modules = {} } = {}) {
+function manager({
+  enabled = new Set(['flights', 'local-datacenters']),
+  modules = {},
+} = {}) {
   return {
     isEnabled: (id) => enabled.has(id),
-    layers: new Map(Object.entries(modules).map(([id, module]) => [id, { name: id, module }])),
+    layers: new Map(
+      Object.entries(modules).map(([id, module]) => [id, { name: id, module }]),
+    ),
   };
 }
 
@@ -26,7 +33,16 @@ test('an aircraft billboard resolves through its pick owner to a live label', ()
   const dataManager = manager({
     modules: {
       flights: {
-        findByQuery: (q) => (q === 'a1b2c3' ? { icao24: 'a1b2c3', callsign: 'UPS793', latitude: 30.2, longitude: -97.7, altitudeM: 9000 } : null),
+        findByQuery: (q) =>
+          q === 'a1b2c3'
+            ? {
+                icao24: 'a1b2c3',
+                callsign: 'UPS793',
+                latitude: 30.2,
+                longitude: -97.7,
+                altitudeM: 9000,
+              }
+            : null,
       },
     },
   });
@@ -66,10 +82,20 @@ test('an entity-backed feature resolves through the context store', () => {
 
 test('disabled layers, trails and empty picks never resolve', () => {
   registerPickOwner('military', (id) => id === 'm1');
-  assert.equal(resolvePickedContext({ id: 'm1' }, { dataManager: manager() }), null, 'military is disabled');
+  assert.equal(
+    resolvePickedContext({ id: 'm1' }, { dataManager: manager() }),
+    null,
+    'military is disabled',
+  );
   unregisterPickOwner('military');
-  assert.equal(resolvePickedContext({ id: 'gev-trail:1' }, { dataManager: manager() }), null);
+  assert.equal(
+    resolvePickedContext({ id: 'gev-trail:1' }, { dataManager: manager() }),
+    null,
+  );
   assert.equal(resolvePickedContext(null), null);
-  assert.equal(resolvePickedContext({ id: 'unknown' }, { dataManager: manager() }), null);
+  assert.equal(
+    resolvePickedContext({ id: 'unknown' }, { dataManager: manager() }),
+    null,
+  );
   assert.equal(pickedKindForLayer('ais-live-vessels'), 'vessel');
 });

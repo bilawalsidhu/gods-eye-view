@@ -21,9 +21,16 @@ function fakeClock(startWall = 1_700_000_000_000, startMono = 10_000) {
   let mono = startMono;
   return {
     clock: { wall: () => wall, mono: () => mono },
-    advance(ms) { wall += ms; mono += ms; },
-    rollbackWall(ms) { wall -= ms; },
-    get wall() { return wall; },
+    advance(ms) {
+      wall += ms;
+      mono += ms;
+    },
+    rollbackWall(ms) {
+      wall -= ms;
+    },
+    get wall() {
+      return wall;
+    },
   };
 }
 
@@ -42,7 +49,8 @@ function harness(options = {}) {
       actions.push(action);
       if (action.type === 'connect') {
         assert.equal(
-          openSockets.size, 0,
+          openSockets.size,
+          0,
           `connect(gen ${action.generation}) issued while sockets ${[...openSockets]} were still live`,
         );
         openSockets.add(action.generation);
@@ -58,19 +66,37 @@ function harness(options = {}) {
     actions,
     openSockets,
     time,
-    advance(ms) { time.advance(ms); },
-    configure(env = LIVE_ENV) { return record(watchdog.configure(env)); },
-    tick() { return record(watchdog.tick()); },
-    open(generation) { return record(watchdog.onOpen(generation)); },
-    message(generation) { return record(watchdog.onMessage(generation)); },
+    advance(ms) {
+      time.advance(ms);
+    },
+    configure(env = LIVE_ENV) {
+      return record(watchdog.configure(env));
+    },
+    tick() {
+      return record(watchdog.tick());
+    },
+    open(generation) {
+      return record(watchdog.onOpen(generation));
+    },
+    message(generation) {
+      return record(watchdog.onMessage(generation));
+    },
     close(generation) {
       openSockets.delete(generation); // a socket that closed itself is gone
       return record(watchdog.onClose(generation));
     },
-    fail(generation, detail) { return record(watchdog.onFailure(generation, detail)); },
-    dispose() { return record(watchdog.dispose()); },
-    snapshot() { return watchdog.snapshot(); },
-    types() { return actions.map((a) => `${a.type}:${a.generation}`); },
+    fail(generation, detail) {
+      return record(watchdog.onFailure(generation, detail));
+    },
+    dispose() {
+      return record(watchdog.dispose());
+    },
+    snapshot() {
+      return watchdog.snapshot();
+    },
+    types() {
+      return actions.map((a) => `${a.type}:${a.generation}`);
+    },
   };
 }
 
@@ -140,15 +166,27 @@ test('liveness is data, not socket state: silence past staleMs reports stale', (
 
   h.advance(AIS_WATCHDOG_DEFAULTS.staleMs - 1_000);
   h.tick();
-  assert.equal(h.snapshot().status, 'live', 'inside the budget the feed is still live');
+  assert.equal(
+    h.snapshot().status,
+    'live',
+    'inside the budget the feed is still live',
+  );
 
   h.advance(2_000);
   h.tick();
   const snap = h.snapshot();
   assert.equal(snap.status, 'stale');
-  assert.equal(snap.lastMessageAt, startedAt, 'the last good message is still reported');
+  assert.equal(
+    snap.lastMessageAt,
+    startedAt,
+    'the last good message is still reported',
+  );
   assert.ok(snap.silentForMs >= AIS_WATCHDOG_DEFAULTS.staleMs);
-  assert.deepEqual(h.types(), ['connect:1'], 'reporting stale must not touch the socket');
+  assert.deepEqual(
+    h.types(),
+    ['connect:1'],
+    'reporting stale must not touch the socket',
+  );
 });
 
 test('reporting is fast but recycling is slow — no reconnect at the stale threshold', () => {
@@ -162,7 +200,11 @@ test('reporting is fast but recycling is slow — no reconnect at the stale thre
     h.tick();
   }
   assert.equal(h.snapshot().status, 'stale');
-  assert.deepEqual(h.types(), ['connect:1'], 'no socket churn between staleMs and recycleAfterMs');
+  assert.deepEqual(
+    h.types(),
+    ['connect:1'],
+    'no socket churn between staleMs and recycleAfterMs',
+  );
 });
 
 // --- FINDING 5: a handshake must not buy extra silence budget --------------
@@ -183,8 +225,11 @@ test('a late handshake does NOT reset the silence clock', () => {
   // ...and it still recycles on the ORIGINAL schedule, not open + 300s.
   h.advance(1_001);
   h.tick();
-  assert.deepEqual(h.types(), ['connect:1', 'terminate:1'],
-    'an opened-but-silent socket recycles on its commissioning schedule');
+  assert.deepEqual(
+    h.types(),
+    ['connect:1', 'terminate:1'],
+    'an opened-but-silent socket recycles on its commissioning schedule',
+  );
 });
 
 test('a handshake does not clear a stale verdict or reset the ladder', () => {
@@ -207,12 +252,20 @@ test('a wall-clock rollback cannot suppress stale detection', () => {
   h.time.rollbackWall(3_600_000);
   h.tick();
 
-  assert.equal(h.snapshot().status, 'stale', 'staleness is measured monotonically');
+  assert.equal(
+    h.snapshot().status,
+    'stale',
+    'staleness is measured monotonically',
+  );
   assert.ok(h.snapshot().silentForMs > 0, 'silence must never read negative');
 
   h.advance(AIS_WATCHDOG_DEFAULTS.recycleAfterMs);
   h.tick();
-  assert.deepEqual(h.types(), ['connect:1', 'terminate:1'], 'recycle still fires after a rollback');
+  assert.deepEqual(
+    h.types(),
+    ['connect:1', 'terminate:1'],
+    'recycle still fires after a rollback',
+  );
 });
 
 test('a silent socket is terminated once, then reconnected after backoff', () => {
@@ -248,10 +301,18 @@ test('single-socket invariant: a reconnect always terminates the old socket firs
   for (const entry of h.types()) {
     const [type, generation] = entry.split(':');
     if (type === 'connect') {
-      assert.equal(held, null, `connect ${generation} while ${held} was still held`);
+      assert.equal(
+        held,
+        null,
+        `connect ${generation} while ${held} was still held`,
+      );
       held = generation;
     } else {
-      assert.equal(held, generation, `terminate ${generation} but ${held} was held`);
+      assert.equal(
+        held,
+        generation,
+        `terminate ${generation} but ${held} was held`,
+      );
       held = null;
     }
   }
@@ -278,7 +339,11 @@ test('backoff is exponential, not a fixed thrash cycle', () => {
   h.tick();
 
   const waits = [];
-  for (let attempt = 0; attempt < AIS_WATCHDOG_DEFAULTS.backoffMs.length; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < AIS_WATCHDOG_DEFAULTS.backoffMs.length;
+    attempt += 1
+  ) {
     const generation = attempt + 1;
     h.open(generation);
     h.close(generation);
@@ -288,7 +353,11 @@ test('backoff is exponential, not a fixed thrash cycle', () => {
   }
 
   assert.deepEqual(waits, [5_000, 15_000, 60_000, 300_000]);
-  assert.equal(waits.every((w) => w === 90_000), false, 'not the reverted fixed cycle');
+  assert.equal(
+    waits.every((w) => w === 90_000),
+    false,
+    'not the reverted fixed cycle',
+  );
 });
 
 /** Fail every rung plus one, leaving the watchdog DOWN with no socket held. */
@@ -301,7 +370,11 @@ function exhaustLadder(h) {
     h.open(generation);
     h.close(generation);
     if (attempt < rungs) {
-      assert.equal(h.snapshot().status, 'reconnecting', `attempt ${attempt + 1} should still be retrying`);
+      assert.equal(
+        h.snapshot().status,
+        'reconnecting',
+        `attempt ${attempt + 1} should still be retrying`,
+      );
       h.advance(h.snapshot().nextAttemptAt - h.time.wall);
       h.tick();
     }
@@ -313,7 +386,10 @@ test('backoff exhaustion enters DOWN with a slow retry, not silent infinite retr
   const h = exhaustLadder(harness());
   const down = h.snapshot();
   assert.equal(down.status, 'down');
-  assert.equal(down.reconnectAttempt, AIS_WATCHDOG_DEFAULTS.backoffMs.length + 1);
+  assert.equal(
+    down.reconnectAttempt,
+    AIS_WATCHDOG_DEFAULTS.backoffMs.length + 1,
+  );
   assert.equal(h.watchdog.debugState().owned, null, 'DOWN holds no socket');
 
   const before = h.types().length;
@@ -323,17 +399,29 @@ test('backoff exhaustion enters DOWN with a slow retry, not silent infinite retr
 
   h.advance(2_000);
   h.tick();
-  assert.equal(h.types().length, before + 1, 'exactly one slow retry after the cadence');
+  assert.equal(
+    h.types().length,
+    before + 1,
+    'exactly one slow retry after the cadence',
+  );
 });
 
 test('the DOWN chip does not flicker hopeful while the slow retry runs behind it', () => {
   const h = exhaustLadder(harness());
   h.advance(AIS_WATCHDOG_DEFAULTS.downRetryMs + 1);
   h.tick();
-  assert.equal(h.snapshot().status, 'down', 'a retry attempt must not read as recovery');
+  assert.equal(
+    h.snapshot().status,
+    'down',
+    'a retry attempt must not read as recovery',
+  );
 
   h.open(h.watchdog.debugState().owned);
-  assert.equal(h.snapshot().status, 'down', 'a handshake proves nothing — still DOWN');
+  assert.equal(
+    h.snapshot().status,
+    'down',
+    'a handshake proves nothing — still DOWN',
+  );
 });
 
 test('DOWN clears only when data actually flows again', () => {
@@ -346,11 +434,18 @@ test('DOWN clears only when data actually flows again', () => {
 
   const recovered = h.snapshot();
   assert.equal(recovered.status, 'live');
-  assert.equal(recovered.reconnectAttempt, 0, 'the ladder resets only on real data');
+  assert.equal(
+    recovered.reconnectAttempt,
+    0,
+    'the ladder resets only on real data',
+  );
   assert.equal(recovered.error, null);
 
   h.close(generation);
-  assert.equal(h.snapshot().nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.backoffMs[0]);
+  assert.equal(
+    h.snapshot().nextAttemptAt - h.time.wall,
+    AIS_WATCHDOG_DEFAULTS.backoffMs[0],
+  );
 });
 
 test('an open socket that never delivers does not reset the backoff ladder', () => {
@@ -366,7 +461,11 @@ test('an open socket that never delivers does not reset the backoff ladder', () 
   h.tick();
   h.open(2);
   h.close(2);
-  assert.equal(h.snapshot().reconnectAttempt, 2, 'open alone must not count as success');
+  assert.equal(
+    h.snapshot().reconnectAttempt,
+    2,
+    'open alone must not count as success',
+  );
 });
 
 test('a late-opening orphan is told to hang itself up', () => {
@@ -376,8 +475,12 @@ test('a late-opening orphan is told to hang itself up', () => {
   h.advance(6_000);
   h.tick();
 
-  assert.deepEqual(h.watchdog.onOpen(1), [{ type: 'terminate', generation: 1, reason: 'orphan' }]);
-  assert.deepEqual(h.watchdog.onMessage(1), [{ type: 'terminate', generation: 1, reason: 'orphan' }]);
+  assert.deepEqual(h.watchdog.onOpen(1), [
+    { type: 'terminate', generation: 1, reason: 'orphan' },
+  ]);
+  assert.deepEqual(h.watchdog.onMessage(1), [
+    { type: 'terminate', generation: 1, reason: 'orphan' },
+  ]);
   assert.equal(h.snapshot().status, 'connecting');
   assert.equal(h.watchdog.debugState().owned, 2);
 });
@@ -392,7 +495,11 @@ test('a stale generation closing does not disturb the socket that replaced it', 
   h.message(2);
 
   h.close(1); // the old socket's close finally lands
-  assert.equal(h.snapshot().status, 'live', 'orphan close must not knock the live feed over');
+  assert.equal(
+    h.snapshot().status,
+    'live',
+    'orphan close must not knock the live feed over',
+  );
   assert.equal(h.snapshot().reconnectAttempt, 0);
   assert.equal(h.watchdog.debugState().owned, 2);
 });
@@ -404,7 +511,11 @@ test('generations are never reused across dispose', () => {
   h.dispose();
   h.configure();
   h.tick();
-  assert.equal(h.watchdog.debugState().owned, 2, 'the namespace continues past the disposal');
+  assert.equal(
+    h.watchdog.debugState().owned,
+    2,
+    'the namespace continues past the disposal',
+  );
   assert.equal(h.watchdog.highWaterGeneration(), 2);
 });
 
@@ -416,10 +527,16 @@ test('a replacement machine can be seeded past the old generation namespace', ()
   first.tick();
   const high = first.highWaterGeneration();
 
-  const second = createAisWatchdog({ clock: time.clock, startGeneration: high });
+  const second = createAisWatchdog({
+    clock: time.clock,
+    startGeneration: high,
+  });
   second.configure(LIVE_ENV);
   const actions = second.tick();
-  assert.ok(actions[0].generation > high, 'a replacement must not re-issue a live generation');
+  assert.ok(
+    actions[0].generation > high,
+    'a replacement must not re-issue a live generation',
+  );
 });
 
 // --- FINDINGS 3 & 4: failures are classified ------------------------------
@@ -432,24 +549,32 @@ test('a transport error terminates immediately and walks the ladder', () => {
   const snap = h.snapshot();
   assert.equal(snap.status, 'reconnecting');
   assert.equal(snap.error, 'ECONNRESET');
-  assert.equal(snap.nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.backoffMs[0]);
+  assert.equal(
+    snap.nextAttemptAt - h.time.wall,
+    AIS_WATCHDOG_DEFAULTS.backoffMs[0],
+  );
 });
 
 test('an auth failure is terminal — no ladder, only a very slow probe', () => {
   const h = goLive(harness());
-  h.fail(1, { kind: 'auth', message: 'AISStream rejected the API key (HTTP 401)' });
+  h.fail(1, {
+    kind: 'auth',
+    message: 'AISStream rejected the API key (HTTP 401)',
+  });
 
   const snap = h.snapshot();
   assert.equal(snap.status, 'auth-failed');
   assert.equal(snap.error, 'AISStream rejected the API key (HTTP 401)');
   assert.equal(
-    snap.nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.authProbeMs,
+    snap.nextAttemptAt - h.time.wall,
+    AIS_WATCHDOG_DEFAULTS.authProbeMs,
     'an auth rejection waits an hour, not five seconds',
   );
 
   // Nothing happens for the whole hour, however often we are ticked.
   const before = h.types().length;
-  for (let i = 0; i < 719; i += 1) { // 3595s of 5-second ticks
+  for (let i = 0; i < 719; i += 1) {
+    // 3595s of 5-second ticks
     h.advance(5_000);
     h.tick();
   }
@@ -457,7 +582,11 @@ test('an auth failure is terminal — no ladder, only a very slow probe', () => 
 
   h.advance(10_000);
   h.tick();
-  assert.equal(h.types().length, before + 1, 'exactly one probe after the cadence');
+  assert.equal(
+    h.types().length,
+    before + 1,
+    'exactly one probe after the cadence',
+  );
 });
 
 test('a silent probe socket cannot launder an auth rejection into the fast ladder', () => {
@@ -470,7 +599,11 @@ test('a silent probe socket cannot launder an auth rejection into the fast ladde
   // apply while the key is refused, so nothing happens at 300s...
   h.advance(AIS_WATCHDOG_DEFAULTS.recycleAfterMs + 1);
   h.tick();
-  assert.equal(h.snapshot().status, 'auth-failed', 'silence is not a transport fault here');
+  assert.equal(
+    h.snapshot().status,
+    'auth-failed',
+    'silence is not a transport fault here',
+  );
 
   // ...and when the probe is finally hung up, it is on the auth cadence.
   h.advance(AIS_WATCHDOG_DEFAULTS.authProbeMs);
@@ -478,7 +611,8 @@ test('a silent probe socket cannot launder an auth rejection into the fast ladde
   const snap = h.snapshot();
   assert.equal(snap.status, 'auth-failed', 'still terminal');
   assert.equal(
-    snap.nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.authProbeMs,
+    snap.nextAttemptAt - h.time.wall,
+    AIS_WATCHDOG_DEFAULTS.authProbeMs,
     'the next probe stays an hour out, not five seconds',
   );
 });
@@ -489,9 +623,14 @@ test('repeated auth rejections never accelerate into the ladder', () => {
     const generation = h.watchdog.debugState().owned;
     h.fail(generation, { kind: 'auth', message: 'Invalid API key' });
     const snap = h.snapshot();
-    assert.equal(snap.status, 'auth-failed', `round ${round} must stay terminal`);
     assert.equal(
-      snap.nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.authProbeMs,
+      snap.status,
+      'auth-failed',
+      `round ${round} must stay terminal`,
+    );
+    assert.equal(
+      snap.nextAttemptAt - h.time.wall,
+      AIS_WATCHDOG_DEFAULTS.authProbeMs,
       `round ${round} must keep the slow cadence`,
     );
     h.advance(AIS_WATCHDOG_DEFAULTS.authProbeMs);
@@ -506,7 +645,11 @@ test('the AUTH-FAILED chip does not flicker hopeful while probing', () => {
   h.tick();
   assert.equal(h.snapshot().status, 'auth-failed');
   h.open(h.watchdog.debugState().owned);
-  assert.equal(h.snapshot().status, 'auth-failed', 'a handshake does not mean the key works');
+  assert.equal(
+    h.snapshot().status,
+    'auth-failed',
+    'a handshake does not mean the key works',
+  );
 });
 
 test('a changed API key clears the terminal auth state immediately', () => {
@@ -516,7 +659,11 @@ test('a changed API key clears the terminal auth state immediately', () => {
 
   h.configure({ hasKey: true, hasTransport: true, keyFingerprint: 'key-b' });
   h.tick();
-  assert.equal(h.snapshot().status, 'connecting', 'a new credential earns a fresh attempt');
+  assert.equal(
+    h.snapshot().status,
+    'connecting',
+    'a new credential earns a fresh attempt',
+  );
   assert.equal(h.snapshot().reconnectAttempt, 0);
 });
 
@@ -528,9 +675,14 @@ test('rotating the key mid-probe terminates the old key socket first', () => {
   assert.equal(h.watchdog.debugState().owned, 2);
 
   // The operator swaps the key while that probe is in flight.
-  const rotation = h.configure({ hasKey: true, hasTransport: true, keyFingerprint: 'key-b' });
+  const rotation = h.configure({
+    hasKey: true,
+    hasTransport: true,
+    keyFingerprint: 'key-b',
+  });
   assert.deepEqual(
-    rotation, [{ type: 'terminate', generation: 2, reason: 'key-rotated' }],
+    rotation,
+    [{ type: 'terminate', generation: 2, reason: 'key-rotated' }],
     'the in-flight old-key socket must be hung up, not left running',
   );
   assert.equal(h.openSockets.size, 0);
@@ -553,17 +705,35 @@ test("an old key's late rejection cannot push the new key into auth-failed", () 
   assert.equal(h.snapshot().status, 'live', 'the new key works');
 
   // Generation 2's rejection finally lands, an hour late and about key A.
-  const late = h.watchdog.onFailure(2, { kind: 'auth', message: 'Invalid API key' });
-  assert.deepEqual(late, [], 'an old-key rejection is an orphan with no effect');
-  assert.equal(h.snapshot().status, 'live', 'the new key must not inherit the old one\'s verdict');
+  const late = h.watchdog.onFailure(2, {
+    kind: 'auth',
+    message: 'Invalid API key',
+  });
+  assert.deepEqual(
+    late,
+    [],
+    'an old-key rejection is an orphan with no effect',
+  );
+  assert.equal(
+    h.snapshot().status,
+    'live',
+    "the new key must not inherit the old one's verdict",
+  );
   assert.equal(h.snapshot().reconnectAttempt, 0);
 });
 
 test('rotating the key also replaces a healthy socket built on the old credential', () => {
   const h = goLive(harness());
-  const rotation = h.configure({ hasKey: true, hasTransport: true, keyFingerprint: 'key-b' });
-  assert.deepEqual(rotation, [{ type: 'terminate', generation: 1, reason: 'key-rotated' }],
-    'the live socket subscribed with the old key and must not outlive it');
+  const rotation = h.configure({
+    hasKey: true,
+    hasTransport: true,
+    keyFingerprint: 'key-b',
+  });
+  assert.deepEqual(
+    rotation,
+    [{ type: 'terminate', generation: 1, reason: 'key-rotated' }],
+    'the live socket subscribed with the old key and must not outlive it',
+  );
   h.tick();
   assert.equal(h.watchdog.debugState().owned, 2);
 });
@@ -579,23 +749,42 @@ test('a probe CLOSE keeps auth-failed at the hourly cadence', () => {
   h.close(h.watchdog.debugState().owned);
 
   const snap = h.snapshot();
-  assert.equal(snap.status, 'auth-failed', 'a normal close does not mean the key is fine');
-  assert.equal(snap.nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.authProbeMs);
+  assert.equal(
+    snap.status,
+    'auth-failed',
+    'a normal close does not mean the key is fine',
+  );
+  assert.equal(
+    snap.nextAttemptAt - h.time.wall,
+    AIS_WATCHDOG_DEFAULTS.authProbeMs,
+  );
 });
 
 test('a probe TRANSPORT ERROR keeps auth-failed at the hourly cadence', () => {
   const h = goLive(harness());
-  h.fail(1, { kind: 'auth', message: 'AISStream rejected the API key (HTTP 401)' });
+  h.fail(1, {
+    kind: 'auth',
+    message: 'AISStream rejected the API key (HTTP 401)',
+  });
   h.advance(AIS_WATCHDOG_DEFAULTS.authProbeMs);
   h.tick();
 
-  h.fail(h.watchdog.debugState().owned, { kind: 'transport', message: 'ECONNRESET' });
+  h.fail(h.watchdog.debugState().owned, {
+    kind: 'transport',
+    message: 'ECONNRESET',
+  });
 
   const snap = h.snapshot();
   assert.equal(snap.status, 'auth-failed');
-  assert.equal(snap.nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.authProbeMs);
-  assert.match(snap.error, /rejected the API key/,
-    'the chip keeps pointing at the key, not at the network');
+  assert.equal(
+    snap.nextAttemptAt - h.time.wall,
+    AIS_WATCHDOG_DEFAULTS.authProbeMs,
+  );
+  assert.match(
+    snap.error,
+    /rejected the API key/,
+    'the chip keeps pointing at the key, not at the network',
+  );
 });
 
 test('a probe RATE LIMIT keeps auth-failed at the hourly cadence', () => {
@@ -604,10 +793,16 @@ test('a probe RATE LIMIT keeps auth-failed at the hourly cadence', () => {
   h.advance(AIS_WATCHDOG_DEFAULTS.authProbeMs);
   h.tick();
 
-  h.fail(h.watchdog.debugState().owned, { kind: 'rate-limit', retryAfterMs: 5_000 });
+  h.fail(h.watchdog.debugState().owned, {
+    kind: 'rate-limit',
+    retryAfterMs: 5_000,
+  });
 
   assert.equal(h.snapshot().status, 'auth-failed');
-  assert.equal(h.snapshot().nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.authProbeMs);
+  assert.equal(
+    h.snapshot().nextAttemptAt - h.time.wall,
+    AIS_WATCHDOG_DEFAULTS.authProbeMs,
+  );
 });
 
 test('ticking past staleMs must not relabel an auth-failed probe', () => {
@@ -621,8 +816,15 @@ test('ticking past staleMs must not relabel an auth-failed probe', () => {
     h.advance(1_000);
     h.tick();
   }
-  assert.ok(400_000 > AIS_WATCHDOG_DEFAULTS.recycleAfterMs, 'window covers both thresholds');
-  assert.equal(h.snapshot().status, 'auth-failed', 'time alone must not relabel the state');
+  assert.ok(
+    400_000 > AIS_WATCHDOG_DEFAULTS.recycleAfterMs,
+    'window covers both thresholds',
+  );
+  assert.equal(
+    h.snapshot().status,
+    'auth-failed',
+    'time alone must not relabel the state',
+  );
 });
 
 test('a probe outcome AFTER the stale window still keeps the hourly cadence', () => {
@@ -631,24 +833,37 @@ test('a probe outcome AFTER the stale window still keeps the hourly cadence', ()
   // auth coercion in scheduleRetry would no longer match.
   for (const outcome of ['close', 'transport', 'rate-limit']) {
     const h = goLive(harness());
-    h.fail(1, { kind: 'auth', message: 'AISStream rejected the API key (HTTP 401)' });
+    h.fail(1, {
+      kind: 'auth',
+      message: 'AISStream rejected the API key (HTTP 401)',
+    });
     h.advance(AIS_WATCHDOG_DEFAULTS.authProbeMs);
     h.tick();
     const probe = h.watchdog.debugState().owned;
 
-    for (let second = 0; second < 200; second += 1) { // past staleMs (120s)
+    for (let second = 0; second < 200; second += 1) {
+      // past staleMs (120s)
       h.advance(1_000);
       h.tick();
     }
-    assert.equal(h.snapshot().status, 'auth-failed', `${outcome}: still terminal before the outcome`);
+    assert.equal(
+      h.snapshot().status,
+      'auth-failed',
+      `${outcome}: still terminal before the outcome`,
+    );
 
     if (outcome === 'close') h.close(probe);
     else h.fail(probe, { kind: outcome });
 
     const snap = h.snapshot();
-    assert.equal(snap.status, 'auth-failed', `${outcome} after the stale window must stay terminal`);
     assert.equal(
-      snap.nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.authProbeMs,
+      snap.status,
+      'auth-failed',
+      `${outcome} after the stale window must stay terminal`,
+    );
+    assert.equal(
+      snap.nextAttemptAt - h.time.wall,
+      AIS_WATCHDOG_DEFAULTS.authProbeMs,
       `${outcome} after the stale window must keep the hourly cadence`,
     );
   }
@@ -664,13 +879,21 @@ test('a silent probe is recycled on the auth cadence, never the silence budget',
   // The silence budget would have recycled at 300s; the auth cadence must not.
   h.advance(AIS_WATCHDOG_DEFAULTS.recycleAfterMs + 1_000);
   h.tick();
-  assert.equal(h.types().length, before, 'the silence budget does not apply while auth-failed');
+  assert.equal(
+    h.types().length,
+    before,
+    'the silence budget does not apply while auth-failed',
+  );
   assert.equal(h.snapshot().status, 'auth-failed');
 
   // It IS bounded, though — the probe is hung up on the auth cadence.
   h.advance(AIS_WATCHDOG_DEFAULTS.authProbeMs);
   h.tick();
-  assert.equal(h.types().length, before + 1, 'the probe is still terminated, on its own clock');
+  assert.equal(
+    h.types().length,
+    before + 1,
+    'the probe is still terminated, on its own clock',
+  );
   assert.equal(h.watchdog.debugState().owned, null);
   assert.equal(h.snapshot().status, 'auth-failed');
 });
@@ -688,14 +911,20 @@ test('every probe outcome costs at most one attempt per hour', () => {
         if (action.type !== 'connect') continue;
         connects += 1;
         if (outcome === 'close') h.close(action.generation);
-        else if (outcome === 'transport') h.fail(action.generation, { kind: 'transport' });
-        else if (outcome === 'rate-limit') h.fail(action.generation, { kind: 'rate-limit' });
+        else if (outcome === 'transport')
+          h.fail(action.generation, { kind: 'transport' });
+        else if (outcome === 'rate-limit')
+          h.fail(action.generation, { kind: 'rate-limit' });
         // 'silence' simply never responds.
       }
       h.advance(1_000);
     }
     assert.ok(connects <= 1, `${outcome}: ${connects} probes in an hour`);
-    assert.equal(h.snapshot().status, 'auth-failed', `${outcome} must stay terminal`);
+    assert.equal(
+      h.snapshot().status,
+      'auth-failed',
+      `${outcome} must stay terminal`,
+    );
   }
 });
 
@@ -707,7 +936,11 @@ test('an unchanged key does not clear the terminal auth state', () => {
   h.configure(LIVE_ENV); // same fingerprint
   h.tick();
   assert.equal(h.snapshot().status, 'auth-failed');
-  assert.equal(h.types().length, before, 'no attempt while the same key is being refused');
+  assert.equal(
+    h.types().length,
+    before,
+    'no attempt while the same key is being refused',
+  );
 });
 
 test('a rate limit honours Retry-After', () => {
@@ -716,16 +949,24 @@ test('a rate limit honours Retry-After', () => {
 
   const snap = h.snapshot();
   assert.equal(snap.status, 'reconnecting');
-  assert.equal(snap.nextAttemptAt - h.time.wall, 120_000, "the server's own pacing wins");
+  assert.equal(
+    snap.nextAttemptAt - h.time.wall,
+    120_000,
+    "the server's own pacing wins",
+  );
 });
 
 test('a rate limit without Retry-After enters at the SLOWEST rung', () => {
   const h = goLive(harness());
   h.fail(1, { kind: 'rate-limit', message: '429' });
 
-  const slowest = AIS_WATCHDOG_DEFAULTS.backoffMs[AIS_WATCHDOG_DEFAULTS.backoffMs.length - 1];
+  const slowest =
+    AIS_WATCHDOG_DEFAULTS.backoffMs[AIS_WATCHDOG_DEFAULTS.backoffMs.length - 1];
   assert.equal(h.snapshot().nextAttemptAt - h.time.wall, slowest);
-  assert.notEqual(h.snapshot().nextAttemptAt - h.time.wall, AIS_WATCHDOG_DEFAULTS.backoffMs[0]);
+  assert.notEqual(
+    h.snapshot().nextAttemptAt - h.time.wall,
+    AIS_WATCHDOG_DEFAULTS.backoffMs[0],
+  );
 });
 
 // --- Worst-case connection rate, per failure class -------------------------
@@ -785,7 +1026,12 @@ test('a silent-socket recycle loop also stays in single digits per hour', () => 
 
 test('a custom subscription disarms the silence watch instead of recycling forever', () => {
   const h = harness();
-  h.configure({ hasKey: true, hasTransport: true, silenceWatch: false, keyFingerprint: 'key-a' });
+  h.configure({
+    hasKey: true,
+    hasTransport: true,
+    silenceWatch: false,
+    keyFingerprint: 'key-a',
+  });
   h.tick();
   h.open(1);
   h.message(1);
@@ -793,7 +1039,11 @@ test('a custom subscription disarms the silence watch instead of recycling forev
   h.advance(AIS_WATCHDOG_DEFAULTS.recycleAfterMs * 4);
   h.tick();
 
-  assert.deepEqual(h.types(), ['connect:1'], 'a legitimately quiet filter is never recycled');
+  assert.deepEqual(
+    h.types(),
+    ['connect:1'],
+    'a legitimately quiet filter is never recycled',
+  );
   assert.equal(h.snapshot().watchdog, 'custom-subscription-off');
 });
 
@@ -804,7 +1054,9 @@ test('dispose terminates the live socket and resets the ladder', () => {
   h.advance(6_000);
   h.tick();
 
-  assert.deepEqual(h.dispose(), [{ type: 'terminate', generation: 2, reason: 'dispose' }]);
+  assert.deepEqual(h.dispose(), [
+    { type: 'terminate', generation: 2, reason: 'dispose' },
+  ]);
   assert.equal(h.openSockets.size, 0);
   assert.equal(h.snapshot().status, 'idle');
   assert.equal(h.snapshot().reconnectAttempt, 0);
@@ -846,9 +1098,15 @@ test('an empty or unparseable silence override never silently disables the watch
   // loose parse would read as the kill switch and mute the whole feature.
   assert.deepEqual(parseSilenceTimeoutEnv('', warn), { kind: 'default' });
   assert.deepEqual(parseSilenceTimeoutEnv('   ', warn), { kind: 'default' });
-  assert.deepEqual(parseSilenceTimeoutEnv(undefined, warn), { kind: 'default' });
+  assert.deepEqual(parseSilenceTimeoutEnv(undefined, warn), {
+    kind: 'default',
+  });
   assert.deepEqual(parseSilenceTimeoutEnv(null, warn), { kind: 'default' });
-  assert.equal(warnings.length, 0, 'an absent value is normal, not worth warning about');
+  assert.equal(
+    warnings.length,
+    0,
+    'an absent value is normal, not worth warning about',
+  );
 
   assert.deepEqual(parseSilenceTimeoutEnv('abc', warn), { kind: 'default' });
   assert.deepEqual(parseSilenceTimeoutEnv('-5', warn), { kind: 'default' });
@@ -860,13 +1118,23 @@ test('an empty or unparseable silence override never silently disables the watch
 test('only a literal zero is the documented kill switch', () => {
   assert.deepEqual(parseSilenceTimeoutEnv('0'), { kind: 'off' });
   assert.deepEqual(parseSilenceTimeoutEnv(0), { kind: 'off' });
-  assert.deepEqual(parseSilenceTimeoutEnv('90000'), { kind: 'timeout', value: 90_000 });
-  assert.deepEqual(parseSilenceTimeoutEnv(' 90000 '), { kind: 'timeout', value: 90_000 });
+  assert.deepEqual(parseSilenceTimeoutEnv('90000'), {
+    kind: 'timeout',
+    value: 90_000,
+  });
+  assert.deepEqual(parseSilenceTimeoutEnv(' 90000 '), {
+    kind: 'timeout',
+    value: 90_000,
+  });
 });
 
 test('recycleAfterMs can never be tuned below staleMs', () => {
   const time = fakeClock();
-  const watchdog = createAisWatchdog({ staleMs: 60_000, recycleAfterMs: 1_000, clock: time.clock });
+  const watchdog = createAisWatchdog({
+    staleMs: 60_000,
+    recycleAfterMs: 1_000,
+    clock: time.clock,
+  });
   watchdog.configure(LIVE_ENV);
   watchdog.tick();
   watchdog.onMessage(1);
@@ -874,5 +1142,8 @@ test('recycleAfterMs can never be tuned below staleMs', () => {
   time.advance(30_000);
   assert.deepEqual(watchdog.tick(), []);
   time.advance(31_000);
-  assert.deepEqual(watchdog.tick().map((a) => a.type), ['terminate']);
+  assert.deepEqual(
+    watchdog.tick().map((a) => a.type),
+    ['terminate'],
+  );
 });
