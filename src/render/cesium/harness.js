@@ -14,13 +14,20 @@ import { createCesiumSceneRenderer } from './sceneRenderer.js';
 
 /** @type {ReadonlySet<string>} */
 export const CESIUM_CHECKS = new Set([
+  'draw.drillPick',
   'draw.ids',
   'draw.models',
+  'draw.pick',
   'draw.sets',
   'frame.order',
   'frame.renderOnce',
   'frame.time',
   'globe.sky',
+  'query.heights',
+  'query.heights.sets',
+  'query.projectMany',
+  'query.rays',
+  'query.withoutCapability',
   'renderer.whenSettled',
 ]);
 

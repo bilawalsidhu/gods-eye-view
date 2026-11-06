@@ -93,3 +93,14 @@ export function cameraFlightActive(camera) {
 export function updateCameraChanged(camera) {
   camera._updateCameraChanged();
 }
+
+/**
+ * The error a billboard's image failed to load with, if it did: Cesium
+ * keeps `ready` false then, so `whenSettled` reports the failure instead of
+ * waiting out its timeout.
+ * @param {object} billboard Cesium Billboard.
+ * @returns {Error|undefined}
+ */
+export function billboardLoadError(billboard) {
+  return billboard.loadError;
+}

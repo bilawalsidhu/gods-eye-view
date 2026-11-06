@@ -135,6 +135,10 @@ function createHeights(scene) {
       if (against === 'terrain') {
         const provider = terrainProvider();
         if (!provider) return cartos.map(() => null);
+        // An ellipsoid has no tiles to sample (Cesium throws for want of
+        // their availability): its terrain is the ellipsoid, height 0.
+        if (provider instanceof Cesium.EllipsoidTerrainProvider)
+          return cartos.map((carto) => (carto ? 0 : null));
         await Cesium.sampleTerrainMostDetailed(provider, valid);
       } else {
         if (typeof scene.sampleHeightMostDetailed !== 'function')
