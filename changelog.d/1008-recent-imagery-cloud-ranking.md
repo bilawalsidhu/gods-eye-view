@@ -3,5 +3,6 @@
   newer day within 10 scene-cloud points of it. A day's cloud is weighted by
   the share of the box each HLS granule covers, so a cloudy tile overlapping
   the box by a sliver no longer condemns a clear day, and the day cards show
-  the cloud range of the granules over the box. In Bergen this chose a 30%
-  day over the newest at 83% (trygvehhh, #1008).
+  the cloud range of the granules over the box. Voice `find_imagery` ranks
+  against the same box, so it picks the day START HERE shows. In Bergen this
+  chose a 30% day over the newest at 83% (trygvehhh, #1008).

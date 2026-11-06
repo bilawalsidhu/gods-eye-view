@@ -78,7 +78,7 @@ export function imageryDateRange(dateRange, now = Date.now()) {
  * The candidates that satisfy the filters, ranked by the layer's own rule
  * (coverage, then clear sky, then newest).
  * @param {Array<object>} candidates Layer snapshot candidates.
- * @param {{from?: number, to?: number, maxCloudPct?: number|null, truncated?: boolean}} filters
+ * @param {{from?: number, to?: number, maxCloudPct?: number|null, truncated?: boolean, box?: object|null}} filters
  */
 export function selectImagery(
   candidates,
@@ -87,6 +87,7 @@ export function selectImagery(
     to = Infinity,
     maxCloudPct = null,
     truncated = false,
+    box = null,
   } = {},
 ) {
   // Compared as UTC days: an acquisition belongs to the day it was taken.
@@ -106,6 +107,8 @@ export function selectImagery(
   const ranked = rankLatest(eligible, {
     maxCloud: maxCloudPct ?? undefined,
     truncated,
+    // The same box the layer ranks against, so voice picks START HERE's day.
+    box,
   });
   return { eligible, best: ranked.candidate, reason: ranked.reason };
 }
@@ -327,6 +330,7 @@ export async function findImagery(
       ...(range || {}),
       maxCloudPct,
       truncated: snapshot.notes?.some((note) => /truncated/i.test(note)),
+      box: snapshot.box,
     });
     const windowNote = 'the catalog covers the last 30 days';
     if (!best) {
