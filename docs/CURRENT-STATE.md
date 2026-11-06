@@ -4438,8 +4438,6 @@ IOC page. The row counts reporting stations. Data is raw and not quality
 controlled, and the card says so. The layer is outside voice
 (`VOICE_OFF_LAYERS`).
 
-Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
-
 Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
 layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts
 collapsed. It opens itself only when the user, voice or a tool switches the
