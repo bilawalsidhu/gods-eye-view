@@ -296,6 +296,22 @@ async function expandPanel(page) {
   );
 }
 
+/** A keyless bundle opens on the first keyless source with live controls. */
+async function assertKeylessDefault(page) {
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.setEnabled('street-level', true, {
+      origin: 'user',
+    }),
+  );
+  await uiUntil(page, litAlone, 'kartaview');
+  const shown = await page.evaluate(() => ({
+    status: document.getElementById('sl-status').textContent,
+    disabled: document.getElementById('sl-controls').disabled,
+  }));
+  assert.notEqual(shown.status, 'KEY REQUIRED');
+  assert.equal(shown.disabled, false, 'controls stay live');
+}
+
 async function assertKeyRequired(page) {
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.setEnabled('street-level', true, {
@@ -528,9 +544,23 @@ async function main() {
       );
 
     await expandPanel(page);
-    if (!configured) {
+    if (!configured && litAlone(await getUI(page), 'mapillary')) {
+      // A keyed bundle behind a server without the token keeps Mapillary.
       await step('keyless server: KEY REQUIRED gates the controls', () =>
         assertKeyRequired(page),
+      );
+      skip('no Mapillary key', 'the keyed steps');
+    } else if (!configured) {
+      await step('keyless server: opens on KartaView, not KEY REQUIRED', () =>
+        assertKeylessDefault(page),
+      );
+      await step(
+        'keyless server: the MAPILLARY chip explains its key instead of switching',
+        async () => {
+          await press(page, '#sl-provider-chips [data-chip-id="mapillary"]');
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          assert.ok(litAlone(await getUI(page), 'kartaview'));
+        },
       );
       skip('no Mapillary key', 'the keyed steps');
     } else {
@@ -751,6 +781,8 @@ async function main() {
       await park(page);
 
       await fixtureStep(
+        // The fixture bundle carries a token, so this covers a keyless
+        // server behind a keyed bundle; the keyless default is checked above.
         'keyless server (second page): KEY REQUIRED gates the controls',
         async () => {
           const keyless = await open(
