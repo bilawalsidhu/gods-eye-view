@@ -284,3 +284,32 @@ test('R1: a switch change notifies only the changed key (never the whole stale c
   c.setFlags({ boundaries: true }, { notify: true });
   assert.deepEqual(notified, [{ lines: false }, { boundaries: true }]);
 });
+
+test('a catalogue failure keeps error status and a fixed diagnostic', async () => {
+  const secret = 'https://user:pass@host/?api_key=SECRETKEY123';
+  const error = new Error(`sky data 503 for ${secret}`);
+  error.name = secret;
+  error.cause = new Error(secret);
+  const s = await content({
+    loadData: async () => {
+      throw error;
+    },
+  });
+  assert.equal(s.c.status, 'error');
+  assert.equal(s.c.data, null);
+  const diagnostic =
+    s.c.dataError instanceof Error
+      ? [
+          s.c.dataError.message,
+          s.c.dataError.name,
+          s.c.dataError.stack,
+          s.c.dataError.cause == null
+            ? ''
+            : String(s.c.dataError.cause.message || s.c.dataError.cause),
+        ].join('\n')
+      : String(s.c.dataError);
+  assert.equal(diagnostic.includes('SECRETKEY123'), false, diagnostic);
+  assert.equal(diagnostic.includes('pass@host'), false, diagnostic);
+  assert.equal(s.c.dataError, 'star data could not be loaded');
+  assert.equal(s.c.dataError instanceof Error, false);
+});

@@ -7,6 +7,7 @@ import {
   CONSTELLATION_COUNT,
   MIN_STARS,
   SkyDataError,
+  loadBoundaries,
   loadSkyData,
   parseSkyData,
   resetSkyDataCache,
@@ -148,5 +149,78 @@ test('loadSkyData fetches both files same-origin, validates, memoises, and retri
   await assert.rejects(loadSkyData({ fetchImpl: flaky }), /503/);
   const recovered = await loadSkyData({ fetchImpl: flaky });
   assert.equal(recovered.constellations.length, 88);
+  resetSkyDataCache();
+});
+
+const SECRET = 'https://user:pass@host/?api_key=SECRETKEY123';
+
+function assertLoadErrorOmitsSecret(error) {
+  const text = [
+    error?.message,
+    error?.name,
+    error?.stack,
+    error?.cause == null ? '' : String(error.cause?.message || error.cause),
+  ].join('\n');
+  assert.equal(text.includes('SECRETKEY123'), false, text);
+  assert.equal(text.includes('pass@host'), false, text);
+  assert.equal(text.includes('stars.json'), false, text);
+  assert.equal(text.includes('boundaries.json'), false, text);
+  assert.equal(text.includes('constellations.json'), false, text);
+}
+
+test('catalogue load errors keep the HTTP status and omit the request URL', async () => {
+  resetSkyDataCache();
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 401,
+    json: async () => ({}),
+  });
+  await assert.rejects(loadSkyData({ fetchImpl }), (error) => {
+    assert.equal(error.message, 'sky data 401');
+    assert.equal(error.cause, undefined);
+    assertLoadErrorOmitsSecret(error);
+    return true;
+  });
+
+  resetSkyDataCache();
+  await assert.rejects(
+    loadBoundaries({
+      fetchImpl: async () => ({
+        ok: false,
+        status: 403,
+        json: async () => ({}),
+      }),
+    }),
+    (error) => {
+      assert.equal(error.message, 'sky data 403');
+      assert.equal(error.cause, undefined);
+      assertLoadErrorOmitsSecret(error);
+      return true;
+    },
+  );
+  resetSkyDataCache();
+});
+
+test('a catalogue fetch exception is replaced with a fixed diagnostic', async () => {
+  resetSkyDataCache();
+  const fetchImpl = async () => {
+    const error = new TypeError(`fetch failed ${SECRET}`);
+    error.cause = new Error(SECRET);
+    throw error;
+  };
+  await assert.rejects(loadSkyData({ fetchImpl }), (error) => {
+    assert.equal(error.message, 'sky data fetch failed');
+    assert.equal(error.cause, undefined);
+    assertLoadErrorOmitsSecret(error);
+    return true;
+  });
+
+  resetSkyDataCache();
+  await assert.rejects(loadBoundaries({ fetchImpl }), (error) => {
+    assert.equal(error.message, 'sky data fetch failed');
+    assert.equal(error.cause, undefined);
+    assertLoadErrorOmitsSecret(error);
+    return true;
+  });
   resetSkyDataCache();
 });

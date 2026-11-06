@@ -46,6 +46,26 @@ import {
 
 export const PASS_SLICE_MS = 25;
 
+// Posted to the page. Only these fixed strings are safe; exception text can
+// carry request URLs, tokens, or catalogue bytes.
+const SAFE_WORKER_DIAGNOSTICS = new Set(['no observer', 'bad time']);
+
+function workerDiagnostic(error) {
+  const message = typeof error?.message === 'string' ? error.message : '';
+  return SAFE_WORKER_DIAGNOSTICS.has(message)
+    ? message
+    : 'worker request failed';
+}
+
+function postWorkerError(post, request, seq, error) {
+  post({
+    type: 'error',
+    request: request ?? null,
+    seq: seq ?? null,
+    message: workerDiagnostic(error),
+  });
+}
+
 export function createSatWorkerHandler(
   post,
   {
@@ -102,12 +122,7 @@ export function createSatWorkerHandler(
         try {
           runSlice(state);
         } catch (error) {
-          post({
-            type: 'error',
-            request: 'passes',
-            seq: null,
-            message: String(error?.message || error),
-          });
+          postWorkerError(post, 'passes', null, error);
         }
       });
     }
@@ -230,12 +245,7 @@ export function createSatWorkerHandler(
         arcFor(data);
       }
     } catch (error) {
-      post({
-        type: 'error',
-        request: type ?? null,
-        seq: data?.seq ?? null,
-        message: String(error?.message || error),
-      });
+      postWorkerError(post, type, data?.seq, error);
     }
   };
 }
