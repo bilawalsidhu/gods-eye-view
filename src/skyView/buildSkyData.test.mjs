@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import test from 'node:test';
+import { tmpdir } from 'node:os';
 import { gzipSync } from 'node:zlib';
 import {
   B1875_MS,
@@ -71,7 +75,7 @@ test('stars: mag <= 6.5 plus line stars, Sol dropped, sorted by magnitude', () =
   assert.ok(Math.abs(out.ra[1] - 5.7296) < 1e-9); // 0.1 rad, 4 decimals
   assert.throws(
     () => buildStars(parseCsv(csv(ROWS)), new Set([1, 99])),
-    /no row for line HIP ids: 99/,
+    /no row for line HIP ids/,
   );
 });
 
@@ -133,4 +137,81 @@ test('boundaries: B1875 edges densified to <= 1 deg and precessed to J2000 (inve
     /bad boundary edge/,
   );
   assert.throws(() => buildBoundaries({}, precessionMatrix, -1.25), /no edges/);
+});
+
+const CALLER_SECRET = 'ZZPROBESECRETKEY123Z';
+
+function assertOmitsCallerText(text, callerText) {
+  const value = String(callerText);
+  assert.equal(text.includes(value), false);
+  assert.equal(text.includes(encodeURIComponent(value)), false);
+  if (value.length >= 8) assert.equal(text.includes(value.slice(0, 8)), false);
+  if (value.length >= 6) assert.equal(text.includes(value.slice(-6)), false);
+}
+
+test('boundary and star build errors do not echo caller text', () => {
+  const matrix = () => [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ];
+  assert.throws(
+    () =>
+      buildBoundaries(
+        {
+          edges_epoch: CALLER_SECRET,
+          edges: ['1:1 M+ 00:00:00 +00:00:00 00:00:00 +00:00:00 AND ORI'],
+        },
+        matrix,
+        0,
+      ),
+    (error) => {
+      const text = `${error.message}\n${error.stack}`;
+      assertOmitsCallerText(text, CALLER_SECRET);
+      assert.match(error.message, /edges epoch/);
+      return true;
+    },
+  );
+
+  const edgeSecret = `https://user:pass@host/?api_key=${CALLER_SECRET}`;
+  assert.throws(
+    () => buildBoundaries({ edges_epoch: 'B1875', edges: [edgeSecret] }, matrix, 0),
+    (error) => {
+      const text = `${error.message}\n${error.stack}`;
+      assertOmitsCallerText(text, CALLER_SECRET);
+      assert.equal(text.includes('pass@host'), false);
+      assert.match(error.message, /bad boundary edge/);
+      return true;
+    },
+  );
+
+  assert.throws(
+    () => buildStars(parseCsv(csv(ROWS)), new Set([CALLER_SECRET])),
+    (error) => {
+      const text = `${error.message}\n${error.stack}`;
+      assertOmitsCallerText(text, CALLER_SECRET);
+      assert.match(error.message, /no row for line HIP/);
+      return true;
+    },
+  );
+});
+
+test('build CLI does not echo a missing input path', () => {
+  const script = fileURLToPath(new URL('../../scripts/build-sky-data.mjs', import.meta.url));
+  const missing = path.join(tmpdir(), 'sky-build-absent', CALLER_SECRET);
+  const present = fileURLToPath(new URL('./buildSkyData.test.mjs', import.meta.url));
+  for (const [hyg, western] of [
+    [missing, present],
+    [present, missing],
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      [script, '--hyg', hyg, '--western', western],
+      { encoding: 'utf8' },
+    );
+    const text = `${result.stdout || ''}\n${result.stderr || ''}`;
+    assert.notEqual(result.status, 0);
+    assertOmitsCallerText(text, CALLER_SECRET);
+    assert.equal(text.includes('sky-build-absent'), false);
+  }
 });

@@ -33,7 +33,12 @@
  * `schedule()` the next slice), so tick messages are answered between
  * slices and the sky keeps moving while the list fills in.
  */
-import { createSatEngine } from './satCore.js';
+import {
+  createSatEngine,
+  SKY_CORE_GROUPS,
+  ACTIVE_PATH,
+  STARLINK_PATH,
+} from './satCore.js';
 import {
   createPassScan,
   OBSERVER_MOVE_KM,
@@ -47,8 +52,22 @@ import {
 export const PASS_SLICE_MS = 25;
 
 // Posted to the page. Only these fixed strings are safe; exception text can
-// carry request URLs, tokens, or catalogue bytes.
+// carry request URLs, tokens, or catalogue bytes. A TLE path is echoed only
+// when it is one of the catalogue groups the page itself requests.
 const SAFE_WORKER_DIAGNOSTICS = new Set(['no observer', 'bad time']);
+const KNOWN_CATALOG_PATHS = new Set([
+  ...SKY_CORE_GROUPS.map((group) => group.path),
+  ACTIVE_PATH,
+  STARLINK_PATH,
+]);
+
+function publishedCatalogLoad(load) {
+  if (KNOWN_CATALOG_PATHS.has(load?.path)) return load;
+  if (!load || typeof load !== 'object') return load;
+  const published = { ...load };
+  delete published.path;
+  return published;
+}
 
 function workerDiagnostic(error) {
   const message = typeof error?.message === 'string' ? error.message : '';
@@ -215,7 +234,7 @@ export function createSatWorkerHandler(
         post({
           type: 'catalog',
           version: engine.version,
-          load,
+          load: publishedCatalogLoad(load),
           meta: engine.meta(),
         });
       } else if (type === 'rcs') {
