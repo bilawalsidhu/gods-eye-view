@@ -37,6 +37,7 @@ function standalone({ failOpen = null } = {}) {
       getState: () => ({ status: 'ready' }),
     }),
     resolveEngineKind: () => 'cesium',
+    engineOfChoice: (choice) => (choice === 'cesium' ? 'cesium' : 'navara'),
     createStandalonePlaceSearch: () => ({ kind: 'search' }),
     createStandaloneCatalog: ({ engineKind }) => ({ engineKind }),
     createGoogleTokenSource: () => null,
@@ -51,6 +52,7 @@ function standalone({ failOpen = null } = {}) {
     attachScenePart,
     AbortController,
     AbortSignal,
+    DOMException,
   });
   vm.runInContext(source, context);
   const app = context.createStandaloneApplication({});

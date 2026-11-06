@@ -29,6 +29,8 @@ import {
 import { createMissLoader, tileCacheFile } from './qa/tileCache.mjs';
 
 export const ENGINES = Object.freeze(['cesium', 'navara']);
+/** What the Globe Engine picker offers: the engines and Navara HD. */
+const CHOICES = Object.freeze([...ENGINES, 'navara-hd']);
 /** Local ports that belong to the user's own servers: never a QA preview. */
 export const RESERVED_PORTS = Object.freeze([
   '',
@@ -406,7 +408,7 @@ export async function pickEngine(
   kind,
   { settle = true, afterInput = null } = {},
 ) {
-  assert.ok(ENGINES.includes(kind), kind);
+  assert.ok(CHOICES.includes(kind), kind);
   const expanded = () =>
     page.$eval(
       '#control-panel-toggle',
@@ -430,6 +432,21 @@ export async function pickEngine(
   });
   const from = await page.$eval('#globe-engine', (el) => el.value);
   assert.notEqual(from, kind, `the picker already shows ${kind}`);
+  // The key typed below is `kind`'s first letter: it selects the next option
+  // starting with it (after `from` when `from` starts with it too). Each key
+  // is a change that starts a switch, so `kind` must be one key away
+  // (Cesium → Navara HD goes through Navara).
+  const values = await page.$$eval('#globe-engine option', (options) =>
+    options.map((option) => option.value),
+  );
+  const matches = values.filter((value) => value[0] === kind[0]);
+  assert.equal(
+    from[0] === kind[0]
+      ? matches[(matches.indexOf(from) + 1) % matches.length]
+      : matches[0],
+    kind,
+    `${kind} is not one key away from ${from}`,
+  );
   // Where a pointer can reach the picker: the label's own text (focuses the
   // select without opening its menu), else the select itself.
   const target = await page.$eval('#globe-engine', (el) => {
@@ -537,7 +554,9 @@ export async function pickEngine(
 export async function waitForEngine(page, kind, { timeout = 120000 } = {}) {
   await page.waitForFunction(
     (expected) =>
-      window.__godsEyeView?.engine?.kind === expected &&
+      // Navara HD runs the Navara engine.
+      window.__godsEyeView?.engine?.kind ===
+        (expected === 'cesium' ? 'cesium' : 'navara') &&
       document.querySelector('#globe-engine')?.value === expected &&
       !document.querySelector('#globe-engine')?.disabled &&
       !document.querySelector('.engine-switch-frame') &&

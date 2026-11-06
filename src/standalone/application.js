@@ -15,12 +15,15 @@ import {
 } from '../i18n/index.js';
 import { mountApplicationViews } from '../ui/views/index.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
-import { resolveEngineKind } from '../app/engineChoice.js';
+import { engineOfChoice, resolveEngineKind } from '../app/engineChoice.js';
 import { createSceneHost } from '../app/sceneHost.js';
 import { attachScenePart } from '../app/sceneParts.js';
 
 // Only one engine may own the page at a time.
 let owner = null;
+
+/** The abort reason of a released globe, made once at module load. */
+const SCENE_RELEASED = new DOMException('The globe was released', 'AbortError');
 
 /** The page's engine choice: ?engine=, else the stored gev.engine, else Cesium. */
 export function pageEngineKind() {
@@ -91,7 +94,9 @@ export function createStandaloneApplication({
     const controller = new AbortController();
     const releases = [];
     const release = async () => {
-      controller.abort();
+      // A reason made here would keep this call's stack, and with it the
+      // released scene, alive in every closure that still holds `signal`.
+      controller.abort(SCENE_RELEASED);
       const errors = [];
       while (releases.length) {
         try {
@@ -123,13 +128,16 @@ export function createStandaloneApplication({
       // The catalog of this engine: on Navara only the layers with a Navara
       // renderer (src/app/layers/renderers.js), the others' state kept for
       // links. The layer models are the session's (layerSession.models).
+      // Session models keep the catalog's closures past this scene: they
+      // capture the operations, never the scene (it holds the engine).
+      const { operations } = scene;
       const sceneCatalog = createStandaloneCatalog({
-        engineKind: kind,
+        engineKind: engineOfChoice(kind),
         layerSession,
         sources: { ...sources, ...qaSources },
         streetLevelProviders,
         nepalBoundaryResolver: (resolverSignal) =>
-          scene.operations.annotationResolver.resolveRegionRingForQuery(
+          operations.annotationResolver.resolveRegionRingForQuery(
             'Nepal',
             resolverSignal,
             placeSearch,
@@ -137,7 +145,7 @@ export function createStandaloneApplication({
             { budgetMs: Infinity },
           ),
         signal,
-        surface: scene.operations.surface,
+        surface: operations.surface,
       });
       return Object.freeze({
         ...scene,

@@ -12,7 +12,7 @@
 // Requests that arrive while a switch or a recovery runs are never dropped:
 // once the current attempt settles, the address is read again and reconciled.
 
-const ENGINES = Object.freeze(['cesium', 'navara']);
+import { ENGINE_CHOICES } from '../app/engineChoice.js';
 
 /** A started engine whose first frame takes longer than this is shown anyway. */
 const FIRST_FRAME_WAIT_MS = 10_000;
@@ -88,7 +88,7 @@ export function createEngineSwitch({
 
   /** The picker's choice. While a switch runs it is queued, not dropped. */
   function select(next) {
-    if (!ENGINES.includes(next) || signal.aborted) return null;
+    if (!ENGINE_CHOICES.includes(next) || signal.aborted) return null;
     requests++;
     if (busy) {
       queued = next;

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ENGINE_STORAGE_KEY, resolveEngineKind } from './engineChoice.js';
+import {
+  ENGINE_STORAGE_KEY,
+  engineOfChoice,
+  resolveEngineKind,
+} from './engineChoice.js';
 
 const storage = (value) => ({
   getItem: (key) => (key === ENGINE_STORAGE_KEY ? value : null),
@@ -52,4 +56,24 @@ test('unknown values and unreadable storage fall back to Cesium', () => {
     },
   };
   assert.equal(resolveEngineKind({ search: '', storage: throwing }), 'cesium');
+});
+
+test('Navara HD is a choice of the Navara engine', () => {
+  assert.equal(
+    resolveEngineKind({
+      search: '?engine=navara-hd',
+      storage: storage('cesium'),
+    }),
+    'navara-hd',
+  );
+  assert.equal(
+    resolveEngineKind({ search: '', storage: storage('navara-hd') }),
+    'navara-hd',
+  );
+  assert.equal(resolveEngineKind({ search: '?engine=navara-4k' }), 'cesium');
+  assert.deepEqual(['cesium', 'navara', 'navara-hd'].map(engineOfChoice), [
+    'cesium',
+    'navara',
+    'navara',
+  ]);
 });

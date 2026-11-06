@@ -1,13 +1,52 @@
 // This cache owns the parked renderer and its map. The layer session owns
 // feeds, selection, media and the Director across both renderer attachments.
-export function createRendererCache() {
+
+/** How long a parked renderer waits for a switch back before it is
+ * disposed: a parked Navara holds about 1.3 GiB, a parked Cesium about
+ * 0.26 GiB. A later switch back builds it cold (1.5-2 s). */
+export const PARKED_RELEASE_MS = 3 * 60 * 1000;
+
+/**
+ * `engineOf(kind)` names the engine a kind runs: kinds of one engine (Navara
+ * and Navara HD) never stay parked together, so acquiring one releases the
+ * other first.
+ */
+export function createRendererCache({
+  engineOf = (kind) => kind,
+  parkedMs = PARKED_RELEASE_MS,
+  onReleaseError = (error) =>
+    console.error('Parked renderer release failed:', error),
+} = {}) {
   const idle = new Map();
   let retainKind;
 
+  function take(kind) {
+    const entry = idle.get(kind);
+    idle.delete(kind);
+    if (entry) clearTimeout(entry.releaseTimer);
+    return entry;
+  }
+
+  // Dispose a parked renderer for good.
+  function release(kind) {
+    const entry = take(kind);
+    try {
+      entry.dispose();
+    } catch (error) {
+      onReleaseError(error);
+    } finally {
+      // A disposed globe's context stays live while anything still
+      // references its canvas; losing it frees the GPU memory now (the
+      // canvas is out of the document, so no page listener hears it).
+      entry.context?.getExtension?.('WEBGL_lose_context')?.loseContext();
+    }
+  }
+
   async function acquire(kind, build, defer) {
     const host = document.getElementById('cesiumContainer');
-    let entry = idle.get(kind);
-    idle.delete(kind);
+    for (const other of [...idle.keys()])
+      if (other !== kind && engineOf(other) === engineOf(kind)) release(other);
+    let entry = take(kind);
     // loseContext() takes effect before its queued DOM event is delivered.
     // Check the context itself too, before resuming a parked render loop.
     if (entry && (entry.lost || entry.context?.isContextLost?.())) {
@@ -76,6 +115,7 @@ export function createRendererCache() {
       }
       entry.container.remove();
       idle.set(kind, entry);
+      entry.releaseTimer = setTimeout(() => release(kind), parkedMs);
     });
     return entry.scene;
   }
@@ -86,8 +126,7 @@ export function createRendererCache() {
       retainKind = kind;
     },
     clear() {
-      for (const entry of idle.values()) entry.dispose();
-      idle.clear();
+      for (const kind of [...idle.keys()]) take(kind).dispose();
     },
   };
 }

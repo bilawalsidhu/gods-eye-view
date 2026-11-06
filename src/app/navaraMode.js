@@ -336,6 +336,7 @@ export async function createNavaraScene({
   mapOptions,
   loaderStatus,
   loadNavaraGlobe = loadNavaraGlobeModule,
+  hd = false,
   signal,
   defer,
 }) {
@@ -346,6 +347,8 @@ export async function createNavaraScene({
     container,
     // The cinematic look unless `?look=photoreal|minimal` asks otherwise.
     search: globalThis.location?.search ?? '',
+    // Navara HD: the device pixel ratio and MSAA (viewOptions.js).
+    hd,
   });
   defer(() => globe.destroy());
   const { engine } = globe;

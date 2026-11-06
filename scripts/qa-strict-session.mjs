@@ -103,10 +103,19 @@ export async function installSessionFixtures(
   );
 }
 
-/** Open the app on `engine` with the session hash and wait until it runs. */
-export async function openApp(page, origin, engine, hash = SESSION_HASH) {
+/**
+ * Open the app on `engine` with the session hash (and `search`, more query
+ * parameters such as `&parkedMs=3000`) and wait until it runs.
+ */
+export async function openApp(
+  page,
+  origin,
+  engine,
+  hash = SESSION_HASH,
+  search = '',
+) {
   const url = new URL(origin);
-  url.search = `?engine=${engine}&welcome=0`;
+  url.search = `?engine=${engine}&welcome=0${search}`;
   url.hash = hash;
   await page.goto(url.href, { waitUntil: 'domcontentloaded' });
   await waitForEngine(page, engine);

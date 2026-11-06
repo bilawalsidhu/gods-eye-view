@@ -78,6 +78,7 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     CITY_POIS: [],
     createApplication: (options) => ({ ...options, subscribe() {} }),
     resolveEngineKind: () => 'cesium',
+    engineOfChoice: (choice) => (choice === 'cesium' ? 'cesium' : 'navara'),
     createStandalonePlaceSearch: () => ({}),
     createStandaloneCatalog: () => ({}),
     createGoogleTokenSource: () => createGoogleTokenSource({ fetchImpl }),
@@ -91,6 +92,7 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     attachScenePart,
     AbortController,
     AbortSignal,
+    DOMException,
   });
   vm.runInContext(source, context);
   const app = context.createStandaloneApplication(credentials);

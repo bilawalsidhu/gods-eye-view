@@ -21,8 +21,9 @@ import { loadCesium } from './loadCesium.js';
 
 /**
  * Construct the application globe using the caller's local configuration.
- * `engineKind` 'navara' builds the experimental Navara engine instead of the
- * Cesium viewer: the scene then has no viewer (`viewer: null`).
+ * `engineKind` 'navara' or 'navara-hd' (the page's engine choice,
+ * src/app/engineChoice.js) builds the experimental Navara engine instead of
+ * the Cesium viewer: the scene then has no viewer (`viewer: null`).
  */
 export async function createApplicationScene({
   requestServices,
@@ -113,7 +114,7 @@ async function createRenderer({
 }) {
   // The Navara mode's own code loads only in that mode, with Navara itself,
   // so the Cesium-mode bundle carries none of it.
-  if (engineKind === 'navara') {
+  if (engineKind === 'navara' || engineKind === 'navara-hd') {
     const scene = await (
       await import('./navaraMode.js')
     ).createNavaraScene({
@@ -124,6 +125,7 @@ async function createRenderer({
       mapOptions,
       loaderStatus,
       loadNavaraGlobe,
+      hd: engineKind === 'navara-hd',
       signal,
       defer,
     });

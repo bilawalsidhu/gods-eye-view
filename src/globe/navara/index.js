@@ -13,6 +13,7 @@ import ThreeView, {
 } from '@navaramap/three';
 import * as geo from '../../geo/index.js';
 import { DefaultPlugin } from '@navaramap/three-default-plugin';
+import { Pass } from 'postprocessing';
 import { createNavaraEngine } from './createNavaraEngine.js';
 import {
   forEachLuminanceUniform,
@@ -42,6 +43,10 @@ import {
   navaraViewOptions,
   resolveNavaraLook,
 } from './viewOptions.js';
+
+// Room for tiles in Navara's tile cache, over the screen-sized render
+// targets that its budget also counts (fixedGpuBytes).
+const TILE_CACHE_ROOM = 768 * 1024 * 1024;
 
 // Navara 0.2.1 has no preserveDrawingBuffer option but takes a canvas whose
 // WebGL2 context is already created; three then uses that context.
@@ -108,12 +113,14 @@ function groundInView(engine) {
  * @param {{
  *   container: HTMLElement,
  *   search?: string,
+ *   hd?: boolean,
  * }} options `search`, the page's query string, picks the look from
- *   `?look=` (cinematic by default). The sun follows the engine clock (the
+ *   `?look=` (cinematic by default); `hd` draws at the device pixel ratio
+ *   with MSAA (Navara HD), else at CSS pixels without it. The sun follows the engine clock (the
  *   page's app clock): the look reads its frame time.
  * @returns {Promise<{ view: object, engine: import('../contract.js').GlobeEngine, destroy: () => void }>}
  */
-export async function createNavaraGlobe({ container, search }) {
+export async function createNavaraGlobe({ container, search, hd = false }) {
   if (!container) throw new TypeError('createNavaraGlobe needs a container');
   const canvas = preservedCanvas(container);
   let view;
@@ -125,7 +132,7 @@ export async function createNavaraGlobe({ container, search }) {
   // Parked for a switch back: its render loop is off (setRenderLoop).
   let parked = false;
   try {
-    view = new ThreeView(navaraViewOptions({ container, canvas }));
+    view = new ThreeView(navaraViewOptions({ container, canvas, hd }));
     const plugin = new DefaultPlugin();
     view.addPlugin(plugin);
     await view.init();
@@ -212,6 +219,24 @@ export async function createNavaraGlobe({ container, search }) {
           engine.render.request('navara-look');
       }),
     ];
+    // The tile cache keeps tiles that left the view until it reaches its
+    // budget, by default a quarter of device memory up to 2 GiB: a long
+    // session grew to about 1.4 GiB of GPU memory. The budget counts the
+    // screen-sized targets too, which Navara reports after it draws them, so
+    // it follows them (a fixed total coarsened the view on a 2x screen).
+    let fixedGpuBytes = 0;
+    let budgetedAt = -Infinity;
+    removers.push(
+      engine.frames.postRender.addEventListener(() => {
+        const now = performance.now();
+        if (now - budgetedAt < 1000) return;
+        budgetedAt = now;
+        const fixed = view.memoryStats()?.fixedGpuBytes ?? 0;
+        if (fixed <= 0 || fixed === fixedGpuBytes) return;
+        fixedGpuBytes = fixed;
+        view.cacheBytes = fixed + TILE_CACHE_ROOM;
+      }),
+    );
     removeLook = () => removers.forEach((remove) => remove());
   } catch (error) {
     removeLook?.();
@@ -251,6 +276,11 @@ export async function createNavaraGlobe({ container, search }) {
       engine.destroy();
       overlay.destroy();
       view.dispose();
+      // postprocessing's fullscreen triangle is one module-level geometry:
+      // every renderer that drew it left a 'dispose' listener holding its GL
+      // state, which pins this canvas and the whole view. Disposing it drops
+      // those listeners; the next view uploads it again.
+      Pass.fullscreenGeometry.dispose();
       canvas.remove();
     },
   };

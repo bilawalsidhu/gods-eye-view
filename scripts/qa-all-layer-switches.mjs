@@ -362,6 +362,8 @@ const runs = [
   ['strict-rapid-switch', 'strict-rapid-switch', []],
   ['strict-hidden-switch', 'strict-hidden-switch', []],
   ['strict-context-loss', 'strict-context-loss', []],
+  ['strict-parked-release', 'strict-parked-release', []],
+  ['strict-navara-hd', 'strict-navara-hd', []],
   ['strict-failure-matrix', 'strict-failure-matrix', [], [], 600],
   ['strict-cold-chunks', 'strict-cold-chunks', []],
   ['strict-prod-smoke', 'strict-prod-smoke', []],

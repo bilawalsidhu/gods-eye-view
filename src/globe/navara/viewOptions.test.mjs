@@ -23,10 +23,17 @@ import {
   cloudsSunlitAt,
 } from './viewOptions.js';
 
-test('the product view renders on demand with MSAA 4 at the native pixel ratio', () => {
+test('Navara renders on demand at CSS pixels without MSAA; Navara HD at the device pixel ratio with MSAA 4', () => {
   const container = { id: 'globe' };
   const canvas = { id: 'canvas' };
   assert.deepEqual(navaraViewOptions({ container, canvas }), {
+    container,
+    canvas,
+    animation: false,
+    pixelRatio: 1,
+    multisampling: 0,
+  });
+  assert.deepEqual(navaraViewOptions({ container, canvas, hd: true }), {
     container,
     canvas,
     animation: false,
@@ -34,10 +41,10 @@ test('the product view renders on demand with MSAA 4 at the native pixel ratio',
   });
 });
 
-test('the canvas context keeps its drawing buffer, with the attributes Navara asks for', () => {
+test('the canvas context keeps its drawing buffer, with the attributes Navara asks for but no antialias', () => {
   assert.deepEqual(NAVARA_CONTEXT_ATTRIBUTES, {
     alpha: true,
-    antialias: true,
+    antialias: false,
     depth: true,
     stencil: true,
     premultipliedAlpha: true,
@@ -99,6 +106,14 @@ test('the cinematic look: photoreal plus clouds and ACES, no sun shadow maps, no
   });
   assert.equal(clouds.clouds.coverage, 0.36);
   assert.equal(clouds.clouds.shadows, false, 'no cloud shadow maps');
+  assert.deepEqual(
+    [
+      clouds.clouds.shadowMapSize.x,
+      clouds.clouds.shadowMapSize.y,
+      clouds.clouds.shadowCascadeCount,
+    ],
+    [256, 256, 2],
+  );
   assert.ok(
     clouds.clouds.cloudLayers.every(({ altitude }) => altitude >= 1000),
     'cloud layers sit above the city views',

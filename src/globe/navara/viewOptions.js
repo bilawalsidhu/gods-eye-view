@@ -1,16 +1,24 @@
 // How the product builds its Navara view: render on demand (the engine's
-// render.setContinuous turns animation on), MSAA 4 as Cesium's msaaSamples,
-// the device pixel ratio, a canvas whose WebGL2 context keeps its drawing
+// render.setContinuous turns animation on), at CSS pixels without MSAA as
+// Cesium draws, or in HD at the device pixel ratio with MSAA 4 as Cesium's
+// msaaSamples, a canvas whose WebGL2 context keeps its drawing
 // buffer (Cesium's contextOptions.webgl.preserveDrawingBuffer, for captures),
 // and a look: `cinematic` by default (navaraScenePlan below), Navara's own
 // `photoreal` scene (aerial perspective, tone mapping and SMAA, about 5 ms a
 // frame) with `?look=photoreal`, and `minimal` (sky, stars, sky light and sun
 // without post effects) for benches.
 
-/** WebGL2 attributes Navara 0.2.1 asks for, plus preserveDrawingBuffer. */
+import { Vector2 } from 'three';
+
+/**
+ * WebGL2 attributes Navara 0.2.1 asks for, plus preserveDrawingBuffer, but
+ * without antialias: Navara draws into its own (MSAA) targets and only copies
+ * the result to the canvas, so a multisampled canvas costs about 36 MiB for
+ * nothing (pixel-identical frames).
+ */
 export const NAVARA_CONTEXT_ATTRIBUTES = Object.freeze({
   alpha: true,
-  antialias: true,
+  antialias: false,
   depth: true,
   stencil: true,
   premultipliedAlpha: true,
@@ -18,15 +26,19 @@ export const NAVARA_CONTEXT_ATTRIBUTES = Object.freeze({
   powerPreference: 'default',
 });
 
-const MSAA_SAMPLES = 4;
+const HD_MSAA_SAMPLES = 4;
 
-/** ThreeView options. */
-export function navaraViewOptions({ container, canvas } = {}) {
+/**
+ * ThreeView options. Without `hd` the view draws at CSS pixels without MSAA
+ * (on a 2x screen about 1 GiB less than HD; SMAA still smooths edges).
+ */
+export function navaraViewOptions({ container, canvas, hd = false } = {}) {
   return {
     container,
     ...(canvas ? { canvas } : {}),
     animation: false,
-    multisampling: MSAA_SAMPLES,
+    ...(hd ? {} : { pixelRatio: 1 }),
+    multisampling: hd ? HD_MSAA_SAMPLES : 0,
   };
 }
 
@@ -175,6 +187,11 @@ const cinematic = (mobile) => ({
               // No cloud shadows on the ground: dark patches over the map
               // read as features (and cost nothing measurable either way).
               shadows: false,
+              // The clouds still shade themselves from these maps. The low
+              // preset's 256² and 2 cascades, which Navara 0.2.1 overwrites
+              // with its 512² and 3 (4 MiB instead of 24).
+              shadowMapSize: new Vector2(256, 256),
+              shadowCascadeCount: 2,
               // The two cumulus layers start at 1,500 m instead of 750 and
               // 1,000 m, above the city views (Austin's 600 m, Manhattan's
               // 900 m): clouds fill the sky without hiding the streets.

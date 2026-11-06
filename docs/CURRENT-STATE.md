@@ -105,6 +105,24 @@ next to Cesium. It is picked under Display → Globe Engine or with
 `?engine=navara`; Cesium stays the default. Switching is live: the page keeps
 one application, and only the globe-bound parts move to the next engine.
 
+- **Two Navara choices** (`src/app/engineChoice.js`). **Navara** draws at CSS
+  pixels without MSAA, as Cesium does; SMAA still smooths edges. **Navara HD**
+  (`?engine=navara-hd`) draws at the device pixel ratio with MSAA 4. Both are
+  the `navara` engine to the layers; a pick between them builds the other
+  variant cold and releases the first, so only one Navara holds memory.
+  Measured in headless Chrome (Dubai, 1280×800): Navara 1.6 GiB at DPR 1 and
+  1.8 GiB at DPR 2, Navara HD 1.8 and 2.7 GiB, Cesium 0.93 and 1.08 GiB
+  (Navara used 1.95 and 3.0 GiB before).
+- **Memory.** The canvas context has no antialias (Navara draws into its own
+  targets and copies the result), the cloud shadow maps use the low preset's
+  256² and 2 cascades, and the tile cache budget is the screen-sized targets
+  plus 768 MiB instead of Navara's default of up to 2 GiB, which a long session
+  filled. A released Navara keeps no JS: catalog closures capture the
+  operations, not the scene; a released globe aborts with a reason made at
+  module load (a fresh one keeps the stack, and with it the scene); and
+  `Pass.fullscreenGeometry` from postprocessing is disposed after the view,
+  which otherwise pins the canvas through a three listener.
+
 - **The engine contract** is `src/globe/contract.js`. `src/globe/cesium/*` and
   `src/globe/navara/*` implement it, `src/globe/testing/fakeEngine.js` stands
   in for tests, and `src/globe/testing/contractSuite.mjs` runs the same checks
@@ -114,7 +132,11 @@ one application, and only the globe-bound parts move to the next engine.
   camera mode and URL state outlive a switch. A layer that is a session model
   gets `attachRenderer(engine)` / `detachRenderer()` instead of being rebuilt,
   so its data is not fetched again. The outgoing globe is parked
-  (`src/standalone/rendererCache.js`), so switching back is warm.
+  (`src/standalone/rendererCache.js`), so switching back within three minutes
+  is warm (60-90 ms). After that the parked globe is disposed and its WebGL
+  context lost, which frees about 1.1 GiB for a parked Navara; switching back
+  then builds it cold (1.5-2 s). `?parkedMs=` shortens the delay for QA
+  (`scripts/qa-strict-parked-release.mjs`).
 - **Renderers per engine.** Each layer keeps its model and display policy in
   engine-neutral files and draws through `render/cesium*.js` or
   `render/navara*.js`. Cesium renderers are listed in

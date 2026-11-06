@@ -11,7 +11,7 @@ import {
   resumeSession,
   waitForFirstFrame,
 } from './standalone/engineSwitch.js';
-import { ENGINE_STORAGE_KEY } from './app/engineChoice.js';
+import { ENGINE_STORAGE_KEY, engineOfChoice } from './app/engineChoice.js';
 import { createSessionDiagnostics } from './app/sessionDiagnostics.js';
 import { useDisplayStore } from './ui/stores/display.js';
 import { applicationPinia } from './ui/vueRuntime.js';
@@ -33,7 +33,14 @@ let application;
 let engineSwitch = null;
 let cover = null;
 let cockpit = null;
-const renderers = createRendererCache();
+// ?parkedMs= shortens how long a parked globe waits before it is released,
+// so a QA scenario can switch back to a released one.
+const renderers = createRendererCache({
+  // Navara and Navara HD are one engine: only one of them stays parked.
+  engineOf: engineOfChoice,
+  parkedMs:
+    Number(new URLSearchParams(location.search).get('parkedMs')) || undefined,
+});
 const layerSession = { lifetime: new AbortController() };
 const { signal } = layerSession.lifetime;
 // Which session objects this page holds now (scripts/qa-app-once.mjs).
@@ -239,6 +246,7 @@ function offerEngineRetry() {
   for (const [kind, name] of [
     ['cesium', 'Cesium'],
     ['navara', 'Navara'],
+    ['navara-hd', 'Navara HD'],
   ]) {
     const button = document.createElement('button');
     button.type = 'button';

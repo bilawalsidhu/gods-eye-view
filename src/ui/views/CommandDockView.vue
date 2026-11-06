@@ -119,6 +119,7 @@ function selectMapSource(chip) {
             @change="globeEngine.select($event.target.value)">
             <option value="cesium">Cesium</option>
             <option value="navara">Navara</option>
+            <option value="navara-hd">Navara HD</option>
           </select>
         </label>
       </div>
