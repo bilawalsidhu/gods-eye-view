@@ -122,6 +122,18 @@ test('schema validation rejects broken data with a useful message', () => {
   expectProblem(stars, oneStar, /one-star line/);
 });
 
+test('loader never publishes injected SkyDataError details', async () => {
+  resetSkyDataCache();
+  const secret = 'synthetic-credential-SECRETKEY123';
+  const fetchImpl = async () => { throw new SkyDataError([secret]); };
+  await assert.rejects(loadSkyData({ fetchImpl }), (error) => {
+    assert.doesNotMatch(String(error.stack), /SECRETKEY123/);
+    assert.doesNotMatch(JSON.stringify(error), /SECRETKEY123/);
+    return true;
+  });
+  resetSkyDataCache();
+});
+
 test('loadSkyData fetches both files same-origin, validates, memoises, and retries after failure', async () => {
   resetSkyDataCache();
   const seen = [];
