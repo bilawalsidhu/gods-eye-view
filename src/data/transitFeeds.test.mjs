@@ -552,3 +552,29 @@ test('Rio feeds are CC BY 4.0 and live', () => {
     'Rio has a DATA_SOURCES row',
   );
 });
+
+test('Szczecin is CC0, live, covers the city and not Berlin', () => {
+  const feed = getTransitFeed('zditm-szczecin');
+  assert.equal(feed.defaultEnabled, true);
+  assert.equal(feed.license, 'CC0 1.0');
+  assert.equal(
+    feed.licenseUrl,
+    'https://www.zditm.szczecin.pl/en/zditm/for-developers',
+  );
+  assert.match(feed.terms.quote, /CC0 1\.0 licence/);
+  assert.match(feed.attribution, /ZDiTM/);
+  assert.equal(feed.routeLabel, undefined, 'the feed has no route ids');
+  assert.equal(transitModeFor(feed, null), 'bus');
+  const ids = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
+  assert.ok(ids(53.4285, 14.5528).includes('zditm-szczecin'), 'city centre');
+  assert.ok(ids(53.5, 14.7).includes('zditm-szczecin'), 'north-east edge');
+  assert.ok(!ids(52.52, 13.405).includes('zditm-szczecin'), 'Berlin');
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources.split('\n').some((l) => l.startsWith('| **ZDiTM Szczecin')),
+    'Szczecin has a DATA_SOURCES row',
+  );
+});

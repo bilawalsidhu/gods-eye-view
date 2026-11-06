@@ -788,6 +788,29 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     defaultMode: 'bus',
     routeLabel: rioRouteLabel,
   }),
+  Object.freeze({
+    id: 'zditm-szczecin',
+    name: 'Szczecin buses and trams',
+    operator:
+      'Zarząd Dróg i Transportu Miejskiego w Szczecinie (ZDiTM), Szczecin',
+    region: 'Szczecin, Poland',
+    // Every vehicle in a 2026-11-05 snapshot sat between 53.34–53.55 N and
+    // 14.44–14.77 E, inside 20 km of this point.
+    center: Object.freeze({ lat: 53.44, lon: 14.56 }),
+    loadRadiusKm: 25,
+    url: 'https://www.zditm.szczecin.pl/storage/gtfs/gtfs-rt-vehicles.pb',
+    license: 'CC0 1.0',
+    licenseUrl: 'https://www.zditm.szczecin.pl/en/zditm/for-developers',
+    attribution:
+      'Zarząd Dróg i Transportu Miejskiego w Szczecinie (ZDiTM Szczecin)',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'The data are provided free of charge under the CC0 1.0 licence, for use in any context, with no prior notification required.',
+      note: 'CC0 needs no credit; it is given anyway as a courtesy. ZDiTM gives no guarantee of accuracy or completeness. The developer page says the feed updates every minute; measured on 2026-11-05 the file changed about every 20 seconds, with vehicle timestamps up to 50 seconds old. Speeds are m/s: checked against vehicle movement between two snapshots. The feed carries no route id at all, so every vehicle takes the feed default mode even though the city also runs trams.',
+    }),
+    defaultMode: 'bus',
+  }),
 ]);
 
 /**
