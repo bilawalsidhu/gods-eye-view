@@ -1,8 +1,12 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 import { mergeSightings } from './records.js';
 import { wildlifeMeasure } from './performance.js';
-import { ACARTIA_GUARD_BOX, TAXA_PRESETS } from './policy.js';
-import { boxIntersects } from './viewport.js';
+import {
+  ACARTIA_GUARD_BOX,
+  TAXA_PRESETS,
+  WILDLIFE_RETRY_AFTER_MAX_SEC,
+} from './policy.js';
+import { boxIntersects, retryDelayMs } from './viewport.js';
 import {
   WILDLIFE_GRID_MAX_ZOOM,
   WILDLIFE_GRID_TILE_CAP,
@@ -72,14 +76,19 @@ function retryAfterSeconds(value, nowMs) {
   const text = value.trim();
   if (/^\d+(?:\.\d+)?$/.test(text)) {
     const seconds = Number(text);
-    return Number.isFinite(seconds) ? Math.ceil(seconds) : null;
+    return Number.isFinite(seconds)
+      ? Math.min(WILDLIFE_RETRY_AFTER_MAX_SEC, Math.ceil(seconds))
+      : null;
   }
   // Reject malformed numeric values rather than letting Date.parse interpret
   // them as calendar dates. HTTP dates include a named weekday or month.
   if (!/[a-z]/i.test(text)) return null;
   const deadline = Date.parse(text);
   return Number.isFinite(deadline) && Number.isFinite(nowMs)
-    ? Math.max(0, Math.ceil((deadline - nowMs) / 1000))
+    ? Math.min(
+        WILDLIFE_RETRY_AFTER_MAX_SEC,
+        Math.max(0, Math.ceil((deadline - nowMs) / 1000)),
+      )
     : null;
 }
 
@@ -119,17 +128,56 @@ export function wildlifeFailureRetryable(error) {
   return status === 429 || status >= 500;
 }
 
-/** Prefer the failure that carries retry timing, then the longest wait. */
-export function preferredWildlifeFailure(errors) {
-  const failures = errors.filter(Boolean);
-  const retryable = failures.filter(wildlifeFailureRetryable);
-  if (!retryable.length) return failures[0] || null;
-  return retryable.reduce((best, error) =>
-    (Number.isFinite(error.retryAfterSec) ? error.retryAfterSec : -1) >
-    (Number.isFinite(best.retryAfterSec) ? best.retryAfterSec : -1)
-      ? error
-      : best,
-  );
+/** Return a Retry-After in milliseconds, capped at one day, or null when
+ * it is missing, negative or not finite. */
+export function wildlifeRetryAfterMs(seconds) {
+  return Number.isFinite(seconds) && seconds >= 0
+    ? Math.min(WILDLIFE_RETRY_AFTER_MAX_SEC, seconds) * 1000
+    : null;
+}
+
+/** Return how long a failure asks the layer to wait, or null for none:
+ * 429 and 5xx wait for their Retry-After, else the default backoff after
+ * `previousMs`; other failures may retry on the next view. */
+export function wildlifeFailureDelayMs(error, previousMs = 0) {
+  if (!error || !wildlifeFailureRetryable(error)) return null;
+  return wildlifeRetryAfterMs(error.retryAfterSec) ?? retryDelayMs(previousMs);
+}
+
+/** Flatten failures, expanding a group into every request that failed. */
+export function wildlifeFailures(errors) {
+  return [errors]
+    .flat()
+    .filter(Boolean)
+    .flatMap((error) =>
+      Array.isArray(error.failures) && error.failures.length
+        ? error.failures
+        : [error],
+    );
+}
+
+/** Return the failure with the longest effective delay (the first failure
+ * when none waits), carrying every failure so the caller can recompute. */
+export function preferredWildlifeFailure(errors, previousMs = 0) {
+  const failures = wildlifeFailures(errors);
+  if (!failures.length) return null;
+  let chosen = failures[0];
+  let longest = wildlifeFailureDelayMs(chosen, previousMs) ?? -1;
+  for (const error of failures.slice(1)) {
+    const delay = wildlifeFailureDelayMs(error, previousMs) ?? -1;
+    if (delay > longest) [chosen, longest] = [error, delay];
+  }
+  if (failures.length === 1) return chosen;
+  // Grid errors are shared between consumers of one tile request; describe
+  // the group with a new error rather than mutating any of them.
+  return Object.assign(new Error(chosen.message, { cause: chosen }), {
+    ...(chosen.status ? { status: chosen.status } : {}),
+    ...(chosen.upstreamStatus ? { upstreamStatus: chosen.upstreamStatus } : {}),
+    ...(Number.isFinite(chosen.retryAfterSec)
+      ? { retryAfterSec: chosen.retryAfterSec }
+      : {}),
+    failures,
+  });
 }
 
 /** Merge occupied cells incrementally; neighboring UTFGrid hit tiles can
@@ -145,9 +193,12 @@ export function combineWildlifeGridSnapshots(snapshots, error = null) {
   const totalResults = cells.reduce((sum, cell) => sum + cell.cellCount, 0);
   if (!Number.isSafeInteger(totalResults))
     throw new Error('Malformed iNaturalist grid response');
+  // A failure's Retry-After counts only when its status asks for a wait.
   const retryAfter = [
     ...snapshots.map((snapshot) => snapshot.retryAfterSec),
-    error?.retryAfterSec,
+    ...wildlifeFailures(error)
+      .filter(wildlifeFailureRetryable)
+      .map((failure) => failure.retryAfterSec),
   ].filter(Number.isFinite);
   const stale = snapshots.some((snapshot) => snapshot.stale === true);
   return {
@@ -514,14 +565,16 @@ export function createWildlifeSightingsSource({
     signal?.throwIfAborted();
     const inatSnapshots = [];
     const failedBoxes = [];
-    let inatError = null;
+    const inatErrors = [];
     inatResult.value.forEach((result, index) => {
       if (result.status === 'fulfilled') inatSnapshots.push(result.value);
       else {
         failedBoxes.push(requestBoxes[index]);
-        inatError ??= result.reason;
+        inatErrors.push(result.reason);
       }
     });
+    // Keep every failed box; the layer waits for the longest of them.
+    const inatError = preferredWildlifeFailure(inatErrors);
     // Fail outright only when nothing succeeded; otherwise draw what arrived
     // and report the failed source in its per-source status.
     const acartiaError =

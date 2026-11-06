@@ -1072,3 +1072,98 @@ for (const [name, respond] of [
     assert.equal(h.state.renderedRows.length, 2);
   });
 }
+
+// Every failed request keeps its own timing. The layer waits for the longest
+// effective delay: 4xx other than 429 never waits, 429/5xx wait for their
+// Retry-After or the default backoff. The shown error explains that wait.
+async function settleThroughSource(fetchImpl, bounds = salishSea) {
+  const h = harness(
+    createWildlifeSightingsSource({ now: () => NOW, fetchImpl }),
+  );
+  h.bounds(bounds);
+  h.state.enabled = false;
+  h.layer.enable();
+  const first = h.layer.update();
+  await h.advance(300);
+  await first;
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  return h;
+}
+const tileX = (url) =>
+  Number(new URL(url, 'https://example.test').searchParams.get('x'));
+const observations = () =>
+  Response.json({ rows: [inatRow], totalResults: 1, fetchedAt: NOW });
+
+test('an antimeridian box 400 never hides the other box 503 Retry-After', async () => {
+  for (const westFails of [true, false]) {
+    const h = await settleThroughSource(
+      async (url) => {
+        if (url.startsWith('/api/inaturalist/grid?')) return emptyGrid();
+        const west =
+          Number(
+            new URL(url, 'https://example.test').searchParams.get('west'),
+          ) > 0;
+        return west === westFails
+          ? new Response('', { status: 400 })
+          : unavailable();
+      },
+      { south: 10, west: 179, north: 12, east: -179 },
+    );
+    assert.equal(h.state.error, 'iNaturalist HTTP 503');
+    assert.equal(h.state.retryAt, NOW + 300 + 120_000);
+    assert.equal(h.layer.getStats().retryInSec, 120);
+  }
+});
+
+test('a grid tile 400 with Retry-After beside successful tiles creates no cooldown', async () => {
+  let tiles = new Set();
+  const h = await settleThroughSource(async (url) => {
+    if (!url.startsWith('/api/inaturalist/grid?')) return observations();
+    tiles.add(tileX(url));
+    return tileX(url) === Math.min(...tiles) && tiles.size === 1
+      ? new Response('', { status: 400, headers: { 'Retry-After': '120' } })
+      : emptyGrid();
+  });
+  assert.ok(tiles.size > 1, 'the view spans several grid tiles');
+  assert.equal(h.state.error, 'iNaturalist HTTP 400');
+  assert.equal(h.state.retryAt, 0);
+  assert.equal(h.layer.getStats().retryInSec, undefined);
+});
+
+test('a short grid Retry-After never undercuts a sibling 5xx default backoff', async () => {
+  let failed = 0;
+  const h = await settleThroughSource(async (url) => {
+    if (!url.startsWith('/api/inaturalist/grid?')) return observations();
+    failed++;
+    if (failed === 1)
+      return new Response('', { status: 503, headers: { 'Retry-After': '2' } });
+    if (failed === 2) return new Response('', { status: 502 });
+    return emptyGrid();
+  });
+  assert.ok(failed >= 2);
+  assert.equal(h.state.error, 'iNaturalist HTTP 502');
+  assert.equal(h.state.retryAt, NOW + 300 + 30_000);
+  assert.equal(h.layer.getStats().retryInSec, 30);
+});
+
+test('an enormous Retry-After is capped at one day and a non-finite one uses the default backoff', async () => {
+  for (const [header, delay] of [
+    ['1' + '0'.repeat(306), 86_400_000],
+    ['1' + '0'.repeat(400), 30_000],
+  ]) {
+    const h = await settleThroughSource(async (url) =>
+      url.startsWith('/api/inaturalist/grid?')
+        ? emptyGrid()
+        : url.startsWith('/api/acartia')
+          ? Response.json({ rows: [], fetchedAt: NOW })
+          : new Response('', {
+              status: 503,
+              headers: { 'Retry-After': header },
+            }),
+    );
+    assert.equal(h.state.error, 'iNaturalist HTTP 503');
+    assert.ok(Number.isFinite(h.state.retryAt));
+    assert.equal(h.state.retryAt, NOW + 300 + delay, header.length);
+  }
+});

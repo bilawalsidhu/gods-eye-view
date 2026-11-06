@@ -2,7 +2,10 @@ import { msg } from '../../i18n/marker.js';
 import { getWildlifeHeightBand, rowInWildlifeBoxes } from './model.js';
 import {
   combineWildlifeGridSnapshots,
-  wildlifeFailureRetryable,
+  preferredWildlifeFailure,
+  wildlifeFailureDelayMs,
+  wildlifeFailures,
+  wildlifeRetryAfterMs,
 } from './source.js';
 import { wildlifeMeasure } from './performance.js';
 import { isRecentWildlifeSighting } from './records.js';
@@ -12,11 +15,7 @@ import {
   wildlifeGridTiles,
   wildlifeGridCellId,
 } from './gridViewport.js';
-import {
-  wildlifeViewportBoxes,
-  snapWildlifeBox,
-  retryDelayMs,
-} from './viewport.js';
+import { wildlifeViewportBoxes, snapWildlifeBox } from './viewport.js';
 import {
   WILDLIFE_DEBOUNCE_MS,
   WILDLIFE_MAX_ROWS,
@@ -95,25 +94,25 @@ export function createLifecycle({ state, services, parts }) {
     state.pendingParams = null;
   }
 
-  function applyRetry(errors, retryAfterSec = null) {
-    // Only upstream failures impose cooldown; network/schema errors retry on
-    // pan. Several sources can fail together: wait for the longest of them.
-    const failures = [errors].flat().filter(wildlifeFailureRetryable);
-    const snapshotDelay =
-      Number.isFinite(retryAfterSec) && retryAfterSec >= 0
-        ? retryAfterSec * 1000
-        : null;
-    if (!failures.length && snapshotDelay === null) {
+  function applyRetry(
+    errors,
+    retryAfterSec = null,
+    previousMs = state.failures || 0,
+  ) {
+    // Only 429/5xx failures impose cooldown; client, network and schema
+    // errors retry on pan. Several requests can fail together: wait for the
+    // longest effective delay among them.
+    const delays = [
+      ...wildlifeFailures(errors).map((error) =>
+        wildlifeFailureDelayMs(error, previousMs),
+      ),
+      wildlifeRetryAfterMs(retryAfterSec),
+    ].filter((delay) => delay !== null);
+    if (!delays.length) {
       state.failures = 0;
       state.retryAt = 0;
       return;
     }
-    const delays = failures.map((error) =>
-      Number.isFinite(error.retryAfterSec) && error.retryAfterSec >= 0
-        ? error.retryAfterSec * 1000
-        : retryDelayMs(state.failures || 0),
-    );
-    if (snapshotDelay !== null) delays.push(snapshotDelay);
     const backoff = Math.max(...delays);
     state.failures = backoff;
     state.retryAt = services.now() + backoff;
@@ -282,6 +281,7 @@ export function createLifecycle({ state, services, parts }) {
     request,
     signal,
     epoch,
+    previousFailures,
     replaceRows = true,
   }) {
     const current = currentQuery();
@@ -398,10 +398,14 @@ export function createLifecycle({ state, services, parts }) {
             value.upstreamStatus === 429 ||
             value.upstreamStatus >= 500),
       );
+      // The filter above admits only 429/5xx or an unmarked stale answer.
       const staleError = failedStale.length
         ? Object.assign(
             new Error(msg('Wildlife sightings source unavailable')),
             {
+              upstreamStatus: Math.max(
+                ...failedStale.map((value) => value.upstreamStatus || 503),
+              ),
               retryAfterSec: Math.max(
                 ...failedStale.map((value) => value.retryAfterSec),
               ),
@@ -410,8 +414,8 @@ export function createLifecycle({ state, services, parts }) {
         : null;
       const inat = snapshot.sources?.inaturalist;
       const acartia = snapshot.sources?.acartia;
-      // Keep each failed source's status and Retry-After; the displayed error
-      // is the one that explains the cooldown.
+      // Keep each failed request's status and Retry-After; the displayed
+      // error is the one whose effective delay sets the cooldown.
       const sourceErrors = [
         gridError,
         staleError,
@@ -433,14 +437,10 @@ export function createLifecycle({ state, services, parts }) {
             })
           : null,
       ].filter(Boolean);
-      const sourceError =
-        sourceErrors.find(
-          (error) =>
-            wildlifeFailureRetryable(error) ||
-            Number.isFinite(error.retryAfterSec),
-        ) ||
-        sourceErrors[0] ||
-        null;
+      const sourceError = preferredWildlifeFailure(
+        sourceErrors,
+        previousFailures,
+      );
       state.stale =
         !sourceError && (snapshot.stale === true || grid?.stale === true);
       const fetchedAt = [snapshot.fetchedAt, grid?.fetchedAt].filter(
@@ -467,12 +467,13 @@ export function createLifecycle({ state, services, parts }) {
         applyRetry(
           sourceErrors,
           retryAfter.length ? Math.max(...retryAfter) : null,
+          previousFailures,
         );
       } else {
         state.pendingParams = null;
         state.failedParams = null;
         state.retryAt = retryAfter.length
-          ? services.now() + Math.max(...retryAfter) * 1000
+          ? services.now() + wildlifeRetryAfterMs(Math.max(...retryAfter))
           : 0;
         state.failures = 0;
       }
@@ -632,6 +633,9 @@ export function createLifecycle({ state, services, parts }) {
       state.request?.abort();
       const request = new AbortController();
       const requestLifetime = lifetimeEpoch;
+      // One acquisition publishes several times (tiles, rows, final grid).
+      // Each derives its default backoff from the backoff before it started.
+      const previousFailures = state.failures || 0;
       const supersededResult = () =>
         state.enabled &&
         !state.destroyed &&
@@ -699,6 +703,7 @@ export function createLifecycle({ state, services, parts }) {
           request,
           signal,
           epoch: requestLifetime,
+          previousFailures,
         });
       }
       function finishTiles() {
@@ -804,11 +809,12 @@ export function createLifecycle({ state, services, parts }) {
         continueTiles();
         state.stale = false;
         state.error =
-          error?.message || msg('Wildlife sightings source unavailable');
+          preferredWildlifeFailure(error, previousFailures)?.message ||
+          msg('Wildlife sightings source unavailable');
         failParams(params);
         state.lastQueryKey = null;
         requestQueryKey = null;
-        applyRetry(error);
+        applyRetry(error, null, previousFailures);
         console.warn('[Data:WildlifeSightings] Update failed:', state.error);
         return true;
       } finally {

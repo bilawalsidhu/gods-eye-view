@@ -74,6 +74,9 @@ export { WILDLIFE_MAX_VIEW_DEGREES } from './bounds.js';
 export const WILDLIFE_VIEW_PADDING = 0.3;
 export const WILDLIFE_RETRY_MIN_MS = 30_000;
 export const WILDLIFE_RETRY_MAX_MS = 240_000;
+// Cap a Retry-After so one reply can never stall refresh forever. The proxy's
+// daily-budget reply waits until the next UTC midnight, so allow one day.
+export const WILDLIFE_RETRY_AFTER_MAX_SEC = 86_400;
 
 // Faster polling would reread the proxy's five-minute cache.
 export const WILDLIFE_UPDATE_INTERVAL_MS = 5 * 60_000;
