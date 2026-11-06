@@ -54,6 +54,16 @@ export function createCesiumPorts(widget) {
 
   const frameListeners = { preUpdate: [], preRender: [], postRender: [] };
   let frames = 0;
+  // Every tick raises preUpdate, drawn or not; the phases of a tick share
+  // its clock reading. The first tick counts from when the loop was made.
+  let tickNow = performance.now();
+  let dt = 0;
+  const tick = () => {
+    const now = performance.now();
+    dt = (now - tickNow) / 1000;
+    tickNow = now;
+    frames += 1;
+  };
   const onPhase = (phase) => (_scene, time) => {
     if (frameListeners[phase].length === 0) return;
     const t = {
@@ -61,15 +71,15 @@ export function createCesiumPorts(widget) {
       time: Cesium.JulianDate.toDate(
         time ?? widget.clock.currentTime,
       ).getTime(),
-      now: performance.now(),
-      dt: 1 / 60,
+      now: tickNow,
+      dt,
       rendering: phase !== 'preUpdate',
     };
     for (const cb of frameListeners[phase].slice()) cb(t);
   };
   let disposed = false;
   const removers = [
-    scene.preUpdate.addEventListener(() => (frames += 1)),
+    scene.preUpdate.addEventListener(tick),
     scene.preUpdate.addEventListener(onPhase('preUpdate')),
     scene.preRender.addEventListener(onPhase('preRender')),
     scene.postRender.addEventListener(onPhase('postRender')),
@@ -78,16 +88,26 @@ export function createCesiumPorts(widget) {
   // Pending one-shot renders; disposal settles them rather than leave them
   // attached to a scene that will not render again.
   const pendingRenders = new Set();
-  function nextPostRender() {
+  /** Resolves after the next drawn frame; rejects after `timeoutMs`, if given. */
+  function nextPostRender({ timeoutMs } = {}) {
     if (disposed) return Promise.resolve();
-    return new Promise((resolve) => {
-      const done = () => {
+    return new Promise((resolve, reject) => {
+      let timer;
+      const settle = (error) => {
         off();
+        clearTimeout(timer);
         pendingRenders.delete(done);
-        resolve();
+        if (error) reject(error);
+        else resolve();
       };
+      const done = () => settle();
       const off = scene.postRender.addEventListener(done);
       pendingRenders.add(done);
+      if (timeoutMs !== undefined)
+        timer = setTimeout(
+          () => settle(new Error('renderOnce timed out')),
+          timeoutMs,
+        );
       scene.requestRender();
     });
   }
@@ -102,7 +122,7 @@ export function createCesiumPorts(widget) {
     },
     requestRender: () => scene.requestRender(),
     renderNow: () => scene.render(widget.clock.currentTime),
-    renderOnce: () => nextPostRender(),
+    renderOnce: (options) => nextPostRender(options),
     time: () => Cesium.JulianDate.toDate(widget.clock.currentTime).getTime(),
   };
 

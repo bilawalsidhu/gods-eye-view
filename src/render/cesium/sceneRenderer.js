@@ -29,11 +29,19 @@ const SKY_DEFAULTS = Object.freeze({
   lighting: false,
 });
 
+/** What this renderer can do; a caller may ask for fewer. */
+const CAPABILITIES = ['models'];
+
 /**
- * @param {{container: HTMLElement, msaa?: number}} options
+ * @param {{container: HTMLElement, msaa?: number, capabilities?: Iterable<string>}} options
+ *   `capabilities` limits the renderer to those it lists.
  * @returns {Promise<object>} A renderer with the members listed above.
  */
-export async function createCesiumSceneRenderer({ container, msaa = 4 }) {
+export async function createCesiumSceneRenderer({
+  container,
+  msaa = 4,
+  capabilities: only,
+}) {
   const credits = document.createElement('div');
   const widget = new Cesium.CesiumWidget(container, {
     baseLayer: false,
@@ -60,7 +68,10 @@ export async function createCesiumSceneRenderer({ container, msaa = 4 }) {
   if (scene.moon) scene.moon.show = false;
 
   const sky = { ...SKY_DEFAULTS };
-  const capabilities = new Set(['models']);
+  const allowed = only && new Set(only);
+  const capabilities = new Set(
+    CAPABILITIES.filter((c) => !allowed || allowed.has(c)),
+  );
 
   function applySky() {
     scene.globe.enableLighting = sky.lighting;
@@ -134,7 +145,12 @@ export async function createCesiumSceneRenderer({ container, msaa = 4 }) {
     canvas: scene.canvas,
     frame,
     globe,
-    draw: ports.draw,
+    // A member of a capability left out is absent, not stubbed.
+    draw: capabilities.has('models')
+      ? ports.draw
+      : Object.fromEntries(
+          Object.entries(ports.draw).filter(([kind]) => kind !== 'models'),
+        ),
     camera: ports.camera,
     query: ports.query,
     capture: ports.capture,
