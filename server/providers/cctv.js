@@ -23,6 +23,7 @@ import { googleServerApiKey } from './places/google-key.js';
 import { readResponseBytesCapped } from './common/http.js';
 import { clientNetworkKey } from './common/rate-limit.js';
 import {
+  STREET_VIEW_DEFERRED,
   processStreetViewAdmission,
   registeredStreetViewLocation,
 } from './cctv/streetViewGuard.js';
@@ -40,8 +41,14 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  *
  * @returns {import('vite').Plugin}
  */
-export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
+export function cctvProxy({
+  sourceRoot = process.cwd(),
+  streetViewAdmission,
+} = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
+  // Test callers can supply an isolated budget; deployments default to the
+  // single process-wide admission service shared by every CCTV plugin.
+  const admission = streetViewAdmission ?? processStreetViewAdmission();
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the
@@ -107,7 +114,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     // Paid attempts for all plugin instances share the same admission service.
     // The key contains catalog-owned target and pose only, never URL params.
     const cameraKey = JSON.stringify([cameraId, lat, lon, heading, fov, pitch]);
-    return processStreetViewAdmission().run({
+    return admission.run({
       client,
       cameraKey,
       fetchFrame: async () => {
@@ -576,6 +583,17 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 cameraId,
                 clientNetworkKey(req),
               );
+        if (sv === STREET_VIEW_DEFERRED) {
+          // Keep the previous camera frame and health provenance intact. A
+          // bodyless image response fails the refresh without replacing the
+          // already-painted thumbnail or projection canvas.
+          res.writeHead(204, {
+            'Cache-Control': 'no-store',
+            'X-CCTV-Source': 'deferred',
+          });
+          res.end();
+          return;
+        }
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',
