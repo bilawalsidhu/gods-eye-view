@@ -429,24 +429,48 @@ test('Cyber dock pins escape the tray mask and its decoration overrides the lega
   assert.match(decoration, /pointer-events:\s*none;/);
 });
 
-test('Cyber lower-left telemetry tracks the credit anchor with clearance for its logo row', () => {
-  const telemetry = cssRuleBody(
-    cyberStyles,
-    /#intel-hud\[data-variant='cyber'\] \.hud-bottom-left/,
-  );
-  const offset = telemetry.match(/bottom:\s*calc\(2vh \+ ([\d.]+)rem\);/);
-  assert.ok(offset, 'telemetry must retain the attribution viewport anchor');
+test('lower-left telemetry tracks the credit anchor with clearance for its logo row', () => {
   const credits = read('./styles/command-dock-trays.css');
+  const anchor = cssRuleBody(credits, /:root/);
+  assert.match(anchor, /--gev-credits-bottom:\s*calc\(2vh \+ 5rem\);/);
+  const reserve = anchor.match(/--gev-credits-reserve:\s*([\d.]+)rem;/);
+  assert.ok(
+    Number(reserve?.[1]) >= 2.75,
+    'reserve the 28px logo row, baseline descent and 12px clearance at the 16px root size',
+  );
   const creditOffsets = [
-    ...credits.matchAll(
-      /#cesium-credits\s*\{[^}]*bottom:\s*calc\(2vh \+ ([\d.]+)rem\);/g,
-    ),
+    ...credits.matchAll(/#cesium-credits\s*\{[^}]*bottom:\s*([^;]+);/g),
   ];
   assert.ok(creditOffsets.length > 0);
   for (const credit of creditOffsets) {
-    assert.ok(
-      Number(offset[1]) - Number(credit[1]) >= 2.75,
-      'reserve the 28px logo row, baseline descent and 12px clearance at the 16px root size',
+    assert.equal(credit[1], 'var(--gev-credits-bottom)');
+  }
+  const reserved =
+    /bottom:\s*calc\(var\(--gev-credits-bottom\) \+ var\(--gev-credits-reserve\)\);/;
+  assert.match(
+    cssRuleBody(cyberStyles, /#intel-hud\[data-variant='cyber'\] \.hud-bottom-left/),
+    reserved,
+  );
+  assert.match(
+    cssRuleBody(
+      credits,
+      /#intel-hud\[data-variant='tactical'\] \.hud-bottom-left,\s*#intel-hud\[data-variant='minimal'\] \.hud-bottom-left/,
+    ),
+    reserved,
+  );
+  // Cockpit's corner offset outranks the layouts' rules, so it reserves too.
+  assert.match(
+    read('./styles/cockpit.css'),
+    new RegExp(
+      `\\nbody\\.cockpit-mode #intel-hud \\.hud-bottom-left\\s*\\{[^}]*${reserved.source}`,
+    ),
+  );
+  // One rule owns each layout's lower-left offset; import order must not decide it.
+  for (const file of ['overlays.css', 'command-dock.css', 'command-dock-compact.css']) {
+    assert.doesNotMatch(
+      read(`./styles/${file}`),
+      /\[data-variant='\w+'\] \.hud-bottom-left\s*\{[^}]*bottom:/,
+      file,
     );
   }
   assert.doesNotMatch(cyberStyles, /\.hud-bottom-left\s*\{\s*bottom:\s*60px;/);

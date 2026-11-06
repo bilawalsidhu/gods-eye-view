@@ -448,6 +448,14 @@
   letter-spacing: 0.035rem;
 }
 
+/* The attribution row's anchor above the command dock. HUD readouts over the
+   row sit the reserve above it: the 28px logo row, baseline descent and 12px
+   clearance at the 16px root size. */
+:root {
+  --gev-credits-bottom: calc(2vh + 5rem);
+  --gev-credits-reserve: 2.75rem;
+}
+
 /* Keep the complete inline attribution row above the command dock. */
 body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
 body:not(.ui-clean-view):not(.recording-mode):has(
@@ -455,21 +463,20 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   )
   #cesium-credits {
   right: auto;
-  bottom: calc(2vh + 5rem);
+  bottom: var(--gev-credits-bottom);
   left: 1.5rem;
   width: auto !important;
   max-width: calc(100vw - 3rem);
   text-align: left;
 }
 
-#intel-hud[data-variant='tactical'] .hud-bottom-left,
 #intel-hud[data-variant='tactical'] .hud-bottom-right {
   bottom: calc(2vh + 6.5rem);
 }
 
-/* Clear the attribution row, whose logo stands about 1.75rem tall. */
+#intel-hud[data-variant='tactical'] .hud-bottom-left,
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: calc(2vh + 7.25rem);
+  bottom: calc(var(--gev-credits-bottom) + var(--gev-credits-reserve));
 }
 
 @media (max-width: 900px) {
@@ -478,7 +485,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(
       #intel-hud[data-variant='minimal'].active
     )
     #cesium-credits {
-    bottom: calc(2vh + 5rem);
+    bottom: var(--gev-credits-bottom);
     left: 0.75rem;
     max-width: calc(100vw - 1.5rem);
   }

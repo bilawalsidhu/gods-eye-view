@@ -306,10 +306,6 @@
   top: 88px;
 }
 
-#intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: 12vh;
-}
-
 #intel-hud[data-variant='minimal'] .hud-summary-wrap {
   max-width: 280px;
 }
