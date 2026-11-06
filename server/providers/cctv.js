@@ -19,6 +19,8 @@ import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import { googleServerApiKey } from './places/google-key.js';
+import { googleRateLimiter } from './places/google.js';
+import { clientKey } from './common/rate-limit.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -509,13 +511,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const source = sourceById.get(cameraId);
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
-        const lat = Number(url.searchParams.get('lat') || source?.lat);
-        const lon = Number(url.searchParams.get('lon') || source?.lon);
-        const heading = Number(
-          url.searchParams.get('heading') || source?.headingDeg,
-        );
-        const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
-        const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
@@ -549,18 +544,24 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // request (whose client this server cannot see) gets the placeholder,
         // as if no key were configured. Any forwarding header counts, even an
         // empty one.
+        // It is also only for catalog cameras, framed from the catalog (never
+        // a spot the query names), within the per-IP Google budget.
         const forwarded = PROXY_SIGNALS.some(
           (name) => req.headers?.[name] !== undefined,
         );
-        const sv = forwarded
-          ? null
-          : await streetViewFallback({
-              lat,
-              lon,
-              heading,
-              fov,
-              pitch,
-            });
+        const googleBudget = googleServerApiKey() ? googleRateLimiter() : null;
+        const sv =
+          forwarded ||
+          !source ||
+          (googleBudget && !googleBudget(clientKey(req)))
+            ? null
+            : await streetViewFallback({
+                lat: Number(source.lat),
+                lon: Number(source.lon),
+                heading: Number(source.headingDeg),
+                fov: Number(source.fovDeg),
+                pitch: Number(source.pitchDeg ?? -10),
+              });
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',
