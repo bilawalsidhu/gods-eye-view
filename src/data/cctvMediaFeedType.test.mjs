@@ -462,8 +462,10 @@ test('/frame falls back past a non-raster upstream and Street View frame', async
     assert.equal(res.headers['X-CCTV-Source'], 'synthetic', String(type));
     assert.doesNotMatch(res.body, /street-view/);
   }
+  // A failed Google lookup now cools down this specific camera, so the
+  // valid-type case uses a distinct registered camera.
   streetViewType = 'image/JPEG; charset=x';
-  const res = await app.call(`/frame/${STILL.id}`);
+  const res = await app.call(`/frame/${STILL_ALIAS.id}`);
   assert.equal(res.headers['X-CCTV-Source'], 'streetview');
   assert.equal(res.headers['Content-Type'], 'image/jpeg');
   assert.equal(res.body, 'street-view');
@@ -520,7 +522,9 @@ test('a forwarded same-origin request reaches every CCTV route but not the Stree
       );
   }
   assert.equal(streetViewCalls(), 0, 'a forwarded request spent the key');
-  const direct = await app.call(`/frame/${STILL.id}`, {
+  // The previous test placed STILL into a failure cooldown. Use a distinct
+  // registered camera to prove direct requests still admit paid fallback.
+  const direct = await app.call(`/frame/${VIDEO.id}`, {
     host,
     'sec-fetch-site': 'same-origin',
   });
