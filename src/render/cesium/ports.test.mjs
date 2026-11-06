@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test from 'node:test';
-import { cesiumCapabilities, createCesiumPorts } from './ports.js';
+import {
+  cesiumCapabilities,
+  createCesiumPorts,
+  listenerList,
+} from './ports.js';
 
 test('capabilities follow what the scene supports', () => {
   assert.deepEqual(cesiumCapabilities({}), ['models']);
@@ -25,6 +29,48 @@ test('a caller can ask for fewer capabilities, never more', () => {
     'rayCast',
   ]);
   assert.deepEqual(cesiumCapabilities({}, new Set(['sampleHeight'])), []);
+});
+
+test('a listener list keeps the listener rules', () => {
+  const errors = [];
+  const list = listenerList((error) => errors.push(error));
+  const seen = [];
+  let offB = () => {};
+  list.on(() => {
+    seen.push('a');
+    offB();
+    list.on(() => seen.push('late'));
+  });
+  offB = list.on(() => seen.push('b'));
+  list.on(() => {
+    throw new Error('listener');
+  });
+  const c = () => seen.push('c');
+  list.on(c);
+  const offC2 = list.on(c);
+  list.fire();
+  assert.deepEqual(seen, ['a', 'c', 'c']);
+  assert.equal(errors.length, 1);
+  offC2();
+  seen.length = 0;
+  list.fire();
+  assert.deepEqual(seen, ['a', 'c', 'late']);
+  list.clear();
+  assert.equal(list.size, 0);
+});
+
+test('a listener that clears its list stops the rest of the event', () => {
+  const list = listenerList((error) => {
+    throw error;
+  });
+  const seen = [];
+  list.on(() => {
+    seen.push('a');
+    list.clear();
+  });
+  list.on(() => seen.push('b'));
+  list.fire();
+  assert.deepEqual(seen, ['a']);
 });
 
 /** A widget whose scene records what the query port asks of it. */

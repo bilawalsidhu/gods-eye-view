@@ -347,7 +347,6 @@ const EXPECTED_MISSING = [
   'renderer.effects',
   'renderer.globe',
   'renderer.input',
-  'renderer.on',
   'renderer.quality',
   'renderer.readPixels',
   'renderer.releaseUnused',

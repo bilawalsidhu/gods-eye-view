@@ -24,7 +24,7 @@ import { cesiumCapabilities, createCesiumPorts } from './ports.js';
  * The members a transitional renderer has today.
  * @typedef {Pick<import('../contract/renderer').Renderer,
  *   'id' | 'contractVersion' | 'capabilities' | 'canvas' | 'frame' | 'draw'
- *   | 'camera' | 'query' | 'capture' | 'resize' | 'destroy'>}
+ *   | 'camera' | 'query' | 'capture' | 'on' | 'resize' | 'destroy'>}
  *   TransitionalRenderer
  */
 
@@ -103,6 +103,7 @@ export function createCesiumRendererPlugin({
         camera: ports.camera,
         query: ports.query,
         capture: ports.capture,
+        on: ports.on,
         resize() {
           viewer.resize();
         },
