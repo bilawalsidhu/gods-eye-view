@@ -121,6 +121,10 @@ Provider 429 cooldown is shared; 5xx cooldown is resource-specific. Failed tiles
 retain good cells for at most one hour. Stale replies carry `X-Data-Stale` and
 known `Retry-After`. Failures keep filters and drawn rows, reporting DEGRADED
 with retry timing; logs exclude request URLs and upstream exception text.
+A partial failure still draws what arrived: a failed iNaturalist request, or
+one failed half of an antimeridian view, keeps a good Acartia reply and the
+other half, retains that area's last iNaturalist rows and reports DEGRADED.
+The update fails outright only when every requested source failed.
 
 `/api/acartia/sightings` adds Salish Sea marine mammals within 45.5–50.5° N,
 126–121° W, cached ten minutes and stale for at most 24 h. A valid empty

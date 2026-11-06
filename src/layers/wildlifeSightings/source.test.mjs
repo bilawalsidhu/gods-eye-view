@@ -148,6 +148,79 @@ test('Acartia failure preserves iNat rows with an explicit failed source', async
   assert.equal(result.sources.inaturalist.ok, true);
 });
 
+test('iNat failure keeps a successful Acartia result and reports iNat degraded', async () => {
+  const source = createWildlifeSightingsSource({
+    now: () => now,
+    fetchImpl: async (url) =>
+      url.startsWith('/api/acartia')
+        ? Response.json(acartiaEnvelope())
+        : new Response('', {
+            status: 502,
+            headers: { 'X-Upstream-Status': '503', 'Retry-After': '30' },
+          }),
+  });
+  const result = await source.getSnapshotDetail({ box: seattle });
+  assert.deepEqual(result.rows, [acartia]);
+  assert.equal(result.totalResults, 1);
+  assert.equal(result.fetchedAt, now);
+  assert.equal(result.sources.acartia.ok, true);
+  assert.equal(result.sources.inaturalist.ok, false);
+  assert.equal(result.sources.inaturalist.count, 0);
+  assert.equal(
+    result.sources.inaturalist.error.message,
+    'iNaturalist HTTP 502',
+  );
+  assert.equal(result.sources.inaturalist.error.retryAfterSec, 30);
+  assert.deepEqual(result.sources.inaturalist.failedBoxes, [seattle]);
+});
+
+test('observations reject only when every requested source failed', async () => {
+  const source = createWildlifeSightingsSource({
+    now: () => now,
+    fetchImpl: async (url) =>
+      new Response('', { status: url.startsWith('/api/acartia') ? 502 : 503 }),
+  });
+  await assert.rejects(source.getSnapshotDetail({ box: seattle }), {
+    message: 'iNaturalist HTTP 503',
+  });
+  const antimeridian = createWildlifeSightingsSource({
+    now: () => now,
+    fetchImpl: async () => new Response('', { status: 503 }),
+  });
+  await assert.rejects(
+    antimeridian.getSnapshotDetail({
+      boxes: [
+        { south: 10, west: 179, north: 12, east: 180 },
+        { south: 10, west: -180, north: 12, east: -178 },
+      ],
+    }),
+    { message: 'iNaturalist HTTP 503' },
+  );
+});
+
+test('one failed antimeridian half keeps the other half and reports the failed box', async () => {
+  const east = { south: 10, west: 179, north: 12, east: 180 };
+  const west = { south: 10, west: -180, north: 12, east: -178 };
+  const eastRow = { ...inat, stableId: 'inat:east', lat: 11, lon: 179.5 };
+  const source = createWildlifeSightingsSource({
+    now: () => now,
+    fetchImpl: async (url) =>
+      new URL(url, 'https://example.test').searchParams.get('west') === '179'
+        ? Response.json(inatEnvelope({ rows: [eastRow], totalResults: 3 }))
+        : new Response('', { status: 503 }),
+  });
+  const result = await source.getSnapshotDetail({ boxes: [east, west] });
+  assert.deepEqual(result.rows, [eastRow]);
+  assert.equal(result.totalResults, 3);
+  assert.equal(result.sources.inaturalist.ok, false);
+  assert.equal(result.sources.inaturalist.count, 1);
+  assert.equal(
+    result.sources.inaturalist.error.message,
+    'iNaturalist HTTP 503',
+  );
+  assert.deepEqual(result.sources.inaturalist.failedBoxes, [west]);
+});
+
 test('proxy staleness and original fetch dates pass through with per-source counts', async () => {
   const fetchedAt = now - 50 * 60_000;
   const source = createWildlifeSightingsSource({

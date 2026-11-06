@@ -1568,6 +1568,47 @@ test('provider credits sit in the layer row, never on the globe; Acartia failure
   h.layer.destroy();
 });
 
+test('an iNaturalist failure beside a good Acartia reply keeps both and reports degraded', async () => {
+  let inatHealthy = true;
+  const acartia = {
+    ...base,
+    stableId: 'acartia:1',
+    origin: 'acartia',
+    iconic: 'Mammalia',
+    lon: -122.3,
+    provider: { name: 'Synthetic Provider', entity: null },
+  };
+  const failure = Object.assign(new Error('iNaturalist HTTP 502'), {
+    status: 502,
+    retryAfterSec: 30,
+  });
+  const h = harness({
+    getSnapshot: async () => [],
+    getSnapshotDetail: async ({ boxes }) => ({
+      rows: inatHealthy ? [base, acartia] : [acartia],
+      sources: {
+        inaturalist: inatHealthy
+          ? { ok: true }
+          : { ok: false, error: failure, failedBoxes: boxes },
+        acartia: { ok: true },
+      },
+    }),
+  });
+  await h.update();
+  assert.equal(h.layer.getStats().count, 2);
+  inatHealthy = false;
+  await h.update();
+  // The failed iNaturalist area keeps its last rows; Acartia still refreshes.
+  assert.equal(h.layer.getStats().count, 2);
+  assert.equal(h.layer.getStats().error, 'iNaturalist HTTP 502');
+  assert.equal(layerFeedState(h.layer.getStats()), 'degraded');
+  assert.equal(
+    h.layer.getRowControls().info,
+    'iNaturalist contributors · Acartia 1 (Salish Sea) · licences per record',
+  );
+  h.layer.destroy();
+});
+
 test('ambient cards prefilter the horizon, spread over screen regions and retain visible slots', async () => {
   const rows = Array.from({ length: 32 }, (_, i) => ({
     ...photographed,

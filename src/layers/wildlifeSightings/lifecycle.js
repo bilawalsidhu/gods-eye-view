@@ -345,8 +345,18 @@ export function createLifecycle({ state, services, parts }) {
         state.loadedScope = query.scope;
         state.pendingClear = false;
         // A successful page replaces this queried area, including a healthy
-        // empty page. Keep only other visited areas in the bounded LRU.
+        // empty page. Keep only other visited areas in the bounded LRU. Areas
+        // whose iNaturalist request failed keep their last iNaturalist rows.
+        const inat = snapshot.sources?.inaturalist;
+        const failedInatBoxes =
+          inat?.ok === false ? inat.failedBoxes || query.boxes : null;
         for (const [id, row] of state.rows) {
+          if (
+            failedInatBoxes &&
+            row.origin === 'inaturalist' &&
+            rowInWildlifeBoxes(row, failedInatBoxes, 0)
+          )
+            continue;
           if (rowInWildlifeBoxes(row, query.boxes, 0)) state.rows.delete(id);
         }
         for (const row of snapshot.rows) {
@@ -397,6 +407,10 @@ export function createLifecycle({ state, services, parts }) {
       const sourceError =
         gridError ||
         staleError ||
+        (snapshot.sources?.inaturalist?.ok === false
+          ? snapshot.sources.inaturalist.error ||
+            new Error(msg('Wildlife sightings source unavailable'))
+          : null) ||
         (snapshot.sources?.acartia?.ok === false
           ? new Error(msg('Acartia feed unavailable'))
           : null);

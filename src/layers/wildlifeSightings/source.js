@@ -454,7 +454,9 @@ export function createWildlifeSightingsSource({
       ['all', 'Mammalia', 'whales'].includes(preset) &&
       requestBoxes.some((bounds) => boxIntersects(bounds, ACARTIA_GUARD_BOX));
 
-    const inatRequest = Promise.all(
+    // Each box settles independently: one failed antimeridian half must not
+    // discard the other half, and neither may discard a good Acartia reply.
+    const inatRequest = Promise.allSettled(
       requestBoxes.map((bounds) => {
         const params = new URLSearchParams({
           scope: scope === 'global' ? 'global' : 'view',
@@ -480,8 +482,23 @@ export function createWildlifeSightingsSource({
       acartiaRequest,
     ]);
     signal?.throwIfAborted();
-    if (inatResult.status === 'rejected') throw inatResult.reason;
-    const inatSnapshots = inatResult.value;
+    const inatSnapshots = [];
+    const failedBoxes = [];
+    let inatError = null;
+    inatResult.value.forEach((result, index) => {
+      if (result.status === 'fulfilled') inatSnapshots.push(result.value);
+      else {
+        failedBoxes.push(requestBoxes[index]);
+        inatError ??= result.reason;
+      }
+    });
+    // Fail outright only when nothing succeeded; otherwise draw what arrived
+    // and report the failed source in its per-source status.
+    if (
+      !inatSnapshots.length &&
+      (!useAcartia || acartiaResult.status !== 'fulfilled')
+    )
+      throw inatError;
     const inatRows = inatSnapshots.flatMap((snapshot) => snapshot.rows);
     const acartiaSnapshot =
       acartiaResult.status === 'fulfilled' ? acartiaResult.value : null;
@@ -529,10 +546,11 @@ export function createWildlifeSightingsSource({
       ...(retryAfter.length ? { retryAfterSec: Math.max(...retryAfter) } : {}),
       sources: {
         inaturalist: {
-          ok: true,
+          ok: !inatError,
           stale: inatStale,
           fetchedAt: inatFetchedAt,
           count: rows.filter((row) => row.origin === 'inaturalist').length,
+          ...(inatError ? { error: inatError, failedBoxes } : {}),
         },
         acartia: {
           ok: !useAcartia || acartiaResult.status === 'fulfilled',
