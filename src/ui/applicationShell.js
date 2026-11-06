@@ -30,6 +30,7 @@ import {
 } from './cyberSonarControls.js';
 
 import * as Cesium from 'cesium';
+import { cameraOf } from '../render/rendererOf.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
@@ -441,7 +442,7 @@ export class StyleManager extends ShellFacade {
       },
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
-      cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      cancelOwnedNavigation: () => cameraOf(this.viewer).cancelFlight(),
       // A host may open a share code without a `/share/<code>` address.
       initialShareCode,
     });
@@ -1452,20 +1453,18 @@ export class StyleManager extends ShellFacade {
    */
   applyCameraState(cameraState, duration = 2.8) {
     if (!cameraState) return;
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        cameraState.lon,
-        cameraState.lat,
-        cameraState.alt,
-      ),
-      orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch || -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+    cameraOf(this.viewer).flyTo(
+      { lon: cameraState.lon, lat: cameraState.lat, height: cameraState.alt },
+      {
+        orientation: {
+          heading: Cesium.Math.toRadians(cameraState.heading || 0),
+          pitch: Cesium.Math.toRadians(cameraState.pitch || -35),
+          roll: Cesium.Math.toRadians(cameraState.roll || 0),
+        },
+        durationS: Math.max(0.2, duration || 0),
+        easing: 'cubicInOut',
       },
-      duration: Math.max(0.2, duration || 0),
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-    });
+    );
   }
 
   /**

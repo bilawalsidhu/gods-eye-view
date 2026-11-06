@@ -25,6 +25,7 @@ import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
 import { attachVoiceResult } from './speech.js';
 import { withEntityRecord } from '../data/entityRecords.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -131,6 +132,7 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       lookAtTransform() {},
     },
   };
+  bindFakeCesiumCamera(viewer);
   const styleManager = {
     runImmediateNavigation(noun, navigate, releaseOptions = undefined) {
       return runExplicitNavigation({
@@ -3288,7 +3290,9 @@ test('voice Radio: the keyless path applies no country filter the keyed path wou
 });
 
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
-function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
+/** Fake viewers with a fake Cesium camera reach the renderer's camera port too. */
+const withCameraPort = (viewer) => (viewer?.camera ? bindFakeCesiumCamera(viewer) : viewer);
+function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options, viewer: withCameraPort(options?.viewer) }); }
 function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
 
 test('ALPR common names toggle only the registered camera layer through the normal voice action', async () => {

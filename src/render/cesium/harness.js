@@ -6,7 +6,9 @@
  * `CESIUM_CHECKS` lists the checks of the ports the Cesium renderer has.
  * Each migration adds the checks of the members it brings, so the suite
  * shows how far the renderer is through the contract; every other check is
- * left out of the run rather than failed.
+ * left out of the run rather than failed. Camera flights are checked in
+ * Node instead (`cameraPort.test.mjs`): a page's frames come on the real
+ * clock at the display's rate, where the reference traces step 1/60 s.
  */
 import { DEFAULT_TOLERANCE } from '../conformance/index.js';
 import { toEcef } from '../stub/math.js';
@@ -14,6 +16,11 @@ import { createCesiumSceneRenderer, pointerFeedOf } from './sceneRenderer.js';
 
 /** @type {ReadonlySet<string>} */
 export const CESIUM_CHECKS = new Set([
+  'camera.trace.setView angles',
+  'camera.trace.setView keeps the position when only orientation is given',
+  'camera.trace.lookAt sweep and release',
+  'camera.trace.flyTo with a duration of 0 completes inside the call',
+  'camera.trace.flyTo where the camera already is completes inside the call',
   'camera.viewRectangle',
   'draw.drillPick',
   'draw.ids',

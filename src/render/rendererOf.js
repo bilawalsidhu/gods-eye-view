@@ -27,3 +27,15 @@ export function bindRenderer(host, renderer) {
  * @returns {object|null} The renderer bound to `host`, or null.
  */
 export const rendererOf = (host) => (host && renderers.get(host)) || null;
+
+/**
+ * The camera port of the renderer bound to `host`.
+ * @param {object} host
+ * @returns {import('./contract/camera').CameraPort}
+ * @throws When no renderer is bound to `host`.
+ */
+export function cameraOf(host) {
+  const camera = rendererOf(host)?.camera;
+  if (!camera) throw new Error('This scene has no renderer camera');
+  return camera;
+}

@@ -1,36 +1,34 @@
-import * as Cesium from 'cesium';
+import { toRadians } from './geo/index.js';
+import { cameraOf } from './render/rendererOf.js';
 
 /**
  * Set camera to Austin on load with a cinematic fly-in.
  * @returns {Function} Cancels the pending or active startup flight.
  */
 export function flyToAustin(viewer) {
+  const camera = cameraOf(viewer);
   // Start from a high altitude, then fly down
-  viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 25000),
-    orientation: {
-      heading: Cesium.Math.toRadians(0),
-      pitch: Cesium.Math.toRadians(-90),
-      roll: 0.0,
-    },
+  camera.setView({
+    destination: { lon: -97.7431, lat: 30.2672, height: 25000 },
+    orientation: { heading: 0, pitch: toRadians(-90), roll: 0 },
   });
 
   // Cinematic fly-in after a brief pause
+  let flight = null;
   const timer = setTimeout(() => {
     if (viewer.isDestroyed()) return;
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 600),
-      orientation: {
-        heading: Cesium.Math.toRadians(15),
-        pitch: Cesium.Math.toRadians(-30),
-        roll: 0.0,
+    flight = camera.flyTo(
+      { lon: -97.7431, lat: 30.2672, height: 600 },
+      {
+        orientation: { heading: toRadians(15), pitch: toRadians(-30), roll: 0 },
+        durationS: 4.0,
+        easing: 'cubicInOut',
       },
-      duration: 4.0,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-    });
+    );
   }, 500);
   return () => {
     clearTimeout(timer);
-    if (!viewer.isDestroyed()) viewer.camera.cancelFlight();
+    // Only the fly-in: a flight the user started since is theirs.
+    if (!viewer.isDestroyed()) flight?.cancel();
   };
 }
