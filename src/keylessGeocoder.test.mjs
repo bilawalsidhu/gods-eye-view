@@ -35,6 +35,12 @@ import {
 import { geocodeNavigationMode } from './locations.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const MOSCOW_RESPONSES = JSON.parse(
+  fs.readFileSync(
+    path.join(ROOT, 'src/data/fixtures/photon-moscow-search.json'),
+    'utf8',
+  ),
+);
 
 /** Photon's real answer for "Hanoi", trimmed to the fields we consume. */
 const HANOI = {
@@ -247,6 +253,58 @@ test('a biased near-miss is refused, and the unbiased answer is taken instead', 
   assert.equal(result.label.startsWith('Huế'), true, `got ${result.label}`);
   assert.equal(Math.round(result.lat), 16);
   assert.equal(fetchImpl.urls.length, 2, 'the refused bias costs exactly one extra request');
+});
+
+test('a non-Latin exact match keeps the nearby namesake', async () => {
+  const fetchImpl = photonPair(
+    MOSCOW_RESPONSES.biased.features,
+    MOSCOW_RESPONSES.unbiased.features,
+  );
+
+  const result = await geocodeKeyless('Москва', {
+    bias: '38.90,71.80|39.00,71.90',
+    fetchImpl,
+  });
+
+  assert.equal(result.label, 'Москва, Тоҷикистон');
+  assert.equal(fetchImpl.urls.length, 1);
+});
+
+test('toponym folding preserves non-Latin scripts', () => {
+  const cases = [
+    ['Huế', 'hue'],
+    ['Москва', 'москва'],
+    ['Αθήνα', 'αθήνα'],
+    ['القاهرة', 'القاهرة'],
+    ['東京', '東京'],
+    ['São 東京', 'sao 東京'],
+    ['Straße', 'strasse'],
+    ['Tromsø', 'tromso'],
+    ['Łódź', 'lodz'],
+    ['The Hague', 'the hague'],
+  ];
+
+  for (const [input, expected] of cases) {
+    assert.equal(normalizeToponym(input), expected, input);
+  }
+});
+
+test('a leading "the" is part of the name a nearby match must equal', async () => {
+  // "The Hague" over upstate New York means the Dutch city, not Hague, NY.
+  const hagueNy = {
+    geometry: { type: 'Point', coordinates: [-73.5004, 43.6967] },
+    properties: { osm_key: 'place', osm_value: 'town', type: 'city', name: 'Hague', country: 'United States' },
+  };
+  const theHague = {
+    geometry: { type: 'Point', coordinates: [4.3113, 52.0799] },
+    properties: { osm_key: 'place', osm_value: 'city', type: 'city', name: 'The Hague', country: 'Nederland' },
+  };
+  const fetchImpl = photonPair([hagueNy], [theHague]);
+
+  const result = await geocodeKeyless('The Hague', { bias: '43.65,-73.55|43.75,-73.45', fetchImpl });
+
+  assert.equal(Math.round(result.lat), 52, `got ${result.label}`);
+  assert.equal(fetchImpl.urls.length, 2);
 });
 
 test('a biased match that leads with the name is taken without a second request', async () => {
