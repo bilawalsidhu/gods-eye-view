@@ -348,7 +348,12 @@ function cameraHarness(layer = alprCamerasLayer) {
     type,
     modifier,
   ) {
-    if (type === Cesium.ScreenSpaceEventType.LEFT_CLICK) click = fn;
+    // The unmodified click: the input port binds one per modifier.
+    if (
+      type === Cesium.ScreenSpaceEventType.LEFT_CLICK &&
+      modifier === undefined
+    )
+      click = fn;
     return setInput.call(this, fn, type, modifier);
   };
   try {

@@ -224,11 +224,13 @@ function fakeAnnotations() {
 }
 
 /** Stand up a tool against fresh doubles, with globals restored afterwards. */
-function harness({ navigation = null } = {}) {
+function harness({ navigation = null, beforeInput = () => {} } = {}) {
   resetPointerOwnership();
   const { byId, documentDouble } = fakeDom();
   const viewer = fakeViewer();
-  const input = fakeInput(viewer, { eventTypes: Cesium.ScreenSpaceEventType });
+  // The viewer's own actions are bound before its input port takes them.
+  beforeInput(viewer);
+  const input = fakeInput(viewer);
   const annotations = fakeAnnotations();
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
@@ -339,30 +341,33 @@ test('a destroyed instance cannot free the pointer its replacement holds', async
   }
 });
 
-test('both stock viewer click actions are borrowed for the session and given back', async () => {
-  const h = harness();
+test('both stock viewer click actions are held off for the session and given back', async () => {
+  const stockClick = () => 'viewer picks and selects';
+  const stockDouble = () => 'viewer tracks';
+  const h = harness({
+    beforeInput(viewer) {
+      viewer.screenSpaceEventHandler.setInputAction(stockClick, LEFT_CLICK);
+      viewer.screenSpaceEventHandler.setInputAction(stockDouble, LEFT_DOUBLE_CLICK);
+    },
+  });
   try {
-    const stockClick = () => 'viewer picks and selects';
-    const stockDouble = () => 'viewer tracks';
-    h.viewer.screenSpaceEventHandler.setInputAction(stockClick, LEFT_CLICK);
-    h.viewer.screenSpaceEventHandler.setInputAction(stockDouble, LEFT_DOUBLE_CLICK);
-
+    assert.equal(h.input.stockEnabled('select'), true);
     h.act('toggleDraw');
     assert.equal(
-      h.viewer.screenSpaceEventHandler.getInputAction(LEFT_CLICK),
-      undefined,
+      h.input.stockEnabled('select'),
+      false,
       "the viewer's own selecting click must not run while drawing",
     );
-    assert.equal(
-      h.viewer.screenSpaceEventHandler.getInputAction(LEFT_DOUBLE_CLICK),
-      undefined,
-    );
+    assert.equal(h.input.stockEnabled('dblclickFollow'), false);
 
     h.act('toggleDraw');
+    assert.equal(h.input.stockEnabled('select'), true);
+    assert.equal(h.input.stockEnabled('dblclickFollow'), true);
+    h.input.destroy();
     assert.equal(
       h.viewer.screenSpaceEventHandler.getInputAction(LEFT_CLICK),
       stockClick,
-      'the exact function is restored, not a replacement',
+      'the exact function goes back to the viewer, not a replacement',
     );
     assert.equal(
       h.viewer.screenSpaceEventHandler.getInputAction(LEFT_DOUBLE_CLICK),

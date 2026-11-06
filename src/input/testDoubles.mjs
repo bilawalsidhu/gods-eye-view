@@ -3,30 +3,30 @@
  * `ScreenSpaceEventHandler`, and a dispatcher made on it ahead of the code
  * under test, so that code's `inputFor(viewer)` gets the fake.
  */
-import { inputFor } from './dispatcher.js';
+import { HANDLER_EVENT_TYPES, inputFor } from './dispatcher.js';
 
-export const FAKE_EVENT_TYPES = Object.freeze({
-  LEFT_DOWN: 'down',
-  MOUSE_MOVE: 'move',
-  LEFT_UP: 'up',
-  LEFT_CLICK: 'click',
-  LEFT_DOUBLE_CLICK: 'dblclick',
-});
+/** Cesium's own event types, the ones the input port binds. */
+export const FAKE_EVENT_TYPES = HANDLER_EVENT_TYPES;
 
 export class FakeScreenSpaceEventHandler {
   constructor() {
     this.actions = new Map();
     this.destroyed = false;
   }
-  setInputAction(fn, type) {
-    this.actions.set(type, fn);
+  /** One action per type and modifier, as Cesium keeps them. */
+  static key(type, modifier) {
+    return modifier === undefined ? type : `${type}+${modifier}`;
   }
-  getInputAction(type) {
-    return this.actions.get(type);
+  setInputAction(fn, type, modifier) {
+    this.actions.set(FakeScreenSpaceEventHandler.key(type, modifier), fn);
   }
-  removeInputAction(type) {
-    this.actions.delete(type);
+  getInputAction(type, modifier) {
+    return this.actions.get(FakeScreenSpaceEventHandler.key(type, modifier));
   }
+  removeInputAction(type, modifier) {
+    this.actions.delete(FakeScreenSpaceEventHandler.key(type, modifier));
+  }
+  /** Raise an action as Cesium does for a press with no modifier held. */
   fire(type, event) {
     this.actions.get(type)?.(event);
   }
@@ -41,18 +41,16 @@ export class FakeScreenSpaceEventHandler {
 /**
  * Make `viewer`'s dispatcher on a fake handler and return ways to drive it.
  * @param {object} viewer
- * @param {{now?: () => number, eventTypes?: object}} [options] `eventTypes`
- *   defaults to {@link FAKE_EVENT_TYPES}; pass Cesium's own when the code under
- *   test reads the viewer's stock actions by Cesium's type values.
+ * @param {{now?: () => number}} [options]
  */
-export function fakeInput(viewer, { now, eventTypes = FAKE_EVENT_TYPES } = {}) {
+export function fakeInput(viewer, { now } = {}) {
   const handler = new FakeScreenSpaceEventHandler();
   const input = inputFor(viewer, {
     createHandler: () => handler,
-    eventTypes,
+    document: null,
     ...(now ? { now } : {}),
   });
-  const T = eventTypes;
+  const T = FAKE_EVENT_TYPES;
   return {
     input,
     handler,
@@ -71,6 +69,8 @@ export function fakeInput(viewer, { now, eventTypes = FAKE_EVENT_TYPES } = {}) {
     },
     dblclick: (position = { x: 10, y: 10 }) =>
       handler.fire(T.LEFT_DOUBLE_CLICK, { position }),
+    /** Whether the viewer's stock `select` or `dblclickFollow` runs now. */
+    stockEnabled: (name) => input.stockEnabled(name),
     destroy: () => input.destroy(),
   };
 }

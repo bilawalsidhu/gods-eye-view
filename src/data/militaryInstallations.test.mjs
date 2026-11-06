@@ -345,7 +345,8 @@ async function runInstallationLoad({
 
   const originalSetInputAction = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
   Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (action, type, modifier) {
-    if (type === Cesium.ScreenSpaceEventType.LEFT_CLICK) clickAction = action;
+    // The unmodified click: the input port binds one per modifier.
+    if (type === Cesium.ScreenSpaceEventType.LEFT_CLICK && modifier === undefined) clickAction = action;
     return originalSetInputAction.call(this, action, type, modifier);
   };
   try { militaryInstallationsLayer.init(viewer); }

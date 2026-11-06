@@ -29,8 +29,14 @@ function fixture(options = {}) {
     ...options,
   });
   const camera = fakes.viewer.scene.screenSpaceCameraController;
+  // The stock action as it runs now: the input port holds them, so it is
+  // the original while not suppressed, and none while it is.
   const stockAction = (type) =>
-    fakes.viewer.screenSpaceEventHandler.getInputAction(fakes.types[type]);
+    fakes.stockEnabled(type === 'LEFT_CLICK' ? 'select' : 'dblclickFollow')
+      ? type === 'LEFT_CLICK'
+        ? fakes.originalClick
+        : fakes.originalDouble
+      : undefined;
   const preview = () =>
     fakes.viewer.dataSources.sources[0]?.entities.values.every((e) => e.show);
   return {

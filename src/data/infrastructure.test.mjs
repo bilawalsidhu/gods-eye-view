@@ -187,15 +187,18 @@ test('consumer build includes only infrastructure code and resolves assets under
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
     'cameraInput.js',
+    'ctrlWheelZoom.js',
     'dispatcher.js',
     'heights.js',
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
+    'input.js',
     'inputOwnership.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
     'pickRegistry.js',
+    'router.js',
     'scenePick.js',
     'sensorPick.js',
   ]);
