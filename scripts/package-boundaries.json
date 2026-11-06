@@ -3395,6 +3395,8 @@
       "src/globe/cesium/projector.js",
       "src/globe/cesium/render.js",
       "src/globe/cesium/surface.js",
+      "src/globe/cesium/movers.js",
+      "src/globe/cesium/lines.js",
       "src/globe/cesium/engineFromViewer.js",
       "src/globe/cameraMath.js",
       "src/globe/navara/cameraModel.js",

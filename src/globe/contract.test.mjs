@@ -293,29 +293,28 @@ test('mergeSharpen keeps omitted fields and rejects bad values', () => {
     assert.throws(() => mergeSharpen(on, bad), TypeError);
 });
 
-test('movers and lines are optional capabilities, whole or absent', () => {
+test('movers and lines are required and reported as capabilities', () => {
   const engine = createFakeEngine();
   assert.equal(engineCapabilities(engine).movers, true);
   assert.equal(engineCapabilities(engine).lines, true);
   const without = { ...engine };
   delete without.movers;
   delete without.lines;
-  assert.equal(assertGlobeEngine(without), without);
+  assert.throws(() => assertGlobeEngine(without), /\bmovers\b.*\blines\b/);
   assert.equal(engineCapabilities(without).movers, false);
-  const half = { ...engine, movers: { createSet: 1 } };
-  assert.throws(
-    () => assertGlobeEngine(half),
-    /movers\.createSet.*movers\.list/,
-  );
-  // Without them the suite leaves out the checks that draw movers and lines.
-  const names = (target) =>
-    createContractSuite(target, { waitFrames: async () => {} }).map(
-      ({ name }) => name,
+  assert.equal(engineCapabilities(without).lines, false);
+  const half = { ...engine, movers: { createSet: () => {} } };
+  assert.throws(() => assertGlobeEngine(half), /movers\.list/);
+  assert.equal(engineCapabilities(half).movers, false);
+  // The suite draws movers and lines on every engine.
+  const names = createContractSuite(engine, {
+    waitFrames: async () => {},
+  }).map(({ name }) => name);
+  for (const prefix of ['movers:', 'lines:', 'colours:'])
+    assert.ok(
+      names.some((name) => name.startsWith(prefix)),
+      prefix,
     );
-  assert.ok(names(engine).some((name) => name.startsWith('movers:')));
-  const plain = names(without);
-  assert.ok(!plain.some((name) => /^(movers|lines|colours):/.test(name)));
-  assert.ok(plain.some((name) => name.startsWith('camera.')));
 });
 
 test('engineCapabilities names the optional capabilities an engine has whole', () => {

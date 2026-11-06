@@ -369,7 +369,8 @@
  * @property {'normal'|'always'|{ disableWithinM: number }} [depthTest]
  *   'always' draws over the scene; { disableWithinM } skips the depth test for
  *   instances closer to the camera than that (Cesium's
- *   disableDepthTestDistance). 'normal' by default.
+ *   disableDepthTestDistance). 'normal' by default. Sprites and points
+ *   only: models are depth-tested in the scene on both engines.
  * @property {{ atlas: { url?: string, canvas?: object, cells: Object<string, number[]> },
  *   sizePx: number, scaleByDistance?: number[] }} [sprite] An image atlas
  *   whose cells are [u0, v0, u1, v1] in 0..1 (v down from the image top);
@@ -382,11 +383,16 @@
  * @property {{ url: string, minimumPixelSize?: number,
  *   colorBlend?: { mode: 'mix'|'replace', amount: number }, unlit?: boolean }} [model]
  *   A glTF drawn per instance in metres, at least minimumPixelSize px.
- * @property {boolean} [pickable]
+ *   Without colorBlend the instance colour sets only the alpha; 'mix' mixes
+ *   the lit colour toward it by amount, 'replace' replaces it; unlit draws
+ *   the model's own colours without lighting.
+ * @property {boolean} [pickable] Whether picks return the set's instances
+ *   (false by default: picks pass through to what lies under them).
  * @property {boolean} [sharpen] Sprites/points: include the glyph in the
  *   sharpen/AA stage after tone mapping, for translucent fields such as FIRMS
- *   (by default Navara draws them in the later display stage). Does not
- *   enable sharpening or change its amount.
+ *   (by default Navara draws them in the later display stage; Cesium draws
+ *   billboards and points in its own stage either way). Does not enable
+ *   sharpening or change its amount.
  *
  * @typedef {object} MoverFields
  *   One instance; omitted fields keep their value (defaults: white, scale 1,
@@ -410,7 +416,8 @@
  * @property {() => void} commit Uploads what changed (one buffer write) and
  *   requests a render; nothing else draws a frame.
  * @property {() => boolean} ready Whether what the set draws has loaded: a
- *   model set's glTF, a sprite set's atlas.
+ *   model set's glTF (Cesium: every drawn instance's model), a sprite set's
+ *   atlas.
  *   A layer keeps its fallback visual until then.
  * @property {() => void} destroy
  *
@@ -434,8 +441,9 @@
  *   straight segments.
  * @property {Matrix4} [modelMatrix] Applied to the positions (an orbit ring
  *   turned by GMST).
- * @property {any} [pickId] What a pick of the line returns (Navara uses
- *   CPU segment picks; lines do not participate in its GPU pass).
+ * @property {any} [pickId] What a pick of the line returns; a line without
+ *   one is not picked (Navara uses CPU segment picks; lines do not
+ *   participate in its GPU pass).
  *
  * @typedef {object} Line
  * @property {(positions: Cartesian3[] | Float64Array) => void} setPositions
@@ -469,11 +477,9 @@
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
  * @property {GlobeMaps} maps
  * @property {GlobeClock} clock
- * @property {GlobeMovers} [movers] Optional, with lines (capabilities
- *   `movers` and `lines`): the engine draws the layers' moving objects and
- *   polylines (Navara). Cesium has none: in Cesium mode the layers draw
- *   their own Cesium primitives.
- * @property {GlobeLines} [lines]
+ * @property {GlobeMovers} movers The layers' moving objects (sprites,
+ *   points, models), drawn by the engine.
+ * @property {GlobeLines} lines The layers' dynamic polylines.
  * @property {() => void} destroy
  * @property {() => boolean} isDestroyed True once destroy() has run.
  */
@@ -674,6 +680,8 @@ const SHAPE = {
   input: { on: isFunction, setCameraInputs: isFunction },
   credits: { addStatic: isFunction },
   clock: { now: isFunction, frameTime: isFunction },
+  movers: { createSet: isFunction, list: isFunction },
+  lines: { createLine: isFunction, list: isFunction },
   maps: {
     setBaseImagery: isFunction,
     setTerrain: isFunction,
@@ -710,15 +718,11 @@ const OPTIONAL_SHAPE = {
     'render.setContactSonar': isFunction,
     'render.contactSonar': isFunction,
   },
-  movers: {
-    'movers.createSet': isFunction,
-    'movers.list': isFunction,
-  },
-  lines: {
-    'lines.createLine': isFunction,
-    'lines.list': isFunction,
-  },
 };
+
+// Required capabilities engineCapabilities reports as well: true for an
+// engine that has them whole, as every valid engine does.
+const REPORTED_REQUIRED = ['movers', 'lines'];
 
 const memberAt = (engine, path) =>
   path.split('.').reduce((value, key) => value?.[key], engine);
@@ -727,18 +731,25 @@ const memberAt = (engine, path) =>
  * Which optional capabilities an engine has: { visualStyles, ... } as
  * booleans. A caller that refuses a feature on an engine without a Cesium
  * viewer (voice, say) asks here instead: Cesium draws these through the app's
- * own stages and reports false.
+ * own stages and reports false. `movers` and `lines` are required; they are
+ * reported too, true for every valid engine.
  */
 export function engineCapabilities(engine) {
-  return Object.fromEntries(
-    Object.entries(OPTIONAL_SHAPE).map(([flag, members]) => [
+  const whole = (members, prefix = '') =>
+    isObject(engine) &&
+    Object.entries(members).every(([path, valid]) =>
+      valid(memberAt(engine, prefix + path)),
+    );
+  return Object.fromEntries([
+    ...Object.entries(OPTIONAL_SHAPE).map(([flag, members]) => [
       flag,
-      isObject(engine) &&
-        Object.entries(members).every(([path, valid]) =>
-          valid(memberAt(engine, path)),
-        ),
+      whole(members),
     ]),
-  );
+    ...REPORTED_REQUIRED.map((capability) => [
+      capability,
+      whole(SHAPE[capability], `${capability}.`),
+    ]),
+  ]);
 }
 
 /**

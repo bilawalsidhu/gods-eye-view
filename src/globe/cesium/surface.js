@@ -1,5 +1,11 @@
 // GlobeSurface on a Cesium scene: the rendered-surface queries that
 // services/groundSnap and services/meshFloorSampler make.
+//
+// `exclude` takes the engine's own mover sets (engine.movers) as well as
+// Cesium objects: Cesium's sampleHeight matches excluded objects by the
+// picked primitive, which for a set is each billboard, point or model, so a
+// set is hidden for the sample instead (synchronous: nothing draws in
+// between) and shown again after it.
 
 import { firstVisibleTileset } from '../../services/groundSnap.js';
 import { normalizeSurfaceOptions } from '../surfaceDetail.js';
@@ -9,16 +15,46 @@ const finite = (value) => (Number.isFinite(value) ? value : undefined);
 
 /**
  * @param {Cesium.Viewer} viewer
+ * @param {{ engineExclude?: (entry: any) => ({ show: boolean } | null) }} [options]
+ *   `engineExclude` maps an engine object (a mover set) to the Cesium
+ *   primitive that draws it, or null for a Cesium object.
  * @returns {{ surface: import('../contract.js').GlobeSurface, destroy: () => void }}
  */
-export function createCesiumSurface(viewer) {
+export function createCesiumSurface(
+  viewer,
+  { engineExclude = () => null } = {},
+) {
   const { scene } = viewer;
+
+  // Runs `query(nativeExclude)` with the engine objects in `exclude` hidden.
+  function excluding(exclude, query) {
+    if (!exclude?.length) return query(exclude);
+    let native = exclude;
+    const hidden = [];
+    for (const entry of exclude) {
+      const primitive = engineExclude(entry);
+      if (!primitive) continue;
+      if (native === exclude)
+        native = exclude.filter((other) => !engineExclude(other));
+      if (primitive.show) {
+        primitive.show = false;
+        hidden.push(primitive);
+      }
+    }
+    try {
+      return query(native);
+    } finally {
+      for (const primitive of hidden) primitive.show = true;
+    }
+  }
 
   const sampleHeight = (cartographic, exclude) => {
     if (!scene.sampleHeightSupported) return undefined;
     try {
       // Throws when unsupported (no depth textures); that is a miss.
-      return finite(scene.sampleHeight(cartographic, exclude));
+      return excluding(exclude, (native) =>
+        finite(scene.sampleHeight(cartographic, native)),
+      );
     } catch {
       return undefined;
     }
@@ -49,7 +85,9 @@ export function createCesiumSurface(viewer) {
     clampToHeight(position, exclude) {
       if (!scene.clampToHeightSupported) return undefined;
       try {
-        return toGeo3(scene.clampToHeight(position, exclude));
+        return excluding(exclude, (native) =>
+          toGeo3(scene.clampToHeight(position, native)),
+        );
       } catch {
         return undefined;
       }

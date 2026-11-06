@@ -102,3 +102,38 @@ test('sampleHeightDetailed: tiles from sampleHeight, else terrain; no tile size'
     TypeError,
   );
 });
+
+test('an engine mover set in exclude is hidden for the sample, native objects pass', () => {
+  const viewer = createFakeViewer();
+  const collection = { show: true };
+  const set = { id: 'flights' };
+  const { surface } = createCesiumSurface(viewer, {
+    engineExclude: (entry) => (entry === set ? collection : null),
+  });
+  const shownDuring = [];
+  viewer.scene.sampleHeight = (position, excluded) => {
+    shownDuring.push(collection.show, excluded);
+    return 30;
+  };
+  const native = { primitive: 1 };
+  const place = geo.cartographic.fromDegrees(20, 10, 0);
+  assert.equal(surface.sampleHeight(place, [set, native]), 30);
+  assert.deepEqual(shownDuring, [false, [native]]);
+  assert.equal(collection.show, true, 'shown again after the sample');
+  shownDuring.length = 0;
+  surface.sampleHeightDetailed(place, { exclude: [set] });
+  assert.deepEqual(shownDuring, [false, []]);
+  assert.equal(collection.show, true);
+  // clampToHeight too, and a throwing scene still shows the set again.
+  viewer.scene.clampToHeight = (position, excluded) => {
+    shownDuring.push(collection.show, excluded);
+    throw new Error('no depth texture');
+  };
+  shownDuring.length = 0;
+  assert.equal(
+    surface.clampToHeight(geo.cartesian3.fromDegrees(20, 10, 0), [set]),
+    undefined,
+  );
+  assert.deepEqual(shownDuring, [false, []]);
+  assert.equal(collection.show, true);
+});

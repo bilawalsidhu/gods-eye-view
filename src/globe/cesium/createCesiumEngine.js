@@ -3,14 +3,18 @@
 // appear only when the shell uses them, and destroy() removes them again
 // (the viewer itself stays owned by the app). The one exception is the
 // engine clock's frame latch on viewer.clock.onTick (clock.js), attached at
-// creation so it runs before onTick listeners added later.
+// creation so it runs before onTick listeners added later. Mover sets and
+// lines join the scene in one engine-owned collection each, with the first
+// set or line.
 
 import { createCesiumCamera } from './camera.js';
 import { createCesiumClock } from './clock.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumFrames } from './frames.js';
 import { createCesiumInput } from './input.js';
+import { createCesiumLines } from './lines.js';
 import { createCesiumMaps } from './maps.js';
+import { createCesiumMovers } from './movers.js';
 import { createCesiumPicker } from './picker.js';
 import { createCesiumProjector } from './projector.js';
 import { createCesiumRender } from './render.js';
@@ -25,8 +29,11 @@ import { createCesiumSurface } from './surface.js';
  *   createImageryLayer?: Function,
  *   loadPhotorealTileset?: Function,
  *   appClock?: import('../../time/clock.js').AppClock,
+ *   moverFactories?: object,
+ *   lineFactories?: object,
  * }} [options] `requestRender` defaults to the render governor; `appClock`
- *   to the page's app clock; the `create*`/`load*` options are test seams.
+ *   to the page's app clock; the `create*`/`load*` options and the mover and
+ *   line factories (movers.js, lines.js) are test seams.
  *
  * `render.setContinuous` takes a hold on the app's singleton renderGovernor
  * (src/renderGovernor.js), which governs the one viewer it was installed on;
@@ -38,21 +45,38 @@ export function createCesiumEngine(viewer, options = {}) {
   const { canvas } = viewer;
   const render = createCesiumRender(viewer, options);
   const credits = createCesiumCredits(viewer);
-  const picker = createCesiumPicker(viewer);
+  const requestRender = (reason) => render.render.request(reason);
+  const movers = createCesiumMovers(viewer, {
+    requestRender,
+    ...(options.moverFactories ? { factories: options.moverFactories } : {}),
+  });
+  const lines = createCesiumLines(viewer, {
+    requestRender,
+    ...(options.lineFactories ? { factories: options.lineFactories } : {}),
+  });
+  // Picks name the mover set or line they hit, with its pickId.
+  const picker = createCesiumPicker(viewer, {
+    identify: (picked) => movers.identify(picked) ?? lines.identify(picked),
+  });
   const parts = {
     camera: createCesiumCamera(viewer),
     picker,
     projector: createCesiumProjector(viewer),
     frames: createCesiumFrames(viewer),
     clock: createCesiumClock(viewer, options),
+    movers,
+    lines,
     render,
-    surface: createCesiumSurface(viewer),
+    // Mover sets in a surface `exclude` are hidden for the sample.
+    surface: createCesiumSurface(viewer, {
+      engineExclude: (entry) => movers.primitiveOf(entry),
+    }),
     input: createCesiumInput(viewer, { ...options, picker: picker.picker }),
     credits,
     maps: createCesiumMaps(viewer, {
       ...options,
       credits: credits.credits,
-      requestRender: (reason) => render.render.request(reason),
+      requestRender,
     }),
   };
   let destroyed = false;

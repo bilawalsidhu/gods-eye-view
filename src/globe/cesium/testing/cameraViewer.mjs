@@ -1,18 +1,25 @@
 // A Cesium viewer around a real Cesium.Camera on a stub scene (no renderer,
 // GPU or providers), with the Cesium engine over it: for tests that check
-// what the globe contract does to Cesium's own camera geometry.
+// what the globe contract does to Cesium's own camera geometry. The scene's
+// primitives are a real PrimitiveCollection, so mover sets and lines build
+// their Cesium collections (they draw nothing).
 
 import * as Cesium from 'cesium';
 import { createCesiumEngine } from '../createCesiumEngine.js';
 
 /**
- * @param {{ width?: number, height?: number }} [options] The canvas size.
+ * @param {{ width?: number, height?: number, engineOptions?: object }} [options]
+ *   The canvas size; `engineOptions` go to createCesiumEngine.
  * @returns {{ viewer: object, scene: object, camera: Cesium.Camera,
  *   canvas: EventTarget, engine: import('../../contract.js').GlobeEngine,
  *   frame: () => void }} `frame()` runs one turn of CesiumWidget's loop: the
  *   viewer clock's tick, then the scene's frame events.
  */
-export function createCameraViewer({ width = 1280, height = 800 } = {}) {
+export function createCameraViewer({
+  width = 1280,
+  height = 800,
+  engineOptions = {},
+} = {}) {
   const canvas = Object.assign(new EventTarget(), {
     clientWidth: width,
     clientHeight: height,
@@ -32,6 +39,7 @@ export function createCameraViewer({ width = 1280, height = 800 } = {}) {
     pixelRatio: 1,
     // Cesium's running camera flights.
     tweens: [],
+    primitives: new Cesium.PrimitiveCollection(),
     preUpdate: new Cesium.Event(),
     preRender: new Cesium.Event(),
     postRender: new Cesium.Event(),
@@ -61,7 +69,10 @@ export function createCameraViewer({ width = 1280, height = 800 } = {}) {
     },
     isDestroyed: () => false,
   };
-  const engine = createCesiumEngine(viewer, { requestRender: () => {} });
+  const engine = createCesiumEngine(viewer, {
+    requestRender: () => {},
+    ...engineOptions,
+  });
   const frame = () => {
     const time = viewer.clock.currentTime;
     viewer.clock.onTick.raiseEvent(viewer.clock);

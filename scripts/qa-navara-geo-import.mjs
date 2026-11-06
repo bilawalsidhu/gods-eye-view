@@ -176,8 +176,9 @@ await strict.run(
         rows: document.querySelectorAll('#geo-import-list .geo-import-row')
           .length,
         hint: document.getElementById('geo-import-hint')?.textContent || '',
-        // Movers are a Navara capability; Cesium draws the pins as entities.
-        pins: (window.__godsEyeView.engine.movers?.list() ?? [])
+        // Navara draws the pins as mover sets; Cesium as entities (none).
+        pins: window.__godsEyeView.engine.movers
+          .list()
           .filter(({ id }) => id.startsWith('geo-import-'))
           .reduce((n, set) => n + set.count, 0),
       }));

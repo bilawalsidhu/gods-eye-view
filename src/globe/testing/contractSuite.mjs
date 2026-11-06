@@ -133,8 +133,6 @@ export function createContractSuite(
   };
 
   const capabilities = engineCapabilities(engine);
-  // A check may name the optional capabilities it needs (movers, lines)
-  // after its function; without them it is left out.
   const checks = [
     [
       'shape: the engine has every contract capability',
@@ -574,7 +572,6 @@ export function createContractSuite(
           'a destroyed set is still listed',
         );
       },
-      ['movers'],
     ],
     [
       'colours: mid-tone sprite, point and line colours draw as asked (within 3 per channel)',
@@ -673,7 +670,6 @@ export function createContractSuite(
           for (const line of lines) line.destroy();
         }
       },
-      ['movers', 'lines'],
     ],
     [
       'lines: a line draws between its projections, turns with its model matrix and dims where hidden',
@@ -784,7 +780,6 @@ export function createContractSuite(
           'a destroyed line is still listed',
         );
       },
-      ['lines'],
     ],
     [
       'input: picks on click and move payloads, drill, lines',
@@ -924,7 +919,6 @@ export function createContractSuite(
           line.destroy();
         }
       },
-      ['movers', 'lines'],
     ],
     [
       'lines: pixel dashes are regular, in CSS pixels',
@@ -994,7 +988,6 @@ export function createContractSuite(
           line.destroy();
         }
       },
-      ['lines'],
     ],
     [
       'movers: depth tests, rotation, cells, scale, count, points and models',
@@ -1223,7 +1216,6 @@ export function createContractSuite(
           for (const set of sets) set.destroy();
         }
       },
-      ['movers'],
     ],
     [
       'render: continuous mode toggles',
@@ -1609,7 +1601,6 @@ export function createContractSuite(
             1e-6,
             'sampleHeight and the detailed tiles answer',
           );
-        if (!capabilities.movers) return;
         // A mover set in exclude: the sample works and the set stays.
         const set = engine.movers.createSet({
           id: 'contract-surface-exclude',
@@ -2740,7 +2731,7 @@ export function createContractSuite(
         }
       },
     ],
-  ].filter(([, , needs = []]) => needs.every((flag) => capabilities[flag]));
+  ];
   if (mapSources?.photoreal && mapSources.imagery?.length >= 2)
     checks.push(...mapChecks(engine.maps, mapSources));
   if (capabilities.visualStyles)
