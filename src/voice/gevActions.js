@@ -12,6 +12,7 @@ import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import * as Cesium from 'cesium';
+import { cameraOf } from '../render/cesium/camera.js';
 import { distance as chordM, toLonLatH } from '../geo/index.js';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
@@ -2654,14 +2655,18 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
     'frame',
     'frame_overhead',
     () => {
-      viewer.camera.flyToBoundingSphere(sphere, {
-        duration: 2.0,
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          pitch,
-          sphere.radius * 2.4,
-        ),
-      });
+      const camera = cameraOf(viewer);
+      camera.flyToBounds(
+        { center: sphere.center, radius: sphere.radius },
+        {
+          durationS: 2.0,
+          offset: {
+            heading: camera.pose().heading,
+            pitch,
+            range: sphere.radius * 2.4,
+          },
+        },
+      );
 
       let detectionEnabled = false;
       try {

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { cameraOf } from '../render/cesium/camera.js';
 import {
   layerTitle,
   mapAnalystRecord,
@@ -820,6 +821,8 @@ export function createLocalGeoJsonLayer(
 
                   if (targetPos) {
                     const carto = Cesium.Cartographic.fromCartesian(targetPos);
+                    // Before the hold: with no camera, nothing would end it.
+                    const camera = cameraOf(viewer);
 
                     // Hold camera input so Cesium doesn't cancel the flight.
                     // A hold, not a flag: the flight ending must not hand input
@@ -828,16 +831,18 @@ export function createLocalGeoJsonLayer(
                       'local-geojson-flight',
                     );
 
-                    viewer.camera.flyTo({
-                      destination: Cesium.Cartesian3.fromRadians(
+                    camera.flyTo(
+                      Cesium.Cartesian3.fromRadians(
                         carto.longitude,
                         carto.latitude,
                         5000,
                       ),
-                      duration: 1.5,
-                      complete: releaseCamera,
-                      cancel: releaseCamera,
-                    });
+                      {
+                        durationS: 1.5,
+                        onComplete: releaseCamera,
+                        onCancel: releaseCamera,
+                      },
+                    );
                   }
                 }
               });

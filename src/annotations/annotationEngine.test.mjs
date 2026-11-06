@@ -1,3 +1,4 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 // Voice-annotation resilience contract tests — pure logic, no network, no browser.
 //
@@ -1262,7 +1263,7 @@ test('hand-drawn marks: one mark can be hidden, renamed, recoloured, framed and 
   const { renderer, calls } = fakeRenderer();
   const flights = [];
   const engine = createAnnotationEngine({
-    viewer: { camera: { heading: 0, flyToBoundingSphere: (sphere) => flights.push(sphere) } },
+    viewer: bindFakeCesiumCamera({ camera: { heading: 0, flyToBoundingSphere: (sphere) => flights.push(sphere) } }),
     renderer,
   });
   let changes = 0;
@@ -1331,12 +1332,12 @@ test('hand-drawn marks: remove, hide, clear, expiry and framing have their effec
   const { renderer, calls } = fakeRenderer();
   const flights = [];
   const engine = createAnnotationEngine({
-    viewer: {
+    viewer: bindFakeCesiumCamera({
       camera: {
         heading: 0,
         flyToBoundingSphere: (sphere) => flights.push(sphere),
       },
-    },
+    }),
     renderer,
   });
   let changes = 0;
