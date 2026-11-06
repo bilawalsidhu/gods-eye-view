@@ -106,14 +106,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
 
     // Paid attempts for all plugin instances share the same admission service.
     // The key contains catalog-owned target and pose only, never URL params.
-    const cameraKey = JSON.stringify([
-      cameraId,
-      lat,
-      lon,
-      heading,
-      fov,
-      pitch,
-    ]);
+    const cameraKey = JSON.stringify([cameraId, lat, lon, heading, fov, pitch]);
     return processStreetViewAdmission().run({
       client,
       cameraKey,
