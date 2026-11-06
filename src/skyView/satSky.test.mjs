@@ -569,7 +569,7 @@ test('a worker that fails to start stays unavailable without exception text', ()
   });
   assert.equal(sky.start(OBS), false);
   assert.equal(sky.status, 'unavailable');
-  assert.equal(sky.lastError, 'satellite worker unavailable');
+  assert.equal(sky.lastError, 'worker_unavailable');
   assertNoSecret(sky.lastError);
 });
 
