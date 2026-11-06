@@ -53,7 +53,7 @@ test('operator configuration cannot accidentally disable the quota', () => {
   assert.throws(() => createStreetViewAdmission({ maxPending: 0 }), TypeError);
 });
 
-test('shared budgets allow 15 cameras and bound clients, process and day', async () => {
+test('client, process and daily caps allow a 15-camera burst', async () => {
   let clock = 0;
   let calls = 0;
   const admission = createStreetViewAdmission({
@@ -92,7 +92,7 @@ test('shared budgets allow 15 cameras and bound clients, process and day', async
   assert.equal(STREET_VIEW_DAILY_MAX_REQUESTS, 512);
 });
 
-test('concurrent misses coalesce, later refreshes do not reuse image bytes', async () => {
+test('concurrent misses coalesce without a completed-image cache', async () => {
   let clock = 10;
   let calls = 0;
   let release;
@@ -151,7 +151,7 @@ test('concurrent misses coalesce, later refreshes do not reuse image bytes', asy
   assert.equal(calls, 2, 'no completed response byte cache is retained');
 });
 
-test('a failing camera cools down without blocking a different camera', async () => {
+test('failed camera cooldown does not block other cameras', async () => {
   let clock = 0;
   let calls = 0;
   const admission = createStreetViewAdmission({
@@ -180,10 +180,13 @@ test('a failing camera cools down without blocking a different camera', async ()
 });
 
 test('one process-wide admission service is shared by plugin instances', () => {
-  assert.strictEqual(processStreetViewAdmission(), processStreetViewAdmission());
+  assert.strictEqual(
+    processStreetViewAdmission(),
+    processStreetViewAdmission(),
+  );
 });
 
-test('real frame route uses only catalog pose, allows 15 cameras and denies forwarding', async (t) => {
+test('frame route protects catalog pose, 15 cameras and forwarded requests', async (t) => {
   const names = [
     'CCTV_SOURCES_JSON',
     'CCTV_SOURCES_FILE',
