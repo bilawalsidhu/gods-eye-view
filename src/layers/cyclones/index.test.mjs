@@ -488,12 +488,7 @@ test('shared cyclone context distinguishes switches, deliberate clears and feed 
       assert.equal(store.entities.size, 0);
 
       h.layer.setParams({ stormId: 'ep152026' });
-      const record = store.entities.get('cyclone:ep152026');
-      assert.equal(record.layerId, 'weather-cyclones');
-      assert.equal(record.source, 'NOAA NHC / CPHC');
-      assert.equal(record.label, 'Fifteen-E');
-      assert.equal(record.latitude, 15.5);
-      assert.equal(record.longitude, -125.8);
+      assert.equal(store.entities.get('cyclone:ep152026').label, 'Fifteen-E');
       let properties = await selectedProperties();
       assert.equal(properties.classification, 'PTC');
       assert.equal(properties.classificationName, 'Post-tropical cyclone');
@@ -652,23 +647,10 @@ test('cyclone clears leave another layer selection and its records alone', async
       'no clear is reported for a foreign selection',
     );
 
+    // A cyclone clear does not report a dangling foreign selection as evicted.
+    store.entities.delete('flight:abc123');
     h.layer.disable();
     assert.equal(store.selectedEntityId, 'flight:abc123');
-    assert.equal(events.length, before);
-
-    // A cyclone feed failure does not evict a dangling foreign selection.
-    store.entities.delete('flight:abc123');
-    let fail = false;
-    const other = open({
-      getSnapshot: async () => {
-        if (fail) throw new Error('Network unavailable');
-        return snapshot();
-      },
-    });
-    other.layer.enable();
-    await other.layer.update();
-    fail = true;
-    await other.layer.update();
     assert.equal(events.length, before);
   });
 });

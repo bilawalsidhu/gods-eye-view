@@ -84,7 +84,6 @@ export function createCyclonesLayer({
     selectionIntent = 'auto',
     navigationGeneration = 0,
     selectedContextStormId = null,
-    selectedContextEntity = null,
     clickHandler = null,
     removeClickCapture = null;
   let enabled = false,
@@ -98,20 +97,19 @@ export function createCyclonesLayer({
   function clearSelectedContext({ evicted = false } = {}) {
     if (selectedContextStormId) {
       if (!evicted)
-        context?.clearSelectedEntityContextForLayer?.('weather-cyclones');
-      context?.removeEntityContextsForLayer?.('weather-cyclones');
+        context.clearSelectedEntityContextForLayer('weather-cyclones');
+      context.removeEntityContextsForLayer('weather-cyclones');
     }
     selectedContextStormId = null;
-    selectedContextEntity = null;
   }
 
   // Callers publish only while selectedId names a storm in the snapshot.
   function publishSelectedContext({ announce = false } = {}) {
     const storm = selected();
     if (!context) return;
-    selectedContextEntity ||= { show: true };
+    const entity = {};
     const contextId = `cyclone:${storm.id}`;
-    const record = context.registerEntityContext?.(selectedContextEntity, {
+    context.registerEntityContext(entity, {
       id: contextId,
       layerId: 'weather-cyclones',
       layerName: 'Cyclone advisories',
@@ -145,10 +143,9 @@ export function createCyclonesLayer({
             : undefined,
       },
     });
-    if (!record) return;
     selectedContextStormId = storm.id;
-    if (announce) context.selectEntityContext?.(selectedContextEntity);
-    context.removeEntityContextsForLayer?.('weather-cyclones', {
+    if (announce) context.selectEntityContext(entity);
+    context.removeEntityContextsForLayer('weather-cyclones', {
       retainIds: new Set([contextId]),
     });
   }
