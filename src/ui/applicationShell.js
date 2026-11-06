@@ -1687,7 +1687,7 @@ export class StyleManager extends ShellFacade {
       .then((sky) => {
         if (!this._disposed) sky.mountSkyViewForShell(this);
       })
-      .catch((error) => console.warn('[Sky] view unavailable:', error));
+      .catch(() => console.warn('[Sky] view unavailable'));
   }
 
   // ── Share Button ─────────────────────────────

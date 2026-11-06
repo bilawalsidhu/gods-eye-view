@@ -6,6 +6,7 @@ import {
   applySkyCamera,
   applySkyScene,
   applySkyTime,
+  collisionRestoreLifts,
   readCameraAzEl,
   restoreCamera,
   restoreScene,
@@ -279,4 +280,125 @@ test('skyTilesShown: tiles on screen with a real horizon, none with the flat hor
   assert.equal(skyTilesShown(snap(false)), false);
   assert.equal(skyTilesShown(snap(undefined)), true, 'unknown globe flag');
   assert.equal(skyTilesShown(null), true, 'no snapshot: cannot tell');
+});
+
+function realControllerViewer() {
+  const canvas = Object.assign(new EventTarget(), {
+    clientWidth: 1200,
+    clientHeight: 800,
+    width: 1200,
+    height: 800,
+    style: {},
+    disableRootEvents: true,
+    onwheel: null,
+    getBoundingClientRect: () => ({
+      left: 0,
+      top: 0,
+      width: 1200,
+      height: 800,
+    }),
+  });
+  const scene = {
+    canvas,
+    drawingBufferWidth: 1200,
+    drawingBufferHeight: 800,
+    mapProjection: new Cesium.GeographicProjection(Cesium.Ellipsoid.WGS84),
+    globe: {
+      ellipsoid: Cesium.Ellipsoid.WGS84,
+      show: true,
+      enableLighting: false,
+    },
+    ellipsoid: Cesium.Ellipsoid.WGS84,
+    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
+    mode: Cesium.SceneMode.SCENE3D,
+    pixelRatio: 1,
+    verticalExaggeration: 1,
+    verticalExaggerationRelativeHeight: 0,
+    globeHeight: 138,
+    requestRender() {},
+    preRender: new Cesium.Event(),
+    skyBox: { show: true },
+    skyAtmosphere: { show: true },
+    primitives: { length: 0, get: () => undefined },
+  };
+  const camera = new Cesium.Camera(scene);
+  scene.camera = camera;
+  const controller = new Cesium.ScreenSpaceCameraController(scene);
+  scene.screenSpaceCameraController = controller;
+  return {
+    scene,
+    camera,
+    clock: new Cesium.Clock({
+      currentTime: Cesium.JulianDate.fromIso8601('2026-10-11T12:00:00Z'),
+      shouldAnimate: false,
+    }),
+  };
+}
+
+test('restoreScene leaves collision off when a real controller would lift a low camera', () => {
+  const viewer = realControllerViewer();
+  const controller = viewer.scene.screenSpaceCameraController;
+  controller.enableCollisionDetection = true;
+  const snap = snapshotScene(Cesium, viewer);
+  controller.enableCollisionDetection = false;
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 16.7),
+    orientation: { heading: 0, pitch: -0.2, roll: 0 },
+  });
+  controller._lastGlobeHeight = 138;
+  assert.equal(
+    collisionRestoreLifts(viewer.camera, controller, true),
+    true,
+  );
+  const before = Cesium.Cartesian3.clone(viewer.camera.positionWC);
+  restoreScene(Cesium, viewer, snap);
+  assert.equal(
+    controller.enableCollisionDetection,
+    false,
+    'collision stays off below the controller safe height',
+  );
+  for (let frame = 0; frame < 30; frame += 1) controller.update();
+  const lifted = Cesium.Cartesian3.distance(before, viewer.camera.positionWC);
+  assert.ok(lifted < 1, `controller lifted the camera ${lifted} m`);
+  controller.destroy();
+});
+
+test('restoreScene puts collision back above the safe height and when the saved flag is off', () => {
+  const high = realControllerViewer();
+  const highController = high.scene.screenSpaceCameraController;
+  highController.enableCollisionDetection = true;
+  const highSnap = snapshotScene(Cesium, high);
+  highController.enableCollisionDetection = false;
+  high.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 20000),
+    orientation: { heading: 0.3, pitch: -0.6, roll: 0 },
+  });
+  highController._lastGlobeHeight = 138;
+  assert.equal(collisionRestoreLifts(high.camera, highController, true), false);
+  const parked = Cesium.Cartesian3.clone(high.camera.positionWC);
+  restoreScene(Cesium, high, highSnap);
+  assert.equal(highController.enableCollisionDetection, true);
+  highController.update();
+  assert.ok(
+    Cesium.Cartesian3.distance(parked, high.camera.positionWC) < 1,
+  );
+  highController.destroy();
+
+  const low = realControllerViewer();
+  const lowController = low.scene.screenSpaceCameraController;
+  lowController.enableCollisionDetection = false;
+  const lowSnap = snapshotScene(Cesium, low);
+  lowController.enableCollisionDetection = true;
+  low.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 16.7),
+    orientation: { heading: 0, pitch: 0, roll: 0 },
+  });
+  lowController._lastGlobeHeight = 138;
+  restoreScene(Cesium, low, lowSnap);
+  assert.equal(
+    lowController.enableCollisionDetection,
+    false,
+    'a saved off flag is written even at eye height',
+  );
+  lowController.destroy();
 });

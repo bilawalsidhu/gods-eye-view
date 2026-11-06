@@ -50,6 +50,7 @@ import {
   applySkyCamera,
   applySkyScene,
   applySkyTime,
+  collisionRestoreLifts,
   restoreCamera,
   restoreScene,
   skyTilesShown,
@@ -541,6 +542,7 @@ export function mountSkyView({
   let picker = null;
   let tickTimer = null;
   let dropCameraWatch = null;
+  let dropCollisionRestore = null;
   const scratchEye = new CesiumApi.Cartesian3();
   const appliedDirection = new CesiumApi.Cartesian3();
   const appliedUp = new CesiumApi.Cartesian3();
@@ -1453,8 +1455,20 @@ export function mountSkyView({
     let entered = false;
     runNavigation('sky view', () => {
       if (!active) {
+        // A handoff may still be waiting to put collision back. Apply the
+        // saved flag for the snapshot, then drop the watch. Sky turns
+        // collision off again before the next controller update, so the
+        // eye is not lifted, and the next exit still has the original flag.
+        dropCollisionRestore?.({ apply: true });
         cameraSnap = snapshotCamera(CesiumApi, viewer.camera);
         sceneSnap = snapshotScene(CesiumApi, viewer, { nowMs: now() });
+        // Flag is back only so the snapshot records it. Turn it off before
+        // anything can call controller.update().
+        if (
+          'enableCollisionDetection' in
+          (viewer.scene?.screenSpaceCameraController ?? {})
+        )
+          viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
       }
       observer = next;
       active = true;
@@ -1517,8 +1531,15 @@ export function mountSkyView({
     selectedPass = null;
     press = null;
     satDom.root.hidden = true;
+    const savedCollision = sceneSnap?.enableCollisionDetection;
     if (!keepCamera) restoreCamera(CesiumApi, viewer.camera, cameraSnap);
     restoreScene(CesiumApi, viewer, sceneSnap, { nowMs: now() });
+    if (
+      savedCollision === true &&
+      viewer.scene?.screenSpaceCameraController?.enableCollisionDetection !==
+        true
+    )
+      armCollisionRestore(savedCollision);
     cameraSnap = null;
     sceneSnap = null;
     hasAppliedPose = false;
@@ -1649,6 +1670,43 @@ export function mountSkyView({
     if (tickTimer != null) timers.clearInterval?.(tickTimer);
     tickTimer = null;
     dropCameraWatch?.();
+  }
+
+  /**
+   * Hold a saved collision flag until the camera is above the controller's
+   * safe height. `update()` lifts a lower camera once the surface height
+   * has settled; the flag write itself does not. preUpdate and onTick run
+   * every widget frame after that update, so the flag is on for the next
+   * one — when the height is already safe.
+   */
+  function armCollisionRestore(value) {
+    dropCollisionRestore?.();
+    const controller = viewer.scene?.screenSpaceCameraController;
+    if (!controller || value !== true) return;
+    const putBack = () => {
+      if ('enableCollisionDetection' in controller)
+        controller.enableCollisionDetection = value;
+    };
+    const offs = [];
+    const release = ({ apply = false } = {}) => {
+      for (const off of offs.splice(0)) off();
+      if (dropCollisionRestore === release) dropCollisionRestore = null;
+      if (apply) putBack();
+    };
+    const tick = () => {
+      if (collisionRestoreLifts(viewer.camera, controller, value)) return;
+      release();
+      putBack();
+    };
+    const sub = (event) => {
+      const off = event?.addEventListener?.(tick);
+      if (typeof off === 'function') offs.push(off);
+    };
+    sub(viewer.scene?.preUpdate);
+    sub(viewer.scene?.preRender);
+    sub(viewer.clock?.onTick);
+    dropCollisionRestore = release;
+    tick();
   }
 
   // ── picking on the map ───────────────────────────────────────────────────
@@ -2294,6 +2352,10 @@ export function mountSkyView({
       if (destroyed) return;
       if (hookWindow?.__gevSky?.voice === skyVoice) delete hookWindow.__gevSky;
       exit();
+      // A handoff may still be waiting to put collision back. Unhook it.
+      // Applying the flag here would let the next controller update lift
+      // the camera the handoff just kept.
+      dropCollisionRestore?.();
       stopPicking();
       content.destroy();
       orientation.destroy();
