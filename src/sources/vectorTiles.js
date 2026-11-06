@@ -181,7 +181,12 @@ export function createSharedDecodedTileCache({
   };
 }
 
-/** A decoded XYZ cache with bounded workers, reads, retained bytes and request lifetimes. */
+/**
+ * A decoded XYZ cache with bounded workers, reads, retained bytes and request lifetimes.
+ * `emptyStatuses` lists HTTP statuses (default none) that a tile response may
+ * answer to mean "no features here"; such a tile is decoded from zero bytes,
+ * cached and counted as loaded instead of failing. TileJSON requests ignore it.
+ */
 export function createVectorTileSource({
   tileJsonUrl,
   template,
@@ -199,6 +204,7 @@ export function createVectorTileSource({
   sharedDecodedCache = null,
   selectDecoded = (value) => value,
   selectedSize = null,
+  emptyStatuses = [],
 }) {
   const cache = new Map();
   const active = new Set();
@@ -213,7 +219,13 @@ export function createVectorTileSource({
   let activeWorkers = 0;
   const waiters = [];
 
-  async function request(url, parentSignal, read, trackAsSource = true) {
+  async function request(
+    url,
+    parentSignal,
+    read,
+    trackAsSource = true,
+    emptyOk = false,
+  ) {
     const controller = new AbortController();
     const abort = () => controller.abort(parentSignal?.reason);
     parentSignal?.throwIfAborted();
@@ -235,6 +247,10 @@ export function createVectorTileSource({
         signal: controller.signal,
         redirect: 'error',
       });
+      if (emptyOk && emptyStatuses.includes(response.status)) {
+        await response.body?.cancel().catch(() => {});
+        return new Uint8Array(0);
+      }
       if (!response.ok) {
         const status = Number.isFinite(response.status)
           ? response.status
@@ -460,6 +476,7 @@ export function createVectorTileSource({
             return value;
           },
           !sharedOwnership,
+          true,
         );
         phaseTiming('tile-fetch', fetchStart, {
           source: allowedOrigin,

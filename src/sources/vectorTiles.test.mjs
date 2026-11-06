@@ -538,3 +538,52 @@ test('clear prevents an old generation from starting tile I/O', async () => {
   await assert.rejects(pending, { name: 'AbortError' });
   assert.equal(requests, 0);
 });
+
+for (const [label, emptyStatuses] of [
+  ['opted-in', [404]],
+  ['default', undefined],
+]) {
+  test(`a 404 tile is ${label === 'opted-in' ? 'an empty tile' : 'still an error'} (${label})`, async () => {
+    let cancelled = 0;
+    const seen = [];
+    const source = createVectorTileSource({
+      ...options,
+      template: meta.tiles[0],
+      emptyStatuses,
+      decode: (bytes) => {
+        seen.push(bytes.byteLength);
+        return [];
+      },
+      fetchImpl: async () => ({
+        ok: false,
+        status: 404,
+        body: {
+          async cancel() {
+            cancelled++;
+          },
+        },
+      }),
+    });
+    const loaded = [];
+    const read = () =>
+      source.fetchBounds(box, {
+        zoom: 12,
+        onTile: (value) => loaded.push(value),
+      });
+    if (!emptyStatuses) {
+      await assert.rejects(read(), /Vector tiles unavailable \(HTTP 404\)/);
+      assert.equal(cancelled, 1);
+      return;
+    }
+    const result = await read();
+    assert.equal(result.partial, false);
+    assert.ok(result.tiles.length > 0);
+    assert.deepEqual(result.tiles[0], []);
+    assert.equal(loaded.length, result.tiles.length);
+    assert.deepEqual([...new Set(seen)], [0]);
+    assert.equal(cancelled, result.tiles.length);
+    const fetched = source.getStats().tilesFetched;
+    await read();
+    assert.equal(source.getStats().tilesFetched, fetched);
+  });
+}
