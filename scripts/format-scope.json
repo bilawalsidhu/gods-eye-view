@@ -50,6 +50,7 @@
   "src/queries/heights.js",
   "src/render/cesium/internals.js",
   "src/render/cesium/cameraInput.js",
+  "src/render/cesium/ctrlWheelZoom.js",
   "src/render/cesium/cameraInput.test.mjs",
   "src/render/input/router.js",
   "src/render/input/router.test.mjs",

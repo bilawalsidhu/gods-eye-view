@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createApplication } from './application.js';
-import { installTrackpadPinchZoom } from './viewer.js';
+import { installTrackpadPinchZoom } from '../render/cesium/ctrlWheelZoom.js';
 
 const phases = ['Scene', 'Controls', 'Data', 'Tools'];
 function fixture(overrides = {}) {
