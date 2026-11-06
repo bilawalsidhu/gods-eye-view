@@ -325,6 +325,11 @@ test('untrusted USGS fetch errors never appear in console or layer status', asyn
     async () => {
       throw new Error(`upstream fetch failed: ${secret}`);
     },
+    async () => {
+      const error = new Error(`aborted: ${secret}`);
+      error.name = 'AbortError';
+      throw error;
+    },
     async () => ({ ok: true, status: 200, text: async () => secret }),
     async () => ({
       ok: false,
