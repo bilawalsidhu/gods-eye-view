@@ -3708,3 +3708,29 @@ test('voice runs app actions itself and other tools through the catalog', async 
   assert.deepEqual(disposals, [['removed']]);
   assert.equal(withToolCatalog(runner, undefined), runner);
 });
+
+test('the controller forwards viewport escalation diagnostics to its debug log', async () => {
+  const records = [];
+  const controller = new GevRealtimeController({
+    ui: createTestVoiceUi(),
+    runner: async () => ({ ok: true }),
+    radioLayer: { subscribePlaybackControls: () => () => {}, setVoiceDucked() {} },
+  });
+  controller.debugLog = (event, detail) => records.push({ event, detail });
+  controller.dc = { readyState: 'open', send() {}, close() {} };
+
+  assert.equal(
+    await controller.sendVisualContextIfUseful({
+      action: 'get_entity_context',
+      scene: { basemap: { viewScale: 'regional' } },
+    }),
+    false,
+  );
+  assert.deepEqual(
+    records.filter((record) => record.event.startsWith('viewport_context.')),
+    [{
+      event: 'viewport_context.decision',
+      detail: { contextId: 1, send: false, reason: 'view-scale-not-local', viewScale: 'regional' },
+    }],
+  );
+});

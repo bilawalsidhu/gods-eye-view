@@ -557,3 +557,27 @@ test('a throw after a real send still logs it as sent', async () => {
     [['viewport_context.result', 'sent']],
   );
 });
+
+test('a second request for a snapshot still being captured is not sent twice', async () => {
+  const releases = [];
+  const snapshot = groundSnapshot();
+  const { viewport, events } = recordingViewport({
+    readPointer: () => snapshot,
+    capturePointer: () => new Promise((resolve) => releases.push(resolve)),
+  });
+  const first = viewport.sendVisualContextIfUseful(pointerGround());
+  const second = viewport.sendVisualContextIfUseful(pointerGround());
+  await Promise.resolve();
+  for (const release of releases)
+    release({ dataUrl: 'data:image/jpeg;base64,AA==', rect: {} });
+  assert.deepEqual([await first, await second], [true, false]);
+  assert.equal(releases.length, 1);
+  const outcomes = events.filter((item) => outcomeEvents.has(item.event));
+  assert.deepEqual(
+    outcomes.map((item) => [item.detail.contextId, item.detail.reason]),
+    [
+      [2, 'pointer-already-requested'],
+      [1, 'sent'],
+    ],
+  );
+});
