@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import { cameraOf } from '../../render/cesium/camera.js';
+import { findCamera } from '../../render/rendererOf.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
   REPLAY_ASCENT_MIN_SEC,
@@ -315,9 +316,9 @@ export function createReplay({ state: layerState, services, parts, source }) {
     layerState._replayCameraToken++;
     if (layerState._replayCameraRemover) layerState._replayCameraRemover();
     layerState._replayCameraRemover = null;
-    layerState._viewer?.camera?.cancelFlight();
-    if (layerState._viewer?.camera)
-      layerState._viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    const camera = findCamera(layerState._viewer);
+    camera?.cancelFlight();
+    camera?.release();
     layerState._replayCameraLaunchId = null;
     layerState._replayPaused = false;
     layerState._replayPausedAtMs = null;
@@ -354,7 +355,8 @@ export function createReplay({ state: layerState, services, parts, source }) {
     parts.overlays.syncMissionOverlayEntries();
     parts.policyHelpers.releaseAircraftTracking(layerState._dataManager);
     layerState._viewer.trackedEntity = undefined;
-    cameraOf(layerState._viewer).cancelFlight();
+    const camera = cameraOf(layerState._viewer);
+    camera.cancelFlight();
     layerState._animationStarts.set(
       launchId,
       Date.now() +
@@ -374,6 +376,9 @@ export function createReplay({ state: layerState, services, parts, source }) {
         )
           return;
         const state = track.beginReplayFrame();
+        // Asked for each frame, not kept: a renderer bound meanwhile
+        // replaces the port.
+        const chaseCamera = cameraOf(layerState._viewer);
         syncReplayCountdownButton(state);
         if (!cameraReady) return;
         const path = state.ascending
@@ -432,14 +437,11 @@ export function createReplay({ state: layerState, services, parts, source }) {
             )
           : cameraView.range;
         if (state.ascending) {
-          layerState._viewer.camera.lookAt(
-            cameraTarget,
-            new Cesium.HeadingPitchRange(
-              track.lastCameraHeading,
-              cameraView.pitch,
-              cameraRange,
-            ),
-          );
+          chaseCamera.lookAt(cameraTarget, {
+            heading: track.lastCameraHeading,
+            pitch: cameraView.pitch,
+            range: cameraRange,
+          });
         } else {
           const tangentStep = Math.max(
             0.002,
@@ -464,12 +466,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
           );
           if (orbitPose) {
             if (!track.orbitCameraWorldFrame) {
-              layerState._viewer.camera.lookAtTransform(
-                Cesium.Matrix4.IDENTITY,
-              );
+              chaseCamera.release();
               track.orbitCameraWorldFrame = true;
             }
-            layerState._viewer.camera.setView({
+            chaseCamera.setView({
               destination: orbitPose.destination,
               orientation: {
                 direction: orbitPose.direction,
@@ -486,7 +486,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
         }
       });
 
-    cameraOf(layerState._viewer).flyToBounds(
+    camera.flyToBounds(
       { center: track.ascentPath[0], radius: 0 },
       {
         offset: {

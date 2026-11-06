@@ -29,6 +29,8 @@ import { formatDate, t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { heightsFor } from '../queries/heights.js';
+import { cameraOf } from '../render/cesium/camera.js';
+import { findCamera } from '../render/rendererOf.js';
 
 export const BHOTE_KOSHI_LAYER_ID = 'bhote-koshi-2026';
 export const BHOTE_KOSHI_OVERLAY_SOURCE_ID = 'bhote-koshi-witnesses';
@@ -888,20 +890,24 @@ function focusView(viewer, viewpoint) {
     viewpoint.lat,
     viewpoint.targetElevationM,
   );
-  const offset = new Cesium.HeadingPitchRange(
-    Cesium.Math.toRadians(viewpoint.headingDeg),
-    Cesium.Math.toRadians(viewpoint.pitchDeg),
-    viewpoint.rangeM,
-  );
-  viewer.camera.cancelFlight?.();
-  viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 80), {
-    offset,
-    duration: 2.2,
-    complete: () => {
-      viewer.camera.lookAt(target, offset);
-      viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  const offset = {
+    heading: Cesium.Math.toRadians(viewpoint.headingDeg),
+    pitch: Cesium.Math.toRadians(viewpoint.pitchDeg),
+    range: viewpoint.rangeM,
+  };
+  const camera = cameraOf(viewer);
+  camera.cancelFlight();
+  camera.flyToBounds(
+    { center: target, radius: 80 },
+    {
+      offset,
+      durationS: 2.2,
+      onComplete: () => {
+        camera.lookAt(target, offset);
+        camera.release();
+      },
     },
-  });
+  );
 }
 
 function setElementProperty(element, property, value) {
@@ -1045,7 +1051,7 @@ export function createBhoteKoshiEventLayer({
   let _cinematicActive = false;
   let _cinematicReplayArmed = false;
   let _cinematicPose = { target: new Cesium.Cartesian3() };
-  let _cinematicOffset = new Cesium.HeadingPitchRange();
+  const _cinematicOffset = { heading: 0, pitch: 0, range: 0 };
   let _lastCinematicProgress = null;
   let _cameraInputTarget = null;
   let _evidenceClickTarget = null;
@@ -2626,7 +2632,7 @@ export function createBhoteKoshiEventLayer({
     _cinematicOffset.heading = Cesium.Math.toRadians(pose.headingDeg);
     _cinematicOffset.pitch = Cesium.Math.toRadians(pose.pitchDeg);
     _cinematicOffset.range = pose.rangeM;
-    _viewer.camera.lookAt(pose.target, _cinematicOffset);
+    findCamera(_viewer)?.lookAt(pose.target, _cinematicOffset);
     _lastCinematicProgress = _progress;
   }
 
@@ -2696,7 +2702,7 @@ export function createBhoteKoshiEventLayer({
       _cinematicActive = true;
       _lastCinematicProgress = null;
       announceNavigationAuthority('bhote-koshi-cinematic');
-      _viewer?.camera?.cancelFlight?.();
+      findCamera(_viewer)?.cancelFlight();
     }
     syncCinematicButton();
     return true;
@@ -2713,8 +2719,7 @@ export function createBhoteKoshiEventLayer({
     }
     _cinematicActive = false;
     _lastCinematicProgress = null;
-    if (releaseCamera)
-      _viewer?.camera?.lookAtTransform?.(Cesium.Matrix4.IDENTITY);
+    if (releaseCamera) findCamera(_viewer)?.release();
     syncCinematicButton();
     renderHost.request('bhote-koshi-cinematic-stop');
   }

@@ -30,6 +30,8 @@ import {
   releaseContinuousRender,
 } from './renderGovernor.js';
 import { heightsFor } from './queries/heights.js';
+import { cameraOf } from './render/cesium/camera.js';
+import { findCamera } from './render/rendererOf.js';
 
 let _isCockpitActive = null;
 /** °/s by speed word — orbit; pan uses fractions of view height/s. */
@@ -1004,7 +1006,7 @@ export function interruptCameraMotionIfActive(
 
 function clearLookAt() {
   try {
-    _viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    findCamera(_viewer)?.release();
   } catch {
     /* teardown race */
   }
@@ -1022,13 +1024,11 @@ function clearLookAt() {
  */
 function levelCameraRoll() {
   try {
-    const cam = _viewer?.camera;
-    if (!cam || typeof cam.setView !== 'function') return false;
-    const roll = Cesium.Math.negativePiToPi(cam.roll || 0);
-    if (Math.abs(roll) < 1e-5) return false;
-    cam.setView({
-      orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },
-    });
+    const camera = findCamera(_viewer);
+    if (!camera) return false;
+    const { heading, pitch, roll } = camera.pose();
+    if (Math.abs(Cesium.Math.negativePiToPi(roll || 0)) < 1e-5) return false;
+    camera.setView({ orientation: { heading, pitch, roll: 0 } });
     return true;
   } catch {
     return false; // teardown race
@@ -1081,6 +1081,9 @@ export function getActiveCameraMotion() {
   return info;
 }
 
+/** A pan's direction as the camera move it makes; any other is down. */
+const PAN_MOVES = Object.freeze({ left: 'left', right: 'right', up: 'up' });
+
 function onTick() {
   if (!_active || !_viewer) return;
   // Wall-clock dt: clock.currentTime FREEZES when the app clock isn't
@@ -1091,6 +1094,8 @@ function onTick() {
     Math.max(0.001, (nowMs - (_active.lastMs ?? nowMs)) / 1000),
   );
   _active.lastMs = nowMs;
+  // Reads stay on Cesium's camera until the query port has them; every
+  // write goes through the camera port.
   const cam = _viewer.camera;
   const m = _active;
 
@@ -1106,6 +1111,7 @@ function onTick() {
   }
 
   try {
+    const camera = cameraOf(_viewer);
     if (m.kind === 'orbit' && m.pending) {
       // Armed but target-less (started mid-flight, e.g. "fly to X and orbit
       // it"): keep trying for a ground target until the camera settles.
@@ -1155,7 +1161,7 @@ function onTick() {
       } else {
         m.hpr.heading += rate * dt;
       }
-      cam.lookAt(m.target, m.hpr);
+      camera.lookAt(m.target, m.hpr);
     } else if (m.kind === 'pan') {
       const heightM = Math.max(50, cam.positionCartographic.height);
       const step =
@@ -1163,10 +1169,7 @@ function onTick() {
           ? heightM * ONCE.panViewFraction * (scale - (m.lastScale || 0))
           : heightM * PAN_VIEW_FRACTION_S[m.speed] * dt;
       m.lastScale = scale;
-      if (m.direction === 'left') cam.moveLeft(step);
-      else if (m.direction === 'right') cam.moveRight(step);
-      else if (m.direction === 'up') cam.moveUp(step);
-      else cam.moveDown(step);
+      camera.move(PAN_MOVES[m.direction] ?? 'down', step);
     } else if (
       m.kind === 'tilt' ||
       m.kind === 'rotate' ||
@@ -1211,7 +1214,7 @@ function onTick() {
           interruptCameraMotion('globe-surface-limit');
           return;
         }
-        cam.rotate(m.rotationAxis, angle);
+        camera.rotateAround(m.rotationAxis, angle);
       } else if (m.kind === 'tilt') {
         const up = m.direction === 'up';
         // Clamp pitch to [-89°, -5°]: never through the ground, never at the sky.
@@ -1220,10 +1223,8 @@ function onTick() {
           interruptCameraMotion('tilt-clamp');
           return;
         }
-        if (up) cam.lookUp(stepRad);
-        else cam.lookDown(stepRad);
-      } else if (m.direction === 'left') cam.lookLeft(stepRad);
-      else cam.lookRight(stepRad);
+        camera.look(up ? 'up' : 'down', stepRad);
+      } else camera.look(m.direction === 'left' ? 'left' : 'right', stepRad);
     } else if (m.kind === 'route') {
       // The dolly's shaping lives in advanceRouteFlight(); the tick only
       // applies the pose and honours the same completion path as before.
@@ -1232,7 +1233,7 @@ function onTick() {
       // user left it rather than teleporting to an altitude derived from
       // nothing. An interrupt during the arm is still instant.
       if (frame.arming) return;
-      cam.setView({
+      camera.setView({
         destination: frame.eye,
         orientation: { direction: frame.direction, up: frame.up },
       });
@@ -1612,9 +1613,10 @@ export function moveCamera(args = {}, runNavigation = null) {
     if (motion === 'rotate_globe') {
       // Convert an inherited ground-target frame without changing the world
       // pose. Rotation must pivot about Earth, never the previous local target.
+      const camera = cameraOf(_viewer);
+      camera.cancelFlight();
+      camera.release();
       const cam = _viewer.camera;
-      cam.cancelFlight();
-      cam.lookAtTransform(Cesium.Matrix4.IDENTITY);
       // Handoff may level a route's bank. Keep the caller's exact world pose.
       // Copy the basis directly: setView's heading/pitch conversion is singular
       // at nadir and can change the captured orientation near the poles.

@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { toRadians } from './geo/index.js';
+import { cameraOf, findCamera } from './render/rendererOf.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -16,14 +17,15 @@ export class OrbitController {
     this.target = null;
     this.radius = 500;
     this.pitch = -30;
-    this.speed = Cesium.Math.toRadians(6); // ~6°/sec → full rotation in ~60s
+    this.speed = toRadians(6); // ~6°/sec → full rotation in ~60s
     this.angle = 0;
     this._removeListener = null;
   }
 
   /**
    * Start orbiting around a target position.
-   * @param {Cesium.Cartesian3} targetCartesian - The point to orbit around
+   * @param {{x: number, y: number, z: number}} targetCartesian - The point
+   *   to orbit around, ECEF metres
    * @param {object} options
    * @param {number} options.radius - Distance from target in meters
    * @param {number} options.pitch - Tilt angle in degrees (negative = looking down)
@@ -31,18 +33,21 @@ export class OrbitController {
    */
   start(targetCartesian, options = {}) {
     if (!targetCartesian) return;
+    // Asked for each frame, not kept: a renderer bound meanwhile replaces
+    // the port.
+    const pose = cameraOf(this.viewer).pose();
 
     this.target = targetCartesian;
     this.radius = options.radius || this.radius;
     this.pitch = options.pitch || this.pitch;
-    this.speed = Cesium.Math.toRadians(options.speed || 6);
+    this.speed = toRadians(options.speed || 6);
     this.active = true;
     // Orbit mutates the camera from preRender — without a hold the loop
     // starves after its first idle frame. (perf wave 2)
     holdContinuousRender('camera-orbit');
 
     // Start from the camera's current heading for seamless transition
-    this.angle = this.viewer.camera.heading;
+    this.angle = pose.heading;
 
     let lastTime = Date.now();
     this._removeListener = this.viewer.scene.preRender.addEventListener(() => {
@@ -54,12 +59,11 @@ export class OrbitController {
 
       this.angle += this.speed * dt;
 
-      const hpr = new Cesium.HeadingPitchRange(
-        this.angle,
-        Cesium.Math.toRadians(this.pitch),
-        this.radius,
-      );
-      this.viewer.camera.lookAt(this.target, hpr);
+      cameraOf(this.viewer).lookAt(this.target, {
+        heading: this.angle,
+        pitch: toRadians(this.pitch),
+        range: this.radius,
+      });
     });
   }
 
@@ -74,12 +78,12 @@ export class OrbitController {
       this._removeListener = null;
     }
     // Unlock camera for free interaction
-    this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    findCamera(this.viewer)?.release();
   }
 
   /**
    * Toggle orbit on/off.
-   * @param {Cesium.Cartesian3} targetCartesian - Required when starting
+   * @param {{x: number, y: number, z: number}} targetCartesian - Required when starting
    * @param {object} options - Passed to start()
    * @returns {boolean} Whether orbit is now active
    */

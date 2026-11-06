@@ -1,3 +1,4 @@
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 import { GLOBE_VIEW } from './locations.js';
 import { projectEarthDiscToViewport } from './celestialRing.js';
 import assert from 'node:assert/strict';
@@ -146,13 +147,13 @@ function harness(
       roll: radians(roll),
     },
   });
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     camera,
     scene,
     trackedEntity: undefined,
     trackedEntityChanged: new Cesium.Event(),
     clock: { onTick: new Cesium.Event() },
-  };
+  });
   const target = Cesium.Cartesian3.fromDegrees(
     longitudeDeg,
     latitude,

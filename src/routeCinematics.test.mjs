@@ -7,6 +7,7 @@
  * the mesh, it flattens under prefers-reduced-motion, and it stops the instant
  * anything interrupts it.
  */
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
@@ -99,7 +100,7 @@ function createTickableViewer({ heightM = 700 } = {}) {
       if (orientation && Number.isFinite(orientation.pitch)) camera.pitch = orientation.pitch;
     },
   };
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     trackedEntity: undefined,
     clock: { onTick: { addEventListener: (fn) => { listeners.push(fn); return () => {}; } } },
     scene: {
@@ -111,7 +112,7 @@ function createTickableViewer({ heightM = 700 } = {}) {
       sampleHeight: () => 0,
     },
     camera,
-  };
+  });
   return {
     viewer,
     setViews,

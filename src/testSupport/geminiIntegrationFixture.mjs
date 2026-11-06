@@ -4,6 +4,7 @@ import { createGevActionRunner } from '../voice/gevActions.js';
 import { createGeminiSession } from '../voice/geminiSession.js';
 import { createTestVoiceUi } from './voiceUi.mjs';
 import { createNarrationScheduler } from '../voice/narration.js';
+import { bindFakeCesiumCamera } from './fakeCameraPort.mjs';
 
 export const turnOfEventLoop = () =>
   new Promise((resolve) => setImmediate(resolve));
@@ -68,7 +69,7 @@ export function nativeIntegrationFixture(t) {
   const acquisitions = { microphone: 0, audio: 0, token: 0, socket: 0 };
   const state = { height: 1000, renders: 0, zooms: [], earconStarts: 0 };
   const position = { x: 6379137, y: 0, z: 0 };
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     clock: { onTick: { addEventListener: () => () => {} } },
     camera: {
       positionWC: position,
@@ -99,7 +100,7 @@ export function nativeIntegrationFixture(t) {
         state.renders++;
       },
     },
-  };
+  });
   const dataManager = { layers: new Map() };
   const actualRunner = createGevActionRunner({
     viewer,

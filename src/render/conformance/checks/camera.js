@@ -316,20 +316,30 @@ export function cameraChecks() {
         r.camera.on('moveStart', () => events.push(['start', h.now(r)]));
         r.camera.on('moveEnd', () => events.push(['end', h.now(r)]));
         await h.frame(r);
+        const movingAt = h.now(r);
         r.camera.move('forward', 1000);
         await h.frame(r);
         equal(events[0]?.[0], 'start', 'moveStart after the move');
         const movedAt = h.now(r);
-        for (let i = 0; i < 45; i++) await h.frame(r);
+        // By the clock, not a frame count: a page's frames come at the
+        // display's rate.
+        // The event comes on the first frame past 500 ms, so the slack is
+        // two of the longest frames seen, never less than two at 60 Hz.
+        let longestFrame = 1000 / 60;
+        for (let i = 0; i < 600 && h.now(r) - movedAt < 750; i++) {
+          const before = h.now(r);
+          await h.frame(r);
+          longestFrame = Math.max(longestFrame, h.now(r) - before);
+        }
         const end = events.find(([kind]) => kind === 'end');
         ok(end, 'moveEnd fired');
         ok(
-          end[1] - movedAt >= 500 - 1e-6,
-          `moveEnd waited 500 ms (${end[1] - movedAt})`,
+          end[1] - movingAt >= 500 - 1e-6,
+          `moveEnd waited 500 ms (${end[1] - movingAt})`,
         );
         ok(
-          end[1] - movedAt < 500 + 2 * (1000 / 60) + 1e-6,
-          'moveEnd came within two frames of 500 ms',
+          end[1] - movedAt < 500 + 2 * longestFrame + 1e-6,
+          `moveEnd came within two frames of 500 ms (${end[1] - movedAt})`,
         );
         r.destroy();
       },
