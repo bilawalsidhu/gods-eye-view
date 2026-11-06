@@ -179,3 +179,26 @@ export function updateCameraChanged(camera) {
 export function billboardLoadError(billboard) {
   return billboard.loadError;
 }
+
+const NO_CREDITS = Object.freeze([]);
+
+/**
+ * What a credit display shows, for the credits port to report: its static
+ * credits, the credit elements of the frame under way or last drawn (each
+ * `{credit, count}`, a static one counted `Number.MAX_VALUE`) and the logo
+ * credit it shows first. Cesium's public API only adds and removes static
+ * credits; the per-frame ones (imagery, terrain and tile credits) are seen
+ * nowhere else.
+ * @param {object} display Cesium CreditDisplay.
+ * @returns {{statics: object[], screen: object[], lightbox: object[],
+ *   logo: object|undefined}}
+ */
+export function creditDisplayContents(display) {
+  const frame = display?._currentFrameCredits;
+  return {
+    statics: display?._staticCredits ?? NO_CREDITS,
+    screen: frame?.screenCredits?.values ?? NO_CREDITS,
+    lightbox: frame?.lightboxCredits?.values ?? NO_CREDITS,
+    logo: display?._currentCesiumCredit,
+  };
+}

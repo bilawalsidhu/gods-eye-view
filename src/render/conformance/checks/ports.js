@@ -297,7 +297,6 @@ export function portChecks() {
       'every subscription list follows the listener rules',
       async (h, r) => {
         await overAustin(h, r);
-        const credits = [];
         const lists = [
           [
             'frame.on(postRender)',
@@ -314,13 +313,6 @@ export function portChecks() {
             (cb) => r.camera.onCommand(cb),
             () =>
               r.camera.setView({ destination: { ...AUSTIN, height: 2000 } }),
-          ],
-          [
-            'credits.on(change)',
-            (cb) => r.credits.on('change', cb),
-            () => {
-              credits.push(r.credits.addStatic({ text: 'Conformance data' }));
-            },
           ],
           [
             'quality.signals.on(frame)',
@@ -352,7 +344,25 @@ export function portChecks() {
           ]);
         for (const [where, subscribe, fire] of lists)
           await listenerRules(r, where, subscribe, fire);
-        for (const off of credits) off();
+      },
+    ),
+    check(
+      'credits.listenerRules',
+      'credits.on(change) follows the listener rules',
+      async (h, r) => {
+        const credits = [];
+        try {
+          await listenerRules(
+            r,
+            'credits.on(change)',
+            (cb) => r.credits.on('change', cb),
+            () => {
+              credits.push(r.credits.addStatic({ text: 'Conformance data' }));
+            },
+          );
+        } finally {
+          for (const off of credits) off();
+        }
       },
     ),
 

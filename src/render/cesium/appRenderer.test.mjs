@@ -337,7 +337,6 @@ const EXPECTED_MISSING = [
   'draw.clampState',
   'draw.on',
   'frame.setTime',
-  'renderer.credits',
   'renderer.effects',
   'renderer.globe',
   'renderer.quality',
