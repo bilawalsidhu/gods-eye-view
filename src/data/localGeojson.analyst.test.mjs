@@ -2,7 +2,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createLocalGeoJsonLayer, mapAnalystRecord } from './localGeojson.js';
+import { localGeoJsonServices } from '../app/localGeojsonServices.js';
+import {
+  createLocalGeoJsonLayer as createLayer,
+  mapAnalystRecord,
+} from './localGeojsonCore.js';
+
+/** The catalog's services, with the overlay host each test supplies. */
+const createLocalGeoJsonLayer = (options) =>
+  createLayer(options, {
+    ...localGeoJsonServices,
+    overlayHost: options.overlayHost,
+  });
 
 const DC_RAW = {
   id: '1176042553',

@@ -84,10 +84,10 @@ body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
   background: rgba(0, 0, 0, 0.18);
 }
 
-/* ── Top bar: logo left, globe actions right ───────────────────────────── */
+/* ── Top bar: logo at the start, globe actions at the end ──────────────── */
 body.mobile-shell #title-bar {
   top: calc(var(--mobile-top-inset) + 10px);
-  left: 14px;
+  inset-inline-start: 14px;
 }
 
 body.mobile-shell #title-bar .title-logo {
@@ -101,13 +101,13 @@ body.mobile-shell #title-bar .subtitle {
 
 body.mobile-shell #top-center-actions {
   top: calc(var(--mobile-top-inset) + 10px);
-  right: 12px;
+  inset-inline-start: auto;
+  inset-inline-end: 12px;
 }
 
 /* ── HUD: one compact readout under the top bar ────────────────────────── */
 body.mobile-shell #intel-hud .hud-edge,
 body.mobile-shell #intel-hud .hud-corner,
-body.mobile-shell #intel-hud .hud-top-bar,
 body.mobile-shell #intel-hud .hud-bottom-bar {
   display: none;
 }
@@ -166,6 +166,9 @@ body.mobile-shell #right-context-rail > #recent-imagery-panel {
 /* Rail-scoped ids so a rail's own hiding rules (for example the Tactical HUD
    hiding collapsed siblings) never take a panel out of an open sheet. */
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel,
+body.mobile-shell[data-mobile-sheet='layers']
+  #left-panel-stack
+  > #utilities-panel,
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #scene-panel,
 body.mobile-shell[data-mobile-sheet='cameras']
   #right-context-rail
@@ -379,7 +382,15 @@ body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   right: auto;
   bottom: calc(var(--mobile-tab-space) + 106px) !important;
   left: 10px;
-  max-width: calc(100vw - 20px);
+  /* With the base rule's nowrap the credits run off the right edge, and a
+     max-width alone wrapped them into a narrow column: the line needs wrapping
+     and a real width. The width applies before the 0.8 scale, keeping the
+     scaled line 10px from the right edge, so every credit and "Data
+     attribution" stay on screen. Like the offset above, it must beat the
+     dock's width: auto !important. */
+  width: calc((100vw - 20px) / 0.8) !important;
+  max-width: none !important;
+  white-space: normal;
   transform-origin: left bottom;
   scale: 0.8;
 }
@@ -401,7 +412,7 @@ body.mobile-shell:not(.cockpit-mode) #view-switcher {
 
 body.mobile-shell #corner-actions {
   top: calc(var(--mobile-top-inset) + 60px);
-  right: 12px;
+  inset-inline-end: 12px;
   bottom: auto;
 }
 

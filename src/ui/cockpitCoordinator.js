@@ -1,5 +1,9 @@
+import { nextTick } from 'vue';
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
-import { cockpitEntryAllowed } from '../contextModePolicy.js';
+import {
+  COCKPIT_AIRCRAFT_LAYER_IDS,
+  cockpitEntryAllowed,
+} from '../contextModePolicy.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
 import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
@@ -14,6 +18,7 @@ export class CockpitCoordinator {
     readDataManager,
     readContext,
     readActiveStyle,
+    readUtilityDisclosureOpen,
     enterPanels,
     exitPanels,
   }) {
@@ -25,6 +30,7 @@ export class CockpitCoordinator {
         readDataManager,
         readContext,
         readActiveStyle,
+        readUtilityDisclosureOpen,
         enterPanels,
         exitPanels,
       },
@@ -69,21 +75,29 @@ export class CockpitCoordinator {
         fetchRegionalBrief,
         regionalDistanceM,
         weatherCodeLabel,
+        // The Contact card and Live Signals say which feeds are off.
+        isLayerEnabled: (layerId) => this._isLayerEnabled(layerId),
       },
       onVisionChange: (mode, active, options) =>
         this._setCockpitVision(mode, active, options),
       getInitialVisionMode: () => cockpitVisionModeForStyle(this.activeStyle),
       onCameraTakeover: () =>
         this._stampNavigation({ cancelPendingSelection: false }),
-      isEntryAllowed: () =>
-        cockpitEntryAllowed({
-          contextMode: this._contextMode,
+      // Only the tracked aircraft's own layer gates entry (see the policy).
+      isEntryAllowed: () => {
+        const subjectLayerId =
+          this.cockpitView?.readAircraftInfo?.()?.layerId ?? null;
+        return cockpitEntryAllowed({
+          subjectLayerId,
+          subjectLayerEnabled: this._isLayerEnabled(subjectLayerId),
           contextModeChanging: this._contextModeChanging,
-          flightsEnabled: !!this._dataManager?.isEnabled('flights'),
-          militaryEnabled: !!this._dataManager?.isEnabled('military'),
-        }),
+        });
+      },
+      publish: this.publishCockpit,
+      isUtilityDisclosureOpen: () => !!this.readUtilityDisclosureOpen?.(),
       onEntered: () => this.enterPanels(),
       onExited: () => this.exitPanels(),
+      onRide: (layerId) => this._adoptRiddenLayer(layerId),
       restoreTrackingFrame: (entity) => {
         const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(
           ':',
@@ -110,6 +124,44 @@ export class CockpitCoordinator {
   get activeStyle() {
     return this.readActiveStyle();
   }
+  /** Whether a data layer is enabled; false for no layer. */
+  _isLayerEnabled(layerId) {
+    return Boolean(layerId) && !!this._dataManager?.isEnabled(layerId);
+  }
+  /**
+   * Make the ridden aircraft's layer the user's own while Contacts is on.
+   * Contacts may have turned that layer on, and it releases the layers it
+   * owns when it goes off; the Cockpit must outlive Contacts, so riding an
+   * aircraft adopts its layer as a direct selection does. Contacts then stops
+   * owning it and the Context restore keeps it (session `userAdded`).
+   * @param {string|null} layerId The ridden aircraft's layer.
+   */
+  _adoptRiddenLayer(layerId) {
+    if (!COCKPIT_AIRCRAFT_LAYER_IDS.includes(layerId)) return;
+    if (!this._isLayerEnabled('military-awareness')) return;
+    this._dataManager?.adoptLayerVisibility?.(layerId, true, {
+      origin: 'user',
+      adoptedFromSelection: true,
+    });
+  }
+  /** Whether either aircraft layer is on, so there is an aircraft to ride. */
+  get _aircraftLayerEnabled() {
+    return COCKPIT_AIRCRAFT_LAYER_IDS.some((layerId) =>
+      this._isLayerEnabled(layerId),
+    );
+  }
+  /**
+   * Why voice entry must refuse before it touches tracking, or null. The
+   * tracked aircraft's own layer is checked again by the entry itself.
+   * @returns {string|null}
+   */
+  _cockpitEntryRefusal() {
+    if (this._contextModeChanging)
+      return 'Context is still changing — try Cockpit again in a moment';
+    if (!this._aircraftLayerEnabled)
+      return 'No aircraft layer is on — turn on Flights or Military Flights and track an aircraft to enter Cockpit';
+    return null;
+  }
   getCockpitState() {
     const { militaryAwarenessLayer } = this.services;
     const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
@@ -124,19 +176,24 @@ export class CockpitCoordinator {
     const entryAllowed =
       !active &&
       Boolean(gateOpen && info && this.viewer?.trackedEntity?.position);
+    // Entry needs only the ridden aircraft's own layer: with one tracked,
+    // that layer; with none, any aircraft layer to track one from.
+    const subjectLayerOff = info
+      ? !this._isLayerEnabled(info.layerId)
+      : !this._aircraftLayerEnabled;
     return {
       active,
       entryAllowed,
       // Why entry is unavailable, so a refusal can be explained rather than
-      // guessed at.
+      // guessed at. Contacts is not required, so it is never the reason.
       entryBlockedReason:
         entryAllowed || active
           ? null
-          : !gateOpen
-            ? this._contextModeChanging
-              ? 'contacts-starting'
-              : 'contacts-inactive'
-            : 'no-tracked-aircraft',
+          : this._contextModeChanging
+            ? 'contacts-starting'
+            : subjectLayerOff
+              ? 'subject-layer-off'
+              : 'no-tracked-aircraft',
       visionMode: this.cockpitView?.visionMode || null,
       subject: info
         ? {
@@ -255,17 +312,18 @@ export class CockpitCoordinator {
       };
     }
     if (normalized === 'enter') {
-      // Entry is gated exactly as the manual entry chip is. Attempting it while
-      // the gate is shut produced the half-entered look the operator reported
-      // (a plane anchored under the camera with no cockpit around it), so
-      // refuse with the reason instead of trying.
-      if (!this.cockpitView.isEntryAllowed?.()) {
+      // Attempting entry while the gate is shut produced the half-entered look
+      // the operator reported (a plane anchored under the camera with no
+      // cockpit around it), so refuse with the reason instead of trying. The
+      // aircraft may not be tracked yet (a selection or a requested layer is
+      // adopted below), so this checks what can be known now; the entry
+      // itself then applies the manual chip's gate to the aircraft it rides.
+      const refusal = this._cockpitEntryRefusal();
+      if (refusal) {
         return {
           ok: false,
           action: 'control_cockpit',
-          error: this._contextModeChanging
-            ? 'Contacts is still starting up — try Cockpit again in a moment'
-            : 'Contacts must be active to enter Cockpit — say "open contacts" first',
+          error: refusal,
           state: this.getCockpitState(),
         };
       }
@@ -375,6 +433,10 @@ export class CockpitCoordinator {
       layout: () => {
         this._layoutRightPanels();
         this.cockpitView?.scheduleContextLayout();
+      },
+      publish: (slots) => this.publishCockpitPortal?.(slots),
+      afterRender: (callback) => {
+        void nextTick(callback);
       },
     });
   }
