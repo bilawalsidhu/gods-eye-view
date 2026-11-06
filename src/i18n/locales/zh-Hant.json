@@ -3091,5 +3091,13 @@
   "Open {name} on Acartia": "在 Acartia 上打開 {name}",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "iNaturalist 貢獻者 · 各紀錄個別授權",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist 貢獻者 · Acartia {count}（薩利希海） · 各紀錄個別授權"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist 貢獻者 · Acartia {count}（薩利希海） · 各紀錄個別授權",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude 僅在聊天中回覆；此服務商不支持語音。",
+  "Claude has no voice. Open CHAT to type instead.": "Claude 不支持語音。請打開聊天改為輸入文字。",
+  "Claude typed chat": "Claude 文字聊天",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI 僅在聊天中回覆；此服務商不支持語音。",
+  "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AI 不支持語音。請打開聊天改為輸入文字。",
+  "Gemini typed chat through Vertex AI Express Mode": "透過 Vertex AI 快速模式進行 Gemini 文字聊天",
+  "Open chat": "打開聊天",
+  "This provider answers in chat only": "此服務商僅在聊天中回覆"
 }

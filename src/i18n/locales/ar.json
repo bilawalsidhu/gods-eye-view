@@ -3466,5 +3466,13 @@
   "Open {name} on Acartia": "فتح {name} على Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "مساهمو iNaturalist · التراخيص لكل سجل",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "مساهمو iNaturalist · Acartia {count} (بحر ساليش) · التراخيص لكل سجل"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "مساهمو iNaturalist · Acartia {count} (بحر ساليش) · التراخيص لكل سجل",
+  "Claude answers in chat only; voice is not available for this provider.": "يجيب Claude في الدردشة فقط؛ الصوت غير متاح لهذا المزوّد.",
+  "Claude has no voice. Open CHAT to type instead.": "لا يدعم Claude الصوت. افتح «دردشة» للكتابة بدلًا من ذلك.",
+  "Claude typed chat": "الدردشة النصية مع Claude",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "يجيب Vertex AI في الدردشة فقط؛ الصوت غير متاح لهذا المزوّد.",
+  "Vertex AI has no voice. Open CHAT to type instead.": "لا يدعم Vertex AI الصوت. افتح «دردشة» للكتابة بدلًا من ذلك.",
+  "Gemini typed chat through Vertex AI Express Mode": "الدردشة النصية مع Gemini عبر الوضع السريع في Vertex AI",
+  "Open chat": "فتح الدردشة",
+  "This provider answers in chat only": "يجيب هذا المزوّد في الدردشة فقط"
 }

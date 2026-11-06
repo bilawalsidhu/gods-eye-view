@@ -2,7 +2,10 @@ import { supportedVoiceProviders } from './providerCapabilities.js';
 
 const STORAGE_KEY = 'gev.voice.provider';
 
-export function readVoiceProvider(storage, supported = ['openai', 'gemini']) {
+export function readVoiceProvider(
+  storage,
+  supported = ['openai', 'gemini', 'anthropic', 'vertex'],
+) {
   let saved;
   try {
     saved = (storage ?? globalThis.localStorage)?.getItem(STORAGE_KEY);

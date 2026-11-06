@@ -155,8 +155,32 @@ test('root config retains existing named exports and standalone provider order',
     standaloneProviders.indexOf('gemini-live-proxy'),
     standaloneProviders.indexOf('openai-realtime-proxy') + 1,
   );
+  assert.equal(
+    standaloneProviders.filter((name) => name === 'anthropic-chat-proxy')
+      .length,
+    1,
+  );
+  assert.equal(
+    standaloneProviders.indexOf('anthropic-chat-proxy'),
+    standaloneProviders.indexOf('gemini-live-proxy') + 1,
+  );
+  assert.equal(
+    standaloneProviders.filter((name) => name === 'vertex-chat-proxy').length,
+    1,
+  );
+  assert.equal(
+    standaloneProviders.indexOf('vertex-chat-proxy'),
+    standaloneProviders.indexOf('anthropic-chat-proxy') + 1,
+  );
   assert.deepEqual(
-    standaloneProviders.filter((name) => name !== 'gemini-live-proxy'),
+    standaloneProviders.filter(
+      (name) =>
+        ![
+          'gemini-live-proxy',
+          'anthropic-chat-proxy',
+          'vertex-chat-proxy',
+        ].includes(name),
+    ),
     providers
       .localProviderPlugins({ nominatimStorageDir })
       .map((plugin) => plugin.name),
