@@ -14,6 +14,7 @@ const ORDER = [
   'weather-satellite',
   'weather-lightning',
   'air-quality',
+  'weather-aurora',
 ];
 const OBSERVED = new Set(ORDER.slice(2, 5));
 const utc = (time) =>
@@ -130,6 +131,7 @@ export function createWeatherPanel({
       'weather-radar': t('Rain radar'),
       'weather-satellite': t('Satellite clouds'),
       'weather-lightning': t('Lightning density'),
+      'weather-aurora': t('Aurora forecast'),
     };
     const index =
       state.mode === 'latest'
@@ -174,12 +176,12 @@ export function createWeatherPanel({
                 ? t('{detail} · synced', { detail })
                 : t('{detail} · nearest', { detail });
         }
-      } else if (id === 'wind') {
+      } else if (id === 'wind' || id === 'weather-aurora') {
         detail = t('Forecast · valid {valid} · issued {issued}', {
           valid: utc(summary.validTime),
           issued: utc(summary.issuedTime),
         });
-        if (state.mode === 'history')
+        if (id === 'wind' && state.mode === 'history')
           detail = t('{detail} · Does not follow history', { detail });
       }
       const lines = [
@@ -224,7 +226,7 @@ export function createWeatherPanel({
         compact:
           summary.status ||
           summary.compact ||
-          (id === 'wind'
+          (id === 'wind' || id === 'weather-aurora'
             ? t('Forecast · valid {valid}', { valid: utc(summary.validTime) })
             : detail),
         compactStatus: Boolean(summary.status),

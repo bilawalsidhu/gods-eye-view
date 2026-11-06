@@ -3319,7 +3319,11 @@
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
+      "src/layers/aurora/source.js",
+      "src/layers/aurora/index.js"
     ],
     "external": [
       "hls.js",
@@ -3968,7 +3972,10 @@
       "src/layers/wildlifeSightings/sprites.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
+      "src/layers/aurora/index.js"
     ],
     "external": [
       "hls.js",
