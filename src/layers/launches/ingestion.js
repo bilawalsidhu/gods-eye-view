@@ -236,7 +236,6 @@ export function createIngestion({
           parts.panel.renderMissionRoster();
           throw error;
         }
-        layerState._entryCameraView = null;
       }
     }
   }

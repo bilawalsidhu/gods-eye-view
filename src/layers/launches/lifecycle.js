@@ -241,12 +241,12 @@ export function createLifecycle({
         // A new attempt at an index that never loaded starts from loading.
         layerState._lastError = null;
         parts.panel.renderMissionRoster();
+        // Kept until the mission index loads, so an entry that never does
+        // gives the view back. A newer flight takes the camera and drops it.
+        layerState._entryCameraView = captureCameraView(layerState._viewer);
+        layerState._entryLandedView = null;
       }
-      // Kept until the mission index loads, so an entry that never does
-      // gives the view back. A newer flight takes the camera and drops it.
       const token = layerState._lifecycleToken;
-      layerState._entryCameraView = captureCameraView(layerState._viewer);
-      layerState._entryLandedView = null;
       const flying = parts.selection.focusFullGlobe(layerState._viewer, {
         complete: () => {
           if (token === layerState._lifecycleToken)
@@ -305,7 +305,6 @@ export function createLifecycle({
       layerState._sourceController.abort();
       releaseContinuousRender('rocket-launches'); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
-      layerState._entryCameraView = null;
       layerState._lifecycleToken++;
       layerState._updateDirty = false;
       await parts.ingestion.restoreSatelliteDependency();
