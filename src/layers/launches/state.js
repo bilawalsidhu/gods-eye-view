@@ -19,6 +19,8 @@ export function createState({ services }) {
 
   state._lastError = null;
 
+  state._lastErrorAt = null;
+
   state._entryCameraView = null;
 
   state._entryLandedView = null;

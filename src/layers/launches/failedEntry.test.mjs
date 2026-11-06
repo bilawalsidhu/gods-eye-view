@@ -6,6 +6,7 @@ import http from 'node:http';
 import * as Cesium from 'cesium';
 import { DataLayerManager } from '../../data/manager.js';
 import { ContextControls } from '../../ui/contextControls.js';
+import { spaceMissionsIndexFailure } from '../../ui/contextActions.js';
 import { createLaunchSource } from './source.js';
 import { createState } from './state.js';
 import { createModel } from './model.js';
@@ -454,7 +455,6 @@ test('a refresh failure after a loaded index keeps the mode and its records', as
   await f.settle();
   assert.deepEqual(f.view(), framed);
 });
-// Append to src/layers/launches/failedEntry.test.mjs (uses its fixture()).
 test('exiting during a successful entry flight cancels the mission-owned flight', async (t) => {
   const f = await fixture(t);
   f.upstream.status = 200;
@@ -473,10 +473,7 @@ test('exiting during a successful entry flight cancels the mission-owned flight'
     'leaving Space Missions stops the flight it started (main cancels it)',
   );
 });
-// Append to src/layers/launches/failedEntry.test.mjs (uses its fixture()).
-// Encodes the "surface the reason where the user acted" fix: the roster that
-// carries 30-DAY MISSION INDEX UNAVAILABLE is hidden by the rollback, so the
-// lasting feedback (the toast) has to name the cause.
+// The rollback hides the roster, so the toast has to name the cause.
 test('a failed first load tells the user the mission index is unavailable', async (t) => {
   const f = await fixture(t);
   await f.manager.setEnabled('earthquakes', true, { origin: 'user' });
@@ -490,4 +487,30 @@ test('a failed first load tells the user the mission index is unavailable', asyn
     f.toasts.some((message) => /mission index/i.test(message)),
     `visible feedback names the failure, got ${JSON.stringify(f.toasts)}`,
   );
+});
+
+test('navigation taking the camera keeps a mission flight it asked to preserve', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  await f.manager.setEnabled('rocket-launches', true, { origin: 'user' });
+  await f.settle();
+  const flight = f.camera.flight;
+  assert.ok(flight, 'the entry flight is in progress');
+  f.missions.releaseCameraOwnership();
+  assert.equal(f.camera.flight, flight, 'navigation decides about the flight');
+  // After exit an inactive layer never cancels another owner's flight.
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  f.camera.flyTo({ destination: new Cesium.Cartesian3(1, 1, 1) });
+  const other = f.camera.flight;
+  f.missions.releaseCameraOwnership();
+  assert.equal(f.camera.flight, other);
+});
+
+test("an earlier attempt's index error is not blamed for a later failure", async (t) => {
+  const f = await fixture(t);
+  await f.manager.setEnabled('rocket-launches', true, { origin: 'user' });
+  await f.settle();
+  assert.match(spaceMissionsIndexFailure(f.manager), /mission index/);
+  assert.equal(spaceMissionsIndexFailure(f.manager, Date.now() + 1), null);
 });

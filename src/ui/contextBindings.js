@@ -60,11 +60,12 @@ export function _initGlobalContextPanel() {
     const nextMode =
       this._contextMode === 'space-missions' ? null : 'space-missions';
     this._claimContextVisualAuthority();
+    const startedAt = Date.now();
     void this._runUserFacingContextAction(
       (notificationToken) =>
         this._selectContextMode(nextMode, { notificationToken }),
       () =>
-        (nextMode && spaceMissionsIndexFailure(this._dataManager)) ||
+        (nextMode && spaceMissionsIndexFailure(this._dataManager, startedAt)) ||
         t(
           'Space Missions could not complete the requested transition; try again',
         ),

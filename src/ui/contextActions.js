@@ -4,12 +4,13 @@ import {
   contextModeWord,
 } from '../contextModePolicy.js';
 
-/** Why a Space Missions entry failed, when its mission index never loaded. */
-export function spaceMissionsIndexFailure(dataManager) {
+/** Why a Space Missions entry failed: its mission index never loaded, and
+ * the error is no older than `since` (an earlier attempt's is not the cause). */
+export function spaceMissionsIndexFailure(dataManager, since = 0) {
   const stats = dataManager?.layers
     ?.get('rocket-launches')
     ?.module?.getStats?.();
-  return stats?.error && stats.lastUpdate == null
+  return stats?.error && stats.lastUpdate == null && stats.errorAt >= since
     ? t(
         'Space Missions unavailable: the mission index could not load. Try again later.',
       )

@@ -285,6 +285,7 @@ export function createLifecycle({
       parts.ingestion.clearPostTleRetry();
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
+      layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
       if (layerState._dataSource) layerState._dataSource.show = false;
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
@@ -310,6 +311,7 @@ export function createLifecycle({
       await parts.ingestion.restoreSatelliteDependency();
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
+      layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
       parts.ingestion.clearPostTleRetry();
       if (layerState._clickHandler) layerState._clickHandler.destroy();

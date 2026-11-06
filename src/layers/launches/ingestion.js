@@ -228,6 +228,7 @@ export function createIngestion({
     } catch (error) {
       if (layerState._enabled && token === layerState._lifecycleToken) {
         layerState._lastError = error.message;
+        layerState._lastErrorAt = Date.now();
         console.warn('[Data:RocketLaunches] Fetch error:', error);
         // No index yet: fail the enable so Context rolls back.
         // After a loaded index, a failed refresh keeps its records.
