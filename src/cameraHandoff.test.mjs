@@ -223,11 +223,20 @@ test('validated voice camera destinations share the UI navigation authority faca
     'move camera',
   );
   ordered(move, [
-    "if (!['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe'].includes(motion))",
+    'if (argsError) return argsError;',
     'const start = () => {',
     /const preserveCameraFlight =\s*motion === 'orbit'/,
     'runNavigation(start, { preserveCameraFlight })',
   ], 'move validation before handoff');
+  const moveArgs = body(
+    cameraVerbs,
+    /export function moveCameraArgsError\(args = \{\}\) \{([\s\S]*?)\n\}/,
+    'move camera argument checks',
+  );
+  assert.ok(
+    moveArgs.includes("if (!['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe'].includes(motion))"),
+    'unknown motions are refused before handoff',
+  );
 
   const route = body(
     cameraVerbs,
