@@ -3316,5 +3316,10 @@
   "Open {name} on Acartia": "Открыть {name} в Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Участники iNaturalist · лицензия у каждой записи",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Участники iNaturalist · Acartia {count} (море Сэлиш) · лицензия у каждой записи"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Участники iNaturalist · Acartia {count} (море Сэлиш) · лицензия у каждой записи",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude отвечает только в чате; голосовой режим для этого провайдера недоступен.",
+  "Claude has no voice. Open CHAT to type instead.": "У Claude нет голосового режима. Откройте ЧАТ, чтобы писать текстом.",
+  "Claude typed chat": "Текстовый чат с Claude",
+  "Open chat": "Открыть чат",
+  "This provider answers in chat only": "Этот провайдер отвечает только в чате"
 }

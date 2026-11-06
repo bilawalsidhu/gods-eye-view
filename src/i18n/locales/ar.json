@@ -3466,5 +3466,10 @@
   "Open {name} on Acartia": "فتح {name} على Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "مساهمو iNaturalist · التراخيص لكل سجل",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "مساهمو iNaturalist · Acartia {count} (بحر ساليش) · التراخيص لكل سجل"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "مساهمو iNaturalist · Acartia {count} (بحر ساليش) · التراخيص لكل سجل",
+  "Claude answers in chat only; voice is not available for this provider.": "يجيب Claude في الدردشة فقط؛ الصوت غير متاح لهذا المزوّد.",
+  "Claude has no voice. Open CHAT to type instead.": "لا يدعم Claude الصوت. افتح «دردشة» للكتابة بدلًا من ذلك.",
+  "Claude typed chat": "الدردشة النصية مع Claude",
+  "Open chat": "فتح الدردشة",
+  "This provider answers in chat only": "يجيب هذا المزوّد في الدردشة فقط"
 }

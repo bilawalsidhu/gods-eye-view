@@ -3241,5 +3241,10 @@
   "Open {name} on Acartia": "Ouvrir {name} sur Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Contributeurs iNaturalist · licences par observation",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Contributeurs iNaturalist · Acartia {count} (mer des Salish) · licences par observation"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Contributeurs iNaturalist · Acartia {count} (mer des Salish) · licences par observation",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude ne répond que dans la discussion ; la voix n'est pas disponible pour ce fournisseur.",
+  "Claude has no voice. Open CHAT to type instead.": "Claude n'a pas de voix. Ouvrez CHAT pour écrire à la place.",
+  "Claude typed chat": "Discussion écrite avec Claude",
+  "Open chat": "Ouvrir la discussion",
+  "This provider answers in chat only": "Ce fournisseur ne répond que dans la discussion"
 }

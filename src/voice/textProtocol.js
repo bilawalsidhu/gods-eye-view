@@ -113,6 +113,72 @@ export const textProtocols = {
       };
     },
   },
+  anthropic: {
+    endpoint: '/api/anthropic/chat',
+    keyEnv: 'ANTHROPIC_API_KEY',
+    user: (text) => ({ role: 'user', content: text }),
+    note: (text) => ({ role: 'assistant', content: [{ type: 'text', text }] }),
+    // A tool_result message is not a user turn boundary.
+    isUser: (item) =>
+      item.role === 'user' &&
+      (typeof item.content === 'string' ||
+        item.content.some((block) => block.type === 'text')),
+    request: (messages) => ({ messages }),
+    decode(data) {
+      const content = data?.content;
+      if (
+        content?.role !== 'assistant' ||
+        !Array.isArray(content.content) ||
+        !content.content.length ||
+        content.content.length > 32
+      )
+        throw Error('Invalid response');
+      return {
+        content,
+        text: content.content
+          .filter((block) => block.type === 'text')
+          .map((block) => block.text)
+          .join(''),
+        calls: content.content
+          .filter((block) => block.type === 'tool_use')
+          .map((block) => ({
+            id: block.id,
+            name: block.name,
+            args: block.input,
+          })),
+        finished: data.finishReason === 'end_turn',
+      };
+    },
+    results: (pairs) => [
+      {
+        role: 'user',
+        content: pairs.map(({ call, result }) => ({
+          type: 'tool_result',
+          tool_use_id: call.id,
+          content: JSON.stringify(result),
+        })),
+      },
+    ],
+    compactResult(item, maxBytes) {
+      if (item.role !== 'user' || !Array.isArray(item.content)) return item;
+      return {
+        ...item,
+        content: item.content.map((block) => {
+          if (block.type !== 'tool_result') return block;
+          let result;
+          try {
+            result = JSON.parse(block.content);
+          } catch {
+            result = { ok: false, error: 'Tool result could not be read' };
+          }
+          return {
+            ...block,
+            content: JSON.stringify(boundedToolResult(result, maxBytes)),
+          };
+        }),
+      };
+    },
+  },
 };
 
 export const emptyTextUsage = () => ({

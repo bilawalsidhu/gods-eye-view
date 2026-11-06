@@ -3091,5 +3091,10 @@
   "Open {name} on Acartia": "Acartiaで{name}を開く",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "iNaturalist の投稿者 · ライセンスは記録ごと",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist の投稿者 · Acartia {count}（セイリッシュ海） · ライセンスは記録ごと"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist の投稿者 · Acartia {count}（セイリッシュ海） · ライセンスは記録ごと",
+  "Claude answers in chat only; voice is not available for this provider.": "Claudeはチャットでのみ応答します。このプロバイダーでは音声を利用できません。",
+  "Claude has no voice. Open CHAT to type instead.": "Claudeは音声に対応していません。代わりにチャットを開いて入力してください。",
+  "Claude typed chat": "Claudeのテキストチャット",
+  "Open chat": "チャットを開く",
+  "This provider answers in chat only": "このプロバイダーはチャットでのみ応答します"
 }

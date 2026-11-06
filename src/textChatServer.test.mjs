@@ -4,6 +4,8 @@ import http from 'node:http';
 import { once } from 'node:events';
 import { createGeminiChatHandler } from '../server/providers/gemini/chat.js';
 import { createOpenAiChatHandler } from '../server/providers/openai/chat.js';
+import { createAnthropicChatHandler } from '../server/providers/anthropic/chat.js';
+import { parseUsage } from '../server/providers/common/textTools.js';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import {
   realtimeDirectives,
@@ -83,6 +85,25 @@ const providers = {
       usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 },
     }),
   },
+  anthropic: {
+    create: createAnthropicChatHandler,
+    input: { messages: [{ role: 'user', content: 'Hello' }] },
+    reply: (bad = false) => ({
+      id: 'm',
+      type: 'message',
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id: 'c',
+          name: 'fly_to',
+          input: { lat: bad ? 100 : 1 },
+        },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 7, output_tokens: 3 },
+    }),
+  },
 };
 async function fixture(t, provider, fetchImpl, overrides = {}) {
   const calls = [];
@@ -150,6 +171,7 @@ for (const [name, provider] of Object.entries(providers)) {
     const nullCall = provider.reply();
     if (name === 'gemini')
       nullCall.candidates[0].content.parts[0].functionCall.args = null;
+    else if (name === 'anthropic') nullCall.content[0].input = null;
     else nullCall.choices[0].message.tool_calls[0].function.arguments = 'null';
     const nullFixture = await fixture(t, provider, async () =>
       Response.json(nullCall),
@@ -178,13 +200,30 @@ for (const [name, provider] of Object.entries(providers)) {
               },
             ],
           }
-        : {
-            messages: [
-              ...provider.input.messages,
-              body.content,
-              { role: 'tool', tool_call_id: 'c', content: '{"ok":false}' },
-            ],
-          };
+        : name === 'anthropic'
+          ? {
+              messages: [
+                ...provider.input.messages,
+                body.content,
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'tool_result',
+                      tool_use_id: 'c',
+                      content: '{"ok":false}',
+                    },
+                  ],
+                },
+              ],
+            }
+          : {
+              messages: [
+                ...provider.input.messages,
+                body.content,
+                { role: 'tool', tool_call_id: 'c', content: '{"ok":false}' },
+              ],
+            };
     assert.equal((await f.send(input)).status, 200);
     const orphan =
       name === 'gemini'
@@ -204,6 +243,29 @@ for (const [name, provider] of Object.entries(providers)) {
       assert.equal(f.calls[0].body.n, 1);
       assert.equal(f.calls[0].body.model, 'gpt-4.1-mini');
       assert.equal(f.calls[0].body.messages[0].role, 'system');
+      assert.equal(
+        (await f.send({ messages: [{ role: 'system', content: 'override' }] }))
+          .status,
+        400,
+      );
+    }
+    if (name === 'anthropic') {
+      const [{ url, body: sent, options }] = f.calls;
+      assert.equal(url, 'https://api.anthropic.com/v1/messages');
+      assert.equal(options.headers['x-api-key'], 'fixture-only');
+      assert.equal(options.headers['anthropic-version'], '2023-06-01');
+      assert.equal(sent.model, 'claude-haiku-5-5');
+      assert.equal(sent.max_tokens, 4096);
+      assert.deepEqual(sent.thinking, { type: 'disabled' });
+      assert.equal(typeof sent.system, 'string');
+      assert.deepEqual(sent.messages, provider.input.messages);
+      assert.deepEqual(sent.tools, [
+        {
+          name: 'fly_to',
+          description: 'Fly',
+          input_schema: tools[0].parameters,
+        },
+      ]);
       assert.equal(
         (await f.send({ messages: [{ role: 'system', content: 'override' }] }))
           .status,
@@ -259,7 +321,11 @@ for (const [name, provider] of Object.entries(providers)) {
     const f = await fixture(t, provider, async () =>
       Response.json({
         ...provider.reply(),
-        ...(name === 'gemini' ? { candidates: [] } : { choices: [] }),
+        ...(name === 'gemini'
+          ? { candidates: [] }
+          : name === 'anthropic'
+            ? { content: [] }
+            : { choices: [] }),
       }),
     );
     const response = await f.send();
@@ -353,6 +419,8 @@ for (const [name, provider] of Object.entries(providers)) {
     const echo = provider.reply();
     if (name === 'gemini')
       echo.candidates[0].content.parts = [{ text: 'key fixture-only' }];
+    else if (name === 'anthropic')
+      echo.content = [{ type: 'text', text: 'key fixture-only' }];
     else
       echo.choices[0].message = {
         role: 'assistant',
@@ -526,11 +594,15 @@ for (const [name, provider] of Object.entries(providers)) {
       const offered =
         name === 'openai'
           ? body.tools.map((tool) => tool.function.name)
-          : body.tools[0].functionDeclarations.map((tool) => tool.name);
+          : name === 'anthropic'
+            ? body.tools.map((tool) => tool.name)
+            : body.tools[0].functionDeclarations.map((tool) => tool.name);
       const prompt =
         name === 'openai'
           ? body.messages[0].content
-          : body.systemInstruction.parts[0].text;
+          : name === 'anthropic'
+            ? body.system
+            : body.systemInstruction.parts[0].text;
       assert.equal(offered.includes('osm_query'), overpass);
       assert.equal(prompt.includes('osm_query'), overpass);
       assert.ok(offered.includes('resolve_area'));
@@ -631,6 +703,8 @@ test('chat throttles read their own variables and fall back per provider', async
     'GEV_RATELIMIT_OPENAI_PER_MIN',
     'GEV_RATELIMIT_GEMINI_CHAT_PER_MIN',
     'GEV_RATELIMIT_GEMINI_PER_MIN',
+    'GEV_RATELIMIT_ANTHROPIC_CHAT_PER_MIN',
+    'GEV_RATELIMIT_ANTHROPIC_PER_MIN',
   ];
   const saved = Object.fromEntries(names.map((key) => [key, process.env[key]]));
   t.after(() => {
@@ -649,12 +723,16 @@ test('chat throttles read their own variables and fall back per provider', async
   for (const key of names) delete process.env[key];
   process.env.GEV_RATELIMIT_OPENAI_PER_MIN = '2';
   process.env.GEV_RATELIMIT_GEMINI_PER_MIN = '3';
+  process.env.GEV_RATELIMIT_ANTHROPIC_PER_MIN = '1';
   assert.equal(await allowed(providers.openai, 5), 2);
   assert.equal(await allowed(providers.gemini, 5), 3);
+  assert.equal(await allowed(providers.anthropic, 5), 1);
   process.env.GEV_RATELIMIT_OPENAI_CHAT_PER_MIN = '4';
   process.env.GEV_RATELIMIT_GEMINI_CHAT_PER_MIN = '0';
+  process.env.GEV_RATELIMIT_ANTHROPIC_CHAT_PER_MIN = '2';
   assert.equal(await allowed(providers.openai, 6), 4);
   assert.equal(await allowed(providers.gemini, 6), 6);
+  assert.equal(await allowed(providers.anthropic, 6), 2);
 });
 
 test('the ChatGPT OAuth lock refuses OpenAI chat but not Gemini chat', async (t) => {
@@ -696,4 +774,146 @@ test('OpenAI empty tool arrays are removed before history is returned', async (t
   );
   const body = await (await f.send()).json();
   assert.equal(body.content.tool_calls, undefined);
+});
+
+test('Anthropic overload 529 answers 503 and passes on Retry-After', async (t) => {
+  const f = await fixture(t, providers.anthropic, async () =>
+    Response.json(
+      { type: 'error', error: { type: 'overloaded_error', message: 'Busy' } },
+      { status: 529, headers: { 'Retry-After': '9' } },
+    ),
+  );
+  const response = await f.send();
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('retry-after'), '9');
+  assert.deepEqual(await response.json(), {
+    error: 'Could not connect. Try again.',
+  });
+});
+
+test('Anthropic history must alternate and answer each tool_use batch in order', async (t) => {
+  const f = await fixture(t, providers.anthropic);
+  const user = (text) => ({ role: 'user', content: text });
+  const calls = {
+    role: 'assistant',
+    content: [
+      { type: 'text', text: 'Flying' },
+      { type: 'tool_use', id: 'a', name: 'fly_to', input: { lat: 1 } },
+      { type: 'tool_use', id: 'b', name: 'fly_to', input: { lat: 2 } },
+    ],
+  };
+  const results = (...ids) => ({
+    role: 'user',
+    content: ids.map((id) => ({
+      type: 'tool_result',
+      tool_use_id: id,
+      content: '{"ok":true}',
+    })),
+  });
+  const done = { role: 'assistant', content: [{ type: 'text', text: 'Done' }] };
+  const send = async (messages) => (await f.send({ messages })).status;
+  assert.equal(
+    await send([user('Go'), calls, results('a', 'b'), done, user('Next')]),
+    200,
+  );
+  assert.equal(await send([user('Go'), calls, results('a', 'b')]), 200);
+  // Results out of order, missing, or mixed with text.
+  assert.equal(await send([user('Go'), calls, results('b', 'a')]), 400);
+  assert.equal(await send([user('Go'), calls, results('a')]), 400);
+  const mixed = results('a', 'b');
+  mixed.content.push({ type: 'text', text: 'And more' });
+  assert.equal(await send([user('Go'), calls, mixed]), 400);
+  // A result with no call before it, and a call left unanswered.
+  assert.equal(await send([results('a')]), 400);
+  assert.equal(await send([user('Go'), done, results('a')]), 400);
+  assert.equal(await send([user('Go'), calls]), 400);
+  assert.equal(await send([user('Go'), calls, user('Never mind')]), 400);
+  // Roles alternate from the user and the history ends with the user.
+  assert.equal(await send([user('Go'), user('Again')]), 400);
+  assert.equal(await send([done, user('Go')]), 400);
+  assert.equal(await send([user('Go'), done]), 400);
+  // Only known blocks and keys cross the route.
+  assert.equal(
+    await send([
+      {
+        role: 'user',
+        content: [{ type: 'image', source: { type: 'url', url: 'x' } }],
+      },
+    ]),
+    400,
+  );
+  assert.equal(
+    await send([
+      { role: 'user', content: [{ type: 'text', text: 'Hi', cache: 1 }] },
+    ]),
+    400,
+  );
+  assert.equal(
+    await send([{ role: 'user', content: 'Hi', name: 'override' }]),
+    400,
+  );
+  assert.equal(await send([user('')]), 400);
+  assert.equal(f.calls.length, 2);
+});
+
+test('Anthropic replies keep only the blocks history can send back', async (t) => {
+  const reply = (content) => async () =>
+    Response.json({
+      ...providers.anthropic.reply(),
+      content,
+      stop_reason: 'end_turn',
+    });
+  const f = await fixture(
+    t,
+    providers.anthropic,
+    reply([{ type: 'text', text: 'Hi', citations: null }]),
+  );
+  const body = await (await f.send()).json();
+  assert.deepEqual(body.content, {
+    role: 'assistant',
+    content: [{ type: 'text', text: 'Hi' }],
+  });
+  assert.equal(body.finishReason, 'end_turn');
+  const thinking = await fixture(
+    t,
+    providers.anthropic,
+    reply([{ type: 'thinking', thinking: '', signature: 's' }]),
+  );
+  assert.equal((await thinking.send()).status, 502);
+});
+
+test('parseUsage adds Anthropic cache tokens to input and needs both counts', () => {
+  assert.deepEqual(
+    parseUsage('anthropic', { usage: { input_tokens: 7, output_tokens: 3 } }),
+    {
+      inputTokens: 7,
+      outputTokens: 3,
+      totalTokens: 10,
+      reasoningTokens: 0,
+      cachedInputTokens: 0,
+    },
+  );
+  assert.deepEqual(
+    parseUsage('anthropic', {
+      usage: {
+        input_tokens: 7,
+        output_tokens: 3,
+        cache_read_input_tokens: 100,
+        cache_creation_input_tokens: 20,
+      },
+    }),
+    {
+      inputTokens: 127,
+      outputTokens: 3,
+      totalTokens: 130,
+      reasoningTokens: 0,
+      cachedInputTokens: 100,
+    },
+  );
+  assert.equal(parseUsage('anthropic', { usage: { input_tokens: 7 } }), null);
+  assert.equal(
+    parseUsage('anthropic', { usage: { input_tokens: -1, output_tokens: 3 } }),
+    null,
+  );
+  assert.equal(parseUsage('anthropic', {}), null);
 });
