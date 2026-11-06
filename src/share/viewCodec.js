@@ -297,6 +297,7 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
     sinceDays: 0,
   }),
   radio: Object.freeze({ filter: 'all', volume: 0.8 }),
+  'wildlife-sightings': Object.freeze({ confirmed: false, taxa: 'all' }),
 });
 
 /** The frozen meaning of an omitted option; unlisted options are always written. */

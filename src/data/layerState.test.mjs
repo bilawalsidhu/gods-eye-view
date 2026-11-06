@@ -203,8 +203,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 36);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 36);
+  assert.equal(REGISTERED_LAYER_IDS.length, 37);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 37);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -243,17 +243,22 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '00');
+  assert.equal(nextLayerStateToken(), '01');
+  // The sequence scenarios below model the ledger before border-waits took 00.
+  const beforeBorderWaits = { ...LAYER_STATE_TOKEN_RESERVATIONS };
+  delete beforeBorderWaits['border-waits'];
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '00',
-      bravo: '01',
+      alpha: '9',
+      bravo: '00',
     }),
-    '02',
+    '01',
   );
-  // The published ledger already holds every single digit.
-  const digitsExhausted = { ...LAYER_STATE_TOKEN_RESERVATIONS };
+  const digitsExhausted = {
+    ...beforeBorderWaits,
+    ...Object.fromEntries([...'9'].map((digit) => [`prior-${digit}`, digit])),
+  };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
     nextLayerStateToken({ ...digitsExhausted, retired: '00', used: '01' }),
@@ -304,8 +309,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '00',
-      next: '01',
+      future: '01',
+      next: '02',
     }),
     true,
   );
@@ -313,12 +318,13 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     () =>
       validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
         ...LAYER_STATE_TOKEN_RESERVATIONS,
-        future: '01',
+        future: '02',
       }),
-    /next free token 00/,
+    /next free token 01/,
   );
   const beforeLastDigit = { ...digitsExhausted };
-  delete beforeLastDigit['border-waits'];
+  delete beforeLastDigit['prior-9'];
+  delete beforeLastDigit['wildlife-sightings'];
   assert.equal(
     validateLayerStateAllocations(beforeLastDigit, {
       ...beforeLastDigit,
@@ -338,10 +344,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '00' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '00', competing: '00' },
+        { ...beforeBorderWaits, merged: '9' },
+        { ...beforeBorderWaits, merged: '9', competing: '9' },
       ),
-    /next free token 01/,
+    /next free token 00/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -497,7 +503,7 @@ test('unknown enabled-layer tokens reject the payload instead of becoming an emp
 });
 
 test('malformed enabled-layer lists reject the entire payload', () => {
-  for (const value of ['.c', 'c.', 'c..e', 'c.c', '00', 'c.00']) {
+  for (const value of ['.c', 'c.', 'c..e', 'c.c', 'zz', 'c.zz']) {
     assert.equal(
       decodeLayerStateParams(new URLSearchParams(`v=2&l=${value}`)),
       null,
@@ -2691,6 +2697,32 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
     parseStoredLayerState(previous).options['recent-imagery'].split,
     50,
   );
+});
+
+test('wildlife confirmed and every taxa preset round-trip through the full share codec', () => {
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'wildlife-sightings').token,
+    '9',
+  );
+  for (const taxa of [
+    'all',
+    'Aves',
+    'Mammalia',
+    'whales',
+    'Insecta',
+    'Plantae',
+  ]) {
+    const state = normalizeLayerState({
+      enabledLayerIds: ['wildlife-sightings'],
+      options: { 'wildlife-sightings': { confirmed: true, taxa } },
+    });
+    const encoded = encode(state);
+    assert.doesNotMatch(encoded, /undefined/);
+    assert.deepEqual(
+      decodeLayerStateParams(new URLSearchParams(encoded)),
+      state,
+    );
+  }
 });
 
 test('drone restrictions uses digit 8 without colliding with fire perimeters', () => {

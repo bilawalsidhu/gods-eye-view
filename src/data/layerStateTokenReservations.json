@@ -5,7 +5,7 @@
   ["bhote-koshi-2026", "h"],
   ["bhote-koshi-locator", "z"],
   ["bikeshare", "b"],
-  ["border-waits", "9"],
+  ["border-waits", "00"],
   ["cctv", "c"],
   ["directions", "n"],
   ["drone-airspace", "8"],
@@ -34,5 +34,6 @@
   ["weather-lightning", "l"],
   ["weather-radar", "v"],
   ["weather-satellite", "o"],
+  ["wildlife-sightings", "9"],
   ["wind", "k"]
 ]
