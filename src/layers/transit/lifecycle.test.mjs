@@ -4021,3 +4021,15 @@ test('a view with no feed reads its coverage prompt, not an undated feed', async
     'Fly below 2,850 km to a covered region',
   );
 });
+
+test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) => {
+  // 2,900 km is under ACTIVATION_ALTITUDE_M but above the enter threshold.
+  const app = harness(t, { altitude: 2_900_000 });
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.deepEqual(app.requested, [], 'nothing loads over Boston');
+  assert.equal(
+    app.layer.getStats().statusMessage,
+    'Fly below 2,850 km to a covered region',
+  );
+});

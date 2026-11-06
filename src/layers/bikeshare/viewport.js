@@ -243,11 +243,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
       nextActive.size !== layerState._activeCityIds.size ||
       [...nextActive].some((cityId) => !layerState._activeCityIds.has(cityId));
     layerState._activeCityIds = nextActive;
-    if (layerState._activeCityIds.size === 0) {
+    if (nextActive.size === 0) {
       layerState._count = 0;
       layerState._lastUpdate = null;
-      if (changed) refreshRow();
-      return;
     }
     if (changed) refreshRow();
 

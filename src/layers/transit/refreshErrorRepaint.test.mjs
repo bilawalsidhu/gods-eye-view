@@ -91,8 +91,10 @@ test('leaving a feed whose tick failed repaints its error away', async () => {
   await lifecycle.refreshLayer('transit');
   assert.match(row(), /feed unavailable/, 'the tick recorded the failure');
 
+  const before = painted.length;
   state._viewer = viewer(LONDON, 4_000);
   parts.viewport.runProximityCheck();
   assert.equal(queries.getStats().status, 'zoom-in');
+  assert.ok(painted.length > before, 'leaving Boston repainted the row');
   assert.doesNotMatch(painted.at(-1), /feed unavailable/);
 });

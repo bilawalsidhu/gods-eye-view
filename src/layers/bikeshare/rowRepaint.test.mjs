@@ -1,11 +1,13 @@
-// Bike Share: after the camera settles, the last row the panel painted must
-// match what the layer reports now. Each case drives the real viewport,
+// Bike Share's Layers row. With no system in range it says why instead of
+// "never" and keeps no date for data it no longer draws. After the camera
+// settles, the last row the panel painted must match what the layer reports
+// now. Each case drives the real viewport,
 // ingestion, rendering and controls; the manager is a spy that records the
 // row text (LayerPanel._buildMetaText) at every refreshLayerStats() call.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { CITY_BY_ID } from './registry.js';
+import { CITY_BY_ID, GBFS_CITY_REGISTRY } from './registry.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
 import { createIngestion } from './ingestion.js';
@@ -175,6 +177,7 @@ function makeLiveLayer() {
     source,
     painted,
     lastPainted: () => painted.at(-1),
+    stats: () => controls.getStats(),
     live: () => rowText(controls.getStats()),
     moveTo(place, height = LOW_M) {
       Object.assign(camera, place, { height });
@@ -290,4 +293,74 @@ test('leaving the failed city of two repaints DEGRADED away', async () => {
   await settle();
   assert.doesNotMatch(layer.live(), /^degraded/);
   assert.equal(layer.lastPainted(), layer.live());
+});
+
+test('above the altitude gate the row says how low to fly', async () => {
+  const layer = makeLiveLayer();
+  await layer.enable();
+  await layer.moveTo(LONDON, 2_000_000);
+  const stats = layer.stats();
+  assert.equal(stats.status, 'zoom-in');
+  assert.equal(stats.statusMessage, 'Fly below 48 km to a covered city');
+  assert.equal(stats.error, undefined);
+});
+
+test('a city with no system says so and counts the ones there are', async () => {
+  const layer = makeLiveLayer();
+  await layer.enable();
+  const stats = layer.stats();
+  assert.equal(stats.status, 'zoom-in');
+  assert.equal(
+    stats.statusMessage,
+    `No bike share here yet · ${GBFS_CITY_REGISTRY.length} systems available`,
+  );
+  assert.equal(stats.count, 0);
+});
+
+test('a city in range, loading, failed or a disabled layer gets no prompt', async () => {
+  const layer = makeLiveLayer();
+  assert.equal(layer.stats().status, undefined, 'disabled');
+
+  const info = deferred();
+  layer.source.gates.set(`${BOSTON_ID}:info`, info);
+  await layer.enable();
+  const entering = layer.moveTo(BOSTON);
+  assert.equal(layer.stats().status, undefined, 'loading');
+  info.resolve();
+  await entering;
+  await settle();
+  assert.equal(layer.stats().status, undefined, 'loaded');
+
+  // Left mid-load: range is empty, but the aborted load still owns the row.
+  const leaving = makeLiveLayer();
+  leaving.source.gates.set(`${BOSTON_ID}:info`, deferred());
+  await leaving.enable();
+  const loading = leaving.moveTo(BOSTON);
+  await settle();
+  const left = leaving.moveTo(LONDON);
+  assert.equal(leaving.state._activeCityIds.size, 0);
+  assert.equal(leaving.stats().loading, true);
+  assert.equal(leaving.stats().status, undefined, 'leaving mid-load');
+  await Promise.all([loading, left]);
+
+  const failed = makeLiveLayer();
+  failed.source.dead.add(BOSTON_ID);
+  await failed.enable();
+  await failed.moveTo(BOSTON);
+  await settle();
+  assert.equal(failed.stats().status, undefined, 'failed');
+  assert.equal(failed.stats().error, 'GBFS fetch error');
+});
+
+test('leaving every system behind drops the date of the data it drew', async () => {
+  for (const height of [LOW_M, 2_000_000]) {
+    const layer = makeLiveLayer();
+    await layer.enable();
+    await layer.moveTo(BOSTON);
+    await settle();
+    assert.ok(layer.stats().lastUpdate, 'Boston is dated');
+
+    await layer.moveTo(LONDON, height);
+    assert.equal(layer.stats().lastUpdate, null, `at ${height} m`);
+  }
 });
