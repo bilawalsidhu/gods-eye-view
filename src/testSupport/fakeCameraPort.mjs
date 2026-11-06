@@ -132,8 +132,10 @@ export function bindFakeCesiumCamera(viewer) {
     pose: {
       value() {
         const c = fake.positionCartographic;
+        const p = fake.positionWC;
         return {
           ...DEFAULT_POSE,
+          ...(p ? { position: { x: p.x, y: p.y, z: p.z } } : {}),
           lon: c ? toDegrees(c.longitude) : NaN,
           lat: c ? toDegrees(c.latitude) : NaN,
           height: c ? c.height : NaN,

@@ -25,7 +25,7 @@ const QUERY_RECORDS = new Set([
   'occluded',
 ]);
 /** Commands and records the port does not have yet. */
-const MISSING = new Set(['move', 'look', 'rotateAround', 'zoom', 'matrices']);
+const MISSING = new Set(['matrices']);
 
 const runnable = CAMERA_SCRIPTS.filter((script) =>
   script.steps.every(

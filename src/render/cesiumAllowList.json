@@ -208,7 +208,6 @@
   "src/maps/google3d.js",
   "src/maps/imagery.js",
   "src/maps/terrain.js",
-  "src/orbit.js",
   "src/overlays/worldOverlay.js",
   "src/queries/heights.js",
   "src/sceneCommandRelease.js",

@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
 import { cameraOf } from '../../render/cesium/camera.js';
+import { findCamera } from '../../render/rendererOf.js';
 
 export function createSelection({
   state: layerState,
@@ -94,9 +95,8 @@ export function createSelection({
       layerState._missionZoomAnchorRemover();
     layerState._missionZoomAnchorRemover = null;
     layerState._missionZoomAnchorId = null;
-    if (layerState._viewer?.camera && !layerState._replayCameraLaunchId) {
-      layerState._viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-    }
+    if (!layerState._replayCameraLaunchId)
+      findCamera(layerState._viewer)?.release();
   }
 
   function startMissionZoomAnchor(launch, initialRange) {
@@ -109,14 +109,11 @@ export function createSelection({
       Number(initialRange) || MISSION_GLOBE_VIEW_RANGE_M,
     );
     layerState._missionZoomAnchorId = launch.id;
-    layerState._viewer.camera.lookAt(
-      target,
-      new Cesium.HeadingPitchRange(
-        0,
-        parts.camera.missionZoomPitch(range),
-        range,
-      ),
-    );
+    cameraOf(layerState._viewer).lookAt(target, {
+      heading: 0,
+      pitch: parts.camera.missionZoomPitch(range),
+      range,
+    });
   }
 
   function focusMission(launch) {

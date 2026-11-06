@@ -1,4 +1,5 @@
 // Imports intentionally target the candidate, never the immutable reference.
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -176,7 +177,7 @@ function compositionFixture(
   const canvas = new EventTarget();
   Object.assign(canvas, { clientWidth: 800, clientHeight: 600 });
   const position = { x: 6379137, y: 0, z: 0 };
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     clock: { onTick: { addEventListener: () => () => {} } },
     camera: {
       positionWC: position,
@@ -202,7 +203,7 @@ function compositionFixture(
         state.renders++;
       },
     },
-  };
+  });
   const dataManager = { layers: new Map() };
   pointer = createPointerTracker({ element: null, now: () => 1000 });
   const referents = createReferentRegistry();

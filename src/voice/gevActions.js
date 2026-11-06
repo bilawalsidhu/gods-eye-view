@@ -2927,9 +2927,10 @@ function adjustCameraZoom(viewer, args) {
   }[amount];
   if (!fraction) throw new Error(`Unknown zoom amount: ${args.amount}`);
 
-  const camera = viewer.camera;
-  const beforePosition = Cesium.Cartesian3.clone(camera.positionWC);
-  const beforeHeightM = camera.positionCartographic.height;
+  const camera = cameraOf(viewer);
+  const before = camera.pose();
+  const beforePosition = before.position;
+  const beforeHeightM = before.height;
   const target = getViewTargetCartesian(viewer);
   const targetDistanceM = target
     ? chordM(beforePosition, target)
@@ -2939,7 +2940,7 @@ function adjustCameraZoom(viewer, args) {
 
   camera.cancelFlight();
   if (direction === 'out') {
-    camera.zoomOut(movementM);
+    camera.zoom(-movementM);
   } else {
     const safeMovementM = Math.min(
       movementM,
@@ -2954,13 +2955,12 @@ function adjustCameraZoom(viewer, args) {
         error: 'Camera is already at the minimum target distance',
       };
     }
-    camera.zoomIn(safeMovementM);
+    camera.zoom(safeMovementM);
   }
-  viewer.scene.requestRender();
 
-  const afterPosition = camera.positionWC;
-  const movedM = chordM(beforePosition, afterPosition);
-  const afterHeightM = camera.positionCartographic.height;
+  const after = camera.pose();
+  const movedM = chordM(beforePosition, after.position);
+  const afterHeightM = after.height;
   const moved = movedM >= 0.5;
   return {
     ok: moved,

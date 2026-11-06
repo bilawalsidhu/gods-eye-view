@@ -1,3 +1,4 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -239,7 +240,7 @@ function eventViewer(splitPosition = 0.37) {
   const canvas = new FakeElement('canvas');
   const cameraLooks = [];
   const cameraTransforms = [];
-  return {
+  return bindFakeCesiumCamera({
     scene: { splitPosition, canvas },
     camera: {
       cancelFlight() {},
@@ -272,7 +273,7 @@ function eventViewer(splitPosition = 0.37) {
       cameraLooks,
       cameraTransforms,
     },
-  };
+  });
 }
 
 test('public lifecycle restores Nepal scene ownership without forwarding origin to enable', async () => {

@@ -26,6 +26,25 @@ export const EASINGS = Object.freeze({
   sineInOut: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
 });
 
+/**
+ * The contract's moves and looks as Cesium camera method names, called by
+ * name: a consumer's camera may come from another copy of Cesium.
+ */
+const MOVES = Object.freeze({
+  forward: 'moveForward',
+  back: 'moveBackward',
+  left: 'moveLeft',
+  right: 'moveRight',
+  up: 'moveUp',
+  down: 'moveDown',
+});
+const LOOKS = Object.freeze({
+  left: 'lookLeft',
+  right: 'lookRight',
+  up: 'lookUp',
+  down: 'lookDown',
+});
+
 /** A contract destination as Cesium's: a Cartesian3, or a Rectangle. */
 export function toDestination(d) {
   if ('rect' in d) {
@@ -219,6 +238,24 @@ export function createCesiumCamera({ scene, camera, report }) {
     release() {
       command('release');
       camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      scene.requestRender();
+    },
+    move(direction, metres) {
+      camera[MOVES[direction]](metres);
+      scene.requestRender();
+    },
+    look(direction, radians) {
+      camera[LOOKS[direction]](radians);
+      scene.requestRender();
+    },
+    rotateAround(axis, radians) {
+      camera.rotate(toCartesian(axis), radians);
+      scene.requestRender();
+    },
+    zoom(metres) {
+      // Cesium's zoom, not a move: outside 3D it changes the view's width.
+      if (metres < 0) camera.zoomOut(-metres);
+      else camera.zoomIn(metres);
       scene.requestRender();
     },
     viewRectangle() {
