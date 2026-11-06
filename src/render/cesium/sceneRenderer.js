@@ -15,7 +15,7 @@
  * Members it does not have are absent, never stubbed.
  */
 import * as Cesium from 'cesium';
-import { createCesiumPorts } from './ports.js';
+import { cesiumCapabilities, createCesiumPorts } from './ports.js';
 
 export { toCartesian, toColor, toImage } from './ports.js';
 
@@ -28,9 +28,6 @@ const SKY_DEFAULTS = Object.freeze({
   fog: false,
   lighting: false,
 });
-
-/** What this renderer can do; a caller may ask for fewer. */
-const CAPABILITIES = ['models'];
 
 /**
  * @param {{container: HTMLElement, msaa?: number, capabilities?: Iterable<string>}} options
@@ -68,10 +65,7 @@ export async function createCesiumSceneRenderer({
   if (scene.moon) scene.moon.show = false;
 
   const sky = { ...SKY_DEFAULTS };
-  const allowed = only && new Set(only);
-  const capabilities = new Set(
-    CAPABILITIES.filter((c) => !allowed || allowed.has(c)),
-  );
+  const capabilities = new Set(cesiumCapabilities(scene, only));
 
   function applySky() {
     scene.globe.enableLighting = sky.lighting;
@@ -82,7 +76,7 @@ export async function createCesiumSceneRenderer({
     scene.requestRender();
   }
 
-  const ports = createCesiumPorts(widget);
+  const ports = createCesiumPorts(widget, { capabilities });
   const frame = {
     ...ports.frame,
     setTime(ms) {
@@ -128,13 +122,17 @@ export async function createCesiumSceneRenderer({
       await ports.nextPostRender();
       if (models().some((r) => r.host.failed > 0))
         return { state: 'failed', blockers: ['models'] };
-      const loading = models().some((r) => r.host.loading > 0);
+      const icons = ports.iconState();
+      if (icons === 'failed') return { state: 'failed', blockers: ['icons'] };
+      const loading =
+        models().some((r) => r.host.loading > 0) || icons === 'loading';
       quiet = scene.globe.tilesLoaded && !loading ? quiet + 1 : 0;
       if (quiet >= 3) return { state: 'settled', blockers: [] };
     }
     const blockers = [];
     if (!scene.globe.tilesLoaded) blockers.push('globe');
     if (models().some((r) => r.host.loading > 0)) blockers.push('models');
+    if (ports.iconState() !== 'settled') blockers.push('icons');
     return { state: 'timeout', blockers };
   }
 

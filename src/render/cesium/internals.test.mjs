@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
   billboardCollectionOf,
+  billboardLoadError,
   cameraFlightActive,
   closeRenderLoopLatch,
   clusterPointCollection,
@@ -50,6 +51,11 @@ test('every private field Core reaches is still declared by the installed Cesium
   assert.deepEqual(missing, []);
   const camera = fs.readFileSync(path.join(ENGINE, 'Scene/Camera.js'), 'utf8');
   assert.match(camera, /Camera\.prototype\._updateCameraChanged = function/);
+  const billboard = fs.readFileSync(
+    path.join(ENGINE, 'Scene/Billboard.js'),
+    'utf8',
+  );
+  assert.match(billboard, /\n {2}loadError: \{/, 'Billboard#loadError');
 });
 
 test('the helpers read and write exactly those fields', () => {
@@ -75,6 +81,8 @@ test('the helpers read and write exactly those fields', () => {
   closeRenderLoopLatch({ _cesiumWidget: widget });
   assert.equal(widget._renderLoopRunning, false);
   closeRenderLoopLatch({});
+  const error = new Error('404');
+  assert.equal(billboardLoadError({ loadError: error }), error);
   const gl = {};
   assert.equal(webglContext({ context: { _gl: gl } }), gl);
   assert.equal(cameraFlightActive({ _currentFlight: {} }), true);

@@ -18,7 +18,7 @@
  */
 import { createApplicationViewer } from '../../app/viewer.js';
 import { CONTRACT_VERSION } from '../contract/index.js';
-import { createCesiumPorts } from './ports.js';
+import { cesiumCapabilities, createCesiumPorts } from './ports.js';
 
 /**
  * The members a transitional renderer has today.
@@ -83,9 +83,11 @@ export function createCesiumRendererPlugin({
       document.body.appendChild(creditContainer);
       let viewer;
       let ports;
+      let capabilities;
       try {
         viewer = createViewer({ container, creditContainer });
-        ports = createCesiumPorts(viewer);
+        capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
+        ports = createCesiumPorts(viewer, { capabilities });
       } catch (error) {
         if (viewer && !viewer.isDestroyed()) viewer.destroy();
         creditContainer.remove();
@@ -94,7 +96,7 @@ export function createCesiumRendererPlugin({
       const renderer = Object.freeze({
         id: 'cesium',
         contractVersion: CONTRACT_VERSION,
-        capabilities: new ReadonlySet(['models']),
+        capabilities,
         canvas: viewer.canvas,
         frame: ports.frame,
         draw: ports.draw,

@@ -51,6 +51,16 @@ async function overAustin(h, r, height = 2000) {
   await h.frame(r);
 }
 
+/**
+ * Waits until what is drawn has loaded (icon images, tiles, models), as a
+ * query answers from what is loaded. A renderer that draws synchronously is
+ * settled at once.
+ */
+async function settled(r) {
+  const result = await r.whenSettled({ timeoutMs: 20000 });
+  equal(result.state, 'settled', `settled (${result.blockers.join(', ')})`);
+}
+
 async function drawn(h, r, frames = 2) {
   for (let i = 0; i < frames; i++) {
     r.frame.requestRender('conformance');
@@ -486,6 +496,7 @@ export function portChecks() {
           { id: 'one', pos, image: DOT, size: [24, 24], meta: { n: 1 } },
         ]);
         await drawn(h, r);
+        await settled(r);
         const s = r.query.project(pos);
         ok(s, 'the icon projects');
         const hit = r.query.pick(s.x, s.y);
@@ -1162,6 +1173,7 @@ export function portChecks() {
       'pickRay starts at the eye; pickEllipsoid lies on its ray; pickGlobe agrees',
       async (h, r) => {
         await overAustin(h, r, 5000);
+        await settled(r);
         const eye = r.camera.pose().position;
         const ray = r.query.pickRay(640, 360);
         nearVec(ray.origin, eye, 1e-3, 'ray origin');
@@ -1267,6 +1279,7 @@ export function portChecks() {
       async (h, r) => {
         await overAustin(h, r);
         await drawn(h, r);
+        await settled(r);
         const point = { ...AUSTIN };
         const before = await r.query.sampleHeight([point]);
         const shapes = r.draw.shapes({ id: 'conf:not-ground' });
@@ -1291,6 +1304,7 @@ export function portChecks() {
           },
         ]);
         await drawn(h, r);
+        await settled(r);
         const after = await r.query.sampleHeight([point]);
         equal(after[0] === null, before[0] === null, 'answered as before');
         if (after[0] && before[0])

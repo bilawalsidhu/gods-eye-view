@@ -128,6 +128,16 @@ test('batch leaves the caller’s Cartographics alone', async () => {
   assert.equal(carto.height, 999);
 });
 
+test('terrain on an ellipsoid is height 0, without sampling tiles', async () => {
+  const s = scene({ terrainProvider: new Cesium.EllipsoidTerrainProvider() });
+  assert.deepEqual(
+    await heightsFor(s).batch([AUSTIN, { lon: 'x', lat: 1 }], {
+      against: 'terrain',
+    }),
+    [0, null],
+  );
+});
+
 test('batch misses everything when the scene cannot stream, and rejects when it fails', async () => {
   assert.deepEqual(await heightsFor(scene()).batch([AUSTIN]), [null]);
   const failing = scene({
@@ -193,9 +203,10 @@ test('height queries go through the service', () => {
   // A renderer that answers heights from a cache or asynchronously plugs in
   // at src/queries/heights.js; a site that asks Cesium directly bypasses it.
   const SERVICE = 'src/queries/heights.js';
-  // The renderer contract's own height members, and the stub and suite that
-  // implement and call them, are not Cesium.
-  const CONTRACT = /^src\/render\/(contract|stub|conformance)\//;
+  // The renderer contract's own height members, and the renderers and suite
+  // that implement and call them: the Cesium adapter answers them through
+  // this service.
+  const CONTRACT = /^src\/render\/(contract|stub|conformance|cesium)\//;
   const NAMES =
     'sampleHeight|clampToHeight|sampleHeightMostDetailed|clampToHeightMostDetailed|getHeight';
   const direct = new RegExp(
