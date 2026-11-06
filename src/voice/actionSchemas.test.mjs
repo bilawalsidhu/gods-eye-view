@@ -55,6 +55,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
+    // control_cockpit states the own-layer entry rule (Contacts not required).
     // show_street_level (map, source, photo) is the only change on top of main.
     SHOW_STREET_LEVEL_PAYLOAD_DIGEST,
   );
@@ -74,12 +75,12 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     .digest('hex');
   assert.equal(
     shipped,
-    'd0c5ad733670972713a54cb10676c42b7c6e78834bfff52b473c0e8a45e742c3',
+    '9522ff6f6d640bede81c51cea6b9601439b08becc5bc20b7355aec24feb17e8d',
   );
 });
 
 const SHOW_STREET_LEVEL_PAYLOAD_DIGEST =
-  '3ffa77ea3f4a1c9a14eddf4963c4498d6d32330414818a3ef0f24e744878e5aa';
+  'da21e84ba5c3831bd822464edd490e639e549607af26cd64ffbb0e31b60c32e3';
 
 test('descriptions customize wording without changing immutable shared arguments', () => {
   const descriptions = {

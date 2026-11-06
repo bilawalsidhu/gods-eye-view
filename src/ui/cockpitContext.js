@@ -1,6 +1,7 @@
 /** Contact readouts and nearby-signal presentation for the Cockpit controller. */
 import * as Cesium from 'cesium';
 import { formatNumber, t, tn } from '../i18n/index.js';
+import { sourceStatusLabel } from './layerNames.js';
 import { unitLabel } from './unitLabels.js';
 import {
   bearingBetweenCoordinates,
@@ -23,6 +24,27 @@ const LOCALIZED_CONTEXT_SCOPE = Object.freeze({
   installations: ({ scope, coverage }) =>
     t('{scope} · INSTALLATIONS {coverage}', { scope, coverage }),
 });
+
+/**
+ * Which air feed the aircraft Cockpit's surrounding picture is missing. Entry
+ * needs only the ridden aircraft's own layer, so the other one may be off;
+ * the panels then say the picture is partial rather than present it as
+ * complete. Null with both feeds on, or when the owner cannot tell.
+ * @returns {?{title: string, detail: string}}
+ */
+export function readPartialPicture() {
+  const isLayerEnabled = this.services.isLayerEnabled;
+  if (typeof isLayerEnabled !== 'function') return null;
+  const militaryOff = !isLayerEnabled('military');
+  const flightsOff = !isLayerEnabled('flights');
+  if (!militaryOff && !flightsOff) return null;
+  return {
+    title: militaryOff
+      ? t('MILITARY FEED OFF · PARTIAL PICTURE')
+      : t('FLIGHTS FEED OFF · PARTIAL PICTURE'),
+    detail: t('NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR'),
+  };
+}
 
 /** Hand a fresh copy of the Contact card to the view. */
 export function publishContextView() {
@@ -52,7 +74,11 @@ export function updateContext(info, heading) {
     this.services.militaryAwarenessLayer.getContextSnapshot?.() || null;
   const trackedId = info.icao24 || info.id;
   const readout = resolveCockpitContextReadout({ snapshot, info });
+  const partial = readPartialPicture.call(this);
   if (!readout.visible) {
+    // Contacts just went off: the rows its snapshot built stop being
+    // measured, so they go before the standby rows replace them.
+    if (this.presence.context) this.dropContextSnapshotSignals?.();
     this.showContextCard(false);
     this.contextLayoutStamp = null;
     this.pushCockpitSignal(
@@ -61,6 +87,14 @@ export function updateContext(info, heading) {
       t('CONTEXT STANDBY'),
       t('ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS'),
     );
+    if (partial)
+      this.pushCockpitSignal(
+        'feed-status',
+        'warning',
+        partial.title,
+        partial.detail,
+      );
+    else this.dropCockpitSignal?.('feed-status');
     return;
   }
 
@@ -110,6 +144,7 @@ export function updateContext(info, heading) {
     if (shown) {
       shown.count = cohort.count === null ? '?' : String(cohort.count);
       shown.unknown = cohort.relationship === 'UNKNOWN';
+      shown.source = sourceStatusLabel(cohort.source, cohort.sourceStatus);
     }
     if (cohort.count === null) unknownCount += 1;
     for (const item of cohort.nearest) nearest.push({ ...item, cohort });
@@ -171,19 +206,22 @@ export function updateContext(info, heading) {
       angle: `${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`,
     });
   }
-  view.uncertainty = unknownCount
-    ? tn(
-        unknownCount,
-        '{count} INPUT UNKNOWN · NOT AN ALL-CLEAR',
-        '{count} INPUTS UNKNOWN · NOT AN ALL-CLEAR',
-      )
-    : t('AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR');
+  // A feed that is off outranks unknown inputs: the picture is partial.
+  view.uncertainty = partial
+    ? partial.title
+    : unknownCount
+      ? tn(
+          unknownCount,
+          '{count} INPUT UNKNOWN · NOT AN ALL-CLEAR',
+          '{count} INPUTS UNKNOWN · NOT AN ALL-CLEAR',
+        )
+      : t('AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR');
   view.updated = Number.isFinite(snapshot.evaluatedAt)
     ? new Date(snapshot.evaluatedAt).toISOString().slice(11, 19) + 'Z'
     : '--:--:--Z';
-  view.state = unknownCount ? 'uncertain' : 'current';
+  view.state = unknownCount || partial ? 'uncertain' : 'current';
   this.publishContextView();
-  this.updateCockpitSignals(snapshot, unknownCount);
+  this.updateCockpitSignals(snapshot, unknownCount, partial);
   if (this.contextLayoutStamp !== snapshot.evaluatedAt) {
     this.contextLayoutStamp = snapshot.evaluatedAt;
     this.scheduleContextLayout();

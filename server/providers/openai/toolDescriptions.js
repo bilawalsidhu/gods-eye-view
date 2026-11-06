@@ -157,7 +157,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   control_cockpit: {
     description:
-      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (establishes Contacts itself; no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
+      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (needs only its own Flights/Military layer on, not Contacts; opens Contacts itself, no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
     $position: 1,
     parameters: {
       properties: {

@@ -1298,6 +1298,77 @@ test('undocking while a tray is open brings the panel back as its bar', async (t
   assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
 });
 
+test('opening chat or closing the voice panel clears a stale voice error', async (t) => {
+  for (const leave of ['chat', 'close']) {
+    const f = mounted(t, { view: true });
+    await f.commands.session.start();
+    f.commands.voicePanel.select('preview');
+    f.instances[0].hooks.emit({
+      type: 'state',
+      state: 'error',
+      detail: 'Lost',
+    });
+    await f.settle();
+    assert.equal($('#gev-voice-control').dataset.status, 'error');
+    assert.equal(f.commands.session.isActive(), false);
+    if (leave === 'chat') $('#gev-chat-button').click();
+    else $('#gev-voice-settings-close').click();
+    await f.settle();
+    assert.equal(f.commands.session.state, 'idle', leave);
+    assert.notEqual($('#gev-voice-control').dataset.status, 'error', leave);
+  }
+});
+
+test('switching AI Provider from chat Settings keeps chat Settings on the new mount', async (t) => {
+  const view = mountVoiceView(t);
+  const host = createVoicePanelHost({ storage: null });
+  const instances = [];
+  const commands = createProviderCommands(
+    {
+      runner: async () => ({}),
+      dataManager: { layers: new Map() },
+      supportedProviders: ['openai', 'gemini'],
+    },
+    {
+      bind: (options) =>
+        bind({
+          ...options,
+          panelHost: host,
+          createControl: (control) =>
+            createTestVoiceUi({ ...control, pinia: view.pinia }),
+        }),
+      factories: { openai: factory(instances), gemini: factory(instances) },
+      storage: null,
+    },
+  );
+  t.after(() => {
+    commands.destroy();
+    host.destroy();
+  });
+  await view.settle();
+  $('#gev-chat-button').click();
+  await view.settle();
+  $('#gev-chat-panel').getBoundingClientRect = () => ({
+    width: 320,
+    height: 480,
+  });
+  $('#gev-voice-settings-button').click();
+  await view.settle();
+  const old = commands.ui;
+  assert.equal(old.state.voicePanel.context, 'chat');
+  old.emit('provider-change', 'gemini');
+  await view.settle();
+  const { ui } = commands;
+  assert.notEqual(ui, old);
+  assert.equal(ui.state.voicePanel.context, 'chat');
+  assert.equal(ui.state.voicePanel.frameWidth, 320);
+  assert.equal(ui.state.voicePanel.frameHeight, 480);
+  assert.equal(ui.state.chat.backVisible, true);
+  assert.equal(ui.state.root.assistantMode, 'chat');
+  assert.equal($('#gev-chat-back').hidden, false);
+  assert.equal(active(), 'gev-voice-provider');
+});
+
 test('the voice panel close turns voice off', async (t) => {
   const f = mounted(t, { view: true });
   await f.commands.session.start();
