@@ -21,10 +21,18 @@
 import * as Cesium from 'cesium';
 import { GLOBE_VIEW } from './locations.js';
 import {
+  globeFrameShare,
+  isFreeGlobeCamera,
+  lookAngleWithinFrame,
+  lookStepLosesGlobe,
+} from './globeInView.js';
+import {
   projectEarthDiscToViewport,
   earthDiscScreenRadius,
   getKeyholeGeometry,
+  KEYHOLE_OUTER_RADIUS,
 } from './celestialRing.js';
+import { isScopeMaskEnabled } from './scopeMask.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -1046,6 +1054,187 @@ export function interruptCameraMotionIfActive(
   return interruptCameraMotion(reason);
 }
 
+// The frame share that in-place voice turns measure their limit against, with
+// the pose the last voice turn left the camera in. A turn that starts where
+// the last one left off keeps that baseline (raised if the planet now fills
+// more of the frame), so repeating a request cannot take a little more each
+// time. Once anything else has moved or turned the camera, a turn starts over
+// from what is on screen.
+let _lookBaseline = null;
+
+// The pre-check's proof that a half-degree turn from this pose keeps the planet
+// in view: which way, from which position and direction. A motion that starts from that
+// pose turns at least that far, so a request reported as done really moves
+// even when a smaller first step lands in a dip of the sampled share.
+const PROVEN_TURN_RAD = Cesium.Math.toRadians(0.5);
+let _provenLook = null;
+
+/** The part of the frame a viewer can see: the scope keyhole when it is on. */
+function visibleFrame() {
+  return { keyholeRadius: isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0 };
+}
+
+/** The frame share an in-place turn from `cam`'s pose is limited against. */
+function lookBaselineShare(cam) {
+  const share = globeFrameShare(cam, visibleFrame());
+  const continues =
+    _lookBaseline &&
+    Cesium.Cartesian3.equalsEpsilon(
+      _lookBaseline.position,
+      cam.positionWC,
+      0,
+      1,
+    ) &&
+    Cesium.Cartesian3.equalsEpsilon(
+      _lookBaseline.direction,
+      cam.directionWC,
+      0,
+      1e-9,
+    );
+  _lookBaseline = {
+    position: Cesium.Cartesian3.clone(cam.positionWC),
+    direction: Cesium.Cartesian3.clone(cam.directionWC),
+    share: continues ? Math.max(_lookBaseline.share, share) : share,
+  };
+  return _lookBaseline.share;
+}
+
+/**
+ * One in-place look step of motion `m`. From orbit a free globe camera turns
+ * only as far as keeps the planet in frame, measured against the baseline the
+ * turn started from, then the motion ends there.
+ */
+function lookWithinFrame(cam, m, look, angle) {
+  let allowed = angle;
+  if (isFreeGlobeCamera(_viewer)) {
+    if (m.globeShareAtStart === undefined) {
+      m.globeShareAtStart = lookBaselineShare(cam);
+      m.provenTurnRad = lookProven(cam, look) ? PROVEN_TURN_RAD : 0;
+      m.turnedRad = 0;
+    }
+    _provenLook = null;
+    allowed = lookAngleWithinFrame(cam, look, angle, {
+      ...visibleFrame(),
+      startShare: m.globeShareAtStart,
+    });
+    const owed = Math.min(angle, m.provenTurnRad - m.turnedRad);
+    if (allowed < owed) allowed = owed;
+    m.turnedRad += allowed;
+  }
+  if (allowed > 0) cam[look](allowed);
+  // The pose this turn leaves, for a turn that continues from it.
+  if (_lookBaseline)
+    Cesium.Cartesian3.clone(cam.directionWC, _lookBaseline.direction);
+  if (allowed < angle) interruptCameraMotion('globe-out-of-frame');
+}
+
+/**
+ * The in-place look a pitch change from `fromPitch` to `goalPitch` makes:
+ * 'lookUp', 'lookDown', or null when it does not move. A tilt is judged by
+ * the way its pitch moves, whatever form or direction word it came in.
+ */
+function tiltLook(fromPitch, goalPitch) {
+  if (!Number.isFinite(fromPitch) || !Number.isFinite(goalPitch)) return null;
+  if (goalPitch > fromPitch) return 'lookUp';
+  return goalPitch < fromPitch ? 'lookDown' : null;
+}
+
+/** Tilt `m` in place to `goalPitch`, as far as the frame limit allows. */
+function tiltInPlaceWithinFrame(cam, m, goalPitch) {
+  const look = tiltLook(cam.pitch, goalPitch);
+  if (look) lookWithinFrame(cam, m, look, Math.abs(goalPitch - cam.pitch));
+}
+
+/**
+ * The pitch an in-place tilt from `cam`'s pose toward `goalPitch` reaches
+ * before the frame limit stops it, judged as its steps will be: `goalPitch`
+ * itself when the planet stays in frame the whole way, or the camera is not a
+ * free globe camera. The steps run on a copy of the camera, each looking by
+ * the pitch still to go as the tilt's frames do, because a rolled camera's
+ * look turns its pitch by less than the look angle.
+ */
+function tiltPitchWithinFrame(cam, goalPitch) {
+  const look = tiltLook(cam.pitch, goalPitch);
+  if (!look || !isFreeGlobeCamera(_viewer)) return goalPitch;
+  const frame = { ...visibleFrame(), startShare: lookBaselineShare(cam) };
+  // A proven half degree is turned whatever the sampled share says.
+  let owed = lookProven(cam, look) ? PROVEN_TURN_RAD : 0;
+  const probe = Cesium.Camera.clone(cam);
+  for (let i = 0; i < 32; i += 1) {
+    if (tiltLook(probe.pitch, goalPitch) !== look) return goalPitch;
+    const angle = Math.abs(goalPitch - probe.pitch);
+    if (angle < 1e-6) return goalPitch;
+    const allowed = Math.max(
+      lookAngleWithinFrame(probe, look, angle, frame),
+      Math.min(angle, owed),
+    );
+    owed -= allowed;
+    if (allowed > 0) probe[look](allowed);
+    if (allowed < angle) return probe.pitch;
+  }
+  return probe.pitch;
+}
+
+/** The reply's note for a tilt the frame limit stops short of its angle. */
+function tiltFrameNote(pitch) {
+  return `Stopped at ${Math.round(Cesium.Math.toDegrees(pitch))}°: from this height a shallower angle would turn the globe out of view. Zoom in to tilt further.`;
+}
+
+/** True when the pre-check proved a half-degree `look` from `cam`'s pose. */
+function lookProven(cam, look) {
+  return (
+    _provenLook?.look === look &&
+    Cesium.Cartesian3.equalsEpsilon(
+      _provenLook.position,
+      cam.positionWC,
+      0,
+      1,
+    ) &&
+    Cesium.Cartesian3.equalsEpsilon(
+      _provenLook.direction,
+      cam.directionWC,
+      0,
+      1e-9,
+    )
+  );
+}
+
+/**
+ * The check a voice in-place turn (`look`: 'lookUp', 'lookDown', 'lookLeft'
+ * or 'lookRight') must pass from orbit: refused when even half a degree would
+ * cross the frame limit, otherwise proven for that half degree from this pose.
+ * With `released`, the turn runs through a navigation that first releases a
+ * tracked or locked camera and keeps its world pose. The frame measure and the
+ * turn are the same in any reference frame, so such a camera is judged as it
+ * is, before the release, and a refusal leaves tracking as it was. Otherwise a
+ * camera that is not a free globe camera is not checked. Returns the refusal,
+ * or null.
+ */
+function checkLookFromOrbit(look, { released = false } = {}) {
+  _provenLook = null;
+  if (_viewer.scene.mode !== Cesium.SceneMode.SCENE3D) return null;
+  const cam = _viewer.camera;
+  if (!released && !isFreeGlobeCamera(_viewer)) return null;
+  if (
+    lookStepLosesGlobe(cam, look, PROVEN_TURN_RAD, {
+      ...visibleFrame(),
+      startShare: lookBaselineShare(cam),
+    })
+  )
+    return {
+      ok: false,
+      action: 'move_camera',
+      error:
+        'From this height that would turn the globe out of view — zoom in first, or turn the other way.',
+    };
+  _provenLook = {
+    look,
+    position: Cesium.Cartesian3.clone(cam.positionWC),
+    direction: Cesium.Cartesian3.clone(cam.directionWC),
+  };
+  return null;
+}
+
 function clearLookAt() {
   try {
     _viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
@@ -1226,12 +1415,7 @@ function onTick() {
         // Tracking can acquire the camera without going through navigation.
         // Yield without resetting its pose/frame: the world-space arc proof
         // only describes Cesium's rotation while the frame is identity.
-        if (
-          _viewer.scene.mode !== Cesium.SceneMode.SCENE3D ||
-          _viewer.trackedEntity ||
-          _isCockpitActive?.() ||
-          !Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY)
-        ) {
+        if (!isFreeGlobeCamera(_viewer) || _isCockpitActive?.()) {
           interruptCameraMotion('globe-camera-owner-changed');
           return;
         }
@@ -1253,8 +1437,14 @@ function onTick() {
           return;
         }
         cam.rotate(m.rotationAxis, angle);
-      } else if (m.direction === 'left') cam.lookLeft(stepRad);
-      else cam.lookRight(stepRad);
+      } else {
+        lookWithinFrame(
+          cam,
+          m,
+          m.direction === 'left' ? 'lookLeft' : 'lookRight',
+          stepRad,
+        );
+      }
     } else if (m.kind === 'route') {
       // The dolly's shaping lives in advanceRouteFlight(); the tick only
       // applies the pose and honours the same completion path as before.
@@ -1339,7 +1529,7 @@ function tickTilt(cam, m, scale, dt) {
       }
     }
   }
-  if (!m.hpr) cam.lookUp(limited - cam.pitch);
+  if (!m.hpr) tiltInPlaceWithinFrame(cam, m, limited);
   if (m.mode !== 'once' && (limited !== want || atLimit))
     interruptCameraMotion('tilt-clamp');
 }
@@ -1618,6 +1808,7 @@ export function initCameraVerbs(
   _isCockpitActive =
     typeof isCockpitActive === 'function' ? isCockpitActive : null;
   _viewer = viewer;
+  _lookBaseline = null;
   if (_tickRemover) _tickRemover();
   _tickRemover = viewer.clock.onTick.addEventListener(onTick);
   if (_trackingRemover) _trackingRemover();
@@ -1831,6 +2022,34 @@ export function moveCamera(args = {}, runNavigation = null) {
       };
     }
   }
+  // A tilt is judged by the way its pitch will move: toward its angle, or a
+  // nudge up or down; a rotate turns left only when told to, as it runs.
+  const look =
+    motion === 'tilt'
+      ? tiltLook(
+          _viewer.camera.pitch,
+          tiltToPitch ??
+            _viewer.camera.pitch +
+              Cesium.Math.toRadians(ONCE.tiltDeg) *
+                (direction === 'up' ? 1 : -1),
+        )
+      : motion === 'rotate'
+        ? direction === 'left'
+          ? 'lookLeft'
+          : 'lookRight'
+        : null;
+  // Honest limits from orbit too: a stopped turn rests within 0.05° of its
+  // limit, so one that cannot go half a degree further is refused rather than
+  // run and reported as done, and one that can is then turned at least that
+  // far. Near the limit the sampled share wobbles as the planet's edge crosses
+  // the grid, so a turn that would keep the planet can occasionally be refused
+  // too.
+  // A camera that is tracked or locked now is judged as the navigation that
+  // runs the turn will release it, so a refusal keeps the tracking.
+  const lookRefusal =
+    look &&
+    checkLookFromOrbit(look, { released: typeof runNavigation === 'function' });
+  if (lookRefusal) return lookRefusal;
   if (
     (motion === 'rotate_globe' ||
       (motion === 'orbit' && typeof runNavigation !== 'function')) &&
@@ -1914,9 +2133,17 @@ export function moveCamera(args = {}, runNavigation = null) {
         error: 'Globe rotation requires a clear ellipsoid bounding sphere.',
       };
   }
-  let horizonLimited = null;
+  // The angle a tilt to an angle stops at short of it, and why.
+  let stoppedAt = null;
+  let stopNote = null;
   const start = () => {
     interruptCameraMotion('replaced');
+    // Checked again only if the release left the camera somewhere other than
+    // where the check above expected it.
+    if (look && !lookProven(_viewer.camera, look)) {
+      const refusal = checkLookFromOrbit(look);
+      if (refusal) return refusal;
+    }
     const state = {
       kind: motion,
       direction: direction || 'right',
@@ -1935,10 +2162,20 @@ export function moveCamera(args = {}, runNavigation = null) {
       if (tiltToPitch !== null) {
         // From far out the place reaches its horizon before the camera
         // reaches the asked angle: stop there, and say so.
-        const goal =
+        let goal =
           tiltToPitch > from
             ? Math.min(tiltToPitch, Math.max(from, upLimit))
             : tiltToPitch;
+        if (goal !== tiltToPitch) stopNote = tiltHorizonNote(goal);
+        // From orbit an in-place tilt stops where the planet would leave the
+        // frame: aim it there, and say so.
+        if (!pivot) {
+          const framed = tiltPitchWithinFrame(_viewer.camera, goal);
+          if (framed !== goal) {
+            goal = framed;
+            stopNote = tiltFrameNote(goal);
+          }
+        }
         state.mode = 'once';
         state.direction = goal > from ? 'up' : 'down';
         state.goalPitch = goal;
@@ -1949,7 +2186,7 @@ export function moveCamera(args = {}, runNavigation = null) {
           ONCE.durationS,
           Math.abs(Cesium.Math.toDegrees(goal - from)) / TILT_TO_DEG_S,
         );
-        if (goal !== tiltToPitch) horizonLimited = goal;
+        if (goal !== tiltToPitch) stoppedAt = goal;
       } else {
         // A nudge stops at the limit it travels toward.
         const step =
@@ -2048,11 +2285,9 @@ export function moveCamera(args = {}, runNavigation = null) {
       speed,
       mode: state.mode,
       ...(tiltToPitch !== null && {
-        pitchDeg: Math.round(
-          Cesium.Math.toDegrees(horizonLimited ?? tiltToPitch),
-        ),
+        pitchDeg: Math.round(Cesium.Math.toDegrees(stoppedAt ?? tiltToPitch)),
       }),
-      ...(horizonLimited !== null && { note: tiltHorizonNote(horizonLimited) }),
+      ...(stopNote !== null && { note: stopNote }),
     };
   };
   const preserveCameraFlight =
