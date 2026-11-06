@@ -30,7 +30,8 @@ export function parseSkyData(starsJson, constellationsJson) {
   const problems = [];
   const fail = (message) => problems.push(message);
 
-  if (starsJson?.format !== STARS_FORMAT) fail(`stars format != ${STARS_FORMAT}`);
+  if (starsJson?.format !== STARS_FORMAT)
+    fail(`stars format != ${STARS_FORMAT}`);
   if (constellationsJson?.format !== CONSTELLATIONS_FORMAT)
     fail(`constellations format != ${CONSTELLATIONS_FORMAT}`);
   if (problems.length) throw new SkyDataError(problems);
@@ -133,7 +134,8 @@ function skyStatusError(status) {
 
 /** Network and parser failures must not carry the request URL or exception text. */
 function publishedSkyError(error) {
-  if (error instanceof SkyDataError) return new SkyDataError(['catalogue format or contents invalid']);
+  if (error instanceof SkyDataError)
+    return new SkyDataError(['catalogue format or contents invalid']);
   if (
     error instanceof Error &&
     /^sky data \d{3}$/.test(error.message) &&

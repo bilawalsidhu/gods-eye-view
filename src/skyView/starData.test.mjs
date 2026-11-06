@@ -125,7 +125,9 @@ test('schema validation rejects broken data with a useful message', () => {
 test('loader never publishes injected SkyDataError details', async () => {
   resetSkyDataCache();
   const secret = 'synthetic-credential-SECRETKEY123';
-  const fetchImpl = async () => { throw new SkyDataError([secret]); };
+  const fetchImpl = async () => {
+    throw new SkyDataError([secret]);
+  };
   await assert.rejects(loadSkyData({ fetchImpl }), (error) => {
     assert.doesNotMatch(String(error.stack), /SECRETKEY123/);
     assert.doesNotMatch(JSON.stringify(error), /SECRETKEY123/);
@@ -271,7 +273,11 @@ test('parse diagnostics name the broken field and do not echo caller text', () =
   ];
 
   assert.throws(
-    () => parseSkyData({ ...stars, format: CALLER_SECRET }, { ...lines, format: CALLER_SECRET }),
+    () =>
+      parseSkyData(
+        { ...stars, format: CALLER_SECRET },
+        { ...lines, format: CALLER_SECRET },
+      ),
     (error) => {
       const text = diagnosticText(error);
       assertOmitsCallerText(text, CALLER_SECRET);

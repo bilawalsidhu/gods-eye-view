@@ -1376,6 +1376,7 @@
       "src/skyView/starLayer.js",
       "src/skyView/textSprites.js",
       "src/keylessGeocoder.js",
+      "src/data/placeNames.js",
       "src/data/satelliteClass.js",
       "src/sources/tle.js",
       "src/data/satellitePass.js"

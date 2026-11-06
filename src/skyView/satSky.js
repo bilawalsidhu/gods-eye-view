@@ -478,7 +478,7 @@ export function createSatSky({
           worker = createWorker();
         } catch {
           worker = null;
-          lastError = 'satellite worker unavailable';
+          lastError = 'worker_unavailable';
         }
         if (!worker) {
           status = 'unavailable';
