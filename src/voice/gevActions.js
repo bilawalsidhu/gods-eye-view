@@ -471,6 +471,11 @@ export function createGevActionRunner({
           amount: amt,
           [held.kind === 'tilt' ? 'tiltRangeAdjusted' : 'orbitRadiusAdjusted']:
             true,
+          // A tilt to an angle names the angle the new range now ends it at.
+          ...(held.pitchDeg !== undefined && {
+            pitchDeg: held.pitchDeg,
+            note: held.note,
+          }),
         };
       }
     }

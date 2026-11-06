@@ -610,3 +610,79 @@ for (const direction of ['left', 'right'])
     assert.match(angled.error, /pitchDeg alone/);
     assert.equal(getActiveCameraMotion(), null);
   });
+
+// The 1,000 km pivot cutoff includes its boundary: at exactly 1,000 km the
+// pivot range came back a hair over it, so the tilt ran in place and put the
+// crosshair on the sky.
+test('from exactly 1,000 km a tilt to -5° still pivots about the place', (t) => {
+  const h = harness(t, { height: 1_000_000 });
+  const result = moveCamera({ motion: 'tilt', pitchDeg: 5 });
+  assert.equal(result.ok, true);
+  h.finish();
+  assert.ok(h.viewTarget(), 'the crosshair is on the sky');
+  assert.ok(centreDrift(h) < 100, `centre drifted ${centreDrift(h)} m`);
+  assert.ok(
+    Math.abs(pitchDeg(h.camera) - result.pitchDeg) < 0.5,
+    `camera at ${pitchDeg(h.camera)}°, reported ${result.pitchDeg}°`,
+  );
+  assert.match(result.note, /horizon/);
+});
+
+// A zoom mid-tilt moves the pivot's horizon limit: the zoom's reply names the
+// angle the tilt now ends at, and the camera ends there.
+test('a zoom out during a tilt to an angle reports the angle it now ends at', (t) => {
+  const h = harness(t, { height: 400_000 });
+  const result = moveCamera({ motion: 'tilt', pitchDeg: -5 });
+  assert.equal(result.pitchDeg, -5);
+  assert.equal(result.note, undefined);
+  for (let i = 0; i < 10; i += 1) h.tick();
+  const zoom = adjustOrbitRange(2.5);
+  assert.equal(zoom.kind, 'tilt');
+  assert.equal(zoom.changed, true);
+  h.finish();
+  assert.ok(h.viewTarget(), 'the crosshair is on the sky');
+  assert.ok(zoom.pitchDeg < -5, `zoom reported ${zoom.pitchDeg}°`);
+  assert.ok(
+    Math.abs(pitchDeg(h.camera) - zoom.pitchDeg) < 0.5,
+    `camera at ${pitchDeg(h.camera)}°, zoom reported ${zoom.pitchDeg}°`,
+  );
+  assert.match(zoom.note, /horizon/);
+});
+
+test('a zoom in during a horizon-limited tilt reports the angle it now reaches', (t) => {
+  const h = harness(t, { height: 900_000 });
+  const result = moveCamera({ motion: 'tilt', pitchDeg: -5 });
+  assert.ok(result.pitchDeg < -5, `reported ${result.pitchDeg}°`);
+  for (let i = 0; i < 10; i += 1) h.tick();
+  const zoom = adjustOrbitRange(1 / 2.4);
+  assert.equal(zoom.changed, true);
+  h.finish();
+  assert.equal(zoom.pitchDeg, -5);
+  assert.ok(
+    Math.abs(pitchDeg(h.camera) - -5) < 0.5,
+    `camera at ${pitchDeg(h.camera)}°`,
+  );
+});
+
+test('a voice zoom during a tilt to an angle passes on the new end angle', async (t) => {
+  const h = harness(t, { height: 400_000 });
+  const runner = createGevActionRunner({
+    viewer: h.viewer,
+    styleManager: {},
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  moveCamera({ motion: 'tilt', pitchDeg: -5 });
+  for (let i = 0; i < 10; i += 1) h.tick();
+  const zoom = await runner('adjust_camera_zoom', {
+    direction: 'out',
+    amount: 'lot',
+  });
+  assert.equal(zoom.ok, true);
+  assert.equal(zoom.tiltRangeAdjusted, true);
+  h.finish();
+  assert.ok(
+    Math.abs(pitchDeg(h.camera) - zoom.pitchDeg) < 0.5,
+    `camera at ${pitchDeg(h.camera)}°, zoom reported ${zoom.pitchDeg}°`,
+  );
+  assert.match(zoom.note, /horizon/);
+});

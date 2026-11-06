@@ -63,6 +63,12 @@ const TILT_MIN_CLEARANCE_M = 150;
  */
 const TILT_PIVOT_MAX_RANGE_M = 1_000_000;
 /**
+ * A pivot range rebuilt from the camera's position comes back a hair off the
+ * range it was set at: a range this close past the cutoff still counts as on
+ * it.
+ */
+const TILT_PIVOT_RANGE_SLACK_M = 1;
+/**
  * The shallowest a pivot swing goes when its clearance is not what stops it.
  * From several hundred km the camera's own horizon limit lies past the
  * place's horizon; tilting the rest in place there would lift the crosshair
@@ -1403,8 +1409,18 @@ function tiltUpLimit({ target, pivot }) {
 function tiltStartFrame(cam) {
   const target = _viewer.trackedEntity ? null : _getTarget?.(_viewer);
   let pivot = target ? tiltPivot(cam, target) : null;
-  if (pivot && pivot.range > TILT_PIVOT_MAX_RANGE_M) pivot = null;
+  if (pivot && !tiltPivotInReach(pivot.range)) pivot = null;
   return { target, pivot, from: cam.pitch };
+}
+
+/** Whether a tilt may pivot at this range: up to and including the cutoff. */
+function tiltPivotInReach(range) {
+  return range <= TILT_PIVOT_MAX_RANGE_M + TILT_PIVOT_RANGE_SLACK_M;
+}
+
+/** The reply's note for a tilt the place's horizon stops short of its angle. */
+function tiltHorizonNote(pitch) {
+  return `Stopped at ${Math.round(Cesium.Math.toDegrees(pitch))}°: from this range a shallower angle puts the place past the horizon. Zoom in to tilt further.`;
 }
 
 /** Ground pivot for a tilt: heading, pitch and range in the target's own frame. */
@@ -1917,6 +1933,9 @@ export function moveCamera(args = {}, runNavigation = null) {
         state.mode = 'once';
         state.direction = goal > from ? 'up' : 'down';
         state.goalPitch = goal;
+        // A zoom mid-tilt moves the horizon limit; it re-judges the goal
+        // against the angle asked for.
+        state.askedPitch = tiltToPitch;
         state.durationS = Math.max(
           ONCE.durationS,
           Math.abs(Cesium.Math.toDegrees(goal - from)) / TILT_TO_DEG_S,
@@ -2024,9 +2043,7 @@ export function moveCamera(args = {}, runNavigation = null) {
           Cesium.Math.toDegrees(horizonLimited ?? tiltToPitch),
         ),
       }),
-      ...(horizonLimited !== null && {
-        note: `Stopped at ${Math.round(Cesium.Math.toDegrees(horizonLimited))}°: from this range a shallower angle puts the place past the horizon. Zoom in to tilt further.`,
-      }),
+      ...(horizonLimited !== null && { note: tiltHorizonNote(horizonLimited) }),
     };
   };
   const preserveCameraFlight =
@@ -2043,8 +2060,10 @@ export function moveCamera(args = {}, runNavigation = null) {
  * fight the per-frame lookAt (field test: "zoom out did literally nothing").
  * A tilt swinging about its pivot holds a range the same way.
  * @param {number} factor  >1 zooms out (radius grows), <1 zooms in.
- * @returns {{kind: string, changed: boolean}|null} the motion that consumed
- *   the zoom, and whether its range moved; null when none did.
+ * @returns {{kind: string, changed: boolean, pitchDeg?: number,
+ *   note?: string}|null} the motion that consumed the zoom, and whether its
+ *   range moved; null when none did. A tilt to an angle whose end the new
+ *   range moves also names the angle it now ends at (pitchDeg), with a note.
  */
 export function adjustOrbitRange(factor) {
   if (!_active || !['orbit', 'tilt'].includes(_active.kind) || !_active.hpr)
@@ -2066,7 +2085,38 @@ export function adjustOrbitRange(factor) {
     Math.min(Math.max(ceiling, range), range * factor),
   );
   // Under half a metre counts as not moved, as for a plain zoom.
-  return { kind, changed: Math.abs(hpr.range - range) >= 0.5 };
+  const changed = Math.abs(hpr.range - range) >= 0.5;
+  return { kind, changed, ...(changed && retargetTiltAfterZoom(_active)) };
+}
+
+/**
+ * A zoom changed the range a tilt to an angle holds, and with it the place's
+ * horizon limit: aim the tilt at the angle asked for or the new limit,
+ * whichever comes first, from where the camera is now. Returns the end angle
+ * and a note for the reply when that end moved, otherwise nothing.
+ */
+function retargetTiltAfterZoom(m) {
+  if (m.kind !== 'tilt' || m.mode !== 'once' || m.askedPitch === undefined)
+    return {};
+  const from = _viewer.camera.pitch;
+  if (!(m.askedPitch > from)) return {};
+  const limit = tiltUpLimit({ target: m.target, pivot: m.hpr });
+  const goal = Math.min(m.askedPitch, Math.max(from, limit));
+  if (Math.abs(goal - m.goalPitch) < 1e-6) return {};
+  m.goalPitch = goal;
+  m.startPitch = from;
+  m.elapsed = 0;
+  m.durationS = Math.max(
+    ONCE.durationS,
+    Math.abs(Cesium.Math.toDegrees(goal - from)) / TILT_TO_DEG_S,
+  );
+  const limited = goal !== m.askedPitch;
+  return {
+    pitchDeg: Math.round(Cesium.Math.toDegrees(goal)),
+    note: limited
+      ? tiltHorizonNote(goal)
+      : `The tilt now reaches ${Math.round(Cesium.Math.toDegrees(goal))}°.`,
+  };
 }
 
 /**
