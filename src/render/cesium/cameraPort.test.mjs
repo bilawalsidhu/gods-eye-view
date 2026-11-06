@@ -15,6 +15,7 @@ import {
 import { FRAME_MS, headlessCamera, withVirtualClock } from './cameraGoldens.js';
 import { createCesiumCamera } from './camera.js';
 import { createCesiumPorts } from './ports.js';
+import { cameraOf } from '../rendererOf.js';
 
 /** Records the headless scene cannot answer: they need the query port. */
 const QUERY_RECORDS = new Set([
@@ -207,4 +208,27 @@ test('a flight Cesium does not start ends cancelled rather than never', async ()
   const flight = port.flyTo({ lon: 1, lat: 1, height: 1e6 }, { durationS: 1 });
   assert.equal(await flight.done, 'cancelled');
   assert.equal(port.flying, false);
+});
+
+test('a Cesium viewer with no renderer bound gets a camera port over its own camera', async () => {
+  await withVirtualClock(async () => {
+    const { scene, camera } = headlessCamera();
+    scene.postUpdate = new Cesium.Event();
+    scene.requestRender = () => {};
+    const viewer = { scene, camera };
+    const port = cameraOf(viewer);
+    assert.equal(cameraOf(viewer), port, 'one port per viewer');
+    let outcome = null;
+    port.flyTo(
+      { lon: 2.35, lat: 48.86, height: 1500 },
+      { durationS: 0, onComplete: () => (outcome = 'complete') },
+    );
+    assert.equal(outcome, 'complete');
+    const pose = port.pose();
+    assert.ok(
+      Math.abs(pose.lon - 2.35) < 1e-9 && Math.abs(pose.lat - 48.86) < 1e-9,
+    );
+    assert.ok(Math.abs(pose.height - 1500) < 1e-6);
+    assert.throws(() => cameraOf({ scene, camera: {} }), /no renderer camera/);
+  });
 });

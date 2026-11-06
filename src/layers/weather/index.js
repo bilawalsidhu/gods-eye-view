@@ -10,7 +10,7 @@ import {
 } from './clock.js';
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 
 /**
  * A stored (English) failure in the language. HTTP failures from source.js

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
   REPLAY_ASCENT_MIN_SEC,
@@ -353,7 +354,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     parts.overlays.syncMissionOverlayEntries();
     parts.policyHelpers.releaseAircraftTracking(layerState._dataManager);
     layerState._viewer.trackedEntity = undefined;
-    layerState._viewer.camera.cancelFlight();
+    cameraOf(layerState._viewer).cancelFlight();
     layerState._animationStarts.set(
       launchId,
       Date.now() +
@@ -485,20 +486,20 @@ export function createReplay({ state: layerState, services, parts, source }) {
         }
       });
 
-    layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(track.ascentPath[0], 0),
+    cameraOf(layerState._viewer).flyToBounds(
+      { center: track.ascentPath[0], radius: 0 },
       {
-        offset: new Cesium.HeadingPitchRange(
-          initialHeading,
-          Cesium.Math.toRadians(-20),
-          REPLAY_INITIAL_RANGE_M,
-        ),
-        duration: 1.4,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: () => {
+        offset: {
+          heading: initialHeading,
+          pitch: Cesium.Math.toRadians(-20),
+          range: REPLAY_INITIAL_RANGE_M,
+        },
+        durationS: 1.4,
+        easing: 'cubicInOut',
+        onComplete: () => {
           cameraReady = true;
         },
-        cancel: () => {
+        onCancel: () => {
           if (
             token === layerState._replayCameraToken &&
             layerState._replayCameraLaunchId === launchId

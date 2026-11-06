@@ -50,3 +50,18 @@ export function toCartesian(pos) {
   if ('x' in pos) return new Cesium.Cartesian3(pos.x, pos.y, pos.z);
   return Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, pos.height ?? 0);
 }
+
+/**
+ * Where a listener's throw goes with no `error` listener: the platform's
+ * `reportError` (or a rethrow on a microtask), as a browser reports an event
+ * listener's exception, loud, while the frame and the other listeners carry
+ * on.
+ */
+export function uncaught(error) {
+  if (typeof globalThis.reportError === 'function')
+    globalThis.reportError(error);
+  else
+    queueMicrotask(() => {
+      throw error;
+    });
+}

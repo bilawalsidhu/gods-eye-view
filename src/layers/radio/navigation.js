@@ -4,7 +4,7 @@ import {
   GLOBAL_RADIO_ALTITUDE_M,
   RADIO_GLOBE_RECENTER_MAX_HEIGHT_M,
 } from './policy.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 
 export function createNavigation({
   state: layerState,

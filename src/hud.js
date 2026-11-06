@@ -20,7 +20,7 @@ import { applicationServices } from './services/application.js';
  */
 
 import { toDegrees, toRadians } from './geo/index.js';
-import { rendererOf } from './render/rendererOf.js';
+import { findCamera } from './render/rendererOf.js';
 import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
@@ -241,7 +241,7 @@ export class IntelHUD {
       basemapContext = {},
       summaryService = applicationServices.summary,
       publish = () => {},
-      camera = rendererOf(viewer)?.camera,
+      camera = findCamera(viewer),
     } = {},
   ) {
     if (!camera) throw new Error('IntelHUD needs a camera port');

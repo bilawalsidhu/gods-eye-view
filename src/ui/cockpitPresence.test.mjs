@@ -10,6 +10,7 @@ import { CockpitViewController } from './cockpitController.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 
 const INFO = Object.freeze({
   icao24: 'abc123',
@@ -51,6 +52,7 @@ function fixture(t) {
     },
     trackedEntityChanged: listeners(),
   };
+  bindFakeCesiumCamera(viewer);
   const cockpit = new CockpitViewController(viewer, {
     services: {
       flightsLayer: { getTrackedInfo: () => INFO, refreshTr3b() {} },

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { governorRequestRender } from './renderGovernor.js';
+import { cameraOf } from './render/cesium/camera.js';
 
 /** Outer edge of the existing NVG/FLIR keyhole in normalized shader space. */
 export const KEYHOLE_OUTER_RADIUS = 1.05;
@@ -576,30 +577,33 @@ export class CelestialRing {
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
 
+    const camera = cameraOf(this.viewer);
     this._focusInProgress = true;
     const finishFocus = () => {
       this._focusInProgress = false;
       this.viewer.scene.requestRender?.();
     };
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromRadians(
+    camera.flyTo(
+      Cesium.Cartesian3.fromRadians(
         cartographic.longitude,
         cartographic.latitude,
         altitude,
       ),
-      orientation: {
-        heading: this.viewer.camera.heading,
-        pitch: -Cesium.Math.PI_OVER_TWO,
-        roll: 0,
+      {
+        orientation: {
+          heading: camera.pose().heading,
+          pitch: -Cesium.Math.PI_OVER_TWO,
+          roll: 0,
+        },
+        durationS: duration,
+        easing: 'cubicInOut',
+        onComplete: finishFocus,
+        onCancel: () => {
+          finishFocus();
+          if (!this.isGlobeFullyVisible()) this._autoDisable();
+        },
       },
-      duration,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-      complete: finishFocus,
-      cancel: () => {
-        finishFocus();
-        if (!this.isGlobeFullyVisible()) this._autoDisable();
-      },
-    });
+    );
     return true;
   }
 

@@ -30,7 +30,7 @@ import {
 } from './cyberSonarControls.js';
 
 import * as Cesium from 'cesium';
-import { cameraOf } from '../render/rendererOf.js';
+import { cameraOf } from '../render/cesium/camera.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 

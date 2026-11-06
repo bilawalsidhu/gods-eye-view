@@ -14,7 +14,7 @@
 import * as Cesium from 'cesium';
 import { heightsFor } from '../../queries/heights.js';
 import { createCesiumCamera } from './camera.js';
-import { listenerList, toCartesian } from './common.js';
+import { listenerList, toCartesian, uncaught } from './common.js';
 import {
   atEndOfTick,
   billboardLoadError,
@@ -24,21 +24,6 @@ import {
 } from './internals.js';
 
 export { listenerList, toCartesian };
-
-/**
- * Where a listener's throw goes with no `error` listener: the platform's
- * `reportError` (or a rethrow on a microtask), as a browser reports an event
- * listener's exception, loud, while the frame and the other listeners carry
- * on.
- */
-function uncaught(error) {
-  if (typeof globalThis.reportError === 'function')
-    globalThis.reportError(error);
-  else
-    queueMicrotask(() => {
-      throw error;
-    });
-}
 
 /** The contract's colour as Cesium's. */
 export function toColor(color, alpha = 1) {

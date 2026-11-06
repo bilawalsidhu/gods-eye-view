@@ -26,7 +26,7 @@ import {
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { alprMarkers } from './markerState.js';
 import { heightsFor } from '../../queries/heights.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;

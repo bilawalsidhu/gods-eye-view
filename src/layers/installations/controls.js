@@ -6,7 +6,7 @@ import {
   ANCHOR_REFRESH_M,
 } from './policy.js';
 import { formatNumber, t, tn } from '../../i18n/index.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 
 // installationFeedback.js is shared with the HUD (src/loadingFeedback.js) and
 // hands back msg()-marked English plus values; getStats translates them here.

@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { VESSEL_FOCUS_RADIUS_M } from './policy.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 
 export function createFocus({ state: layerState, services, parts, source }) {
   const flightsLayer = services.flights;

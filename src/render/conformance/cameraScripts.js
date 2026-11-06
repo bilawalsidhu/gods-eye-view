@@ -393,6 +393,29 @@ export const CAMERA_SCRIPTS = Object.freeze([
     ],
   },
   {
+    name: 'flyTo sineInOut',
+    steps: [
+      START,
+      {
+        do: 'flyTo',
+        args: [
+          { ...AUSTIN, height: 4000 },
+          {
+            durationS: 1,
+            easing: 'sineInOut',
+            orientation: { heading: 0.3, pitch: -0.5, roll: 0 },
+          },
+        ],
+      },
+      { do: 'frames', count: 15 },
+      { record: 'pose' },
+      { do: 'frames', count: 30 },
+      { record: 'pose' },
+      { do: 'frames', count: 30 },
+      { record: 'pose' },
+    ],
+  },
+  {
     name: 'a cancelled flight stops where it was',
     steps: [
       START,

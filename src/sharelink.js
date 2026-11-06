@@ -1,5 +1,5 @@
 import { toDegrees, toRadians } from './geo/index.js';
-import { rendererOf } from './render/rendererOf.js';
+import { findCamera } from './render/rendererOf.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from './bloom.js';
 import {
   migrateDetectionState,
@@ -69,7 +69,7 @@ export class ShareLinkManager {
       isNavigationCurrent,
       cancelOwnedNavigation,
       initialShareCode = null,
-      camera = rendererOf(viewer)?.camera,
+      camera = findCamera(viewer),
     } = {},
   ) {
     if (!camera) throw new Error('ShareLinkManager needs a camera port');

@@ -8,6 +8,9 @@
  */
 import * as Cesium from 'cesium';
 import { withTileRequestHook } from '../../render/cesium/tileRequests.js';
+// The layer is Cesium-free and flies through `cameraOf`; its Cesium renderer
+// brings the factory a viewer with no renderer bound gets a camera from.
+import '../../render/cesium/camera.js';
 import { PRODUCTS, gibsTemplate } from './model.js';
 
 const SLOT_IDS = ['a', 'b'];

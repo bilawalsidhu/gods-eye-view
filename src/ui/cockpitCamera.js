@@ -1,5 +1,6 @@
 /** Camera placement, ground acquisition and motion correction for the Cockpit controller. */
 import * as Cesium from 'cesium';
+import { cameraOf } from '../render/cesium/camera.js';
 import {
   cockpitAnchorCorrectionStep,
   cockpitGroundSafeHeight,
@@ -349,7 +350,7 @@ export function update() {
     }
   }
 
-  this.viewer.camera.setView({
+  cameraOf(this.viewer).setView({
     destination: this.scratchCamera,
     orientation: { direction: this.scratchForward, up: this.scratchUp },
   });

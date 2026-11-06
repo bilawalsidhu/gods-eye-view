@@ -1,3 +1,4 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -12,7 +13,7 @@ import { createView } from '../view/index.js';
 
 const fakeViewer = () => {
   const flights = [];
-  return {
+  return bindFakeCesiumCamera({
     flights,
     camera: {
       flyTo(options) {
@@ -20,7 +21,7 @@ const fakeViewer = () => {
         options.complete();
       },
     },
-  };
+  });
 };
 const fakeLayers = (enabled) => ({
   getAll: () =>

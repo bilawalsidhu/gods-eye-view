@@ -78,7 +78,12 @@ export interface ViewSpec {
 }
 
 export type Easing =
-  'linear' | 'quadraticInOut' | 'cubicInOut' | 'cubicOut' | 'quinticInOut';
+  | 'linear'
+  | 'quadraticInOut'
+  | 'cubicInOut'
+  | 'cubicOut'
+  | 'quinticInOut'
+  | 'sineInOut';
 
 /**
  * A flight's omitted orientation is the same as `setView`'s. Its omitted

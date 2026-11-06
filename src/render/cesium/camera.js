@@ -6,8 +6,15 @@
  */
 import * as Cesium from 'cesium';
 import { createCameraEvents } from '../camera/events.js';
-import { listenerList, toCartesian } from './common.js';
+import { listenerList, toCartesian, uncaught } from './common.js';
 import { cameraFlightActive } from './internals.js';
+import { cameraOf, provideUnboundCamera } from '../rendererOf.js';
+
+/**
+ * `cameraOf`, for code that already reaches Cesium: importing it from here
+ * loads the factory a viewer with no renderer bound gets its camera from.
+ */
+export { cameraOf };
 
 /** The contract's easings as Cesium's. */
 export const EASINGS = Object.freeze({
@@ -16,6 +23,7 @@ export const EASINGS = Object.freeze({
   cubicInOut: Cesium.EasingFunction.CUBIC_IN_OUT,
   cubicOut: Cesium.EasingFunction.CUBIC_OUT,
   quinticInOut: Cesium.EasingFunction.QUINTIC_IN_OUT,
+  sineInOut: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
 });
 
 /** A contract destination as Cesium's: a Cartesian3, or a Rectangle. */
@@ -265,3 +273,19 @@ export function createCesiumCamera({ scene, camera, report }) {
     },
   };
 }
+
+// A Cesium viewer of a consumer's own, with no renderer bound to it, gets a
+// camera port over its camera when code first asks `cameraOf` for one.
+provideUnboundCamera((viewer) =>
+  // By shape, not `instanceof`: a consumer's viewer may come from another
+  // copy of Cesium.
+  typeof viewer.camera?.flyTo === 'function' &&
+  typeof viewer.camera.moveStart?.addEventListener === 'function' &&
+  typeof viewer.scene?.postUpdate?.addEventListener === 'function'
+    ? createCesiumCamera({
+        scene: viewer.scene,
+        camera: viewer.camera,
+        report: uncaught,
+      })
+    : null,
+);
