@@ -3249,7 +3249,7 @@
   "event age filter|All": "Todos",
   "Event age": "Idade do evento",
   "Event age: {days}d · undated kept": "Idade do evento: {days} dias · sem data mantidos",
-"New Moon": "Lua nova",
+  "New Moon": "Lua nova",
   "Waxing Crescent": "Lua crescente",
   "First Quarter": "Quarto crescente",
   "Waxing Gibbous": "Crescente gibosa",

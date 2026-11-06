@@ -3099,7 +3099,7 @@
   "event age filter|All": "すべて",
   "Event age": "経過日数",
   "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持",
-"New Moon": "新月",
+  "New Moon": "新月",
   "Waxing Crescent": "三日月",
   "First Quarter": "上弦",
   "Waxing Gibbous": "十三夜",
