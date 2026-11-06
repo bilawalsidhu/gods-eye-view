@@ -589,10 +589,8 @@ test('every style paints its OWN plate token through the production callout path
 });
 
 test('a callout gives way to its contact\'s own card only while that card paints', () => {
-  // A vessel's ambient card already shows its name, speed and course, and the
-  // callout drawn beneath it shows through the card's plate. The host paints
-  // only part of the published cards (shared budget, collisions, UI chrome),
-  // so a contact whose card was published but not painted keeps its callout.
+  // The callout shows through its card's plate. The host paints only some
+  // published cards (budget, collisions, UI chrome); an unpainted one keeps it.
   const env = installEnvironment({ width: 900, height: 600, dpr: 1 });
   try {
     const ships = [

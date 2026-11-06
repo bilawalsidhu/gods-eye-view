@@ -505,8 +505,7 @@ export function createQueries({
           id: record.name || record.mmsi || 'VESSEL',
           type: 'SEA',
           skipLabel: record === selected,
-          // The vessel's ambient card: while the overlay paints it, detection
-          // draws no callout under it.
+          // Detection hides the callout while this card paints.
           cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
           cardEntryId: components.cards.vesselOverlayEntryId(record),
           klass: record.type

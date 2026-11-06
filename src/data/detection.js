@@ -110,10 +110,7 @@ const THEME_MAP = DETECTION_THEME_MAP;
 const SPARSE_ZONE_FRACTION = 0.5;
 /** Solve cadence for membership/collision; accepted identities still reproject every frame. */
 const LABEL_SOLVE_INTERVAL_MS = 125;
-/**
- * A contact's own card at this opacity or more hides its callout; below it the
- * callout fades in, so a card fading in or out never snaps the callout.
- */
+/** Own-card opacity that fully hides a callout; below it the callout fades in. */
 const CARD_ALPHA_HIDING_CALLOUT = 0.5;
 /** Alpha bands retain bracket batching while approximating a continuous radial fade. */
 const BRACKET_ALPHA_STEPS = 4;
@@ -1149,8 +1146,8 @@ function _paintCalloutLane(frame) {
   ctx.textBaseline = 'alphabetic';
   for (let i = 0; i < _calloutCount; i++) {
     const row = _calloutPool[i];
-    // Under the contact's own card (an ambient vessel card) the callout would
-    // show through the plate. Only a card painting this frame counts.
+    // The callout would show through its contact's own card: fade it by the
+    // opacity that card paints with this frame.
     const cardAlpha =
       row.cardEntryId === ''
         ? 0

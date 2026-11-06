@@ -1224,9 +1224,8 @@ test('custom detection lane receives the shared host frame and paints below ordi
 });
 
 test('a detection lane sees which cards this frame will paint before they publish paint rects', () => {
-  // The detection lane paints first, so a card's paint rectangle for this
-  // frame does not exist yet when it runs. The queued alpha is what lets a
-  // contact's callout give way to that contact's own card in the same frame.
+  // The detection lane paints before the cards publish this frame's paint
+  // rects, so it reads the queued alpha instead.
   const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
   initWorldOverlay(env.viewer);
   const seen = [];
@@ -2529,8 +2528,8 @@ test('promoting an ambient entry to selected paints it once with no fading dupli
 });
 
 test('the queued-card index stays bounded while card identities churn', () => {
-  // The index is internal: capture the per-source map the same way the
-  // projection-record test captures its map, through Map.prototype.set.
+  // The index is internal: capture it through Map.prototype.set, like the
+  // projection-record test.
   const originalSet = Map.prototype.set;
   let queuedIndex = null;
   Map.prototype.set = function captureQueuedIndex(key, value) {
@@ -2546,9 +2545,8 @@ test('the queued-card index stays bounded while card identities churn', () => {
     initWorldOverlay(env.viewer);
     const FRAMES = 1300;
     for (let frame = 0; frame < FRAMES; frame++) {
-      // One painted card whose identity changes every frame: the same pooled
-      // paint item serves every id (a vessel cohort republished as the camera
-      // moves, a CCTV or radio card swapping).
+      // One card whose id changes every frame reuses one pooled paint item,
+      // like a vessel cohort republished as the camera moves.
       setOverlayEntries('cards', [selectedEntry(`churn-card-${frame}`, {
         position: positionAtScreen(200, 150),
       })]);

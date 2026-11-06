@@ -1047,9 +1047,9 @@ export function getOverlayPaintRect(sourceId, entryId) {
 }
 
 /**
- * Opacity an entry will paint with in the frame being painted, or 0 when it is
- * not queued. Valid from the custom lanes, which paint before the entries in
- * later lanes publish their paint rects. Leaves out only the Cyber sonar fade.
+ * Opacity an entry paints with this frame, or 0 when it is not queued. Custom
+ * lanes may call it before later lanes publish paint rects. Leaves out the
+ * Cyber sonar fade and yield-collision hiding.
  * @param {string} sourceId
  * @param {string} entryId
  * @returns {number}
@@ -2253,9 +2253,8 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
   item.collisionHidden = false;
   item.stamp = _frameStamp;
   _paintQueue[_paintCount++] = item;
-  // Indexed by source and id rather than by `record.key`, so a lookup builds
-  // no string. A card fading out after it left its source's entries is still
-  // queued here, though `_records` no longer has it.
+  // Keyed by source and id, not `record.key`, so a lookup builds no string.
+  // Also holds cards fading out after they left `_records`.
   let bySource = _queuedItemBySource.get(record.entry.source);
   if (!bySource) {
     bySource = new Map();
