@@ -21,6 +21,8 @@ import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
 import * as Cesium from 'cesium';
+import { cameraOf } from '../render/cesium/camera.js';
+import { findCamera } from '../render/rendererOf.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -263,7 +265,8 @@ export class SceneDirector {
       this.stopScene(msg('Stopped'));
       this._loadAbort?.abort();
       this._loadGeneration++;
-      this.viewer.camera.cancelFlight();
+      // The viewer may be gone by now: then there is no flight to stop.
+      findCamera(this.viewer)?.cancelFlight();
       this._storageToast?.cancel();
       await Promise.allSettled(this._pendingWork || []);
       this._clock.destroy();
@@ -1746,16 +1749,16 @@ export class SceneDirector {
 
   /** Place the camera at an authored replay start pose without an intermediate flight. */
   _setCameraView(cameraState) {
-    if (!cameraState || typeof this.viewer?.camera?.setView !== 'function')
-      return false;
+    const camera = findCamera(this.viewer);
+    if (!cameraState || !camera) return false;
     this.styleManager?.clearSearchedLocation?.();
-    this.viewer.camera.cancelFlight?.();
-    this.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(
-        cameraState.lon,
-        cameraState.lat,
-        cameraState.alt,
-      ),
+    camera.cancelFlight();
+    camera.setView({
+      destination: {
+        lon: cameraState.lon,
+        lat: cameraState.lat,
+        height: cameraState.alt,
+      },
       orientation: {
         heading: Cesium.Math.toRadians(cameraState.heading || 0),
         pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
@@ -2022,7 +2025,8 @@ export class SceneDirector {
     this._loadGeneration++;
     this._clock.stopShot();
     this._cancelActiveSceneTravel();
-    this.viewer.camera.cancelFlight();
+    // Stop runs in teardown too, after the viewer may be gone.
+    findCamera(this.viewer)?.cancelFlight();
     this._clock.stop();
     if (!this._running || !this._runToken) return;
     this._runToken.cancelled = true;
@@ -2464,11 +2468,11 @@ export class SceneDirector {
       0.2,
       Number(durationSec) || DEFAULT_SHOT_DURATION_SEC,
     );
-    const destination = Cesium.Cartesian3.fromDegrees(
-      cameraState.lon,
-      cameraState.lat,
-      cameraState.alt,
-    );
+    const destination = {
+      lon: cameraState.lon,
+      lat: cameraState.lat,
+      height: cameraState.alt,
+    };
 
     await new Promise((resolve) => {
       // Guard against double-resolve from both callback and timeout
@@ -2481,17 +2485,16 @@ export class SceneDirector {
         resolve();
       };
 
-      this.viewer.camera.flyTo({
-        destination,
+      cameraOf(this.viewer).flyTo(destination, {
         orientation: {
           heading: Cesium.Math.toRadians(cameraState.heading || 0),
           pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
           roll: Cesium.Math.toRadians(cameraState.roll || 0),
         },
-        duration,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: finish,
-        cancel: finish,
+        durationS: duration,
+        easing: 'cubicInOut',
+        onComplete: finish,
+        onCancel: finish,
       });
 
       // Safety timeout in case Cesium callbacks fail to fire

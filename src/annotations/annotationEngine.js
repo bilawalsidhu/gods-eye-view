@@ -1,6 +1,7 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
+import { cameraOf } from '../render/cesium/camera.js';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
@@ -1700,14 +1701,18 @@ export function createAnnotationEngine({
         Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
       );
       const sphere = Cesium.BoundingSphere.fromPoints(cart);
-      viewer.camera.flyToBoundingSphere(sphere, {
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          Cesium.Math.toRadians(-35),
-          Math.max(900, sphere.radius * 2.6),
-        ),
-        duration: 1.6,
-      });
+      const camera = cameraOf(viewer);
+      camera.flyToBounds(
+        { center: sphere.center, radius: sphere.radius },
+        {
+          offset: {
+            heading: camera.pose().heading,
+            pitch: Cesium.Math.toRadians(-35),
+            range: Math.max(900, sphere.radius * 2.6),
+          },
+          durationS: 1.6,
+        },
+      );
     } catch {
       /* camera assist is best-effort */
     }
@@ -1757,22 +1762,23 @@ export function createAnnotationEngine({
               : anno.ring,
           )
         : viewportRange(anno.viewport) || 600;
-      viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
-            target.lon,
-            target.lat,
-            anno.anchor.height || 0,
-          ),
-          range,
-        ),
+      const camera = cameraOf(viewer);
+      camera.flyToBounds(
         {
-          offset: new Cesium.HeadingPitchRange(
-            viewer.camera.heading,
-            Cesium.Math.toRadians(-35),
-            range * 2.4,
-          ),
-          duration: 1.8,
+          center: {
+            lon: target.lon,
+            lat: target.lat,
+            height: anno.anchor.height || 0,
+          },
+          radius: range,
+        },
+        {
+          offset: {
+            heading: camera.pose().heading,
+            pitch: Cesium.Math.toRadians(-35),
+            range: range * 2.4,
+          },
+          durationS: 1.8,
         },
       );
     } catch {
@@ -1978,15 +1984,17 @@ export function createAnnotationEngine({
   }) {
     if (destroyed) return;
     try {
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
-        orientation: {
-          heading: Cesium.Math.toRadians(heading),
-          pitch: Cesium.Math.toRadians(pitch),
-          roll: 0,
+      cameraOf(viewer).flyTo(
+        { lon, lat, height },
+        {
+          orientation: {
+            heading: Cesium.Math.toRadians(heading),
+            pitch: Cesium.Math.toRadians(pitch),
+            roll: 0,
+          },
+          durationS: duration,
         },
-        duration,
-      });
+      );
     } catch {
       /* camera flight best-effort */
     }
