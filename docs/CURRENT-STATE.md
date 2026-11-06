@@ -5881,8 +5881,11 @@ HTTP refusals and outages remain retryable. Searches share a 12-second total
 deadline, with Photon requests capped at six seconds each. Caller/application
 cancellation stops retries and late cache writes. Replacing a location search
 cancels the previous lookup; disposing its controls cancels the active lookup. Photon uses a soft proximity bias, up to five
-candidates, and an unbiased retry for name mismatches. A "place, region" query
-prefers a candidate named exactly for the place whose city, county, state,
+candidates, and an unbiased retry for name mismatches. Name comparison folds
+Latin accents while preserving letters and marks in other scripts, so a
+non-Latin name spelled exactly, marks included, keeps its proximity ranking. A
+leading "the" counts: "The Hague" does not take a nearby "Hague". A "place, region" query prefers a
+candidate named exactly for the place whose city, county, state,
 country or country code (or USA/UK) contains every word of the region, and a
 settlement or administrative area over a POI when both fit. Nearby results that
 fail that check are retried unbiased. After the region checks of both passes, a
