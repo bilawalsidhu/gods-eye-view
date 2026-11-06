@@ -87,6 +87,7 @@ import { createTimeControl, toLocalInputValue } from './skyTimeControl.js';
 import { validityBanners } from './skyValidity.js';
 import {
   clampEl,
+  DEG,
   dragView,
   inertiaStep,
   keyView,
@@ -143,6 +144,12 @@ const CLICK_MS = 400;
 const PASS_ANCHOR_MS = 5000;
 /** A pick this far from the ellipsoid is a streaming-tile glitch, not ground. */
 const PLAUSIBLE_GROUND_M = [-500, 9000];
+/**
+ * In-place turn that counts as someone else taking the camera. Above Sky's
+ * own setView round-trip (~0.01°) and below one voice-tilt step, so a tilt
+ * hands the view back and a look Sky just applied does not.
+ */
+const HANDOFF_TURN_RAD = 0.25 * DEG;
 
 const fmt = (value, digits) => Number(value).toFixed(digits);
 
@@ -533,6 +540,11 @@ export function mountSkyView({
   let profileToken = 0;
   let picker = null;
   let tickTimer = null;
+  let dropCameraWatch = null;
+  const scratchEye = new CesiumApi.Cartesian3();
+  const appliedDirection = new CesiumApi.Cartesian3();
+  const appliedUp = new CesiumApi.Cartesian3();
+  let hasAppliedPose = false;
   let urlTimer = null;
   let autoTimer = null;
   let inertiaFrame = null;
@@ -1360,6 +1372,7 @@ export function mountSkyView({
     view = makeView(next);
     if (!active || !observer) return;
     applySkyCamera(CesiumApi, viewer.camera, observer, view);
+    rememberAppliedPose();
     viewer.scene.requestRender?.();
     redraw();
     scheduleUrl();
@@ -1540,21 +1553,91 @@ export function mountSkyView({
       // fallback when frames do not run (background tab, no rAF)
       if (time.moving) applyTime();
     }, 1000);
+    watchCamera();
   }
-  /** True when something else (search, fly-to, voice) moved the camera away. */
+  /**
+   * Pose Sky last wrote. An external turn (voice tilt looks without moving)
+   * diverges from it; applyView refreshes it, so Sky's own look does not.
+   */
+  function rememberAppliedPose() {
+    const camera = viewer.camera;
+    const direction = camera?.directionWC ?? camera?.direction;
+    const up = camera?.upWC ?? camera?.up;
+    if (!direction || !up) {
+      hasAppliedPose = false;
+      return;
+    }
+    CesiumApi.Cartesian3.clone(direction, appliedDirection);
+    CesiumApi.Cartesian3.clone(up, appliedUp);
+    hasAppliedPose = true;
+  }
+  function turnedPast(live, applied) {
+    if (!live || !applied) return false;
+    return (
+      CesiumApi.Math.acosClamped(CesiumApi.Cartesian3.dot(live, applied)) >
+      HANDOFF_TURN_RAD
+    );
+  }
+  /**
+   * True when something else (search, fly-to, voice) took the camera.
+   * Position: more than 100 m from the eye. Orientation: an in-place turn
+   * whose direction or up differs from the pose Sky last applied. Compared,
+   * not inferred from the event, because Sky's own setView raises the same
+   * camera signals on the next frame.
+   */
   function cameraTakenElsewhere() {
     if (!observer) return false;
     const eye = CesiumApi.Cartesian3.fromDegrees(
       observer.lonDeg,
       observer.latDeg,
       observer.groundHeightM + observer.eyeHeightM,
+      CesiumApi.Ellipsoid.WGS84,
+      scratchEye,
     );
-    const at = viewer.camera.positionWC ?? viewer.camera.position;
-    return CesiumApi.Cartesian3.distance(eye, at) > 100;
+    const camera = viewer.camera;
+    const at = camera.positionWC ?? camera.position;
+    if (CesiumApi.Cartesian3.distance(eye, at) > 100) return true;
+    if (!hasAppliedPose) return false;
+    return (
+      turnedPast(camera.directionWC ?? camera.direction, appliedDirection) ||
+      turnedPast(camera.upWC ?? camera.up, appliedUp)
+    );
+  }
+  /**
+   * Ask the same question from every signal that can see a turn.
+   *
+   * `changed` fires only from Camera#_updateCameraChanged, only past
+   * percentageChanged, and the first call after subscribe stores a baseline
+   * and does not fire. One update can raise it twice. `moveStart` fires once
+   * per gesture from the render loop; `moveEnd` waits 500 ms of stillness, so
+   * a rapid tilt never ends the gesture while steps are still arriving.
+   * preRender covers drawn frames under that threshold. clock.onTick covers
+   * a voice tilt that has not drawn a frame yet. None of these is the
+   * decision — cameraTakenElsewhere is — so Sky's own pose is not a handoff.
+   */
+  function handoffIfTaken() {
+    if (!active) return;
+    if (cameraTakenElsewhere()) exit({ keepCamera: true });
+  }
+  function watchCamera() {
+    const remove = [];
+    const sub = (event) => {
+      const off = event?.addEventListener?.(handoffIfTaken);
+      if (typeof off === 'function') remove.push(off);
+    };
+    sub(viewer.scene?.preRender);
+    sub(viewer.camera?.changed);
+    sub(viewer.camera?.moveStart);
+    sub(viewer.clock?.onTick);
+    dropCameraWatch = () => {
+      for (const off of remove.splice(0)) off();
+      dropCameraWatch = null;
+    };
   }
   function stopTicking() {
     if (tickTimer != null) timers.clearInterval?.(tickTimer);
     tickTimer = null;
+    dropCameraWatch?.();
   }
 
   // ── picking on the map ───────────────────────────────────────────────────
