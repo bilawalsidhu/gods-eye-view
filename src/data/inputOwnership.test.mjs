@@ -115,18 +115,23 @@ test('pointer input, camera holds and the stock clicks go through the one dispat
   // edit each layer. A layer that binds its own handler, writes the camera
   // flag or takes the stock clicks itself steps around that contract.
   const DISPATCHER = 'src/input/dispatcher.js';
+  // Each rule names the one other module it belongs in, if any.
   const rules = [
     [
       /new\s+[\w.]*ScreenSpaceEventHandler\(/,
       'binds its own ScreenSpaceEventHandler',
+      [],
     ],
     [
       /\.enableInputs\s*=(?!=)/,
       'writes enableInputs instead of suspendCamera()',
+      // The scene's camera-input holds, which own the flag.
+      ['src/render/cesium/cameraInput.js'],
     ],
     [
       /screenSpaceEventHandler\??\.removeInputAction\(/,
       'removes stock clicks instead of suppressStockClicks()',
+      [],
     ],
   ];
   const walk = (dir) =>
@@ -141,8 +146,9 @@ test('pointer input, camera holds and the stock clicks go through the one dispat
   for (const file of walk('src')) {
     if (file === DISPATCHER) continue;
     const source = read(file);
-    for (const [pattern, what] of rules)
-      if (pattern.test(source)) offenders.push(`${file} ${what}`);
+    for (const [pattern, what, allowed] of rules)
+      if (!allowed.includes(file) && pattern.test(source))
+        offenders.push(`${file} ${what}`);
   }
   assert.deepEqual(offenders, []);
 });
