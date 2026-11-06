@@ -12,6 +12,7 @@ import {
 } from './cctv/media.js';
 import {
   CCTV_FRAME_FETCH_TIMEOUT_MS,
+  CCTV_FRAME_MAX_BODY_BYTES,
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
@@ -19,8 +20,10 @@ import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import { googleServerApiKey } from './places/google-key.js';
+import { readResponseBytesCapped } from './common/http.js';
+import { clientNetworkKey } from './common/rate-limit.js';
 import {
-  createStreetViewBudget,
+  processStreetViewAdmission,
   registeredStreetViewLocation,
 } from './cctv/streetViewGuard.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
@@ -47,8 +50,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
-  // Global per-process cap: changing camera IDs cannot multiply Google spend.
-  const streetViewBudget = createStreetViewBudget();
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {
@@ -94,57 +95,72 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
    * rather than HTTP referrer) and falls back to the browser-exposed
    * GOOGLE_MAPS_API_KEY for setups that haven't split the two yet.
    */
-  const streetViewFallback = async ({ lat, lon, heading, fov, pitch }) => {
+  const streetViewFallback = async (
+    { lat, lon, heading, fov, pitch },
+    cameraId,
+    client,
+  ) => {
     const streetViewKey = googleServerApiKey();
-    if (
-      !streetViewKey ||
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lon) ||
-      !streetViewBudget.consume()
-    )
+    if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon))
       return null;
-    try {
-      const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
-      sv.searchParams.set('size', '960x540');
-      sv.searchParams.set('location', `${lat},${lon}`);
-      sv.searchParams.set(
-        'heading',
-        String(Number.isFinite(heading) ? heading : 0),
-      );
-      sv.searchParams.set(
-        'fov',
-        String(Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80),
-      );
-      sv.searchParams.set(
-        'pitch',
-        String(Number.isFinite(pitch) ? Math.max(-40, Math.min(20, pitch)) : 0),
-      );
-      sv.searchParams.set('source', 'outdoor');
-      sv.searchParams.set('return_error_code', 'true');
-      sv.searchParams.set('key', streetViewKey);
 
-      const svResp = await fetch(sv.toString(), {
-        headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
-        signal: AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS),
-      });
-      const svType = cctvRasterImageType(svResp.headers.get('content-type'));
-      if (!svResp.ok || !svType) {
+    // Paid attempts for all plugin instances share the same admission service.
+    // The key contains catalog-owned target and pose only, never URL params.
+    const cameraKey = JSON.stringify([
+      cameraId,
+      lat,
+      lon,
+      heading,
+      fov,
+      pitch,
+    ]);
+    return processStreetViewAdmission().run({
+      client,
+      cameraKey,
+      fetchFrame: async () => {
         try {
-          await svResp.body?.cancel();
-        } catch {
-          /* no-op */
-        }
-        return null;
-      }
+          const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
+          sv.searchParams.set('size', '960x540');
+          sv.searchParams.set('location', `${lat},${lon}`);
+          sv.searchParams.set('heading', String(heading));
+          sv.searchParams.set('fov', String(fov));
+          sv.searchParams.set('pitch', String(pitch));
+          sv.searchParams.set('source', 'outdoor');
+          sv.searchParams.set('return_error_code', 'true');
+          sv.searchParams.set('key', streetViewKey);
 
-      return {
-        ok: true,
-        body: Buffer.from(await svResp.arrayBuffer()),
-        contentType: svType,
-      };
-    } catch {
-      return null;
-    }
+          const signal = AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS);
+          const svResp = await fetch(sv.toString(), {
+            headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
+            redirect: 'error',
+            signal,
+          });
+          const svType = cctvRasterImageType(
+            svResp.headers.get('content-type'),
+          );
+          if (!svResp.ok || !svType) {
+            try {
+              await svResp.body?.cancel();
+            } catch {
+              /* no-op */
+            }
+            return null;
+          }
+          const bytes = await readResponseBytesCapped(
+            svResp,
+            CCTV_FRAME_MAX_BODY_BYTES,
+            signal,
+          );
+          return {
+            ok: true,
+            body: Buffer.from(bytes),
+            contentType: svType,
+          };
+        } catch {
+          return null;
+        }
+      },
+    });
   };
 
   const installMiddleware = (server) => {
@@ -562,7 +578,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const sv =
           forwarded || !registeredLocation
             ? null
-            : await streetViewFallback(registeredLocation);
+            : await streetViewFallback(
+                registeredLocation,
+                cameraId,
+                clientNetworkKey(req),
+              );
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',
