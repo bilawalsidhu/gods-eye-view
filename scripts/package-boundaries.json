@@ -2357,6 +2357,7 @@
       "src/app/scene.js",
       "src/app/zoomOutGuard.js",
       "src/sources/sourceSlot.js",
+      "src/sources/cctvPose.js",
       "src/app/sources.js",
       "src/app/startupChrome.js",
       "src/app/stateChannel.js",
