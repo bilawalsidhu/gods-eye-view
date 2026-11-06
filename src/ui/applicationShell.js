@@ -17,6 +17,7 @@ import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
 import { StreetLevelControls } from './streetLevelControls.js';
+import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
 import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
@@ -589,6 +590,7 @@ export class StyleManager extends ShellFacade {
     this._initRadioPanel();
     this._initCctvPanel();
     this._initStreetLevelPanel();
+    this._initWildlifeSightingCard();
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initMobileShell();
@@ -1071,6 +1073,19 @@ export class StyleManager extends ShellFacade {
     const cameraId = activate();
     if (!cameraId) return false;
     return this._runExplicitNavigation('camera', () => focus(cameraId));
+  }
+
+  /** Keep one compact card anchored to the selected wildlife sighting. */
+  _initWildlifeSightingCard() {
+    this._wildlifeSightingCard?.destroy();
+    this._wildlifeSightingCard = null;
+    const layer = this.services.wildlifeSightingsLayer;
+    if (!layer) return;
+    this._wildlifeSightingCard = createWildlifeSightingCard({
+      layer,
+      ui: this._ui,
+      viewer: this.viewer,
+    });
   }
 
   /** Compose the Street Level panel controls from its layer and application actions. */
@@ -1791,6 +1806,7 @@ export class StyleManager extends ShellFacade {
     this._recording.destroy();
     this._mobileShell?.destroy();
     this._panelNavigation?.destroy();
+    this._wildlifeSightingCard?.destroy();
     this._ui.destroy();
     this._panelChrome.destroy();
     this._feedback.destroy();

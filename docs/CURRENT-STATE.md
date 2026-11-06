@@ -65,6 +65,59 @@ settling. Oblique views below 300 km are left alone.
 `QA_BASE_URL=http://localhost:4173 node scripts/qa-zoom-out-guard.mjs` exercises
 the real browser controller at desktop and phone widths with keyless fixtures.
 
+Cesium's free look (Shift+drag, which turns the camera in place) works only
+below 1,000 km. Above that height a few drags could turn the whole planet out of
+frame and leave only stars, so Shift+drag does nothing there. Cesium also turns
+the camera in place for a drag that starts on the stars below its trackball
+height (7,500 km by default); that height is lowered to 1,000 km, so such a drag
+orbits the globe above it, as it does higher up, and a tilt (drag or touch)
+while the screen centre is on the stars there tilts about the planet's edge or
+does nothing, wherever it starts. Rotation drags that start on the planet, and
+zoom, are unchanged. How much of the frame shows the planet's surface is
+measured by casting a 32×18 grid of view rays at the ellipsoid; while the scope
+mask is on (the default) only the rays inside its keyhole count, since the mask
+hides or dims the rest. Voice tilt and in-place turns of a free 3D camera above
+1,000 km stop when about a tenth of the frame still shows the surface (or about
+as much as it showed when it started), never less than about 1% of the visible
+frame, and a view that already shows less only keeps or gains what it has. A
+turn that cannot go half a degree further without crossing that limit is refused
+with a reason instead of reported as done, and a turn it accepts turns at least
+that half degree. A voice tilt to an angle (or a bare tilt, to -45°) that the
+limit stops short of is aimed at the angle where it stops, and its result names
+that angle (`pitchDeg`) with a `note`. A turn that keeps or gains surface is not refused, even after
+the window has been resized, except that near the limit, where the planet's edge
+crosses the sample grid, sampling wobble can occasionally refuse one (most often
+above about 15,000 km and on phone or ultrawide frames); nothing then turns away
+from the planet. A turn that starts where the last voice turn left the camera
+keeps that turn's limit, or a higher one if the planet now fills more, so
+repeating the request does not take any more; once anything else has moved or
+turned the camera, a turn is measured from what is on screen. When a camera move
+ends above 1,000 km with no ray on the surface, the camera turns straight down
+at the same position and heading. The end of a move is taken from Cesium's
+move-end event and from a check of its own that samples the pose every 250 ms
+after a move starts and acts once it has held for half a second, because at some
+of these poses the camera drifts by a rounding error every frame and Cesium
+never sees it stop. That check keeps watching until move-end arrives, recovering
+once after each move that comes to rest, and gives up five minutes after the
+camera last moved. Limb glow, and a surface sliver up to about one grid cell
+thick (some 50 px on a 900 px tall frame), can count as out of view. The
+zoom-out guard above keeps wheel and pinch zoom-outs in view; this catches the
+other ways a move can end looking away, such as a saved or shared view that did.
+Views with more surface than that, such as the oblique orbital Director shots,
+are left as they are, and so are tracked or locked cameras, a camera flight in
+progress, a Director scene while it plays (holds included), a pointer held
+down on the globe (a drag held still; with several fingers down, until the
+last is released) and the 2D and Columbus modes; a check a flight, scene or
+held pointer defers runs once it ends. A release outside the window that the
+page never sees counts as given once the window loses focus, the page is
+hidden, the canvas loses the pointer's capture, or the pointer moves with no
+button down. A Director
+shot loaded or replayed outside a run is not a playing scene. A view that loses
+its surface without a camera move (a resize, or turning the scope on) is left as
+it is until the next move. A voice turn requested while the camera is tracked is
+judged by the pose voice's release of the follow camera will leave, before that
+release, so a refused turn keeps the tracking.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
@@ -97,6 +150,106 @@ approximations. Four great-circle copies remain for a follow-up:
 across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
+
+## Wildlife Sightings — iNaturalist and Acartia
+
+**Wildlife Sightings** (`wildlife-sightings`, share-link token `9`) is off by
+default in the Wildlife group between Events and Weather. CONFIRMED and six
+taxa presets round-trip in share links. Voice is off for this layer for now;
+it is outside analyst queries and DETECT. Community observations are not a
+census; private records are excluded.
+
+`/api/inaturalist/observations` requests verifiable wildlife in view within
+48 h (whales 7 d). Recency uses observation time: the `d1` date filter and a
+strict rolling cutoff. Date-only rows qualify only when their day starts
+within the window. Close views use a cached random sample of at most 200 rows;
+global samples use newest observations first. Observation caches last five
+minutes (global ten minutes), with stale fallback for at most one hour.
+
+Observations and grid tiles share a paced priority queue: a four-call burst,
+then one request per second, at most four in flight, ≤60/minute and a persisted
+8,000/day budget. Superseded consumers leave before dispatch. The recovered
+queue tail isolates failures; ordinary grid failures do not fail observations.
+Provider 429 cooldown is shared; 5xx cooldown is resource-specific. Failed tiles
+retain good cells for at most one hour. Stale replies carry `X-Data-Stale` and
+known `Retry-After`. Failures keep filters and drawn rows, reporting DEGRADED
+with retry timing; logs exclude request URLs and upstream exception text.
+A partial failure still draws what arrived: a failed iNaturalist request, or
+one failed half of an antimeridian view, keeps a good Acartia reply and the
+other half, retains that area's last iNaturalist rows and reports DEGRADED.
+The update fails outright only when every requested source failed. Each failed
+source keeps its HTTP status and `Retry-After` (the HTTP status counts when no
+`X-Upstream-Status` is sent), and the next request waits out the longest 429 or
+5xx cooldown among them. One update requests both sources, so the cooldown
+holds the whole layer; a fully successful refresh clears it.
+
+`/api/acartia/sightings` adds Salish Sea marine mammals within 45.5–50.5° N,
+126–121° W, cached ten minutes and stale for at most 24 h. A valid empty
+snapshot, including one whose rows all fall outside coverage or the species
+checks, is a fresh success that clears earlier rows; only a malformed or failed
+upstream reply serves stale and starts a retry cooldown. WHALES accepts only
+recognized cetaceans; other identified marine mammals appear under ALL or
+MAMMALS. Sensitive iNaturalist locations remain 0.2° privacy cells; Acartia
+positions are rounded to 0.01° on the server. Acartia comments are never retained.
+Observer identity is retained only for photo attribution.
+
+`/api/inaturalist/grid` supplies a dedicated, nonpickable billboard density glow,
+with a view-relative density ramp from cool teal to warm amber. Overlapping
+Gaussian splats span four logical cell widths; mono and CRT styles follow map
+and cockpit vision changes. Empty snapshots paint nothing. Full footprints
+stay inside the globe limb with a 5% radius margin; opacity fades from full at
+3,000 km to zero at 8,000 km camera altitude. Culling and cached coordinates
+add no per-frame work and leave sighting counts intact.
+
+Only real sampled observation rows produce taxon badges at their public
+positions. The badges use 28 px screen buckets, a 22 px overlap check and a
+5,000-observation cap. Tinted circles have a white Material Symbols glyph and
+1.5 px dark outline, remaining 12–22 px at all distances, including selection.
+Glyphs: birds `raven`, mammals `pets`, reptiles `egg_alt`, amphibians
+`water_drop`, fishes `set_meal`, insects `bug_report`, arachnids `pest_control`,
+plants `eco`, fungi `umbrella`, other animals `category`, unknown `question_mark`.
+A plain circle displays while the icon font loads. Row counts read
+“{n} sightings in view”, using visible grid totals when available.
+
+Views request at most six tiles, coarsening zoom for complete coverage. Server
+and client keep bounded 400-tile caches for 15 minutes. Cached, stale and
+adjacent-zoom tiles publish before network waits; each arriving tile replaces
+its covered area, including healthy empty tiles. Grid tiles publish even while
+the independent observation request is pending or failed. Enable waits for one
+camera settle; camera acquisition uses moveEnd with a 600 ms debounce. The
+documented UTFGrid endpoint's unspecified cell records have a schema guard;
+see `KNOWN-ISSUES.md`.
+
+Ambient cards use a fixed 96 px image width and a short creator name credit,
+with a bounded frame cache. New cards fill free screen regions; visible cards
+survive a random sample refresh until they leave the view or observation
+window. The 110/125 km show/hide thresholds provide hysteresis; cards scale
+and fade gradually through 120 km. Only painted photos suppress their own
+badge and label. Labels yield to painted cards, then compete by ambient score;
+repeated translated names within 80 screen pixels yield to higher-priority
+content. At most 150 labels enter the host. Titles prefer a word boundary for
+ellipses; accessible names remain complete. Selected thumbnails or names use
+the shared selected chrome and paint lane, with no canvas source link.
+
+Clicking a badge, label or photo flies to its supplied position and opens a
+compact anchored photo card. Selection stays pinned across camera, filter and
+sample changes until explicit deselection or layer disable. Its medium image
+uses `object-fit: contain`, with names, compact observed age and creator/licence.
+The card is the single source link to iNaturalist. Obscured sightings also stay
+text-only; Acartia stays text-only with provider credit and whale guidance,
+and its source link is always `https://acartia.io/`, never a contributed URL.
+Placement avoids actual HUD, toolbar and rail rectangles, panning only when
+necessary while preserving zoom. Escape, close or an outside click closes the
+card and clears selection. Camera/layout changes reposition the card without
+an idle frame listener; shell teardown also removes its host and subscription.
+
+Attribution appears in the layer row and Data attribution popover:
+“iNaturalist contributors · licences per record”, plus Acartia when drawn.
+Disable/destroy releases the glow collection, texture atlas, timers, queues and
+style listeners. Synthetic fixtures cover privacy, acquisition, rendering,
+selection and card placement. Deterministic operation checks run in `npm test`;
+wall-clock budgets run in `npm run test:perf`. All 11 locales are supported.
+
 
 ## Prohibited & Restricted Airspace — FAA special-use airspace
 
@@ -1544,6 +1697,8 @@ are owned by a renderer-free panel component. The layer manager supplies current
 snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
 The clear control presents busy state while its existing action owns the transaction.
+The Wildlife group follows Events and precedes Weather; Wildlife Sightings
+provides its confirmed toggle, taxa presets and fixed-order, nonempty legend.
 
 ## Sky background
 
@@ -4216,6 +4371,7 @@ its criteria cannot be silently ignored.
 | Ski Pistes ⛷ (`ski-pistes`) | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 | Prohibited & Restricted Airspace 🚫 | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry) | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js` | `/api/drone-airspace` | 1 h (server cache 1 h; stale-on-error) |
+| Wildlife Sightings 🦉 | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless) | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js` | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings` | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
