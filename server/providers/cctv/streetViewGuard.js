@@ -69,7 +69,7 @@ export function createStreetViewAdmission({
   perClientMax = STREET_VIEW_PER_CLIENT_MAX_REQUESTS,
   globalMax = STREET_VIEW_MAX_REQUESTS,
   dailyMax = STREET_VIEW_DAILY_MAX_REQUESTS,
-  successCooldownMs = 60_000,
+  successCooldownMs = 0,
   failureCooldownMs = 120_000,
   maxPending = STREET_VIEW_MAX_PENDING,
   maxTracked = STREET_VIEW_MAX_TRACKED_KEYS,
