@@ -1127,3 +1127,64 @@ test('the panel says why a lit Street View draws nothing off Google 3D', async (
   const view = presentStreetLevelPanel(layer.getUIState());
   assert.match(view.meta, /Google Street View needs the Google 3D map/);
 });
+
+test('without a Mapillary key the first keyless source is lit instead', async (t) => {
+  const kartaViewSource = {
+    getTile: async () => ({ lines: [] }),
+    nearestPhotos: async () => [],
+    getPhoto: async () => {
+      throw new Error('KartaView has no such photo');
+    },
+    getSequencePhotos: async () => ({ photos: [], hasMore: false }),
+    probeImage: async () => true,
+  };
+  const lit = (hasToken) => {
+    const layer = createStreetLevelLayer({
+      providers: [
+        createMapillaryProvider({
+          source: fakeMapillarySource({ hasToken: () => hasToken }),
+          photoViewer: fakePhotoViewer(),
+        }),
+        createKartaViewProvider({ source: kartaViewSource }),
+      ],
+    });
+    t.after(() => layer.destroy());
+    return layer
+      .getUIState()
+      .providers.filter((provider) => provider.on)
+      .map((provider) => provider.id);
+  };
+  assert.deepEqual(lit(false), ['kartaview']);
+  assert.deepEqual(lit(true), ['mapillary']);
+});
+
+test('restoring the default "Mapillary on" without its key keeps a keyless source', (t) => {
+  const layer = createStreetLevelLayer({
+    providers: [
+      createMapillaryProvider({
+        source: fakeMapillarySource({ hasToken: () => false }),
+        photoViewer: fakePhotoViewer(),
+      }),
+      createKartaViewProvider({
+        source: {
+          getTile: async () => ({ lines: [] }),
+          nearestPhotos: async () => [],
+          getPhoto: async () => null,
+          getSequencePhotos: async () => ({ photos: [], hasMore: false }),
+          probeImage: async () => true,
+        },
+      }),
+    ],
+  });
+  t.after(() => layer.destroy());
+  const litIds = () =>
+    layer
+      .getUIState()
+      .providers.filter((provider) => provider.on)
+      .map((provider) => provider.id);
+  layer.setParams({ mapillary: true, providerSwitches: '' });
+  assert.deepEqual(litIds(), ['kartaview']);
+  // A link that switches KartaView off keeps its word.
+  layer.setParams({ mapillary: true, providerSwitches: 'kartaview-0' });
+  assert.deepEqual(litIds(), ['mapillary']);
+});

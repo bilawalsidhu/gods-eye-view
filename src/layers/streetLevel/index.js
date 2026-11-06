@@ -126,8 +126,17 @@ export function createStreetLevelLayer({
     });
   }
 
-  // One source at a time: the first provider that defaults on.
-  const startsOn = defs.find((def) => def.defaultOn !== false);
+  /** `def`, or the first keyless provider not refused when `def` has no key. */
+  function keylessInstead(def, refused = () => false) {
+    if (def.keyReady?.() !== false) return def;
+    return defs.find((d) => !d.requiresKeyId && !refused(d.id)) || def;
+  }
+
+  // One source at a time: the first provider that defaults on. Without its
+  // key, the first keyless source instead, so a fresh keyless install opens
+  // on coverage rather than KEY REQUIRED.
+  const preferred = defs.find((def) => def.defaultOn !== false);
+  const startsOn = preferred && keylessInstead(preferred);
   for (const def of defs) {
     const entry = {
       def,
@@ -585,7 +594,15 @@ export function createStreetLevelLayer({
         providerIds: state.providers.keys(),
         filter: state.filter,
       });
-      const lit = litByParams(decoded.providers);
+      // Links and stored state omit Mapillary when it is on (the codec
+      // default), so a keyless install would restore a source it cannot draw.
+      const asked = litByParams(decoded.providers);
+      const lit =
+        asked &&
+        keylessInstead(
+          state.providers.get(asked).def,
+          (id) => decoded.providers.get(id) === false,
+        ).id;
       const before = litIds();
       for (const [id, entry] of state.providers)
         if (id !== lit) switchProvider(entry, false);
