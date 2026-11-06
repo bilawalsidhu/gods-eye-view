@@ -3,22 +3,34 @@
  * @description The part of the Cesium renderer the reference scenes need,
  * through the contract's own members: a bare globe and sky, icons, points,
  * lines, shapes and models, `setView`, picks and projection, the frame
- * phases, settling and capture. The `/dev/conformance/` page draws the
- * scenes with it to make and check the visual references.
+ * phases, pointer input, settling and capture. The `/dev/conformance/` page
+ * draws the scenes with it to make and check the visual references.
  *
  * Its ports are `ports.js`'s, which the application's renderer shares;
- * this factory adds the conformance widget, its fixed settings and the
- * bare-globe and sky members.
+ * this factory adds the conformance widget, its fixed settings, the input
+ * port (`input.js`, not yet the application's) and the bare-globe and sky
+ * members.
  *
  * It is not yet the whole Cesium renderer: each later migration adds the
  * members its layer family needs, until it passes the whole suite.
  * Members it does not have are absent, never stubbed.
  */
 import * as Cesium from 'cesium';
+import { createCesiumInput } from './input.js';
 import { onEngineWorkCompleted, renderPending } from './internals.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
 
 export { toCartesian, toColor, toImage } from './ports.js';
+
+/** Each renderer's pointer feed, for the conformance harness. */
+const feeds = new WeakMap();
+
+/**
+ * Delivers one pointer event to a renderer this made, as its handler would.
+ * @param {object} renderer
+ * @returns {((type: string, x: number, y: number, extra?: object) => void) | null}
+ */
+export const pointerFeedOf = (renderer) => feeds.get(renderer) ?? null;
 
 const SKY_DEFAULTS = Object.freeze({
   atmosphere: false,
@@ -78,6 +90,10 @@ export async function createCesiumSceneRenderer({
   }
 
   const ports = createCesiumPorts(widget, { capabilities });
+  const input = createCesiumInput(widget, {
+    query: ports.query,
+    report: ports.report,
+  });
   const frame = {
     ...ports.frame,
     setTime(ms) {
@@ -247,7 +263,7 @@ export async function createCesiumSceneRenderer({
     }
   }
 
-  return {
+  const renderer = {
     id: 'cesium',
     contractVersion: '0',
     capabilities,
@@ -262,6 +278,7 @@ export async function createCesiumSceneRenderer({
         ),
     camera: ports.camera,
     query: ports.query,
+    input: input.port,
     capture: ports.capture,
     whenSettled,
     resize: () => widget.resize(),
@@ -269,8 +286,11 @@ export async function createCesiumSceneRenderer({
     destroy() {
       destroyed = true;
       for (const finish of [...watching]) finish('ended');
+      input.dispose();
       ports.dispose();
       widget.destroy();
     },
   };
+  feeds.set(renderer, input.feed);
+  return renderer;
 }

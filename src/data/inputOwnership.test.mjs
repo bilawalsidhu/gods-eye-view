@@ -120,7 +120,8 @@ test('pointer input, camera holds and the stock clicks go through the one dispat
     [
       /new\s+[\w.]*ScreenSpaceEventHandler\(/,
       'binds its own ScreenSpaceEventHandler',
-      [],
+      // The Cesium renderer's input port, the renderer's one handler.
+      ['src/render/cesium/input.js'],
     ],
     [
       /\.enableInputs\s*=(?!=)/,
@@ -129,9 +130,10 @@ test('pointer input, camera holds and the stock clicks go through the one dispat
       ['src/render/cesium/cameraInput.js'],
     ],
     [
-      /screenSpaceEventHandler\??\.removeInputAction\(/,
+      /(?:screenSpaceEventHandler|stockHandler)\??\.removeInputAction\(/,
       'removes stock clicks instead of suppressStockClicks()',
-      [],
+      // It runs the stock clicks itself.
+      ['src/render/cesium/input.js'],
     ],
   ];
   const walk = (dir) =>

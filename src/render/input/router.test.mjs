@@ -114,3 +114,20 @@ test('camera holds go to the renderer, reason as a string', () => {
   port.suspendCameraControls(7);
   assert.deepEqual(reasons, ['7']);
 });
+
+test('dispose ends delivery, even of the event under way', () => {
+  const { port, dispatch, dispose, listenerCount } = router();
+  const heard = [];
+  // A lease that leaves presses alone, so the down is everyone else's.
+  const lease = port.claimPointer('tool', { grab: () => false });
+  port.on('down', () => {
+    heard.push('a');
+    dispose();
+  });
+  port.on('down', () => heard.push('b'));
+  dispatch(ev('down'));
+  assert.deepEqual(heard, ['a']);
+  assert.equal(listenerCount(), 0);
+  assert.equal(lease.current, false, 'the lease ended');
+  assert.equal(port.isPointerFree(), true);
+});
