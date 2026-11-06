@@ -124,7 +124,11 @@ with retry timing; logs exclude request URLs and upstream exception text.
 A partial failure still draws what arrived: a failed iNaturalist request, or
 one failed half of an antimeridian view, keeps a good Acartia reply and the
 other half, retains that area's last iNaturalist rows and reports DEGRADED.
-The update fails outright only when every requested source failed.
+The update fails outright only when every requested source failed. Each failed
+source keeps its HTTP status and `Retry-After` (the HTTP status counts when no
+`X-Upstream-Status` is sent), and the next request waits out the longest 429 or
+5xx cooldown among them. One update requests both sources, so the cooldown
+holds the whole layer; a fully successful refresh clears it.
 
 `/api/acartia/sightings` adds Salish Sea marine mammals within 45.5–50.5° N,
 126–121° W, cached ten minutes and stale for at most 24 h. A valid empty

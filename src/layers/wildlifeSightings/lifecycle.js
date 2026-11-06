@@ -1,6 +1,9 @@
 import { msg } from '../../i18n/marker.js';
 import { getWildlifeHeightBand, rowInWildlifeBoxes } from './model.js';
-import { combineWildlifeGridSnapshots } from './source.js';
+import {
+  combineWildlifeGridSnapshots,
+  wildlifeFailureRetryable,
+} from './source.js';
 import { wildlifeMeasure } from './performance.js';
 import { isRecentWildlifeSighting } from './records.js';
 import {
@@ -92,25 +95,26 @@ export function createLifecycle({ state, services, parts }) {
     state.pendingParams = null;
   }
 
-  function applyRetry(error, retryAfterSec = null) {
-    // Only upstream failures impose cooldown; network/schema errors retry on pan.
-    const status =
-      error?.upstreamStatus ??
-      error?.status ??
-      Number(/HTTP (\d{3})/.exec(error?.message || '')?.[1]);
-    const retryDelays = [error?.retryAfterSec, retryAfterSec].filter(
-      (value) => Number.isFinite(value) && value >= 0,
-    );
-    const retryFromSnapshot =
-      Number.isFinite(retryAfterSec) && retryAfterSec >= 0;
-    if (!(status === 429 || status >= 500) && !retryFromSnapshot) {
+  function applyRetry(errors, retryAfterSec = null) {
+    // Only upstream failures impose cooldown; network/schema errors retry on
+    // pan. Several sources can fail together: wait for the longest of them.
+    const failures = [errors].flat().filter(wildlifeFailureRetryable);
+    const snapshotDelay =
+      Number.isFinite(retryAfterSec) && retryAfterSec >= 0
+        ? retryAfterSec * 1000
+        : null;
+    if (!failures.length && snapshotDelay === null) {
       state.failures = 0;
       state.retryAt = 0;
       return;
     }
-    const backoff = retryDelays.length
-      ? Math.max(...retryDelays) * 1000
-      : retryDelayMs(state.failures || 0);
+    const delays = failures.map((error) =>
+      Number.isFinite(error.retryAfterSec) && error.retryAfterSec >= 0
+        ? error.retryAfterSec * 1000
+        : retryDelayMs(state.failures || 0),
+    );
+    if (snapshotDelay !== null) delays.push(snapshotDelay);
+    const backoff = Math.max(...delays);
     state.failures = backoff;
     state.retryAt = services.now() + backoff;
   }
@@ -404,16 +408,39 @@ export function createLifecycle({ state, services, parts }) {
             },
           )
         : null;
-      const sourceError =
-        gridError ||
-        staleError ||
-        (snapshot.sources?.inaturalist?.ok === false
-          ? snapshot.sources.inaturalist.error ||
+      const inat = snapshot.sources?.inaturalist;
+      const acartia = snapshot.sources?.acartia;
+      // Keep each failed source's status and Retry-After; the displayed error
+      // is the one that explains the cooldown.
+      const sourceErrors = [
+        gridError,
+        staleError,
+        inat?.ok === false
+          ? inat.error ||
             new Error(msg('Wildlife sightings source unavailable'))
-          : null) ||
-        (snapshot.sources?.acartia?.ok === false
-          ? new Error(msg('Acartia feed unavailable'))
-          : null);
+          : null,
+        acartia?.ok === false
+          ? Object.assign(new Error(msg('Acartia feed unavailable')), {
+              ...(acartia.error?.status
+                ? { status: acartia.error.status }
+                : {}),
+              ...(acartia.error?.upstreamStatus
+                ? { upstreamStatus: acartia.error.upstreamStatus }
+                : {}),
+              ...(Number.isFinite(acartia.error?.retryAfterSec)
+                ? { retryAfterSec: acartia.error.retryAfterSec }
+                : {}),
+            })
+          : null,
+      ].filter(Boolean);
+      const sourceError =
+        sourceErrors.find(
+          (error) =>
+            wildlifeFailureRetryable(error) ||
+            Number.isFinite(error.retryAfterSec),
+        ) ||
+        sourceErrors[0] ||
+        null;
       state.stale =
         !sourceError && (snapshot.stale === true || grid?.stale === true);
       const fetchedAt = [snapshot.fetchedAt, grid?.fetchedAt].filter(
@@ -438,7 +465,7 @@ export function createLifecycle({ state, services, parts }) {
       if (sourceError) {
         failParams(params);
         applyRetry(
-          sourceError,
+          sourceErrors,
           retryAfter.length ? Math.max(...retryAfter) : null,
         );
       } else {

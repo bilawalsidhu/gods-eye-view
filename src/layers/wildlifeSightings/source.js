@@ -102,6 +102,36 @@ function validProjectedRows(rows, origin) {
   );
 }
 
+/** Return the status a failure reports. The proxy marks upstream failures
+ * with X-Upstream-Status; without it the HTTP status is the signal. */
+function wildlifeFailureStatus(error) {
+  return (
+    error?.upstreamStatus ||
+    error?.status ||
+    Number(/HTTP (\d{3})/.exec(error?.message || '')?.[1]) ||
+    0
+  );
+}
+
+/** Whether a failure asks clients to wait before the next request. */
+export function wildlifeFailureRetryable(error) {
+  const status = wildlifeFailureStatus(error);
+  return status === 429 || status >= 500;
+}
+
+/** Prefer the failure that carries retry timing, then the longest wait. */
+export function preferredWildlifeFailure(errors) {
+  const failures = errors.filter(Boolean);
+  const retryable = failures.filter(wildlifeFailureRetryable);
+  if (!retryable.length) return failures[0] || null;
+  return retryable.reduce((best, error) =>
+    (Number.isFinite(error.retryAfterSec) ? error.retryAfterSec : -1) >
+    (Number.isFinite(best.retryAfterSec) ? best.retryAfterSec : -1)
+      ? error
+      : best,
+  );
+}
+
 /** Merge occupied cells incrementally; neighboring UTFGrid hit tiles can
  * report the same geographic cell, so source ids remain the dedupe key. */
 export function combineWildlifeGridSnapshots(snapshots, error = null) {
@@ -421,7 +451,7 @@ export function createWildlifeSightingsSource({
       ),
     );
     signal?.throwIfAborted();
-    const failure = failures.find(Boolean);
+    const failure = preferredWildlifeFailure(failures);
     if (!snapshots.some(Boolean) && failure) throw failure;
     return combineWildlifeGridSnapshots(snapshots.filter(Boolean), failure);
   }
@@ -494,11 +524,15 @@ export function createWildlifeSightingsSource({
     });
     // Fail outright only when nothing succeeded; otherwise draw what arrived
     // and report the failed source in its per-source status.
+    const acartiaError =
+      useAcartia && acartiaResult.status === 'rejected'
+        ? acartiaResult.reason
+        : null;
     if (
       !inatSnapshots.length &&
       (!useAcartia || acartiaResult.status !== 'fulfilled')
     )
-      throw inatError;
+      throw preferredWildlifeFailure([inatError, acartiaError]);
     const inatRows = inatSnapshots.flatMap((snapshot) => snapshot.rows);
     const acartiaSnapshot =
       acartiaResult.status === 'fulfilled' ? acartiaResult.value : null;
@@ -553,12 +587,13 @@ export function createWildlifeSightingsSource({
           ...(inatError ? { error: inatError, failedBoxes } : {}),
         },
         acartia: {
-          ok: !useAcartia || acartiaResult.status === 'fulfilled',
+          ok: !acartiaError,
           stale: acartiaStale,
           fetchedAt: Number.isFinite(acartiaSnapshot?.fetchedAt)
             ? acartiaSnapshot.fetchedAt
             : null,
           count: drawnAcartia,
+          ...(acartiaError ? { error: acartiaError } : {}),
         },
       },
     };

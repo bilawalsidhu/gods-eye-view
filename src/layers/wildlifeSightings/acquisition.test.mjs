@@ -833,10 +833,10 @@ test('an empty tile retires its old zoom cells while uncovered density survives 
   assert.equal(h.state.gridTotal, 2);
 });
 
-test('only marked upstream failures create cooldown; local pacing, network and schema errors can retry on the next view', async () => {
+test('only 429 and 5xx failures create cooldown; client, network and schema errors can retry on the next view', async () => {
   for (const error of [
-    Object.assign(new Error('iNaturalist HTTP 503'), {
-      status: 503,
+    Object.assign(new Error('iNaturalist HTTP 400'), {
+      status: 400,
       upstreamStatus: 0,
       retryAfterSec: 30,
     }),
@@ -873,6 +873,19 @@ test('only marked upstream failures create cooldown; local pacing, network and s
     2,
     'actual Retry-After is honored without imposing a 30s local floor',
   );
+  // The proxy's daily-budget 503 has no upstream status. Its HTTP status and
+  // Retry-After still govern the next request.
+  const budget = harness({
+    getSnapshot: async () => {
+      throw Object.assign(new Error('iNaturalist HTTP 503'), {
+        status: 503,
+        upstreamStatus: 0,
+        retryAfterSec: 3600,
+      });
+    },
+  });
+  await budget.layer.update();
+  assert.equal(budget.layer.getStats().retryInSec, 3600);
 });
 
 test('stale cached tiles with local pacing metadata keep their display and do not enter cooldown', async () => {
@@ -942,3 +955,120 @@ test('an explicit upstream Retry-After zero retries immediately while a missing 
     }
   }
 });
+
+const salishSea = { south: 47.5, west: -122.5, north: 47.7, east: -122.2 };
+const inatRow = {
+  stableId: 'inat:301',
+  origin: 'inaturalist',
+  lat: 47.6,
+  lon: -122.3,
+  observedAt: NOW - 3_600_000,
+  iconic: 'Mammalia',
+};
+const acartiaRow = {
+  stableId: 'acartia:301',
+  origin: 'acartia',
+  lat: 47.6,
+  lon: -122.35,
+  observedAt: NOW - 3_600_000,
+  cetacean: true,
+  quality: 'research',
+  provider: { name: 'Provider', entity: null },
+};
+const emptyGrid = () =>
+  Response.json({ cells: [], totalResults: 0, fetchedAt: NOW });
+const unavailable = (headers = {}) =>
+  new Response('', {
+    status: 503,
+    headers: { 'Retry-After': '120', ...headers },
+  });
+
+// Each case runs the real source and lifecycle. A healthy source draws its
+// rows while the failed source's Retry-After holds the next acquisition.
+for (const [name, respond] of [
+  [
+    'Acartia alone returns 503',
+    (url) =>
+      url.startsWith('/api/acartia')
+        ? unavailable()
+        : url.startsWith('/api/inaturalist/grid?')
+          ? emptyGrid()
+          : Response.json({
+              rows: [inatRow],
+              totalResults: 1,
+              fetchedAt: NOW,
+            }),
+  ],
+  [
+    'iNaturalist returns 503 without X-Upstream-Status',
+    (url) =>
+      url.startsWith('/api/acartia')
+        ? Response.json({ rows: [acartiaRow], fetchedAt: NOW })
+        : url.startsWith('/api/inaturalist/grid?')
+          ? emptyGrid()
+          : unavailable(),
+  ],
+  [
+    'iNaturalist returns 503 while every grid tile fails its schema',
+    (url) =>
+      url.startsWith('/api/acartia')
+        ? Response.json({ rows: [acartiaRow], fetchedAt: NOW })
+        : url.startsWith('/api/inaturalist/grid?')
+          ? Response.json({ cells: 'malformed' })
+          : unavailable({ 'X-Upstream-Status': '503' }),
+  ],
+]) {
+  test(`a partial failure keeps its Retry-After: ${name}`, async () => {
+    let healthy = false;
+    let requests = 0;
+    const source = createWildlifeSightingsSource({
+      now: () => NOW,
+      fetchImpl: async (url) => {
+        if (!url.startsWith('/api/inaturalist/grid?')) requests++;
+        if (healthy)
+          return url.startsWith('/api/acartia')
+            ? Response.json({ rows: [acartiaRow], fetchedAt: NOW })
+            : url.startsWith('/api/inaturalist/grid?')
+              ? emptyGrid()
+              : Response.json({
+                  rows: [inatRow],
+                  totalResults: 1,
+                  fetchedAt: NOW,
+                });
+        return respond(url);
+      },
+    });
+    const h = harness(source);
+    h.bounds(salishSea);
+    h.state.enabled = false;
+    h.layer.enable();
+    const first = h.layer.update();
+    await h.advance(300);
+    await first;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.state.renderedRows.length, 1, 'the healthy source draws');
+    assert.ok(h.state.error, 'the failed source is reported');
+    // The source clock stays at NOW; the layer settled 300 ms of camera time.
+    assert.equal(h.state.retryAt, NOW + 300 + 120_000);
+    assert.equal(h.layer.getStats().retryInSec, 120);
+    const attempted = requests;
+    h.bounds({ ...salishSea, north: 47.8 });
+    h.moveEnd();
+    assert.equal([...h.timers.values()][0]?.delay, 120_000);
+    await h.advance(119_999);
+    await h.layer.update();
+    assert.equal(
+      requests,
+      attempted,
+      'neither a camera move nor manager polling skips the cooldown',
+    );
+    healthy = true;
+    await h.advance(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(requests > attempted, 'acquisition resumes at the deadline');
+    assert.equal(h.state.error, null);
+    assert.equal(h.state.retryAt, 0, 'a fully successful refresh clears it');
+    assert.equal(h.layer.getStats().retryInSec, undefined);
+    assert.equal(h.state.renderedRows.length, 2);
+  });
+}
