@@ -1,26 +1,25 @@
+import { readFileSync } from 'node:fs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import militaryAwarenessLayer, {
   _getAwarenessNavigationStateForTest,
+  _getAwarenessPanelRendersForTest,
   awarenessClearMatchesSubject,
   awarenessNeedsContinuousRender,
   awarenessRefreshDecision,
   awarenessRefreshIntervalMs,
   awarenessRefreshRequired,
   awarenessResultsAreLive,
-  awarenessPanelControlKey,
   buildAwarenessContextSnapshot,
   canNavigateAwarenessNext,
   contactsWindowFromSnapshot,
   contextTargetFlyToAllowed,
-  captureAwarenessPanelFocus,
   summarizeInstallationViewport,
   findCompatibleHistoryIndex,
   AWARENESS_QUERY_LIMIT,
   historySubjectSnapshot,
-  restoreAwarenessPanelFocus,
 } from './militaryAwareness.js';
 import flightsLayer, {
   _setTrackedFlightRefreshStateForTest,
@@ -52,6 +51,10 @@ const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
   'utf8',
 );
+const awarenessPanelSource = readFileSync(
+  new URL('../ui/views/panels/AwarenessPanel.vue', import.meta.url),
+  'utf8',
+);
 
 const AWARENESS_DEPENDENCIES = [
   'flights',
@@ -76,6 +79,9 @@ test('Contacts moves a distance that rounds to 1,000 m into kilometres', () => {
   assert.equal(presentAwarenessDistance(999.4), '999\u00a0m');
   assert.equal(presentAwarenessDistance(999.6), '1.0\u00a0km');
   assert.equal(presentAwarenessDistance(4600), '4.6\u00a0km');
+  assert.equal(presentAwarenessDistance(9949), '9.9\u00a0km');
+  assert.equal(presentAwarenessDistance(9950), '10\u00a0km');
+  assert.equal(presentAwarenessDistance(9960), '10\u00a0km');
 });
 
 function installAwarenessRuntime({
@@ -92,33 +98,19 @@ function installAwarenessRuntime({
   // status its module never emits guards nothing. See the settled-but-fetching
   // tests below, which use militaryInstallations' genuine first-fetch readout.
   layerStats = {},
+  subscribe = undefined,
 } = {}) {
   const originalWindow = globalThis.window;
   const originalDocument = globalThis.document;
   const listeners = new Map();
   let nextTimer = 1;
   let preRenderListener = null;
-  const createdElements = [];
 
   class FakeElement {
     constructor() {
       this.classList = { contains: () => false };
       this.style = { setProperty() {} };
-      this._hidden = false;
-      // renderResults() writes `hidden = false` on EVERY call, ahead of its
-      // markup diff, so counting these writes observes "was the panel
-      // repaint path entered?" independently of whether the markup changed.
-      this.hiddenWrites = 0;
-      this.innerHTML = '';
-    }
-
-    get hidden() {
-      return this._hidden;
-    }
-
-    set hidden(value) {
-      this._hidden = value;
-      this.hiddenWrites += 1;
+      this.hidden = false;
     }
 
     setAttribute() {}
@@ -213,9 +205,7 @@ function installAwarenessRuntime({
       return null;
     },
     createElement() {
-      const element = new FakeElement();
-      createdElements.push(element);
-      return element;
+      return new FakeElement();
     },
     addEventListener() {},
     removeEventListener() {},
@@ -226,9 +216,14 @@ function installAwarenessRuntime({
     setEnabled,
     getLayerLifecycleState,
     layers,
+    ...(subscribe ? { subscribe } : {}),
   });
   militaryAwarenessLayer.setParams({ passive: true });
   militaryAwarenessLayer.init(viewer);
+  const panelViews = [];
+  const unsubscribePanel = militaryAwarenessLayer.subscribePanel((view) =>
+    panelViews.push(view),
+  );
   militaryAwarenessLayer.enable();
 
   return {
@@ -248,15 +243,16 @@ function installAwarenessRuntime({
       );
       return taken;
     },
-    /** The standalone Context panel element renderResults() paints into. */
+    /** The Contacts panel as the layer publishes it to the view. */
     panel() {
-      return (
-        createdElements.find(
-          (element) => element.id === 'military-awareness-panel',
-        ) || null
-      );
+      return {
+        view: panelViews.at(-1) ?? null,
+        publishes: panelViews.length,
+        renders: _getAwarenessPanelRendersForTest(),
+      };
     },
     restore() {
+      unsubscribePanel();
       militaryAwarenessLayer.destroy();
       globalThis.window = originalWindow;
       globalThis.document = originalDocument;
@@ -264,144 +260,24 @@ function installAwarenessRuntime({
   };
 }
 
-function awarenessControl(dataset, { disabled = false } = {}) {
-  return {
-    dataset,
-    disabled,
-    focusCalls: 0,
-    closest(selector) {
-      if (selector === '[data-awareness-focus-continuation]') {
-        return this.isContinuation ? this : null;
-      }
-      return selector.includes('button') && !this.isContinuation ? this : null;
-    },
-    matches(selector) {
-      return (
-        selector === '[data-awareness-focus-continuation]' &&
-        this.isContinuation
-      );
-    },
-    focus(options) {
-      this.focusCalls += 1;
-      this.focusOptions = options;
-    },
-  };
+/** The count a published Contacts panel shows for one cohort row. */
+function panelCount(runtime, label) {
+  return runtime.panel().view?.rows?.find((row) => row.label === label)?.count;
 }
-
-function awarenessPanel(controls) {
-  const continuation = awarenessControl({});
-  continuation.isContinuation = true;
-  return {
-    controls,
-    continuation,
-    contains(element) {
-      return controls.includes(element) || element === continuation;
-    },
-    querySelectorAll() {
-      return this.controls;
-    },
-    querySelector(selector) {
-      return selector === '[data-awareness-focus-continuation]'
-        ? continuation
-        : null;
-    },
-  };
-}
-
-test('Contacts live repaint restores only stable identity and never retargets another contact', () => {
-  const previous = awarenessControl({ awarenessAction: 'previous' });
-  const focus = awarenessControl({ awarenessAction: 'focus' });
-  const next = awarenessControl({ awarenessAction: 'next' });
-  const alpha = awarenessControl({
-    awarenessLayer: 'flights',
-    awarenessId: 'abc123',
-  });
-  const bravo = awarenessControl({
-    awarenessLayer: 'military',
-    awarenessId: 'def456',
-  });
-  const before = awarenessPanel([previous, focus, next, alpha, bravo]);
-  const alphaSnapshot = captureAwarenessPanelFocus(before, alpha);
-
-  assert.deepEqual(alphaSnapshot, { key: 'target:flights:abc123' });
-  assert.equal(awarenessPanelControlKey(next), 'action:next');
-
-  const retainedAlpha = awarenessControl({
-    awarenessLayer: 'flights',
-    awarenessId: 'abc123',
-  });
-  const retained = awarenessPanel([
-    previous,
-    focus,
-    next,
-    bravo,
-    retainedAlpha,
-  ]);
-  assert.equal(
-    restoreAwarenessPanelFocus(retained, alphaSnapshot),
-    retainedAlpha,
-  );
-  assert.equal(
-    retainedAlpha.focusCalls,
-    1,
-    'identity wins even when live distance reorders rows',
-  );
-  assert.deepEqual(retainedAlpha.focusOptions, { preventScroll: true });
-
-  const forward = awarenessControl({
-    awarenessLayer: 'ais-live-vessels',
-    awarenessId: '789',
-  });
-  const departed = awarenessPanel([previous, focus, next, forward]);
-  assert.equal(
-    restoreAwarenessPanelFocus(departed, alphaSnapshot),
-    departed.continuation,
-  );
-  assert.equal(
-    forward.focusCalls,
-    0,
-    'automatic paging must not transfer focus to another contact',
-  );
-  assert.equal(departed.continuation.focusCalls, 1);
-
-  const bravoSnapshot = captureAwarenessPanelFocus(before, bravo);
-  const noRemainingRow = awarenessPanel([previous, focus, next, alpha]);
-  assert.equal(
-    restoreAwarenessPanelFocus(noRemainingRow, bravoSnapshot),
-    noRemainingRow.continuation,
-  );
-  assert.equal(
-    noRemainingRow.continuation.focusCalls,
-    1,
-    'the end sentinel continues Tab beyond the list',
-  );
-
-  const continuationSnapshot = captureAwarenessPanelFocus(
-    departed,
-    departed.continuation,
-  );
-  assert.deepEqual(continuationSnapshot, { key: 'continuation' });
-  const repaintedAgain = awarenessPanel([previous, focus, next, forward]);
-  assert.equal(
-    restoreAwarenessPanelFocus(repaintedAgain, continuationSnapshot),
-    repaintedAgain.continuation,
-  );
-  assert.equal(
-    repaintedAgain.continuation.focusCalls,
-    1,
-    'later live repaints keep focus on the continuation point until the user tabs onward',
-  );
-});
 
 test('Contacts continuation target is the visible explanatory note', () => {
-  const source = readLayerSource(
-    new URL('./militaryAwareness.js', import.meta.url),
+  assert.match(
+    awarenessPanelSource,
+    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>\{\{ view\.note \}\}<\/p>/,
+  );
+  assert.doesNotMatch(
+    awarenessPanelSource,
+    /<span[^>]*data-awareness-focus-continuation/,
   );
   assert.match(
-    source,
-    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>\$\{t\('Open-source mapped\/observed context\.[^']*'\)\}<\/p>/,
+    militaryAwarenessSource,
+    /'Open-source mapped\/observed context\./,
   );
-  assert.doesNotMatch(source, /<span[^>]*data-awareness-focus-continuation/);
 });
 
 test('awareness disable settles every owned dependency release before resolving', async () => {
@@ -509,6 +385,54 @@ test('Contacts does not claim a dependency already enabling for the user', async
   }
 });
 
+test('a dependency the user adopts stays on when Contacts turns off', async () => {
+  // A direct selection, or the Cockpit riding one of its aircraft, promotes a
+  // layer Contacts turned on into the user's own (adoptLayerVisibility). The
+  // coordinator must give it up, or its OFF release tears the layer down —
+  // and the track or the Cockpit with it — before Context restores it.
+  const calls = [];
+  const subscribers = new Set();
+  const runtime = installAwarenessRuntime({
+    isEnabled: () => false,
+    isEffectivelyEnabled: () => false,
+    setEnabled: (layerId, enabled) => {
+      calls.push({ layerId, enabled });
+      return Promise.resolve(true);
+    },
+    subscribe: (listener) => {
+      subscribers.add(listener);
+      return () => subscribers.delete(listener);
+    },
+  });
+
+  try {
+    militaryAwarenessLayer.setParams({ passive: false });
+    await nextTurn();
+    for (const listener of subscribers)
+      listener({
+        type: 'visibility',
+        layerId: 'flights',
+        enabled: true,
+        origin: 'user',
+        adopted: true,
+        adoptedFromSelection: true,
+      });
+    await militaryAwarenessLayer.disable();
+    const released = calls
+      .filter(({ enabled }) => !enabled)
+      .map(({ layerId }) => layerId)
+      .sort();
+    assert.deepEqual(
+      released,
+      AWARENESS_DEPENDENCIES.filter((layerId) => layerId !== 'flights').sort(),
+      'the adopted layer is the user\'s now; the rest are still released',
+    );
+  } finally {
+    runtime.restore();
+  }
+  assert.equal(subscribers.size, 0, 'destroy drops the manager subscription');
+});
+
 test('operational awareness becomes ready after aircraft while deferred sources keep loading', async () => {
   let enabled = false;
   let releaseAircraft;
@@ -599,9 +523,9 @@ test('pending mapped installations render as unknown instead of a false zero', a
       'loading is not an observed empty cohort',
     );
     assert.match(installations?.reason || '', /unavailable/i);
-    assert.match(
-      runtime.panel()?.innerHTML || '',
-      /Mapped installations<\/strong><b aria-live="polite">\?<\/b>/,
+    assert.equal(
+      panelCount(runtime, 'Mapped installations'),
+      '?',
       'the operator sees ? rather than an all-clear 0 while installations load',
     );
   } finally {
@@ -741,15 +665,10 @@ test('a vessel feed still connecting after the lifecycle settles reads as unknow
       'a source that has never answered has told us nothing — 0 would be a fabricated all-clear',
     );
     assert.match(vessels?.reason || '', /unavailable/i);
-    assert.match(
-      runtime.panel()?.innerHTML || '',
-      /AIS vessels<\/strong><b aria-live="polite">\?<\/b>/,
-      'the panel prints ? for the whole settled-but-connecting window',
-    );
-    assert.doesNotMatch(
-      runtime.panel()?.innerHTML || '',
-      /AIS vessels<\/strong><b aria-live="polite">0<\/b>/,
-      'the panel must never print an all-clear 0 before the feed has answered once',
+    assert.equal(
+      panelCount(runtime, 'AIS vessels'),
+      '?',
+      'the panel prints ? for the whole settled-but-connecting window, never an all-clear 0',
     );
   } finally {
     restoreCollections();
@@ -789,9 +708,9 @@ test('a settled vessel feed reporting a real empty viewport recovers to 0', asyn
       0,
       'an answered empty viewport is a real observation',
     );
-    assert.match(
-      runtime.panel()?.innerHTML || '',
-      /AIS vessels<\/strong><b aria-live="polite">0<\/b>/,
+    assert.equal(
+      panelCount(runtime, 'AIS vessels'),
+      '0',
       'the operator sees the real count once the feed answers',
     );
   } finally {
@@ -1254,16 +1173,22 @@ test('a cached Context subject re-reads its label when enrichment lands after se
       id,
     );
     const panel = runtime.panel();
-    assert.ok(panel, 'the Context panel must exist');
-    assert.match(panel.innerHTML, /ae1fa4/, 'panel starts on the hex');
+    assert.equal(panel.view?.kind, 'results', 'the Context panel must exist');
+    assert.match(panel.view.subject, /ae1fa4/, 'panel starts on the hex');
 
     // A refresh that changes NOTHING must not repaint (no per-refresh storm).
-    const settledWrites = panel.hiddenWrites;
+    const settledRenders = runtime.panel().renders;
+    const settledPublishes = runtime.panel().publishes;
     await militaryAwarenessLayer.update();
     assert.equal(
-      panel.hiddenWrites,
-      settledWrites,
+      runtime.panel().renders,
+      settledRenders,
       'an unchanged label must not trigger a panel repaint',
+    );
+    assert.equal(
+      runtime.panel().publishes,
+      settledPublishes,
+      'an unchanged refresh publishes no new panel, results or standby',
     );
 
     // Enrichment answers. The contact has NOT moved and no source revision
@@ -1283,17 +1208,18 @@ test('a cached Context subject re-reads its label when enrichment lands after se
       'subject identity must stay the ICAO hex',
     );
     // The RENDERED panel is the surface the operator actually reads.
+    const repainted = runtime.panel();
     assert.ok(
-      panel.hiddenWrites > settledWrites,
+      repainted.publishes > settledPublishes,
       'a changed label must repaint the standalone Context panel',
     );
     assert.match(
-      panel.innerHTML,
+      repainted.view.subject,
       /N123AB/,
       'the rendered Context panel must show the registration without a position change',
     );
     assert.doesNotMatch(
-      panel.innerHTML,
+      JSON.stringify(repainted.view),
       /ae1fa4/,
       'the hex must be gone from the panel',
     );
@@ -2240,9 +2166,10 @@ test('expanded Context results omit the redundant status heading', () => {
     militaryAwarenessSource,
     /GLOBAL CONTEXT <span>CONTEXT ONLY<\/span>/,
   );
-  assert.match(militaryAwarenessSource, /military-awareness-subject/);
+  assert.doesNotMatch(awarenessPanelSource, /military-awareness-heading/);
+  assert.match(awarenessPanelSource, /military-awareness-subject/);
   assert.match(militaryAwarenessSource, /FLIGHT \/ VESSEL WINDOW/);
-  assert.match(militaryAwarenessSource, /military-awareness-controls/);
+  assert.match(awarenessPanelSource, /military-awareness-controls/);
 });
 
 test('Context entry tracks a nearer civilian aircraft over a farther military aircraft', async () => {
@@ -4229,7 +4156,7 @@ test('a moving camera refreshes Contacts more than once inside one parked interv
   }
 });
 
-test('a selected installation card keeps every member name and escapes source text', () => {
+test('a selected installation card keeps every member name as text', () => {
   const runtime = installAwarenessRuntime();
   const restores = [];
   try {
@@ -4252,16 +4179,15 @@ test('a selected installation card keeps every member name and escapes source te
       },
     });
     militaryAwarenessLayer.update();
-    const html = runtime.panel().innerHTML;
-    assert.match(html, /Named areas \(4\)/);
-    for (const name of [
+    // The view renders names as text; ui/awarenessPanel.test.mjs covers it.
+    const names = runtime.panel().view?.subjectNames;
+    assert.equal(names?.summary, 'Named areas (4)');
+    assert.deepEqual(names?.names, [
       'Area one',
       'Area two',
       'Area three',
-      '&lt;Area four&gt;',
-    ])
-      assert.ok(html.includes(name));
-    assert.ok(!html.includes('<Area four>'));
+      '<Area four>',
+    ]);
   } finally {
     restores.reverse().forEach((restore) => restore());
     runtime.restore();

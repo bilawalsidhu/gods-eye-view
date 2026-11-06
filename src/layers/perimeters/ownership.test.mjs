@@ -552,3 +552,36 @@ for (const action of ['disable', 'destroy', 'selection']) {
     if (action !== 'destroy') h.layer.destroy();
   });
 }
+
+test('a stale snapshot reads stale, dated by its own fetch, and a fresh one clears it', async () => {
+  const fetchedAt = Date.now() - 3 * 60 * 60 * 1000;
+  let snapshot = { rows: [row], stale: true, fetchedAt };
+  const h = harness({
+    getSnapshot: async () => snapshot.rows,
+    getSnapshotDetail: async () => snapshot,
+  });
+  await h.layer.update(h.viewer);
+  assert.equal(h.layer.getStats().stale, true);
+  assert.equal(h.layer.getStats().lastUpdate, fetchedAt);
+  snapshot = { rows: [row], stale: false, fetchedAt: Date.now() };
+  await h.layer.update(h.viewer);
+  assert.equal(h.layer.getStats().stale, false);
+  assert.ok(h.layer.getStats().lastUpdate > fetchedAt);
+});
+
+test('a failed refresh after a stale snapshot reads as the failure, not stale', async () => {
+  let fail = false;
+  const h = harness({
+    getSnapshot: async () => [row],
+    getSnapshotDetail: async () => {
+      if (fail) throw new Error('WFIGS HTTP 502');
+      return { rows: [row], stale: true, fetchedAt: Date.now() - 60_000 };
+    },
+  });
+  await h.layer.update(h.viewer);
+  assert.equal(h.layer.getStats().stale, true);
+  fail = true;
+  await h.layer.update(h.viewer);
+  assert.equal(h.layer.getStats().stale, false);
+  assert.equal(h.layer.getStats().error, 'WFIGS HTTP 502');
+});

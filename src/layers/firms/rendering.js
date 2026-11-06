@@ -1,7 +1,21 @@
 import * as Cesium from 'cesium';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
-import { LOD_LEVELS, CONTEXT_TOP_N } from './policy.js';
+import { buildHeatRaster } from '../../data/firmsHeatRaster.js';
+import {
+  LOD_LEVELS,
+  CONTEXT_TOP_N,
+  HANDOFF_FADE,
+  HEAT_RASTER,
+  HEAT_REBUILD_MS,
+} from './policy.js';
+import { createHeatImagery } from './heatImagery.js';
+
+/** The markers drawn under the far bands' heatmap for the hand-off fade. */
+const HANDOFF_MARKER_LOD = LOD_LEVELS.find((lod) => lod.mode === 'detections');
+
+/** Fade steps: a moving camera rewrites marker colors at most this often. */
+const FADE_STEPS = 32;
 
 export function createRendering({
   layerState,
@@ -29,8 +43,11 @@ export function createRendering({
       !layerState._dataSource ||
       !layerState._fires.length ||
       !layerState._viewer
-    )
+    ) {
+      // A filter that leaves nothing shown must not leave the old heat behind.
+      if (!layerState._fires.length) layerState._heatImagery?.setShow(false);
       return false;
+    }
     const lodIndex = components.viewport.selectLodIndex(
       components.viewport.cameraHeight(),
     );
@@ -51,12 +68,52 @@ export function createRendering({
       ? components.model.paddedDegreeBounds(viewRect)
       : null;
 
-    if (lod.mode === 'detections') {
-      renderDetections(lod, bounds);
-    } else {
-      renderCells(aggregateFires(lod, bounds), lod, bounds);
-    }
+    renderBand(lod, bounds);
     return true;
+  }
+
+  /**
+   * Draw one band. Markers and heatmap stay built in every band; the
+   * hand-off only fades between them.
+   * @param {Object} lod - Band descriptor.
+   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   */
+
+  function renderBand(lod, bounds) {
+    prepareHeat(lod.mode === 'heat');
+    if (lod.mode === 'detections') renderDetections(lod, bounds);
+    else renderHeat(lod, bounds);
+    applyHandoffFade(true);
+  }
+
+  const fadeColor = new Cesium.Color();
+
+  /**
+   * Cross-fade between markers and heatmap by camera height (HANDOFF_FADE),
+   * on every rendered frame, so a fast zoom never outruns the throttled band
+   * check. Cheap when nothing changed: one height read and a compare.
+   * @param {boolean} [force] Reapply, e.g. to freshly added markers.
+   */
+
+  function applyHandoffFade(force = false) {
+    const height = components.viewport.cameraHeight();
+    const t = Math.min(
+      1,
+      Math.max(
+        0,
+        (height - HANDOFF_FADE.from) / (HANDOFF_FADE.to - HANDOFF_FADE.from),
+      ),
+    );
+    const heat = Math.round(t * t * (3 - 2 * t) * FADE_STEPS) / FADE_STEPS;
+    if (!force && heat === layerState._handoffHeat) return;
+    layerState._handoffHeat = heat;
+    layerState._heatImagery?.setOpacity(heat);
+    const billboards = layerState._billboards;
+    if (!billboards) return;
+    billboards.show = layerState._enabled && heat < 1;
+    const color = Cesium.Color.WHITE.withAlpha(1 - heat, fadeColor);
+    for (let i = 0; i < billboards.length; i += 1)
+      billboards.get(i).color = color;
   }
 
   /**
@@ -118,65 +175,96 @@ export function createRendering({
     return clipped;
   }
 
+  /** The heat imagery adapter, created on first use. */
+
+  function heatImagery() {
+    if (!layerState._heatImagery) {
+      layerState._heatImagery = createHeatImagery({
+        cesium: Cesium,
+        getHost: () =>
+          layerState._imageryHost?.() ?? {
+            collection: layerState._viewer?.imageryLayers ?? null,
+            kind: 'globe',
+          },
+      });
+    }
+    return layerState._heatImagery;
+  }
+
+  /** Build the heat raster from the shown set and drape it. */
+
+  function rebuildHeatRaster() {
+    clearTimeout(layerState._heatRebuildTimer);
+    layerState._heatRebuildTimer = null;
+    if (layerState._destroyed) return;
+    layerState._heatRaster = buildHeatRaster(layerState._fires, HEAT_RASTER);
+    heatImagery().setRaster(layerState._heatRaster);
+  }
+
   /**
-   * Render aggregated heat cells (global/regional bands) as ground-clamped
-   * rectangles. Cell labels do NOT live on the entities anymore — they go
-   * through the same unclamped, screen-space-decluttered label pipeline as
-   * detections (see {@link rebuildAmbientLabels}).
-   * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
+   * Make sure the draped heatmap matches the shown set. The first paint in a
+   * far band is immediate; other builds (filter drags, refreshes, the
+   * preload under the markers) trail by HEAT_REBUILD_MS and keep the
+   * previous heatmap on screen meanwhile.
+   * @param {boolean} now Build at once when nothing is draped yet.
+   */
+
+  function ensureHeatRaster(now) {
+    if (layerState._heatRaster) return;
+    if (now && !heatImagery().hasRaster()) {
+      rebuildHeatRaster();
+      return;
+    }
+    clearTimeout(layerState._heatRebuildTimer);
+    layerState._heatRebuildTimer = setTimeout(
+      rebuildHeatRaster,
+      HEAT_REBUILD_MS,
+    );
+  }
+
+  /**
+   * Keep the heatmap draped on the current map stack and current with the
+   * shown set in every band; the hand-off fade decides how much of it shows.
+   * @param {boolean} now The camera is in a far band.
+   */
+
+  function prepareHeat(now) {
+    const imagery = heatImagery();
+    // The map stack may have changed since the last render.
+    imagery.rehome();
+    ensureHeatRaster(now);
+    imagery.setShow(layerState._enabled);
+  }
+
+  /**
+   * Far bands (global/regional): a Snap Map–style heatmap draped over the
+   * globe, transparent where nothing burns, plus the decluttered "N FIRES"
+   * cards from the coarse aggregation. The nearest band's markers are kept
+   * built underneath for the hand-off fade and hidden once it completes;
+   * cards go through the same screen-space label pipeline as detections
+   * (see {@link rebuildAmbientLabels}).
    * @param {Object} lod - Active LOD descriptor.
    * @param {?Object} bounds - Padded view bounds in degrees, or null.
    */
 
-  function renderCells(cells, lod, bounds) {
-    ensureDetectionCollections();
-    layerState._dataSource.entities.removeAll();
-    if (layerState._billboards) layerState._billboards.removeAll();
-    layerState._pickIndexById.clear();
-    layerState._cullPositions.length = 0;
-    layerState._cellCount = cells.length;
-    const maxScore = Math.max(1, ...cells.map(components.model.heatScore));
+  function renderHeat(lod, bounds) {
+    paintMarkers(HANDOFF_MARKER_LOD, bounds);
 
+    const cells = aggregateFires(lod, bounds);
+    layerState._cellCount = cells.length;
     layerState._labelCandidates = [];
     layerState._labelLodDistance = lod.labelDistance;
 
+    // Cells arrive heat-sorted, so candidate order doubles as label priority.
     for (const cell of cells) {
-      const score = components.model.heatScore(cell);
-      const normalized = Math.min(1, Math.sqrt(score / maxScore));
-      const alpha = 0.16 + normalized * 0.5;
-      const color = components.model.heatColor(normalized, alpha);
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
-      const position = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0);
-
-      layerState._dataSource.entities.add({
-        rectangle: {
-          coordinates: Cesium.Rectangle.fromDegrees(
-            cell.lonCell,
-            cell.latCell,
-            cell.lonCell + lod.gridDegrees,
-            cell.latCell + lod.gridDegrees,
-          ),
-          material: new Cesium.ColorMaterialProperty(color),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        },
-        position,
-        properties: {
-          count: cell.count,
-          intensity: score,
-          maxFrp: cell.maxFrp,
-          night: cell.night,
-        },
-      });
-
-      // Cells arrive heat-sorted, so candidate order doubles as label priority.
-      // Accent is resolved here because `normalized` only exists in this walk.
       layerState._labelCandidates.push({
-        position,
+        position: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0),
         cullPosition: components.model.cellCullPosition(centerLon, centerLat),
         fire: null,
         cell,
-        accent: components.model.cellAccent(normalized),
+        accent: components.model.cellCardAccent(cell),
       });
     }
 
@@ -202,9 +290,48 @@ export function createRendering({
    */
 
   function renderDetections(lod, bounds) {
+    const markers = paintMarkers(lod, bounds);
+    if (!markers) return;
+    const candidates = markers.map((marker) => marker.fire);
+
+    layerState._cellCount = candidates.length;
+    // FRP-sorted walk: marker order doubles as label priority.
+    layerState._labelCandidates = markers;
+    layerState._labelLodDistance = lod.labelDistance;
+
+    components.cards.rebuildAmbientLabels();
+    components.selection.refreshContextRegistrations(
+      candidates.slice(0, CONTEXT_TOP_N),
+    );
+
+    if (lod.id === 'close') {
+      // Batched (chunked ≤200, sequential, session-cached) DEM warm for the
+      // rendered subset; fires are static so each coarse cell resolves once
+      // ever. Re-render ONLY when a floor actually landed — a failed resolve
+      // reports false, so this chain terminates instead of looping against a
+      // down proxy (the next camera-driven rebuild retries).
+      warmFireAnchorFloors(candidates).then((warmed) => {
+        if (!warmed || !layerState._enabled || !layerState._viewer) return;
+        const currentLod = LOD_LEVELS[layerState._currentLodIndex];
+        if (!currentLod || currentLod.mode !== 'detections') return;
+        renderCurrentLod(true);
+      });
+    }
+  }
+
+  /**
+   * The glow-sprite markers for a detections band: the strongest fires in
+   * view, capped at the band's maxDetections, horizon-culled.
+   * @param {Object} lod - Detections band descriptor.
+   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   * @returns {?Array<Object>} Label candidates for the fires drawn,
+   *   strongest first; null before the sprite collection exists.
+   */
+
+  function paintMarkers(lod, bounds) {
     ensureDetectionCollections();
     layerState._dataSource.entities.removeAll();
-    if (!layerState._billboards) return;
+    if (!layerState._billboards) return null;
     layerState._billboards.removeAll();
     layerState._pickIndexById.clear();
     layerState._cullPositions.length = 0;
@@ -226,17 +353,20 @@ export function createRendering({
       candidates = layerState._firesByFrp.slice(0, lod.maxDetections);
     }
 
-    layerState._cellCount = candidates.length;
-    layerState._labelCandidates = [];
-    layerState._labelLodDistance = lod.labelDistance;
-
+    const markers = [];
+    // Only the close band warms terrain floors (renderDetections).
+    const anchor =
+      lod.id === 'close'
+        ? components.model.firePosition
+        : components.model.fireBuiltPosition;
     for (const fire of candidates) {
       const coreSize = components.model.frpPixelSize(fire.frp);
-      const position = components.model.firePosition(fire);
-      const cullPosition = components.model.fireCullPosition(fire);
+      const position = anchor(fire);
+      const cullPosition = components.model.fireCullPosition(fire, position);
       const pickId = `firms-${fire.index}`;
       layerState._pickIndexById.set(pickId, fire);
       layerState._cullPositions.push(cullPosition);
+      markers.push({ position, cullPosition, fire, cell: null });
       layerState._billboards.add({
         id: pickId,
         position,
@@ -248,37 +378,13 @@ export function createRendering({
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       });
-      // FRP-sorted walk: candidate order doubles as label priority.
-      layerState._labelCandidates.push({
-        position,
-        cullPosition,
-        fire,
-        cell: null,
-      });
     }
 
     // Freshly-added sprites default to show=true; cull the far side now so a
     // rebuild never flashes through-the-planet detections while the camera
     // sits still (the moveEnd/preRender hooks only fire on camera motion).
     refreshHorizonCulling();
-    components.cards.rebuildAmbientLabels();
-    components.selection.refreshContextRegistrations(
-      candidates.slice(0, CONTEXT_TOP_N),
-    );
-
-    if (lod.id === 'close') {
-      // Batched (chunked ≤200, sequential, session-cached) DEM warm for the
-      // rendered subset; fires are static so each coarse cell resolves once
-      // ever. Re-render ONLY when a floor actually landed — a failed resolve
-      // reports false, so this chain terminates instead of looping against a
-      // down proxy (the next camera-driven rebuild retries).
-      warmFireAnchorFloors(candidates).then((warmed) => {
-        if (!warmed || !layerState._enabled || !layerState._viewer) return;
-        const currentLod = LOD_LEVELS[layerState._currentLodIndex];
-        if (!currentLod || currentLod.mode !== 'detections') return;
-        renderCurrentLod(true);
-      });
-    }
+    return markers;
   }
 
   function ensureDetectionCollections() {
@@ -344,9 +450,11 @@ export function createRendering({
   }
   return {
     renderCurrentLod,
+    renderBand,
     aggregateFires,
-    renderCells,
+    renderHeat,
     renderDetections,
+    applyHandoffFade,
     ensureDetectionCollections,
     removeDetectionCollections,
     fireHorizonOccluder,

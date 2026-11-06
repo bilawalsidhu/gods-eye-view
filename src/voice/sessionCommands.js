@@ -1,16 +1,18 @@
+import { nextTick } from 'vue';
+import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
+import { bindChatControl } from './chatControl.js';
+import { bindVoiceMiniPreview } from './voiceMiniPreview.js';
 import { createVoiceControl, voiceStatusLabel } from './control.js';
-import { createVoiceSession } from './session.js';
+import { createVoiceSession, isStoppable } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
-import { msg, registerUnsavedWork, t } from '../i18n/index.js';
+import { t } from '../i18n/index.js';
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
-  const doc = element?.ownerDocument;
-  if (!doc) return null;
+  if (!element?.ownerDocument) return null;
   return new PointerReticle({
-    doc,
     rectOf: () => element.getBoundingClientRect?.() || null,
   });
 }
@@ -38,12 +40,11 @@ export function createVoiceCommands({
   createReticle = createDefaultReticle,
   panelHost = null,
   nativePanelProvider = null,
+  // Chat's Settings, carried across a provider switch.
+  presentation = null,
 }) {
   if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
-  const ui = createControl({
-    reset: true,
-    ...(panelHost ? { panel: true } : {}),
-  });
+  const ui = createControl(panelHost ? { panel: true } : {});
   let actionObserver;
   let panelMount;
   const session = createVoiceSession({
@@ -67,40 +68,38 @@ export function createVoiceCommands({
   });
   const adapter = session.adapter;
   const capabilities = adapter.capabilities || {};
-  const providerHandler = () => onProviderChange?.(ui.providerSelect.value);
-  if (ui.providerSelect && onProviderChange) {
-    if (supportedProviders && ui.providerSelect.replaceChildren) {
-      const doc = ui.providerSelect.ownerDocument;
-      ui.providerSelect.replaceChildren(
-        ...supportedProviders.map((name) => {
-          const option = doc.createElement('option');
-          option.value = name;
-          option.textContent = VOICE_PROVIDERS[name].label;
-          return option;
-        }),
-      );
-    }
-    ui.providerSelect.value = provider;
-    ui.providerSelect.title = [
-      t('Changing provider reconnects voice if it is on.'),
-      capabilities.advisoryLimit,
-    ]
-      .filter(Boolean)
-      .join(' ');
-    ui.providerSelect.addEventListener('change', providerHandler);
-    ui.root.dataset.provider = provider;
+  const offProvider = onProviderChange
+    ? ui.on('provider-change', (value) => onProviderChange(value))
+    : null;
+  if (onProviderChange) {
+    ui.update('provider', {
+      ...(supportedProviders && {
+        options: supportedProviders.map((name) => ({
+          value: name,
+          label: VOICE_PROVIDERS[name].label,
+        })),
+      }),
+      value: provider,
+      title: () =>
+        [
+          t('Changing provider reconnects voice if it is on.'),
+          capabilities.advisoryLimit,
+        ]
+          .filter(Boolean)
+          .join(' '),
+    });
+    ui.update('root', { provider });
   }
   const hasProviderChoice = Boolean(
     onProviderChange && supportedProviders?.length > 1,
   );
-  if (ui.providerField) ui.providerField.hidden = !hasProviderChoice;
-  ui.root.dataset.providerChoice = String(hasProviderChoice);
-  if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
-  if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
+  ui.update('provider', { hidden: !hasProviderChoice });
+  ui.update('root', { providerChoice: String(hasProviderChoice) });
+  ui.update('tier', { hidden: !capabilities.costControls });
+  ui.update('cost', { hidden: !capabilities.costControls });
   if (!capabilities.pushToTalk) {
-    ui.button.setAttribute('aria-label', t('Toggle voice control'));
-    if (ui.helpDetail)
-      ui.helpDetail.textContent = t('Activate to toggle voice');
+    ui.update('button', { label: () => t('Toggle voice control') });
+    ui.update('help', { text: () => t('Activate to toggle voice') });
   }
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
@@ -108,31 +107,36 @@ export function createVoiceCommands({
   controls.ui = ui;
   const updateStatus = session.subscribe((event) => {
     if (event.type !== 'state') return;
-    ui.root.dataset.status = event.state;
+    ui.update('root', {
+      status: event.state,
+      ...(event.state === 'error' && { errorDismissed: false }),
+    });
     // States are machine values; only the label is translated.
-    ui.status.textContent = voiceStatusLabel(event.state);
+    ui.update('status', { text: () => voiceStatusLabel(event.state) });
     // The portable session reports 'Voice off' in English: show the idle
     // label instead. Other details are provider messages, shown as they come.
     const idle = event.state === 'idle';
     const detail = event.detail === 'Voice off' ? '' : event.detail;
-    ui.detail.textContent =
-      detail || (idle ? t('Voice off') : t('Voice active'));
-    ui.button.setAttribute('aria-pressed', String(session.isActive()));
-    if (ui.errorDetail)
-      ui.errorDetail.textContent =
+    ui.update('detail', {
+      text: () => detail || (idle ? t('Voice off') : t('Voice active')),
+    });
+    // A typed chat session is not the microphone.
+    ui.update('button', {
+      pressed: session.isActive() && !adapter.getStartOptions?.().textOnly,
+    });
+    ui.update('error', {
+      text: () =>
         event.state === 'error'
           ? event.detail || t('Voice could not be started.')
-          : '';
-    if (event.state === 'error') ui.root.classList?.remove('error-dismissed');
+          : '',
+    });
   });
   // Captions, plan and result card nested in the control; it only reads
   // provider-neutral session events.
-  const card = ui.card
-    ? createCard({
-        root: ui.root,
-        ...(panelHost ? { onRender: () => panelMount?.panel.sync() } : {}),
-      })
-    : null;
+  const card = createCard({
+    ui,
+    ...(panelHost ? { onRender: () => panelMount?.panel.sync() } : {}),
+  });
   panelMount = panelHost?.mount({
     ui,
     card,
@@ -140,15 +144,50 @@ export function createVoiceCommands({
     observer: actionObserver,
     nativeProvider: nativePanelProvider,
   });
-  const updatePanel = panelMount ? session.subscribe(panelMount.handle) : null;
+  // Typed chat turns belong to the chat panel, not the voice card or panel.
+  const voicePresentation = (handle) => (event) => {
+    if (event.type !== 'state' && adapter.getStartOptions?.().textOnly) return;
+    handle(event);
+  };
+  const updatePanel = panelMount
+    ? session.subscribe(voicePresentation(panelMount.handle))
+    : null;
   const updateCard =
     card && !panelMount
-      ? session.subscribe((event) => card.handle(event))
+      ? session.subscribe(voicePresentation((event) => card.handle(event)))
       : null;
   controls.voiceCard = card;
   if (panelMount) {
     controls.voicePanel = panelMount.panel;
-    controls.captureVoicePanelOperation = panelMount.captureOperation;
+    // An explicit, successful show hands the frame from chat to the voice
+    // panel, which chat's open state hides. Closing chat keeps its typed
+    // session, running turn and messages; reopening chat restores them.
+    // Focus held in chat (its composer, or chat Settings' Back) would be
+    // left on a hidden control, so it moves to the panel's view, as the
+    // panel's own tabs do; focus anywhere else stays where it is.
+    controls.captureVoicePanelOperation = () => {
+      const operation = panelMount.captureOperation();
+      return {
+        ...operation,
+        show(view, open = true) {
+          const focused = globalThis.document?.activeElement;
+          const inChat =
+            Boolean(focused) &&
+            (ui.element('chatPanel')?.contains?.(focused) ||
+              focused === ui.element('chatBack'));
+          const result = operation.show(view, open);
+          if (!open || !result.ok) return result;
+          chat?.close();
+          if (inChat)
+            void ui.focus(
+              result.view === 'settings'
+                ? ['settingsTab', 'voiceBack', 'settingsClose']
+                : ['previewTab', 'settingsTab', 'settingsClose'],
+            );
+          return result;
+        },
+      };
+    };
     controls.getVoicePanelState = panelMount.snapshot;
     controls.getVoicePreferences = panelHost.snapshot;
   }
@@ -157,11 +196,16 @@ export function createVoiceCommands({
   const reticle = pointer ? createReticle(pointer) : null;
   const updatePointer = session.subscribe((event) => {
     reticle?.handle(event);
-    if (event.type === 'state' && ['idle', 'error'].includes(event.state)) {
+    // A failed typed turn ends only that reply; its conversation continues.
+    if (
+      event.type === 'state' &&
+      (event.state === 'idle' ||
+        (event.state === 'error' && !adapter.getStartOptions?.().textOnly))
+    ) {
       pointer?.clear();
       referents?.clear();
       // Conversation memory ("those", "the last answer") ends with the
-      // session.
+      // session; area handles live for the page.
       runner.resetConversation?.();
     }
   });
@@ -175,26 +219,91 @@ export function createVoiceCommands({
     card?.outline(event);
     session.sendMapEvent({ type: 'map_annotation_outline', ...event });
   });
-  // A reload (the language switch) ends the conversation: ask first.
-  const unregisterUnsavedWork = registerUnsavedWork(() =>
-    session.isActive() ? msg('the active voice session') : null,
-  );
+  const chat = panelMount
+    ? bindChatControl({
+        ui,
+        session,
+        dataManager,
+        onOpen: () => panelMount?.panel.close(),
+      })
+    : null;
+  chat?.restorePresentation(presentation);
+  controls.chatPresentation = () => chat?.presentation() ?? null;
+  function minimizeVoicePanel() {
+    const panel = ui.element('voicePanel');
+    const holdsFocus = panel?.contains?.(globalThis.document?.activeElement);
+    ui.update('voicePanel', { minimized: true });
+    // Keep focus on the bar's expand button, not the mic (Space there would
+    // end voice), without a keyboard ring.
+    if (holdsFocus)
+      void nextTick(() =>
+        panel
+          ?.querySelector?.('[data-layout-minimize]')
+          ?.focus?.({ focusVisible: false }),
+      );
+  }
+  const layouts = panelMount
+    ? [
+        bindLayoutDock(ui),
+        bindAssistantPanelLayout({
+          ui,
+          name: 'chatPanel',
+          minimize: () => chat?.minimize({ focus: false }),
+          restore: () => chat?.restore({ focus: false }),
+        }),
+        bindAssistantPanelLayout({
+          ui,
+          name: 'voicePanel',
+          minimize: minimizeVoicePanel,
+          restore: () => ui.update('voicePanel', { minimized: false }),
+        }),
+        ui.on('voice-minimize', () => {
+          if (ui.state.voicePanel.minimized)
+            ui.update('voicePanel', { minimized: false });
+          else minimizeVoicePanel();
+        }),
+      ]
+    : [];
+  const unbindMiniPreview = panelMount
+    ? bindVoiceMiniPreview({ ui, session })
+    : null;
+  const startVoice = () => {
+    if (panelMount?.panel.snapshot().previewEnabled)
+      panelMount.panel.select('preview');
+    void session.start({ pushToTalk: false });
+  };
   const buttonHandler = () => {
     if (adapter.ignoreButtonClick?.()) return;
-    if (session.isActive()) {
+    chat?.close();
+    if (session.isActive() && adapter.getStartOptions?.().textOnly) {
+      session.stop();
+      startVoice();
+    } else if (session.isActive()) {
       const ticket = panelMount?.stopTicket();
       session.stop();
       panelMount?.closeAfterStop(ticket);
-    } else void session.start({ pushToTalk: false });
+    } else startVoice();
   };
-  ui.button.addEventListener('click', buttonHandler);
+  const offButton = ui.on('button', buttonHandler);
+  // The panel's close turns voice off, as chat's close ends the chat. A typed
+  // session belongs to chat, which handles its own close.
+  const offClose = ui.on('settings-close', () => {
+    // A voice error the user closes is over too; stopping returns to idle.
+    if (!isStoppable(session) || adapter.getStartOptions?.().textOnly) return;
+    const ticket = panelMount?.stopTicket();
+    session.stop();
+    panelMount?.closeAfterStop(ticket);
+  });
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
-    ui.button.removeEventListener('click', buttonHandler);
-    ui.providerSelect?.removeEventListener('change', providerHandler);
-    unregisterUnsavedWork();
+    offButton();
+    offClose();
+    offProvider?.();
+    for (const off of layouts) off();
+    unbindMiniPreview?.();
+    chat?.destroy();
     annotationUnsubscribe?.();
     updateStatus();
     updateCard?.();
@@ -206,7 +315,7 @@ export function createVoiceCommands({
     reticle?.destroy();
     card?.destroy();
     if (disposeRunner) runner.dispose?.();
-    ui.root.remove();
+    ui.remove();
   };
   session.signal.addEventListener('abort', cleanup, { once: true });
   if (session.disposed) cleanup();
