@@ -14,6 +14,20 @@ export function createLifecycle({
   const { id, overlayHost } = config;
 
   const methods = {
+    /**
+     * Shell services: `imageryHost()` resolves where draped imagery goes on
+     * the active map stack (globe or 3D tiles, src/maps/imageryHost.js). The
+     * heatmap moves with it; without a host it drapes on viewer.imageryLayers.
+     * @param {{imageryHost?: () => {collection: ?Object, kind: string}}|null} services
+     */
+    attachShellServices(services) {
+      layerState._imageryHost =
+        typeof services?.imageryHost === 'function'
+          ? services.imageryHost
+          : null;
+      layerState._heatImagery?.rehome();
+    },
+
     init(viewer) {
       if (layerState._destroyed) return;
       layerState._viewer = viewer;
@@ -40,6 +54,10 @@ export function createLifecycle({
         layerState._billboards.show = true;
       }
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, true);
+      // A filter can leave an old raster cached while the current set is empty.
+      layerState._heatImagery?.setShow(layerState._fires.length > 0);
+      // The camera can have crossed the hand-off while the layer was off.
+      components.rendering.applyHandoffFade(true);
       components.viewport.installLodWatcher();
       components.viewport.installMoveEndWatcher();
       components.selection.installClickHandler();
@@ -64,6 +82,7 @@ export function createLifecycle({
       components.selection.clearFireSelection();
       if (layerState._dataSource) layerState._dataSource.show = false;
       if (layerState._billboards) layerState._billboards.show = false;
+      layerState._heatImagery?.setShow(false);
       overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
       clearSelectedEntityContextForLayer(id);
@@ -91,10 +110,21 @@ export function createLifecycle({
       components.rendering.removeDetectionCollections(viewer);
       components.selection.clearContextRegistrations();
       clearSelectedEntityContextForLayer(id);
+      layerState._allFires = [];
+      layerState._allFiresByFrp = [];
       layerState._fires = [];
       layerState._firesByFrp = [];
       layerState._cellCacheByGrid.clear();
+      clearTimeout(layerState._heatRebuildTimer);
+      layerState._heatRebuildTimer = null;
+      layerState._heatImagery?.destroy();
+      layerState._heatImagery = null;
+      layerState._heatRaster = null;
+      layerState._handoffHeat = -1;
+      layerState._imageryHost = null;
       layerState._count = 0;
+      layerState._totalCount = 0;
+      layerState._rowControlsListener = null;
       layerState._cellCount = 0;
       layerState._lastUpdate = null;
       layerState._keyRequired = false;

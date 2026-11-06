@@ -4,16 +4,21 @@
  * moves, whatever the state: box actions, a notice line, the strip of day
  * cards and its hint line, the selection bar (mode, the two slot rows),
  * opacity, SWAP and export, then a collapsed DETAILS card for every note and
- * hedge. Box actions, export and DETAILS are rail-card blocks and cards; the
- * strip and selection bar are this adapter's own keyed DOM. Source toggles
- * live on the data-panel row.
+ * hedge. The adapter computes the view from the layer's snapshot and renders
+ * the RecentImageryReadout component; box actions, export and DETAILS are
+ * rail-card blocks and cards. Source toggles live on the data-panel row.
  */
-import { formatNumber, msg, t, tn, translateKnown } from '../i18n/index.js';
-import { createRailCardBlocks } from './railCardBlocks.js';
-import { createRailCards } from './railCards.js';
+import { h, render as renderVue } from 'vue';
+import {
+  formatNumber,
+  msg,
+  onLocaleChange,
+  t,
+  tn,
+  translateKnown,
+} from '../i18n/index.js';
 import { createImagerySplit } from './imagerySplit.js';
-import { createSlider } from './slider.js';
-import { createSegmentedControl } from './segmentedControl.js';
+import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
   hhmm,
@@ -32,6 +37,7 @@ const ESRI_NOTE = msg('Imagery on Esri · Google 3D returns when cleared');
 const LAYER_NOTICES = new Set([
   ESRI_NOTE,
   msg('Box and images cleared'),
+  msg('Search cancelled'),
   msg('Esri map unavailable · no swipe'),
   msg('Swipe needs a globe map'),
   msg('Imagery stays on Esri · CLEAR to use Google 3D'),
@@ -186,16 +192,6 @@ function revealCard(scroller, card) {
   if (delta) scroller.scrollTop = (scroller.scrollTop || 0) + delta;
 }
 
-/** Depth-first search over `children`, for nodes the blocks module owns. */
-function findIn(root, predicate) {
-  for (const child of root?.children || []) {
-    if (predicate(child)) return child;
-    const inner = findIn(child, predicate);
-    if (inner) return inner;
-  }
-  return null;
-}
-
 /**
  * Mount the readout into the panel body.
  * @param {{ container: HTMLElement, layer: object, viewer?: object, tool?: object, createSplit?: Function, fetchImpl?: typeof fetch, createObjectUrl?: Function, revokeObjectUrl?: Function, requestRender?: Function }} deps
@@ -222,163 +218,41 @@ export function createRecentImageryPanel({
     target.addEventListener(type, handler, options);
     listeners.push([target, type, handler, options]);
   };
-  const el = (tag, className, parent, text) => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text != null) node.textContent = text;
-    parent?.appendChild(node);
-    return node;
-  };
   const set = (node, key, value) => {
     if (node[key] !== value) node[key] = value;
   };
-  const attribute = (node, key, value) => {
-    if (node.getAttribute(key) !== value) node.setAttribute(key, value);
-  };
-  const toggle = (node, name, on) => {
-    if (node.classList.contains(name) !== Boolean(on))
-      node.classList.toggle(name, Boolean(on));
-  };
-
-  // ---- build: every block exists from the start, in its final order ----
-  const root = el('section', 'recent-imagery-readout');
-  root.setAttribute('aria-label', t('Recent imagery'));
-
-  const actionsHost = el('div', 'ri-block ri-actions-row', root);
-  actionsHost.id = 'ri-actions';
-  const actions = createRailCardBlocks({
-    container: actionsHost,
-    cardId: 'recent-imagery',
-    onParams: () => {},
-  });
-
-  // The notice line: the text, and ZOOM IN in a fixed slot at its right end
-  // (reserved, never removed, whenever there is nothing to fit).
-  const notice = el('div', 'ri-block ri-line ri-notice', root);
-  notice.id = 'ri-notice';
-  const noticeText = el('span', 'ri-notice-text', notice);
-  noticeText.id = 'ri-notice-text';
-  noticeText.setAttribute('role', 'status');
-  noticeText.setAttribute('aria-live', 'polite');
-  const zoomIn = el(
-    'button',
-    'data-toggle-chip ri-zoom-in',
-    notice,
-    t('ZOOM IN'),
-  );
-  zoomIn.id = 'ri-zoom-in';
-  zoomIn.type = 'button';
-  zoomIn.title = t('Fly in until the view fits the 1,000 km limit');
-
-  const strip = el('div', 'ri-block ri-strip', root);
-  strip.id = 'ri-strip';
-  strip.tabIndex = 0;
-  strip.setAttribute('role', 'listbox');
-  strip.setAttribute('aria-orientation', 'horizontal');
-  strip.setAttribute(
-    'aria-label',
-    t('Imagery days, newest first · arrows move, S or A and B pin'),
-  );
-  strip.setAttribute('aria-keyshortcuts', 'A B S');
-  const stripEmpty = el('div', 'ri-strip-empty', strip);
-
-  const hint = el('div', 'ri-block ri-line ri-hint', root);
-  hint.id = 'ri-hint';
-
-  const selection = el('section', 'ri-block ri-selection', root);
-  selection.id = 'ri-selection';
-  selection.setAttribute('aria-label', t('On the map'));
-  const modeGroup = el('div', 'gev-segmented ri-mode', selection);
-  modeGroup.id = 'ri-mode';
-  modeGroup.setAttribute('role', 'radiogroup');
-  modeGroup.setAttribute('aria-label', t('Mode'));
-  const modeButtons = new Map(
-    MODE_LABELS.map(([mode, label]) => {
-      const node = el('button', 'gev-segment ri-mode-btn', modeGroup);
-      node.type = 'button';
-      node.textContent = t(label);
-      node.dataset.mode = mode;
-      node.setAttribute('role', 'radio');
-      return [mode, node];
-    }),
-  );
-  const modeControl = createSegmentedControl({
-    buttons: modeButtons.values(),
-    valueOf: (button) => button.dataset.mode,
-    onChange: (mode) => layer.setMode(mode),
-    keyboard: 'arrows',
-    keyTarget: modeGroup,
-    readValue: () => snapshot.mode,
-    listen,
-  });
-  const slotRows = {};
-  for (const slotId of ['a', 'b']) {
-    const row = el('div', 'ri-slot', selection);
-    row.id = `ri-slot-${slotId}`;
-    const tag = el('span', 'ri-slot-tag', row);
-    const value = el('span', 'ri-slot-value', row);
-    const unpin = el('button', 'data-toggle-chip ri-unpin', row, '×');
-    unpin.type = 'button';
-    unpin.id = `ri-unpin-${slotId}`;
-    unpin.dataset.unpin = slotId;
-    slotRows[slotId] = { row, tag, value, unpin };
-  }
-
-  const controls = el('div', 'ri-block ri-controls', root);
-  controls.id = 'ri-controls';
-  const opacityLabel = el('label', 'ri-opacity-label', controls);
-  el('span', '', opacityLabel, t('OPACITY'));
-  const opacityValue = el('span', 'ri-opacity-value', opacityLabel, '100%');
-  const opacity = createSlider({
-    documentRef: document,
-    className: 'ri-opacity',
-    min: '0',
-    max: '100',
-    step: '1',
-    value: '100',
-    ariaLabel: t('Imagery opacity'),
-  });
-  opacity.id = 'ri-opacity';
-  controls.appendChild(opacity);
-  opacityLabel.htmlFor = 'ri-opacity';
-  // Its slot is always there; it is only usable while a swipe is live.
-  const swap = el('button', 'data-toggle-chip ri-swap', controls, t('SWAP'));
-  swap.id = 'ri-swap';
-  swap.type = 'button';
-  swap.title = t('Trade the two sides of the divider');
-  const exportHost = el('div', 'ri-exports', controls);
-  const exports = createRailCardBlocks({
-    container: exportHost,
-    cardId: 'recent-imagery',
-    onParams: () => {},
-  });
-
-  const detailsHost = el('div', 'ri-details', root);
-  detailsHost.id = 'ri-details';
-  let detailsOpen = false;
-  const details = createRailCards({
-    container: detailsHost,
-    document,
-    cardClassName: 'ri-details-card',
-    onOpen: () => {
-      detailsOpen = !detailsOpen;
-      render();
-      // After the render: preserveScroll() puts the old position back.
-      if (detailsOpen) revealCard(container, detailsHost.children[0]);
-    },
-  });
-
-  container.appendChild(root);
 
   // ---- state ------------------------------------------------------------
-  const cards = new Map();
-  let stripKeys = '';
   let snapshot = layer.getSnapshot();
   let split = null;
   let splitSignature = '';
   let exportError = null;
   const exporting = new Set();
   let destroyed = false;
+  let detailsOpen = false;
+  let stripKeys = '';
+  // Days whose thumbnail has been shown: their image stays, hidden when gone.
+  const imaged = new Set();
+
+  // The readout patches synchronously, so it can be measured at once. Once
+  // destroyed nothing paints: a late export would mount it again.
+  const paint = () =>
+    !destroyed &&
+    renderVue(
+      h(RecentImageryReadout, {
+        view: buildView(),
+        modes: MODE_LABELS,
+        onOpenDetails,
+        onSetMode: (mode) => layer.setMode(mode),
+      }),
+      container,
+    );
+  paint();
+  const root = container.lastElementChild;
+  const strip = root.querySelector('#ri-strip');
+  const zoomIn = root.querySelector('#ri-zoom-in');
+  const swap = root.querySelector('#ri-swap');
+  const opacity = root.querySelector('#ri-opacity');
 
   /**
    * The body is the scroll container and no render may move it: a
@@ -395,8 +269,8 @@ export function createRecentImageryPanel({
   }
 
   // ---- box actions ------------------------------------------------------
-  function renderActions() {
-    actions.update([
+  function actionsView() {
+    return [
       {
         id: 'box',
         type: 'actions',
@@ -405,6 +279,7 @@ export function createRecentImageryPanel({
             id: 'select-box',
             label: t('SELECT BOX'),
             title: t('Drag a box on the map (Esc cancels)'),
+            pressed: Boolean(snapshot.toolActive),
             onClick: () => {
               exportError = null;
               if (tool?.isActive()) tool.cancel('toggle');
@@ -432,140 +307,53 @@ export function createRecentImageryPanel({
           },
         ],
       },
-    ]);
-    const selectBox = findIn(
-      actionsHost,
-      (node) => node.dataset?.actionId === 'select-box',
-    );
-    if (selectBox) {
-      attribute(
-        selectBox,
-        'aria-pressed',
-        String(Boolean(snapshot.toolActive)),
-      );
-      toggle(selectBox, 'active', snapshot.toolActive);
-    }
+    ];
   }
 
   // ---- notice -----------------------------------------------------------
-  function renderNotice() {
+  function noticeView() {
     const warning = snapshot.boxError || snapshot.error || exportError;
     const text = localizeNotice(
       warning || snapshot.notice || (snapshot.borrowedEsri ? ESRI_NOTE : ''),
     );
-    set(noticeText, 'textContent', text);
-    attribute(noticeText, 'title', text);
-    toggle(notice, 'warn', Boolean(warning));
-    toggle(notice, 'info', !warning && Boolean(text));
-    // ZOOM IN only for the oversized box or view the notice is showing.
-    const fit = Boolean(snapshot.zoomToFit);
-    toggle(notice, 'has-action', fit);
-    toggle(zoomIn, 'is-reserved', !fit);
-    set(zoomIn, 'disabled', !fit);
-    attribute(zoomIn, 'aria-hidden', String(!fit));
+    return {
+      text,
+      warn: Boolean(warning),
+      info: !warning && Boolean(text),
+      // ZOOM IN only for the oversized box or view the notice is showing.
+      fit: Boolean(snapshot.zoomToFit),
+    };
   }
 
   // ---- strip ------------------------------------------------------------
-  function buildCard(candidate) {
-    const card = el('div', 'ri-card');
-    card.dataset.key = candidate.key;
-    card.setAttribute('role', 'option');
-    const entry = { card, image: null, imageUrl: null };
-    entry.thumb = el('div', 'ri-thumb', card);
-    entry.placeholder = el('span', 'ri-thumb-text', entry.thumb);
-    entry.flag = el('span', 'ri-card-flag', entry.thumb);
-    entry.start = el('span', 'ri-card-start', entry.thumb, t('START HERE'));
-    entry.date = el('div', 'ri-card-date', card);
-    entry.sensor = el('div', 'ri-card-sensor', card);
-    entry.cloud = el('div', 'ri-card-cloud', card);
-    const chips = el('div', 'ri-card-chips', card);
-    entry.chips = {};
-    for (const slotId of ['a', 'b']) {
-      const chip = el('button', 'data-toggle-chip ri-chip', chips);
-      chip.type = 'button';
-      chip.tabIndex = -1;
-      chip.dataset.slot = slotId;
-      entry.chips[slotId] = chip;
-    }
-    cards.set(candidate.key, entry);
-    return card;
-  }
-
-  function updateCard(candidate, index) {
-    const entry = cards.get(candidate.key);
-    if (!entry) return;
-    const { card } = entry;
+  function cardView(candidate, index) {
     const day = displayDay(candidate.day);
     const ab = snapshot.mode === 'ab';
-    set(card, 'id', `ri-card-${index}`);
     const focused = index === snapshot.focusIndex;
-    toggle(card, 'focused', focused);
-    attribute(card, 'aria-selected', String(focused));
-    toggle(card, 'pinned', Boolean(candidate.pinned));
-    toggle(card, 'preview', Boolean(candidate.preview));
     const status = candidate.thumbnail?.status || 'unknown';
     const objectUrl = candidate.thumbnail?.objectUrl || null;
     const shown = status === 'present' && Boolean(objectUrl);
-    if (shown && !entry.image) {
-      entry.image = el('img', 'ri-thumb-img');
-      entry.image.alt = '';
-      entry.image.decoding = 'async';
-      entry.thumb.insertBefore(entry.image, entry.thumb.children[0] || null);
-    }
-    if (entry.image && entry.imageUrl !== (shown ? objectUrl : null)) {
-      entry.imageUrl = shown ? objectUrl : null;
-      entry.image.src = entry.imageUrl || '';
-    }
-    if (entry.image) set(entry.image, 'hidden', !shown);
-    set(entry.placeholder, 'hidden', shown);
-    set(
-      entry.placeholder,
-      'textContent',
-      PLACEHOLDERS[status] ? t(PLACEHOLDERS[status]) : t('Checking'),
-    );
-    if (entry.thumb.dataset.status !== status)
-      entry.thumb.dataset.status = status;
+    if (shown) imaged.add(candidate.key);
     const flag = candidate.preview
       ? t('PREVIEW')
       : candidate.pending
         ? t('LOADING')
         : '';
-    set(entry.flag, 'textContent', flag);
-    set(entry.flag, 'hidden', !flag);
     const recommended = snapshot.recommended?.key === candidate.key;
-    set(entry.start, 'hidden', !recommended);
-    if (recommended)
-      set(
-        entry.start,
-        'title',
-        t(
-          START_HERE_TITLES[snapshot.recommended.reason] ||
-            msg('Newest day with imagery for this box'),
-        ),
-      );
-    set(entry.date, 'textContent', day);
-    set(entry.sensor, 'textContent', sensorLine(candidate.product));
-    set(entry.cloud, 'textContent', cloudText(candidate));
     const empty = status === 'empty';
-    for (const slotId of ['a', 'b']) {
-      const chip = entry.chips[slotId];
+    const chips = ['a', 'b'].map((slotId) => {
       const live = slotId === 'a' || ab;
-      const on = candidate.pinned === slotId && live;
-      const label = slotId === 'a' ? (ab ? 'A' : t('SHOW')) : 'B';
-      set(chip, 'textContent', label);
-      set(chip, 'disabled', empty || !live);
-      toggle(chip, 'active', on);
-      toggle(chip, 'is-reserved', !live);
-      attribute(chip, 'aria-pressed', String(on));
-      attribute(chip, 'aria-hidden', String(!live));
-      attribute(
-        chip,
-        'aria-label',
-        ab
+      return {
+        slot: slotId,
+        label: slotId === 'a' ? (ab ? 'A' : t('SHOW')) : 'B',
+        disabled: empty || !live,
+        active: candidate.pinned === slotId && live,
+        reserved: !live,
+        ariaLabel: ab
           ? t('Pin {day} as {slot}', { day, slot: slotId.toUpperCase() })
           : t('Show {day}', { day }),
-      );
-    }
+      };
+    });
     const state = candidate.pinned
       ? ab
         ? t('pinned {slot}', { slot: candidate.pinned.toUpperCase() })
@@ -575,40 +363,47 @@ export function createRecentImageryPanel({
       : candidate.preview
         ? t('preview')
         : '';
-    attribute(
-      card,
-      'aria-label',
-      [
+    return {
+      key: candidate.key,
+      id: `ri-card-${index}`,
+      focused,
+      pinned: Boolean(candidate.pinned),
+      preview: Boolean(candidate.preview),
+      status,
+      image: imaged.has(candidate.key)
+        ? { src: shown ? objectUrl : '', hidden: !shown }
+        : null,
+      placeholder: PLACEHOLDERS[status]
+        ? t(PLACEHOLDERS[status])
+        : t('Checking'),
+      flag,
+      start: recommended
+        ? t(
+            START_HERE_TITLES[snapshot.recommended.reason] ||
+              msg('Newest day with imagery for this box'),
+          )
+        : '',
+      date: day,
+      sensor: sensorLine(candidate.product),
+      cloud: cloudText(candidate),
+      chips,
+      ariaLabel: [
         day,
         sensorLine(candidate.product),
         cloudText(candidate),
         ...[recommended ? t('start here') : '', state].filter(Boolean),
       ].join(' · '),
-    );
+    };
   }
 
-  function renderStrip() {
+  function stripView() {
     const candidates = snapshot.candidates;
-    const keys = candidates.map((candidate) => candidate.key).join('|');
-    if (keys !== stripKeys) {
-      stripKeys = keys;
-      const wanted = new Set(candidates.map((candidate) => candidate.key));
-      for (const [key, entry] of [...cards]) {
-        if (wanted.has(key)) continue;
-        entry.card.remove();
-        cards.delete(key);
-      }
-      candidates.forEach((candidate, index) => {
-        const node = cards.get(candidate.key)?.card || buildCard(candidate);
-        if (strip.children[index] !== node)
-          strip.insertBefore(node, strip.children[index] || null);
-      });
-    }
-    candidates.forEach(updateCard);
-    set(
-      stripEmpty,
-      'textContent',
-      candidates.length
+    // A day that leaves the strip loses its image with its card.
+    const keys = new Set(candidates.map((candidate) => candidate.key));
+    for (const key of imaged) if (!keys.has(key)) imaged.delete(key);
+    return {
+      cards: candidates.map(cardView),
+      empty: candidates.length
         ? ''
         : !snapshot.box
           ? t('No box')
@@ -619,19 +414,21 @@ export function createRecentImageryPanel({
               : !snapshot.sources.hls && !snapshot.sources.viirs
                 ? t('Sources off')
                 : t('No imagery'),
-    );
-    set(stripEmpty, 'hidden', candidates.length > 0);
-    if (candidates[snapshot.focusIndex])
-      attribute(
-        strip,
-        'aria-activedescendant',
-        `ri-card-${snapshot.focusIndex}`,
-      );
-    else strip.removeAttribute('aria-activedescendant');
-    toggle(strip, 'searching', snapshot.searching);
-    set(hint, 'textContent', hintText(snapshot));
-    attribute(hint, 'title', hint.textContent);
+      activeDescendant: candidates[snapshot.focusIndex]
+        ? `ri-card-${snapshot.focusIndex}`
+        : null,
+      searching: Boolean(snapshot.searching),
+    };
   }
+
+  /** The strip's day cards by key. */
+  const cardNodes = () =>
+    new Map(
+      [...strip.querySelectorAll('.ri-card')].map((node) => [
+        node.dataset.key,
+        node,
+      ]),
+    );
 
   /**
    * Keyboard only: slide the strip until the focused card is in view. Only
@@ -639,7 +436,7 @@ export function createRecentImageryPanel({
    */
   function scrollFocusedIntoView() {
     const focus = snapshot.candidates[snapshot.focusIndex];
-    const card = focus ? cards.get(focus.key)?.card : null;
+    const card = focus ? cardNodes().get(focus.key) : null;
     const left = Number(card?.offsetLeft) || 0;
     const width = Number(card?.offsetWidth) || 0;
     const viewLeft = Number(strip.scrollLeft) || 0;
@@ -656,8 +453,9 @@ export function createRecentImageryPanel({
     const left = Number(strip.scrollLeft) || 0;
     let first = null;
     let last = null;
+    const nodes = cardNodes();
     snapshot.candidates.forEach((candidate, index) => {
-      const card = cards.get(candidate.key)?.card;
+      const card = nodes.get(candidate.key);
       const start = Number(card?.offsetLeft) || 0;
       const end = start + (Number(card?.offsetWidth) || 0);
       if (!card || end < left || start > left + width) return;
@@ -677,21 +475,13 @@ export function createRecentImageryPanel({
     return null;
   }
 
-  function renderSelection() {
+  function slotsView() {
     const { mode } = snapshot;
-    set(selection.dataset, 'mode', mode);
-    modeControl.update(mode, { rovingFocus: true });
     const ab = mode === 'ab';
-    for (const slotId of ['a', 'b']) {
-      const { row, tag, value, unpin } = slotRows[slotId];
+    return ['a', 'b'].map((slotId) => {
       const basemapRow = slotId === 'b' && !ab;
       const image = basemapRow ? null : slotImage(slotId);
       const pinned = Boolean(image && !image.preview);
-      set(
-        tag,
-        'textContent',
-        ab ? slotId.toUpperCase() : slotId === 'a' ? t('IMAGE') : t('VS'),
-      );
       let text = t('Not set');
       if (basemapRow) text = t('Basemap');
       else if (image?.label)
@@ -706,29 +496,20 @@ export function createRecentImageryPanel({
         ]
           .filter(Boolean)
           .join(' · ');
-      set(value, 'textContent', text);
-      attribute(value, 'title', text);
-      const lit = basemapRow
-        ? mode === 'basemap'
-        : Boolean(image) && !image.sourceOff;
-      set(
-        row.dataset,
-        'state',
-        pinned ? 'pinned' : image ? 'preview' : 'empty',
-      );
-      toggle(row, 'lit', lit);
-      set(unpin, 'disabled', !pinned);
-      toggle(unpin, 'is-reserved', !pinned);
-      attribute(unpin, 'aria-hidden', String(!pinned));
-      attribute(
-        unpin,
-        'aria-label',
-        ab
+      return {
+        id: slotId,
+        tag: ab ? slotId.toUpperCase() : slotId === 'a' ? t('IMAGE') : t('VS'),
+        text,
+        lit: basemapRow
+          ? mode === 'basemap'
+          : Boolean(image) && !image.sourceOff,
+        state: pinned ? 'pinned' : image ? 'preview' : 'empty',
+        pinned,
+        unpinLabel: ab
           ? t('Unpin {slot}', { slot: slotId.toUpperCase() })
           : t('Unpin the image'),
-      );
-      set(unpin, 'title', unpin.getAttribute('aria-label'));
-    }
+      };
+    });
   }
 
   // ---- opacity and export -----------------------------------------------
@@ -739,20 +520,9 @@ export function createRecentImageryPanel({
     return image?.candidate && !image.sourceOff ? image.candidate : null;
   }
 
-  function renderControls() {
-    const anything = Boolean(snapshot.shown.a || snapshot.shown.b);
-    set(opacity, 'disabled', !anything);
-    const alphaValue = String(Math.round(snapshot.alpha * 100));
-    if (opacity.value !== alphaValue) opacity.value = alphaValue;
-    set(opacityValue, 'textContent', `${alphaValue}%`);
-    const swipe = snapshot.comparison.active;
-    toggle(swap, 'is-reserved', !swipe);
-    set(swap, 'disabled', !swipe);
-    attribute(swap, 'aria-hidden', String(!swipe));
-    toggle(swap, 'active', swipe && snapshot.swapped);
-    attribute(swap, 'aria-pressed', String(swipe && snapshot.swapped));
+  function exportsView() {
     const ab = snapshot.mode === 'ab';
-    exports.update([
+    return [
       {
         id: 'export',
         type: 'actions',
@@ -765,18 +535,11 @@ export function createRecentImageryPanel({
             ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
             : t('Download the image as a PNG'),
           disabled: !exportTarget(slotId) || exporting.has(slotId),
+          reserved: slotId === 'b' ? !ab : undefined,
           onClick: () => void exportImage(slotId),
         })),
       },
-    ]);
-    const exportB = findIn(
-      exportHost,
-      (node) => node.dataset?.actionId === 'export-b',
-    );
-    if (exportB) {
-      toggle(exportB, 'is-reserved', !ab);
-      attribute(exportB, 'aria-hidden', String(!ab));
-    }
+    ];
   }
 
   // ---- details ----------------------------------------------------------
@@ -852,10 +615,10 @@ export function createRecentImageryPanel({
     return lines;
   }
 
-  function renderDetails() {
+  function detailsView() {
     const hidden = snapshot.hiddenCount;
     const showing = snapshot.showUnavailable;
-    details.update([
+    return [
       {
         id: 'details',
         title: t('Details'),
@@ -882,7 +645,35 @@ export function createRecentImageryPanel({
           },
         ],
       },
-    ]);
+    ];
+  }
+
+  function onOpenDetails() {
+    detailsOpen = !detailsOpen;
+    render();
+    // After the render: preserveScroll() puts the old position back.
+    if (detailsOpen)
+      revealCard(container, root.querySelector('#ri-details > [data-card-id]'));
+  }
+
+  function buildView() {
+    return {
+      hidden: !snapshot.enabled,
+      mode: snapshot.mode,
+      actions: actionsView(),
+      notice: noticeView(),
+      strip: stripView(),
+      hint: hintText(snapshot),
+      slots: slotsView(),
+      alpha: String(Math.round(snapshot.alpha * 100)),
+      opacityEnabled: Boolean(snapshot.shown.a || snapshot.shown.b),
+      swap: {
+        live: Boolean(snapshot.comparison.active),
+        pressed: Boolean(snapshot.comparison.active && snapshot.swapped),
+      },
+      exports: exportsView(),
+      details: detailsView(),
+    };
   }
 
   // ---- divider ----------------------------------------------------------
@@ -912,7 +703,6 @@ export function createRecentImageryPanel({
     if (!live || split || destroyed) return;
     split = createSplit({
       scene: viewer?.scene,
-      parent: document.body,
       initialValue: snapshot.split,
       id: 'recent-imagery-split-line',
       handleClass: 'recent-imagery-split-handle',
@@ -946,7 +736,6 @@ export function createRecentImageryPanel({
   function renderPanel() {
     const hidden = !snapshot.enabled;
     if (panel) set(panel, 'hidden', hidden);
-    set(root, 'hidden', hidden);
     if (count) set(count, 'textContent', hidden ? '' : countText(snapshot));
     if (hidden || !panel || appearedDocuments.has(document)) return;
     appearedDocuments.add(document);
@@ -962,15 +751,11 @@ export function createRecentImageryPanel({
 
   function render() {
     if (destroyed) return;
+    // The strip a full render showed: thumbnails for it take the short path.
+    stripKeys = snapshot.candidates.map((candidate) => candidate.key).join('|');
     preserveScroll(() => {
-      set(root.dataset, 'mode', snapshot.mode);
       renderPanel();
-      renderActions();
-      renderNotice();
-      renderStrip();
-      renderSelection();
-      renderControls();
-      renderDetails();
+      paint();
       renderSplit();
       reportVisibleRange();
     });
@@ -979,10 +764,11 @@ export function createRecentImageryPanel({
   // ---- export -----------------------------------------------------------
   async function exportImage(slotId = 'a') {
     const candidate = exportTarget(slotId);
-    if (!candidate || !snapshot.box || exporting.has(slotId)) return false;
+    if (destroyed || !candidate || !snapshot.box || exporting.has(slotId))
+      return false;
     exporting.add(slotId);
     exportError = null;
-    preserveScroll(renderControls);
+    preserveScroll(paint);
     // The snapshot is plate carrée: keep the box's degree aspect, with the
     // longer side at the size limit.
     const size = longerSideKm(snapshot.boxSizeKm) > 25 ? 2048 : 1024;
@@ -1030,11 +816,7 @@ export function createRecentImageryPanel({
       return false;
     } finally {
       exporting.delete(slotId);
-      if (!destroyed)
-        preserveScroll(() => {
-          renderControls();
-          renderNotice();
-        });
+      if (!destroyed) preserveScroll(paint);
     }
   }
 
@@ -1149,22 +931,21 @@ export function createRecentImageryPanel({
     if (reason === 'split') {
       split?.setValue(snapshot.split);
     } else if (reason === 'alpha') {
-      preserveScroll(renderControls);
+      preserveScroll(paint);
     } else if (
       reason === 'thumbnail' &&
       snapshot.candidates.map((candidate) => candidate.key).join('|') ===
         stripKeys
     ) {
       // A probe that emptied a day hides its card; only an unchanged strip
-      // takes this in-place path.
-      preserveScroll(() => {
-        snapshot.candidates.forEach(updateCard);
-        renderDetails();
-      });
+      // takes this in-place path, without the divider or visible range.
+      preserveScroll(paint);
     } else {
       render();
     }
   });
+  // The readout's text is translated here; show it again in a new locale.
+  const offLocale = onLocaleChange(render);
   render();
 
   return {
@@ -1174,19 +955,16 @@ export function createRecentImageryPanel({
       if (destroyed) return;
       destroyed = true;
       unsubscribe();
+      offLocale();
       layer.setToolHandler?.(null);
       split?.destroy();
       split = null;
       for (const [target, type, handler, options] of listeners.splice(0))
         target.removeEventListener(type, handler, options);
-      for (const entry of cards.values()) {
-        if (entry.image) entry.image.src = '';
-      }
-      cards.clear();
-      actions.destroy();
-      exports.destroy();
-      details.destroy();
-      root.remove();
+      for (const image of root.querySelectorAll('.ri-thumb-img'))
+        image.src = '';
+      imaged.clear();
+      renderVue(null, container);
       if (count) count.textContent = '';
       if (panel) panel.hidden = true;
     },

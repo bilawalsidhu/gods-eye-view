@@ -30,6 +30,8 @@
  * This module is portable: no Cesium, DOM, network or storage access.
  */
 
+import { readAdsbVerticalRateFpm } from './adsbFields.js';
+
 /** A marker is dropped once its newest position is this old. */
 export const LOCAL_ADSB_POSITION_STALE_MS = 60_000;
 /** An aircraft is forgotten once no message has arrived for this long. */
@@ -247,7 +249,7 @@ export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
       altitudeFt: altitude,
       groundSpeedKt: finiteOrNull(entry.gs),
       trackDeg: normalizeTrack(entry.track),
-      verticalRateFpm: finiteOrNull(entry.baro_rate),
+      verticalRateFpm: readAdsbVerticalRateFpm(entry),
       lastPositionAt: hasPosition
         ? receivedAt - Math.max(0, seenPosS) * 1000
         : null,
