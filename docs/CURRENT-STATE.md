@@ -4429,8 +4429,10 @@ provider draws in one colour (`PROVIDER_COLORS` in
 sequence is GEV cyan. Share options: `m` (Mapillary), `r` (the other providers' switches by id,
 e.g. `google-1` for Street View), `p` (`a`/`p`/`f` panoramas), `s` (since, days). Mapillary, Google
 Street View, KartaView and Panoramax are registered. Without
-`MAPILLARY_CLIENT_TOKEN` the panel reads KEY REQUIRED and the controls are
-disabled. With it, coverage draws as z11–14 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
+`MAPILLARY_CLIENT_TOKEN` (and no Graph proxy) Street Level starts on the first
+keyless provider (KartaView), including a restored "Mapillary on" unless the link
+switches the keyless providers off; filter-only updates never change the source.
+With it, coverage draws as z11–14 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
 tiles (12 MB → ~80 KB) and shares one upstream fetch between concurrent
 requests for a tile.
 
@@ -4444,7 +4446,7 @@ the camera, nearest first, at most 9 (the halves of a view across
 the date line count a shared tile once). Lines are draped
 `GroundPolylinePrimitive`s (`ClassificationType.BOTH`), so they follow terrain
 and Google 3D tiles alike; cones and the photo marker are ground-clamped
-billboards with a horizon cull. Without `MAPILLARY_CLIENT_TOKEN` the panel
+billboards with a horizon cull. When Mapillary is lit without `MAPILLARY_CLIENT_TOKEN` the panel
 reads KEY REQUIRED, says which key to add and disables the filters; a rejected
 key reads KEY REJECTED and stops tile requests until the layer goes off; a 429
 pauses them for its Retry-After.
