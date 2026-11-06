@@ -520,6 +520,15 @@ test('a step that throws still closes its decision, then rethrows', async () => 
         },
       },
     ],
+    [
+      pointerGround(),
+      {
+        readPointer: () => groundSnapshot(),
+        capturePointer: async () => {
+          throw new Error('crop boom');
+        },
+      },
+    ],
   ]) {
     const { viewport, events } = recordingViewport(extra);
     await assert.rejects(viewport.sendVisualContextIfUseful(context), /boom/);
@@ -535,6 +544,39 @@ test('a step that throws still closes its decision, then rethrows', async () => 
       },
     ]);
   }
+});
+
+test('direct calls log their defensive skips without a decision id', async () => {
+  const open = recordingViewport();
+  assert.equal(
+    await open.viewport.sendPointerCrop(groundSnapshot(), {
+      viewScale: 'global',
+    }),
+    false,
+  );
+  const closed = recordingViewport({ channel: { readyState: 'closed' } });
+  assert.equal(
+    await closed.viewport.sendPointerCrop(groundSnapshot(), {
+      viewScale: 'city',
+    }),
+    false,
+  );
+  assert.equal(
+    await closed.viewport.sendRetainedImage(
+      async () => 'data:image/jpeg;base64,AA==',
+      'text',
+      'client.viewport_context',
+    ),
+    false,
+  );
+  assert.deepEqual(
+    [...open.events, ...closed.events].map((item) => item.detail),
+    [
+      { contextId: null, kind: 'crop', reason: 'pointer-scale-not-useful' },
+      { contextId: null, kind: 'crop', reason: 'channel-closed' },
+      { contextId: null, kind: 'viewport', reason: 'channel-closed' },
+    ],
+  );
 });
 
 test('a throw after a real send still logs it as sent', async () => {
