@@ -141,6 +141,16 @@ export function webglContext(scene) {
 }
 
 /**
+ * The entity Cesium's EntityView tracks: set once tracking has started and
+ * framed its entity, which can be frames after `trackedEntity` is set.
+ * @param {object} widget Viewer or CesiumWidget.
+ * @returns {object|null} Entity.
+ */
+export function trackedEntityViewEntity(widget) {
+  return (widget?._cesiumWidget ?? widget)?._entityView?.entity ?? null;
+}
+
+/**
  * Whether a camera flight is under way. Cesium clears it before calling a
  * flight's `complete`, so it reads false inside that callback.
  * @param {object} camera Cesium Camera.

@@ -8,6 +8,7 @@ import * as Cesium from 'cesium';
 import { createCameraEvents } from '../camera/events.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { cameraFlightActive } from './internals.js';
+import { createCesiumFollow } from './follow.js';
 import { cameraOf, provideUnboundCamera } from '../rendererOf.js';
 
 /**
@@ -68,13 +69,18 @@ export function toOrientation(o = {}) {
   };
 }
 
+/** The follow offset of a camera that cannot follow. */
+const NO_FOLLOW_OFFSET = Object.freeze({ get: () => null, set() {} });
+
 /**
- * @param {{scene: object, camera: object, report: (error: unknown) => void}}
- *   options `scene` gives `requestRender` and the `postUpdate` tick
- *   `changed` is measured on.
+ * @param {{scene: object, camera: object, report: (error: unknown) => void,
+ *   widget?: object}} options `scene` gives `requestRender` and the
+ *   `postUpdate` tick `changed` is measured on; `widget`, the Viewer or
+ *   CesiumWidget, gives the entity tracking `follow` runs on (without it the
+ *   camera cannot follow).
  * @returns {{port: import('../contract/camera').CameraPort, dispose: () => void}}
  */
-export function createCesiumCamera({ scene, camera, report }) {
+export function createCesiumCamera({ scene, camera, report, widget }) {
   const removers = [];
   // Camera events: Cesium's own moveStart and moveEnd (500 ms after the
   // last change, never while following), and `changed` measured per
@@ -88,6 +94,15 @@ export function createCesiumCamera({ scene, camera, report }) {
     camera.moveStart.addEventListener(() => cameraEvents.emit('moveStart')),
     camera.moveEnd.addEventListener(() => cameraEvents.emit('moveEnd')),
   );
+
+  const following = widget?.trackedEntityChanged
+    ? createCesiumFollow({
+        widget,
+        scene,
+        camera,
+        onChanged: () => cameraEvents.emit('followChanged'),
+      })
+    : null;
 
   // Camera commands: hooks run before each one, so an owner can yield.
   const commandHooks = listenerList(report);
@@ -235,6 +250,20 @@ export function createCesiumCamera({ scene, camera, report }) {
       );
       scene.requestRender();
     },
+    follow(target) {
+      if (!following)
+        throw new Error('This camera cannot follow: it has no entity tracking');
+      command('follow');
+      following.follow(target);
+      scene.requestRender();
+    },
+    get followed() {
+      return following?.followed ?? null;
+    },
+    get followFramed() {
+      return following?.followFramed ?? false;
+    },
+    followOffset: following?.followOffset ?? NO_FOLLOW_OFFSET,
     release() {
       command('release');
       camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
@@ -304,6 +333,7 @@ export function createCesiumCamera({ scene, camera, report }) {
   return {
     port: cameraPort,
     dispose() {
+      following?.dispose();
       for (const off of removers.splice(0)) off();
       cameraEvents.clear();
       commandHooks.clear();
@@ -323,6 +353,7 @@ provideUnboundCamera((viewer) =>
         scene: viewer.scene,
         camera: viewer.camera,
         report: uncaught,
+        widget: viewer,
       })
     : null,
 );
