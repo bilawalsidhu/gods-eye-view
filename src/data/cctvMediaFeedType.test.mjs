@@ -109,7 +109,9 @@ function recordingResponse() {
 function mount(
   t,
   respond,
-  { streetViewAdmission = createStreetViewAdmission({ failureCooldownMs: 0 }) } = {},
+  {
+    streetViewAdmission = createStreetViewAdmission({ failureCooldownMs: 0 }),
+  } = {},
 ) {
   const before = {
     json: process.env.CCTV_SOURCES_JSON,
