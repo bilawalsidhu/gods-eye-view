@@ -1,0 +1,48 @@
+{
+  "id": "portland-metro-or",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Portland Metro (RLIS), Oregon Aerial Photos",
+  "provider": "Oregon Metro RLIS",
+  "description": "Aerial orthophotos: Portland Metro (RLIS), Oregon jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-123.1535, 45.234, -122.3675, 45.7026]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://utility.arcgis.com/usrsvcs/servers/41cd821260944a668ef228f671b3ff46/rest/services/photo/2023aerialphoto/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://rlisdiscovery.oregonmetro.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Oregon Metro RLIS",
+    "url": "https://rlisdiscovery.oregonmetro.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

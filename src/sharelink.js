@@ -121,6 +121,7 @@ export class ShareLinkManager {
     this._scopeTerminusPct = null;
     this._mapStack = 'photoreal';
     this._layerStateProvider = null;
+    this._libraryParamsEncoder = null;
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._initialRestorePending = false;
@@ -402,6 +403,20 @@ export class ShareLinkManager {
     this._layerStateProvider = typeof provider === 'function' ? provider : null;
   }
 
+  /**
+   * Install the Data Library's `lib=` writer. Library selections travel in
+   * their own field and never touch the core layer-token ledger.
+   * @param {((params: URLSearchParams) => void) | null} encoder
+   */
+  setLibraryParamsEncoder(encoder) {
+    this._libraryParamsEncoder = typeof encoder === 'function' ? encoder : null;
+  }
+
+  /** Called when the Data Library selection changes. */
+  onLibraryStateChange() {
+    this._scheduleUpdate();
+  }
+
   /** Install the finalized panel-state source used by URL generation. */
   setPanelStateProvider(provider) {
     this._panelStateProvider = typeof provider === 'function' ? provider : null;
@@ -590,6 +605,7 @@ export class ShareLinkManager {
     params.set('map', this._mapStack);
     const layerState = this._layerStateProvider?.();
     if (layerState) encodeLayerStateParams(params, layerState);
+    this._libraryParamsEncoder?.(params);
     this._encodePanelStateParam(params, this._panelStateProvider?.());
     encodeStyleParamState(
       params,
@@ -622,6 +638,7 @@ export class ShareLinkManager {
     this._removeCameraChanged?.();
     this._removeCameraChanged = null;
     this._layerStateProvider = null;
+    this._libraryParamsEncoder = null;
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._onRestore = null;

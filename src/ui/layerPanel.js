@@ -97,6 +97,17 @@ const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
 const PANEL_POSITIONS = new Map(
   PANEL_ORDER.map(({ id }, index) => [id, index]),
 );
+// Data Library layers follow every core group, in the order they were added.
+const LIBRARY_GROUP = msg('Library');
+const panelPosition = (layer) =>
+  layer.libraryEntryId
+    ? PANEL_ORDER.length + 1
+    : (PANEL_POSITIONS.get(layer.id) ?? PANEL_ORDER.length);
+const panelGroup = (layer) =>
+  layer.libraryEntryId
+    ? LIBRARY_GROUP
+    : (PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ??
+      msg('Other layers'));
 
 function englishPanelLabel(layer) {
   return PANEL_LABELS[layer.id] || LAYER_NAME_KEYS[layer.id] || layer.name;
@@ -276,6 +287,10 @@ export class LayerPanel {
     this._recentImageryFactory = null;
     this._toggleContainer = null;
   }
+  /** Rebuild the rows after the layer set changed (a Data Library add/remove). */
+  rerender() {
+    this._renderToggles();
+  }
   _renderToggles() {
     if (this._destroyed || !this._toggleContainer) return;
     this._releaseBindings();
@@ -284,17 +299,11 @@ export class LayerPanel {
     const generation = this._generation;
     const layers = this.getAll()
       .slice()
-      .sort(
-        (a, b) =>
-          (PANEL_POSITIONS.get(a.id) ?? PANEL_ORDER.length) -
-          (PANEL_POSITIONS.get(b.id) ?? PANEL_ORDER.length),
-      );
+      .sort((a, b) => panelPosition(a) - panelPosition(b));
     let previousGroup = '';
     for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
-      const group =
-        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ??
-        msg('Other layers');
+      const group = panelGroup(layer);
       if (group && group !== previousGroup) {
         const heading = document.createElement('h3');
         heading.className = 'data-layer-group-heading';
@@ -305,6 +314,7 @@ export class LayerPanel {
       const row = document.createElement('div');
       row.className = 'data-toggle-row';
       row.dataset.layerId = layer.id;
+      if (layer.libraryEntryId) row.dataset.libraryEntry = layer.libraryEntryId;
       // English name for voice tools, which must not receive translated text.
       row.dataset.layerName = englishPanelLabel(layer);
 
@@ -394,7 +404,12 @@ export class LayerPanel {
             const chip = this._rowControlsFor(layer.id)?.chips?.find(
               (entry) => entry.id === button.dataset.chipId,
             );
-            if (!chip || chip.disabled || !this.isEnabled(layer.id)) return;
+            if (
+              !chip ||
+              chip.disabled ||
+              (!this.isEnabled(layer.id) && !chip.whileOff)
+            )
+              return;
             if (typeof chip.onClick === 'function') chip.onClick();
             else if (chip.params)
               this.setLayerParams(layer.id, chip.params, { origin: 'user' });
@@ -511,7 +526,12 @@ export class LayerPanel {
    */
   _syncRowControls(container, layer, listContainer = null) {
     if (!container) return;
-    const controls = layer.enabled ? this._rowControlsFor(layer.id) : null;
+    // A quiet row stays quiet while off, except Data Library rows, whose
+    // actions (zoom, remove) work on a layer that is off.
+    const controls =
+      layer.enabled || layer.libraryEntryId
+        ? this._rowControlsFor(layer.id)
+        : null;
     if (controls?.readout) {
       container.remove();
       listContainer?.remove();

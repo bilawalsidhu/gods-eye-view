@@ -1,0 +1,47 @@
+{
+  "id": "oh-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Ohio Statewide Imagery",
+  "provider": "Ohio OGRIP (OSIP)",
+  "description": "Aerial orthophotos: Statewide coverage of Ohio.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-84.9418, 38.3739, -80.4714, 42.0065]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://maps.ohio.gov/image/rest/services/osip_most_current_cache/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "6 in – 1 ft",
+    "resolutionM": 0.1524,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Rolling statewide (OSIP)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain — Ohio open data",
+    "url": "https://maps.ohio.gov/"
+  },
+  "attribution": {
+    "text": "Ohio Geographically Referenced Information Program (OGRIP)",
+    "url": "https://maps.ohio.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

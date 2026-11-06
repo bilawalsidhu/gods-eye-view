@@ -1,0 +1,48 @@
+{
+  "id": "nwa-benton-washington-ar",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Northwest Arkansas (Benton & Washington County) Imagery",
+  "provider": "Northwest Arkansas regional GIS",
+  "description": "Aerial orthophotos: Northwest Arkansas (Benton & Washington County) jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-94.6282, 35.7407, -93.7939, 36.5179]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/G4bYaaas92zuKaUR/arcgis/rest/services/BentWashImg2024Pack/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2024–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.nwarpc.org/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "NWARPC; Washington County; Benton County",
+    "url": "https://www.nwarpc.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

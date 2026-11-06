@@ -1,0 +1,48 @@
+{
+  "id": "bangor-me",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Bangor, Maine Orthoimagery",
+  "provider": "City of Bangor GIS",
+  "description": "Aerial orthophotos: Bangor, Maine jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-68.9126, 44.7674, -68.6451, 44.8951]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/yIxdYDwtUG29jfAN/arcgis/rest/services/2024_Orthoimagery_Tiles/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2024–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.bangormaine.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "City of Bangor GIS",
+    "url": "https://www.bangormaine.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

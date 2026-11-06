@@ -1,0 +1,24 @@
+{
+  "id": "cctv-lithuania",
+  "kind": "pack",
+  "family": "cameras",
+  "title": "Lithuania road cameras (Via Lietuva)",
+  "provider": "Via Lietuva",
+  "description": "Eismoinfo road-camera stills across Lithuania, added to the CCTV layer. Off until Via Lietuva confirms the photo licence.",
+  "icon": "◉",
+  "maintainer": "core",
+  "coverage": { "countries": ["LT"], "bbox": [20.9, 53.89, 26.84, 56.45] },
+  "source": { "format": "host", "url": "https://eismoinfo.lt/" },
+  "pack": { "host": "cctv", "env": "CCTV_LITHUANIA_ENABLED" },
+  "licence": {
+    "name": "Via Lietuva open-data statement; camera photo coverage unconfirmed",
+    "url": "https://eismoinfo.lt/eismoinfo-backend/content?id=44",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Via Lietuva / eismoinfo.lt",
+    "url": "https://eismoinfo.lt/"
+  },
+  "status": "verified",
+  "reviewed": "2026-10-21"
+}

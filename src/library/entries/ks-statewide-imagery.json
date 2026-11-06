@@ -1,0 +1,48 @@
+{
+  "id": "ks-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Kansas Statewide Imagery (2021)",
+  "provider": "Kansas DASC / KGS",
+  "description": "Aerial orthophotos: Statewide coverage of Kansas.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-102.472, 36.738, -94.035, 40.211]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://services.kgs.ku.edu/arcgis7/rest/services/IMAGERY_STATEWIDE/FSA_NAIP_2021_Color/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "60 cm",
+    "resolutionM": 0.6,
+    "trueOrtho": false,
+    "vintage": "2021–present",
+    "updateCycle": "NAIP 2-year cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://www.kansasgis.org/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "FSA, USDA,",
+    "url": "https://www.kansasgis.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

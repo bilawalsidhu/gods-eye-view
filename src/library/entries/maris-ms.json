@@ -1,0 +1,48 @@
+{
+  "id": "maris-ms",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "MARIS Imagery, Mississippi",
+  "provider": "MARIS",
+  "description": "Aerial orthophotos: MARIS Imagery, Mississippi jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-89.5658, 34.3427, -89.5141, 34.3953]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/EAeOFj04EVkIaWLk/arcgis/rest/services/OleMiss_Basemap_ZL2/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 13,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2020–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.gis.ms.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "MARIS",
+    "url": "https://www.gis.ms.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

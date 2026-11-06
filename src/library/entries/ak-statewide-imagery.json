@@ -1,0 +1,47 @@
+{
+  "id": "ak-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Alaska Statewide Imagery (2023)",
+  "provider": "Alaska Geospatial Council",
+  "description": "Aerial orthophotos: Statewide coverage of Alaska.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-170, 51.2, -129, 71.4551]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://apps.geo.fpac.usda.gov/nrcs-imagery/rest/services/ortho_imagery/alaska_vivid_2023_30cm/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "30 cm",
+    "resolutionM": 0.3,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "Periodic statewide refresh",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public Domain (U.S. Government work)",
+    "url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits"
+  },
+  "attribution": {
+    "text": "USDA / Alaska Geospatial Council",
+    "url": "https://gis.data.alaska.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

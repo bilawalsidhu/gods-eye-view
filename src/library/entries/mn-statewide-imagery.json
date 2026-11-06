@@ -1,0 +1,48 @@
+{
+  "id": "mn-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Minnesota Statewide Imagery",
+  "provider": "MnGeo",
+  "description": "Aerial orthophotos: Statewide coverage of Minnesota.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-97.24, 43.5, -89.49, 49.38]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://imageserver.gisdata.mn.gov/cgi-bin/wms?service=WMS&request=GetMap&version=1.1.1&layers=fsa&styles=&srs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "60 cm (FSA/NAIP)",
+    "resolutionM": 0.6,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "NAIP 2-year cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain / open — MnGeo terms",
+    "url": "https://www.mngeo.state.mn.us/"
+  },
+  "attribution": {
+    "text": "MnGeo / State of Minnesota",
+    "url": "https://www.mngeo.state.mn.us/chouse/airphoto/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

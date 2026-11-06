@@ -1,0 +1,48 @@
+{
+  "id": "new-orleans-rpc-la",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "New Orleans Regional Planning Commission Imagery",
+  "provider": "New Orleans RPC",
+  "description": "Aerial orthophotos: New Orleans Regional Planning Commission jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-90.0974, 29.8415, -89.9951, 29.9701]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/3OuwdDUqRzQS6PA4/arcgis/rest/services/RPC2022imagery/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2020–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.norpc.org/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Regional Planning Commission for Jefferson, Orleans, Plaquemines, St. Bernard, St. Charles, St. John the Baptist, St. Tammany, and Tangipahoa Parishes (RPC)",
+    "url": "https://www.norpc.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

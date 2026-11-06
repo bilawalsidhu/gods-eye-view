@@ -1,0 +1,48 @@
+{
+  "id": "pa-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Pennsylvania Statewide Imagery",
+  "provider": "PASDA / PAMAP (Penn State)",
+  "description": "Aerial orthophotos: Statewide coverage of Pennsylvania.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-80.52, 39.72, -74.69, 42.27]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://imagery.pasda.psu.edu/arcgis/rest/services/pasda/Aerials0306StateWide/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true,
+    "noDataColor": "#fdfdfd"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "1 ft – 2 ft",
+    "resolutionM": 0.3048,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "PAMAP multi-year cycles",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain — PASDA open data",
+    "url": "https://www.pasda.psu.edu/"
+  },
+  "attribution": {
+    "text": "PASDA / PAMAP, Commonwealth of Pennsylvania",
+    "url": "https://www.pasda.psu.edu/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

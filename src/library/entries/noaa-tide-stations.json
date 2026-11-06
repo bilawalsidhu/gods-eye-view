@@ -1,0 +1,37 @@
+{
+  "id": "noaa-tide-stations",
+  "kind": "dataset",
+  "family": "environment",
+  "title": "US tide stations (NOAA CO-OPS)",
+  "provider": "NOAA CO-OPS",
+  "description": "About 300 NOAA water-level stations on US coasts, the Great Lakes and Pacific islands, with their tide type.",
+  "icon": "≈",
+  "maintainer": "github:asturksever",
+  "coverage": { "countries": ["US"], "bbox": [-180, -15, 180, 72] },
+  "source": {
+    "format": "json",
+    "url": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json",
+    "query": { "type": "waterlevels" },
+    "records": "stations",
+    "columns": { "lat": "lat", "lon": "lng" },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxBytes": 4194304,
+    "maxFeatures": 1000
+  },
+  "display": {
+    "color": "#63b3ed",
+    "label": "name",
+    "fields": ["state", "tideType"]
+  },
+  "licence": {
+    "name": "NOAA data: U.S. public domain",
+    "url": "https://tidesandcurrents.noaa.gov/disclaimers.html"
+  },
+  "attribution": {
+    "text": "NOAA Center for Operational Oceanographic Products and Services (CO-OPS)",
+    "url": "https://tidesandcurrents.noaa.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

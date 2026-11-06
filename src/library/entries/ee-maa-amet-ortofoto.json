@@ -1,0 +1,47 @@
+{
+  "id": "ee-maa-amet-ortofoto",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Eesti ortofoto (Maa-amet)",
+  "provider": "Estonian Land Board (Maa-amet)",
+  "description": "Aerial orthophotos: 100% of Estonia (2-year cycle; cities yearly).",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["EE"],
+    "bbox": [21.76, 57.51, 28.21, 59.68]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.maaamet.ee/tm/tms/1.0.0/foto@GMC/{z}/{x}/{reverseY}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 18,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "coverage",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "10–25 cm",
+    "resolutionM": 0.1,
+    "trueOrtho": false,
+    "vintage": "2021–present",
+    "updateCycle": "Biennial (annual in cities)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Maa-amet open data licence (attribution)",
+    "url": "https://geoportaal.maaamet.ee/eng/Spatial-Data/Orthophotos-p309.html"
+  },
+  "attribution": {
+    "text": "© Maa-amet (Estonian Land Board)",
+    "url": "https://geoportaal.maaamet.ee/eng/Download-p609.html"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

@@ -1,0 +1,47 @@
+{
+  "id": "ar-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Arkansas Statewide Imagery (2023)",
+  "provider": "Arkansas GIS Office (GeoStor)",
+  "description": "Aerial orthophotos: Statewide coverage of Arkansas.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-94.642, 32.9545, -89.584, 36.5414]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://gis.arkansas.gov/arcgis/rest/services/ImageServices/IMAGERY_9IN_2023/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "9 in / 6 in urban",
+    "resolutionM": 0.2286,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "Multi-year statewide cycles",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain — Arkansas GIS Office open data",
+    "url": "https://gis.arkansas.gov/"
+  },
+  "attribution": {
+    "text": "Arkansas GIS Office",
+    "url": "https://gis.arkansas.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

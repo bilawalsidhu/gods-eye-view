@@ -1,0 +1,48 @@
+{
+  "id": "nj-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "New Jersey Statewide Imagery (2015)",
+  "provider": "NJ Office of GIS (NJOGIS)",
+  "description": "Aerial orthophotos: Statewide coverage of New Jersey.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-75.56, 38.93, -73.89, 41.36]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://maps.nj.gov/arcgis/rest/services/Basemap/Orthos_Natural_2015_NJ_WM/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "1 ft",
+    "resolutionM": 0.3048,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Roughly every 3 years",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open — State of New Jersey provides data 'as is'",
+    "url": "https://njgin.nj.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Project definition, funding requests, and data distribution by NJ Office of Information Technology, Office of Geographic Information Systems (NJOIT - OGIS). Funding for the imagery project provided by",
+    "url": "https://registry.opendata.aws/nj-imagery/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

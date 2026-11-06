@@ -1,0 +1,66 @@
+{
+  "id": "epc-england-wales",
+  "kind": "dataset",
+  "family": "infrastructure",
+  "title": "Home energy ratings, England and Wales (EPC)",
+  "provider": "Addresscloud / DLUHC",
+  "description": "Every domestic Energy Performance Certificate in England and Wales at its UPRN, coloured by current rating A–G. Loads the homes in view once you zoom in below 4 km.",
+  "icon": "⌂",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["GB"],
+    "bbox": [-5.8, 49.8, 1.8, 55.9]
+  },
+  "source": {
+    "format": "geoparquet",
+    "url": "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/addresscloud/epc/geoparquet-local-authority/",
+    "partitions": {
+      "listUrl": "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop?list-type=2&prefix=addresscloud/epc/geoparquet-local-authority/",
+      "keyBase": "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/"
+    },
+    "fetch": "browser-direct",
+    "view": {
+      "maxAltitudeM": 4000,
+      "sample": [-3.19, 51.47, -3.16, 51.49]
+    },
+    "cacheSeconds": 86400,
+    "maxBytes": 8388608,
+    "maxFeatures": 6000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "UPRN",
+    "fields": ["CURRENT_ENERGY_RATING", "POTENTIAL_ENERGY_RATING"],
+    "colorBy": {
+      "field": "CURRENT_ENERGY_RATING",
+      "colors": {
+        "A": "#008054",
+        "B": "#19b459",
+        "C": "#8dce46",
+        "D": "#ffd500",
+        "E": "#fcaa65",
+        "F": "#ef8023",
+        "G": "#e9153b"
+      },
+      "labels": {
+        "A": "A · 92–100",
+        "B": "B · 81–91",
+        "C": "C · 69–80",
+        "D": "D · 55–68",
+        "E": "E · 39–54",
+        "F": "F · 21–38",
+        "G": "G · 1–20"
+      }
+    }
+  },
+  "licence": {
+    "name": "Open Government Licence v3.0 (EPC data); OS Open UPRN under OGL",
+    "url": "https://epc.opendatacommunities.org/docs/copyright"
+  },
+  "attribution": {
+    "text": "Energy Performance of Buildings Data, DLUHC; geocoded by Addresscloud with OS Open UPRN — contains OS data © Crown copyright and database right; via Source Cooperative",
+    "url": "https://source.coop/addresscloud/epc"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

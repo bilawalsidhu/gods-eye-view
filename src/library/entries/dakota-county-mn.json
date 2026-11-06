@@ -1,0 +1,48 @@
+{
+  "id": "dakota-county-mn",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Dakota County, Minnesota Air Photo",
+  "provider": "Dakota County GIS",
+  "description": "Aerial orthophotos: Dakota County, Minnesota jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-93.3479, 44.4582, -92.7129, 44.9358]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://gisimg.co.dakota.mn.us/arcgis/rest/services/AerialPhotography/2025AirPhotoLeafOff6Inch_Spring/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "6 in",
+    "resolutionM": 0.1524,
+    "trueOrtho": false,
+    "vintage": "2025–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://gis.co.dakota.mn.us/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Dakota County GIS",
+    "url": "https://gis.co.dakota.mn.us/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

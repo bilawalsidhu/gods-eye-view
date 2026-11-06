@@ -1,0 +1,49 @@
+{
+  "id": "union-county-oh",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Union County, Ohio Aerial Imagery",
+  "provider": "Union County GIS",
+  "description": "Aerial orthophotos: Union County, Ohio jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-83.6732, 39.9845, -83.0745, 40.5493]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://www7.co.union.oh.us/unioncountyohio/rest/services/AerialPhoto2023/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true,
+    "noDataColor": "#fdfdfd"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://union-county-auditor-unionco.hub.arcgis.com/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Union County / City of Marysville GIS",
+    "url": "https://union-county-auditor-unionco.hub.arcgis.com/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

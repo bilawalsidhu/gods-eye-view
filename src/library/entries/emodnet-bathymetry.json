@@ -1,0 +1,34 @@
+{
+  "id": "emodnet-bathymetry",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "European seabed depth (EMODnet)",
+  "provider": "EMODnet",
+  "description": "Shaded relief of the seabed across European seas from the EMODnet Digital Bathymetry model.",
+  "icon": "≈",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "bbox": [-36, 15, 43, 90]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 12
+  },
+  "display": {
+    "opacity": 0.85
+  },
+  "licence": {
+    "name": "EMODnet data: free use with attribution",
+    "url": "https://emodnet.ec.europa.eu/en/emodnet-data-policy"
+  },
+  "attribution": {
+    "text": "EMODnet Bathymetry Consortium — EMODnet Digital Bathymetry (DTM)",
+    "url": "https://emodnet.ec.europa.eu/en/bathymetry"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

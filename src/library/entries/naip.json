@@ -1,0 +1,47 @@
+{
+  "id": "naip",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "NAIP — National Agriculture Imagery Program",
+  "provider": "USDA FSA / USGS",
+  "description": "Aerial orthophotos: Conterminous US, each state every 2–3 years.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-125, 24, -66.9, 49.4]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "coverage",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "60 cm (30 cm in some states)",
+    "resolutionM": 0.3,
+    "trueOrtho": false,
+    "vintage": "2003–present",
+    "updateCycle": "2–3 year state cycles",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public Domain (U.S. Government work)",
+    "url": "https://naip-usdaonline.hub.arcgis.com/"
+  },
+  "attribution": {
+    "text": "USDA NAIP",
+    "url": "https://naip-usdaonline.hub.arcgis.com/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

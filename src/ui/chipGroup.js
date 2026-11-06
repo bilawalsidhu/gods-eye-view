@@ -25,9 +25,26 @@ export function syncChipGroup(container, chips = [], { before = null } = {}) {
     set(
       button,
       'className',
-      `data-toggle-chip chip-${state}${chip.active ? ' active' : ''}`,
+      `data-toggle-chip chip-${state}${chip.active ? ' active' : ''}${chip.icon ? ' chip-icon' : ''}`,
     );
-    set(button, 'textContent', chip.label);
+    if (chip.icon) {
+      // An icon chip shows a Material Symbol (named in index.html's
+      // `icon_names` subset); its label is the accessible name and tooltip.
+      let glyph = button.children[0];
+      if (!glyph?.classList?.contains('material-symbols-outlined')) {
+        button.textContent = '';
+        glyph = document.createElement('span');
+        glyph.className = 'material-symbols-outlined';
+        glyph.setAttribute('aria-hidden', 'true');
+        button.append(glyph);
+      }
+      set(glyph, 'textContent', chip.icon);
+      attribute(button, 'aria-label', chip.label);
+    } else {
+      if (button.getAttribute('aria-label') !== null)
+        button.removeAttribute('aria-label');
+      set(button, 'textContent', chip.label);
+    }
     // Optional per-chip colour; CSS decides how it is used.
     const color = chip.color || '';
     if ((button.dataset.chipColor || '') !== color) {
@@ -39,9 +56,13 @@ export function syncChipGroup(container, chips = [], { before = null } = {}) {
         delete button.dataset.chipColor;
       }
     }
-    set(button, 'title', chip.title || '');
+    set(button, 'title', chip.title || (chip.icon ? chip.label : ''));
     set(button, 'disabled', Boolean(chip.disabled));
-    attribute(button, 'aria-pressed', String(Boolean(chip.active)));
+    // An action (Zoom, Remove) is a plain button, not an on/off toggle.
+    if (chip.action) {
+      if (button.getAttribute('aria-pressed') !== null)
+        button.removeAttribute('aria-pressed');
+    } else attribute(button, 'aria-pressed', String(Boolean(chip.active)));
     attribute(button, 'aria-busy', String(Boolean(chip.busy)));
     ordered.push(button);
   }

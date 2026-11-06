@@ -1,0 +1,35 @@
+{
+  "id": "usgs-topo",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "US topographic map (USGS)",
+  "provider": "USGS",
+  "description": "The National Map's topographic basemap of the United States: contours, roads, places and land cover.",
+  "icon": "⛰",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-180, 13, -64, 72]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 16
+  },
+  "display": {
+    "opacity": 1
+  },
+  "licence": {
+    "name": "USGS The National Map: U.S. public domain",
+    "url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits"
+  },
+  "attribution": {
+    "text": "USGS The National Map",
+    "url": "https://www.usgs.gov/programs/national-geospatial-program/national-map"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

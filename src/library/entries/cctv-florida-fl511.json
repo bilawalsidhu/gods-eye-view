@@ -1,0 +1,24 @@
+{
+  "id": "cctv-florida-fl511",
+  "kind": "pack",
+  "family": "cameras",
+  "title": "Florida cameras (FL511)",
+  "provider": "FL511",
+  "description": "Statewide FL511 traffic camera stills, added to the CCTV layer. Individual personal use only; other use needs FDOT's written consent.",
+  "icon": "◉",
+  "maintainer": "core",
+  "coverage": { "countries": ["US"], "bbox": [-87.64, 24.4, -79.97, 31.0] },
+  "source": { "format": "host", "url": "https://fl511.com/" },
+  "pack": { "host": "cctv", "env": "CCTV_FLORIDA_ENABLED" },
+  "licence": {
+    "name": "FL511 content: individual personal use only",
+    "url": "https://fl511.com/privacy#disclaimer",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Florida DOT — FL511.com",
+    "url": "https://fl511.com/"
+  },
+  "status": "verified",
+  "reviewed": "2026-10-21"
+}

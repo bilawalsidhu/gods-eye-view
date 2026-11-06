@@ -1,0 +1,48 @@
+{
+  "id": "lu-ortho-latest",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Orthophoto officielle du Luxembourg",
+  "provider": "ACT Luxembourg / geoportail.lu",
+  "description": "Aerial orthophotos: 100% of Luxembourg (~2,586 km²).",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["LU"],
+    "bbox": [5.73, 49.44, 6.53, 50.19]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://wmts1.geoportail.lu/opendata/wmts/ortho_latest/GLOBAL_WEBMERCATOR_4_V3/{z}/{x}/{y}.jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 8,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "coverage",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "5–20 cm",
+    "resolutionM": 0.05,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "Annual (spring flight)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "CC0 1.0 (Licence ouverte Luxembourg)",
+    "url": "https://data.public.lu/en/datasets/orthophoto-officelle-du-grand-duche-de-luxembourg-edition-2023/"
+  },
+  "attribution": {
+    "text": "Administration du cadastre et de la topographie, Luxembourg (CC0)",
+    "url": "https://data.public.lu/en/datasets/?q=orthophoto"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

@@ -52,3 +52,33 @@ test('a chip colour is set once, changed, and cleared through a CSS variable', (
   ]);
   assert.equal(chip.dataset.chipColor, undefined);
 });
+
+test('an icon action chip draws its glyph, names itself by its label and is not a toggle', () => {
+  let writes = 0;
+  const f = railFixture(() => writes++);
+  const zoom = {
+    id: 'zoom',
+    icon: 'zoom_in_map',
+    action: true,
+    label: 'Zoom to layer',
+  };
+  syncChipGroup(f.container, [zoom]);
+  const button = f.container.children[0];
+  const glyph = button.children[0];
+  assert.equal(glyph.className, 'material-symbols-outlined');
+  assert.equal(glyph.textContent, 'zoom_in_map');
+  assert.equal(glyph.getAttribute('aria-hidden'), 'true');
+  assert.equal(button.getAttribute('aria-label'), 'Zoom to layer');
+  assert.equal(button.title, 'Zoom to layer');
+  assert.equal(button.getAttribute('aria-pressed'), null);
+  assert.ok(button.className.includes('chip-icon'));
+  writes = 0;
+  syncChipGroup(f.container, [zoom]);
+  assert.equal(writes, 0, 'a resync writes nothing');
+  assert.equal(button.children[0], glyph);
+  // The same id as a text toggle drops the icon semantics.
+  syncChipGroup(f.container, [{ id: 'zoom', label: 'ZOOM', active: true }]);
+  assert.equal(button.textContent, 'ZOOM');
+  assert.equal(button.getAttribute('aria-label'), null);
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+});
