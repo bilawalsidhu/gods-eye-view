@@ -6,7 +6,7 @@
     "viewerLines": 2424,
     "navaraKindChecks": 17,
     "engineSniffCalls": 51,
-    "navaraViewsReads": 27,
+    "engineExtensionReads": 27,
     "groundEffectPasses": 9,
     "cesiumSdkLoads": 6,
     "screenSpaceHandlerFiles": 20,

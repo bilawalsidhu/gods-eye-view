@@ -482,6 +482,11 @@
  * @property {GlobeLines} lines The layers' dynamic polylines.
  * @property {() => void} destroy
  * @property {() => boolean} isDestroyed True once destroy() has run.
+ * @property {{ cesium?: object, navara?: object }} [extensions]
+ *   What only one engine has, under its kind: Cesium's Viewer, Navara's view
+ *   and SDK classes. Not part of the contract: only code written against that
+ *   engine reads it, and scripts/report-engine-coupling.mjs counts each read
+ *   outside src/globe.
  */
 
 export const ENGINE_KINDS = Object.freeze(['cesium', 'navara']);

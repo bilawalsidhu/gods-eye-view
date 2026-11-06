@@ -82,6 +82,8 @@ export function createCesiumEngine(viewer, options = {}) {
   let destroyed = false;
   return {
     kind: 'cesium',
+    // What only Cesium has, for code still written against the viewer.
+    extensions: Object.freeze({ cesium: Object.freeze({ viewer }) }),
     host: {
       container: viewer.container,
       canvas,

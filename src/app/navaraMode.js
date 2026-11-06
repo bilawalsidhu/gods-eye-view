@@ -26,9 +26,6 @@ import {
 } from './navaraTools.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 
-// Native mesh capability stays at the composition boundary.
-const navaraViews = new WeakMap();
-
 /**
  * An imported file's data source drawn on `engine` (UTILITIES ▸ Import); the
  * drawing loads on first use, like the layers' Navara renderers.
@@ -37,7 +34,7 @@ async function drawImported(engine, dataSource) {
   const { drawImportedSource, measureImportImages } =
     await import('../layers/shared/render/navaraStory.js');
   const sizes = await measureImportImages(dataSource);
-  return drawImportedSource(engine, navaraViews.get(engine), dataSource, {
+  return drawImportedSource(engine, engine.extensions.navara, dataSource, {
     sizes,
   });
 }
@@ -102,7 +99,7 @@ export async function registerNavaraLayerRenderers() {
       return (engine, options) =>
         createRecentImageryNavaraRenderer(engine, {
           ...options,
-          ...navaraViews.get(engine),
+          ...engine.extensions.navara,
         });
     },
     transit: async () => {
@@ -111,7 +108,7 @@ export async function registerNavaraLayerRenderers() {
       return (engine, options) =>
         createTransitNavaraRenderer(engine, {
           ...options,
-          ...navaraViews.get(engine),
+          ...engine.extensions.navara,
         });
     },
     cctv: async () => {
@@ -120,7 +117,7 @@ export async function registerNavaraLayerRenderers() {
       return (engine, options) =>
         createCctvNavaraRenderer(engine, {
           ...options,
-          ...navaraViews.get(engine),
+          ...engine.extensions.navara,
         });
     },
     'alpr-cameras': async () =>
@@ -141,7 +138,7 @@ export async function registerNavaraLayerRenderers() {
           return (engine, options) =>
             createWeatherNavaraRenderer(
               engine,
-              navaraViews.get(engine),
+              engine.extensions.navara,
               options,
             );
         },
@@ -151,42 +148,42 @@ export async function registerNavaraLayerRenderers() {
       const { createNepalEventDisplay } =
         await import('../layers/bhoteKoshi/render/navara.js');
       return (engine) =>
-        createNepalEventDisplay(engine, navaraViews.get(engine));
+        createNepalEventDisplay(engine, engine.extensions.navara);
     },
     'bhote-koshi-locator': async () => {
       const { drawStorySource } =
         await import('../layers/shared/render/navaraStory.js');
       return (engine, { data }) =>
-        drawStorySource(engine, navaraViews.get(engine), data);
+        drawStorySource(engine, engine.extensions.navara, data);
     },
     'street-level': async () => {
       const { createStreetMap } =
         await import('../layers/streetLevel/render/navara.js');
-      return (engine) => createStreetMap(engine, navaraViews.get(engine));
+      return (engine) => createStreetMap(engine, engine.extensions.navara);
     },
     traffic: async () => {
       const { createTrafficNavaraRenderer } =
         await import('../layers/traffic/render/navara.js');
       return (engine) =>
-        createTrafficNavaraRenderer(engine, navaraViews.get(engine));
+        createTrafficNavaraRenderer(engine, engine.extensions.navara);
     },
     directions: async () => {
       const { createDirectionsNavaraRenderer } =
         await import('../layers/directions/render/navara.js');
       return (engine) =>
-        createDirectionsNavaraRenderer(engine, navaraViews.get(engine));
+        createDirectionsNavaraRenderer(engine, engine.extensions.navara);
     },
     'telegeography-submarine-cables': async () => {
       const { createNavaraCables } =
         await import('../layers/submarineCables/render/navara.js');
       return (engine, { overlayHost }) =>
-        createNavaraCables(engine, navaraViews.get(engine), overlayHost);
+        createNavaraCables(engine, engine.extensions.navara, overlayHost);
     },
     wind: async () => {
       const { createWindNavaraRenderer } =
         await import('../layers/wind/render/navara.js');
       return (engine) =>
-        createWindNavaraRenderer(engine, navaraViews.get(engine));
+        createWindNavaraRenderer(engine, engine.extensions.navara);
     },
     'weather-cyclones': async () => {
       const { createCyclonesNavaraRenderer } =
@@ -194,7 +191,7 @@ export async function registerNavaraLayerRenderers() {
       return (engine, options) =>
         createCyclonesNavaraRenderer(
           engine,
-          navaraViews.get(engine).view,
+          engine.extensions.navara.view,
           options,
         );
     },
@@ -207,7 +204,7 @@ export async function registerNavaraLayerRenderers() {
           return (engine, { config, services }) =>
             createInfrastructureNavaraRenderer(
               engine,
-              navaraViews.get(engine),
+              engine.extensions.navara,
               config,
               services,
             );
@@ -218,13 +215,13 @@ export async function registerNavaraLayerRenderers() {
       const { createGhostMapsNavaraRenderer } =
         await import('../layers/ghostMaps/render/navara.js');
       return (engine) =>
-        createGhostMapsNavaraRenderer(engine, navaraViews.get(engine).view);
+        createGhostMapsNavaraRenderer(engine, engine.extensions.navara.view);
     },
     'military-awareness': async () => {
       const { createAwarenessNavaraRenderer } =
         await import('../layers/awareness/render/navara.js');
       return (engine) =>
-        createAwarenessNavaraRenderer(engine, navaraViews.get(engine));
+        createAwarenessNavaraRenderer(engine, engine.extensions.navara);
     },
     'military-installations': async () => {
       const { createInstallationsNavaraRenderer } =
@@ -232,7 +229,7 @@ export async function registerNavaraLayerRenderers() {
       return (engine, options) =>
         createInstallationsNavaraRenderer(engine, {
           ...options,
-          ...navaraViews.get(engine),
+          ...engine.extensions.navara,
         });
     },
     'local-firms': async () => {
@@ -241,7 +238,7 @@ export async function registerNavaraLayerRenderers() {
       return (engine, options) =>
         createFirmsNavaraRenderer(engine, {
           ...options,
-          ...navaraViews.get(engine),
+          ...engine.extensions.navara,
         });
     },
     'osm-places': async () =>
@@ -251,25 +248,25 @@ export async function registerNavaraLayerRenderers() {
       const { createDroneAirspaceNavaraRenderer } =
         await import('../layers/droneAirspace/render/navara.js');
       return (engine) =>
-        createDroneAirspaceNavaraRenderer(engine, navaraViews.get(engine));
+        createDroneAirspaceNavaraRenderer(engine, engine.extensions.navara);
     },
     'fire-perimeters': async () => {
       const { createPerimetersNavaraRenderer } =
         await import('../layers/perimeters/render/navara.js');
       return (engine) =>
-        createPerimetersNavaraRenderer(engine, navaraViews.get(engine));
+        createPerimetersNavaraRenderer(engine, engine.extensions.navara);
     },
     'gnss-integrity': async () => {
       const { createGnssNavaraRenderer } =
         await import('../layers/gnss/render/navara.js');
       return (engine) =>
-        createGnssNavaraRenderer(engine, navaraViews.get(engine));
+        createGnssNavaraRenderer(engine, engine.extensions.navara);
     },
     'air-quality': async () => {
       const { createAirQualityNavaraRenderer } =
         await import('../layers/airQuality/render/navara.js');
       return (engine) =>
-        createAirQualityNavaraRenderer(engine, navaraViews.get(engine));
+        createAirQualityNavaraRenderer(engine, engine.extensions.navara);
     },
     earthquakes: async () => {
       const { createEarthquakesNavaraRenderer } =
@@ -277,7 +274,7 @@ export async function registerNavaraLayerRenderers() {
       return (engine, options) =>
         createEarthquakesNavaraRenderer(engine, {
           ...options,
-          ...navaraViews.get(engine),
+          ...engine.extensions.navara,
         });
     },
     'rocket-launches': async () => {
@@ -286,7 +283,7 @@ export async function registerNavaraLayerRenderers() {
       return (engine, options) =>
         createLaunchesNavaraRenderer(engine, {
           ...options,
-          ...navaraViews.get(engine),
+          ...engine.extensions.navara,
         });
     },
     satellites: async () =>
@@ -352,17 +349,6 @@ export async function createNavaraScene({
   });
   defer(() => globe.destroy());
   const { engine } = globe;
-  navaraViews.set(engine, {
-    view: globe.view,
-    alignDaylightToRestoredView: globe.alignDaylightToRestoredView,
-    MeshDesc: globe.MeshDesc,
-    NavaraColor: globe.NavaraColor,
-    EffectDesc: globe.LayerEffectDesc,
-    NavaraEffect: globe.NavaraEffect,
-    DrapedMesh: globe.DrapedMesh,
-    setupMaterialForDrape: globe.setupMaterialForDrape,
-  });
-  defer(() => navaraViews.delete(engine));
   // The layers drawn on Navara (their render/navara.js), before the catalog
   // asks the registry which layers this engine shows.
   await registerNavaraLayerRenderers();
@@ -400,7 +386,7 @@ export async function createNavaraScene({
   const packGraphics = () =>
     (packRenderer ??= createNavaraPackRenderer(
       engine,
-      navaraViews.get(engine),
+      engine.extensions.navara,
     ));
   return {
     viewer: null,
@@ -446,8 +432,7 @@ export function attachViewerlessTools(
 ) {
   const { dataManager } = data;
   void styleManager.initialRestorePromise?.then(() => {
-    if (!signal.aborted)
-      navaraViews.get(engine)?.alignDaylightToRestoredView?.();
+    if (!signal.aborted) engine.extensions.navara.alignDaylightToRestoredView();
   });
   const recentImagery = dataManager.layers.get('recent-imagery')?.module;
   if (recentImagery) {
@@ -500,7 +485,11 @@ export function attachViewerlessTools(
   defer(() => styleManager._clearPersistentStatusNotice?.());
   // The page session's annotation board, Draw and Import on this engine
   // (src/app/navaraTools.js).
-  const tools = { engine, views: navaraViews.get(engine), mapStackController };
+  const tools = {
+    engine,
+    views: engine.extensions?.navara,
+    mapStackController,
+  };
   const context = {
     operations,
     placeSearch,

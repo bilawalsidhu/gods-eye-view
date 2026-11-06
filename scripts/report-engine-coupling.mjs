@@ -103,13 +103,14 @@ export const ENGINE_COUPLING_METRICS = Object.freeze([
         ),
   },
   {
-    id: 'navaraViewsReads',
-    label: 'Raw Navara reads through navaraViews',
+    id: 'engineExtensionReads',
+    label: 'Reads of engine.extensions (cesium, navara) outside src/globe',
     measure: (files) =>
       files
-        .filter(({ file }) => !inEngine(file))
+        .filter(({ file }) => !inGlobe(file))
         .reduce(
-          (sum, { text }) => sum + countMatches(text, /\bnavaraViews\.get\(/),
+          (sum, { text }) =>
+            sum + countMatches(text, /\bextensions\??\.(?:navara|cesium)\b/),
           0,
         ),
   },

@@ -248,6 +248,23 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
     throw error;
   }
   let destroyed = false;
+  // What only Navara has, for the code written against Navara itself (its
+  // layer renderers): the view, the SDK classes and the daylight reset.
+  engine.extensions = Object.freeze({
+    navara: Object.freeze({
+      view,
+      MeshDesc,
+      NavaraColor,
+      EffectDesc: layerEffectDesc(EffectDesc),
+      NavaraEffect,
+      DrapedMesh,
+      setupMaterialForDrape,
+      alignDaylightToRestoredView() {
+        look.resetDaylight();
+        engine.render.request('restored-daylight');
+      },
+    }),
+  });
   return {
     view,
     engine,
