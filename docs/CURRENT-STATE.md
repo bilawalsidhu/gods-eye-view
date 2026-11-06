@@ -1345,9 +1345,7 @@ M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling o
 destroying the layer cancels pending work and ignores late results.
 The browser application also wires explicit earthquake map clicks into the
 shared selected-entity context with source coordinates, magnitude, depth,
-place and observation time. Selection preserves USGS and EMSC event IDs from
-injected snapshot rows and identifies EMSC-only records as EMSC; USGS retains
-source priority when both IDs are present. An ordinary refresh updates the selected quake
+place and observation time. An ordinary refresh updates the selected quake
 without another click announcement; changing from quake A to B removes A's
 obsolete record without announcing a false eviction. Empty-space deselection
 announces `reason: 'deliberate'`, while disappearance from the refreshed USGS
