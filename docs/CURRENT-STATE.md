@@ -134,7 +134,7 @@ existing batch size and one bounded upstream chunk. Larger requests return HTTP
 413 before disk-cache loading or upstream work; malformed coordinates remain 400.
 The browser continues to split larger workloads into sequential 64-point requests.
 
-Traffic holds continuous rendering only while enabled with animated dots or a pulsing jam heat-line. Empty and high-altitude views release the hold. A failed load leaves no hold only when no animated content is retained: if an earlier load succeeded, ingestion keeps its animated points and the hold stays. Population admission reacquires the hold and resets animation time. Clear, disable, and destroy also release it. Retained fading dots keep animation alive until they are removed. When the last point leaves mid height correction, the correction is settled at once, before the hold is released, so it cannot keep the layer reporting loading.
+Traffic holds continuous rendering only while enabled with shown animated dots, a pulsing jam heat-line, or road lines whose geometry is still building (replaced lines stay drawn until their successors are ready, so a rebuild never blinks); hidden dots (`dots` off) and settled flow lines hold nothing. Empty and high-altitude views release the hold. A failed load leaves no hold only when no animated content is retained: if an earlier load succeeded, ingestion keeps its animated points and the hold stays. Population admission reacquires the hold and resets animation time. Clear, disable, and destroy also release it. Retained fading dots keep animation alive until they are removed. When the last point leaves mid height correction, the correction is settled at once, before the hold is released, so it cannot keep the layer reporting loading.
 
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
@@ -6437,7 +6437,26 @@ easier to meet (detection is now on more often), but does not create it.
 - Road source (`src/layers/traffic/roadModes.js`): the Street Traffic row has
   TomTom / OSM / Hybrid chips (`roadMode` param, stored in the existing layer
   state `lo` field, no new share token); `?trafficRoads=tomtom|osm|hybrid`
-  overrides restored state until the user picks a chip. With no stored choice
+  overrides restored state until the user picks a chip. A host may offer
+  fewer modes with `createTrafficSource({ roadModes })` (a non-empty subset,
+  default all three): only offered modes get chips (none for a single mode),
+  and other choices from chips, restores, share links or the query are
+  ignored. Without `osm` the layer never simulates: keyless or with the
+  status probe unreachable, loads fail with "TomTom roads need a TomTom key"
+  or "TomTom roads unavailable while the traffic service is unreachable" and
+  no roads are drawn.
+- Row toggles (live mode only): after the road-source chips, Lines draws
+  every road with flow as a steady draped line in its bucket color (green
+  free, amber slow, red jam; jam first, then slow, then free, longest first,
+  capped at 1,500; on 3D tiles under photoreal, on terrain or tiles
+  otherwise), and Dots shows or hides the moving dots (hidden dots are kept,
+  are not offered to detection overlays, and hold no render frames).
+  Without live flow only a hidden Dots toggle is offered, so dots hidden by a
+  live choice, a restore or a share link can always be shown again.
+  Defaults: Lines off, Dots on. Both are `lines` / `dots` params stored in the
+  layer state `lo` field (`l`, `d`). Toggling either restyles in place, with
+  no refetch. The owner `jamViz` heat-line prototype is unchanged when Lines
+  is off. With no stored choice
   the default is Hybrid with a TomTom key and OSM without one; share links
   without a road-source choice (including older ones) likewise use the
   installation's default (Hybrid when keyed, OpenStreetMap when keyless). Without a key
