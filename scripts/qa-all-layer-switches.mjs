@@ -283,6 +283,7 @@ const runs = [
   ],
   ['local-adsb-engine-switch', 'local-adsb-engine-switch', ['local-adsb']],
   ['ghostmaps-switch', 'ghostmaps-switch', ['s2-ghostmaps']],
+  ['wildlife-switch', 'wildlife-switch', ['wildlife-sightings']],
   [
     'open-layers-switch',
     'open-layers-switch',

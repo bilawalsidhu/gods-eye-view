@@ -1614,5 +1614,7 @@
   "src/layers/satellites/render/display.test.mjs",
   "src/layers/vessels/render/display.js",
   "src/layers/vessels/render/display.test.mjs",
-  "src/testSupport/vesselViewerRenderer.mjs"
+  "src/testSupport/vesselViewerRenderer.mjs",
+  "scripts/qa-wildlife-switch.mjs",
+  "scripts/fixtures/wildlife.mjs"
 ]
