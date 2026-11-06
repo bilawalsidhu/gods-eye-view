@@ -544,7 +544,13 @@ async function main() {
       );
 
     await expandPanel(page);
-    if (!configured) {
+    if (!configured && litAlone(await getUI(page), 'mapillary')) {
+      // A keyed bundle behind a server without the token keeps Mapillary.
+      await step('keyless server: KEY REQUIRED gates the controls', () =>
+        assertKeyRequired(page),
+      );
+      skip('no Mapillary key', 'the keyed steps');
+    } else if (!configured) {
       await step('keyless server: opens on KartaView, not KEY REQUIRED', () =>
         assertKeylessDefault(page),
       );
