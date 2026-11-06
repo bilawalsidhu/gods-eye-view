@@ -116,14 +116,12 @@ export function createCyclonesLayer({
       layerId: 'weather-cyclones',
       layerName: 'Cyclone advisories',
       source: 'NOAA NHC / CPHC',
-      // Keep official storm names verbatim; layerName identifies the layer.
       label: storm.name,
       latitude: storm.position.latitude,
       longitude: storm.position.longitude,
       // At most 12 properties reach the voice summary; keep the list short.
       properties: {
         classification: storm.classification,
-        // English source meaning; unknown codes stay unexpanded.
         classificationName: Object.hasOwn(
           CLASSIFICATION_NAMES,
           storm.classification,
@@ -140,7 +138,7 @@ export function createCyclonesLayer({
         movementDirectionDegrees: storm.movement?.directionDegrees,
         movementSpeedKt: storm.movement?.speedKt,
         advisoryUrl: storm.advisoryUrl,
-        // Present only while the server serves its cache with NHC unreachable.
+        // Only while the proxy serves its cache because NHC is unreachable.
         staleCacheFetchedAt:
           snapshot.stale && Number.isFinite(snapshot.fetchedAt)
             ? new Date(snapshot.fetchedAt).toISOString()

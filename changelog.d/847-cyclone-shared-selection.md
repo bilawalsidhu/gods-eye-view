@@ -1,4 +1,3 @@
-- Explicit cyclone selections publish only the currently selected NHC/CPHC
-  storm into shared context. Switching storms removes the previous identity
-  without a false eviction event. Deliberate clears remain distinct from feed
-  disappearance (kvnloo, #847; reviewed by quanticsoul4772).
+- Let the voice assistant read the storm you select in Cyclone advisories:
+  its official advisory, position, intensity and movement. Clearing the
+  selection and the storm leaving the feed are reported apart (kvnloo, #847).

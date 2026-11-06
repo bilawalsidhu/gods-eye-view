@@ -405,8 +405,7 @@ function harness(
     },
   };
 }
-// Runs a test body against the real shared-context store on a stand-in window,
-// with the voice runner reading the same store.
+// Real shared-context store on a stand-in window; the voice runner reads it.
 async function withSharedContext(t, body) {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const host = new EventTarget();
@@ -657,8 +656,7 @@ test('cyclone clears leave another layer selection and its records alone', async
     assert.equal(store.selectedEntityId, 'flight:abc123');
     assert.equal(events.length, before);
 
-    // A foreign record removed without clearing its selection: a cyclone
-    // feed failure must not report that selection as evicted by cyclones.
+    // A cyclone feed failure does not evict a dangling foreign selection.
     store.entities.delete('flight:abc123');
     let fail = false;
     const other = open({
