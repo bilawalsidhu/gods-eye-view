@@ -1,3 +1,4 @@
+import { isFollowing } from '../../data/followed.js';
 import { isUnavailableCapability } from '../../sources/capability.js';
 import * as Cesium from 'cesium';
 import {
@@ -369,13 +370,12 @@ export function createAlprCamerasLayer({ source, services } = {}) {
           {
             id: 'find-camera',
             label: t('SHOW NEAREST'),
-            title: state.viewer?.trackedEntity
+            title: isFollowing(state.viewer)
               ? t(
                   'Stop following the current object before navigating to a camera',
                 )
               : t('Move to the nearest loaded camera and show its details'),
-            disabled:
-              !state.enabled || !count || Boolean(state.viewer?.trackedEntity),
+            disabled: !state.enabled || !count || isFollowing(state.viewer),
             onClick: focusNearest,
           },
         ],

@@ -1,3 +1,4 @@
+import { onFollowChanged } from '../../data/followed.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
@@ -97,14 +98,11 @@ export function createSelection({
     state.keyTarget = keyTarget;
     state.keydownHandler = onVesselKeyDown;
     keyTarget.addEventListener('keydown', state.keydownHandler);
-    // Vessels never set viewer.trackedEntity, so any new tracked entity belongs
-    // to another layer and takes interaction ownership of the scene.
-    state.trackedEntityRemover = viewer.trackedEntityChanged.addEventListener(
-      () => {
-        if (viewer.trackedEntity && state.selectedRecord)
-          clearVesselInspection();
-      },
-    );
+    // Vessels never follow, so anything newly followed belongs to another
+    // layer and takes interaction ownership of the scene.
+    state.trackedEntityRemover = onFollowChanged(viewer, (followed) => {
+      if (followed && state.selectedRecord) clearVesselInspection();
+    });
   }
 
   /** Select one live vessel and request one UI-owned camera transfer. */

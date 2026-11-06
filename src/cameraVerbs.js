@@ -18,6 +18,7 @@
  * globe motion, opposite to the camera's travel around Earth.
  */
 
+import { followedOf, isFollowing, onFollowChanged } from './data/followed.js';
 import * as Cesium from 'cesium';
 import { GLOBE_VIEW } from './locations.js';
 import {
@@ -1041,7 +1042,7 @@ export function interruptCameraMotion(reason = 'interrupt') {
   // While an entity is TRACKED, the follow camera owns the reference frame —
   // resetting the lookAt transform here flings the camera into space (field
   // finding). Leave the transform to the tracker; it re-asserts every frame.
-  const tracking = Boolean(_viewer?.trackedEntity);
+  const tracking = isFollowing(_viewer);
   const wasRoute = wasActive && _active.kind === 'route';
   if (
     wasActive &&
@@ -1190,7 +1191,7 @@ function onTick() {
         // only describes Cesium's rotation while the frame is identity.
         if (
           _viewer.scene.mode !== Cesium.SceneMode.SCENE3D ||
-          _viewer.trackedEntity ||
+          isFollowing(_viewer) ||
           _isCockpitActive?.() ||
           !Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY)
         ) {
@@ -1413,8 +1414,8 @@ export function initCameraVerbs(
   if (_trackingRemover) _trackingRemover();
   // Cockpit can acquire then clear tracking before the next clock tick.
   // Yield on acquisition itself without changing legacy camera motions.
-  _trackingRemover = viewer.trackedEntityChanged?.addEventListener((entity) => {
-    if (entity && _active?.kind === 'rotate_globe')
+  _trackingRemover = onFollowChanged(viewer, (followed) => {
+    if (followed && _active?.kind === 'rotate_globe')
       interruptCameraMotion('globe-camera-owner-changed');
   });
   for (const rm of _inputRemovers) rm();
@@ -1522,15 +1523,14 @@ export function moveCamera(args = {}, runNavigation = null) {
   if (
     (motion === 'rotate_globe' ||
       (motion === 'orbit' && typeof runNavigation !== 'function')) &&
-    _viewer?.trackedEntity
+    isFollowing(_viewer)
   ) {
     // The follow camera owns a tracked view; a lookAt orbit fights it frame
     // by frame and stop rips the camera out (field finding). Honest refusal
     // until tracked-orbit rides the follow camera natively (roadmap).
+    const followed = followedOf(_viewer);
     const label =
-      _viewer.trackedEntity?.name ||
-      _viewer.trackedEntity?.id ||
-      'the tracked target';
+      followed?.name || followed?.labelModel?.title || 'the tracked target';
     return {
       ok: false,
       action: 'move_camera',
@@ -1701,7 +1701,7 @@ export function moveCamera(args = {}, runNavigation = null) {
   const preserveCameraFlight =
     motion === 'orbit' &&
     _viewer.scene.tweens.length > 0 &&
-    !_viewer.trackedEntity;
+    !isFollowing(_viewer);
   return typeof runNavigation === 'function'
     ? runNavigation(start, { preserveCameraFlight })
     : start();

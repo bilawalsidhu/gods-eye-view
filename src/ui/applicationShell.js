@@ -1,3 +1,4 @@
+import { followedOf } from '../data/followed.js';
 import { nextTick } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
@@ -1174,7 +1175,7 @@ export class StyleManager extends ShellFacade {
       setEnabled: (next) =>
         this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
       readOwnership: () => ({
-        trackedEntity: this.viewer?.trackedEntity,
+        followed: followedOf(this.viewer),
         cockpitActive: !!this.cockpitView?.active,
       }),
       shouldFocus: () =>

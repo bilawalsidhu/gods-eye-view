@@ -1,3 +1,4 @@
+import { isFollowing } from '../../data/followed.js';
 import * as Cesium from 'cesium';
 import { CCTV_FOCUS_RESULT } from './policy.js';
 import { cameraOf } from '../../render/cesium/camera.js';
@@ -52,7 +53,7 @@ export function createNavigation({
       console.debug('[Data:CCTV] focus ignored while cockpit owns the camera');
       return CCTV_FOCUS_RESULT.COCKPIT_ACTIVE;
     }
-    if (viewer.trackedEntity) {
+    if (isFollowing(viewer)) {
       console.debug(
         '[Data:CCTV] focus ignored while a tracked entity owns the camera',
       );

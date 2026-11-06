@@ -12,6 +12,7 @@
  * State is persisted to localStorage and can be exported/imported as JSON.
  */
 
+import { isFollowing } from '../data/followed.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
@@ -114,7 +115,7 @@ export class SceneDirector {
     this._interactionTransitions = 0;
     this._interactions = createSceneInteractions(viewer, {
       available: () =>
-        !this._destroyed && !this._running && !this.viewer.trackedEntity,
+        !this._destroyed && !this._running && !isFollowing(this.viewer),
       execute: (action, signal) =>
         this._trackWork(this._executeInteraction(action, signal)),
     });

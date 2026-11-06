@@ -1,6 +1,7 @@
+import { findCamera } from '../render/cesium/camera.js';
+import { stopFollowing } from '../data/followed.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { createStateChannel } from '../app/stateChannel.js';
-import * as Cesium from 'cesium';
 import {
   beginDeferredNavigation,
   reassertNavigationHandoff,
@@ -176,12 +177,13 @@ export class NavigationController {
     } catch {
       /* best-effort release */
     }
-    this.viewer.trackedEntity = undefined;
+    stopFollowing(this.viewer);
     this.interruptCameraMotion('explicit-navigation');
     this.stopOrbit();
-    if (!preserveCameraFlight) this.viewer.camera.cancelFlight();
+    const camera = findCamera(this.viewer);
+    if (!preserveCameraFlight) camera?.cancelFlight();
     try {
-      this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      camera?.release();
     } catch {
       /* teardown race */
     }

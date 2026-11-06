@@ -1,3 +1,5 @@
+import { findCamera } from '../render/cesium/camera.js';
+import { stopFollowing } from '../data/followed.js';
 import * as Cesium from 'cesium';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
@@ -367,9 +369,10 @@ export class LocationNavigation {
     } catch {
       /* best-effort release */
     }
-    this.viewer.trackedEntity = undefined;
-    this.viewer.camera.cancelFlight();
-    this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    stopFollowing(this.viewer);
+    const camera = findCamera(this.viewer);
+    camera?.cancelFlight();
+    camera?.release();
     this._beginWorldJumpTransition();
 
     let resolveReset;

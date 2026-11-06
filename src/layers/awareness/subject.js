@@ -1,3 +1,4 @@
+import { followedOf } from '../../data/followed.js';
 import {
   AWARENESS_RADIUS_M,
   AWARENESS_RELATIONSHIP,
@@ -10,7 +11,6 @@ import {
   SUBJECT_PRESENCE,
   AWARENESS_PAGE_SIZE,
 } from './policy.js';
-import { readEntityRecord } from '../../data/entityRecords.js';
 
 // coverageLabel is machine-composed English from installations/controls.js
 // (pinned by src/data/militaryInstallations.test.mjs); translate the known
@@ -192,9 +192,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
    */
 
   function currentTrackedFlightSubject() {
-    const trackedKey = normalizeContextId(
-      readEntityRecord(layerState.viewer?.trackedEntity)?.trackedId,
-    );
+    const trackedKey = normalizeContextId(followedOf(layerState.viewer)?.key);
     if (!trackedKey) return null;
     const subjects = [
       flightsLayer.getTrackedSubject?.(),
@@ -261,19 +259,15 @@ export function createSubject({ state: layerState, services, parts, source }) {
   ) {
     if (!subject?.position) return null;
     if (subject.layerId === 'flights' || subject.layerId === 'military') {
-      const trackedPosition = readEntityRecord(
-        layerState.viewer?.trackedEntity,
-      )?.displayPosition?.();
+      const followed = followedOf(layerState.viewer);
+      const trackedPosition = followed?.displayPosition?.();
       if (trackedPosition) {
         return {
           position: Cesium.Cartesian3.clone(trackedPosition),
           // Only the follow camera's own contact proves presence this way; a
           // different tracked entity says nothing about this subject.
           presence:
-            String(
-              readEntityRecord(layerState.viewer?.trackedEntity)?.trackedId ||
-                '',
-            ) === subjectKey(subject)
+            String(followed?.key || '') === subjectKey(subject)
               ? SUBJECT_PRESENCE.LIVE
               : SUBJECT_PRESENCE.UNCHECKED,
         };
