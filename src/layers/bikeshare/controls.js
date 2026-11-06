@@ -70,17 +70,26 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {{ count: number, lastUpdate: number|null, loading: boolean, loadingLabel?: string, error?: string, degraded?: boolean, stale?: boolean, status?: string, statusMessage?: string }}
      */
     getStats() {
+      // A city in range without points is loading even before its fetch
+      // starts: the row repaints on entry, ahead of beginLoading().
+      const loading =
+        layerState._loading ||
+        [...layerState._activeCityIds].some(
+          (cityId) =>
+            !layerState._cityRuntime.has(cityId) &&
+            !layerState._failedCityIds.has(cityId),
+        );
       const stats = {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
-        loading: layerState._loading,
+        loading,
       };
       // No system in range is guidance, not an empty feed: the camera is too
       // high, or no catalogued system is near the view. A city that failed
       // leaves range empty too, and reports its failure below instead.
       if (
         layerState._enabled &&
-        !layerState._loading &&
+        !loading &&
         layerState._activeCityIds.size === 0 &&
         layerState._failedCityIds.size === 0
       ) {
@@ -92,7 +101,7 @@ export function createControls({ state: layerState, services, parts, source }) {
           : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered city`;
         return { ...stats, status: 'zoom-in', statusMessage: note };
       }
-      if (layerState._loading) {
+      if (loading) {
         stats.loadingLabel =
           layerState._activeCityIds.size > 0
             ? t('syncing {count} city feeds...', {

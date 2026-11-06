@@ -19,7 +19,7 @@ export function createState({ services }) {
 
   layerState._viewer = null;
 
-  /** @type {{ refreshLayerStats?: () => void }|null} Manager that repaints the layer's row. */
+  /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} Manager that repaints the layer's row. */
 
   layerState._dataManager = null;
 

@@ -2385,9 +2385,26 @@ export class LayerLifecycle {
   /**
    * Ask presentation to repaint layer rows now, for data that lands outside
    * the manager tick (Transit's proximity polls, Directions' route steps).
+   * @param {string} [layerId] - The layer whose row changed.
    */
-  refreshLayerStats() {
+  refreshLayerStats(layerId) {
+    this._dropRecoveredRefreshError(layerId);
     this._publishActivity({ type: 'status' });
+  }
+
+  /**
+   * A tick's failure belongs to the feed it polled. Once the layer's own stats
+   * stop reporting one (the camera left that feed), the row stops showing it
+   * instead of waiting for the next tick.
+   */
+  _dropRecoveredRefreshError(layerId) {
+    const entry = layerId ? this.layers.get(layerId) : null;
+    if (!entry?.managerRefreshError || entry.refreshing) return;
+    const failure = refreshFailureFromStats(
+      this._moduleStats(entry),
+      entry.module.name || layerId,
+    );
+    if (!failure) entry.managerRefreshError = null;
   }
 
   _publishActivity(change) {

@@ -126,7 +126,7 @@ export function createViewport({ state, services, parts }) {
     governorRequestRender('transit-proximity');
     // The row's text follows the camera (coverage prompt, feed list), so it
     // repaints now instead of at the next 15 s manager tick.
-    if (changed) state._dataManager?.refreshLayerStats?.();
+    if (changed) state._dataManager?.refreshLayerStats?.('transit');
   }
 
   function onCameraChanged() {

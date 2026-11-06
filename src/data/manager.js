@@ -20,8 +20,10 @@ export class DataLayerManager extends LayerLifecycle {
    * manager tick (camera-driven loads such as Transit's proximity polls), so a
    * row shows its count when the data lands instead of at the next interval.
    * One DOM pass; skipped while the document is hidden.
+   * @param {string} [layerId] - The layer whose row changed.
    */
-  refreshLayerStats() {
+  refreshLayerStats(layerId) {
+    this._dropRecoveredRefreshError(layerId);
     this._refreshTogglePanel();
   }
 

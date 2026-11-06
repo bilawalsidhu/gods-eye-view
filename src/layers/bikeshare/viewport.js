@@ -121,7 +121,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
    * prompt, station count), and the manager tick is 60 s.
    */
   function refreshRow() {
-    layerState._dataManager?.refreshLayerStats?.();
+    layerState._dataManager?.refreshLayerStats?.('bikeshare');
   }
 
   /** Deactivate all currently active cities and clear the active set. */
@@ -232,12 +232,17 @@ export function createViewport({ state: layerState, services, parts, source }) {
       }
     }
     // A failure never outlives its city's range.
+    let failureCleared = false;
     for (const cityId of layerState._failedCityIds) {
-      if (!nextActive.has(cityId)) layerState._failedCityIds.delete(cityId);
+      if (!nextActive.has(cityId)) {
+        layerState._failedCityIds.delete(cityId);
+        failureCleared = true;
+      }
     }
 
     const changed =
       !wasGateEnabled ||
+      failureCleared ||
       nextActive.size !== layerState._activeCityIds.size ||
       [...nextActive].some((cityId) => !layerState._activeCityIds.has(cityId));
     layerState._activeCityIds = nextActive;
@@ -259,7 +264,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
     await Promise.all(
       toActivate.map((cityId) => activateCity(cityId, generation)),
     );
-    if (generation === layerState._proximityGeneration) refreshRow();
+    // Superseded loads repaint too: a newer check may have painted the row
+    // while this one was still loading, or found nothing to load itself.
+    if (layerState._enabled) refreshRow();
   }
 
   /** Schedule a debounced proximity check after camera movement. */
