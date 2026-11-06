@@ -2109,20 +2109,27 @@ export function adjustOrbitRange(factor) {
 function retargetTiltAfterZoom(m) {
   if (m.kind !== 'tilt' || m.mode !== 'once' || m.askedPitch === undefined)
     return {};
-  const from = _viewer.camera.pitch;
+  let from = _viewer.camera.pitch;
   if (!(m.askedPitch > from)) return {};
   if (m.hpr) {
     // At the same pivot pitch a longer range looks down more steeply (the
     // Earth curves away): find the pivot pitch that holds this camera pitch.
+    // It stays below the place's horizon limit (or where the pivot already
+    // was): past it the place drops behind the Earth, so a camera the zoom
+    // leaves past that limit steps down to it with the zoom.
+    const cap = Math.max(m.hpr.pitch, tiltPivotPitchMax(m.hpr.range));
     for (let i = 0; i < 4; i += 1) {
       const error = from - pivotCameraPitch(m.target, m.hpr, m.hpr.pitch);
       if (Math.abs(error) < 1e-7) break;
-      m.hpr.pitch = Cesium.Math.clamp(
+      const pitch = Cesium.Math.clamp(
         m.hpr.pitch + error,
         -Cesium.Math.PI_OVER_TWO,
-        0,
+        cap,
       );
+      if (pitch === m.hpr.pitch) break;
+      m.hpr.pitch = pitch;
     }
+    from = Math.min(from, pivotCameraPitch(m.target, m.hpr, m.hpr.pitch));
   }
   const limit =
     m.hpr && !tiltClearanceBinds(m.hpr.range)
