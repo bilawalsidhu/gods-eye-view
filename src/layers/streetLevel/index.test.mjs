@@ -1128,63 +1128,58 @@ test('the panel says why a lit Street View draws nothing off Google 3D', async (
   assert.match(view.meta, /Google Street View needs the Google 3D map/);
 });
 
-test('without a Mapillary key the first keyless source is lit instead', async (t) => {
-  const kartaViewSource = {
-    getTile: async () => ({ lines: [] }),
-    nearestPhotos: async () => [],
-    getPhoto: async () => {
-      throw new Error('KartaView has no such photo');
-    },
-    getSequencePhotos: async () => ({ photos: [], hasMore: false }),
-    probeImage: async () => true,
-  };
-  const lit = (hasToken) => {
-    const layer = createStreetLevelLayer({
-      providers: [
-        createMapillaryProvider({
-          source: fakeMapillarySource({ hasToken: () => hasToken }),
-          photoViewer: fakePhotoViewer(),
-        }),
-        createKartaViewProvider({ source: kartaViewSource }),
-      ],
-    });
-    t.after(() => layer.destroy());
-    return layer
-      .getUIState()
-      .providers.filter((provider) => provider.on)
-      .map((provider) => provider.id);
-  };
-  assert.deepEqual(lit(false), ['kartaview']);
-  assert.deepEqual(lit(true), ['mapillary']);
-});
-
-test('restoring the default "Mapillary on" without its key keeps a keyless source', (t) => {
+/** Mapillary (keyless unless `mapillary` says otherwise) plus KartaView. */
+function keylessLayer(t, mapillary = { hasToken: () => false }) {
   const layer = createStreetLevelLayer({
     providers: [
       createMapillaryProvider({
-        source: fakeMapillarySource({ hasToken: () => false }),
+        source: fakeMapillarySource(mapillary),
         photoViewer: fakePhotoViewer(),
       }),
-      createKartaViewProvider({
-        source: {
-          getTile: async () => ({ lines: [] }),
-          nearestPhotos: async () => [],
-          getPhoto: async () => null,
-          getSequencePhotos: async () => ({ photos: [], hasMore: false }),
-          probeImage: async () => true,
-        },
-      }),
+      createKartaViewProvider(),
     ],
   });
   t.after(() => layer.destroy());
-  const litIds = () =>
-    layer
-      .getUIState()
-      .providers.filter((provider) => provider.on)
-      .map((provider) => provider.id);
+  return layer;
+}
+const litProviders = (layer) =>
+  layer
+    .getUIState()
+    .providers.filter((provider) => provider.on)
+    .map((provider) => provider.id);
+
+test('without a Mapillary key the first keyless source is lit instead', (t) => {
+  assert.deepEqual(litProviders(keylessLayer(t)), ['kartaview']);
+  assert.deepEqual(litProviders(keylessLayer(t, {})), ['mapillary']);
+  // A token-adding Graph proxy counts as a key.
+  const proxied = keylessLayer(t, {
+    hasToken: () => false,
+    graphEndpoint: '/api/mapillary/graph',
+  });
+  assert.deepEqual(litProviders(proxied), ['mapillary']);
+});
+
+test('restoring the default "Mapillary on" without its key keeps a keyless source', (t) => {
+  const layer = keylessLayer(t);
   layer.setParams({ mapillary: true, providerSwitches: '' });
-  assert.deepEqual(litIds(), ['kartaview']);
+  assert.deepEqual(litProviders(layer), ['kartaview']);
   // A link that switches KartaView off keeps its word.
   layer.setParams({ mapillary: true, providerSwitches: 'kartaview-0' });
-  assert.deepEqual(litIds(), ['mapillary']);
+  assert.deepEqual(litProviders(layer), ['mapillary']);
+});
+
+test('filter-only updates keep the lit source, even a chosen keyless Mapillary', (t) => {
+  const layer = keylessLayer(t);
+  layer.setParams({ pano: 'pano' });
+  assert.deepEqual(litProviders(layer), ['kartaview']);
+  // What the MAPILLARY chip sends, and what stored state restores.
+  layer.setParams({ mapillary: true, providerSwitches: 'kartaview-0' });
+  for (const params of [{ pano: 'pano' }, { sinceDays: 365 }, {}]) {
+    layer.setParams(params);
+    assert.deepEqual(
+      litProviders(layer),
+      ['mapillary'],
+      JSON.stringify(params),
+    );
+  }
 });

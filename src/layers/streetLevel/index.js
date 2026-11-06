@@ -126,7 +126,7 @@ export function createStreetLevelLayer({
     });
   }
 
-  /** `def`, or the first keyless provider not refused when `def` has no key. */
+  /** `def` if its key is ready, else the first keyless provider not refused. */
   function keylessInstead(def, refused = () => false) {
     if (def.keyReady?.() !== false) return def;
     return defs.find((d) => !d.requiresKeyId && !refused(d.id)) || def;
@@ -594,15 +594,17 @@ export function createStreetLevelLayer({
         providerIds: state.providers.keys(),
         filter: state.filter,
       });
-      // Links and stored state omit Mapillary when it is on (the codec
-      // default), so a keyless install would restore a source it cannot draw.
+      // A restored "Mapillary on" (the codec default) would light a source a
+      // keyless install cannot draw. Only redirect a provider the params switch
+      // on: a filter-only update keeps whatever the user chose.
       const asked = litByParams(decoded.providers);
       const lit =
-        asked &&
-        keylessInstead(
-          state.providers.get(asked).def,
-          (id) => decoded.providers.get(id) === false,
-        ).id;
+        asked && decoded.providers.get(asked) === true
+          ? keylessInstead(
+              state.providers.get(asked).def,
+              (id) => decoded.providers.get(id) === false,
+            ).id
+          : asked;
       const before = litIds();
       for (const [id, entry] of state.providers)
         if (id !== lit) switchProvider(entry, false);
