@@ -169,7 +169,6 @@ export function createUsgsWaterLayers(
       } catch (error) {
         // localGeojsonCore logs this error and copies its message into status.
         // Upstream text can carry credentials; keep both surfaces fixed.
-        if (error?.name === 'AbortError') throw error;
         throw new Error('USGS request failed');
       }
     };
