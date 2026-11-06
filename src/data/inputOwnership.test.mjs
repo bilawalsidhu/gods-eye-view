@@ -117,27 +117,23 @@ test('every scene click handler consults ownership before it picks', () => {
     ['src/data/trackingClickGesture.js', 'onClick(click, gesture);'],
     ['src/data/localGeojsonCore.js', 'viewer.scene.pick(click.position)'],
     ['src/data/cctvGizmo.js', 'pickGizmoPart(event.position)'],
-    [
-      'src/layers/alpr/render/cesiumPresentation.js',
-      'viewer.scene.pick(click.position)',
-    ],
-    [
-      'src/layers/bikeshare/render/cesium/selection.js',
-      'viewer.scene.pick(click.position)',
-    ],
+    // ALPR and bikeshare take the engine's click with its pick.
+    ['src/layers/alpr/render/display.js', 'overlay.pick(position) ||'],
+    ['src/layers/bikeshare/render/display.js', 'const picked = event.picked;'],
     ['src/layers/firms/selection.js', 'scene.pick(click.position)'],
     [
       'src/layers/installations/render/cesium/selection.js',
       'viewer.scene.pick(click.position)',
     ],
-    ['src/layers/launches/render/cesium.js', 'drillPick(movement.position'],
+    ['src/layers/launches/render/display.js', '[ctx.picked, ...ctx.drilled]'],
     [
       'src/layers/radio/interaction.js',
       'const stationId = pickedRadioStationAt(position);',
     ],
+    // Satellites take the engine dispatcher's pick too.
     [
-      'src/layers/satellites/render/cesium.js',
-      'viewer.scene.pick(click.position)',
+      'src/layers/satellites/interaction.js',
+      'getRenderer().isTrackedPick(picked',
     ],
     [
       'src/layers/submarineCables/interaction.js',

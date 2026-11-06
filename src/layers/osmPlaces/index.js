@@ -1,51 +1,14 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { msg } from '../../i18n/marker.js';
 import { OSM_PLACES_LAYER_ID, OSM_PLACE_COLOR } from './model.js';
 import { createNominatimStatus } from '../../sources/nominatimStatus.js';
+import { createOsmPlacesDisplay } from './render/display.js';
 export * from './model.js';
 
 const OVERLAY_SOURCE_ID = OSM_PLACES_LAYER_ID;
 /** Named results that get a map label; the rest are points. */
 const LABEL_LIMIT = 48;
 const COLOR = OSM_PLACE_COLOR;
-
-/**
- * The places' points on a Cesium globe (the default renderer):
- * `{ setVisible, replace(records), destroy }`.
- */
-export function createOsmPlacesCesiumRenderer({ viewer }) {
-  const dataSource = new Cesium.CustomDataSource(OSM_PLACES_LAYER_ID);
-  dataSource.show = false;
-  viewer.dataSources.add(dataSource);
-  return {
-    setVisible(show) {
-      dataSource.show = show;
-    },
-    replace(records) {
-      dataSource.entities.removeAll();
-      const color = Cesium.Color.fromCssColorString(COLOR);
-      for (const record of records)
-        dataSource.entities.add({
-          id: `osm-place:${record.id}`,
-          position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
-          point: {
-            pixelSize: 9,
-            color,
-            outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
-            outlineWidth: 2,
-            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            // On top only up close (as bikeshare stations): beyond that the
-            // depth test keeps far-side points from showing through the globe.
-            disableDepthTestDistance: 2500,
-          },
-        });
-    },
-    destroy() {
-      viewer.dataSources.remove(dataSource, true);
-    },
-  };
-}
 
 /**
  * OSM Places: the results of the last voice OpenStreetMap search ("hospitals
@@ -60,7 +23,7 @@ export function createOsmPlacesLayer({
   overlayHost,
   // The same once-per-page capability probe as Nominatim's, on Overpass.
   overpassConfigured = createNominatimStatus({ url: '/api/overpass/status' }),
-  createRenderer = createOsmPlacesCesiumRenderer,
+  createRenderer = ({ engine }) => createOsmPlacesDisplay(engine),
 } = {}) {
   if (!overlayHost) throw new TypeError('OSM Places requires an overlay host');
   let initialized = false;
@@ -131,7 +94,7 @@ export function createOsmPlacesLayer({
         })
         .catch(() => {});
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
-      if (viewer || engine) this.attachRenderer(viewer, { engine });
+      if (engine) this.attachRenderer(viewer, { engine });
     },
 
     /** Draw on a globe; the results stay for the next one. */

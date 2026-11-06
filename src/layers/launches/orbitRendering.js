@@ -10,7 +10,7 @@ export function createOrbitRendering({
   function missionOrbitPrimitiveVisible(launchId) {
     return Boolean(
       layerState._enabled &&
-      layerState._dataSource?.show &&
+      getRenderer()?.visible() &&
       (!layerState._selectedLaunchId ||
         layerState._selectedLaunchId === launchId),
     );
@@ -18,32 +18,24 @@ export function createOrbitRendering({
 
   function syncMissionOrbitPrimitiveVisibility() {
     for (const [launchId, path] of layerState._missionOrbitPrimitives) {
-      if (path.primitive)
-        path.primitive.show = missionOrbitPrimitiveVisible(launchId);
+      if (path.line) path.line.show = missionOrbitPrimitiveVisible(launchId);
     }
   }
 
   function removeMissionOrbitPrimitives() {
-    for (const path of layerState._missionOrbitPrimitives.values()) {
-      if (path.primitive && layerState._viewer) {
-        getRenderer().removePrimitive(path.primitive);
-      }
-    }
+    for (const path of layerState._missionOrbitPrimitives.values())
+      path.line?.remove();
     layerState._missionOrbitPrimitives.clear();
   }
 
   function updateMissionOrbitPrimitiveFrames(nowDate) {
     for (const [launchId, path] of layerState._missionOrbitPrimitives) {
-      if (!path.primitive || !missionOrbitPrimitiveVisible(launchId)) continue;
-      orbitFrameModelMatrix(
-        path.gmstAtBake,
-        nowDate,
-        path.primitive.modelMatrix,
-      );
-      getRenderer().commitOrbit(path.primitive);
+      if (!path.line || !missionOrbitPrimitiveVisible(launchId)) continue;
+      orbitFrameModelMatrix(path.gmstAtBake, nowDate, path.modelMatrix);
+      path.line.setModelMatrix(path.modelMatrix);
       if (path.labelBakePosition && path.labelPosition) {
         geo.matrix4.multiplyByPoint(
-          path.primitive.modelMatrix,
+          path.modelMatrix,
           path.labelBakePosition,
           path.labelPosition,
         );
@@ -53,25 +45,29 @@ export function createOrbitRendering({
 
   function addMissionOrbitPrimitive(launch, orbitPath, satelliteTrack) {
     if (
-      !layerState._viewer ||
+      !getRenderer() ||
       !satelliteTrack ||
       !Number.isFinite(satelliteTrack.gmstAtBake)
     )
       return false;
-    const collection = getRenderer().createOrbit({
-      positions: orbitPath,
-      width: 3,
-      color: rgbaFromCss('#22e6e6').withAlpha(0.95),
-    });
-    collection.show = missionOrbitPrimitiveVisible(launch.id);
-    orbitFrameModelMatrix(
+    const modelMatrix = orbitFrameModelMatrix(
       satelliteTrack.gmstAtBake,
       new Date(appClock.now()),
-      collection.modelMatrix,
+      geo.matrix4.clone(geo.matrix4.IDENTITY),
     );
-    getRenderer().commitOrbit(collection);
+    // The live ring is not picked (as Cesium's polyline collection).
+    const line = getRenderer().addLine({
+      id: `rocket-orbit-ring:${launch.id}`,
+      positions: orbitPath,
+      widthPx: 3,
+      color: rgbaFromCss('#22e6e6').withAlpha(0.95),
+      dash: 'tactical',
+      modelMatrix,
+    });
+    line.show = missionOrbitPrimitiveVisible(launch.id);
     layerState._missionOrbitPrimitives.set(launch.id, {
-      primitive: collection,
+      line,
+      modelMatrix,
       basePositions: orbitPath,
       gmstAtBake: satelliteTrack.gmstAtBake,
     });

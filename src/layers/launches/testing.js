@@ -12,8 +12,14 @@ export function createTesting({ state: layerState, services, parts, source }) {
   function _setSelectedRocketMissionForTest(launchId = null) {
     parts.selection.setSelectedMission(launchId, Boolean(launchId));
   }
+  /** Test seam: the layer's record of one drawn element, by pick id. */
+
+  function _missionElementForTest(id) {
+    return layerState._missionElements.get(id) ?? null;
+  }
   return {
     _setRocketMissionOverlayHostForTest,
     _setSelectedRocketMissionForTest,
+    _missionElementForTest,
   };
 }

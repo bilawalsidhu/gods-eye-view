@@ -12,12 +12,12 @@ export function createSelection({
   const { getKeyholeGeometry } = services.geometry;
 
   /** @returns {boolean} Whether the flight started. */
-  function focusFullGlobe(viewer, { duration = 2.4, complete, cancel } = {}) {
-    const canvas = viewer?.scene?.canvas;
-    const height = canvas?.clientHeight || canvas?.height;
-    const width = canvas?.clientWidth || canvas?.width;
-    const cartographic = viewer?.camera?.positionCartographic;
-    const fovy = viewer?.camera?.frustum?.fovy;
+  function focusFullGlobe(engine, { duration = 2.4, complete, cancel } = {}) {
+    const camera = engine?.camera;
+    const { width, height } = engine?.host?.size() ?? {};
+    const pose = camera?.pose();
+    const cartographic = pose?.cartographic;
+    const fovy = pose?.fovy;
     if (
       !(width > 0) ||
       !(height > 0) ||
@@ -36,28 +36,29 @@ export function createSelection({
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
     layerState._cameraReleased = false;
-    viewer.camera.flyTo({
+    camera.flyTo({
       destination: geo.cartesian3.fromRadians(
         cartographic.longitude,
         cartographic.latitude,
         altitude,
       ),
       orientation: {
-        heading: viewer.camera.heading,
+        heading: pose.heading,
         pitch: -geo.math.PI_OVER_TWO,
         roll: 0,
       },
       duration,
-      easingFunction: getRenderer().easing,
+      easing: 'cubicInOut',
       complete,
       cancel,
     });
     return true;
   }
 
-  function entityLaunchId(entity) {
-    if (!entity?.id || typeof entity.id !== 'string') return null;
-    const match = entity.id.match(/^rocket-[^:]+:([^:]+)/);
+  /** The mission a pick id (`rocket-<kind>:<launch id>…`) belongs to. */
+  function entityLaunchId(id) {
+    if (!id || typeof id !== 'string') return null;
+    const match = id.match(/^rocket-[^:]+:([^:]+)/);
     return match?.[1] || null;
   }
 
@@ -78,22 +79,20 @@ export function createSelection({
     layerState._selectedLaunchId = launchId;
     layerState._explicitSelection = Boolean(launchId && isolate);
     if (launchId) layerState._animationStarts.set(launchId, appClock.now());
-    if (!launchId && layerState._viewer) {
-      stopMissionZoomAnchor();
-      layerState._viewer.selectedEntity = undefined;
-    }
+    if (!launchId && layerState._engine) stopMissionZoomAnchor();
     showSelectedMission();
   }
 
   function showSelectedMission() {
-    if (!layerState._dataSource) return;
+    if (!getRenderer()) return;
     const launchId = layerState._selectedLaunchId;
-    for (const entity of layerState._dataSource.entities.values) {
-      const relatedId = entityLaunchId(entity);
-      entity.show = launchId
-        ? relatedId === launchId
-        : entity.id.startsWith('rocket-launch:');
-    }
+    for (const element of layerState._missionElements.values())
+      parts.rendering.setElementShown(
+        element,
+        launchId
+          ? element.launchId === launchId
+          : element.id.startsWith('rocket-launch:'),
+      );
     parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
     parts.overlays.syncMissionOverlayEntries();
     parts.panel.renderMissionPanel();
@@ -104,13 +103,12 @@ export function createSelection({
       layerState._missionZoomAnchorRemover();
     layerState._missionZoomAnchorRemover = null;
     layerState._missionZoomAnchorId = null;
-    if (layerState._viewer?.camera && !layerState._replayCameraLaunchId) {
-      layerState._viewer.camera.lookAtTransform(geo.matrix4.IDENTITY);
-    }
+    if (layerState._engine && !layerState._replayCameraLaunchId)
+      layerState._engine.camera.release();
   }
 
   function startMissionZoomAnchor(launch, initialRange) {
-    if (!layerState._viewer || !launch || layerState._replayCameraLaunchId)
+    if (!layerState._engine || !launch || layerState._replayCameraLaunchId)
       return;
     stopMissionZoomAnchor();
     const target = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
@@ -120,36 +118,27 @@ export function createSelection({
     );
     layerState._missionZoomAnchorId = launch.id;
     layerState._missionZoomRange = range;
-    layerState._viewer.camera.lookAt(
-      target,
-      getRenderer().range(0, parts.camera.missionZoomPitch(range), range),
-    );
+    layerState._engine.camera.lookAt(target, {
+      heading: 0,
+      pitch: parts.camera.missionZoomPitch(range),
+      range,
+    });
   }
 
   function focusMission(launch) {
-    if (!layerState._viewer || !launch) return;
+    const engine = layerState._engine;
+    if (!engine || !launch) return;
     stopMissionZoomAnchor();
     layerState._missionFocusIntentId = launch.id;
-    layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
-      `rocket-launch:${launch.id}`,
-    );
-    const orbitEntity = layerState._dataSource.entities.getById(
+    const orbitPositions = layerState._missionElements.get(
       `rocket-orbit:${launch.id}`,
-    );
-    const orbitPositions = orbitEntity?.polyline?.positions?.getValue(
-      getRenderer().time(appClock.now()),
-    );
+    )?.positions;
     const launchPosition = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     let range = 18000000;
     if (orbitPositions?.length > 1) {
-      const canvas = layerState._viewer.scene.canvas;
-      const fovy =
-        layerState._viewer.camera.frustum?.fovy || geo.math.toRadians(60);
-      const aspect = Math.max(
-        0.1,
-        (canvas.clientWidth || canvas.width) /
-          Math.max(1, canvas.clientHeight || canvas.height),
-      );
+      const size = engine.host.size();
+      const fovy = engine.camera.pose().fovy || geo.math.toRadians(60);
+      const aspect = Math.max(0.1, size.width / Math.max(1, size.height));
       const fovx = 2 * Math.atan(Math.tan(fovy * 0.5) * aspect);
       const paddedHalfAngle = Math.min(fovy, fovx) * 0.5 * 0.62;
       const orbitExtent = orbitPositions.reduce(
@@ -193,7 +182,8 @@ export function createSelection({
       geo.cartesian3.create(),
     );
     layerState._cameraReleased = false;
-    layerState._viewer.camera.flyTo({
+    // Without an easing: the engine's own for the flight's heights.
+    engine.camera.flyTo({
       destination,
       orientation: { direction, up },
       duration: 1.1,
@@ -205,25 +195,20 @@ export function createSelection({
   }
 
   function focusLaunchSite(launch) {
-    if (!layerState._viewer || !launch) return;
+    if (!layerState._engine || !launch) return;
     parts.replay.stopMissionReplay();
     layerState._missionFocusIntentId = null;
     stopMissionZoomAnchor();
     const launchPosition = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
-    layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
-      `rocket-launch:${launch.id}`,
-    );
     layerState._cameraReleased = false;
-    layerState._viewer.camera.flyToBoundingSphere(
+    layerState._engine.camera.flyToSphere(
       geo.boundingSphere.create(launchPosition, 0),
       {
-        offset: getRenderer().range(
-          0,
-          geo.math.toRadians(-42),
-          MISSION_FOCUS_RANGE_M,
-        ),
+        heading: 0,
+        pitch: geo.math.toRadians(-42),
+        range: MISSION_FOCUS_RANGE_M,
         duration: 1.4,
-        easingFunction: getRenderer().easing,
+        easing: 'cubicInOut',
         complete: () => {
           if (layerState._selectedLaunchId === launch.id) {
             startMissionZoomAnchor(launch, MISSION_FOCUS_RANGE_M);

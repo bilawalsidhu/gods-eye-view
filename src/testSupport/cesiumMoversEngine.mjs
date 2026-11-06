@@ -48,14 +48,17 @@ function fakeModel(options) {
 }
 
 /**
+ * @param {{ engineOptions?: object }} [options] More createCesiumEngine
+ *   options (an input handler seam, say).
  * @returns {{ viewer: object, engine: object, frame: () => void,
  *   loads: object[], primitive: (id: string) => (object | undefined) }}
  *   `primitive(id)`: the Cesium primitive drawing a mover set or line.
  */
-export function createCesiumMoversEngine() {
+export function createCesiumMoversEngine({ engineOptions = {} } = {}) {
   const loads = [];
   const { viewer, engine, frame } = createCameraViewer({
     engineOptions: {
+      ...engineOptions,
       moverFactories: {
         cropCells: async (atlas, keys) =>
           new Map(keys.map((key) => [key, { width: 8, height: 8, key }])),

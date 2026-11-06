@@ -1,6 +1,13 @@
+// The OSM Places points on the globe contract (engine.movers,
+// engine.surface, engine.camera), the same on every engine: 9 px discs in
+// the place colour with a dark 2 px outline, on top only within 2.5 km of
+// the camera. The contract has no ground clamping, so each point sits on the
+// sampled surface; heights are read again after each camera move, and
+// shortly after a draw that found no surface under a place yet.
+
 import * as geo from '../../../geo/index.js';
 import { rgbaFromCss } from '../../shared/color.js';
-import { OSM_PLACE_COLOR } from '../model.js';
+import { OSM_PLACES_LAYER_ID, OSM_PLACE_COLOR } from '../model.js';
 
 // Above the sampled surface, so a point does not sink into it.
 const HEIGHT_OFFSET_M = 2;
@@ -9,15 +16,17 @@ const INITIAL_CAPACITY = 256;
 // While the surface under a place has not loaded, its height is asked again.
 const RESAMPLE_MS = 500;
 const RESAMPLE_TRIES = 20;
+// Under the moving contacts (src/data/spriteOrder.js), as map data.
+const POINT_ORDER = -1;
+
+/** What a pick of a place returns. */
+export const osmPlacePickId = (record) => `osm-place:${record.id}`;
 
 /**
- * The places' points on Navara, as the Cesium renderer draws them: 9 px
- * discs with a dark outline, on the surface where it has loaded, on top only
- * within 2.5 km of the camera. `{ setVisible, replace(records), destroy }`.
- * Heights are read again after each camera move, and shortly after a draw
- * that found no surface under a place yet.
+ * The places' points: `{ setVisible, replace(records), destroy }`.
+ * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
-export function createOsmPlacesNavaraRenderer(engine) {
+export function createOsmPlacesDisplay(engine) {
   const color = rgbaFromCss(OSM_PLACE_COLOR).rgba();
   let set = null,
     capacity = 0,
@@ -31,10 +40,11 @@ export function createOsmPlacesNavaraRenderer(engine) {
     set?.destroy();
     capacity = Math.max(INITIAL_CAPACITY, count);
     set = engine.movers.createSet({
-      id: 'osm-places',
+      id: OSM_PLACES_LAYER_ID,
       kind: 'point',
       capacity,
-      order: 30,
+      order: POINT_ORDER,
+      pickable: true,
       depthTest: { disableWithinM: 2500 },
       point: { sizePx: 9, outlinePx: 2, outlineColor: [0, 0, 0, 0.8] },
     });
@@ -45,9 +55,10 @@ export function createOsmPlacesNavaraRenderer(engine) {
     retry = null;
     const shown = visible ? records : [];
     ensure(shown.length);
+    const sampling = engine.surface.supported;
     let unsampled = false;
     shown.forEach((record, index) => {
-      const sampled = engine.surface?.supported
+      const sampled = sampling
         ? engine.surface.sampleHeight(
             geo.cartographic.fromDegrees(record.lon, record.lat),
             [set],
@@ -62,15 +73,15 @@ export function createOsmPlacesNavaraRenderer(engine) {
         ),
         color,
         show: true,
+        pickId: osmPlacePickId(record),
       });
     });
     set.setCount(shown.length);
     set.commit();
-    engine.render.request('osm-places');
-    if (unsampled && engine.surface?.supported && tries++ < RESAMPLE_TRIES)
+    if (unsampled && sampling && tries++ < RESAMPLE_TRIES)
       retry = setTimeout(draw, RESAMPLE_MS);
   }
-  const removeMoveEnd = engine.camera?.moveEnd?.addEventListener(() => {
+  const removeMoveEnd = engine.camera.moveEnd.addEventListener(() => {
     tries = 0;
     if (visible && records.length) draw();
   });
@@ -89,7 +100,7 @@ export function createOsmPlacesNavaraRenderer(engine) {
       if (destroyed) return;
       destroyed = true;
       clearTimeout(retry);
-      removeMoveEnd?.();
+      removeMoveEnd();
       set?.destroy();
       set = null;
       records = [];

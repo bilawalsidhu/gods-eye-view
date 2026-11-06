@@ -151,8 +151,8 @@ export function createLifecycle({
     },
 
     /**
-     * Creates the engine's vessel renderer (render/*.js), its sprite
-     * collection, the click rule and the per-frame pass.
+     * Creates the engine's vessel display (render/display.js), its chevron
+     * bank, the click rule and the per-frame pass.
      * @param {object|null} viewer The Cesium viewer (null on an engine
      *   without one).
      * @param {{ engine?: object }} [context] LayerLifecycle's context.
@@ -281,15 +281,9 @@ export function createLifecycle({
     },
   };
 
-  /** The engine's vessel renderer (the Cesium one without an engine). */
+  /** The engine's vessel display (none without an engine). */
   function createRenderer(viewer, engine) {
-    return (
-      services.renderer?.create({
-        viewer,
-        engine,
-        createTrail: services.trails?.createTrail ?? null,
-      }) ?? null
-    );
+    return services.renderer?.create({ viewer, engine }) ?? null;
   }
 
   function bindVisibleScene(activeViewer, scene) {
@@ -317,10 +311,7 @@ export function createLifecycle({
   }
 
   function detachFleet() {
-    const fleet = state.renderer?.fleet;
-    if (fleet?.collection)
-      services.sprites.unregisterSpriteCollection?.('ais', fleet.collection);
-    fleet?.detach();
+    state.renderer?.fleet.detach();
   }
 
   function removeViewListener() {

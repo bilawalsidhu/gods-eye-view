@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 4546,
-    "navaraLayerRendererLines": 11106,
-    "cesiumImportFiles": 66,
-    "viewerLines": 2209,
-    "navaraKindChecks": 17,
+    "cesiumLayerRendererLines": 2638,
+    "navaraLayerRendererLines": 8735,
+    "cesiumImportFiles": 65,
+    "viewerLines": 2014,
+    "navaraKindChecks": 15,
     "engineSniffCalls": 14,
-    "engineExtensionReads": 27,
-    "groundEffectPasses": 9,
+    "engineExtensionReads": 26,
+    "groundEffectPasses": 8,
     "cesiumSdkLoads": 6,
-    "screenSpaceHandlerFiles": 20,
-    "engineNameLines": 162
+    "screenSpaceHandlerFiles": 15,
+    "engineNameLines": 141
   },
-  "measuredAt": "after the aircraft, Wildlife and Cockpit displays and engine-only app code, 2026-11-07"
+  "measuredAt": "after the vessels, satellites, launches, ALPR, bikeshare and OSM Places displays, 2026-11-07"
 }

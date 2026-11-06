@@ -58,7 +58,7 @@ test('the default registry: every layer on Cesium, none yet on Navara', () => {
   }
 });
 
-test('the aircraft, vessels, satellites, launches and earthquakes have extracted Cesium renderers', () => {
+test('the layers with extracted renderers', () => {
   assert.deepEqual(Object.keys(CESIUM_LAYER_RENDERERS), [
     'earthquakes',
     'air-quality',
@@ -66,6 +66,8 @@ test('the aircraft, vessels, satellites, launches and earthquakes have extracted
     'fire-perimeters',
     'drone-airspace',
     'osm-places',
+    'alpr-cameras',
+    'bikeshare',
     'local-firms',
     'rocket-launches',
     'satellites',
@@ -74,22 +76,19 @@ test('the aircraft, vessels, satellites, launches and earthquakes have extracted
     'local-adsb',
     'ais-live-vessels',
   ]);
-  const vessels = rendererFor(
-    'ais-live-vessels',
-    { kind: 'cesium' },
-    {
-      viewer: { scene: {}, camera: {} },
-    },
-  );
-  assert.equal(vessels.kind, 'cesium');
-  assert.equal(rendererFor('satellites', { kind: 'cesium' }).kind, 'cesium');
 });
 
-test('the aircraft family draws through one display, the same factory on every engine', async () => {
+test('the layers drawn through one display get the same factory on every engine', async () => {
   const displays = {
     flights: ['flights', 'createFlightsDisplay'],
     military: ['military', 'createMilitaryDisplay'],
     'local-adsb': ['localAdsb', 'createLocalAdsbDisplay'],
+    'ais-live-vessels': ['vessels', 'createVesselsDisplay'],
+    satellites: ['satellites', 'createSatellitesDisplay'],
+    'rocket-launches': ['launches', 'createLaunchesDisplay'],
+    'osm-places': ['osmPlaces', 'createOsmPlacesDisplay'],
+    'alpr-cameras': ['alpr', 'createAlprDisplay'],
+    bikeshare: ['bikeshare', 'createBikeshareDisplay'],
   };
   // The Navara mode registers the same modules' factories.
   const navaraMode = readFileSync(
@@ -109,6 +108,9 @@ test('the aircraft family draws through one display, the same factory on every e
       ),
       id,
     );
+    // Each display's own tests build it with its services; the aircraft
+    // family needs none beyond an atlas.
+    if (!['flights', 'military', 'local-adsb'].includes(id)) continue;
     for (const kind of ['cesium', 'navara']) {
       const engine = createFakeEngine({ kind });
       const display = factory(engine, { drawAtlas });

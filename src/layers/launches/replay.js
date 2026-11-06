@@ -324,10 +324,10 @@ export function createReplay({
     // taking the camera.
     if (
       (stoppedLaunchId || !layerState._cameraReleased) &&
-      layerState._viewer?.camera
+      layerState._engine
     ) {
-      layerState._viewer.camera.cancelFlight();
-      layerState._viewer.camera.lookAtTransform(geo.matrix4.IDENTITY);
+      layerState._engine.camera.cancelFlight();
+      layerState._engine.camera.release();
     }
     layerState._replayCameraLaunchId = null;
     layerState._replayPaused = false;
@@ -344,7 +344,8 @@ export function createReplay({
   function startMissionReplay(launchId, { resuming = false } = {}) {
     const launch = layerState._launches.find((item) => item.id === launchId);
     const track = layerState._replayTracks.get(launchId);
-    if (!layerState._viewer || !launch || !track) return false;
+    const engine = layerState._engine;
+    if (!engine || !launch || !track) return false;
     if (!resuming && layerState._replayCameraLaunchId === launchId) {
       stopMissionReplay();
       return false;
@@ -371,8 +372,8 @@ export function createReplay({
     parts.overlays.syncMissionOverlayEntries();
     if (!resuming) {
       parts.policyHelpers.releaseAircraftTracking(layerState._dataManager);
-      layerState._viewer.trackedEntity = undefined;
-      layerState._viewer.camera.cancelFlight();
+      engine.camera.following()?.stop();
+      engine.camera.cancelFlight();
       layerState._animationStarts.set(
         launchId,
         appClock.now() +
@@ -383,10 +384,11 @@ export function createReplay({
     let lastCameraUpdateMs = null;
 
     // Move the chase camera before scene traversal. Mutating it in preRender
-    // makes Cesium discover a new view after 3D-tile refinement, which can cause
-    // a self-sustaining refinement loop and visible stutter during slow replay.
-    layerState._replayCameraRemover =
-      layerState._viewer.scene.preUpdate.addEventListener(() => {
+    // makes the engine discover a new view after 3D-tile refinement, which can
+    // cause a self-sustaining refinement loop and visible stutter during slow
+    // replay.
+    layerState._replayCameraRemover = engine.frames.preUpdate.addEventListener(
+      () => {
         if (
           token !== layerState._replayCameraToken ||
           layerState._replayCameraLaunchId !== launchId
@@ -451,14 +453,11 @@ export function createReplay({
             )
           : cameraView.range;
         if (state.ascending) {
-          layerState._viewer.camera.lookAt(
-            cameraTarget,
-            getRenderer().range(
-              track.lastCameraHeading,
-              cameraView.pitch,
-              cameraRange,
-            ),
-          );
+          engine.camera.lookAt(cameraTarget, {
+            heading: track.lastCameraHeading,
+            pitch: cameraView.pitch,
+            range: cameraRange,
+          });
         } else {
           const tangentStep = Math.max(
             0.002,
@@ -483,10 +482,10 @@ export function createReplay({
           );
           if (orbitPose) {
             if (!track.orbitCameraWorldFrame) {
-              layerState._viewer.camera.lookAtTransform(geo.matrix4.IDENTITY);
+              engine.camera.release();
               track.orbitCameraWorldFrame = true;
             }
-            layerState._viewer.camera.setView({
+            engine.camera.setView({
               destination: orbitPose.destination,
               orientation: {
                 direction: orbitPose.direction,
@@ -501,19 +500,18 @@ export function createReplay({
         ) {
           stopMissionReplay();
         }
-      });
+      },
+    );
 
     if (resuming) return true;
-    layerState._viewer.camera.flyToBoundingSphere(
+    engine.camera.flyToSphere(
       geo.boundingSphere.create(track.ascentPath[0], 0),
       {
-        offset: getRenderer().range(
-          initialHeading,
-          geo.math.toRadians(-20),
-          REPLAY_INITIAL_RANGE_M,
-        ),
+        heading: initialHeading,
+        pitch: geo.math.toRadians(-20),
+        range: REPLAY_INITIAL_RANGE_M,
         duration: 1.4,
-        easingFunction: getRenderer().easing,
+        easing: 'cubicInOut',
         complete: () => {
           cameraReady = true;
         },

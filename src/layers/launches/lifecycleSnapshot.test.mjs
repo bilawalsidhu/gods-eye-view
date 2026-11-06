@@ -8,8 +8,9 @@ test('missions preserve the satellite target before their focus flight releases 
     let target = 25544,
       snapshot = null;
     const lifecycle = createLifecycle({
-      state: { _dataSource: { show: false }, _viewer: {} },
+      state: { _engine: {} },
       services: { render: {} },
+      getRenderer: () => ({ setVisible() {} }),
       parts: {
         orbitRendering: { syncMissionOrbitPrimitiveVisibility() {} },
         selection: {

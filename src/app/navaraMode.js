@@ -122,14 +122,13 @@ export async function registerNavaraLayerRenderers() {
         });
     },
     'alpr-cameras': async () =>
-      (await import('../layers/alpr/render/navara.js'))
-        .createAlprNavaraRenderer,
+      (await import('../layers/alpr/render/display.js')).createAlprDisplay,
     radio: async () =>
       (await import('../layers/radio/render/navara.js'))
         .createRadioNavaraRenderer,
     bikeshare: async () =>
-      (await import('../layers/bikeshare/render/navara.js'))
-        .createBikeshareNavaraRenderer,
+      (await import('../layers/bikeshare/render/display.js'))
+        .createBikeshareDisplay,
     ...Object.fromEntries(
       ['weather-radar', 'weather-satellite', 'weather-lightning'].map((id) => [
         id,
@@ -243,8 +242,8 @@ export async function registerNavaraLayerRenderers() {
         });
     },
     'osm-places': async () =>
-      (await import('../layers/osmPlaces/render/navara.js'))
-        .createOsmPlacesNavaraRenderer,
+      (await import('../layers/osmPlaces/render/display.js'))
+        .createOsmPlacesDisplay,
     // Draws itself through the globe contract (engine.movers, engine.lines).
     'wildlife-sightings': async () => () => null,
     'drone-airspace': async () => {
@@ -280,18 +279,13 @@ export async function registerNavaraLayerRenderers() {
           ...engine.extensions.navara,
         });
     },
-    'rocket-launches': async () => {
-      const { createLaunchesNavaraRenderer } =
-        await import('../layers/launches/render/navara.js');
-      return (engine, options) =>
-        createLaunchesNavaraRenderer(engine, {
-          ...options,
-          ...engine.extensions.navara,
-        });
-    },
+    // The same displays as on Cesium (renderers.js).
+    'rocket-launches': async () =>
+      (await import('../layers/launches/render/display.js'))
+        .createLaunchesDisplay,
     satellites: async () =>
-      (await import('../layers/satellites/render/navara.js'))
-        .createSatellitesNavaraRenderer,
+      (await import('../layers/satellites/render/display.js'))
+        .createSatellitesDisplay,
     // The aircraft family: the same displays as on Cesium (renderers.js).
     flights: async () =>
       (await import('../layers/flights/render/display.js'))
@@ -303,8 +297,8 @@ export async function registerNavaraLayerRenderers() {
       (await import('../layers/localAdsb/render/display.js'))
         .createLocalAdsbDisplay,
     'ais-live-vessels': async () =>
-      (await import('../layers/vessels/render/navara.js'))
-        .createVesselsNavaraRenderer,
+      (await import('../layers/vessels/render/display.js'))
+        .createVesselsDisplay,
     // The open map overlays drape themselves through engine.maps.addOverlay.
     'sea-marks': async () => () => null,
     'ski-pistes': async () => () => null,

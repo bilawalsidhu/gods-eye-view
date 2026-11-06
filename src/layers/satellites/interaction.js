@@ -16,21 +16,21 @@ export function createInteraction({
     }
   }
 
-  function _installClickHandler(viewer) {
-    if (layerState._clickHandler) return; // already installed
+  function _installClickHandler() {
+    if (layerState._clickHandler || !getRenderer()) return; // already installed
 
     // Cross-layer untrack (H2, mirror of flights): if ANOTHER layer (flights,
     // military, …) grabs the follow-camera, drop our tracking so the orbit ring /
-    // tracked entity don't orphan — without touching viewer.trackedEntity (the
-    // new owner controls it). Guarded so our OWN switch (viewer.trackedEntity
-    // briefly undefined mid-_trackSatellite) doesn't self-clear.
+    // tracked dot don't orphan — without releasing the follow (the new owner
+    // controls it). Guarded so our OWN switch (the follow briefly null
+    // mid-_trackSatellite) doesn't self-clear.
     if (!layerState._trackedEntityChangedRemove) {
       layerState._trackedEntityChangedRemove = getRenderer().follow.onChanged(
         () => {
           if (!layerState._enabled) return;
           if (
             layerState._trackedNorad &&
-            layerState._viewer &&
+            getRenderer() &&
             ((getRenderer().follow.current() &&
               getRenderer().follow.current() !== layerState._trackedEntity) ||
               (!getRenderer().follow.current() &&
@@ -70,7 +70,7 @@ export function createInteraction({
 
         // A pick that belongs to a sibling layer (plane, vessel, station, CCTV
         // camera…) is not "empty space" — leave OUR tracking (and crucially
-        // viewer.trackedEntity, which that sibling may have JUST set) alone (H2).
+        // the follow, which that sibling may have JUST started) alone (H2).
         if (picked) {
           const pickedId = resolvePickId(picked);
           if (pickedId && isOwnedByOtherLayer('satellites', pickedId)) return;

@@ -1,5 +1,4 @@
 import { rendererFor } from './renderers.js';
-import { createSatellitesCesiumRenderer } from '../../layers/satellites/render/cesium.js';
 import { createSatellitesLayer } from '../../layers/satellites/index.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as focus from '../../data/focusDeemphasis.js';
@@ -12,11 +11,10 @@ import * as layerState from '../../data/layerState.js';
 /** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationSatellites({
   source,
+  // Test seam: the renderer factory (default: the engine's, from the
+  // registry: the satellites display on every engine).
   renderer = {
-    create: ({ engine = null, ...options }) =>
-      engine
-        ? rendererFor('satellites', engine, options)
-        : createSatellitesCesiumRenderer(null, options),
+    create: ({ engine = null } = {}) => rendererFor('satellites', engine),
   },
 }) {
   return createSatellitesLayer({

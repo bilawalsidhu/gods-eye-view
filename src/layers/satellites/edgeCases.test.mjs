@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createApplicationSatellites } from '../../app/layers/satellites.js';
-import { createSatellitesNavaraRenderer } from './render/navara.js';
+import { createSatellitesDisplay } from './render/display.js';
 import { appClock } from '../../time/clock.js';
 
 // Canonical archived ISS element set (epoch 2008-09-20 ~12:25 UTC).
@@ -65,7 +65,7 @@ test('edge:satellites: a scene switch at a stopped epoch keeps passes and coordi
       },
     },
     renderer: {
-      create: ({ engine }) => createSatellitesNavaraRenderer(engine),
+      create: ({ engine }) => createSatellitesDisplay(engine),
     },
   });
   const [first, second] = [createFakeEngine(), createFakeEngine()];

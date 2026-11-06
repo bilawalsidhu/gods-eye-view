@@ -448,18 +448,20 @@ test('unknown GBFS counts stay unknown through the source, model and station col
 });
 
 test('a station without a published capacity re-derives it from every status poll', async () => {
-  const { createRendering } = await import('./render/cesium/rendering.js');
+  const { createBikeshareDisplay } = await import('./render/display.js');
+  const { createFakeEngine } =
+    await import('../../globe/testing/fakeEngine.js');
   const { COLOR_YELLOW } = await import('./policy.js');
   const model = createModel({});
   const state = {
     _cityRuntime: new Map(),
     _stationRenderMap: new Map(),
-    _pointCollection: { add: (options) => ({ ...options }) },
   };
-  const rendering = createRendering({
+  const parts = { model, selection: { refreshSelectedCard() {} } };
+  const { rendering } = createBikeshareDisplay(createFakeEngine(), {
     state,
     services: { render: { governorRequestRender() {} } },
-    parts: { model, selection: { refreshSelectedCard() {} } },
+    parts,
   });
   const info = model.parseStationInformation({
     data: {

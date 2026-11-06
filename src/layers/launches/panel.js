@@ -1,4 +1,3 @@
-import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
 import {
@@ -328,17 +327,16 @@ export function createPanel({
     if (
       !layerState._missionPanelReady ||
       !layerState._selectedLaunchId ||
-      !layerState._dataSource
+      !layerState._renderer
     )
       return;
     const now = performance.now();
     if (!force && now - layerState._lastPanelTelemetryMs < 250) return;
     layerState._lastPanelTelemetryMs = now;
-    const satellite = layerState._dataSource.entities.getById(
-      `rocket-satellite:${layerState._selectedLaunchId}`,
-    );
-    const position = satellite?.position?.getValue(
-      getRenderer().time(appClock.now()),
+    const position = parts.rendering.elementPosition(
+      layerState._missionElements.get(
+        `rocket-satellite:${layerState._selectedLaunchId}`,
+      ),
     );
     const altitudeM = position
       ? geo.cartographic.fromCartesian(position)?.height

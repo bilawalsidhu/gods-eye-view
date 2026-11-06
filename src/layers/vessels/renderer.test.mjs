@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createVesselLayer } from './index.js';
 import { recordingRenderer, services } from './testFixtures.mjs';
-import { createVesselsCesiumRenderer } from './render/cesium.js';
+import { createVesselsDisplay, vesselAtlasLayout } from './render/display.js';
 import { allVesselChevronIcons, vesselChevronIcon } from './icons.js';
 import {
   VESSEL_TYPE_CSS_COLORS,
@@ -23,18 +23,6 @@ const row = (mmsi, latitude, longitude) => ({
   speedMps: 2,
   headingDeg: 90,
   courseDeg: 90,
-});
-
-test('the vessels Cesium renderer picks the record a billboard is of', () => {
-  const renderer = createVesselsCesiumRenderer(null, {
-    viewer: { scene: {}, camera: {} },
-  });
-  assert.equal(renderer.kind, 'cesium');
-  // The record a pick is of: Cesium's billboard id is the record.
-  const record = { mmsi: '111' };
-  assert.equal(renderer.pickedRecord({ id: record }), record);
-  assert.equal(renderer.pickedRecord({ primitive: { id: record } }), record);
-  assert.equal(renderer.pickedRecord({ id: 'ae01ce' }), null);
 });
 
 test('the chevron artwork: one icon per type colour plus the selected one', () => {
@@ -107,12 +95,10 @@ test('vessel logic draws and selects through a plain renderer on an engine, with
   }
 });
 
-test('vessels on the Navara renderer: one always-on-top chevron bank, MMSI picks, the trail on engine.lines', async () => {
-  const { createVesselsNavaraRenderer, vesselAtlasLayout } =
-    await import('./render/navara.js');
+test('vessels on the display: one always-on-top chevron bank, MMSI picks, the trail on engine.lines', async () => {
   const engine = createFakeEngine();
   const layout = vesselAtlasLayout();
-  const renderer = createVesselsNavaraRenderer(engine, {
+  const renderer = createVesselsDisplay(engine, {
     drawAtlas: async () => ({ canvas: { kind: 'atlas' }, cells: layout.cells }),
   });
   const layer = createVesselLayer({
@@ -260,8 +246,7 @@ test('a pending AIS poll and selected trail survive replacement of the planet', 
 });
 
 test('a vessel bank commits rows arriving after its empty visibility commit and after growth', async () => {
-  const { createMoverBank } =
-    await import('../shared/render/navaraMoverBank.js');
+  const { createMoverBank } = await import('../shared/render/moverBank.js');
   let commits = 0;
   let pending = null;
   const bank = createMoverBank(

@@ -4,6 +4,7 @@
 // Run with: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createOsmPlacesLayer } from './index.js';
 
 function fakeOverlayHost() {
@@ -77,19 +78,7 @@ test('destroy and re-init expose a fresh empty session', () => {
   });
   assert.ok(layer.getStats().lastUpdate);
   layer.destroy();
-  const dataSources = {
-    added: [],
-    removed: [],
-    add(source) {
-      this.added.push(source);
-      return source;
-    },
-    remove(source, destroy) {
-      this.removed.push([source, destroy]);
-      return true;
-    },
-  };
-  layer.init({ dataSources });
+  layer.init(null, { engine: createFakeEngine() });
   layer.enable();
   assert.equal(layer.getResultsMeta(), null);
   assert.deepEqual(layer.getAnalystRecords(), []);
@@ -102,8 +91,6 @@ test('destroy and re-init expose a fresh empty session', () => {
 });
 
 test('without an operator Overpass the layer shows as unavailable', async () => {
-  const added = [];
-  const viewer = { dataSources: { add: (ds) => added.push(ds), remove() {} } };
   const off = createOsmPlacesLayer({
     overlayHost: fakeOverlayHost(),
     overpassConfigured: async () => false,
@@ -113,14 +100,14 @@ test('without an operator Overpass the layer shows as unavailable', async () => 
     true,
     'unknown until asked',
   );
-  off.init(viewer);
+  off.init(null, { engine: createFakeEngine() });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(off.getSourceAvailability().available, false);
   const unknown = createOsmPlacesLayer({
     overlayHost: fakeOverlayHost(),
     overpassConfigured: async () => null,
   });
-  unknown.init(viewer);
+  unknown.init(null, { engine: createFakeEngine() });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(
     unknown.getSourceAvailability().available,
@@ -130,23 +117,23 @@ test('without an operator Overpass the layer shows as unavailable', async () => 
 });
 
 test('places are depth-tested past close range, so they never show through the globe', () => {
-  const added = [];
-  const viewer = { dataSources: { add: (ds) => added.push(ds), remove() {} } };
+  const engine = createFakeEngine();
   const layer = createOsmPlacesLayer({
     overlayHost: fakeOverlayHost(),
     overpassConfigured: async () => true,
   });
-  layer.init(viewer);
+  layer.init(null, { engine });
   layer.enable();
   layer.setResults(RECORDS, {
     kind: 'hospital',
     label: 'hospitals',
     area: 'Kathmandu',
   });
-  const point = added[0].entities.values[0].point;
-  const distance = point.disableDepthTestDistance.getValue();
+  const { disableWithinM } =
+    engine.fake.moverSet('osm-places').options.depthTest;
   assert.ok(
-    Number.isFinite(distance) && distance <= 5000,
-    `depth test off only within ${distance} m`,
+    Number.isFinite(disableWithinM) && disableWithinM <= 5000,
+    `depth test off only within ${disableWithinM} m`,
   );
+  layer.destroy();
 });

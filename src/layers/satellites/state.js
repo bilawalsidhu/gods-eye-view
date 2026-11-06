@@ -26,8 +26,8 @@ export function createState({ services }) {
   state._detectionObjects = new Map();
 
   // noradId → { primitive, gmstAtBake }
-  // primitive is a one-instance Cesium.Primitive holding the ring baked in ECEF
-  // at gmstAtBake; the preRender tick re-aligns it to current GMST by updating
+  // primitive is the display's orbit ring holding the ring baked in ECEF at
+  // gmstAtBake; the preRender tick re-aligns it to current GMST by updating
   // its modelMatrix (rigid Z-rotation — no geometry rebuild, WS-D1).
 
   state._orbitPaths = new Map();
@@ -48,7 +48,7 @@ export function createState({ services }) {
 
   state._denseLoadController = null;
 
-  state._viewer = null;
+  /** The engine's display (render/display.js) while the layer draws. */
   state._renderer = null;
   state._engine = null;
 
@@ -88,7 +88,7 @@ export function createState({ services }) {
 
   state._clickHandler = null;
 
-  /** @type {Cesium.Event.RemoveCallback|null} trackedEntityChanged listener disposer (cross-layer untrack) */
+  /** @type {(() => void)|null} follow-changed listener disposer (cross-layer untrack) */
 
   state._trackedEntityChangedRemove = null;
 
@@ -140,7 +140,7 @@ export function createState({ services }) {
 
   // Per-frame cache for the tracked satellite (WS-D2): dot, host readout, camera, and
   // getTrackedInfo all read one SGP4 sample per rendered frame, keyed on
-  // scene.frameState.frameNumber, so they never diverge in epoch.
+  // the display's frame number, so they never diverge in epoch.
 
   state._trackedFrameNumber = -1;
 

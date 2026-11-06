@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { WHITE } from '../shared/color.js';
-import { createLaunchesNavaraRenderer } from './render/navara.js';
+import { createLaunchesDisplay } from './render/display.js';
 import { createState } from './state.js';
+import { createRendering } from './rendering.js';
 import { createPaths } from './paths.js';
 import { createCamera } from './camera.js';
 import { createSelection } from './selection.js';
@@ -27,13 +28,13 @@ const pad = (launch, height = 0) =>
   geo.cartesian3.fromDegrees(launch.lon, launch.lat, height);
 
 function rig({ tle = async () => '1 25544U' } = {}) {
-  const engine = createFakeEngine({ kind: 'navara' });
+  const engine = createFakeEngine();
   engine.fake.setPose({
     longitude: geo.math.toRadians(-100),
     latitude: geo.math.toRadians(30),
     height: 20_000_000,
   });
-  const renderer = createLaunchesNavaraRenderer(engine);
+  const renderer = createLaunchesDisplay(engine);
   const state = createState({
     services: {
       overlays: {
@@ -43,12 +44,10 @@ function rig({ tle = async () => '1 25544U' } = {}) {
       },
     },
   });
-  state._viewer = renderer.view;
   state._engine = engine;
   state._renderer = renderer;
   state._enabled = true;
-  state._dataSource = renderer.createDataSource();
-  state._dataSource.show = true;
+  renderer.setVisible(true);
   let feed = [CAPE, VANDENBERG];
   const source = {
     getLaunches: async () => feed,
@@ -68,34 +67,41 @@ function rig({ tle = async () => '1 25544U' } = {}) {
     },
     policyHelpers: { releaseAircraftTracking: noop },
     model: { normalizeRocketLaunches: (launches) => launches },
-    rendering: {
-      // The launch marker (the pad) and a replay track per mission.
-      addLaunchEntity(launch) {
-        renderer.addEntity(state._dataSource, {
-          id: `rocket-launch:${launch.id}`,
-          position: pad(launch),
-          point: { pixelSize: 8, color: WHITE },
-        });
-        state._replayTracks.set(launch.id, {
-          ascentDurationSec: 600,
-          ascentPath: [pad(launch), pad(launch, 100_000)],
-          animatedOrbitPath: [pad(launch, 100_000), pad(launch, 200_000)],
-          beginReplayFrame: () => ({
-            ascending: true,
-            phaseProgress: 0.2,
-            elapsedSinceStart: 10,
-          }),
-          getReplayState: () => null,
-        });
-      },
-    },
   };
   const context = {
     state,
-    services: { geometry: { getKeyholeGeometry: () => ({ radius: 300 }) } },
+    services: {
+      geometry: { getKeyholeGeometry: () => ({ radius: 300 }) },
+      satellites: {
+        getSatelliteOrbitTrack: () => null,
+        findSatelliteOrbitTrackInTle: () => null,
+      },
+    },
     parts,
     source,
     getRenderer: () => renderer,
+  };
+  parts.rendering = {
+    ...createRendering(context),
+    // The launch marker (the pad) and a replay track per mission.
+    addLaunchElements(launch) {
+      parts.rendering.addMissionElement({
+        id: `rocket-launch:${launch.id}`,
+        position: pad(launch),
+        point: { pixelSize: 8, color: WHITE },
+      });
+      state._replayTracks.set(launch.id, {
+        ascentDurationSec: 600,
+        ascentPath: [pad(launch), pad(launch, 100_000)],
+        animatedOrbitPath: [pad(launch, 100_000), pad(launch, 200_000)],
+        beginReplayFrame: () => ({
+          ascending: true,
+          phaseProgress: 0.2,
+          elapsedSinceStart: 10,
+        }),
+        getReplayState: () => null,
+      });
+    },
   };
   parts.paths = createPaths(context);
   parts.camera = createCamera(context);
@@ -107,8 +113,7 @@ function rig({ tle = async () => '1 25544U' } = {}) {
     state,
     parts,
     setFeed: (next) => (feed = next),
-    shown: (id) =>
-      state._dataSource.entities.getById(`rocket-launch:${id}`)?.show,
+    shown: (id) => state._missionElements.get(`rocket-launch:${id}`)?.shown,
     cameraCommands: () =>
       engine.fake.calls.filter(({ method }) =>
         [

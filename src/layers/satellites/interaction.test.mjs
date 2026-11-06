@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEngineEvent } from '../../globe/contract.js';
 import { createInteraction } from './interaction.js';
-test('external null follow clears satellite state on Cesium; own release stays guarded', () => {
+test('an external null follow clears satellite state; own release stays guarded', () => {
   const previous = globalThis.document;
   globalThis.document = new EventTarget();
   try {
@@ -11,7 +11,6 @@ test('external null follow clears satellite state on Cesium; own release stays g
       releasing = false;
     const calls = [];
     const renderer = {
-      kind: 'cesium',
       follow: {
         onChanged: (fn) => changed.addEventListener(fn),
         current: () => current,
@@ -22,7 +21,6 @@ test('external null follow clears satellite state on Cesium; own release stays g
     const state = {
       _enabled: true,
       _trackedNorad: 25544,
-      _viewer: {},
       _trackedEntity: { id: 'own' },
     };
     const interaction = createInteraction({
@@ -31,7 +29,7 @@ test('external null follow clears satellite state on Cesium; own release stays g
       parts: { tracking: { _clearTracking: (...args) => calls.push(args) } },
       getRenderer: () => renderer,
     });
-    interaction._installClickHandler(state._viewer);
+    interaction._installClickHandler();
     releasing = true;
     changed.raiseEvent();
     assert.equal(calls.length, 0);

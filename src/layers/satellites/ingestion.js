@@ -94,7 +94,7 @@ export function createIngestion({
         layerState._pointCollection.removeAll();
         layerState._points.clear();
         for (const path of layerState._orbitPaths.values())
-          getRenderer().removeOrbit(path.primitive);
+          getRenderer()?.removeOrbit(path.primitive);
         layerState._orbitPaths.clear();
         layerState._catalog.clear();
         // The detection overlay caches one record per satellite and stamps its

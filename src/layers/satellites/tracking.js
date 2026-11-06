@@ -57,7 +57,7 @@ export function createTracking({
     )
       return false;
     if (
-      !layerState._viewer ||
+      !layerState._renderer ||
       !layerState._catalog.has(pending.id) ||
       !layerState._points.has(pending.id)
     )
@@ -75,9 +75,9 @@ export function createTracking({
   /**
    * Stop tracking the currently followed satellite.
    * @param {boolean} [skipViewerUntrack=false] - When ANOTHER layer just grabbed
-   *   the follow-camera (viewer.trackedEntityChanged), tear down our own state
-   *   but do NOT clear viewer.trackedEntity — the new owner controls it now,
-   *   and clearing it would yank the camera off their target (mirror of flights).
+   *   the follow-camera (engine.camera.followChanged), tear down our own state
+   *   but do NOT release the follow — the new owner controls it now, and
+   *   releasing it would yank the camera off their target (mirror of flights).
    */
 
   function _clearTracking(
@@ -121,10 +121,9 @@ export function createTracking({
     if (layerState._trackedNorad !== ISS_NORAD) {
       parts.rendering._hideOrbitPath(layerState._trackedNorad);
     }
-    if (layerState._viewer && !skipViewerUntrack)
-      getRenderer().follow.release();
+    if (getRenderer() && !skipViewerUntrack) getRenderer().follow.release();
     if (layerState._trackedEntity) {
-      getRenderer().removeTracked(layerState._trackedEntity);
+      getRenderer()?.removeTracked(layerState._trackedEntity);
       layerState._trackedEntity = null;
     }
     layerState._trackedNorad = null;
@@ -153,8 +152,7 @@ export function createTracking({
     const sat = layerState._catalog.get(layerState._trackedNorad);
     if (!sat) return null;
 
-    const frameNumber =
-      layerState._viewer?.scene?.frameState?.frameNumber ?? -1;
+    const frameNumber = getRenderer()?.view.frameNumber() ?? -1;
     if (
       frameNumber === -1 ||
       frameNumber !== layerState._trackedFrameNumber ||
@@ -201,8 +199,8 @@ export function createTracking({
       publishFocusTargetFromCachedPosition({
         ownerLayer: 'satellites',
         id: layerState._trackedNorad,
-        scene: layerState._viewer?.scene,
-        camera: layerState._viewer?.camera,
+        scene: getRenderer()?.view.scene,
+        camera: getRenderer()?.view.camera,
         displayPosition: layerState._trackedFrameCartesian,
         widthPx: Math.max(trackedPointDiameterPx, Math.min(260, labelWidthPx)),
         // Union of the 14 px point and the two-line label shifted 18 px upward.

@@ -23,7 +23,7 @@ export function createSelection({
    * (`onClick`: every click with its top pick, no gesture rule, as its old
    * LEFT_CLICK handler), plus Escape and the "another layer took the camera"
    * signal. The test seam (interactionHandlerFactory) gives a handler-like
-   * click source over a fake viewer's scene.pick instead.
+   * click source over a test viewer's scene.pick instead.
    * @param {object|null} scene The viewer, or the renderer's view.
    */
   function installInteraction(scene) {
@@ -60,11 +60,8 @@ export function createSelection({
         picked: pickContact(viewer.scene, click.position),
       }),
     );
-    // The follow signal of the Cesium renderer over that viewer.
-    bindKeysAndFollow(
-      services.renderer?.create({ viewer, engine: null }),
-      keyTarget,
-    );
+    // The follow signal of the layer's renderer.
+    bindKeysAndFollow(state.renderer, keyTarget);
   }
 
   function bindKeysAndFollow(renderer, keyTarget) {

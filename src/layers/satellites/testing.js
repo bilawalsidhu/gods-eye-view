@@ -8,6 +8,15 @@ export function createTesting({
   source,
   getRenderer,
 }) {
+  // The layer's display on a test engine (none without one).
+  function useEngine(engine) {
+    layerState._renderer?.destroy();
+    layerState._engine = engine ?? null;
+    layerState._renderer = engine
+      ? (services.renderer.create({ engine }) ?? null)
+      : null;
+  }
+
   /**
    * Seed a single tracked satellite so tests can invoke the exact production
    * pre-render callback without constructing a WebGL viewer.
@@ -17,7 +26,8 @@ export function createTesting({
    * @param {object} state.satrec
    * @param {object} state.entity
    * @param {object} state.point
-   * @param {object} state.viewer
+   * @param {object} [state.engine] The test engine the display draws on (its
+   *   frames number the per-frame sample).
    * @param {() => (number|Date)} state.now
    */
 
@@ -27,15 +37,13 @@ export function createTesting({
     satrec,
     entity,
     point,
-    viewer,
+    engine = null,
     now,
     // Extra catalog/point rows so a test can exercise a docked cluster (and a
     // control satellite that must NOT be treated as part of it).
     neighbours = [],
   }) {
-    layerState._renderer = null;
-    layerState._engine = null;
-    layerState._viewer = viewer;
+    useEngine(engine);
     layerState._catalog = new Map([
       [noradId, { name, satrec, group: 'stations' }],
     ]);
@@ -106,9 +114,6 @@ export function createTesting({
     catalog = 'core',
     showPoints = true,
   } = {}) {
-    layerState._viewer = {
-      scene: { primitives: { add: (p) => p, remove() {} } },
-    };
     // Neutralize the shared world-overlay host: these tests exercise catalog and
     // row-control logic, not the ISS callout.
     layerState._overlayHost = {
@@ -144,7 +149,6 @@ export function createTesting({
     layerState._rowControlsListener = null;
     layerState._overlayHost = layerState.DEFAULT_OVERLAY_HOST;
     layerState._orbitPaths = new Map();
-    layerState._viewer = null;
     layerState._pointCollection = null;
     layerState._catalog = new Map();
     layerState._points = new Map();
@@ -167,18 +171,19 @@ export function createTesting({
     return layerState._catalog.get(Number(noradId))?.group;
   }
 
-  /** Seed ISS/tracking state while retaining the production track and host paths. */
+  /**
+   * Seed ISS/tracking state while retaining the production track and host
+   * paths; `engine` is the test engine the display draws and follows on.
+   */
 
   function _setSatelliteLabelLifecycleStateForTest({
-    viewer,
+    engine = null,
     satrec,
     point,
     overlayHost,
     preservePending = false,
   }) {
-    layerState._renderer = null;
-    layerState._engine = null;
-    layerState._viewer = viewer;
+    useEngine(engine);
     layerState._catalog = new Map([
       [ISS_NORAD, { name: 'ISS (ZARYA)', satrec, group: 'stations' }],
     ]);

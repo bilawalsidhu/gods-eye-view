@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
-import { createVesselsCesiumRenderer } from './render/cesium.js';
+import { vesselViewerRenderer } from '../../testSupport/vesselViewerRenderer.mjs';
 
 const noop = () => {};
 function services() {
@@ -10,9 +10,6 @@ function services() {
     context: {
       clearSelectedEntityContextForLayer: noop,
       registerEntityContext: () => null,
-    },
-    trails: {
-      createTrail: () => ({ setPositions: noop, clear: noop, destroy: noop }),
     },
     labels: {},
     picking: { unregisterPickOwner: noop },
@@ -31,7 +28,7 @@ function services() {
     },
     worldFocus: {},
     renderer: {
-      create: (options) => createVesselsCesiumRenderer(null, options),
+      create: ({ viewer }) => vesselViewerRenderer({ viewer }),
     },
     render: {
       holdContinuousRender: noop,
@@ -45,6 +42,7 @@ function setup(source, options = {}) {
   const primitives = new Set();
   layer.testing._setVesselStateForTest({
     viewer: {},
+    renderer: vesselViewerRenderer,
     billboardCollection: {
       add(options) {
         const primitive = { ...options };

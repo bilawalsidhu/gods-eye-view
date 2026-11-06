@@ -83,13 +83,12 @@ test('a recovered city clears its own failure', () => {
 // drive the real proximity check, status poll and lifecycle against a fake
 // GBFS source, so the failure state they read is the state the layer builds.
 
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { CITY_BY_ID } from './registry.js';
 import { createIngestion } from './ingestion.js';
 import { createModel } from './model.js';
-import { createViewport } from './render/cesium/viewport.js';
-import { createRendering } from './render/cesium/rendering.js';
-import { createLifecycle } from './render/cesium/lifecycle.js';
+import { createBikeshareDisplay } from './render/display.js';
 
 const TORONTO = 'toronto-bike-share';
 const BUFFALO = 'buffalo-reddy';
@@ -100,12 +99,6 @@ const TORONTO_ONLY = { lat: 43.7, lon: -79.6 };
 // Within range of Buffalo only.
 const BUFFALO_ONLY = { lat: 42.5, lon: -78.0 };
 const LOW_M = 10_000;
-
-// disable() detaches a keydown listener; node has no document.
-globalThis.document ??= {
-  addEventListener() {},
-  removeEventListener() {},
-};
 
 /** A GBFS source whose per-city answers each test can change. */
 function makeSource() {
@@ -175,7 +168,6 @@ function makeLiveLayer() {
       setOverlaySourceVisible() {},
       clearOverlaySource() {},
     },
-    sprites: { registerSpriteCollection() {}, restoreSpriteOrder() {} },
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
   };
   const state = createState({ services });
@@ -183,49 +175,36 @@ function makeLiveLayer() {
   const context = { state, services, parts, source };
   parts.ingestion = createIngestion(context);
   parts.model = createModel(context);
-  parts.viewport = createViewport(context);
-  parts.rendering = createRendering(context);
-  // Selection owns a DOM click handler; nothing here selects a station.
-  parts.selection = {
-    refreshSelectedCard() {},
-    _installClickHandler() {},
-    _clearSelection() {},
-    _onKeyDown() {},
-  };
+  // The display's parts on a fake globe the test moves; nothing here
+  // clicks a station.
+  const engine = createFakeEngine();
+  // The view centre is the point under the camera.
+  engine.fake.script('viewRectangle', undefined);
+  const display = createBikeshareDisplay(engine, context);
+  Object.assign(parts, display);
   parts.queries = { collectDetectableStations: () => [] };
-  parts.lifecycle = createLifecycle(context);
   const { methods: controls } = createControls(context);
 
-  const camera = { ...BETWEEN, height: LOW_M };
-  const viewer = {
-    camera: {
-      get positionCartographic() {
-        return Cesium.Cartographic.fromDegrees(
-          camera.lon,
-          camera.lat,
-          camera.height,
-        );
-      },
-      computeViewRectangle: () => undefined,
-      changed: { addEventListener() {}, removeEventListener() {} },
-    },
-    scene: { globe: {}, primitives: { add() {}, remove() {} } },
-  };
-  parts.lifecycle.methods.init(viewer);
+  const place = (where, height) =>
+    engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(where.lon, where.lat, height),
+    });
+  place(BETWEEN, LOW_M);
+  parts.lifecycle.methods.init();
 
   return {
     state,
     source,
     stats: () => controls.getStats(),
-    moveTo(place, height = LOW_M) {
-      Object.assign(camera, place, { height });
+    moveTo(where, height = LOW_M) {
+      place(where, height);
       return parts.viewport.runProximityCheck();
     },
     async enable() {
-      parts.lifecycle.methods.enable(viewer);
+      parts.lifecycle.methods.enable();
       await settle();
     },
-    disable: () => parts.lifecycle.methods.disable(viewer),
+    disable: () => parts.lifecycle.methods.disable(),
     poll: () => parts.ingestion.methods.update(),
   };
 }

@@ -225,20 +225,18 @@ export function createPolicyHelpers({
   }
 
   function previewMissionFromRoster(launch) {
-    if (!layerState._viewer || !launch || layerState._selectedLaunchId) return;
-    const range = parts.panel.missionHoverPreviewRange(
-      layerState._viewer.camera.positionCartographic?.height,
-    );
+    const engine = layerState._engine;
+    if (!engine || !launch || layerState._selectedLaunchId) return;
+    const range = parts.panel.missionHoverPreviewRange(engine.camera.height());
     const position = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     layerState._cameraReleased = false;
-    layerState._viewer.camera.flyToBoundingSphere(
-      geo.boundingSphere.create(position, 0),
-      {
-        offset: getRenderer().range(0, -geo.math.PI_OVER_TWO, range),
-        duration: 0.8,
-        easingFunction: getRenderer().easing,
-      },
-    );
+    engine.camera.flyToSphere(geo.boundingSphere.create(position, 0), {
+      heading: 0,
+      pitch: -geo.math.PI_OVER_TWO,
+      range,
+      duration: 0.8,
+      easing: 'cubicInOut',
+    });
   }
   return {
     satelliteParamsForSpaceMissions,

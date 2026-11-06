@@ -22,7 +22,7 @@ export function createOverlays({
   /**
    * Resolve whether a surface mission anchor is safely on the camera-facing
    * side of Earth. The small positive limb margin prevents labels anchored just
-   * beyond the horizon from leaking through the hidden Cesium globe.
+   * beyond the horizon from leaking through a hidden globe.
    * @param {Cesium.Cartesian3} cameraPosition Camera world position.
    * @param {Cesium.Cartesian3} markerPosition Mission anchor world position.
    * @param {number} [limbMargin] Additional normalized horizon clearance.
@@ -364,7 +364,7 @@ export function createOverlays({
   }
 
   function syncMissionOverlayEntries() {
-    if (!layerState._enabled || !layerState._dataSource?.show) {
+    if (!layerState._enabled || !getRenderer()?.visible()) {
       clearMissionOverlaySources();
       return;
     }
@@ -454,7 +454,7 @@ export function createOverlays({
 
   function updateReplayVehicleOverlay(occluder) {
     if (
-      !layerState._viewer ||
+      !layerState._engine ||
       !layerState._replayVehicleOverlay ||
       !layerState._selectedLaunchId
     ) {
@@ -501,12 +501,12 @@ export function createOverlays({
       hideReplayVehicleOverlay();
       return null;
     }
-    const canvas = layerState._viewer.scene.canvas;
+    const canvas = layerState._engine.host.size();
     if (
       windowPosition.x < -80 ||
       windowPosition.y < -100 ||
-      windowPosition.x > canvas.clientWidth + 80 ||
-      windowPosition.y > canvas.clientHeight + 100
+      windowPosition.x > canvas.width + 80 ||
+      windowPosition.y > canvas.height + 100
     ) {
       hideReplayVehicleOverlay();
       return null;
@@ -526,7 +526,7 @@ export function createOverlays({
     track.lastOverlayWindowPosition = renderedWindowPosition;
     track.lastOverlayMode = mode;
     const sonar = isCyberSonarActive()
-      ? createCyberSonarSampler(canvas.clientWidth, canvas.clientHeight)
+      ? createCyberSonarSampler(canvas.width, canvas.height)
       : null;
     const factor =
       sonar?.at(renderedWindowPosition.x, renderedWindowPosition.y) ?? 1;

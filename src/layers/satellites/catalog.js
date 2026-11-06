@@ -62,7 +62,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
 
   async function _loadDenseCatalog({ signal = null } = {}) {
     if (layerState._waitForRenderer) await layerState._waitForRenderer;
-    if (!layerState._viewer || !layerState._pointCollection)
+    if (!layerState._pointCollection)
       return { status: 'source-unavailable', reason: 'layer-unavailable' };
     layerState._denseLoadController?.abort();
     const resourceController = new AbortController();

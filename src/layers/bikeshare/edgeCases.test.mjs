@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createBikeshareLayer } from './index.js';
-import { createBikeshareNavaraRenderer } from './render/navara.js';
+import { createBikeshareDisplay } from './render/display.js';
 import { CITY_BY_ID } from './registry.js';
 
 // Two systems that cover one view and both number a station "1".
@@ -68,8 +68,7 @@ function fixture() {
         clearOverlaySource: (id) => entries.delete(id),
       },
     },
-    rendererFactory: (context) =>
-      createBikeshareNavaraRenderer(engine, context),
+    rendererFactory: (context) => createBikeshareDisplay(engine, context),
   });
   layer.init(null, { engine });
   return {

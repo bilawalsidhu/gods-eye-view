@@ -72,7 +72,7 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
       state._selectedKey = selected;
       state._cityRuntime.clear();
       state._stationRenderMap.clear();
-      state._viewer = state._engine = null;
+      state._engine = null;
       renderer = null;
       initialized = false;
       for (const key of ['rendering', 'selection', 'viewport', 'lifecycle'])
@@ -103,7 +103,11 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
     {
       createBikeshareSelectedOverlayEntry,
       _setBikeshareSelectionStateForTest: (options) => {
-        renderer ??= rendererFactory({ ...context, viewer: options.viewer });
+        renderer ??= rendererFactory({
+          ...context,
+          viewer: null,
+          engine: options.engine,
+        });
         Object.assign(parts, renderer);
         parts.testing._setBikeshareSelectionStateForTest(options);
       },

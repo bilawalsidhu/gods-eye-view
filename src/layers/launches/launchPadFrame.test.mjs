@@ -9,14 +9,13 @@ test('selected pad frame uses neutral geometry and the physical orbit epoch', ()
     created = 0,
     epoch;
   const state = {
-    _viewer: {
+    _engine: {
       camera: {
-        positionWC: geo.cartesian3.fromDegrees(launch.lon, launch.lat, 500),
-        positionCartographic: { height: 500 },
+        livePosition: geo.cartesian3.fromDegrees(launch.lon, launch.lat, 500),
+        height: () => 500,
       },
     },
     _enabled: true,
-    _dataSource: { show: true },
     _selectedLaunchId: 'qa',
     _launches: [launch],
     _launchPadZoneRemover: null,
@@ -26,6 +25,7 @@ test('selected pad frame uses neutral geometry and the physical orbit epoch', ()
     _launchPadZoneLaunchId: null,
   };
   const renderer = {
+    visible: () => true,
     on: (event, fn) => {
       assert.equal(event, 'preRender');
       tick = fn;
@@ -33,9 +33,8 @@ test('selected pad frame uses neutral geometry and the physical orbit epoch', ()
     },
     createPad: () => {
       created++;
-      return { show: true };
+      return { show: true, destroy() {} };
     },
-    removePrimitive: () => {},
   };
   const parts = {
     orbitRendering: {

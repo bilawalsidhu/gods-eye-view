@@ -161,14 +161,14 @@ export function createViewport({ state: layerState, services, parts, camera }) {
     if (!layerState._enabled || layerState._restoringViewport) return;
 
     const generation = ++layerState._proximityGeneration;
-    const altitude = getCameraAltitude(layerState._viewer);
+    const altitude = getCameraAltitude();
     // Altitude gate: disable all cities when camera is too high
     if (!shouldActivateAtAltitude(altitude)) {
       deactivateAllCities();
       return;
     }
 
-    const center = getCameraCenterLatLon(layerState._viewer);
+    const center = getCameraCenterLatLon();
     if (!center) return;
 
     // Diff active set against newly computed in-range set

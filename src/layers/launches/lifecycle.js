@@ -1,34 +1,34 @@
 import * as geo from '../../geo/index.js';
 
 /** The camera pose to give back, in world coordinates. */
-function captureCameraView(viewer) {
-  const camera = viewer?.camera;
-  if (!camera?.positionWC) return null;
+function captureCameraView(engine) {
+  const pose = engine?.camera?.pose();
+  if (!pose?.position) return null;
   return {
-    destination: geo.cartesian3.clone(camera.positionWC),
+    destination: geo.cartesian3.clone(pose.position),
     orientation: {
-      heading: camera.heading,
-      pitch: camera.pitch,
-      roll: camera.roll,
+      heading: pose.heading,
+      pitch: pose.pitch,
+      roll: pose.roll,
     },
   };
 }
 
-function sameCameraView(camera, view) {
+function sameCameraView(pose, view) {
   return (
-    geo.cartesian3.equalsEpsilon(camera.positionWC, view.destination, 0, 1) &&
+    geo.cartesian3.equalsEpsilon(pose.position, view.destination, 0, 1) &&
     ['heading', 'pitch', 'roll'].every((key) =>
-      geo.math.equalsEpsilon(camera[key], view.orientation[key], 0, 1e-6),
+      geo.math.equalsEpsilon(pose[key], view.orientation[key], 0, 1e-6),
     )
   );
 }
 
 /** Restore the pre-entry view if the entry flight still holds the camera. */
-function restoreCameraView(viewer, view, landedView) {
-  const camera = viewer?.camera;
+function restoreCameraView(engine, view, landedView) {
+  const camera = engine?.camera;
   if (!camera) return;
-  if (!landedView) camera.cancelFlight?.();
-  else if (!sameCameraView(camera, landedView)) return;
+  if (!landedView) camera.cancelFlight();
+  else if (!sameCameraView(camera.pose(), landedView)) return;
   camera.setView(view);
 }
 export function createLifecycle({
@@ -40,65 +40,60 @@ export function createLifecycle({
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
 
+  /** The display on `engine`, with its input and frame listeners. */
+  function attachDisplay(engine) {
+    layerState._engine = engine;
+    layerState._renderer = services.renderer.create({ engine });
+    parts.panel.createMissionPanel();
+    parts.overlays.createReplayVehicleOverlay();
+    parts.overlays.clearMissionOverlaySources();
+    const enabled = () =>
+      layerState._enabled && Boolean(layerState._renderer?.visible());
+    layerState._clickHandler = getRenderer().onClick(
+      (id) => {
+        const launchId = parts.selection.entityLaunchId(id);
+        if (!launchId) return;
+        parts.selection.setSelectedMission(launchId);
+        parts.selection.focusMission(
+          layerState._launches.find((l) => l.id === launchId),
+        );
+      },
+      { enabled },
+    );
+    layerState._moveHandler = getRenderer().onHover({ enabled });
+    // Apply horizon visibility before the engine traverses and picks the
+    // scene. A postRender write is one frame late and can remain visibly
+    // stale when request-on-demand rendering stops after a globe camera move.
+    layerState._declutterHandler = getRenderer().on(
+      'preRender',
+      parts.rendering.updateMissionFrame,
+    );
+    parts.launchPad.initLaunchPadZonePrimitive();
+    if (layerState._enabled) {
+      holdContinuousRender('rocket-launches');
+      getRenderer().setVisible(true);
+      layerState._orbitMatches = 0;
+      for (const launch of layerState._launches)
+        parts.rendering.addLaunchElements(launch, layerState._renderedTleText);
+      parts.selection.showSelectedMission();
+    }
+  }
+
   const methods = {
-    init(viewer, options) {
+    // The layer draws through the engine (options.engine) only.
+    init(_scene, options) {
       layerState._count = 0;
       layerState._lastUpdate = null;
       layerState._stale = false;
       layerState._lastError = null;
       layerState._orbitMatches = 0;
-      this.attachRenderer(viewer, options);
+      this.attachRenderer(null, options);
     },
     attachRenderer(
-      viewer,
+      _scene,
       { engine = null, waitForCameraRestore = false } = {},
     ) {
-      layerState._engine = engine;
-      layerState._renderer = services.renderer.create({ viewer, engine });
-      layerState._viewer = layerState._renderer.view;
-      layerState._declutterOccluder = getRenderer().occluder();
-      parts.panel.createMissionPanel();
-      parts.overlays.createReplayVehicleOverlay();
-      layerState._dataSource = getRenderer().createDataSource();
-      parts.overlays.clearMissionOverlaySources();
-      const enabled = () => layerState._enabled && layerState._dataSource?.show;
-      layerState._clickHandler = getRenderer().listenClick(
-        layerState._dataSource,
-        (entity) => {
-          const launchId = parts.selection.entityLaunchId(entity);
-          if (!launchId) return;
-          parts.selection.setSelectedMission(launchId);
-          parts.selection.focusMission(
-            layerState._launches.find((l) => l.id === launchId),
-          );
-        },
-        { enabled },
-      );
-      layerState._moveHandler = getRenderer().listenMove(
-        layerState._dataSource,
-        (entity) => {
-          layerState._viewer.scene.canvas.style.cursor = entity
-            ? 'pointer'
-            : '';
-        },
-        { enabled },
-      );
-      // Apply horizon visibility before Cesium traverses and picks the scene.
-      // A postRender write is one frame late and can remain visibly stale when
-      // request-on-demand rendering stops after a globe camera move.
-      layerState._declutterHandler = getRenderer().on(
-        'preRender',
-        parts.rendering.updateMissionFrame,
-      );
-      parts.launchPad.initLaunchPadZonePrimitive();
-      if (layerState._enabled) {
-        holdContinuousRender('rocket-launches');
-        layerState._dataSource.show = true;
-        layerState._orbitMatches = 0;
-        for (const launch of layerState._launches)
-          parts.rendering.addLaunchEntity(launch, layerState._renderedTleText);
-        parts.selection.showSelectedMission();
-      }
+      if (engine) attachDisplay(engine);
       layerState._restoringViewport = true;
       if (!waitForCameraRestore) this.resumeViewport();
     },
@@ -148,13 +143,9 @@ export function createLifecycle({
       layerState._missionOverlayRecords.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
-      layerState._renderer.removeDataSource(layerState._dataSource);
+      parts.rendering.removeMissionElements();
       layerState._renderer.destroy();
-      layerState._dataSource =
-        layerState._renderer =
-        layerState._engine =
-        layerState._viewer =
-          null;
+      layerState._renderer = layerState._engine = null;
       if (layerState._enabled) releaseContinuousRender('rocket-launches');
     },
 
@@ -182,7 +173,7 @@ export function createLifecycle({
 
     async _enableBody() {
       layerState._updateDirty = false;
-      if (layerState._dataSource) layerState._dataSource.show = true;
+      getRenderer()?.setVisible(true);
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
       // Snapshot the existing follow before the mission flight releases it.
       await parts.ingestion.captureSatelliteDependency();
@@ -192,14 +183,14 @@ export function createLifecycle({
         parts.panel.renderMissionRoster();
         // Kept until the mission index loads, so an entry that never does
         // gives the view back. A newer flight takes the camera and drops it.
-        layerState._entryCameraView = captureCameraView(layerState._viewer);
+        layerState._entryCameraView = captureCameraView(layerState._engine);
         layerState._entryLandedView = null;
       }
       const token = layerState._lifecycleToken;
-      const flying = parts.selection.focusFullGlobe(layerState._viewer, {
+      const flying = parts.selection.focusFullGlobe(layerState._engine, {
         complete: () => {
           if (token === layerState._lifecycleToken)
-            layerState._entryLandedView = captureCameraView(layerState._viewer);
+            layerState._entryLandedView = captureCameraView(layerState._engine);
         },
         cancel: () => {
           if (token === layerState._lifecycleToken)
@@ -223,7 +214,7 @@ export function createLifecycle({
       layerState._entryCameraView = null;
       if (entryView)
         restoreCameraView(
-          layerState._viewer,
+          layerState._engine,
           entryView,
           layerState._entryLandedView,
         );
@@ -235,10 +226,10 @@ export function createLifecycle({
       parts.replay.stopMissionReplay();
       layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
-      if (layerState._dataSource) layerState._dataSource.show = false;
+      getRenderer()?.setVisible(false);
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
-      if (layerState._viewer?.scene?.canvas)
-        layerState._viewer.scene.canvas.style.cursor = '';
+      const cursor = layerState._engine?.host?.canvas?.style;
+      if (cursor) cursor.cursor = '';
       parts.launchPad.hideLaunchPadZone();
       parts.overlays.hideReplayVehicleOverlay();
       layerState._selectedLaunchId = null;
@@ -249,7 +240,7 @@ export function createLifecycle({
       parts.panel.renderMissionPanel();
     },
 
-    async destroy(viewer) {
+    async destroy() {
       layerState._resumeRenderer?.();
       layerState._waitForRenderer = layerState._resumeRenderer = null;
       layerState._sourceController.abort();
@@ -279,9 +270,7 @@ export function createLifecycle({
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
       parts.panel.clearMissionPanel();
-      if (layerState._dataSource)
-        getRenderer().removeDataSource(layerState._dataSource);
-      layerState._dataSource = null;
+      parts.rendering.removeMissionElements();
       layerState._count = 0;
       layerState._orbitMatches = 0;
       layerState._lastUpdate = null;
@@ -297,7 +286,6 @@ export function createLifecycle({
       layerState._renderer?.destroy();
       layerState._renderer = null;
       layerState._engine = null;
-      layerState._viewer = null;
     },
   };
 

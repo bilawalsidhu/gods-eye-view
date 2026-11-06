@@ -14,8 +14,7 @@ export function createLaunchPad({
   }
 
   function removeLaunchPadZonePrimitive() {
-    if (layerState._launchPadZonePrimitive)
-      getRenderer().removePrimitive(layerState._launchPadZonePrimitive);
+    layerState._launchPadZonePrimitive?.destroy();
     layerState._launchPadZonePrimitive = null;
     layerState._launchPadZoneLaunchId = null;
   }
@@ -27,9 +26,9 @@ export function createLaunchPad({
   }
 
   function initLaunchPadZonePrimitive() {
-    if (!layerState._viewer || layerState._launchPadZoneRemover) return;
+    if (!getRenderer() || layerState._launchPadZoneRemover) return;
     layerState._launchPadZoneRemover = getRenderer().on('preRender', () => {
-      if (!layerState._enabled || !layerState._dataSource?.show) {
+      if (!layerState._enabled || !getRenderer()?.visible()) {
         hideLaunchPadZone();
         return;
       }
@@ -44,19 +43,19 @@ export function createLaunchPad({
       const launch = layerState._launches.find(
         (item) => item.id === layerState._selectedLaunchId,
       );
-      const camera = layerState._viewer?.camera;
+      const camera = layerState._engine?.camera;
       if (!launch || !camera) {
         hideLaunchPadZone();
         return;
       }
       const launchPosition = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
       const visible = parts.policyHelpers.launchPadZoneVisible({
-        layerActive: Boolean(layerState._dataSource?.show),
+        layerActive: Boolean(getRenderer()?.visible()),
         selectedLaunchId: layerState._selectedLaunchId,
         launchId: launch.id,
-        cameraHeightM: camera.positionCartographic?.height,
+        cameraHeightM: camera.height(),
         cameraDistanceM: geo.cartesian3.distance(
-          camera.positionWC,
+          camera.livePosition,
           launchPosition,
         ),
       });

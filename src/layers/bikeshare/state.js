@@ -15,13 +15,9 @@ export function createState({ services }) {
   // Module-level mutable state
   // ---------------------------------------------------------------------------
 
-  /** @type {Cesium.Viewer|null} Active Cesium viewer instance. */
+  /** The globe engine the stations draw on, or null. */
 
-  layerState._viewer = null;
-
-  /** @type {Cesium.PointPrimitiveCollection|null} Primitive collection for station dots. */
-
-  layerState._pointCollection = null;
+  layerState._engine = null;
 
   /** Whether the bikeshare layer is currently enabled. */
 
@@ -71,17 +67,9 @@ export function createState({ services }) {
 
   layerState._stationRenderMap = new Map();
 
-  /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for station selection. */
-
-  layerState._clickHandler = null;
-
   /** @type {string|null} Key of the currently selected station, or null. */
 
   layerState._selectedKey = null;
-
-  /** @type {Cesium.Entity|null} Entity used to display the selected-station point highlight. */
-
-  layerState._selectedEntity = null;
 
   /** Total number of currently rendered station points. */
 

@@ -185,20 +185,20 @@ export function createIngestion({
       if (
         !layerState._enabled ||
         token !== layerState._lifecycleToken ||
-        !layerState._dataSource
+        !layerState._renderer
       )
         return;
       const activeTleText = layerState._activeTleText;
       if (layerState._replayCameraLaunchId) parts.replay.stopMissionReplay();
       layerState._launches = launches;
       parts.orbitRendering.removeMissionOrbitPrimitives();
-      layerState._dataSource.entities.removeAll();
+      parts.rendering.removeMissionElements();
       layerState._missionOverlayRecords.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
       layerState._orbitMatches = 0;
       launches.forEach((launch) =>
-        parts.rendering.addLaunchEntity(launch, activeTleText),
+        parts.rendering.addLaunchElements(launch, activeTleText),
       );
       layerState._renderedTleText = activeTleText;
       if (layerState._renderedTleText === layerState._activeTleText)

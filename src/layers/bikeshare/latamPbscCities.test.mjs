@@ -3,7 +3,7 @@ import test from 'node:test';
 import { CITY_BY_ID } from './registry.js';
 import { createIngestion } from './ingestion.js';
 import { createModel } from './model.js';
-import { createViewport } from './render/cesium/viewport.js';
+import { createViewport } from './viewport.js';
 import { isAllowedGbfsHost, isAllowedGbfsPath } from '../../data/gbfsSource.js';
 
 // Each system's PBSC host, the station farthest from its registered centre,
@@ -56,6 +56,8 @@ const { computeInRangeCities } = createViewport({
   services: { render: { governorRequestRender() {} } },
   parts,
   source: null,
+  // The range check reads no camera.
+  camera: {},
 });
 
 test('Bogotá and Santiago are registered and readable through the proxy', () => {

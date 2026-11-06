@@ -14,13 +14,15 @@ export function createLifecycle({
   const methods = {
     // Catalog data refresh; propagation remains preRender-owned.
 
-    async init(viewer, { engine = null } = {}) {
+    // The display draws on `engine` (none without one: nothing is drawn).
+    async init(_viewer, { engine = null } = {}) {
       parts.catalog._abortActiveUpdates();
       clearFocusTarget('satellites');
       layerState._engine = engine;
       layerState._renderer?.destroy();
-      layerState._renderer = services.renderer.create({ viewer, engine });
-      layerState._viewer = layerState._renderer.view;
+      layerState._renderer = engine
+        ? (services.renderer.create({ engine }) ?? null)
+        : null;
       layerState._catalog = new Map();
       layerState._points = new Map();
       layerState._detectionObjects = new Map();
@@ -50,16 +52,19 @@ export function createLifecycle({
       layerState._denseError = null;
       layerState._catalogRevision++;
 
-      // Point primitives for satellite dots
-      layerState._pointCollection = getRenderer().createPoints();
+      const renderer = getRenderer();
+      if (renderer) {
+        // Point primitives for satellite dots
+        layerState._pointCollection = renderer.createPoints();
 
-      parts.interaction._installClickHandler(viewer);
+        parts.interaction._installClickHandler();
 
-      // Pre-render listener for real-time position updates
-      // (fleet propagation + tracked per-frame dot + orbit ring GMST rotation)
-      layerState._preRenderListener = getRenderer().onFrame(
-        parts.rendering._preRenderTick,
-      );
+        // Pre-render listener for real-time position updates
+        // (fleet propagation + tracked per-frame dot + orbit ring GMST rotation)
+        layerState._preRenderListener = renderer.onFrame(
+          parts.rendering._preRenderTick,
+        );
+      }
 
       console.log('[Data:Satellites] Initialized');
     },
@@ -123,7 +128,6 @@ export function createLifecycle({
       renderer.removePoints(layerState._pointCollection);
       renderer.destroy();
       layerState._engine =
-        layerState._viewer =
         layerState._renderer =
         layerState._pointCollection =
           null;
@@ -132,13 +136,17 @@ export function createLifecycle({
     },
 
     attachRenderer(
-      viewer,
+      _viewer,
       { engine = null, waitForCameraRestore = false } = {},
     ) {
       layerState._engine = engine;
-      const renderer = services.renderer.create({ viewer, engine });
+      const renderer = engine
+        ? (services.renderer.create({ engine }) ?? null)
+        : null;
       layerState._renderer = renderer;
-      layerState._viewer = renderer.view;
+      if (!renderer) return;
+      // The new engine counts its own frames.
+      layerState._trackedFrameNumber = -1;
       layerState._pointCollection = renderer.createPoints();
       for (const [id, spec] of layerState._points)
         layerState._points.set(id, layerState._pointCollection.add(spec));
@@ -171,13 +179,13 @@ export function createLifecycle({
             origin: layerState._handoffOrigin,
             resuming: true,
           });
-        this.enable(layerState._viewer);
+        this.enable();
       }
       layerState._resumeRenderer?.();
       layerState._waitForRenderer = layerState._resumeRenderer = null;
     },
 
-    enable(viewer) {
+    enable() {
       layerState._enabled = true;
       holdContinuousRender('satellites'); // per-frame animator (perf wave 2)
       if (layerState._pointCollection)
@@ -194,14 +202,14 @@ export function createLifecycle({
         );
       parts.labels._syncIssOverlay();
       // Re-attach input handlers and preRender propagation
-      parts.interaction._installClickHandler(viewer);
+      if (layerState._renderer) parts.interaction._installClickHandler();
       // Pick-ownership (H2): satellite dot ids are numeric NORAD catalog numbers;
       // the registry hands predicates String()-coerced ids, so match via Number().
       registerPickOwner('satellites', (pickedId) => {
         const norad = Number(pickedId);
         return Number.isFinite(norad) && layerState._points.has(norad);
       });
-      if (!layerState._preRenderListener && layerState._viewer) {
+      if (!layerState._preRenderListener && layerState._renderer) {
         layerState._preRenderListener = getRenderer().onFrame(
           parts.rendering._preRenderTick,
         );
@@ -209,7 +217,7 @@ export function createLifecycle({
       parts.tracking._applyPendingTrackingRestore();
     },
 
-    disable(viewer) {
+    disable() {
       parts.catalog._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       layerState._enabled = false;
@@ -236,7 +244,7 @@ export function createLifecycle({
       }
     },
 
-    destroy(viewer) {
+    destroy() {
       layerState._resumeRenderer?.();
       layerState._waitForRenderer = layerState._resumeRenderer = null;
       parts.catalog._abortActiveUpdates();
@@ -266,7 +274,7 @@ export function createLifecycle({
       }
       // Orbit ring primitives are removed (and destroyed) here
       for (const path of layerState._orbitPaths.values()) {
-        if (path.primitive) getRenderer().removeOrbit(path.primitive);
+        if (path.primitive) getRenderer()?.removeOrbit(path.primitive);
       }
       layerState._points.clear();
       layerState._detectionObjects.clear();
@@ -295,7 +303,6 @@ export function createLifecycle({
       layerState._renderer?.destroy();
       layerState._renderer = null;
       layerState._engine = null;
-      layerState._viewer = null;
     },
   };
 

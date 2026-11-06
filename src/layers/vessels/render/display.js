@@ -1,23 +1,19 @@
-// The vessels layer's renderer on the Navara engine,
-// with render/cesium.js's interface (./contract.js), built only on the
-// engine contract: the chevrons are one engine.movers sprite bank (always on
-// top, as Cesium's depth-test-free billboards) whose atlas holds every
-// chevron the layer draws (../icons.js, rasterised at 32 px as Cesium's
-// billboard texture); the trail is engine.lines; the camera reads go
-// through the shared Navara layer view (engine.camera.pose(), the
-// projector). No three, no Cesium. Registered for 'navara' by the Navara
-// mode after its import() (src/app/navaraMode.js).
+// The vessels layer's display (contract: ./contract.js), the same on every
+// globe engine, through the engine contract only: the ship chevrons are one
+// engine.movers sprite bank drawn without a depth test (the ellipsoid
+// horizon hides the far side), screen-aligned and centred, whose atlas holds
+// every chevron the layer draws (../icons.js, rasterised at 32 px); the
+// selected vessel's trail is engine.lines; the camera reads go through the
+// shared engine layer view (engine.camera.pose(), the projector) and "another
+// layer took the camera" is engine.camera.followChanged.
 //
-// Handles keep Cesium's Billboard field vocabulary as setters that write
-// the bank; the writes of a frame are committed once, at the end of the
-// frame listener that made them (or in a microtask for writes outside a
-// frame).
+// Handles keep the Billboard field vocabulary the logic writes (contract.js)
+// as setters that write the bank; the writes of a frame are committed once,
+// at the end of the frame listener that made them (or in a microtask for
+// writes outside a frame).
 
 import * as geo from '../../../geo/index.js';
-import {
-  createMoverBank,
-  StoredColor,
-} from '../../shared/render/navaraMoverBank.js';
+import { createMoverBank, StoredColor } from '../../shared/render/moverBank.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import {
@@ -26,13 +22,25 @@ import {
   packImageAtlas,
 } from '../../shared/render/imageAtlas.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
+import { registerPickOwner } from '../../../data/pickRegistry.js';
 import { allVesselChevronIcons, VESSEL_ICON_PX } from '../icons.js';
 
 const LAYER_ID = 'ais-live-vessels';
+// Where the trail passes the depth test, and where the scene hides it: dimmed,
+// never gone.
 const TRAIL_ALPHA = 0.85;
 const TRAIL_OCCLUDED_ALPHA = 0.4;
 const MIN_SEGMENT_DISTANCE_SQ = 0.01;
 const ATLAS_PAD = 2;
+/** The id namespace of track-history lines (vessels and aircraft). */
+export const TRAIL_PICK_PREFIX = 'gev-trail:';
+
+// A trail hugs its contact, so an unclaimed trail pick would read as empty
+// space in every layer's click rule and release the very contact selected.
+// Claiming the namespace makes a trail pick another layer's for everyone.
+registerPickOwner('trails', (pickedId) =>
+  String(pickedId).startsWith(TRAIL_PICK_PREFIX),
+);
 
 const iconEntry = (key, image) => ({
   key,
@@ -71,10 +79,12 @@ async function drawVesselAtlas() {
  *   Test seam: the chevron atlas.
  * @returns {import('./contract.js').VesselRenderer}
  */
-export function createVesselsNavaraRenderer(
+export function createVesselsDisplay(
   engine,
   { drawAtlas = drawVesselAtlas } = {},
 ) {
+  if (!engine?.movers || !engine?.lines)
+    throw new TypeError('The vessels display needs a globe engine');
   let destroyed = false;
 
   // --- commits: once per frame listener, or in a microtask -----------------
@@ -162,7 +172,9 @@ export function createVesselsNavaraRenderer(
         kind: 'sprite',
         capacity,
         order: SPRITE_LAYER_ORDER.indexOf('ais'),
-        // Cesium's disableDepthTestDistance: Infinity.
+        // Contacts are always visible: no depth test (the ellipsoid horizon
+        // hides the far side). The tile sea mesh is not the geoid exactly, so
+        // a depth-tested chevron at the geoid would clip behind mesh noise.
         depthTest: 'always',
         pickable: true,
         sprite: { atlas, sizePx: VESSEL_ICON_PX },
@@ -179,7 +191,10 @@ export function createVesselsNavaraRenderer(
       if (destroyed) return;
       atlas = drawn;
       if (attached) ensureBank();
-    });
+    })
+    .catch((error) =>
+      console.warn(`[${LAYER_ID}] chevron atlas failed`, error),
+    );
 
   const update = (handle, fields) => {
     if (handle.gevBank) handle.gevBank.update(handle, fields);
@@ -202,11 +217,10 @@ export function createVesselsNavaraRenderer(
       storedScale: spec.scale ?? 1,
       storedImage: spec.image,
       storedColor: new StoredColor(),
-      // Cesium reads these before the image loads as undefined (the logic
-      // falls back to the 32 px artwork).
-      width: undefined,
-      height: undefined,
-      // The bank draws without a depth test (Cesium's billboards: Infinity).
+      // The chevron artwork's size, before the scale.
+      width: VESSEL_ICON_PX,
+      height: VESSEL_ICON_PX,
+      // The bank draws without a depth test.
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
       get position() {
         return handle.storedPosition;
@@ -261,7 +275,6 @@ export function createVesselsNavaraRenderer(
   };
 
   const fleet = {
-    collection: null,
     attached: () => attached,
     attach({ show }) {
       if (attached || destroyed) return;
@@ -273,7 +286,6 @@ export function createVesselsNavaraRenderer(
     setVisible(show) {
       visible = show !== false;
       bank?.setVisible(visible && attached);
-      if (visible) view.requestRender();
     },
     add(spec) {
       const handle = newHandle(spec);
@@ -316,24 +328,35 @@ export function createVesselsNavaraRenderer(
   };
 
   // --- the trail (engine.lines) ----------------------------------------------
+  const lines = new Set();
   let lineSeq = 0;
   const trails = {
     create({ color, width = 2.5 }) {
       const [r, g, b] = rgbaFromCss(color).rgba();
-      const id = `gev-trail:${LAYER_ID}-${++lineSeq}`;
+      const id = `${TRAIL_PICK_PREFIX}${LAYER_ID}-${++lineSeq}`;
       let line = null;
-      const ensure = () =>
-        (line ??= engine.lines.createLine({
-          id,
-          widthPx: width,
-          color: [r, g, b, TRAIL_ALPHA],
-          depthFailAlpha: TRAIL_OCCLUDED_ALPHA / TRAIL_ALPHA,
-          arc: 'geodesic',
-          pickId: id,
-        }));
+      let shown = true;
+      let gone = false;
+      const ensure = () => {
+        if (!line) {
+          line = engine.lines.createLine({
+            id,
+            widthPx: width,
+            color: [r, g, b, TRAIL_ALPHA],
+            depthFailAlpha: TRAIL_OCCLUDED_ALPHA / TRAIL_ALPHA,
+            arc: 'geodesic',
+            pickId: id,
+          });
+          line.show(shown);
+          lines.add(line);
+        }
+        return line;
+      };
       return {
+        // Fewer than 2 distinct positions draw nothing; consecutive
+        // near-duplicates are dropped.
         setPositions(cartesians) {
-          if (destroyed) return;
+          if (gone || destroyed) return;
           const positions = [];
           for (const position of Array.isArray(cartesians) ? cartesians : []) {
             if (!position) continue;
@@ -348,11 +371,17 @@ export function createVesselsNavaraRenderer(
           }
           ensure().setPositions(positions.length >= 2 ? positions : []);
         },
+        /** Hides or shows the trail and keeps its positions. */
+        setVisible(next) {
+          shown = next !== false;
+          line?.show(shown);
+        },
         clear() {
           line?.setPositions([]);
         },
         destroy() {
-          line?.destroy();
+          gone = true;
+          if (line && lines.delete(line)) line.destroy();
           line = null;
         },
       };
@@ -360,7 +389,6 @@ export function createVesselsNavaraRenderer(
   };
 
   return {
-    kind: 'navara',
     engine,
     view,
     fleet,
@@ -374,6 +402,8 @@ export function createVesselsNavaraRenderer(
       flush();
       fleet.detach();
       destroyed = true;
+      for (const line of lines) line.destroy();
+      lines.clear();
       layerView.destroy();
     },
   };

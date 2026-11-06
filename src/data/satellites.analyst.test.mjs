@@ -104,7 +104,6 @@ test('satellite getAnalystRecords: core rows beat dense extras under the cap', (
     satrec,
     entity: {},
     point,
-    viewer: {},
     now: () => Date.now(),
     neighbours: [
       {

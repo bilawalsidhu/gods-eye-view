@@ -1,17 +1,14 @@
-import {
-  createOsmPlacesLayer,
-  createOsmPlacesCesiumRenderer,
-} from '../../layers/osmPlaces/index.js';
+import { createOsmPlacesLayer } from '../../layers/osmPlaces/index.js';
 import { overlayHost } from './overlayHost.js';
 import { rendererFor } from './renderers.js';
 
-/** Wire OSM Places labels to the application overlay host. */
+/**
+ * Wire OSM Places labels to the application overlay host; the points are the
+ * engine's renderer from the registry (render/display.js on every engine).
+ */
 export function createApplicationOsmPlaces() {
   return createOsmPlacesLayer({
     overlayHost,
-    createRenderer: ({ viewer, engine }) =>
-      engine
-        ? rendererFor('osm-places', engine, { viewer })
-        : createOsmPlacesCesiumRenderer({ viewer }),
+    createRenderer: ({ engine }) => rendererFor('osm-places', engine),
   });
 }

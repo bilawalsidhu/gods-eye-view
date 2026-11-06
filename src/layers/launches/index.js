@@ -22,14 +22,8 @@ export function createRocketLaunchesLayer({ services, source }) {
     throw new TypeError('A launches source is required');
   const state = createState({ services });
   const parts = {};
-  const getRenderer = () => {
-    if (!state._renderer || state._renderer.view !== state._viewer)
-      state._renderer = services.renderer.create({
-        viewer: state._viewer,
-        engine: state._engine,
-      });
-    return state._renderer;
-  };
+  // The display the layer draws through (render/display.js), while attached.
+  const getRenderer = () => state._renderer;
   const context = { state, services, parts, source, getRenderer };
   parts.policyHelpers = createPolicyHelpers(context);
   parts.ingestion = createIngestion(context);
@@ -54,11 +48,9 @@ export function createRocketLaunchesLayer({ services, source }) {
     parts.panel.commands,
     {
       qaDrawn() {
-        if (!state._viewer || !state._dataSource) return null;
-        const value = (v) =>
-          typeof v?.getValue === 'function'
-            ? v.getValue(state._declutterTime)
-            : v;
+        const display = state._renderer;
+        if (!display) return null;
+        const elements = [...state._missionElements.values()];
         const plain = (p) => (p ? { x: p.x, y: p.y, z: p.z } : null);
         const anchors = (positions) =>
           !positions?.length
@@ -80,37 +72,34 @@ export function createRocketLaunchesLayer({ services, source }) {
             latitude: l.lat,
             orbit: l.orbit?.name,
           })),
-          points: state._dataSource.entities.values
+          points: elements
             .filter((e) => e.point && e.position)
             .map((e) => {
-              const color = value(e.point.color);
+              const color = e.pointStyle.color;
               return {
                 id: e.id,
-                position: plain(value(e.position)),
-                show:
-                  state._dataSource.show &&
-                  e.show &&
-                  value(e.point.show) !== false,
-                size: value(e.point.pixelSize),
+                position: plain(parts.rendering.elementPosition(e)),
+                show: display.visible() && e.point.show,
+                size: e.pointStyle.pixelSize,
                 color: color
                   ? [color.red, color.green, color.blue, color.alpha]
                   : null,
               };
             }),
-          paths: state._dataSource.entities.values
-            .filter((e) => e.polyline)
+          paths: elements
+            .filter((e) => e.line)
             .map((e) => ({
               id: e.id,
-              show: state._dataSource.show && e.show,
-              anchors: anchors(value(e.polyline.positions)),
+              show: display.visible() && e.line.show,
+              anchors: anchors(e.positions),
             })),
           rings: [...state._missionOrbitPrimitives].map(([id, path]) => ({
             id,
-            show: path.primitive.show,
+            show: display.visible() && path.line.show,
             anchors: anchors(path.basePositions).map((p) =>
               plain(
                 geo.matrix4.multiplyByPoint(
-                  path.primitive.modelMatrix,
+                  path.modelMatrix,
                   p,
                   geo.cartesian3.create(),
                 ),
@@ -195,6 +184,7 @@ export function createRocketLaunchesLayer({ services, source }) {
         parts.testing._setRocketMissionOverlayHostForTest,
       _setSelectedRocketMissionForTest:
         parts.testing._setSelectedRocketMissionForTest,
+      _missionElementForTest: parts.testing._missionElementForTest,
     },
   );
 }

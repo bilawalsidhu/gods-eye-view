@@ -3572,8 +3572,8 @@ test('reject then selected history backfill cannot resurrect a 111 km displaceme
 test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in every enable/disable order', async (t) => {
   const { createLifecycle: trafficLifecycle } =
     await import('../traffic/lifecycle.js');
-  const { createLifecycle: bikeLifecycle } =
-    await import('../bikeshare/render/cesium/lifecycle.js');
+  const { createBikeshareDisplay } =
+    await import('../bikeshare/render/display.js');
   const app = harness(t);
   const noop = () => {};
   const traffic = trafficLifecycle({
@@ -3589,33 +3589,35 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
       ingestion: { cancelActiveFetch: noop },
     },
   }).methods;
-  const bike = bikeLifecycle({
-    state: {
-      _viewer: app.viewer,
-      _pointCollection: {},
-      _overlayHost: { setVisible: noop },
-      _cityRuntime: new Map(),
-      _failedCityIds: new Set(),
-    },
-    services: {
-      sprites: { restoreSpriteOrder: noop },
-      picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-    },
-    source: {},
-    parts: {
-      selection: {
-        _installClickHandler: noop,
-        _clearSelection: noop,
-        _onKeyDown: noop,
+  // The bikeshare display claims through its engine's camera: the viewer's.
+  const bike = createBikeshareDisplay(
+    { camera: app.viewer.camera },
+    {
+      state: {
+        _overlayHost: { setVisible: noop },
+        _cityRuntime: new Map(),
+        _failedCityIds: new Set(),
       },
-      viewport: {
-        onCameraChanged: noop,
-        runProximityCheck: noop,
-        deactivateAllCities: noop,
+      services: {
+        render: { governorRequestRender: noop },
+        picking: { registerPickOwner: noop, unregisterPickOwner: noop },
       },
-      ingestion: { abortAllInFlight: noop },
+      source: {},
+      parts: {
+        selection: {
+          _installClickHandler: noop,
+          _uninstallClickHandler: noop,
+          _clearSelection: noop,
+        },
+        viewport: {
+          onCameraChanged: noop,
+          runProximityCheck: noop,
+          deactivateAllCities: noop,
+        },
+        ingestion: { abortAllInFlight: noop },
+      },
     },
-  }).methods;
+  ).lifecycle.methods;
   app.viewer.camera.moveEnd = new Cesium.Event();
   const layers = { traffic, bikeshare: bike, transit: app.layer };
   const orders = [

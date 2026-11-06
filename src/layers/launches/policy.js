@@ -89,11 +89,11 @@ export const MISSION_ORBIT_DASHES_PER_GROUP = 100;
 export const LAUNCH_PAD_ZONE_RADIUS_M = 500;
 
 /**
- * The pad zone's look on both engines, as a fraction of the radius: a faint
- * fill, a bright rim between rimStart and rimEnd whose colour gains the
- * emission, and a soft edge from rimEnd to the radius. The zone is classified
- * onto the surface under the pad (terrain and 3D tiles), never drawn at a
- * height.
+ * The pad zone's look, as a fraction of the radius: a faint fill, a bright
+ * rim between rimStart and rimEnd whose colour gains the emission, and a soft
+ * edge from rimEnd to the radius. The display draws the rim (render/display.js
+ * padRimColor, PAD_RIM_RADIUS_M) as a ring on the terrain under the pad, over
+ * the scene; the engine contract has no surface fill for the rest.
  */
 export const LAUNCH_PAD_ZONE_STYLE = Object.freeze({
   color: '#22e6e6',

@@ -15,8 +15,9 @@ import { createLineRegistry } from '../lines.js';
 const TACTICAL_TYPE = 'GevLineTactical';
 let tacticalRegistered = false;
 
-// The launches' GevMissionOrbitTactical shader (layers/launches/render/
-// cesium.js), under the engine's own type.
+// The launches' selected-orbit pattern (layers/launches/policy.js
+// MISSION_ORBIT_PATTERN_GROUPS and MISSION_ORBIT_DASHES_PER_GROUP): one
+// round dot and the dashes of each group, under the engine's own type.
 function registerTactical() {
   if (tacticalRegistered) return;
   new Cesium.Material({

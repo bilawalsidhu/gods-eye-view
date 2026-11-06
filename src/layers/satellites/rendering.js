@@ -23,27 +23,18 @@ export function createRendering({
   /**
    * Show orbital path for a satellite.
    *
-   * RING FLICKER FIX: this is a one-instance Cesium.Primitive built
-   * synchronously ONCE (asynchronous: false), then re-aligned to current GMST
-   * each tick via its modelMatrix. The previous Entity-polyline approach
-   * rebuilt geometry ASYNCHRONOUSLY on every positions assignment, which made
-   * both the selected ring and the ISS ring blink once per second while the
-   * rebuild was in flight. A rigid Z-rotation needs no rebuild at all.
-   *
-   * Why not a CallbackProperty entity (dynamic mode)? Verified in Cesium
-   * 1.138 source: the dynamic polyline updater renders through a shared
-   * PolylineCollection and applies only the fill material —
-   * `depthFailMaterial` is silently dropped, losing the dimmed behind-Earth
-   * segment. The Primitive keeps it via depthFailAppearance + the per-instance
-   * depthFailColor attribute (same mechanism the entity STATIC batch uses):
-   * bright where above the horizon, dimmed where behind the globe.
+   * The ring is one engine line built once from the baked positions, then
+   * re-aligned to current GMST each tick through its model matrix: a rigid
+   * Z-rotation, so its geometry is never rebuilt (no blink while a rebuild
+   * is in flight). It is bright where the scene does not hide it and dimmed
+   * where it passes behind the globe (the line's depth-fail alpha).
    */
 
   function _showOrbitPath(noradId, color) {
     if (layerState._orbitPaths.has(noradId)) return; // already showing
 
     const sat = layerState._catalog.get(noradId);
-    if (!sat || !layerState._viewer) return;
+    if (!sat || !getRenderer()) return;
 
     const bakeDate = new Date(appClock.now());
     const basePositions = parts.orbits.computeOrbitPath(sat.satrec, bakeDate);
@@ -86,13 +77,11 @@ export function createRendering({
    * rotation cannot distinguish. Tiny negative deltas right after bake are
    * likewise harmless. No unwrapping needed.
    *
-   * No SGP4 here — the rotation is applied as the ring primitive's modelMatrix
-   * (exact compensation; WGS84 is rotationally symmetric about Z, so rotating
-   * the baked curve rigidly equals rebaking from rotated points). modelMatrix
-   * updates are synchronous uniforms — no geometry rebuild, no flicker. Post-
-   * creation modelMatrix changes are supported for one-instance primitives in
-   * 3D mode, which these rings are. In-place mutation is safe: Primitive.update
-   * diffs modelMatrix against an internal clone.
+   * No SGP4 here — the rotation is applied as the ring's modelMatrix (exact
+   * compensation; WGS84 is rotationally symmetric about Z, so rotating the
+   * baked curve rigidly equals rebaking from rotated points). The matrix is
+   * written in place and handed to the line (commitOrbit): no geometry
+   * rebuild, no flicker.
    * @param {Date} nowDate Epoch used for current GMST.
    */
 
@@ -106,7 +95,7 @@ export function createRendering({
         nowDate,
         path.primitive.modelMatrix,
       );
-      getRenderer().commitOrbit(path.primitive);
+      getRenderer()?.commitOrbit(path.primitive);
     }
   }
 
@@ -117,7 +106,7 @@ export function createRendering({
   function _hideOrbitPath(noradId) {
     const path = layerState._orbitPaths.get(noradId);
     if (path) {
-      if (layerState._viewer) getRenderer().removeOrbit(path.primitive); // remove() destroys
+      if (path.primitive) getRenderer()?.removeOrbit(path.primitive);
       layerState._orbitPaths.delete(noradId);
     }
   }
@@ -213,8 +202,8 @@ export function createRendering({
       return;
     if (nowMs - layerState._lastFocusUpdate < 80) return;
     layerState._lastFocusUpdate = nowMs;
-    const scene = layerState._viewer.scene;
-    const camera = layerState._viewer.camera;
+    const camera = getRenderer()?.view.camera;
+    if (!camera) return;
     const result = applySatellitePointFocusDeemphasis({
       points: layerState._points,
       trackedId: layerState._trackedNorad,

@@ -49,7 +49,6 @@ export function recordingRenderer(
       for (const listener of followListeners) listener();
     },
     renderer: {
-      kind: 'plain',
       engine,
       view: {
         camera,
@@ -65,7 +64,6 @@ export function recordingRenderer(
         },
       },
       fleet: {
-        collection: null,
         attached: () => attached,
         attach() {
           attached = true;
@@ -104,7 +102,6 @@ export function services(renderer) {
       registerEntityContext: () => null,
       selectEntityContext: noop,
     },
-    trails: { createTrail: null },
     labels: {},
     picking,
     overlay: {

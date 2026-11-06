@@ -1,5 +1,4 @@
 import { rendererFor } from './renderers.js';
-import { createLaunchesCesiumRenderer } from '../../layers/launches/render/cesium.js';
 import { createRocketLaunchesLayer } from '../../layers/launches/index.js';
 import * as geometry from '../../celestialRing.js';
 import * as overlays from '../../overlays/worldOverlay.js';
@@ -9,11 +8,10 @@ import * as render from '../../renderGovernor.js';
 export function createApplicationLaunches({
   source,
   satellites,
+  // Test seam: the display factory (default: the engine's, from the
+  // registry: render/display.js on every engine).
   renderer = {
-    create: ({ engine = null, ...options }) =>
-      engine
-        ? rendererFor('rocket-launches', engine, options)
-        : createLaunchesCesiumRenderer(null, options),
+    create: ({ engine }) => rendererFor('rocket-launches', engine),
   },
 }) {
   return createRocketLaunchesLayer({

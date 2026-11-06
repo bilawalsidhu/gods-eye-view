@@ -1,11 +1,9 @@
 import { createPerimetersCesiumRenderer } from '../../layers/perimeters/render/cesium.js';
 import { createDroneAirspaceCesiumRenderer } from '../../layers/droneAirspace/index.js';
-import { createOsmPlacesCesiumRenderer } from '../../layers/osmPlaces/index.js';
 import { createGnssCesiumRenderer } from '../../layers/gnss/render/cesium.js';
 import { createAirQualityCesiumRenderer } from '../../layers/airQuality/render/cesium.js';
 import { createFirmsCesiumRenderer } from '../../layers/firms/render/cesium.js';
 import { createEarthquakesCesiumRenderer } from '../../layers/earthquakes/render/cesium.js';
-import { createLaunchesCesiumRenderer } from '../../layers/launches/render/cesium.js';
 // Which engine draws which layer: the layer renderer registry and the layer
 // availability API built on it.
 //
@@ -36,8 +34,12 @@ import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
 import { createFlightsDisplay } from '../../layers/flights/render/display.js';
 import { createMilitaryDisplay } from '../../layers/military/render/display.js';
 import { createLocalAdsbDisplay } from '../../layers/localAdsb/render/display.js';
-import { createSatellitesCesiumRenderer } from '../../layers/satellites/render/cesium.js';
-import { createVesselsCesiumRenderer } from '../../layers/vessels/render/cesium.js';
+import { createSatellitesDisplay } from '../../layers/satellites/render/display.js';
+import { createVesselsDisplay } from '../../layers/vessels/render/display.js';
+import { createLaunchesDisplay } from '../../layers/launches/render/display.js';
+import { createOsmPlacesDisplay } from '../../layers/osmPlaces/render/display.js';
+import { createAlprDisplay } from '../../layers/alpr/render/display.js';
+import { createBikeshareDisplay } from '../../layers/bikeshare/render/display.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
 
@@ -104,14 +106,16 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
     createPerimetersCesiumRenderer(options),
   'drone-airspace': (_engine, options) =>
     createDroneAirspaceCesiumRenderer(options),
-  'osm-places': (_engine, options) => createOsmPlacesCesiumRenderer(options),
+  'osm-places': createOsmPlacesDisplay,
+  'alpr-cameras': createAlprDisplay,
+  bikeshare: createBikeshareDisplay,
   'local-firms': createFirmsCesiumRenderer,
-  'rocket-launches': createLaunchesCesiumRenderer,
-  satellites: createSatellitesCesiumRenderer,
+  'rocket-launches': createLaunchesDisplay,
+  satellites: createSatellitesDisplay,
   flights: createFlightsDisplay,
   military: createMilitaryDisplay,
   'local-adsb': createLocalAdsbDisplay,
-  'ais-live-vessels': createVesselsCesiumRenderer,
+  'ais-live-vessels': createVesselsDisplay,
 });
 
 // The other application layers still draw themselves on Cesium.

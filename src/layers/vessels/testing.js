@@ -25,7 +25,8 @@ export function createTesting({
 
   /**
    * Prime the minimum live state needed by interaction/lifecycle wire tests.
-   * @param {Object} [options={}] - Test state values.
+   * @param {Object} [options={}] - Test state values; `renderer` is the
+   *   test's renderer factory `({ viewer, billboardCollection }) => renderer`.
    * @returns {void}
    */
 
@@ -48,16 +49,20 @@ export function createTesting({
         .map((record) => [record.mmsi, record]),
     );
     state.selectedRecord = options.selectedRecord || null;
-    // The Cesium renderer over the test viewer, adopting the test collection.
+    // The test's renderer over its viewer and collection
+    // (testSupport/vesselViewerRenderer), else the layer's for `engine`.
     state.renderer =
-      services.renderer?.create({
-        viewer: state.viewer,
-        engine: null,
-        createTrail: services.trails?.createTrail ?? null,
-        adopt: {
-          billboardCollection: options.billboardCollection || { remove() {} },
-        },
-      }) ?? null;
+      typeof options.renderer === 'function'
+        ? options.renderer({
+            viewer: state.viewer,
+            billboardCollection: options.billboardCollection || {
+              remove() {},
+            },
+          })
+        : (services.renderer?.create({
+            viewer: state.viewer,
+            engine: options.engine ?? null,
+          }) ?? null);
     state.trail = options.trail || null;
     state.trailMmsi = options.trailMmsi || null;
     state.trailPositions = Array.isArray(options.trailPositions)

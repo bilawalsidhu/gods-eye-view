@@ -8,6 +8,13 @@ import {
   STAGE_REENTRY_ALTITUDE_M,
 } from './policy.js';
 
+// Cesium's PolylineDash patterns of the mission paths as the contract's
+// dashes: dashLength 12 px with 0xaaaa is 0.75 px on, 0.75 px off; 8 px and
+// 24 px with 0xf0f0 are 2 and 6 px on, as much off.
+const RECOVERY_DASH = Object.freeze({ lengthPx: 0.75, gapPx: 0.75 });
+const REENTRY_DASH = Object.freeze({ lengthPx: 2, gapPx: 2 });
+const TRANSFER_DASH = Object.freeze({ lengthPx: 6, gapPx: 6 });
+
 export function createRendering({
   state: layerState,
   services,
@@ -18,60 +25,139 @@ export function createRendering({
   const { getSatelliteOrbitTrack, findSatelliteOrbitTrackInTle } =
     services.satellites;
 
-  function setGraphicVisibility(graphic, visible, time) {
-    if (!graphic) return;
-    const next = Boolean(visible);
-    const current = graphic.show?.getValue?.(time);
-    if (current !== next) graphic.show = next;
+  /** An element's position now (a function position is read). */
+  function elementPosition(element) {
+    return typeof element?.position === 'function'
+      ? element.position()
+      : element?.position;
+  }
+
+  /** Draws an element's graphics as its own and its graphics' flags say. */
+  function syncElement(element) {
+    if (element.point) element.point.show = element.shown && element.pointShown;
+    if (element.reticle)
+      element.reticle.show = element.shown && element.reticleShown;
+    if (element.line) element.line.show = element.shown;
+  }
+
+  /** Selection isolation: whether the element belongs in the view. */
+  function setElementShown(element, shown) {
+    const next = Boolean(shown);
+    if (element.shown === next) return;
+    element.shown = next;
+    syncElement(element);
+  }
+
+  /**
+   * One mission element (a launch site, path, payload or vehicle) the layer
+   * records and the display draws: `point` { pixelSize, color },
+   * `reticle` (the hover reticle), `polyline` { positions, width, color,
+   * dash, arc }.
+   */
+  function addMissionElement({
+    id,
+    position,
+    point,
+    reticle,
+    polyline,
+    properties,
+  }) {
+    const display = getRenderer();
+    const element = {
+      id,
+      launchId: parts.selection.entityLaunchId(id),
+      position,
+      positions: polyline?.positions ?? null,
+      properties,
+      shown: true,
+      pointShown: true,
+      reticleShown: false,
+      pointStyle: point ?? null,
+      point: null,
+      reticle: null,
+      line: null,
+    };
+    if (point)
+      element.point = display.addPoint({
+        id,
+        position,
+        sizePx: point.pixelSize,
+        color: point.color,
+      });
+    if (reticle)
+      element.reticle = display.addReticle({
+        id,
+        position,
+        image: parts.overlays.missionHoverReticleImage(),
+      });
+    if (polyline)
+      element.line = display.addLine({
+        id,
+        pickId: id,
+        positions: polyline.positions,
+        widthPx: polyline.width,
+        color: polyline.color,
+        dash: polyline.dash,
+        arc: polyline.arc,
+      });
+    layerState._missionElements.set(id, element);
+    syncElement(element);
+    return element;
+  }
+
+  /** Removes every mission element and what the display draws for it. */
+  function removeMissionElements() {
+    for (const element of layerState._missionElements.values()) {
+      element.point?.remove();
+      element.reticle?.remove();
+      element.line?.remove();
+    }
+    layerState._missionElements.clear();
   }
 
   function updateMissionFrame() {
-    if (
-      !layerState._enabled ||
-      !layerState._viewer ||
-      !layerState._dataSource?.show
-    ) {
+    const display = getRenderer();
+    if (!layerState._enabled || !display?.visible()) {
       parts.overlays.hideReplayVehicleOverlay();
       return;
     }
     parts.panel.updateMissionTelemetry();
-    // The app clock's now, as the JulianDate Cesium's entity properties take.
-    const time = getRenderer().time(appClock.now());
-    layerState._declutterTime = time;
-    layerState._declutterOccluder.cameraPosition =
-      layerState._viewer.scene.camera.positionWC;
-    parts.overlays.updateReplayVehicleOverlay(layerState._declutterOccluder);
+    const { occluder } = display;
+    const cameraPosition = layerState._engine.camera.livePosition;
+    parts.overlays.updateReplayVehicleOverlay(occluder);
     parts.overlays.refreshSelectedMissionOverlayText();
-    for (const entity of layerState._dataSource.entities.values) {
-      if (!entity.show) continue;
-      if (!entity.position) continue;
-      const id = parts.selection.entityLaunchId(entity);
+    for (const element of layerState._missionElements.values()) {
+      if (!element.shown) continue;
+      if (!element.position) continue;
+      const id = element.launchId;
       if (!id) continue;
-      const position = entity.position.getValue(time);
+      const position = elementPosition(element);
       let horizonVisible = Boolean(
-        position && layerState._declutterOccluder.isPointVisible(position),
+        position && occluder.isPointVisible(position),
       );
-      const launchAnchor = entity.id.startsWith('rocket-launch:');
+      const launchAnchor = element.id.startsWith('rocket-launch:');
       if (launchAnchor) {
         horizonVisible = parts.overlays.missionAnchorVisible(
-          layerState._viewer.scene.camera.positionWC,
+          cameraPosition,
           position,
           id,
           layerState._selectedLaunchId,
         );
-        // Keep entity.show reserved for mission-selection isolation. Horizon
+        // Keep `shown` reserved for mission-selection isolation. Horizon
         // state is applied to the individual graphics below so a rear-side
         // anchor remains eligible for reevaluation as the camera moves.
       }
-      if (entity.point) {
-        setGraphicVisibility(entity.point, horizonVisible, time);
+      if (element.point && element.pointShown !== horizonVisible) {
+        element.pointShown = horizonVisible;
+        syncElement(element);
       }
-      if (launchAnchor && entity.billboard) {
-        setGraphicVisibility(
-          entity.billboard,
-          horizonVisible && id === layerState._hoveredRosterLaunchId,
-          time,
-        );
+      if (launchAnchor && element.reticle) {
+        const reticleShown =
+          horizonVisible && id === layerState._hoveredRosterLaunchId;
+        if (element.reticleShown !== reticleShown) {
+          element.reticleShown = reticleShown;
+          syncElement(element);
+        }
       }
     }
   }
@@ -105,7 +191,10 @@ export function createRendering({
     return solution;
   }
 
-  function addLaunchEntity(launch, activeTleText = layerState._activeTleText) {
+  function addLaunchElements(
+    launch,
+    activeTleText = layerState._activeTleText,
+  ) {
     const position = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     const overlayRecord = {
       launch,
@@ -130,25 +219,14 @@ export function createRendering({
       );
     });
     if (satelliteTrack) layerState._orbitMatches++;
-    const entity = getRenderer().addEntity(layerState._dataSource, {
+    addMissionElement({
       id: `rocket-launch:${launch.id}`,
       position,
       point: {
         pixelSize: 5,
         color: parts.model.missionMarkerColor(launch),
-        outlineColor: parts.model.missionMarkerColor(launch),
-        outlineWidth: 0,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
-      billboard: {
-        image: parts.overlays.missionHoverReticleImage(),
-        width: 24,
-        height: 24,
-        show: false,
-        horizontalOrigin: 0,
-        verticalOrigin: 0,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
+      reticle: true,
       properties: {
         launchId: launch.id,
         launchName: launch.name,
@@ -163,10 +241,6 @@ export function createRendering({
         noradId: satelliteTrack?.noradId || '',
       },
     });
-    // Publish the same anchor representation held by the active renderer.
-    overlayRecord.anchorPosition = entity.position.getValue(
-      getRenderer().time(appClock.now()),
-    );
     const points = launch.trajectory
       .filter(
         (point) =>
@@ -197,15 +271,14 @@ export function createRendering({
       });
       segments.forEach((segment, index) => {
         if (segment.positions.length < 2) return;
-        getRenderer().addEntity(layerState._dataSource, {
+        addMissionElement({
           id: `rocket-trajectory:${launch.id}:${index}`,
           polyline: {
             positions: parts.paths.surfaceSafePath(segment.positions),
             width: 2,
-            material: rgbaFromCss(
+            color: rgbaFromCss(
               TRAJECTORY_STAGE_COLORS[index % TRAJECTORY_STAGE_COLORS.length],
             ).withAlpha(0.8),
-            clampToGround: false,
             arc: 'none',
           },
           properties: {
@@ -277,8 +350,8 @@ export function createRendering({
         launch,
         ascentPath,
       );
-      // Cesium can evaluate CallbackProperty values multiple times while it
-      // traverses one frame. Camera tracking and the HTML replay overlay must
+      // A frame can read the replay position several times (the camera, the
+      // overlay, the vehicle element). Camera tracking and the HTML replay overlay must
       // use the exact same replay epoch as those callbacks; sampling appClock.now()
       // independently made the vehicle advance relative to the camera and then
       // snap back on the next frame.
@@ -295,10 +368,8 @@ export function createRendering({
           REPLAY_TILE_SETTLE_DELAY_SEC,
           layerState._replayCameraLaunchId !== launch.id,
         );
-      // preUpdate runs before Cesium evaluates entity CallbackProperties. Seed
-      // one state there and retain it through postRender so every consumer in
-      // that traversal sees the same timestamp. scene.frameState.frameNumber is
-      // advanced between some of those phases, so it is not a reliable cache key.
+      // The replay camera seeds one state in preUpdate and every consumer of
+      // that frame, through postRender, sees the same timestamp.
       const beginReplayFrame = () => {
         replayStateForFrame = sampleReplayState();
         return replayStateForFrame;
@@ -329,16 +400,13 @@ export function createRendering({
             (stageIndex + 1) % TRAJECTORY_STAGE_COLORS.length
           ],
         );
-        getRenderer().addEntity(layerState._dataSource, {
+        addMissionElement({
           id: `rocket-reentry-recovery:${launch.id}:${stageIndex}`,
           polyline: {
             positions: path,
             width: 2,
-            material: getRenderer().dash({
-              color: color.withAlpha(0.82),
-              dashLength: 12,
-              dashPattern: 0xaaaa,
-            }),
+            color: color.withAlpha(0.82),
+            dash: RECOVERY_DASH,
             arc: 'none',
           },
           properties: {
@@ -350,16 +418,13 @@ export function createRendering({
           },
         });
         if (reentryPath.length > 1) {
-          getRenderer().addEntity(layerState._dataSource, {
+          addMissionElement({
             id: `rocket-reentry:${launch.id}:${stageIndex}`,
             polyline: {
               positions: reentryPath,
               width: 2.5,
-              material: getRenderer().dash({
-                color: rgbaFromCss('#ffd166').withAlpha(0.9),
-                dashLength: 8,
-                dashPattern: 0xf0f0,
-              }),
+              color: rgbaFromCss('#ffd166').withAlpha(0.9),
+              dash: REENTRY_DASH,
               arc: 'none',
             },
             properties: {
@@ -382,15 +447,10 @@ export function createRendering({
             }),
           );
         }
-        getRenderer().addEntity(layerState._dataSource, {
+        addMissionElement({
           id: `rocket-recovery-end:${launch.id}:${stageIndex}`,
           position: path.at(-1),
-          point: {
-            pixelSize: 4,
-            color,
-            outlineWidth: 0,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
+          point: { pixelSize: 4, color },
           properties: {
             launchId: launch.id,
             stageId: stage.id,
@@ -424,9 +484,10 @@ export function createRendering({
       let liveFrameNumber = -1;
       const fallbackPeriodSec =
         parts.paths.estimatedOrbitPeriodSeconds(orbitPath);
+      // At most once per engine frame: every reader in a frame (the dot,
+      // the panel, the label) sees one propagation.
       const updateLiveState = () => {
-        const frameNumber =
-          layerState._viewer?.scene?.frameState?.frameNumber ?? -1;
+        const frameNumber = getRenderer()?.frameNumber() ?? -1;
         if (frameNumber !== -1 && frameNumber === liveFrameNumber) return;
         liveFrameNumber = frameNumber;
         const nowMs = appClock.now();
@@ -457,17 +518,15 @@ export function createRendering({
             ) || livePosition;
         }
       };
-      getRenderer().addEntity(layerState._dataSource, {
+      addMissionElement({
         id: `rocket-satellite:${launch.id}`,
-        position: getRenderer().callback(() => {
+        position: () => {
           updateLiveState();
           return livePosition;
-        }, false),
+        },
         point: {
           pixelSize: 6,
           color: rgbaFromCss(satelliteTrack ? '#7bed9f' : '#ffd166'),
-          outlineWidth: 0,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         properties: {
           launchId: launch.id,
@@ -496,25 +555,24 @@ export function createRendering({
           gapPx: 12,
         });
       });
-      // Live satellite rings use a primitive collection so the core Satellite
-      // GMST transform can rotate their baked ECEF geometry without rebuilding
-      // it. Estimated launch-site-relative rings remain ordinary entities.
+      // Live satellite rings are lines with a model matrix so the core
+      // Satellite GMST transform can rotate their baked ECEF geometry without
+      // rebuilding it. Estimated launch-site-relative rings are fixed.
       const primitiveOrbitAdded = parts.orbitRendering.addMissionOrbitPrimitive(
         launch,
         orbitPath,
         satelliteTrack,
       );
       if (!primitiveOrbitAdded) {
-        getRenderer().addEntity(layerState._dataSource, {
+        addMissionElement({
           id: `rocket-orbit:${launch.id}`,
           polyline: {
             positions: orbitPath,
             // The 3 px canvas gives the periodic dot room to read as round; the
-            // shader masks the ten intervening dashes down to a thin center stroke.
+            // pattern masks the ten intervening dashes down to a thin center stroke.
             width: 3,
-            material: getRenderer().patternMaterial(
-              rgbaFromCss('#c084fc').withAlpha(0.95),
-            ),
+            color: rgbaFromCss('#c084fc').withAlpha(0.95),
+            dash: 'tactical',
             arc: 'none',
           },
           properties: {
@@ -531,7 +589,7 @@ export function createRendering({
       if (primitivePath) {
         primitivePath.labelBakePosition = orbitLabelBakePosition;
         primitivePath.labelPosition = geo.matrix4.multiplyByPoint(
-          primitivePath.primitive.modelMatrix,
+          primitivePath.modelMatrix,
           orbitLabelBakePosition,
           geo.cartesian3.create(),
         );
@@ -547,13 +605,15 @@ export function createRendering({
           gapPx: 8,
         }),
       );
-      const replayPosition = getRenderer().callback(() => {
+      const replayPosition = () => {
         const state = getReplayState();
         return state.ascending
           ? parts.paths.samplePath(ascentPath, state.phaseProgress)
           : parts.paths.samplePath(animatedOrbitPath, state.phaseProgress);
-      }, false);
-      getRenderer().addEntity(layerState._dataSource, {
+      };
+      // The replay vehicle draws as the screen overlay; its element has no
+      // graphics.
+      addMissionElement({
         id: `rocket-vehicle:${launch.id}`,
         position: replayPosition,
         properties: {
@@ -565,20 +625,17 @@ export function createRendering({
             : 'Approximate trajectory animation',
         },
       });
-      getRenderer().addEntity(layerState._dataSource, {
+      addMissionElement({
         id: `rocket-transfer:${launch.id}`,
         polyline: {
           positions: ascentPath,
           width: 1.5,
           // The animated vehicle uses Cartesian interpolation between these
-          // exact samples. Prevent Cesium from replacing each segment with a
-          // geodesic arc, which would visually separate the dot from the line.
+          // exact samples. Straight segments keep the line from separating
+          // from it as geodesic arcs would.
           arc: 'none',
-          material: getRenderer().dash({
-            color: rgbaFromCss('#7bed9f').withAlpha(0.8),
-            dashLength: 24,
-            dashPattern: 0xf0f0,
-          }),
+          color: rgbaFromCss('#7bed9f').withAlpha(0.8),
+          dash: TRANSFER_DASH,
         },
         properties: {
           launchId: launch.id,
@@ -590,5 +647,12 @@ export function createRendering({
       });
     }
   }
-  return { setGraphicVisibility, updateMissionFrame, addLaunchEntity };
+  return {
+    elementPosition,
+    setElementShown,
+    addMissionElement,
+    removeMissionElements,
+    updateMissionFrame,
+    addLaunchElements,
+  };
 }

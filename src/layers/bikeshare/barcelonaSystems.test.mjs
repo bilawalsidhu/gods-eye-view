@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CITY_BY_ID } from './registry.js';
 import { createModel } from './model.js';
-import { createViewport } from './render/cesium/viewport.js';
+import { createViewport } from './viewport.js';
 import { isAllowedGbfsHost, isAllowedGbfsPath } from '../../data/gbfsSource.js';
 
 // Each Barcelona system's host, and the stations farthest from its registered
@@ -37,6 +37,8 @@ const { computeInRangeCities } = createViewport({
   services: { render: { governorRequestRender() {} } },
   parts,
   source: null,
+  // The range check reads no camera.
+  camera: {},
 });
 
 test('Bicing and AMBici are registered and readable through the proxy', () => {

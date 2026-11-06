@@ -15,7 +15,7 @@ import {
   reduceVesselSelection,
   vesselDatumHeightM,
   _bindVesselInteractionForTest,
-  _setVesselStateForTest,
+  _setVesselStateForTest as setVesselStateForTest,
   _reconcileVesselsForTest,
   _applyAisFeedSnapshotForTest,
   _loadLivePositionsForTest,
@@ -39,6 +39,12 @@ import {
   presentSelectedVessel,
   subscribeSelectedVessel,
 } from '../hudReadouts.js';
+import { vesselViewerRenderer } from '../testSupport/vesselViewerRenderer.mjs';
+
+// The layer's state over the test's viewer, drawn by the Cesium-shaped test
+// renderer (its billboard collection, projection and trackedEntityChanged).
+const _setVesselStateForTest = (options = {}) =>
+  setVesselStateForTest({ renderer: vesselViewerRenderer, ...options });
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42), null);
@@ -944,6 +950,16 @@ function installWireHarness(picked, stateOverrides = {}) {
   globalThis.document = {
     getElementById: () => null,
   };
+  // The test renderer draws in no scene; the harness viewer's
+  // trackedEntityChanged is its follow signal.
+  const followViewer = {
+    get trackedEntity() {
+      return viewer.trackedEntity;
+    },
+    trackedEntityChanged,
+  };
+  const renderer = ({ billboardCollection }) =>
+    vesselViewerRenderer({ viewer: followViewer, billboardCollection });
   _setVesselStateForTest({
     records: [record],
     selectedRecord: record,
@@ -952,6 +968,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     trailPositions: [POS],
     interactionHandlerFactory,
     interactionKeyTarget: keyTarget,
+    renderer,
     ...stateOverrides,
   });
   _bindVesselInteractionForTest(viewer, handler, keyTarget);
@@ -966,6 +983,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     windowTarget,
     reinstalledHandlers,
     interactionHandlerFactory,
+    renderer,
     cleanup() {
       stopReadout();
       aisLiveVesselsLayer.destroy();
@@ -1201,6 +1219,7 @@ test('vessel interaction lifecycle: disable detaches input and enable reinstalls
       trailPositions: [POS],
       interactionHandlerFactory: harness.interactionHandlerFactory,
       interactionKeyTarget: harness.keyTarget,
+      renderer: harness.renderer,
     });
     disabledClick({ position: { x: 10, y: 20 } });
     disabledKeydown({ key: 'Escape' });

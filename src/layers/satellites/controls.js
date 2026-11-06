@@ -261,7 +261,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       const id = Number(noradId);
       if (
         !Number.isFinite(id) ||
-        !layerState._viewer ||
+        !layerState._renderer ||
         !layerState._catalog.has(id) ||
         !layerState._points.has(id)
       )

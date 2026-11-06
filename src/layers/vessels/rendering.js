@@ -69,7 +69,6 @@ export function createRendering({
     visualRecords = new WeakMap();
   }
 
-  const { registerSpriteCollection } = services.sprites;
   const {
     forgetSpriteFocus,
     focusNowMs,
@@ -101,13 +100,13 @@ export function createRendering({
     return Math.min(DEFAULT_ACTIVE_LABELS, renderRowLimit());
   }
 
-  // The renderer's sprite collection, once a scene is there (the argument:
-  // the scene the caller holds — the viewer, or the renderer's view).
+  // The renderer's chevron fleet, once a scene is there (the argument: the
+  // scene the caller holds — the viewer, or the renderer's view). Its draw
+  // order is the fleet's own (data/spriteOrder's 'ais' slot).
   function ensureCollections(scene) {
     const fleet = state.renderer?.fleet;
     if (!scene || !fleet || fleet.attached()) return;
     fleet.attach({ show: state.feed.enabled });
-    if (fleet.collection) registerSpriteCollection('ais', fleet.collection);
   }
 
   /**
@@ -226,6 +225,11 @@ export function createRendering({
     state.trailingVisibilityTimer = null;
   }
 
+  // The camera a pass reads: the renderer's view, else the viewer's.
+  function passCamera() {
+    return state.renderer?.view?.camera ?? state.viewer?.camera ?? null;
+  }
+
   function updateVisibility(force = false) {
     if (!state.feed.enabled || (!state.renderer && !state.viewer)) return;
     if (force) governorRequestRender('ais-vessels-update');
@@ -236,10 +240,11 @@ export function createRendering({
     const focusPass =
       focusPassIsNeeded(focusTarget, state.activeFocusCount) &&
       (force || now - state.lastFocusUpdate >= FOCUS_UPDATE_MS);
+    const poseCamera = passCamera();
     if (
       !regularPass &&
-      state.viewer?.camera &&
-      cameraPoseSignature(state.viewer.camera) !== vesselState._lastCamPoseSig
+      poseCamera &&
+      cameraPoseSignature(poseCamera) !== vesselState._lastCamPoseSig
     )
       scheduleTrailingVisibilityPass(now);
     if (!regularPass && !focusPass) return;
@@ -250,10 +255,8 @@ export function createRendering({
       // Still record the pose this pass evaluated, or every later frame that
       // falls inside the cadence would schedule another trailing frame.
       if (regularPass) {
-        if (state.viewer?.camera)
-          vesselState._lastCamPoseSig = cameraPoseSignature(
-            state.viewer.camera,
-          );
+        if (poseCamera)
+          vesselState._lastCamPoseSig = cameraPoseSignature(poseCamera);
         updateClusteredLabels([]);
       }
       if (focusPass) {

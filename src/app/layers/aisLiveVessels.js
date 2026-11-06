@@ -1,6 +1,5 @@
 import { createVesselLayer } from '../../layers/vessels/index.js';
 import * as context from '../../data/contextStore.js';
-import * as trails from '../../data/trailRenderer.js';
 import * as labels from '../../data/detectionDraw.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlay from '../../overlays/worldOverlay.js';
@@ -11,19 +10,16 @@ import * as worldFocus from '../../worldFocus.js';
 import * as render from '../../renderGovernor.js';
 import * as selection from '../../data/selectionDispatcher.js';
 import { rendererFor } from './renderers.js';
-import { createVesselsCesiumRenderer } from '../../layers/vessels/render/cesium.js';
 import * as readouts from '../../hudReadouts.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationVessels({
   source,
   options = {},
-  // Test seam: the renderer factory (default: the engine's, from the registry).
+  // Test seam: the renderer factory (default: the engine's, from the
+  // registry: the vessels display on every engine; none without an engine).
   renderer = {
-    create: ({ engine = null, ...rendererOptions }) =>
-      engine
-        ? rendererFor('ais-live-vessels', engine, rendererOptions)
-        : createVesselsCesiumRenderer(null, rendererOptions),
+    create: ({ engine = null } = {}) => rendererFor('ais-live-vessels', engine),
   },
 }) {
   return createVesselLayer({
@@ -31,7 +27,6 @@ export function createApplicationVessels({
     options,
     services: {
       context,
-      trails,
       labels,
       picking,
       overlay,
@@ -41,8 +36,7 @@ export function createApplicationVessels({
       worldFocus,
       render,
       selection,
-      // The engine's vessel renderer from the registry (render/cesium.js on
-      // Cesium); a bare viewer without an engine (unit tests) draws on Cesium.
+      // The engine's vessel display from the registry (render/display.js).
       renderer,
       readouts,
     },

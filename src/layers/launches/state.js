@@ -11,7 +11,8 @@ export function createState({ services }) {
     clearSource: clearOverlaySource,
   });
 
-  state._dataSource = null;
+  // The layer's records of what it draws, by pick id (rendering.js).
+  state._missionElements = new Map();
 
   state._count = 0;
 
@@ -35,8 +36,6 @@ export function createState({ services }) {
   state._clickHandler = null;
 
   state._moveHandler = null;
-
-  state._viewer = null;
 
   state._declutterHandler = null;
 
@@ -152,10 +151,9 @@ export function createState({ services }) {
 
   state._missionOrbitPrimitives = new Map();
 
+  // The display (render/display.js) and the engine it draws on.
   state._renderer = null;
   state._engine = null;
-  state._declutterTime = null;
-  state._declutterOccluder = null;
 
   state._missionRingDate = new Date(0);
 
