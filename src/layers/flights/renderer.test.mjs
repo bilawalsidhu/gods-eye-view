@@ -293,3 +293,87 @@ test('the flights logic draws, tracks and follows on the Cesium engine through t
   assert.equal(engine.lines.list().length, 0, 'no line left behind');
   engine.destroy();
 });
+
+test('a failed engine switch, its rollback and the retry re-follow the tracked aircraft as a restore', async () => {
+  const { createCesiumMoversEngine } =
+    await import('../../testSupport/cesiumMoversEngine.mjs');
+  const { createFlightsDisplay } = await import('./render/display.js');
+  const { aircraftAtlasLayout } = await import('../aircraft/render/display.js');
+  const layout = aircraftAtlasLayout();
+  // The shell's navigation stamp (LayerBindings.observeCamera): a follow
+  // Cesium announces through trackedEntityChanged is new navigation unless
+  // it rebinds the session's own subject. A new navigation supersedes the
+  // switch's share restore, which then clears the selection.
+  const navigations = [];
+  const cesium = () => {
+    const made = createCesiumMoversEngine();
+    made.engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(-97.5, 30.3, 400_000),
+    });
+    made.viewer.trackedEntityChanged.addEventListener((entity) => {
+      if (entity && !entity.gevRestoring)
+        navigations.push(entity.gevTrackedId);
+    });
+    return made;
+  };
+  const working = cesium();
+  let display = null;
+  const layer = createApplicationFlights({
+    surface: defaultSurface,
+    source: {
+      label: 'Fixture aircraft',
+      getSnapshot: async () => snapshotOf(['abc123', 'def456']),
+    },
+    militaryRegistry,
+    renderer: {
+      create: ({ engine: given }) =>
+        (display = createFlightsDisplay(given, {
+          drawAtlas: async () => ({
+            canvas: { width: layout.width, height: layout.height },
+            cells: layout.cells,
+          }),
+        })),
+    },
+  });
+  layer.init(working.viewer, { engine: working.engine });
+  layer.enable();
+  const candidate = createFakeEngine();
+  let retried = null;
+  try {
+    await display.whenReady();
+    await layer.update(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The person's own selection is navigation.
+    assert.equal(layer.trackById('def456', { origin: 'user' }), true);
+    assert.deepEqual(navigations, ['flights:def456']);
+    navigations.length = 0;
+    // The switch: the working engine detaches; the candidate attaches the
+    // layer, then fails and releases what it attached.
+    layer.detachRenderer(working.viewer);
+    layer.attachRenderer(null, { engine: candidate });
+    assert.equal(candidate.camera.following()?.label?.id, 'flights:def456');
+    layer.detachRenderer(null);
+    // The rollback: the working engine attaches again and follows the same
+    // aircraft, announced as a restore.
+    layer.attachRenderer(working.viewer, { engine: working.engine });
+    assert.equal(layer.getTrackedInfo()?.icao24, 'def456');
+    assert.equal(working.viewer.trackedEntity?.gevTrackedId, 'flights:def456');
+    assert.deepEqual(navigations, [], 'the rollback is not new navigation');
+    // The retry onto a new Cesium engine.
+    layer.detachRenderer(working.viewer);
+    retried = cesium();
+    layer.attachRenderer(retried.viewer, { engine: retried.engine });
+    assert.equal(layer.getTrackedInfo()?.icao24, 'def456');
+    assert.equal(retried.viewer.trackedEntity?.gevTrackedId, 'flights:def456');
+    assert.equal(
+      retried.engine.camera.following()?.label?.id,
+      'flights:def456',
+    );
+    assert.deepEqual(navigations, [], 'the retry is not new navigation');
+  } finally {
+    layer.disable();
+    layer.destroy(retried?.viewer ?? working.viewer);
+  }
+  for (const engine of [working.engine, candidate, retried?.engine])
+    engine?.destroy();
+});

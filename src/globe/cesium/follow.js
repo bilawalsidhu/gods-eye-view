@@ -23,13 +23,18 @@ import { toCesium3 } from './convert.js';
 const MAX_FRAME_ATTEMPTS = 120;
 const entityName = (entity) => (entity ? entity.name || entity.id : undefined);
 // What viewer.trackedEntity readers take from a tracked Entity, read through
-// a proxy from the layer's own handle.
+// a proxy from the layer's own handle. gevRestoring marks a follow that
+// rebinds the session's own subject (a resumed renderer, a share restore)
+// while it starts: trackedEntityChanged readers (the shell's navigation
+// stamp) must see it on the proxy, or a resumed follow supersedes the
+// restore it belongs to.
 const READOUT_FIELDS = [
   'gevTrackedId',
   'gevLabelModel',
   'gevDisplayPosition',
   'gevVisualPosition',
   'gevSelectionOrigin',
+  'gevRestoring',
 ];
 const ZOOM_INERTIA_STATES = new WeakMap();
 

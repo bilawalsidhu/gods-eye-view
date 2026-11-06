@@ -109,6 +109,26 @@ test('a native that is not an Entity is echoed and followed through an ENU proxy
   assert.equal(viewer.entities.contains(proxy), false);
 });
 
+test("the proxy shows a restoring native's mark while its follow starts", () => {
+  const { viewer, camera } = setup();
+  const native = { id: 'flights-tracked-1', gevTrackedId: 'flights:abc123' };
+  // What trackedEntityChanged readers see as the follow starts.
+  const seen = [];
+  viewer.trackedEntityChanged.addEventListener((entity) =>
+    seen.push(entity?.gevRestoring),
+  );
+  native.gevRestoring = true;
+  const handle = camera.follow({
+    native,
+    position: () => TARGET,
+    viewFrom: () => ({ x: 0, y: -500, z: 200 }),
+  });
+  delete native.gevRestoring;
+  assert.deepEqual(seen, [true]);
+  assert.equal(viewer.trackedEntity.gevRestoring, undefined, 'read through');
+  handle.stop();
+});
+
 test('a camera command or another tracked entity ends the follow', () => {
   const { viewer, camera, changes } = setup();
   const options = { position: () => TARGET, viewFrom: { x: 0, y: -500, z: 0 } };
