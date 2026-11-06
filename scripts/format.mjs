@@ -120,6 +120,19 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
+  // TEMPORARY diagnostic: emit exact canonical text for the two PR files.
+  if (mode === '--check') {
+    for (const entry of changed) {
+      if (
+        entry.name === 'server/providers/cctv/streetViewGuard.js' ||
+        entry.name === 'server/providers/cctv/streetViewGuard.test.mjs'
+      )
+        console.log(
+          'STREETVIEW_FORMAT_JSON ' +
+            JSON.stringify({ name: entry.name, formatted: entry.formatted }),
+        );
+    }
+  }
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
