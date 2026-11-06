@@ -2448,6 +2448,7 @@
       "src/app/surfaceServices.js",
       "src/app/tools.js",
       "src/app/viewer.js",
+      "src/render/cesium/ctrlWheelZoom.js",
       "src/sky/starrySky.js",
       "src/sky/stars.js",
       "src/app/atmosphereCompat.js",

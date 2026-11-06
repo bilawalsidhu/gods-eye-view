@@ -1,6 +1,6 @@
 import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
-import { installTrackpadPinchZoom } from '../app/viewer.js';
+import { installTrackpadPinchZoom } from '../render/cesium/ctrlWheelZoom.js';
 import {
   cesiumRenderer,
   cesiumViewerOf,
