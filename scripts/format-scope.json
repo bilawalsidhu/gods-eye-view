@@ -475,6 +475,7 @@
   "src/layers/satellites/stale.test.mjs",
   "src/layers/launches/source.test.mjs",
   "src/layers/launches/ingestion.test.mjs",
+  "src/layers/launches/failedEntry.test.mjs",
   "src/layers/installations/lifecycle.js",
   "src/layers/installations/viewport.js",
   "src/layers/installations/controls.js",

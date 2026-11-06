@@ -301,6 +301,8 @@
   "AVAILABLE MISSIONS": "المهام المتاحة",
   "SELECT A MISSION TO INSPECT": "اختر مهمة لفحصها",
   "LOADING 30-DAY MISSION INDEX": "جارٍ تحميل فهرس مهام 30 يومًا",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "المهام الفضائية غير متاحة: تعذّر تحميل فهرس المهام. حاول مرة أخرى لاحقًا.",
+  "30-DAY MISSION INDEX UNAVAILABLE": "فهرس مهام 30 يومًا غير متاح",
   "RADIO": "الراديو",
   "ENABLE": "تفعيل",
   "Previous filtered radio station": "محطة الراديو السابقة في القائمة المصفّاة",

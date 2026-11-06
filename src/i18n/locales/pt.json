@@ -2807,6 +2807,8 @@
   "AVAILABLE MISSIONS": "MISSÕES DISPONÍVEIS",
   "SELECT A MISSION TO INSPECT": "SELECIONE UMA MISSÃO PARA INSPECIONAR",
   "LOADING 30-DAY MISSION INDEX": "CARREGANDO ÍNDICE DE MISSÕES DE 30 DIAS",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "Missões espaciais indisponíveis: não foi possível carregar o índice de missões. Tente novamente mais tarde.",
+  "30-DAY MISSION INDEX UNAVAILABLE": "ÍNDICE DE MISSÕES DE 30 DIAS INDISPONÍVEL",
   "TAB PREVIEWS · ENTER / SPACE SELECTS": "TAB MOSTRA PRÉVIA · ENTER / SPACE SELECIONA",
   "Internet radio and local SDR": "Rádio pela internet e SDR local",
   "STATION TAG": "TAG DA ESTAÇÃO",
