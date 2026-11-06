@@ -19,11 +19,9 @@ snapshot. Future refreshes should record both before replacing the file.
 
 ## Norway refresh
 
-Features inside the Geofabrik Norway boundary (`norway.poly`, which includes
-Svalbard) were refreshed separately, so this file mixes two vintages: Norway
-reflects OSM as of the extract below, everything else the original snapshot.
+Features inside Geofabrik's Norway boundary (`norway.poly`, with Svalbard) come
+from a newer extract than the rest of the file. Contact tags are dropped as above.
 
 - Extract: Geofabrik `norway-261005.osm.pbf`, OSM data
   2026-10-05T20:21:35Z, MD5 `1d2cfdeb98980fce11b8891d0f9146c0`
 - Filter: `osmium tags-filter nwr/telecom=data_center nwr/building=data_center`
-- Contact tags are dropped as above.

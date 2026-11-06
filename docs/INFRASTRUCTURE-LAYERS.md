@@ -59,4 +59,4 @@ globals.
 Dataset files and source/license notices remain under `src/data/local_data/`.
 Their input counts are 4,352 datacenter features and 704 dam features. Cesium may
 expand multipart geometries into multiple entities; entity and stem counts are
-different measurements. This change does not refresh or relicense the datasets.
+different measurements.
