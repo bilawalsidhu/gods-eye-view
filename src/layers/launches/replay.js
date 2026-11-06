@@ -314,7 +314,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     layerState._replayCameraToken++;
     if (layerState._replayCameraRemover) layerState._replayCameraRemover();
     layerState._replayCameraRemover = null;
-    // Without a replay the camera is not ours: leave other flights running.
+    // Cancel only a replay's flight; any other flight runs on.
     if (stoppedLaunchId && layerState._viewer?.camera) {
       layerState._viewer.camera.cancelFlight();
       layerState._viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);

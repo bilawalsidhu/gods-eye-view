@@ -263,10 +263,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
     publishPanel();
   }
 
-  /**
-   * The roster entries as the list shows them; null while the first index
-   * is still loading, and an empty failed roster once that load failed.
-   */
+  /** The roster as listed; null until the first index loads or fails. */
   function presentRoster() {
     if (layerState._lastUpdate === null && !layerState._launches.length) {
       if (!layerState._lastError) return null;

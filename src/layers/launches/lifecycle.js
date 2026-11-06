@@ -139,10 +139,7 @@ function sameCameraView(camera, view) {
   );
 }
 
-/**
- * Return to the pose before entry while the entry's full-globe flight still
- * holds the camera: in flight, or landed with nothing moved since.
- */
+/** Restore the pre-entry view if the entry flight still holds the camera. */
 function restoreCameraView(viewer, view, landedView) {
   const camera = viewer?.camera;
   if (!camera) return;

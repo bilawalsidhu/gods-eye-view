@@ -229,9 +229,8 @@ export function createIngestion({
       if (layerState._enabled && token === layerState._lifecycleToken) {
         layerState._lastError = error.message;
         console.warn('[Data:RocketLaunches] Fetch error:', error);
-        // Without one usable index there is no mode to enter: report the
-        // failure so the manager fails the enable closed and Context rolls
-        // back. A refresh after a loaded index keeps its records instead.
+        // No index yet: fail the enable so Context rolls back.
+        // After a loaded index, a failed refresh keeps its records.
         if (layerState._lastUpdate === null) {
           parts.panel.renderMissionRoster();
           throw error;

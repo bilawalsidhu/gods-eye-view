@@ -1,8 +1,5 @@
-// A Space Missions entry whose mission index never loads must not commit the
-// mode. The real manager, Context coordinator and launches ingestion run
-// against a local /api/launches that answers 429, so the test follows the
-// same failure the browser sees: isolation clears the other layers, the first
-// update fails, and the entry rolls back to the layers and view it replaced.
+// The real manager, Context coordinator and launches ingestion run against a
+// local /api/launches, so a failed first load takes the browser's path.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -137,8 +134,7 @@ async function fixture(t) {
     dataSources: new Cesium.DataSourceCollection(),
     scene: { canvas, preRender: new Cesium.Event(), drillPick: () => [] },
   };
-  // Scene presentation is inert; source, ingestion, lifecycle, panel views
-  // and the satellites dependency run unchanged.
+  // Only scene presentation is stubbed.
   const parts = {
     overlays: {
       shortMissionLabel: (name) => name,
@@ -281,7 +277,6 @@ test('a direct Space Missions entry that gets HTTP 429 rolls back instead of iso
   assert.deepEqual(f.view(), before, 'the pre-entry view comes back');
   assert.ok(f.camera.cancelled > 0, 'the full-globe flight is cancelled');
 
-  // Nothing is left isolating the workspace.
   assert.equal(
     await f.manager.setEnabled('wind', true, { origin: 'user' }),
     true,
@@ -454,7 +449,7 @@ test('a refresh failure after a loaded index keeps the mode and its records', as
   assert.equal(f.missions.getStats().error, 'HTTP 429');
   assert.equal(f.rosters.at(-1).entries.length, 1);
 
-  // Leaving a mode that loaded keeps today's camera behaviour.
+  // Leaving a loaded mode does not restore the pre-entry view.
   await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
   await f.settle();
   assert.deepEqual(f.view(), framed);
