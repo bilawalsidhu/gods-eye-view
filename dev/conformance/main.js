@@ -20,6 +20,10 @@ import {
 import { createStubHarness } from '../../src/render/stub/harness.js';
 import { toEcef } from '../../src/render/stub/math.js';
 import { createCesiumSceneRenderer } from '../../src/render/cesium/sceneRenderer.js';
+import {
+  CESIUM_CHECKS,
+  createCesiumHarness,
+} from '../../src/render/cesium/harness.js';
 
 const REFERENCES = '/src/render/conformance/goldens/visual/';
 const SAVE = '/__conformance/references/';
@@ -31,9 +35,19 @@ const RENDERERS = {
   cesium: () => createCesiumSceneRenderer({ container: $('stage') }),
 };
 
-async function runLogic() {
-  status('running the logic suite…');
-  const report = await runConformance(createStubHarness('stub (browser)'));
+const HARNESSES = {
+  stub: () => [createStubHarness('stub (browser)'), {}],
+  cesium: () => [
+    createCesiumHarness({ model: ctx.assets.model }),
+    { only: (id) => CESIUM_CHECKS.has(id) },
+  ],
+};
+
+/** Runs the logic suite on `which`; `all` runs every check, listed or not. */
+async function runLogic(which = 'stub', { all = false } = {}) {
+  status(`running the logic suite on ${which}…`);
+  const [harness, options] = HARNESSES[which]();
+  const report = await runConformance(harness, all ? {} : options);
   $('logicResults').innerHTML =
     `<p>${report.harness}: <b class="pass">${report.passed} passed</b>, <b class="fail">${report.failed} failed</b>, ${report.skipped} skipped</p>
     <table>${report.results
@@ -209,7 +223,8 @@ async function runScenes({ record = false, only } = {}) {
   return results;
 }
 
-$('logic').onclick = () => runLogic();
+$('logic').onclick = () => runLogic('stub');
+$('logicCesium').onclick = () => runLogic('cesium');
 $('check').onclick = () => runScenes();
 $('record').onclick = () => runScenes({ record: true });
 window.conformance = { runLogic, runScenes };
