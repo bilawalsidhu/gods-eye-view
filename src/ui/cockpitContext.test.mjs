@@ -12,6 +12,13 @@ import {
   updateContext,
 } from './cockpitContext.js';
 import { createContextState } from './cockpitContextState.js';
+import {
+  dropCockpitSignal,
+  dropContextSnapshotSignals,
+  publishCockpitSignals,
+  pushCockpitSignal,
+  updateCockpitSignals,
+} from './cockpitSignals.js';
 import { syncWeatherToggle } from './cockpitInstruments.js';
 import { setContextCollapsed } from './cockpitLayout.js';
 import { useCockpitStore } from './stores/cockpit.js';
@@ -246,6 +253,119 @@ test('without a snapshot the card stands by, hidden', async (t) => {
   assert.equal($('#cockpit-context').hidden, true);
   assert.equal(owner.presence.context, false);
   assert.equal(signals.at(-1)[2], 'CONTEXT STANDBY');
+});
+
+test('a feed that is off makes the card and Live Signals say the picture is partial', async (t) => {
+  // Every input known, so only the feed that is off can make it partial.
+  const { $, text, owner } = fixture(
+    t,
+    snapshot({
+      cohorts: [
+        {
+          id: 'flights',
+          label: 'Flights',
+          count: 12,
+          relationship: 'OBSERVED',
+          nearest: [{ id: 'N1', distanceM: 4200 }],
+        },
+      ],
+    }),
+  );
+  const rebuilt = [];
+  owner.updateCockpitSignals = (...args) => rebuilt.push(args);
+  owner.services.isLayerEnabled = () => true;
+  updateContext.call(owner, INFO, 0);
+  await nextTick();
+  assert.equal($('#cockpit-context').dataset.state, 'current');
+  assert.equal(rebuilt.at(-1)[2], null, 'both feeds on: nothing to add');
+
+  owner.services.isLayerEnabled = (layerId) => layerId !== 'military';
+  updateContext.call(owner, INFO, 0);
+  await nextTick();
+  assert.equal($('#cockpit-context').dataset.state, 'uncertain');
+  assert.equal(
+    text('#cockpit-context-uncertainty'),
+    'MILITARY FEED OFF · PARTIAL PICTURE',
+  );
+  assert.deepEqual(rebuilt.at(-1)[2], {
+    title: 'MILITARY FEED OFF · PARTIAL PICTURE',
+    detail: 'NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR',
+  });
+});
+
+test('without Contacts, a feed that is off adds a signal until it is back', async (t) => {
+  const { owner, signals } = fixture(t, null);
+  const dropped = [];
+  owner.dropCockpitSignal = (key) => dropped.push(key);
+  // Riding a military aircraft with Live Flights off.
+  owner.services.isLayerEnabled = (layerId) => layerId === 'military';
+  updateContext.call(owner, { ...INFO, layerId: 'military' }, 0);
+  assert.equal(signals.at(-2)[2], 'CONTEXT STANDBY');
+  assert.deepEqual(signals.at(-1), [
+    'feed-status',
+    'warning',
+    'FLIGHTS FEED OFF · PARTIAL PICTURE',
+    'NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR',
+  ]);
+  owner.services.isLayerEnabled = () => true;
+  updateContext.call(owner, { ...INFO, layerId: 'military' }, 0);
+  assert.deepEqual(dropped, ['feed-status']);
+});
+
+/** The fixture's owner with the real Live Signals presenters. */
+function withSignals(owner) {
+  const published = [];
+  Object.assign(owner, {
+    signalItems: [],
+    signalSignatures: new Map(),
+    publishSignals: (rows) => published.push(rows),
+    publishCockpitSignals,
+    pushCockpitSignal,
+    dropCockpitSignal,
+    dropContextSnapshotSignals,
+    updateCockpitSignals,
+  });
+  return () => published.at(-1).map((row) => row.title);
+}
+
+test('Contacts going off clears its contact rows and leaves standby', async (t) => {
+  const { owner } = fixture(t, snapshot());
+  const rows = withSignals(owner);
+  owner.services.isLayerEnabled = () => true;
+  updateContext.call(owner, INFO, 0);
+  assert.ok(
+    owner.signalItems.some((item) => item.key.startsWith('flight:')),
+    'Contacts fills the rows',
+  );
+  assert.ok(owner.signalItems.some((item) => item.key === 'input-status'));
+  // Both feeds stay on; only Contacts goes.
+  owner.snapshot = null;
+  updateContext.call(owner, INFO, 0);
+  assert.deepEqual(rows(), ['CONTEXT STANDBY']);
+  updateContext.call(owner, INFO, 0);
+  assert.deepEqual(rows(), ['CONTEXT STANDBY'], 'standby holds still');
+});
+
+test('Contacts going off with a feed off keeps the feed row beside standby', async (t) => {
+  const { owner } = fixture(t, snapshot());
+  const rows = withSignals(owner);
+  owner.services.isLayerEnabled = (layerId) => layerId !== 'military';
+  updateContext.call(owner, INFO, 0);
+  owner.snapshot = null;
+  updateContext.call(owner, INFO, 0);
+  assert.deepEqual(rows(), [
+    'MILITARY FEED OFF · PARTIAL PICTURE',
+    'CONTEXT STANDBY',
+  ]);
+});
+
+test('standby without Contacts keeps the rows the session already shows', async (t) => {
+  const { owner } = fixture(t, null);
+  const rows = withSignals(owner);
+  owner.services.isLayerEnabled = () => true;
+  owner.pushCockpitSignal('track', 'track', 'TRACK ACQUIRED', 'UAL123');
+  updateContext.call(owner, INFO, 0);
+  assert.deepEqual(rows(), ['CONTEXT STANDBY', 'TRACK ACQUIRED']);
 });
 
 test('the weather toggle renders its state and the action it offers', async (t) => {
