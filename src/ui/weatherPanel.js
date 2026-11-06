@@ -10,12 +10,17 @@ const openPanels = new WeakMap();
 const ORDER = [
   'weather-cyclones',
   'wind',
+  'temperature',
   'weather-radar',
   'weather-satellite',
   'weather-lightning',
   'air-quality',
 ];
-const OBSERVED = new Set(ORDER.slice(2, 5));
+const OBSERVED = new Set([
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+]);
 const utc = (time) =>
   Number.isFinite(Date.parse(time))
     ? `${formatUtcDayMonth(time)} ${utcClock(time)}`
@@ -174,7 +179,7 @@ export function createWeatherPanel({
                 ? t('{detail} · synced', { detail })
                 : t('{detail} · nearest', { detail });
         }
-      } else if (id === 'wind') {
+      } else if (id === 'wind' || summary.forecast) {
         detail = t('Forecast · valid {valid} · issued {issued}', {
           valid: utc(summary.validTime),
           issued: utc(summary.issuedTime),
@@ -200,7 +205,9 @@ export function createWeatherPanel({
           labels: legend.map(({ label }) => label),
           units: categorical ? '' : summary.units,
           ...(summary.unitsVerbatim === true ? { unitsVerbatim: true } : {}),
-          zeroIndex: legend.findIndex(({ label }) => label === '0'),
+          zeroIndex:
+            entry.legendZeroIndex ??
+            legend.findIndex(({ label }) => label === '0'),
         },
       };
       const blocks = [
@@ -224,7 +231,7 @@ export function createWeatherPanel({
         compact:
           summary.status ||
           summary.compact ||
-          (id === 'wind'
+          (id === 'wind' || summary.forecast
             ? t('Forecast · valid {valid}', { valid: utc(summary.validTime) })
             : detail),
         compactStatus: Boolean(summary.status),

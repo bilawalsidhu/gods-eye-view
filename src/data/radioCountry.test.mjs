@@ -60,8 +60,10 @@ test('Radio country normalization rejects malformed, non-ISO, and oversized valu
     assert.equal(result.valid, false, String(input));
     assert.equal(result.code, '', String(input));
   }
-  assert.deepEqual(
-    normalizeRadioCountryInput(''),
-    { valid: true, empty: true, code: '', name: '' },
-  );
+  assert.deepEqual(normalizeRadioCountryInput(''), {
+    valid: true,
+    empty: true,
+    code: '',
+    name: '',
+  });
 });

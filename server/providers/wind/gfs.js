@@ -46,27 +46,37 @@ export function windMessageRanges(
   { level = '10 m above ground', overlay = 'none' } = {},
 ) {
   weatherScalarMetadata(overlay);
-  const range = (variable, fieldLevel = level) => {
-    const index = parsed.messages.findIndex(
-      (message) =>
-        message.variable === variable && message.level === fieldLevel,
-    );
-    const message = parsed.messages[index];
-    const next = parsed.messages[index + 1];
-    if (!message || !next)
-      throw new Error(`missing ${variable} at ${fieldLevel}`);
-    return { start: message.offset, end: next.offset - 1 };
-  };
   return {
-    u: range('UGRD'),
-    v: range('VGRD'),
+    u: gfsMessageRange(parsed, { variable: 'UGRD', level }),
+    v: gfsMessageRange(parsed, { variable: 'VGRD', level }),
     ...(overlay === 'temperature'
-      ? { scalar: range('TMP', '2 m above ground') }
+      ? {
+          scalar: gfsMessageRange(parsed, {
+            variable: 'TMP',
+            level: '2 m above ground',
+          }),
+        }
       : {}),
     ...(overlay === 'pressure'
-      ? { scalar: range('PRMSL', 'mean sea level') }
+      ? {
+          scalar: gfsMessageRange(parsed, {
+            variable: 'PRMSL',
+            level: 'mean sea level',
+          }),
+        }
       : {}),
   };
+}
+
+/** Exact variable/level lookup, bounded by the next inventory message. */
+export function gfsMessageRange(parsed, { variable, level }) {
+  const index = parsed.messages.findIndex(
+    (message) => message.variable === variable && message.level === level,
+  );
+  const message = parsed.messages[index];
+  const next = parsed.messages[index + 1];
+  if (!message || !next) throw new Error(`missing ${variable} at ${level}`);
+  return { start: message.offset, end: next.offset - 1 };
 }
 
 /** Fetch a bounded text response as a Buffer. */
@@ -152,14 +162,39 @@ export async function loadOptionalScalar({
   }
 }
 
-import {
-  GFS_BUCKET,
-  gfsObjectKey,
-  selectLatestGfsCycle,
-  nearestGfsStep,
-} from './catalog.js';
+import { selectGfsForecast } from './catalog.js';
 import { decodeWindGribMessage } from './decode.js';
-import { resampleWeatherSnapshot, weatherScalarMetadata } from './grid.js';
+import {
+  resampleWeatherSnapshot,
+  weatherScalarMetadata,
+  resampleTemperatureGrid,
+} from './grid.js';
+
+/** Fetch only TMP at 2 m: no wind or pressure messages are required. */
+export async function fetchGfsAirTemperature({
+  fetchImpl = fetch,
+  now = () => Date.now(),
+  targetDx = 1,
+  decodeImpl = decodeWindGribMessage,
+  signal,
+} = {}) {
+  const { cycle, base } = selectGfsForecast(now());
+  const index = await fetchText({ url: `${base}.idx`, fetchImpl, signal });
+  const range = gfsMessageRange(parseGfsIdx(index.toString()), {
+    variable: 'TMP',
+    level: '2 m above ground',
+  });
+  const field = await decodeImpl(
+    await fetchRange({ url: base, ...range, fetchImpl, signal }),
+  );
+  signal?.throwIfAborted();
+  return {
+    cycle,
+    level: '2 m above ground',
+    units: '°C',
+    grid: resampleTemperatureGrid({ field, targetDx }),
+  };
+}
 
 /** Fetch and decode the GFS 10 m wind field valid closest to now. */
 export async function fetchGfsWind({
@@ -171,18 +206,7 @@ export async function fetchGfsWind({
   overlay = 'none',
 } = {}) {
   weatherScalarMetadata(overlay);
-  const nowMs = now();
-  const cycle = selectLatestGfsCycle(nowMs);
-  const runMs = Date.UTC(
-    Number(cycle.date.slice(0, 4)),
-    Number(cycle.date.slice(4, 6)) - 1,
-    Number(cycle.date.slice(6, 8)),
-    cycle.hour,
-  );
-  // Pick the forecast step whose valid time is closest to now, so the layer
-  // shows the freshest field the cycle offers instead of the analysis.
-  const forecastHour = nearestGfsStep((nowMs - runMs) / 3600_000);
-  const base = `https://${GFS_BUCKET}.s3.amazonaws.com/${gfsObjectKey({ ...cycle, forecastHour })}`;
+  const { cycle, base } = selectGfsForecast(now());
   const index = await fetchText({ url: `${base}.idx`, fetchImpl, signal });
   const inventory = parseGfsIdx(index.toString());
   const ranges = windMessageRanges(inventory);
@@ -210,10 +234,8 @@ export async function fetchGfsWind({
   ]);
   signal?.throwIfAborted();
   const fields = resampleWeatherSnapshot({ u, v, scalar, overlay, targetDx });
-  const runIso = new Date(runMs).toISOString();
-  const validIso = new Date(runMs + forecastHour * 3600_000).toISOString();
   return {
-    cycle: { ...cycle, forecastHour, runIso, validIso },
+    cycle,
     level: '10 m above ground',
     units: 'm/s',
     ...fields,

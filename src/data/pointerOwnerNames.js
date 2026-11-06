@@ -8,6 +8,7 @@ import { msg } from '../i18n/marker.js';
 const POINTER_OWNER_NAMES = Object.freeze({
   draw: msg('Draw'),
   directions: msg('Directions'),
+  'air-temperature': msg('Air Temperature'),
   'recent-imagery-box': msg('Recent imagery'),
 });
 

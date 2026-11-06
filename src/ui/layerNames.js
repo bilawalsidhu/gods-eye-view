@@ -39,6 +39,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'wildlife-sightings': msg('Wildlife Sightings'),
   's2-ghostmaps': msg('S2 GhostMaps'),
   wind: msg('Wind'),
+  temperature: msg('Temperature'),
   'weather-radar': msg('Rain radar'),
   'weather-satellite': msg('Satellite clouds'),
   'weather-lightning': msg('Lightning density'),
@@ -123,6 +124,7 @@ const SOURCE_LABEL_KEYS = new Map(
     msg('OSM routing'),
     msg('Mapped camera locations'),
     msg('OpenStreetMap · community mapped'),
+    msg('NASA GIBS · MODIS Terra land surface temperature'),
   ].map((key) => [key, key]),
 );
 
