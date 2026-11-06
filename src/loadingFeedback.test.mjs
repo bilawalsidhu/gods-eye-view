@@ -247,11 +247,11 @@ test('terminal loading feedback centers its label without an empty detail slot',
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   assert.match(
     css,
-    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='error'\]\s*\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
+    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='key'\],\s*\[data-state='error'\]\s*\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
   );
   assert.match(
     css,
-    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='error'\]\s*\)\s*#global-loading-detail\s*\{\s*display:\s*none;/,
+    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='key'\],\s*\[data-state='error'\]\s*\)\s*#global-loading-detail\s*\{\s*display:\s*none;/,
   );
 });
 
@@ -346,13 +346,43 @@ test('participant stats failure outranks a simultaneous visibility completion', 
     name: 'AIS Vessels',
     enabled: true,
     lifecycleState: 'enabled',
-    stats: { loading: false, keyRequired: true },
+    stats: { loading: false, error: 'Upstream closed' },
   }]);
   state = reduceLoadingFeedback(state, missingKey, 250, {
     type: 'visibility', layerId: 'ais-live-vessels', enabled: true,
   });
 
   assert.equal(state.terminal, 'error');
+});
+
+test('a layer waiting for a key ends the batch as KEY REQUIRED, not LOAD FAILED', () => {
+  const quakes = (stats) => ({ id: 'earthquakes', name: 'Earthquakes', ...stats });
+  const fires = (stats) => ({ id: 'local-firms', name: 'Active Fires', ...stats });
+  const enabling = aggregateLayerLoading([
+    quakes({ lifecycleState: 'enabling', stats: { loading: true } }),
+    fires({ lifecycleState: 'enabling', stats: { loading: true } }),
+  ]);
+  let state = reduceLoadingFeedback(createLoadingFeedbackState(), enabling, 0);
+  state = reduceLoadingFeedback(state, enabling, 200);
+  const settled = aggregateLayerLoading([
+    quakes({ enabled: true, stats: { count: 27, lastUpdate: 1 } }),
+    fires({ enabled: true, stats: { status: 'unavailable', keyRequired: true, error: 'KEY REQUIRED' } }),
+  ]);
+  state = reduceLoadingFeedback(state, settled, 250);
+  assert.equal(state.terminal, 'key');
+  assert.deepEqual(state.failedEventIds, []);
+  const view = presentLoadingFeedback(state, settled, 260);
+  assert.equal(view.state, 'key');
+  assert.equal(view.label, 'KEY REQUIRED');
+
+  // A real failure beside it still reads as one.
+  const broken = aggregateLayerLoading([
+    quakes({ enabled: true, stats: { error: 'USGS 503' } }),
+    fires({ enabled: true, stats: { status: 'unavailable', keyRequired: true } }),
+  ]);
+  let failing = reduceLoadingFeedback(createLoadingFeedbackState(), enabling, 0);
+  failing = reduceLoadingFeedback(failing, enabling, 200);
+  assert.equal(reduceLoadingFeedback(failing, broken, 250).terminal, 'error');
 });
 
 test('retains the worst terminal outcome until every concurrent load drains', () => {
