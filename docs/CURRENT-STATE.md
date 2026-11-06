@@ -741,6 +741,12 @@ geographic seams and releases on disable; forecast animation is not implied.
 NHC movement speed is converted from miles per hour to rounded knots by the
 proxy; advisory wind intensity is already in knots and is passed through.
 Cyclone markers, labels, tracks and cones are hidden beyond the horizon on every map source.
+Explicitly selecting a storm publishes one shared `weather-cyclones` record:
+advisory provenance, source position, the English classification name and,
+while the proxy serves its cache, the cache fetch time. The automatic row
+selection does not claim shared context; refreshes do not re-announce it.
+Clear or disable reports `deliberate`; a storm leaving the feed reports
+`evicted`, with no fallback.
 Consult the linked official advisory for safety decisions.
 
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
