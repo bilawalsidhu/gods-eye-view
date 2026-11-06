@@ -274,17 +274,8 @@ export function createUsgsWaterStore({
       ),
     });
     if (!response.ok) {
-      let detail = '';
-      try {
-        detail =
-          JSON.parse(await readResponseTextCapped(response, 4096))
-            ?.description || '';
-      } catch {
-        /* no readable detail */
-      }
-      throw new Error(
-        `USGS HTTP ${response.status}${detail ? `: ${redact(String(detail)).slice(0, 160)}` : ''}`,
-      );
+      await response.body?.cancel().catch(() => {});
+      throw new Error('USGS request failed');
     }
     // Throws when the body passes maxBytes (the stream is cancelled).
     return JSON.parse(await readResponseTextCapped(response, maxBytes, signal));
