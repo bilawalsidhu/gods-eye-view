@@ -1022,6 +1022,14 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
     'noir',
   ]);
   visualStyle.enum = [...visualStyle.enum, 'snow'];
+  // Tilt to an angle adds pitchDeg and rewords direction; restore
+  // the legacy camera fields to keep the pin.
+  const camera = legacyTools.find((tool) => tool.name === 'move_camera')
+    .parameters.properties;
+  assert.equal(camera.pitchDeg.type, 'number');
+  delete camera.pitchDeg;
+  camera.direction.description =
+    'Required for pan/tilt/rotate; orbit/rotate_globe default right.';
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt
