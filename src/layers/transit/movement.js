@@ -9,10 +9,7 @@ import {
   correctHeight,
   setTimeOffsetMs,
 } from '../../data/contactPlayback.js';
-export const FIX_HISTORY_MAX = 128;
-export const DISPLAY_LAG_MIN_MS = 25_000;
-export const DISPLAY_LAG_RESET_MS = 90_000;
-export const MODE_MAX_SPEED_MPS = Object.freeze({
+const MODE_MAX_SPEED_MPS = Object.freeze({
   bus: 36, // ~130 km/h — a coach on a motorway
   tram: 28, // ~100 km/h — interurban light rail
   subway: 42, // ~150 km/h
@@ -32,22 +29,19 @@ export const MODE_MAX_SPEED_MPS = Object.freeze({
  * @param {boolean} [inferred] Whether the mode came from a feed default.
  * @returns {number} m/s
  */
-export function speedCeilingMps(mode, inferred = false) {
+function speedCeilingMps(mode, inferred = false) {
   if (inferred) return MODE_MAX_SPEED_MPS.unknown;
   return MODE_MAX_SPEED_MPS[mode] ?? MODE_MAX_SPEED_MPS.unknown;
 }
-
-/** Position deadband is disabled: even a short reported crawl is played. */
-export const FIX_NOISE_M = 0;
 
 /**
  * Displacement (m) a glide must cover before its direction is worth believing.
  * Below this the course derived from it is noise; the last good one is held.
  */
-export const COURSE_MIN_TRAVEL_M = 12;
+const COURSE_MIN_TRAVEL_M = 12;
 
 /** Maximum display-course change per second (deg). A bus is not a gyroscope. */
-export const COURSE_MAX_RATE_DEG_PER_S = 120;
+const COURSE_MAX_RATE_DEG_PER_S = 120;
 /**
  * Longest stretch of elapsed time (s) one evaluation may spend. The limiter
  * used to bank the time since the course last CHANGED, so a vehicle that held
@@ -56,15 +50,7 @@ export const COURSE_MAX_RATE_DEG_PER_S = 120;
  * EVALUATED, and capped here so that even a first look after a long idle
  * sweeps visibly instead of snapping.
  */
-export const COURSE_STEP_MAX_S = 0.25;
-
-/**
- * Consecutive fixes at the same place before a vehicle is called STOPPED.
- * One is not enough: a fifteen-second gap between identical fixes is also what
- * a vehicle waiting at a light looks like, and so is a feed that repeated
- * itself.
- */
-export const STOPPED_FIXES = 2;
+const COURSE_STEP_MAX_S = 0.25;
 
 /**
  * How long after its newest fix a vehicle stops being described as travelling.
@@ -75,7 +61,7 @@ export const STOPPED_FIXES = 2;
  * otherwise is the same overreach as reading STOPPED off a stale status. Ninety
  * seconds matches the threshold at which a whole feed reads as gone quiet.
  */
-export const MOTION_UNKNOWN_AFTER_MS = 90_000;
+const MOTION_UNKNOWN_AFTER_MS = 90_000;
 
 const EARTH_M_PER_DEG = 111_320;
 
@@ -95,28 +81,12 @@ export function fixDistanceM(a, b) {
 }
 
 /**
- * Course in degrees clockwise from north, from one point to another.
- * @param {{lat:number, lon:number}} from
- * @param {{lat:number, lon:number}} to
- * @returns {number} 0-360
- */
-export function courseBetween(from, to) {
-  const dLat = (to.lat - from.lat) * EARTH_M_PER_DEG;
-  const dLon =
-    (to.lon - from.lon) *
-    EARTH_M_PER_DEG *
-    Math.cos((from.lat * Math.PI) / 180);
-  const deg = (Math.atan2(dLon, dLat) * 180) / Math.PI;
-  return (deg + 360) % 360;
-}
-
-/**
  * Shortest signed difference between two courses, in degrees (-180, 180].
  * @param {number} from
  * @param {number} to
  * @returns {number}
  */
-export function courseDelta(from, to) {
+function courseDelta(from, to) {
   let delta = ((to - from + 540) % 360) - 180;
   if (delta === -180) delta = 180;
   return delta;
@@ -259,7 +229,7 @@ export function attachFloorToPlace(entry, fix, heightM) {
       correctHeight(entry.track, scratch.seq, heightM);
   }
 }
-export function displayCourse(entry, nowMs) {
+function displayCourse(entry, nowMs) {
   if (!entry) return null;
   const target = Number.isFinite(entry.sample?.segmentCourseDeg)
     ? entry.sample.segmentCourseDeg

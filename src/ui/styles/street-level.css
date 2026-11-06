@@ -39,8 +39,6 @@
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
 }
 
 /* Class-qualified, not id-qualified, so a theme's header rule still wins. */
@@ -236,10 +234,26 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
   gap: 4px 10px;
 }
 
-.sl-since-note {
+/* The shared slider surface, in Street Level's green. */
+.sl-range {
+  --accent: var(--sl-green);
+  --accent-glow: color-mix(in srgb, var(--sl-green) 55%, transparent);
+}
+
+/* The value and its note share a line: ANY DATE (by upload date). */
+.sl-since-value {
   grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  min-width: 0;
+}
+
+.sl-since-note {
   font-family: var(--font-mono);
-  font-size: var(--sl-text-small);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
   color: var(--text-secondary);
 }
 
@@ -248,7 +262,6 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
 }
 
 .sl-since-label {
-  grid-column: 2;
   font-family: var(--font-mono);
   font-size: var(--sl-text);
   letter-spacing: 0.08em;

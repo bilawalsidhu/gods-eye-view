@@ -53,9 +53,21 @@ export function createState({ services }) {
 
   state._launches = [];
 
-  state._missionPanel = null;
+  state._missionPanelReady = false;
 
-  state._missionRoster = null;
+  state._missionPanelView = null;
+
+  state._missionPanelSignature = null;
+
+  state._missionPanelListeners = new Set();
+
+  state._missionRosterView = null;
+
+  state._missionRosterSignature = null;
+
+  state._missionTelemetry = null;
+
+  state._missionPanelScrollRequest = 0;
 
   state._missionRosterHoverTimer = null;
 
@@ -65,9 +77,10 @@ export function createState({ services }) {
 
   state._missionHoverReticleImage = null;
 
+  // The replay vehicle overlay as its view renders it; null without one.
   state._replayVehicleOverlay = null;
 
-  state._replayVehicleOverlayText = '';
+  state._replayVehicleOverlayListeners = new Set();
 
   state._animationStarts = new Map();
 
@@ -98,6 +111,8 @@ export function createState({ services }) {
   state._replayCameraToken = 0;
 
   state._replayPaused = false;
+
+  state._replayTransportLabel = null;
 
   state._replayPausedAtMs = null;
 

@@ -122,6 +122,18 @@ import {
   NYC_MAX_CATALOG_BYTES,
   NYC_GROUND_ELEVATION_M,
   NYC_ANCHORS,
+  DEFAULT_A22_CCTV_URL,
+  A22_IMAGE_ORIGIN,
+  A22_MAX_CATALOG_BYTES,
+  A22_GROUND_ELEVATION_BY_KM,
+  A22_DEFAULT_GROUND_ELEVATION_M,
+  HOUSTON_CAMERAS_URL,
+  HOUSTON_IMAGE_URL,
+  HOUSTON_CAMERA_ID_RE,
+  DEFAULT_HOUSTON_MAX_SOURCES,
+  HOUSTON_MAX_CATALOG_BYTES,
+  HOUSTON_GROUND_ELEVATION_M,
+  HOUSTON_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -133,7 +145,6 @@ import {
   fallbackHeadingFromId,
   isLikelyFinlandCoordinate,
   fintrafficCameraName,
-  hashSeed,
   isPlausibleLatLon,
   isLikelyBcCoordinate,
   isLikelyTexasCoordinate,
@@ -143,12 +154,15 @@ import {
   isLikelyCataloniaCoordinate,
   decodeNumericEntities,
   isLikelyNycCoordinate,
+  isLikelyHoustonCoordinate,
   isLikelyHongKongCoordinate,
   isLikelyNorwayCoordinate,
   isLikelyTorontoCoordinate,
+  isLikelyA22Coordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
+  pinnedCameraUrl,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
 import {
@@ -310,9 +324,12 @@ export async function loadCaltransSourcesFromOpenData() {
       const lon = toFiniteNumber(loc.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
-      const imageUrl = String(cctv.imageData?.static?.currentImageURL || '');
       // Official-host pin (see JSDoc). Also drops records with no still image.
-      if (!imageUrl.startsWith('https://cwwp2.dot.ca.gov/')) continue;
+      const imageUrl = pinnedCameraUrl(
+        cctv.imageData?.static?.currentImageURL,
+        'https://cwwp2.dot.ca.gov/',
+      );
+      if (!imageUrl) continue;
 
       const locationName = String(loc.locationName || '').trim();
       // Leading token of locationName is the stable camera code ("TV102 -- I-580 : …").
@@ -417,8 +434,8 @@ export async function loadTflSourcesFromOpenData() {
       const lat = toFiniteNumber(place?.lat);
       const lon = toFiniteNumber(place?.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const imageUrl = String(props.imageUrl || '');
-      if (!imageUrl.startsWith(TFL_IMAGE_ORIGIN)) continue; // official-bucket pin
+      const imageUrl = pinnedCameraUrl(props.imageUrl, TFL_IMAGE_ORIGIN);
+      if (!imageUrl) continue; // official-bucket pin
 
       // "JamCams_00002.00865" → "tfl-00002.00865" (provider-stable id).
       const rawId = String(place?.id || '').replace(/^JamCams_/, '');
@@ -1127,13 +1144,15 @@ export function loadTallinnSourcesFromCatalog({
     // Rough Estonia/Tallinn metro sanity (allows nearby suburbs already in the pack).
     if (lat < 59.2 || lat > 59.7 || lon < 24.3 || lon > 25.4) continue;
 
-    const imageUrl =
+    const imageUrl = pinnedCameraUrl(
       typeof item.url === 'string'
-        ? item.url.trim()
+        ? item.url
         : typeof item.snapshotUrl === 'string'
-          ? item.snapshotUrl.trim()
-          : '';
-    if (!imageUrl.startsWith(TALLINN_IMAGE_ORIGIN)) continue;
+          ? item.snapshotUrl
+          : '',
+      TALLINN_IMAGE_ORIGIN,
+    );
+    if (!imageUrl) continue;
 
     const extractedHeading = toFiniteNumber(item.headingDeg, NaN);
     const hasHeading = Number.isFinite(extractedHeading);
@@ -1235,8 +1254,8 @@ export function parseTarkteeDatexImages(xml) {
       body,
     );
     if (!refMatch || !urlMatch) continue;
-    const url = urlMatch[1].trim();
-    if (!url.startsWith(TARKTEE_IMAGE_ORIGIN)) continue;
+    const url = pinnedCameraUrl(urlMatch[1], TARKTEE_IMAGE_ORIGIN);
+    if (!url) continue;
     out.set(refMatch[1], url);
   }
   return out;
@@ -1422,14 +1441,16 @@ export function loadWarendorfSourcesFromCatalog({
   for (const item of rows) {
     if (!item || typeof item !== 'object') continue;
     const id = typeof item.id === 'string' ? item.id.trim() : '';
-    const url =
+    const raw =
       typeof item.url === 'string'
-        ? item.url.trim()
+        ? item.url
         : typeof item.snapshotUrl === 'string'
-          ? item.snapshotUrl.trim()
+          ? item.snapshotUrl
           : '';
-    if (!id || !WARENDORF_IMAGE_ORIGINS.some((o) => url.startsWith(o)))
-      continue;
+    const url = WARENDORF_IMAGE_ORIGINS.map((o) =>
+      pinnedCameraUrl(raw, o),
+    ).find(Boolean);
+    if (!id || !url) continue;
     const lat = typeof item.lat === 'number' ? item.lat : NaN;
     const lon = typeof item.lon === 'number' ? item.lon : NaN;
     if (!isPlausibleLatLon(lat, lon)) continue;
@@ -1483,8 +1504,8 @@ export function nswCameraToSource(feature) {
   const lat = typeof coords?.[1] === 'number' ? coords[1] : NaN;
   if (!isLikelyNswCoordinate(lat, lon)) return null;
   const props = feature?.properties || {};
-  const url = String(props.href || '').trim();
-  if (!url.startsWith(NSW_IMAGE_ORIGIN)) return null;
+  const url = pinnedCameraUrl(props.href, NSW_IMAGE_ORIGIN);
+  if (!url) return null;
   // "N-E" -> "NE" for the compass lookup.
   const direction = String(props.direction || '')
     .trim()
@@ -1578,8 +1599,7 @@ export function normalizeCalgaryImageUrl(raw) {
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
   parsed.protocol = 'https:';
-  const upgraded = parsed.toString();
-  return upgraded.startsWith(CALGARY_IMAGE_ORIGIN) ? upgraded : null;
+  return pinnedCameraUrl(parsed.toString(), CALGARY_IMAGE_ORIGIN);
 }
 
 /**
@@ -1862,7 +1882,7 @@ export function normalizeCataloniaImageUrl(rawUrl) {
  * @param {string} imageUrl - A URL normalizeCataloniaImageUrl accepted.
  * @returns {string}
  */
-export function cataloniaCameraId(imageUrl) {
+function cataloniaCameraId(imageUrl) {
   const parsed = new URL(imageUrl);
   const slug = (text) =>
     text
@@ -2085,8 +2105,7 @@ export function normalizeHkImageUrl(raw) {
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
   parsed.protocol = 'https:';
-  const upgraded = parsed.toString();
-  return upgraded.startsWith(HK_IMAGE_ORIGIN) ? upgraded : null;
+  return pinnedCameraUrl(parsed.toString(), HK_IMAGE_ORIGIN);
 }
 
 /**
@@ -2423,10 +2442,16 @@ export async function loadKingCountySourcesFromOpenData() {
       // county image origin, so they are skipped.
       if (owner === 'WSDOT') continue;
       // The handler is served over HTTPS; the feed still writes http://.
-      const imageUrl = String(attrs.ImageURL || '')
-        .trim()
-        .replace(/^http:\/\/info\.kingcounty\.gov\//, KING_COUNTY_IMAGE_ORIGIN);
-      if (!imageUrl.startsWith(KING_COUNTY_IMAGE_ORIGIN)) continue;
+      const imageUrl = pinnedCameraUrl(
+        String(attrs.ImageURL || '')
+          .trim()
+          .replace(
+            /^http:\/\/info\.kingcounty\.gov\//,
+            KING_COUNTY_IMAGE_ORIGIN,
+          ),
+        KING_COUNTY_IMAGE_ORIGIN,
+      );
+      if (!imageUrl) continue;
       const [lon, lat] = Array.isArray(row?.geometry?.coordinates)
         ? row.geometry.coordinates
         : [];
@@ -2586,8 +2611,8 @@ export async function loadWsdotSourcesFromOpenData() {
       const attrs = row?.attributes;
       const rawId = attrs?.CameraID;
       if (!Number.isSafeInteger(rawId) || rawId <= 0) continue;
-      const imageUrl = String(attrs.ImageURL || '').trim();
-      if (!imageUrl.startsWith(WSDOT_IMAGE_ORIGIN)) continue;
+      const imageUrl = pinnedCameraUrl(attrs.ImageURL, WSDOT_IMAGE_ORIGIN);
+      if (!imageUrl) continue;
       const x = row?.geometry?.x;
       const y = row?.geometry?.y;
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
@@ -3629,6 +3654,285 @@ export async function loadFloridaSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Florida camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * One Open Data Hub `WebcamInfo` item (source `a22`) -> one catalog source,
+ * or null.
+ *
+ * The frame must be the operator's own `WebCamImg/km<N>.jpg` for the
+ * camera's motorway kilometre. The feed names the place and the kilometre but
+ * no bearing, so the heading uses the shared id-hash fallback at low
+ * confidence, like Calgary and Vegvesen; the ground elevation comes from the
+ * per-kilometre DEM table because the road spans ~1,350 m of altitude.
+ *
+ * @param {object} item - One element of the API's `Items` array.
+ * @returns {?object}
+ */
+export function a22WebcamToSource(item) {
+  if (!item || typeof item !== 'object') return null;
+  if (item.Active === false) return null;
+  if (String(item.Source ?? '').toLowerCase() !== 'a22') return null;
+
+  const gps = Array.isArray(item.GpsInfo) ? item.GpsInfo[0] : null;
+  const lat = toFiniteNumber(gps?.Latitude);
+  const lon = toFiniteNumber(gps?.Longitude);
+  if (!isLikelyA22Coordinate(lat, lon)) return null;
+
+  const km = String(item.Mapping?.a22?.km ?? '').trim();
+  if (!/^\d{1,3}$/.test(km)) return null;
+  const imageUrl = `${A22_IMAGE_ORIGIN}km${Number(km)}.jpg`;
+  let image;
+  try {
+    image = new URL(String(item.Webcamurl ?? ''));
+  } catch {
+    return null;
+  }
+  if (image.username || image.password || image.href !== imageUrl) return null;
+
+  const place =
+    String(item.Shortname ?? item.Webcamname?.it ?? '')
+      .replace(/\s+/g, ' ')
+      .trim() || `Km ${Number(km)}`;
+  const cameraId = `it-a22-km${Number(km)}`;
+  const ground = A22_GROUND_ELEVATION_BY_KM[Number(km)];
+
+  return {
+    id: cameraId,
+    name: `A22 ${place} (km ${Number(km)})`,
+    // One motorway-wide category in the camera picker; the place is already
+    // in the name.
+    city: 'A22 Brennero',
+    cityId: 'a22',
+    provider: 'Autostrada del Brennero',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -15,
+    fovDeg: 50,
+    rangeM: 160,
+    mountHeightM: 8,
+    groundElevationM: Number.isFinite(ground)
+      ? ground
+      : A22_DEFAULT_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'a22-opendatahub',
+    license:
+      'Webcam images © Autostrada del Brennero S.p.A., via the Open Data Hub (NOI Techpark)',
+    code: cameraDisplayCode(place.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch the Autostrada del Brennero (A22) webcams from the keyless Open Data
+ * Hub tourism API. Frames are stills on www.autobrennero.it.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadA22SourcesFromOpenDataHub() {
+  try {
+    const endpoint = process.env.CCTV_A22_URL || DEFAULT_A22_CCTV_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn('[CCTV] A22 catalog redirected; redirects are not followed');
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] A22 camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(resp, A22_MAX_CATALOG_BYTES);
+    const items = Array.isArray(payload?.Items) ? payload.Items : [];
+    const cameras = [];
+    const seen = new Set();
+    for (const item of items) {
+      const camera = a22WebcamToSource(item);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    // North to south along the motorway, so the picker reads in road order.
+    cameras.sort((a, b) => b.lat - a.lat);
+    console.log(`[CCTV] Loaded A22 camera sources: ${cameras.length}`);
+    return cameras;
+  } catch (error) {
+    console.warn('[CCTV] A22 camera download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Label for one Houston TranStar camera: the interchange an operator
+ * recognises ("10 EAST @ SAN JACINTO").
+ *
+ * @param {object} record - Raw TranStar camera row.
+ * @param {string} cameraId - Derived stable id.
+ * @returns {string}
+ */
+export function houstonCameraName(record, cameraId) {
+  const name = String(record?.location ?? '').trim();
+  if (name) return name;
+  const short = String(cameraId || '').replace(/^houston-/, '');
+  return short ? `Houston Camera ${short}` : 'Houston Camera';
+}
+
+/**
+ * TranStar `dir` (the camera's side of the freeway) -> the travel direction
+ * of the nearest lanes, as TranStar's map script `translateCameraDirection`
+ * reads it. Only these four values are mapped; anything else is unknown.
+ */
+const HOUSTON_TRAVEL_HEADING_BY_SIDE = Object.freeze({
+  south: 90,
+  north: 270,
+  west: 180,
+  east: 0,
+});
+
+/**
+ * One Houston TranStar camera row -> one catalog source, or null.
+ *
+ * Frame URLs are synthesized from a validated numeric id on the pinned
+ * snapshot origin. The payload's `url` is a `showWin(...)` viewer helper
+ * and is ignored so a catalog edit cannot steer the frame proxy off-host.
+ * TranStar's `dir` is the side of the freeway the camera sits on, not the
+ * way it faces: TranStar's own map labels it "Traffic closest to the camera
+ * is traveling …" (South→Eastbound, North→Westbound, West→Southbound,
+ * East→Northbound). That travel direction is only a low-confidence prior
+ * for the view, so the heading stays estimated with the low-confidence
+ * pose; `None`, blank or unknown values fall back to the shared id-hash
+ * heading.
+ *
+ * @param {object} record - Raw TranStar camera row.
+ * @returns {?object}
+ */
+export function houstonCameraToSource(record) {
+  if (!record || typeof record !== 'object') return null;
+
+  const lat = toFiniteNumber(record.lat);
+  const lon = toFiniteNumber(record.lng);
+  if (!isLikelyHoustonCoordinate(lat, lon)) return null;
+
+  const rawId = String(record.id ?? '').trim();
+  if (!HOUSTON_CAMERA_ID_RE.test(rawId)) return null;
+  const cameraId = `houston-${rawId}`;
+  const imageUrl = HOUSTON_IMAGE_URL(rawId);
+  const name = houstonCameraName(record, cameraId);
+  const travelHeading =
+    HOUSTON_TRAVEL_HEADING_BY_SIDE[
+      String(record.dir ?? '')
+        .trim()
+        .toLowerCase()
+    ];
+
+  return {
+    id: cameraId,
+    name,
+    city: 'Houston',
+    cityId: 'houston',
+    provider: 'Houston TranStar',
+    lat,
+    lon,
+    headingDeg: Number.isFinite(travelHeading)
+      ? travelHeading
+      : fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
+    groundElevationM: HOUSTON_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'houston-transtar',
+    license:
+      'TranStar disclaimer — redistribution and external framing need TxDOT written permission',
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch Houston TranStar cameras from the keyless `cctvSnapshots_json.js`
+ * catalog. Frames are stills on `www.houstontranstar.org`, registered from
+ * a validated numeric id rather than from the payload URL. The catalog host
+ * answers `Accept: application/json` with HTTP 406, so this request accepts
+ * any media type.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadHoustonSourcesFromOpenData() {
+  try {
+    const endpoint =
+      process.env.CCTV_HOUSTON_CAMERAS_URL || HOUSTON_CAMERAS_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: '*/*' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Houston catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Houston camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(
+      resp,
+      HOUSTON_MAX_CATALOG_BYTES,
+    );
+    const rows = Array.isArray(payload?.cameras) ? payload.cameras : [];
+    const cameras = [];
+    const seen = new Set();
+    for (const record of rows) {
+      const camera = houstonCameraToSource(record);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_HOUSTON_MAX_SOURCES || DEFAULT_HOUSTON_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      : DEFAULT_HOUSTON_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, HOUSTON_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Houston camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Houston camera download error:',
       error?.message || error,
     );
     return [];
