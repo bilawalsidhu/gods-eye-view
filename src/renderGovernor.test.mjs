@@ -7,7 +7,9 @@ import {
   governorRequestRender,
   getRenderGovernorDiagnostics,
   _resetRenderGovernorForTest,
+  uninstallRenderGovernor,
 } from './renderGovernor.js';
+import { framePortFor } from './testSupport/fakeFramePort.mjs';
 
 function makeViewer() {
   const calls = { requestRender: 0 };
@@ -21,17 +23,40 @@ function makeViewer() {
 
 beforeEach(() => _resetRenderGovernorForTest());
 
-test('install with zero holds enters idle mode and pins maximumRenderTimeChange', () => {
+test('install with zero holds leaves the loop on demand', () => {
   const { viewer, scene } = makeViewer();
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   assert.equal(scene.requestRenderMode, true);
-  assert.equal(scene.maximumRenderTimeChange, Infinity);
   assert.equal(getRenderGovernorDiagnostics().mode, 'idle');
+});
+
+test('holds taken before install apply at install', () => {
+  holdContinuousRender('boot');
+  const { viewer, scene } = makeViewer();
+  installRenderGovernor(framePortFor(viewer.scene));
+  assert.equal(scene.requestRenderMode, false);
+  releaseContinuousRender('boot');
+  assert.equal(scene.requestRenderMode, true);
+});
+
+test('uninstall gives back what the governor holds on the port', () => {
+  const { viewer, scene } = makeViewer();
+  const frame = framePortFor(viewer.scene);
+  installRenderGovernor(frame);
+  holdContinuousRender('flights');
+  assert.equal(scene.requestRenderMode, false);
+  uninstallRenderGovernor(frame);
+  assert.equal(scene.requestRenderMode, true);
+  assert.deepEqual(getRenderGovernorDiagnostics().holds, []);
+});
+
+test('install needs a frame port', () => {
+  assert.throws(() => installRenderGovernor({ scene: {} }), TypeError);
 });
 
 test('a hold flips to continuous; releasing the last hold returns to idle with a settling frame', () => {
   const { viewer, scene, calls } = makeViewer();
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   const settleBaseline = calls.requestRender;
   holdContinuousRender('flights');
   assert.equal(scene.requestRenderMode, false);
@@ -44,7 +69,7 @@ test('a hold flips to continuous; releasing the last hold returns to idle with a
 
 test('holds are identity-keyed: double-hold cannot leak, double-release cannot corrupt', () => {
   const { viewer, scene } = makeViewer();
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   holdContinuousRender('traffic');
   holdContinuousRender('traffic');
   releaseContinuousRender('traffic');
@@ -56,7 +81,7 @@ test('holds are identity-keyed: double-hold cannot leak, double-release cannot c
 
 test('mode stays continuous until the LAST holder releases', () => {
   const { viewer, scene } = makeViewer();
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   holdContinuousRender('flights');
   holdContinuousRender('satellites');
   releaseContinuousRender('flights');
@@ -68,7 +93,7 @@ test('mode stays continuous until the LAST holder releases', () => {
 
 test('governorRequestRender forwards to the scene and records reasons only in idle mode', () => {
   const { viewer, calls } = makeViewer();
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   const baseline = calls.requestRender;
   governorRequestRender('layer-tick:earthquakes');
   assert.equal(calls.requestRender, baseline + 1);
@@ -93,7 +118,7 @@ test('hold/release/request are safe no-ops before install (test environments wit
 test('holds registered before install apply at install time', () => {
   holdContinuousRender('flights');
   const { viewer, scene } = makeViewer();
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   assert.equal(scene.requestRenderMode, false, 'pre-install hold keeps continuous mode');
   releaseContinuousRender('flights');
   assert.equal(scene.requestRenderMode, true);

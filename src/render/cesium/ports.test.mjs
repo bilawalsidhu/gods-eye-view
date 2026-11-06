@@ -442,3 +442,15 @@ test('releasing the last hold asks for one more frame', () => {
   assert.equal(requests(), before + 1, 'a second release does nothing');
   ports.dispose();
 });
+
+test('the loop starts on demand and never draws for scene time alone', () => {
+  const { widget, scene } = tickingWidget();
+  scene.requestRenderMode = false;
+  scene.maximumRenderTimeChange = 0;
+  widget.targetFrameRate = 60;
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(scene.maximumRenderTimeChange, Infinity);
+  assert.equal(ports.frame.diagnostics().targetFps, 60, 'the widget’s cap');
+  ports.dispose();
+});

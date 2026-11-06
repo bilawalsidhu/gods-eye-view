@@ -19,6 +19,7 @@ import {
   installRenderGovernor,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
 const FULL_RAW = {
   id: 'us7000abcd',
@@ -246,7 +247,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
   });
 
   _resetRenderGovernorForTest();
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   // Installing the governor enters idle mode, which itself paints one settling
   // frame. Drop that from the baseline or the enable assertion below can pass on
   // the install alone, without the manager ever requesting anything.

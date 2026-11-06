@@ -12,6 +12,8 @@ import { loadPhotorealisticTileset } from '../mapStartup.js';
 import { initLogoGaze } from '../logoGaze.js';
 import { inputFor } from '../input/dispatcher.js';
 import {
+  holdContinuousRender,
+  installRenderGovernor,
   uninstallRenderGovernor,
   governorRequestRender,
 } from '../renderGovernor.js';
@@ -69,9 +71,14 @@ export async function createApplicationScene({
     }
     throw refusal;
   }
+  // The governor keeps its holds on the renderer's frame port. The loop
+  // draws every frame until the application's tools are up (they release
+  // 'boot'), as it did before anything could hold it.
+  installRenderGovernor(renderer.frame);
+  holdContinuousRender('boot');
   defer(() => {
     try {
-      uninstallRenderGovernor(viewer);
+      uninstallRenderGovernor(renderer.frame);
     } finally {
       renderer.destroy();
     }
