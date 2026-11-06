@@ -246,13 +246,32 @@ test('an error that quotes the API key never reaches the log', async (t) => {
   });
   assert.equal(await store.current(), null);
   assert.ok(lines.length > 0, 'the failure is logged');
-  assert.ok(
-    lines.some((line) => line.includes('[redacted]')),
-    'the key is replaced, not just dropped with the message',
-  );
+  assert.ok(lines.every((line) => !line.includes('rejected')));
   assert.ok(
     lines.every((line) => !line.includes(key)),
     'the key is masked in the log',
+  );
+});
+
+test('untrusted fetch errors never appear in warning diagnostics', async (t) => {
+  const secret = 'synthetic-private-BEARER-XYZ123';
+  const lines = [];
+  const store = createUsgsWaterStore({
+    fetchImpl: async () => {
+      throw new Error(
+        `Authorization: Bearer ${secret} https://user:pass@host/?api_key=${secret}`,
+      );
+    },
+    cacheFile: tmpCache(t),
+    env: {},
+    log: { warn: (...args) => lines.push(args.join(' ')) },
+  });
+  assert.equal(await store.current(), null);
+  assert.ok(lines.length > 0);
+  assert.ok(
+    lines.every(
+      (line) => !line.includes(secret) && !line.includes('user:pass'),
+    ),
   );
 });
 

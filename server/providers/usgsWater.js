@@ -237,18 +237,10 @@ export function createUsgsWaterStore({
   log = console,
 } = {}) {
   const requestTimes = [];
-  /** Log a failure with the API key (if any) masked out of its message. */
-  function redact(text) {
-    const key = usgsWaterApiKey(env);
-    if (!key) return text;
-    return text
-      .split(key)
-      .join('[redacted]')
-      .split(encodeURIComponent(key))
-      .join('[redacted]');
-  }
-  function warn(label, error) {
-    log.warn?.(label, redact(String(error?.message || error)));
+  // Error messages can contain credentials from upstream or network libraries.
+  // Keep the contextual label, but never include untrusted exception details.
+  function warn(label) {
+    log.warn?.(label);
   }
   const names = new Map();
   let namesLoaded = false;
