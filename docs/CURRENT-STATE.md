@@ -181,14 +181,12 @@ one application, and only the globe-bound parts move to the next engine.
   in for tests, and `src/globe/testing/contractSuite.mjs` holds the checks
   every engine must pass. `npm test` runs them on the fake engine;
   `node scripts/qa-contract-suite.mjs <origin>` runs them in headless Chrome
-  on the real Cesium and Navara of a keyless dev server. On November 7, 2026
-  Cesium passed 57 of 57 and Navara 64 of 67: a resting move raised no
-  `moveEnd`, a click payload never came, and contact sonar lost an angle-only
-  change inside the app. `movers` and `lines` are required of every engine:
-  Cesium draws them with billboards, points, models and polyline primitives
-  (`src/globe/cesium/movers.js`, `lines.js`). The 57 Cesium checks above ran
-  without them; in Node their checks pass on Cesium without pixels or a
-  pointer, and the browser run with them is still to come.
+  on the real Cesium and Navara of a keyless dev server, with a real pointer
+  and real canvases; checks of state the app drives itself (contact sonar)
+  are skipped and named. On November 7, 2026 Cesium passed 63 of 63 and
+  Navara 66 of 66. `movers` and `lines` are required of every engine: Cesium
+  draws them with billboards, points, models and polyline primitives
+  (`src/globe/cesium/movers.js`, `lines.js`).
 - **Engine coupling.** `node scripts/report-engine-coupling.mjs` counts the
   engine-specific code outside the engines: renderer lines per engine, Cesium
   imports, `viewer` mentions, engine-name checks, raw Navara reads, Navara

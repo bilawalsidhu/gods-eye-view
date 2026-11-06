@@ -11,8 +11,8 @@
  * are refused here anyway, so neither engine draws photoreal tiles. The page
  * imports the suite from the dev server, so it shares the app's modules (an
  * engine event is recognised by the module that made it). It gets a real
- * pointer (the pick checks) and no map sources (the maps checks would ask for
- * photoreal tiles). Exits 1 when any check fails on any engine.
+ * pointer (the pick checks), real 2D canvases for sprite atlases, and no map
+ * sources (the maps checks would ask for photoreal tiles). Exits 1 when any check fails on any engine.
  */
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
@@ -26,11 +26,13 @@ const option = (name) =>
   args.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
 if (!origin) {
   console.error(
-    'Usage: node scripts/qa-contract-suite.mjs <origin> [--engine=cesium,navara] [--json=FILE]',
+    'Usage: node scripts/qa-contract-suite.mjs <origin> [--engine=cesium,navara] [--only=prefix,...] [--json=FILE]',
   );
   process.exit(2);
 }
 const engines = (option('engine') ?? 'cesium,navara').split(',');
+// --only=prefix,prefix runs just the checks whose names start with one.
+const only = option('only')?.split(',') ?? null;
 
 // Checks of state the running app drives itself, by name prefix, with the
 // owner. The app sets contact sonar on every frame (src/cyberSonarEngine.js),
@@ -68,9 +70,17 @@ async function runOn(browser, kind) {
     () => !window.__godsEyeView.engine.camera.flightActive(),
     { timeout: 60_000, polling: 250 },
   );
+  // Only the engine's canvas takes the pointer: the world overlay draws on a
+  // canvas of its own above it.
+  await page.evaluate(() =>
+    window.__godsEyeView.engine.host.canvas.setAttribute(
+      'data-contract-target',
+      '',
+    ),
+  );
   await page.addStyleTag({
     content:
-      '* { pointer-events: none !important; } canvas { pointer-events: auto !important; }',
+      '* { pointer-events: none !important; } [data-contract-target] { pointer-events: auto !important; }',
   });
   // A real left click and pointer move at a canvas position.
   await page.exposeFunction('__contractPointer', async (type, x, y) => {
@@ -86,47 +96,56 @@ async function runOn(browser, kind) {
       await page.mouse.move(...at);
     }
   });
-  const results = await page.evaluate(async (appOwned) => {
-    const { engine } = window.__godsEyeView;
-    const waitFrames = (count) =>
-      new Promise((resolve) => {
-        let left = count;
-        const remove = engine.frames.postRender.addEventListener(() => {
-          if (--left > 0) return;
-          remove();
-          resolve();
+  const results = await page.evaluate(
+    async (appOwned, only) => {
+      const { engine } = window.__godsEyeView;
+      const waitFrames = (count) =>
+        new Promise((resolve) => {
+          let left = count;
+          const remove = engine.frames.postRender.addEventListener(() => {
+            if (--left > 0) return;
+            remove();
+            resolve();
+          });
+          engine.render.request('contract-suite');
         });
-        engine.render.request('contract-suite');
-      });
-    const pointer = {
-      click: (x, y) => window.__contractPointer('click', x, y),
-      move: (x, y) => window.__contractPointer('move', x, y),
-    };
-    const { createContractSuite } =
-      await import('/src/globe/testing/contractSuite.mjs');
-    const outcome = [];
-    for (const { name, run } of createContractSuite(engine, {
-      waitFrames,
-      pointer,
-    })) {
-      const owner = appOwned.find(([prefix]) => name.startsWith(prefix));
-      if (owner) {
-        outcome.push({ name, skipped: owner[1] });
-        continue;
+      const pointer = {
+        click: (x, y) => window.__contractPointer('click', x, y),
+        move: (x, y) => window.__contractPointer('move', x, y),
+      };
+      const { createContractSuite } =
+        await import('/src/globe/testing/contractSuite.mjs');
+      const outcome = [];
+      // A real 2D canvas: a sprite atlas the engines can draw and pick.
+      const makeCanvas = (width, height) =>
+        Object.assign(document.createElement('canvas'), { width, height });
+      for (const { name, run } of createContractSuite(engine, {
+        waitFrames,
+        pointer,
+        makeCanvas,
+      })) {
+        if (only && !only.some((prefix) => name.startsWith(prefix))) continue;
+        const owner = appOwned.find(([prefix]) => name.startsWith(prefix));
+        if (owner) {
+          outcome.push({ name, skipped: owner[1] });
+          continue;
+        }
+        try {
+          await run();
+          outcome.push({ name, ok: true });
+        } catch (error) {
+          outcome.push({
+            name,
+            ok: false,
+            error: String(error?.message ?? error),
+          });
+        }
       }
-      try {
-        await run();
-        outcome.push({ name, ok: true });
-      } catch (error) {
-        outcome.push({
-          name,
-          ok: false,
-          error: String(error?.message ?? error),
-        });
-      }
-    }
-    return outcome;
-  }, APP_OWNED);
+      return outcome;
+    },
+    APP_OWNED,
+    only,
+  );
   await page.close();
   return { engine: kind, results, pageErrors };
 }
