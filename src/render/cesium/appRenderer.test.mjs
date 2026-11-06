@@ -318,7 +318,6 @@ test('the application refuses a renderer it cannot run on, and destroys it', asy
 });
 
 const EXPECTED_MISSING = [
-  'camera.cancelFlight',
   'camera.controls',
   'camera.controls.coast',
   'camera.controls.coast.drag',
@@ -334,9 +333,6 @@ const EXPECTED_MISSING = [
   'camera.controls.suspend',
   'camera.controls.zoomFactor',
   'camera.controls.zoomInputs',
-  'camera.flyTo',
-  'camera.flyToBounds',
-  'camera.flying',
   'camera.follow',
   'camera.followFramed',
   'camera.followOffset',
@@ -344,11 +340,8 @@ const EXPECTED_MISSING = [
   'camera.followOffset.set',
   'camera.followed',
   'camera.look',
-  'camera.lookAt',
   'camera.matrices',
   'camera.move',
-  'camera.onCommand',
-  'camera.release',
   'camera.rotateAround',
   'camera.setFov',
   'camera.zoom',

@@ -19,9 +19,10 @@ import {
 import { runCameraScript } from '../conformance/cameraRunner.js';
 import { updateCameraChanged } from './internals.js';
 
-const FRAME_MS = 1000 / 60;
-
-/** The contract's easings as Cesium's. */
+/**
+ * The contract's easings as Cesium's, kept here rather than taken from the
+ * port: the traces are the reference the port is checked against.
+ */
 const EASINGS = {
   linear: Cesium.EasingFunction.LINEAR_NONE,
   quadraticInOut: Cesium.EasingFunction.QUADRATIC_IN_OUT,
@@ -30,8 +31,11 @@ const EASINGS = {
   quinticInOut: Cesium.EasingFunction.QUINTIC_IN_OUT,
 };
 
+/** One frame of the virtual clock, ms. */
+export const FRAME_MS = 1000 / 60;
+
 /** Run `fn` with `performance.now()` reading the virtual clock. */
-async function withVirtualClock(fn) {
+export async function withVirtualClock(fn) {
   const real = Object.getOwnPropertyDescriptor(globalThis, 'performance');
   const clock = { now: 0 };
   Object.defineProperty(globalThis, 'performance', {
@@ -45,7 +49,8 @@ async function withVirtualClock(fn) {
   }
 }
 
-function headlessCamera() {
+/** A Cesium camera on a scene with no globe, sized as the scripts' viewport. */
+export function headlessCamera() {
   const scene = {
     canvas: {
       clientWidth: SCRIPT_VIEWPORT.width,

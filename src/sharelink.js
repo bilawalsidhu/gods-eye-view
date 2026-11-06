@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { fromDegrees, toDegrees, toRadians } from './geo/index.js';
+import { toDegrees, toRadians } from './geo/index.js';
 import { rendererOf } from './render/rendererOf.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from './bloom.js';
 import {
@@ -333,9 +332,7 @@ export class ShareLinkManager {
     if (this._destroyed || !state)
       return { succeeded: false, reason: 'unavailable' };
     const view = {
-      destination: Cesium.Cartesian3.clone(
-        fromDegrees(state.lon, state.lat, state.alt),
-      ),
+      destination: { lon: state.lon, lat: state.lat, height: state.alt },
       orientation: {
         heading: toRadians(state.heading),
         pitch: toRadians(state.pitch),
@@ -364,11 +361,11 @@ export class ShareLinkManager {
       };
       // Re-apply the final pose only while this share restoration still owns
       // navigation. A later user or voice command wins over delayed restore.
-      this.viewer.camera.flyTo({
-        ...view,
-        duration: 3.0,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: () => {
+      this._camera.flyTo(view.destination, {
+        orientation: view.orientation,
+        durationS: 3.0,
+        easing: 'cubicInOut',
+        onComplete: () => {
           if (
             this._destroyed ||
             restoreGeneration !== this._restoreGeneration ||
@@ -377,11 +374,10 @@ export class ShareLinkManager {
             releaseOwnedFlight('superseded');
             return;
           }
-          this.viewer.camera.setView(view);
-          this.viewer.scene?.requestRender?.();
+          this._camera.setView(view);
           releaseOwnedFlight('applied');
         },
-        cancel: () => releaseOwnedFlight('cancelled'),
+        onCancel: () => releaseOwnedFlight('cancelled'),
       });
     }
 

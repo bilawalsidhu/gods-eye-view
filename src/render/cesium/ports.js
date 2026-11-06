@@ -13,7 +13,8 @@
  */
 import * as Cesium from 'cesium';
 import { heightsFor } from '../../queries/heights.js';
-import { createCameraEvents } from '../camera/events.js';
+import { createCesiumCamera } from './camera.js';
+import { listenerList, toCartesian } from './common.js';
 import {
   atEndOfTick,
   billboardLoadError,
@@ -21,6 +22,8 @@ import {
   lastSeenCamera,
   renderPending,
 } from './internals.js';
+
+export { listenerList, toCartesian };
 
 /**
  * Where a listener's throw goes with no `error` listener: the platform's
@@ -35,46 +38,6 @@ function uncaught(error) {
     queueMicrotask(() => {
       throw error;
     });
-}
-
-/**
- * One subscription list under the contract's listener rules: subscription
- * order, one removed during delivery does not run, one added during
- * delivery waits for the next event, and a throw goes to `onThrow` while
- * the rest still run. Each subscription is its own entry, so a callback
- * subscribed twice runs twice.
- * @param {(error: unknown) => void} onThrow
- */
-export function listenerList(onThrow) {
-  const entries = [];
-  return {
-    get size() {
-      return entries.length;
-    },
-    on(cb) {
-      const entry = { cb, live: true };
-      entries.push(entry);
-      return () => {
-        entry.live = false;
-        const i = entries.indexOf(entry);
-        if (i >= 0) entries.splice(i, 1);
-      };
-    },
-    fire(...args) {
-      for (const entry of entries.slice()) {
-        if (!entry.live) continue;
-        try {
-          entry.cb(...args);
-        } catch (error) {
-          onThrow(error);
-        }
-      }
-    },
-    clear() {
-      for (const entry of entries) entry.live = false;
-      entries.length = 0;
-    },
-  };
 }
 
 /** The contract's colour as Cesium's. */
@@ -95,12 +58,6 @@ export function toImage(image) {
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(image.svg)}`;
   if (image?.canvas) return image.canvas;
   throw new Error('the Cesium renderer takes URL, SVG and canvas images only');
-}
-
-/** A contract position as ECEF. */
-export function toCartesian(pos) {
-  if ('x' in pos) return new Cesium.Cartesian3(pos.x, pos.y, pos.z);
-  return Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, pos.height ?? 0);
 }
 
 const ANCHORS = {
@@ -789,80 +746,8 @@ export function createCesiumPorts(widget, { capabilities }) {
     models: (spec) => makeSet('models', { ...spec }, buildModels),
   };
 
-  // Camera events: Cesium's own moveStart and moveEnd (500 ms after the
-  // last change, never while following), and `changed` measured per
-  // listener on every tick, where Cesium measures its single threshold.
-  const cameraEvents = createCameraEvents({
-    pose: () => cameraPort.pose(),
-    report,
-  });
-  removers.push(
-    scene.postUpdate.addEventListener(() => {
-      if (!disposed) cameraEvents.stepChanged();
-    }),
-    camera.moveStart.addEventListener(() => cameraEvents.emit('moveStart')),
-    camera.moveEnd.addEventListener(() => cameraEvents.emit('moveEnd')),
-  );
-
-  const cameraPort = {
-    on: (event, cb, options) => cameraEvents.on(event, cb, options),
-    setView(spec) {
-      const d = spec.destination;
-      if (d && 'rect' in d)
-        throw new Error('the Cesium renderer takes position destinations only');
-      const o = spec.orientation ?? {};
-      camera.setView({
-        ...(d ? { destination: toCartesian(d) } : {}),
-        orientation: {
-          heading: o.heading ?? 0,
-          pitch: o.pitch ?? -Math.PI / 2,
-          roll: o.roll ?? 0,
-        },
-      });
-      scene.requestRender();
-    },
-    viewRectangle() {
-      const rect = camera.computeViewRectangle(Cesium.Ellipsoid.WGS84);
-      if (!rect) return null;
-      const deg = Cesium.Math.toDegrees;
-      return {
-        west: deg(rect.west),
-        south: deg(rect.south),
-        east: deg(rect.east),
-        north: deg(rect.north),
-      };
-    },
-    pose() {
-      const v = (c) => ({ x: c.x, y: c.y, z: c.z });
-      // Cesium has no cartographic position for an eye at the earth's
-      // centre; the pose then says so with NaN.
-      const carto = camera.positionCartographic ?? {
-        longitude: NaN,
-        latitude: NaN,
-        height: NaN,
-      };
-      return {
-        lon: Cesium.Math.toDegrees(carto.longitude),
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        position: v(camera.positionWC),
-        direction: v(camera.directionWC),
-        up: v(camera.upWC),
-        right: v(camera.rightWC),
-        heading: camera.heading,
-        pitch: camera.pitch,
-        roll: camera.roll,
-        height: carto.height,
-        fovy: camera.frustum.fovy,
-        aspectRatio: camera.frustum.aspectRatio,
-        near: camera.frustum.near,
-        far: camera.frustum.far,
-        frameIsIdentity: Cesium.Matrix4.equals(
-          camera.transform,
-          Cesium.Matrix4.IDENTITY,
-        ),
-      };
-    },
-  };
+  const cameraPart = createCesiumCamera({ scene, camera, report });
+  const cameraPort = cameraPart.port;
 
   // --- Query -----------------------------------------------------------------
 
@@ -1220,7 +1105,7 @@ export function createCesiumPorts(widget, { capabilities }) {
       // A listener that disposes the renderer stops the rest of its event.
       for (const list of Object.values(rendererListeners)) list.clear();
       for (const list of Object.values(frameListeners)) list.clear();
-      cameraEvents.clear();
+      cameraPart.dispose();
       for (const done of [...pendingRenders]) done();
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) record.host = null;

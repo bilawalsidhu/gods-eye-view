@@ -456,12 +456,13 @@ test('share-link restore forces a final stationary render for Google 3D Tiles', 
 
   assert.ok(calls.flyTo, 'restore must start a camera flight');
   assert.equal(typeof calls.flyTo.complete, 'function');
+  const rendersInFlight = calls.renders;
   calls.flyTo.complete();
   assert.deepEqual(calls.setView, {
     destination: calls.flyTo.destination,
     orientation: calls.flyTo.orientation,
   });
-  assert.equal(calls.renders, 1);
+  assert.equal(calls.renders, rendersInFlight + 1, 'one render at rest');
 });
 
 test('newer navigation suppresses delayed share camera while non-camera state still restores', async () => {
