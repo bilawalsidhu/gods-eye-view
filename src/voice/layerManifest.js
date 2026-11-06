@@ -459,6 +459,7 @@ export const VOICE_OFF_LAYERS = Object.freeze({
     'informational airspace layer; no room in the prompt budget',
   'wildlife-sightings':
     'community observation layer; no room in the prompt budget',
+  'border-waits': 'border wait times layer; no room in the prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({

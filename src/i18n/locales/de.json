@@ -3166,5 +3166,15 @@
   "Open {name} on Acartia": "{name} auf Acartia öffnen",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "iNaturalist-Beitragende · Lizenzen je Eintrag",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist-Beitragende · Acartia {count} (Salish-See) · Lizenzen je Eintrag"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist-Beitragende · Acartia {count} (Salish-See) · Lizenzen je Eintrag",
+  "Under 15 min": "Unter 15 Min.",
+  "15–29 min": "15–29 Min.",
+  "30–59 min": "30–59 Min.",
+  "60 min or more": "60 Min. oder mehr",
+  "BORDER · {crossing}": "GRENZE · {crossing}",
+  "Border wait source unavailable": "Quelle für Grenzwartezeiten nicht verfügbar",
+  "Closed": "Geschlossen",
+  "No wait reported": "Keine Wartezeit gemeldet",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "Die Farbe zeigt die von der CBP gemeldete Wartezeit für Pkw bei der Einreise in die USA.",
+  "Border Wait Times": "Wartezeiten an der Grenze"
 }

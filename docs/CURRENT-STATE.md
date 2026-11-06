@@ -4371,6 +4371,7 @@ its criteria cannot be silently ignored.
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 | Prohibited & Restricted Airspace 🚫 | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry) | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js` | `/api/drone-airspace` | 1 h (server cache 1 h; stale-on-error) |
 | Wildlife Sightings 🦉 | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless) | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js` | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings` | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
+| Border Wait Times 🛂 | U.S. CBP land-border wait times (keyless, one document for every crossing); bundled crossing points from Wikidata and BTS | `src/layers/borderWaits/` via `src/app/layers/borderWaits.js` | `/api/border-waits` (CBP + CBSA) | 5 min (server cache 5 min) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -4411,6 +4412,8 @@ proxy.
 Polygons keep holes; pick ownership is deliberately unregistered so sibling
 cards still work over a zone. The row legend and selected card state that the
 layer is informational only and not a substitute for B4UFLY / LAANC.
+
+Border Wait Times draws one marker per CBP crossing, coloured by the passenger-vehicle wait to enter the U.S. (pedestrian, then commercial, when a crossing has no passenger lanes), with an ambient minute label. Selecting a marker opens a card listing each reported lane (standard, NEXUS/SENTRI, Ready, FAST), lanes open, CBP's update time, port hours and any notice. The proxy reads one capped, timed CBP document, normalizes it server-side, serves the last good snapshot marked stale when CBP fails, and logs crossings without a bundled location instead of drawing them. Cards for the 26 crossings whose facing Canada Border Services Agency office CBSA reports add a line with the travellers and commercial waits into Canada, read from CBSA's keyless CSV (Open Government Licence – Canada) through the same proxy with its own 5-minute cache; a CBSA failure leaves the CBP waits untouched, and CBSA offices with no CBP crossing are logged. `npm run qa:border-waits` (dev server at `QA_BASE_URL`, default `http://localhost:4173`) checks the live feed through the proxy, Michigan's five crossings, painted labels, a marker click opening its card and a clean disable.
 
 Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
 layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts

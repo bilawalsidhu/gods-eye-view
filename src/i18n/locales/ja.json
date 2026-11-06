@@ -3091,5 +3091,15 @@
   "Open {name} on Acartia": "Acartiaで{name}を開く",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "iNaturalist の投稿者 · ライセンスは記録ごと",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist の投稿者 · Acartia {count}（セイリッシュ海） · ライセンスは記録ごと"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist の投稿者 · Acartia {count}（セイリッシュ海） · ライセンスは記録ごと",
+  "Under 15 min": "15分未満",
+  "15–29 min": "15〜29分",
+  "30–59 min": "30〜59分",
+  "60 min or more": "60分以上",
+  "BORDER · {crossing}": "国境 · {crossing}",
+  "Border wait source unavailable": "国境待ち時間のデータソースを利用できません",
+  "Closed": "閉鎖",
+  "No wait reported": "待ち時間の報告なし",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "色は CBP が報告する米国入国時の乗用車の待ち時間を示します。",
+  "Border Wait Times": "国境の待ち時間"
 }

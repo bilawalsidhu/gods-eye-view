@@ -31,6 +31,7 @@ import { ghostMapsProxy } from './ghostMaps.js';
 import { droneAirspaceProxy } from './droneAirspace.js';
 import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
+import { borderWaitsProxy } from './borderWaits.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 
@@ -85,6 +86,7 @@ function localProviderPlugins({
     droneAirspaceProxy(),
     inaturalistProxy(),
     acartiaProxy(),
+    borderWaitsProxy(),
     keySetupEndpoint(),
   ];
 }

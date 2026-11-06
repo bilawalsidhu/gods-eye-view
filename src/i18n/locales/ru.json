@@ -3316,5 +3316,15 @@
   "Open {name} on Acartia": "Открыть {name} в Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Участники iNaturalist · лицензия у каждой записи",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Участники iNaturalist · Acartia {count} (море Сэлиш) · лицензия у каждой записи"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Участники iNaturalist · Acartia {count} (море Сэлиш) · лицензия у каждой записи",
+  "Under 15 min": "Менее 15 мин",
+  "15–29 min": "15–29 мин",
+  "30–59 min": "30–59 мин",
+  "60 min or more": "60 мин и более",
+  "BORDER · {crossing}": "ГРАНИЦА · {crossing}",
+  "Border wait source unavailable": "Источник времени ожидания на границе недоступен",
+  "Closed": "Закрыто",
+  "No wait reported": "Время ожидания не сообщается",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "Цвет показывает время ожидания легковых автомобилей для въезда в США по данным CBP.",
+  "Border Wait Times": "Ожидание на границе"
 }

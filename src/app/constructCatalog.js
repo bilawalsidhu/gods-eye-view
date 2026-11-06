@@ -31,6 +31,7 @@ import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
 import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
+import { createApplicationBorderWaits } from './layers/borderWaits.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
@@ -142,6 +143,7 @@ export function createApplicationCatalog({
           source: sources['wildlife-sightings'],
           groundFloor: surface.groundFloor,
         }),
+        createApplicationBorderWaits({ source: sources['border-waits'] }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
           surface,
