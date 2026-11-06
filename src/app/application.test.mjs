@@ -811,6 +811,102 @@ test('the recovery waits while a pointer is held on the globe', () => {
   assert.equal(timers.pending(), 0, 'disposed recovery holds no listeners');
 });
 
+/** A held-pointer recovery over a canvas in a document in a window. */
+function heldPointerRecovery() {
+  const timers = fakeTimers();
+  const { camera, scene, viewer } = realCamera({ width: 1225, height: 923 });
+  const window = new EventTarget();
+  const document = Object.assign(new EventTarget(), {
+    defaultView: window,
+    visibilityState: 'visible',
+  });
+  scene.canvas = Object.assign(new EventTarget(), {
+    clientWidth: 1225,
+    clientHeight: 923,
+    ownerDocument: document,
+  });
+  const dispose = installGlobeInViewRecovery(viewer, timers);
+  const pointer = (target, type, pointerId, init = {}) =>
+    target.dispatchEvent(
+      Object.assign(new Event(type), { pointerId, ...init }),
+    );
+  /** Press, move and hold still: the check defers while a pointer is held. */
+  const holdStill = () => {
+    aim(camera, reportedStuckView);
+    camera.moveStart.raiseEvent();
+    for (let i = 0; i < 8; i += 1) timers.tick();
+    camera.moveEnd.raiseEvent();
+    for (let i = 0; i < 8; i += 1) timers.tick();
+  };
+  const settle = () => {
+    for (let i = 0; i < 3; i += 1) timers.tick();
+  };
+  const recovered = () =>
+    Cesium.Math.equalsEpsilon(camera.pitch, -Math.PI / 2, 1e-6);
+  return {
+    camera,
+    document,
+    window,
+    dispose,
+    pointer,
+    holdStill,
+    settle,
+    recovered,
+    canvas: scene.canvas,
+  };
+}
+
+// Releasing one of two fingers cleared the held flag, and the recovery
+// turned the view down under the finger still on the glass.
+test('the recovery waits until every held pointer is released', () => {
+  const h = heldPointerRecovery();
+  h.pointer(h.canvas, 'pointerdown', 1);
+  h.pointer(h.canvas, 'pointerdown', 2);
+  h.holdStill();
+  h.pointer(h.document, 'pointerup', 1);
+  h.settle();
+  assert.equal(h.recovered(), false, 'left alone under the second finger');
+  assert.equal(globeOutOfFrame(h.camera), true);
+  h.pointer(h.document, 'pointercancel', 2);
+  h.settle();
+  assert.equal(h.recovered(), true, 'recovered once both are released');
+  h.dispose();
+});
+
+// A release the page never sees (the pointer let go outside the window)
+// must not hold the recovery off for good.
+for (const [label, lose] of [
+  ['the window loses focus', (h) => h.window.dispatchEvent(new Event('blur'))],
+  [
+    'the page is hidden',
+    (h) => {
+      h.document.visibilityState = 'hidden';
+      h.document.dispatchEvent(new Event('visibilitychange'));
+    },
+  ],
+  [
+    'the canvas loses the pointer capture',
+    (h) => h.pointer(h.canvas, 'lostpointercapture', 1),
+  ],
+  [
+    'the pointer moves with no button down',
+    (h) => h.pointer(h.document, 'pointermove', 1, { buttons: 0 }),
+  ],
+]) {
+  test(`a held pointer whose release is lost stops deferring when ${label}`, () => {
+    const h = heldPointerRecovery();
+    h.pointer(h.canvas, 'pointerdown', 1);
+    h.holdStill();
+    h.pointer(h.document, 'pointermove', 1, { buttons: 1 });
+    h.settle();
+    assert.equal(h.recovered(), false, 'left alone while held');
+    lose(h);
+    h.settle();
+    assert.equal(h.recovered(), true, 'recovered once the hold is let go');
+    h.dispose();
+  });
+}
+
 function fakeTimers() {
   let next = 1;
   const pending = new Map();

@@ -104,8 +104,12 @@ other ways a move can end looking away, such as a saved or shared view that did.
 Views with more surface than that, such as the oblique orbital Director shots,
 are left as they are, and so are tracked or locked cameras, a camera flight in
 progress, a Director scene while it plays (holds included), a pointer held
-down on the globe (a drag held still) and the 2D and Columbus modes; a check a
-flight, scene or held pointer defers runs once it ends. A Director
+down on the globe (a drag held still; with several fingers down, until the
+last is released) and the 2D and Columbus modes; a check a flight, scene or
+held pointer defers runs once it ends. A release outside the window that the
+page never sees counts as given once the window loses focus, the page is
+hidden, the canvas loses the pointer's capture, or the pointer moves with no
+button down. A Director
 shot loaded or replayed outside a run is not a playing scene. A view that loses
 its surface without a camera move (a resize, or turning the scope on) is left as
 it is until the next move. A voice turn requested while the camera is tracked is

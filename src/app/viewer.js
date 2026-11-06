@@ -207,26 +207,43 @@ export function installGlobeInViewRecovery(
     throw new TypeError('A complete Cesium viewer is required');
 
   // A pointer held on the globe is a gesture in progress, even when it holds
-  // still for half a second: the check waits for its release.
+  // still for half a second: the check waits until every pointer pressed on
+  // it (each finger of a pinch) is released. A release the page never sees,
+  // outside the window, is taken as given when the window loses focus, the
+  // page is hidden, the canvas loses the pointer's capture, or the pointer
+  // moves with no button down.
   const canvas = scene.canvas;
   const releaseTarget = canvas?.ownerDocument ?? canvas;
-  let pointerHeld = false;
-  const onPointerDown = () => {
-    pointerHeld = true;
+  const releaseWindow = canvas?.ownerDocument?.defaultView;
+  const heldPointers = new Set();
+  const onPointerDown = (event) => heldPointers.add(event?.pointerId);
+  const onPointerUp = (event) => heldPointers.delete(event?.pointerId);
+  const onPointerMove = (event) => {
+    if (event?.buttons === 0) heldPointers.delete(event.pointerId);
   };
-  const onPointerUp = () => {
-    pointerHeld = false;
+  const releaseAll = () => heldPointers.clear();
+  const onVisibilityChange = () => {
+    if (canvas.ownerDocument.visibilityState === 'hidden') releaseAll();
   };
-  canvas?.addEventListener?.('pointerdown', onPointerDown);
-  releaseTarget?.addEventListener?.('pointerup', onPointerUp);
-  releaseTarget?.addEventListener?.('pointercancel', onPointerUp);
+  const listeners = [
+    [canvas, 'pointerdown', onPointerDown],
+    [canvas, 'lostpointercapture', onPointerUp],
+    [releaseTarget, 'pointerup', onPointerUp],
+    [releaseTarget, 'pointercancel', onPointerUp],
+    [releaseTarget, 'pointermove', onPointerMove],
+    [canvas?.ownerDocument, 'visibilitychange', onVisibilityChange],
+    [releaseWindow, 'blur', releaseAll],
+  ];
+  for (const [target, type, listener] of listeners)
+    target?.addEventListener?.(type, listener);
 
   // Returns false while a flight, a paused scene or a held pointer defers the
   // check, so the caller can try again once it ends.
   const recover = () => {
     if (!isFreeGlobeCamera(viewer)) return true;
     // Cesium has no public running-flight flag.
-    if (camera._currentFlight || paused() || pointerHeld) return false;
+    if (camera._currentFlight || paused() || heldPointers.size > 0)
+      return false;
     const height = camera.positionCartographic?.height;
     if (
       !(height > minHeight) ||
@@ -310,9 +327,9 @@ export function installGlobeInViewRecovery(
     stopSettling();
     removeMoveEnd();
     removeMoveStart();
-    canvas?.removeEventListener?.('pointerdown', onPointerDown);
-    releaseTarget?.removeEventListener?.('pointerup', onPointerUp);
-    releaseTarget?.removeEventListener?.('pointercancel', onPointerUp);
+    for (const [target, type, listener] of listeners)
+      target?.removeEventListener?.(type, listener);
+    heldPointers.clear();
   };
 }
 
