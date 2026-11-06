@@ -201,8 +201,9 @@ function encode(state) {
   return params.toString();
 }
 
-// The ledger as published before the USGS water layers took 9, 00 and 01: the
-// allocation scenarios below start from it so "next free token 9" still holds.
+// The ledger as published on main before the USGS water layers took 00, 01 and
+// 02: the allocation scenarios below start from it, so each still exercises
+// "the next free token is 00".
 const PRE_USGS_RESERVATIONS = Object.freeze(
   Object.fromEntries(
     Object.entries(LAYER_STATE_TOKEN_RESERVATIONS).filter(
@@ -213,8 +214,8 @@ const PRE_USGS_RESERVATIONS = Object.freeze(
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 36);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 36);
+  assert.equal(REGISTERED_LAYER_IDS.length, 39);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 39);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.ok(REGISTERED_LAYER_IDS.includes('local-usgs-water'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
@@ -254,7 +255,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '00');
+  assert.equal(nextLayerStateToken(PRE_USGS_RESERVATIONS), '00');
+  assert.equal(nextLayerStateToken(), '03');
   assert.equal(
     nextLayerStateToken({
       ...PRE_USGS_RESERVATIONS,
@@ -315,8 +317,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     true,
   );
   assert.equal(
-    validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
-      ...LAYER_STATE_TOKEN_RESERVATIONS,
+    validateLayerStateAllocations(PRE_USGS_RESERVATIONS, {
+      ...PRE_USGS_RESERVATIONS,
       future: '00',
       next: '01',
     }),
@@ -324,8 +326,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   );
   assert.throws(
     () =>
-      validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
-        ...LAYER_STATE_TOKEN_RESERVATIONS,
+      validateLayerStateAllocations(PRE_USGS_RESERVATIONS, {
+        ...PRE_USGS_RESERVATIONS,
         future: '01',
       }),
     /next free token 00/,
@@ -511,7 +513,7 @@ test('unknown enabled-layer tokens reject the payload instead of becoming an emp
 });
 
 test('malformed enabled-layer lists reject the entire payload', () => {
-  for (const value of ['.c', 'c.', 'c..e', 'c.c', '02', 'c.02']) {
+  for (const value of ['.c', 'c.', 'c..e', 'c.c', 'zz', 'c.zz']) {
     assert.equal(
       decodeLayerStateParams(new URLSearchParams(`v=2&l=${value}`)),
       null,
@@ -542,7 +544,7 @@ test('Nepal event and locator have distinct enabled-only share tokens', () => {
 
 test('USGS water layers have stable enabled-only share tokens', () => {
   for (const [token, id] of [
-    ['9', 'local-usgs-water'],
+    ['02', 'local-usgs-water'],
     ['00', 'local-usgs-lakes'],
     ['01', 'local-usgs-springs'],
   ]) {
