@@ -80,7 +80,7 @@ function postWorkerError(post, request, seq, error) {
   post({
     type: 'error',
     request: request ?? null,
-    seq: seq ?? null,
+    seq: Number.isSafeInteger(seq) ? seq : null,
     message: workerDiagnostic(error),
   });
 }

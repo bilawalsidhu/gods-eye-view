@@ -18,6 +18,21 @@ function harness() {
   return { out, handle };
 }
 
+test('worker error does not echo an untrusted sequence value', () => {
+  const out = [];
+  const handle = createSatWorkerHandler((message) => out.push({ message }), {
+    engine: {
+      tick() {
+        throw new Error('synthetic failure');
+      },
+    },
+  });
+  handle({ type: 'tick', seq: 'SYNTHETIC_SECRETKEY123', timeMs: 0 });
+  assert.equal(out.at(-1).message.type, 'error');
+  assert.doesNotMatch(JSON.stringify(out.at(-1).message), /SECRETKEY123/);
+  assert.equal(out.at(-1).message.seq, null);
+});
+
 test('tle -> catalog meta; observer; tick -> packed Float32Array, transferred', () => {
   const { out, handle } = harness();
   handle({ type: 'tle', path: 'active', text: FIXTURE });
