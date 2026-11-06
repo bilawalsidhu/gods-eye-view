@@ -70,13 +70,13 @@ test('without GEV_NEWS_ORIGIN Core answers itself: Conflicts from GDELT, Local s
   const hotspots = await call('/hotspots');
   assert.equal(hotspots.status, 502);
   assert.deepEqual(hotspots.json, { error: 'news_upstream_error' });
-  const local = await call('/feed?hotspot=all&at=51.13,71.43');
+  const local = await call('/feed?hotspot=all&at=31.95,35.93');
   assert.equal(local.status, 503);
   assert.deepEqual(local.json, { error: 'no_key', key: 'worldnewsapi' });
   // The area is read from the bundled countries, with no key.
-  const area = await call('/outline?at=51.13,71.43&v=4');
+  const area = await call('/outline?at=31.95,35.93&v=4');
   assert.equal(area.status, 200);
-  assert.equal(area.json.area.name, 'Kazakhstan');
+  assert.equal(area.json.area.name, 'Jordan');
   // The client's allowlist still holds.
   assert.equal((await call('/feed?side=UA')).status, 400);
   assert.ok(hosts.length > 0);
@@ -206,7 +206,7 @@ test('a host that serves news only from its own server turns the built-in backen
   for (const url of [
     '/hotspots',
     '/feed?hotspot=all',
-    '/outline?at=51.13,71.43&v=4',
+    '/outline?at=31.95,35.93&v=4',
   ]) {
     const answer = await call(url);
     assert.equal(answer.status, 503, url);

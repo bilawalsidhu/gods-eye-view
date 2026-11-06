@@ -37,12 +37,12 @@ const LIVEUAMAP = {
     },
     {
       id: 102,
-      name: 'Floods kill dozens in Astana',
-      lat: '51.16940',
-      lng: '71.44910',
-      location: 'Astana',
+      name: 'Floods kill dozens in Amman',
+      lat: '31.95390',
+      lng: '35.91060',
+      location: 'Amman',
       timestamp: seconds('2026-11-05T10:00:00Z'),
-      link: 'https://asia.liveuamap.com/en/2026/5-november-astana',
+      link: 'https://mideast.liveuamap.com/en/2026/5-november-amman',
       img_share: '',
       video: '',
     },
@@ -83,8 +83,8 @@ const WORLD_NEWS = {
   news: [
     {
       id: 9001,
-      title: 'Visiting minister arrives in Astana for talks',
-      url: 'https://www.daily.example/en/minister-astana-talks',
+      title: 'Visiting minister arrives in Amman for talks',
+      url: 'https://www.daily.example/en/minister-amman-talks',
       image: 'https://www.daily.example/pics/visit.jpg',
       publish_date: '2026-11-05 08:30:00',
       language: 'en',
@@ -102,7 +102,7 @@ const WORLD_NEWS = {
     // Sport is left out.
     {
       id: 9004,
-      title: 'Astana Arlan win the cup final',
+      title: 'Al-Faisaly win the cup final',
       url: 'https://sport.example/cup',
       publish_date: '2026-11-05 09:00:00',
       category: 'sports',
@@ -452,13 +452,13 @@ test('an export not published yet is looked for again, and the day is kept a day
 
 test('Local names the country at the point and outlines it, with no key', async () => {
   const { ask, calls } = keyed({ env: {} });
-  const answer = await ask('/outline', 'at=51.13,71.43&v=4');
+  const answer = await ask('/outline', 'at=31.95,35.93&v=4');
   const outline = normalizeOutlinePayload(answer.body);
   assert.deepEqual(outline.area, {
-    key: 'KZ',
-    name: 'Kazakhstan',
+    key: 'JO',
+    name: 'Jordan',
     kind: 'country',
-    country: 'KZ',
+    country: 'JO',
   });
   assert.ok(outline.polygons.length > 0);
   const sea = await ask('/outline', 'at=0,-30&v=4');
@@ -472,12 +472,12 @@ test("Local in a country is its outlets' everyday news, pinned inside it, plus t
   const { ask, calls } = keyed();
   const answer = await ask(
     '/feed',
-    'hotspot=all&geo=1&today=1&events=1&limit=40&at=51.13,71.43',
+    'hotspot=all&geo=1&today=1&events=1&limit=40&at=31.95,35.93',
   );
   assert.equal(answer.status, 200);
   const search = calls.find((c) => host(c) === 'api.worldnewsapi.com');
   assert.equal(search.url.pathname, '/search-news');
-  assert.equal(search.url.searchParams.get('source-country'), 'kz');
+  assert.equal(search.url.searchParams.get('source-country'), 'jo');
   assert.equal(search.url.searchParams.has('categories'), false);
   assert.equal(
     search.url.searchParams.get('earliest-publish-date'),
@@ -497,13 +497,13 @@ test("Local in a country is its outlets' everyday news, pinned inside it, plus t
   assert.equal(visit.publisher, 'daily.example');
   assert.equal(visit.snippet, null, 'titles and links only');
   assert.equal(visit.geo.precision, 'country');
-  assert.equal(visit.geo.place, 'Kazakhstan');
+  assert.equal(visit.geo.place, 'Jordan');
   assert.equal(visit.event.image.publisher, 'daily.example');
   assert.equal(exploration.category, 'economy');
 
   // The point each is pinned at lies in the area Local outlines.
   const outline = normalizeOutlinePayload(
-    (await ask('/outline', 'at=51.13,71.43&v=4')).body,
+    (await ask('/outline', 'at=31.95,35.93&v=4')).body,
   );
   const { inPolygons } = await import('../../../src/layers/news/model.js');
   for (const report of reports)
@@ -555,7 +555,7 @@ test("GDELT's places are named by their town and the area there, not its old reg
 
 test("a country's news is read once per half hour and Liveuamap's feed once per five minutes", async () => {
   const { ask, calls, clock } = keyed();
-  const local = 'hotspot=all&at=51.13,71.43';
+  const local = 'hotspot=all&at=31.95,35.93';
   await ask('/feed', local);
   await ask('/feed', local);
   await ask('/hotspots');
@@ -573,7 +573,7 @@ test("a country's news is read once per half hour and Liveuamap's feed once per 
 
 test('Local without its key says which key it needs and reads nothing', async () => {
   const noLocal = keyed({ env: { LIVEUAMAP_API_KEY: 'live-key' } });
-  assert.deepEqual(await noLocal.ask('/feed', 'at=51.13,71.43'), {
+  assert.deepEqual(await noLocal.ask('/feed', 'at=31.95,35.93'), {
     status: 503,
     body: { error: 'no_key', key: 'worldnewsapi' },
   });
@@ -589,7 +589,7 @@ test('a refused Liveuamap key leaves GDELT; World News API refusing names its ke
   const conflicts = await refused.ask('/hotspots');
   assert.equal(conflicts.status, 200);
   assert.equal(conflicts.body.hotspots[0].counts.last24h, 4);
-  assert.deepEqual(await refused.ask('/feed', 'at=51.13,71.43'), {
+  assert.deepEqual(await refused.ask('/feed', 'at=31.95,35.93'), {
     status: 503,
     body: { error: 'key_rejected', key: 'worldnewsapi' },
   });
@@ -766,10 +766,10 @@ test('Local where only Conflicts reports speak answers 502 when they fail; in a 
     UPSTREAM_ERROR,
   );
   assert.equal(count(calls, 'api.worldnewsapi.com'), 0);
-  const kazakhstan = await ask('/feed', 'hotspot=all&at=51.13,71.43');
-  assert.equal(kazakhstan.status, 200);
+  const jordan = await ask('/feed', 'hotspot=all&at=31.95,35.93');
+  assert.equal(jordan.status, 200);
   assert.deepEqual(
-    kazakhstan.body.reports.map((r) => r.id),
+    jordan.body.reports.map((r) => r.id),
     ['wna-9001', 'wna-9002'],
   );
 });
@@ -809,7 +809,7 @@ test('a territory without a code is named as itself, not read as sea', async () 
 test('a stale Liveuamap or World News API read is served while it is read again', async () => {
   const answers = {};
   const { ask, calls, clock, settle } = keyed({ answers });
-  const local = 'hotspot=all&at=51.13,71.43';
+  const local = 'hotspot=all&at=31.95,35.93';
   const ids = (answer) => answer.body.reports.map((r) => r.id);
   assert.deepEqual(ids(await ask('/feed', local)), [
     'lum-102',
@@ -877,14 +877,14 @@ test("World News API's reads are a daily budget: spent, Local says key_quota and
     env: { WORLDNEWSAPI_KEY: 'wna-key', WORLDNEWSAPI_DAILY_READS: '2' },
   });
   const at = (point) => ask('/feed', `hotspot=all&at=${point}`);
-  assert.equal((await at('51.13,71.43')).status, 200);
+  assert.equal((await at('31.95,35.93')).status, 200);
   assert.equal((await at('48.85,2.35')).status, 200);
   // Germany would be the third read today.
   assert.deepEqual(await at('52.52,13.4'), KEY_QUOTA);
   assert.equal(count(calls, 'api.worldnewsapi.com'), 2);
-  // Kazakhstan, read earlier, is served from what was read.
+  // Jordan, read earlier, is served from what was read.
   clock.now += 31 * MINUTE;
-  const kept = await at('51.13,71.43');
+  const kept = await at('31.95,35.93');
   assert.equal(kept.status, 200);
   assert.equal(kept.body.reports.length, 2);
   assert.equal(count(calls, 'api.worldnewsapi.com'), 2);
@@ -901,13 +901,13 @@ test("World News API's reads are a daily budget: spent, Local says key_quota and
 
 test('World News API answering 402 is key_quota, and nothing more is asked today; a 429 is no quota', async () => {
   const paid = keyed({ answers: { worldnews: 402 } });
-  assert.deepEqual(await paid.ask('/feed', 'at=51.13,71.43'), KEY_QUOTA);
+  assert.deepEqual(await paid.ask('/feed', 'at=31.95,35.93'), KEY_QUOTA);
   paid.clock.now += 2 * MINUTE;
   assert.deepEqual(await paid.ask('/feed', 'at=48.85,2.35'), KEY_QUOTA);
   assert.equal(count(paid.calls, 'api.worldnewsapi.com'), 1);
   // A 429 is its per-second limit: an ordinary failure, tried again soon.
   const busy = keyed({ answers: { worldnews: 429 } });
-  assert.deepEqual(await busy.ask('/feed', 'at=51.13,71.43'), UPSTREAM_ERROR);
+  assert.deepEqual(await busy.ask('/feed', 'at=31.95,35.93'), UPSTREAM_ERROR);
   await paid.settle();
   await busy.settle();
 });
@@ -965,7 +965,7 @@ test('a town a disputed area is named after is named as the town alone', () => {
 test('World News API is credited on each of its reports', async () => {
   const { ask, settle } = keyed();
   const { reports } = normalizeFeedPayload(
-    (await ask('/feed', 'hotspot=all&at=51.13,71.43')).body,
+    (await ask('/feed', 'hotspot=all&at=31.95,35.93')).body,
   );
   const national = reports.filter((r) => r.kind === 'worldnewsapi');
   assert.ok(national.length > 0);
@@ -1056,7 +1056,7 @@ test('a failing file gets one strike a round, not three within seconds', async (
 test("a country's own news keeps World News API's category and no severity, whatever its words", async () => {
   const { worldNewsReport } = await import('./keyed.js');
   const { countryByCode } = await import('./areas.js');
-  const country = countryByCode('KZ');
+  const country = countryByCode('JO');
   const read = (title, category) =>
     worldNewsReport(
       {
@@ -1070,7 +1070,7 @@ test("a country's own news keeps World News API's category and no severity, what
       country,
     );
   const rankings = read(
-    'Kazakhstan Advances in Global Digital Rankings as AI Infrastructure Expands',
+    'Jordan Advances in Global Digital Rankings as AI Infrastructure Expands',
     'technology',
   );
   assert.equal(rankings.category, 'other');
@@ -1079,6 +1079,6 @@ test("a country's own news keeps World News API's category and no severity, what
     read('Startup advances to the next funding round', 'business').category,
     'economy',
   );
-  assert.equal(read('King visits Astana', 'politics').category, 'political');
+  assert.equal(read('King visits Amman', 'politics').category, 'political');
   assert.equal(read('Parliament session opens', null).category, 'other');
 });

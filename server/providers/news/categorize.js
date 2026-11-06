@@ -282,7 +282,7 @@ const RULES = {
     ['president', 0.5],
     ['minister', 0.5],
     ['statement', 0.5],
-    // A state visit ("King of Jordan arrives in Astana").
+    // A state visit ("Emir of Qatar arrives in Amman").
     ['visit', 0.5],
     ['delegation', 0.5],
     ['agreement', 0.5],
@@ -345,7 +345,7 @@ const RULES = {
 
 // Business, trade, industry and energy, counted only when nothing physical
 // happened (categorizeText): an oil depot struck is a strike. English,
-// Russian, Ukrainian, Kazakh-press Russian, Turkish and the European stems.
+// Russian, Ukrainian, Turkish and the European stems.
 RULES.economy = [
   'econom',
   'gdp$',
