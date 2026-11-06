@@ -686,3 +686,32 @@ test('a voice zoom during a tilt to an angle passes on the new end angle', async
   );
   assert.match(zoom.note, /horizon/);
 });
+
+// Late in the tilt the camera is already past the angle the new range's
+// horizon allows (from 400 km at -8°, a zoom out x2.5 reported -8° and the
+// next frame jumped to -9.4°): it eases to that limit with no jump, and the
+// zoom's reply names the angle it ends at, not the one it stood at.
+test('a late zoom out during a tilt eases to the new limit and reports it', (t) => {
+  const h = harness(t, { height: 400_000 });
+  moveCamera({ motion: 'tilt', pitchDeg: -5 });
+  for (let i = 0; i < 70; i += 1) h.tick();
+  const zoom = adjustOrbitRange(2.5);
+  assert.equal(zoom.changed, true);
+  let last = pitchDeg(h.camera);
+  let maxStep = 0;
+  for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) {
+    h.tick();
+    maxStep = Math.max(maxStep, Math.abs(pitchDeg(h.camera) - last));
+    last = pitchDeg(h.camera);
+  }
+  assert.equal(getActiveCameraMotion(), null, 'tilt must finish');
+  assert.ok(maxStep < 0.5, `pitch jumped ${maxStep}° in one frame`);
+  assert.ok(h.viewTarget(), 'the crosshair is on the sky');
+  // Replies give whole degrees: the reported angle is the reached one rounded.
+  assert.equal(
+    zoom.pitchDeg,
+    Math.round(pitchDeg(h.camera)),
+    `camera at ${pitchDeg(h.camera)}°, zoom reported ${zoom.pitchDeg}°`,
+  );
+  assert.match(zoom.note, /horizon/);
+});

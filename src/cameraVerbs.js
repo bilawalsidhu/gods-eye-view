@@ -1378,12 +1378,22 @@ function tiltClearanceBinds(range) {
  */
 function tiltUpLimit({ target, pivot }) {
   if (!pivot || tiltClearanceBinds(pivot.range)) return PITCH_MAX;
-  const pitch = Math.max(pivot.pitch, tiltPivotPitchMax(pivot.range));
-  // The camera's position for that pivot pitch, as lookAt places it.
+  return Math.min(
+    PITCH_MAX,
+    pivotCameraPitch(
+      target,
+      pivot,
+      Math.max(pivot.pitch, tiltPivotPitchMax(pivot.range)),
+    ),
+  );
+}
+
+/** The camera pitch lookAt gives for this pivot at the given pivot pitch. */
+function pivotCameraPitch(target, { heading, range }, pitch) {
   const offset = new Cesium.Cartesian3(
-    -pivot.range * Math.cos(pitch) * Math.sin(pivot.heading),
-    -pivot.range * Math.cos(pitch) * Math.cos(pivot.heading),
-    -pivot.range * Math.sin(pitch),
+    -range * Math.cos(pitch) * Math.sin(heading),
+    -range * Math.cos(pitch) * Math.cos(heading),
+    -range * Math.sin(pitch),
   );
   const eye = Cesium.Matrix4.multiplyByPoint(
     Cesium.Transforms.eastNorthUpToFixedFrame(target),
@@ -1394,9 +1404,8 @@ function tiltUpLimit({ target, pivot }) {
   Cesium.Cartesian3.normalize(look, look);
   const ellipsoid = _viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
   const upAtEye = ellipsoid.geodeticSurfaceNormal(eye, new Cesium.Cartesian3());
-  return Math.min(
-    PITCH_MAX,
-    Math.asin(Cesium.Math.clamp(Cesium.Cartesian3.dot(look, upAtEye), -1, 1)),
+  return Math.asin(
+    Cesium.Math.clamp(Cesium.Cartesian3.dot(look, upAtEye), -1, 1),
   );
 }
 
@@ -2092,16 +2101,37 @@ export function adjustOrbitRange(factor) {
 /**
  * A zoom changed the range a tilt to an angle holds, and with it the place's
  * horizon limit: aim the tilt at the angle asked for or the new limit,
- * whichever comes first, from where the camera is now. Returns the end angle
- * and a note for the reply when that end moved, otherwise nothing.
+ * whichever comes first, from where the camera is now. The pivot pitch is
+ * re-solved so the new range keeps the camera's pitch, and a limit the camera
+ * is already past is eased down to rather than jumped to. Returns the end
+ * angle and a note for the reply when that end moved, otherwise nothing.
  */
 function retargetTiltAfterZoom(m) {
   if (m.kind !== 'tilt' || m.mode !== 'once' || m.askedPitch === undefined)
     return {};
   const from = _viewer.camera.pitch;
   if (!(m.askedPitch > from)) return {};
-  const limit = tiltUpLimit({ target: m.target, pivot: m.hpr });
-  const goal = Math.min(m.askedPitch, Math.max(from, limit));
+  if (m.hpr) {
+    // At the same pivot pitch a longer range looks down more steeply (the
+    // Earth curves away): find the pivot pitch that holds this camera pitch.
+    for (let i = 0; i < 4; i += 1) {
+      const error = from - pivotCameraPitch(m.target, m.hpr, m.hpr.pitch);
+      if (Math.abs(error) < 1e-7) break;
+      m.hpr.pitch = Cesium.Math.clamp(
+        m.hpr.pitch + error,
+        -Cesium.Math.PI_OVER_TWO,
+        0,
+      );
+    }
+  }
+  const limit =
+    m.hpr && !tiltClearanceBinds(m.hpr.range)
+      ? Math.min(
+          PITCH_MAX,
+          pivotCameraPitch(m.target, m.hpr, tiltPivotPitchMax(m.hpr.range)),
+        )
+      : PITCH_MAX;
+  const goal = Math.min(m.askedPitch, limit);
   if (Math.abs(goal - m.goalPitch) < 1e-6) return {};
   m.goalPitch = goal;
   m.startPitch = from;
