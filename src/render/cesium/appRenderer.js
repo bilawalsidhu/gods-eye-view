@@ -34,6 +34,9 @@ import { cesiumCapabilities, createCesiumPorts } from './ports.js';
 
 const viewers = new WeakMap();
 
+/** Capabilities of ports the application renderer does not have yet. */
+const NOT_YET = ['styles', 'bloom', 'sharpen'];
+
 /** A Set no one can change once built, so `capabilities` stays true. */
 export class ReadonlySet extends Set {
   #sealed;
@@ -91,7 +94,11 @@ export function createCesiumRendererPlugin({
       let capabilities;
       try {
         viewer = createViewer({ container, creditContainer });
-        capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
+        // Effects are not the application's yet: its styles still run
+        // through stages of their own.
+        capabilities = new ReadonlySet(
+          cesiumCapabilities(viewer.scene).filter((c) => !NOT_YET.includes(c)),
+        );
         ports = createCesiumPorts(viewer, { capabilities });
         input = createCesiumInput(viewer, {
           query: ports.query,

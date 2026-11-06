@@ -3,7 +3,7 @@
  * @description The part of the Cesium renderer the reference scenes need,
  * through the contract's own members: a bare globe and sky, icons, points,
  * lines, shapes and models, `setView`, picks and projection, the frame
- * phases, pointer input, credits, settling and capture. The
+ * phases, pointer input, credits, effects, settling and capture. The
  * `/dev/conformance/` page draws the scenes with it to make and check the
  * visual references.
  *
@@ -280,6 +280,7 @@ export async function createCesiumSceneRenderer({
     camera: ports.camera,
     query: ports.query,
     input: input.port,
+    effects: ports.effects,
     capture: ports.capture,
     credits: ports.credits,
     whenSettled,
