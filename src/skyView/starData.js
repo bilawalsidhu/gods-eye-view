@@ -125,6 +125,25 @@ export function parseSkyData(starsJson, constellationsJson) {
 
 let cached = null;
 
+function skyStatusError(status) {
+  const code = Number(status);
+  if (Number.isInteger(code) && code >= 100 && code <= 599)
+    return new Error(`sky data ${code}`);
+  return new Error('sky data fetch failed');
+}
+
+/** Network and parser failures must not carry the request URL or exception text. */
+function publishedSkyError(error) {
+  if (error instanceof SkyDataError) return error;
+  if (
+    error instanceof Error &&
+    /^sky data \d{3}$/.test(error.message) &&
+    error.cause == null
+  )
+    return error;
+  return new Error('sky data fetch failed');
+}
+
 /**
  * Fetch both catalogues (same-origin static assets emitted by Vite) and
  * validate them. Memoised; a failure clears the memo so a retry can work.
@@ -137,15 +156,24 @@ export function loadSkyData({ fetchImpl = globalThis.fetch } = {}) {
     import.meta.url,
   );
   const getJson = async (url) => {
-    const response = await fetchImpl(url);
-    if (!response.ok) throw new Error(`sky data ${response.status} for ${url}`);
-    return response.json();
+    let response;
+    try {
+      response = await fetchImpl(url);
+    } catch (error) {
+      throw publishedSkyError(error);
+    }
+    if (!response?.ok) throw skyStatusError(response?.status);
+    try {
+      return await response.json();
+    } catch (error) {
+      throw publishedSkyError(error);
+    }
   };
   cached = Promise.all([getJson(starsUrl), getJson(constellationsUrl)])
     .then(([stars, constellations]) => parseSkyData(stars, constellations))
     .catch((error) => {
       cached = null;
-      throw error;
+      throw publishedSkyError(error);
     });
   return cached;
 }
@@ -196,14 +224,13 @@ export function loadBoundaries({ fetchImpl = globalThis.fetch } = {}) {
   boundariesCached = Promise.resolve()
     .then(() => fetchImpl(url))
     .then((response) => {
-      if (!response.ok)
-        throw new Error(`sky data ${response.status} for ${url}`);
+      if (!response?.ok) throw skyStatusError(response?.status);
       return response.json();
     })
     .then(parseBoundaries)
     .catch((error) => {
       boundariesCached = null;
-      throw error;
+      throw publishedSkyError(error);
     });
   return boundariesCached;
 }

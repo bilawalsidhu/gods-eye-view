@@ -37,6 +37,33 @@ export const MAX_EXTRAPOLATE_MS = 15_000;
 /** Cap on the azimuth an extrapolation may add (near the zenith az races). */
 const MAX_AZ_STEP_DEG = 10;
 
+const KNOWN_CATALOG_PATHS = new Set([
+  ...SKY_CORE_GROUPS.map((group) => group.path),
+  ACTIVE_PATH,
+  STARLINK_PATH,
+]);
+// Worker messages the page may keep. Anything else is replaced so a raw
+// exception cannot land in lastError.
+const SAFE_WORKER_DIAGNOSTICS = new Set([
+  'no observer',
+  'bad time',
+  'worker request failed',
+]);
+
+function catalogLoadDiagnostic(path, error) {
+  const label = KNOWN_CATALOG_PATHS.has(path) ? path : 'catalog';
+  const message = typeof error?.message === 'string' ? error.message : '';
+  const http = /^HTTP (\d{3})$/.exec(message);
+  if (http) return `${label}: HTTP ${http[1]}`;
+  return `${label}: catalog fetch failed`;
+}
+
+function workerErrorDiagnostic(message) {
+  return SAFE_WORKER_DIAGNOSTICS.has(message)
+    ? message
+    : 'worker request failed';
+}
+
 function defaultCreateWorker() {
   if (typeof Worker !== 'function') return null;
   // Keep this the literal `new Worker(new URL(...), { type: 'module' })`
@@ -49,9 +76,25 @@ function defaultCreateWorker() {
 
 /** TLE text of a group from the same-origin CelesTrak proxy. */
 export async function fetchCelestrakText(path) {
-  const response = await globalThis.fetch(`/api/celestrak/${path}`);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.text();
+  // Fetch failures name the request URL. The page only needs a fixed
+  // diagnostic, plus the HTTP status when the proxy answered.
+  let response;
+  try {
+    response = await globalThis.fetch(`/api/celestrak/${path}`);
+  } catch {
+    throw new Error('catalog fetch failed');
+  }
+  if (!response?.ok) {
+    const status = response?.status;
+    if (Number.isInteger(status) && status >= 100 && status <= 599)
+      throw new Error(`HTTP ${status}`);
+    throw new Error('catalog fetch failed');
+  }
+  try {
+    return await response.text();
+  } catch {
+    throw new Error('catalog fetch failed');
+  }
 }
 
 /**
@@ -185,7 +228,7 @@ export function createSatSky({
       .catch((error) => {
         if (worker !== target) return;
         loads.set(path, 'error');
-        lastError = `${path}: ${error?.message || error}`;
+        lastError = catalogLoadDiagnostic(path, error);
         notify('load-error');
         // Starlink rides in `active`; without it, fetch the Starlink group.
         if (path === ACTIVE_PATH) ensureData();
@@ -308,7 +351,7 @@ export function createSatSky({
       acceptTick(msg);
       if (wantForce) requestTick(true);
     } else if (msg.type === 'error') {
-      lastError = msg.message;
+      lastError = workerErrorDiagnostic(msg.message);
       if (msg.request === 'tick' && msg.seq === pendingSeq) pendingSeq = null;
       if (msg.request === 'passes') lastPassRequestMs = null;
       notify('worker-error');
@@ -433,9 +476,9 @@ export function createSatSky({
       if (!worker) {
         try {
           worker = createWorker();
-        } catch (error) {
+        } catch {
           worker = null;
-          lastError = String(error?.message || error);
+          lastError = 'satellite worker unavailable';
         }
         if (!worker) {
           status = 'unavailable';

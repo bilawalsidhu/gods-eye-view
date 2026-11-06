@@ -91,6 +91,42 @@ const isTileset = (Cesium, primitive) =>
   Boolean(Cesium.Cesium3DTileset) &&
   primitive instanceof Cesium.Cesium3DTileset;
 
+/**
+ * Height above which `ScreenSpaceCameraController.update` does not adjust
+ * for terrain. Below it, a settled `scene.globeHeight` lifts the camera to
+ * `globeHeight + minimumZoomDistance` — on the next update if
+ * `_lastGlobeHeight` has converged, or ~24 frames later if it is still 0.
+ * @param {object} controller
+ * @returns {number}
+ */
+export function collisionSafeHeightM(controller) {
+  const internal = controller?._minimumCollisionTerrainHeight;
+  if (Number.isFinite(internal)) return internal;
+  const published = controller?.minimumCollisionTerrainHeight;
+  if (Number.isFinite(published)) return published;
+  return 15000;
+}
+
+/**
+ * True when writing `enableCollisionDetection = true` would let the real
+ * controller move this camera. The flag write itself does not; `update()`
+ * does, once the sampled surface has settled.
+ * @param {object} camera
+ * @param {object} controller
+ * @param {boolean} enableCollisionDetection Saved flag about to be restored.
+ * @returns {boolean}
+ */
+export function collisionRestoreLifts(
+  camera,
+  controller,
+  enableCollisionDetection,
+) {
+  if (enableCollisionDetection !== true) return false;
+  if (!controller || !('enableCollisionDetection' in controller)) return false;
+  const height = camera?.positionCartographic?.height;
+  return Number.isFinite(height) && height < collisionSafeHeightM(controller);
+}
+
 /** Scene flags Sky mode may change, and the clock. */
 export function snapshotScene(Cesium, viewer, { nowMs = Date.now() } = {}) {
   const scene = viewer.scene;
@@ -153,11 +189,23 @@ export function restoreScene(
   set(scene.skyBox, 'show', snap.skyBoxShow);
   set(scene.skyAtmosphere, 'show', snap.skyAtmosphereShow);
   set(scene.screenSpaceCameraController, 'enableInputs', snap.enableInputs);
-  set(
-    scene.screenSpaceCameraController,
-    'enableCollisionDetection',
-    snap.enableCollisionDetection,
-  );
+  // Restoring collision below the controller's safe height lets update()
+  // lift the camera onto the settled surface (seen: +117 m at eye height
+  // over a 138 m surface). Leave the flag off; the caller restores it
+  // once the camera is high enough that update() will not move it.
+  if (
+    !collisionRestoreLifts(
+      viewer.camera,
+      scene.screenSpaceCameraController,
+      snap.enableCollisionDetection,
+    )
+  ) {
+    set(
+      scene.screenSpaceCameraController,
+      'enableCollisionDetection',
+      snap.enableCollisionDetection,
+    );
+  }
   for (const { primitive, show } of snap.tilesets) {
     if (!primitive.isDestroyed?.()) primitive.show = show;
   }

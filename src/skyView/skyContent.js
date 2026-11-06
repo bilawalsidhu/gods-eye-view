@@ -361,8 +361,9 @@ export function createSkyContent({
         requestRedraw();
         return loaded;
       })
-      .catch((error) => {
-        dataError = error;
+      .catch(() => {
+        // Keep the failure, not the exception: its message can name a URL.
+        dataError = 'star data could not be loaded';
         loading = null;
         setDataStatus('Star data could not be loaded; stars are off.');
         return null;
@@ -826,6 +827,10 @@ export function createSkyContent({
       if (dataError) return 'error';
       if (data) return 'ready';
       return loading ? 'loading' : 'idle';
+    },
+    /** Fixed catalogue-load diagnostic, or null. Never an exception object. */
+    get dataError() {
+      return dataError;
     },
     get data() {
       return data;

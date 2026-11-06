@@ -7,6 +7,7 @@ import {
   MAX_EXTRAPOLATE_MS,
   createSatSky,
   extrapolateAzEl,
+  fetchCelestrakText,
   unpackRecords,
 } from './satSky.js';
 import { createSatWorkerHandler } from './satWorker.js';
@@ -521,4 +522,105 @@ test('x reverse play: a running pass scan is never restarted by playback ticks; 
   assert.equal(passCoverage(state.fromMs, time), 'ok');
   assert.ok(state.fromMs <= time && time - state.fromMs <= RESCAN_AFTER_MS);
   sky.stop();
+});
+
+const SECRET = 'https://user:pass@host/?api_key=SECRETKEY123';
+
+function assertNoSecret(value) {
+  const text = JSON.stringify(value);
+  assert.equal(text.includes('SECRETKEY123'), false, text);
+  assert.equal(text.includes('pass@host'), false, text);
+}
+
+test('catalog fetch failures keep load status and a fixed diagnostic', async () => {
+  const sky = createSatSky({
+    createWorker: () => ({
+      postMessage() {},
+      addEventListener() {},
+      removeEventListener() {},
+      terminate() {},
+    }),
+    fetchText: async (path) => {
+      const error = new Error(
+        `Failed to parse URL from /api/celestrak/${path}?api_key=${SECRET}`,
+      );
+      error.name = SECRET;
+      error.cause = new Error(SECRET);
+      throw error;
+    },
+    timers: fakeTimers(),
+  });
+  sky.start(OBS);
+  await settle();
+  assert.equal(sky.loads.get('active'), 'error');
+  assert.equal(sky.status, 'loading');
+  assert.equal(sky.lastError, 'active: catalog fetch failed');
+  assertNoSecret(sky.lastError);
+});
+
+test('a worker that fails to start stays unavailable without exception text', () => {
+  const sky = createSatSky({
+    createWorker: () => {
+      const error = new Error(`worker failed ${SECRET}`);
+      error.name = SECRET;
+      throw error;
+    },
+    timers: fakeTimers(),
+  });
+  assert.equal(sky.start(OBS), false);
+  assert.equal(sky.status, 'unavailable');
+  assert.equal(sky.lastError, 'satellite worker unavailable');
+  assertNoSecret(sky.lastError);
+});
+
+test('a worker error clears the in-flight tick and drops secret text', () => {
+  const { worker, sky } = setup({ auto: false });
+  assert.equal(sky.start(OBS), true);
+  assert.equal(sky.pending, true);
+  const seq = worker.ticks().at(-1).seq;
+  worker.dispatchEvent(
+    Object.assign(new Event('message'), {
+      data: {
+        type: 'error',
+        request: 'tick',
+        seq,
+        message: `boom ${SECRET}`,
+      },
+    }),
+  );
+  assert.equal(sky.pending, false);
+  assert.equal(sky.lastError, 'worker request failed');
+  assertNoSecret(sky.lastError);
+});
+
+test('fetchCelestrakText keeps HTTP status and hides fetch exception URLs', async () => {
+  const orig = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 401,
+      text: async () => '',
+    });
+    await assert.rejects(fetchCelestrakText('active'), (error) => {
+      assert.equal(error.message, 'HTTP 401');
+      assertNoSecret(error.message);
+      return true;
+    });
+    globalThis.fetch = async (url) => {
+      const error = new TypeError(`Failed to parse URL from ${url}`);
+      error.cause = new Error(SECRET);
+      throw error;
+    };
+    await assert.rejects(
+      fetchCelestrakText(`active?api_key=${SECRET}`),
+      (error) => {
+        assert.equal(error.message, 'catalog fetch failed');
+        assert.equal(error.cause, undefined);
+        assertNoSecret(`${error.message}\n${error.stack ?? ''}`);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = orig;
+  }
 });

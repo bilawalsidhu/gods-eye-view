@@ -94,6 +94,72 @@ test('ticks for sets not asked are absent; bad messages answer with an error, ne
     type: 'error',
     request: 'tick',
     seq: 9,
-    message: 'boom',
+    message: 'worker request failed',
   });
+});
+
+test('worker error diagnostics stay functional and omit exception secrets', () => {
+  const secret = 'https://user:pass@host/?api_key=SECRETKEY123';
+  const out = [];
+  const broken = createSatWorkerHandler((message) => out.push(message), {
+    engine: {
+      tick() {
+        const error = new Error(`tick exploded ${secret}`);
+        error.name = secret;
+        error.cause = new Error(secret);
+        throw error;
+      },
+      loadGroup() {
+        throw secret;
+      },
+    },
+  });
+  broken({ type: 'tick', seq: 4, timeMs: 0 });
+  const tickError = out.at(-1);
+  assert.equal(tickError.type, 'error');
+  assert.equal(tickError.request, 'tick');
+  assert.equal(tickError.seq, 4);
+  assert.equal(tickError.message, 'worker request failed');
+  assert.equal(JSON.stringify(tickError).includes('SECRETKEY123'), false);
+  assert.equal(JSON.stringify(tickError).includes('pass@host'), false);
+
+  broken({ type: 'tle', path: 'active', text: secret });
+  const tleError = out.at(-1);
+  assert.equal(tleError.request, 'tle');
+  assert.equal(tleError.message, 'worker request failed');
+  assert.equal(JSON.stringify(tleError).includes('SECRETKEY123'), false);
+
+  const functional = createSatWorkerHandler((message) => out.push(message));
+  functional({ type: 'passes', timeMs: Date.now() });
+  assert.equal(out.at(-1).message, 'no observer');
+  functional({ type: 'observer', latDeg: 29.7, lonDeg: -95.4 });
+  functional({ type: 'passes', timeMs: secret });
+  assert.equal(out.at(-1).request, 'passes');
+  assert.equal(out.at(-1).message, 'bad time');
+  assert.equal(JSON.stringify(out.at(-1)).includes('SECRETKEY123'), false);
+});
+
+test('a later pass-scan slice posts a fixed diagnostic, not the exception', () => {
+  const secret = 'https://user:pass@host/?api_key=SECRETKEY123';
+  const posted = [];
+  let clocks = 0;
+  const handle = createSatWorkerHandler((message) => posted.push(message), {
+    schedule: (fn) => fn(),
+    clock: () => {
+      clocks += 1;
+      if (clocks >= 3) throw new Error(`slice exploded ${secret}`);
+      return 0;
+    },
+    sliceMs: 0,
+  });
+  handle({ type: 'tle', path: 'stations', text: FIXTURE });
+  handle({ type: 'observer', latDeg: 29.7604, lonDeg: -95.3698 });
+  handle({ type: 'passes', timeMs: Date.parse('2026-10-11T03:00:00Z') });
+  const error = posted.find((message) => message.type === 'error');
+  assert.ok(error, `no slice error in ${JSON.stringify(posted.at(-1))}`);
+  assert.equal(error.request, 'passes');
+  assert.equal(error.seq, null);
+  assert.equal(error.message, 'worker request failed');
+  assert.equal(JSON.stringify(error).includes('SECRETKEY123'), false);
+  assert.equal(JSON.stringify(error).includes('pass@host'), false);
 });
