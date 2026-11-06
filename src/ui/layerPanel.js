@@ -11,6 +11,7 @@ import {
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
+import { createGravityPanel } from './gravityPanel.js';
 import { translateFeedError, translateStatusLine } from './statusText.js';
 import {
   formatNumber,
@@ -78,6 +79,7 @@ const PANEL_GROUPS = [
       'fire-perimeters',
       'gnss-integrity',
       's2-ghostmaps',
+      'gravity',
     ],
   },
   {
@@ -314,6 +316,12 @@ export class LayerPanel {
         container?.ownerDocument?.getElementById?.('weather-panel-body'),
       setLayerParams: this.setLayerParams,
     });
+    this._gravityPanel?.destroy();
+    this._gravityPanel = createGravityPanel({
+      container:
+        container?.ownerDocument?.getElementById?.('gravity-panel-body'),
+      setLayerParams: this.setLayerParams,
+    });
     this._mountRecentImagery();
     this._renderToggles();
   }
@@ -349,6 +357,8 @@ export class LayerPanel {
     this._releaseBindings();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
+    this._gravityPanel?.destroy();
+    this._gravityPanel = null;
     this._recentImageryPanel?.destroy();
     this._recentImageryPanel = null;
     this._recentImageryFactory = null;
@@ -613,6 +623,10 @@ export class LayerPanel {
   }
 
   _refreshWeatherPanel() {
+    const gravity = this.getAll().find(({ id }) => id === 'gravity');
+    this._gravityPanel?.update(
+      gravity?.enabled ? this._rowControlsFor('gravity')?.card || null : null,
+    );
     this._weatherPanel?.update(
       this.getAll()
         .filter(
