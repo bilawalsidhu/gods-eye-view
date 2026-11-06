@@ -264,10 +264,10 @@ test('no runtime file is in a language the ratchet cannot read', () => {
   assert.deepEqual(unread, [], 'Teach the ratchet to read these first.');
 });
 
-test('the renderer contract, stub and conformance suite stay Cesium-free', () => {
+test('the renderer contract, stub, input router and conformance suite stay Cesium-free', () => {
   const engineFree = tracked.filter(
     (file) =>
-      /^src\/render\/(?:contract|stub|conformance)\//.test(file) &&
+      /^src\/render\/(?:contract|stub|input|conformance)\//.test(file) &&
       /\.[cm]?js$/.test(file) &&
       !/\.test\.[cm]?js$/.test(file),
   );
