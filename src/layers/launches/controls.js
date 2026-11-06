@@ -17,6 +17,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
       parts.selection.stopMissionZoomAnchor();
+      layerState._cameraReleased = true;
     },
 
     /**

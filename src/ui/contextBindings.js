@@ -1,4 +1,5 @@
 import { t } from '../i18n/index.js';
+import { spaceMissionsIndexFailure } from './contextActions.js';
 import { shouldExpandGlobalContextPanel } from '../rightRailPolicy.js';
 
 export function _initGlobalContextPanel() {
@@ -62,9 +63,11 @@ export function _initGlobalContextPanel() {
     void this._runUserFacingContextAction(
       (notificationToken) =>
         this._selectContextMode(nextMode, { notificationToken }),
-      t(
-        'Space Missions could not complete the requested transition; try again',
-      ),
+      () =>
+        (nextMode && spaceMissionsIndexFailure(this._dataManager)) ||
+        t(
+          'Space Missions could not complete the requested transition; try again',
+        ),
     ).then((succeeded) => {
       if (
         !this.destroyed &&

@@ -4,6 +4,18 @@ import {
   contextModeWord,
 } from '../contextModePolicy.js';
 
+/** Why a Space Missions entry failed, when its mission index never loaded. */
+export function spaceMissionsIndexFailure(dataManager) {
+  const stats = dataManager?.layers
+    ?.get('rocket-launches')
+    ?.module?.getStats?.();
+  return stats?.error && stats.lastUpdate == null
+    ? t(
+        'Space Missions unavailable: the mission index could not load. Try again later.',
+      )
+    : null;
+}
+
 export async function _runUserFacingContextAction(
   operation,
   message = t('Context could not restore every layer; try again'),
@@ -19,7 +31,10 @@ export async function _runUserFacingContextAction(
       onFailure: (error) => {
         if (this.destroyed) return;
         console.warn('[Context] user-facing transition failed', error);
-        this.showToast(localizedMessage || message);
+        this.showToast(
+          localizedMessage ||
+            (typeof message === 'function' ? message() : message),
+        );
       },
     });
   } finally {

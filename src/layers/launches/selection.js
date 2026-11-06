@@ -33,6 +33,7 @@ export function createSelection({
     );
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
+    layerState._cameraReleased = false;
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromRadians(
         cartographic.longitude,
@@ -191,6 +192,7 @@ export function createSelection({
       Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3()),
       new Cesium.Cartesian3(),
     );
+    layerState._cameraReleased = false;
     layerState._viewer.camera.flyTo({
       destination,
       orientation: { direction, up },
@@ -213,6 +215,7 @@ export function createSelection({
     layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
       `rocket-launch:${launch.id}`,
     );
+    layerState._cameraReleased = false;
     layerState._viewer.camera.flyToBoundingSphere(
       new Cesium.BoundingSphere(launchPosition, 0),
       {

@@ -192,6 +192,7 @@
   "AVAILABLE MISSIONS": "MISIONES DISPONIBLES",
   "SELECT A MISSION TO INSPECT": "SELECCIONA UNA MISIÓN PARA INSPECCIONAR",
   "LOADING 30-DAY MISSION INDEX": "CARGANDO ÍNDICE DE MISIONES DE 30 DÍAS",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "Misiones espaciales no disponibles: no se pudo cargar el índice de misiones. Inténtalo más tarde.",
   "30-DAY MISSION INDEX UNAVAILABLE": "ÍNDICE DE MISIONES DE 30 DÍAS NO DISPONIBLE",
   "RADIO": "RADIO",
   "ENABLE": "ACTIVAR",

@@ -134,7 +134,7 @@ async function fixture(t) {
     dataSources: new Cesium.DataSourceCollection(),
     scene: { canvas, preRender: new Cesium.Event(), drillPick: () => [] },
   };
-  // Only scene presentation is stubbed.
+  // Scene presentation is stubbed; ingestion, lifecycle and panel are real.
   const parts = {
     overlays: {
       shortMissionLabel: (name) => name,
@@ -453,4 +453,41 @@ test('a refresh failure after a loaded index keeps the mode and its records', as
   await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
   await f.settle();
   assert.deepEqual(f.view(), framed);
+});
+// Append to src/layers/launches/failedEntry.test.mjs (uses its fixture()).
+test('exiting during a successful entry flight cancels the mission-owned flight', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  assert.ok(f.camera.flight, 'the 2.4 s entry flight is still in progress');
+
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.equal(
+    f.camera.flight,
+    null,
+    'leaving Space Missions stops the flight it started (main cancels it)',
+  );
+});
+// Append to src/layers/launches/failedEntry.test.mjs (uses its fixture()).
+// Encodes the "surface the reason where the user acted" fix: the roster that
+// carries 30-DAY MISSION INDEX UNAVAILABLE is hidden by the rollback, so the
+// lasting feedback (the toast) has to name the cause.
+test('a failed first load tells the user the mission index is unavailable', async (t) => {
+  const f = await fixture(t);
+  await f.manager.setEnabled('earthquakes', true, { origin: 'user' });
+
+  await f.controls.setContextMode('space-missions', {
+    claimVisualAuthority: false,
+  });
+  await f.settle();
+  assert.equal(f.controls.getContextModeState().mode, null, 'rolled back');
+  assert.ok(
+    f.toasts.some((message) => /mission index/i.test(message)),
+    `visible feedback names the failure, got ${JSON.stringify(f.toasts)}`,
+  );
 });

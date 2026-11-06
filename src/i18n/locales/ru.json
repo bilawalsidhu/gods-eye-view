@@ -722,6 +722,7 @@
   "Contact Context actions": "Действия контекста контакта",
   "Available Space Missions": "Доступные космические миссии",
   "LOADING 30-DAY MISSION INDEX": "ЗАГРУЗКА ИНДЕКСА МИССИЙ ЗА 30 ДНЕЙ",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "Космические миссии недоступны: не удалось загрузить список миссий. Повторите попытку позже.",
   "30-DAY MISSION INDEX UNAVAILABLE": "ИНДЕКС МИССИЙ ЗА 30 ДНЕЙ НЕДОСТУПЕН",
   "Radio playback": "Воспроизведение радио",
   "Radio volume": "Громкость радио",
