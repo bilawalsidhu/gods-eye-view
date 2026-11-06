@@ -696,7 +696,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({
     id: 'local-usgs-water',
-    token: '9',
+    token: '02',
     disposition: 'enabled-only',
   }),
   Object.freeze({
