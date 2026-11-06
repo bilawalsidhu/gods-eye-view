@@ -120,6 +120,22 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
+  // Temporary CI diagnostic for applying the exact formatter output.
+  if (mode === '--check') {
+    for (const entry of changed) {
+      if (
+        [
+          'server/providers/cctv/streetViewGuard.test.mjs',
+          'src/data/cctvMediaFeedType.test.mjs',
+          'src/tools/queries/media.test.mjs',
+        ].includes(entry.name)
+      )
+        console.log(
+          'CCTV_FORMAT_JSON ' +
+            JSON.stringify({ name: entry.name, formatted: entry.formatted }),
+        );
+    }
+  }
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
