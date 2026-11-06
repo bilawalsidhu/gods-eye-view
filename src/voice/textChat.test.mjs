@@ -106,6 +106,9 @@ const wire = {
   },
 };
 
+// Vertex AI carries Gemini's contents through its own route and key.
+wire.vertex = { ...wire.gemini, keyEnv: 'VERTEX_API_KEY' };
+
 function harness(provider, replies, options = {}) {
   const events = [];
   const requests = [];
@@ -135,7 +138,7 @@ function harness(provider, replies, options = {}) {
   return { chat, events, requests, actions, errors, completions };
 }
 
-for (const provider of ['openai', 'gemini', 'anthropic']) {
+for (const provider of ['openai', 'gemini', 'anthropic', 'vertex']) {
   const w = wire[provider];
 
   test(`${provider}: a failed turn keeps the conversation for the next message`, async () => {
@@ -596,4 +599,49 @@ test('anthropic: a round of calls is answered by one user message, in call order
   }
   assert.equal(h.completions().length, 3);
   h.chat.stop();
+});
+
+test('vertex: both spellings of the stop reason end a turn, on its own route', async () => {
+  for (const finishReason of ['STOP', 'FINISH_REASON_STOP']) {
+    const h = harness('vertex', () => ({
+      ...wire.vertex.final('Done'),
+      finishReason,
+    }));
+    h.chat.start();
+    h.chat.sendText('Hello');
+    await settle();
+    assert.equal(h.errors().length, 0, finishReason);
+    assert.equal(h.completions().length, 1, finishReason);
+    h.chat.stop();
+  }
+  const h = harness('vertex', () => ({
+    ...wire.vertex.final('Cut'),
+    finishReason: 'MAX_TOKENS',
+  }));
+  h.chat.start();
+  h.chat.sendText('Hello');
+  await settle();
+  assert.equal(
+    h.errors()[0].detail,
+    t('Reply interrupted. You can try again.'),
+  );
+  h.chat.stop();
+});
+
+test('vertex: requests go to the Vertex route', async () => {
+  const urls = [];
+  const chat = createTextChat({
+    provider: 'vertex',
+    emit: () => {},
+    runAction: async () => ({ ok: true }),
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return Response.json(wire.vertex.final('Hi'));
+    },
+  });
+  chat.start();
+  chat.sendText('Hello');
+  await settle();
+  assert.deepEqual(urls, ['/api/vertex/chat']);
+  chat.stop();
 });

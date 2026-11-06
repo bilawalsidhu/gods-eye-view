@@ -3469,6 +3469,9 @@
   "Claude answers in chat only; voice is not available for this provider.": "Claude відповідає лише в чаті; голосовий режим для цього постачальника недоступний.",
   "Claude has no voice. Open CHAT to type instead.": "Claude не має голосового режиму. Відкрийте ЧАТ, щоб писати текстом.",
   "Claude typed chat": "Текстовий чат із Claude",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI відповідає лише в чаті; голосовий режим для цього постачальника недоступний.",
+  "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AI не має голосового режиму. Відкрийте ЧАТ, щоб писати текстом.",
+  "Gemini typed chat through Vertex AI Express Mode": "Текстовий чат із Gemini через Vertex AI в експрес-режимі",
   "Open chat": "Відкрити чат",
   "This provider answers in chat only": "Цей постачальник відповідає лише в чаті"
 }

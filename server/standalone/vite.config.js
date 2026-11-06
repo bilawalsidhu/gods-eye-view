@@ -27,6 +27,7 @@ export function standaloneConfig(
         realtime: { tools },
         gemini: { tools },
         anthropic: { tools },
+        vertex: { tools },
         nominatimStorageDir,
       }),
       localMcpPlugin(),
