@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
 import { heightsFor } from '../../queries/heights.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 /** Fly the globe camera once to frame a photo after it opens. */
 export function createCameraFraming({ state }) {
@@ -49,36 +50,37 @@ export function createCameraFraming({ state }) {
       return;
     const ground = groundHeightAt(position.lon, position.lat, altitude);
     // Owned before the call: starting it cancels the previous flight (ours
-    // included) synchronously, and a zero-length one completes at once.
+    // included), and a zero-length one completes inside the call.
     const current = {};
     flight = current;
     const release = () => {
       if (flight === current) flight = null;
     };
-    state.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(
-        Cesium.Cartesian3.fromDegrees(position.lon, position.lat, ground + 2),
-        4,
-      ),
+    const started = cameraOf(state.viewer).flyToBounds(
       {
-        offset: new Cesium.HeadingPitchRange(
-          Cesium.Math.toRadians(bearing || 0),
-          Cesium.Math.toRadians(-32),
-          140,
-        ),
-        duration: 1.6,
-        complete: release,
-        cancel: release,
+        center: { lon: position.lon, lat: position.lat, height: ground + 2 },
+        radius: 4,
+      },
+      {
+        offset: {
+          heading: Cesium.Math.toRadians(bearing || 0),
+          pitch: Cesium.Math.toRadians(-32),
+          range: 140,
+        },
+        durationS: 1.6,
+        onComplete: release,
+        onCancel: release,
       },
     );
+    if (flight === current) current.handle = started;
   }
 
   /** Stop our framing flight if it is still in the air; another feature's flight is left alone. */
   function cancel() {
     if (!flight) return;
-    // Give up ownership first: cancelFlight delivers `cancel` synchronously.
+    const { handle } = flight;
     flight = null;
-    state.viewer?.camera?.cancelFlight?.();
+    handle?.cancel();
   }
 
   return { attachNavigation, begin, frame, cancel };

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { VESSEL_FOCUS_RADIUS_M } from './policy.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createFocus({ state: layerState, services, parts, source }) {
   const flightsLayer = services.flights;
@@ -45,9 +46,9 @@ export function createFocus({ state: layerState, services, parts, source }) {
     )
       return true;
     announceNavigationAuthority('context-vessel-focus');
-    layerState.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(vessel.position, VESSEL_FOCUS_RADIUS_M),
-      { duration: 1.4 },
+    cameraOf(layerState.viewer).flyToBounds(
+      { center: vessel.position, radius: VESSEL_FOCUS_RADIUS_M },
+      { durationS: 1.4 },
     );
     return true;
   }
@@ -180,9 +181,9 @@ export function createFocus({ state: layerState, services, parts, source }) {
     announceNavigationAuthority('context-vessel-autofocus', {
       cancelPendingSelection: false,
     });
-    layerState.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(vessel.position, VESSEL_FOCUS_RADIUS_M),
-      { duration: 1.6 },
+    cameraOf(layerState.viewer).flyToBounds(
+      { center: vessel.position, radius: VESSEL_FOCUS_RADIUS_M },
+      { durationS: 1.6 },
     );
     return true;
   }

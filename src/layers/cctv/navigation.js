@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { CCTV_FOCUS_RESULT } from './policy.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createNavigation({
   state: layerState,
@@ -59,19 +60,16 @@ export function createNavigation({
     }
     const { camera } = record;
     const range = Math.max(280, camera.rangeM * 1.18);
-    viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(
-        record.position,
-        Math.max(40, camera.rangeM * 0.36),
-      ),
+    cameraOf(viewer).flyToBounds(
+      { center: record.position, radius: Math.max(40, camera.rangeM * 0.36) },
       {
-        offset: new Cesium.HeadingPitchRange(
-          parts.model.toRad(camera.headingDeg),
-          parts.model.toRad(-22),
+        offset: {
+          heading: parts.model.toRad(camera.headingDeg),
+          pitch: parts.model.toRad(-22),
           range,
-        ),
-        duration: Math.max(0.2, duration || 0),
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        },
+        durationS: Math.max(0.2, duration || 0),
+        easing: 'cubicInOut',
       },
     );
     return CCTV_FOCUS_RESULT.FOCUSED;

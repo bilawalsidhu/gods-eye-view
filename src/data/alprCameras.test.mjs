@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import alprCamerasLayer, {
   createAlprCamerasLayer,
   configureAlprSource,
@@ -342,6 +343,9 @@ function cameraHarness(layer = alprCamerasLayer) {
       remove() {},
     },
   };
+  bindFakeCesiumCamera(viewer);
+  // The renderer's camera port relays moveEnd; the layer's own come on top.
+  const portMoveEndListeners = viewer.camera.moveEnd.numberOfListeners;
   const setInput = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
   Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (
     fn,
@@ -364,6 +368,7 @@ function cameraHarness(layer = alprCamerasLayer) {
   layer.enable();
   return {
     viewer,
+    portMoveEndListeners,
     requests,
     credits,
     get source() {
@@ -932,7 +937,10 @@ test('two factories keep their requests, records and destruction independent', a
         b.source.entities.values[0],
       )?.labelModel.details.includes('Source: Test directory'),
     );
-    assert.equal(a.viewer.camera.moveEnd.numberOfListeners, 0);
+    assert.equal(
+      a.viewer.camera.moveEnd.numberOfListeners,
+      a.portMoveEndListeners,
+    );
     assert.equal(a.viewer.scene.postRender.numberOfListeners, 0);
   } finally {
     b.restore();

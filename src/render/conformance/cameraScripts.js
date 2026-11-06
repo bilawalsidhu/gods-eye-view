@@ -372,6 +372,27 @@ export const CAMERA_SCRIPTS = Object.freeze([
     ],
   },
   {
+    name: 'flyToBounds easing',
+    steps: [
+      START,
+      {
+        do: 'flyToBounds',
+        args: [
+          { center: { ...AUSTIN, height: 0 }, radius: 500 },
+          {
+            offset: { heading: 0.5, pitch: -0.4, range: 2500 },
+            durationS: 1,
+            easing: 'cubicInOut',
+          },
+        ],
+      },
+      { do: 'frames', count: 20 },
+      { record: 'pose' },
+      { do: 'frames', count: 70 },
+      { record: 'pose' },
+    ],
+  },
+  {
     name: 'a cancelled flight stops where it was',
     steps: [
       START,

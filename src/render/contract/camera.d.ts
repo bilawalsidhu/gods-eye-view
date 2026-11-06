@@ -210,9 +210,9 @@ export interface CameraPort {
    */
   flyToBounds(
     sphere: Sphere,
-    options?: { offset?: HeadingPitchRange; durationS?: number } & Pick<
+    options?: { offset?: HeadingPitchRange } & Pick<
       FlightOptions,
-      'onComplete' | 'onCancel'
+      'durationS' | 'easing' | 'onComplete' | 'onCancel'
     >,
   ): Flight;
   cancelFlight(): void;

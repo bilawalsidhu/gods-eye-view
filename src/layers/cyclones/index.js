@@ -23,6 +23,7 @@ import {
   translateKnown,
 } from '../../i18n/index.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 // "10-12 15:00 UTC" never breaks across lines: no-break spaces, and a word
 // joiner after the hyphen (JetBrains Mono has no U+2011 non-breaking hyphen).
@@ -319,12 +320,15 @@ export function createCyclonesLayer({
               selectedId !== storm.id
             )
               return;
-            return viewer.camera.flyToBoundingSphere(sphere, {
-              duration: matchMedia?.('(prefers-reduced-motion: reduce)')
-                ?.matches
-                ? 0
-                : 1.4,
-            });
+            cameraOf(viewer).flyToBounds(
+              { center: sphere.center, radius: sphere.radius },
+              {
+                durationS: matchMedia?.('(prefers-reduced-motion: reduce)')
+                  ?.matches
+                  ? 0
+                  : 1.4,
+              },
+            );
           });
         }
       }

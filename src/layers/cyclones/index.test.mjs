@@ -8,6 +8,7 @@ import {
 } from '../../data/inputOwnership.js';
 import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 
 /** Record each click subscription the layer makes, as the old handler fakes did. */
 function recordHandlers(viewer, handlers) {
@@ -120,6 +121,7 @@ test('map selection yields to pointer owners and owns only its enabled handler',
       },
     },
   };
+  bindFakeCesiumCamera(viewer);
   recordHandlers(viewer, handlers);
   layer.init(viewer);
   layer.setRowControlsListener(() => notices++);
@@ -360,7 +362,10 @@ function harness(
     setSelection(id) {
       selection = id;
     },
-    getFocusSphere: () => ({ radius: 500000 }),
+    getFocusSphere: () => ({
+      center: { x: 6378137, y: 0, z: 0 },
+      radius: 500000,
+    }),
     clear() {
       cleared++;
     },
@@ -384,6 +389,7 @@ function harness(
         navigation.push({ sphere, options }),
     },
   };
+  bindFakeCesiumCamera(viewer);
   layer.init(viewer);
   layer.attachShellServices({
     runNavigation: (fn) => {
