@@ -274,7 +274,11 @@ export function createUsgsWaterStore({
       ),
     });
     if (!response.ok) {
-      await response.body?.cancel().catch(() => {});
+      try {
+        void response.body?.cancel().catch(() => {});
+      } catch {
+        // Discard failures must not delay or expose the original error.
+      }
       throw new Error('USGS request failed');
     }
     // Throws when the body passes maxBytes (the stream is cancelled).

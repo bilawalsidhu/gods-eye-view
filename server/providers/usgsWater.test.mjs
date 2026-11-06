@@ -253,6 +253,30 @@ test('an error that quotes the API key never reaches the log', async (t) => {
   );
 });
 
+test('failed response cancellation does not stall refresh', async (t) => {
+  let cancelled = 0;
+  const store = createUsgsWaterStore({
+    fetchImpl: async () => ({
+      ok: false,
+      body: {
+        cancel: () => {
+          cancelled += 1;
+          return new Promise(() => {});
+        },
+      },
+    }),
+    cacheFile: tmpCache(t),
+    env: {},
+    log: quiet,
+  });
+  const result = await Promise.race([
+    store.current(),
+    new Promise((resolve) => setTimeout(() => resolve('stalled'), 100)),
+  ]);
+  assert.equal(result, null);
+  assert.ok(cancelled > 0);
+});
+
 test('untrusted fetch errors never appear in warning diagnostics', async (t) => {
   const secret = 'synthetic-private-BEARER-XYZ123';
   const lines = [];
