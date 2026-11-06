@@ -8,6 +8,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { registerHooks } from 'node:module';
+import { fakeCameraPort } from './testSupport/fakeCameraPort.mjs';
+import { toDegrees as deg } from './geo/index.js';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -48,13 +50,6 @@ function installPage() {
     clearInterval,
   };
   const viewer = {
-    camera: {
-      pitch: -Math.PI / 2,
-      positionCartographic: { latitude: 0.53, longitude: -1.7, height: 600 },
-      computeViewRectangle: () => undefined,
-      moveStart: { addEventListener() {}, removeEventListener() {} },
-      moveEnd: { addEventListener() {}, removeEventListener() {} },
-    },
   };
   return {
     viewer,
@@ -73,6 +68,7 @@ function createHud(t, summaryService) {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const page = installPage();
   const hud = new IntelHUD(page.viewer, {
+    camera: fakeCameraPort({ pose: { lat: deg(0.53), lon: deg(-1.7), height: 600 } }).port,
     summaryService,
     publish: page.publish,
   });

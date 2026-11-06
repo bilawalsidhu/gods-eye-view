@@ -14,10 +14,12 @@
  * still missing.
  * Until a family is ported, its code reaches the Cesium viewer through
  * `cesiumViewerOf`, never through a renderer member, so no engine type
- * crosses the contract and each call marks code still to port.
+ * crosses the contract and each call marks code still to port. Ported code
+ * that still holds the viewer reaches the renderer through `rendererOf`.
  */
 import { createApplicationViewer } from '../../app/viewer.js';
 import { CONTRACT_VERSION } from '../contract/index.js';
+import { bindRenderer } from '../rendererOf.js';
 import { createCesiumInput } from './input.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
 
@@ -101,6 +103,7 @@ export function createCesiumRendererPlugin({
         creditContainer.remove();
         throw error;
       }
+      let unbind = () => {};
       const renderer = Object.freeze({
         id: 'cesium',
         contractVersion: CONTRACT_VERSION,
@@ -118,6 +121,7 @@ export function createCesiumRendererPlugin({
         },
         destroy() {
           try {
+            unbind();
             input.dispose();
             ports.dispose();
             if (!viewer.isDestroyed()) viewer.destroy();
@@ -127,6 +131,7 @@ export function createCesiumRendererPlugin({
         },
       });
       viewers.set(renderer, viewer);
+      unbind = bindRenderer(viewer, renderer);
       return renderer;
     },
   });

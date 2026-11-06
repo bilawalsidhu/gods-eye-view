@@ -13,6 +13,8 @@ import { registerHooks } from 'node:module';
 import { presentSelectedVessel } from '../../hudReadouts.js';
 import { useHudStore } from '../stores/hud.js';
 import IntelHudView from './IntelHudView.vue';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
+import { toDegrees as deg } from '../../geo/index.js';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -35,7 +37,6 @@ registerHooks({
 
 const { IntelHUD } = await import('../../hud.js');
 
-const listeners = () => ({ addEventListener() {}, removeEventListener() {} });
 
 function mount(t) {
   document.body.replaceChildren();
@@ -44,16 +45,9 @@ function mount(t) {
   const app = createApp(IntelHudView).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
   const hud = new IntelHUD(
+    {},
     {
-      camera: {
-        pitch: -Math.PI / 2,
-        positionCartographic: { latitude: 0.7, longitude: -1.2, height: 500 },
-        computeViewRectangle: () => undefined,
-        moveStart: listeners(),
-        moveEnd: listeners(),
-      },
-    },
-    {
+      camera: fakeCameraPort({ pose: { lat: deg(0.7), lon: deg(-1.2), height: 500 } }).port,
       // No AI summary: the readouts are what this test renders.
       summaryService: { configured: async () => false },
       publish: (view) => store.publish(view),

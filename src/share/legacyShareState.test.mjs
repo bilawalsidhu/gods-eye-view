@@ -22,6 +22,7 @@ import {
   fromLegacyShareState,
   toLegacyShareState,
 } from './legacyShareState.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 
 const DEG = Math.PI / 180;
 
@@ -47,7 +48,7 @@ function parseLegacy(hash) {
   globalThis.window = {
     location: { hash: body, href: `http://localhost/${body}` },
   };
-  const manager = new ShareLinkManager(stubViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(stubViewer()));
   const parsed = manager.parseInitialHash();
   manager.destroy();
   return parsed;
@@ -209,7 +210,7 @@ function generatedLegacyHash(random) {
   const int = (min, max) => min + Math.floor(random() * (max - min + 1));
   globalThis.window = { location: { hash: '', href: 'http://localhost/' } };
   const manager = new ShareLinkManager(
-    stubViewer({
+    bindFakeCesiumCamera(stubViewer({
       position: {
         latitude: (int(-899999, 899999) / 1e4) * DEG,
         longitude: (int(-1799999, 1799999) / 1e4) * DEG,
@@ -218,7 +219,7 @@ function generatedLegacyHash(random) {
       heading: int(0, 359) * DEG + (random() < 0.1 ? 0.99 * DEG : 0),
       pitch: int(-90, 0) * DEG,
       roll: pick(random, [0, 359.7 * DEG, int(0, 359) * DEG]),
-    }),
+    })),
   );
   const style = pick(random, VIEW_STYLES);
   manager.onStyleChange(style);
@@ -305,7 +306,7 @@ test('the converter ignores non-objects and restore bookkeeping', () => {
 test('the converter knows every key of the long form’s parsed state', () => {
   // A key the converter does not list would silently drop out of share codes.
   globalThis.window = { location: { hash: '', href: 'http://localhost/' } };
-  const manager = new ShareLinkManager(stubViewer({}));
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(stubViewer({})));
   const parsed = manager._parseShareHash('v=2&lat=1&lon=2');
   assert.deepEqual(
     Object.keys(parsed).sort(),

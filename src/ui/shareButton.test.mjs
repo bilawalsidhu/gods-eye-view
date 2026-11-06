@@ -8,6 +8,7 @@ import { parseSharePath } from '../share/shareLinkPath.js';
 import { decodeShareView } from '../share/viewCodec.js';
 import { applicationPinia } from './vueRuntime.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 
 /** The decoded view of a `/share/<code>` link. */
 const sharedState = (href) =>
@@ -28,7 +29,7 @@ function makeManager(href, { positioned = true } = {}) {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(bindFakeCesiumCamera(viewer));
 }
 
 function installClipboard(writeText) {

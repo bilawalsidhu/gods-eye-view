@@ -42,6 +42,7 @@ import {
   setScopeMaskFeather,
 } from './scopeMask.js';
 import { ShareLinkManager } from './sharelink.js';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 
 // Follow the UI wiring and its extracted preset definitions.
 const uiSource = readShellSource()
@@ -71,7 +72,7 @@ function managerForHash(hash) {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(bindFakeCesiumCamera(viewer));
 }
 
 // ---------------------------------------------------------------------------

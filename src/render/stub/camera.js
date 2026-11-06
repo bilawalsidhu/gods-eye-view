@@ -11,7 +11,6 @@ import {
   IDENTITY,
   PI_OVER_TWO,
   TWO_PI,
-  acosClamped,
   add,
   clone,
   cross,
@@ -44,6 +43,7 @@ import {
   vec,
   zeroToTwoPi,
 } from './math.js';
+import { createCameraEvents } from '../camera/events.js';
 import { geodesicAt } from './geodesic.js';
 
 const DEFAULT_FOV = Math.PI / 3;
@@ -94,13 +94,8 @@ export function createStubCamera({
   const near = 1;
   const far = 5e8;
 
-  const listeners = {
-    changed: [],
-    moveStart: [],
-    moveEnd: [],
-    followChanged: [],
-    flightEnd: [],
-  };
+  const events = createCameraEvents({ pose, report });
+  const { emit, on, stepChanged } = events;
   const commandHooks = [];
   const holds = new Map();
   let holdSeq = 0;
@@ -726,89 +721,6 @@ export function createStubCamera({
   }
 
   // --- Events ----------------------------------------------------------------
-
-  function emit(event) {
-    for (const entry of listeners[event].slice()) {
-      if (!entry.live) continue;
-      try {
-        entry.cb();
-      } catch (error) {
-        report(error);
-      }
-    }
-  }
-
-  function on(event, cb, options = {}) {
-    const entry = {
-      cb,
-      live: true,
-      threshold: options.threshold ?? 0.5,
-      ref: null,
-    };
-    listeners[event].push(entry);
-    return () => {
-      entry.live = false;
-      const list = listeners[event];
-      const i = list.indexOf(entry);
-      if (i >= 0) list.splice(i, 1);
-    };
-  }
-
-  /** How far the view moved from a listener's reference, as a fraction. */
-  const angleDelta = (a, b) => {
-    const d = Math.abs(a - b) % TWO_PI;
-    return (d > Math.PI ? TWO_PI - d : d) / Math.PI;
-  };
-
-  /**
-   * Per listener, the reference camera's formula: heading and roll each
-   * against their own last reported value, then direction and position
-   * against the last reported view. Each can report in the same frame.
-   */
-  function stepChanged() {
-    const list = listeners.changed;
-    if (!list.length) return;
-    const current = pose();
-    for (const entry of list.slice()) {
-      if (!entry.live) continue;
-      const t = entry.threshold;
-      entry.heading ??= current.heading;
-      entry.roll ??= current.roll;
-      const headingF = angleDelta(entry.heading, current.heading);
-      const rollF = angleDelta(entry.roll, current.roll);
-      if (headingF > t) entry.heading = current.heading;
-      if (rollF > t) entry.roll = current.roll;
-      if (headingF > t || rollF > t) deliver(entry);
-      if (!entry.view) {
-        entry.view = {
-          position: current.position,
-          direction: current.direction,
-        };
-        continue;
-      }
-      const dirF =
-        acosClamped(dot(current.direction, entry.view.direction)) /
-        (current.fovy * 0.5);
-      const heightF =
-        distance(current.position, entry.view.position) / current.height;
-      if (dirF > t || heightF > t) {
-        entry.view = {
-          position: current.position,
-          direction: current.direction,
-        };
-        deliver(entry);
-      }
-    }
-  }
-
-  function deliver(entry) {
-    if (!entry.live) return;
-    try {
-      entry.cb();
-    } catch (error) {
-      report(error);
-    }
-  }
 
   function sameView(a, b) {
     return (
