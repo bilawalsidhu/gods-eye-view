@@ -312,9 +312,10 @@ function trackDisplayText(entry) {
  * @returns {{w:number,h:number,padX:number,padY:number,titleH:number,lineH:number,thumbW:number,thumbH:number}}
  */
 export function measureOverlayEntry(ctx, entry, out = {}) {
-  const variant = entry?.selected
-    ? 'selected'
-    : String(entry?.variant || 'label');
+  const variant =
+    entry?.selected && entry?.variant !== 'thumbnail'
+      ? 'selected'
+      : String(entry?.variant || 'label');
   const details = Array.isArray(entry?.details) ? entry.details : [];
   const selected = variant === 'selected';
   const tracked = variant === 'tracked';
@@ -391,7 +392,13 @@ export function measureOverlayEntry(ctx, entry, out = {}) {
     out.thumbW = Math.max(1, Number(entry?.thumbnailWidth) || 96);
     out.thumbH = Math.max(1, Number(entry?.thumbnailHeight) || 54);
     out.w = out.thumbW + out.padX * 2;
-    out.h = out.padY + out.thumbH + out.titleGap + out.titleH + out.padBottom;
+    out.h =
+      out.padY +
+      out.thumbH +
+      out.titleGap +
+      out.titleH +
+      details.length * out.lineH +
+      out.padBottom;
   } else {
     out.w = Math.ceil(Math.max(titleWidth, detailWidth)) + out.padX * 2;
     out.h = out.padY * 2 + out.titleH + details.length * out.lineH;
@@ -912,6 +919,38 @@ export function paintCard(
   return placement.rect;
 }
 
+/** Bound a title by code points, preferring a whole word before the ellipsis. */
+export function truncateOverlayTitle(value, maxChars) {
+  const text = String(value ?? '');
+  if (text.length <= maxChars) return text;
+  const glyphs = Array.from(text);
+  if (glyphs.length <= maxChars) return text;
+  const length = Math.max(0, maxChars - 1);
+  const prefix = glyphs.slice(0, length).join('');
+  const atBoundary = /\s$/u.test(prefix) || /\s/u.test(glyphs[length] || '');
+  const words = atBoundary
+    ? prefix.trimEnd()
+    : prefix.replace(/\s+\S*$/u, '').trimEnd();
+  return `${words || prefix.trimEnd()}…`;
+}
+
+function fitThumbnailText(ctx, value, font, maxWidth, wordBoundary = false) {
+  const text = String(value ?? '');
+  if (measureWorldOverlayText(ctx, text, font) <= maxWidth) return text;
+  const glyphs = Array.from(text);
+  let low = 0;
+  let high = glyphs.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    const candidate = `${glyphs.slice(0, mid).join('')}…`;
+    if (measureWorldOverlayText(ctx, candidate, font) <= maxWidth) low = mid;
+    else high = mid - 1;
+  }
+  return wordBoundary
+    ? truncateOverlayTitle(text, low + 1)
+    : `${glyphs.slice(0, low).join('')}…`;
+}
+
 /** Paint a thumbnail card. The image slot remains source-owned. */
 export function paintThumbnail(
   ctx,
@@ -928,6 +967,7 @@ export function paintThumbnail(
   const thumbW = layout.thumbW || Number(entry.thumbnailWidth) || 96;
   const thumbH = layout.thumbH || Number(entry.thumbnailHeight) || 54;
   const titleH = Number.isFinite(layout.titleH) ? layout.titleH : 13;
+  const details = Array.isArray(entry.details) ? entry.details : [];
   const image = entry.image?.frame ?? entry.image;
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -942,16 +982,38 @@ export function paintThumbnail(
   );
   drawAnchorDot(ctx, entry, placement);
   ctx.globalAlpha = alpha * Math.max(0, Math.min(1, Number(contentAlpha) || 0));
-  ctx.beginPath();
-  roundedRectPath(ctx, x, y, w, h, Number(entry.thumbnailRadius) || 4);
-  ctx.fillStyle = entry.thumbnailBackground || WORLD_OVERLAY_STYLE.background;
-  ctx.fill();
+  if (entry.selected) {
+    drawCardChrome(ctx, entry, placement, true, false);
+  } else {
+    ctx.beginPath();
+    roundedRectPath(ctx, x, y, w, h, Number(entry.thumbnailRadius) || 4);
+    ctx.fillStyle = entry.thumbnailBackground || WORLD_OVERLAY_STYLE.background;
+    ctx.fill();
+  }
 
   const imageX = x + padX;
   const imageY = y + padY;
   if (image && typeof ctx.drawImage === 'function') {
     try {
-      ctx.drawImage(image, imageX, imageY, thumbW, thumbH);
+      const sourceW = Number(
+        image.naturalWidth || image.videoWidth || image.width,
+      );
+      const sourceH = Number(
+        image.naturalHeight || image.videoHeight || image.height,
+      );
+      const scale =
+        entry.thumbnailFit === 'contain' && sourceW > 0 && sourceH > 0
+          ? Math.min(thumbW / sourceW, thumbH / sourceH)
+          : null;
+      const width = scale == null ? thumbW : sourceW * scale;
+      const height = scale == null ? thumbH : sourceH * scale;
+      ctx.drawImage(
+        image,
+        imageX + (thumbW - width) / 2,
+        imageY + (thumbH - height) / 2,
+        width,
+        height,
+      );
     } catch {
       // A source may replace/close a live image slot between frames. Chrome
       // and text remain valid; the next source update supplies the next frame.
@@ -978,11 +1040,40 @@ export function paintThumbnail(
   ctx.fillStyle = entry.thumbnailTitleColor || WORLD_OVERLAY_STYLE.title;
   ctx.font = entry.thumbnailTitleFont || WORLD_OVERLAY_STYLE.fontTitle;
   if (title && titleH > 0) {
+    const label =
+      titleChars > 0
+        ? entry.thumbnailTitleWordBoundary
+          ? truncateOverlayTitle(title, titleChars)
+          : title.slice(0, titleChars)
+        : title;
     ctx.fillText(
-      titleChars > 0 ? title.slice(0, titleChars) : title,
+      entry.thumbnailFixedWidth === true
+        ? fitThumbnailText(
+            ctx,
+            label,
+            ctx.font,
+            thumbW,
+            entry.thumbnailTitleWordBoundary,
+          )
+        : label,
       imageX,
       imageY + thumbH + titleH - 3,
     );
+  }
+  if (details.length) {
+    ctx.fillStyle = WORLD_OVERLAY_STYLE.detail;
+    ctx.font = WORLD_OVERLAY_STYLE.fontDetail;
+    const lineH = Number.isFinite(layout.lineH) ? layout.lineH : 13;
+    const titleGap = Number.isFinite(layout.titleGap) ? layout.titleGap : 0;
+    for (let i = 0; i < details.length; i++) {
+      ctx.fillText(
+        entry.thumbnailFixedWidth === true
+          ? fitThumbnailText(ctx, details[i], ctx.font, thumbW)
+          : details[i],
+        imageX,
+        imageY + thumbH + titleGap + titleH + (i + 1) * lineH - 3,
+      );
+    }
   }
   ctx.restore();
   return placement.rect;
@@ -1125,8 +1216,6 @@ export function paintOverlayEntry(
     return paintTacticalCard(ctx, entry, placement, alpha);
   if (entry.variant === 'tracked')
     return paintTracked(ctx, entry, placement, alpha);
-  if (entry.selected || entry.variant === 'selected')
-    return paintSelected(ctx, entry, placement, alpha);
   if (entry.variant === 'thumbnail') {
     return paintThumbnail(
       ctx,
@@ -1137,6 +1226,8 @@ export function paintOverlayEntry(
       contentAlpha,
     );
   }
+  if (entry.selected || entry.variant === 'selected')
+    return paintSelected(ctx, entry, placement, alpha);
   if (entry.variant === 'card') {
     return paintCard(
       ctx,

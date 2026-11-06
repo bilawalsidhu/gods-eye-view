@@ -480,11 +480,16 @@ export function setCyberSonarEnabled(
   return enabled;
 }
 
-/** Whether the map-mode sweep should alter flight presentation. */
+/**
+ * Whether the map-mode sweep should alter flight presentation. `hudActive`
+ * is the HUD's visibility from its owner, which a caller acting on it in the
+ * same turn passes; otherwise the rendered `#intel-hud` class answers.
+ */
 export function isCyberSonarActive({
   root = globalThis.document?.documentElement,
   body = globalThis.document?.body,
   hud,
+  hudActive,
   reducedMotion,
 } = {}) {
   // Keep optional method calls in the body: production downleveling of nested
@@ -498,7 +503,7 @@ export function isCyberSonarActive({
   return !!(
     root?.dataset?.uiTheme === 'cyber' &&
     isCyberSonarEnabled(root) &&
-    hud?.classList?.contains?.('active') &&
+    (hudActive ?? hud?.classList?.contains?.('active')) &&
     !body?.classList?.contains?.('cockpit-mode') &&
     !reducedMotion
   );
@@ -508,12 +513,13 @@ export function isCyberMapThemeActive({
   root = globalThis.document?.documentElement,
   body = globalThis.document?.body,
   hud,
+  hudActive,
 } = {}) {
   if (hud === undefined)
     hud = globalThis.document?.getElementById?.('intel-hud');
   return !!(
     root?.dataset?.uiTheme === 'cyber' &&
-    hud?.classList?.contains?.('active') &&
+    (hudActive ?? hud?.classList?.contains?.('active')) &&
     !body?.classList?.contains?.('cockpit-mode')
   );
 }
