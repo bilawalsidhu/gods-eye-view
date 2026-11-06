@@ -1041,12 +1041,21 @@ export function createGevActionRunner({
           contextState?.mode === 'flights' &&
           contextState?.active !== false &&
           contextState?.changing !== true;
-        if (!contactsReady) {
+        // Cockpit no longer needs Contacts; voice starts it only to find an
+        // aircraft. With one selected or tracked, and no other layer or class
+        // asked for, entry rides it as the button does and leaves the user's
+        // layers alone.
+        const rideable = selectedCockpitTarget(dataManager) || rollbackTarget;
+        const needsContacts =
+          !rideable ||
+          Boolean(aircraftClass) ||
+          Boolean(targetLayer && targetLayer !== rideable.layerId);
+        if (!contactsReady && needsContacts) {
           const contextResult = await styleManager.setContextMode('flights', {
             signal: runOptions.signal,
             isCurrent: runOptions.isCurrent,
-            // Cockpit entry establishes Contacts as its own precondition. That
-            // is internal choreography, not an operator Context request, so it
+            // Starting Contacts to find an aircraft for entry is internal
+            // choreography, not an operator Context request, so it
             // must stay inert: claiming here would cancel a pending shared
             // style/detection restore the operator never overrode.
             claimVisualAuthority: false,

@@ -2741,13 +2741,111 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
 
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, true);
+  // A selected aircraft is entered as the button enters it: Contacts is not
+  // started, so the user's other layers stay as they were.
   assert.deepEqual(calls, [
-    { action: 'context', mode: 'flights' },
     {
       action: 'enter',
       selectedTarget: { layerId: 'flights', id: 'abc123' },
     },
   ]);
+  assert.equal(contextActive, false);
+});
+
+test('control_cockpit enters a tracked aircraft without starting Contacts', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  getContextStore().selectedEntityId = null;
+  const calls = [];
+  const styleManager = {
+    getAircraftTrackingTarget: () => ({ layerId: 'military', id: 'ae1234' }),
+    getContextModeState: () => ({ mode: null, active: false, changing: false }),
+    setContextMode: () => assert.fail('a tracked aircraft needs no Contacts'),
+    controlCockpit(action, options) {
+      calls.push({ action, rollbackTarget: options.rollbackTarget });
+      return { ok: true, state: { active: true } };
+    },
+  };
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } },
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: {
+      layers: new Map(),
+      isEnabled: (layerId) => layerId === 'military',
+      getAll: () => [],
+    },
+  });
+
+  const result = await runner('control_cockpit', {
+    action: 'enter',
+    targetLayer: 'military',
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, [
+    { action: 'enter', rollbackTarget: { layerId: 'military', id: 'ae1234' } },
+  ]);
+});
+
+test('control_cockpit starts Contacts to find an aircraft on another layer', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const calls = [];
+  let contextActive = false;
+  const record = registerEntityContext(
+    { __gevContextId: 'selected-flight-for-military-entry' },
+    { id: 'abc123', layerId: 'flights', label: 'AAL123' },
+  );
+  const contextStore = getContextStore();
+  contextStore.selectedEntityId = record?.id || null;
+  contextStore.selectedAt = Date.now();
+  const styleManager = {
+    getContextModeState: () => ({
+      mode: contextActive ? 'flights' : null,
+      active: contextActive,
+      changing: false,
+    }),
+    async setContextMode(mode) {
+      calls.push(`context:${mode || 'off'}`);
+      contextActive = mode === 'flights';
+      return { ok: true, mode, active: contextActive, changing: false };
+    },
+    controlCockpit(action, options) {
+      calls.push(`${action}:${options.targetLayer}`);
+      return { ok: true, state: { active: true } };
+    },
+  };
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } },
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: {
+      layers: new Map([['flights', { module: { trackById: () => true } }]]),
+      isEnabled: (layerId) => layerId === 'flights',
+      getAll: () => [],
+    },
+  });
+
+  const result = await runner('control_cockpit', {
+    action: 'enter',
+    targetLayer: 'military',
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ['context:flights', 'enter:military']);
 });
 
 test('control_cockpit does not mutate selection when Contacts entry fails', async () => {
@@ -2970,7 +3068,11 @@ test('control_cockpit adopts the newest selection after Contacts settles', async
   };
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
 
-  const result = await runner('control_cockpit', { action: 'enter' });
+  // A class filter needs Contacts to find the aircraft.
+  const result = await runner('control_cockpit', {
+    action: 'enter',
+    aircraftClass: 'helicopter',
+  });
   assert.equal(result.ok, true);
   assert.deepEqual(receivedTarget, { layerId: 'flights', id: 'second' });
   assert.deepEqual(receivedRollbackTarget, {
@@ -3070,7 +3172,11 @@ test('control_cockpit contains entry exceptions and still restores the prior Con
     },
   });
 
-  const result = await runner('control_cockpit', { action: 'enter' });
+  // Another layer than the tracked aircraft's needs Contacts to find one.
+  const result = await runner('control_cockpit', {
+    action: 'enter',
+    targetLayer: 'flights',
+  });
   assert.equal(result.ok, false);
   assert.equal(result.error, 'entry exploded');
   assert.equal(result.contextRollback.ok, true);
@@ -4236,8 +4342,9 @@ test('voice Radio Pause while disabled is a truthful playback-only no-op', async
 // ---------------------------------------------------------------------------
 // Cockpit choreography must not take the Context visual lane.
 //
-// `control_cockpit` establishes Contacts as its own PRECONDITION by calling the
-// public setContextMode facade internally. That facade claims the visual
+// `control_cockpit` starts Contacts to find an aircraft (none selected or
+// tracked, as in these pins) by calling the public setContextMode facade
+// internally. That facade claims the visual
 // restore lane so a genuine operator Context request supersedes a delayed
 // shared style/detection restore — correct for the operator, wrong here: a
 // cockpit transition is inert by rule, and claiming would cancel a pending
