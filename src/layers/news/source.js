@@ -161,13 +161,25 @@ export function createNewsSource({
     signal?.throwIfAborted();
     const timeout = AbortSignal.timeout(timeoutMs);
     const request = signal ? AbortSignal.any([signal, timeout]) : timeout;
-    const response = await fetchImpl(`${BASE_PATH}${path}`, {
-      signal: request,
-      cache: 'no-store',
-      redirect: 'error',
-    });
-    if (!response.ok) throw await responseError(response);
-    return readResponseJsonCapped(response, MAX_BYTES, request);
+    try {
+      const response = await fetchImpl(`${BASE_PATH}${path}`, {
+        signal: request,
+        cache: 'no-store',
+        redirect: 'error',
+      });
+      if (!response.ok) throw await responseError(response);
+      return await readResponseJsonCapped(response, MAX_BYTES, request);
+    } catch (cause) {
+      // Out of time the feed reads unavailable, not the browser's own words
+      // ("signal timed out"); the caller's own abort stays an abort.
+      if (timeout.aborted && !signal?.aborted)
+        throw Object.assign(new Error(msg('News feed unavailable')), {
+          code: 'timeout',
+          unavailable: false,
+          retryable: true,
+        });
+      throw cause;
+    }
   }
   return {
     // `hours` asks for counts over a shorter window than the server's own.

@@ -1082,3 +1082,35 @@ test("a country's own news keeps World News API's category and no severity, what
   assert.equal(read('King visits Amman', 'politics').category, 'political');
   assert.equal(read('Parliament session opens', null).category, 'other');
 });
+
+test('a first read slower than the browser waits answers unavailable, and the next ask is served from it', async () => {
+  const fake = upstream();
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  const news = createKeyedNews({
+    env: () => ({ WORLDNEWSAPI_KEY: 'wna-key' }),
+    fetchImpl: async (url, init) => {
+      if (new URL(url).host === 'api.worldnewsapi.com') await held;
+      return fake.fetchImpl(url, init);
+    },
+    now: () => NOW,
+    log: () => {},
+    later: () => {},
+    firstAnswerMs: 20,
+  });
+  const local = () =>
+    news.answer('/feed', new URLSearchParams('hotspot=all&at=31.95,35.93'));
+  assert.deepEqual(await local(), UPSTREAM_ERROR);
+  // The read went on, and is not asked again.
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const served = await local();
+  assert.equal(served.status, 200);
+  assert.deepEqual(
+    served.body.reports.map((r) => r.id),
+    ['wna-9001', 'wna-9002'],
+  );
+  assert.equal(count(fake.calls, 'api.worldnewsapi.com'), 1);
+});

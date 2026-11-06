@@ -176,7 +176,12 @@ test('reads time out and follow the caller signal', async () => {
       );
     });
   const slow = createNewsSource({ fetchImpl: hang, timeoutMs: 20 });
-  await assert.rejects(slow.getHotspots(), { name: 'TimeoutError' });
+  // Out of time it reads unavailable, in the app's words, and is retried.
+  await assert.rejects(slow.getHotspots(), {
+    message: 'News feed unavailable',
+    code: 'timeout',
+    retryable: true,
+  });
   const caller = new AbortController();
   const pending = createNewsSource({ fetchImpl: hang }).getFeed(
     {},

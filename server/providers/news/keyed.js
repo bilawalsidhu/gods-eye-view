@@ -59,14 +59,13 @@ const DAY_MS = 24 * HOUR_MS;
 // published; one that fails GDELT_EXPORT_TRIES times (a try a round), or
 // cannot be read at all, is given up on, so one bad file never holds the
 // rest back. Only while GDELT itself answers is a file given up on. The first
-// answer waits at most GDELT_FIRST_MS for the first exports.
+// answer waits at most FIRST_ANSWER_MS for the first exports.
 const GDELT_FRESH_MS = 5 * 60_000;
 const GDELT_EXPORTS_PER_READ = 12;
 const GDELT_PARALLEL = 4;
 const GDELT_NEXT_MS = 2_000;
 const GDELT_GONE_MS = 90 * 60_000;
 const GDELT_EXPORT_TRIES = 3;
-const GDELT_FIRST_MS = 12_000;
 const MAX_GDELT_REPORTS = 5000;
 // Events kept of one story, to place it by.
 const MAX_STORY_EVENTS = 200;
@@ -80,6 +79,9 @@ const COUNTRY_FRESH_MS = 30 * 60_000;
 // A failed read is not tried again for a minute; what was read before is
 // served meanwhile, up to these ages (GDELT's: since an export last came in).
 const RETRY_MS = 60_000;
+// A read with nothing to serve yet is waited for at most this long, under the
+// browser's own 15 s: it goes on, and the next ask is served from it.
+const FIRST_ANSWER_MS = 12_000;
 const GDELT_STALE_MS = 2 * HOUR_MS;
 const LIVE_STALE_MS = HOUR_MS;
 const COUNTRY_STALE_MS = 6 * HOUR_MS;
@@ -276,6 +278,7 @@ export function createKeyedNews({
   now = () => Date.now(),
   log = (message) => console.warn(message),
   later = (run, ms) => setTimeout(run, ms).unref(),
+  firstAnswerMs = FIRST_ANSWER_MS,
 } = {}) {
   const keyOf = (id) => String(env()[NEWS_KEYS[id]] ?? '').trim();
   const inFlight = new Map();
@@ -373,7 +376,7 @@ export function createKeyedNews({
           .finally(() => inFlight.delete(flight)),
       );
     if (prior.value && at - prior.readAt < staleMs) return prior;
-    return inFlight.get(flight);
+    return firstAnswer(inFlight.get(flight), { ...prior, error: null });
   }
 
   /** An entry stored as the most recently used (the countries are capped). */
@@ -384,6 +387,22 @@ export function createKeyedNews({
   }
 
   /** An entry's reports while they may be served, else why there are none. */
+  /** `read`, waited for at most firstAnswerMs; then `fallback`, as it goes on. */
+  async function firstAnswer(read, fallback) {
+    let timer;
+    try {
+      return await Promise.race([
+        read,
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(fallback), firstAnswerMs);
+          timer.unref?.();
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   function served(entry, staleMs, id) {
     if (entry.value && now() - entry.readAt < staleMs)
       return { reports: entry.value, readAt: entry.readAt };
@@ -602,19 +621,10 @@ export function createKeyedNews({
     // newest exports' events, not their titles.
     const current = () =>
       gdelt.readAt !== null && now() - gdelt.readAt < GDELT_STALE_MS;
-    if (!current() && inFlight.has('gdelt')) {
-      // At most GDELT_FIRST_MS: a slow GDELT must not outlast the browser's
-      // own timeout; what has come in by then is served.
-      let timer;
-      await Promise.race([
-        inFlight.get('gdelt'),
-        new Promise((resolve) => {
-          timer = setTimeout(resolve, GDELT_FIRST_MS);
-          timer.unref?.();
-        }),
-      ]);
-      clearTimeout(timer);
-    }
+    // A slow GDELT must not outlast the browser's own timeout: what has come
+    // in by then is served.
+    if (!current() && inFlight.has('gdelt'))
+      await firstAnswer(inFlight.get('gdelt'));
     if (!current()) return { failed: true };
     const dayAgo = new Date(now() - DAY_MS).toISOString();
     const reports = [...gdelt.reports.values()]
