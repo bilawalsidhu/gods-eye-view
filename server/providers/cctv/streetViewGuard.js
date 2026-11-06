@@ -85,9 +85,7 @@ export function createStreetViewAdmission({
     ![successCooldownMs, failureCooldownMs].every(
       (n) => Number.isFinite(n) && n >= 0,
     ) ||
-    ![maxPending, maxTracked].every(
-      (n) => Number.isSafeInteger(n) && n > 0,
-    )
+    ![maxPending, maxTracked].every((n) => Number.isSafeInteger(n) && n > 0)
   )
     throw new TypeError('Invalid Street View admission policy');
 
