@@ -174,7 +174,8 @@ compact anchored photo card. Selection stays pinned across camera, filter and
 sample changes until explicit deselection or layer disable. Its medium image
 uses `object-fit: contain`, with names, compact observed age and creator/licence.
 The card is the single source link to iNaturalist. Obscured sightings also stay
-text-only; Acartia stays text-only with provider credit and whale guidance.
+text-only; Acartia stays text-only with provider credit and whale guidance,
+and its source link is always `https://acartia.io/`, never a contributed URL.
 Placement avoids actual HUD, toolbar and rail rectangles, panning only when
 necessary while preserving zoom. Escape, close or an outside click closes the
 card and clears selection. Camera/layout changes reposition the card without

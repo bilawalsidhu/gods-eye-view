@@ -373,6 +373,36 @@ test('missing, restricted, obscured and Acartia photos all use the same compact 
     });
 });
 
+test('an Acartia card labels only the Acartia site as Acartia', async (context) => {
+  for (const link of [
+    'https://provider.example/photos/synthetic.jpg',
+    'https://acartia.io.attacker.example/',
+    'https://acartia.io/',
+  ])
+    await context.test(link, async (context) => {
+      const f = fixture(context, {
+        ...row,
+        origin: 'acartia',
+        stableId: 'acartia:456',
+        provider: { name: 'Synthetic network' },
+        link,
+      });
+      await f.click();
+      const card = f.cardElement();
+      const hrefs = [...card.querySelectorAll('a')].map((a) =>
+        a.getAttribute('href'),
+      );
+      assert.deepEqual(hrefs, [
+        'https://acartia.io/',
+        'https://www.bewhalewise.org',
+      ]);
+      assert.equal(
+        card.querySelector('.wildlife-sighting-card-source').textContent,
+        'Acartia ↗',
+      );
+    });
+});
+
 test('safe placements near each viewport edge exclude actual HUD, toolbar and rail rects', () => {
   const obstacles = [
     rect(0, 0, 260, 160),

@@ -330,7 +330,7 @@ test('Acartia requires flat provider text, handles trust, and sanitizes type', (
   );
 });
 
-test('Acartia rejects invalid times/positions and unsafe photo links become the canonical page', () => {
+test('Acartia rejects invalid times/positions and its link is always the Acartia site', () => {
   for (const overrides of [
     { created: new Date(now - 8 * 24 * hour - 1).toISOString() },
     { created: new Date(now + 10 * 60_000 + 1).toISOString() },
@@ -341,6 +341,10 @@ test('Acartia rejects invalid times/positions and unsafe photo links become the 
   ])
     assert.deepEqual(normalizeAcartiaSightings([sighting(overrides)], now), []);
   for (const photo_url of [
+    // A contributor-supplied URL is never labelled as the Acartia source.
+    'https://provider.example/photo.jpg',
+    'https://phishing.example/acartia.io/login',
+    'https://acartia.io.attacker.example/',
     'http://provider.example/p.jpg',
     'https://user:secret@provider.example/p.jpg',
     'javascript:bad()',
@@ -349,7 +353,7 @@ test('Acartia rejects invalid times/positions and unsafe photo links become the 
   ]) {
     assert.equal(
       normalizeAcartiaSightings([sighting({ photo_url })], now)[0].link,
-      'https://acartia.io',
+      'https://acartia.io/',
     );
   }
 });

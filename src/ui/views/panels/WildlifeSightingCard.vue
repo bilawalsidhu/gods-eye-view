@@ -2,7 +2,7 @@
 import { computed, shallowRef, useTemplateRef, watch } from 'vue';
 import { formatDate, t, translateKnown } from '../../../i18n/index.js';
 import { photoCreator, formatAge } from '../../../layers/wildlifeSightings/photoText.js';
-import { inatLicenceLabel, inatPhotoUrl, isOpenPhoto } from '../../../layers/wildlifeSightings/records.js';
+import { ACARTIA_SITE, inatLicenceLabel, inatPhotoUrl, isOpenPhoto } from '../../../layers/wildlifeSightings/records.js';
 
 const props = defineProps({
   sighting: { type: Object, required: true },
@@ -36,6 +36,8 @@ const age = computed(() => {
 });
 const observedDate = computed(() => observedDay.value ? formatDate(Date.parse(`${observedDay.value}T00:00:00Z`), { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
 const link = computed(() => {
+  // The "Acartia" label only ever points at the Acartia site, never a row URL.
+  if (acartia.value) return ACARTIA_SITE;
   try {
     const url = new URL(props.sighting.link);
     return url.protocol === 'https:' && !url.username && !url.password ? url.href : null;
@@ -89,7 +91,6 @@ watch([() => props.sighting.stableId, () => photo.value?.src], () => { loaded.va
       </div>
     </component>
     <p v-if="acartia || taxa === 'whales'" class="wildlife-sighting-card-guidance">
-      <a v-if="acartia && !/^https:\/\/acartia\.io\/?$/.test(link || '')" href="https://acartia.io" target="_blank" rel="noopener noreferrer">{{ t('Open on Acartia ↗') }}</a>
       <a href="https://www.bewhalewise.org" target="_blank" rel="noopener noreferrer">{{ t('Be Whale Wise') }}</a>
     </p>
   </section>

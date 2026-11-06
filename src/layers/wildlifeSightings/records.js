@@ -247,18 +247,9 @@ export function normalizeInatObservations(
   return rows;
 }
 
-function acartiaLink(value) {
-  if (typeof value !== 'string' || value.length > 500)
-    return 'https://acartia.io';
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password
-      ? url.href
-      : 'https://acartia.io';
-  } catch {
-    return 'https://acartia.io';
-  }
-}
+// Acartia has no documented per-sighting page, and photo_url is supplied by the
+// contributor. The source link is therefore always the Acartia site itself.
+export const ACARTIA_SITE = 'https://acartia.io/';
 
 /** Acartia documents flat rows only. Name and entity are text fields; unknown
  * shapes are skipped rather than guessing nested provider data. */
@@ -315,7 +306,7 @@ export function normalizeAcartiaSightings(payload, nowMs) {
       cetacean: speciesGroup === 'cetacean',
       threatened: false,
       provider: { name, entity: cleanText(raw.data_source_entity, 60) },
-      link: acartiaLink(raw.photo_url),
+      link: ACARTIA_SITE,
       photo: null,
       favesCount: 0,
       identificationAgreements: 0,
