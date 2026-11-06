@@ -57,8 +57,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // tightened area tool wording follow review.
     // control_cockpit states the own-layer entry rule (Contacts not required).
     // move_camera tilt takes an optional pitchDeg angle, described as
-    // absolute, with steps sent as a direction.
-    '17e54c1a04054edf48f2eddcf88c60ac66ec7c885fb48596b778bfee0be8a544',
+    // absolute with its -45 default, with steps sent as a direction.
+    '6a0d154e68beb787c4e20f12d29a5c86577dc343f3e71d8b5651998ea45d8c3c',
   );
 });
 

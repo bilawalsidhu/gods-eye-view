@@ -523,7 +523,7 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         direction: {
           description:
-            'Needed for pan/rotate/tilt steps; orbit/rotate_globe default right.',
+            'Pan/rotate/tilt steps; orbit/rotate_globe default right.',
           $position: 2,
         },
         mode: {
@@ -532,7 +532,7 @@ export const ACTION_DESCRIPTIONS = {
           $position: 2,
         },
         pitchDeg: {
-          description: 'Absolute; -89 top-down.',
+          description: 'Absolute; -45 default, -89 top-down.',
           $position: 1,
         },
       },
