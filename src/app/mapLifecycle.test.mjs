@@ -8,6 +8,7 @@ import {
   governorRequestRender,
   getRenderGovernorDiagnostics,
 } from '../renderGovernor.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
 test('destroy invalidates a pending imagery provider before it can touch the viewer', async () => {
   let resolveProvider;
@@ -44,11 +45,11 @@ test('uninstall only releases the current viewer and makes later render requests
       },
     },
   };
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   holdContinuousRender('fixture');
-  uninstallRenderGovernor({});
+  uninstallRenderGovernor(framePortFor({}));
   assert.equal(getRenderGovernorDiagnostics().installed, true);
-  uninstallRenderGovernor(viewer);
+  uninstallRenderGovernor(framePortFor(viewer.scene));
   const before = renders;
   governorRequestRender('late');
   assert.equal(renders, before);

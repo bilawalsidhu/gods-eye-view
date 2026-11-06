@@ -350,7 +350,7 @@ async function runInstallationLoad({
   };
   try { militaryInstallationsLayer.init(viewer); }
   finally { Cesium.ScreenSpaceEventHandler.prototype.setInputAction = originalSetInputAction; }
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   militaryInstallationsLayer.enable();
   await militaryInstallationsLayer.update();
 
@@ -799,6 +799,7 @@ test('zoom-out aborts an active installation request and returns non-loading gui
 // by source probes against the shipped file, the same technique the HUD datum
 // tests use where a full boot is impractical.
 import { installationRetryDelayMs } from './militaryInstallations.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
 const installationsSource = readLayerSource(
   new URL('./militaryInstallations.js', import.meta.url), 'utf8');

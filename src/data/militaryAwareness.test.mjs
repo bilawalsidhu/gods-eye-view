@@ -47,6 +47,7 @@ import {
 } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
 import { withEntityRecord } from './entityRecords.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
@@ -3860,7 +3861,7 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
 
   try {
     Date.now = () => clockMs;
-    installRenderGovernor(runtime.viewer);
+    installRenderGovernor(framePortFor(runtime.viewer.scene));
     runtime.viewer.camera = {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
@@ -3996,7 +3997,7 @@ test('a moving view over failed feeds takes no continuous-render hold', () => {
 
   try {
     Date.now = () => clockMs;
-    installRenderGovernor(runtime.viewer);
+    installRenderGovernor(framePortFor(runtime.viewer.scene));
     runtime.viewer.camera = {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,

@@ -8,22 +8,23 @@
  * whenever nothing animates per frame, and return to the continuous loop the
  * moment something does.
  *
- * Architecture — a binary mode driven by ref-counted holds:
+ * Architecture — a binary mode driven by owner holds, kept by the
+ * renderer's frame port (`src/render/contract/frame.d.ts`), which is the one
+ * place the loop's mode is set:
  *
- * - **Continuous mode** (`requestRenderMode = false`, today's behavior)
- *   while ANY hold is registered. Every per-frame animator — fleet
+ * - **Continuous mode** (every frame drawn) while ANY hold is registered. Every per-frame animator — fleet
  *   interpolation, traffic sim, satellite motion, tracked-entity follow,
  *   style crossfades, CCTV projection — registers a hold for exactly the
  *   lifetime of its scene-loop listener or animation. While one is active,
  *   behavior is byte-identical to pre-governor main: the locked
  *   interpolation/tracking invariants are preserved by construction.
- * - **Idle mode** (`requestRenderMode = true`) when zero holds. Cesium
- *   auto-renders on camera input and tile loads; every other scene mutation
+ * - **Idle mode** (drawn on demand) when zero holds. The renderer draws
+ *   on camera input and tile loads by itself; every other scene mutation
  *   must call `governorRequestRender()` for its one frame. Discrete
  *   mutators (layer poll ticks, slider writes, annotation changes) route
  *   through that.
  *
- * Holds are identity-keyed (a Set of owner ids), NOT a counter — a module
+ * Holds are identity-keyed (one per owner id), NOT a counter — a module
  * that double-holds or double-releases cannot corrupt the mode. Owners are
  * short stable strings ('flights', 'traffic', 'style-anim', …) so the
  * diagnostics read like a story.
@@ -31,45 +32,45 @@
  * The governor is O(1) passive: no per-frame work of its own, ever.
  */
 
-let _viewer = null;
-let _installed = false;
-const _holds = new Set();
+/** @typedef {import('./render/contract/frame').FramePort} FramePort */
+
+let _frame = null;
+/** Owners holding, each with the frame port's release once installed. */
+const _holds = new Map();
 
 /** Debug trail of the most recent one-shot render requests (idle mode only). */
 const _recentRequests = [];
 const RECENT_REQUEST_CAP = 16;
 
-function applyMode() {
-  if (!_installed || !_viewer?.scene) return;
-  const continuous = _holds.size > 0;
-  const scene = _viewer.scene;
-  if (scene.requestRenderMode === !continuous) return;
-  scene.requestRenderMode = !continuous;
-  if (!continuous) {
-    // Entering idle: render one settling frame so anything the last
-    // continuous frame mutated is on screen before the loop stops.
-    scene.requestRender?.();
-  }
+function holdOnFrame(ownerId) {
+  if (_frame && !_holds.get(ownerId))
+    _holds.set(ownerId, _frame.holdContinuous(ownerId));
 }
 
 /**
- * Install the governor on the viewer. Idempotent. Before install,
- * hold/release still record into the holds set (and apply at install time);
- * requests are safe no-ops — so modules can call all three unconditionally
- * in tests without a viewer.
- * @param {Cesium.Viewer} viewer
+ * Install the governor on the renderer's frame port, which keeps the loop
+ * drawing every frame while any owner holds and on demand otherwise (and
+ * draws one settling frame when the last hold goes). Idempotent. Before
+ * install, hold/release still record into the holds (and apply at install
+ * time); requests are safe no-ops — so modules can call all three
+ * unconditionally in tests without a renderer.
+ * @param {FramePort} frame
  * @returns {void}
  */
-export function installRenderGovernor(viewer) {
-  if (!viewer?.scene)
-    throw new TypeError('installRenderGovernor requires a Cesium viewer');
-  _viewer = viewer;
-  _installed = true;
-  // Never let Cesium re-render on simulation-time deltas behind our back —
-  // idle means idle. All re-renders are camera/tiles (Cesium-native) or
-  // explicit requests.
-  viewer.scene.maximumRenderTimeChange = Infinity;
-  applyMode();
+export function installRenderGovernor(frame) {
+  if (typeof frame?.holdContinuous !== 'function')
+    throw new TypeError('installRenderGovernor requires a frame port');
+  if (_frame === frame) return;
+  if (_frame) releaseFrameHolds();
+  _frame = frame;
+  for (const ownerId of _holds.keys()) holdOnFrame(ownerId);
+}
+
+function releaseFrameHolds() {
+  for (const [ownerId, release] of _holds) {
+    release?.();
+    _holds.set(ownerId, null);
+  }
 }
 
 /**
@@ -81,8 +82,8 @@ export function installRenderGovernor(viewer) {
  */
 export function holdContinuousRender(ownerId) {
   if (!ownerId) return;
-  _holds.add(ownerId);
-  applyMode();
+  if (!_holds.has(ownerId)) _holds.set(ownerId, null);
+  holdOnFrame(ownerId);
 }
 
 /**
@@ -93,27 +94,28 @@ export function holdContinuousRender(ownerId) {
  * @returns {void}
  */
 export function releaseContinuousRender(ownerId) {
-  if (!ownerId) return;
+  if (!ownerId || !_holds.has(ownerId)) return;
+  const release = _holds.get(ownerId);
   _holds.delete(ownerId);
-  applyMode();
+  release?.();
 }
 
 /**
  * One-shot render request for a discrete scene mutation (layer tick, slider
- * write, annotation change). Always forwards to scene.requestRender() — in
- * continuous mode that is a harmless flag set (and forwarding closes the
- * request-then-last-release race); only idle-mode requests are recorded in
- * diagnostics. Cheap enough to call unconditionally after any mutation.
+ * write, annotation change). Always forwards to the frame port — while held
+ * that is harmless (and forwarding closes the request-then-last-release
+ * race); only idle-mode requests are recorded in diagnostics. Cheap enough
+ * to call unconditionally after any mutation.
  * @param {string} [reason] For diagnostics only.
  * @returns {void}
  */
 export function governorRequestRender(reason = 'unspecified') {
-  if (!_installed || !_viewer?.scene) return;
+  if (!_frame) return;
   if (_holds.size === 0) {
     _recentRequests.push({ reason, at: Date.now() });
     if (_recentRequests.length > RECENT_REQUEST_CAP) _recentRequests.shift();
   }
-  _viewer.scene.requestRender?.();
+  _frame.requestRender(reason);
 }
 
 /**
@@ -122,26 +124,25 @@ export function governorRequestRender(reason = 'unspecified') {
  */
 export function getRenderGovernorDiagnostics() {
   return {
-    installed: _installed,
+    installed: Boolean(_frame),
     mode: _holds.size > 0 ? 'continuous' : 'idle',
-    holds: [..._holds].sort(),
+    holds: [..._holds.keys()].sort(),
     recentRequests: [..._recentRequests],
   };
 }
 
-/** Release the installed viewer after its animation owners have stopped. */
-export function uninstallRenderGovernor(viewer) {
-  if (_viewer !== viewer) return;
-  _viewer = null;
-  _installed = false;
+/** Release the installed frame port after its animation owners have stopped. */
+export function uninstallRenderGovernor(frame) {
+  if (!_frame || _frame !== frame) return;
+  releaseFrameHolds();
+  _frame = null;
   _holds.clear();
   _recentRequests.length = 0;
 }
 
 /** Test seam: reset module state between unit tests. */
 export function _resetRenderGovernorForTest() {
-  _viewer = null;
-  _installed = false;
+  _frame = null;
   _holds.clear();
   _recentRequests.length = 0;
 }

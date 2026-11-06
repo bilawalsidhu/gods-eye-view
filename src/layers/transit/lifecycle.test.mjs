@@ -43,6 +43,7 @@ import {
   uninstallRenderGovernor,
 } from '../../renderGovernor.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
+import { framePortFor } from '../../testSupport/fakeFramePort.mjs';
 
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
 
@@ -302,7 +303,7 @@ function harness(
     },
   });
 
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   layer.init(viewer);
 
   t.after(() => {
@@ -311,7 +312,7 @@ function harness(
     } catch {
       /* a test may already have destroyed it */
     }
-    uninstallRenderGovernor(viewer);
+    uninstallRenderGovernor(framePortFor(viewer.scene));
     _resetRenderGovernorForTest();
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;

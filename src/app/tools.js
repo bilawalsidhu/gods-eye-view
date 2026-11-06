@@ -11,7 +11,6 @@ import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
 import {
-  installRenderGovernor,
   getRenderGovernorDiagnostics,
   governorRequestRender,
   holdContinuousRender,
@@ -34,7 +33,7 @@ export function createApplicationTools({
   signal,
   defer,
 }) {
-  const { viewer, tileset, mapStackController, operations } = scene;
+  const { viewer, renderer, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
@@ -127,10 +126,10 @@ export function createApplicationTools({
   }
   if (startChrome)
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
-  // Idle render governor: flips the scene into requestRenderMode whenever
-  // nothing animates per frame. Installed AFTER every module above has had
-  // its chance to register pre-install holds. (perf wave 2)
-  installRenderGovernor(viewer);
+  // Idle render governor: the loop draws on demand whenever nothing animates
+  // per frame. It goes idle only now, after every module above has had its
+  // chance to hold. (perf wave 2)
+  releaseContinuousRender('boot');
   // Cesium keeps a turned-off layer's draw commands (and so all its entities)
   // alive in reused per-pass arrays; trim them after each disable.
   defer(
@@ -163,7 +162,7 @@ export function createApplicationTools({
     // A panel's host may report it hidden while it is on screen; the panel
     // keeps drawing itself (see keepPanelRendering in embed.js).
     const hidden = document.hidden && !isEmbeddedInline();
-    viewer.useDefaultRenderLoop = !hidden;
+    renderer.frame.suspend(hidden);
     cockpitCloudEffects?.setSuspended?.(hidden);
     if (!hidden) {
       data.presentation.flushVisible();

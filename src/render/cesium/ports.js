@@ -3,7 +3,8 @@
  * @description The Cesium renderer's contract ports, built over a Cesium
  * widget or viewer someone else made and configured: frame phases, the
  * draw sets, `setView` and the pose, picks and projection, and capture.
- * Building them changes nothing in the scene; only calls do.
+ * Building them puts the loop on demand (no holds yet, and no redraws for
+ * scene time alone); nothing else in the scene changes until a call.
  *
  * The conformance renderer (`sceneRenderer.js`) and the application's
  * renderer (`appRenderer.js`) both use them, so what conformance
@@ -233,8 +234,12 @@ export function createCesiumPorts(widget, { capabilities }) {
     if (scene.requestRenderMode === !continuous) return;
     scene.requestRenderMode = !continuous;
   }
+  // On demand means drawn when asked, held or the view changed: never
+  // because scene time moved on by itself. With no holds yet, it starts so.
+  scene.maximumRenderTimeChange = Infinity;
+  scene.requestRenderMode = true;
   let suspended = false;
-  let targetFps = 0;
+  let targetFps = widget.targetFrameRate > 0 ? widget.targetFrameRate : 0;
 
   // Pending one-shot renders; disposal settles them rather than leave them
   // attached to a scene that will not render again.

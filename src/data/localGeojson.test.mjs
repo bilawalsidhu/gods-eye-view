@@ -23,6 +23,7 @@ import {
 } from '../renderGovernor.js';
 import { getContextStore } from './contextStore.js';
 import { readEntityRecord } from './entityRecords.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
 /** The catalog's services, with the overlay host each test supplies. */
 const createLocalGeoJsonLayer = (options) =>
@@ -793,7 +794,7 @@ for (const [terrainHeight, sampledHeight, expectedHeight, globeShown] of [
 test('a failed ground sample schedules the retry frame the idle governor would never produce', async (t) => {
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
-  installRenderGovernor({ scene: { requestRender() {} } });
+  installRenderGovernor(framePortFor({ requestRender() {} }));
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => {
     env.layer.destroy(env.viewer);
@@ -821,7 +822,7 @@ test('a failed ground sample schedules the retry frame the idle governor would n
 test('a far camera arms no retry render — the governor stays fully idle', async (t) => {
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
-  installRenderGovernor({ scene: { requestRender() {} } });
+  installRenderGovernor(framePortFor({ requestRender() {} }));
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => {
     env.layer.destroy(env.viewer);
@@ -844,7 +845,7 @@ test('a far camera arms no retry render — the governor stays fully idle', asyn
 test('disable cancels a pending ground-retry render', async (t) => {
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
-  installRenderGovernor({ scene: { requestRender() {} } });
+  installRenderGovernor(framePortFor({ requestRender() {} }));
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => {
     env.layer.destroy(env.viewer);
@@ -928,7 +929,7 @@ test('a scene that cannot sample heights never arms a retry — not even once', 
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: false });
   _resetRenderGovernorForTest();
   const governorScene = { renders: 0, requestRender() { this.renders += 1; } };
-  installRenderGovernor({ scene: governorScene });
+  installRenderGovernor(framePortFor(governorScene));
   governorScene.renders = 0; // discard the governor's own install settling frame
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const clock = installFakeClock(t);
@@ -965,7 +966,7 @@ test('a sampleable scene still measures the retry distance it needs', async (t) 
   // remove it — a scene that CAN sample still pays one distance per walk.
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
-  installRenderGovernor({ scene: { requestRender() {} } });
+  installRenderGovernor(framePortFor({ requestRender() {} }));
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const clock = installFakeClock(t);
   t.after(() => {
@@ -991,7 +992,7 @@ test('capability arriving late re-opens a spent budget without camera motion', a
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
   const governorScene = { renders: 0, requestRender() { this.renders += 1; } };
-  installRenderGovernor({ scene: governorScene });
+  installRenderGovernor(framePortFor(governorScene));
   governorScene.renders = 0;
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const clock = installFakeClock(t);
@@ -1024,7 +1025,7 @@ test('a sampleable scene that keeps failing gives up after a bounded run of arms
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
   const governorScene = { renders: 0, requestRender() { this.renders += 1; } };
-  installRenderGovernor({ scene: governorScene });
+  installRenderGovernor(framePortFor(governorScene));
   governorScene.renders = 0; // discard the governor's own install settling frame
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const clock = installFakeClock(t);
@@ -1056,7 +1057,7 @@ test('after the cap a camera-motion frame still samples, and re-opens the budget
   const env = await createRealLocalLayerHarness({ sampleHeightSupported: true });
   _resetRenderGovernorForTest();
   const governorScene = { renders: 0, requestRender() { this.renders += 1; } };
-  installRenderGovernor({ scene: governorScene });
+  installRenderGovernor(framePortFor(governorScene));
   governorScene.renders = 0; // discard the governor's own install settling frame
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const clock = installFakeClock(t);

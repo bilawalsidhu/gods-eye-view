@@ -9,10 +9,7 @@
  * less the members that would not be true of the application yet: the
  * globe (it draws photoreal tiles the port does not know), `whenSettled`
  * (it would not wait for them), `frame.setTime` (it would stop the
- * application's clock), and the frame members that steer the loop
- * (`holdContinuous`, `suspend`, `setTargetFps`) with the `diagnostics` that
- * report them: `renderGovernor.js` and the page's visibility handling still
- * own those settings, and two owners would undo each other. Those arrive with the layer families that need
+ * application's clock). Those arrive with the layer families that need
  * them (phase 2 of the renderer plan); `checkRendererShape` lists what is
  * still missing.
  * Until a family is ported, its code reaches the Cesium viewer through
@@ -22,14 +19,6 @@
 import { createApplicationViewer } from '../../app/viewer.js';
 import { CONTRACT_VERSION } from '../contract/index.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
-
-/** Frame members the application's own loop code still owns. */
-const LOOP_OWNED = new Set([
-  'diagnostics',
-  'holdContinuous',
-  'setTargetFps',
-  'suspend',
-]);
 
 /**
  * The members a transitional renderer has today.
@@ -109,13 +98,7 @@ export function createCesiumRendererPlugin({
         contractVersion: CONTRACT_VERSION,
         capabilities,
         canvas: viewer.canvas,
-        frame: Object.freeze(
-          Object.fromEntries(
-            Object.entries(ports.frame).filter(
-              ([name]) => !LOOP_OWNED.has(name),
-            ),
-          ),
-        ),
+        frame: ports.frame,
         draw: ports.draw,
         camera: ports.camera,
         query: ports.query,

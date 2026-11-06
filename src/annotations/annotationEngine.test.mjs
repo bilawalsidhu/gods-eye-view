@@ -25,6 +25,7 @@ import {
   installRenderGovernor,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
 // A resolver that replays a scripted sequence of outcomes (undefined = transient,
 // null = definitive miss, object = footprint) and counts its invocations.
@@ -1547,7 +1548,7 @@ test('hand-drawn marks: with every mark hidden the scene idles, and showing one 
   _resetRenderGovernorForTest();
   t.after(() => _resetRenderGovernorForTest());
   let renders = 0;
-  installRenderGovernor({ scene: { requestRenderMode: true, requestRender: () => (renders += 1) } });
+  installRenderGovernor(framePortFor({ requestRenderMode: true, requestRender: () => (renders += 1) }));
   const { renderer } = fakeRenderer();
   const engine = createAnnotationEngine({ viewer: {}, renderer });
   await engine.annotate([
