@@ -172,6 +172,14 @@ test('root config retains existing named exports and standalone provider order',
     standaloneProviders.indexOf('vertex-chat-proxy'),
     standaloneProviders.indexOf('anthropic-chat-proxy') + 1,
   );
+  assert.equal(
+    standaloneProviders.filter((name) => name === 'bedrock-chat-proxy').length,
+    1,
+  );
+  assert.equal(
+    standaloneProviders.indexOf('bedrock-chat-proxy'),
+    standaloneProviders.indexOf('vertex-chat-proxy') + 1,
+  );
   assert.deepEqual(
     standaloneProviders.filter(
       (name) =>
@@ -179,6 +187,7 @@ test('root config retains existing named exports and standalone provider order',
           'gemini-live-proxy',
           'anthropic-chat-proxy',
           'vertex-chat-proxy',
+          'bedrock-chat-proxy',
         ].includes(name),
     ),
     providers

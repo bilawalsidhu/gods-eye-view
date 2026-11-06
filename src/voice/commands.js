@@ -3,6 +3,7 @@ import { createRealtimeSession } from './realtimeSession.js';
 import { createGeminiSession } from './geminiSession.js';
 import { createAnthropicSession } from './anthropicSession.js';
 import { createVertexSession } from './vertexSession.js';
+import { createBedrockSession } from './bedrockSession.js';
 import { createProviderCommands } from './providerCommands.js';
 import { createVoicePanelHost } from './panel/host.js';
 
@@ -45,6 +46,7 @@ export function createVoiceCommands(options = {}) {
         gemini: createGeminiSession,
         anthropic: createAnthropicSession,
         vertex: createVertexSession,
+        bedrock: createBedrockSession,
       },
     });
   else commands = bind({ createSession: createRealtimeSession, ...options });

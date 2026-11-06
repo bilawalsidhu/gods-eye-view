@@ -3,6 +3,7 @@ export const VOICE_PROVIDERS = Object.freeze({
   gemini: Object.freeze({ label: 'Gemini' }), // i18n-ignore: provider product name
   anthropic: Object.freeze({ label: 'Claude' }), // i18n-ignore: provider product name
   vertex: Object.freeze({ label: 'Vertex AI' }), // i18n-ignore: provider product name
+  bedrock: Object.freeze({ label: 'Amazon Bedrock' }), // i18n-ignore: provider product name
 });
 
 /** Optional providers require an explicit host opt-in and an available factory. */
