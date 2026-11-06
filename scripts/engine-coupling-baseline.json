@@ -1,0 +1,16 @@
+{
+  "metrics": {
+    "cesiumLayerRendererLines": 5239,
+    "navaraLayerRendererLines": 12331,
+    "cesiumImportFiles": 69,
+    "viewerLines": 2424,
+    "navaraKindChecks": 17,
+    "engineSniffCalls": 51,
+    "navaraViewsReads": 27,
+    "groundEffectPasses": 9,
+    "cesiumSdkLoads": 6,
+    "screenSpaceHandlerFiles": 20,
+    "engineNameLines": 175
+  },
+  "measuredAt": "german/navara merged with origin/main 8da8c05e, 2026-11-07"
+}

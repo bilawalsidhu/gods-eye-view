@@ -1616,5 +1616,9 @@
   "src/layers/wildlifeSightings/density.test.mjs",
   "src/layers/wildlifeSightings/selection.test.mjs",
   "server/providers/inaturalist/proxy.fixture.mjs",
-  "src/globe/cesium/doubleClick.js"
+  "scripts/report-engine-coupling.mjs",
+  "scripts/engineCoupling.test.mjs",
+  "scripts/qa-contract-suite.mjs",
+  "src/globe/cesium/doubleClick.js",
+  "scripts/engine-coupling-baseline.json"
 ]

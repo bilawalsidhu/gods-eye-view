@@ -178,9 +178,20 @@ one application, and only the globe-bound parts move to the next engine.
 
 - **The engine contract** is `src/globe/contract.js`. `src/globe/cesium/*` and
   `src/globe/navara/*` implement it, `src/globe/testing/fakeEngine.js` stands
-  in for tests, and `src/globe/testing/contractSuite.mjs` runs the same checks
-  on every engine. `movers` and `lines` are optional capabilities: only
+  in for tests, and `src/globe/testing/contractSuite.mjs` holds the checks
+  every engine must pass. `npm test` runs them on the fake engine;
+  `node scripts/qa-contract-suite.mjs <origin>` runs them in headless Chrome
+  on the real Cesium and Navara of a keyless dev server. On November 7, 2026
+  Cesium passed 57 of 57 and Navara 64 of 67: a resting move raised no
+  `moveEnd`, a click payload never came, and contact sonar lost an angle-only
+  change inside the app. `movers` and `lines` are optional capabilities: only
   Navara has them, and the suite skips their checks elsewhere.
+- **Engine coupling.** `node scripts/report-engine-coupling.mjs` counts the
+  engine-specific code outside the engines: renderer lines per engine, Cesium
+  imports, `viewer` mentions, engine-name checks, raw Navara reads, Navara
+  ground passes, Cesium SDK loads and `ScreenSpaceEventHandler` users.
+  `scripts/engineCoupling.test.mjs` (in `npm test`) fails when a count grows
+  past `scripts/engine-coupling-baseline.json`.
 - **The session owns the state.** Catalog, layer models, sources, selection,
   camera mode and URL state outlive a switch. A layer that is a session model
   gets `attachRenderer(engine)` / `detachRenderer()` instead of being rebuilt,
