@@ -48,7 +48,7 @@ const asObserver = (observer) =>
 
 const bodyOf = (name) => {
   const body = Body[name];
-  if (!body) throw new RangeError(`unknown body ${name}`);
+  if (!body) throw new RangeError('unknown body');
   return body;
 };
 
@@ -149,7 +149,7 @@ export function moonState(ms, observer, options) {
 
 /** A planet: position and magnitude. */
 export function planetState(name, ms, observer, options) {
-  if (!PLANETS.includes(name)) throw new RangeError(`not a planet: ${name}`);
+  if (!PLANETS.includes(name)) throw new RangeError('not a planet');
   return {
     ...bodyPosition(name, ms, observer, options),
     magnitude: magnitude(name, ms),

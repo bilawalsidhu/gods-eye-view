@@ -30,12 +30,9 @@ export function parseSkyData(starsJson, constellationsJson) {
   const problems = [];
   const fail = (message) => problems.push(message);
 
-  if (starsJson?.format !== STARS_FORMAT)
-    fail(`stars format ${starsJson?.format} != ${STARS_FORMAT}`);
+  if (starsJson?.format !== STARS_FORMAT) fail(`stars format != ${STARS_FORMAT}`);
   if (constellationsJson?.format !== CONSTELLATIONS_FORMAT)
-    fail(
-      `constellations format ${constellationsJson?.format} != ${CONSTELLATIONS_FORMAT}`,
-    );
+    fail(`constellations format != ${CONSTELLATIONS_FORMAT}`);
   if (problems.length) throw new SkyDataError(problems);
 
   const count = starsJson.count;
@@ -86,7 +83,7 @@ export function parseSkyData(starsJson, constellationsJson) {
     for (const entry of starsJson[key] ?? []) {
       const [index, text] = Array.isArray(entry) ? entry : [];
       if (!Number.isInteger(index) || index < 0 || index >= count || !text)
-        fail(`${key} entry ${JSON.stringify(entry)} invalid`);
+        fail(`${key} entry invalid`);
       else target.set(index, String(text));
     }
   }
@@ -97,21 +94,23 @@ export function parseSkyData(starsJson, constellationsJson) {
   const seen = new Set();
   const constellations = (Array.isArray(list) ? list : []).map((entry) => {
     const iau = String(entry?.iau ?? '');
-    if (!/^[A-Z][a-zA-Z]{2}$/.test(iau)) fail(`bad IAU abbreviation ${iau}`);
-    if (seen.has(iau)) fail(`duplicate constellation ${iau}`);
+    if (!/^[A-Z][a-zA-Z]{2}$/.test(iau)) fail('bad IAU abbreviation');
+    if (seen.has(iau)) fail('duplicate constellation');
     seen.add(iau);
-    if (!entry?.name || !entry?.native) fail(`${iau} has no name`);
+    if (!entry?.name || !entry?.native) fail('constellation has no name');
     const lines = (Array.isArray(entry?.lines) ? entry.lines : []).map(
       (chain) =>
         (Array.isArray(chain) ? chain : []).map((hip) => {
           const index = hipIndex.get(hip);
-          if (index === undefined)
-            fail(`${iau} line endpoint HIP ${hip} not in star data`);
+          if (index === undefined) {
+            const hipText = Number.isInteger(hip) ? ` HIP ${hip}` : '';
+            fail(`line endpoint${hipText} not in star data`);
+          }
           return index ?? -1;
         }),
     );
     if (!lines.length || lines.some((chain) => chain.length < 2))
-      fail(`${iau} has an empty or one-star line`);
+      fail('constellation has an empty or one-star line');
     return {
       iau,
       name: String(entry?.name ?? ''),
@@ -193,7 +192,7 @@ export const BOUNDARIES_FORMAT = 'gev-sky-boundaries/1';
 export function parseBoundaries(json) {
   const problems = [];
   if (json?.format !== BOUNDARIES_FORMAT)
-    problems.push(`boundaries format ${json?.format} != ${BOUNDARIES_FORMAT}`);
+    problems.push(`boundaries format != ${BOUNDARIES_FORMAT}`);
   const edges = Array.isArray(json?.edges) ? json.edges : [];
   if (!edges.length) problems.push('no boundary edges');
   const out = edges.map((edge, i) => {

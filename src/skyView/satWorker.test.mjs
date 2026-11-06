@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { inspect } from 'node:util';
 import { RECORD_FIELDS, decodeFlags } from './satCore.js';
 import { createSatWorkerHandler } from './satWorker.js';
 
@@ -162,4 +163,24 @@ test('a later pass-scan slice posts a fixed diagnostic, not the exception', () =
   assert.equal(error.message, 'worker request failed');
   assert.equal(JSON.stringify(error).includes('SECRETKEY123'), false);
   assert.equal(JSON.stringify(error).includes('pass@host'), false);
+});
+
+test('a catalog reply does not repeat an unrecognized TLE path or text', () => {
+  const secret = 'https://user:pass@host/?api_key=SECRETKEY123';
+  const out = [];
+  const handle = createSatWorkerHandler((message) => out.push(message));
+  handle({
+    type: 'tle',
+    path: secret,
+    text: `SECRET ${secret}\nnot a tle\n${secret}`,
+  });
+  const catalog = out.at(-1);
+  assert.equal(catalog.type, 'catalog');
+  assert.equal(catalog.load.parsed, 0);
+  const visible = inspect(catalog, { depth: 6 });
+  assert.equal(visible.includes(secret), false, visible);
+  assert.equal(visible.includes('SECRETKEY123'), false, visible);
+  assert.equal(visible.includes('pass@host'), false, visible);
+  handle({ type: 'tle', path: 'active', text: FIXTURE });
+  assert.equal(out.at(-1).load.path, 'active');
 });

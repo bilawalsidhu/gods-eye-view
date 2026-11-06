@@ -45,6 +45,18 @@ const ISO_HEAD = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?/;
 
 const fail = (error, extra = {}) => ({ ok: false, error, ...extra });
 
+// openHere reasons the page itself produces. Anything else can be a URL,
+// token, or exception text, so it is not repeated.
+const SAFE_OPEN_ERRORS = new Set([
+  'No ground at the screen centre. Move the map onto land first.',
+  'Sky view is not available in this mode.',
+]);
+
+const publishedOpenError = (opened) =>
+  SAFE_OPEN_ERRORS.has(opened?.error)
+    ? opened.error
+    : 'Could not open Sky view';
+
 const fold = (text) =>
   String(text ?? '')
     .normalize('NFKD')
@@ -117,7 +129,7 @@ export function createSkyVoice({ getHandle, satelliteWaitMs = 2000 }) {
     if (typeof sky.openHere !== 'function')
       return fail('Sky view cannot open from here');
     const opened = await sky.openHere();
-    if (!opened?.ok) return fail(opened?.error || 'Could not open Sky view');
+    if (!opened?.ok) return fail(publishedOpenError(opened));
     return { ok: true, opened: !opened.alreadyOpen };
   }
 

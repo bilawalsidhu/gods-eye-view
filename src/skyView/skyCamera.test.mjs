@@ -335,64 +335,151 @@ function realControllerViewer() {
   };
 }
 
-test('restoreScene leaves collision off when a real controller would lift a low camera', () => {
+function placeAt(viewer, height) {
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, height),
+    orientation: { heading: 0, pitch: -0.2, roll: 0 },
+  });
+  return Cesium.Cartesian3.clone(viewer.camera.positionWC);
+}
+
+function movedM(viewer, before) {
+  return Cesium.Cartesian3.distance(before, viewer.camera.positionWC);
+}
+
+test('real controller lifts only under globeHeight plus minimumZoomDistance', () => {
+  const viewer = realControllerViewer();
+  const controller = viewer.scene.screenSpaceCameraController;
+  const scene = viewer.scene;
+  controller.enableCollisionDetection = true;
+  controller.minimumZoomDistance = 20;
+  scene.globeHeight = 138;
+  controller._lastGlobeHeight = 138;
+  const floor = scene.globeHeight + controller.minimumZoomDistance;
+
+  const below = placeAt(viewer, floor - 5);
+  controller.update();
+  assert.ok(
+    movedM(viewer, below) > 1,
+    'a settled surface lifts a camera under the floor',
+  );
+
+  const aboveTerrain = placeAt(viewer, 500);
+  assert.ok(500 < controller.minimumCollisionTerrainHeight);
+  controller.update();
+  assert.ok(
+    movedM(viewer, aboveTerrain) < 1,
+    '500 m over a 138 m surface is not a collision, even under 15 km',
+  );
+
+  scene.globeHeight = undefined;
+  controller._lastGlobeHeight = 0;
+  const unknown = placeAt(viewer, 16.7);
+  for (let frame = 0; frame < 30; frame += 1) controller.update();
+  assert.ok(
+    movedM(viewer, unknown) < 1,
+    'an unknown globeHeight does not lift on this update',
+  );
+
+  scene.globeHeight = 138;
+  controller._lastGlobeHeight = 0;
+  const cold = placeAt(viewer, 16.7);
+  let liftedAt = -1;
+  for (let frame = 0; frame < 40; frame += 1) {
+    controller.update();
+    if (movedM(viewer, cold) > 1) {
+      liftedAt = frame;
+      break;
+    }
+  }
+  assert.ok(
+    liftedAt > 0,
+    'an unsettled surface still lifts once _lastGlobeHeight converges',
+  );
+
+  controller.enableCollisionDetection = false;
+  scene.globeHeight = 138;
+  controller._lastGlobeHeight = 138;
+  const off = placeAt(viewer, 16.7);
+  for (let frame = 0; frame < 5; frame += 1) controller.update();
+  assert.ok(movedM(viewer, off) < 1, 'collision off never lifts');
+  controller.destroy();
+});
+
+test('collisionRestoreLifts uses globeHeight plus minimum distance, and unknown is not safe', () => {
+  const viewer = realControllerViewer();
+  const controller = viewer.scene.screenSpaceCameraController;
+  controller.minimumZoomDistance = 20;
+  viewer.scene.globeHeight = 138;
+  const floor = 138 + controller.minimumZoomDistance;
+
+  placeAt(viewer, floor - 5);
+  assert.equal(collisionRestoreLifts(viewer.camera, controller, true), true);
+  placeAt(viewer, 500);
+  assert.equal(
+    collisionRestoreLifts(viewer.camera, controller, true),
+    false,
+    'above the terrain floor is safe even under 15 km',
+  );
+  viewer.scene.globeHeight = 0;
+  placeAt(viewer, 50);
+  assert.ok(50 > viewer.scene.globeHeight + controller.minimumZoomDistance);
+  assert.equal(
+    collisionRestoreLifts(viewer.camera, controller, true),
+    false,
+    'a known ellipsoid height of 0 is not an unknown surface',
+  );
+  viewer.scene.globeHeight = undefined;
+  placeAt(viewer, 500);
+  assert.equal(
+    collisionRestoreLifts(viewer.camera, controller, true),
+    true,
+    'an unknown surface must defer, not look safe',
+  );
+  placeAt(viewer, controller.minimumCollisionTerrainHeight + 10);
+  assert.equal(
+    collisionRestoreLifts(viewer.camera, controller, true),
+    false,
+    'above the controller ceiling never lifts, even if the surface is unknown',
+  );
+  placeAt(viewer, 16.7);
+  assert.equal(collisionRestoreLifts(viewer.camera, controller, false), false);
+  controller.destroy();
+});
+
+test('restoreScene writes the saved collision flag; deferCollision is the handoff opt-out', () => {
   const viewer = realControllerViewer();
   const controller = viewer.scene.screenSpaceCameraController;
   controller.enableCollisionDetection = true;
   const snap = snapshotScene(Cesium, viewer);
   controller.enableCollisionDetection = false;
-  viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 16.7),
-    orientation: { heading: 0, pitch: -0.2, roll: 0 },
-  });
+  placeAt(viewer, 16.7);
   controller._lastGlobeHeight = 138;
-  assert.equal(
-    collisionRestoreLifts(viewer.camera, controller, true),
-    true,
-  );
-  const before = Cesium.Cartesian3.clone(viewer.camera.positionWC);
   restoreScene(Cesium, viewer, snap);
   assert.equal(
     controller.enableCollisionDetection,
-    false,
-    'collision stays off below the controller safe height',
+    true,
+    'a normal restore puts collision back even under the floor',
   );
-  for (let frame = 0; frame < 30; frame += 1) controller.update();
-  const lifted = Cesium.Cartesian3.distance(before, viewer.camera.positionWC);
-  assert.ok(lifted < 1, `controller lifted the camera ${lifted} m`);
-  controller.destroy();
-});
 
-test('restoreScene puts collision back above the safe height and when the saved flag is off', () => {
-  const high = realControllerViewer();
-  const highController = high.scene.screenSpaceCameraController;
-  highController.enableCollisionDetection = true;
-  const highSnap = snapshotScene(Cesium, high);
-  highController.enableCollisionDetection = false;
-  high.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 20000),
-    orientation: { heading: 0.3, pitch: -0.6, roll: 0 },
-  });
-  highController._lastGlobeHeight = 138;
-  assert.equal(collisionRestoreLifts(high.camera, highController, true), false);
-  const parked = Cesium.Cartesian3.clone(high.camera.positionWC);
-  restoreScene(Cesium, high, highSnap);
-  assert.equal(highController.enableCollisionDetection, true);
-  highController.update();
-  assert.ok(
-    Cesium.Cartesian3.distance(parked, high.camera.positionWC) < 1,
+  controller.enableCollisionDetection = false;
+  restoreScene(Cesium, viewer, snap, { deferCollision: true });
+  assert.equal(
+    controller.enableCollisionDetection,
+    false,
+    'handoff may ask restoreScene to leave collision off',
   );
-  highController.destroy();
+  const parked = Cesium.Cartesian3.clone(viewer.camera.positionWC);
+  for (let frame = 0; frame < 30; frame += 1) controller.update();
+  assert.ok(movedM(viewer, parked) < 1, `deferred restore lifted ${movedM(viewer, parked)} m`);
+  controller.destroy();
 
   const low = realControllerViewer();
   const lowController = low.scene.screenSpaceCameraController;
   lowController.enableCollisionDetection = false;
   const lowSnap = snapshotScene(Cesium, low);
   lowController.enableCollisionDetection = true;
-  low.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 16.7),
-    orientation: { heading: 0, pitch: 0, roll: 0 },
-  });
+  placeAt(low, 16.7);
   lowController._lastGlobeHeight = 138;
   restoreScene(Cesium, low, lowSnap);
   assert.equal(

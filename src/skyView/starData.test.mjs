@@ -9,6 +9,7 @@ import {
   SkyDataError,
   loadBoundaries,
   loadSkyData,
+  parseBoundaries,
   parseSkyData,
   resetSkyDataCache,
 } from './starData.js';
@@ -220,6 +221,91 @@ test('a catalogue fetch exception is replaced with a fixed diagnostic', async ()
     assert.equal(error.message, 'sky data fetch failed');
     assert.equal(error.cause, undefined);
     assertLoadErrorOmitsSecret(error);
+    return true;
+  });
+  resetSkyDataCache();
+});
+
+/** Probe-style secret: unique prefix8 and suffix6, not a real credential. */
+const CALLER_SECRET = 'ZZPROBESECRETKEY123Z';
+
+function diagnosticText(error) {
+  return [
+    error?.name,
+    error?.message,
+    error?.stack,
+    error?.cause == null ? '' : String(error.cause?.message ?? error.cause),
+    ...(Array.isArray(error?.problems) ? error.problems : []),
+  ].join('\n');
+}
+
+function assertOmitsCallerText(text, callerText) {
+  const value = String(callerText);
+  assert.equal(text.includes(value), false);
+  assert.equal(text.includes(encodeURIComponent(value)), false);
+  if (value.length >= 8) assert.equal(text.includes(value.slice(0, 8)), false);
+  if (value.length >= 6) assert.equal(text.includes(value.slice(-6)), false);
+}
+
+test('parse diagnostics name the broken field and do not echo caller text', () => {
+  const stars = json('stars.json');
+  const lines = clone(json('constellations.json'));
+  const nameSecret = `${CALLER_SECRET}name`;
+  const iauSecret = `${CALLER_SECRET}iau`;
+  stars.names = [[-1, nameSecret]];
+  stars.bf = [['nope', `${CALLER_SECRET}bf`]];
+  lines.constellations = [
+    { iau: iauSecret, name: 'x', native: 'x', lines: [[1, 2]] },
+  ];
+
+  assert.throws(
+    () => parseSkyData({ ...stars, format: CALLER_SECRET }, { ...lines, format: CALLER_SECRET }),
+    (error) => {
+      const text = diagnosticText(error);
+      assertOmitsCallerText(text, CALLER_SECRET);
+      assert.match(text, /stars format/);
+      assert.match(text, /constellations format/);
+      return true;
+    },
+  );
+
+  assert.throws(
+    () => parseSkyData(stars, lines),
+    (error) => {
+      const text = diagnosticText(error);
+      assertOmitsCallerText(text, nameSecret);
+      assertOmitsCallerText(text, iauSecret);
+      assertOmitsCallerText(text, `${CALLER_SECRET}bf`);
+      assert.match(text, /names entry/);
+      assert.match(text, /bf entry/);
+      assert.match(text, /bad IAU abbreviation/);
+      assert.match(text, /not in star data/);
+      return true;
+    },
+  );
+
+  assert.throws(
+    () => parseBoundaries({ format: CALLER_SECRET, edges: [] }),
+    (error) => {
+      const text = diagnosticText(error);
+      assertOmitsCallerText(text, CALLER_SECRET);
+      assert.match(text, /boundaries format/);
+      return true;
+    },
+  );
+});
+
+test('a catalogue body with a caller-supplied format does not echo that text', async () => {
+  resetSkyDataCache();
+  const fetchImpl = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ format: CALLER_SECRET, count: 1 }),
+  });
+  await assert.rejects(loadSkyData({ fetchImpl }), (error) => {
+    const text = diagnosticText(error);
+    assertOmitsCallerText(text, CALLER_SECRET);
+    assert.match(text, /format/);
     return true;
   });
   resetSkyDataCache();
