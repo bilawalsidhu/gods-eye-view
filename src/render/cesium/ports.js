@@ -21,6 +21,61 @@ import {
   renderPending,
 } from './internals.js';
 
+/**
+ * Where a listener's throw goes with no `error` listener: the platform's
+ * `reportError` (or a rethrow on a microtask), as a browser reports an event
+ * listener's exception, loud, while the frame and the other listeners carry
+ * on.
+ */
+function uncaught(error) {
+  if (typeof globalThis.reportError === 'function')
+    globalThis.reportError(error);
+  else
+    queueMicrotask(() => {
+      throw error;
+    });
+}
+
+/**
+ * One subscription list under the contract's listener rules: subscription
+ * order, one removed during delivery does not run, one added during
+ * delivery waits for the next event, and a throw goes to `onThrow` while
+ * the rest still run. Each subscription is its own entry, so a callback
+ * subscribed twice runs twice.
+ * @param {(error: unknown) => void} onThrow
+ */
+export function listenerList(onThrow) {
+  const entries = [];
+  return {
+    get size() {
+      return entries.length;
+    },
+    on(cb) {
+      const entry = { cb, live: true };
+      entries.push(entry);
+      return () => {
+        entry.live = false;
+        const i = entries.indexOf(entry);
+        if (i >= 0) entries.splice(i, 1);
+      };
+    },
+    fire(...args) {
+      for (const entry of entries.slice()) {
+        if (!entry.live) continue;
+        try {
+          entry.cb(...args);
+        } catch (error) {
+          onThrow(error);
+        }
+      }
+    },
+    clear() {
+      for (const entry of entries) entry.live = false;
+      entries.length = 0;
+    },
+  };
+}
+
 /** The contract's colour as Cesium's. */
 export function toColor(color, alpha = 1) {
   if (color === undefined || color === null)
@@ -127,7 +182,27 @@ export function createCesiumPorts(widget, { capabilities }) {
   const camera = scene.camera;
   const sets = new Map();
 
-  const frameListeners = { preUpdate: [], preRender: [], postRender: [] };
+  // An error listener's own throw is uncaught, never reported again.
+  const rendererListeners = {
+    error: listenerList(uncaught),
+    contextLost: listenerList(report),
+    contextRestored: listenerList(report),
+  };
+  /** Hands a listener's throw to the renderer's `error` listeners. */
+  function report(error) {
+    if (rendererListeners.error.size === 0) uncaught(error);
+    else rendererListeners.error.fire(error);
+  }
+  // Cesium cannot bring a lost context back, so it never sends
+  // `contextRestored`.
+  const contextLost = () => rendererListeners.contextLost.fire();
+  scene.canvas?.addEventListener?.('webglcontextlost', contextLost);
+
+  const frameListeners = {
+    preUpdate: listenerList(report),
+    preRender: listenerList(report),
+    postRender: listenerList(report),
+  };
   let frames = 0;
   let rendered = 0;
   // Every tick raises preUpdate, drawn or not; the phases of a tick share
@@ -156,7 +231,7 @@ export function createCesiumPorts(widget, { capabilities }) {
     frames += 1;
   };
   const onPhase = (phase) => (_scene, time) => {
-    if (frameListeners[phase].length === 0) return;
+    if (frameListeners[phase].size === 0) return;
     const t = {
       frame: frames,
       time: Cesium.JulianDate.toDate(
@@ -177,7 +252,7 @@ export function createCesiumPorts(widget, { capabilities }) {
       });
       liveTick = t;
     }
-    for (const cb of frameListeners[phase].slice()) cb(t);
+    frameListeners[phase].fire(t);
   };
   // Reasons given before a frame starts drawing are answered by it; one
   // given while it draws waits for the next, as Cesium's own request does.
@@ -270,11 +345,9 @@ export function createCesiumPorts(widget, { capabilities }) {
 
   const frame = {
     on(phase, cb) {
-      frameListeners[phase].push(cb);
-      return () => {
-        const i = frameListeners[phase].indexOf(cb);
-        if (i >= 0) frameListeners[phase].splice(i, 1);
-      };
+      const list = frameListeners[phase];
+      if (!list) throw new TypeError(`Unknown frame phase: ${phase}`);
+      return list.on(cb);
     },
     requestRender(reason = 'unspecified') {
       // During a draw the reasons it answers are spoken for: a reason given
@@ -333,7 +406,7 @@ export function createCesiumPorts(widget, { capabilities }) {
   function makeSet(kind, spec, build) {
     if (sets.has(spec.id)) throw new Error(`a set with id ${spec.id} is live`);
     const items = new Map();
-    const listeners = { ready: [] };
+    const listeners = { ready: listenerList(report) };
     const record = { kind, spec, items, listeners, host: null, pickIds: [] };
     // Each build records its items' pick ids, for height queries to see
     // through.
@@ -381,12 +454,7 @@ export function createCesiumPorts(widget, { capabilities }) {
         scene.requestRender();
       },
       on(event, cb) {
-        listeners[event]?.push(cb);
-        return () => {
-          const list = listeners[event];
-          const i = list?.indexOf(cb) ?? -1;
-          if (i >= 0) list.splice(i, 1);
-        };
+        return listeners[event]?.on(cb) ?? (() => {});
       },
       dispose() {
         if (record.host && !record.host.isDestroyed?.())
@@ -702,7 +770,7 @@ export function createCesiumPorts(widget, { capabilities }) {
           host.add(model);
           model.readyEvent.addEventListener(() => {
             settle(false);
-            for (const cb of record.listeners.ready.slice()) cb(item.id);
+            record.listeners.ready.fire(item.id);
           });
           model.errorEvent.addEventListener(() => settle(true));
           scene.requestRender();
@@ -1092,6 +1160,11 @@ export function createCesiumPorts(widget, { capabilities }) {
   }
 
   return {
+    /** The renderer's own events: `error`, `contextLost`, `contextRestored`. */
+    on(event, cb) {
+      return rendererListeners[event]?.on(cb) ?? (() => {});
+    },
+    report,
     frame,
     draw,
     camera: cameraPort,
@@ -1106,6 +1179,10 @@ export function createCesiumPorts(widget, { capabilities }) {
       // The tick under way is no longer seen through: it is not claimed.
       settleTick(false);
       for (const off of removers) off();
+      scene.canvas?.removeEventListener?.('webglcontextlost', contextLost);
+      // A listener that disposes the renderer stops the rest of its event.
+      for (const list of Object.values(rendererListeners)) list.clear();
+      for (const list of Object.values(frameListeners)) list.clear();
       for (const done of [...pendingRenders]) done();
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) record.host = null;

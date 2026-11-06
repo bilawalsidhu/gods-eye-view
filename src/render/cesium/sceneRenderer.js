@@ -265,6 +265,7 @@ export async function createCesiumSceneRenderer({
     capture: ports.capture,
     whenSettled,
     resize: () => widget.resize(),
+    on: ports.on,
     destroy() {
       destroyed = true;
       for (const finish of [...watching]) finish('ended');
