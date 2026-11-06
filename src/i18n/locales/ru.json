@@ -2313,6 +2313,9 @@
   "SIMULATED — {reason}": "СИМУЛЯЦИЯ — {reason}",
   "TomTom key unavailable": "Ключ TomTom недоступен",
   "TomTom daily budget reached": "Исчерпан дневной лимит TomTom",
+  "Monthly traffic allowance used": "Месячный лимит данных о трафике исчерпан",
+  "Traffic rate limit reached": "Достигнут лимит запросов данных о трафике",
+  "Traffic service unavailable": "Сервис данных о трафике недоступен",
   "TomTom upstream unreachable": "Сервер TomTom не отвечает",
   "TomTom flow unavailable": "Поток TomTom недоступен",
   "API key rejected — check AISSTREAM_API_KEY": "Ключ API отклонён — проверьте AISSTREAM_API_KEY",
@@ -3313,5 +3316,12 @@
   "Open {name} on Acartia": "Открыть {name} в Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Участники iNaturalist · лицензия у каждой записи",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Участники iNaturalist · Acartia {count} (море Сэлиш) · лицензия у каждой записи"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Участники iNaturalist · Acartia {count} (море Сэлиш) · лицензия у каждой записи",
+  "{days}d": "{days}д",
+  "All markers": "Все метки",
+  "Show markers of every age": "Показать метки любого возраста",
+  "Maximum event age: {days}d; undated markers are kept": "Максимальный возраст события: {days} дн.; метки без даты сохранены",
+  "event age filter|All": "Все",
+  "Event age": "Возраст события",
+  "Event age: {days}d · undated kept": "Возраст события: {days} дн. · метки без даты сохранены"
 }

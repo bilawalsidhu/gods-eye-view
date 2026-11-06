@@ -2274,6 +2274,9 @@
   "SIMULATED — {reason}": "SIMULADO — {reason}",
   "TomTom key unavailable": "Clave de TomTom no disponible",
   "TomTom daily budget reached": "Se alcanzó el límite diario de TomTom",
+  "Monthly traffic allowance used": "Cupo mensual de tráfico agotado",
+  "Traffic rate limit reached": "Límite de solicitudes de tráfico alcanzado",
+  "Traffic service unavailable": "Servicio de tráfico no disponible",
   "TomTom upstream unreachable": "Servidor de TomTom inaccesible",
   "TomTom flow unavailable": "Flujo de TomTom no disponible",
   "API key rejected — check AISSTREAM_API_KEY": "Clave de API rechazada — revisa AISSTREAM_API_KEY",
@@ -3238,5 +3241,12 @@
   "Open {name} on Acartia": "Abrir {name} en Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Colaboradores de iNaturalist · licencias por registro",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Colaboradores de iNaturalist · Acartia {count} (mar de Salish) · licencias por registro"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Colaboradores de iNaturalist · Acartia {count} (mar de Salish) · licencias por registro",
+  "{days}d": "{days}d",
+  "All markers": "Todos los marcadores",
+  "Show markers of every age": "Mostrar marcadores de cualquier antigüedad",
+  "Maximum event age: {days}d; undated markers are kept": "Antigüedad máxima: {days} días; se conservan los marcadores sin fecha",
+  "event age filter|All": "Todos",
+  "Event age": "Antigüedad",
+  "Event age: {days}d · undated kept": "Antigüedad: {days} días · se conservan los marcadores sin fecha"
 }

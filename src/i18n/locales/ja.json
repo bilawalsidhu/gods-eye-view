@@ -1073,6 +1073,9 @@
   "Hybrid": "ハイブリッド",
   "TomTom key unavailable": "TomTomキーを利用できません",
   "TomTom daily budget reached": "TomTomの1日の上限に達しました",
+  "Monthly traffic allowance used": "今月の交通情報の上限に達しました",
+  "Traffic rate limit reached": "交通情報のリクエスト上限に達しました",
+  "Traffic service unavailable": "交通情報サービスを利用できません",
   "TomTom upstream unreachable": "TomTomのサービスに接続できません",
   "TomTom flow unavailable": "TomTomの交通流を利用できません",
   "SIMULATED — {reason}": "シミュレーション：{reason}",
@@ -3088,5 +3091,12 @@
   "Open {name} on Acartia": "Acartiaで{name}を開く",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "iNaturalist の投稿者 · ライセンスは記録ごと",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist の投稿者 · Acartia {count}（セイリッシュ海） · ライセンスは記録ごと"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "iNaturalist の投稿者 · Acartia {count}（セイリッシュ海） · ライセンスは記録ごと",
+  "{days}d": "{days}日",
+  "All markers": "すべてのマーカー",
+  "Show markers of every age": "日付にかかわらずすべてのマーカーを表示",
+  "Maximum event age: {days}d; undated markers are kept": "イベントの最大経過日数：{days}日。日付のないマーカーは保持",
+  "event age filter|All": "すべて",
+  "Event age": "経過日数",
+  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持"
 }

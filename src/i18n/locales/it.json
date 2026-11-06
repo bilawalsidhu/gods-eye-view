@@ -1105,6 +1105,9 @@
   "Hybrid": "Ibrido",
   "TomTom key unavailable": "Chiave TomTom non disponibile",
   "TomTom daily budget reached": "Budget giornaliero TomTom esaurito",
+  "Monthly traffic allowance used": "Quota mensile del traffico esaurita",
+  "Traffic rate limit reached": "Limite di richieste del traffico raggiunto",
+  "Traffic service unavailable": "Servizio traffico non disponibile",
   "TomTom upstream unreachable": "Servizio TomTom irraggiungibile",
   "TomTom flow unavailable": "Flusso TomTom non disponibile",
   "SIMULATED — {reason}": "SIMULATO: {reason}",
@@ -3238,5 +3241,12 @@
   "Open {name} on Acartia": "Apri {name} su Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Contributori di iNaturalist · licenze per osservazione",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Contributori di iNaturalist · Acartia {count} (Mare dei Salish) · licenze per osservazione"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Contributori di iNaturalist · Acartia {count} (Mare dei Salish) · licenze per osservazione",
+  "{days}d": "{days}g",
+  "All markers": "Tutti gli indicatori",
+  "Show markers of every age": "Mostra gli indicatori di qualsiasi età",
+  "Maximum event age: {days}d; undated markers are kept": "Età massima degli eventi: {days} giorni; indicatori senza data mantenuti",
+  "event age filter|All": "Tutti",
+  "Event age": "Età degli eventi",
+  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti"
 }
