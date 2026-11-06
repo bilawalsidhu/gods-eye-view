@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './testSupport/stubMgrs.mjs';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
+import { fakeCameraPort } from './testSupport/fakeCameraPort.mjs';
+import { toDegrees as deg } from './geo/index.js';
 
 const { IntelHUD } = await import('./hud.js');
 const { setLocale } = await import('./i18n/index.js');
@@ -50,6 +52,7 @@ function createHud(
   };
   const sent = [];
   const hud = new IntelHUD(viewer, {
+    camera: fakeCameraPort({ pose: { lat: deg(0.53), lon: deg(-1.7), height: 600 } }).port,
     publish,
     summaryService: {
       configured: async () => true,

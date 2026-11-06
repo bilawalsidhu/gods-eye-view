@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { ShareLinkManager } from './sharelink.js';
 import { resolveLocale } from './i18n/locale.js';
 import { persistLocale } from './i18n/index.js';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 
 function makeManager(href) {
   globalThis.window = { location: { href, hash: new URL(href).hash } };
@@ -18,7 +19,7 @@ function makeManager(href) {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(bindFakeCesiumCamera(viewer));
 }
 
 function installClipboard(writeText) {

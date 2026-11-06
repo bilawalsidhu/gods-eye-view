@@ -41,7 +41,6 @@
   "src/data/osmOverlays.js",
   "src/data/trackedCamera.js",
   "src/data/trailRenderer.js",
-  "src/hud.js",
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",
   "src/layers/airQuality/index.js",

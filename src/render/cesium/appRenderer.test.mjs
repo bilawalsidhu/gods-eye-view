@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { CONTRACT_VERSION, checkRendererShape } from '../contract/index.js';
+import { rendererOf } from '../rendererOf.js';
 import {
   ReadonlySet,
   cesiumRenderer,
@@ -49,10 +50,14 @@ function fakeViewer(log, { failDestroy = false } = {}) {
   return {
     listeners,
     scene: {
-      camera: {},
+      camera: {
+        moveStart: fakeEvent(listeners),
+        moveEnd: fakeEvent(listeners),
+      },
       primitives: { add() {}, remove() {} },
       requestRender() {},
       preUpdate: fakeEvent(listeners),
+      postUpdate: fakeEvent(listeners),
       preRender: fakeEvent(listeners),
       postRender: fakeEvent(listeners),
     },
@@ -121,6 +126,7 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   assert.throws(() => renderer.capabilities.clear(), TypeError);
   assert.ok(!('viewer' in renderer), 'no engine object is a member');
   assert.equal(cesiumViewerOf(renderer).canvas, renderer.canvas);
+  assert.equal(rendererOf(viewer), renderer, 'the viewer finds its renderer');
 
   assert.ok(viewer.listeners.size > 0, 'the ports follow the frame phases');
   assert.equal(typeof renderer.draw.icons, 'function');
@@ -129,6 +135,7 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   renderer.resize();
   renderer.destroy();
   assert.equal(viewer.listeners.size, 0, 'and stop on destroy');
+  assert.equal(rendererOf(viewer), null, 'and lets go of the viewer');
   assert.deepEqual(log, ['resize', 'destroy']);
   assert.deepEqual(doc.children, [], 'credits leave with the renderer');
   renderer.destroy();
@@ -340,12 +347,10 @@ const EXPECTED_MISSING = [
   'camera.lookAt',
   'camera.matrices',
   'camera.move',
-  'camera.on',
   'camera.onCommand',
   'camera.release',
   'camera.rotateAround',
   'camera.setFov',
-  'camera.viewRectangle',
   'camera.zoom',
   'draw.atlas',
   'draw.clampState',

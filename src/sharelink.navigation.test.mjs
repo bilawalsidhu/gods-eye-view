@@ -10,6 +10,7 @@ import {
   decodeLayerStateParams,
 } from './data/layerState.js';
 import { LayerStateCoordinator } from './data/layerStateCoordinator.js';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 
 const SHARE_A = 'v=2&lat=10.0000&lon=20.0000&alt=800&style=nvg&l=e';
 const SHARE_B = 'v=2&lat=48.8584&lon=2.2945&alt=500&style=normal&l=f';
@@ -102,7 +103,7 @@ function fakeViewer() {
 
 test('a hash navigation to a different share restores it and holds URL writes', (t) => {
   const tab = installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   const initial = manager.parseInitialHash();
   manager.completeInitialRestore(initial.restoreToken);
   const navigated = [];
@@ -124,7 +125,7 @@ test('a hash navigation to a different share restores it and holds URL writes', 
 
 test("the app's own hash writes never trigger a restore", (t) => {
   installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   let restores = 0;
   manager.watchNavigation(() => {
@@ -142,7 +143,7 @@ test("the app's own hash writes never trigger a restore", (t) => {
 
 test('a non-share hash is ignored and Back/Forward restores each entry once', (t) => {
   const tab = installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   // The app rewrites entry 0 with its own state; Back must return to that.
   manager._updateHash();
@@ -176,7 +177,7 @@ test('a newer navigation supersedes an older restore and its pending write', (t)
   const tab = installTab(t, SHARE_A);
   const timers = installManualTimers(t);
 
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   assert.equal(timers.size, 1, 'releasing suppression schedules a write');
   const navigated = [];
@@ -204,7 +205,7 @@ test('a newer navigation supersedes an older restore and its pending write', (t)
 
 test('destroy removes the navigation listeners', (t) => {
   const tab = installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.parseInitialHash();
   let restores = 0;
   manager.watchNavigation(() => {
@@ -240,7 +241,7 @@ function restorationHarness(t, initialHash, navigationOverrides = {}) {
 
   const restores = [];
   let navigationGeneration = 0;
-  const manager = new ShareLinkManager(fakeViewer(), {
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
     onRestore: (state) => {
       const gate = deferred();
       restores.push({ state, gate });

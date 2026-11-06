@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { fromDegrees, toDegrees, toRadians } from './geo/index.js';
+import { rendererOf } from './render/rendererOf.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from './bloom.js';
 import {
   migrateDetectionState,
@@ -69,9 +70,12 @@ export class ShareLinkManager {
       isNavigationCurrent,
       cancelOwnedNavigation,
       initialShareCode = null,
+      camera = rendererOf(viewer)?.camera,
     } = {},
   ) {
+    if (!camera) throw new Error('ShareLinkManager needs a camera port');
     this.viewer = viewer;
+    this._camera = camera;
     // A host may hand over the share code to open instead of the address.
     this._initialShareCode =
       typeof initialShareCode === 'string' ? initialShareCode : null;
@@ -133,12 +137,13 @@ export class ShareLinkManager {
         ? cancelOwnedNavigation
         : null;
 
-    // Listen for camera changes
-    this._removeCameraChanged = this.viewer.camera.changed.addEventListener(
-      () => {
-        this._scheduleUpdate();
-      },
-    );
+    // The hash follows the camera as it moves, and catches up with where
+    // it comes to rest.
+    const schedule = () => this._scheduleUpdate();
+    this._cameraOffs = [
+      camera.on('changed', schedule),
+      camera.on('moveEnd', schedule),
+    ];
   }
 
   /**
@@ -645,18 +650,17 @@ export class ShareLinkManager {
   /** Build a deterministic snapshot without mutating history. */
   _buildHashParams() {
     if (this._destroyed) return null;
-    const camera = this.viewer.camera;
-    const carto = camera.positionCartographic;
-    if (!carto) return null;
+    const pose = this._camera.pose();
+    if (!Number.isFinite(pose.lat) || !Number.isFinite(pose.lon)) return null;
 
     const params = new URLSearchParams();
     params.set('v', '2');
-    params.set('lat', toDegrees(carto.latitude).toFixed(4));
-    params.set('lon', toDegrees(carto.longitude).toFixed(4));
-    params.set('alt', Math.round(carto.height).toString());
-    params.set('heading', Math.round(toDegrees(camera.heading)).toString());
-    params.set('pitch', Math.round(toDegrees(camera.pitch)).toString());
-    params.set('roll', Math.round(toDegrees(camera.roll)).toString());
+    params.set('lat', pose.lat.toFixed(4));
+    params.set('lon', pose.lon.toFixed(4));
+    params.set('alt', Math.round(pose.height).toString());
+    params.set('heading', Math.round(toDegrees(pose.heading)).toString());
+    params.set('pitch', Math.round(toDegrees(pose.pitch)).toString());
+    params.set('roll', Math.round(toDegrees(pose.roll)).toString());
     params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');
     params.set('sharpen', this._sharpenEnabled ? '1' : '0');
@@ -711,8 +715,7 @@ export class ShareLinkManager {
     this._destroyed = true;
     clearTimeout(this._debounceTimer);
     this._debounceTimer = null;
-    this._removeCameraChanged?.();
-    this._removeCameraChanged = null;
+    for (const off of this._cameraOffs.splice(0)) off();
     this._unwatchNavigation?.();
     this._layerStateProvider = null;
     this._panelStateProvider = null;

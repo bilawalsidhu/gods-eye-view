@@ -13,6 +13,7 @@
  */
 import * as Cesium from 'cesium';
 import { heightsFor } from '../../queries/heights.js';
+import { createCameraEvents } from '../camera/events.js';
 import {
   atEndOfTick,
   billboardLoadError,
@@ -788,7 +789,23 @@ export function createCesiumPorts(widget, { capabilities }) {
     models: (spec) => makeSet('models', { ...spec }, buildModels),
   };
 
+  // Camera events: Cesium's own moveStart and moveEnd (500 ms after the
+  // last change, never while following), and `changed` measured per
+  // listener on every tick, where Cesium measures its single threshold.
+  const cameraEvents = createCameraEvents({
+    pose: () => cameraPort.pose(),
+    report,
+  });
+  removers.push(
+    scene.postUpdate.addEventListener(() => {
+      if (!disposed) cameraEvents.stepChanged();
+    }),
+    camera.moveStart.addEventListener(() => cameraEvents.emit('moveStart')),
+    camera.moveEnd.addEventListener(() => cameraEvents.emit('moveEnd')),
+  );
+
   const cameraPort = {
+    on: (event, cb, options) => cameraEvents.on(event, cb, options),
     setView(spec) {
       const d = spec.destination;
       if (d && 'rect' in d)
@@ -804,9 +821,29 @@ export function createCesiumPorts(widget, { capabilities }) {
       });
       scene.requestRender();
     },
+    viewRectangle() {
+      const rect = camera.computeViewRectangle(Cesium.Ellipsoid.WGS84);
+      if (!rect) return null;
+      const deg = Cesium.Math.toDegrees;
+      return {
+        west: deg(rect.west),
+        south: deg(rect.south),
+        east: deg(rect.east),
+        north: deg(rect.north),
+      };
+    },
     pose() {
       const v = (c) => ({ x: c.x, y: c.y, z: c.z });
+      // Cesium has no cartographic position for an eye at the earth's
+      // centre; the pose then says so with NaN.
+      const carto = camera.positionCartographic ?? {
+        longitude: NaN,
+        latitude: NaN,
+        height: NaN,
+      };
       return {
+        lon: Cesium.Math.toDegrees(carto.longitude),
+        lat: Cesium.Math.toDegrees(carto.latitude),
         position: v(camera.positionWC),
         direction: v(camera.directionWC),
         up: v(camera.upWC),
@@ -814,7 +851,7 @@ export function createCesiumPorts(widget, { capabilities }) {
         heading: camera.heading,
         pitch: camera.pitch,
         roll: camera.roll,
-        height: camera.positionCartographic.height,
+        height: carto.height,
         fovy: camera.frustum.fovy,
         aspectRatio: camera.frustum.aspectRatio,
         near: camera.frustum.near,
@@ -1183,6 +1220,7 @@ export function createCesiumPorts(widget, { capabilities }) {
       // A listener that disposes the renderer stops the rest of its event.
       for (const list of Object.values(rendererListeners)) list.clear();
       for (const list of Object.values(frameListeners)) list.clear();
+      cameraEvents.clear();
       for (const done of [...pendingRenders]) done();
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) record.host = null;

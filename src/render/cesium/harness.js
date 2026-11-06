@@ -14,6 +14,7 @@ import { createCesiumSceneRenderer, pointerFeedOf } from './sceneRenderer.js';
 
 /** @type {ReadonlySet<string>} */
 export const CESIUM_CHECKS = new Set([
+  'camera.viewRectangle',
   'draw.drillPick',
   'draw.ids',
   'draw.models',

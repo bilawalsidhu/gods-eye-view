@@ -8,6 +8,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { registerHooks } from 'node:module';
+import { fakeCameraPort } from './testSupport/fakeCameraPort.mjs';
+import { toDegrees as deg } from './geo/index.js';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -41,13 +43,6 @@ function installHiddenPage() {
     removeEventListener() {},
   };
   const viewer = {
-    camera: {
-      pitch: -Math.PI / 2,
-      positionCartographic: { latitude: 0.7, longitude: -1.2, height: 500 },
-      computeViewRectangle: () => undefined,
-      moveStart: { addEventListener() {}, removeEventListener() {} },
-      moveEnd: { addEventListener() {}, removeEventListener() {} },
-    },
   };
   return {
     alt: () => elements.get('hud-alt').textContent,
@@ -65,7 +60,10 @@ test('the HUD readout pauses in a hidden page but keeps updating in an inline pa
   const page = installHiddenPage();
   let hud;
   try {
-    hud = new IntelHUD(page.viewer, { publish: page.publish });
+    hud = new IntelHUD(page.viewer, {
+      publish: page.publish,
+      camera: fakeCameraPort({ pose: { lat: deg(0.7), lon: deg(-1.2), height: 500 } }).port,
+    });
     hud._visible = true;
 
     t.mock.timers.tick(250);

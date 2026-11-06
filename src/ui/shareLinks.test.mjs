@@ -19,6 +19,7 @@ import {
   followOffsetToEnu,
 } from '../share/viewCodec.js';
 import { entityRecord, withEntityRecord } from '../data/entityRecords.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 
 const NOW_MS = Date.now();
 const FIX = { lat: 37.6213, lon: -122.379, alt: 3200 };
@@ -127,7 +128,7 @@ function openPage(t, href, { managerOptions = {}, tracking = null } = {}) {
   const clock = installManualTimers(t);
   const viewer = fakeViewer();
   const restores = [];
-  const manager = new ShareLinkManager(viewer, {
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(viewer), {
     onRestore: async (state) => restores.push(state),
     isNavigationCurrent: () => true,
     ...managerOptions,
@@ -401,7 +402,7 @@ test('a shared vessel is selected once the vessel feed has it', async (t) => {
 
 test('the share button links to /share/<code>, following the followed entity', (t) => {
   installPage(t, 'https://gev.example/?lang=ru#v=2&lat=1&lon=2');
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   // A fresh session's look, as the app reports it at start-up.
   manager.onToggleChange(false, true, {
     hudVisible: true,
