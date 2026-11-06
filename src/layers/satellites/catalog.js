@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { twoline2satrec } from 'satellite.js';
-import { noradIdFromSatnum } from '../../sources/tle.js';
+import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import {
   DENSE_REFRESH_FRAMES,
   DENSE_GROUP_PATH,
@@ -123,6 +123,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             name: entry.name,
             satrec,
             group: 'dense',
+            launchYear: tleLineLaunchYear(entry.line1),
           });
           const point = layerState._pointCollection.add({
             position: Cesium.Cartesian3.fromDegrees(

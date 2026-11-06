@@ -54,9 +54,24 @@ function probeTransport(status) {
   return { seen, fetchImpl };
 }
 const stalled = (init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
+const stalledWithReferencedWait = (init) =>
+  new Promise((_, reject) => {
+    // AbortSignal.timeout() is intentionally unref'd in Node. Keep this one
+    // timeout test alive until the signal fires so an isolated test process
+    // cannot exit with a still-pending assertion.
+    const keepAlive = setTimeout(() => {}, 1000);
+    init.signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(keepAlive);
+        reject(init.signal.reason);
+      },
+      { once: true },
+    );
+  });
 
 test('a stalled capability probe times out and queries proceed; no re-probe during backoff', async () => {
-  const { seen, fetchImpl } = probeTransport(stalled);
+  const { seen, fetchImpl } = probeTransport(stalledWithReferencedWait);
   const services = createApplicationRequestServices({ fetchImpl, boundaryProbe: { timeoutMs: 20, retryMs: 60_000 } });
   const started = Date.now();
   assert.deepEqual(await services.boundaries.query('fixture'), []);
@@ -93,4 +108,42 @@ test('a failed probe is retried after its backoff, not on every query', async ()
     'POST /api/overpass',
     'GET /api/overpass/status',
   ]);
+});
+
+test('a failed terrain request carries the real heights the server had', async () => {
+  const partial = [{ ellipsoid: 412.5 }, null];
+  const services = createApplicationRequestServices({
+    fetchImpl: async () => Response.json({ error: 'x', partial }, { status: 502 }),
+  });
+  const points = [{ lat: 30, lon: -97 }, { lat: 31, lon: -97 }];
+  await assert.rejects(services.terrain.getHeights(points), (error) => {
+    assert.match(error.message, /Terrain heights unavailable \(502\)/);
+    assert.deepEqual(error.partial, partial);
+    return true;
+  });
+  await assert.rejects(services.terrain.getHeights(points.slice(0, 1)), (error) => {
+    assert.equal(error.partial, undefined, 'a list of the wrong length is not attached');
+    return true;
+  });
+});
+
+test('the summary capability probe is asked once and unknown when unanswered', async () => {
+  for (const [answer, expected] of [
+    [() => Response.json({ configured: false }), false],
+    [() => Response.json({ configured: true }), true],
+    [() => new Response('missing', { status: 404 }), null],
+    [() => Response.json({ configured: 'yes' }), null],
+    [() => { throw new TypeError('offline'); }, null],
+  ]) {
+    const seen = [];
+    const services = createApplicationRequestServices({
+      fetchImpl: async (url, init) => {
+        seen.push(`${init.method || 'GET'} ${url}`);
+        return answer();
+      },
+    });
+    assert.equal(await services.summary.configured(), expected);
+    assert.equal(await services.summary.configured(), expected);
+    assert.deepEqual(seen, ['GET /api/openai/hud-summary/status']);
+  }
 });

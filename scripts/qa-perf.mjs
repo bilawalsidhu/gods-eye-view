@@ -310,7 +310,7 @@ try {
     countFrames(2_500),
     page.evaluate(() => new Promise((resolve) => setTimeout(() => {
       // Drive the actual sharpen slider: input event → handler →
-      // _applySharpenIntensity → governorRequestRender. Proves the wiring,
+      // _setSharpenIntensity → governorRequestRender. Proves the wiring,
       // not just the facade.
       const slider = document.getElementById('sharpen-intensity-slider');
       if (!slider) { resolve({ ok: false }); return; }

@@ -1,4 +1,5 @@
 import { getKeyholeGeometry } from './celestialRing.js';
+import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
 
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
@@ -41,25 +42,10 @@ import { getKeyholeGeometry } from './celestialRing.js';
 /** Matches the page background the emergent scope faded into. */
 const SCOPE_OUTSIDE_COLOR = { r: 5, g: 5, b: 8 };
 /**
- * Default edge feather as a fraction of the keyhole radius.
- *
- * 0.11 since 2026-08-24 (owner final lock; 0.08 on 08-23, hard-crop 0 on
- * 08-22 — this supersedes both), REVISING the 2026-08-22 ruling that
- * set it to zero: a subtle soft edge rather than either the hard crop or the
- * retired 35 % halo. The slider is untouched and still spans 0..100; this is
- * only where it STARTS. `setScopeMaskFeather` is unchanged, so any feather a
- * share link carries, or the operator dials in, overrides this immediately, and
- * the hard-crop path at 0 is still reachable from the handle.
- *
- * Keep in lockstep with `#scope-feather-slider`'s markup value AND readout in
- * index.html and `_scopeFeatherPct` in sharelink.js — a fresh boot applies no
- * restore, so those literals ARE the first-run state. NOT the `scf` PARSE
- * fallback, which stays at 35 on purpose: a link predating that field was
- * authored when 35 was what its author saw, and a link from the feather-0 era
- * carries `scf=0` explicitly because the generator always writes the field.
- * Pinned in reasonableDefaults.test.mjs.
+ * First-run feather ratio; the Display slider and share defaults use 100%.
+ * The historical missing-scf parse fallback remains 35%.
  */
-export const SCOPE_FEATHER_RATIO_DEFAULT = 0.11;
+export const SCOPE_FEATHER_RATIO_DEFAULT = 1;
 /**
  * Terminus opacity at/above SCOPE_TERMINUS_FAR_M — slightly translucent so
  * faint stars survive in the corners at globe scale.
@@ -344,7 +330,10 @@ function teardownDevicePixelRatioWatch() {
 export function scopeMaskGeometry(width, height, featherRatio = _featherRatio) {
   const keyhole = getKeyholeGeometry(width, height);
   if (!(keyhole.radius > 0)) return null;
-  const feather = Math.max(0, Math.min(1, Number(featherRatio) || 0));
+  const feather = Math.max(
+    0,
+    Math.min(SCOPE_FEATHER_RATIO_MAX, Number(featherRatio) || 0),
+  );
   // Feather straddles the keyhole edge so the visible radius stays anchored
   // to the shared geometry every keyhole consumer (labels, cards) fades on.
   const half = keyhole.radius * feather * 0.5;
@@ -423,6 +412,14 @@ function draw() {
   _painted = true;
 }
 
+/** Expose only the OFF state; an absent attribute preserves the original HUD. */
+function syncScopeMaskAppearance(enabled = _enabled) {
+  const dataset = globalThis.document?.documentElement?.dataset;
+  if (!dataset) return;
+  if (enabled) delete dataset.scopeMask;
+  else dataset.scopeMask = 'off';
+}
+
 /**
  * Install the scope mask into the viewer container. Idempotent.
  * @param {Cesium.Viewer} viewer
@@ -430,6 +427,7 @@ function draw() {
  */
 export function installScopeMask(viewer) {
   if (_canvas || !viewer?.container) return;
+  syncScopeMaskAppearance();
   _container = viewer.container;
   _viewer = viewer;
   _canvas = document.createElement('canvas');
@@ -505,6 +503,7 @@ export function setScopeMaskEnabled(enabled) {
   const next = Boolean(enabled);
   const reEnabled = next && !_enabled;
   _enabled = next;
+  syncScopeMaskAppearance();
   if (reEnabled) {
     // The camera moved freely while the scope was off and nothing sampled it,
     // so the painted terminus can be a whole altitude band stale. Re-sync once
@@ -522,11 +521,14 @@ export function isScopeMaskEnabled() {
 }
 
 /**
- * @param {number} ratio - Edge feather as a fraction of keyhole radius [0,1].
+ * @param {number} ratio - Edge feather as a fraction of keyhole radius [0,2].
  * @returns {void}
  */
 export function setScopeMaskFeather(ratio) {
-  _featherRatio = Math.max(0, Math.min(1, Number(ratio) || 0));
+  _featherRatio = Math.max(
+    0,
+    Math.min(SCOPE_FEATHER_RATIO_MAX, Number(ratio) || 0),
+  );
   draw();
 }
 
@@ -540,6 +542,7 @@ export function getScopeMaskFeather() {
  * @returns {void}
  */
 export function destroyScopeMask() {
+  syncScopeMaskAppearance(true);
   _resizeObserver?.disconnect();
   _resizeObserver = null;
   teardownDevicePixelRatioWatch();
@@ -553,6 +556,7 @@ export function destroyScopeMask() {
 
 /** Test seam. */
 export function _resetScopeMaskForTest() {
+  syncScopeMaskAppearance(true);
   _resizeObserver?.disconnect();
   _resizeObserver = null;
   teardownDevicePixelRatioWatch();
