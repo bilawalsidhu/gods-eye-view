@@ -2353,3 +2353,50 @@ test('promoting an ambient entry to selected paints it once with no fading dupli
     assert.equal(paint(), 1, 'deselect restores the ambient card without re-entry cooldown');
   } finally { env.cleanup(); }
 });
+
+test('the queued-card index stays bounded while card identities churn', () => {
+  // The index is internal: capture the per-source map the same way the
+  // projection-record test captures its map, through Map.prototype.set.
+  const originalSet = Map.prototype.set;
+  let queuedIndex = null;
+  Map.prototype.set = function captureQueuedIndex(key, value) {
+    if (typeof key === 'string' && key.startsWith('churn-card-')
+      && value && typeof value === 'object' && 'temporalAlpha' in value
+      && 'placement' in value && 'stamp' in value) {
+      queuedIndex = this;
+    }
+    return originalSet.call(this, key, value);
+  };
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  try {
+    initWorldOverlay(env.viewer);
+    const FRAMES = 1300;
+    for (let frame = 0; frame < FRAMES; frame++) {
+      // One painted card whose identity changes every frame: the same pooled
+      // paint item serves every id (a vessel cohort republished as the camera
+      // moves, a CCTV or radio card swapping).
+      setOverlayEntries('cards', [selectedEntry(`churn-card-${frame}`, {
+        position: positionAtScreen(200, 150),
+      })]);
+      env.advanceTime(16);
+      env.postRender.raise();
+      assert.equal(getQueuedOverlayEntryAlpha('cards', `churn-card-${frame}`), 1,
+        'the live card is queued in the frame just painted');
+      if (frame > 0) {
+        assert.equal(getQueuedOverlayEntryAlpha('cards', `churn-card-${frame - 1}`), 0,
+          'a stale row never reports the previous card as queued');
+      }
+    }
+    assert.ok(queuedIndex, 'the queued-card index was never populated');
+    // Rows are pruned every 600 painted frames, so with one new id per frame
+    // the index holds at most one prune window of ids plus the live card.
+    const bound = 600 + 1;
+    assert.ok(
+      queuedIndex.size <= bound,
+      `queued-card index holds ${queuedIndex.size} rows after ${FRAMES} identities (bound ${bound})`,
+    );
+  } finally {
+    Map.prototype.set = originalSet;
+    env.cleanup();
+  }
+});

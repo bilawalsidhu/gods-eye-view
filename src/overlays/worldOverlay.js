@@ -2298,7 +2298,15 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
 function pruneQueuedItemIndex() {
   for (const [sourceId, bySource] of _queuedItemBySource) {
     for (const [entryId, item] of bySource) {
-      if (item.stamp !== _frameStamp) bySource.delete(entryId);
+      // A pooled item that now paints another entry keeps a fresh stamp.
+      const entry = item.record.entry;
+      if (
+        item.stamp !== _frameStamp ||
+        entry.id !== entryId ||
+        entry.source !== sourceId
+      ) {
+        bySource.delete(entryId);
+      }
     }
     if (bySource.size === 0) _queuedItemBySource.delete(sourceId);
   }
