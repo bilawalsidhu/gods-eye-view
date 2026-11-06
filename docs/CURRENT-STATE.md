@@ -1543,6 +1543,10 @@ calibration edit. Failed refreshes preserve settled pixels for the same camera,
 while a newly selected camera never shows the prior camera's image. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
+The CCTV layer control `focusNearestToPoint(lat, lon, options)` selects the
+nearest catalog camera to a valid WGS84 point and optionally flies to it.
+`focus: false` selects without flying; no current UI action calls this method.
+
 ## UI disposal
 
 UI disposal releases the CCTV subscription, command-dock observer, legacy drag
