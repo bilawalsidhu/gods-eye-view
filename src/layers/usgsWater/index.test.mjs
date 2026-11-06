@@ -297,6 +297,62 @@ test('a missing data file surfaces as a layer error, not a silent zero', async (
   springs.destroy(viewer);
 });
 
+function renderedDiagnostic(value, seen = new Set()) {
+  if (value instanceof Error) {
+    if (seen.has(value)) return '';
+    seen.add(value);
+    return [
+      value.name,
+      value.message,
+      value.stack,
+      renderedDiagnostic(value.cause, seen),
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (value && typeof value === 'object') return JSON.stringify(value);
+  return String(value ?? '');
+}
+
+test('untrusted USGS fetch errors never appear in console or layer status', async () => {
+  const secret = 'synthetic-usgs-fetch-detail-9f3c';
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => {
+    logged.push(args.map((arg) => renderedDiagnostic(arg)).join(' '));
+  };
+  const cases = [
+    async () => {
+      throw new Error(`upstream fetch failed: ${secret}`);
+    },
+    async () => ({ ok: true, status: 200, text: async () => secret }),
+    async () => ({
+      ok: false,
+      status: 403,
+      text: async () => secret,
+    }),
+  ];
+  try {
+    for (const fetchImpl of cases) {
+      logged.length = 0;
+      const viewer = fakeViewer({ box: null });
+      const springs = createUsgsWaterLayers(services(), {
+        ...opts([]),
+        fetchImpl,
+      })[2];
+      await springs.enable(viewer);
+      const error = springs.getStats().error;
+      const blob = `${error}\n${logged.join('\n')}`;
+      assert.equal(error, 'dataset unavailable (USGS request failed)');
+      assert.equal(blob.includes(secret), false, blob);
+      assert.match(logged.join('\n'), /USGS request failed/);
+      springs.destroy(viewer);
+    }
+  } finally {
+    console.error = original;
+  }
+});
+
 test('the layer source names the hourly server refresh', async () => {
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('./index.js', import.meta.url), 'utf8');
