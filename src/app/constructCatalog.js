@@ -29,6 +29,8 @@ import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
+import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
+import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
@@ -133,6 +135,13 @@ export function createApplicationCatalog({
           windowMs: sources['gnss-integrity'].windowMs,
         }),
         createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
+        createApplicationDroneAirspace({
+          source: sources['drone-airspace'],
+        }),
+        createApplicationWildlifeSightings({
+          source: sources['wildlife-sightings'],
+          groundFloor: surface.groundFloor,
+        }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
           surface,
