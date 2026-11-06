@@ -44,7 +44,6 @@ export function registeredStreetViewLocation(source) {
   };
 }
 
-
 /**
  * Parse operator-selected ceilings. An explicit zero disables paid fallback;
  * malformed input keeps the protective default, never means unlimited.
@@ -160,7 +159,8 @@ export function createStreetViewAdmission({
 
       // Atomic reservation in a single JS turn; no awaits before charging.
       if (clients.has(client)) clients.delete(client);
-      else if (clients.size >= maxTracked) clients.delete(clients.keys().next().value);
+      else if (clients.size >= maxTracked)
+        clients.delete(clients.keys().next().value);
       clients.set(client, {
         start: clientUsed ? recent.start : time,
         used: clientUsed + 1,
@@ -179,8 +179,7 @@ export function createStreetViewAdmission({
             cooldowns.delete(cooldowns.keys().next().value);
           cooldowns.set(
             cameraKey,
-            now() +
-              (result?.ok ? successCooldownMs : failureCooldownMs),
+            now() + (result?.ok ? successCooldownMs : failureCooldownMs),
           );
           return result;
         })
