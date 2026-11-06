@@ -1,9 +1,9 @@
 import * as Cesium from 'cesium';
 import { readEntityRecord } from './entityRecords.js';
+import { clampFollowEye, holdFollowZoom } from '../render/cesium/follow.js';
 
 const MAX_FRAME_ATTEMPTS = 120;
 const MIN_TRACKED_RANGE_M = 150;
-const ZOOM_INERTIA_STATES = new WeakMap();
 
 /**
  * Preserve real-world model scale except when a very close tracked camera
@@ -65,31 +65,7 @@ export function trackedDisplayPositionForCamera(entity, time, result) {
 }
 
 function acquireStableTrackedZoom(controller, entity) {
-  if (!controller) return () => {};
-  let state = ZOOM_INERTIA_STATES.get(controller);
-  if (!state) {
-    state = {
-      originalInertiaZoom: controller.inertiaZoom,
-      originalMinimumZoomDistance: controller.minimumZoomDistance,
-      owners: new Set(),
-    };
-    ZOOM_INERTIA_STATES.set(controller, state);
-  }
-  state.owners.add(entity);
-  controller.inertiaZoom = 0;
-  controller.minimumZoomDistance = Math.max(
-    state.originalMinimumZoomDistance,
-    MIN_TRACKED_RANGE_M,
-  );
-  return () => {
-    const current = ZOOM_INERTIA_STATES.get(controller);
-    if (!current) return;
-    current.owners.delete(entity);
-    if (current.owners.size > 0) return;
-    controller.inertiaZoom = current.originalInertiaZoom;
-    controller.minimumZoomDistance = current.originalMinimumZoomDistance;
-    ZOOM_INERTIA_STATES.delete(controller);
-  };
+  return holdFollowZoom(controller, entity, MIN_TRACKED_RANGE_M);
 }
 
 /**
@@ -106,34 +82,7 @@ export function clampTrackedCameraPosition(
   previousPosition,
   minimumRangeM = MIN_TRACKED_RANGE_M,
 ) {
-  const crossedOrigin =
-    Cesium.Cartesian3.dot(camera.position, previousPosition) <= 0;
-  const forwardDistance = -Cesium.Cartesian3.dot(
-    camera.position,
-    camera.direction,
-  );
-  const rangeSquared = Cesium.Cartesian3.magnitudeSquared(camera.position);
-  if (crossedOrigin) {
-    Cesium.Cartesian3.normalize(previousPosition, camera.position);
-    Cesium.Cartesian3.multiplyByScalar(
-      camera.position,
-      minimumRangeM,
-      camera.position,
-    );
-    return true;
-  }
-  if (
-    forwardDistance < minimumRangeM ||
-    rangeSquared < minimumRangeM * minimumRangeM
-  ) {
-    Cesium.Cartesian3.multiplyByScalar(
-      camera.direction,
-      -minimumRangeM,
-      camera.position,
-    );
-    return true;
-  }
-  return false;
+  return clampFollowEye(camera, previousPosition, minimumRangeM);
 }
 
 /**

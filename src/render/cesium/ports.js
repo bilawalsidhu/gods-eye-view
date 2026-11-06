@@ -731,7 +731,7 @@ export function createCesiumPorts(widget, { capabilities }) {
     models: (spec) => makeSet('models', { ...spec }, buildModels),
   };
 
-  const cameraPart = createCesiumCamera({ scene, camera, report });
+  const cameraPart = createCesiumCamera({ scene, camera, report, widget });
   const cameraPort = cameraPart.port;
 
   // --- Query -----------------------------------------------------------------

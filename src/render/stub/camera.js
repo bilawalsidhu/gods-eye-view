@@ -681,10 +681,11 @@ export function createStubCamera({
 
   function follow(target) {
     command('follow');
+    const changed = followed !== target;
     followed = target;
     followFramed = false;
     if (!target) setFrame(IDENTITY);
-    emit('followChanged');
+    if (changed) emit('followChanged');
     requestRender('follow');
   }
 

@@ -46,6 +46,7 @@ test('every private field Core reaches is still declared by the installed Cesium
     [WIDGETS, 'Viewer/Viewer.js', '_cesiumWidget'],
     [ENGINE, 'Renderer/Context.js', '_gl'],
     [ENGINE, 'Scene/Camera.js', '_currentFlight'],
+    [ENGINE, 'Widget/CesiumWidget.js', '_entityView'],
     [ENGINE, 'Scene/Scene.js', '_renderRequested'],
     [ENGINE, 'Scene/Scene.js', '_logDepthBufferDirty'],
     [ENGINE, 'Scene/Scene.js', '_hdrDirty'],

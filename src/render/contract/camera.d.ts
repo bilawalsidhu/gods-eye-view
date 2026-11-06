@@ -233,6 +233,10 @@ export interface CameraPort {
   look(direction: 'left' | 'right' | 'up' | 'down', radians: number): void;
   rotateAround(axis: Vec3, radians: number): void;
   zoom(metres: number): void;
+  /**
+   * Follow `target`, or stop following with null; `followChanged` fires
+   * whenever `followed` changes, and only then.
+   */
   follow(target: FollowTarget | null): void;
   readonly followed: FollowTarget | null;
   /** Whether the follow has placed its first frame. */
