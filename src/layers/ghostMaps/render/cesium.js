@@ -63,6 +63,7 @@ export function createGhostMapsCesiumRenderer(
               },
             });
             pins.push({
+              index,
               position,
               get show() {
                 return entity.show;
@@ -130,6 +131,20 @@ export function createGhostMapsCesiumRenderer(
       );
       return {
         ready,
+        // Take one report off in place: an expired event leaves its edition's
+        // data source, which stays mounted for the reports that remain.
+        drop(index) {
+          const prefix = `ghostmaps:${productId}:${index}:`;
+          for (const entity of [...dataSource.entities.values])
+            if (entity.id.startsWith(prefix))
+              dataSource.entities.remove(entity);
+          for (let i = pins.length - 1; i >= 0; i -= 1)
+            if (pins[i].index === index) {
+              allPins.delete(pins[i]);
+              pins.splice(i, 1);
+            }
+          return true;
+        },
         destroy() {
           disposed = true;
           for (const pin of pins) allPins.delete(pin);

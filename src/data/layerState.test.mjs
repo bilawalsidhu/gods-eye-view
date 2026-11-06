@@ -203,8 +203,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 35);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 35);
+  assert.equal(REGISTERED_LAYER_IDS.length, 36);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 36);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -243,7 +243,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '9');
+  assert.equal(nextLayerStateToken(), '00');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
@@ -306,8 +306,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '9',
-      next: '00',
+      future: '00',
+      next: '01',
     }),
     true,
   );
@@ -315,12 +315,13 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     () =>
       validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
         ...LAYER_STATE_TOKEN_RESERVATIONS,
-        future: '00',
+        future: '01',
       }),
-    /next free token 9/,
+    /next free token 00/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
+  delete beforeLastDigit['wildlife-sightings'];
   assert.equal(
     validateLayerStateAllocations(beforeLastDigit, {
       ...beforeLastDigit,
@@ -2693,6 +2694,32 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
     parseStoredLayerState(previous).options['recent-imagery'].split,
     50,
   );
+});
+
+test('wildlife confirmed and every taxa preset round-trip through the full share codec', () => {
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'wildlife-sightings').token,
+    '9',
+  );
+  for (const taxa of [
+    'all',
+    'Aves',
+    'Mammalia',
+    'whales',
+    'Insecta',
+    'Plantae',
+  ]) {
+    const state = normalizeLayerState({
+      enabledLayerIds: ['wildlife-sightings'],
+      options: { 'wildlife-sightings': { confirmed: true, taxa } },
+    });
+    const encoded = encode(state);
+    assert.doesNotMatch(encoded, /undefined/);
+    assert.deepEqual(
+      decodeLayerStateParams(new URLSearchParams(encoded)),
+      state,
+    );
+  }
 });
 
 test('drone restrictions uses digit 8 without colliding with fire perimeters', () => {

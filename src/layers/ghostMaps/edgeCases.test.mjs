@@ -84,7 +84,7 @@ function fakeRenderer(name, live) {
       const paint = {
         engine: name,
         id,
-        names: features.map((feature) => feature.name),
+        names: [...features.values()].map((feature) => feature.name),
         ready: Promise.resolve(),
         destroy() {
           live.delete(paint);

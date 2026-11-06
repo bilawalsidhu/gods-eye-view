@@ -411,32 +411,37 @@ export function contextRestoreLayerIds(snapshot = {}) {
   return restored;
 }
 
+/** The layers an aircraft Cockpit subject can come from. */
+export const COCKPIT_AIRCRAFT_LAYER_IDS = Object.freeze([
+  'flights',
+  'military',
+]);
+
 /**
- * Contacts mode requires both observed-flight feeds. Both globes support
- * first-person flight directly from a single selected aircraft layer.
+ * Cockpit entry needs only the aircraft it rides: that aircraft's own layer
+ * (Live Flights for a civilian, Military Flights for a military aircraft) must
+ * be on. Contacts and the other feeds are not required. When a source the
+ * surrounding picture uses is off, the Cockpit's Contact card and Live
+ * Signals say the picture is partial instead of blocking entry, so a partial
+ * picture is never presented as complete. A Context mode change in flight
+ * still owns the camera, so entry waits it out.
  *
- * @param {object} input Current context and dependency visibility.
- * @param {boolean} [input.standaloneAircraft] Allow direct entry outside a Context mode.
- * @param {string|null} input.contextMode Active Context mode.
- * @param {boolean} input.contextModeChanging Whether the Context transaction is unsettled.
- * @param {boolean} input.flightsEnabled Whether Live Flights is enabled.
- * @param {boolean} input.militaryEnabled Whether Military Flights is enabled.
+ * @param {object} input Current subject and Context state.
+ * @param {string|null} input.subjectLayerId Layer of the tracked aircraft
+ *   ('flights' or 'military'), or null with none tracked.
+ * @param {boolean} input.subjectLayerEnabled Whether that layer is enabled.
+ * @param {boolean} input.contextModeChanging Whether a Context transaction is unsettled.
  * @returns {boolean} Whether cockpit entry may be offered or activated.
  */
 export function cockpitEntryAllowed({
-  standaloneAircraft = false,
-  contextMode,
+  subjectLayerId,
+  subjectLayerEnabled,
   contextModeChanging,
-  flightsEnabled,
-  militaryEnabled,
 }) {
-  if (standaloneAircraft && !contextMode)
-    return !contextModeChanging && Boolean(flightsEnabled || militaryEnabled);
   return (
-    contextMode === 'flights' &&
-    !contextModeChanging &&
-    Boolean(flightsEnabled) &&
-    Boolean(militaryEnabled)
+    COCKPIT_AIRCRAFT_LAYER_IDS.includes(subjectLayerId) &&
+    Boolean(subjectLayerEnabled) &&
+    !contextModeChanging
   );
 }
 

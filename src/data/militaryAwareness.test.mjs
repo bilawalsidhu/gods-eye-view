@@ -98,6 +98,7 @@ function installAwarenessRuntime({
   // status its module never emits guards nothing. See the settled-but-fetching
   // tests below, which use militaryInstallations' genuine first-fetch readout.
   layerStats = {},
+  subscribe = undefined,
 } = {}) {
   const originalWindow = globalThis.window;
   const originalDocument = globalThis.document;
@@ -215,6 +216,7 @@ function installAwarenessRuntime({
     setEnabled,
     getLayerLifecycleState,
     layers,
+    ...(subscribe ? { subscribe } : {}),
   });
   militaryAwarenessLayer.setParams({ passive: true });
   militaryAwarenessLayer.init(viewer);
@@ -381,6 +383,54 @@ test('Contacts does not claim a dependency already enabling for the user', async
   } finally {
     runtime.restore();
   }
+});
+
+test('a dependency the user adopts stays on when Contacts turns off', async () => {
+  // A direct selection, or the Cockpit riding one of its aircraft, promotes a
+  // layer Contacts turned on into the user's own (adoptLayerVisibility). The
+  // coordinator must give it up, or its OFF release tears the layer down —
+  // and the track or the Cockpit with it — before Context restores it.
+  const calls = [];
+  const subscribers = new Set();
+  const runtime = installAwarenessRuntime({
+    isEnabled: () => false,
+    isEffectivelyEnabled: () => false,
+    setEnabled: (layerId, enabled) => {
+      calls.push({ layerId, enabled });
+      return Promise.resolve(true);
+    },
+    subscribe: (listener) => {
+      subscribers.add(listener);
+      return () => subscribers.delete(listener);
+    },
+  });
+
+  try {
+    militaryAwarenessLayer.setParams({ passive: false });
+    await nextTurn();
+    for (const listener of subscribers)
+      listener({
+        type: 'visibility',
+        layerId: 'flights',
+        enabled: true,
+        origin: 'user',
+        adopted: true,
+        adoptedFromSelection: true,
+      });
+    await militaryAwarenessLayer.disable();
+    const released = calls
+      .filter(({ enabled }) => !enabled)
+      .map(({ layerId }) => layerId)
+      .sort();
+    assert.deepEqual(
+      released,
+      AWARENESS_DEPENDENCIES.filter((layerId) => layerId !== 'flights').sort(),
+      'the adopted layer is the user\'s now; the rest are still released',
+    );
+  } finally {
+    runtime.restore();
+  }
+  assert.equal(subscribers.size, 0, 'destroy drops the manager subscription');
 });
 
 test('operational awareness becomes ready after aircraft while deferred sources keep loading', async () => {

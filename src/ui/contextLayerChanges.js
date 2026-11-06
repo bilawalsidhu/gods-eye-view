@@ -9,6 +9,7 @@ import {
   spaceMissionEntryCancellationDisposition,
 } from '../contextModePolicy.js';
 import { localizeLayerName } from './layerNames.js';
+import { spaceMissionsIndexFailure } from './contextActions.js';
 
 /**
  * A blocked-visibility reason in the UI language. Reasons stay English (voice
@@ -120,10 +121,14 @@ export function _handleContextLayerChange(change) {
     return;
   }
   if (change?.type === 'visibility-failed') {
-    const failureMessage = t('{layerId} could not {action} cleanly', {
-      layerId: change.layerId,
-      action: change.enabled ? t('start') : t('stop'),
-    });
+    const failureMessage =
+      (change.layerId === 'rocket-launches' &&
+        change.enabled &&
+        spaceMissionsIndexFailure(this._dataManager)) ||
+      t('{layerId} could not {action} cleanly', {
+        layerId: change.layerId,
+        action: change.enabled ? t('start') : t('stop'),
+      });
     // A failed direct Context-shell START has already had its siblings
     // cleared by the visibility guard. Wait outside the synchronous manager
     // notification for this queue to settle, then reconcile the complete
@@ -244,7 +249,12 @@ export function _handleContextLayerChange(change) {
       );
     }
   }
-  if (this.cockpitView?.active && !this.cockpitView.isEntryAllowed()) {
+  // Turning off the layer the view rides ends it; every other layer may be
+  // turned on or off freely during a session.
+  const riddenLayerId = this.cockpitView?.active
+    ? this.cockpitView.readSubjectLayerId?.()
+    : null;
+  if (riddenLayerId && !this._dataManager?.isEnabled(riddenLayerId)) {
     this.cockpitView.exit({ restoreTracking: false });
   }
   this._syncContextModeButtons();

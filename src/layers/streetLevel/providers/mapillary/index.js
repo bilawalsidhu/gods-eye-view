@@ -74,6 +74,9 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
     name: MAPILLARY_NAME,
     label: MAPILLARY_LABEL,
     requiresKeyId: MAPILLARY_KEY_ID,
+    /** A browser token, or a Graph proxy that adds one server-side. */
+    keyReady: () =>
+      source.hasToken?.() !== false || Boolean(source.graphEndpoint),
     pickPrefix: PICK_PREFIX.root,
     colors: COLORS,
     credit: Object.freeze({ html: MAPILLARY_CREDIT_HTML }),

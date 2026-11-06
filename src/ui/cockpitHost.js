@@ -1,4 +1,6 @@
 // Camera and aircraft ownership used by the shared first-person controller.
+import { routeViewerDoubleClick } from '../globe/cesium/doubleClick.js';
+
 export function cockpitHost(viewer, engine) {
   if (viewer) {
     return {
@@ -24,6 +26,9 @@ export function cockpitHost(viewer, engine) {
       inputs: (enabled) => {
         viewer.scene.screenSpaceCameraController.enableInputs = enabled;
       },
+      canvasPosition: (world) =>
+        viewer.scene.cartesianToCanvasCoordinates(world) ?? null,
+      routeDoubleClick: (handle) => routeViewerDoubleClick(viewer, handle),
     };
   }
   const aircraft = () => {
@@ -44,5 +49,9 @@ export function cockpitHost(viewer, engine) {
     terrainHeight: (place) => engine.surface.terrainHeight(place),
     surface: engine,
     inputs: (enabled) => engine.input.setCameraInputs(enabled),
+    canvasPosition: (world) => engine.projector.worldToWindow(world) ?? null,
+    // Navara has no stock double-click to route around.
+    routeDoubleClick: (handle) =>
+      engine.input.on('doubleClick', (event) => handle(event.position)),
   };
 }

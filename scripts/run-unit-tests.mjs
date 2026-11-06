@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -45,7 +45,10 @@ export function discoverUnitTestFiles(root = process.cwd()) {
       }
     }
   };
-  for (const testRoot of UNIT_TEST_ROOTS) visit(path.join(root, testRoot));
+  // A checkout without one of the roots (a test fixture) has no tests there.
+  for (const testRoot of UNIT_TEST_ROOTS)
+    if (existsSync(path.join(root, testRoot)))
+      visit(path.join(root, testRoot));
   return files.sort();
 }
 

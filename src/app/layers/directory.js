@@ -16,6 +16,7 @@ export const APPLICATION_LAYER_DIRECTORY = Object.freeze(
     ['gnss-integrity', 'GNSS Integrity'],
     ['s2-ghostmaps', 'S2 GhostMaps'],
     ['drone-airspace', 'Prohibited & Restricted Airspace'],
+    ['wildlife-sightings', 'Wildlife Sightings'],
     ['alpr-cameras', 'ALPR Cameras'],
     ['street-level', 'Street Level'],
     ['satellites', 'Satellites'],

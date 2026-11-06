@@ -230,6 +230,7 @@ export function createPolicyHelpers({
       layerState._viewer.camera.positionCartographic?.height,
     );
     const position = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
+    layerState._cameraReleased = false;
     layerState._viewer.camera.flyToBoundingSphere(
       geo.boundingSphere.create(position, 0),
       {

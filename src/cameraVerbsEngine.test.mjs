@@ -274,7 +274,9 @@ test('engine rig globe rotation turns the camera about Earth like Cesium camera.
 
 test('a once nudge spends its budget in 0.9 s and then lets go', (t) => {
   const { engine, run, camera } = engineHarness(t);
-  initCameraVerbs(engine, () => ORBIT_TARGET);
+  // No view target: the tilt turns in place. With ground under the crosshair
+  // it swings about that point instead (src/cameraTilt.test.mjs).
+  initCameraVerbs(engine);
   const before = camera();
   assert.equal(moveCamera({ motion: 'tilt', direction: 'up' }).ok, true);
   assert.equal(hasRenderHold(), true);

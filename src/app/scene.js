@@ -3,6 +3,7 @@ import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
 import {
   createApplicationViewer,
+  installFreeLookHeightLimit,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
@@ -165,6 +166,7 @@ async function createRenderer({
   // As the Navara scene above: a released engine keeps no camera verb.
   defer(() => releaseCameraVerbs(engine));
   defer(installTrackpadPinchZoom(viewer));
+  defer(installFreeLookHeightLimit(viewer));
   registerDataCredits(engine, credits);
   configureCreditKeyboardAccess(document);
   defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));

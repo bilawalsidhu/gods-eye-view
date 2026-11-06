@@ -1,7 +1,7 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
-import { createCyclonesLayer } from '../layers/cyclones/index.js';
+import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { createLayerAvailability, rendererFor } from './layers/renderers.js';
@@ -32,6 +32,7 @@ import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
+import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { OSM_OVERLAYS, createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
@@ -264,6 +265,16 @@ export function createApplicationCatalog({
           ),
       ],
       [
+        'wildlife-sightings',
+        () =>
+          sessionModel('wildlife-sightings', () =>
+            createApplicationWildlifeSightings({
+              source: sources['wildlife-sightings'],
+              groundFloor: surface.groundFloor,
+            }),
+          ),
+      ],
+      [
         'alpr-cameras',
         () =>
           sessionModel('alpr-cameras', () =>
@@ -399,7 +410,7 @@ export function createApplicationCatalog({
         'weather-cyclones',
         () =>
           sessionModel('weather-cyclones', () =>
-            createCyclonesLayer({
+            createApplicationCyclones({
               feed: sources.cyclones,
               createNativeRendering: (engine, options) =>
                 rendererFor('weather-cyclones', engine, options),

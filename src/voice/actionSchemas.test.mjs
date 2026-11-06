@@ -56,7 +56,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
-    '93b9edca1f0bfe405b1c5cca234734a39071d201d1ed9e2dd4ce3e72bba59877',
+    // control_cockpit states the own-layer entry rule (Contacts not required).
+    // move_camera tilt takes an optional pitchDeg angle, described as
+    // absolute with its -45 default, with steps sent as a direction.
+    'fd0e4b884c501411b3cf57fde932f53954566d56cb14836155925744111f986f',
   );
 });
 
@@ -176,6 +179,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
     'stop',
   ]);
   motion.enum = motion.enum.filter((value) => value !== 'rotate_globe');
+  // Tilt to an angle is additive.
+  delete property('move_camera').pitchDeg;
   const panels = property('set_panel_open').panelId;
   panels.enum = panels.enum.filter(
     (id) =>
@@ -320,4 +325,16 @@ test('direct voice timeout schema accepts None and exact integers, rejects malfo
     assert.equal(validateArgs(tool.parameters, { minutes }).length, 0);
   for (const minutes of [-1, 61, 1.5, '5'])
     assert.ok(validateArgs(tool.parameters, { minutes }).length > 0);
+});
+
+test('tilt accepts an angle with no direction', () => {
+  const schema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'move_camera',
+  ).parameters;
+  assert.deepEqual(validateArgs(schema, { motion: 'tilt', pitchDeg: -45 }), []);
+  assert.deepEqual(validateArgs(schema, { motion: 'tilt' }), []);
+  // No range in the schema (prompt budget): the runner clamps to -89..-5.
+  assert.ok(
+    validateArgs(schema, { motion: 'tilt', pitchDeg: 'steep' }).length > 0,
+  );
 });

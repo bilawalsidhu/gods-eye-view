@@ -123,6 +123,8 @@ test('missing scene capabilities refuse with a structured result', async () => {
   });
   delete engine.camera.lookAt;
   const runner = runnerOn(engine, { styleManager });
+  // The runner subscribes to camera handoffs when it is made.
+  touched.length = 0;
   engine.fake.resetCalls();
   for (const name of [
     'annotate_map',

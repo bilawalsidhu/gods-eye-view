@@ -294,3 +294,14 @@ test('shell attach waits for a deferred outgoing detach', async () => {
   await Promise.all([leaving, entering]);
   assert.equal(shell.engine, engine);
 });
+
+test('an engine without Wildlife Sightings gets no card instead of a failed start', () => {
+  const shell = Object.create(StyleManager.prototype);
+  // The stand-in a catalog gives for a layer the engine leaves out.
+  Object.assign(shell, {
+    services: { wildlifeSightingsLayer: {} },
+    _scene: { viewer: null, engine: { kind: 'navara' } },
+  });
+  assert.doesNotThrow(() => shell._initWildlifeSightingCard());
+  assert.equal(shell._wildlifeSightingCard, null);
+});
