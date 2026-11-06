@@ -1,0 +1,47 @@
+{
+  "id": "nc-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "North Carolina Statewide Imagery (2023)",
+  "provider": "NC OneMap",
+  "description": "Aerial orthophotos: Statewide coverage of North Carolina.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-84.452, 33.6938, -75.4041, 36.6379]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://services.nconemap.gov/secure/rest/services/Imagery/Orthoimagery_2020_2023/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "6 in – 1 ft",
+    "resolutionM": 0.1524,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "Statewide 4-year cycle (quarterly regions)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain — NC OneMap terms of use",
+    "url": "https://www.nconemap.gov/pages/terms"
+  },
+  "attribution": {
+    "text": "NC911, NCCGIA",
+    "url": "https://www.nconemap.gov/pages/imagery"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

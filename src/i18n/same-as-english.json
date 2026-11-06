@@ -212,7 +212,10 @@
     "ΔN",
     "Ⅱ PAUSE",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "COMMUNITY",
+    "Regional",
+    "OPT-IN"
   ],
   "es": [
     "1090 MHz",
@@ -351,7 +354,9 @@
     "Reptiles",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "Regional",
+    "{datasets} · {tiles} · {packs}"
   ],
   "fr": [
     "1090 MHz",
@@ -545,7 +550,12 @@
     "ΔN",
     "Ⅱ PAUSE",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "PACK",
+    "{count} packs",
+    "Orthophoto",
+    "Oblique",
+    "Type"
   ],
   "it": [
     "1090 MHz",
@@ -725,7 +735,10 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "DATASET",
+    "{count} datasets",
+    "ZOOM"
   ],
   "ja": [
     "1090 MHz",
@@ -919,7 +932,8 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "Regional"
   ],
   "ru": [
     "AIS: --",
@@ -942,7 +956,8 @@
     "WHOT/BHOT",
     "acartia.io ↗",
     "iNaturalist",
-    "iNaturalist ↗"
+    "iNaturalist ↗",
+    "{datasets} · {tiles} · {packs}"
   ],
   "uk": [
     "AIS: --",

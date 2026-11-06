@@ -1,0 +1,48 @@
+{
+  "id": "ct-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Connecticut Statewide Imagery (2019)",
+  "provider": "CT ECO (UConn / CT DEEP)",
+  "description": "Aerial orthophotos: Statewide coverage of Connecticut.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-73.7389, 40.9738, -71.7784, 42.0598]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://cteco.uconn.edu/ctraster/rest/services/images/Ortho_2019_tiled/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "6 in",
+    "resolutionM": 0.1524,
+    "trueOrtho": false,
+    "vintage": "2019–present",
+    "updateCycle": "Roughly every 3 years",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://ct-deep-gis-open-data-website-ctdeep.hub.arcgis.com/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "CT ECO — UConn CLEAR / CT DEEP",
+    "url": "https://ct-deep-gis-open-data-website-ctdeep.hub.arcgis.com/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

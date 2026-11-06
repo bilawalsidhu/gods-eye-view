@@ -437,6 +437,7 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 
 #control-panel.collapsed .button-grid,
 #data-panel.collapsed .data-toggle-list,
+#data-panel.collapsed .data-library-footer,
 #global-context-panel.collapsed #radio-panel,
 #global-context-panel.collapsed #military-awareness-panel,
 #global-context-panel.collapsed .global-context-actions,

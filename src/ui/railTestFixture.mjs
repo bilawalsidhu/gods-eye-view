@@ -26,6 +26,10 @@ export function railFixture(onWrite = () => {}) {
         getAttribute(key) {
           return this.attributes.get(key) ?? null;
         },
+        removeAttribute(key) {
+          onWrite('attribute');
+          this.attributes.delete(key);
+        },
         appendChild(child) {
           return this.insertBefore(child, null);
         },

@@ -86,6 +86,13 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     if (river && river.toLocaleLowerCase() !== title.toLocaleLowerCase()) {
       details.push(clampCardLine(river));
     }
+  } else if (Array.isArray(props.__gevDetails)) {
+    // Data Library features carry their card lines from the manifest
+    // (src/library/formats.js presentLibraryProperties).
+    for (const line of props.__gevDetails.slice(0, 2)) {
+      const clean = cleanLabel(line);
+      if (clean) details.push(clampCardLine(clean));
+    }
   }
 
   return { title, details };
@@ -292,7 +299,10 @@ export function localDatasetError(error) {
  * A minimal, rock-solid native implementation for loading local GeoJSON Data.
  * Draws 3D stems (polylines) attached to Point entities and ensures
  * standard scene.pick natively clicks them.
- * @param {object} options Dataset URL, identity, appearance and optional Cesium adapters.
+ * @param {object} options Dataset URL (or a `loadFeatures({signal})` loader
+ *   resolving to GeoJSON features), identity, appearance (an optional
+ *   `featureColor(properties)` returns a CSS colour per feature) and optional
+ *   Cesium adapters.
  * @param {object} services Caller-owned operations; see docs/INFRASTRUCTURE-LAYERS.md.
  * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats/getAnalystRecords.
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
@@ -310,6 +320,8 @@ export function createLocalGeoJsonLayer(
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
+    loadFeatures = null,
+    featureColor = null,
     screenSpaceEventHandlerFactory = (canvas) =>
       new Cesium.ScreenSpaceEventHandler(canvas),
     projectToWindow = (scene, position) =>
@@ -585,7 +597,17 @@ export function createLocalGeoJsonLayer(
             let addedToScene = false;
             try {
               let features = _cachedFeatures;
-              if (!features) {
+              if (!features && loadFeatures) {
+                // A caller-owned loader (the Data Library) fetches and bounds
+                // its own live dataset; this layer only renders it.
+                features = await loadFeatures({
+                  signal: _loadController.signal,
+                });
+                if (_destroyed) return;
+                if (!Array.isArray(features))
+                  throw new Error('dataset unavailable');
+                _cachedFeatures = features;
+              } else if (!features) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
                 });
@@ -639,9 +661,21 @@ export function createLocalGeoJsonLayer(
               _stemRecords = [];
               _stemGeometryDirty = true;
 
+              // An optional per-feature colour (Data Library colorBy); one
+              // Cesium colour per distinct CSS value.
+              const colorCache = new Map([[color, baseColor]]);
+              const colorFor = (entity) => {
+                if (typeof featureColor !== 'function') return baseColor;
+                const css = featureColor(propertyObject(entity)) || color;
+                if (!colorCache.has(css))
+                  colorCache.set(css, Cesium.Color.fromCssColorString(css));
+                return colorCache.get(css);
+              };
+
               for (let i = 0; i < entities.length; i++) {
                 const feature = entities[i];
                 feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
+                const featureBaseColor = colorFor(feature);
 
                 let pos = feature.position?.getValue(Cesium.JulianDate.now());
 
@@ -649,7 +683,10 @@ export function createLocalGeoJsonLayer(
                   // It's a polygon or line
                   if (feature.polygon) {
                     feature.polygon.outline = true;
-                    feature.polygon.outlineColor = baseColor;
+                    feature.polygon.outlineColor = featureBaseColor;
+                    if (featureBaseColor !== baseColor)
+                      feature.polygon.material =
+                        featureBaseColor.withAlpha(0.3);
 
                     // Calculate center point for the stem
                     const hierarchy = feature.polygon.hierarchy?.getValue(
@@ -716,11 +753,11 @@ export function createLocalGeoJsonLayer(
                 feature.polyline = new Cesium.PolylineGraphics({
                   positions: stemPositionBuffers[0],
                   width: 3.5,
-                  material: new Cesium.ColorMaterialProperty(baseColor),
+                  material: new Cesium.ColorMaterialProperty(featureBaseColor),
                 });
                 feature.point = new Cesium.PointGraphics({
                   pixelSize: 10,
-                  color: baseColor,
+                  color: featureBaseColor,
                   outlineColor: Cesium.Color.BLACK,
                   outlineWidth: 2,
                   // Never depth-cull the anchor against the photoreal mesh —
@@ -749,7 +786,7 @@ export function createLocalGeoJsonLayer(
                         position: tip,
                         properties,
                         priority,
-                        accent: color,
+                        accent: featureBaseColor.toCssHexString(),
                       })
                     : null,
                 });
@@ -1323,6 +1360,10 @@ function labelPriorityFromProperties(props, layerId) {
   if (props.output || tags['plant:output:electricity']) score += 120;
   if (layerId === 'local-dams') score += 80;
   if (layerId === 'local-datacenters') score += 60;
+  // Data Library features carry their manifest importance (0–600), below the
+  // named/unnamed gap so a rank never promotes an unnamed feature.
+  if (Number.isFinite(props.__gevRank))
+    score += Math.max(0, Math.min(600, props.__gevRank));
   return score;
 }
 

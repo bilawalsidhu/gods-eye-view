@@ -1,0 +1,48 @@
+{
+  "id": "gsi-japan-photo",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Japan aerial photos (GSI)",
+  "provider": "GSI",
+  "description": "Seamless aerial and satellite photography of Japan from the Geospatial Information Authority of Japan.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["JP"],
+    "bbox": [122, 20, 154, 46]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 2,
+    "maxZoom": 18,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "countries",
+    "aerial": true,
+    "noDataColor": "#343434"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "20 cm (cities) – 40 cm",
+    "resolutionM": 0.2,
+    "trueOrtho": false,
+    "vintage": "2007–present",
+    "updateCycle": "Rolling",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "GSI Tiles terms (free use with attribution)",
+    "url": "https://maps.gsi.go.jp/development/ichiran.html"
+  },
+  "attribution": {
+    "text": "Geospatial Information Authority of Japan (GSI Tiles)",
+    "url": "https://maps.gsi.go.jp/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

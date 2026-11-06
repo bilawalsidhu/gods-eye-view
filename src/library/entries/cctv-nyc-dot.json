@@ -1,0 +1,24 @@
+{
+  "id": "cctv-nyc-dot",
+  "kind": "pack",
+  "family": "cameras",
+  "title": "New York City cameras (NYC DOT TMC)",
+  "provider": "NYC DOT",
+  "description": "About 980 NYC DOT traffic cameras across the five boroughs, added to the CCTV layer. Needs your own NYC DOT data-sharing agreement.",
+  "icon": "◉",
+  "maintainer": "core",
+  "coverage": { "countries": ["US"], "bbox": [-74.26, 40.49, -73.69, 40.92] },
+  "source": {
+    "format": "host",
+    "url": "https://webcams.nyctmc.org/api/cameras"
+  },
+  "pack": { "host": "cctv", "env": "CCTV_NYC_ENABLED" },
+  "licence": {
+    "name": "NYC DOT camera feed: data-sharing agreement required",
+    "url": "https://www.nyc.gov/html/dot/html/about/datafeeds.shtml",
+    "operatorOptIn": true
+  },
+  "attribution": { "text": "NYC DOT Traffic Management Center" },
+  "status": "verified",
+  "reviewed": "2026-10-21"
+}

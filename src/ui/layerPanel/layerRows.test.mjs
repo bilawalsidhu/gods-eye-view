@@ -159,3 +159,57 @@ test('a row switch and slider render their markup and report choices', () => {
   assert.equal(segments[1].classList.contains('active'), true);
   render(null, container);
 });
+
+const libraryRow = (chips) => ({
+  ...row(false),
+  key: 'lib-night-lights',
+  id: 'lib-night-lights',
+  libraryEntry: 'nasa-black-marble',
+  controls: { hidden: false, chips, legend: [], list: null },
+});
+
+test('a Data Library row names its entry and draws icon action chips', () => {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const zoom = {
+    id: 'zoom',
+    icon: 'zoom_in_map',
+    action: true,
+    label: 'Zoom to layer',
+  };
+  render(h(LayerRows, { items: [libraryRow([zoom])] }), container);
+  const element = container.querySelector('[data-layer-id="lib-night-lights"]');
+  assert.equal(element.dataset.libraryEntry, 'nasa-black-marble');
+  const button = element.querySelector('[data-chip-id="zoom"]');
+  const glyph = button.children[0];
+  assert.equal(glyph.className, 'material-symbols-outlined');
+  assert.equal(glyph.textContent, 'zoom_in_map');
+  assert.equal(glyph.getAttribute('aria-hidden'), 'true');
+  assert.equal(button.getAttribute('aria-label'), 'Zoom to layer');
+  assert.equal(button.title, 'Zoom to layer');
+  assert.equal(button.getAttribute('aria-pressed'), null);
+  assert.ok(button.classList.contains('chip-icon'));
+
+  // The same id as a text toggle drops the icon semantics.
+  render(
+    h(LayerRows, {
+      items: [libraryRow([{ id: 'zoom', label: 'ZOOM', active: true }])],
+    }),
+    container,
+  );
+  const toggle = element.querySelector('[data-chip-id="zoom"]');
+  assert.equal(toggle.textContent, 'ZOOM');
+  assert.equal(toggle.getAttribute('aria-label'), null);
+  assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+  assert.equal(toggle.classList.contains('chip-icon'), false);
+  render(null, container);
+});
+
+test('a core row carries no library entry attribute', () => {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  render(h(LayerRows, { items: [row(false)] }), container);
+  const element = container.querySelector('[data-layer-id="flights"]');
+  assert.equal(element.hasAttribute('data-library-entry'), false);
+  render(null, container);
+});

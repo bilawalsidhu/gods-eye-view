@@ -1,0 +1,48 @@
+{
+  "id": "mountain-village-co",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Mountain Village, Colorado Orthoimagery",
+  "provider": "Town of Mountain Village",
+  "description": "Aerial orthophotos: Mountain Village, Colorado jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-107.8864, 37.9114, -107.8244, 37.9537]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/Nefdxa42x2DnAd5Z/arcgis/rest/services/Mountain_Village_Orthos/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 13,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2024–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.townofmountainvillage.com/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Town of Mountain Village",
+    "url": "https://www.townofmountainvillage.com/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

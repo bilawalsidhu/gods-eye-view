@@ -1,0 +1,47 @@
+{
+  "id": "ny-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "New York Statewide Imagery (2019)",
+  "provider": "NYS GIS Program Office (ITS)",
+  "description": "Aerial orthophotos: Statewide coverage of New York.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-80.1606, 40.2704, -71.2889, 45.1325]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://orthos.its.ny.gov/arcgis/rest/services/wms/NAIP_2019/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 18,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "3 in – 1 ft",
+    "resolutionM": 0.0762,
+    "trueOrtho": false,
+    "vintage": "2019–present",
+    "updateCycle": "Statewide 3-year cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain — NYS open data",
+    "url": "https://data.gis.ny.gov/"
+  },
+  "attribution": {
+    "text": "USDA; NYS ITS Geospatial Services",
+    "url": "https://data.gis.ny.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

@@ -1,0 +1,48 @@
+{
+  "id": "bayern-dop40",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Digitales Orthophoto Bayern (DOP 40 cm, open)",
+  "provider": "LDBV Bayern",
+  "description": "Aerial orthophotos: 100% of Bavaria (~70,550 km²).",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["DE"],
+    "bbox": [8.97, 47.27, 13.84, 50.56]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://geoservices.bayern.de/od/wms/dop/v1/dop40?service=WMS&request=GetMap&version=1.3.0&layers=by_dop40c&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 8,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "40 cm (20 cm is paid)",
+    "resolutionM": 0.4,
+    "trueOrtho": false,
+    "vintage": "2021–present",
+    "updateCycle": "Biennial (rolling)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "CC BY 4.0",
+    "url": "https://geodaten.bayern.de/opengeodata/"
+  },
+  "attribution": {
+    "text": "© Bayerische Vermessungsverwaltung",
+    "url": "https://geodaten.bayern.de/opengeodata/OpenDataDetail.html?pn=dop40"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

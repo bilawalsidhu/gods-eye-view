@@ -1,0 +1,56 @@
+{
+  "id": "nws-active-alerts",
+  "kind": "dataset",
+  "family": "weather",
+  "title": "US weather alerts with drawn areas (NWS)",
+  "provider": "NWS",
+  "description": "Active National Weather Service alerts that carry their own polygon, such as storm-based warnings. Zone-wide alerts have no drawn area and are left out.",
+  "icon": "⚠",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-180, 13, -64, 72]
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://api.weather.gov/alerts/active",
+    "fetch": "browser-direct",
+    "cacheSeconds": 300,
+    "maxBytes": 8388608,
+    "maxFeatures": 2000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "event",
+    "fields": ["severity", "areaDesc"],
+    "rank": {
+      "field": "onset",
+      "order": "desc"
+    },
+    "colorBy": {
+      "field": "severity",
+      "colors": {
+        "Extreme": "#d03b3b",
+        "Severe": "#ec835a",
+        "Moderate": "#fab219",
+        "Minor": "#0ca30c"
+      },
+      "labels": {
+        "Extreme": "Extreme",
+        "Severe": "Severe",
+        "Moderate": "Moderate",
+        "Minor": "Minor"
+      }
+    }
+  },
+  "licence": {
+    "name": "NWS data: U.S. public domain",
+    "url": "https://www.weather.gov/disclaimer"
+  },
+  "attribution": {
+    "text": "NOAA National Weather Service",
+    "url": "https://www.weather.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

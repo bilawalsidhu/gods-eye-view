@@ -27,6 +27,7 @@ const COCKPIT_REFUSALS = Object.freeze({
   'sighting-area': msg('Exit cockpit to fly to a sighting area'),
   route: msg('Exit cockpit to fly to a route'),
   file: msg('Exit cockpit to fly to a file'),
+  layer: msg('Exit cockpit to fly to a layer'),
   drawing: msg('Exit cockpit to fly to a drawing'),
   scene: msg('Exit cockpit to fly to a scene'),
   // Radar, satellite and lightning fly to the layer's coverage area (their

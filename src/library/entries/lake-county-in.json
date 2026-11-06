@@ -1,0 +1,48 @@
+{
+  "id": "lake-county-in",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Lake County, Indiana Aerial Imagery",
+  "provider": "Lake County GIS",
+  "description": "Aerial orthophotos: Lake County, Indiana jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-87.5421, 41.1501, -87.2023, 41.7204]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/8CXRnvSfSpwdf0R6/arcgis/rest/services/LakeIN2023Aerial/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.lakecountyin.org/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Lake County Surveyor's Office",
+    "url": "https://www.lakecountyin.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

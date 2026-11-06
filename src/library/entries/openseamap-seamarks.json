@@ -1,0 +1,30 @@
+{
+  "id": "openseamap-seamarks",
+  "kind": "tiles",
+  "family": "infrastructure",
+  "title": "Seamarks (OpenSeaMap)",
+  "provider": "OpenSeaMap",
+  "description": "Buoys, beacons, lights and harbour marks from OpenSeaMap, drawn over any map. Useful with AIS vessels.",
+  "icon": "⚓",
+  "maintainer": "github:asturksever",
+  "coverage": { "global": true },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 18
+  },
+  "display": { "opacity": 1 },
+  "licence": {
+    "name": "CC BY-SA 2.0; data © OpenStreetMap contributors (ODbL)",
+    "url": "https://openseamap.org/index.php?id=imprint&L=1"
+  },
+  "attribution": {
+    "text": "© OpenSeaMap contributors, CC BY-SA; data © OpenStreetMap contributors",
+    "url": "https://openseamap.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-21"
+}

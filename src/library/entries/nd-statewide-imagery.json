@@ -1,0 +1,48 @@
+{
+  "id": "nd-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "North Dakota Statewide Imagery (2013)",
+  "provider": "North Dakota GIS Hub",
+  "description": "Aerial orthophotos: Statewide coverage of North Dakota.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-104.3616, 45.7993, -96.3961, 49.1166]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://ndgishub.nd.gov/arcgis/rest/services/Imagery/AerialImage_DES_BaseMap_Cached/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 21,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "1 ft – 1 m",
+    "resolutionM": 0.3048,
+    "trueOrtho": false,
+    "vintage": "2013–present",
+    "updateCycle": "Periodic",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://www.gis.nd.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "ND Dept. of Transportation, ND Dept. of Emergency Services, and the ND GIS Hub",
+    "url": "https://www.gis.nd.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

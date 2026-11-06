@@ -1,0 +1,48 @@
+{
+  "id": "md-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Maryland Statewide Imagery",
+  "provider": "Maryland iMAP / MD DoIT",
+  "description": "Aerial orthophotos: Statewide coverage of Maryland.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-79.5157, 37.8702, -74.9964, 39.778]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://mdgeodata.md.gov/imagery/rest/services/NAIP/MD_NAIPImagery/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "3 in – 1 m",
+    "resolutionM": 0.0762,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Annual/biennial by region",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://imap.maryland.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Maryland iMAP",
+    "url": "https://imap.maryland.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}
