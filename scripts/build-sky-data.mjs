@@ -125,7 +125,7 @@ export function buildBoundaries(western, precessionMatrix, toJ2000T) {
   if (!Array.isArray(edges) || !edges.length)
     throw new Error('western index.json: no edges array');
   if (western.edges_epoch && western.edges_epoch !== 'B1875')
-    throw new Error(`edges epoch ${western.edges_epoch} != B1875`);
+    throw new Error('edges epoch != B1875');
   const p = precessionMatrix(toJ2000T);
   const D = Math.PI / 180;
   const toJ2000 = (raDeg, decDeg) => {
@@ -146,7 +146,7 @@ export function buildBoundaries(western, precessionMatrix, toJ2000T) {
   };
   return edges.map((text) => {
     const m = EDGE_RE.exec(String(text));
-    if (!m) throw new Error(`bad boundary edge: ${text}`);
+    if (!m) throw new Error('bad boundary edge');
     const hms = (h, mi, s) =>
       (Number(h) + Number(mi) / 60 + Number(s) / 3600) * 15;
     const dms = (sign, d, mi, s) =>
@@ -206,7 +206,7 @@ export function buildStars(rows, lineHips, magLimit = MAG_LIMIT) {
   }
   const missing = [...lineHips].filter((hip) => !seenHip.has(hip));
   if (missing.length)
-    throw new Error(`HYG has no row for line HIP ids: ${missing.join(',')}`);
+    throw new Error('HYG has no row for line HIP ids');
   picked.sort((a, b) => a.mag - b.mag || a.id - b.id);
   const out = {
     ra: [],
@@ -346,6 +346,15 @@ export function buildSkyData(hygGz, westernJson) {
   };
 }
 
+function readInput(label, filePath) {
+  try {
+    return readFileSync(filePath);
+  } catch {
+    console.error(`${label} input not readable`);
+    return null;
+  }
+}
+
 function main(argv) {
   const arg = (name) => {
     const index = argv.indexOf(name);
@@ -359,8 +368,10 @@ function main(argv) {
     );
     return 2;
   }
-  const hyg = readFileSync(hygPath);
-  const western = readFileSync(westernPath);
+  const hyg = readInput('HYG', hygPath);
+  if (!hyg) return 1;
+  const western = readInput('western', westernPath);
+  if (!western) return 1;
   for (const [label, buffer, expected] of [
     ['HYG', hyg, HYG_SHA256],
     ['western', western, WESTERN_SHA256],

@@ -1533,13 +1533,19 @@ export function mountSkyView({
     satDom.root.hidden = true;
     const savedCollision = sceneSnap?.enableCollisionDetection;
     if (!keepCamera) restoreCamera(CesiumApi, viewer.camera, cameraSnap);
-    restoreScene(CesiumApi, viewer, sceneSnap, { nowMs: now() });
-    if (
-      savedCollision === true &&
-      viewer.scene?.screenSpaceCameraController?.enableCollisionDetection !==
-        true
-    )
-      armCollisionRestore(savedCollision);
+    const controller = viewer.scene?.screenSpaceCameraController;
+    // Normal exit already put the saved camera back, so every flag,
+    // including collision, goes back with it. A handoff keeps the other
+    // camera: defer only while that camera is actually under the terrain
+    // floor (or the surface height is still unknown).
+    const deferCollision =
+      keepCamera &&
+      collisionRestoreLifts(viewer.camera, controller, savedCollision);
+    restoreScene(CesiumApi, viewer, sceneSnap, {
+      nowMs: now(),
+      deferCollision,
+    });
+    if (deferCollision) armCollisionRestore(savedCollision);
     cameraSnap = null;
     sceneSnap = null;
     hasAppliedPose = false;
@@ -1673,11 +1679,10 @@ export function mountSkyView({
   }
 
   /**
-   * Hold a saved collision flag until the camera is above the controller's
-   * safe height. `update()` lifts a lower camera once the surface height
-   * has settled; the flag write itself does not. preUpdate and onTick run
-   * every widget frame after that update, so the flag is on for the next
-   * one — when the height is already safe.
+   * Hold a saved collision flag until the kept camera is safe: at or above
+   * `globeHeight + minimumZoomDistance`, or above the controller ceiling.
+   * An unknown globeHeight keeps waiting. preUpdate and onTick run every
+   * widget frame, so the flag is on before the next update that could lift.
    */
   function armCollisionRestore(value) {
     dropCollisionRestore?.();
@@ -2352,10 +2357,10 @@ export function mountSkyView({
       if (destroyed) return;
       if (hookWindow?.__gevSky?.voice === skyVoice) delete hookWindow.__gevSky;
       exit();
-      // A handoff may still be waiting to put collision back. Unhook it.
-      // Applying the flag here would let the next controller update lift
-      // the camera the handoff just kept.
-      dropCollisionRestore?.();
+      // A handoff may still be holding collision off. Put the saved flag
+      // back and drop the watch. Leaving it off would disable collision
+      // for the rest of the session.
+      dropCollisionRestore?.({ apply: true });
       stopPicking();
       content.destroy();
       orientation.destroy();

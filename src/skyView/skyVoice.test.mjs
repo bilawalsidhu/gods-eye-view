@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { inspect } from 'node:util';
 import { createSkyVoice, parseSkyTime, SKY_PRESET_IDS } from './skyVoice.js';
 
 const NOW = Date.parse('2026-10-26T02:00:00Z');
@@ -187,6 +188,22 @@ test('open reports a fixed reason when the map centre has no ground', async () =
   assert.equal(r.ok, false);
   assert.match(r.error, /screen centre/);
   assert.equal(h.state.active, false);
+});
+
+test('an openHere failure does not forward an arbitrary error', async () => {
+  const secret = 'https://synthuser:SECRETKEY123@probe.example.invalid/api/v1';
+  const h = voiceFor({
+    openResult: { ok: false, error: secret },
+  });
+  for (const call of [() => h.voice.look('Mars'), () => h.voice.open()]) {
+    const r = await call();
+    assert.equal(r.ok, false);
+    const visible = inspect(r, { depth: 6 });
+    assert.equal(visible.includes(secret), false, visible);
+    assert.equal(visible.includes('SECRETKEY123'), false, visible);
+    assert.equal(visible.includes('synthuser'), false, visible);
+    assert.equal(r.error, 'Could not open Sky view');
+  }
 });
 
 test('close leaves the sky; closing a closed sky does not call exit', () => {

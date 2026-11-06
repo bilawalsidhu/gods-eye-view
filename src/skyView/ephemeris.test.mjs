@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { inspect } from 'node:util';
 import { Illumination, MakeTime } from 'astronomy-engine';
 import {
   PLANETS,
@@ -192,4 +193,29 @@ test('observer validation', () => {
   assert.throws(() => makeObserver({ latDeg: NaN, lonDeg: 0 }), TypeError);
   assert.equal(makeObserver({ latDeg: 1, lonDeg: 2 }).height, 0);
   assert.throws(() => bodyPosition('Vulcan', 0, SITES.Houston), RangeError);
+});
+
+test('unknown-body and non-planet diagnostics do not repeat the caller name', () => {
+  const secret = 'https://user:pass@host/?api_key=SECRETKEY123';
+  for (const call of [
+    () => bodyPosition(secret, 0, SITES.Houston),
+    () => planetState(secret, 0, SITES.Houston),
+  ]) {
+    assert.throws(call, (error) => {
+      assert.equal(error instanceof RangeError, true);
+      const visible = [
+        error.message,
+        error.stack,
+        error.cause ? inspect(error.cause, { depth: 6 }) : '',
+        inspect(error, { depth: 6 }),
+      ].join('\n');
+      assert.equal(visible.includes(secret), false, visible);
+      assert.equal(visible.includes('SECRETKEY123'), false, visible);
+      assert.equal(visible.includes('pass@host'), false, visible);
+      return true;
+    });
+  }
+  assert.throws(() => planetState('Sun', 0, SITES.Houston), RangeError);
+  const mars = bodyPosition('Mars', 0, SITES.Houston);
+  assert.equal(mars.name, 'Mars');
 });
