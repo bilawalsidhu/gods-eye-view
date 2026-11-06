@@ -9,6 +9,7 @@
  * Nothing runs on its own: `testing.tick()` and `testing.advance()` drive the
  * loop on a virtual clock, one frame at a time, in the contract's order.
  */
+import { createInputRouter } from '../input/router.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from './motion.js';
@@ -715,164 +716,11 @@ export function createStubRenderer(options = {}) {
 
   // --- Input -----------------------------------------------------------------
 
-  const pointerListeners = [];
-  let currentLease = null;
-  const cameraHolds = new Map();
-  const behaviourHolds = { select: 0, dblclickFollow: 0 };
-
-  function makeBehaviour(name) {
-    return {
-      get enabled() {
-        return behaviourHolds[name] === 0;
-      },
-      suppress() {
-        behaviourHolds[name] += 1;
-        let released = false;
-        return () => {
-          if (released) return;
-          released = true;
-          behaviourHolds[name] -= 1;
-        };
-      },
-    };
-  }
-
-  /** Each lease's `grab`, or null when it takes every press. */
-  const leaseGrab = new WeakMap();
-  /**
-   * The presses under way, by button, from their `down`: `owner` is the
-   * lease each went to, or null when it went to everyone else. A press's
-   * click and double-click go where its down went (an ended owner's to no
-   * one).
-   */
-  const presses = new Map();
-
-  const leaseOf = (entry) =>
-    typeof entry.lease === 'function' ? entry.lease() : entry.lease;
-
-  const input = {
-    on(type, cb, opts = {}) {
-      const entry = { type, cb, lease: opts.lease ?? null, live: true };
-      pointerListeners.push(entry);
-      return () => {
-        entry.live = false;
-        const i = pointerListeners.indexOf(entry);
-        if (i >= 0) pointerListeners.splice(i, 1);
-      };
-    },
-    claimPointer(owner, opts = {}) {
-      if (currentLease) currentLease.release();
-      let released = false;
-      const grab = typeof opts.grab === 'function' ? opts.grab : null;
-      const lease = {
-        owner: String(owner),
-        get current() {
-          return !released && currentLease === lease;
-        },
-        release() {
-          if (released) return;
-          released = true;
-          if (currentLease === lease) currentLease = null;
-        },
-      };
-      currentLease = lease;
-      leaseGrab.set(lease, grab);
-      return lease;
-    },
-    isPointerFree: () => currentLease === null,
-    suspendCameraControls(reason) {
-      return camera.port.controls.suspend(String(reason));
-    },
-    behaviours: {
-      select: makeBehaviour('select'),
-      dblclickFollow: makeBehaviour('dblclickFollow'),
-    },
-    ctrlWheelZoom: false,
-  };
-
-  /** Who a new press belongs to, decided from its `down`. */
-  function pressFor(down) {
-    const lease = currentLease;
-    if (!lease) return { owner: null, clicked: false };
-    const grab = leaseGrab.get(lease);
-    let grabbed = !grab;
-    if (grab)
-      try {
-        grabbed = grab(down) === true;
-      } catch (error) {
-        report(error);
-      }
-    return { owner: grabbed ? lease : null, clicked: false };
-  }
-
-  /**
-   * Where an event goes: to one lease's listeners (`lease`), to everyone
-   * without a lease (`ambient`), or both (`move` and `up`).
-   */
-  function recipients(type, ev) {
-    const button = ev.button;
-    // A click comes straight after its press's up, and a double-click
-    // straight after that click, by the same button at the same spot;
-    // anything else after the up ends the press.
-    for (const [b, p] of presses) {
-      if (!p.up) continue;
-      const continues =
-        b === button &&
-        ((type === 'click' &&
-          !p.clicked &&
-          Math.hypot(p.at.x - ev.position.x, p.at.y - ev.position.y) <= 4) ||
-          (type === 'dblclick' &&
-            p.clicked &&
-            Math.hypot(p.at.x - ev.position.x, p.at.y - ev.position.y) <= 4));
-      if (!continues) presses.delete(b);
-    }
-    if (type === 'up' && presses.has(button)) {
-      const p = presses.get(button);
-      p.up = true;
-      p.at = ev.position;
-    }
-    if (type === 'move' || type === 'up')
-      return { lease: currentLease, ambient: true };
-    if (type === 'wheel' || type === 'pinch') {
-      const exclusive = currentLease && !leaseGrab.get(currentLease);
-      return exclusive
-        ? { lease: currentLease, ambient: false }
-        : { lease: null, ambient: true };
-    }
-    // `grab` sees a click with no press of its own as the down it stands
-    // for: no pick, no gesture.
-    const asDown = () => ({
-      ...pressFor({
-        type: 'down',
-        position: ev.position,
-        button: ev.button,
-        modifiers: ev.modifiers,
-        timestamp: ev.timestamp,
-        pointerType: ev.pointerType,
-      }),
-      up: true,
-    });
-    let current;
-    if (type === 'down') {
-      current = pressFor(ev);
-      presses.set(button, current);
-    } else {
-      // Only a press the loop above kept, at the right step, continues;
-      // anything else is a press of its own and leaves a held one alone.
-      const held = presses.get(button);
-      const continues =
-        held?.up && (type === 'click' ? !held.clicked : held.clicked);
-      current = continues ? held : asDown();
-      if (type === 'click' && (continues || !held)) {
-        current.clicked = true;
-        presses.set(button, current);
-      } else if (continues) presses.delete(button);
-    }
-    current.at = ev.position;
-    return current.owner
-      ? { lease: current.owner, ambient: false }
-      : { lease: null, ambient: true };
-  }
+  const router = createInputRouter({
+    report,
+    suspendCamera: (reason) => camera.port.controls.suspend(reason),
+  });
+  const input = router.port;
 
   function dispatchPointer(type, x, y, extra = {}) {
     let picked;
@@ -900,19 +748,7 @@ export function createStubRenderer(options = {}) {
         opts.limit === undefined ? hits().slice() : hits().slice(0, opts.limit);
       ev.ground = () => rayEllipsoid(pickRay(x, y));
     }
-    const to = recipients(type, ev);
-    for (const entry of pointerListeners.slice()) {
-      if (!entry.live || entry.type !== type) continue;
-      if (entry.lease) {
-        const lease = leaseOf(entry);
-        if (!to.lease || lease !== to.lease || !lease.current) continue;
-      } else if (!to.ambient) continue;
-      try {
-        entry.cb(ev);
-      } catch (error) {
-        report(error);
-      }
-    }
+    router.dispatch(ev);
     requestRender('input');
   }
 
