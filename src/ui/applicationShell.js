@@ -196,8 +196,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
-      applyFollowOffset: (entity, offset) =>
-        applyShareFollowOffset(viewer, entity, offset),
+      applyFollowOffset: (followed, offset) =>
+        applyShareFollowOffset(viewer, followed, offset),
     });
 
     this._visualSettings = new VisualSettings({

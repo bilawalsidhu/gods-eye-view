@@ -879,6 +879,7 @@
       "src/render/cesium/common.js",
       "src/ui/cockpitContext.js",
       "src/ui/cockpitController.js",
+      "src/data/followed.js",
       "src/ui/cockpitDisplayPortal.js",
       "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
@@ -4412,6 +4413,7 @@
       "src/navigationPolicy.js",
       "src/share/follow.js",
       "src/ui/shareRestoration.js",
+      "src/data/followed.js",
       "src/ui/uiLifetime.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
@@ -4426,7 +4428,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/render/rendererOf.js"
     ],
     "external": []
   },

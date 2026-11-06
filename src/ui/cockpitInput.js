@@ -1,4 +1,5 @@
 /** Route Cockpit keys while preserving the active disclosure and form-control owner. */
+import { followedOf } from '../data/followed.js';
 
 export function onKeyDown(event) {
   if (this.destroyed) return false;
@@ -49,7 +50,7 @@ export function onKeyDown(event) {
   if (key === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey) {
     if (!this.active) {
       const cockpitAttempt = !!(
-        this.readAircraftInfo() && this.viewer.trackedEntity?.position
+        this.readAircraftInfo() && followedOf(this.viewer)?.entity?.position
       );
       if (!cockpitAttempt) return;
     }

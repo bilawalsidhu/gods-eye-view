@@ -45,7 +45,7 @@ test('Cockpit takeover invalidates deferred work before camera cancellation', ()
     'if (!info || !entity?.position) return false;',
     'this.onCameraTakeover?.();',
     'cameraOf(this.viewer).cancelFlight();',
-    'this.viewer.trackedEntity = undefined;',
+    'stopFollowing(this.viewer);',
   ], 'Cockpit takeover');
   assert.match(
     ui,

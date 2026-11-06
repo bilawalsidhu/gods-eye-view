@@ -1,3 +1,4 @@
+import { followedOf, isFollowing, onFollowChanged } from './followed.js';
 import {
   clearOverlaySource,
   setOverlayEntries,
@@ -126,7 +127,7 @@ function entryIdFor(entity) {
 }
 
 function activeEntity() {
-  return _viewer?.trackedEntity || _selectedContext?.entity || null;
+  return followedOf(_viewer)?.entity || _selectedContext?.entity || null;
 }
 
 /**
@@ -235,11 +236,10 @@ export function initTrackedReadout(viewer) {
   if (_viewer) destroyTrackedReadout();
   _viewer = viewer;
   _overlayHost.setVisible(TRACKED_OVERLAY_SOURCE_ID, true);
-  _trackedEntityChangedRemove =
-    viewer.trackedEntityChanged?.addEventListener?.(() => {
-      if (viewer.trackedEntity) _selectedContext = null;
-      syncActiveEntity();
-    }) || null;
+  _trackedEntityChangedRemove = onFollowChanged(viewer, (followed) => {
+    if (followed) _selectedContext = null;
+    syncActiveEntity();
+  });
   _contextSelectedHandler = (event) => {
     const record = event.detail;
     if (READOUT_CONTEXT_LAYERS.has(record?.layerId)) {
@@ -263,7 +263,7 @@ export function initTrackedReadout(viewer) {
   };
   _aircraftSelectedHandler = () => {
     _selectedContext = null;
-    if (!_viewer?.trackedEntity) clearTrackedSource();
+    if (!isFollowing(_viewer)) clearTrackedSource();
   };
   window.addEventListener('gev:entity-selected', _contextSelectedHandler);
   window.addEventListener(

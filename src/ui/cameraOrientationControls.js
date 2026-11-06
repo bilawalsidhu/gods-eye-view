@@ -1,16 +1,17 @@
 import * as Cesium from 'cesium';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { t } from '../i18n/index.js';
-import { readEntityRecord } from '../data/entityRecords.js';
+import {
+  followedOf,
+  followedPosition,
+  isFollowing,
+  onFollowChanged,
+} from '../data/followed.js';
 
 function trackedTarget(viewer) {
-  const entity = viewer.trackedEntity;
-  // Read the visual's sample first; sampling a flight CallbackProperty twice
-  // can advance dead reckoning ahead of the displayed aircraft.
-  return (
-    readEntityRecord(entity)?.displayPosition?.() ||
-    entity?.position?.getValue(viewer.clock?.currentTime)
-  );
+  // The visual's sample first: sampling a flight CallbackProperty twice can
+  // advance dead reckoning ahead of the displayed aircraft.
+  return followedPosition(viewer, followedOf(viewer));
 }
 
 export const OBLIQUE_PITCH = Cesium.Math.toRadians(-35);
@@ -75,7 +76,7 @@ export function pickViewTarget(viewer) {
 /** Describe the camera as an orbit around the current viewport center. */
 export function readCameraTargetFrame(viewer) {
   const camera = viewer?.camera;
-  const target = viewer?.trackedEntity
+  const target = isFollowing(viewer)
     ? trackedTarget(viewer)
     : pickViewTarget(viewer);
   if (!camera || !target || !isPickedWorldPosition(camera.positionWC))
@@ -112,7 +113,7 @@ function setCameraTargetFrame(viewer, frame) {
   const camera = viewer?.camera;
   if (!camera || !frame?.target || !Number.isFinite(frame.range)) return false;
   try {
-    const trackedTransform = viewer.trackedEntity
+    const trackedTransform = isFollowing(viewer)
       ? Cesium.Matrix4.clone(camera.transform)
       : null;
     camera.lookAt(
@@ -200,20 +201,20 @@ export function createCameraOrientationAnimator(
     cancel();
     if (!viewer.scene?.preUpdate?.addEventListener || duration <= 0)
       return setCameraTargetFrame(viewer, { ...frame, ...destination });
-    const entity = viewer.trackedEntity;
+    const followed = followedOf(viewer);
     pending = destination;
     const start = now();
     const headingDelta = Cesium.Math.negativePiToPi(
       destination.heading - frame.heading,
     );
     remove = viewer.scene.preUpdate.addEventListener(() => {
-      if (viewer.isDestroyed?.() || viewer.trackedEntity !== entity) {
+      if (viewer.isDestroyed?.() || followedOf(viewer) !== followed) {
         cancel();
         return;
       }
       const progress = Cesium.Math.clamp((now() - start) / duration, 0, 1);
       const eased = Cesium.EasingFunction.CUBIC_IN_OUT(progress);
-      const target = entity ? trackedTarget(viewer) : frame.target;
+      const target = followed ? trackedTarget(viewer) : frame.target;
       if (
         !isPickedWorldPosition(target) ||
         !setCameraTargetFrame(viewer, {
@@ -338,7 +339,7 @@ export function bindCameraOrientationControls({
   // The exact tilt state is refreshed once per gesture, not once per frame —
   // moveEnd fires when the camera stops, which is where the pick is affordable.
   subscribe(viewer?.camera?.moveEnd, refreshTilt);
-  subscribe(viewer?.trackedEntityChanged, animator.cancel);
+  if (viewer) removers.push(onFollowChanged(viewer, animator.cancel));
   for (const type of ['pointerdown', 'wheel']) {
     const canvas = viewer?.scene?.canvas;
     canvas?.addEventListener?.(type, animator.cancel, { passive: true });

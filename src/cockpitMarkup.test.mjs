@@ -238,7 +238,7 @@ test('Cockpit shortcut failures do not leak and open utilities own the first Esc
   assert.match(keydown, /if \(this\.isUtilityDisclosureOpen\?\.\(\)\) return;/);
   assert.match(
     keydown,
-    /const cockpitAttempt = !!\(\s*this\.readAircraftInfo\(\) && this\.viewer\.trackedEntity\?\.position\s*\);[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?!this\.isEntryAllowed\(\)/,
+    /const cockpitAttempt = !!\(\s*this\.readAircraftInfo\(\) && followedOf\(this\.viewer\)\?\.entity\?\.position\s*\);[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?!this\.isEntryAllowed\(\)/,
   );
 });
 
@@ -295,14 +295,14 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
   );
 });
 
-test('the cockpit reads its aircraft from the layer that owns Cesium tracking', () => {
+test('the cockpit reads its aircraft from the layer the camera follows', () => {
   const read = readAircraftInfo.toString();
   assert.ok(read, 'readAircraftInfo is missing');
   assert.match(read, /resolveTrackedAircraftInfo\(\{/);
-  assert.match(read, /readEntityRecord\([^)]*\)\?\.trackedId/);
-  // In cockpit mode the controller moves the entity off viewer.trackedEntity,
-  // so its own handle is the tracked identity there.
-  assert.match(read, /this\.viewer\?\.trackedEntity \|\| this\.trackedEntity/);
+  assert.match(read, /trackedId: followed\?\.key/);
+  // In cockpit mode the controller stops the camera following, so its own
+  // handle is the tracked identity there.
+  assert.match(read, /followedOf\(this\.viewer\) \|\| this\.trackedFollow/);
 });
 
 test('programmatic Context layer changes cannot bypass explicit expansion policy', () => {
@@ -1171,7 +1171,7 @@ test('cockpit route direction uses self-contained vector artwork, not a font lig
 test('cockpit aircraft handoff invalidates the prior world-position anchor', () => {
   const match = _adoptTrackedEntity.toString();
   assert.ok(match, 'cockpit tracked-entity handoff block is missing');
-  assert.match(match, /this\.viewer\.trackedEntity = undefined;/);
+  assert.match(match, /stopFollowing\(this\.viewer\);/);
   assert.match(match, /this\.cockpitAnchorValid = false;/);
   assert.match(
     match,
