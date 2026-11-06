@@ -2,6 +2,7 @@ import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
 import {
   createApplicationViewer,
+  installFreeLookHeightLimit,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
@@ -58,6 +59,7 @@ export async function createApplicationScene({
     if (!viewer.isDestroyed()) viewer.destroy();
   });
   defer(installTrackpadPinchZoom(viewer));
+  defer(installFreeLookHeightLimit(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));
