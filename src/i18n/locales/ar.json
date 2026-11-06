@@ -3471,5 +3471,6 @@
   "All markers": "كل العلامات",
   "Show markers of every age": "عرض العلامات من جميع الأعمار",
   "Maximum event age: {days}d; undated markers are kept": "الحد الأقصى لعمر الحدث: {days} يوم؛ تُحفظ العلامات غير المؤرخة",
+  "Event age": "عمر الحدث",
   "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ"
 }

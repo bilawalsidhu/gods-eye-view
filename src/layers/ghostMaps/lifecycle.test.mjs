@@ -203,7 +203,9 @@ const dated = (name, value, label = 'Date') => ({
 });
 
 const ageChip = (layer, days) =>
-  layer.getRowControls().chips.find(({ id }) => id === `age-${days ?? 'all'}`);
+  layer
+    .getRowControls()
+    .segmented.options.find(({ id }) => id === `age-${days ?? 'all'}`);
 
 test('age controls default to seven days and widening restores filtered and expired reports', async (t) => {
   let at = Date.UTC(2026, 10, 3, 12);
@@ -233,10 +235,16 @@ test('age controls default to seven days and widening restores filtered and expi
   await ageChip(layer, null).onClick();
   assert.equal(layer.getStats().count, 4);
   assert.equal(mounted.size, 1, 'filter changes never duplicate data sources');
-  const ageChips = layer
-    .getRowControls()
-    .chips.filter(({ id }) => id.startsWith('age-'));
-  assert.equal(ageChips.filter(({ active }) => active).length, 1);
+  const controls = layer.getRowControls();
+  assert.equal(
+    controls.segmented.options.filter(({ active }) => active).length,
+    1,
+  );
+  assert.equal(
+    controls.chips.some(({ id }) => id.startsWith('age-')),
+    false,
+    'age options are one switch, not product chips',
+  );
   assert.equal(ageChip(layer, null).active, true);
 });
 
@@ -309,49 +317,49 @@ test('a filter changed during a pending load never installs the superseded filte
     created.length - 1,
     'discarded load releases icons',
   );
+});
 
-  test('age filtering and All markers apply to every conflict-map product, including optional maps', async (t) => {
-    for (const product of [...GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP]) {
-      await t.test(product.id, async (t) => {
-        const { layer, viewer, mounted } = fixture(t, {
-          now: () => Date.UTC(2026, 10, 3, 12),
-          products: [{ ...product, version: 'a'.repeat(40) }],
-          reports: [
-            dated(
-              'Old event',
-              '10/1/2026',
-              product.id === 'cip' ? 'Date of Event' : 'Date',
-            ),
-            dated('Recent event', '11/2/2026'),
-            { name: 'Undated reference feature' },
-          ],
-        });
-        await layer.update(viewer);
-        if (!product.defaultOn) {
-          layer
-            .getRowControls()
-            .chips.find(({ id }) => id === product.id)
-            .onClick();
-          await layer.update(viewer);
-        }
-        assert.deepEqual(layer.getStats().products, [product.id]);
-        assert.equal(layer.getStats().count, 2);
-        assert.deepEqual(
-          layer.getAnalystRecords().map(({ name }) => name),
-          ['Recent event', 'Undated reference feature'],
-        );
-        await ageChip(layer, null).onClick();
-        assert.equal(
-          layer.getStats().count,
-          3,
-          "All markers restores this product's old events",
-        );
-        await ageChip(layer, 7).onClick();
-        assert.equal(layer.getStats().count, 2);
-        assert.equal(mounted.size, 1);
+test('age filtering and All markers apply to every conflict-map product, including optional maps', async (t) => {
+  for (const product of [...GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP]) {
+    await t.test(product.id, async (t) => {
+      const { layer, viewer, mounted } = fixture(t, {
+        now: () => Date.UTC(2026, 10, 3, 12),
+        products: [{ ...product, version: 'a'.repeat(40) }],
+        reports: [
+          dated(
+            'Old event',
+            '10/1/2026',
+            product.id === 'cip' ? 'Date of Event' : 'Date',
+          ),
+          dated('Recent event', '11/2/2026'),
+          { name: 'Undated reference feature' },
+        ],
       });
-    }
-  });
+      await layer.update(viewer);
+      if (!product.defaultOn) {
+        layer
+          .getRowControls()
+          .chips.find(({ id }) => id === product.id)
+          .onClick();
+        await layer.update(viewer);
+      }
+      assert.deepEqual(layer.getStats().products, [product.id]);
+      assert.equal(layer.getStats().count, 2);
+      assert.deepEqual(
+        layer.getAnalystRecords().map(({ name }) => name),
+        ['Recent event', 'Undated reference feature'],
+      );
+      await ageChip(layer, null).onClick();
+      assert.equal(
+        layer.getStats().count,
+        3,
+        "All markers restores this product's old events",
+      );
+      await ageChip(layer, 7).onClick();
+      assert.equal(layer.getStats().count, 2);
+      assert.equal(mounted.size, 1);
+    });
+  }
 });
 
 test('default products filter old event dates while keeping recent, future and undated markers', async (t) => {
@@ -448,7 +456,8 @@ test('unchanged cached products age out on the timer, clear selected cards and k
 
 test('expiry removes every geometry and polygon outline belonging to an old report', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
-  let at = Date.UTC(2026, 10, 3);
+  // 10/27 is a whole UTC day: at 7d it expires when 11/3 ends.
+  let at = Date.UTC(2026, 10, 4) - 30_000;
   const polygon = element('Polygon', [
     element('outerBoundaryIs', [
       element('LinearRing', [
@@ -476,4 +485,76 @@ test('expiry removes every geometry and polygon outline belonging to an old repo
   t.mock.timers.tick(60_000);
   assert.equal(ds.entities.values.length, 0);
   assert.equal(layer.getStats().count, 0);
+});
+
+test('narrowing then returning to the previous window restores its reports without a duplicate source', async (t) => {
+  const { layer, viewer, mounted } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 3, 12),
+    reports: [dated('Today', '11/3/2026'), dated('Three days', '10/31/2026')],
+  });
+  await layer.update(viewer);
+  assert.equal(layer.getStats().count, 2);
+  await ageChip(layer, 1).onClick();
+  assert.equal(layer.getStats().count, 1);
+  await ageChip(layer, 7).onClick();
+  await layer.update(viewer);
+  assert.equal(layer.getStats().count, 2, '7d must show both reports again');
+  assert.equal(mounted.size, 1);
+});
+
+test('two quick clicks, 1d then 7d, restore the report', async (t) => {
+  const at = Date.UTC(2026, 10, 3, 12);
+  const { layer, viewer } = fixture(t, {
+    now: () => at,
+    reports: [dated('Today', '11/3/2026'), dated('Three days', '10/31/2026')],
+  });
+  await layer.update(viewer);
+  const a = ageChip(layer, 1).onClick();
+  const b = ageChip(layer, 7).onClick();
+  await a;
+  await b;
+  await layer.update(viewer);
+  assert.equal(layer.getStats().count, 2);
+});
+
+test('narrowing the window keeps the open card of a surviving marker', async (t) => {
+  let click;
+  const cards = [];
+  const { layer, viewer } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 3, 12),
+    reports: [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')],
+    controls: {
+      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
+      screenSpaceEventHandlerFactory: () => ({
+        setInputAction: (fn) => {
+          click = fn;
+        },
+        destroy() {},
+      }),
+      picking: { resolvePickId: (picked) => picked },
+    },
+  });
+  await layer.update(viewer);
+  await ageChip(layer, 30).onClick();
+  assert.equal(layer.getStats().count, 2);
+  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
+  click({ position: { x: 0, y: 0 } });
+  assert.equal(cards.at(-1).length, 1);
+  await ageChip(layer, 3).onClick();
+  assert.equal(layer.getStats().count, 1);
+  assert.equal(
+    cards.at(-1).length,
+    1,
+    'card of the surviving marker stays open',
+  );
+});
+
+test('a report dated yesterday is shown by 1d one hour into today (UTC)', async (t) => {
+  const { layer, viewer } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 6, 1),
+    reports: [dated('Yesterday', '11/5/2026')],
+  });
+  await layer.update(viewer);
+  await ageChip(layer, 1).onClick();
+  assert.equal(layer.getStats().count, 1);
 });

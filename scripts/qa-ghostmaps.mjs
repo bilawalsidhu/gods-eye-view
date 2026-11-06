@@ -203,15 +203,12 @@ async function main() {
     );
     record(
       'LIVE: one chip per product, defaults pressed',
-      chips.filter((chip) => !chip.id.startsWith('age-')).length ===
-        catalog.products.length &&
-        chips
-          .filter((chip) => !chip.id.startsWith('age-'))
-          .every(
-            (chip) =>
-              chip.active ===
-              catalog.products.find((p) => p.id === chip.id)?.defaultOn,
-          ),
+      chips.length === catalog.products.length &&
+        chips.every(
+          (chip) =>
+            chip.active ===
+            catalog.products.find((p) => p.id === chip.id)?.defaultOn,
+        ),
       chips.map((c) => `${c.id}${c.active ? '*' : ''}`).join(' '),
     );
     const stream = await page
@@ -229,7 +226,18 @@ async function main() {
     record('LIVE: the /api/ghostmaps/events stream is open', stream);
     await page.screenshot({ path: path.join(SHOTS_DIR, 'ghostmaps-live.png') });
 
-    const ageChips = chips.filter((chip) => chip.id.startsWith('age-'));
+    const ageChips = await page.evaluate(
+      (id) =>
+        [
+          ...document.querySelectorAll(
+            `[data-layer-id="${id}"] [data-segmented-id="age"] [role="radio"]`,
+          ),
+        ].map((option) => ({
+          id: option.dataset.chipId,
+          active: option.getAttribute('aria-checked') === 'true',
+        })),
+      LAYER_ID,
+    );
     record(
       'AGE: seven days is the default with an All markers option',
       live.ageDays === 7 &&
@@ -262,7 +270,8 @@ async function main() {
     const all = await selectAge(null);
     record(
       'AGE: All markers restores old events without duplicate data sources',
-      all.count > live.count && (await sources(page)).length === 2,
+      all.count > live.count &&
+        (await sources(page)).length === live.products.length,
       `${live.count} → ${all.count}`,
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -279,7 +288,7 @@ async function main() {
     const one = await selectAge(1);
     const seven = await selectAge(7);
     record(
-      'AGE: shorter and longer windows change the count and seven days restores the default',
+      'AGE: counts follow the window order and seven days restores the default',
       one.count <= live.count &&
         thirty.count >= live.count &&
         thirty.count <= all.count &&

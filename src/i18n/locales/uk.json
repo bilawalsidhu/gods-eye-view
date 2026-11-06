@@ -3321,5 +3321,6 @@
   "All markers": "Усі позначки",
   "Show markers of every age": "Показати позначки будь-якого віку",
   "Maximum event age: {days}d; undated markers are kept": "Максимальний вік події: {days} дн.; позначки без дати збережено",
+  "Event age": "Вік події",
   "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено"
 }

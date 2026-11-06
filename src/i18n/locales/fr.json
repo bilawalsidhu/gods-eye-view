@@ -3246,5 +3246,6 @@
   "All markers": "Tous les marqueurs",
   "Show markers of every age": "Afficher les marqueurs de tout âge",
   "Maximum event age: {days}d; undated markers are kept": "Ancienneté maximale : {days} j ; marqueurs sans date conservés",
+  "Event age": "Ancienneté",
   "Event age: {days}d · undated kept": "Ancienneté : {days} j · marqueurs sans date conservés"
 }

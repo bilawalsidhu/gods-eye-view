@@ -3246,5 +3246,6 @@
   "All markers": "Tutti gli indicatori",
   "Show markers of every age": "Mostra gli indicatori di qualsiasi età",
   "Maximum event age: {days}d; undated markers are kept": "Età massima degli eventi: {days} giorni; indicatori senza data mantenuti",
+  "Event age": "Età degli eventi",
   "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti"
 }

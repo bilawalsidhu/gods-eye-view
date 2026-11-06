@@ -73,7 +73,9 @@ export const GHOSTMAPS_DEFAULT_AGE_DAYS = 7;
 export const GHOSTMAPS_AGE_OPTIONS = Object.freeze([1, 3, 7, 14, 30, null]);
 
 /** ArcGIS US dates (optionally with a time) and ISO dates, interpreted in UTC
- * when no zone is supplied. Reject calendar rollovers instead of guessing. */
+ * when no zone is supplied. A date without a time means the whole UTC day, so
+ * it resolves to the day's last millisecond: "1d" still shows yesterday's
+ * reports. Reject calendar rollovers instead of guessing. */
 export function parseGhostMapsEventDate(value) {
   const input = String(value ?? '').trim();
   const us =
@@ -113,7 +115,7 @@ export function parseGhostMapsEventDate(value) {
     const parsed = Date.parse(zoned);
     return Number.isFinite(parsed) ? parsed : null;
   }
-  return at;
+  return us?.[4] ? at : at + 86400_000 - 1;
 }
 
 /** The event's date, never its report/upload date or dates mentioned in prose. */

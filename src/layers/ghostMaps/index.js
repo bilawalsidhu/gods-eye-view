@@ -208,13 +208,13 @@ export function createGhostMapsLayer({
     return (_catalog?.products || []).filter(wanted).map(({ id }) => id);
   }
 
-  function unload(id) {
+  function unload(id, keepSelection = false) {
     const item = _loaded.get(id);
     if (!item) return;
     _loaded.delete(id);
     _viewer?.dataSources?.remove(item.dataSource, true);
     item.urls.forEach((url) => URL.revokeObjectURL(url));
-    if (_selectedKey?.startsWith(`${id}:`)) clearSelection();
+    if (!keepSelection && _selectedKey?.startsWith(`${id}:`)) clearSelection();
   }
 
   // Remove expired entities, rather than hiding them: horizon culling must
@@ -423,8 +423,9 @@ export function createGhostMapsLayer({
           // Cull before the first frame so far-side pins never flash.
           _horizon.update(next.pins);
           await _viewer.dataSources.add(next.dataSource);
-          // The new edition is on the globe before the old one leaves.
-          unload(product.id);
+          // The new edition is on the globe before the old one leaves. A wider
+          // window over the same edition keeps indices, so the card stays.
+          unload(product.id, loaded?.version === next.version);
           _loaded.set(product.id, next);
         } catch (error) {
           if (signal.aborted) return;
@@ -473,9 +474,16 @@ export function createGhostMapsLayer({
       /* private window or blocked storage: keep the session choice */
     }
     expireEvents();
+    // Narrowing only removes markers. A product loaded with a narrower window
+    // keeps its old ageDays, so sync() restores omitted placemarks from the
+    // cached KMZ even though its upstream version has not changed.
+    for (const item of _loaded.values())
+      if (
+        item.ageDays === null ||
+        (ageDays !== null && item.ageDays >= ageDays)
+      )
+        item.ageDays = ageDays;
     notifyRow();
-    // A wider window must restore previously omitted placemarks from the
-    // cached KMZ, even though its upstream version has not changed.
     return sync();
   }
 
@@ -730,8 +738,10 @@ export function createGhostMapsLayer({
             })
         : t('Connecting to the S2 GhostMaps repository…');
       return {
-        chips: [
-          ...GHOSTMAPS_AGE_OPTIONS.map((days) => ({
+        segmented: {
+          id: 'age',
+          label: t('Event age'),
+          options: GHOSTMAPS_AGE_OPTIONS.map((days) => ({
             id: `age-${days ?? 'all'}`,
             label:
               days === null
@@ -746,36 +756,36 @@ export function createGhostMapsLayer({
             active: days === _ageDays,
             onClick: () => setAgeDays(days),
           })),
-          ...products.map((product) => {
-            const loaded = _loaded.get(product.id);
-            const failed = _failed.get(product.id);
-            return {
-              id: product.id,
-              label: t(PRODUCT_LABELS[product.id] || product.title),
-              active: wanted(product),
-              busy: _loading.has(product.id),
-              state: failed ? 'error' : undefined,
-              color: PRODUCT_COLORS[product.id],
-              title: [
-                product.fileTitle,
-                loaded
-                  ? tn(
-                      loaded.features.size,
-                      '{count} placemark',
-                      '{count} placemarks',
-                      {
-                        count: formatNumber(loaded.features.size),
-                      },
-                    )
-                  : null,
-                failed ? t(failed) : null,
-              ]
-                .filter(Boolean)
-                .join(' · '),
-              onClick: () => toggleProduct(product.id),
-            };
-          }),
-        ],
+        },
+        chips: products.map((product) => {
+          const loaded = _loaded.get(product.id);
+          const failed = _failed.get(product.id);
+          return {
+            id: product.id,
+            label: t(PRODUCT_LABELS[product.id] || product.title),
+            active: wanted(product),
+            busy: _loading.has(product.id),
+            state: failed ? 'error' : undefined,
+            color: PRODUCT_COLORS[product.id],
+            title: [
+              product.fileTitle,
+              loaded
+                ? tn(
+                    loaded.features.size,
+                    '{count} placemark',
+                    '{count} placemarks',
+                    {
+                      count: formatNumber(loaded.features.size),
+                    },
+                  )
+                : null,
+              failed ? t(failed) : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            onClick: () => toggleProduct(product.id),
+          };
+        }),
         legend: [],
         info: `${_ageDays === null ? t('All markers') : t('Event age: {days}d · undated kept', { days: formatNumber(_ageDays) })} · ${info}`,
         infoTitle: t(

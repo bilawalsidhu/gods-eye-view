@@ -14,15 +14,15 @@ import {
 
 test('event dates parse ArcGIS calendar dates and timestamps consistently in UTC', () => {
   for (const [value, iso] of [
-    ['10/28/2026', '2026-10-28T00:00:00Z'],
+    ['10/28/2026', '2026-10-28T23:59:59.999Z'],
     ['10/28/2026 6:12:00 PM', '2026-10-28T18:12:00Z'],
     ['1/17/2026 9:46:41 AM', '2026-01-17T09:46:41Z'],
     ['10/28/2026 12:00 AM', '2026-10-28T00:00:00Z'],
     ['10/28/2026 12:00 PM', '2026-10-28T12:00:00Z'],
-    ['2026-10-28', '2026-10-28T00:00:00Z'],
+    ['2026-10-28', '2026-10-28T23:59:59.999Z'],
     ['2026-10-28T12:34:56', '2026-10-28T12:34:56Z'],
     ['2026-10-28T12:34:56.123-04:00', '2026-10-28T16:34:56.123Z'],
-    ['2/29/2024', '2024-02-29T00:00:00Z'],
+    ['2/29/2024', '2024-02-29T23:59:59.999Z'],
   ])
     assert.equal(parseGhostMapsEventDate(value), Date.parse(iso), value);
   for (const value of [
@@ -52,7 +52,7 @@ test('event date fields take precedence over report dates and prose, even after 
     row('Date', '10/30/2026') +
     row('Date of Event', '10/28/2026')
   }</table></td></tr></table>`;
-  assert.equal(ghostMapsEventDate(html), Date.UTC(2026, 9, 28));
+  assert.equal(ghostMapsEventDate(html), Date.UTC(2026, 9, 29) - 1);
   assert.equal(
     ghostMapsEventDate(
       `<table>${row('Date', '&lt;Null&gt;')}${row('Date Of Report', '11/2/2026')}</table>`,
@@ -61,7 +61,7 @@ test('event date fields take precedence over report dates and prose, even after 
   );
   assert.equal(
     ghostMapsEventDate(`<table>${row('Date_Of_Event', '10/28/2026')}</table>`),
-    Date.UTC(2026, 9, 28),
+    Date.UTC(2026, 9, 29) - 1,
   );
   assert.equal(ghostMapsEventDate('Occurred 10/28/2026'), null);
   assert.equal(
