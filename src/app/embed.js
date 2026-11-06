@@ -216,7 +216,14 @@ function armedToast() {
  */
 export async function applyView(
   view,
-  { viewer, dataManager, run, signal, retryMs = FOLLOW_RETRY_MS },
+  {
+    viewer,
+    dataManager,
+    run,
+    signal,
+    autoOpen = true,
+    retryMs = FOLLOW_RETRY_MS,
+  },
 ) {
   const steps = [];
   const act = async (name, args) => {
@@ -258,7 +265,7 @@ export async function applyView(
     // before flying, the view's own camera still applies.
     const result = await act(
       'show_street_level',
-      streetLevelArgs(view.street_level),
+      streetLevelArgs(view.street_level, { autoOpen }),
     );
     if (result?.ok !== true) {
       // An earlier view's photo must not stay over a place this view left.
@@ -447,9 +454,18 @@ export function installViews({
       );
       return;
     }
+    // A panel's host can hand back old results on a remount: only one issued
+    // just now may open a billed photo. A framing page's view is its own.
+    const autoOpen = !isEmbeddedInline() || event.data.fresh === true;
     queue = queue.then(async () => {
       if (signal?.aborted) return;
-      const steps = await applyView(view, { viewer, dataManager, run, signal });
+      const steps = await applyView(view, {
+        viewer,
+        dataManager,
+        run,
+        signal,
+        autoOpen,
+      });
       post(
         {
           type: EMBED_APPLIED_MESSAGE,

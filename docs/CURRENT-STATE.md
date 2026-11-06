@@ -4569,8 +4569,9 @@ returns the radius's photos in no particular order and cuts them at the limit
 first, so the distance sort and the imagery filter run over the spot's photos.
 On a phone the panel sits in the Cameras tab sheet: a photo that opens, and a
 link that arms, open that sheet and scroll the panel into view
-(`revealPanel`); every photo the action opens reveals the panel again, also
-one the user had collapsed. The layer exposes `requiredMapStack(id)` and
+(`revealPanel`, which does nothing above 720px, scrolling included); every
+photo the action opens reveals the panel again, also one the user had
+collapsed. The layer exposes `requiredMapStack(id)` and
 `providerStatus(id)` for callers that must decide before the panel lists a
 source, and `coverageLines(id)` (the lines a provider draws now, current and
 stale tiles, as `[lon, lat]` parts) for diagnostics and the browser gate,
@@ -4597,7 +4598,16 @@ the lookup that still owns the panel may change its spinner or error. Cancelling
 a lookup clears its loading state even when an existing photo stays open;
 internally retired lookups also release the caller's abort listener. A
 passive link's photos stand down if anyone navigated (a gesture, a search,
-the assistant) while the link waited behind its own marks. A plain
+the assistant) while the link waited behind its own marks. The action itself
+checks again after every await (flight, map switch, layer on, lookup): a
+newer turn, a shell navigation stamp (`_navigationGeneration`, re-taken where
+its own flight lands) or a press or wheel on the globe stops the remaining
+stages (`superseded: true`), and cockpit, clean view, recording or scene
+playback entered meanwhile ends it at the `view` stage; a photo that opened
+after either is closed again. The hidden-panel check also runs before the
+flight, so a recording's camera never moves for it. A photo already open
+closes before the new request arms or looks up, so a place with no imagery
+shows its own error, not the previous place's photo. A plain
 link never loads a photo from a source that bills every load
 (`billedPerImage` on the provider; Google): the action runs with
 `autoOpen: false`, arms the lookup on the layer (`armNearest`: the link's
@@ -4610,7 +4620,9 @@ points at OPEN GOOGLE STREET VIEW. Only the panel page's own link (inline
 embed) for a tool result issued in the last 5 minutes, and posted views, open
 the photo: `show_in_gods_eye_view` stamps a street-level result `issued_at`,
 and a host that mounts the panel again later hands back the old result, which
-only arms; `?embed=1` on a published link only
+only arms. The panel checks every result, not just the first: each `gev:view`
+it posts carries `fresh`, and the inline app applies a view without it with
+`autoOpen: false` (a framing page's posted views still open); `?embed=1` on a published link only
 arms, without the panel nudge or toast (the rail is hidden in a frame). A link that follows an entity ignores `sl`.
 The look-at default applies below 20 km, at a pitch steeper than -5° and
 within 10 km ahead; otherwise the camera's own point is used. A view's

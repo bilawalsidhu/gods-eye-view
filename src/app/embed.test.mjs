@@ -188,6 +188,59 @@ test('an embedded page takes views only from its parent and answers it', async (
   remove();
 });
 
+test('an inline panel opens a billed photo only for a view whose result is fresh', async () => {
+  const windowRef = new EventTarget();
+  windowRef.parent = windowRef;
+  windowRef.postMessage = () => {};
+  windowRef.document = { body: { classList: new Set() } };
+  windowRef.document.body.classList.add = Set.prototype.add;
+  Object.assign(windowRef, {
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame() {},
+    setInterval: () => 1,
+    clearInterval() {},
+  });
+  const { calls, run } = recorder();
+  globalThis.GEV_EMBED_INLINE = true;
+  try {
+    const remove = installViews({
+      shell: { initialRestorePromise: Promise.resolve() },
+      viewer: fakeViewer(),
+      dataManager: fakeLayers(new Set()),
+      run,
+      location: { search: '', hash: '' },
+      windowRef,
+    });
+    const view = {
+      camera: { lat: 48.8584, lon: 2.2945 },
+      map: 'photoreal',
+      street_level: { provider: 'google', lat: 48.8584, lon: 2.2945 },
+    };
+    for (const [id, fresh] of [
+      [1, true],
+      [2, false],
+      [3, undefined],
+    ]) {
+      const event = new Event('message');
+      Object.assign(event, {
+        source: windowRef,
+        data: { type: 'gev:view', id, view, fresh },
+      });
+      windowRef.dispatchEvent(event);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(
+      calls
+        .filter(([name]) => name === 'show_street_level')
+        .map(([, args]) => args.autoOpen ?? true),
+      [true, false, false],
+    );
+    remove();
+  } finally {
+    delete globalThis.GEV_EMBED_INLINE;
+  }
+});
+
 test('an app loaded inline into a panel page talks through its own window', async () => {
   const posted = [];
   const windowRef = new EventTarget();

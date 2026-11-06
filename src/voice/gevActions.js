@@ -760,6 +760,7 @@ export function createGevActionRunner({
 
     if (name === 'show_street_level') {
       return showStreetLevel(args, {
+        viewer,
         dataManager,
         styleManager,
         placeSearch,
@@ -3458,6 +3459,55 @@ function actionIntentOrigin(runOptions) {
   return runOptions?.origin === 'programmatic' ? 'programmatic' : 'voice';
 }
 
+/** Gestures on the globe that take the camera from a pending request. */
+const CAMERA_GESTURES = ['pointerdown', 'wheel'];
+
+/**
+ * Whether the camera is still a request's: a navigation the shell stamps (a
+ * search, the assistant, a link) or a press or wheel on the globe hands it to
+ * someone else. `claim()` makes the camera as it is now the request's (after
+ * its own flight); `stop()` removes the gesture listeners.
+ */
+function watchCameraOwner(viewer, navigation) {
+  let generation = navigation?._navigationGeneration;
+  const canvas = viewer?.canvas ?? viewer?.scene?.canvas ?? null;
+  let taken = false;
+  const onGesture = () => {
+    taken = true;
+  };
+  for (const type of CAMERA_GESTURES)
+    canvas?.addEventListener?.(type, onGesture, { passive: true });
+  return {
+    claim: () => {
+      generation = navigation?._navigationGeneration;
+      taken = false;
+    },
+    taken: () =>
+      taken ||
+      (Number.isFinite(generation) &&
+        navigation._navigationGeneration !== generation),
+    stop: () => {
+      for (const type of CAMERA_GESTURES)
+        canvas?.removeEventListener?.(type, onGesture);
+    },
+  };
+}
+
+/**
+ * Whether cockpit, clean view, recording or scene playback hides the panel a
+ * street-level photo opens in. Embed mode uses clean view for its globe but
+ * lifts the photo out of the hidden rail.
+ */
+function streetLevelPanelHidden() {
+  const body = globalThis.document?.body;
+  const embedded = body?.classList?.contains('ui-embed') === true;
+  return EXCLUSIVE_SURFACE_CLASSES.some(
+    (mode) =>
+      body?.classList?.contains(mode) &&
+      !(embedded && mode === 'ui-clean-view'),
+  );
+}
+
 /**
  * "Show me <place> on Street View / on Mapillary": fly to the place, make sure
  * the imagery source's map is up, light that source in Street Level, turn the
@@ -3469,13 +3519,26 @@ function actionIntentOrigin(runOptions) {
  * from a source that bills every load: the panel is armed and the OPEN
  * button is one click away.
  */
-export async function showStreetLevel(
+export async function showStreetLevel(args, context) {
+  // Every await can hand the request's moment to someone else: a newer turn,
+  // a navigation or gesture that takes the camera, or a mode that hides the
+  // panel. Each stage after the place is settled checks again.
+  const owner = watchCameraOwner(context.viewer, context.styleManager);
+  try {
+    return await requestStreetLevel(args, { ...context, owner });
+  } finally {
+    owner.stop();
+  }
+}
+
+async function requestStreetLevel(
   args,
   {
     dataManager,
     styleManager,
     placeSearch,
     runGevAction,
+    owner,
     runOptions = {},
     current = () => true,
     reportProgress = () => {},
@@ -3548,6 +3611,34 @@ export async function showStreetLevel(
       keyAlternatives: layerModule.getUIState?.()?.keyAlternatives || [],
     });
 
+  // A hidden panel refuses before the camera leaves a recording or scene.
+  const hidden = (extra = {}) =>
+    fail(
+      'view',
+      msg(
+        'Street-level photos are hidden in the current view. Leave it first.',
+      ),
+      extra,
+    );
+  if (streetLevelPanelHidden()) return hidden();
+  const interrupted = (stage, extra = {}) => {
+    if (!current())
+      return fail(stage, 'Street-level request was cancelled', {
+        cancelled: true,
+        location,
+        ...extra,
+      });
+    if (owner.taken())
+      return fail(stage, 'The camera moved on before the photo opened', {
+        cancelled: true,
+        superseded: true,
+        location,
+        ...extra,
+      });
+    if (streetLevelPanelHidden()) return hidden({ location, ...extra });
+    return null;
+  };
+
   // Then the place: a name that geocodes to nothing changes nothing else.
   label =
     query ||
@@ -3615,24 +3706,11 @@ export async function showStreetLevel(
   }
 
   // Cockpit, clean view, recording and scene playback hide the panel the
-  // photo opens in: say so before anything loads unseen. Embed mode uses
-  // clean view for its globe but lifts the photo out of the hidden rail.
-  const body = globalThis.document?.body;
-  const embedded = body?.classList?.contains('ui-embed') === true;
-  if (
-    EXCLUSIVE_SURFACE_CLASSES.some(
-      (mode) =>
-        body?.classList?.contains(mode) &&
-        !(embedded && mode === 'ui-clean-view'),
-    )
-  )
-    return fail(
-      'view',
-      msg(
-        'Street-level photos are hidden in the current view. Leave it first.',
-      ),
-      { location },
-    );
+  // photo opens in, and may have started during the flight.
+  // The camera is the request's from where its own flight landed.
+  if (location) owner.claim();
+  const arrived = interrupted('view');
+  if (arrived) return arrived;
 
   // The source's map, when it needs one (Street View: Google 3D only).
   const requiredStack = layerModule.requiredMapStack?.(provider) || null;
@@ -3644,13 +3722,15 @@ export async function showStreetLevel(
       { stack: requiredStack },
       runOptions,
     );
-    if (map?.ok !== true || !current())
+    if (map?.ok !== true && current())
       return fail(
         'map',
         map?.error ||
           `${providerName} needs the ${requiredStack} map, which is not available`,
         { map, location },
       );
+    const stop = interrupted('map', { map });
+    if (stop) return stop;
   }
 
   // Light the source the way a chip click does, so the choice is kept.
@@ -3675,12 +3755,14 @@ export async function showStreetLevel(
       { layerId: STREET_LEVEL_LAYER_ID, enabled: true },
       runOptions,
     );
-    if (layer?.ok !== true || !current())
+    if (layer?.ok !== true && current())
       return fail(
         'layer',
         layer?.error || 'Street Level could not be enabled',
-        { cancelled: !current() || Boolean(layer?.cancelled), layer, location },
+        { cancelled: Boolean(layer?.cancelled), layer, location },
       );
+    const stop = interrupted('layer', { layer });
+    if (stop) return stop;
   }
 
   // Listed now that its map is up, and lit.
@@ -3697,6 +3779,11 @@ export async function showStreetLevel(
     return fail('provider', `${providerName} could not be switched on`, {
       location,
     });
+
+  // A photo of another place must not stay up beside this request's answer,
+  // armed or opened, found or not: the panel shows this request's outcome.
+  if (layerModule.getUIState?.()?.street?.open === true)
+    layerModule.closeViewer?.();
 
   // A billed source never loads from a link without a click: everything is
   // ready and OPEN is one press away at the view centre.
@@ -3737,12 +3824,13 @@ export async function showStreetLevel(
   });
   const street = layerModule.getUIState?.()?.street || {};
   // A cancelled request opens nothing (the lookup and the viewer both honour
-  // the turn's signal); a photo that did open is reported as open.
-  if (opened !== true && !current())
-    return fail('imagery', 'Street-level request was cancelled', {
-      cancelled: true,
-      location,
-    });
+  // the turn's signal). A photo that opened after the camera moved on, or
+  // into a panel hidden meanwhile, is closed again: nobody asked to see it.
+  const late = interrupted('imagery');
+  if (late) {
+    if (opened === true) layerModule.closeViewer?.();
+    return late;
+  }
   if (opened !== true) {
     // Why nothing opened: the key, a change under the lookup, or no imagery.
     const after = layerModule.providerStatus?.(provider) || status || {};

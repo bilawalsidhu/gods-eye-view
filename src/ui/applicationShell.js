@@ -4,7 +4,11 @@ import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
-import { initMobileShell, sheetForPanelId } from './mobileShell.js';
+import {
+  initMobileShell,
+  MOBILE_SHELL_MEDIA_QUERY,
+  sheetForPanelId,
+} from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -1221,6 +1225,7 @@ export class StyleManager extends ShellFacade {
    */
   revealPanel(panelId) {
     const sheet = sheetForPanelId(panelId);
+    if (!globalThis.matchMedia?.(MOBILE_SHELL_MEDIA_QUERY)?.matches) return;
     if (sheet) this._mobileShell?.setSheet(sheet);
     // The sheet opens at its top; a panel lower in the rail is scrolled to.
     document.getElementById(panelId)?.scrollIntoView?.({ block: 'nearest' });

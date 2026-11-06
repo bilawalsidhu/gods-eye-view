@@ -560,9 +560,15 @@ export function panelRuntime(config) {
   let started = false;
   let ready = false;
   let queued = null;
+  let queuedFresh = false;
   let currentUrl = null;
-  const postView = (view) =>
-    window.postMessage({ type: 'gev:view', id: nextId++, view }, '*');
+  // Every view carries whether its result was issued just now: only those may
+  // open a billed photo, whichever result on this mount they came in.
+  const postView = (view, fresh) =>
+    window.postMessage(
+      { type: 'gev:view', id: nextId++, view, fresh: fresh === true },
+      '*',
+    );
   function show(result) {
     const data = result?.structuredContent;
     const view = data?.view;
@@ -570,16 +576,17 @@ export function panelRuntime(config) {
     if (!view || !url) return;
     currentUrl = url;
     open.hidden = false;
-    if (ready) return postView(view);
-    queued = view;
-    if (started) return;
-    started = true;
-    // i18n-ignore: host-panel script, no app catalogs
-    say("Loading God's Eye View…");
     const issuedAt = Number(data.issued_at);
     const fresh =
       Number.isFinite(issuedAt) &&
       Math.abs(Date.now() - issuedAt) <= FRESH_RESULT_MS;
+    if (ready) return postView(view, fresh);
+    queued = view;
+    queuedFresh = fresh;
+    if (started) return;
+    started = true;
+    // i18n-ignore: host-panel script, no app catalogs
+    say("Loading God's Eye View…");
     startApp(url, view, fresh).catch((error) =>
       // i18n-ignore: host-panel script, no app catalogs
       say(`God's Eye View could not load here: ${error?.message || error}.`),
@@ -601,7 +608,7 @@ export function panelRuntime(config) {
       if (message?.type === 'gev:ready') {
         ready = true;
         status.remove();
-        if (queued) postView(queued);
+        if (queued) postView(queued, queuedFresh);
         queued = null;
       }
       return;

@@ -120,8 +120,11 @@ photo at once; none of them bills per image. A link that follows an entity ignor
 Tools take a view as `VIEW_ARGUMENTS`: an `area` to frame from above, or a
 `camera`, plus `layers`, `style`, `map`, `follow`, `annotations` and
 `street_level`. A tilted camera over an area looks at its center from behind;
-camera fields given with an area override its framing. `resolveViewArguments`
-turns them into a view.
+camera fields given with an area override its framing. A passed-through
+view's `street_level` point moves with a new `area` or camera position (a
+turned camera keeps it). `resolveViewArguments` turns them into a view. The
+app's own links (the address bar, Copy Link, `/share/<code>`) do not carry
+`sl`; see `docs/SHARE-LINK-FORMAT.md`.
 
 ### The God's Eye View panel
 

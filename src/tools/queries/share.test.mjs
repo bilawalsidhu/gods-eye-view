@@ -158,7 +158,7 @@ test('links can open street-level photos at the area, on the map the source need
   );
 });
 
-test('a new area moves a passed-through view’s photos, and a tilted area still opens them at its centre', async () => {
+test('a new area or camera position moves a passed-through view’s photos, and a tilted area still opens them at its centre', async () => {
   const catalog = composeCatalog({
     tools: coreTools,
     services: { app: { baseUrl: 'http://localhost:4173/' } },
@@ -176,6 +176,21 @@ test('a new area moves a passed-through view’s photos, and a tilted area still
     lat: 42.3314,
     lon: -83.0458,
   });
+  // A new camera position moves them too; turning the camera keeps them.
+  const moved = await catalog.call('show_in_gods_eye_view', {
+    view: first.data.view,
+    camera: { lat: 40.758, lon: -73.9855, altitude_m: 800, pitch_deg: -90 },
+  });
+  assert.deepEqual(moved.data.view.street_level, {
+    provider: 'google',
+    lat: 40.758,
+    lon: -73.9855,
+  });
+  const turned = await catalog.call('show_in_gods_eye_view', {
+    view: first.data.view,
+    camera: { heading_deg: 90 },
+  });
+  assert.deepEqual(turned.data.view.street_level, first.data.view.street_level);
   const tilted = await catalog.call('show_in_gods_eye_view', {
     area: { lat: 48.8584, lon: 2.2945, radius_km: 1 },
     camera: { pitch_deg: -30 },

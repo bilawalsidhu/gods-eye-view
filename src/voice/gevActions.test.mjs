@@ -5717,12 +5717,21 @@ function createStreetLevelHarness({
   lightFails = false,
   imageryError = null,
   sky = false,
+  photoOpen = false,
+  duringMapSwitch = null,
+  duringEnable = null,
 } = {}) {
   const order = [];
   const lookups = [];
   const origins = [];
   const revealed = [];
-  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const { viewer, styleManager, currentGeneration } = createVoiceNavigationHarness();
+  // Who owns the camera: the shell's navigation stamps and globe gestures.
+  let userNavigations = 0;
+  Object.defineProperty(styleManager, '_navigationGeneration', {
+    get: () => currentGeneration() + userNavigations,
+  });
+  viewer.scene.canvas = Object.assign(new EventTarget(), { clientWidth: 1200, clientHeight: 800 });
   let completeFlight = null;
   viewer.camera.lookAt = () => {};
   viewer.camera.flyToBoundingSphere = (_sphere, options) => {
@@ -5736,11 +5745,14 @@ function createStreetLevelHarness({
   styleManager.setMapStack = async (id) => {
     order.push(`map:${id}`);
     stack = id;
+    duringMapSwitch?.();
     return { ok: true, activeStack: id, error: null };
   };
   let params = { ...lit };
   let keyRejected = keyRejectedAtStart;
-  const street = { imageId: null, error: null };
+  const street = photoOpen
+    ? { open: true, imageId: 'eiffel-photo', error: null }
+    : { open: false, imageId: null, error: null };
   const names = { google: 'Google Street View', mapillary: 'Mapillary' };
   const layer = {
     providerIds: ['mapillary', 'google'],
@@ -5777,6 +5789,10 @@ function createStreetLevelHarness({
       coverage: { hint: 'not on this map' },
       street: { ...street },
     }),
+    closeViewer() {
+      order.push('close');
+      Object.assign(street, { open: false, imageId: null, error: null, nearestOutcome: null });
+    },
     armNearest(point, options) {
       order.push(`arm:${options.providerIds.join('+')}:${options.radiusM ?? 'default'}:${point ? `${point.lat},${point.lon}` : 'view-centre'}`);
     },
@@ -5806,6 +5822,7 @@ function createStreetLevelHarness({
         street.error = `No street-level imagery within ${options.radiusM ?? 50} m of ${point ? 'that point' : 'the view centre'}`;
         return false;
       }
+      street.open = true;
       street.imageId = nearest;
       street.title = '10th St, Sacramento';
       street.position = point;
@@ -5828,6 +5845,7 @@ function createStreetLevelHarness({
       order.push(`enable:${id}`);
       if (enableResult === false) return false;
       enabled = true;
+      duringEnable?.();
       return true;
     },
     getAll: () => [{ id: 'street-level', name: 'Street Level', enabled }],
@@ -5835,7 +5853,22 @@ function createStreetLevelHarness({
   styleManager.setPanelCollapsed = (id, collapsed) => revealed.push(`collapse:${id}:${collapsed}`);
   styleManager.revealPanel = (id) => revealed.push(`reveal:${id}`);
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
-  return { runner, order, finishFlight: () => completeFlight?.(), layer, dataManager, lookups, origins, revealed };
+  return {
+    runner,
+    order,
+    finishFlight: () => completeFlight?.(),
+    layer,
+    dataManager,
+    lookups,
+    origins,
+    revealed,
+    street,
+    // The user searches or flies elsewhere, or drags the globe.
+    navigate: () => {
+      userNavigations += 1;
+    },
+    gesture: () => viewer.scene.canvas.dispatchEvent(new Event('pointerdown')),
+  };
 }
 
 /** A loaded CCTV camera the entity branch can locate. */
@@ -6396,6 +6429,99 @@ test('show_street_level in a view that hides its panel stops before anything loa
       globalThis.document = saved;
     }
   }
+});
+
+test('show_street_level checks the panel again after every wait: a mode entered meanwhile loads nothing unseen', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const saved = globalThis.document;
+  const classes = new Set();
+  globalThis.document = { body: { classList: { contains: (name) => classes.has(name) } } };
+  try {
+    for (const [mode, when] of [
+      ['ui-clean-view', 'duringEnable'],
+      ['cockpit-mode', 'duringMapSwitch'],
+    ]) {
+      classes.clear();
+      const h = createStreetLevelHarness({ [when]: () => classes.add(mode) });
+      const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
+      assert.deepEqual([result.ok, result.stage], [false, 'view'], mode);
+      assert.deepEqual(h.order.filter((step) => /^(open|arm)/.test(step)), [], `${mode}: no billed load`);
+      assert.deepEqual(h.revealed, [], `${mode}: nothing revealed`);
+    }
+    // Entered while the photo loaded: it is closed again, not reported as shown.
+    classes.clear();
+    const late = createStreetLevelHarness({ enabled: true });
+    const open = late.layer.openNearest;
+    late.layer.openNearest = async (...call) => {
+      const opened = await open(...call);
+      classes.add('recording-mode');
+      return opened;
+    };
+    const result = await late.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+    assert.deepEqual([result.ok, result.stage], [false, 'view']);
+    assert.equal(late.order.at(-1), 'close');
+    assert.deepEqual(late.revealed, []);
+  } finally {
+    globalThis.document = saved;
+  }
+});
+
+test('show_street_level refuses a hidden panel before the camera leaves a recording', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const saved = globalThis.document;
+  globalThis.document = { body: { classList: { contains: (name) => name === 'recording-mode' } } };
+  try {
+    const { runner, order } = createStreetLevelHarness();
+    const result = await runner('show_street_level', { query: 'Eiffel Tower', provider: 'mapillary' });
+    assert.deepEqual([result.ok, result.stage], [false, 'view']);
+    assert.deepEqual(order, [], 'no flight');
+  } finally {
+    globalThis.document = saved;
+  }
+});
+
+test('show_street_level stops once the camera is someone else’s: a navigation or a gesture during the map switch', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  for (const take of ['navigate', 'gesture']) {
+    let h;
+    h = createStreetLevelHarness({ duringMapSwitch: () => h[take]() });
+    const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+    assert.equal(result.ok, true, `${take}: Mapillary needs no map switch`);
+    h = createStreetLevelHarness({ duringMapSwitch: () => h[take]() });
+    const google = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
+    assert.deepEqual([google.ok, google.stage, google.cancelled, google.superseded], [false, 'map', true, true], take);
+    assert.deepEqual(h.order.filter((step) => /^(params|enable|open|arm)/.test(step)), [], `${take}: nothing lit for the old place`);
+  }
+  // During the layer switch-on: the photo lookup never runs.
+  let h;
+  h = createStreetLevelHarness({ duringEnable: () => h.navigate() });
+  const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+  assert.deepEqual([result.ok, result.stage, result.superseded], [false, 'layer', true]);
+  assert.ok(!h.order.some((step) => step.startsWith('open:')));
+});
+
+test('show_street_level owns the camera from where its own flight lands', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const h = createStreetLevelHarness();
+  const pending = h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  h.finishFlight();
+  const result = await pending;
+  assert.equal(result.ok, true, result.error);
+  assert.ok(h.order.some((step) => step.startsWith('open:mapillary')));
+});
+
+test('show_street_level closes the previous photo, so one that finds nothing leaves no other place on screen', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const empty = createStreetLevelHarness({ enabled: true, photoOpen: true, nearest: null });
+  const result = await empty.runner('show_street_level', { latitude: 23.4, longitude: 12.5, provider: 'mapillary', fly: false });
+  assert.deepEqual([result.ok, result.noImagery], [false, true]);
+  assert.equal(empty.street.open, false, 'the Paris photo is gone');
+  assert.match(empty.street.error, /No street-level imagery/, 'the panel shows why');
+  // A link that only arms a billed source closes it too.
+  const armed = createStreetLevelHarness({ enabled: true, photoOpen: true, activeStack: 'photoreal' });
+  await armed.runner('show_street_level', { latitude: 23.4, longitude: 12.5, provider: 'google', fly: false, autoOpen: false });
+  assert.deepEqual(armed.order.filter((step) => /^(close|arm)/.test(step)).map((step) => step.split(':')[0]), ['close', 'arm']);
 });
 
 test('show_street_level opens over the clean embedded globe but respects its other exclusive modes', async () => {

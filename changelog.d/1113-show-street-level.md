@@ -28,5 +28,9 @@
   failing source is reported as an error, not as missing imagery; and
   Mapillary's nearest search gives up after 12 seconds. On a phone the panel
   scrolls into view, and in embed mode EXPAND stays open while cockpit,
-  recording and scene playback hide the photo (Said Turksever, @asturksever,
-  #1113).
+  recording and scene playback hide the photo. The action checks again after
+  every wait: a navigation or a drag of the globe, or a mode that hides the
+  panel, stops it before a photo loads for a place the user left or in a
+  panel nobody sees, and a request that finds nothing closes the previous
+  photo. The panel's later results open a billed photo only when they are
+  fresh too (Said Turksever, @asturksever, #1113).
