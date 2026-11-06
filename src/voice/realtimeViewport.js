@@ -339,6 +339,16 @@ export function isBenignViewportDeleteError(payload, pendingDeleteIds = null) {
   return code === 'item_not_found';
 }
 
+/** Pairs one visual-context request's outcome with its decision. */
+function diagnosticsRecord(contextId = null) {
+  return { contextId, logged: false };
+}
+
+function reportOutcome(owner, diag, event, kind, reason) {
+  diag.logged = true;
+  owner.debugLog?.(event, { contextId: diag.contextId, kind, reason });
+}
+
 /** Own the one retained viewport image and bounded pending deletion identities. */
 export class RealtimeViewport {
   constructor({
@@ -359,6 +369,8 @@ export class RealtimeViewport {
     // Bumped by every capture request and every new user turn: only the
     // newest request of the current turn may publish.
     this.captureSeq = 0;
+    // Diagnostics only: pairs each visual-context decision with its outcome.
+    this.contextSeq = 0;
     this.lastPointerCrop = null;
     // What the retained image shows: `{kind:'viewport'|'crop', rect, cameraKey}`.
     // Pixel targeting (screenX/screenY) is read against it.
@@ -370,24 +382,47 @@ export class RealtimeViewport {
     return this.readChannel();
   }
 
+  /**
+   * Escalate an entity-context answer to an image when the gate allows it.
+   * Logs one `viewport_context.decision`, then, for a send decision, exactly
+   * one `.skipped` or `.result` outcome, even when a step throws. Every
+   * event carries the same `contextId` and the image `kind`, so overlapping
+   * requests pair up.
+   */
   async sendVisualContextIfUseful(result) {
-    const channel = this.dc;
+    // Runs after every tool output. Only entity context can escalate, so
+    // other tools log nothing and leave the shared debug-log budget alone.
+    if (result?.action !== 'get_entity_context') return false;
+    const contextId = ++this.contextSeq;
     const decision = viewportContextDecision(result, {
-      channelOpen: channel?.readyState === 'open',
+      channelOpen: this.dc?.readyState === 'open',
     });
-    this.debugLog?.('viewport_context.decision', decision);
+    this.debugLog?.('viewport_context.decision', { contextId, ...decision });
     if (!decision.send) return false;
-    // #837's pointer crop is separate from the full viewport: preserve it.
-    if (decision.kind === 'crop')
-      return this.sendPointerCrop(this.readPointer(), {
-        viewScale: decision.viewScale,
-      });
-    return this.sendRetainedImage(
-      () => this.capture(),
-      "Current God's Eye View viewport screenshot. Read any clearly visible street, building, and place labels in the image and combine them with the structured nearbyPlaces, streetLabels, and scene context. Do not invent labels that are not legible.",
-      'client.viewport_context',
-      { kind: 'viewport' },
-    );
+    const diag = diagnosticsRecord(contextId);
+    try {
+      // #837's pointer crop is separate from the full viewport: preserve it.
+      if (decision.kind === 'crop')
+        return await this.sendPointerCrop(this.readPointer(), {
+          viewScale: decision.viewScale,
+          diag,
+        });
+      return await this.sendRetainedImage(
+        () => this.capture(),
+        "Current God's Eye View viewport screenshot. Read any clearly visible street, building, and place labels in the image and combine them with the structured nearbyPlaces, streetLabels, and scene context. Do not invent labels that are not legible.",
+        'client.viewport_context',
+        { kind: 'viewport', diag },
+      );
+    } catch (error) {
+      // The caller logs the error itself; close the pair, then rethrow.
+      if (!diag.logged)
+        this.debugLog?.('viewport_context.skipped', {
+          contextId,
+          kind: decision.kind,
+          reason: 'error',
+        });
+      throw error;
+    }
   }
 
   /** A new user turn: captures still in flight from the last one are dropped. */
@@ -401,27 +436,39 @@ export class RealtimeViewport {
    * @param {object|null} snapshot Fresh pointer snapshot on bare ground.
    * @returns {Promise<boolean>}
    */
-  async sendPointerCrop(snapshot, { viewScale } = {}) {
-    if (!snapshot?.fresh || snapshot.target !== 'ground' || !snapshot.screenPx)
+  async sendPointerCrop(
+    snapshot,
+    { viewScale, diag = diagnosticsRecord() } = {},
+  ) {
+    const skip = (reason) => {
+      reportOutcome(this, diag, 'viewport_context.skipped', 'crop', reason);
       return false;
+    };
+    if (!snapshot?.fresh) return skip('pointer-not-fresh');
+    if (snapshot.target !== 'ground') return skip('pointer-not-ground');
+    if (!snapshot.screenPx) return skip('pointer-off-screen');
     // Too far out, the crop is a smear: every path shares this guard.
-    if (!POINTER_CROP_SCALES.has(viewScale)) return false;
-    if (snapshot === this.lastPointerCrop) return false;
+    if (!POINTER_CROP_SCALES.has(viewScale))
+      return skip('pointer-scale-not-useful');
+    // Set before the capture finishes, so this also covers one in flight.
+    if (snapshot === this.lastPointerCrop)
+      return skip('pointer-already-requested');
     const capturedAt = Number(snapshot.capturedAt) || 0;
-    if (this.now() - capturedAt > POINTER_CROP_MAX_AGE_MS) return false;
+    if (this.now() - capturedAt > POINTER_CROP_MAX_AGE_MS)
+      return skip('pointer-expired');
     // The snapshot's pixels only name its own camera pose.
     const snapshotCameraKey = snapshot.cameraKey;
-    if (!snapshotCameraKey) return false;
+    if (!snapshotCameraKey) return skip('pointer-pose-unknown');
     const samePose = () =>
       snapshotCameraKey === this.readCameraKey() &&
       this.now() - capturedAt <= POINTER_CROP_MAX_AGE_MS;
-    if (!samePose()) return false;
+    if (!samePose()) return skip('pose-changed');
     this.lastPointerCrop = snapshot;
     const sent = await this.sendRetainedImage(
       () => this.capturePointer(snapshot.screenPx),
       "Crop of the map around the user's pointer; the ring marks the exact spot they mean by this or here. Describe only what is clearly visible.",
       'client.pointer_crop',
-      { kind: 'crop', valid: samePose },
+      { kind: 'crop', valid: samePose, diag },
     );
     if (!sent && this.lastPointerCrop === snapshot) this.lastPointerCrop = null;
     return sent;
@@ -429,7 +476,14 @@ export class RealtimeViewport {
 
   /** Capture one image and make it the single retained image in context. */
   async sendRetainedImage(captureImage, text, label, frame = {}) {
-    if (!this.dc || this.dc.readyState !== 'open') return false;
+    const kind = frame.kind || 'viewport';
+    const diag = frame.diag || diagnosticsRecord();
+    const report = (event, reason) =>
+      reportOutcome(this, diag, event, kind, reason);
+    if (!this.dc || this.dc.readyState !== 'open') {
+      report('viewport_context.skipped', 'channel-closed');
+      return false;
+    }
     const generation = this.generation;
     const request = ++this.captureSeq;
     const channel = this.dc;
@@ -437,21 +491,23 @@ export class RealtimeViewport {
     const imageUrl =
       typeof captured === 'string' ? captured : captured?.dataUrl || null;
     if (!imageUrl) {
-      this.debugLog?.('viewport_context.skipped', {
-        reason: 'capture-unavailable',
-      });
+      report('viewport_context.skipped', 'capture-unavailable');
       return false;
     }
-    if (
-      generation !== this.generation ||
-      request !== this.captureSeq ||
-      this.dc !== channel ||
-      channel.readyState !== 'open' ||
-      (typeof frame.valid === 'function' && !frame.valid())
-    ) {
-      this.debugLog?.('viewport_context.skipped', {
-        reason: 'capture-invalidated',
-      });
+    // Same guards as before, checked in order so each drop names its cause:
+    // reset() bumps both counters, so a session reset is tested first.
+    const invalidated =
+      generation !== this.generation
+        ? 'session-reset'
+        : request !== this.captureSeq
+          ? 'superseded'
+          : this.dc !== channel || channel.readyState !== 'open'
+            ? 'channel-lost'
+            : typeof frame.valid === 'function' && !frame.valid()
+              ? 'frame-stale'
+              : null;
+    if (invalidated) {
+      report('viewport_context.skipped', invalidated);
       return false;
     }
 
@@ -509,14 +565,15 @@ export class RealtimeViewport {
     this.lastViewportItemId = sent ? newItemId : null;
     this.retainedFrame = sent
       ? {
-          kind: frame.kind || 'viewport',
+          kind,
           rect: captured?.rect || null,
           cameraKey: this.readCameraKey(),
         }
       : null;
-    this.debugLog?.('viewport_context.result', {
-      reason: sent ? 'sent' : 'data-channel-send-failed',
-    });
+    report(
+      'viewport_context.result',
+      sent ? 'sent' : 'data-channel-send-failed',
+    );
     return sent;
   }
 
