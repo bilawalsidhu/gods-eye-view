@@ -96,8 +96,9 @@ export interface Renderer {
    */
   readPixels(options?: { crop?: ScreenRect; scale?: number }): ImageData;
   /**
-   * Resolves once what is in view has loaded, or the timeout passes, or a
-   * load failed for good. `blockers` names what was still loading or
+   * Resolves once what is in view has loaded and the last presented frame
+   * shows it (no redraw of the renderer's own is pending), or the timeout
+   * passes, or a load failed for good. `blockers` names what was still loading or
    * failed (`'tiles'`, `'imagery:<id>'`, `'models'`, ...); empty when settled.
    */
   whenSettled(options?: { timeoutMs?: number }): Promise<SettleResult>;
