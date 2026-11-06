@@ -562,6 +562,12 @@ export class RealtimeViewport {
     // the item we just deleted as null and fall through so the caller still
     // issues queueResponseCreate WITHOUT the image, instead of stranding the turn.
     const sent = this.sendRealtimeEvent(contextEvent, label);
+    // Report before the bookkeeping below, so a later throw cannot turn a
+    // real send into a logged "error".
+    report(
+      'viewport_context.result',
+      sent ? 'sent' : 'data-channel-send-failed',
+    );
     this.lastViewportItemId = sent ? newItemId : null;
     this.retainedFrame = sent
       ? {
@@ -570,10 +576,6 @@ export class RealtimeViewport {
           cameraKey: this.readCameraKey(),
         }
       : null;
-    report(
-      'viewport_context.result',
-      sent ? 'sent' : 'data-channel-send-failed',
-    );
     return sent;
   }
 

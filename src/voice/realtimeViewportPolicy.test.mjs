@@ -536,3 +536,24 @@ test('a step that throws still closes its decision, then rethrows', async () => 
     ]);
   }
 });
+
+test('a throw after a real send still logs it as sent', async () => {
+  let reads = 0;
+  const { viewport, events } = recordingViewport({
+    // The first read happens only after the image was handed to the channel.
+    readCameraKey: () => {
+      reads += 1;
+      throw new Error('camera gone');
+    },
+  });
+  await assert.rejects(
+    viewport.sendVisualContextIfUseful(localContext()),
+    /camera gone/,
+  );
+  assert.equal(reads, 1);
+  const outcomes = events.filter((item) => outcomeEvents.has(item.event));
+  assert.deepEqual(
+    outcomes.map((item) => [item.event, item.detail.reason]),
+    [['viewport_context.result', 'sent']],
+  );
+});
