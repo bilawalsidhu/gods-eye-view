@@ -3532,6 +3532,7 @@
       "src/layers/cctv/ingestion.js",
       "src/layers/cctv/lifecycle.js",
       "src/layers/cctv/model.js",
+      "src/sources/cctvPose.js",
       "src/layers/cctv/modelSpecs.js",
       "src/layers/cctv/navigation.js",
       "src/layers/cctv/policy.js",
