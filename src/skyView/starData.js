@@ -133,13 +133,13 @@ function skyStatusError(status) {
 
 /** Network and parser failures must not carry the request URL or exception text. */
 function publishedSkyError(error) {
-  if (error instanceof SkyDataError) return error;
+  if (error instanceof SkyDataError) return new SkyDataError(['catalogue format or contents invalid']);
   if (
     error instanceof Error &&
     /^sky data \d{3}$/.test(error.message) &&
     error.cause == null
   )
-    return error;
+    return new Error(error.message);
   return new Error('sky data fetch failed');
 }
 
