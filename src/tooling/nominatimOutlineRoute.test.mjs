@@ -684,25 +684,29 @@ test('the disk cache survives a restart and stays within its bounds', async () =
     await createNominatimCache({ dir, now: time.now }).get('k0'),
     null,
   );
-  assert.equal(
-    fs.statSync(dir).mode & 0o777,
-    0o700,
-    'the query cache directory is private',
-  );
+  // Windows has no POSIX permission bits: stat reports 0o666 whatever
+  // chmod asked for, so the privacy modes are checked where they exist.
+  if (process.platform !== 'win32')
+    assert.equal(
+      fs.statSync(dir).mode & 0o777,
+      0o700,
+      'the query cache directory is private',
+    );
   const text = fs
     .readdirSync(dir)
     .filter((name) => name.endsWith('.json'))
     .map((name) => fs.readFileSync(path.join(dir, name), 'utf8'))
     .join('\n');
   assert.equal(text.includes('k4'), false, 'disk entries never store raw keys');
-  for (const name of fs
-    .readdirSync(dir)
-    .filter((entry) => entry.endsWith('.json')))
-    assert.equal(
-      fs.statSync(path.join(dir, name)).mode & 0o777,
-      0o600,
-      `${name} is private`,
-    );
+  if (process.platform !== 'win32')
+    for (const name of fs
+      .readdirSync(dir)
+      .filter((entry) => entry.endsWith('.json')))
+      assert.equal(
+        fs.statSync(path.join(dir, name)).mode & 0o777,
+        0o600,
+        `${name} is private`,
+      );
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
