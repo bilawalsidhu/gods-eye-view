@@ -3,8 +3,9 @@
  * @description The part of the Cesium renderer the reference scenes need,
  * through the contract's own members: a bare globe and sky, icons, points,
  * lines, shapes and models, `setView`, picks and projection, the frame
- * phases, pointer input, settling and capture. The `/dev/conformance/` page
- * draws the scenes with it to make and check the visual references.
+ * phases, pointer input, credits, settling and capture. The
+ * `/dev/conformance/` page draws the scenes with it to make and check the
+ * visual references.
  *
  * Its ports are `ports.js`'s, which the application's renderer shares;
  * this factory adds the conformance widget, its fixed settings, the input
@@ -280,6 +281,7 @@ export async function createCesiumSceneRenderer({
     query: ports.query,
     input: input.port,
     capture: ports.capture,
+    credits: ports.credits,
     whenSettled,
     resize: () => widget.resize(),
     on: ports.on,

@@ -12,6 +12,7 @@ import {
   closeRenderLoopLatch,
   clusterPointCollection,
   commandExtents,
+  creditDisplayContents,
   defaultView,
   lastRenderTime,
   lastSeenCamera,
@@ -54,6 +55,9 @@ test('every private field Core reaches is still declared by the installed Cesium
     [ENGINE, 'Scene/Scene.js', '_view'],
     [ENGINE, 'Scene/View.js', '_cameraClone'],
     [ENGINE, 'Scene/Scene.js', '_frameState'],
+    [ENGINE, 'Scene/CreditDisplay.js', '_staticCredits'],
+    [ENGINE, 'Scene/CreditDisplay.js', '_currentFrameCredits'],
+    [ENGINE, 'Scene/CreditDisplay.js', '_currentCesiumCredit'],
   ];
   const missing = fields.filter(
     ([root, file, field]) =>
@@ -149,6 +153,27 @@ test('the helpers read and write exactly those fields', () => {
   const fn = () => {};
   atEndOfTick({ _frameState: { afterRender } }, fn);
   assert.deepEqual(afterRender, [fn]);
+  const logo = {};
+  const statics = [{}];
+  const screen = [{ credit: {}, count: 1 }];
+  const lightbox = [];
+  assert.deepEqual(
+    creditDisplayContents({
+      _staticCredits: statics,
+      _currentFrameCredits: {
+        screenCredits: { values: screen },
+        lightboxCredits: { values: lightbox },
+      },
+      _currentCesiumCredit: logo,
+    }),
+    { statics, screen, lightbox, logo },
+  );
+  assert.deepEqual(creditDisplayContents(undefined), {
+    statics: [],
+    screen: [],
+    lightbox: [],
+    logo: undefined,
+  });
   const event = () => {
     const listeners = new Set();
     return {

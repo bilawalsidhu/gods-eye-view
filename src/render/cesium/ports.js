@@ -2,7 +2,8 @@
  * @module render/cesium/ports
  * @description The Cesium renderer's contract ports, built over a Cesium
  * widget or viewer someone else made and configured: frame phases, the
- * draw sets, `setView` and the pose, picks and projection, and capture.
+ * draw sets, `setView` and the pose, picks and projection, credits and
+ * capture.
  * Building them puts the loop on demand (no holds yet, and no redraws for
  * scene time alone); nothing else in the scene changes until a call.
  *
@@ -15,6 +16,7 @@ import * as Cesium from 'cesium';
 import { heightsFor } from '../../queries/heights.js';
 import { createCesiumCamera } from './camera.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
+import { createCesiumCredits } from './credits.js';
 import {
   atEndOfTick,
   billboardLoadError,
@@ -734,6 +736,13 @@ export function createCesiumPorts(widget, { capabilities }) {
   const cameraPart = createCesiumCamera({ scene, camera, report, widget });
   const cameraPort = cameraPart.port;
 
+  const creditsPart = createCesiumCredits({
+    display: widget.creditDisplay,
+    scene,
+    report,
+    requestRender: () => frame.requestRender('credits'),
+  });
+
   // --- Query -----------------------------------------------------------------
 
   const screen = (x, y) => new Cesium.Cartesian2(x, y);
@@ -1075,6 +1084,7 @@ export function createCesiumPorts(widget, { capabilities }) {
     frame,
     draw,
     camera: cameraPort,
+    credits: creditsPart.port,
     query,
     capture,
     modelSets,
@@ -1091,6 +1101,7 @@ export function createCesiumPorts(widget, { capabilities }) {
       for (const list of Object.values(rendererListeners)) list.clear();
       for (const list of Object.values(frameListeners)) list.clear();
       cameraPart.dispose();
+      creditsPart.dispose();
       for (const done of [...pendingRenders]) done();
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) record.host = null;
