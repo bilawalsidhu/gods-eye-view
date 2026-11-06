@@ -24,6 +24,7 @@ export function createGeocodePlaceService({
   cacheMs = 10 * 60_000,
   timeoutMs = 15_000,
   now = () => Date.now(),
+  keylessGeocoder = null,
 } = {}) {
   // Recent answers by name, so tools that combine others resolve a place to
   // the same point once instead of once per section. A pending lookup is
@@ -33,8 +34,17 @@ export function createGeocodePlaceService({
   async function lookup(name, signal) {
     const query = new URLSearchParams({ q: name });
     const response = await fetchImpl(`/api/geocode?${query}`, { signal });
+    const payload = await response.json().catch(() => null);
+    // No server geocoder (no Google key, no Nominatim): ask the keyless one
+    // the search box uses, rather than reporting every name as unmatched.
+    if (
+      keylessGeocoder &&
+      (payload?.configured === false || payload?.code === 'NOMINATIM_DISABLED')
+    ) {
+      const { place } = await keylessGeocoder.geocode(name, { signal });
+      return place ? placeFromKeylessResult(place) : null;
+    }
     if (!response.ok) throw new Error(`Geocode HTTP ${response.status}`);
-    const payload = await response.json();
     return placeFromGeocodeResult(payload?.results?.[0]);
   }
   function start(key, name) {
@@ -100,6 +110,14 @@ export function createGeocodePlaceService({
 }
 
 /** Convert one geocode result to a place with bounds, or null. */
+/** A keyless (Photon) answer in the same shape as a geocode result's. */
+function placeFromKeylessResult({ lat, lng, label, name, viewport }) {
+  return placeFromGeocodeResult({
+    formatted_address: label || name || null,
+    geometry: { location: { lat, lng }, ...(viewport ? { viewport } : {}) },
+  });
+}
+
 export function placeFromGeocodeResult(result) {
   const location = result?.geometry?.location;
   if (!Number.isFinite(location?.lat) || !Number.isFinite(location?.lng))
