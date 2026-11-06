@@ -191,13 +191,14 @@ async function fixture(t) {
   manager.register(missions);
   missions.attachDataManager(manager);
 
+  const toasts = [];
   const controls = new ContextControls({
     elements: {},
     installations: {},
     actions: {
       getCockpit: () => null,
       claimVisualAuthority: noop,
-      showToast: noop,
+      showToast: (message) => toasts.push(message),
       setClearBusy: noop,
       syncDetection: noop,
       scheduleLayout: noop,
@@ -234,6 +235,7 @@ async function fixture(t) {
     manager,
     controls,
     missions,
+    toasts,
     state,
     camera,
     rosters,
