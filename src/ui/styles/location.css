@@ -298,3 +298,20 @@
 #location-search.searching {
   opacity: 0.5;
 }
+
+.location-search-error {
+  /* Its own line under the search row, which clips overflow in the dock. */
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 99, 99, 0.45);
+  border-radius: 6px;
+  background: rgba(30, 8, 10, 0.92);
+  color: #ffb3b3;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.location-search-error:empty {
+  display: none;
+}

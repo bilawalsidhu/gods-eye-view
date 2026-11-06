@@ -5,8 +5,10 @@ import {
   applyDocumentTranslations,
   formatDate,
   formatNumber,
+  formatRelativeTime,
   msg,
-  persistLocaleAndReload,
+  onLocaleChange,
+  persistLocale,
   setLocale,
   t,
   tn,
@@ -33,8 +35,38 @@ function memoryStorage(initial = {}) {
 test('normalizeLocale folds regional variants and rejects unshipped tags', () => {
   assert.equal(normalizeLocale('ru-RU'), 'ru');
   assert.equal(normalizeLocale(' RU '), 'ru');
+  assert.equal(normalizeLocale('uk'), 'uk');
+  assert.equal(normalizeLocale('uk-UA'), 'uk');
   assert.equal(normalizeLocale('en_GB'), 'en');
+  assert.equal(normalizeLocale('de'), 'de');
+  assert.equal(normalizeLocale('de-AT'), 'de');
+  assert.equal(normalizeLocale('de_CH'), 'de');
+  assert.equal(normalizeLocale('fr'), 'fr');
+  assert.equal(normalizeLocale('fr-CA'), 'fr');
+  assert.equal(normalizeLocale('FR_be'), 'fr');
+  assert.equal(normalizeLocale('pt-BR'), 'pt');
+  assert.equal(normalizeLocale('pt_PT'), 'pt');
   assert.equal(normalizeLocale('xx'), null);
+  assert.equal(normalizeLocale('it-IT'), 'it');
+  assert.equal(normalizeLocale('it_CH'), 'it');
+  assert.equal(normalizeLocale('ja'), 'ja');
+  assert.equal(normalizeLocale('ja-JP'), 'ja');
+  assert.equal(normalizeLocale('JA_jp'), 'ja');
+  // Explicit script tags take precedence over regional defaults.
+  assert.equal(normalizeLocale('zh'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-CN'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-Hans-SG'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-Hant'), 'zh-Hant');
+  assert.equal(normalizeLocale(' ZH_hant '), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-TW'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-Hant-HK'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-Hans-HK'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-Hant-CN'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh_HK'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-MO'), 'zh-Hant');
+  assert.equal(normalizeLocale('ar'), 'ar');
+  assert.equal(normalizeLocale('ar-EG'), 'ar');
+  assert.equal(normalizeLocale(' AR_sa '), 'ar');
   assert.equal(normalizeLocale(undefined), null);
 });
 
@@ -56,7 +88,7 @@ test('resolveLocale: ?lang= wins, then the stored choice, then browser languages
     resolveLocale({
       location: { search: '?lang=xx' },
       storage: memoryStorage(),
-      languages: ['de-DE', 'ru-RU'],
+      languages: ['ko-KR', 'ru-RU'],
     }),
     'ru',
   );
@@ -64,7 +96,15 @@ test('resolveLocale: ?lang= wins, then the stored choice, then browser languages
     resolveLocale({
       location: { search: '' },
       storage: memoryStorage(),
-      languages: ['de'],
+      languages: ['de-DE', 'ru-RU'],
+    }),
+    'de',
+  );
+  assert.equal(
+    resolveLocale({
+      location: { search: '' },
+      storage: memoryStorage(),
+      languages: ['ko'],
     }),
     'en',
   );
@@ -90,6 +130,10 @@ test('applyDocumentLanguage sets lang and dir', () => {
   const doc = { documentElement: {} };
   applyDocumentLanguage(doc, 'ru-RU');
   assert.deepEqual(doc.documentElement, { lang: 'ru', dir: 'ltr' });
+  applyDocumentLanguage(doc, 'ar-EG');
+  assert.deepEqual(doc.documentElement, { lang: 'ar', dir: 'rtl' });
+  applyDocumentLanguage(doc, 'en');
+  assert.deepEqual(doc.documentElement, { lang: 'en', dir: 'ltr' });
 });
 
 test('t() returns English text in English and translates in Russian', () => {
@@ -130,6 +174,36 @@ test('tn() picks English and Russian plural forms', () => {
   assert.match(label(21), / 21 КЛЮЧ(?![А-ЯЁ])/);
 });
 
+test('tn() picks the Portuguese one, many and other forms', () => {
+  const label = (count) =>
+    tn(
+      count,
+      'POWER UP · {count} KEY WAITING',
+      'POWER UP · {count} KEYS WAITING',
+    );
+  setLocale('pt');
+  assert.equal(label(0), 'ATIVAR · 0 CHAVE PENDENTE');
+  assert.equal(label(1), 'ATIVAR · 1 CHAVE PENDENTE');
+  assert.equal(label(3), 'ATIVAR · 3 CHAVES PENDENTES');
+  assert.equal(label(1_000_000), 'ATIVAR · 1000000 DE CHAVES PENDENTES');
+});
+
+test('tn() picks the four Ukrainian plural forms', () => {
+  const label = (count) =>
+    tn(
+      count,
+      'POWER UP · {count} KEY WAITING',
+      'POWER UP · {count} KEYS WAITING',
+    );
+  setLocale('uk');
+  assert.match(label(1), / 1 КЛЮЧ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(3), / 3 КЛЮЧІ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(5), / 5 КЛЮЧІВ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(11), / 11 КЛЮЧІВ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(21), / 21 КЛЮЧ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(1.5), / 1\.5 КЛЮЧА(?![А-ЯҐЄІЇ])/);
+});
+
 test('t() context separates identical English with different meanings', () => {
   assert.equal(t('CLEAR', { context: 'action' }), 'CLEAR');
   setLocale('ru');
@@ -152,7 +226,13 @@ test('Intl formatters follow the active locale', () => {
   assert.equal(formatNumber(1234.5), '1,234.5');
   setLocale('ru');
   assert.equal(formatDate(date, options), '15 января 2026 г.');
+  assert.equal(formatRelativeTime(-5, 'minute'), '5 минут назад');
   assert.equal(formatNumber(1234.5), '1 234,5');
+  // Japanese keeps a number and its unit together, as the catalog does.
+  setLocale('ja');
+  assert.equal(formatDate(date, options), '2026年1月15日');
+  assert.equal(formatRelativeTime(-5, 'minute'), '5分前');
+  assert.equal(formatRelativeTime(-3, 'day'), '3日前');
 });
 
 function fakeElement({ text = '', attributes = {} } = {}) {
@@ -186,15 +266,60 @@ test('applyDocumentTranslations translates opted-in text and attributes in place
   assert.equal(label.textContent, t('POWERED UP'));
   assert.equal(pin.attrs.get('title'), t('POWERED UP'));
   assert.equal(unknown.textContent, 'No such message');
+  // A later pass starts from the English source, so every switch applies.
+  setLocale('de');
+  applyDocumentTranslations(doc);
+  assert.equal(label.textContent, t('POWERED UP'));
+  setLocale('en');
+  assert.equal(applyDocumentTranslations(doc), 2, 'English restores');
+  assert.equal(label.textContent, 'POWERED UP');
+  assert.equal(pin.attrs.get('title'), 'POWERED UP');
+  // Text that code wrote since is the new source; a pass leaves it alone.
+  label.textContent = 'Error: offline';
+  setLocale('ru');
+  applyDocumentTranslations(doc);
+  assert.equal(label.textContent, 'Error: offline');
 });
 
-test('persistLocaleAndReload keeps the choice in ?lang when storage is blocked', () => {
-  const calls = [];
-  const location = {
-    href: 'https://gev.local/?x=1#scene=a',
-    assign: (url) => calls.push(['assign', url]),
-    reload: () => calls.push(['reload']),
+test('onLocaleChange listeners hear each change until removed', () => {
+  const heard = [];
+  const off = onLocaleChange(() => heard.push(t('POWERED UP')));
+  const broken = onLocaleChange(() => {
+    throw new Error('broken listener');
+  });
+  const error = console.error;
+  console.error = () => {};
+  try {
+    setLocale('ru');
+    setLocale('ru');
+    assert.deepEqual(heard, [t('POWERED UP')], 'once, in the new locale');
+    off();
+    setLocale('en');
+    assert.equal(heard.length, 1);
+  } finally {
+    console.error = error;
+    broken();
+  }
+});
+
+test('applyDocumentTranslations reads data-i18n-context for element text', () => {
+  const option = fakeElement({
+    text: 'All',
+    attributes: { 'data-i18n-context': 'radio tag' },
+  });
+  const doc = {
+    querySelectorAll: (selector) =>
+      selector === '[data-i18n]' ? [option] : [],
   };
+  setLocale('pt');
+  applyDocumentTranslations(doc);
+  assert.equal(option.textContent, t('All', { context: 'radio tag' }));
+  assert.notEqual(option.textContent, t('All'));
+});
+
+test('persistLocale keeps the choice in ?lang when storage is blocked', () => {
+  const calls = [];
+  const location = { href: 'https://gev.local/?x=1#scene=a' };
   const history = {
     replaceState: (_s, _t, url) => calls.push(['replace', url]),
   };
@@ -203,36 +328,30 @@ test('persistLocaleAndReload keeps the choice in ?lang when storage is blocked',
       throw new Error('blocked');
     },
   };
-  assert.equal(
-    persistLocaleAndReload('ru', { location, history, storage }),
-    true,
-  );
+  assert.equal(persistLocale('ru', { location, history, storage }), 'ru');
   assert.deepEqual(calls, [
     ['replace', 'https://gev.local/?x=1&lang=ru#scene=a'],
-    ['reload'],
   ]);
 });
 
-test('persistLocaleAndReload stores the choice, keeps the hash, strips ?lang', () => {
+test('persistLocale stores the choice, keeps the hash, strips ?lang', () => {
   const storage = memoryStorage();
   const calls = [];
-  const location = {
-    href: 'https://gev.local/?lang=en&x=1#scene=a',
-    assign: (url) => calls.push(['assign', url]),
-    reload: () => calls.push(['reload']),
-  };
+  const location = { href: 'https://gev.local/?lang=en&x=1#scene=a' };
   const history = {
     replaceState: (_s, _t, url) => calls.push(['replace', url]),
   };
-  assert.equal(
-    persistLocaleAndReload('ru', { location, history, storage }),
-    true,
-  );
+  assert.equal(persistLocale('ru', { location, history, storage }), 'ru');
   assert.equal(storage.data.get(LOCALE_STORAGE_KEY), 'ru');
-  assert.deepEqual(calls, [
-    ['replace', 'https://gev.local/?x=1#scene=a'],
-    ['reload'],
-  ]);
+  assert.deepEqual(calls, [['replace', 'https://gev.local/?x=1#scene=a']]);
+  // An address without ?lang is left as it is.
+  calls.length = 0;
+  persistLocale('de', {
+    location: { href: 'https://gev.local/#scene=a' },
+    history,
+    storage,
+  });
+  assert.deepEqual(calls, []);
 });
 
 test('tn() shows a caller-formatted count and still picks the form by number', () => {

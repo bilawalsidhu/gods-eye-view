@@ -128,3 +128,28 @@ test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
   assert.match(credit.html, /make no representation as to the accuracy/);
   assert.match(credit.html, /observe posted signage/);
 });
+
+test("the Houston camera credit names TranStar's terms and the permission they require", () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'houston-cctv');
+  assert.ok(credit, 'Houston TranStar camera frames must be credited');
+  assert.match(credit.html, /\(Houston, when enabled\)/);
+  assert.ok(
+    credit.html.includes(
+      'href="https://traffic.houstontranstar.org/disclaimer.aspx"',
+    ),
+  );
+  assert.match(credit.html, /TxDOT's written permission/);
+});
+
+test('every Street Level imagery source is in the attribution lightbox', () => {
+  for (const key of [
+    'mapillary',
+    'google-street-view',
+    'kartaview',
+    'panoramax',
+  ])
+    assert.ok(
+      DATA_CREDITS.some((entry) => entry.key === key),
+      `${key} has no credit`,
+    );
+});

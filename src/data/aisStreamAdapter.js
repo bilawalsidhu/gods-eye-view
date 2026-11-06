@@ -215,7 +215,7 @@ export const AIS_RECOGNIZED_MESSAGE_TYPES = Object.freeze(
  * @param {Object} body
  * @returns {string|null}
  */
-export function aisEnvelopeMmsi(envelope, body = {}) {
+function aisEnvelopeMmsi(envelope, body = {}) {
   const metadata = envelope?.MetaData || envelope?.Metadata || {};
   const raw = metadata.MMSI ?? body.UserID ?? body.UserId ?? body.Mmsi;
   if (raw === null || raw === undefined) return null;

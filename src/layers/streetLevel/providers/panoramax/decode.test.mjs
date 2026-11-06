@@ -6,7 +6,6 @@ import {
   decodePictures,
   simplifyLine,
 } from './decode.js';
-import { OVERVIEW_BINS_PER_AXIS } from './policy.js';
 import { encodePanoramaxTile } from '../../../../testSupport/panoramaxFixtures.mjs';
 import { tileCentre } from '../../../../testSupport/streetLevelFakes.mjs';
 
@@ -42,8 +41,7 @@ test('sequence lines keep their parts apart, with their day and camera type', ()
       },
     ],
   });
-  const { sequences, overview } = decodeCoverageTile(bytes, tile);
-  assert.equal(overview.length, 0);
+  const { sequences } = decodeCoverageTile(bytes, tile);
   assert.equal(sequences.length, 2);
   const pano = sequences.find((s) => s.id === 'pano-seq');
   const flat = sequences.find((s) => s.id === 'flat-seq');
@@ -72,33 +70,13 @@ test('sequence lines keep their parts apart, with their day and camera type', ()
   assert.equal(untyped.isPano, null, 'no camera type: neither');
 });
 
-test('density cells bin to a bounded number of points that keep the counts and kinds', () => {
+test('the density grid is not read: nothing is drawn from orbit', () => {
   const tile = { x: 0, y: 0, z: 0 };
-  // Two cells in one bin (3.75° wide at z0) far enough apart to tell
-  // which it sits on, one far away, one empty.
-  const grid = [
-    { lon: 0.3, lat: 48.85, pano: 0, flat: 5 },
-    { lon: 3.4, lat: 48.85, pano: 30, flat: 0 },
-    { lon: -73.9, lat: 40.7, pano: 1, flat: 0 },
-    { lon: 10, lat: 10, pano: 0, flat: 0 },
-  ];
-  const { overview } = decodeCoverageTile(
-    encodePanoramaxTile(tile, { grid }),
-    tile,
+  const grid = [{ lon: 2.35, lat: 48.85, pano: 3, flat: 5 }];
+  assert.deepEqual(
+    decodeCoverageTile(encodePanoramaxTile(tile, { grid }), tile),
+    { sequences: [] },
   );
-  assert.equal(overview.length, 2, 'Paris cells share a bin; empty cells go');
-  const paris = overview.find((p) => p.lon > 0);
-  assert.equal(paris.weight, 35);
-  assert.equal(paris.hasPano, true);
-  assert.equal(paris.hasFlat, true);
-  assert.equal(paris.isPano, true, 'mostly 360°');
-  assert.equal(paris.capturedAt, null, 'cells are undated');
-  assert.ok(
-    near(paris.lon, 3.4, 0.2),
-    `sits on the busiest cell: ${paris.lon}`,
-  );
-  const nyc = overview.find((p) => p.lon < 0);
-  assert.deepEqual([nyc.hasPano, nyc.hasFlat, nyc.weight], [true, false, 1]);
 });
 
 test('lines come longest first, so a cap on lines drawn drops the shortest', () => {
@@ -121,25 +99,6 @@ test('lines come longest first, so a cap on lines drawn drops the shortest', () 
   assert.deepEqual(
     sequences.map((s) => s.id),
     ['long', 'mid', 'short'],
-  );
-});
-
-test('a dense grid tile never draws more than the bins allow', () => {
-  const tile = { x: 0, y: 0, z: 0 };
-  const grid = [];
-  for (let i = 0; i < 300; i++)
-    for (let j = 0; j < 60; j++)
-      grid.push({ lon: -170 + i * 1.1, lat: -60 + j * 2 });
-  const { overview } = decodeCoverageTile(
-    encodePanoramaxTile(tile, { grid }),
-    tile,
-  );
-  assert.ok(overview.length <= OVERVIEW_BINS_PER_AXIS ** 2);
-  assert.ok(overview.length > 1000);
-  assert.equal(
-    overview.reduce((sum, p) => sum + p.weight, 0),
-    grid.length,
-    'every picture is still counted',
   );
 });
 
@@ -212,7 +171,6 @@ test('an empty tile decodes to nothing', () => {
   for (const bytes of [new Uint8Array(0), null, undefined])
     assert.deepEqual(decodeCoverageTile(bytes, { x: 0, y: 0, z: 0 }), {
       sequences: [],
-      overview: [],
     });
   assert.deepEqual(
     decodePictures(new Uint8Array(0), { x: 0, y: 0, z: 15 }, 's'),

@@ -2,12 +2,13 @@
  * The one adapter from a tool result to what the voice card shows.
  *
  * Most tools carry a card-ready `display` ({title, lines, chips, notes,
- * sources}) from their speech builder. The analyst instead returns semantic
- * fields the engine owns (count, complete, scopeLabel, partial, and a
- * `display` of scope, window and caveat). This module turns those into the
- * card shape so every result renders the same way, and names the numbered
- * referents the card lists (the referent registry reads the same answer, so
- * "the second one" always means the second row on screen).
+ * sources}) from their speech builder. The analyst, area, imagery and OSM
+ * tools instead return semantic fields the engine owns (count, complete,
+ * scopeLabel, needsClarification, candidates, and a `display` of scope,
+ * source, window and caveat). This module turns those into the card shape so
+ * every result renders the same way, and names the numbered referents the
+ * card lists (the referent registry reads the same answer, so "the second
+ * one" always means the second row on screen).
  *
  * What the model receives stays English (`analystHeadline` feeds the spoken
  * answer); the card shows the same answer in the active language.
@@ -16,7 +17,7 @@
  * @module voice/resultDisplay
  */
 
-import { voiceLayer } from './layerManifest.js';
+import { analystNounFor, spokenLabel } from './speech.js';
 import {
   formatDate,
   formatNumber,
@@ -30,17 +31,6 @@ import { layerNameForId, sourceLabel } from '../ui/layerNames.js';
 import { localizePlaceName } from '../ui/placeNames.js';
 import { translateStatusLine } from '../ui/statusText.js';
 import { formatQuantity } from '../ui/unitLabels.js';
-
-const LAYER_NOUNS = Object.freeze({
-  flights: 'aircraft',
-  military: 'military aircraft',
-  'local-adsb': 'aircraft',
-  'ais-live-vessels': 'ships',
-  satellites: 'satellites',
-  'rocket-launches': 'launches',
-  earthquakes: 'earthquakes',
-  'local-firms': 'fires',
-});
 
 /** Split "a; b" caveat text into separate notes. */
 function notesOf(...values) {
@@ -59,19 +49,20 @@ function notesOf(...values) {
   ];
 }
 
-export function analystNounFor(layerKeys) {
-  const keys = [...new Set(layerKeys.filter(Boolean))];
-  if (keys.length !== 1) return 'results';
-  const key = keys[0];
-  return LAYER_NOUNS[key] || voiceLayer(key)?.aliases?.[0] || 'results';
-}
-
 /** The count/scope headline shared by the analyst card and spoken answer. */
 const ANALYST_HEADLINE_MAX = 64;
 // The card's headline wraps, and a translation runs longer than the English:
 // "Al menos 12 aeronaves militares en un radio de 40 km de Los Ángeles" is 67.
 // English keeps the spoken bound, so its card title still equals `say`.
 const SHOWN_HEADLINE_MAX = 120;
+
+/** Area levels in words. */
+const LEVEL_WORDS = Object.freeze({
+  admin1: msg('state or province'),
+  admin2: msg('county or district'),
+  district: msg('neighbourhood'),
+  natural: msg('natural region'),
+});
 
 function boundedHeadline(value, max = ANALYST_HEADLINE_MAX) {
   const text = String(value || '')
@@ -81,15 +72,32 @@ function boundedHeadline(value, max = ANALYST_HEADLINE_MAX) {
   return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
-export function analystHeadline(result) {
-  const keys = (result?.coverage?.layersQueried || []).map(
-    (layer) => layer.layerKey,
-  );
-  const count = Number(result?.count) || 0;
-  const floor = result?.complete === false ? 'At least ' : '';
-  return boundedHeadline(
-    `${floor}${count.toLocaleString('en-US')} ${analystNounFor(keys)} ${result?.scopeLabel || ''}`,
-  );
+/** Candidate lines for a clarification: "1 · Punjab — state or province, India". */
+function candidateLines(candidates) {
+  return (Array.isArray(candidates) ? candidates : []).map((candidate, i) => {
+    const level = candidate?.level
+      ? LEVEL_WORDS[candidate.level]
+        ? t(LEVEL_WORDS[candidate.level])
+        : candidate.level
+      : null;
+    const detail = [level, candidate?.region, candidate?.country]
+      .filter(Boolean)
+      .join(', ');
+    return `${i + 1} · ${spokenLabel(candidate?.name || 'Unnamed', 40)}${detail ? ` — ${detail}` : ''}`;
+  });
+}
+
+function clarification(result, subject) {
+  if (!result?.needsClarification) return null;
+  return {
+    display: {
+      title: subject
+        ? t('Which {place}?', { place: spokenLabel(subject, 40) })
+        : t('Which place?'),
+      lines: candidateLines(result.candidates),
+    },
+    referents: [],
+  };
 }
 
 /* ---------------- the analyst card in the active language ---------------- */
@@ -285,6 +293,14 @@ const FIXED_NOTES = new Map(
     msg(
       'the count is a lower bound because at least one layer reached its retained limit.',
     ),
+    // Area, imagery and OSM card lines (areaActions, imageryActions,
+    // osmActions); the model gets the English.
+    msg('buffer sized to the place'),
+    msg('enclosing mapped area'),
+    msg('the map was cleared while looking it up'),
+    msg('OpenStreetMap coverage varies by place'),
+    msg('the catalog covers the last 30 days'),
+    msg('there are more'),
   ].map((text) => [text, text]),
 );
 
@@ -294,7 +310,58 @@ const LAYER_STATUS_NOTES = Object.freeze({
   error: (label) => t('{label} error', { label }),
 });
 
+const countOf = (text) => Number(String(text).replace(/,/g, ''));
+
 const NOTE_PATTERNS = [
+  [
+    /^([\d,]+) m around the landmark$/,
+    ([, radius]) =>
+      t('{radius} m around the landmark', {
+        radius: formatNumber(countOf(radius)),
+      }),
+  ],
+  [
+    /^([\d,]+) parts$/,
+    ([, n]) =>
+      tn(countOf(n), '{count} part', '{count} parts', {
+        count: formatNumber(countOf(n)),
+      }),
+  ],
+  [
+    /^([\d,]+) of ([\d,]+) parts drawn$/,
+    ([, drawn, total]) =>
+      tn(
+        countOf(total),
+        '{drawn} of {total} part drawn',
+        '{drawn} of {total} parts drawn',
+        {
+          drawn: formatNumber(countOf(drawn)),
+          total: formatNumber(countOf(total)),
+        },
+      ),
+  ],
+  [
+    /^([\d,]+) duplicate mappings merged$/,
+    ([, n]) =>
+      tn(
+        countOf(n),
+        '{count} duplicate mapping merged',
+        '{count} duplicate mappings merged',
+        { count: formatNumber(countOf(n)) },
+      ),
+  ],
+  [
+    /^listed the first ([\d,]+)$/,
+    ([, limit]) =>
+      t('listed the first {limit}', { limit: formatNumber(countOf(limit)) }),
+  ],
+  [
+    /^counted over the bounding box of (.+), not its outline$/,
+    ([, area]) =>
+      t('counted over the bounding box of {area}, not its outline', {
+        area: spokenLabel(area, 48),
+      }),
+  ],
   [
     /^counted the first ([\d,]+) loaded records$/,
     ([, returned]) =>
@@ -365,6 +432,11 @@ const NOTE_PATTERNS = [
   ],
 ];
 
+/** A card line from a producer's English text, or null when absent. */
+function shownLine(text) {
+  return text ? shownNote(String(text)) : null;
+}
+
 function shownNote(text) {
   if (FIXED_NOTES.has(text)) return t(FIXED_NOTES.get(text));
   for (const [pattern, show] of NOTE_PATTERNS) {
@@ -393,8 +465,9 @@ function shownFeedState(state) {
   return key ? t(key) : state;
 }
 
-function analystCard(result) {
-  if (!result?.ok) return null;
+function analystCard(result, args = {}) {
+  if (!result?.ok)
+    return clarification(result, result?.query || args?.scope?.name);
   const display = result.display || {};
   const unanswered = Array.isArray(result.unanswered) ? result.unanswered : [];
   const provenance = result.feedProvenance || result.coverage?.feedProvenance;
@@ -422,7 +495,10 @@ function analystCard(result) {
         ...(result.feedState && result.feedState !== 'nominal'
           ? [{ label: shownFeedState(result.feedState) }]
           : []),
-        ...(result.partial ? [{ label: t('partial') }] : []),
+        // A partial feed state already says it.
+        ...(result.partial && result.feedState !== 'partial'
+          ? [{ label: t('partial') }]
+          : []),
       ],
       // Coverage qualifications lead the feed detail. The bounded card groups
       // overflow in its existing Notes disclosure rather than dropping them.
@@ -444,16 +520,132 @@ function analystCard(result) {
   };
 }
 
+function areaCard(result, args = {}) {
+  if (!result?.ok) return clarification(result, result?.query || args.query);
+  const display = result.display || {};
+  const km2 = Number(result.areaKm2);
+  return {
+    display: {
+      title: `${result.name ? spokenLabel(result.name, 48) : t('Area', { context: 'voice area' })}${result.country ? `, ${spokenLabel(result.country, 24)}` : ''}`,
+      lines: [
+        Number.isFinite(km2) && km2 > 0 ? `${formatNumber(km2)} km²` : null,
+        shownLine(display.basis),
+        shownLine(display.parts),
+        shownLine(display.drawnParts),
+        result.notDrawn
+          ? t('Not drawn: {parts}', { parts: shownNote(result.notDrawn) })
+          : null,
+      ].filter(Boolean),
+      chips: [
+        ...(result.approximate ? [{ label: t('approximate') }] : []),
+        ...(result.partial ? [{ label: shownFeedState('partial') }] : []),
+      ],
+      notes: notesOf(display.caveat).map(shownNote),
+      sources: display.source ? [{ label: display.source }] : [],
+    },
+    referents: [],
+  };
+}
+
+const capitalized = (text) =>
+  text
+    ? `${String(text).charAt(0).toUpperCase()}${String(text).slice(1)}`
+    : null;
+
+function imageryCard(result) {
+  if (!result?.ok) return null;
+  const display = result.display || {};
+  const shown = result.shown;
+  const lines = shown
+    ? [
+        shown.cloudPct !== null && shown.cloudPct !== undefined
+          ? t('{pct}% cloud', { pct: formatNumber(shown.cloudPct) })
+          : null,
+        result.area
+          ? t('Over {area}', { area: spokenLabel(result.area, 48) })
+          : null,
+        tn(
+          Number(result.total) || 0,
+          '{count} of {total} acquisitions match',
+          '{count} of {total} acquisitions match',
+          {
+            count: formatNumber(Number(result.count) || 0),
+            total: formatNumber(Number(result.total) || 0),
+          },
+        ),
+        capitalized(shownLine(display.window)),
+      ]
+    : [
+        tn(
+          Number(result.total) || 0,
+          '{n} acquisitions searched',
+          '{n} acquisitions searched',
+          { n: formatNumber(Number(result.total) || 0) },
+        ),
+        capitalized(shownLine(display.window)),
+      ];
+  return {
+    display: {
+      title: shown
+        ? `${spokenLabel(shown.source, 32)} · ${shown.date}`
+        : t('No matching imagery'),
+      lines: lines.filter(Boolean),
+      chips:
+        shown && !shown.onMap ? [{ label: shownFeedState('loading') }] : [],
+      notes: notesOf(display.caveat).map(shownNote),
+    },
+    referents: [],
+  };
+}
+
+function osmCard(result) {
+  if (!result?.ok) return null;
+  const display = result.display || {};
+  const count = Number(result.count);
+  // The kind is the preset's English noun, the model's data; one place takes
+  // its singular ("1 hospital").
+  const kind = spokenLabel(
+    (count === 1 && result.kindSingular) || result.kind || 'places',
+    32,
+  );
+  const values = { count: formatNumber(count), kind };
+  const title = !Number.isFinite(count)
+    ? t('Unknown number of {kind}', { kind })
+    : result.countScope === 'bounding-box'
+      ? t('About {count} {kind}', values)
+      : result.complete === false
+        ? t('At least {count} {kind}', values)
+        : t('{count} {kind}', values);
+  return {
+    display: {
+      title,
+      lines: [
+        result.area
+          ? t('In {area}', { area: spokenLabel(result.area, 48) })
+          : null,
+        shownLine(display.merged),
+      ].filter(Boolean),
+      notes: notesOf(display.caveat).map(shownNote),
+      sources: display.source ? [{ label: display.source }] : [],
+    },
+    referents: Array.isArray(result.referents) ? result.referents : [],
+    resultSet: true,
+  };
+}
+
 const ADAPTERS = Object.freeze({
   analyst_query: analystCard,
+  resolve_area: areaCard,
+  find_imagery: imageryCard,
+  osm_query: osmCard,
 });
 
 /**
  * What the card shows for one result, or null when it shows nothing (a
- * silent lookup, a refusal, a cancelled call).
+ * silent lookup, a refusal without a question, a cancelled call).
  * @param {string} name Tool name.
  * @param {object} result Tool result as the model received it.
- * @param {object} [args] Tool arguments.
+ * @param {object} [args] Tool arguments (names a clarification's subject).
  * @returns {{display: object, referents: Array<object>, resultSet?: boolean}|null}
  *   `resultSet` marks a fresh answer set that replaces the numbered list
  *   even when empty.

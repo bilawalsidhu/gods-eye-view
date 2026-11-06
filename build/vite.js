@@ -1,8 +1,55 @@
-import { applicationHtmlPlugin } from './application-html.js';
+import { fileURLToPath } from 'node:url';
 import cesium from 'vite-plugin-cesium';
+import vue from '@vitejs/plugin-vue';
+import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
+
+/**
+ * The repository root (this file lives at `<root>/build/vite.js`), as a
+ * forward-slash path for glob matching. Vite's `fs.deny` patterns are
+ * matched against the full absolute file path, and a bare `**\/dist/**`
+ * matches a `dist` directory at *any* depth — including dependencies that
+ * ship their own, such as `node_modules/vite/dist/client/client.mjs` (the
+ * dev client itself). Anchoring to this repository's root denies only the
+ * project's own build output.
+ */
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+  .replace(/\\/g, '/')
+  .replace(/\/$/, '');
+
+export function escapeFsDenyPath(path) {
+  return path.replace(/[()[\]{}*?!+@|]/g, '\\$&');
+}
+
+const REPO_ROOT_GLOB = escapeFsDenyPath(REPO_ROOT);
+
+/**
+ * Browser-safe form of the optional Photon endpoint build input. Only https
+ * is accepted: the page's connect-src allows no plain-http origin, so an
+ * http endpoint would only fail later, silently, in the browser.
+ */
+function photonEndpointSetting(value) {
+  if (value === undefined) return undefined;
+  const text = String(value ?? '').trim();
+  if (!text || ['off', 'none', 'disabled'].includes(text.toLowerCase()))
+    return null;
+  try {
+    const url = new URL(text);
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    )
+      return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
@@ -47,24 +94,98 @@ export const BROWSER_HEADERS = Object.freeze({
   'X-Content-Type-Options': 'nosniff',
 });
 
+/**
+ * Content-Security-Policy for every `/api` response. API routes return data,
+ * never a document, so a response opened directly in a tab gets no origin and
+ * can load nothing.
+ */
+export const API_CSP = "default-src 'none'; sandbox";
+
+/** Response headers every `/api` response carries. */
+export const API_HEADERS = Object.freeze({
+  'Content-Security-Policy': API_CSP,
+  'X-Content-Type-Options': 'nosniff',
+});
+
+/**
+ * Whether a request reaches an `/api` mount, by the router's own rule: the
+ * prefix compared without case and followed by the end, `/` or `.`. The router
+ * reads an absolute-form target's path without resolving dot segments, so the
+ * path is taken here the same way (scheme and authority dropped, backslashes as
+ * slashes), alongside the raw and the fully parsed path; any match counts.
+ */
+function isApiPath(url) {
+  const raw = String(url || '/');
+  const target = raw
+    .trim()
+    .split(/[?#]/, 1)[0]
+    .replace(/\\/g, '/')
+    .replace(/^[a-z][a-z0-9+.-]*:(?:\/\/[^/]*)?/i, '');
+  let parsed = '';
+  try {
+    parsed = new URL(raw, 'http://localhost').pathname;
+  } catch {
+    /* the unparsed paths still decide */
+  }
+  return [raw.split(/[?#]/, 1)[0], target, parsed].some((path) =>
+    /^\/api(?:$|[/.])/i.test(path),
+  );
+}
+
+/**
+ * Vite plugin that sets API_HEADERS on every API response before any other
+ * middleware runs, so success, error, partial, refused and unknown-route
+ * answers all carry them. Vite's `server.headers` and `preview.headers` only
+ * reach the documents and assets Vite serves itself. A route may still add
+ * headers; a route's own Content-Security-Policy is sent as an additional
+ * policy, which can only restrict further, never replace this one.
+ */
+export function apiResponseHeadersPlugin() {
+  const install = (server) => {
+    server.middlewares.use((req, res, next) => {
+      if (!isApiPath(req.url)) return next();
+      for (const [name, value] of Object.entries(API_HEADERS))
+        res.setHeader(name, value);
+      const setHeader = res.setHeader.bind(res);
+      res.setHeader = (name, value) =>
+        String(name).toLowerCase() === 'content-security-policy' &&
+        String(value) !== API_CSP
+          ? setHeader(name, `${API_CSP}, ${value}`)
+          : setHeader(name, value);
+      next();
+    });
+  };
+  return {
+    name: 'api-response-headers',
+    enforce: 'pre',
+    configureServer: install,
+    configurePreviewServer: install,
+  };
+}
+
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
   plugins = [],
   publicDir,
   googleApiKey,
   cesiumToken,
+  photonUrl,
   mapillaryToken,
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
   command,
 } = {}) {
+  const photonSetting = photonEndpointSetting(photonUrl);
   return {
     plugins: [
-      // First, so no provider route answers a Host the server does not allow.
+      // First, so every API response, including a Host refusal, carries them.
+      apiResponseHeadersPlugin(),
+      // Next, so no provider route answers a Host the server does not allow.
       hostCheckPlugin(),
       cesium(),
-      applicationHtmlPlugin(),
+      // Application views are Vue single-file components.
+      vue(VUE_PLUGIN_OPTIONS),
       ...plugins,
       embedFramingPlugin(),
       panelBuildPlugin(),
@@ -94,7 +215,19 @@ export function createBrowserViteConfig({
       // build/allowedHosts.js); IP addresses are always accepted.
       allowedHosts: [...allowedHosts],
       fs: {
-        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
+        deny: [
+          '.env',
+          '.env.*',
+          '*.{crt,pem}',
+          '**/.git/**',
+          '**/ENVIRONMENT',
+          '**/.gev-logs/**',
+          '**/.gev-cache/**',
+          // Root-anchored: a bare '**/dist/**' would also deny every
+          // dependency's own dist/ (e.g. node_modules/vite/dist/client),
+          // breaking /@vite/client and other dev-client assets.
+          `${REPO_ROOT_GLOB}/dist/**`,
+        ],
       },
       // These headers protect the document containing Provider Settings and
       // give the whole page a real Content-Security-Policy (BROWSER_CSP).
@@ -106,8 +239,20 @@ export function createBrowserViteConfig({
     // framing + CSP hardening (one constant, no drift).
     preview: { headers: BROWSER_HEADERS },
     define: {
+      // vue-i18n holds the locale and catalogs; Core formats the messages
+      // (src/ui/i18n.js), so the build drops vue-i18n's message compiler.
+      __VUE_I18N_FULL_INSTALL__: 'false',
+      __VUE_I18N_LEGACY_API__: 'false',
+      __INTLIFY_PROD_DEVTOOLS__: 'false',
+      __INTLIFY_DROP_MESSAGE_COMPILER__: 'true',
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      // Only expose a validated URL or the explicit disabled sentinel.
+      ...(photonSetting === undefined
+        ? {}
+        : {
+            'import.meta.env.PHOTON_URL': JSON.stringify(photonSetting),
+          }),
       // Mapillary client tokens are public by design (see SECURITY.md).
       'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
         mapillaryToken ?? '',
