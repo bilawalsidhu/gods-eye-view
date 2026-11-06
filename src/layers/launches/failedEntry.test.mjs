@@ -17,6 +17,7 @@ import { createIngestion } from './ingestion.js';
 import { createPanel } from './panel.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
+import { createReplay } from './replay.js';
 
 const noop = () => {};
 
@@ -81,6 +82,7 @@ function fakeCamera() {
       camera.flight = null;
       flight?.cancel?.();
     },
+    lookAtTransform: noop,
     setView({ destination, orientation }) {
       camera.position = Cesium.Cartesian3.clone(destination);
       camera.heading = orientation.heading;
@@ -144,8 +146,8 @@ async function fixture(t) {
       clearMissionOverlaySources: noop,
       hideReplayVehicleOverlay: noop,
       destroyReplayVehicleOverlay: noop,
+      syncMissionOverlayEntries: noop,
     },
-    replay: { stopMissionReplay: noop, presentReplay: () => null },
     selection: {
       focusFullGlobe(target, flight) {
         target.camera.flyTo({
@@ -182,6 +184,7 @@ async function fixture(t) {
   parts.policyHelpers = createPolicyHelpers(context);
   parts.model = createModel(context);
   parts.panel = createPanel(context);
+  parts.replay = createReplay(context);
   parts.ingestion = createIngestion(context);
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
@@ -372,13 +375,24 @@ test('a navigation during a failed first load is not cancelled by the rollback',
   await untilFlown(f);
   // Search or Home: navigation releases mission camera ownership, then flies.
   f.missions.releaseCameraOwnership();
-  f.camera.flyTo({ destination: new Cesium.Cartesian3(5, 5, 5) });
+  let navigationCancelled = false;
+  f.camera.flyTo({
+    destination: new Cesium.Cartesian3(5, 5, 5),
+    cancel: () => {
+      navigationCancelled = true;
+    },
+  });
   const cancelled = f.camera.cancelled;
   const navigated = f.view();
 
   release();
   assert.equal(await entering, false);
   await f.settle();
+  assert.equal(
+    navigationCancelled,
+    false,
+    'the rollback does not cancel the Search/Home flight',
+  );
   assert.equal(f.camera.cancelled, cancelled);
   assert.deepEqual(f.view(), navigated);
 });
