@@ -367,6 +367,9 @@ test('15 concurrent different cameras are bounded by eight pending slots', async
   release();
   const results = await Promise.all(promises);
   assert.equal(results.filter((result) => result?.ok).length, 8);
-  assert.equal(results.filter((result) => result === STREET_VIEW_DEFERRED).length, 7);
+  assert.equal(
+    results.filter((result) => result === STREET_VIEW_DEFERRED).length,
+    7,
+  );
   assert.equal(calls, 8);
 });
