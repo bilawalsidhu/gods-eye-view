@@ -1,8 +1,7 @@
 // The real manager, Context coordinator and launches ingestion run against a
-// local /api/launches, so a failed first load takes the browser's path.
+// stubbed /api/launches, so a failed first load takes the browser's path.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
 import * as Cesium from 'cesium';
 import { DataLayerManager } from '../../data/manager.js';
 import { ContextControls } from '../../ui/contextControls.js';
@@ -92,24 +91,15 @@ function fakeCamera() {
 
 async function fixture(t) {
   const upstream = { status: 429, results: [launchRecord] };
-  const server = http.createServer(async (req, res) => {
-    if (req.url === '/api/celestrak/active') {
-      res.end('');
-      return;
-    }
-    if (upstream.hold) await upstream.hold;
-    if (upstream.status !== 200) {
-      res.writeHead(upstream.status, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Launch Library 2 unavailable' }));
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ results: upstream.results }));
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const origin = `http://127.0.0.1:${server.address().port}`;
   const source = createLaunchSource({
-    fetchImpl: (url, options) => fetch(new URL(url, origin), options),
+    async fetchImpl(url) {
+      if (url === '/api/celestrak/active') return new Response('');
+      if (upstream.hold) await upstream.hold;
+      return Response.json(
+        upstream.status === 200 ? { results: upstream.results } : {},
+        { status: upstream.status },
+      );
+    },
   });
 
   const services = {
@@ -200,14 +190,13 @@ async function fixture(t) {
   manager.register(missions);
   missions.attachDataManager(manager);
 
-  const toasts = [];
   const controls = new ContextControls({
     elements: {},
     installations: {},
     actions: {
       getCockpit: () => null,
       claimVisualAuthority: noop,
-      showToast: (message) => toasts.push(message),
+      showToast: noop,
       setClearBusy: noop,
       syncDetection: noop,
       scheduleLayout: noop,
@@ -223,8 +212,6 @@ async function fixture(t) {
     for (const id of ['rocket-launches', 'satellites', 'earthquakes', 'wind'])
       await manager.setEnabled(id, false);
     await missions.destroy(viewer);
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
   });
 
   const enabledIds = () => [...manager.getEnabledLayerIds()].sort();
@@ -249,56 +236,46 @@ async function fixture(t) {
     state,
     camera,
     rosters,
-    toasts,
     enabledIds,
     view,
     settle,
   };
 }
 
-test('a direct Space Missions entry that gets HTTP 429 rolls back instead of isolating', async (t) => {
-  const f = await fixture(t);
-  assert.equal(
-    await f.manager.setEnabled('earthquakes', true, { origin: 'user' }),
-    true,
-  );
-  const before = f.view();
+const entries = {
+  direct: (f) =>
+    f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+  'Context-panel': async (f) =>
+    (
+      await f.controls.setContextMode('space-missions', {
+        claimVisualAuthority: false,
+      })
+    ).ok,
+};
 
-  const entered = await f.manager.setEnabled('rocket-launches', true, {
-    origin: 'user',
+for (const [path, enter] of Object.entries(entries))
+  test(`a ${path} Space Missions entry that gets HTTP 429 rolls back instead of isolating`, async (t) => {
+    const f = await fixture(t);
+    await f.manager.setEnabled('earthquakes', true, { origin: 'user' });
+    const before = f.view();
+
+    const entered = await enter(f);
+    await f.settle();
+
+    assert.equal(entered, false, 'a failed mission index fails the enable');
+    assert.deepEqual(f.enabledIds(), ['earthquakes']);
+    assert.equal(f.controls.getContextModeState().mode, null);
+    assert.equal(f.controls.getContextModeState().active, false);
+    assert.equal(f.missions.getStats().error, 'HTTP 429');
+    assert.deepEqual(f.view(), before, 'the pre-entry view comes back');
+    assert.ok(f.camera.cancelled > 0, 'the full-globe flight is cancelled');
+
+    assert.equal(
+      await f.manager.setEnabled('wind', true, { origin: 'user' }),
+      true,
+      'an unrelated layer is not blocked after the failed entry',
+    );
   });
-  await f.settle();
-
-  assert.equal(entered, false, 'a failed mission index fails the enable');
-  assert.deepEqual(f.enabledIds(), ['earthquakes']);
-  assert.equal(f.controls.getContextModeState().mode, null);
-  assert.equal(f.controls.getContextModeState().active, false);
-  assert.equal(f.missions.getStats().error, 'HTTP 429');
-  assert.deepEqual(f.view(), before, 'the pre-entry view comes back');
-  assert.ok(f.camera.cancelled > 0, 'the full-globe flight is cancelled');
-
-  assert.equal(
-    await f.manager.setEnabled('wind', true, { origin: 'user' }),
-    true,
-    'an unrelated layer is not blocked after the failed entry',
-  );
-});
-
-test('a Context-panel Space Missions entry that gets HTTP 429 restores the previous layers', async (t) => {
-  const f = await fixture(t);
-  await f.manager.setEnabled('earthquakes', true, { origin: 'user' });
-  const before = f.view();
-
-  const result = await f.controls.setContextMode('space-missions', {
-    claimVisualAuthority: false,
-  });
-  await f.settle();
-
-  assert.equal(result.ok, false);
-  assert.deepEqual(f.enabledIds(), ['earthquakes']);
-  assert.equal(f.controls.getContextModeState().mode, null);
-  assert.deepEqual(f.view(), before);
-});
 
 // Holds the /api/launches reply until the returned release is called.
 function holdReply(f) {
