@@ -65,6 +65,59 @@ settling. Oblique views below 300 km are left alone.
 `QA_BASE_URL=http://localhost:4173 node scripts/qa-zoom-out-guard.mjs` exercises
 the real browser controller at desktop and phone widths with keyless fixtures.
 
+Cesium's free look (Shift+drag, which turns the camera in place) works only
+below 1,000 km. Above that height a few drags could turn the whole planet out of
+frame and leave only stars, so Shift+drag does nothing there. Cesium also turns
+the camera in place for a drag that starts on the stars below its trackball
+height (7,500 km by default); that height is lowered to 1,000 km, so such a drag
+orbits the globe above it, as it does higher up, and a tilt (drag or touch)
+while the screen centre is on the stars there tilts about the planet's edge or
+does nothing, wherever it starts. Rotation drags that start on the planet, and
+zoom, are unchanged. How much of the frame shows the planet's surface is
+measured by casting a 32×18 grid of view rays at the ellipsoid; while the scope
+mask is on (the default) only the rays inside its keyhole count, since the mask
+hides or dims the rest. Voice tilt and in-place turns of a free 3D camera above
+1,000 km stop when about a tenth of the frame still shows the surface (or about
+as much as it showed when it started), never less than about 1% of the visible
+frame, and a view that already shows less only keeps or gains what it has. A
+turn that cannot go half a degree further without crossing that limit is refused
+with a reason instead of reported as done, and a turn it accepts turns at least
+that half degree. A voice tilt to an angle (or a bare tilt, to -45°) that the
+limit stops short of is aimed at the angle where it stops, and its result names
+that angle (`pitchDeg`) with a `note`. A turn that keeps or gains surface is not refused, even after
+the window has been resized, except that near the limit, where the planet's edge
+crosses the sample grid, sampling wobble can occasionally refuse one (most often
+above about 15,000 km and on phone or ultrawide frames); nothing then turns away
+from the planet. A turn that starts where the last voice turn left the camera
+keeps that turn's limit, or a higher one if the planet now fills more, so
+repeating the request does not take any more; once anything else has moved or
+turned the camera, a turn is measured from what is on screen. When a camera move
+ends above 1,000 km with no ray on the surface, the camera turns straight down
+at the same position and heading. The end of a move is taken from Cesium's
+move-end event and from a check of its own that samples the pose every 250 ms
+after a move starts and acts once it has held for half a second, because at some
+of these poses the camera drifts by a rounding error every frame and Cesium
+never sees it stop. That check keeps watching until move-end arrives, recovering
+once after each move that comes to rest, and gives up five minutes after the
+camera last moved. Limb glow, and a surface sliver up to about one grid cell
+thick (some 50 px on a 900 px tall frame), can count as out of view. The
+zoom-out guard above keeps wheel and pinch zoom-outs in view; this catches the
+other ways a move can end looking away, such as a saved or shared view that did.
+Views with more surface than that, such as the oblique orbital Director shots,
+are left as they are, and so are tracked or locked cameras, a camera flight in
+progress, a Director scene while it plays (holds included), a pointer held
+down on the globe (a drag held still; with several fingers down, until the
+last is released) and the 2D and Columbus modes; a check a flight, scene or
+held pointer defers runs once it ends. A release outside the window that the
+page never sees counts as given once the window loses focus, the page is
+hidden, the canvas loses the pointer's capture, or the pointer moves with no
+button down. A Director
+shot loaded or replayed outside a run is not a playing scene. A view that loses
+its surface without a camera move (a resize, or turning the scope on) is left as
+it is until the next move. A voice turn requested while the camera is tracked is
+judged by the pose voice's release of the follow camera will leave, before that
+release, so a refused turn keeps the tracking.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
