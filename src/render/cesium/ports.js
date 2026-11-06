@@ -12,7 +12,13 @@
  */
 import * as Cesium from 'cesium';
 import { heightsFor } from '../../queries/heights.js';
-import { billboardLoadError } from './internals.js';
+import {
+  atEndOfTick,
+  billboardLoadError,
+  lastRenderTime,
+  lastSeenCamera,
+  renderPending,
+} from './internals.js';
 
 /** The contract's colour as Cesium's. */
 export function toColor(color, alpha = 1) {
@@ -46,6 +52,52 @@ const ANCHORS = {
   top: Cesium.VerticalOrigin.TOP,
 };
 
+const scratchPosition0 = new Cesium.Cartesian3();
+const scratchPosition1 = new Cesium.Cartesian3();
+
+/** Cesium's own test (`View.js`) for whether the camera moved. */
+function cameraEqual(camera0, camera1, epsilon) {
+  const maximumPositionComponent = Math.max(
+    Cesium.Cartesian3.maximumComponent(
+      Cesium.Cartesian3.abs(camera0.position, scratchPosition0),
+    ),
+    Cesium.Cartesian3.maximumComponent(
+      Cesium.Cartesian3.abs(camera1.position, scratchPosition1),
+    ),
+  );
+  const scalar = 1 / Math.max(1, maximumPositionComponent);
+  Cesium.Cartesian3.multiplyByScalar(
+    camera0.position,
+    scalar,
+    scratchPosition0,
+  );
+  Cesium.Cartesian3.multiplyByScalar(
+    camera1.position,
+    scalar,
+    scratchPosition1,
+  );
+  return (
+    Cesium.Cartesian3.equalsEpsilon(
+      scratchPosition0,
+      scratchPosition1,
+      epsilon,
+    ) &&
+    Cesium.Cartesian3.equalsEpsilon(
+      camera0.direction,
+      camera1.direction,
+      epsilon,
+    ) &&
+    Cesium.Cartesian3.equalsEpsilon(camera0.up, camera1.up, epsilon) &&
+    Cesium.Cartesian3.equalsEpsilon(camera0.right, camera1.right, epsilon) &&
+    Cesium.Matrix4.equalsEpsilon(
+      camera0.transform,
+      camera1.transform,
+      epsilon,
+    ) &&
+    camera0.frustum.equalsEpsilon(camera1.frustum, epsilon)
+  );
+}
+
 /**
  * What a Cesium scene can do, as contract capabilities; `only` limits them
  * to those it lists. Depth picks, height samples and ray casts all need
@@ -76,11 +128,27 @@ export function createCesiumPorts(widget, { capabilities }) {
 
   const frameListeners = { preUpdate: [], preRender: [], postRender: [] };
   let frames = 0;
+  let rendered = 0;
   // Every tick raises preUpdate, drawn or not; the phases of a tick share
   // its clock reading. The first tick counts from when the loop was made.
   let tickNow = performance.now();
   let dt = 0;
+  // The preUpdate FrameTime of the tick under way: its `rendering` reads
+  // live until the tick has drawn or not, then holds that answer.
+  let liveTick = null;
+  const settleTick = (drawn) => {
+    if (liveTick)
+      Object.defineProperty(liveTick, 'rendering', {
+        value: drawn,
+        enumerable: true,
+      });
+    liveTick = null;
+  };
   const tick = () => {
+    settleTick(false);
+    // A tick that does not draw settles at its end; one that does, at
+    // preRender, before this runs.
+    atEndOfTick(scene, () => void settleTick(false));
     const now = performance.now();
     dt = (now - tickNow) / 1000;
     tickNow = now;
@@ -95,17 +163,78 @@ export function createCesiumPorts(widget, { capabilities }) {
       ).getTime(),
       now: tickNow,
       dt,
-      rendering: phase !== 'preUpdate',
+      rendering: true,
     };
+    // At preUpdate, Cesium has not decided yet: this applies its test when
+    // read, so it counts what earlier listeners did (a camera move, a
+    // request, a hold) but not what later ones will.
+    if (phase === 'preUpdate') {
+      Object.defineProperty(t, 'rendering', {
+        enumerable: true,
+        configurable: true,
+        get: () => willDraw(time),
+      });
+      liveTick = t;
+    }
     for (const cb of frameListeners[phase].slice()) cb(t);
+  };
+  // Reasons given before a frame starts drawing are answered by it; one
+  // given while it draws waits for the next, as Cesium's own request does.
+  const pendingReasons = [];
+  let answering = 0;
+  const drawing = () => {
+    settleTick(true);
+    answering = pendingReasons.length;
+  };
+  const drew = () => {
+    rendered += 1;
+    pendingReasons.splice(0, answering);
+    answering = 0;
   };
   let disposed = false;
   const removers = [
     scene.preUpdate.addEventListener(tick),
     scene.preUpdate.addEventListener(onPhase('preUpdate')),
+    scene.preRender.addEventListener(drawing),
     scene.preRender.addEventListener(onPhase('preRender')),
+    scene.postRender.addEventListener(drew),
     scene.postRender.addEventListener(onPhase('postRender')),
   ];
+
+  /**
+   * Whether this tick draws: the test `Scene.render` makes just after
+   * `preUpdate`, made here so `preUpdate` can say. Not seen: a request made
+   * in between, by a `camera.moveEnd` listener (Cesium raises it there); no
+   * Core listener does that, and the answer is corrected at preRender.
+   */
+  function willDraw(time) {
+    if (!scene.requestRenderMode || renderPending(scene)) return true;
+    if (scene.mode === Cesium.SceneMode.MORPHING) return true;
+    const seen = lastSeenCamera(scene);
+    if (!seen || !cameraEqual(camera, seen, Cesium.Math.EPSILON15)) return true;
+    const last = lastRenderTime(scene);
+    const max = scene.maximumRenderTimeChange;
+    return (
+      last !== undefined &&
+      max !== undefined &&
+      Math.abs(
+        Cesium.JulianDate.secondsDifference(
+          last,
+          time ?? Cesium.JulianDate.now(),
+        ),
+      ) > max
+    );
+  }
+
+  // Holds keep the loop drawing every frame; counted per reason.
+  const holds = new Map();
+  function applyHolds() {
+    const continuous = holds.size > 0;
+    if (scene.requestRenderMode === !continuous) return;
+    scene.requestRenderMode = !continuous;
+  }
+  let suspended = false;
+  let targetFps = 0;
 
   // Pending one-shot renders; disposal settles them rather than leave them
   // attached to a scene that will not render again.
@@ -142,9 +271,55 @@ export function createCesiumPorts(widget, { capabilities }) {
         if (i >= 0) frameListeners[phase].splice(i, 1);
       };
     },
-    requestRender: () => scene.requestRender(),
-    renderNow: () => scene.render(widget.clock.currentTime),
+    requestRender(reason = 'unspecified') {
+      // During a draw the reasons it answers are spoken for: a reason given
+      // again waits for the next frame.
+      if (!pendingReasons.includes(reason, answering))
+        pendingReasons.push(reason);
+      scene.requestRender();
+    },
+    holdContinuous(reason) {
+      holds.set(reason, (holds.get(reason) ?? 0) + 1);
+      applyHolds();
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        const left = holds.get(reason) - 1;
+        if (left > 0) holds.set(reason, left);
+        else holds.delete(reason);
+        applyHolds();
+        // What changed in the last held frame still gets drawn.
+        if (holds.size === 0) scene.requestRender();
+      };
+    },
+    /** Cesium can idle, so it draws on demand. */
+    mode: () => 'demand',
+    diagnostics: () => ({
+      mode: 'demand',
+      frames,
+      rendered,
+      pendingReasons: [...pendingReasons],
+      holds: [...holds].flatMap(([reason, n]) => Array(n).fill(reason)),
+      suspended,
+      targetFps,
+    }),
+    suspend(hidden) {
+      if (Boolean(hidden) === suspended) return;
+      suspended = Boolean(hidden);
+      // The loop's queued callback sees the flag and stops without a tick.
+      // The latch stays as Cesium keeps it: a resume before that callback
+      // runs keeps the one loop rather than start a second.
+      widget.useDefaultRenderLoop = !suspended;
+      if (!suspended) scene.requestRender();
+    },
+    // Draws even when nothing asked for a frame.
+    renderNow: () => scene.forceRender(widget.clock.currentTime),
     renderOnce: (options) => nextPostRender(options),
+    setTargetFps(fps) {
+      targetFps = fps > 0 ? fps : 0;
+      widget.targetFrameRate = targetFps || undefined;
+    },
     time: () => Cesium.JulianDate.toDate(widget.clock.currentTime).getTime(),
   };
 
@@ -923,6 +1098,8 @@ export function createCesiumPorts(widget, { capabilities }) {
     /** Detach from the scene; the widget's owner destroys the widget. */
     dispose() {
       disposed = true;
+      // The tick under way is no longer seen through: it is not claimed.
+      settleTick(false);
       for (const off of removers) off();
       for (const done of [...pendingRenders]) done();
       // Late model loads find no host and destroy themselves.

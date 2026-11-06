@@ -67,6 +67,71 @@ export function closeRenderLoopLatch(viewer) {
 }
 
 /**
+ * Whether the scene has a render pending that its next tick will draw in
+ * request-render mode: a request, or a depth-buffer or HDR change. With
+ * `cameraMovedSinceRender` and the time check, this is the test
+ * `Scene.render` makes after `preUpdate`, so the frame port can say at
+ * `preUpdate` whether the tick draws.
+ * @param {object} scene Cesium Scene.
+ * @returns {boolean}
+ */
+export function renderPending(scene) {
+  return Boolean(
+    scene._renderRequested || scene._logDepthBufferDirty || scene._hdrDirty,
+  );
+}
+
+/**
+ * Calls `cb` each time Cesium completes a request or a worker task, in any
+ * scene. A scene redraws on its own after each (its `requestRenderAfterFrame`
+ * listeners): a terrain picker build after the camera moves, say, which no
+ * loading flag shows. `whenSettled` uses it to tell when that work has
+ * stopped. Both events are marked private.
+ * @param {{RequestScheduler: object, TaskProcessor: object}} cesium The
+ *   Cesium namespace.
+ * @param {() => void} cb
+ * @returns {() => void} Removes the listeners.
+ */
+export function onEngineWorkCompleted({ RequestScheduler, TaskProcessor }, cb) {
+  const offs = [
+    RequestScheduler.requestCompletedEvent.addEventListener(() => cb()),
+    TaskProcessor.taskCompletedEvent.addEventListener(() => cb()),
+  ];
+  return () => offs.forEach((off) => off());
+}
+
+/**
+ * Runs `fn` at the end of the scene's current tick, drawn or not: Cesium's
+ * after-render queue, which every `Scene.render` empties after its draw (if
+ * any) and before `postRender`. `fn` must return nothing; a truthy return
+ * asks for another frame.
+ * @param {object} scene Cesium Scene.
+ * @param {() => void} fn
+ */
+export function atEndOfTick(scene, fn) {
+  scene._frameState.afterRender.push(fn);
+}
+
+/**
+ * The scene time of the last drawn frame, for `maximumRenderTimeChange`.
+ * @param {object} scene Cesium Scene.
+ * @returns {object|undefined} Cesium JulianDate.
+ */
+export function lastRenderTime(scene) {
+  return scene._lastRenderTime;
+}
+
+/**
+ * The camera as the scene last saw it move, which `Scene.render` compares
+ * the camera with to decide whether it moved.
+ * @param {object} scene Cesium Scene.
+ * @returns {object|undefined} Cesium Camera.
+ */
+export function lastSeenCamera(scene) {
+  return scene._view?._cameraClone;
+}
+
+/**
  * The scene's WebGL context, for diagnostics that read the GPU directly.
  * @param {object} scene Cesium Scene.
  * @returns {WebGLRenderingContext|WebGL2RenderingContext|undefined}

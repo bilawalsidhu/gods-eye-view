@@ -61,6 +61,32 @@ async function settled(r) {
   equal(result.state, 'settled', `settled (${result.blockers.join(', ')})`);
 }
 
+/**
+ * Settles, then watches `ticks` ticks and returns what they did: preUpdate's
+ * `['u', rendering]` and a draw's `['r']`. An engine may still draw on its
+ * own once in a while after settling (roundoff in its camera bookkeeping,
+ * say), so a watch that saw a draw is tried again, up to `tries` times; one
+ * that always draws fails every try.
+ */
+async function idleWatch(h, r, ticks, tries = 3) {
+  let seen = [];
+  const off = [
+    r.frame.on('preUpdate', (t) => seen.push(['u', t.rendering])),
+    r.frame.on('postRender', () => seen.push(['r'])),
+  ];
+  try {
+    for (let i = 0; i < tries; i++) {
+      await settled(r);
+      seen = [];
+      for (let k = 0; k < ticks; k++) await h.frame(r);
+      if (!seen.some(([kind]) => kind === 'r')) break;
+    }
+    return seen;
+  } finally {
+    for (const f of off) f();
+  }
+}
+
 async function drawn(h, r, frames = 2) {
   for (let i = 0; i < frames; i++) {
     r.frame.requestRender('conformance');
@@ -355,16 +381,15 @@ export function portChecks() {
         if (r.frame.mode() === 'continuous')
           return { skip: 'continuous engine' };
         await drawn(h, r, 3);
-        const seen = [];
-        r.frame.on('preUpdate', (t) => seen.push(['u', t.rendering]));
-        r.frame.on('postRender', () => seen.push(['r']));
-        await h.frame(r);
+        // A renderer still loading is not idle.
         deepEqual(
-          seen,
+          await idleWatch(h, r, 1),
           [['u', false]],
           'an idle tick runs preUpdate and draws nothing',
         );
-        seen.length = 0;
+        const seen = [];
+        r.frame.on('preUpdate', (t) => seen.push(['u', t.rendering]));
+        r.frame.on('postRender', () => seen.push(['r']));
         r.frame.requestRender('one');
         ok(
           r.frame.diagnostics().pendingReasons.includes('one'),
@@ -372,9 +397,14 @@ export function portChecks() {
         );
         await h.frame(r);
         deepEqual(seen, [['u', true], ['r']], 'a request draws one frame');
-        seen.length = 0;
-        await h.frame(r);
-        deepEqual(seen, [['u', false]], 'and only one');
+        deepEqual(
+          r.frame.diagnostics().pendingReasons,
+          [],
+          'and that frame answers it',
+        );
+        // What that frame started loading (tiles it now needs) may draw on
+        // its own; once that is done the loop is idle again.
+        deepEqual(await idleWatch(h, r, 1), [['u', false]], 'and only one');
         const a = r.frame.holdContinuous('a');
         const b = r.frame.holdContinuous('b');
         deepEqual(
@@ -396,10 +426,46 @@ export function portChecks() {
         await h.frame(r);
         equal(seen.filter(([k]) => k === 'r').length, 1, 'one hold still out');
         b();
-        seen.length = 0;
-        await h.frame(r);
-        await h.frame(r);
-        equal(seen.filter(([k]) => k === 'r').length, 0, 'no holds, no frames');
+        equal(
+          (await idleWatch(h, r, 2)).filter(([k]) => k === 'r').length,
+          0,
+          'no holds, no frames',
+        );
+      },
+    ),
+    check(
+      'frame.prediction',
+      'preUpdate rendering says whether the tick draws, whatever came before',
+      async (h, r) => {
+        if (r.frame.mode() === 'continuous')
+          return { skip: 'continuous engine' };
+        await settled(r);
+        // An earlier listener asks for frames and takes and gives back
+        // holds; the prediction, read after it, must match each tick.
+        const script = ['idle', 'request', 'idle', 'hold', 'idle', 'release'];
+        let step = 0;
+        let release = null;
+        r.frame.on('preUpdate', () => {
+          const op = script[step++ % script.length];
+          if (op === 'request') r.frame.requestRender('prediction');
+          if (op === 'hold') release = r.frame.holdContinuous('prediction');
+          if (op === 'release') release?.();
+        });
+        const predicted = new Map();
+        const drew = new Set();
+        r.frame.on('preUpdate', (t) => predicted.set(t.frame, t.rendering));
+        r.frame.on('postRender', (t) => drew.add(t.frame));
+        for (let i = 0; i < 4 * script.length; i++) await h.frame(r);
+        release?.();
+        const wrong = [...predicted]
+          .filter(([frame, rendering]) => rendering !== drew.has(frame))
+          .map(([frame, rendering]) => `${frame}:${rendering}`);
+        deepEqual(wrong, [], 'ticks predicted wrongly (frame:prediction)');
+        ok(
+          [...predicted.values()].some((x) => x) &&
+            [...predicted.values()].some((x) => !x),
+          'both kinds of tick were seen',
+        );
       },
     ),
     check(

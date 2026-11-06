@@ -41,7 +41,12 @@ export interface FrameTime {
   now: number;
   /** Seconds since the previous tick. */
   dt: number;
-  /** Whether this tick draws. */
+  /**
+   * Whether this tick draws. Read during `preUpdate` it counts what has been
+   * asked so far; a request or hold made later in `preUpdate` draws this
+   * tick or the next, as the engine decides, and readers after it see
+   * which. Once the tick is over it keeps its answer.
+   */
   rendering: boolean;
 }
 

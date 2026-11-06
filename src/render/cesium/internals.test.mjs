@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
+  atEndOfTick,
   billboardCollectionOf,
   billboardLoadError,
   cameraFlightActive,
@@ -12,7 +13,11 @@ import {
   clusterPointCollection,
   commandExtents,
   defaultView,
+  lastRenderTime,
+  lastSeenCamera,
+  onEngineWorkCompleted,
   pickOffscreenView,
+  renderPending,
   updateCameraChanged,
   webglContext,
 } from './internals.js';
@@ -41,6 +46,13 @@ test('every private field Core reaches is still declared by the installed Cesium
     [WIDGETS, 'Viewer/Viewer.js', '_cesiumWidget'],
     [ENGINE, 'Renderer/Context.js', '_gl'],
     [ENGINE, 'Scene/Camera.js', '_currentFlight'],
+    [ENGINE, 'Scene/Scene.js', '_renderRequested'],
+    [ENGINE, 'Scene/Scene.js', '_logDepthBufferDirty'],
+    [ENGINE, 'Scene/Scene.js', '_hdrDirty'],
+    [ENGINE, 'Scene/Scene.js', '_lastRenderTime'],
+    [ENGINE, 'Scene/Scene.js', '_view'],
+    [ENGINE, 'Scene/View.js', '_cameraClone'],
+    [ENGINE, 'Scene/Scene.js', '_frameState'],
   ];
   const missing = fields.filter(
     ([root, file, field]) =>
@@ -56,6 +68,39 @@ test('every private field Core reaches is still declared by the installed Cesium
     'utf8',
   );
   assert.match(billboard, /\n {2}loadError: \{/, 'Billboard#loadError');
+  const read = (file) => fs.readFileSync(path.join(ENGINE, file), 'utf8');
+  assert.match(
+    read('Core/RequestScheduler.js'),
+    /\nRequestScheduler\.requestCompletedEvent = /,
+  );
+  assert.match(
+    read('Core/TaskProcessor.js'),
+    /\nTaskProcessor\.taskCompletedEvent = /,
+  );
+  assert.match(read('Scene/FrameState.js'), /this\.afterRender = \[\]/);
+  // What makes them matter: each completion redraws the scene.
+  const scene = read('Scene/Scene.js');
+  // Every tick empties the after-render queue, outside its draw.
+  const render = scene.slice(
+    scene.indexOf('Scene.prototype.render = function'),
+  );
+  const body = render.slice(0, render.indexOf('\n};'));
+  assert.match(
+    body,
+    /\n {2}callAfterRenderFunctions\(this\);\n/,
+    'callAfterRenderFunctions runs at the top level of Scene#render',
+  );
+  for (const event of [
+    'RequestScheduler.requestCompletedEvent',
+    'TaskProcessor.taskCompletedEvent',
+  ])
+    assert.match(
+      scene,
+      new RegExp(
+        `${event.replace('.', '\\.')}\\.addEventListener\\(\\s*requestRenderAfterFrame\\(this\\)`,
+      ),
+      event,
+    );
 });
 
 test('the helpers read and write exactly those fields', () => {
@@ -81,6 +126,15 @@ test('the helpers read and write exactly those fields', () => {
   closeRenderLoopLatch({ _cesiumWidget: widget });
   assert.equal(widget._renderLoopRunning, false);
   closeRenderLoopLatch({});
+  assert.equal(renderPending({}), false);
+  assert.equal(renderPending({ _renderRequested: true }), true);
+  assert.equal(renderPending({ _hdrDirty: true }), true);
+  assert.equal(renderPending({ _logDepthBufferDirty: true }), true);
+  const time = {};
+  assert.equal(lastRenderTime({ _lastRenderTime: time }), time);
+  const clone = {};
+  assert.equal(lastSeenCamera({ _view: { _cameraClone: clone } }), clone);
+  assert.equal(lastSeenCamera({}), undefined);
   const error = new Error('404');
   assert.equal(billboardLoadError({ loadError: error }), error);
   const gl = {};
@@ -90,6 +144,33 @@ test('the helpers read and write exactly those fields', () => {
   let checked = 0;
   updateCameraChanged({ _updateCameraChanged: () => (checked += 1) });
   assert.equal(checked, 1);
+  const afterRender = [];
+  const fn = () => {};
+  atEndOfTick({ _frameState: { afterRender } }, fn);
+  assert.deepEqual(afterRender, [fn]);
+  const event = () => {
+    const listeners = new Set();
+    return {
+      addEventListener(cb) {
+        listeners.add(cb);
+        return () => listeners.delete(cb);
+      },
+      raise: () => listeners.forEach((cb) => cb('ignored')),
+    };
+  };
+  const RequestScheduler = { requestCompletedEvent: event() };
+  const TaskProcessor = { taskCompletedEvent: event() };
+  const calls = [];
+  const off = onEngineWorkCompleted(
+    { RequestScheduler, TaskProcessor },
+    (...args) => calls.push(args),
+  );
+  RequestScheduler.requestCompletedEvent.raise();
+  TaskProcessor.taskCompletedEvent.raise();
+  assert.deepEqual(calls, [[], []]);
+  off();
+  TaskProcessor.taskCompletedEvent.raise();
+  assert.equal(calls.length, 2);
 });
 
 test('private Cesium fields are reached only through internals.js', () => {

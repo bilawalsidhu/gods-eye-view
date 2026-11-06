@@ -19,8 +19,11 @@ export const CESIUM_CHECKS = new Set([
   'draw.models',
   'draw.pick',
   'draw.sets',
+  'frame.demand',
   'frame.order',
+  'frame.prediction',
   'frame.renderOnce',
+  'frame.suspend',
   'frame.time',
   'globe.sky',
   'query.heights',
@@ -31,25 +34,24 @@ export const CESIUM_CHECKS = new Set([
   'renderer.whenSettled',
 ]);
 
-/** A tick fails the check rather than hang it when the loop has stopped. */
-const TICK_TIMEOUT_MS = 5000;
+/** A frame fails the check rather than hang it when frames stop. */
+const FRAME_TIMEOUT_MS = 5000;
 
 /**
- * One tick of the render loop, through the contract: it resolves once the
- * next tick (drawn or not) has run, so loads and timers progress between
- * ticks. It asks for no frame itself, so a check's own `requestRender` is
- * what makes a tick draw.
+ * One frame of the page: it resolves once the render loop's tick for the
+ * next animation frame (drawn or not, or none while suspended) has run, so
+ * loads and timers progress between frames. Cesium's loop asks for its
+ * animation frame before this does, so its tick runs first. It asks for no
+ * render itself: a check's own `requestRender` is what makes a tick draw.
  */
-function nextTick(r) {
+function nextFrame() {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      off();
-      reject(new Error('the render loop did not tick'));
-    }, TICK_TIMEOUT_MS);
-    const off = r.frame.on('preUpdate', () => {
-      off();
+    const timer = setTimeout(
+      () => reject(new Error('no animation frame came')),
+      FRAME_TIMEOUT_MS,
+    );
+    requestAnimationFrame(() => {
       clearTimeout(timer);
-      // The rest of the tick (render, postRender) runs in the same task.
       setTimeout(resolve, 0);
     });
   });
@@ -90,7 +92,7 @@ export function createCesiumHarness({ name = 'cesium', model } = {}) {
       };
       return renderer;
     },
-    frame: nextTick,
+    frame: nextFrame,
     now: () => performance.now(),
     toEcef,
     tolerance: DEFAULT_TOLERANCE,

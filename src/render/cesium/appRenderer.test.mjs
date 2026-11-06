@@ -146,12 +146,17 @@ test('work pending at destroy settles and lets go of the scene', async (t) => {
   await renderer.frame.renderOnce();
 
   const waiting = await plugin.create({ container: {} });
+  const standing = viewers[1].listeners.size;
   await assert.rejects(
     waiting.frame.renderOnce({ timeoutMs: 5 }),
     /timed out/,
     'a frame that never comes times out when asked to',
   );
-  assert.equal(viewers[1].listeners.size, 4, 'and lets go of its listener');
+  assert.equal(
+    viewers[1].listeners.size,
+    standing,
+    'and lets go of its listener',
+  );
   waiting.destroy();
 
   // A model that finishes loading after destroy is destroyed, not added.
@@ -339,7 +344,6 @@ const EXPECTED_MISSING = [
   'draw.on',
   'frame.diagnostics',
   'frame.holdContinuous',
-  'frame.mode',
   'frame.setTargetFps',
   'frame.setTime',
   'frame.suspend',
