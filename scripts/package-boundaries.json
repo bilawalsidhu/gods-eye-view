@@ -337,6 +337,8 @@
     "modules": [
       "server/providers/cctv.js",
       "server/providers/cctv/streetViewGuard.js",
+      "server/providers/common/rate-limit.js",
+      "src/sources/rateLimit.js",
       "server/providers/common/same-site.js",
       "src/localRequestGate.mjs",
       "server/providers/cctv/cap.js",
