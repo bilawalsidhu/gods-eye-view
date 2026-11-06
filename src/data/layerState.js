@@ -312,6 +312,23 @@ const OPTION_GROUPS = Object.freeze({
       high: 'h',
     }),
   ]),
+  'wildlife-sightings': Object.freeze([
+    booleanOption('confirmed', 'c', false),
+    enumOption(
+      'taxa',
+      't',
+      'all',
+      ['all', 'Aves', 'Mammalia', 'whales', 'Insecta', 'Plantae'],
+      {
+        all: 'a',
+        Aves: 'b',
+        Mammalia: 'm',
+        whales: 'w',
+        Insecta: 'i',
+        Plantae: 'p',
+      },
+    ),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -691,7 +708,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'satellites',
   }),
   Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
-  Object.freeze({ id: 'shipwrecks', token: '9', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'shipwrecks', token: '00', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'street-level',
@@ -733,6 +750,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'o',
     disposition: 'enabled+options',
     optionOwner: 'weather-satellite',
+  }),
+  Object.freeze({
+    id: 'wildlife-sightings',
+    token: '9',
+    disposition: 'enabled+options',
+    optionOwner: 'wildlife-sightings',
   }),
   Object.freeze({
     id: 'wind',
