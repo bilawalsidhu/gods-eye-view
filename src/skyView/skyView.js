@@ -1369,6 +1369,15 @@ export function mountSkyView({
   }
 
   function applyView(next) {
+    // A voice tilt (or any other in-place turn) can land before changed,
+    // preRender, onTick, or the 1 Hz interval. Writing the stored pose here
+    // would put the old orientation back and refresh the baseline, so the
+    // later signal would see no handoff. Yield first and leave the camera.
+    // enter() clears the baseline so placing the eye is not itself a handoff.
+    if (active && hasAppliedPose && cameraTakenElsewhere()) {
+      exit({ keepCamera: true });
+      return;
+    }
     view = makeView(next);
     if (!active || !observer) return;
     applySkyCamera(CesiumApi, viewer.camera, observer, view);
@@ -1459,6 +1468,7 @@ export function mountSkyView({
       content.start(observer, time.getTime());
       timeControl.sync();
       applyTime();
+      hasAppliedPose = false;
       applyView(view);
       startTicking();
       refreshProfile();
@@ -1511,6 +1521,7 @@ export function mountSkyView({
     restoreScene(CesiumApi, viewer, sceneSnap, { nowMs: now() });
     cameraSnap = null;
     sceneSnap = null;
+    hasAppliedPose = false;
     profile = null;
     profileToken += 1;
     pointers.clear();

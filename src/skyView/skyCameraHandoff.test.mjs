@@ -469,3 +469,42 @@ test('a pure roll and a position move still hand Sky back without fighting the c
   );
   moved.handle.destroy();
 });
+
+test('applyView does not overwrite an in-place external tilt before the tick', async () => {
+  const { viewer, handle } = await enter(mount());
+  const camera = viewer.camera;
+  handle.setView(handle.view);
+  viewer.clock.onTick.raiseEvent(viewer.clock);
+  assert.equal(
+    handle.active,
+    true,
+    "reapplying Sky's own pose is not a handoff",
+  );
+
+  const position = Cesium.Cartesian3.clone(camera.positionWC);
+  const overlayEl = handle.view.elDeg;
+  camera.lookDown(radians(8));
+  const tiltedEl = look(camera).elDeg;
+  assert.ok(Math.abs(tiltedEl - overlayEl) > 5, tiltedEl);
+  assert.ok(Cesium.Cartesian3.distance(position, camera.positionWC) < 1);
+
+  // Identity setView is the race: Sky reapplies its stored view before
+  // changed, preRender, onTick, or the 1 Hz interval can see the tilt.
+  handle.setView(handle.view);
+  viewer.clock.onTick.raiseEvent(viewer.clock);
+
+  assert.equal(
+    handle.active,
+    false,
+    'Sky must yield instead of staying up on the old orientation',
+  );
+  assert.ok(
+    Cesium.Cartesian3.distance(position, camera.positionWC) < 1,
+    'handoff must not move the eye',
+  );
+  assert.ok(
+    Math.abs(look(camera).elDeg - tiltedEl) < 0.05,
+    `camera returned to ${look(camera).elDeg}, tilt was ${tiltedEl}`,
+  );
+  handle.destroy();
+});
