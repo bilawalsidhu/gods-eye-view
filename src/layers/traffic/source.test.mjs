@@ -1050,3 +1050,29 @@ test('cancelling a flow body releases its freshness before a new request', async
   assert.equal(getEventListeners(requestSignal, 'abort').length, 0);
   assert.equal(source.getFlowSessionStats().cacheEntries, 0);
 });
+
+test('a failed flow tile carries the server reason for its label', async () => {
+  for (const [status, body, code] of [
+    [
+      429,
+      { error: 'Monthly usage limit reached', code: 'USAGE_LIMIT_REACHED' },
+      'USAGE_LIMIT_REACHED',
+    ],
+    [
+      429,
+      { error: 'Request rate limit reached', code: 'RATE_LIMITED' },
+      'RATE_LIMITED',
+    ],
+    [503, { error: 'no_key' }, 'no_key'],
+    [503, { error: 'Usage enforcement is temporarily unavailable' }, null],
+  ]) {
+    const source = createFlowTileSource({
+      fetchImpl: async () => Response.json(body, { status }),
+    });
+    await assert.rejects(source.fetchFlowForBounds(bounds), (error) => {
+      assert.equal(error.status, status);
+      assert.equal(error.code, code);
+      return true;
+    });
+  }
+});
