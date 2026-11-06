@@ -27,8 +27,8 @@ let _googleRateLimiter;
  */
 export const GOOGLE_DEFAULT_PER_MIN = 120;
 
-/** Google cost endpoints (nearby-places, text-search, geocoding, the CCTV Street View fallback). Null only when set to 0. */
-export function googleRateLimiter() {
+/** Google cost endpoints (nearby-places, text-search, geocoding). Null only when set to 0. */
+function googleRateLimiter() {
   if (_googleRateLimiter === undefined)
     _googleRateLimiter = makeCostRateLimiter(
       process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,

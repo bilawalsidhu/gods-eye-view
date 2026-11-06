@@ -19,9 +19,22 @@ import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import { googleServerApiKey } from './places/google-key.js';
-import { googleRateLimiter } from './places/google.js';
-import { clientKey } from './common/rate-limit.js';
+import { clientKey, makeCostRateLimiter } from './common/rate-limit.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
+let _streetViewRateLimiter;
+/**
+ * Per-IP budget for the Street View fallback, on the same setting as the
+ * other Google routes (GEV_RATELIMIT_GOOGLE_PER_MIN; 0 disables it).
+ */
+function streetViewRateLimiter() {
+  if (_streetViewRateLimiter === undefined)
+    _streetViewRateLimiter = makeCostRateLimiter(
+      process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
+      120,
+    );
+  return _streetViewRateLimiter;
+}
+
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
  * fallback chain (upstream -> Street View -> synthetic SVG), and health tracking.
@@ -549,7 +562,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const forwarded = PROXY_SIGNALS.some(
           (name) => req.headers?.[name] !== undefined,
         );
-        const googleBudget = googleServerApiKey() ? googleRateLimiter() : null;
+        const googleBudget = googleServerApiKey()
+          ? streetViewRateLimiter()
+          : null;
         const sv =
           forwarded ||
           !source ||
