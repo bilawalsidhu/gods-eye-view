@@ -4,7 +4,7 @@ const STORAGE_KEY = 'gev.voice.provider';
 
 export function readVoiceProvider(
   storage,
-  supported = ['openai', 'gemini', 'anthropic'],
+  supported = ['openai', 'gemini', 'anthropic', 'vertex'],
 ) {
   let saved;
   try {

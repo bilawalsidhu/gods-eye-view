@@ -82,6 +82,15 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'metered',
   }),
   Object.freeze({
+    id: 'vertex',
+    title: 'VERTEX AI', // i18n-ignore: provider product name
+    unlocks: msg('Gemini typed chat through Vertex AI Express Mode'),
+    getUrl:
+      'https://console.cloud.google.com/agent-platform/studio/settings/api-keys',
+    envVars: Object.freeze(['VERTEX_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
     id: 'aisstream',
     title: 'AISSTREAM', // i18n-ignore: provider product name
     unlocks: msg('Live ships, worldwide'),

@@ -164,9 +164,22 @@ test('root config retains existing named exports and standalone provider order',
     standaloneProviders.indexOf('anthropic-chat-proxy'),
     standaloneProviders.indexOf('gemini-live-proxy') + 1,
   );
+  assert.equal(
+    standaloneProviders.filter((name) => name === 'vertex-chat-proxy').length,
+    1,
+  );
+  assert.equal(
+    standaloneProviders.indexOf('vertex-chat-proxy'),
+    standaloneProviders.indexOf('anthropic-chat-proxy') + 1,
+  );
   assert.deepEqual(
     standaloneProviders.filter(
-      (name) => !['gemini-live-proxy', 'anthropic-chat-proxy'].includes(name),
+      (name) =>
+        ![
+          'gemini-live-proxy',
+          'anthropic-chat-proxy',
+          'vertex-chat-proxy',
+        ].includes(name),
     ),
     providers
       .localProviderPlugins({ nominatimStorageDir })

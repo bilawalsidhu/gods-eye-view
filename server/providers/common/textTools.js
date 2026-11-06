@@ -17,7 +17,9 @@ export function invalidCalls(calls, tools) {
 
 // Missing usage stays unknown, never an invented zero-cost request.
 export function parseUsage(provider, data) {
-  const raw = provider === 'gemini' ? data?.usageMetadata : data?.usage;
+  // Vertex AI answers with Gemini's usageMetadata.
+  const geminiShape = provider === 'gemini' || provider === 'vertex';
+  const raw = geminiShape ? data?.usageMetadata : data?.usage;
   const number = (value) =>
     Number.isSafeInteger(value) && value >= 0 ? value : null;
   // Anthropic's input_tokens excludes cache reads and writes, and it reports
@@ -38,24 +40,23 @@ export function parseUsage(provider, data) {
     };
   }
   const inputTokens = number(
-    provider === 'gemini' ? raw?.promptTokenCount : raw?.prompt_tokens,
+    geminiShape ? raw?.promptTokenCount : raw?.prompt_tokens,
   );
   const candidateTokens = number(
-    provider === 'gemini' ? raw?.candidatesTokenCount : raw?.completion_tokens,
+    geminiShape ? raw?.candidatesTokenCount : raw?.completion_tokens,
   );
   const totalTokens = number(
-    provider === 'gemini' ? raw?.totalTokenCount : raw?.total_tokens,
+    geminiShape ? raw?.totalTokenCount : raw?.total_tokens,
   );
   if (inputTokens === null || candidateTokens === null || totalTokens === null)
     return null;
   const reasoningTokens =
     number(
-      provider === 'gemini'
+      geminiShape
         ? raw?.thoughtsTokenCount
         : raw?.completion_tokens_details?.reasoning_tokens,
     ) ?? 0;
-  const outputTokens =
-    candidateTokens + (provider === 'gemini' ? reasoningTokens : 0);
+  const outputTokens = candidateTokens + (geminiShape ? reasoningTokens : 0);
   return {
     inputTokens,
     outputTokens,
@@ -63,7 +64,7 @@ export function parseUsage(provider, data) {
     reasoningTokens,
     cachedInputTokens:
       number(
-        provider === 'gemini'
+        geminiShape
           ? raw?.cachedContentTokenCount
           : raw?.prompt_tokens_details?.cached_tokens,
       ) ?? 0,
