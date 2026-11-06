@@ -10,7 +10,7 @@
  */
 import { DEFAULT_TOLERANCE } from '../conformance/index.js';
 import { toEcef } from '../stub/math.js';
-import { createCesiumSceneRenderer } from './sceneRenderer.js';
+import { createCesiumSceneRenderer, pointerFeedOf } from './sceneRenderer.js';
 
 /** @type {ReadonlySet<string>} */
 export const CESIUM_CHECKS = new Set([
@@ -26,6 +26,11 @@ export const CESIUM_CHECKS = new Set([
   'frame.suspend',
   'frame.time',
   'globe.sky',
+  'input.behaviours',
+  'input.clickPick',
+  'input.lease',
+  'input.lease.grab',
+  'input.lease.press',
   'query.heights',
   'query.heights.sets',
   'query.projectMany',
@@ -94,6 +99,9 @@ export function createCesiumHarness({ name = 'cesium', model } = {}) {
       return renderer;
     },
     frame: nextFrame,
+    // Events as the renderer's handler delivers them: the checks send ones
+    // no real pointer can (a click with no press), so not DOM events.
+    pointer: (r, type, x, y, extra) => pointerFeedOf(r)(type, x, y, extra),
     now: () => performance.now(),
     toEcef,
     tolerance: DEFAULT_TOLERANCE,

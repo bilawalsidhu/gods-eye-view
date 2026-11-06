@@ -214,12 +214,20 @@ export function createInputRouter({
   /**
    * Delivers one event to the listeners it belongs to.
    * @param {import('../contract/input').PointerEv} ev
-   * @returns {{lease: object|null, ambient: boolean}} Who it went to, so a
-   *   renderer can leave a grabbed press out of its stock behaviours. A
+   * @param {(to: {lease: object|null, ambient: boolean}) => void} [before]
+   *   Runs first with who the event goes to: a renderer's stock behaviours,
+   *   which run ahead of the subscribers. Its error is reported.
+   * @returns {{lease: object|null, ambient: boolean}} Who it went to. A
    *   `move` or `up` always reads as going to both, grabbed press or not.
    */
-  function dispatch(ev) {
+  function dispatch(ev, before) {
     const to = recipients(ev);
+    if (before)
+      try {
+        before(to);
+      } catch (error) {
+        report(error);
+      }
     for (const entry of listeners.slice()) {
       if (!entry.live || entry.type !== ev.type) continue;
       if (entry.lease) {
@@ -240,5 +248,14 @@ export function createInputRouter({
     dispatch,
     /** Live listeners, for leak checks. */
     listenerCount: () => listeners.length,
+    /**
+     * Ends delivery: no listener runs again, even for the event under way
+     * (a listener that destroys the renderer stops the rest).
+     */
+    dispose() {
+      for (const entry of listeners) entry.live = false;
+      listeners.length = 0;
+      currentLease?.release();
+    },
   };
 }
