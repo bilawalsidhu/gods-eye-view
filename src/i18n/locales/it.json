@@ -3241,5 +3241,16 @@
   "Open {name} on Acartia": "Apri {name} su Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Contributori di iNaturalist · licenze per osservazione",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Contributori di iNaturalist · Acartia {count} (Mare dei Salish) · licenze per osservazione"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Contributori di iNaturalist · Acartia {count} (Mare dei Salish) · licenze per osservazione",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude risponde solo nella chat; la voce non è disponibile per questo provider.",
+  "Claude has no voice. Open CHAT to type instead.": "Claude non ha la voce. Apri CHAT per scrivere invece.",
+  "Claude typed chat": "Chat scritta con Claude",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI risponde solo nella chat; la voce non è disponibile per questo provider.",
+  "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AI non ha la voce. Apri CHAT per scrivere invece.",
+  "Gemini typed chat through Vertex AI Express Mode": "Chat scritta con Gemini tramite Vertex AI in modalità express",
+  "Amazon Bedrock answers in chat only; voice is not available for this provider.": "Amazon Bedrock risponde solo nella chat; la voce non è disponibile per questo provider.",
+  "Amazon Bedrock has no voice. Open CHAT to type instead.": "Amazon Bedrock non ha la voce. Apri CHAT per scrivere invece.",
+  "Typed chat with any Converse model on Bedrock (Claude, Nova, Llama, …)": "Chat scritta con qualsiasi modello Converse su Bedrock (Claude, Nova, Llama, …)",
+  "Open chat": "Apri la chat",
+  "This provider answers in chat only": "Questo provider risponde solo nella chat"
 }

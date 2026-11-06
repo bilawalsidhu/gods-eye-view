@@ -17,28 +17,62 @@ export function invalidCalls(calls, tools) {
 
 // Missing usage stays unknown, never an invented zero-cost request.
 export function parseUsage(provider, data) {
-  const raw = provider === 'gemini' ? data?.usageMetadata : data?.usage;
+  // Vertex AI answers with Gemini's usageMetadata.
+  const geminiShape = provider === 'gemini' || provider === 'vertex';
+  const raw = geminiShape ? data?.usageMetadata : data?.usage;
   const number = (value) =>
     Number.isSafeInteger(value) && value >= 0 ? value : null;
+  // Anthropic's input_tokens excludes cache reads and writes, and it reports
+  // no total; both are added up here.
+  if (provider === 'anthropic') {
+    const input = number(raw?.input_tokens);
+    const output = number(raw?.output_tokens);
+    if (input === null || output === null) return null;
+    const cacheRead = number(raw?.cache_read_input_tokens) ?? 0;
+    const cacheCreation = number(raw?.cache_creation_input_tokens) ?? 0;
+    const inputTokens = input + cacheRead + cacheCreation;
+    return {
+      inputTokens,
+      outputTokens: output,
+      totalTokens: inputTokens + output,
+      reasoningTokens: 0,
+      cachedInputTokens: cacheRead,
+    };
+  }
+  // Bedrock's totalTokens already includes cache reads and writes, so input
+  // is what the total leaves after the output.
+  if (provider === 'bedrock') {
+    const outputTokens = number(raw?.outputTokens);
+    const totalTokens = number(raw?.totalTokens);
+    if (outputTokens === null || totalTokens === null) return null;
+    const inputTokens = totalTokens - outputTokens;
+    if (inputTokens < 0) return null;
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      reasoningTokens: 0,
+      cachedInputTokens: number(raw?.cacheReadInputTokens) ?? 0,
+    };
+  }
   const inputTokens = number(
-    provider === 'gemini' ? raw?.promptTokenCount : raw?.prompt_tokens,
+    geminiShape ? raw?.promptTokenCount : raw?.prompt_tokens,
   );
   const candidateTokens = number(
-    provider === 'gemini' ? raw?.candidatesTokenCount : raw?.completion_tokens,
+    geminiShape ? raw?.candidatesTokenCount : raw?.completion_tokens,
   );
   const totalTokens = number(
-    provider === 'gemini' ? raw?.totalTokenCount : raw?.total_tokens,
+    geminiShape ? raw?.totalTokenCount : raw?.total_tokens,
   );
   if (inputTokens === null || candidateTokens === null || totalTokens === null)
     return null;
   const reasoningTokens =
     number(
-      provider === 'gemini'
+      geminiShape
         ? raw?.thoughtsTokenCount
         : raw?.completion_tokens_details?.reasoning_tokens,
     ) ?? 0;
-  const outputTokens =
-    candidateTokens + (provider === 'gemini' ? reasoningTokens : 0);
+  const outputTokens = candidateTokens + (geminiShape ? reasoningTokens : 0);
   return {
     inputTokens,
     outputTokens,
@@ -46,7 +80,7 @@ export function parseUsage(provider, data) {
     reasoningTokens,
     cachedInputTokens:
       number(
-        provider === 'gemini'
+        geminiShape
           ? raw?.cachedContentTokenCount
           : raw?.prompt_tokens_details?.cached_tokens,
       ) ?? 0,

@@ -74,6 +74,34 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'metered',
   }),
   Object.freeze({
+    id: 'anthropic',
+    title: 'ANTHROPIC', // i18n-ignore: provider product name
+    unlocks: msg('Claude typed chat'),
+    getUrl: 'https://console.anthropic.com/settings/keys',
+    envVars: Object.freeze(['ANTHROPIC_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'vertex',
+    title: 'VERTEX AI', // i18n-ignore: provider product name
+    unlocks: msg('Gemini typed chat through Vertex AI Express Mode'),
+    getUrl:
+      'https://console.cloud.google.com/agent-platform/studio/settings/api-keys',
+    envVars: Object.freeze(['VERTEX_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'bedrock',
+    title: 'AMAZON BEDROCK', // i18n-ignore: provider product name
+    unlocks: msg(
+      'Typed chat with any Converse model on Bedrock (Claude, Nova, Llama, …)',
+    ),
+    getUrl:
+      'https://console.aws.amazon.com/bedrock/home#/api-keys/long-term/create',
+    envVars: Object.freeze(['AWS_BEARER_TOKEN_BEDROCK']),
+    tier: 'metered',
+  }),
+  Object.freeze({
     id: 'aisstream',
     title: 'AISSTREAM', // i18n-ignore: provider product name
     unlocks: msg('Live ships, worldwide'),

@@ -3316,5 +3316,16 @@
   "Open {name} on Acartia": "Відкрити {name} в Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Учасники iNaturalist · ліцензія в кожного запису",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Учасники iNaturalist · Acartia {count} (море Селіш) · ліцензія в кожного запису"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Учасники iNaturalist · Acartia {count} (море Селіш) · ліцензія в кожного запису",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude відповідає лише в чаті; голосовий режим для цього постачальника недоступний.",
+  "Claude has no voice. Open CHAT to type instead.": "Claude не має голосового режиму. Відкрийте ЧАТ, щоб писати текстом.",
+  "Claude typed chat": "Текстовий чат із Claude",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI відповідає лише в чаті; голосовий режим для цього постачальника недоступний.",
+  "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AI не має голосового режиму. Відкрийте ЧАТ, щоб писати текстом.",
+  "Gemini typed chat through Vertex AI Express Mode": "Текстовий чат із Gemini через Vertex AI в експрес-режимі",
+  "Amazon Bedrock answers in chat only; voice is not available for this provider.": "Amazon Bedrock відповідає лише в чаті; голосовий режим для цього постачальника недоступний.",
+  "Amazon Bedrock has no voice. Open CHAT to type instead.": "Amazon Bedrock не має голосового режиму. Відкрийте ЧАТ, щоб писати текстом.",
+  "Typed chat with any Converse model on Bedrock (Claude, Nova, Llama, …)": "Текстовий чат із будь-якою моделлю Converse у Bedrock (Claude, Nova, Llama, …)",
+  "Open chat": "Відкрити чат",
+  "This provider answers in chat only": "Цей постачальник відповідає лише в чаті"
 }

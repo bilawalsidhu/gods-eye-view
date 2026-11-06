@@ -88,14 +88,27 @@ export function createGeminiChatHandler({
     process.env.GEMINI_CHAT_MODEL || 'gemini-3.5-flash-lite',
   resolveApiKey = () => process.env.GEMINI_API_KEY,
   resolveProviderRateLimit = () => process.env.GEV_RATELIMIT_GEMINI_PER_MIN,
+  // Vertex AI speaks the same generateContent API from another host, with
+  // its own Schema dialect for tool parameters and thinking per model.
+  provider = 'gemini',
+  endpoint = (model) =>
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+  declareTool = ({ name, description, parameters }) => ({
+    name,
+    description,
+    parametersJsonSchema: parameters,
+  }),
+  // A falsy value leaves thinkingConfig out of the request.
+  thinkingConfig = () => ({ thinkingLevel: 'LOW' }),
+  providerPerMin = GEMINI_DEFAULT_PER_MIN,
   ...options
 } = {}) {
   return createTextChatHandler({
     ...options,
-    provider: 'gemini',
+    provider,
     resolveApiKey,
     resolveProviderRateLimit,
-    providerPerMin: GEMINI_DEFAULT_PER_MIN,
+    providerPerMin,
     prepare(input) {
       const model = normalizeGeminiModel(resolveChatModel());
       if (!model || /live|audio|tts/i.test(model)) return { errorStatus: 503 };
@@ -107,8 +120,9 @@ export function createGeminiChatHandler({
         return null;
       if (!pairedContents(input.contents)) return null;
       const overpass = overpassConfigured();
+      const thinking = thinkingConfig(model);
       return {
-        endpoint: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        endpoint: endpoint(model),
         headers: (key) => ({ 'x-goog-api-key': key }),
         body: {
           contents: input.contents,
@@ -120,18 +134,14 @@ export function createGeminiChatHandler({
           tools: [
             {
               functionDeclarations: offeredTools(tools, { overpass }).map(
-                ({ name, description, parameters }) => ({
-                  name,
-                  description,
-                  parametersJsonSchema: parameters,
-                }),
+                (tool) => declareTool(tool),
               ),
             },
           ],
           generationConfig: {
             responseModalities: ['TEXT'],
             maxOutputTokens: 4096,
-            thinkingConfig: { thinkingLevel: 'LOW' },
+            ...(thinking ? { thinkingConfig: thinking } : {}),
           },
         },
       };
