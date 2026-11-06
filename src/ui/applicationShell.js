@@ -35,7 +35,6 @@ import {
 } from './cyberSonarControls.js';
 
 import * as geo from '../geo/index.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { cesiumHeading, cesiumRoll } from '../cameraAngles.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
@@ -94,8 +93,7 @@ export class StyleManager extends ShellFacade {
   /**
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options] `engine`: the page's globe engine (the world
-   *   overlay host, camera navigation, HUD and share links run on it; defaults
-   *   to the one registered for the viewer).
+   *   overlay host, camera navigation, HUD and share links run on it).
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
    *   picker, for a host that does not initialize Core's locale.
@@ -103,7 +101,7 @@ export class StyleManager extends ShellFacade {
   constructor(
     viewer,
     {
-      engine = engineFromViewer(viewer),
+      engine = null,
       mapStackController = null,
       placeSearch,
       services,
@@ -635,6 +633,7 @@ export class StyleManager extends ShellFacade {
 
     // Full-globe sun/moon ring on either engine, below the HUD/readout.
     this.celestialRing = new CelestialRing(viewer ?? engine, {
+      engine,
       enabled: false,
       store: useCelestialRingStore(applicationPinia()),
       onAutoDisable: () =>
@@ -716,7 +715,7 @@ export class StyleManager extends ShellFacade {
 
   async _attachScene({
     viewer = null,
-    engine = engineFromViewer(viewer),
+    engine = null,
     mapStackController = null,
     services = {},
     engineSwitch = true,
@@ -863,7 +862,7 @@ export class StyleManager extends ShellFacade {
     if (changed('cctvLayer')) this._initCctvPanel();
     if (changed('radioLayer', 'localAdsbLayer')) this._initRadioPanel();
     if (changed('streetLevelLayer')) this._initStreetLevelPanel();
-    if (changed('wildlifeSightingsLayer')) this._initWildlifeSightingCard();
+    this._initWildlifeSightingCard();
     if (
       changed(
         'radioLayer',
@@ -1347,18 +1346,17 @@ export class StyleManager extends ShellFacade {
     return this._runExplicitNavigation('camera', () => focus(cameraId));
   }
 
-  /** Keep one compact card anchored to the selected wildlife sighting. */
+  /** Keep one compact card anchored to the selected wildlife sighting. The
+   * card follows the engine's canvas and camera, so each globe builds its own. */
   _initWildlifeSightingCard() {
     this._wildlifeSightingCard?.destroy();
     this._wildlifeSightingCard = null;
     const layer = this.services.wildlifeSightingsLayer;
-    // The layer draws on Cesium only; another engine gets its stand-in and
-    // no card (the card anchors to Cesium's canvas).
-    if (typeof layer?.subscribeSelection !== 'function' || !this.viewer) return;
+    if (typeof layer?.subscribeSelection !== 'function' || !this.engine) return;
     this._wildlifeSightingCard = createWildlifeSightingCard({
       layer,
       ui: this._ui,
-      viewer: this.viewer,
+      engine: this.engine,
     });
   }
 

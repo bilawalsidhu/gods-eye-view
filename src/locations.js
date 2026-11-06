@@ -2,7 +2,6 @@ import { isUnavailableCapability } from './sources/capability.js';
 import { createOverpassFeatureSource } from './sources/overpassFeatures.js';
 import { applicationServices } from './services/application.js';
 import * as geo from './geo/index.js';
-import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import { greatCircleKm } from './geoDistance.js';
 import {
   viewportBias,
@@ -31,14 +30,12 @@ export const GLOBE_VIEW = Object.freeze({
 /**
  * Fly straight out to the full-earth globe view, keeping the current sub-camera
  * point centered so the user's continent stays in front of them.
- * @param {import('./globe/contract.js').GlobeEngine | object} target The globe
- *   engine, or a viewer registered for one.
+ * @param {import('./globe/contract.js').GlobeEngine | null} engine
  * @param {{duration?: number, onComplete?: Function, onCancel?: Function}} options
  * @returns {{latitude: number, longitude: number, heightM: number} | null}
  *   Null without an engine.
  */
-export function flyToGlobeView(target, options = {}) {
-  const engine = engineFromViewer(target);
+export function flyToGlobeView(engine, options = {}) {
   if (!engine) return null;
   const { camera } = engine;
   const carto = camera.pose().cartographic;
@@ -83,8 +80,7 @@ export const LOCATIONS = Object.entries(CITY_POIS).map(([id, city]) => ({
  * Fly the camera to a landmark using lookAt-based targeting.
  * Guarantees the target is centered in viewport via flyToBoundingSphere + lookAt.
  *
- * @param {import('./globe/contract.js').GlobeEngine | object} target The
- *   globe engine, or a viewer registered for one.
+ * @param {import('./globe/contract.js').GlobeEngine | null} engine
  * @param {number} lat - Latitude in degrees
  * @param {number} lon - Longitude in degrees
  * @param {object} options
@@ -99,8 +95,7 @@ export const LOCATIONS = Object.entries(CITY_POIS).map(([id, city]) => ({
  * @returns {{ targetPosition: {x: number, y: number, z: number} } | null} The
  *   computed target for orbit use; null without an engine.
  */
-export function flyToLandmark(target, lat, lon, options = {}) {
-  const engine = engineFromViewer(target);
+export function flyToLandmark(engine, lat, lon, options = {}) {
   if (!engine) return null;
   const { camera } = engine;
   cancelCameraArrival(engine);
@@ -222,7 +217,7 @@ export function flyToLandmark(target, lat, lon, options = {}) {
  * Fly to a preset location by ID (uses the first POI as default).
  * Returns target position for orbit controller.
  */
-export function flyToPresetLocation(target, locationId, options = {}) {
+export function flyToPresetLocation(engine, locationId, options = {}) {
   const city = CITY_POIS[locationId];
   if (!city) return null;
   if (
@@ -230,7 +225,7 @@ export function flyToPresetLocation(target, locationId, options = {}) {
     !finitePositive(options.range) &&
     city.viewBounds
   ) {
-    return flyToViewportBounds(engineFromViewer(target), city.viewBounds, {
+    return flyToViewportBounds(engine, city.viewBounds, {
       duration: options.duration,
       onStart: options.onStart,
       onComplete: options.onComplete,
@@ -239,7 +234,7 @@ export function flyToPresetLocation(target, locationId, options = {}) {
     });
   }
   const poi = city.pois[0];
-  return flyToLandmark(target, poi.lat, poi.lon, {
+  return flyToLandmark(engine, poi.lat, poi.lon, {
     range: poi.alt,
     pitch: poi.pitch,
     heading: poi.heading || 0,
@@ -254,11 +249,11 @@ export function flyToPresetLocation(target, locationId, options = {}) {
  * Fly to a specific POI within a city.
  * Returns target position for orbit controller.
  */
-export function flyToPOI(target, cityId, poiIndex, options = {}) {
+export function flyToPOI(engine, cityId, poiIndex, options = {}) {
   const city = CITY_POIS[cityId];
   if (!city || !city.pois[poiIndex]) return null;
   const poi = city.pois[poiIndex];
-  return flyToLandmark(target, poi.lat, poi.lon, {
+  return flyToLandmark(engine, poi.lat, poi.lon, {
     range: poi.alt,
     pitch: poi.pitch,
     heading: poi.heading || 0,
@@ -315,10 +310,8 @@ export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
  * appropriate to the request. Countries and cities use their viewport by
  * default; precise landmarks/buildings use close landmark framing.
  */
-export async function searchAndFlyTo(target, query, options = {}) {
+export async function searchAndFlyTo(engine, query, options = {}) {
   const { placeSearch = unavailablePlaceSearch, signal } = options;
-  // The globe engine, or (voice) a viewer registered for one.
-  const engine = engineFromViewer(target);
   if (!engine) return null;
   signal?.throwIfAborted();
   const beforeFly =

@@ -1,6 +1,5 @@
 import * as geo from './geo/index.js';
 import { createCelestialView } from './celestialRing/view.js';
-import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import {
   cesiumIcrfToFixed,
   projectCelestialPoint,
@@ -245,6 +244,9 @@ export function earthDiscScreenRadius(cameraDistance, viewportHeight, fovy) {
  * @param {number} height - Viewport height in CSS pixels.
  * @param {object} [scratchCenter] - Reusable Cesium Cartesian2 result.
  * @param {object} [scratchToCenter] - Reusable Cesium Cartesian3 result.
+ * @param {import('./globe/contract.js').GlobeProjector | null} [projector] -
+ *   The globe engine's projector; without one, Cesium's SceneTransforms
+ *   (the same projection on a Cesium scene).
  * @returns {object|null}
  */
 export function projectEarthDiscToViewport(
@@ -253,6 +255,7 @@ export function projectEarthDiscToViewport(
   height,
   scratchCenter = undefined,
   scratchToCenter = undefined,
+  projector = null,
 ) {
   const camera = viewer?.camera;
   const scene = viewer?.scene;
@@ -271,7 +274,6 @@ export function projectEarthDiscToViewport(
   );
   if (geo.cartesian3.dot(camera.directionWC, toCenter) <= 0) return null;
 
-  const projector = engineFromViewer(viewer)?.projector;
   const center = projector
     ? projector.worldToWindow(geo.cartesian3.ZERO, scratchCenter)
     : projectCelestialPoint(scene, geo.cartesian3.ZERO, scratchCenter);
@@ -398,14 +400,19 @@ let rings = 0;
 export class CelestialRing {
   /**
    * @param {Cesium.Viewer} viewer
-   * @param {{enabled?:boolean,onAutoDisable?:Function,store:object}} options
+   * @param {{enabled?:boolean,onAutoDisable?:Function,store:object,
+   *   engine?:object}} options
    *   `store` is the celestial ring store (src/ui/stores/celestialRing.js);
    *   the keyhole helpers here stay free of Vue for the packages that use
-   *   them.
+   *   them. `engine`: the globe engine, whose projector places the Earth disc.
    */
-  constructor(viewer, { enabled = true, onAutoDisable = null, store } = {}) {
+  constructor(
+    viewer,
+    { enabled = true, onAutoDisable = null, store, engine = null } = {},
+  ) {
     this._engineView = viewer?.kind ? createCelestialView(viewer) : null;
     this.viewer = this._engineView?.view ?? viewer;
+    this._projector = engine?.projector ?? null;
     this.enabled = !!enabled;
     this.visible = false;
     this._onAutoDisable =
@@ -684,6 +691,7 @@ export class CelestialRing {
       height,
       this._screenCenter,
       this._toCenter,
+      this._projector,
     );
   }
 

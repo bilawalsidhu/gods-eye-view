@@ -8,19 +8,22 @@ import {
 } from './viewport.js';
 import { ACARTIA_GUARD_BOX } from './policy.js';
 import { getWildlifeHeightBand } from './model.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
-const viewer = ({ south, west, north, east }) => ({
-  camera: {
-    computeViewRectangle: () =>
-      Object.fromEntries(
-        Object.entries({ south, west, north, east }).map(([key, value]) => [
-          key,
-          (value * Math.PI) / 180,
-        ]),
-      ),
-  },
-  scene: { globe: { ellipsoid: {} } },
-});
+// A globe engine whose camera sees this rectangle (degrees).
+const engineSeeing = ({ south, west, north, east }) => {
+  const engine = createFakeEngine();
+  engine.fake.script(
+    'viewRectangle',
+    Object.fromEntries(
+      Object.entries({ south, west, north, east }).map(([key, value]) => [
+        key,
+        (value * Math.PI) / 180,
+      ]),
+    ),
+  );
+  return engine;
+};
 
 test('local boxes snap outward to 0.1 degrees; wider views to whole degrees', () => {
   assert.deepEqual(
@@ -87,7 +90,7 @@ test('intersections handle guard coverage, point boxes and antimeridian', () => 
 test('viewport rectangles split at 180 degrees and reject overly large or missing views', () => {
   assert.deepEqual(
     wildlifeViewportBoxes(
-      viewer({ south: 10, west: 179, north: 12, east: -178 }),
+      engineSeeing({ south: 10, west: 179, north: 12, east: -178 }),
     ),
     [
       { south: 10, west: 179, north: 12, east: 180 },
@@ -96,19 +99,19 @@ test('viewport rectangles split at 180 degrees and reject overly large or missin
   );
   assert.deepEqual(
     wildlifeViewportBoxes(
-      viewer({ south: 47, west: -123, north: 48, east: -122 }),
+      engineSeeing({ south: 47, west: -123, north: 48, east: -122 }),
     ),
     [{ south: 47, west: -123, north: 48, east: -122 }],
   );
   assert.equal(
     wildlifeViewportBoxes(
-      viewer({ south: -21, west: -10, north: 20, east: 10 }),
+      engineSeeing({ south: -21, west: -10, north: 20, east: 10 }),
     ),
     null,
   );
   assert.equal(
     wildlifeViewportBoxes(
-      viewer({ south: 0, west: 170, north: 10, east: -140 }),
+      engineSeeing({ south: 0, west: 170, north: 10, east: -140 }),
     ),
     null,
   );

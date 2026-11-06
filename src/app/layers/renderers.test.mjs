@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   CESIUM_BUILTIN,
@@ -9,6 +10,7 @@ import {
   layerAvailableOn,
 } from './renderers.js';
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
 test('a registry knows which engine renders which layer', () => {
   const registry = createRendererRegistry();
@@ -80,14 +82,41 @@ test('the aircraft, vessels, satellites, launches and earthquakes have extracted
     },
   );
   assert.equal(vessels.kind, 'cesium');
-  const viewer = { scene: {}, camera: {} };
-  const renderer = rendererFor('flights', { kind: 'cesium' }, { viewer });
-  assert.equal(renderer.kind, 'cesium');
-  assert.equal(renderer.viewer, viewer);
-  const military = rendererFor('military', { kind: 'cesium' }, { viewer });
-  assert.equal(military.kind, 'cesium');
-  assert.equal(military.viewer, viewer);
   assert.equal(rendererFor('satellites', { kind: 'cesium' }).kind, 'cesium');
+});
+
+test('the aircraft family draws through one display, the same factory on every engine', async () => {
+  const displays = {
+    flights: ['flights', 'createFlightsDisplay'],
+    military: ['military', 'createMilitaryDisplay'],
+    'local-adsb': ['localAdsb', 'createLocalAdsbDisplay'],
+  };
+  // The Navara mode registers the same modules' factories.
+  const navaraMode = readFileSync(
+    new URL('../navaraMode.js', import.meta.url),
+    'utf8',
+  );
+  const drawAtlas = async () => ({ canvas: {}, cells: {} });
+  for (const [id, [directory, name]] of Object.entries(displays)) {
+    const factory = (
+      await import(`../../layers/${directory}/render/display.js`)
+    )[name];
+    assert.equal(CESIUM_LAYER_RENDERERS[id], factory, id);
+    assert.match(
+      navaraMode,
+      new RegExp(
+        `'?${id}'?: async \\(\\) =>\\s*\\(await import\\('[^']+/render/display\\.js'\\)\\)\\s*\\.${name}\\b`,
+      ),
+      id,
+    );
+    for (const kind of ['cesium', 'navara']) {
+      const engine = createFakeEngine({ kind });
+      const display = factory(engine, { drawAtlas });
+      assert.equal(display.engine, engine, `${id} on ${kind}`);
+      display.destroy();
+      engine.destroy();
+    }
+  }
 });
 
 test('the layer availability API: engine, isAvailable, available, unavailable', () => {

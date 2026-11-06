@@ -1,6 +1,5 @@
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { createStateChannel } from '../app/stateChannel.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import {
   beginDeferredNavigation,
   reassertNavigationHandoff,
@@ -15,7 +14,7 @@ import {
 export class NavigationController {
   constructor({
     viewer = null,
-    engine = engineFromViewer(viewer),
+    engine = null,
     tracking,
     settleSearch = () => {},
     interruptCameraMotion,
@@ -289,7 +288,7 @@ export class NavigationController {
       });
     }
     this.viewer = viewer;
-    this.engine = engine ?? engineFromViewer(viewer);
+    this.engine = engine;
   }
   /** Subscribe to ownership changes without claiming the camera or exposing mutable state. */
   subscribeCameraHandoff(listener) {

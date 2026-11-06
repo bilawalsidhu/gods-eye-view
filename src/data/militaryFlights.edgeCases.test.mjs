@@ -16,6 +16,7 @@ import {
   registerMilitaryIcaos,
   setMilitaryLayerActive,
 } from './militaryRegistry.js';
+import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
 
 const SHARED_HEX = 'ae5e01';
 const CIVIL_HEX = 'a0c1v1';
@@ -84,6 +85,7 @@ test('edge:military: an ICAO in both feeds draws one target and keeps the milita
   const civilBillboards = collection();
   _armFlightTrackingRestoreForTest(null);
   _setTrackedMilitaryRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'seedm0',
     entity: null,
     billboard: { show: false, position: Cesium.Cartesian3.ZERO },
@@ -93,6 +95,7 @@ test('edge:military: an ICAO in both feeds draws one target and keeps the milita
     tracked: false,
   });
   _setTrackedFlightRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'seedf0',
     entity: null,
     billboard: { show: false, position: Cesium.Cartesian3.ZERO },
@@ -171,6 +174,7 @@ test('edge:military: losing the tracked contact from the owning feed releases th
     trackedEntity: entity,
   };
   _setTrackedMilitaryRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: SHARED_HEX,
     entity,
     billboard: {

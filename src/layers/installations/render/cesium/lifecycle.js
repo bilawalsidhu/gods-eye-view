@@ -1,6 +1,5 @@
 import * as Cesium from 'cesium';
 import { LAYER_ID } from '../../policy.js';
-import { engineFromViewer } from '../../../../globe/cesium/engineFromViewer.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
@@ -14,10 +13,10 @@ export function createLifecycle({
 }) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const { clearSelectedEntityContextForLayer } = services.context;
+  const cameraOwner = (viewer) => layerState.engine ?? viewer?.camera;
 
   const methods = {
     init(viewer, { engine = null } = {}) {
-      engine ||= engineFromViewer(viewer);
       layerState.viewer = viewer;
       layerState.engine = engine;
       layerState.dataSource = new Cesium.CustomDataSource(
@@ -55,7 +54,7 @@ export function createLifecycle({
         });
       parts.namedMarkers?.enable();
       parts.namedMarkers?.sync(layerState.records || []);
-      claimCameraSensitivity(layerState.viewer.camera, LAYER_ID, 0.01);
+      claimCameraSensitivity(cameraOwner(layerState.viewer), LAYER_ID, 0.01);
       registerPickOwner(LAYER_ID, (id) => layerState.recordById.has(id));
       layerState.dataSource.show = true;
       // DataLayerManager invokes update() immediately after enable(), which owns
@@ -67,7 +66,7 @@ export function createLifecycle({
       services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
       services.credits?.hideGooglePlacesCredit?.(layerState.viewer, LAYER_ID);
       parts.namedMarkers?.hide();
-      releaseCameraSensitivity(layerState.viewer?.camera, LAYER_ID);
+      releaseCameraSensitivity(cameraOwner(layerState.viewer), LAYER_ID);
       layerState.contextAnchor = null;
       layerState.contextPosition = null;
       layerState.coverage = { kind: 'viewport' };
@@ -99,7 +98,7 @@ export function createLifecycle({
       services.credits?.hideOsmCredit?.(viewer, LAYER_ID);
       services.credits?.hideGooglePlacesCredit?.(viewer, LAYER_ID);
       unregisterPickOwner(LAYER_ID);
-      releaseCameraSensitivity(viewer?.camera, LAYER_ID);
+      releaseCameraSensitivity(cameraOwner(viewer), LAYER_ID);
       layerState.surfaceChangedRemove?.();
       layerState.surfaceChangedRemove = null;
       layerState.moveEndRemove?.();

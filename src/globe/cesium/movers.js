@@ -3,10 +3,11 @@
 // sprites are a BillboardCollection (screen-aligned, rotation in screen
 // space, an image per atlas cell cropped from the set's atlas), points a
 // PointPrimitiveCollection, models one Model per instance in a
-// PrimitiveCollection. commit() writes the changed instances and requests a
-// render; nothing else renders. Picks resolve through identify(): the
-// billboard, point or model a Cesium pick names → its set, instance and
-// the pickId the layer gave it.
+// PrimitiveCollection (the glTF's own axes, no axis correction, lit without
+// Cesium's dynamic environment map). commit() writes the changed instances
+// and requests a render; nothing else renders. Picks resolve through
+// identify(): the billboard, point or model a Cesium pick names → its set,
+// instance and the pickId the layer gave it.
 
 import * as Cesium from 'cesium';
 import { horizonVisible } from '../cameraMath.js';
@@ -246,6 +247,15 @@ function modelPart(options, store, { factories, requestRender, owners }) {
     factories
       .loadModel({
         url: model.url,
+        // Resources built at once, not spread over frames behind tile jobs.
+        asynchronous: false,
+        // The instance orientation turns the glTF's own axes (the contract's
+        // model frame), as Navara draws them.
+        upAxis: Cesium.Axis.Z,
+        forwardAxis: Cesium.Axis.X,
+        // Navara has no environment map; Cesium's renders the sky around
+        // each model and reads it back from the GPU.
+        environmentMapOptions: { enabled: false },
         minimumPixelSize: model.minimumPixelSize,
         ...modelBlend(model.colorBlend),
         allowPicking: pickable,
@@ -274,10 +284,12 @@ function modelPart(options, store, { factories, requestRender, owners }) {
   };
   return {
     primitive: collection,
-    // Every drawn instance's model has loaded.
-    ready() {
-      for (let index = 0; index < store.count; index++)
-        if (!models[index]?.ready) return false;
+    // Every drawn instance's model has loaded (with an index, that one's).
+    ready(index) {
+      if (index !== undefined)
+        return index < store.count && models[index]?.ready === true;
+      for (let at = 0; at < store.count; at++)
+        if (!models[at]?.ready) return false;
       return true;
     },
     commit(range) {

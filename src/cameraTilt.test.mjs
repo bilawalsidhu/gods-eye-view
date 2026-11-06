@@ -10,7 +10,6 @@ import {
 } from './cameraVerbs.js';
 import { createGevActionRunner } from './voice/gevActions.js';
 import { createCameraViewer } from './globe/cesium/testing/cameraViewer.mjs';
-import { registerViewerEngine } from './globe/cesium/engineFromViewer.js';
 
 const radians = Cesium.Math.toRadians;
 const degrees = Cesium.Math.toDegrees;
@@ -35,8 +34,6 @@ function harness(
     destination: Cesium.Cartesian3.fromDegrees(-0.1276, 51.5072, height),
     orientation: { heading: radians(heading), pitch: radians(pitch), roll: 0 },
   });
-  // A voice runner built on the viewer reaches the same engine.
-  const unregister = registerViewerEngine(viewer, engine);
   // The app's view target: the ground point under the screen centre.
   const viewTarget = () => {
     const ray = new Cesium.Ray(camera.positionWC, camera.directionWC);
@@ -47,7 +44,6 @@ function harness(
   initCameraVerbs(engine, pivot ? viewTarget : () => undefined);
   t.after(() => {
     interruptCameraMotion('test-cleanup');
-    unregister();
     engine.destroy();
     globalThis.performance = realPerformance;
   });
@@ -59,7 +55,7 @@ function harness(
     for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) tick();
     assert.equal(getActiveCameraMotion(), null, 'tilt must finish');
   };
-  return { viewer, camera, target, tick, finish, viewTarget };
+  return { viewer, camera, engine, target, tick, finish, viewTarget };
 }
 
 const pitchDeg = (camera) => degrees(camera.pitch);
@@ -417,6 +413,7 @@ test('a voice zoom during a pivot tilt says what it changed', async (t) => {
   const h = harness(t, { height: 400 });
   const runner = createGevActionRunner({
     viewer: h.viewer,
+    engine: h.engine,
     styleManager: {},
     dataManager: { layers: new Map(), getAll: () => [] },
   });
@@ -653,6 +650,7 @@ test('a voice zoom during a tilt to an angle passes on the new end angle', async
   const h = harness(t, { height: 400_000 });
   const runner = createGevActionRunner({
     viewer: h.viewer,
+    engine: h.engine,
     styleManager: {},
     dataManager: { layers: new Map(), getAll: () => [] },
   });

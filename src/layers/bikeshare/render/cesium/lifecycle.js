@@ -11,6 +11,7 @@ export function createLifecycle({
   services,
   parts,
   source,
+  engine,
 }) {
   const {
     registerSpriteCollection,
@@ -78,7 +79,7 @@ export function createLifecycle({
         // Through the shared ledger: this is a single number every layer's
         // camera.changed listener shares, and a layer leaving must not hand
         // back a coarse default while this one is still driving off it.
-        claimCameraSensitivity(viewer.camera, 'bikeshare', 0.05);
+        claimCameraSensitivity(engine ?? viewer.camera, 'bikeshare', 0.05);
         layerState._cameraChangedAttached = true;
       }
 
@@ -116,7 +117,7 @@ export function createLifecycle({
         viewer.camera.changed.removeEventListener(
           parts.viewport.onCameraChanged,
         );
-        releaseCameraSensitivity(viewer.camera, 'bikeshare');
+        releaseCameraSensitivity(engine ?? viewer.camera, 'bikeshare');
         layerState._cameraChangedAttached = false;
       }
 
@@ -140,7 +141,7 @@ export function createLifecycle({
         viewer.camera.changed.removeEventListener(
           parts.viewport.onCameraChanged,
         );
-        releaseCameraSensitivity(viewer.camera, 'bikeshare');
+        releaseCameraSensitivity(engine ?? viewer.camera, 'bikeshare');
         layerState._cameraChangedAttached = false;
       }
       unregisterSpriteCollection?.('bikeshare', layerState._pointCollection);
@@ -172,7 +173,7 @@ export function createLifecycle({
         viewer.camera.changed.removeEventListener(
           parts.viewport.onCameraChanged,
         );
-        releaseCameraSensitivity(viewer.camera, 'bikeshare');
+        releaseCameraSensitivity(engine ?? viewer.camera, 'bikeshare');
         layerState._cameraChangedAttached = false;
       }
       parts.ingestion.abortAllInFlight();

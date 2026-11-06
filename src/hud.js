@@ -20,7 +20,6 @@ import { applicationServices } from './services/application.js';
  */
 
 import * as geo from './geo/index.js';
-import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
@@ -1236,7 +1235,7 @@ export class IntelHUD {
     this._removeCameraMoveStart?.();
     this._removeCameraMoveStart = null;
     this._summaryRequest?.abort();
-    this.engine = engine ? engineFromViewer(engine) : null;
+    this.engine = engine ?? null;
     this.viewer = viewer;
     if (!this.engine) return;
     this._removeCameraMoveStart =

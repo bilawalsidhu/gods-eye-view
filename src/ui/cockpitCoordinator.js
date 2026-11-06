@@ -40,12 +40,14 @@ export class CockpitCoordinator {
       operations,
     );
     this._cockpitDisplayPortal = null;
+    // The Cockpit rides the engine's follow; a shell with no globe yet has
+    // none.
     this.cockpitView =
-      viewer || (engine?.frames?.preUpdate && engine?.camera?.followChanged)
-        ? this._createCockpitView(viewer, services)
+      engine?.frames?.preUpdate && engine?.camera?.followChanged
+        ? this._createCockpitView(services)
         : null;
   }
-  _createCockpitView(viewer, services) {
+  _createCockpitView(services) {
     const {
       flightsLayer,
       militaryFlightsLayer,
@@ -64,8 +66,9 @@ export class CockpitCoordinator {
       regionalDistanceM,
       weatherCodeLabel,
     } = services;
-    return new CockpitViewController(viewer, {
-      engine: this.engine,
+    return new CockpitViewController(this.engine, {
+      // Cesium's stock double-click goes after the Cockpit's.
+      viewer: this.viewer,
       services: {
         flightsLayer,
         militaryFlightsLayer,
@@ -107,18 +110,6 @@ export class CockpitCoordinator {
       onEntered: () => this.enterPanels(),
       onExited: () => this.exitPanels(),
       onRide: (layerId) => this._adoptRiddenLayer(layerId),
-      restoreTrackingFrame: (entity) => {
-        const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(
-          ':',
-        );
-        const trackedId = idParts.join(':');
-        if (!trackedId) return false;
-        if (layerId === 'flights')
-          return flightsLayer.refocusTrackedById?.(trackedId) === true;
-        if (layerId === 'military')
-          return militaryFlightsLayer.refocusTrackedById?.(trackedId) === true;
-        return false;
-      },
     });
   }
   get _dataManager() {
@@ -178,10 +169,10 @@ export class CockpitCoordinator {
     const active = Boolean(this.cockpitView?.active);
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
     // "Could Cockpit be ENTERED right now" — so it is false while already
-    // inside, unconditionally. Cockpit takes the entity off
-    // `viewer.trackedEntity` on entry and NEXT puts one back, which made this
-    // flip true/false between calls while `active` stayed true; readers
-    // (including the voice model) read that as a broken half-entered state.
+    // inside, unconditionally. Cockpit releases the engine's follow on entry
+    // and NEXT starts another, which made this flip true/false between
+    // calls while `active` stayed true; readers (including the voice model)
+    // read that as a broken half-entered state.
     const entryAllowed =
       !active && Boolean(gateOpen && info && this.cockpitView?.host.current());
     // Entry needs only the ridden aircraft's own layer: with one tracked,

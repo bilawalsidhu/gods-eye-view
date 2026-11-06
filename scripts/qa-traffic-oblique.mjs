@@ -226,7 +226,7 @@ try {
     await page.evaluate(async (v) => {
       const { flyToLandmark } = await import('/src/locations.js');
       await new Promise((resolve) =>
-        flyToLandmark(window.__godsEyeView.viewer, v.lat, v.lon, {
+        flyToLandmark(window.__godsEyeView.engine, v.lat, v.lon, {
           range: 1000,
           pitch: -15,
           heading: 0,

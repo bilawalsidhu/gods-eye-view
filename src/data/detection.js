@@ -1,4 +1,3 @@
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { paintTransitBracket } from './detectionDraw.js';
 import * as geo from '../geo/index.js';
 import { governorRequestRender } from '../renderGovernor.js';
@@ -198,18 +197,15 @@ export function countFadingRenderEntries(renderEntries) {
   return count;
 }
 // ---------------------------------------------------------------------------
-// Module-level state — singleton lifecycle tied to the Cesium viewer
+// Module-level state — singleton lifecycle tied to the globe engine
 // ---------------------------------------------------------------------------
 
-/** @type {Cesium.Viewer|null} */
-let _viewer = null;
+/** @type {import('../globe/contract.js').GlobeEngine|null} */
+let _engine = null;
 
-/** The camera height (m): the engine's, else a bare viewer's (tests). */
+/** The camera height (m), or undefined before init. */
 function cameraHeight() {
-  const engine = engineFromViewer(_viewer);
-  return engine
-    ? engine.camera.height()
-    : _viewer?.camera?.positionCartographic?.height;
+  return _engine?.camera.height();
 }
 /** @type {number} Current mode index into MODE_LABELS */
 let _mode = MODE_OFF;
@@ -297,12 +293,12 @@ let _cockpitModeListener = null;
 /**
  * Initializes detection inside the shared world-overlay host and stores
  * references to data layers. The host owns the canvas and render listener.
- * @param {object} viewer - The globe engine (or a Cesium viewer; only the
- *   camera height is read, through the engine when one is registered).
+ * @param {import('../globe/contract.js').GlobeEngine} engine - The globe
+ *   engine; only its camera height is read.
  * @param {Array} layers - Data layer modules that may implement getDetectableObjects().
  * @param {Function} onModeChange - Callback invoked with the new mode label string on mode changes.
  */
-export function initDetection(viewer, layers, onModeChange) {
+export function initDetection(engine, layers, onModeChange) {
   if (_cockpitModeListener && typeof window !== 'undefined') {
     window.removeEventListener(
       'gev:cockpit-mode-changed',
@@ -311,7 +307,7 @@ export function initDetection(viewer, layers, onModeChange) {
   }
   _hostLane?.unregister?.();
   _calloutLane?.unregister?.();
-  _viewer = viewer;
+  _engine = engine;
   _layers = layers;
   _onModeChange = onModeChange;
   _debugBanner = detectionDebugRequested(
@@ -367,7 +363,7 @@ export function destroyDetection() {
   _calloutLane = null;
   _transitBracketPaths.clear();
   _calloutCount = 0;
-  _viewer = null;
+  _engine = null;
   _layers = [];
   _onModeChange = null;
   _hostCanvas = null;

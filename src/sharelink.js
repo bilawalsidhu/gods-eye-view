@@ -1,5 +1,4 @@
 import * as geo from './geo/index.js';
-import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import { cesiumHeading, cesiumRoll } from './cameraAngles.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from './bloom.js';
 import {
@@ -65,8 +64,7 @@ const SHARE_STYLE_PARAM_REGISTRY = SHARE_VIEW_STYLE_PARAMS;
 
 export class ShareLinkManager {
   /**
-   * @param {import('./globe/contract.js').GlobeEngine | object} engine The
-   *   globe engine, or a viewer registered for one.
+   * @param {import('./globe/contract.js').GlobeEngine | null} engine
    */
   constructor(
     engine,
@@ -77,7 +75,7 @@ export class ShareLinkManager {
       initialShareCode = null,
     } = {},
   ) {
-    this.engine = engineFromViewer(engine);
+    this.engine = engine ?? null;
     // A host may hand over the share code to open instead of the address.
     this._initialShareCode =
       typeof initialShareCode === 'string' ? initialShareCode : null;
@@ -165,7 +163,7 @@ export class ShareLinkManager {
       this._activeCameraFlight = null;
       flight.settle?.('superseded');
     }
-    this.engine = engine ? engineFromViewer(engine) : null;
+    this.engine = engine ?? null;
     if (!this.engine) return;
     this._removeCameraChanged = this.engine.camera.changed.addEventListener(
       () => this._scheduleUpdate(),

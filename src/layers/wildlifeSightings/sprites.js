@@ -62,8 +62,33 @@ const FALLBACKS = new Map(
   ]),
 );
 
+// One atlas cell per group, side by side, each WILDLIFE_SPRITE_PX * 2 square.
+const CELL_PX = WILDLIFE_SPRITE_PX * 2;
+export const WILDLIFE_ATLAS_CELLS = Object.freeze(
+  Object.fromEntries(
+    WILDLIFE_SPRITE_GROUPS.map((group, index) => [
+      group,
+      Object.freeze([
+        index / WILDLIFE_SPRITE_GROUPS.length,
+        0,
+        (index + 1) / WILDLIFE_SPRITE_GROUPS.length,
+        1,
+      ]),
+    ]),
+  ),
+);
+const FALLBACK_ATLAS = Object.freeze({
+  url: `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${CELL_PX * WILDLIFE_SPRITE_GROUPS.length}" height="${CELL_PX}" viewBox="0 0 ${20 * WILDLIFE_SPRITE_GROUPS.length} 20">${WILDLIFE_SPRITE_GROUPS.map(
+      (group, index) =>
+        `<circle cx="${index * 20 + 10}" cy="10" r="9.1" fill="${ICONIC_TINTS[WILDLIFE_SPRITE_ICONIC[group]]}" stroke="${OUTLINE_COLOR}" stroke-width="${WILDLIFE_BADGE_OUTLINE_PX}"/>`,
+    ).join('')}</svg>`,
+  )}`,
+  cells: WILDLIFE_ATLAS_CELLS,
+});
+
 /** One bounded set of canvas sprites per document, painted only after the
- * icon font is decoded. Until then the very same billboards use plain badges. */
+ * icon font is decoded. Until then the very same badges use plain circles. */
 export function createWildlifeSpriteCache({
   documentRef = globalThis.document,
 } = {}) {
@@ -71,6 +96,7 @@ export function createWildlifeSpriteCache({
   const listeners = new Set();
   let ready = false;
   let loading = null;
+  let atlas = null;
 
   function paint(group) {
     const canvas = documentRef.createElement('canvas');
@@ -111,7 +137,28 @@ export function createWildlifeSpriteCache({
     return loading;
   }
 
+  // The painted sprites side by side, made once on first use.
+  function paintAtlas() {
+    const canvas = documentRef.createElement('canvas');
+    canvas.width = CELL_PX * WILDLIFE_SPRITE_GROUPS.length;
+    canvas.height = CELL_PX;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return FALLBACK_ATLAS;
+    WILDLIFE_SPRITE_GROUPS.forEach((group, index) => {
+      const sprite = sprites.get(group);
+      if (typeof sprite !== 'string')
+        ctx.drawImage(sprite, index * CELL_PX, 0, CELL_PX, CELL_PX);
+    });
+    return Object.freeze({ canvas, cells: WILDLIFE_ATLAS_CELLS });
+  }
+
   return {
+    /** Every group's badge in one atlas ({ url | canvas, cells }), keyed by
+     * sprite group; plain circles until the icon font is ready. */
+    atlas() {
+      if (!ready) return FALLBACK_ATLAS;
+      return (atlas ??= paintAtlas());
+    },
     get(groupOrIconic) {
       const group = wildlifeSpriteGroup(groupOrIconic);
       return (ready ? sprites : FALLBACKS).get(group);

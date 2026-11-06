@@ -1,14 +1,14 @@
-// The Local ADS-B logic on its Navara renderer over a
-// fake engine: magenta markers in the shared aircraft renderer's glyph sets,
-// the UAT ring as its own set, a click through the engine's selection
+// The Local ADS-B logic on its display over a
+// fake engine: magenta markers in the aircraft display's glyph sets,
+// the UAT ring as its own point set, a click through the engine's selection
 // dispatcher selects (the camera never follows), empty map releases, and the
 // layer leaves no mover set behind.
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createLocalAdsbLayer } from './index.js';
-import { createLocalAdsbNavaraRenderer } from './render/navara.js';
-import { aircraftAtlasLayout } from '../aircraft/render/navara.js';
+import { createLocalAdsbDisplay } from './render/display.js';
+import { aircraftAtlasLayout } from '../aircraft/render/display.js';
 import * as selection from '../../data/selectionDispatcher.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import * as geo from '../../geo/index.js';
@@ -49,7 +49,7 @@ const record = (icao, lat, band = '1090') => ({
   source: 'feed',
 });
 
-test('local aircraft draw, ring and select on the Navara renderer; the camera never follows', async () => {
+test('local aircraft draw, ring and select on the display; the camera never follows', async () => {
   const engine = createFakeEngine();
   engine.camera.setView({
     destination: geo.cartesian3.fromDegrees(0, 0, 60_000),
@@ -76,14 +76,10 @@ test('local aircraft draw, ring and select on the Navara renderer; the camera ne
       selection,
       renderer: {
         create: ({ engine: given }) =>
-          (renderer = createLocalAdsbNavaraRenderer(given, {
+          (renderer = createLocalAdsbDisplay(given, {
             drawAtlas: async () => ({
               canvas: { width: layout.width, height: layout.height },
               cells: layout.cells,
-            }),
-            drawRing: () => ({
-              canvas: { width: 64, height: 64 },
-              cells: { ring: [0, 0, 1, 1] },
             }),
           })),
       },
@@ -115,6 +111,19 @@ test('local aircraft draw, ring and select on the Navara renderer; the camera ne
     const rings = sets().filter(({ id }) => id.startsWith('local-adsb-rings'));
     assert.equal(rings.length, 1);
     assert.equal(rings[0].count, 1, 'a ring for the UAT-only aircraft');
+    // The ring: a transparent 24 px point with a 1.5 px outline, over the
+    // markers, drawn through the scene.
+    const ring = engine.fake.moverSet(rings[0].id);
+    assert.equal(ring.options.kind, 'point');
+    assert.equal(ring.options.point.sizePx, 24);
+    assert.equal(ring.options.point.outlinePx, 1.5);
+    assert.equal(ring.options.depthTest, 'always');
+    assert.deepEqual([...ring.store.colors.slice(0, 4)], [0, 0, 0, 0]);
+    assert.equal(ring.store.pickIds[0], 'local-adsb:def456');
+    assert.equal(
+      engine.fake.moverSet(sprites[0].id).options.depthTest,
+      'always',
+    );
     assert.equal(layer.getAllPositions().length, 2);
 
     // A click selects through the dispatcher; the camera does not follow.

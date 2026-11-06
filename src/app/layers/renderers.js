@@ -10,7 +10,8 @@ import { createLaunchesCesiumRenderer } from '../../layers/launches/render/cesiu
 // availability API built on it.
 //
 // A renderer factory `(engine, options) => renderer` draws one layer on one
-// engine kind (`render/cesium.js`, `render/navara.js` of a layer). Cesium
+// engine kind (`render/cesium.js`, `render/navara.js` of a layer), or on
+// every kind (its `render/display.js`, registered for each). Cesium
 // layers without a render/cesium.js draw themselves: they are registered as
 // CESIUM_BUILTIN. Cesium entries are registered here, statically (main
 // chunk); Navara factories are registered by the Navara mode after its
@@ -32,9 +33,9 @@ import { createLaunchesCesiumRenderer } from '../../layers/launches/render/cesiu
 // `availability` provider (`{ engine, unavailable() }` is the part it reads).
 
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
-import { createFlightsCesiumRenderer } from '../../layers/flights/render/cesium.js';
-import { createMilitaryCesiumRenderer } from '../../layers/military/render/cesium.js';
-import { createLocalAdsbCesiumRenderer } from '../../layers/localAdsb/render/cesium.js';
+import { createFlightsDisplay } from '../../layers/flights/render/display.js';
+import { createMilitaryDisplay } from '../../layers/military/render/display.js';
+import { createLocalAdsbDisplay } from '../../layers/localAdsb/render/display.js';
 import { createSatellitesCesiumRenderer } from '../../layers/satellites/render/cesium.js';
 import { createVesselsCesiumRenderer } from '../../layers/vessels/render/cesium.js';
 
@@ -107,9 +108,9 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   'local-firms': createFirmsCesiumRenderer,
   'rocket-launches': createLaunchesCesiumRenderer,
   satellites: createSatellitesCesiumRenderer,
-  flights: createFlightsCesiumRenderer,
-  military: createMilitaryCesiumRenderer,
-  'local-adsb': createLocalAdsbCesiumRenderer,
+  flights: createFlightsDisplay,
+  military: createMilitaryDisplay,
+  'local-adsb': createLocalAdsbDisplay,
   'ais-live-vessels': createVesselsCesiumRenderer,
 });
 

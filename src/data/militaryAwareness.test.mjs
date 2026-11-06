@@ -46,6 +46,7 @@ import {
   presentAwarenessDistance,
 } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
+import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
@@ -938,6 +939,7 @@ test('Contacts activation adopts the production military tracked-subject descrip
 
   try {
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1020,6 +1022,7 @@ test('Contacts activation adopts the production military tracked-subject descrip
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1047,6 +1050,7 @@ test('production military tracked-subject label falls back to registration befor
 
   try {
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1100,6 +1104,7 @@ test('production military tracked-subject label falls back to registration befor
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1146,6 +1151,7 @@ test('a cached Context subject re-reads its label when enrichment lands after se
 
   try {
     _setTrackedFlightRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: id,
       entity: null,
       billboard: { position, color: Cesium.Color.WHITE, show: true },
@@ -1234,6 +1240,7 @@ test('a cached Context subject re-reads its label when enrichment lands after se
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedFlightRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1256,6 +1263,7 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
 
   try {
     _setTrackedFlightRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1345,6 +1353,7 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedFlightRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: id,
       entity: null,
       billboard: { position, show: true },

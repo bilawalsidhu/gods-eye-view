@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
+import { aircraftViewerRenderer } from '../../testSupport/aircraftViewerRenderer.mjs';
 
 function services() {
   const names = [
@@ -31,17 +32,13 @@ function services() {
 // The application's own scene services, as src/app/layers/militaryFlights.js
 // composes them; only the surface samplers and registry are stubbed.
 async function sceneServices() {
-  const { createMilitaryCesiumRenderer } = await import('./render/cesium.js');
   // The application's own scene services, as src/app/layers/militaryFlights.js
   // composes them; only the surface samplers and registry are stubbed.
   return {
     picking: await import('../../data/pickRegistry.js'),
     selection: await import('../../data/selectionDispatcher.js'),
-    // The layer's Cesium renderer, as the app creates it without an engine.
-    renderer: {
-      create: ({ viewer, adopt }) =>
-        createMilitaryCesiumRenderer(null, { viewer, adopt }),
-    },
+    // Seeded through the testing seam with the test's own renderer.
+    renderer: { create: () => null },
     aircraftPresentation: await import('../../data/tr3bRegistry.js'),
     camera: await import('../../data/trackedCamera.js'),
     labels: await import('../../data/detectionDraw.js'),
@@ -186,6 +183,7 @@ async function firstPlacement(appClockLagMs) {
   });
   const added = [];
   layer.testing._setTrackedMilitaryRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
@@ -289,6 +287,7 @@ test('a vanished military contact fades while position-less rows keep theirs', a
   });
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   layer.testing._setTrackedMilitaryRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },

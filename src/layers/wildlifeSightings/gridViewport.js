@@ -115,10 +115,8 @@ export function wildlifeGridTiles({ boxes, z } = {}) {
 }
 
 /** Unlike detail-row viewport queries, grids cover full globe views too. */
-export function wildlifeGridViewportBoxes(viewer) {
-  const rectangle = viewer?.camera?.computeViewRectangle?.(
-    viewer?.scene?.globe?.ellipsoid,
-  );
+export function wildlifeGridViewportBoxes(engine) {
+  const rectangle = engine?.camera?.viewRectangle();
   if (!rectangle) return [];
   return normalizedBoxes([
     Object.fromEntries(

@@ -7,8 +7,9 @@ import {
 } from '../cockpitMath.js';
 
 export function readAircraftInfo() {
-  // In cockpit mode the controller takes the entity off `viewer.trackedEntity`
-  // (see update()), so the cockpit's own handle is the tracked identity there.
+  // In cockpit mode the controller releases the engine's follow of the
+  // aircraft (see enter()), so the cockpit's own handle is the tracked
+  // identity there.
   const trackedEntity = this.host.followed() || this.trackedEntity;
   return resolveTrackedAircraftInfo({
     civilian: this.services.flightsLayer.getTrackedInfo?.() || null,
@@ -32,13 +33,11 @@ export function readSubjectLayerId() {
 }
 
 /**
- * The subject entry would take: a Cesium-tracked aircraft.
+ * The subject entry would take: the aircraft the engine follows.
  * @returns {'aircraft'|null}
  */
 export function resolveEntryKind() {
-  return this.readAircraftInfo() && this.viewer.trackedEntity?.position
-    ? 'aircraft'
-    : null;
+  return this.readAircraftInfo() && this.host.current() ? 'aircraft' : null;
 }
 
 export function dispatchCockpitModeChanged(active, info = null) {
@@ -265,7 +264,7 @@ export function exit({ restoreTracking = true } = {}) {
   this.trackedEntityWasShown = true;
   this.dispatchCockpitModeChanged(false);
   if (restoreTracking && entity && this.host.contains(entity)) {
-    this.host.restore(entity, this.restoreTrackingFrame);
+    this.host.restore(entity);
   }
   this.syncEntry();
   // Back to whichever entry was used: the Contacts button or the readout's.

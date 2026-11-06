@@ -6,8 +6,6 @@ import * as context from '../../data/contextStore.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as selection from '../../data/selectionDispatcher.js';
 import { rendererFor } from './renderers.js';
-import { createLocalAdsbCesiumRenderer } from '../../layers/localAdsb/render/cesium.js';
-import * as trails from '../../data/trailRenderer.js';
 import * as geoid from '../../data/geoid.js';
 import { markDetectionSourcesChanged } from '../../data/detection.js';
 import { refreshTrackedReadout } from '../../data/trackedReadout.js';
@@ -30,12 +28,10 @@ export function createApplicationLocalAdsb({
   displayParams = null,
   resolveAsset = (url) =>
     `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
-  // Test seam: the renderer factory (default: the engine's, from the registry).
+  // Test seam: the renderer factory (default: the engine's, from the
+  // registry: the Local ADS-B display on every engine).
   renderer = {
-    create: ({ engine = null, ...options }) =>
-      engine
-        ? rendererFor('local-adsb', engine, options)
-        : createLocalAdsbCesiumRenderer(null, options),
+    create: ({ engine = null } = {}) => rendererFor('local-adsb', engine),
   },
 } = {}) {
   return createLocalAdsbLayer({
@@ -47,11 +43,8 @@ export function createApplicationLocalAdsb({
       context,
       picking,
       selection,
-      // The engine's Local ADS-B renderer from the registry (render/cesium.js
-      // on Cesium); a bare viewer without an engine (unit tests) draws on
-      // Cesium.
+      // The engine's Local ADS-B renderer from the registry (render/display.js).
       renderer,
-      trails,
       geoid,
       groundSnap: surface?.groundSnap || null,
       enrichment,

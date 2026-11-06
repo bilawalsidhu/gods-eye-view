@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createSelection } from './selection.js';
 
 const row = {
@@ -22,7 +23,14 @@ function fixture(sighting = row) {
   let hit = null;
   let projections = 0;
   let picked = null;
-  let click;
+  const engine = createFakeEngine({ width: 1200, height: 900 });
+  engine.fake.setPose({ height: 30_000 });
+  // Anchors here are screen points already.
+  engine.fake.script('worldToWindow', (anchor) => {
+    projections++;
+    return anchor;
+  });
+  engine.fake.script('pick', () => picked);
   const state = {
     enabled: true,
     destroyed: false,
@@ -36,13 +44,7 @@ function fixture(sighting = row) {
     ambientIds: [],
     ambientRows: [],
     labelRows: [],
-    viewer: {
-      scene: {
-        pick: () => picked,
-        canvas: { clientWidth: 1200, clientHeight: 900 },
-      },
-      camera: { positionCartographic: { height: 30_000 } },
-    },
+    engine,
   };
   const selection = createSelection({
     state,
@@ -55,16 +57,7 @@ function fixture(sighting = row) {
           hit?.sourceId === sourceId ? hit : null,
       },
       now: () => row.observedAt + 60_000,
-      project: (_scene, anchor) => {
-        projections++;
-        return anchor;
-      },
       focus: { requestWorldFocus: (request) => flights.push(request) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => (click = fn),
-        destroy() {},
-      }),
-      cesium: { ScreenSpaceEventType: { LEFT_CLICK: 0 } },
       eventTarget: new EventTarget(),
     },
     parts: {
@@ -100,8 +93,8 @@ function fixture(sighting = row) {
       selection.photoCardsChanged();
     },
     click(id = `wildlife:${sighting.stableId}`) {
-      picked = id ? { id } : null;
-      click({ position: { x: 10, y: 20 } });
+      picked = id ? { id } : undefined;
+      engine.fake.input('click', { position: { x: 10, y: 20 } });
     },
   };
 }

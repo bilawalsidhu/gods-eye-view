@@ -26,30 +26,26 @@ test('claims on a globe engine set its camera sensitivity and share one ledger',
   assert.deepEqual(cameraSensitivityClaims(engine), []);
 });
 
-test("a Cesium viewer's camera claims on the same key as its engine's camera", async () => {
+test("a Cesium engine's claims share one ledger and set its viewer's camera", async () => {
   const { createFakeViewer } =
     await import('../globe/cesium/testing/fakeViewer.mjs');
   const { createCesiumEngine } =
     await import('../globe/cesium/createCesiumEngine.js');
-  const { registerViewerEngine } =
-    await import('../globe/cesium/engineFromViewer.js');
   const viewer = createFakeViewer();
   const engine = createCesiumEngine(viewer, { requestRender: () => {} });
-  const unregister = registerViewerEngine(viewer, engine);
   try {
-    claimCameraSensitivity(viewer.camera, 'traffic', 0.05);
+    claimCameraSensitivity(engine.camera, 'traffic', 0.05);
     claimCameraSensitivity(engine, 'transit', 0.05);
     // One ledger: both claims are on it, and releasing one keeps the other.
-    assert.deepEqual(cameraSensitivityClaims(viewer).sort(), [
+    assert.deepEqual(cameraSensitivityClaims(engine).sort(), [
       'traffic',
       'transit',
     ]);
     releaseCameraSensitivity(engine, 'transit');
     assert.equal(viewer.camera.percentageChanged, 0.05);
-    releaseCameraSensitivity(viewer.camera, 'traffic');
+    releaseCameraSensitivity(engine.camera, 'traffic');
     assert.equal(viewer.camera.percentageChanged, 0.5);
   } finally {
-    unregister();
     engine.destroy();
   }
 });

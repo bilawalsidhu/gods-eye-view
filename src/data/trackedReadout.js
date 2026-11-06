@@ -4,7 +4,6 @@ import {
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
 import { WORLD_OVERLAY_STYLE } from '../overlays/worldOverlayTokens.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 
 /**
  * @module trackedReadout
@@ -34,9 +33,7 @@ const DEFAULT_TRACKED_OVERLAY_HOST = Object.freeze({
   clearSource: clearOverlaySource,
 });
 
-let _viewer = null;
-// The globe engine, when the readout was given one (or a viewer with a
-// registered engine): the followed target is engine.camera.following().
+// The globe engine: the followed target is engine.camera.following().
 let _engine = null;
 let _trackedEntityChangedRemove = null;
 let _selectedContext = null;
@@ -149,8 +146,7 @@ function followSubject(handle) {
 }
 
 function trackedSubject() {
-  if (_engine) return followSubject(_engine.camera.following());
-  return _viewer?.trackedEntity || null;
+  return _engine ? followSubject(_engine.camera.following()) : null;
 }
 
 function activeEntity() {
@@ -262,22 +258,17 @@ const READOUT_CONTEXT_LAYERS = new Set(['alpr-cameras', 'local-adsb']);
 /**
  * Initialize the model bridge and selection listeners. No render listener is
  * installed; the already-initialized world-overlay host owns the frame lane.
- * @param {Object} target The globe engine (or a viewer whose engine is
- *   registered): the readout follows engine.camera.following(), its label
- *   (plain data) or its Cesium entity. A bare viewer (tests) is read for
- *   its trackedEntity.
+ * @param {import('../globe/contract.js').GlobeEngine} engine The readout
+ *   follows engine.camera.following(), its label (plain data) or its Cesium
+ *   entity.
  */
-export function initTrackedReadout(target) {
-  if (!target || _viewer === target) return;
-  if (_viewer) destroyTrackedReadout();
-  _viewer = target;
-  _engine = engineFromViewer(target);
+export function initTrackedReadout(engine) {
+  if (!engine || _engine === engine) return;
+  if (_engine) destroyTrackedReadout();
+  _engine = engine;
   _overlayHost.setVisible(TRACKED_OVERLAY_SOURCE_ID, true);
-  const changed = _engine
-    ? _engine.camera.followChanged
-    : target.trackedEntityChanged;
   _trackedEntityChangedRemove =
-    changed?.addEventListener?.(() => {
+    engine.camera.followChanged?.addEventListener?.(() => {
       if (trackedSubject()) _selectedContext = null;
       syncActiveEntity();
     }) || null;
@@ -343,7 +334,6 @@ export function destroyTrackedReadout() {
   _selectedContext = null;
   clearTrackedSource();
   _overlayHost.setVisible(TRACKED_OVERLAY_SOURCE_ID, false);
-  _viewer = null;
   _engine = null;
 }
 

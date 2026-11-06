@@ -1,13 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
-import { registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
 import { cancelCameraArrival, ownCameraArrival } from './cameraArrival.js';
 
-test('an arrival owned on the engine yields to a cancel through its viewer', () => {
+test('an arrival owned on the engine yields to a cancel on the engine', () => {
   const engine = createFakeEngine();
-  const viewer = {};
-  const unregister = registerViewerEngine(viewer, engine);
   const cancelled = [];
   // A correction releases its ownership when it stops, as the ground guard does.
   const own = (key, name) => {
@@ -17,12 +14,11 @@ test('an arrival owned on the engine yields to a cancel through its viewer', () 
       release();
     });
   };
-  own(engine, 'engine-owned');
-  cancelCameraArrival(viewer);
-  own(viewer, 'viewer-owned');
+  own(engine, 'first');
   cancelCameraArrival(engine);
-  assert.deepEqual(cancelled, ['engine-owned', 'viewer-owned']);
-  unregister();
+  own(engine, 'second');
+  cancelCameraArrival(engine);
+  assert.deepEqual(cancelled, ['first', 'second']);
 });
 
 test('a newer arrival replaces the older one and release is idempotent', () => {

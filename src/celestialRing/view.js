@@ -1,6 +1,5 @@
 // The shared engine view has no renderer-library imports. Reuse its cached
 // camera basis for the celestial canvas, with flight and host ownership here.
-import { registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
 import { createEngineLayerView } from '../layers/shared/render/engineView.js';
 export function createCelestialView(engine) {
   const adapter = createEngineLayerView(engine, { layerId: 'celestial-ring' });
@@ -11,11 +10,9 @@ export function createCelestialView(engine) {
   view.scene.requestRender = () => engine.render.request('celestial-ring');
   view.camera.flyTo = ({ easingFunction, ...options }) =>
     engine.camera.flyTo({ ...options, easing: 'cubicInOut' });
-  const unregister = registerViewerEngine(view, engine);
   return {
     view,
     destroy() {
-      unregister();
       adapter.destroy();
     },
   };

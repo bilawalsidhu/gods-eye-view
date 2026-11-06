@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { CockpitViewController } from './cockpitController.js';
 import { COCKPIT_MIN_GROUND_CLEARANCE_M } from './cockpitPresentation.js';
 import * as geo from '../geo/index.js';
+import { createCockpitEngine } from '../testSupport/cockpitEngine.mjs';
 
 function environment() {
   const original = { document: globalThis.document, window: globalThis.window };
@@ -14,25 +15,18 @@ function environment() {
   const window = Object.assign(new EventTarget(), { clearTimeout, setTimeout });
   globalThis.document = document;
   globalThis.window = window;
-  const callbacks = new Set();
-  const event = {
-    addEventListener(fn) {
-      callbacks.add(fn);
-      return () => callbacks.delete(fn);
-    },
-  };
-  const viewer = {
-    scene: {
-      preUpdate: event,
-      screenSpaceCameraController: { enableInputs: false },
-    },
-    trackedEntityChanged: event,
-    entities: { contains: () => false },
-  };
+  const cockpit = createCockpitEngine();
+  const { engine } = cockpit;
+  // The Cockpit's frame and follow subscriptions.
+  const subscriptions = () =>
+    engine.frames.preUpdate.numberOfListeners +
+    engine.camera.followChanged.numberOfListeners;
   return {
-    viewer,
-    callbacks,
+    engine,
+    cockpit,
+    subscriptions,
     restore() {
+      engine.destroy();
       Object.assign(globalThis, original);
     },
   };
@@ -41,11 +35,20 @@ function environment() {
 test('Cockpit subscriptions are released once and retained actions cannot restart it', () => {
   const env = environment();
   try {
-    const owner = new CockpitViewController(env.viewer, { services: {} });
-    assert.equal(env.callbacks.size, 2);
+    const before = env.subscriptions();
+    const owner = new CockpitViewController(env.engine, { services: {} });
+    assert.equal(env.subscriptions(), before + 2);
+    let doubleClicks = 0;
+    owner.onSceneDoubleClick = () => {
+      doubleClicks++;
+    };
+    env.engine.fake.input('doubleClick', { position: { x: 1, y: 1 } });
+    assert.equal(doubleClicks, 1);
     owner.dispose();
     owner.dispose();
-    assert.equal(env.callbacks.size, 0);
+    assert.equal(env.subscriptions(), before);
+    env.engine.fake.input('doubleClick', { position: { x: 1, y: 1 } });
+    assert.equal(doubleClicks, 1, 'the double-click route is released');
     assert.equal(owner.enter(), false);
     assert.equal(owner.navigateContext(1), false);
     assert.equal(owner.toggleTrackedTr3b(), false);
@@ -60,18 +63,19 @@ test('disposing an active Cockpit releases the supplied render owner without ret
   const env = environment();
   try {
     const released = [];
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: { releaseContinuousRender: (reason) => released.push(reason) },
     });
-    owner.active = true;
+    const ridden = env.cockpit.aircraft();
+    env.engine.input.setCameraInputs(false);
+    ridden.show = false;
+    Object.assign(owner, { active: true, trackedEntity: ridden });
     owner.dispose();
     owner.dispose();
     assert.deepEqual(released, ['cockpit']);
-    assert.equal(
-      env.viewer.scene.screenSpaceCameraController.enableInputs,
-      true,
-    );
-    assert.equal(env.viewer.trackedEntity, undefined);
+    assert.equal(env.engine.fake.cameraInputsEnabled, true);
+    assert.equal(ridden.show, true, 'the ridden glyph is shown again');
+    assert.equal(env.engine.camera.following(), null, 'and not followed');
     assert.equal(owner.active, false);
   } finally {
     env.restore();
@@ -91,15 +95,17 @@ test('aircraft identity is read from the supplied layer instances', () => {
       layerId: 'military',
       callsign: 'MILITARY',
     };
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: {
         flightsLayer: { getTrackedInfo: () => civilian },
         militaryFlightsLayer: { getTrackedInfo: () => military },
+        // A follow change syncs the entry and its TR-3B chip.
+        isTr3b: () => false,
       },
     });
-    env.viewer.trackedEntity = { gevTrackedId: 'military:def456' };
+    env.cockpit.ride(env.cockpit.aircraft({ gevTrackedId: 'military:def456' }));
     assert.deepEqual(owner.readAircraftInfo(), military);
-    env.viewer.trackedEntity = { gevTrackedId: 'flights:abc123' };
+    env.cockpit.ride(env.cockpit.aircraft({ gevTrackedId: 'flights:abc123' }));
     assert.deepEqual(owner.readAircraftInfo(), civilian);
     owner.dispose();
   } finally {
@@ -112,7 +118,7 @@ test('an obsolete regional briefing cannot publish after Cockpit disposal', asyn
   try {
     let finish;
     let signal;
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: {
         regionalDistanceM: () => Infinity,
         fetchRegionalBrief: (_lat, _lon, options) => {
@@ -148,14 +154,15 @@ test('stopping Cockpit revokes camera actions before deferred disposal releases 
   const env = environment();
   try {
     const released = [];
-    const owner = new CockpitViewController(env.viewer, {
+    const before = env.subscriptions();
+    const owner = new CockpitViewController(env.engine, {
       services: {
         releaseContinuousRender: (reason) => released.push(reason),
       },
     });
     owner.active = true;
     owner.stop();
-    assert.equal(env.callbacks.size, 0);
+    assert.equal(env.subscriptions(), before);
     assert.equal(owner.update(), false);
     assert.equal(owner.navigateContext(1), false);
     assert.deepEqual(released, []);
@@ -174,13 +181,12 @@ test('stopped Cockpit cannot rearm briefing rotation or request a fresh region',
     let next = 0;
     let fetches = 0;
     let paints = 0;
-    env.viewer.scene.screenSpaceCameraController.enableInputs = true;
     window.setTimeout = (callback) => {
       frames.set(++next, callback);
       return next;
     };
     window.clearTimeout = (id) => frames.delete(id);
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: {
         regionalDistanceM: () => Infinity,
         fetchRegionalBrief: () => {
@@ -223,7 +229,7 @@ test('the weather toggle flips from its own state, however fast it is pressed', 
       requested.push(event.detail.enabled),
     );
     const published = [];
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: {},
       publish: { context: (view) => published.push(view.weather) },
     });
@@ -261,23 +267,9 @@ test('the cockpit eye stays above the engine surface when the aircraft reads bel
       place.latitude,
       107,
     );
-    const views = [];
-    Object.assign(env.viewer, {
-      clock: { currentTime: 0 },
-      camera: {
-        setView: ({ destination }) =>
-          views.push(geo.cartographic.fromCartesian(destination).height),
-        positionCartographic: { ...place, height: 130 },
-      },
-      entities: { contains: () => true },
-    });
-    env.viewer.scene.globe = { getHeight: () => SURFACE_M };
-    const entity = {
-      position: {
-        getValue: (time, result) => geo.cartesian3.clone(aircraft, result),
-      },
-    };
-    const owner = new CockpitViewController(env.viewer, {
+    env.engine.fake.script('terrainHeight', SURFACE_M);
+    const entity = env.cockpit.aircraft({ position: aircraft });
+    const owner = new CockpitViewController(env.engine, {
       services: {
         cachedGroundFloor: () => undefined,
         GROUND_FLOOR_LIFT_M: 1.5,
@@ -297,6 +289,12 @@ test('the cockpit eye stays above the engine surface when the aircraft reads bel
       updateHud() {},
     });
     owner.update();
+    const views = env.engine.fake
+      .callsOf('camera.setView')
+      .map(
+        ({ args: [{ destination }] }) =>
+          geo.cartographic.fromCartesian(destination).height,
+      );
     assert.equal(views.length, 1);
     assert.ok(
       views[0] >= SURFACE_M + COCKPIT_MIN_GROUND_CLEARANCE_M - 1e-6,

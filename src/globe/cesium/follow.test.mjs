@@ -77,6 +77,38 @@ test('without native the follow tracks a proxy entity at position()', () => {
   assert.equal(viewer.trackedEntity, undefined);
 });
 
+test('a native that is not an Entity is echoed and followed through an ENU proxy that shows its readout fields', () => {
+  const { viewer, camera, frame } = setup();
+  const native = {
+    id: 'flights-tracked-1',
+    gevTrackedId: 'flights:abc123',
+    gevLabelModel: { title: 'DAL123' },
+    gevDisplayPosition: () => TARGET,
+  };
+  const handle = camera.follow({
+    native,
+    position: () => TARGET,
+    viewFrom: () => ({ x: 0, y: -500, z: 200 }),
+  });
+  const proxy = viewer.trackedEntity;
+  assert.ok(proxy instanceof Cesium.Entity);
+  assert.notEqual(proxy, native);
+  assert.equal(handle.native, native);
+  assert.equal(camera.following(), handle);
+  assert.equal(proxy.trackingReferenceFrame, Cesium.TrackingReferenceFrame.ENU);
+  assert.equal(proxy.gevTrackedId, 'flights:abc123');
+  native.gevLabelModel = { title: 'DAL124' };
+  assert.equal(proxy.gevLabelModel.title, 'DAL124', 'read through');
+  assert.equal(proxy.gevDisplayPosition(), TARGET);
+  frame();
+  const [[, offset]] = viewer
+    .callsOf('camera.lookAtTransform')
+    .map((call) => call.args);
+  assert.deepEqual([offset.x, offset.y, offset.z], [0, -500, 200]);
+  handle.stop();
+  assert.equal(viewer.entities.contains(proxy), false);
+});
+
 test('a camera command or another tracked entity ends the follow', () => {
   const { viewer, camera, changes } = setup();
   const options = { position: () => TARGET, viewFrom: { x: 0, y: -500, z: 0 } };

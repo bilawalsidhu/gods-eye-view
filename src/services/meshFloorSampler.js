@@ -200,9 +200,8 @@ export function createMeshFloorSampler({
   return {
     sampleMeshFloorCells,
     cachedGroundFloor,
-    /** Whether the engine of `target` (a scene or viewer) has its tiles
-     *  loaded (street level's mesh sampler gate). */
-    visibleTilesetLoaded: (target) =>
-      engineFromViewer(target)?.surface.tilesLoaded() ?? false,
+    /** Whether the globe engine has its tiles loaded (street level's mesh
+     *  sampler gate). */
+    visibleTilesetLoaded: (engine) => engine?.surface.tilesLoaded() ?? false,
   };
 }

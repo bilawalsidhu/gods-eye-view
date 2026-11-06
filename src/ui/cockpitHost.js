@@ -1,36 +1,15 @@
-// Camera and aircraft ownership used by the shared first-person controller.
+// Camera and aircraft ownership used by the shared first-person controller,
+// on the globe contract: the ridden aircraft is the engine follow's target,
+// the aircraft display's tracked glyph handle.
 import { routeViewerDoubleClick } from '../globe/cesium/doubleClick.js';
 
-export function cockpitHost(viewer, engine) {
-  if (viewer) {
-    return {
-      preUpdate: viewer.scene.preUpdate,
-      followChanged: viewer.trackedEntityChanged,
-      followed: () => viewer.trackedEntity,
-      current: () =>
-        viewer.trackedEntity?.position ? viewer.trackedEntity : null,
-      contains: (entity) => viewer.entities.contains(entity),
-      position: (entity, result) =>
-        entity.position.getValue(viewer.clock.currentTime, result),
-      release: () => {
-        viewer.trackedEntity = undefined;
-      },
-      restore: (entity, refocus) => {
-        viewer.trackedEntity = entity;
-        refocus(entity);
-      },
-      camera: viewer.camera,
-      cartographic: () => viewer.camera.positionCartographic,
-      terrainHeight: (place) => viewer.scene.globe?.getHeight(place),
-      surface: viewer.scene,
-      inputs: (enabled) => {
-        viewer.scene.screenSpaceCameraController.enableInputs = enabled;
-      },
-      canvasPosition: (world) =>
-        viewer.scene.cartesianToCanvasCoordinates(world) ?? null,
-      routeDoubleClick: (handle) => routeViewerDoubleClick(viewer, handle),
-    };
-  }
+/**
+ * @param {import('../globe/contract.js').GlobeEngine} engine
+ * @param {{ viewer?: object|null }} [options] `viewer`: Cesium's Viewer when
+ *   the engine is Cesium. Its stock double-click would drop the follow, so
+ *   the Cockpit's goes first; Navara has none to route around.
+ */
+export function cockpitHost(engine, { viewer = null } = {}) {
   const aircraft = () => {
     const target = engine.camera.following()?.native;
     return target?.resumeAircraftFollow ? target : null;
@@ -50,8 +29,9 @@ export function cockpitHost(viewer, engine) {
     surface: engine,
     inputs: (enabled) => engine.input.setCameraInputs(enabled),
     canvasPosition: (world) => engine.projector.worldToWindow(world) ?? null,
-    // Navara has no stock double-click to route around.
     routeDoubleClick: (handle) =>
-      engine.input.on('doubleClick', (event) => handle(event.position)),
+      viewer
+        ? routeViewerDoubleClick(viewer, handle)
+        : engine.input.on('doubleClick', (event) => handle(event.position)),
   };
 }

@@ -12,7 +12,7 @@ import { createContactTrailRenderer } from '../../../data/render/cesiumContactTr
 import { CAMERA_PERCENTAGE_CHANGED } from '../policy.js';
 
 /** Native resource owner; feed/playback/selection policy stays in the layer. */
-export function createTransitCesiumRenderer({ state, services }) {
+export function createTransitCesiumRenderer({ state, services, engine }) {
   let viewer = null;
   const banks = [];
   const removers = new Set();
@@ -99,13 +99,13 @@ export function createTransitCesiumRenderer({ state, services }) {
     },
     claimCamera() {
       claimCameraSensitivity(
-        viewer?.camera,
+        engine ?? viewer?.camera,
         'transit',
         CAMERA_PERCENTAGE_CHANGED,
       );
     },
     releaseCamera() {
-      releaseCameraSensitivity(viewer?.camera, 'transit');
+      releaseCameraSensitivity(engine ?? viewer?.camera, 'transit');
     },
     onCameraChanged: (fn) => own(viewer.camera.changed.addEventListener(fn)),
     onPreRender: (fn) => own(viewer.scene.preRender.addEventListener(fn)),

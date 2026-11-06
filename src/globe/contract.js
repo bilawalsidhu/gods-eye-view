@@ -141,8 +141,11 @@
  *   from the target in its east-north-up frame, metres.
  * @property {number} [minRange] Closest the camera comes (150 m).
  * @property {'enu'} [frame]
- * @property {any} [native] Cesium only (layers' render/cesium.js): the
- *   Entity to put on viewer.trackedEntity instead of a proxy.
+ * @property {any} [native] What is followed, as the handle's `native`. On
+ *   Cesium an Entity goes on viewer.trackedEntity itself; anything else (a
+ *   layer's own handle) is followed through a proxy Entity, which shows the
+ *   handle's tracked-readout fields (gevTrackedId, gevLabelModel,
+ *   gevDisplayPosition, gevVisualPosition, gevSelectionOrigin).
  * @property {{ id: string, model: object | (() => object), position: () => Cartesian3 }} [label]
  *   The tracked readout's card (src/data/trackedReadout.js): its id, label
  *   model ({ title, details, accent, ... }) and anchor, as plain data.
@@ -401,7 +404,8 @@
  * @property {number} [rotation] Sprites: screen angle in radians,
  *   counter-clockwise from screen up (Cesium's Billboard.rotation).
  * @property {{ x: number, y: number, z: number, w: number }} [orientation]
- *   Models: the model frame's rotation into Earth-fixed axes.
+ *   Models: the rotation of the glTF's own axes (as the file stores them,
+ *   +Y up) into Earth-fixed axes; no engine adds an axis correction.
  * @property {number[]} [color] rgba in 0..1; multiplies the sprite's texels.
  * @property {number} [scale]
  * @property {string} [cell] An atlas cell key.
@@ -415,9 +419,10 @@
  * @property {() => number} count
  * @property {() => void} commit Uploads what changed (one buffer write) and
  *   requests a render; nothing else draws a frame.
- * @property {() => boolean} ready Whether what the set draws has loaded: a
- *   model set's glTF (Cesium: every drawn instance's model), a sprite set's
- *   atlas.
+ * @property {(index?: number) => boolean} ready Whether what the set draws
+ *   has loaded: a model set's glTF (Cesium: every drawn instance's model), a
+ *   sprite set's atlas. With an index, what that instance draws (Cesium: its
+ *   own model; the other engines load a set's glTF once).
  *   A layer keeps its fallback visual until then.
  * @property {() => void} destroy
  *

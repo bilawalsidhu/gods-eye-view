@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { WORLD_OVERLAY_OCCLUDER_SELECTORS } from '../overlays/worldOverlayChrome.js';
 
 // DOM cards also avoid the HUD edges and responsive sheet containers.
@@ -32,13 +32,13 @@ const rectAt = (left, top, width, height) => ({
   height,
 });
 
-/** Read visible chrome rectangles inside the viewer's usable screen area. */
+/** Read visible chrome rectangles inside the globe canvas's usable area. */
 export function readWildlifeCardSafeArea({
   documentRef,
-  viewer,
+  engine,
   windowRef = globalThis.window,
 }) {
-  const canvasRect = viewer?.scene?.canvas?.getBoundingClientRect?.();
+  const canvasRect = engine?.host?.canvas?.getBoundingClientRect?.();
   const width =
     windowRef?.innerWidth || documentRef.documentElement.clientWidth;
   const height =
@@ -208,67 +208,51 @@ export function placeWildlifeSightingCard(point, size, safeArea) {
 }
 
 /** Project a front-side sighting into viewport coordinates. */
-export function projectWildlifeSighting(viewer, row, layer) {
-  if (
-    !viewer?.scene ||
-    !Number.isFinite(row?.lat) ||
-    !Number.isFinite(row?.lon)
-  )
+export function projectWildlifeSighting(engine, row, layer) {
+  if (!engine || !Number.isFinite(row?.lat) || !Number.isFinite(row?.lon))
     return null;
   const position =
     layer?.getSightingPosition?.(row.stableId) ||
-    Cesium.Cartesian3.fromDegrees(row.lon, row.lat);
-  const ellipsoid = viewer.scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84;
-  if (
-    viewer.camera?.positionWC &&
-    new Cesium.EllipsoidalOccluder(
-      ellipsoid,
-      viewer.camera.positionWC,
-    ).isPointVisible(position) !== true
-  )
-    return null;
-  const point = Cesium.SceneTransforms.worldToWindowCoordinates(
-    viewer.scene,
-    position,
-  );
+    geo.cartesian3.fromDegrees(row.lon, row.lat);
+  if (engine.projector.horizonVisible(position) !== true) return null;
+  const point = engine.projector.worldToWindow(position);
   if (!point) return null;
-  const rect = viewer.scene.canvas?.getBoundingClientRect?.();
+  const rect = engine.host.canvas?.getBoundingClientRect?.();
   return { x: point.x + (rect?.left || 0), y: point.y + (rect?.top || 0) };
 }
 
 /** Translate the camera by the smallest screen correction and preserve its
  * altitude/orientation. A card must never zoom merely to reveal its anchor. */
-export function panWildlifeSighting(viewer, from, to, reducedMotion = false) {
-  const camera = viewer?.camera;
-  if (!camera?.pickEllipsoid || !camera.flyTo) return false;
-  const rect = viewer.scene.canvas.getBoundingClientRect();
-  const local = (p) => new Cesium.Cartesian2(p.x - rect.left, p.y - rect.top);
-  const ellipsoid = viewer.scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84;
-  const start = camera.pickEllipsoid(local(from), ellipsoid);
-  const finish = camera.pickEllipsoid(local(to), ellipsoid);
-  if (!start || !finish || !camera.positionWC) return false;
-  const delta = Cesium.Cartesian3.subtract(
-    start,
-    finish,
-    new Cesium.Cartesian3(),
+export function panWildlifeSighting(engine, from, to, reducedMotion = false) {
+  const camera = engine?.camera;
+  if (!camera) return false;
+  const rect = engine.host.canvas?.getBoundingClientRect?.();
+  const local = (p) => ({
+    x: p.x - (rect?.left || 0),
+    y: p.y - (rect?.top || 0),
+  });
+  const start = camera.pickEllipsoid(local(from));
+  const finish = camera.pickEllipsoid(local(to));
+  if (!start || !finish) return false;
+  const pose = camera.pose();
+  const destination = geo.cartesian3.add(
+    pose.position,
+    geo.cartesian3.subtract(start, finish, geo.cartesian3.create()),
+    geo.cartesian3.create(),
   );
-  const destination = Cesium.Cartesian3.add(
-    camera.positionWC,
-    delta,
-    new Cesium.Cartesian3(),
-  );
-  const cartographic = ellipsoid.cartesianToCartographic(destination);
+  const cartographic = geo.cartographic.fromCartesian(destination);
   if (!cartographic) return false;
-  cartographic.height = camera.positionCartographic.height;
+  cartographic.height = pose.cartographic.height;
   camera.flyTo({
-    destination: ellipsoid.cartographicToCartesian(cartographic),
+    destination: geo.cartographic.toCartesian(cartographic),
     orientation: {
-      heading: camera.heading,
-      pitch: camera.pitch,
-      roll: camera.roll,
+      heading: pose.heading,
+      pitch: pose.pitch,
+      roll: pose.roll,
     },
     duration: reducedMotion ? 0 : 0.22,
-    easingFunction: Cesium.EasingFunction.QUADRATIC_OUT,
+    // The contract has no ease-out; linear keeps the correction prompt.
+    easing: 'linear',
   });
   return true;
 }

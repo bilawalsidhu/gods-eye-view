@@ -1,4 +1,3 @@
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { cancelCameraArrival } from './cameraArrival.js';
 
 function cloneLayerParams(value) {
@@ -84,8 +83,8 @@ export class LayerLifecycle {
    * @param {object | null} viewer The Cesium viewer (null on Navara).
    * @param {{ engine?: import('../globe/contract.js').GlobeEngine,
    *   allowQaRegistration?: boolean, getSourceAvailability?: Function }} [options]
-   *   `engine` (default: the viewer's registered engine): every module call
-   *   gets `{ signal, engine }` as its second argument.
+   *   `engine`: every module call gets `{ signal, engine }` as its second
+   *   argument.
    *   `attachSettleTimeoutMs`: how long a scene bind or detach waits for
    *   asynchronous layer attachments before it continues without them.
    */
@@ -102,7 +101,7 @@ export class LayerLifecycle {
     this._catalogSourceAvailability = getSourceAvailability;
     this._visibilityTarget = visibilityTarget;
     this.viewer = viewer;
-    this.engine = engine ?? engineFromViewer(viewer) ?? null;
+    this.engine = engine ?? null;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
     this._listeners = new Set();
@@ -214,7 +213,7 @@ export class LayerLifecycle {
   bindCatalog(viewer, engine, catalog, options = {}) {
     if (this._registrationsFinalized) throw new Error('Scene already attached');
     this.viewer = viewer;
-    this.engine = engine ?? engineFromViewer(viewer) ?? null;
+    this.engine = engine ?? null;
     this._catalogSourceAvailability = catalog.getSourceAvailability;
     const scene = new AbortController();
     this._sceneController = scene;
@@ -1456,7 +1455,9 @@ export class LayerLifecycle {
     const entry = this.layers.get(layerId);
     if (!entry) return { intentEpoch: null, promise: Promise.resolve() };
     const desiredState = Boolean(shouldEnable);
-    if (!desiredState) cancelCameraArrival(this.viewer);
+    // A layer leaving ends the camera arrival correction on a globe with a
+    // viewer (Cesium).
+    if (!desiredState && this.viewer) cancelCameraArrival(this.engine);
     if (entry.destroying) {
       return {
         intentEpoch: null,
@@ -2487,7 +2488,7 @@ export class LayerLifecycle {
   async destroyLayer(layerId) {
     const entry = this.layers.get(layerId);
     if (!entry || entry.destroying) return false;
-    cancelCameraArrival(this.viewer);
+    if (this.viewer) cancelCameraArrival(this.engine);
     entry.destroying = true;
     // Work parked for the next scene ends now; teardown waits for its queue.
     this._settleSceneWaiters(false, entry);

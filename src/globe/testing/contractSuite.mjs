@@ -479,6 +479,11 @@ export function createContractSuite(
           set.commit();
           ensure(set.count() === 3, `count ${set.count()}`);
           ensure(
+            typeof set.ready() === 'boolean' &&
+              typeof set.ready(0) === 'boolean',
+            'ready() and ready(index) answer booleans',
+          );
+          ensure(
             engine.movers
               .list()
               .some(
@@ -1211,6 +1216,10 @@ export function createContractSuite(
           // ready() turns true once the glTF has loaded (the magenta point
           // and sprites above can already fill the region before then).
           await until(() => models.ready(), 'the model set ready()');
+          ensure(
+            models.ready(0) === true,
+            'the drawn instance is not ready(0)',
+          );
           await until(() => modelPixels() > 150, 'the model drawn');
         } finally {
           for (const set of sets) set.destroy();
@@ -2548,7 +2557,10 @@ export function createContractSuite(
             orientation: { heading: 0, pitch: -0.6, roll: 0 },
           });
           await settle();
+          // A layer's own handle as `native`: echoed, whatever the engine.
+          const followed = { id: 'contract-followed' };
           const handle = camera.follow({
+            native: followed,
             position: () => at(step),
             viewFrom: { x: 0, y: -1000, z: 400 },
           });
@@ -2556,6 +2568,7 @@ export function createContractSuite(
             camera.following() === handle,
             'following() is not the handle',
           );
+          ensure(handle.native === followed, 'the handle lost its native');
           ensure(
             changes.at(-1) === handle,
             'followChanged did not report the handle',

@@ -364,7 +364,7 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
   const modes = [];
   try {
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [detectableLayer()], (mode) => modes.push(mode));
+    initDetection(env.engine, [detectableLayer()], (mode) => modes.push(mode));
     assert.equal(env.postRender.listeners.size, 1);
     assert.equal(env.document.getElementById('detection-overlay'), null);
     assert.ok(env.document.getElementById('world-overlay-canvas'));
@@ -518,7 +518,7 @@ test('callouts stop painting the moment the last detectable object goes away', (
   }];
   try {
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
+    initDetection(env.engine, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
     setMode('DENSE');
     env.advance(250);
     env.postRender.raise();
@@ -554,7 +554,7 @@ test('every style paints its OWN plate token through the production callout path
   const env = installEnvironment();
   try {
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [mixedTierLayer()], () => {});
+    initDetection(env.engine, [mixedTierLayer()], () => {});
     setMode('DENSE');
     settleFrame(env);
     settleFrame(env);
@@ -592,7 +592,7 @@ test('space-tier callouts take the heavier plate while air contacts keep the lig
   const env = installEnvironment();
   try {
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [mixedTierLayer()], () => {});
+    initDetection(env.engine, [mixedTierLayer()], () => {});
     setDetectionStyle('surveillance');
     setMode('DENSE');
     settleFrame(env);
@@ -620,7 +620,7 @@ test('surveillance military tier reaches the dedicated render target as shipped 
   const env = installEnvironment();
   try {
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [militaryLayer()], () => {});
+    initDetection(env.engine, [militaryLayer()], () => {});
     setDetectionStyle('surveillance');
     setMode('DENSE');
     env.advance(250);
@@ -660,7 +660,7 @@ test('Global Context echo brackets reach the canvas in the detection style colou
       echo,
     });
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [militaryLayer()], () => {});
+    initDetection(env.engine, [militaryLayer()], () => {});
     setMode('DENSE');
     setDetectionStyle('normal');
     settleFrame(env);
@@ -706,7 +706,7 @@ test('a Global Context echo bracket is drawn outside its contact bracket and dim
       level: () => 0.5,
     });
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [militaryLayer()], () => {});
+    initDetection(env.engine, [militaryLayer()], () => {});
     setMode('DENSE');
     setDetectionStyle('normal');
     settleFrame(env);
@@ -778,7 +778,7 @@ test('under the Cyber sonar sweep an echo is never brighter than its own bracket
       level: () => 1,
     });
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [contact], () => {});
+    initDetection(env.engine, [contact], () => {});
     setMode('DENSE');
     setDetectionStyle('normal');
     settleFrame(env);
@@ -840,7 +840,7 @@ test('resting Global Context pulses skip echo work for the whole frame, not per 
       },
     });
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [layer], () => {});
+    initDetection(env.engine, [layer], () => {});
     setMode('DENSE');
     settleFrame(env);
     levelCalls = 0;
@@ -867,7 +867,7 @@ test('pathological detection paint holds alternate frames without freezing share
   const env = installEnvironment({ search: '?detectDebug=1' });
   try {
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [detectableLayer()], () => {});
+    initDetection(env.engine, [detectableLayer()], () => {});
     setOverlayEntries('valve-card', [{
       id: 'ambient-card',
       position: new Cesium.Cartesian3(0, 0, 0),
@@ -974,7 +974,7 @@ test('the mode banner is absent by default and present behind the flag', () => {
     const env = installEnvironment({ search });
     try {
       initWorldOverlay(env.engine);
-      initDetection(env.viewer, [detectableLayer()], () => {});
+      initDetection(env.engine, [detectableLayer()], () => {});
       setMode('DENSE');
       env.advance(250);
       env.postRender.raise();
@@ -1001,7 +1001,7 @@ test('detection telemetry stays reachable programmatically with the banner hidde
   const env = installEnvironment();
   try {
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [detectableLayer()], () => {});
+    initDetection(env.engine, [detectableLayer()], () => {});
     setMode('DENSE');
     env.advance(250);
     env.postRender.raise();
@@ -1029,7 +1029,7 @@ test('civilian and military AIR brackets cover front, left, and right at Sparse 
         type: 'AIR',
       }));
       initWorldOverlay(env.engine);
-      initDetection(env.viewer, [{ id: layerId, getDetectableObjects: () => objects }], () => {});
+      initDetection(env.engine, [{ id: layerId, getDetectableObjects: () => objects }], () => {});
       setDetectionTuning({ densityPct: 25 });
       setMode('SPARSE');
       settleFrame(env);
@@ -1087,7 +1087,7 @@ test('the backdrop feather reaches the canvas as a lighter plate against sky', (
   const env = installEnvironment();
   try {
     initWorldOverlay(env.engine);
-    initDetection(env.viewer, [backdropLayer()], () => {});
+    initDetection(env.engine, [backdropLayer()], () => {});
     setDetectionStyle('normal');
     setMode('DENSE');
     settleFrame(env);
@@ -1146,7 +1146,7 @@ test('a transit vehicle is a contact: box, route, mode and operator on the share
   try {
     initWorldOverlay(env.engine);
     initDetection(
-      env.viewer,
+      env.engine,
       [{ id: 'transit', getDetectableObjects: () => objects }],
       () => {},
     );

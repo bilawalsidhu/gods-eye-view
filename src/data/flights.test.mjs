@@ -28,6 +28,8 @@ import {
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
+import { trackingEngine } from '../testSupport/viewerEngine.mjs';
+import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
 
 test('share-Follow absence requires an accepted OpenSky snapshot', async () => {
   _setFlightTrackingRefreshOutcomeForTest({ status: 'source-unavailable' });
@@ -183,6 +185,7 @@ test('flights first update forwards caller cancellation into the feed request', 
 
 test('nonempty OpenSky payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedFlightRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'abc123',
     entity: { gevLabelModel: { title: 'WARM', details: [] } },
     billboard: { show: false },
@@ -238,6 +241,7 @@ test('a newly seen aircraft appears at its delayed position, not ahead of it', a
   };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'seed00',
     entity: null,
     billboard: {
@@ -326,6 +330,7 @@ test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STA
   const billboardCollection = { show: false, remove() {} };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24,
     entity,
     billboard,
@@ -475,8 +480,9 @@ test('real civil track path creates no native label and publishes every cached h
   globalThis.fetch = async () => ({ ok: false });
   _setTrackedOverlayHostForTest(host);
   try {
-    initTrackedReadout(viewer);
+    initTrackedReadout(trackingEngine(viewer));
     _setTrackedFlightRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24,
       entity: null,
       billboard,
@@ -736,6 +742,7 @@ function seedLabelContact({
   meta: metaOverrides = {},
 }) {
   _setTrackedFlightRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: LABEL_ICAO,
     entity: null,
     billboard: {
@@ -944,6 +951,7 @@ test('civil tracked readout: a callsign-less enriched contact reads as its regis
   const entity = { gevLabelModel: { title: 'OLD', details: [] } };
   seedLabelContact({ callsign: '  ', registration: ' N123AB ', tracked: true });
   _setTrackedFlightRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: LABEL_ICAO,
     entity,
     billboard: {
@@ -1082,6 +1090,7 @@ test('a newly seen taxiing aircraft starts on the floor under its delayed positi
   };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'seed00',
     entity: null,
     billboard: {

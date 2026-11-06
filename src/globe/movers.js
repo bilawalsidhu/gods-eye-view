@@ -348,8 +348,9 @@ export function createMoverSet(
       commit();
       store.clean();
     },
-    // Whether what it draws has loaded (a model's glTF, an atlas image).
-    ready: () => !destroyed && ready() === true,
+    // Whether what it draws has loaded (a model's glTF, an atlas image); with
+    // an index, what that instance draws.
+    ready: (index) => !destroyed && ready(index) === true,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -385,7 +386,7 @@ export function createMoverRegistry(build) {
           sets.delete(options.id);
           part.destroy();
         },
-        ready: () => (part.ready ? part.ready() : true),
+        ready: (index) => (part.ready ? part.ready(index) : true),
       });
       sets.set(options.id, entry);
       return entry.set;

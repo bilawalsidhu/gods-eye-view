@@ -4,7 +4,6 @@ import * as selection from '../../data/selectionDispatcher.js';
 import * as aircraftPresentation from '../../data/tr3bRegistry.js';
 import * as trackedCamera from '../../data/trackedCamera.js';
 import { rendererFor } from './renderers.js';
-import { createMilitaryCesiumRenderer } from '../../layers/military/render/cesium.js';
 import * as labels from '../../data/detectionDraw.js';
 import * as geoid from '../../data/geoid.js';
 import * as focus from '../../data/focusDeemphasis.js';
@@ -20,12 +19,10 @@ export function createApplicationMilitary({
   militaryRegistry,
   resolveAsset = (url) =>
     `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
-  // Test seam: the renderer factory (default: the engine's, from the registry).
+  // Test seam: the renderer factory (default: the engine's, from the
+  // registry: the military display on every engine).
   renderer = {
-    create: ({ viewer, engine = null, adopt }) =>
-      engine
-        ? rendererFor('military', engine, { viewer, adopt })
-        : createMilitaryCesiumRenderer(null, { viewer, adopt }),
+    create: ({ engine = null } = {}) => rendererFor('military', engine),
   },
 }) {
   const { groundFloor, meshFloor, groundSnap } = surface;
@@ -35,9 +32,7 @@ export function createApplicationMilitary({
     services: {
       picking,
       selection,
-      // The engine's military renderer from the registry (render/cesium.js
-      // on Cesium); a bare viewer without an engine (unit tests) draws on
-      // Cesium.
+      // The engine's military renderer from the registry (render/display.js).
       renderer,
       aircraftPresentation,
       camera: trackedCamera,

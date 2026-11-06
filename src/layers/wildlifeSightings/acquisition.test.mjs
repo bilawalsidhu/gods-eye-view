@@ -8,6 +8,7 @@ import { createWildlifeSightingsSource } from './source.js';
 import { wildlifeGridCellId } from './gridViewport.js';
 import { LayerLifecycle } from '../../data/lifecycle.js';
 import { layerFeedState } from '../../data/feedState.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
 const NOW = Date.UTC(2026, 10, 4, 18);
 const rectangle = { south: 10, west: 10, north: 12, east: 12 };
@@ -20,31 +21,26 @@ function harness(source = { getSnapshot: async () => [] }) {
   let notifications = 0;
   let managerRequests = 0;
   const timers = new Map();
-  const cameraListeners = new Set();
   const document = { hidden: false };
+  // The camera sees `bounds` (degrees) from an exact `camera.height`.
+  const engine = createFakeEngine({ width: 1400, height: 900 });
+  const camera = { height: 30_000 };
+  engine.camera.height = () => camera.height;
+  engine.fake.script(
+    'viewRectangle',
+    () =>
+      bounds &&
+      Object.fromEntries(
+        Object.entries(bounds).map(([key, value]) => [
+          key,
+          (value * Math.PI) / 180,
+        ]),
+      ),
+  );
   const state = {
-    viewer: {
-      camera: {
-        moveEnd: {
-          addEventListener(fn) {
-            cameraListeners.add(fn);
-            return () => cameraListeners.delete(fn);
-          },
-        },
-        positionCartographic: { height: 30_000 },
-        computeViewRectangle: () =>
-          bounds &&
-          Object.fromEntries(
-            Object.entries(bounds).map(([key, value]) => [
-              key,
-              (value * Math.PI) / 180,
-            ]),
-          ),
-      },
-    },
+    engine,
     enabled: true,
     destroyed: false,
-    points: {},
     rows: new Map(),
     renderedRows: [],
     rowById: new Map(),
@@ -118,6 +114,8 @@ function harness(source = { getSnapshot: async () => [] }) {
   });
   return {
     state,
+    engine,
+    camera,
     layer,
     parts,
     timers,
@@ -129,9 +127,7 @@ function harness(source = { getSnapshot: async () => [] }) {
     },
     notifications: () => notifications,
     managerRequests: () => managerRequests,
-    moveEnd: () => {
-      for (const listener of cameraListeners) listener();
-    },
+    moveEnd: () => engine.fake.emit('camera.moveEnd'),
     async advance(ms) {
       time += ms;
       for (const [id, timer] of [...timers]) {
@@ -347,8 +343,8 @@ test('SF WHALES failure keeps chosen error chip, drawn rows and manager DEGRADED
     },
   });
   h.bounds({ south: 37.2, west: -123, north: 38.2, east: -122 });
-  h.state.viewer.camera.positionCartographic.height = 250_000;
-  const manager = new LayerLifecycle(h.state.viewer);
+  h.camera.height = 250_000;
+  const manager = new LayerLifecycle(null, { engine: h.engine });
   manager.register({ ...h.layer, init: () => true, updateInterval: 0 });
   h.layer.attachDataManager(manager);
   try {
@@ -491,7 +487,7 @@ test('a selected observation survives omitted samples, zoom, changed filters and
   await h.layer.update();
   assert.equal(h.state.rows.get(sighting.stableId), sighting);
   assert.equal(h.state.selectedId, sighting.stableId);
-  h.state.viewer.camera.positionCartographic.height = 3_500_000;
+  h.camera.height = 3_500_000;
   h.bounds({ south: 40, west: 40, north: 42, east: 42 });
   await h.layer.update();
   assert.equal(h.state.query.scope, 'global');
@@ -554,7 +550,7 @@ test('all heights and the sampled fallback use the same sightings-in-view count 
   h.state.gridTotal = 1000;
   h.state.sightingCount = 870;
   for (const height of [30_000, 1_500_000]) {
-    h.state.viewer.camera.positionCartographic.height = height;
+    h.camera.height = height;
     assert.equal(h.layer.getStats().count, 870);
     assert.equal(h.layer.getStats().countLabel, '870 sightings in view');
   }
@@ -676,8 +672,8 @@ test('Europe density tiles publish before a slow observation page and survive it
     },
   });
   h.bounds({ south: 44, west: -8, north: 55, east: 24 });
-  h.state.viewer.scene = { canvas: { clientWidth: 1280, clientHeight: 800 } };
-  h.state.viewer.camera.positionCartographic.height = 1_500_000;
+  h.engine.fake.setSize(1280, 800);
+  h.camera.height = 1_500_000;
   const updating = h.layer.update();
   assert.equal(tileOptions.tiles.length, 3);
   const first = { id: 'grid:first', lat: 48, lon: 8, cellCount: 4 };
@@ -800,12 +796,11 @@ test('an empty tile retires its old zoom cells while uncovered density survives 
     },
   });
   h.bounds({ south: 44, west: -8, north: 55, east: 24 });
-  h.state.viewer.scene = { canvas: { clientWidth: 160, clientHeight: 100 } };
-  h.state.viewer.camera.positionCartographic.height = 1_500_000;
+  h.engine.fake.setSize(160, 100);
+  h.camera.height = 1_500_000;
   await h.layer.update();
   first = false;
-  h.state.viewer.scene.canvas.clientWidth = 1280;
-  h.state.viewer.scene.canvas.clientHeight = 800;
+  h.engine.fake.setSize(1280, 800);
   const updating = h.layer.update();
   const zoom = tileOptions.tiles[0].z;
   assert.ok(zoom > oldZoom);

@@ -61,6 +61,7 @@ export function navaraModeNotice(availability) {
 
 /** Static attribution for the shell and the layers available on Navara. */
 const NAVARA_CREDIT_KEYS = new Set([
+  'inaturalist',
   'photon-geocoder',
   'openstreetmap',
   'reearth-terrain',
@@ -244,6 +245,8 @@ export async function registerNavaraLayerRenderers() {
     'osm-places': async () =>
       (await import('../layers/osmPlaces/render/navara.js'))
         .createOsmPlacesNavaraRenderer,
+    // Draws itself through the globe contract (engine.movers, engine.lines).
+    'wildlife-sightings': async () => () => null,
     'drone-airspace': async () => {
       const { createDroneAirspaceNavaraRenderer } =
         await import('../layers/droneAirspace/render/navara.js');
@@ -289,15 +292,16 @@ export async function registerNavaraLayerRenderers() {
     satellites: async () =>
       (await import('../layers/satellites/render/navara.js'))
         .createSatellitesNavaraRenderer,
+    // The aircraft family: the same displays as on Cesium (renderers.js).
     flights: async () =>
-      (await import('../layers/flights/render/navara.js'))
-        .createFlightsNavaraRenderer,
+      (await import('../layers/flights/render/display.js'))
+        .createFlightsDisplay,
     military: async () =>
-      (await import('../layers/military/render/navara.js'))
-        .createMilitaryNavaraRenderer,
+      (await import('../layers/military/render/display.js'))
+        .createMilitaryDisplay,
     'local-adsb': async () =>
-      (await import('../layers/localAdsb/render/navara.js'))
-        .createLocalAdsbNavaraRenderer,
+      (await import('../layers/localAdsb/render/display.js'))
+        .createLocalAdsbDisplay,
     'ais-live-vessels': async () =>
       (await import('../layers/vessels/render/navara.js'))
         .createVesselsNavaraRenderer,

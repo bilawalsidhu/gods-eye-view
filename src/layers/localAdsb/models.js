@@ -29,8 +29,7 @@ const specKey = (spec) => `${spec.url}@${spec.scale}`;
  * are drawn by the layer's renderer (its `models`: the shared aircraft
  * renderer's model part) and read the camera through its `view`.
  * @param {object} options
- * @param {object} options.renderer The layer's renderer (render/cesium.js,
- *   render/navara.js).
+ * @param {object} options.renderer The layer's display (render/display.js).
  * @param {object} options.color Model tint (a colour with red/green/blue/alpha).
  * @param {(url: string) => string} options.resolveAsset
  * @param {object|null} [options.groundSnap] `createGroundSnap()` instance.

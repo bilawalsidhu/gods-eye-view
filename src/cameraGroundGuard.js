@@ -16,7 +16,6 @@
  */
 import * as geo from './geo/index.js';
 import { ownCameraArrival } from './data/cameraArrival.js';
-import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
 export const MIN_EYE_CLEARANCE_M = 120;
@@ -80,14 +79,13 @@ export function groundClearanceDeficitM(
  * (`camera.commanded`: a flight, setView, lookAt, cancelFlight or, on
  * Cesium, a new tracked entity), or `isStale()` reporting that a newer
  * arrival owns the camera.
- * @param {import('./globe/contract.js').GlobeEngine | object} target The
- *   globe engine, or a viewer registered for one.
+ * @param {import('./globe/contract.js').GlobeEngine | null} engine
  * @param {{lat: number, lon: number}} at Destination being framed.
  * @param {{clearanceM?: number, attempts?: number, intervalMs?: number,
  *   isStale?: () => boolean, onLift?: (liftM: number) => void}} [options]
  * @returns {() => void} Cancel function.
  */
-export function guardCameraAboveGround(target, at, options = {}) {
+export function guardCameraAboveGround(engine, at, options = {}) {
   const {
     clearanceM = MIN_EYE_CLEARANCE_M,
     attempts = GUARD_ATTEMPTS,
@@ -95,7 +93,6 @@ export function guardCameraAboveGround(target, at, options = {}) {
     isStale = () => false,
     onLift = null,
   } = options;
-  const engine = engineFromViewer(target);
   if (!engine || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
     return () => {};
 

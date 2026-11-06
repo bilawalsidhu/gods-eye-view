@@ -150,8 +150,8 @@ test('voice context reads a track that rounds to north as 0°, not 360°', () =>
 test('a live flight keeps observations, selection and freshness across renderer lifetimes', async () => {
   const { createFakeEngine } =
     await import('../../globe/testing/fakeEngine.js');
-  const { aircraftAtlasLayout, createAircraftNavaraRenderer } =
-    await import('../aircraft/render/navara.js');
+  const { aircraftAtlasLayout, createAircraftDisplay } =
+    await import('../aircraft/render/display.js');
   const { createApplicationFlights } =
     await import('../../app/layers/flights.js');
   const first = createFakeEngine();
@@ -203,8 +203,7 @@ test('a live flight keeps observations, selection and freshness across renderer 
     },
     renderer: {
       create: ({ engine }) =>
-        createAircraftNavaraRenderer({
-          engine,
+        createAircraftDisplay(engine, {
           layerId: 'flights',
           order: 1,
           headingOffsetDeg: 180,

@@ -1,7 +1,8 @@
 // camera.follow on Cesium: the viewer's trackedEntity (Cesium's EntityView
 // owns the continuous follow, the user turns and zooms around the target).
-// With `native` the layer's own Entity is tracked; without it an internal
-// proxy Entity whose position is the caller's `position()`. Each follow gets
+// A `native` Entity is tracked itself; otherwise an internal proxy Entity
+// (ENU frame) whose position is the caller's `position()`, which shows a
+// non-Entity native's tracked-readout fields. Each follow gets
 // one exact tracked frame on preUpdate (applyTrackedCameraFrame) and the
 // zoom limits that keep the camera outside the minimum range.
 // following() also reports a trackedEntity the app set itself, and
@@ -21,6 +22,15 @@ import { toCesium3 } from './convert.js';
 
 const MAX_FRAME_ATTEMPTS = 120;
 const entityName = (entity) => (entity ? entity.name || entity.id : undefined);
+// What viewer.trackedEntity readers take from a tracked Entity, read through
+// a proxy from the layer's own handle.
+const READOUT_FIELDS = [
+  'gevTrackedId',
+  'gevLabelModel',
+  'gevDisplayPosition',
+  'gevVisualPosition',
+  'gevSelectionOrigin',
+];
 const ZOOM_INERTIA_STATES = new WeakMap();
 
 function acquireStableTrackedZoom(controller, owner, minRange) {
@@ -257,7 +267,8 @@ export function createCesiumFollow(viewer, { commanded }) {
 
   function start(state, options) {
     state.options = options;
-    let entity = options.native;
+    const { native } = options;
+    let entity = native instanceof Cesium.Entity ? native : null;
     if (!entity) {
       const scratch = new Cesium.Cartesian3();
       entity = state.proxy = viewer.entities.add({
@@ -273,6 +284,7 @@ export function createCesiumFollow(viewer, { commanded }) {
             : undefined;
         }, false),
         viewFrom: toCesium3(state.options.viewFrom()),
+        trackingReferenceFrame: Cesium.TrackingReferenceFrame.ENU,
         // Cesium's EntityView moves the camera only once the tracked
         // entity has a bounding sphere: a 1 px transparent point gives it
         // one (an entity without graphics is framed once, then left).
@@ -280,14 +292,24 @@ export function createCesiumFollow(viewer, { commanded }) {
       });
       // Picks skip it (picker.js).
       entity.gevFollowProxy = true;
+      if (native)
+        for (const field of READOUT_FIELDS)
+          Object.defineProperty(entity, field, {
+            get: () => native[field],
+            set: (value) => {
+              native[field] = value;
+            },
+          });
     }
     state.entity = entity;
-    state.handle.native = options.native;
+    state.handle.native = native;
     state.handle.label = options.label;
     viewer.camera.cancelFlight();
     viewer.trackedEntity = entity;
     const viewFrom =
-      options.native?.viewFrom ?? toCesium3(state.options.viewFrom());
+      entity === native && native.viewFrom
+        ? native.viewFrom
+        : toCesium3(state.options.viewFrom());
     state.stopFrame =
       applyTrackedCameraFrame(viewer, entity, viewFrom, {
         minRange: options.minRange,

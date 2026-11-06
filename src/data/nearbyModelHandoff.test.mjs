@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import flightsLayer, { _setTrackedFlightRefreshStateForTest } from './flights.js';
 import militaryFlightsLayer, { _setTrackedMilitaryRefreshStateForTest } from './militaryFlights.js';
+import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
 
 const ICAO = 'abc123';
 const OTHER = 'def456';
@@ -41,6 +42,7 @@ const LAYERS = [
     visualCenterM: Cesium.Cartesian3.ZERO,
     seed({ billboardShow, models = [] }) {
       _setTrackedFlightRefreshStateForTest({
+        renderer: aircraftViewerRenderer,
         icao24: ICAO,
         entity: null,
         billboard: contactBillboard(billboardShow),
@@ -63,6 +65,7 @@ const LAYERS = [
     visualCenterM: Cesium.Cartesian3.ZERO,
     seed({ billboardShow, models = [] }) {
       _setTrackedMilitaryRefreshStateForTest({
+        renderer: aircraftViewerRenderer,
         icao24: ICAO,
         entity: null,
         billboard: contactBillboard(billboardShow),

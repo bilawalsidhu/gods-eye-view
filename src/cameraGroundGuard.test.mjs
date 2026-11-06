@@ -12,7 +12,6 @@ import {
   guardCameraAboveGround,
 } from './cameraGroundGuard.js';
 import { createCesiumEngine } from './globe/cesium/createCesiumEngine.js';
-import { registerViewerEngine } from './globe/cesium/engineFromViewer.js';
 import { createFakeEngine } from './globe/testing/fakeEngine.js';
 
 test('a buried camera is lifted clear of the surface', () => {
@@ -50,8 +49,8 @@ test('the clearance frames a subject without turning into an overflight', () => 
   assert.ok(MIN_EYE_CLEARANCE_M <= 250);
 });
 
-// A viewer double under the real Cesium engine, registered as the app does,
-// so the guard runs the shell's engine path against Cesium-shaped calls.
+// A viewer double under the real Cesium engine (`viewer.engine`), so the
+// guard runs the shell's engine path against Cesium-shaped calls.
 function fakeViewer({ cameraHeightM, surfaceM, canvas = null }) {
   const flights = [];
   const position = Cesium.Cartographic.fromDegrees(-97.7603, 30.3141, cameraHeightM);
@@ -75,7 +74,6 @@ function fakeViewer({ cameraHeightM, surfaceM, canvas = null }) {
     },
   };
   viewer.engine = createCesiumEngine(viewer);
-  registerViewerEngine(viewer, viewer.engine);
   return viewer;
 }
 
@@ -83,7 +81,7 @@ test('the guard lifts a buried arrival once the surface answers', async () => {
   const viewer = fakeViewer({ cameraHeightM: 172, surfaceM: 171 });
   const lifts = [];
   guardCameraAboveGround(
-    viewer,
+    viewer.engine,
     { lat: 30.3125, lon: -97.765 },
     { intervalMs: 1, onLift: (m) => lifts.push(m) },
   );
@@ -102,7 +100,7 @@ test('the guard waits for streaming tiles and yields to a newer arrival', async 
   let stale = false;
   const viewer = fakeViewer({ cameraHeightM: 172, surfaceM: () => answer });
   guardCameraAboveGround(
-    viewer,
+    viewer.engine,
     { lat: 30.3125, lon: -97.765 },
     { intervalMs: 2, attempts: 20, isStale: () => stale },
   );
@@ -116,7 +114,7 @@ test('the guard waits for streaming tiles and yields to a newer arrival', async 
 
 test('the guard leaves a clear view untouched', async () => {
   const viewer = fakeViewer({ cameraHeightM: 400, surfaceM: 171 });
-  guardCameraAboveGround(viewer, { lat: 30.3125, lon: -97.765 }, { intervalMs: 1 });
+  guardCameraAboveGround(viewer.engine, { lat: 30.3125, lon: -97.765 }, { intervalMs: 1 });
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(viewer.flights.length, 0);
 });
@@ -147,7 +145,7 @@ function handoffFixture(t) {
     getDataManager() {}, interruptCameraMotion() {}, stopOrbit() {},
     isCockpitActive: () => false, showToast() {},
   });
-  guardCameraAboveGround(viewer, { lat: 30.3, lon: -97.7 });
+  guardCameraAboveGround(viewer.engine, { lat: 30.3, lon: -97.7 });
   return { viewer, navigation, originalFly };
 }
 
@@ -168,7 +166,7 @@ for (const handoff of ['Director', 'tracking', 'follow', 'keyboard', 'UI',
       viewer.scene.canvas.ownerDocument.dispatchEvent(new Event('keydown'));
     } else if (handoff === 'app-stop') navigation.stop();
     else if (handoff.startsWith('layer-')) {
-      const lifecycle = new LayerLifecycle(viewer);
+      const lifecycle = new LayerLifecycle(viewer, { engine: viewer.engine });
       lifecycle.register({ id: 'test', init() {}, enable() {}, disable() {}, destroy() {} });
       await lifecycle.setEnabled('test', true);
       if (handoff === 'layer-disable') await lifecycle.setEnabled('test', false);

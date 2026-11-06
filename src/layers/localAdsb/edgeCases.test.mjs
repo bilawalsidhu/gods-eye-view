@@ -8,8 +8,10 @@ import * as Cesium from 'cesium';
 
 import { createLocalAdsbLayer } from './index.js';
 import { createLocalReceiverFeeds } from './feeds.js';
-import { createLocalAdsbCesiumRenderer } from './render/cesium.js';
+import { aircraftAtlasLayout } from '../aircraft/render/display.js';
+import { createLocalAdsbDisplay } from './render/display.js';
 import * as selection from '../../data/selectionDispatcher.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { readShareFollowSubject } from '../../ui/shareFollow.js';
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -81,13 +83,20 @@ function fakeFeeds() {
   };
 }
 
-function fakeServices() {
+const layout = aircraftAtlasLayout();
+const drawAtlas = async () => ({
+  canvas: { width: layout.width, height: layout.height },
+  cells: layout.cells,
+});
+
+function fakeServices(registered = []) {
   let selected = null;
   return {
     render: { governorRequestRender() {} },
     context: {
       registerEntityContext(entity, metadata) {
         entity.__gevContextId = metadata.id;
+        if (!registered.includes(entity)) registered.push(entity);
       },
       selectEntityContext(entity) {
         selected = { id: entity.__gevContextId, entity };
@@ -101,37 +110,12 @@ function fakeServices() {
     },
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
     selection,
+    // The layer's display (on a fake engine).
     renderer: {
-      create: ({ engine = null, ...options }) =>
-        createLocalAdsbCesiumRenderer(engine, options),
+      create: ({ engine }) => createLocalAdsbDisplay(engine, { drawAtlas }),
     },
     detection: { markSourcesChanged() {} },
     overlays: { refreshReadout() {} },
-  };
-}
-
-function fakeViewer() {
-  const sources = [];
-  const camera = {
-    rightWC: new Cesium.Cartesian3(0, 1, 0),
-    upWC: new Cesium.Cartesian3(0, 0, 1),
-  };
-  return {
-    sources,
-    viewer: {
-      camera,
-      scene: { camera },
-      entities: {
-        add: (entity) => entity,
-        remove() {},
-      },
-      dataSources: {
-        add(source) {
-          sources.push(source);
-        },
-        remove() {},
-      },
-    },
   };
 }
 
@@ -165,7 +149,7 @@ test('edge:local-adsb: an unplugged receiver ends one session and a scene switch
     services: fakeServices(),
     now: () => clock.now,
   });
-  layer.init(fakeViewer().viewer);
+  layer.init(null, { engine: createFakeEngine() });
   await layer.enable();
   assert.ok(layer.selectAircraft('abc123'));
 
@@ -183,7 +167,7 @@ test('edge:local-adsb: an unplugged receiver ends one session and a scene switch
   layer.detachRenderer();
   clock.now += 1_000;
   await layer.update();
-  layer.attachRenderer(fakeViewer().viewer);
+  layer.attachRenderer(null, { engine: createFakeEngine() });
   await layer.update();
 
   assert.deepEqual(receiver.modeCalls, ['adsb'], 'the tuner is asked once');
@@ -241,22 +225,20 @@ test('edge:local-adsb: a selected local aircraft never reaches a share link', as
     mode: 'adsb',
     aircraft: [record({ lat: 10, lon: 20 })],
   });
-  const { viewer, sources } = fakeViewer();
+  const registered = [];
   const layer = createLocalAdsbLayer({
     receiver,
     feeds: fakeFeeds(),
-    services: fakeServices(),
+    services: fakeServices(registered),
     now: () => 100_000,
   });
   t.after(() => layer.destroy());
-  layer.init(viewer);
+  layer.init(null, { engine: createFakeEngine() });
   await layer.enable();
   assert.ok(layer.selectAircraft('abc123'));
-  const marker = sources
-    .flatMap((source) => source.entities.values)
-    .find((entity) =>
-      String(entity.gevTrackedId || '').startsWith('local-adsb:'),
-    );
+  const marker = registered.find((entity) =>
+    String(entity.gevTrackedId || '').startsWith('local-adsb:'),
+  );
   assert.ok(marker, 'the local marker carries its tracked id');
 
   const shareViewer = {

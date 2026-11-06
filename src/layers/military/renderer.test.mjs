@@ -138,9 +138,9 @@ test('the military logic draws, selects and follows only through its renderer', 
   assert.equal(keyListeners.size, 0, 'the dispatcher left the keyboard');
 });
 
-test('the military logic draws and follows on the Navara renderer; the follow passes between flights and military', async () => {
-  const { createAircraftNavaraRenderer, aircraftAtlasLayout } =
-    await import('../aircraft/render/navara.js');
+test('the military logic draws and follows on the aircraft display; the follow passes between flights and military', async () => {
+  const { createAircraftDisplay, aircraftAtlasLayout } =
+    await import('../aircraft/render/display.js');
   const { createApplicationFlights } =
     await import('../../app/layers/flights.js');
   const { openSkySnapshot } = await import('../../sources/live/aircraft.js');
@@ -153,8 +153,7 @@ test('the military logic draws and follows on the Navara renderer; the follow pa
   const renderers = {};
   const navara = (layerId, order) => ({
     create: ({ engine: given }) =>
-      (renderers[layerId] = createAircraftNavaraRenderer({
-        engine: given,
+      (renderers[layerId] = createAircraftDisplay(given, {
         layerId,
         order,
         headingOffsetDeg: 180,

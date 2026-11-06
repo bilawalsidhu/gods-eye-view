@@ -13,7 +13,6 @@
  */
 
 import { cancelCameraArrival } from '../data/cameraArrival.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
 import { createStateChannel } from '../app/stateChannel.js';
@@ -84,15 +83,15 @@ export class SceneDirector {
    * @param {Object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
    * @param {Object} [options] `engine`: the globe engine whose camera the
-   *   scene flights drive (defaults to the one registered for the viewer); the
-   *   viewer still serves tracking, interactions and data packs.
+   *   scene flights drive; the viewer still serves tracking, interactions and
+   *   data packs.
    */
   constructor(
     viewer,
     styleManager,
     dataManager,
     {
-      engine = engineFromViewer(viewer),
+      engine = null,
       isMapStackAvailable = () => false,
       scenePacks = createDefaultScenePacks(),
       dataPacks = {},

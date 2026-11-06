@@ -1,16 +1,27 @@
-// The Local ADS-B layer's renderer on the Navara engine,
-// with render/cesium.js's interface: the shared aircraft renderer
-// (src/layers/aircraft/render/navara.js) draws the magenta markers (its
-// fleet glyphs), the Flights models and the trail; the markers' per-frame
-// position, rotation and visibility (Cesium's CallbackProperties and the
-// 2,000 km display distance) are written each frame; the 978 MHz UAT ring
-// is its own sprite set (Cesium's 24 px transparent point with a 1.5 px
-// outline). Registered for 'navara' by the Navara mode after its import()
-// (src/app/navaraMode.js). The camera never follows a local aircraft.
+// The Local ADS-B layer's display, the same on every engine: the aircraft
+// display (src/layers/aircraft/render/display.js) draws the magenta markers
+// (its fleet glyphs), the Flights models and the trail; the markers'
+// position, rotation and visibility are read each frame, within a 2,000 km
+// display distance; the 978 MHz UAT ring is a point set (24 px, transparent,
+// a 1.5 px outline). The camera never follows a local aircraft.
+//
+// The display:
+//   view                 camera, scene, horizon(), frustumTester(),
+//                        surfaceOwner, requestRender(), on('preRender', fn)
+//   attach(), setVisible(bool), detach()
+//   markers.add({ id, image, position(), rotation(), show() }) → handle
+//     (the context and readout annotations go on it), remove(handle),
+//     setImage(handle, image), setScale(handle, scale), hasRing(handle),
+//     setRing(handle, on, visible())
+//   models               the aircraft display's models (live, loadFleet,
+//                        add, remove, destroy, setPose)
+//   trails.create({ color, width }) → Trail, createHead({ id, positions(),
+//     color, width }), removeHead(head)
+//   engine, destroy()
 
 import * as geo from '../../../geo/index.js';
-import { createAircraftNavaraRenderer } from '../../aircraft/render/navara.js';
-import { createMoverBank } from '../../shared/render/navaraMoverBank.js';
+import { createAircraftDisplay } from '../../aircraft/render/display.js';
+import { createMoverBank } from '../../shared/render/moverBank.js';
 import { MODEL_HEADING_OFFSET_DEG } from '../../flights/policy.js';
 import { nearFarScale, rgbaFromCss } from '../../shared/color.js';
 import {
@@ -24,81 +35,63 @@ export const LOCAL_ADSB_DISPLAY_DISTANCE_M = 2_000_000;
 
 const MAGENTA = Object.freeze(rgbaFromCss(LOCAL_ADSB_COLOR));
 const RING = rgbaFromCss(LOCAL_ADSB_UAT_RING_COLOR).rgba();
+const TRANSPARENT = [0, 0, 0, 0];
 const SCALE_BY_DISTANCE = Object.freeze(
   nearFarScale(1000, 3.0, 8_000_000, 0.5),
 );
-// Cesium's point: 24 px plus a 1.5 px outline on each side, the outline
-// drawn on the outer 1.5 px.
 const RING_PIXEL_SIZE = 24;
 const RING_OUTLINE_PX = 1.5;
-const RING_TOTAL_PX = RING_PIXEL_SIZE + 2 * RING_OUTLINE_PX;
+// Under the aircraft layers' sprites (data/spriteOrder).
 const MARKER_ORDER = -1;
-
-/** The ring's atlas: a white ring on a 64 px canvas (tinted per instance). */
-function drawUatRingAtlas(size = 64) {
-  const canvas = globalThis.document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext('2d');
-  const scale = size / RING_TOTAL_PX;
-  const outer = (RING_TOTAL_PX / 2) * scale;
-  const band = RING_OUTLINE_PX * scale;
-  context.strokeStyle = '#ffffff';
-  context.lineWidth = band;
-  context.beginPath();
-  context.arc(size / 2, size / 2, outer - band / 2, 0, Math.PI * 2);
-  context.stroke();
-  return { canvas, cells: { ring: [0, 0, 1, 1] } };
-}
 
 /**
  * Registry factory (src/app/layers/renderers.js): `(engine, options)`.
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
- * @param {{ drawAtlas?: Function, drawRing?: Function }} [options] Test seams.
+ * @param {{ drawAtlas?: Function }} [options] Test seam: the glyph atlas.
  */
-export function createLocalAdsbNavaraRenderer(
-  engine,
-  { drawAtlas, drawRing = drawUatRingAtlas } = {},
-) {
-  const aircraft = createAircraftNavaraRenderer({
-    engine,
+export function createLocalAdsbDisplay(engine, { drawAtlas } = {}) {
+  const aircraft = createAircraftDisplay(engine, {
     layerId: LAYER_ID,
-    // Under every sprite collection, as Cesium draws the layer's entities
-    // (data/spriteOrder raises the collections over the data sources).
     order: MARKER_ORDER,
     headingOffsetDeg: MODEL_HEADING_OFFSET_DEG,
     ...(drawAtlas ? { drawAtlas } : {}),
   });
   const view = aircraft.view;
+  // Hidden until the layer shows it.
+  aircraft.fleet.setVisible(false);
   const handles = new Set();
   let visible = false;
   let ringBank = null;
+  let ringDirty = false;
   let removeFrame = null;
   const scratch = geo.cartesian3.create();
 
   const ringWrite = (handle, set, index) => {
     set.set(index, {
       position: handle.sprite.position,
-      color: RING,
-      cell: 'ring',
+      color: TRANSPARENT,
       show: handle.ringShown,
       pickId: handle.id,
     });
   };
+  const commitRings = () => {
+    ringDirty = false;
+    ringBank?.commit();
+  };
   const ringBankFor = () => {
     if (ringBank) return ringBank;
-    const atlas = drawRing();
     ringBank = createMoverBank(engine, {
       options: (capacity, generation) => ({
         id: `${LAYER_ID}-rings-${generation}`,
-        kind: 'sprite',
+        kind: 'point',
         capacity,
         order: MARKER_ORDER + 0.25,
         depthTest: 'always',
         pickable: true,
-        sprite: {
-          atlas,
-          sizePx: RING_TOTAL_PX,
+        point: {
+          sizePx: RING_PIXEL_SIZE,
+          outlinePx: RING_OUTLINE_PX,
+          outlineColor: RING,
           scaleByDistance: [
             SCALE_BY_DISTANCE.near,
             SCALE_BY_DISTANCE.nearValue,
@@ -108,13 +101,19 @@ export function createLocalAdsbNavaraRenderer(
         },
       }),
       write: ringWrite,
-      onCommit: (bank) => queueMicrotask(() => bank.commit()),
+      // Committed at the end of the frame pass, or in a microtask.
+      onCommit: () => {
+        if (ringDirty) return;
+        ringDirty = true;
+        queueMicrotask(commitRings);
+      },
     });
     ringBank.setVisible(visible);
     return ringBank;
   };
 
-  // Each frame: Cesium's per-frame callbacks and its display distance.
+  // Each frame: the markers' position, rotation and visibility, and the
+  // display distance.
   const frame = () => {
     const camera = view.camera.positionWC;
     const limitSq = LOCAL_ADSB_DISPLAY_DISTANCE_M ** 2;
@@ -138,7 +137,7 @@ export function createLocalAdsbNavaraRenderer(
         });
       }
     }
-    ringBank?.commit();
+    commitRings();
   };
 
   const markers = {
@@ -193,16 +192,17 @@ export function createLocalAdsbNavaraRenderer(
   };
 
   return {
-    kind: 'navara',
     engine,
     view,
     markers,
     models: aircraft.models,
     trails: aircraft.trails,
+    /** The model tint (the layer's magenta). */
     modelColor: MAGENTA,
     dataSource: null,
     whenReady: () => aircraft.whenReady(),
     attach() {
+      aircraft.fleet.attach();
       removeFrame ??= view.on('preRender', frame);
     },
     setVisible(next) {

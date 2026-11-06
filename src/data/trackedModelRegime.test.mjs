@@ -46,6 +46,7 @@ import militaryFlightsLayer, {
 } from './militaryFlights.js';
 import { clearTr3bRegistry, setTr3b } from './tr3bRegistry.js';
 import { reportMeshFloorCell, _clearMeshFloorCellsForTest } from './groundFloor.js';
+import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
 
 // Sample altitudes are expressed RELATIVE to the band rather than as absolute
 // offsets. The thresholds have already been retuned once (1_000_000 → 150_000
@@ -219,6 +220,7 @@ const LAYERS = [
     seed({ viewer, tracked = true, icao24 = ICAO, modelCollection = null, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedFlightRefreshStateForTest({
+        renderer: aircraftViewerRenderer,
         icao24,
         entity: null,
         billboard,
@@ -244,6 +246,7 @@ const LAYERS = [
     seed({ viewer, tracked = true, icao24 = ICAO, modelCollection = null, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedMilitaryRefreshStateForTest({
+        renderer: aircraftViewerRenderer,
         icao24,
         entity: null,
         billboard,

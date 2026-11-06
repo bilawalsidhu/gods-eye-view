@@ -36,9 +36,9 @@ export function createFlightState({ source, services }) {
   flightState._scratchGroundPos = geo.cartesian3.create();
 
   /** @type {import('../aircraft/render/contract.js').AircraftRenderer|null}
-   *  The engine's aircraft renderer for this lifecycle (render/cesium.js on
-   *  Cesium): the fleet sprites, the models and their collection, the
-   *  tracked visual, the trail, the follow camera and the view reads. */
+   *  The engine's aircraft renderer for this lifecycle (render/display.js,
+   *  on every engine): the fleet sprites, the models, the tracked visual,
+   *  the trail, the follow camera and the view reads. */
 
   flightState._renderer = null;
 

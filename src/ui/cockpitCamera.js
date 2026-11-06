@@ -33,7 +33,7 @@ export function update() {
     // Entry availability changes on a human timescale (tracking start/stop,
     // info arriving after a poll) — polling it every rendered frame ran
     // readAircraftInfo() + DOM pokes at display rate in plain map mode.
-    // 250 ms keeps the chip imperceptibly fresh; trackedEntityChanged still
+    // 250 ms keeps the chip imperceptibly fresh; the follow change still
     // fires syncEntry immediately on the events that matter. (perf item 9)
     const nowMs = performance.now();
     if (nowMs - (this._lastEntrySyncMs || 0) >= 250) {

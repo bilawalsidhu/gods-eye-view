@@ -1,19 +1,18 @@
 import * as geo from '../geo/index.js';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { LocationControls } from './location.js';
 
 /**
  * Own destination selection, lookup, orbit and world-jump lifetime. The camera
  * is the globe `engine`'s, and a world jump stops its follow
  * (`engine.camera.following()`); `viewer` is optional and only clears a
- * Cesium tracked entity that no registered engine reports.
+ * Cesium tracked entity the engine does not report.
  */
 export class LocationNavigation {
   constructor({
     viewer = null,
-    engine = engineFromViewer(viewer),
+    engine = null,
     placeSearch,
     services,
     elements,
@@ -469,7 +468,7 @@ export class LocationNavigation {
   }
 
   /** Navigate on another globe (an engine switch). */
-  attachScene({ viewer = null, engine = engineFromViewer(viewer) } = {}) {
+  attachScene({ viewer = null, engine = null } = {}) {
     if (this._disposed) return;
     this.viewer = viewer;
     this.engine = engine;

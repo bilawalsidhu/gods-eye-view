@@ -10,6 +10,7 @@ import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { SceneControls } from './ui/sceneControls.js';
 import { isRenderedOnScreen } from './ui/cockpitPresentation.js';
 import { onKeyDown as cockpitKeyDown } from './ui/cockpitInput.js';
+import { cockpitHost } from './ui/cockpitHost.js';
 import {
   enter as cockpitEnter,
   exit as cockpitExit,
@@ -223,11 +224,11 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
   assert.match(enter, /activeElement/);
   assert.match(enter, /mapViewButton.*focus|focus.*mapViewButton/s);
   assert.match(exit, /focus\(\{ preventScroll: true \}\)/);
-  assert.match(exit, /this\.host\.restore\(entity, this\.restoreTrackingFrame\)/);
+  assert.match(exit, /this\.host\.restore\(entity\)/);
   assert.doesNotMatch(exit, /applyTrackedCameraFrame/);
   assert.match(
-    ui,
-    /restoreTrackingFrame: \(entity\) => \{[\s\S]*?gevTrackedId[\s\S]*?flightsLayer\.refocusTrackedById[\s\S]*?militaryFlightsLayer\.refocusTrackedById/,
+    cockpitHost.toString(),
+    /restore: \(target\) => target\.resumeAircraftFollow\(\)/,
     'Cockpit exit must return camera-frame ownership through the source layer so Contact Focus cannot accumulate a second owner',
   );
 });
@@ -295,13 +296,13 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
   );
 });
 
-test('the cockpit reads its aircraft from the layer that owns Cesium tracking', () => {
+test('the cockpit reads its aircraft from the layer that owns the tracking', () => {
   const read = readAircraftInfo.toString();
   assert.ok(read, 'readAircraftInfo is missing');
   assert.match(read, /resolveTrackedAircraftInfo\(\{/);
   assert.match(read, /gevTrackedId/);
-  // In cockpit mode the controller moves the entity off viewer.trackedEntity,
-  // so its own handle is the tracked identity there.
+  // In cockpit mode the controller releases the engine's follow of the
+  // aircraft, so its own handle is the tracked identity there.
   assert.match(read, /this\.host\.followed\(\) \|\| this\.trackedEntity/);
 });
 
@@ -1380,9 +1381,9 @@ test('voice Cockpit entry refuses when the entry gate is shut', () => {
 });
 
 test('cockpit state cannot report entryAllowed while already active', () => {
-  // Cockpit takes the entity off viewer.trackedEntity on entry and NEXT puts
-  // one back, so this flipped true/false between calls while active stayed
-  // true — read by the voice model as a broken half-entered state.
+  // Cockpit releases the engine's follow on entry and NEXT starts another,
+  // so this flipped true/false between calls while active stayed true —
+  // read by the voice model as a broken half-entered state.
   const state = ui.slice(
     ui.indexOf('  getCockpitState() {'),
     ui.indexOf('  _retargetCockpitEntryLayer({'),

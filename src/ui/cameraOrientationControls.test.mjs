@@ -15,14 +15,13 @@ import { NavigationController } from './navigationController.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import * as geo from '../geo/index.js';
 import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
-import { registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
 
-// The controls run on the globe engine; these viewer doubles get the Cesium
-// engine registered for them, as the app's scene engine is. A Viewer's
-// canvas is its scene's.
+// The controls run on the globe engine; these viewer doubles carry the
+// Cesium engine built over them (`viewer.engine`), as the app's scene engine
+// is. A Viewer's canvas is its scene's.
 function withEngine(viewer) {
   viewer.canvas = viewer.scene.canvas;
-  registerViewerEngine(viewer, createCesiumEngine(viewer));
+  viewer.engine = createCesiumEngine(viewer);
   return viewer;
 }
 
@@ -178,7 +177,7 @@ test('a heading written into a real camera reads back as the same heading', () =
       );
       viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
-      const frame = readCameraTargetFrame(viewer);
+      const frame = readCameraTargetFrame(viewer.engine, viewer);
       assert.ok(frame, `no frame at ${headingDeg}/${pitchDeg}`);
       const readDeg = Cesium.Math.toDegrees(frame.heading);
       assert.ok(
@@ -208,11 +207,11 @@ test('north-up really points a real camera north from every quadrant', () => {
     viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
     assert.equal(
-      resetCameraNorth(viewer),
+      resetCameraNorth(viewer.engine, viewer),
       true,
       `reset failed at ${headingDeg}`,
     );
-    const after = readCameraTargetFrame(viewer);
+    const after = readCameraTargetFrame(viewer.engine, viewer);
     assert.ok(after, `no frame after reset at ${headingDeg}`);
     const readDeg = Cesium.Math.toDegrees(after.heading);
     assert.ok(
@@ -242,9 +241,9 @@ test('tilt moves a real camera between the two pitches and keeps target and rang
   );
   viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
-  const first = toggleCameraTilt(viewer);
+  const first = toggleCameraTilt(viewer.engine, viewer);
   assert.deepEqual(first, { tilted: true, pitch: OBLIQUE_PITCH });
-  const tilted = readCameraTargetFrame(viewer);
+  const tilted = readCameraTargetFrame(viewer.engine, viewer);
   assert.ok(Math.abs(tilted.pitch - OBLIQUE_PITCH) < 1e-6);
   assert.ok(Math.abs(tilted.range - 3000) < 1, `range ${tilted.range}`);
   assert.ok(
@@ -276,9 +275,9 @@ test('tilt moves a real camera between the two pitches and keeps target and rang
     `camera points ${offBy.toFixed(2)} deg away from its target`,
   );
 
-  const second = toggleCameraTilt(viewer);
+  const second = toggleCameraTilt(viewer.engine, viewer);
   assert.deepEqual(second, { tilted: false, pitch: STRAIGHT_DOWN_PITCH });
-  const down = readCameraTargetFrame(viewer);
+  const down = readCameraTargetFrame(viewer.engine, viewer);
   assert.ok(Math.abs(down.pitch - STRAIGHT_DOWN_PITCH) < 1e-6);
   assert.ok(Math.abs(down.range - 3000) < 1);
 });
@@ -291,19 +290,19 @@ test('tilt alternates at globe range, not only at map range', () => {
     const { viewer } = createRealViewer(AUSTIN_GROUND);
     orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, range);
 
-    const first = toggleCameraTilt(viewer);
+    const first = toggleCameraTilt(viewer.engine, viewer);
     assert.deepEqual(
       first,
       { tilted: true, pitch: OBLIQUE_PITCH },
       `first click at ${range} m must tilt`,
     );
-    const second = toggleCameraTilt(viewer);
+    const second = toggleCameraTilt(viewer.engine, viewer);
     assert.deepEqual(
       second,
       { tilted: false, pitch: STRAIGHT_DOWN_PITCH },
       `second click at ${range} m must level (camera pitch reads ${Cesium.Math.toDegrees(viewer.camera.pitch).toFixed(1)} deg)`,
     );
-    const third = toggleCameraTilt(viewer);
+    const third = toggleCameraTilt(viewer.engine, viewer);
     assert.deepEqual(
       third,
       { tilted: true, pitch: OBLIQUE_PITCH },
@@ -319,6 +318,7 @@ test('the button shows the state the next click will produce, at every range', (
     const bar = recorder();
     const controls = bindCameraOrientationControls({
       viewer,
+      engine: viewer.engine,
       publish: bar.publish,
       runNavigation: (_noun, navigate) => navigate(),
       // No frame loop drives this fixture: apply each change at once.
@@ -353,6 +353,7 @@ test('the needle follows a rotation too small for the camera-changed threshold',
   const bar = recorder();
   const controls = bindCameraOrientationControls({
     viewer,
+    engine: viewer.engine,
     publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
@@ -383,6 +384,7 @@ test('north-up indicator follows real heading including the 360-degree seam', ()
   const bar = recorder();
   const controls = bindCameraOrientationControls({
     viewer,
+    engine: viewer.engine,
     publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
@@ -409,6 +411,7 @@ test('a settled camera publishes no change, and teardown releases every signal',
   const moveEndBefore = viewer.camera.moveEnd.numberOfListeners;
   const controls = bindCameraOrientationControls({
     viewer,
+    engine: viewer.engine,
     publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
@@ -451,9 +454,9 @@ test('a sky-facing camera yields no frame and both actions decline', () => {
   camera.pickEllipsoid = () => undefined;
   const viewer = withEngine({ camera, scene });
 
-  assert.equal(readCameraTargetFrame(viewer), null);
-  assert.equal(toggleCameraTilt(viewer), false);
-  assert.equal(resetCameraNorth(viewer), false);
+  assert.equal(readCameraTargetFrame(viewer.engine, viewer), null);
+  assert.equal(toggleCameraTilt(viewer.engine, viewer), false);
+  assert.equal(resetCameraNorth(viewer.engine, viewer), false);
 });
 
 test('center picking prefers terrain over the ellipsoid and falls through an invalid depth hit', () => {
@@ -464,14 +467,14 @@ test('center picking prefers terrain over the ellipsoid and falls through an inv
   viewer.scene.globe.pick = () => terrain;
   viewer.camera.pickEllipsoid = () => sea;
   sameXYZ(
-    pickViewTarget(viewer),
+    pickViewTarget(viewer.engine),
     terrain,
     'the rendered ground wins over sea level',
   );
 
   viewer.scene.globe.pick = () => null;
   sameXYZ(
-    pickViewTarget(viewer),
+    pickViewTarget(viewer.engine),
     sea,
     'the ellipsoid still answers when nothing is under the cursor',
   );
@@ -479,7 +482,7 @@ test('center picking prefers terrain over the ellipsoid and falls through an inv
 
 test('target frame identifies a straight-down camera in local ENU space', () => {
   const { viewer } = createViewer();
-  const frame = readCameraTargetFrame(viewer);
+  const frame = readCameraTargetFrame(viewer.engine, viewer);
   assert.ok(frame);
   assert.ok(Math.abs(frame.pitch - Cesium.Math.toRadians(-90)) < 0.001);
   assert.ok(frame.range > 999 && frame.range < 1_001);
@@ -488,8 +491,8 @@ test('target frame identifies a straight-down camera in local ENU space', () => 
 
 test('tilt preserves the picked target and range while choosing oblique pitch', () => {
   const { viewer, calls, target } = createViewer();
-  const before = readCameraTargetFrame(viewer);
-  const result = toggleCameraTilt(viewer);
+  const before = readCameraTargetFrame(viewer.engine, viewer);
+  const result = toggleCameraTilt(viewer.engine, viewer);
   const lookAt = calls.find((call) => call.type === 'lookAt');
   assert.deepEqual(result, { tilted: true, pitch: OBLIQUE_PITCH });
   sameXYZ(lookAt.target, target);
@@ -501,8 +504,8 @@ test('tilt preserves the picked target and range while choosing oblique pitch', 
 
 test('north-up preserves target pitch and range', () => {
   const { viewer, calls } = createViewer();
-  const before = readCameraTargetFrame(viewer);
-  assert.equal(resetCameraNorth(viewer), true);
+  const before = readCameraTargetFrame(viewer.engine, viewer);
+  assert.equal(resetCameraNorth(viewer.engine, viewer), true);
   const lookAt = calls.find((call) => call.type === 'lookAt');
   assert.equal(lookAt.offset.heading, 0);
   assert.equal(lookAt.offset.pitch, before.pitch);
@@ -516,6 +519,7 @@ test('bindings route both controls and release every listener on destroy', () =>
   const toasts = [];
   const controls = bindCameraOrientationControls({
     viewer,
+    engine: viewer.engine,
     publish: bar.publish,
     runNavigation(noun, navigate) {
       navigations.push(noun);
@@ -574,12 +578,13 @@ for (const [label, altitude, range] of [
       ),
     );
     let time = 0;
-    const animator = createCameraOrientationAnimator(viewer, {
+    const animator = createCameraOrientationAnimator(viewer.engine, {
+      tracker: viewer,
       now: () => time,
       duration: 1000,
     });
     for (const pitch of [STRAIGHT_DOWN_PITCH, OBLIQUE_PITCH]) {
-      const frame = readCameraTargetFrame(viewer);
+      const frame = readCameraTargetFrame(viewer.engine, viewer);
       animator.animate(frame, { heading: 0, pitch });
       for (const step of [0, 100, 500, 900, 1000]) {
         time = (pitch === STRAIGHT_DOWN_PITCH ? 0 : 1000) + step;
@@ -599,7 +604,7 @@ for (const [label, altitude, range] of [
             1e-8,
           ),
         );
-        const actual = readCameraTargetFrame(viewer);
+        const actual = readCameraTargetFrame(viewer.engine, viewer);
         const eased = Cesium.EasingFunction.CUBIC_IN_OUT(step / 1000);
         assert.ok(
           Math.abs(actual.pitch - Cesium.Math.lerp(frame.pitch, pitch, eased)) <
@@ -612,15 +617,20 @@ for (const [label, altitude, range] of [
     target = Cesium.Cartesian3.fromDegrees(-96, 31, altitude);
     follow.update(viewer.clock.currentTime);
     assert.equal(viewer.trackedEntity, entity);
-    assert.ok(Math.abs(readCameraTargetFrame(viewer).range - range) < 1e-5);
+    assert.ok(
+      Math.abs(readCameraTargetFrame(viewer.engine, viewer).range - range) <
+        1e-5,
+    );
   });
 }
 
 test('orientation animation cancels on replacement and explicit cancellation', () => {
   const { viewer } = createRealViewer(Cesium.Cartesian3.fromDegrees(0, 0));
   orbit(viewer, Cesium.Cartesian3.fromDegrees(0, 0), 90, OBLIQUE_PITCH, 1000);
-  const animator = createCameraOrientationAnimator(viewer);
-  const frame = readCameraTargetFrame(viewer);
+  const animator = createCameraOrientationAnimator(viewer.engine, {
+    tracker: viewer,
+  });
+  const frame = readCameraTargetFrame(viewer.engine, viewer);
   animator.animate(frame, { heading: 0, pitch: STRAIGHT_DOWN_PITCH });
   animator.animate(frame, { heading: 0, pitch: OBLIQUE_PITCH });
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
@@ -704,6 +714,7 @@ test('rapid tilt presses reverse direction and north-up keeps the requested tilt
   let controls;
   controls = bindCameraOrientationControls({
     viewer,
+    engine: viewer.engine,
     publish: bar.publish,
     runNavigation: (_noun, navigate) => {
       controls.cancel();
@@ -718,7 +729,7 @@ test('rapid tilt presses reverse direction and north-up keeps the requested tilt
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
   time = 650;
   viewer.scene.preUpdate.raiseEvent();
-  const frame = readCameraTargetFrame(viewer);
+  const frame = readCameraTargetFrame(viewer.engine, viewer);
   assert.ok(Math.abs(frame.pitch - STRAIGHT_DOWN_PITCH) < 1e-6);
   assert.ok(Math.abs(frame.heading) < 1e-6);
   controls.destroy();

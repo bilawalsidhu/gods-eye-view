@@ -39,7 +39,7 @@ try {
     const { maxPitchForHeight } = await import('/src/app/zoomOutGuard.js');
     const { readCameraTargetFrame } =
       await import('/src/ui/cameraOrientationControls.js');
-    const viewer = window.__godsEyeView.viewer;
+    const { viewer, engine } = window.__godsEyeView;
     viewer.camera.cancelFlight();
     viewer.trackedEntity = undefined;
     // Explicit real renders make each gesture independent of host frame rate.
@@ -51,7 +51,7 @@ try {
     const qa = {
       viewer,
       guardWrites: 0,
-      targetPitch: () => readCameraTargetFrame(viewer)?.pitch,
+      targetPitch: () => readCameraTargetFrame(engine, viewer)?.pitch,
       history: [],
       frame() {
         viewer.scene.requestRender();

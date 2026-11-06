@@ -206,9 +206,13 @@ one application, and only the globe-bound parts move to the next engine.
   (`scripts/qa-strict-parked-release.mjs`).
 - **Renderers per engine.** Each layer keeps its model and display policy in
   engine-neutral files and draws through `render/cesium*.js` or
-  `render/navara*.js`. Cesium renderers are listed in
-  `src/app/layers/renderers.js` (`CESIUM_LAYER_RENDERERS`), Navara ones are
-  loaded by `registerNavaraLayerRenderers` in `src/app/navaraMode.js`. Navara
+  `render/navara*.js`, or through one `render/display.js` that runs on every
+  engine over the globe contract: the aircraft family (flights, military and
+  local ADS-B) draws through `src/layers/aircraft/render/display.js`. Cesium
+  renderers are listed in `src/app/layers/renderers.js`
+  (`CESIUM_LAYER_RENDERERS`), Navara ones are loaded by
+  `registerNavaraLayerRenderers` in `src/app/navaraMode.js`; both register the
+  same display factory for a layer that has one. Navara
   ground effects (heat, pulses, trails, pads, drapes) are declared with
   `defineGroundEffect` (`src/layers/shared/render/navaraGroundEffect.js`);
   their insert order is pinned by `navaraGroundOrder.test.mjs`.
@@ -288,17 +292,23 @@ snapshot, including one whose rows all fall outside coverage or the species
 checks, is a fresh success that clears earlier rows; only a malformed or failed
 upstream reply serves stale and starts a retry cooldown. WHALES accepts only
 recognized cetaceans; other identified marine mammals appear under ALL or
-MAMMALS. Sensitive iNaturalist locations remain 0.2° privacy cells; Acartia
+MAMMALS. Sensitive iNaturalist locations remain 0.2° privacy cells, drawn as
+outlines (`engine.lines`), with no fill yet; Acartia
 positions are rounded to 0.01° on the server. Acartia comments are never retained.
 Observer identity is retained only for photo attribution.
 
-`/api/inaturalist/grid` supplies a dedicated, nonpickable billboard density glow,
+The layer draws on both engines through one display
+(`src/layers/wildlifeSightings/display.js`): taxon badges and the density glow
+are `engine.movers` sprite sets.
+
+`/api/inaturalist/grid` supplies a dedicated, nonpickable sprite density glow,
 with a view-relative density ramp from cool teal to warm amber. Overlapping
 Gaussian splats span four logical cell widths; mono and CRT styles follow map
 and cockpit vision changes. Empty snapshots paint nothing. Full footprints
 stay inside the globe limb with a 5% radius margin; opacity fades from full at
-3,000 km to zero at 8,000 km camera altitude. Culling and cached coordinates
-add no per-frame work and leave sighting counts intact.
+3,000 km to zero at 8,000 km camera altitude. Splats are sized in metres on
+the CPU, only on frames where the camera moved; culling and cached coordinates
+leave sighting counts intact.
 
 Only real sampled observation rows produce taxon badges at their public
 positions. The badges use 28 px screen buckets, a 22 px overlap check and a

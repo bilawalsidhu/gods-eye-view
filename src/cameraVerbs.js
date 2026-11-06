@@ -38,7 +38,6 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from './renderGovernor.js';
-import { isGlobeEngine } from './globe/contract.js';
 
 let _isCockpitActive = null;
 /** °/s by speed word — orbit; pan uses fractions of view height/s. */
@@ -1285,7 +1284,7 @@ const ENGINE_RIG_MEMBERS = Object.freeze([
  * @returns {boolean}
  */
 export function cameraVerbsSupported(target) {
-  if (!isGlobeEngine(target) || target.isDestroyed?.()) return false;
+  if (!target || target.isDestroyed?.()) return false;
   return ENGINE_RIG_MEMBERS.every(
     (path) =>
       typeof path
@@ -2210,7 +2209,7 @@ export function initCameraVerbs(
       _isCockpitActive = isCockpitActive;
     return;
   }
-  if (!isGlobeEngine(target)) return;
+  if (!target) return;
   const previous = _rig;
   const next = engineRigFor(target);
   if (_active && (_active.rig === previous || previous === null)) {

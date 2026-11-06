@@ -13,7 +13,7 @@ export function createApplicationBikeshare({ source }) {
     rendererFactory: ({ engine, ...context }) =>
       engine?.kind === 'navara'
         ? rendererFor('bikeshare', engine, context)
-        : createBikeshareCesiumRenderer(context),
+        : createBikeshareCesiumRenderer({ ...context, engine }),
     services: { render, sprites, picking, overlays },
   });
 }

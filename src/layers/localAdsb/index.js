@@ -78,17 +78,14 @@ const DEFAULT_DISPLAY = Object.freeze({
  * @param {object} [options.feeds] Decoder-feed session (start, stop,
  *   getState, subscribe).
  * @param {object} options.services Render, context, picking, selection
- *   (`selectionDispatcherFor`), renderer (`create({ viewer, engine,
- *   loadModel, createTrail })`: the engine's Local ADS-B renderer),
- *   detection and readout operations supplied by the application;
- *   optionally `display` (`getParams()` → `{ models3d, models3dMode }`),
- *   `enrichment` (a source with `getEnrichment`), `trails` (`createTrail`),
- *   `geoid` (`ensureGeoidReady`, `geoidHeight`) and `groundSnap`
- *   (`createGroundSnap`).
+ *   (`selectionDispatcherFor`), renderer (`create({ viewer, engine })`: the
+ *   engine's Local ADS-B display), detection and readout operations
+ *   supplied by the application; optionally `display` (`getParams()` →
+ *   `{ models3d, models3dMode }`), `enrichment` (a source with
+ *   `getEnrichment`), `geoid` (`ensureGeoidReady`, `geoidHeight`) and
+ *   `groundSnap` (`createGroundSnap`).
  * @param {() => number} [options.now] Clock, injectable for tests.
  * @param {(url: string) => string} [options.resolveAsset] Model URL resolver.
- * @param {(options: object) => Promise<object>} [options.loadModel] Model
- *   loader, injectable for tests.
  * @returns {object} Data-layer module.
  */
 export function createLocalAdsbLayer({
@@ -97,7 +94,6 @@ export function createLocalAdsbLayer({
   services,
   now = Date.now,
   resolveAsset = (url) => url,
-  loadModel,
 }) {
   if (typeof receiver?.getState !== 'function')
     throw new TypeError('Local ADS-B requires a receiver session');
@@ -115,7 +111,7 @@ export function createLocalAdsbLayer({
   } = services.context;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
-  /** The engine's Local ADS-B renderer for this lifecycle (render/*.js). */
+  /** The engine's Local ADS-B display for this lifecycle (render/display.js). */
   let renderer = null;
   let enabled = false;
   let unsubscribe = null;
@@ -637,12 +633,7 @@ export function createLocalAdsbLayer({
     },
 
     attachRenderer(nextViewer, { engine = null } = {}) {
-      renderer = services.renderer.create({
-        viewer: nextViewer,
-        engine,
-        loadModel,
-        createTrail: services.trails?.createTrail ?? null,
-      });
+      renderer = services.renderer.create({ viewer: nextViewer, engine });
       renderer.attach();
       if (renderer.models) {
         models = createLocalAdsbModels({

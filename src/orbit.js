@@ -1,5 +1,4 @@
 import * as geo from './geo/index.js';
-import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -12,11 +11,10 @@ import {
  */
 export class OrbitController {
   /**
-   * @param {import('./globe/contract.js').GlobeEngine | object} engine The
-   *   globe engine, or a viewer registered for one.
+   * @param {import('./globe/contract.js').GlobeEngine | null} engine
    */
   constructor(engine) {
-    this.engine = engineFromViewer(engine);
+    this.engine = engine ?? null;
     this.active = false;
     this.target = null;
     this.radius = 500;
@@ -93,7 +91,7 @@ export class OrbitController {
       this._removeListener?.();
       this._removeListener = null;
     }
-    this.engine = engine ? engineFromViewer(engine) : null;
+    this.engine = engine ?? null;
   }
 
   /**

@@ -1,14 +1,11 @@
 import * as geo from './geo/index.js';
-import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 
 /**
  * Set camera to Austin on load with a cinematic fly-in.
- * @param {import('./globe/contract.js').GlobeEngine | object} target The globe
- *   engine, or a viewer registered for one.
+ * @param {import('./globe/contract.js').GlobeEngine | null} engine
  * @returns {Function} Cancels the pending or active startup flight.
  */
-export function flyToAustin(target) {
-  const engine = engineFromViewer(target);
+export function flyToAustin(engine) {
   if (!engine) return () => {};
   // Start from a high altitude, then fly down
   engine.camera.setView({

@@ -21,6 +21,7 @@ import {
 } from './policy.js';
 import { formatAge } from './photoText.js';
 import { createSelection } from './selection.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { setLocale } from '../../i18n/index.js';
 import {
   altitudeFade,
@@ -439,6 +440,11 @@ test('compact ages follow shared translated minute, hour and day forms', () => {
 });
 
 function ambientFixture(rows, screens) {
+  const engine = createFakeEngine({ width: 1200, height: 900 });
+  // Positions here are screen points already; heights are exact.
+  engine.fake.script('worldToWindow', (position) => position);
+  const camera = { height: 30_000 };
+  engine.camera.height = () => camera.height;
   const state = {
     enabled: true,
     renderedRows: rows,
@@ -451,10 +457,7 @@ function ambientFixture(rows, screens) {
     ),
     pointById: new Map(),
     rowById: new Map(rows.map((row) => [row.stableId, row])),
-    viewer: {
-      scene: { canvas: { clientWidth: 1200, clientHeight: 900 } },
-      camera: { positionCartographic: { height: 30_000 } },
-    },
+    engine,
   };
   const photos = [];
   const painted = [];
@@ -464,7 +467,6 @@ function ambientFixture(rows, screens) {
     state,
     services: {
       now: () => now,
-      project: (_scene, position) => position,
       overlayHost: {
         setEntries(id, _entries, options) {
           entries.set(id, _entries);
@@ -483,6 +485,7 @@ function ambientFixture(rows, screens) {
   });
   return {
     state,
+    camera,
     selection,
     photos,
     painted,
@@ -606,7 +609,7 @@ test('pans retain every on-screen photo and refreshes only fill free slots', () 
 test('ambient show/hide thresholds have hysteresis without small-zoom toggles', () => {
   const a = row();
   const f = ambientFixture([a], new Map([[a.stableId, { x: 150, y: 150 }]]));
-  const height = f.state.viewer.camera.positionCartographic;
+  const height = f.camera;
   height.height = WILDLIFE_CARD_SHOW_MAX_METERS - 1;
   f.selection.refreshAmbient();
   assert.equal(f.state.ambientRows.length, 1);

@@ -20,3 +20,19 @@ export function viewerEngine(viewer) {
   if (camera.setView) engine.camera.setView = camera.setView.bind(camera);
   return engine;
 }
+
+/**
+ * A globe engine whose follow is a viewer test double's tracked entity, as
+ * the Cesium engine reports one the app tracked: following() is
+ * `{ native: entity }` and followChanged is the viewer's
+ * trackedEntityChanged.
+ */
+export function trackingEngine(viewer) {
+  const engine = createFakeEngine();
+  engine.camera.following = () =>
+    viewer.trackedEntity ? { native: viewer.trackedEntity } : null;
+  Object.defineProperty(engine.camera, 'followChanged', {
+    value: viewer.trackedEntityChanged,
+  });
+  return engine;
+}

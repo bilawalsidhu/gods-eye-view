@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import { CockpitViewController } from './cockpitController.js';
+import { createCockpitEngine } from '../testSupport/cockpitEngine.mjs';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
@@ -39,19 +40,10 @@ function fixture(t) {
     };
   }
   const converted = new Set();
-  const listeners = () => ({ addEventListener: () => () => {} });
-  const entity = { position: {}, show: true };
-  const viewer = {
-    trackedEntity: entity,
-    camera: { cancelFlight() {} },
-    entities: { contains: (candidate) => candidate === entity },
-    scene: {
-      preUpdate: listeners(),
-      screenSpaceCameraController: { enableInputs: true },
-    },
-    trackedEntityChanged: listeners(),
-  };
-  const cockpit = new CockpitViewController(viewer, {
+  const globe = createCockpitEngine();
+  const { engine } = globe;
+  const aircraft = globe.ride(globe.aircraft());
+  const cockpit = new CockpitViewController(engine, {
     services: {
       flightsLayer: { getTrackedInfo: () => INFO, refreshTr3b() {} },
       militaryFlightsLayer: { getTrackedInfo: () => null },
@@ -79,11 +71,12 @@ function fixture(t) {
   });
   t.after(() => {
     cockpit.stop();
+    engine.destroy();
     app.unmount();
     document.body.classList.remove('cockpit-mode');
   });
   const $ = (selector) => document.querySelector(selector);
-  return { $, cockpit, store, converted, hiddenFocus };
+  return { $, cockpit, store, converted, hiddenFocus, globe, aircraft };
 }
 
 const shown = ($) => ({
@@ -135,7 +128,7 @@ test('a tracked aircraft shows the entry and a TR-3B chip that names its action'
 });
 
 test('entering shows the HUD and focuses the exit once it renders; exiting returns focus to the entry', async (t) => {
-  const { $, cockpit } = fixture(t);
+  const { $, cockpit, globe, aircraft } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
   const entry = $('#cockpit-entry');
@@ -155,9 +148,17 @@ test('entering shows the HUD and focuses the exit once it renders; exiting retur
   const hud = $('#cockpit-hud');
   assert.equal(hud.classList.contains('signals-active'), true);
   assert.equal(document.activeElement?.id, 'map-view-switch');
+  // First person: the ridden aircraft's glyph is not drawn, the engine's
+  // follow and camera inputs are the Cockpit's.
+  assert.equal(aircraft.show, false);
+  assert.equal(globe.following(), null);
+  assert.equal(globe.engine.fake.cameraInputsEnabled, false);
 
   $('#map-view-switch').click();
   assert.equal(cockpit.active, false);
+  assert.equal(aircraft.show, true);
+  assert.equal(globe.following(), aircraft, 'the follow resumes');
+  assert.equal(globe.engine.fake.cameraInputsEnabled, true);
   await nextTick();
   await Promise.resolve();
   assert.deepEqual(shown($), {

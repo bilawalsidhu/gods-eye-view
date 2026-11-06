@@ -30,7 +30,7 @@ export function createApplicationTransit({
   rendererFactory = ({ engine, ...context }) =>
     engine?.kind === 'navara'
       ? rendererFor('transit', engine, context)
-      : createTransitCesiumRenderer(context),
+      : createTransitCesiumRenderer({ ...context, engine }),
 }) {
   if (!surface?.groundFloor || !surface?.meshFloor)
     throw new TypeError('Transit needs the application surface services');

@@ -1,4 +1,5 @@
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
+import { trackingEngine } from '../testSupport/viewerEngine.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -157,7 +158,7 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
   globalThis.window = fakeWindow;
   _setTrackedOverlayHostForTest(recorder.host);
   try {
-    initTrackedReadout(viewer);
+    initTrackedReadout(trackingEngine(viewer));
     const publication = recorder.calls.find(({ op }) => op === 'set');
     assert.ok(publication);
     assert.equal(publication.sourceId, 'tracked');
@@ -205,7 +206,7 @@ test('selection lifecycle leaves installations to their own entry and retains AL
   globalThis.window = fakeWindow;
   _setTrackedOverlayHostForTest(recorder.host);
   try {
-    initTrackedReadout(viewer);
+    initTrackedReadout(trackingEngine(viewer));
     const setsBefore = recorder.calls.filter(({ op }) => op === 'set').length;
     fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
       detail: { layerId: 'ais-live-vessels', entity: installation },

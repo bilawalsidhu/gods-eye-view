@@ -35,8 +35,8 @@ export function createApplicationOperations({ requests, signal, eventTarget }) {
     requests,
     surface,
     annotationResolver,
-    searchAndFlyTo: (viewer, query, options = {}) =>
-      searchAndFlyTo(viewer, query, {
+    searchAndFlyTo: (engine, query, options = {}) =>
+      searchAndFlyTo(engine, query, {
         ...options,
         features,
         ground: surface.groundFloor,

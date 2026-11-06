@@ -34,10 +34,6 @@ import { MAP_STACKS } from '../mapStackController.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
 import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
-import {
-  engineFromViewer,
-  registerViewerEngine,
-} from '../globe/cesium/engineFromViewer.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
@@ -196,9 +192,9 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
   };
   // A Viewer's canvas is its scene's.
   viewer.canvas = viewer.scene.canvas;
-  // Location flights run on the globe engine registered for the viewer, as
-  // the app's scene engine is (src/app/globeEngine.js).
-  registerViewerEngine(viewer, createCesiumEngine(viewer));
+  // Location flights run on the Cesium engine over the viewer, as the app's
+  // scene engine does (src/app/globeEngine.js).
+  testEngines.set(viewer, createCesiumEngine(viewer));
   const styleManager = {
     runImmediateNavigation(noun, navigate, releaseOptions = undefined) {
       return runExplicitNavigation({
@@ -5277,32 +5273,38 @@ const testPlaceSearch = () =>
     resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__,
   });
 function createGevActionRunner(options) {
-  registerTestEngine(options.viewer);
-  return createActionRunner({ placeSearch: testPlaceSearch(), ...options });
+  return createActionRunner({
+    placeSearch: testPlaceSearch(),
+    ...options,
+    engine: options.engine ?? testEngineFor(options.viewer),
+  });
 }
 /**
- * The runner drives the globe engine registered for its viewer, as the app's
- * scene engine is (src/app/globeEngine.js): a test viewer gets the Cesium
- * engine over it or, when its camera only states where it is
- * (positionCartographic), a fake engine at that place.
+ * The runner drives the globe engine of its viewer, as the app's runner
+ * drives the scene engine (src/app/globeEngine.js): a test viewer gets the
+ * Cesium engine over it or, when its camera only states where it is
+ * (positionCartographic), a fake engine at that place. One engine per viewer.
  */
-function registerTestEngine(viewer) {
-  if (!viewer || engineFromViewer(viewer)) return;
+const testEngines = new WeakMap();
+function testEngineFor(viewer) {
+  if (!viewer) return null;
+  let engine = testEngines.get(viewer);
+  if (engine) return engine;
   const camera = viewer.camera ?? {};
   const place = Object.getOwnPropertyDescriptor(
     camera,
     'positionCartographic',
   )?.value;
-  registerViewerEngine(
-    viewer,
+  engine =
     !camera.positionWC && place
       ? createFakeEngine({
           longitude: place.longitude,
           latitude: place.latitude,
           altitude: place.height,
         })
-      : createCesiumEngine(viewer),
-  );
+      : createCesiumEngine(viewer);
+  testEngines.set(viewer, engine);
+  return engine;
 }
 function controlRadio(viewer, manager, args, options) {
   return runControlRadio(viewer, manager, args, {

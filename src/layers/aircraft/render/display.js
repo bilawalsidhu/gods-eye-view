@@ -1,9 +1,9 @@
-// The aircraft renderer on the Navara engine (contract: ./contract.js),
-// built only on the engine contract: engine.movers (the fleet glyphs, the
-// tracked glyph, the 3D models), engine.lines (the trail and its live head),
+// The aircraft display (contract: ./contract.js): what the aircraft layers
+// (flights, military, local ADS-B) draw, on any globe engine, through the
+// engine contract only: engine.movers (the fleet glyphs, the tracked glyph,
+// the 3D models), engine.lines (the trail and its live head),
 // engine.camera.follow (the follow camera), engine.projector and
-// engine.camera.pose() (the view the logic reads). No three, no Cesium: the
-// engine draws. Loaded only through the Navara mode's import().
+// engine.camera.pose() (the view the logic reads). The engine draws.
 //
 // Handles keep the Cesium field vocabulary the logic writes (contract.js) as
 // setters that write the engine's instance stores; the writes of a frame are
@@ -11,10 +11,10 @@
 // microtask for writes outside a frame), so a fleet tick draws in its frame.
 //
 // Sprites go in banks: one mover set per distance scale and depth mode the
-// handles ask for (flights: one), growing by doubling. Models go in banks per
-// glTF and look (url, minimum pixels, blend, unlit). The glyph atlas holds
-// every aircraftIcon() kind at the fleet and tracked raster sizes, drawn
-// once from the same SVGs Cesium's billboards load.
+// handles ask for (flights: one), growing by doubling; the tracked glyph has
+// its own, drawn over the fleet. Models go in banks per glTF and look (url,
+// minimum pixels, blend, unlit). The glyph atlas holds every aircraftIcon()
+// kind at the fleet and tracked raster sizes, drawn once from the same SVGs.
 
 import * as geo from '../../../geo/index.js';
 import {
@@ -29,21 +29,23 @@ import {
   createMoverBank,
   StoredColor,
   writeFields,
-} from '../../shared/render/navaraMoverBank.js';
+} from '../../shared/render/moverBank.js';
 
 const BASE_SIZE_PX = 20;
 
 /**
- * The model frame → glTF scene axes on Navara: Cesium's own glTF axis
- * correction, Y_UP_TO_Z_UP × Z_UP_TO_X_UP (data/modelVisualAnchor.js).
- * Navara's glTF loader is three's GLTFLoader, which keeps the scene Y-up,
- * so Z_UP_TO_X_UP alone would draw every model 90° off its heading.
+ * The model frame → the glTF's own axes (the movers' orientation): Cesium's
+ * glTF axis correction, Y_UP_TO_Z_UP × Z_UP_TO_X_UP (data/modelVisualAnchor.js),
+ * column-major. setPose keeps modelMatrix in the model frame, as the layers'
+ * anchors read it.
  */
-// Cesium's Axis.Y_UP_TO_Z_UP × Axis.Z_UP_TO_X_UP, column-major.
-const NAVARA_GLTF_AXIS = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
-const ATLAS_PAD = 2;
+const GLTF_AXIS = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
+// The trail's alpha where it passes the depth test and where the scene hides
+// it (as data/trailRenderer.js draws track histories), and the live head's.
 const TRAIL_ALPHA = 0.85;
 const TRAIL_OCCLUDED_ALPHA = 0.4;
+const HEAD_ALPHA = 0.9;
+const HEAD_OCCLUDED_ALPHA = 0.45;
 const MIN_SEGMENT_DISTANCE_SQ = 0.01;
 
 // ---------------------------------------------------------------------------
@@ -81,8 +83,7 @@ const scalarKey = (scalar) =>
 
 // Follow handle → the tracked handle it follows, for every aircraft layer on
 // the engine: a layer whose follow another aircraft layer took reads the
-// new owner's tracked handle (its gevSelectionOrigin), as Cesium's
-// viewer.trackedEntity gives it the other layer's entity.
+// new owner's tracked handle (its gevSelectionOrigin).
 const FOLLOWED_TRACKED = new WeakMap();
 // The tracked handle whose follow is being started (any aircraft layer):
 // the engine raises followChanged inside follow(), before the follow
@@ -90,12 +91,12 @@ const FOLLOWED_TRACKED = new WeakMap();
 let followStarting = null;
 
 // ---------------------------------------------------------------------------
-// The renderer
+// The display
 // ---------------------------------------------------------------------------
 
 /**
+ * @param {import('../../../globe/contract.js').GlobeEngine} engine
  * @param {object} options
- * @param {import('../../../globe/contract.js').GlobeEngine} options.engine
  * @param {string} options.layerId Names the layer's mover sets and lines.
  * @param {number} [options.order=0] Draw order of the layer's sprites.
  * @param {number} [options.headingOffsetDeg=0] Model nose vs heading 0.
@@ -103,14 +104,19 @@ let followStarting = null;
  *   Test seam: the glyph atlas.
  * @returns {import('./contract.js').AircraftRenderer}
  */
-export function createAircraftNavaraRenderer({
+export function createAircraftDisplay(
   engine,
-  layerId,
-  order = 0,
-  headingOffsetDeg = 0,
-  drawAtlas = drawAircraftIconAtlas,
-}) {
+  {
+    layerId,
+    order = 0,
+    headingOffsetDeg = 0,
+    drawAtlas = drawAircraftIconAtlas,
+  },
+) {
+  if (!engine?.movers || !engine?.lines)
+    throw new TypeError('The aircraft display needs a globe engine');
   let destroyed = false;
+  let attached = false;
   const removers = [];
   const iconCells = aircraftIconCells();
   const defaultIcon = [...iconCells.keys()][0];
@@ -150,10 +156,11 @@ export function createAircraftNavaraRenderer({
   removers.push(layerView.destroy);
   const { view, freshCamera } = layerView;
 
-  // --- fleet sprites ---------------------------------------------------------
+  // --- sprites: the fleet and the tracked glyph -------------------------------
   let atlas = null;
   let fleetVisible = true;
   const spriteBanks = new Map();
+  let spriteBankSeq = 0;
   const unbanked = new Set(); // sprites added before the atlas
   const spriteWrite = (sprite, set, index) => {
     writeFields(set, index, {
@@ -166,20 +173,23 @@ export function createAircraftNavaraRenderer({
     });
     set.set(index, { pickId: sprite.id });
   };
+  // One bank per role (fleet, tracked), distance scale and depth mode.
   const spriteBankFor = (sprite) => {
     if (!atlas) return null;
+    const { tracked } = sprite;
     const depth = depthKey(sprite.disableDepthTestDistance);
-    const key = `${scalarKey(sprite.scaleByDistance)}|${JSON.stringify(depth)}`;
+    const key = `${tracked ? 'tracked' : 'fleet'}|${scalarKey(sprite.scaleByDistance)}|${JSON.stringify(depth)}`;
     let bank = spriteBanks.get(key);
     if (!bank) {
       const scalar = sprite.scaleByDistance;
-      const index = spriteBanks.size;
+      const index = spriteBankSeq++;
       bank = createMoverBank(engine, {
         options: (capacity, generation) => ({
-          id: `${layerId}-sprites-${index}-${generation}`,
+          id: `${layerId}-${tracked ? 'tracked' : 'sprites'}-${index}-${generation}`,
           kind: 'sprite',
           capacity,
-          order,
+          // The tracked glyph over the fleet.
+          order: tracked ? order + 0.5 : order,
           depthTest: depth,
           pickable: true,
           sprite: {
@@ -193,12 +203,13 @@ export function createAircraftNavaraRenderer({
         write: spriteWrite,
         onCommit,
       });
-      bank.setVisible(fleetVisible);
+      bank.setVisible(tracked || fleetVisible);
       spriteBanks.set(key, bank);
     }
     return bank;
   };
   const placeSprite = (sprite) => {
+    if (!sprite.live) return;
     const bank = spriteBankFor(sprite);
     if (!bank) {
       unbanked.add(sprite);
@@ -213,9 +224,7 @@ export function createAircraftNavaraRenderer({
       atlas = drawn;
       const waiting = [...unbanked];
       unbanked.clear();
-      for (const sprite of waiting) if (sprite.live) placeSprite(sprite);
-      for (const sprite of trackedSprites)
-        if (sprite.live) placeTracked(sprite);
+      for (const sprite of waiting) placeSprite(sprite);
       engine.render.request(layerId);
     })
     .catch((error) =>
@@ -223,11 +232,11 @@ export function createAircraftNavaraRenderer({
     );
 
   class Sprite {
-    constructor(spec, bankFor) {
+    constructor(spec, tracked = false) {
       this.gevBank = null;
       this.gevIndex = -1;
       this.live = true;
-      this.bankFor = bankFor;
+      this.tracked = tracked;
       this._position = geo.cartesian3.clone(
         spec.position ?? geo.cartesian3.ZERO,
       );
@@ -242,8 +251,8 @@ export function createAircraftNavaraRenderer({
       this._scaleByDistance = spec.scaleByDistance
         ? { ...spec.scaleByDistance }
         : undefined;
-      this.disableDepthTestDistance = spec.disableDepthTestDistance ?? 0;
-      this.id = spec.id;
+      this._disableDepthTestDistance = spec.disableDepthTestDistance ?? 0;
+      this._id = spec.id;
       this.alignedAxis = spec.alignedAxis;
       this.sizeInMeters = false;
     }
@@ -254,6 +263,18 @@ export function createAircraftNavaraRenderer({
 
     write(fields) {
       this.gevBank?.update(this, fields);
+    }
+
+    get id() {
+      return this._id;
+    }
+
+    set id(value) {
+      this._id = value;
+      if (this.gevBank?.set) {
+        this.gevBank.set.set(this.gevIndex, { pickId: value });
+        this.gevBank.touch();
+      }
     }
 
     get position() {
@@ -311,6 +332,7 @@ export function createAircraftNavaraRenderer({
       this.write(spriteScaleField);
     }
 
+    // Glyphs are square: the width sizes them.
     get height() {
       return this._height;
     }
@@ -358,25 +380,49 @@ export function createAircraftNavaraRenderer({
       if (scalarKey(next) === scalarKey(this._scaleByDistance)) return;
       this._scaleByDistance = next;
       // Another distance scale is another set.
-      if (this.gevBank) this.bankFor(this);
+      if (this.gevBank) placeSprite(this);
+    }
+
+    get disableDepthTestDistance() {
+      return this._disableDepthTestDistance;
+    }
+
+    set disableDepthTestDistance(value) {
+      const next = value ?? 0;
+      if (next === this._disableDepthTestDistance) return;
+      this._disableDepthTestDistance = next;
+      // Another depth mode is another set.
+      if (this.gevBank) placeSprite(this);
     }
   }
 
+  const fleetBanks = () =>
+    [...spriteBanks.entries()]
+      .filter(([key]) => key.startsWith('fleet|'))
+      .map(([, bank]) => bank);
+
   const fleet = {
-    attach() {},
-    detach() {
-      for (const bank of spriteBanks.values()) bank.destroy();
-      spriteBanks.clear();
-      unbanked.clear();
+    attach() {
+      attached = !destroyed;
     },
-    attached: () => !destroyed,
-    visible: () => !destroyed && fleetVisible,
+    detach() {
+      attached = false;
+      for (const [key, bank] of [...spriteBanks])
+        if (key.startsWith('fleet|')) {
+          bank.destroy();
+          spriteBanks.delete(key);
+        }
+      for (const sprite of unbanked)
+        if (!sprite.tracked) unbanked.delete(sprite);
+    },
+    attached: () => attached && !destroyed,
+    visible: () => attached && !destroyed && fleetVisible,
     setVisible(visible) {
       fleetVisible = visible;
-      for (const bank of spriteBanks.values()) bank.setVisible(visible);
+      for (const bank of fleetBanks()) bank.setVisible(visible);
     },
     add(spec) {
-      const sprite = new Sprite(spec, (s) => placeSprite(s));
+      const sprite = new Sprite(spec);
       placeSprite(sprite);
       return sprite;
     },
@@ -386,6 +432,7 @@ export function createAircraftNavaraRenderer({
       unbanked.delete(sprite);
       sprite.gevBank?.remove(sprite);
     },
+    // Draw order is each set's `order` (the layer's data/spriteOrder slot).
     restoreOrder() {},
     restoreOrderOnEnable() {},
   };
@@ -447,18 +494,19 @@ export function createAircraftNavaraRenderer({
       this._show = true;
       this._scale = spec.scale ?? 1;
       this._color = new StoredColor(spec.color);
-      this.id = spec.id;
+      this._id = spec.id;
       this.modelMatrix = geo.matrix4.create();
       this.translation = geo.cartesian3.create();
       this.orientation = geo.quaternion.create(0, 0, 0, 1);
       this.radiusM = spec.radiusM ?? 1;
     }
 
+    /** Placed, and the engine has loaded what this instance draws. */
     get ready() {
-      return this.placed && Boolean(this.gevBank?.ready());
+      return this.placed && Boolean(this.gevBank?.set?.ready(this.gevIndex));
     }
 
-    /** The scale drawn: Cesium's minimumPixelSize kept on the CPU. */
+    /** The scale drawn: minimumPixelSize kept on the CPU. */
     get computedScale() {
       const minimum = this.spec.minimumPixelSize ?? 0;
       if (!(minimum > 0)) return this._scale;
@@ -477,6 +525,18 @@ export function createAircraftNavaraRenderer({
         (2 * this.radiusM * this._scale * height) /
         (2 * Math.tan(cam.frustum.fovy / 2) * distance);
       return pixels < minimum ? this._scale * (minimum / pixels) : this._scale;
+    }
+
+    get id() {
+      return this._id;
+    }
+
+    set id(value) {
+      this._id = value;
+      if (this.gevBank?.set) {
+        this.gevBank.set.set(this.gevIndex, { pickId: value });
+        this.gevBank.touch();
+      }
     }
 
     get show() {
@@ -508,14 +568,14 @@ export function createAircraftNavaraRenderer({
   }
 
   const models = {
-    live: () => !destroyed,
+    live: () => attached && !destroyed,
     setVisible(visible) {
       modelsVisible = visible;
       for (const bank of modelBanks.values()) bank.setVisible(visible);
     },
     loadFleet: (spec) => Promise.resolve(new ModelHandle(spec)),
     loadTracked: (spec) => Promise.resolve(new ModelHandle(spec)),
-    // The engine loads each glTF once per bank; nothing to warm.
+    // The engine loads each glTF itself; nothing to warm.
     preload: (url) => Promise.resolve({ url, destroy() {} }),
     add(model) {
       modelBankFor(model).add(model);
@@ -526,9 +586,10 @@ export function createAircraftNavaraRenderer({
     destroy(model) {
       model?.gevBank?.remove(model);
     },
-    /** The same HPR frame as Cesium (modelMatrix); the instance turned by
-     *  Navara's glTF axes (NAVARA_GLTF_AXIS). `offsetDeg`: this model's
-     *  nose offset when the layer's models differ (default: the layer's). */
+    /** The heading-pitch-roll frame (modelMatrix, the model frame); the
+     *  instance turned to the glTF's own axes (GLTF_AXIS). `offsetDeg`: this
+     *  model's nose offset when the layer's models differ (default: the
+     *  layer's). */
     setPose(model, position, headingDeg, offsetDeg = headingOffsetDeg) {
       scratchHpr.heading = geo.math.toRadians((headingDeg || 0) + offsetDeg);
       geo.transforms.headingPitchRollToFixedFrame(
@@ -540,7 +601,7 @@ export function createAircraftNavaraRenderer({
       );
       geo.matrix4.multiplyTransformation(
         model.modelMatrix,
-        NAVARA_GLTF_AXIS,
+        GLTF_AXIS,
         scratchCorrected,
       );
       geo.quaternion.fromRotationMatrix(
@@ -564,37 +625,19 @@ export function createAircraftNavaraRenderer({
 
   // --- the tracked glyph -----------------------------------------------------
   const trackedSprites = new Set();
-  let trackedBank = null;
-  const trackedBankFor = () => {
-    if (!atlas) return null;
-    trackedBank ??= createMoverBank(engine, {
-      options: (capacity, generation) => ({
-        id: `${layerId}-tracked-${generation}`,
-        kind: 'sprite',
-        capacity: Math.max(capacity, 4),
-        order: order + 0.5,
-        depthTest: 'always',
-        pickable: true,
-        sprite: {
-          atlas,
-          sizePx: BASE_SIZE_PX,
-          scaleByDistance: [1000, 3.0, 8000000, 0.5],
-        },
-      }),
-      write: spriteWrite,
-      onCommit,
-    });
-    return trackedBank;
-  };
-  const placeTracked = (sprite) => trackedBankFor()?.add(sprite);
   let trackedSeq = 0;
   // Each frame (before drawing): the tracked glyphs read their callbacks.
+  // A followed glyph takes the position its follow centred this frame
+  // (Cesium's follow reads it before the frame's events).
   removers.push(
     engine.frames.preRender.addEventListener(() =>
       inFrameDo(() => {
         for (const sprite of trackedSprites) {
           const { spec } = sprite;
-          const position = spec.position();
+          const position = sprite.gevFollowSampled
+            ? sprite.gevFollowSample
+            : spec.position();
+          sprite.gevFollowSampled = false;
           if (position) sprite.position = position;
           sprite.rotation = spec.rotation();
           sprite.color = spec.color();
@@ -614,24 +657,26 @@ export function createAircraftNavaraRenderer({
           scale: spec.scale,
           color: spec.color(),
           rotation: spec.rotation(),
+          scaleByDistance: spec.scaleByDistance,
           disableDepthTestDistance: spec.disableDepthTestDistance,
           id: `${layerId}-tracked-${++trackedSeq}`,
         },
-        () => {},
+        true,
       );
-      // The tracked glyph's distance scale is its bank's (as Cesium's).
-      sprite._scaleByDistance = spec.scaleByDistance;
       sprite.spec = spec;
       sprite.resumeAircraftFollow = () => follow.start(sprite);
       sprite.viewFrom = null;
+      sprite.gevFollowSample = geo.cartesian3.create();
+      sprite.gevFollowSampled = false;
       trackedSprites.add(sprite);
-      placeTracked(sprite);
+      placeSprite(sprite);
       return sprite;
     },
     remove(handle) {
       if (!handle) return;
       handle.live = false;
       trackedSprites.delete(handle);
+      unbanked.delete(handle);
       handle.gevBank?.remove(handle);
       if (
         handle.gevFollowHandle &&
@@ -658,22 +703,30 @@ export function createAircraftNavaraRenderer({
   };
 
   // --- follow ---------------------------------------------------------------
-  const ownFollows = FOLLOWED_TRACKED; // follow handle → tracked handle
   // The follow carries the tracked readout's card as plain data (the
   // handle's annotation fields, read when the card paints).
-  const followOf = (handle) => {
-    const card = {
-      id: handle.gevTrackedId,
-      model: () => handle.gevLabelModel,
-      position: () => handle.gevDisplayPosition?.() ?? handle.spec.position(),
-    };
-    return engine.camera.follow({
+  const followOf = (handle) =>
+    engine.camera.follow({
       native: handle,
-      position: () => handle.spec.position(),
+      position() {
+        const position = handle.spec.position();
+        if (position) {
+          geo.cartesian3.clone(position, handle.gevFollowSample);
+          handle.gevFollowSampled = true;
+        }
+        return position;
+      },
       viewFrom: () => handle.viewFrom,
-      label: card,
+      label:
+        typeof handle.gevTrackedId === 'string'
+          ? {
+              id: handle.gevTrackedId,
+              model: () => handle.gevLabelModel,
+              position: () =>
+                handle.gevDisplayPosition?.() ?? handle.spec.position(),
+            }
+          : undefined,
     });
-  };
   const follow = {
     start(handle) {
       const outer = followStarting;
@@ -685,9 +738,9 @@ export function createAircraftNavaraRenderer({
         followStarting = outer;
       }
       handle.gevFollowHandle = followHandle;
-      ownFollows.set(followHandle, handle);
-      // Cesium returns the one-frame camera framing's disposer; the engine's
-      // follow frames itself.
+      FOLLOWED_TRACKED.set(followHandle, handle);
+      // The engine's follow frames itself (Cesium's one exact tracked frame
+      // included) and ends with it: nothing for the caller to stop.
       return () => {};
     },
     refocus(handle) {
@@ -699,17 +752,35 @@ export function createAircraftNavaraRenderer({
     isFollowing: (handle) =>
       Boolean(handle?.gevFollowHandle) &&
       engine.camera.following() === handle.gevFollowHandle,
+    // What is followed: an aircraft layer's tracked handle, else what the
+    // follow is of (another layer's entity), else the follow itself.
     current() {
       if (followStarting) return followStarting;
       const handle = engine.camera.following();
-      return handle ? (ownFollows.get(handle) ?? handle) : undefined;
+      return handle
+        ? (FOLLOWED_TRACKED.get(handle) ?? handle.native ?? handle)
+        : undefined;
     },
     onChanged: (listener) =>
       engine.camera.followChanged.addEventListener(listener),
   };
 
   // --- trails ----------------------------------------------------------------
+  // The layer's lines and heads, released with the display.
+  const lines = new Set();
+  const heads = new Set();
   let lineSeq = 0;
+  const lineOf = (options) => {
+    const line = engine.lines.createLine(options);
+    lines.add(line);
+    return line;
+  };
+  const dropLine = (line) => {
+    if (line && lines.delete(line)) line.destroy();
+  };
+  const samePositions = (a, b) =>
+    a.length === b.length &&
+    a.every((position, index) => geo.cartesian3.equals(position, b[index]));
   const trails = {
     create({ color, width = 2.5 }) {
       const [r, g, b] = rgbaFromCss(color).rgba();
@@ -718,7 +789,7 @@ export function createAircraftNavaraRenderer({
       let visible = true;
       let current = [];
       const ensure = () =>
-        (line ??= engine.lines.createLine({
+        (line ??= lineOf({
           id,
           widthPx: width,
           color: [r, g, b, TRAIL_ALPHA],
@@ -727,6 +798,8 @@ export function createAircraftNavaraRenderer({
           pickId: id,
         }));
       return {
+        // Fewer than 2 distinct positions draw nothing; consecutive
+        // near-duplicates are dropped.
         setPositions(cartesians) {
           if (destroyed) return;
           const positions = [];
@@ -754,28 +827,37 @@ export function createAircraftNavaraRenderer({
           line?.setPositions(current);
         },
         destroy() {
-          line?.destroy();
+          dropLine(line);
           line = null;
         },
       };
     },
+    // The live head segment: its positions are read each frame while shown.
     createHead({ id, show, positions, color, width = 2.5 }) {
+      if (destroyed) return null;
       const [r, g, b] = rgbaFromCss(color).rgba();
-      const line = engine.lines.createLine({
+      const line = lineOf({
         id: `${id}`,
         widthPx: width,
-        color: [r, g, b, 0.9],
-        depthFailAlpha: 0.5,
+        color: [r, g, b, HEAD_ALPHA],
+        depthFailAlpha: HEAD_OCCLUDED_ALPHA / HEAD_ALPHA,
         arc: 'geodesic',
         pickId: id,
       });
       let shown = show !== false;
       line.show(shown);
+      // Written only when they move: each write requests a render.
+      let drawn = [];
       const remove = engine.frames.preRender.addEventListener(() => {
         if (!shown) return;
-        line.setPositions(positions());
+        const next = (positions() ?? []).map((position) =>
+          geo.cartesian3.clone(position),
+        );
+        if (samePositions(next, drawn)) return;
+        drawn = next;
+        line.setPositions(next);
       });
-      return {
+      const head = {
         id,
         get show() {
           return shown;
@@ -785,10 +867,13 @@ export function createAircraftNavaraRenderer({
           line.show(shown);
         },
         remove() {
+          if (!heads.delete(head)) return;
           remove();
-          line.destroy();
+          dropLine(line);
         },
       };
+      heads.add(head);
+      return head;
     },
     removeHead(head) {
       head?.remove();
@@ -796,7 +881,6 @@ export function createAircraftNavaraRenderer({
   };
 
   return {
-    kind: 'navara',
     engine,
     view,
     fleet,
@@ -806,41 +890,45 @@ export function createAircraftNavaraRenderer({
     trails,
     /** The atlas is drawn (tests, QA). */
     whenReady: () => atlasReady,
-    /** A vertical surface probe skips the layer's own mover sets (by id). */
+    /** A vertical surface probe skips the layer's own mover sets. */
     surfaceExclusions: () =>
-      [...spriteBanks.values(), ...modelBanks.values(), trackedBank]
-        .map((bank) => bank?.set?.id)
+      [...spriteBanks.values(), ...modelBanks.values()]
+        .map((bank) => bank.set)
         .filter(Boolean),
     destroy() {
       if (destroyed) return;
       flush();
       destroyed = true;
+      attached = false;
       for (const remove of removers.splice(0)) remove?.();
-      fleet.detach();
+      for (const bank of spriteBanks.values()) bank.destroy();
+      spriteBanks.clear();
+      unbanked.clear();
       for (const bank of modelBanks.values()) bank.destroy();
       modelBanks.clear();
-      trackedBank?.destroy();
-      trackedBank = null;
       trackedSprites.clear();
+      for (const head of [...heads]) head.remove();
+      for (const line of [...lines]) dropLine(line);
     },
   };
 }
 
 /**
- * The Navara registry factory (src/app/layers/renderers.js) of one aircraft
- * layer: its sprite slot (data/spriteOrder's order on Cesium) and its
- * model's nose offset.
+ * The registry factory of one aircraft layer (src/app/layers/renderers.js
+ * and the Navara mode register the same one): its sprite slot
+ * (data/spriteOrder's order) and its model's nose offset. `drawAtlas` is a
+ * test seam.
  * @param {string} layerId
  * @param {number} headingOffsetDeg
  */
-export function aircraftLayerNavaraRenderer(layerId, headingOffsetDeg) {
+export function aircraftLayerDisplay(layerId, headingOffsetDeg) {
   /** @param {import('../../../globe/contract.js').GlobeEngine} engine */
-  return (engine) =>
-    createAircraftNavaraRenderer({
-      engine,
+  return (engine, { drawAtlas } = {}) =>
+    createAircraftDisplay(engine, {
       layerId,
       order: SPRITE_LAYER_ORDER.indexOf(layerId),
       headingOffsetDeg,
+      ...(drawAtlas ? { drawAtlas } : {}),
     });
 }
 

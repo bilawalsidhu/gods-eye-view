@@ -1,7 +1,7 @@
 import { drainWildlifeWork, WILDLIFE_WORK_UNIT } from './performance.js';
 import { wildlifeIconicGroup } from './model.js';
 
-/** Incremental billboard reconciliation, independent of Cesium and the DOM.
+/** Incremental badge reconciliation, independent of the engine and the DOM.
  * A refresh changes only added/removed contacts and properties that differ.
  * Position sampling and appearance construction run only for changed rows. */
 export function createWildlifeBillboardModel({
@@ -58,9 +58,8 @@ export function createWildlifeBillboardModel({
           writes += 1;
         }
         for (const key of Object.keys(appearance)) {
-          // Cesium clones Color and NearFarScalar values on assignment. Our
-          // last descriptor, rather than getter reference identity, records
-          // whether the appearance has actually changed.
+          // The last descriptor, rather than getter reference identity,
+          // records whether the appearance has actually changed.
           if (old?.appearance?.[key] === appearance[key]) continue;
           point[key] = appearance[key];
           writes += 1;
@@ -95,20 +94,5 @@ export function createWildlifeBillboardModel({
     previous.clear();
   }
 
-  // Font readiness replaces just the cached texture. Never resample anchors,
-  // clear the collection or allocate replacement billboards for this swap.
-  function refreshImages(imageForGroup) {
-    let writes = 0;
-    for (const [id, old] of previous) {
-      const point = pointById.get(id);
-      const image = imageForGroup(old.group);
-      if (!point || old.appearance.image === image) continue;
-      point.image = image;
-      old.appearance = { ...old.appearance, image };
-      writes += 1;
-    }
-    return writes;
-  }
-
-  return { update, updateWork, clear, refreshImages };
+  return { update, updateWork, clear };
 }

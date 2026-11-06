@@ -1,18 +1,12 @@
 import * as geo from '../geo/index.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
-import { isGlobeEngine } from '../globe/contract.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { t } from '../i18n/index.js';
 
 // The camera is the globe engine's, and so is the follow: the followed
 // entity is engine.camera.following().native (on Cesium also an entity the
-// app put on viewer.trackedEntity). The viewer, when there is one, is read
-// only for its clock, and for its tracked entity when the engine reports no
-// follow: callers pass an engine and that viewer, or a viewer whose engine
-// is registered (engineFromViewer).
-const engineOf = (target) => engineFromViewer(target);
-const trackerOf = (target, tracker) =>
-  tracker ?? (target && !isGlobeEngine(target) ? target : null);
+// app put on viewer.trackedEntity). The viewer, when callers pass one, is
+// read only for its clock, and for its tracked entity when the engine
+// reports no follow.
 
 // Cesium's EasingFunction.CUBIC_IN_OUT (tween.js Cubic.InOut).
 function cubicInOut(amount) {
@@ -57,11 +51,9 @@ function normalizedHeading(heading) {
 
 /**
  * Return the world position under the center of the canvas, when available.
- * @param {import('../globe/contract.js').GlobeEngine | object} target The
- *   globe engine, or a viewer registered for one.
+ * @param {import('../globe/contract.js').GlobeEngine | null} engine
  */
-export function pickViewTarget(target) {
-  const engine = engineOf(target);
+export function pickViewTarget(engine) {
   if (!engine) return null;
   const { width, height } = engine.host.size();
   if (!width || !height) return null;
@@ -92,15 +84,12 @@ export function pickViewTarget(target) {
 
 /**
  * Describe the camera as an orbit around the current viewport center.
- * @param {import('../globe/contract.js').GlobeEngine | object} target The
- *   globe engine, or a viewer registered for one.
- * @param {object} [tracker] The viewer whose tracked entity is the orbit
- *   target (defaults to `target` when that is a viewer).
+ * @param {import('../globe/contract.js').GlobeEngine | null} engine
+ * @param {object | null} [viewer] The Cesium viewer whose tracked entity is
+ *   the orbit target.
  */
-export function readCameraTargetFrame(target, tracker) {
-  const engine = engineOf(target);
+export function readCameraTargetFrame(engine, viewer = null) {
   if (!engine) return null;
-  const viewer = trackerOf(target, tracker);
   const entity = followedEntity(engine, viewer);
   const follow = engineFollow(engine, viewer);
   const center = entity
@@ -137,15 +126,12 @@ export function readCameraTargetFrame(target, tracker) {
 
 /**
  * Apply an orbit frame, then return the camera to the fixed-world frame.
- * @param {import('../globe/contract.js').GlobeEngine | object} target The
- *   globe engine, or a viewer registered for one.
+ * @param {import('../globe/contract.js').GlobeEngine | null} engine
  * @param {object} frame From {@link readCameraTargetFrame}.
- * @param {object} [tracker] As in readCameraTargetFrame.
+ * @param {object | null} [viewer] As in readCameraTargetFrame.
  */
-function setCameraTargetFrame(target, frame, tracker) {
-  const engine = engineOf(target);
+function setCameraTargetFrame(engine, frame, viewer = null) {
   if (!engine || !frame?.target || !Number.isFinite(frame.range)) return false;
-  const viewer = trackerOf(target, tracker);
   const { camera } = engine;
   // Inside an engine's own follow: the new frame is the follow's offset (a
   // camera command would end the follow; Cesium's tracked entity keeps its
@@ -211,21 +197,21 @@ function frameIsTilted(frame) {
 }
 
 /** Toggle between a straight-down map and a useful oblique map angle. */
-export function toggleCameraTilt(target, tracker) {
-  const frame = readCameraTargetFrame(target, tracker);
+export function toggleCameraTilt(engine, viewer = null) {
+  const frame = readCameraTargetFrame(engine, viewer);
   if (!frame) return false;
   const tilted = frameIsTilted(frame);
   const pitch = tilted ? STRAIGHT_DOWN_PITCH : OBLIQUE_PITCH;
-  return setCameraTargetFrame(target, { ...frame, pitch }, tracker)
+  return setCameraTargetFrame(engine, { ...frame, pitch }, viewer)
     ? { tilted: !tilted, pitch }
     : false;
 }
 
 /** Rotate around the viewport center until north is at the top. */
-export function resetCameraNorth(target, tracker) {
-  const frame = readCameraTargetFrame(target, tracker);
+export function resetCameraNorth(engine, viewer = null) {
+  const frame = readCameraTargetFrame(engine, viewer);
   if (!frame) return false;
-  return setCameraTargetFrame(target, { ...frame, heading: 0 }, tracker);
+  return setCameraTargetFrame(engine, { ...frame, heading: 0 }, viewer);
 }
 
 function headingDegrees(engine) {
@@ -234,17 +220,15 @@ function headingDegrees(engine) {
 
 /**
  * Ease an orbit without handing off the entity that owns the follow camera.
- * @param {import('../globe/contract.js').GlobeEngine | object} target The
- *   globe engine, or a viewer registered for one.
+ * @param {import('../globe/contract.js').GlobeEngine | null} engine
  * @param {{ now?: () => number, duration?: number, tracker?: object }} [options]
- *   `tracker` as in readCameraTargetFrame.
+ *   `tracker`: the viewer, as in readCameraTargetFrame.
  */
 export function createCameraOrientationAnimator(
-  target,
-  { now = () => performance.now(), duration = 650, tracker } = {},
+  engine,
+  { now = () => performance.now(), duration = 650, tracker = null } = {},
 ) {
-  const engine = engineOf(target);
-  const viewer = trackerOf(target, tracker);
+  const viewer = tracker;
   let remove = null;
   let pending = null;
   const cancel = () => {
@@ -310,12 +294,11 @@ export function createCameraOrientationAnimator(
  *   runNavigation: Function,
  *   showToast?: Function,
  *   animationMs?: number,
- * }} options `engine` defaults to the one registered for `viewer`; the viewer
- *   is otherwise only read for its clock and tracked entity.
+ * }} options The viewer is only read for its clock and tracked entity.
  */
 export function bindCameraOrientationControls({
   viewer = null,
-  engine = engineOf(viewer),
+  engine = null,
   publish,
   runNavigation,
   showToast,

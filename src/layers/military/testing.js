@@ -1,4 +1,8 @@
-import { AMBER_TRANSPARENT, TRACKED_ICON_COLOR } from './policy.js';
+import {
+  AMBER_TRANSPARENT,
+  MODEL_HEADING_OFFSET_DEG,
+  TRACKED_ICON_COLOR,
+} from './policy.js';
 
 export function createTesting({
   flightState,
@@ -18,6 +22,8 @@ export function createTesting({
    * @param {object} state.billboard
    * @param {object} state.billboardCollection
    * @param {object} state.viewer
+   * @param {(options: object) => object} state.renderer The test's renderer
+   *   over the viewer and collections (testSupport/aircraftViewerRenderer).
    * @param {Array<Object>} [state.history=[]]
    * @param {boolean} [state.tracked=true]
    * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
@@ -35,12 +41,15 @@ export function createTesting({
     tracked = true,
     models = [],
     modelCollection = null,
+    renderer: createRenderer,
   }) {
     flightState.enabled = billboardCollection?.show !== false;
-    // The production renderer over the test's viewer and (fake) collections.
-    flightState._renderer = services.renderer.create({
+    // The test's renderer over its viewer and (fake) collections.
+    flightState._renderer = createRenderer({
       viewer,
-      adopt: { billboardCollection, modelCollection },
+      billboardCollection,
+      modelCollection,
+      headingOffsetDeg: MODEL_HEADING_OFFSET_DEG,
     });
     flightState._billboards = new Map([[icao24, billboard]]);
     flightState._cullPositions.clear();

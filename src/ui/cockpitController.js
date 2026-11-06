@@ -74,11 +74,17 @@ import * as geo from '../geo/index.js';
 import { cockpitHost } from './cockpitHost.js';
 
 export class CockpitViewController {
+  /**
+   * @param {import('../globe/contract.js').GlobeEngine} engine The scene's
+   *   globe engine: its camera, frames, input and follow (cockpitHost.js).
+   * @param {object} options `viewer`: Cesium's Viewer on the Cesium engine,
+   *   whose stock double-click the Cockpit's goes ahead of.
+   */
   constructor(
-    viewer,
+    engine,
     {
       services,
-      engine = null,
+      viewer = null,
       onVisionChange = null,
       getInitialVisionMode = null,
       onCameraTakeover = null,
@@ -87,11 +93,10 @@ export class CockpitViewController {
       onEntered = null,
       onExited = null,
       onRide = null,
-      restoreTrackingFrame = null,
       publish = {},
     } = {},
   ) {
-    this.host = cockpitHost(viewer, engine);
+    this.host = cockpitHost(engine, { viewer });
     this.services = services;
     this.destroyed = false;
     this.disposed = false;
@@ -127,10 +132,6 @@ export class CockpitViewController {
     this.onEntered = onEntered;
     this.onExited = onExited;
     this.onRide = onRide;
-    this.restoreTrackingFrame =
-      typeof restoreTrackingFrame === 'function'
-        ? restoreTrackingFrame
-        : () => false;
     this.isEntryAllowed =
       typeof isEntryAllowed === 'function' ? isEntryAllowed : () => true;
     this.isUtilityDisclosureOpen =

@@ -76,7 +76,7 @@ export class LayerBindings {
       routeWorldFocusRequest(
         event,
         (detail, fly) => this._runExplicitWorldFocus(detail, fly),
-        (detail) => flyToWorldTarget(this.engine ?? this.viewer, detail),
+        (detail) => flyToWorldTarget(this.engine, detail),
       );
     this._removeWorldRequestFocusListener = registerWorldFocusRequestListener(
       window,

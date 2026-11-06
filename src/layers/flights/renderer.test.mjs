@@ -1,7 +1,8 @@
 // The flights logic draws only through its renderer: with a renderer that
 // is plain data (no Cesium), the layer builds its fleet, selects a contact
 // on a click through the engine's selection dispatcher, tracks and follows
-// it, and releases it on an empty click.
+// it, and releases it on an empty click; then the same through its display
+// on the fake engine and on the Cesium engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -129,9 +130,9 @@ test('the flights logic draws, selects and follows only through its renderer', a
   assert.ok(renderer.calls.some(([name]) => name === 'destroy'));
 });
 
-test('the flights logic draws and follows on the Navara renderer (fake engine)', async () => {
-  const { createAircraftNavaraRenderer, aircraftAtlasLayout } =
-    await import('../aircraft/render/navara.js');
+test('the flights logic draws and follows on the aircraft display (fake engine)', async () => {
+  const { createAircraftDisplay, aircraftAtlasLayout } =
+    await import('../aircraft/render/display.js');
   const layout = aircraftAtlasLayout();
   const engine = createFakeEngine();
   let renderer = null;
@@ -144,8 +145,7 @@ test('the flights logic draws and follows on the Navara renderer (fake engine)',
     militaryRegistry,
     renderer: {
       create: ({ engine: given }) =>
-        (renderer = createAircraftNavaraRenderer({
-          engine: given,
+        (renderer = createAircraftDisplay(given, {
           layerId: 'flights',
           order: 8,
           headingOffsetDeg: 180,
@@ -212,5 +212,84 @@ test('the flights logic draws and follows on the Navara renderer (fake engine)',
     layer.destroy(null);
   }
   assert.equal(engine.movers.list().length, 0, 'no mover set left behind');
+  engine.destroy();
+});
+
+test('the flights logic draws, tracks and follows on the Cesium engine through the same display', async () => {
+  const { createCesiumMoversEngine } =
+    await import('../../testSupport/cesiumMoversEngine.mjs');
+  const { createFlightsDisplay } = await import('./render/display.js');
+  const { aircraftAtlasLayout } = await import('../aircraft/render/display.js');
+  const layout = aircraftAtlasLayout();
+  const { engine, viewer, frame, primitive } = createCesiumMoversEngine();
+  engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(-97.5, 30.3, 400_000),
+  });
+  let display = null;
+  const layer = createApplicationFlights({
+    surface: defaultSurface,
+    source: {
+      label: 'Fixture aircraft',
+      getSnapshot: async () => snapshotOf(['abc123', 'def456']),
+    },
+    militaryRegistry,
+    renderer: {
+      // The registry's factory, with the test's atlas.
+      create: ({ engine: given }) =>
+        (display = createFlightsDisplay(given, {
+          drawAtlas: async () => ({
+            canvas: { width: layout.width, height: layout.height },
+            cells: layout.cells,
+          }),
+        })),
+    },
+  });
+  layer.init(viewer, { engine });
+  layer.enable();
+  try {
+    await display.whenReady();
+    await layer.update(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const [sprites] = engine.movers
+      .list()
+      .filter(({ id }) => id.startsWith('flights-sprites'));
+    assert.equal(sprites.count, 2);
+    const billboards = primitive(sprites.id);
+    assert.equal(billboards.length, 2, 'one Cesium billboard per contact');
+    assert.deepEqual([billboards.get(0).id, billboards.get(1).id].sort(), [
+      'abc123',
+      'def456',
+    ]);
+    assert.deepEqual(
+      layer
+        .qaDrawn()
+        .map((row) => row.id)
+        .sort(),
+      ['abc123', 'def456'],
+    );
+    // Tracking follows through Cesium's trackedEntity, with the readout.
+    assert.equal(layer.trackById('def456', { origin: 'voice' }), true);
+    const following = engine.camera.following();
+    assert.equal(following?.label?.id, 'flights:def456');
+    assert.equal(viewer.trackedEntity?.gevTrackedId, 'flights:def456');
+    frame();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const tracked = engine.movers
+      .list()
+      .find(({ id }) => id.startsWith('flights-tracked'));
+    assert.equal(tracked.count, 1);
+    assert.equal(
+      primitive(tracked.id).get(0).disableDepthTestDistance,
+      Number.POSITIVE_INFINITY,
+    );
+    assert.equal(layer.stopTracking(), true);
+    assert.equal(engine.camera.following(), null);
+    assert.equal(viewer.trackedEntity, undefined);
+  } finally {
+    layer.disable();
+    layer.destroy(viewer);
+  }
+  assert.equal(engine.movers.list().length, 0, 'no mover set left behind');
+  assert.equal(engine.lines.list().length, 0, 'no line left behind');
   engine.destroy();
 });

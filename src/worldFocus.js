@@ -2,7 +2,6 @@
  * One-click camera transfer for layer-owned world targets.
  */
 import * as geo from './geo/index.js';
-import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 
 export const WORLD_FOCUS_REQUEST_EVENT = 'gev:world-request-focus';
 export const WORLD_CLICK_FOCUS_DURATION_SEC = 1.9;
@@ -78,11 +77,10 @@ export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
 
 /**
  * Fly to a world target after ownership has been released.
- * @param {import('./globe/contract.js').GlobeEngine | object | null} engine
- *   The globe engine, or a viewer registered for one.
+ * @param {import('./globe/contract.js').GlobeEngine | null} engine
  */
 export function flyToWorldTarget(engine, target = {}) {
-  const camera = engineFromViewer(engine)?.camera;
+  const camera = engine?.camera;
   const framing = WORLD_FOCUS_FRAMING[target.kind];
   if (!camera || !framing || !isValidWorldFocusTarget(target)) return false;
   const { heading: current } = camera.pose();

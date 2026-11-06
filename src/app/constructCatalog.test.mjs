@@ -251,7 +251,7 @@ test('the catalog per engine: Cesium as before, Navara only what it can show', a
   assert.equal(subset.get('military'), undefined);
 });
 
-test('both production registries attach to the same session models, Cesium-only layers aside', async (t) => {
+test('both production registries attach to the same 38 session models', async (t) => {
   const { registerNavaraLayerRenderers } = await import('./navaraMode.js');
   const lifetime = new AbortController();
   t.after(() => lifetime.abort());
@@ -265,18 +265,12 @@ test('both production registries attach to the same session models, Cesium-only 
   await registerNavaraLayerRenderers();
   const navara = createApplicationCatalog({ ...options, engineKind: 'navara' });
   assert.equal(cesium.layers.length, 38);
-  // Wildlife Sightings still draws itself on Cesium: Navara leaves it out
-  // until it draws through the globe contract.
-  const cesiumOnly = new Set(['wildlife-sightings']);
   assert.deepEqual(
     navara.layers.map(({ id }) => id),
-    cesium.layers.map(({ id }) => id).filter((id) => !cesiumOnly.has(id)),
+    cesium.layers.map(({ id }) => id),
   );
+  assert.deepEqual(navara.metadata, cesium.metadata);
   for (const layer of cesium.layers) {
-    if (cesiumOnly.has(layer.id)) {
-      assert.equal(navara.get(layer.id), undefined, layer.id);
-      continue;
-    }
     assert.equal(navara.get(layer.id), layer, layer.id);
     assert.equal(typeof layer.attachRenderer, 'function', layer.id);
     assert.equal(typeof layer.detachRenderer, 'function', layer.id);

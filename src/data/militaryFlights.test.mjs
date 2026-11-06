@@ -17,6 +17,8 @@ import {
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
+import { trackingEngine } from '../testSupport/viewerEngine.mjs';
+import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
 
 test('share-Follow absence requires an accepted adsb.lol snapshot', async () => {
   _setMilitaryTrackingRefreshOutcomeForTest({ status: 'source-unavailable' });
@@ -146,6 +148,7 @@ test('military first update forwards caller cancellation into the feed request',
 
 test('nonempty adsb.lol payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedMilitaryRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'ae1234',
     entity: { gevLabelModel: { title: 'WARM', details: [] } },
     billboard: { show: false },
@@ -192,6 +195,7 @@ test('military poll refreshes tracked callsign/altitude/kts and marks a missed p
   const billboardCollection = { show: false, remove() {} };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedMilitaryRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24,
     entity,
     billboard,
@@ -263,6 +267,7 @@ test('cached military snapshots retain their observation time and expose stale f
   const history = [];
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedMilitaryRefreshStateForTest({
+    renderer: aircraftViewerRenderer,
     icao24: 'ae01ce',
     entity: { gevLabelModel: { title: 'RCH451', details: [] } },
     billboard: {
@@ -403,8 +408,9 @@ test('real military track path creates no native label and publishes every cache
   globalThis.fetch = async () => ({ ok: false });
   _setTrackedOverlayHostForTest(host);
   try {
-    initTrackedReadout(viewer);
+    initTrackedReadout(trackingEngine(viewer));
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24,
       entity: null,
       billboard,
@@ -844,6 +850,7 @@ test('the military tracked descriptor publishes the reported vertical rate', () 
   // every military contact as level flight.
   const seedRate = (verticalRateMps) =>
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: aircraftViewerRenderer,
       icao24: 'ae7f01',
       entity: { gevLabelModel: { title: 'TEST', details: [] } },
       billboard: {

@@ -301,6 +301,22 @@ test('models load per instance with the set options and follow position, orienta
   assert.equal(options.colorBlendAmount, 0.4);
   assert.equal(options.allowPicking, true);
   assert.equal(options.customShader, undefined, 'lit by default');
+  assert.equal(options.asynchronous, false, 'built at once');
+  // The glTF's own axes: no Cesium axis correction (Y_UP_TO_Z_UP ×
+  // Z_UP_TO_X_UP), so an orientation draws the same on every engine.
+  assert.equal(options.upAxis, Cesium.Axis.Z);
+  assert.equal(options.forwardAxis, Cesium.Axis.X);
+  assert.ok(
+    Cesium.Matrix4.equals(
+      Cesium.ModelUtility.getAxisCorrectionMatrix(
+        options.upAxis,
+        options.forwardAxis,
+        new Cesium.Matrix4(),
+      ),
+      Cesium.Matrix4.IDENTITY,
+    ),
+  );
+  assert.deepEqual(options.environmentMapOptions, { enabled: false });
   const [first, second] = items(collection);
   assert.notEqual(first.modelMatrix, second.modelMatrix);
   const translation = Cesium.Matrix4.getTranslation(
@@ -316,8 +332,12 @@ test('models load per instance with the set options and follow position, orienta
   assert.equal(second.id, 'second');
   assert.equal(set.ready(), false, 'loaded models not yet ready');
   first.ready = true;
+  assert.equal(set.ready(0), true, 'an instance is ready with its model');
+  assert.equal(set.ready(1), false);
+  assert.equal(set.ready(), false);
   second.ready = true;
   assert.equal(set.ready(), true);
+  assert.equal(set.ready(2), false, 'past the count');
   // Shrinking hides the instance past the count; a later write moves it.
   set.setCount(1);
   set.commit();

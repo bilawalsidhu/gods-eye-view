@@ -54,7 +54,6 @@ import {
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { engineCapabilities } from '../globe/contract.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
@@ -319,13 +318,13 @@ const cameraCartographic = (engine) =>
 
 /**
  * Create application actions over the supplied scene and services. The
- * actions drive the globe `engine` (by default the one registered for the
- * viewer). Each action checks its scene services and render/camera capabilities;
- * a missing capability returns UNAVAILABLE_ON_ENGINE on either engine.
+ * actions drive the globe `engine`. Each action checks its scene services and
+ * render/camera capabilities; a missing capability returns
+ * UNAVAILABLE_ON_ENGINE on either engine.
  */
 export function createGevActionRunner({
   viewer,
-  engine: givenEngine = null,
+  engine = null,
   styleManager,
   dataManager,
   sceneDirector = null,
@@ -348,7 +347,6 @@ export function createGevActionRunner({
   const builders = speechBuilders
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
-  const engine = givenEngine ?? engineFromViewer(viewer);
   // A host that replaces this runner when the globe engine changes passes
   // the analyst's follow-up memory and the layer enable times, so the next
   // runner keeps them.
@@ -3337,15 +3335,13 @@ function runManagedVoiceNavigation(
 /** Gathers tracked/selected entities across layer families for read-back. */
 
 /**
- * @param {object} target The globe engine, or a Cesium viewer with a
- *   registered engine (the HUD).
+ * @param {import('../globe/contract.js').GlobeEngine | null} engine
  */
 export async function getBasemapLabelContext(
-  target,
+  engine,
   service = defaultGeospatial,
   { cachedOnly = false, previous = null } = {},
 ) {
-  const engine = engineFromViewer(target);
   const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const viewTarget = engine ? getViewTargetCartographic(engine) : null;
   if (!viewTarget) {

@@ -6,7 +6,6 @@ import { cameraPoseKey, createPointerTracker } from './pointerContext.js';
 import { createPointerPicker } from './pointerPick.js';
 import { createReferentRegistry } from './referents.js';
 import { createSceneRunner } from './sceneRunner.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 export * from './realtimeController.js';
 
 const ACTION_NAMES = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));
@@ -141,7 +140,7 @@ export function createSceneVoice(options) {
     attachScene(attached) {
       if (lifetime?.aborted) return;
       detachScene();
-      const engine = attached.engine ?? engineFromViewer(attached.viewer);
+      const engine = attached.engine ?? null;
       scene.engine = engine;
       shell = attached.styleManager ?? null;
       pick = createPointerPicker({
