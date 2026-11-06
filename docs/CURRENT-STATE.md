@@ -1599,6 +1599,11 @@ render error before Cesium's loop handles it as before.
 - **Retry** after a render error restarts the render loop. The notice stays
   until a frame starts and ends without a render error (Cesium raises
   `postRender` after a failed frame too), and a loop that fails again keeps it.
+  A listener that throws leaves its Cesium event mid-raise, with listeners
+  added or removed since only queued, so Retry first applies the queue of the
+  frame and clock events (`finishRaise()`): the notice's frame watchers start
+  with the next frame, and a listener removed since, for a layer turned off,
+  is not called again.
 - **Reload** after a lost context reloads the page: Cesium cannot draw into a
   context it has lost, and the address keeps the view.
 - **Reset view** opens the app's root address (`appRootUrl()`), without the

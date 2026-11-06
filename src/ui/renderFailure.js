@@ -42,6 +42,17 @@ export function installRenderFailureNotice(
       locationRef.reload();
       return;
     }
+    [
+      scene.preUpdate,
+      scene.postUpdate,
+      scene.preRender,
+      scene.postRender,
+      scene.camera?.changed,
+      scene.camera?.moveStart,
+      scene.camera?.moveEnd,
+      viewer.clock?.onTick,
+      viewer.clock?.onStop,
+    ].forEach(finishRaise);
     viewer.useDefaultRenderLoop = true;
     scene.requestRender?.();
   }
@@ -122,6 +133,30 @@ export function installRenderFailureNotice(
     canvas?.removeEventListener?.('webglcontextlost', onContextLost);
     clear();
   };
+}
+
+/**
+ * Finish the raise a throwing listener cut short. Cesium's `Event.raiseEvent`
+ * marks the event as raising until every listener returns, and until then it
+ * only queues the listeners added or removed: the frame watchers the notice
+ * adds, or the throwing listener of a layer turned off since. Apply the queue
+ * as the raise would have.
+ */
+function finishRaise(event) {
+  if (!event?._invokingListeners) return;
+  event._invokingListeners = false;
+  for (const [listener, scopes] of event._toAdd) {
+    const added = event._listeners.get(listener) ?? new Set();
+    scopes.forEach((scope) => added.add(scope));
+    event._listeners.set(listener, added);
+  }
+  event._toAdd.clear();
+  for (const [listener, scopes] of event._toRemove) {
+    const left = event._listeners.get(listener);
+    scopes.forEach((scope) => left?.delete(scope));
+    if (left?.size === 0) event._listeners.delete(listener);
+  }
+  event._toRemove.clear();
 }
 
 /**
