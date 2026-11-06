@@ -100,7 +100,9 @@ export function acartiaProxy({
         signal,
       );
       const rows = normalizeAcartiaSightings(payload, now());
-      if (!rows?.length) throw new Error('invalid_snapshot');
+      // Only a non-array is malformed. A quiet feed, or one whose rows all fall
+      // outside coverage or the species checks, is a valid empty snapshot.
+      if (!rows) throw new Error('invalid_snapshot');
       return { fetchedAt: now(), rows };
     } catch (error) {
       if (error.status !== 429) coolDown(502, FAILURE_COOLDOWN_MS);

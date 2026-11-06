@@ -123,7 +123,10 @@ known `Retry-After`. Failures keep filters and drawn rows, reporting DEGRADED
 with retry timing; logs exclude request URLs and upstream exception text.
 
 `/api/acartia/sightings` adds Salish Sea marine mammals within 45.5–50.5° N,
-126–121° W, cached ten minutes and stale for at most 24 h. WHALES accepts only
+126–121° W, cached ten minutes and stale for at most 24 h. A valid empty
+snapshot, including one whose rows all fall outside coverage or the species
+checks, is a fresh success that clears earlier rows; only a malformed or failed
+upstream reply serves stale and starts a retry cooldown. WHALES accepts only
 recognized cetaceans; other identified marine mammals appear under ALL or
 MAMMALS. Sensitive iNaturalist locations remain 0.2° privacy cells; Acartia
 positions are rounded to 0.01° on the server. Acartia comments are never retained.

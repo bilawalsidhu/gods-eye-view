@@ -221,41 +221,79 @@ test('one global snapshot single-flights and stays fresh for ten minutes', async
   assert.equal(calls, 2);
 });
 
-test('empty, unprojectable and invented wrapped snapshots never replace the cache', async () => {
-  for (const bad of [
+test('a valid empty or fully filtered snapshot is a fresh success that clears old rows', async () => {
+  for (const quiet of [
     [],
     [null],
     [{ ...sighting(), data_source_name: '' }],
-    { results: [sighting()] },
+    [{ ...sighting(), latitude: 37.8 }],
+    [{ ...sighting(), type: 'Unknown' }],
   ]) {
     let at = NOW;
-    let fail = false;
+    let calls = 0;
+    let empty = false;
     const cache = new Map();
     const request = install({
       cache,
       now: () => at,
-      fetchImpl: async () => Response.json(fail ? bad : [sighting()]),
+      fetchImpl: async () => {
+        calls += 1;
+        return Response.json(empty ? quiet : [sighting()]);
+      },
     });
-    const fresh = await request();
-    const retained = cache.get('sightings');
-    fail = true;
+    assert.equal((await request()).body.rows.length, 1);
+    empty = true;
     at += 600_001;
-    const stale = await request();
-    assert.equal(stale.status, 200);
-    assert.equal(stale.headers['X-Data-Stale'], 'true');
-    assert.equal(stale.body.stale, true);
-    assert.equal(stale.body.fetchedAt, fresh.body.fetchedAt);
-    assert.equal(cache.get('sightings'), retained);
-    const coldCache = new Map();
-    const cold = install({
-      cache: coldCache,
-      fetchImpl: async () => Response.json(bad),
-    });
-    const result = await cold();
-    assert.equal(result.status, 502);
-    assert.equal(result.body.error, 'acartia_unavailable');
-    assert.equal(coldCache.size, 0);
+    const result = await request();
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.body, { fetchedAt: at, rows: [] });
+    assert.equal(result.headers['X-Data-Stale'], undefined);
+    assert.equal(result.headers['Retry-After'], undefined);
+    assert.deepEqual(cache.get('sightings').value.rows, []);
+    // The quiet feed keeps the normal ten-minute cadence, not a failure retry.
+    at += 599_999;
+    assert.equal((await request()).status, 200);
+    assert.equal(calls, 2);
+    at += 1;
+    await request();
+    assert.equal(calls, 3);
+    const cold = install({ fetchImpl: async () => Response.json(quiet) });
+    const coldResult = await cold();
+    assert.equal(coldResult.status, 200);
+    assert.deepEqual(coldResult.body, { fetchedAt: NOW, rows: [] });
   }
+});
+
+test('an invented wrapped snapshot never replaces the cache', async () => {
+  const bad = { results: [sighting()] };
+  let at = NOW;
+  let fail = false;
+  const cache = new Map();
+  const request = install({
+    cache,
+    now: () => at,
+    fetchImpl: async () => Response.json(fail ? bad : [sighting()]),
+  });
+  const fresh = await request();
+  const retained = cache.get('sightings');
+  fail = true;
+  at += 600_001;
+  const stale = await request();
+  assert.equal(stale.status, 200);
+  assert.equal(stale.headers['X-Data-Stale'], 'true');
+  assert.equal(stale.body.stale, true);
+  assert.equal(stale.body.fetchedAt, fresh.body.fetchedAt);
+  assert.equal(cache.get('sightings'), retained);
+  const coldCache = new Map();
+  const cold = install({
+    cache: coldCache,
+    fetchImpl: async () => Response.json(bad),
+  });
+  const result = await cold();
+  assert.equal(result.status, 502);
+  assert.equal(result.body.error, 'acartia_unavailable');
+  assert.equal(result.headers['Retry-After'], '15');
+  assert.equal(coldCache.size, 0);
 });
 
 test('failure serves stale for at most 24 hours and never reports a cold success', async () => {
