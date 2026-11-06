@@ -22,18 +22,17 @@
  *   free still ends (and gives its camera hold back).
  * - Tool subscribers pass their lease and run only while it is current.
  *
- * Camera input is suspended by holds, not by a flag: every suspender gets its
- * own release, and input comes back when the last one releases. The
- * dispatcher owns the controller's `enableInputs`: what others write to it
- * (Cesium's own camera flights turn it off and back on) is kept, and it reads
- * true only while that is true and no hold is out, so a flight that ends can
- * no longer re-enable input under a drag or the cockpit.
+ * Camera input is suspended by the scene's counted holds
+ * (src/render/cesium/cameraInput.js), which own the controller's
+ * `enableInputs`, so a camera flight that ends cannot re-enable input under
+ * a drag or the cockpit.
  *
  * A dispatcher is made per scene on first use ({@link inputFor}) and lives
  * until {@link InputDispatcher.destroy}; the application scene owns it.
  */
 import * as Cesium from 'cesium';
 import { isLeaseCurrent, isPointerFree } from '../data/inputOwnership.js';
+import { acquireCameraInput } from '../render/cesium/cameraInput.js';
 import {
   findPickOwner,
   pickContact,
@@ -129,49 +128,6 @@ export function inputFor(viewer, options = {}) {
   return dispatcher;
 }
 
-/**
- * Take over the controller's `enableInputs`: what others write to it is kept
- * (through an accessor already there, if any), and it reads true only while
- * that is true and no hold is out.
- * @param {object|undefined} controller
- * @param {Set<object>} holds
- * @returns {() => void} Gives the controller its own property back.
- */
-function ownCameraInput(controller, holds) {
-  if (!controller) return () => {};
-  const own = Object.getOwnPropertyDescriptor(controller, 'enableInputs');
-  if (own && !own.configurable) {
-    console.warn('Camera input holds are unavailable: enableInputs is fixed');
-    return () => {};
-  }
-  // A class may define it on its prototype; the hold shadows that for a while.
-  let original = own;
-  for (let proto = Object.getPrototypeOf(controller); !original && proto;) {
-    original = Object.getOwnPropertyDescriptor(proto, 'enableInputs');
-    proto = Object.getPrototypeOf(proto);
-  }
-  original ??= { value: true, writable: true, enumerable: true };
-  let written = Boolean(original.get ? true : original.value);
-  const read = () =>
-    original.get ? Boolean(original.get.call(controller)) : written;
-  Object.defineProperty(controller, 'enableInputs', {
-    configurable: true,
-    enumerable: original.enumerable ?? true,
-    get: () => read() && holds.size === 0,
-    set: (value) => {
-      written = Boolean(value);
-      original.set?.call(controller, value);
-    },
-  });
-  return () => {
-    delete controller.enableInputs;
-    if (own?.get || own?.set)
-      Object.defineProperty(controller, 'enableInputs', own);
-    else if (own || !(original.get || original.set))
-      controller.enableInputs = written;
-  };
-}
-
 function createDispatcher(
   viewer,
   {
@@ -181,12 +137,6 @@ function createDispatcher(
   },
 ) {
   const scene = viewer.scene;
-  const cameraHolds = new Set();
-  // Before the handler, so a controller that cannot be owned leaks nothing.
-  const releaseCameraInput = ownCameraInput(
-    scene.screenSpaceCameraController,
-    cameraHolds,
-  );
   const handler = createHandler(scene.canvas);
   /** @type {Array<{fn: Function}>} */
   const clickSubscribers = [];
@@ -276,6 +226,10 @@ function createDispatcher(
     run(pointerSubscribers.dblclick, isPointerFree(), event);
   }, eventTypes.LEFT_DOUBLE_CLICK);
 
+  // Once the handler is bound, so a setup that throws holds no share of the
+  // scene's camera input.
+  const cameraInput = acquireCameraInput(scene);
+
   const subscribe = (list, entry) => {
     if (destroyed) return () => {};
     list.push(entry);
@@ -314,11 +268,7 @@ function createDispatcher(
 
     suspendCamera(reason) {
       if (destroyed) return () => {};
-      const hold = { reason };
-      cameraHolds.add(hold);
-      return () => {
-        cameraHolds.delete(hold);
-      };
+      return cameraInput.suspend(reason);
     },
 
     suppressStockClicks() {
@@ -356,8 +306,7 @@ function createDispatcher(
       dispatchers.delete(scene);
       clickSubscribers.length = 0;
       for (const type of POINTER_TYPES) pointerSubscribers[type].length = 0;
-      cameraHolds.clear();
-      releaseCameraInput();
+      cameraInput.release();
       if (stockHolds.size) {
         stockHolds.clear();
         restoreStock();

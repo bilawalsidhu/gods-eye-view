@@ -13,6 +13,7 @@
       "src/data/pickRegistry.js",
       "src/data/scenePick.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/input/sensorPick.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
@@ -882,7 +883,8 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/sensorPick.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium"]
   },
@@ -1140,7 +1142,8 @@
       "src/data/inputOwnership.js",
       "src/data/pickRegistry.js",
       "src/input/sensorPick.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1278,7 +1281,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1371,6 +1375,7 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/render/cesium/internals.js"
     ],
     "external": ["cesium"]
@@ -1442,7 +1447,8 @@
       "src/data/scenePick.js",
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium"]
   },
@@ -1526,7 +1532,8 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/sensorPick.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium"]
   },
@@ -1612,7 +1619,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium"]
   },
@@ -1656,7 +1664,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -1700,7 +1709,8 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/sensorPick.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium"]
   },
@@ -1757,7 +1767,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -1904,6 +1915,7 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/queries/heights.js"
     ],
     "external": ["cesium"]
@@ -1973,7 +1985,8 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/sensorPick.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -2051,6 +2064,7 @@
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/queries/heights.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
@@ -2095,6 +2109,7 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/queries/heights.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
@@ -2148,6 +2163,7 @@
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/render/cesium/internals.js"
     ],
     "external": ["cesium"]
@@ -2184,7 +2200,8 @@
       "src/data/scenePick.js",
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium"]
   },
@@ -3344,6 +3361,7 @@
       "src/data/entityRecords.js",
       "src/input/sensorPick.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/queries/heights.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/tileRequests.js"
@@ -3972,6 +3990,7 @@
       "src/data/entityRecords.js",
       "src/input/sensorPick.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/queries/heights.js",
       "src/render/cesium/tileRequests.js",
       "src/render/cesium/internals.js"
@@ -4083,6 +4102,7 @@
     "exports": ["./input"],
     "modules": [
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/input/sensorPick.js",
       "src/data/inputOwnership.js",
       "src/data/pickRegistry.js",
@@ -4340,7 +4360,8 @@
       "src/data/scenePick.js",
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium"]
   },
@@ -4672,6 +4693,7 @@
       "src/i18n/locales/zh-Hant.json",
       "src/input/sensorPick.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/queries/heights.js",
       "src/render/cesium/internals.js"
     ],
@@ -4730,6 +4752,7 @@
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/queries/heights.js",
       "src/render/cesium/internals.js"
     ],
@@ -4797,7 +4820,8 @@
       "src/input/sensorPick.js",
       "src/data/scenePick.js",
       "src/data/pickRegistry.js",
-      "src/input/dispatcher.js"
+      "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js"
     ],
     "external": ["cesium"]
   },
@@ -4898,6 +4922,7 @@
       "src/input/sensorPick.js",
       "src/data/pickRegistry.js",
       "src/input/dispatcher.js",
+      "src/render/cesium/cameraInput.js",
       "src/queries/heights.js"
     ],
     "external": ["cesium"]
