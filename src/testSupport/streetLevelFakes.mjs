@@ -1,5 +1,6 @@
 /** Shared Street Level test stand-ins: provider snapshot and provider, Mapillary source, photo viewer, Cesium viewer, ray-casting camera. */
 import * as Cesium from 'cesium';
+import { bindFakeCesiumCamera } from './fakeCameraPort.mjs';
 import { MAPILLARY_CREDIT_HTML } from '../layers/streetLevel/providers/mapillary/policy.js';
 import {
   latToTileY,
@@ -190,7 +191,7 @@ export function fakeCesiumViewer({ view = false } = {}) {
       },
     },
   );
-  return {
+  return bindFakeCesiumCamera({
     credits,
     flights,
     scene: {
@@ -211,7 +212,7 @@ export function fakeCesiumViewer({ view = false } = {}) {
         if (at !== -1) credits.splice(at, 1);
       },
     },
-  };
+  });
 }
 
 /**

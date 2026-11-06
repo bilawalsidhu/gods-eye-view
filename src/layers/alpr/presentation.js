@@ -26,6 +26,7 @@ import {
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { alprMarkers } from './markerState.js';
 import { heightsFor } from '../../queries/heights.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;
@@ -534,14 +535,18 @@ export function createAlprPresentation({ state, services, source }) {
       validAlprGroundHeight(height) ? height : 0,
     );
     if (!selectRecord(nearest.id)) return false;
-    camera.flyToBoundingSphere(new Cesium.BoundingSphere(center, 30), {
-      duration: 1.2,
-      offset: new Cesium.HeadingPitchRange(
-        camera.heading || 0,
-        -Math.PI / 4,
-        800,
-      ),
-    });
+    const port = cameraOf(state.viewer);
+    port.flyToBounds(
+      { center, radius: 30 },
+      {
+        durationS: 1.2,
+        offset: {
+          heading: port.pose().heading || 0,
+          pitch: -Math.PI / 4,
+          range: 800,
+        },
+      },
+    );
     governorRequestRender('alpr-focus');
     return true;
   }

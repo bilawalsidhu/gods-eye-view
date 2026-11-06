@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { cablePicks } from './pickState.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createInteraction({ state, inputFor }) {
   function registerPickEntity(entity, info) {
@@ -45,22 +46,20 @@ export function createInteraction({ state, inputFor }) {
 
   function flyToReference(viewer, reference) {
     if (!viewer || !reference) return;
-    const destination = Cesium.Cartesian3.fromDegrees(
-      reference.lon,
-      reference.lat,
-      6500,
-    );
-    viewer.camera.cancelFlight();
-    viewer.camera.flyTo({
-      destination,
-      orientation: {
-        heading: viewer.camera.heading || 0,
-        pitch: Cesium.Math.toRadians(-52),
-        roll: 0,
+    const camera = cameraOf(viewer);
+    camera.cancelFlight();
+    camera.flyTo(
+      { lon: reference.lon, lat: reference.lat, height: 6500 },
+      {
+        orientation: {
+          heading: camera.pose().heading || 0,
+          pitch: Cesium.Math.toRadians(-52),
+          roll: 0,
+        },
+        durationS: 1.35,
+        easing: 'cubicInOut',
       },
-      duration: 1.35,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-    });
+    );
   }
   return {
     registerPickEntity,

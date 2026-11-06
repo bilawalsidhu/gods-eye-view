@@ -6,6 +6,7 @@ import {
   ANCHOR_REFRESH_M,
 } from './policy.js';
 import { formatNumber, t, tn } from '../../i18n/index.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 // installationFeedback.js is shared with the HUD (src/loadingFeedback.js) and
 // hands back msg()-marked English plus values; getStats translates them here.
@@ -175,16 +176,16 @@ export function createControls({ state: layerState, services, parts, source }) {
       // No camera flight without a real selection: a flight plus a stale subject
       // reads as success to Context navigation and strands NEXT on this item.
       if (!parts.selection.selectRecord(record.id)) return false;
-      layerState.viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
-            record.longitude,
-            record.latitude,
-            parts.rendering.installationSurfaceHeightM(record),
-          ),
-          18000,
-        ),
-        { duration: 1.4 },
+      cameraOf(layerState.viewer).flyToBounds(
+        {
+          center: {
+            lon: record.longitude,
+            lat: record.latitude,
+            height: parts.rendering.installationSurfaceHeightM(record),
+          },
+          radius: 18000,
+        },
+        { durationS: 1.4 },
       );
       return true;
     },

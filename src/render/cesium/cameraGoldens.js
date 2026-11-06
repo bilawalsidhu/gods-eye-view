@@ -198,6 +198,7 @@ function cesiumDriver(clock, threshold) {
                 )
               : undefined,
             duration: options.durationS,
+            easingFunction: EASINGS[options.easing],
             complete,
             cancel,
           },

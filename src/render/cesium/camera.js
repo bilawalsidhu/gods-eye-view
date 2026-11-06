@@ -182,6 +182,7 @@ export function createCesiumCamera({ scene, camera, report }) {
                 o.range ?? 0,
               ),
               duration: options.durationS,
+              easingFunction: options.easing && EASINGS[options.easing],
               ...callbacks,
             },
           ),

@@ -13,6 +13,7 @@
 //
 // computeFrustumGeometry is PURE (no viewer, no scene queries) so it runs under
 // plain node:test.
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { test } from 'node:test';
 // Preserve structural pins across component qualification and formatter wrapping.
 function componentFunctionSource(fn) {
@@ -868,6 +869,7 @@ test('CCTV focus distinguishes tracking ownership from a missing active camera',
       },
     },
   };
+  bindFakeCesiumCamera(viewer);
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
     position: { x: 1, y: 2, z: 3 },
@@ -899,6 +901,7 @@ test('CCTV focus reports when the camera flight starts', () => {
       },
     },
   };
+  bindFakeCesiumCamera(viewer);
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
     position: { x: 1, y: 2, z: 3 },
@@ -919,6 +922,7 @@ test('CCTV focus refuses camera flights while cockpit owns the view', () => {
       },
     },
   };
+  bindFakeCesiumCamera(viewer);
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
     position: { x: 1, y: 2, z: 3 },
@@ -1397,19 +1401,16 @@ test('CCTV drag-then-release over a camera is inert, while a clean tap activates
   target.addEventListener(CCTV_FOCUS_REQUEST_EVENT, (event) =>
     requests.push(event.detail),
   );
-  bindCctvWorldClickGesture(
-    input,
-    () => {
-      activateCctvCameraFromWorldClick(
-        'atx-cam-3',
-        () => {
-          activationCalls += 1;
-          return CCTV_ACTIVATION_RESULT.ACTIVATED;
-        },
-        target,
-      );
-    },
-  );
+  bindCctvWorldClickGesture(input, () => {
+    activateCctvCameraFromWorldClick(
+      'atx-cam-3',
+      () => {
+        activationCalls += 1;
+        return CCTV_ACTIVATION_RESULT.ACTIVATED;
+      },
+      target,
+    );
+  });
 
   handler.fire(GESTURE_TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
   timeMs = 20;

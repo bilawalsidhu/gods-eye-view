@@ -34,6 +34,7 @@ import {
 } from './model.js';
 import { msg, t } from '../../i18n/index.js';
 import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -987,15 +988,17 @@ export function createRecentImageryLayer({
         height: canvas?.clientHeight,
         fovy: camera.frustum?.fovy,
       });
-      camera.flyTo({
-        destination: ellipsoid.cartographicToCartesian({
+      cameraOf(_viewer).flyTo(
+        ellipsoid.cartographicToCartesian({
           longitude: toRadians(target.lon),
           latitude: toRadians(target.lat),
           height,
         }),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        duration: ZOOM_FIT_SECONDS,
-      });
+        {
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+          durationS: ZOOM_FIT_SECONDS,
+        },
+      );
       return height;
     },
 

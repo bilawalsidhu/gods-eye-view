@@ -7,6 +7,7 @@ import { createWeatherRendering } from './rendering.js';
 import { weatherDisplay, insideExtent, escapeCreditText } from './display.js';
 import { createShellCesium, createShellScene } from './shellFixture.mjs';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 
 const times = ['2026-09-15T20:00:00.000Z', '2026-09-15T20:05:00.000Z'];
 const base = {
@@ -58,18 +59,22 @@ async function shownLayer(id, manifest, params, view = {}) {
       getDiagnostics: () => ({ time, loading: false, error: null }),
     }),
   });
-  layer.init({
-    camera: {
-      moveEnd: { addEventListener: () => () => {} },
-      flyTo: ({ destination }) => flights.push(destination),
-      pickEllipsoid: () =>
-        view.center ? Cesium.Cartesian3.fromDegrees(...view.center) : undefined,
-    },
-    scene: {
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-    },
-  });
+  layer.init(
+    bindFakeCesiumCamera({
+      camera: {
+        moveEnd: { addEventListener: () => () => {} },
+        flyTo: ({ destination }) => flights.push(destination),
+        pickEllipsoid: () =>
+          view.center
+            ? Cesium.Cartesian3.fromDegrees(...view.center)
+            : undefined,
+      },
+      scene: {
+        canvas: { clientWidth: 800, clientHeight: 600 },
+        globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
+      },
+    }),
+  );
   if (params) layer.setParams(params);
   layer.enable();
   await layer.update();
@@ -638,6 +643,7 @@ function globeViewer() {
       requestRender() {},
     },
   };
+  bindFakeCesiumCamera(viewer);
   class Provider {
     constructor(options) {
       this.options = options;

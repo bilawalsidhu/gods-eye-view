@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { createStreetLevelLayer } from './index.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
@@ -326,7 +327,7 @@ function fakeViewer() {
     disableRootEvents: true,
     onwheel: null,
   });
-  return {
+  return bindFakeCesiumCamera({
     credits,
     flights,
     scene: {
@@ -358,7 +359,7 @@ function fakeViewer() {
         if (at !== -1) credits.splice(at, 1);
       },
     },
-  };
+  });
 }
 
 /** A layer over `providers`, initialised and enabled on a stand-in viewer. */

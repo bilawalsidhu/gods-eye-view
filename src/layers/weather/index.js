@@ -10,6 +10,7 @@ import {
 } from './clock.js';
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 /**
  * A stored (English) failure in the language. HTTP failures from source.js
@@ -475,17 +476,19 @@ export function createWeatherLayer({
           (lightning
             ? { west: 110, south: -25, east: 0, north: 80 }
             : manifest.bounds);
-        runNavigation(() =>
-          viewer.camera.flyTo({
-            destination: cesium.Rectangle.fromDegrees(
-              b.west,
-              b.south,
-              b.east,
-              b.north,
-            ),
-            duration: motion?.matches ? 0 : 1.4,
-          }),
-        );
+        runNavigation(() => {
+          cameraOf(viewer).flyTo(
+            {
+              rect: {
+                west: b.west,
+                south: b.south,
+                east: b.east,
+                north: b.north,
+              },
+            },
+            { durationS: motion?.matches ? 0 : 1.4 },
+          );
+        });
       }
       if (clock && enabled) {
         if (params.play === true) void clock.togglePlay();

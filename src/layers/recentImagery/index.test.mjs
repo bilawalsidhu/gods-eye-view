@@ -1,4 +1,5 @@
 import test from 'node:test';
+import * as Cesium from 'cesium';
 import assert from 'node:assert/strict';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
@@ -24,6 +25,7 @@ import {
   manualTimers,
   settle,
 } from './testDoubles.mjs';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 
 const NOW = new Date('2026-09-21T15:00:00Z');
 const LINK_BOX = {
@@ -133,6 +135,7 @@ function fixture({
   });
   if (viirs) layer.setSources({ viirs: true });
   const viewer = { camera: {} };
+  bindFakeCesiumCamera(viewer);
   const reasons = [];
   layer.subscribe((snapshot, reason) => reasons.push(reason));
   layer.init(viewer);
@@ -966,6 +969,8 @@ test('USE VIEW takes the camera rectangle and refuses a view over the cap instea
 test('ZOOM IN: an oversized box or view flies top-down to its centre at the height whose view is 400 km wide', () => {
   const f = fixture();
   const flights = [];
+  const landing = (i) =>
+    Cesium.Ellipsoid.WGS84.cartesianToCartographic(flights[i].destination);
   const deg = (rad) => (rad * 180) / Math.PI;
   const rad = (value) => (value * Math.PI) / 180;
   // A 1000 × 500 canvas with a 60° horizontal FOV.
@@ -976,7 +981,8 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
     scene: {
       canvas: { clientWidth: 1000, clientHeight: 500 },
       ellipsoid: {
-        cartographicToCartesian: (c) => ({ ...c, cartesian: true }),
+        cartographicToCartesian: (c) =>
+          Cesium.Ellipsoid.WGS84.cartographicToCartesian(c),
         cartesianToCartographic: (c) => c && { ...c },
       },
     },
@@ -999,9 +1005,9 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   assert.ok(Math.abs(height - expected) < 1e-6, String(height));
   assert.equal(flights.length, 1);
   const [flight] = flights;
-  assert.ok(Math.abs(deg(flight.destination.longitude) - 10) < 1e-9);
-  assert.ok(Math.abs(deg(flight.destination.latitude) - 10) < 1e-9);
-  assert.equal(flight.destination.height, height);
+  assert.ok(Math.abs(deg(landing(0).longitude) - 10) < 1e-9);
+  assert.ok(Math.abs(deg(landing(0).latitude) - 10) < 1e-9);
+  assert.ok(Math.abs(landing(0).height - height) < 1e-6);
   assert.deepEqual(flight.orientation, {
     heading: 0,
     pitch: -Math.PI / 2,
@@ -1019,14 +1025,14 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   assert.equal(f.layer.useCurrentView(), false);
   assert.equal(f.snap().zoomToFit, true);
   f.layer.zoomToFit();
-  assert.ok(Math.abs(deg(flights[1].destination.longitude) + 97) < 1e-9);
-  assert.ok(Math.abs(deg(flights[1].destination.latitude) - 31) < 1e-9);
+  assert.ok(Math.abs(deg(landing(1).longitude) + 97) < 1e-9);
+  assert.ok(Math.abs(deg(landing(1).latitude) - 31) < 1e-9);
   // Sky at the centre: the view rectangle's centre instead.
   centreHit = null;
   f.layer.useCurrentView();
   f.layer.zoomToFit();
-  assert.ok(Math.abs(deg(flights[2].destination.longitude) + 98) < 1e-9);
-  assert.ok(Math.abs(deg(flights[2].destination.latitude) - 30) < 1e-9);
+  assert.ok(Math.abs(deg(landing(2).longitude) + 98) < 1e-9);
+  assert.ok(Math.abs(deg(landing(2).latitude) - 30) < 1e-9);
   // The box tool's own oversized drag carries its box.
   f.layer.reportBoxRefusal('Box is 2,226 km wide · limit 1,000 km', {
     west: 0,
