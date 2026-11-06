@@ -12,6 +12,11 @@ import {
 } from '../../data/transitFeeds.js';
 import { transitModeTier } from '../../data/transitPresetStyle.js';
 
+/** Regions, not feeds: one region can carry several feeds (Rio has two). */
+const TRANSIT_REGION_COUNT = new Set(
+  TRANSIT_ENABLED_FEEDS.map((feed) => feed.region),
+).size;
+
 /**
  * The registry entry behind a vehicle. Live feeds answer first so a feed the
  * session disabled stops supplying vocabulary; the registry is the fallback,
@@ -244,7 +249,7 @@ export function createQueries({ state, parts }) {
         // row's prompt); both show it through translateStatusMessage
         // (ui/statusText.js).
         const note = state._altitudeGateOpen
-          ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
+          ? `No feed here yet · ${TRANSIT_REGION_COUNT} regions available`
           : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
         return {
           count: 0,
