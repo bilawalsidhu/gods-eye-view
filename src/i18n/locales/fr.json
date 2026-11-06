@@ -3241,5 +3241,12 @@
   "Open {name} on Acartia": "Ouvrir {name} sur Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Contributeurs iNaturalist · licences par observation",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Contributeurs iNaturalist · Acartia {count} (mer des Salish) · licences par observation"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Contributeurs iNaturalist · Acartia {count} (mer des Salish) · licences par observation",
+  "{days}d": "{days}j",
+  "All markers": "Tous les marqueurs",
+  "Show markers of every age": "Afficher les marqueurs de tout âge",
+  "Maximum event age: {days}d; undated markers are kept": "Ancienneté maximale : {days} j ; marqueurs sans date conservés",
+  "event age filter|All": "Tous",
+  "Event age": "Ancienneté",
+  "Event age: {days}d · undated kept": "Ancienneté : {days} j · marqueurs sans date conservés"
 }

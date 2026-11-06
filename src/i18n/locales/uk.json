@@ -3316,5 +3316,12 @@
   "Open {name} on Acartia": "Відкрити {name} в Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "Учасники iNaturalist · ліцензія в кожного запису",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Учасники iNaturalist · Acartia {count} (море Селіш) · ліцензія в кожного запису"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "Учасники iNaturalist · Acartia {count} (море Селіш) · ліцензія в кожного запису",
+  "{days}d": "{days}д",
+  "All markers": "Усі позначки",
+  "Show markers of every age": "Показати позначки будь-якого віку",
+  "Maximum event age: {days}d; undated markers are kept": "Максимальний вік події: {days} дн.; позначки без дати збережено",
+  "event age filter|All": "Усі",
+  "Event age": "Вік події",
+  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено"
 }

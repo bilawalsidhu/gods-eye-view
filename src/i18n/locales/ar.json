@@ -3466,5 +3466,12 @@
   "Open {name} on Acartia": "فتح {name} على Acartia",
   "iNaturalist": "iNaturalist",
   "iNaturalist contributors · licences per record": "مساهمو iNaturalist · التراخيص لكل سجل",
-  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "مساهمو iNaturalist · Acartia {count} (بحر ساليش) · التراخيص لكل سجل"
+  "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "مساهمو iNaturalist · Acartia {count} (بحر ساليش) · التراخيص لكل سجل",
+  "{days}d": "{days}ي",
+  "All markers": "كل العلامات",
+  "Show markers of every age": "عرض العلامات من جميع الأعمار",
+  "Maximum event age: {days}d; undated markers are kept": "الحد الأقصى لعمر الحدث: {days} يوم؛ تُحفظ العلامات غير المؤرخة",
+  "event age filter|All": "الكل",
+  "Event age": "عمر الحدث",
+  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ"
 }
