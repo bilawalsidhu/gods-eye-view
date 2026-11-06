@@ -23,6 +23,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     attachDataManager(dataManager) {
       layerState.dataManager = dataManager;
+      parts.dependencies.watchAdoptions(dataManager);
     },
 
     setParams(params = {}) {
