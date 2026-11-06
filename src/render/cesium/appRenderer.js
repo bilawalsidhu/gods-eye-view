@@ -18,13 +18,15 @@
  */
 import { createApplicationViewer } from '../../app/viewer.js';
 import { CONTRACT_VERSION } from '../contract/index.js';
+import { createCesiumInput } from './input.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
 
 /**
  * The members a transitional renderer has today.
  * @typedef {Pick<import('../contract/renderer').Renderer,
  *   'id' | 'contractVersion' | 'capabilities' | 'canvas' | 'frame' | 'draw'
- *   | 'camera' | 'query' | 'capture' | 'on' | 'resize' | 'destroy'>}
+ *   | 'camera' | 'query' | 'input' | 'capture' | 'on' | 'resize'
+ *   | 'destroy'>}
  *   TransitionalRenderer
  */
 
@@ -83,12 +85,18 @@ export function createCesiumRendererPlugin({
       document.body.appendChild(creditContainer);
       let viewer;
       let ports;
+      let input;
       let capabilities;
       try {
         viewer = createViewer({ container, creditContainer });
         capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
         ports = createCesiumPorts(viewer, { capabilities });
+        input = createCesiumInput(viewer, {
+          query: ports.query,
+          report: ports.report,
+        });
       } catch (error) {
+        ports?.dispose();
         if (viewer && !viewer.isDestroyed()) viewer.destroy();
         creditContainer.remove();
         throw error;
@@ -102,6 +110,7 @@ export function createCesiumRendererPlugin({
         draw: ports.draw,
         camera: ports.camera,
         query: ports.query,
+        input: input.port,
         capture: ports.capture,
         on: ports.on,
         resize() {
@@ -109,6 +118,7 @@ export function createCesiumRendererPlugin({
         },
         destroy() {
           try {
+            input.dispose();
             ports.dispose();
             if (!viewer.isDestroyed()) viewer.destroy();
           } finally {

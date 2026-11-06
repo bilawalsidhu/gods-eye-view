@@ -48,7 +48,7 @@ function fakeDocument() {
   };
 }
 
-function setup({ stock = true, document = null } = {}) {
+function setup({ stock = true, document = null, takeStock = true } = {}) {
   const stockHandler = fakeHandler();
   const selected = [];
   const followed = [];
@@ -86,6 +86,7 @@ function setup({ stock = true, document = null } = {}) {
     createHandler: () => handler,
     now: () => clock,
     document,
+    takeStock,
     ctrlWheelZoom: () => {
       wheelZoom.push('on');
       return () => wheelZoom.push('off');
@@ -373,4 +374,54 @@ test('a double-tap is a touch; a click on Cesium’s timer ends no press', () =>
   doc.listeners.clear();
   s.handler.fire(T.RIGHT_CLICK, { position: s.at(5, 6) });
   assert.deepEqual(heard, ['touch', { travelPx: 0, durationMs: 0 }]);
+});
+
+test('a press that began suppressed never selects, even if its tool lets go on the up', () => {
+  const s = setup();
+  let release = s.port.behaviours.select.suppress();
+  s.port.on('up', () => {
+    release?.();
+    release = null;
+  });
+  s.press(5, 6);
+  assert.equal(s.selected.length, 0, 'the click of the suppressed press');
+  s.press(5, 6);
+  assert.equal(s.selected.length, 1, 'the next press selects');
+});
+
+test('a hold a down subscriber takes keeps its press from selecting', () => {
+  const s = setup();
+  let release = null;
+  s.port.on('down', () => {
+    release = s.port.behaviours.select.suppress();
+  });
+  s.port.on('up', () => release?.());
+  s.press(5, 6);
+  assert.equal(s.selected.length, 0);
+});
+
+test('not taking the stock, they stay on the viewer’s handler but while held', () => {
+  const s = setup({ takeStock: false });
+  const original = s.stockHandler.getInputAction(T.LEFT_CLICK);
+  assert.equal(typeof original, 'function', 'left where the viewer put them');
+  s.press(5, 6);
+  assert.equal(s.selected.length, 0, 'the port never runs them itself');
+  const release = s.port.behaviours.select.suppress();
+  assert.equal(s.stockHandler.getInputAction(T.LEFT_CLICK), undefined);
+  assert.equal(
+    typeof s.stockHandler.getInputAction(T.LEFT_DOUBLE_CLICK),
+    'function',
+    'follow is its own',
+  );
+  release();
+  assert.equal(s.stockHandler.getInputAction(T.LEFT_CLICK), original);
+  s.port.behaviours.dblclickFollow.suppress();
+  const follow = s.stockHandler.getInputAction(T.LEFT_DOUBLE_CLICK);
+  assert.equal(follow, undefined);
+  s.input.dispose();
+  assert.equal(
+    typeof s.stockHandler.getInputAction(T.LEFT_DOUBLE_CLICK),
+    'function',
+    'dispose gives a held one back',
+  );
 });

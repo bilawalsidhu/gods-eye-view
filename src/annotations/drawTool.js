@@ -509,21 +509,10 @@ export function initDrawTool({
         previewDataSources: countPreviewDataSources(viewer),
         previewEntities: destroyed ? 0 : dataSource.entities.values.length,
         pointerOwner: pointerOwner(),
-        // The viewer's OWN click actions. While a session is open both are
-        // borrowed (absent here); after it closes both are back. A harness can
-        // compare the restored functions by identity with what it captured
-        // before, which is the only way to prove they were given back rather
-        // than replaced.
-        stockSingleClick: Boolean(
-          viewer.screenSpaceEventHandler?.getInputAction?.(
-            Cesium.ScreenSpaceEventType.LEFT_CLICK,
-          ),
-        ),
-        stockDoubleClick: Boolean(
-          viewer.screenSpaceEventHandler?.getInputAction?.(
-            Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-          ),
-        ),
+        // The viewer's own select and follow, which the input port runs: off
+        // while a session is open, back on after it closes.
+        stockSingleClick: inputFor(viewer).stockEnabled('select'),
+        stockDoubleClick: inputFor(viewer).stockEnabled('dblclickFollow'),
       };
     },
     /** Resolves once every deferred teardown step has run. */

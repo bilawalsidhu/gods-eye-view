@@ -1,6 +1,5 @@
 import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
-import { installTrackpadPinchZoom } from '../render/cesium/ctrlWheelZoom.js';
 import {
   cesiumRenderer,
   cesiumViewerOf,
@@ -87,7 +86,8 @@ export async function createApplicationScene({
   // Deferred after the viewer, so it is released before the viewer goes.
   const input = inputFor(viewer);
   defer(() => input.destroy());
-  defer(installTrackpadPinchZoom(viewer));
+  // Ctrl+wheel and trackpad pinches zoom the globe, not the page.
+  renderer.input.ctrlWheelZoom = true;
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));

@@ -27,6 +27,9 @@ function fakeDocument() {
     createElement: make,
     body: { appendChild: (el) => children.push(el) },
     getElementById: () => null,
+    // The input port watches the document's pointer events.
+    addEventListener() {},
+    removeEventListener() {},
   };
 }
 
@@ -53,7 +56,12 @@ function fakeViewer(log, { failDestroy = false } = {}) {
       preRender: fakeEvent(listeners),
       postRender: fakeEvent(listeners),
     },
-    canvas: { tag: 'canvas' },
+    canvas: {
+      tag: 'canvas',
+      // Cesium's input handler binds the canvas's events.
+      addEventListener() {},
+      removeEventListener() {},
+    },
     resize: () => log.push('resize'),
     isDestroyed: () => destroyed,
     destroy() {
@@ -346,7 +354,6 @@ const EXPECTED_MISSING = [
   'renderer.credits',
   'renderer.effects',
   'renderer.globe',
-  'renderer.input',
   'renderer.quality',
   'renderer.readPixels',
   'renderer.releaseUnused',

@@ -133,7 +133,7 @@ export function boxToolFakes() {
     },
   };
 
-  const input = fakeInput(viewer, { eventTypes: EVENT_TYPES });
+  const input = fakeInput(viewer);
 
   const pickWorld = (_viewer, nx, ny) =>
     ny * 500 < 40 ? null : { lon: -97.9 + nx * 0.2, lat: 30.4 - ny * 0.2 };
@@ -162,6 +162,7 @@ export function boxToolFakes() {
     documentRef,
     pickWorld,
     input: input.input,
+    stockEnabled: input.stockEnabled,
     bound,
     fire,
     key,

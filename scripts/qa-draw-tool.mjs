@@ -263,39 +263,16 @@ try {
     }),
   );
 
-  // The viewer's OWN click actions, captured before the tool ever runs. Both
-  // must be absent while drawing and back — as the SAME functions — after.
-  await page.evaluate(() => {
-    const Cesium = window.__CESIUM__;
-    const stock = window.__godsEyeView.viewer.screenSpaceEventHandler;
-    window.__qaStock = {
-      click:
-        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null,
-      double:
-        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
-        null,
+  // The viewer's own select and follow, which the input port runs: on before
+  // the tool runs, off while drawing, and on again after.
+  const stockActions = async () => {
+    const state = await drawState();
+    return {
+      clickOn: state.stockSingleClick,
+      doubleOn: state.stockDoubleClick,
     };
-  });
-  const stockActions = () =>
-    page.evaluate(() => {
-      const Cesium = window.__CESIUM__;
-      const stock = window.__godsEyeView.viewer.screenSpaceEventHandler;
-      const live = {
-        click:
-          stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null,
-        double:
-          stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
-          null,
-      };
-      return {
-        clickPresent: Boolean(live.click),
-        doublePresent: Boolean(live.double),
-        clickIsOriginal: live.click === window.__qaStock.click,
-        doubleIsOriginal: live.double === window.__qaStock.double,
-        hadClick: Boolean(window.__qaStock.click),
-        hadDouble: Boolean(window.__qaStock.double),
-      };
-    });
+  };
+  const beforeDraw = await stockActions();
 
   // ── enable / disable cycles leave nothing behind ────────────────────────
   const before = await drawState();
@@ -318,24 +295,21 @@ try {
       `handler ${after.sceneHandler}, owner ${after.pointerOwner}, stock dblclick ${after.stockDoubleClick}`,
   );
 
-  // ── the viewer's own click actions are borrowed, then given back ────────
+  // ── the viewer's own click actions are held off, then given back ───────
   await page.click('#draw-toggle');
   const duringDraw = await stockActions();
   check(
-    "Cesium's own selecting click and tracking double-click are both borrowed while drawing",
-    duringDraw.clickPresent === false && duringDraw.doublePresent === false,
-    `click present ${duringDraw.clickPresent}, double present ${duringDraw.doublePresent} ` +
-      `(viewer had click ${duringDraw.hadClick}, double ${duringDraw.hadDouble})`,
+    "Cesium's own selecting click and tracking double-click are both off while drawing",
+    duringDraw.clickOn === false && duringDraw.doubleOn === false,
+    JSON.stringify({ beforeDraw, duringDraw }),
   );
   await page.click('#draw-toggle');
   const afterDraw = await stockActions();
   check(
-    'and both are restored as the SAME functions, not replacements',
-    afterDraw.clickPresent === duringDraw.hadClick &&
-      afterDraw.doublePresent === duringDraw.hadDouble &&
-      afterDraw.clickIsOriginal &&
-      afterDraw.doubleIsOriginal,
-    JSON.stringify(afterDraw),
+    'and both are back after',
+    afterDraw.clickOn === beforeDraw.clickOn &&
+      afterDraw.doubleOn === beforeDraw.doubleOn,
+    JSON.stringify({ beforeDraw, afterDraw }),
   );
 
   // ── a pin, finished with Enter ──────────────────────────────────────────
@@ -664,19 +638,6 @@ try {
       document.getElementById('draw-toggle')?.getBoundingClientRect().width > 0,
     { timeout: 10_000 },
   );
-  // The reload built a new page context: re-capture the viewer's own click
-  // actions so the identity comparisons below still mean something.
-  await page.evaluate(() => {
-    const Cesium = window.__CESIUM__;
-    const stock = window.__godsEyeView.viewer.screenSpaceEventHandler;
-    window.__qaStock = {
-      click:
-        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null,
-      double:
-        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
-        null,
-    };
-  });
   await page.evaluate((view) => {
     const viewer = window.__godsEyeView.viewer;
     viewer.camera.cancelFlight?.();
@@ -827,24 +788,20 @@ try {
     const wasActive = tool.active;
     await tool.destroy();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const Cesium = window.__CESIUM__;
     const viewer = window.__godsEyeView.viewer;
-    const stock = viewer.screenSpaceEventHandler;
     let previews = 0;
     for (let i = 0; i < viewer.dataSources.length; i += 1)
       if (viewer.dataSources.get(i)?.name === 'gev-draw-preview') previews += 1;
+    const diagnostics = tool.diagnostics();
     return {
       wasActive,
-      diagnostics: tool.diagnostics(),
+      diagnostics,
       previews,
       dataSources: viewer.dataSources.length,
       handleGone: window.__gevDrawTool === undefined,
-      clickRestored:
-        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) ===
-        window.__qaStock.click,
-      doubleRestored:
-        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ===
-        window.__qaStock.double,
+      // The viewer's own select and follow run again.
+      clickRestored: diagnostics.stockSingleClick,
+      doubleRestored: diagnostics.stockDoubleClick,
       drawingClass: document.body.classList.contains('gev-drawing'),
     };
   });

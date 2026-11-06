@@ -1,8 +1,11 @@
 /**
  * @module input/dispatcher
- * @description The one place pointer input over the globe comes in: a single
- * `ScreenSpaceEventHandler` per scene, a click picked once and handed to
- * every subscriber, and the camera-input and stock-click holds tools take.
+ * @description The one place the application's layers and tools take
+ * pointer input over the globe: the scene's input port
+ * (src/render/cesium/input.js), a click picked once and handed to every
+ * subscriber, and the camera-input and stock-click holds tools take. Each
+ * layer family moves onto the renderer's own `input` port as it is ported;
+ * until then it subscribes here, with the events and shapes it always had.
  *
  * Layers used to bind a handler each and pick the same click again, so one
  * click with the usual layers on cost about 25 `scene.pick` passes (each one
@@ -33,6 +36,7 @@
 import * as Cesium from 'cesium';
 import { isLeaseCurrent, isPointerFree } from '../data/inputOwnership.js';
 import { acquireCameraInput } from '../render/cesium/cameraInput.js';
+import { cesiumInputOf, createCesiumInput } from '../render/cesium/input.js';
 import {
   findPickOwner,
   pickContact,
@@ -50,11 +54,22 @@ export {
   releasePointer,
 } from '../data/inputOwnership.js';
 
+/** The handler event types the scene's input port binds, for test doubles. */
+export const HANDLER_EVENT_TYPES = Cesium.ScreenSpaceEventType;
+
 /** A drill is run at least this deep and sliced, so callers asking for
  *  different depths on one click share one pass. */
 const DRILL_DEPTH = 16;
 
 const POINTER_TYPES = ['down', 'move', 'up', 'click', 'dblclick'];
+
+/**
+ * The events Cesium's unmodified left-button actions raised, which is all
+ * the dispatcher's subscribers have ever seen: the port also has the other
+ * buttons and the modified presses.
+ */
+const unmodified = ({ modifiers: m }) => !m.shift && !m.ctrl && !m.alt;
+const unmodifiedLeft = (ev) => ev.button === 0 && unmodified(ev);
 
 /** A tool that re-arms takes a new lease each time: it may pass a getter. */
 const leaseOf = (entry) =>
@@ -106,6 +121,9 @@ const dispatchers = new WeakMap();
  *   off; returns this hold's release.
  * @property {() => () => void} suppressStockClicks Take the viewer's stock
  *   select and double-click-track actions off; returns this hold's release.
+ * @property {(name: 'select'|'dblclickFollow') => boolean} stockEnabled
+ *   Whether the viewer's stock select or follow runs now: it does unless a
+ *   hold is out (or the viewer has none).
  * @property {() => number} subscriberCount Live click and pointer
  *   subscriptions, for leak checks.
  * @property {() => void} destroy
@@ -114,8 +132,9 @@ const dispatchers = new WeakMap();
 /**
  * The scene's dispatcher, made on first use.
  * @param {object} viewer A Cesium viewer (or a test double with `scene`).
- * @param {{createHandler?: (canvas: object) => object, eventTypes?: object, now?: () => number}} [options]
- *   Used only by the call that makes it.
+ * @param {{createHandler?: (canvas: object) => object, now?: () => number, document?: object|null}} [options]
+ *   For the input port it makes when the scene has none (tests pass a fake
+ *   handler); used only by the call that makes it.
  * @returns {InputDispatcher}
  */
 export function inputFor(viewer, options = {}) {
@@ -128,16 +147,23 @@ export function inputFor(viewer, options = {}) {
   return dispatcher;
 }
 
-function createDispatcher(
-  viewer,
-  {
-    createHandler = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
-    eventTypes = Cesium.ScreenSpaceEventType,
-    now = () => performance.now(),
-  },
-) {
+function createDispatcher(viewer, { createHandler, now, document } = {}) {
   const scene = viewer.scene;
-  const handler = createHandler(scene.canvas);
+  // The renderer's port when the application made one; a viewer of the
+  // caller's own gets one for as long as this dispatcher lives.
+  const shared = cesiumInputOf(scene);
+  const cesiumInput =
+    shared ??
+    createCesiumInput(viewer, {
+      report: (error) => console.error('Pointer input failed', error),
+      // The viewer is its owner's: its stock actions stay on its handler.
+      takeStock: false,
+      ...(createHandler ? { createHandler } : {}),
+      ...(now ? { now } : {}),
+      ...(document !== undefined ? { document } : {}),
+    });
+  const { port } = cesiumInput;
+  const cameraInput = acquireCameraInput(scene);
   /** @type {Array<{fn: Function}>} */
   const clickSubscribers = [];
   /** @type {Record<string, Array<{fn: Function, lease: object|null}>>} */
@@ -145,41 +171,7 @@ function createDispatcher(
     POINTER_TYPES.map((type) => [type, []]),
   );
   const stockHolds = new Set();
-  let stockSaved = null;
   let destroyed = false;
-
-  let pressActive = false;
-  let pressStartedAt = 0;
-  let previousPosition = null;
-  let travelPx = 0;
-  let completedGesture = null;
-
-  const appendTravel = (position) => {
-    if (
-      !pressActive ||
-      !Number.isFinite(position?.x) ||
-      !Number.isFinite(position?.y)
-    )
-      return;
-    if (previousPosition) {
-      travelPx += Math.hypot(
-        position.x - previousPosition.x,
-        position.y - previousPosition.y,
-      );
-    }
-    previousPosition = { x: position.x, y: position.y };
-  };
-
-  const finishPress = (position) => {
-    if (!pressActive) return;
-    appendTravel(position);
-    completedGesture = {
-      travelPx,
-      durationMs: Math.max(0, now() - pressStartedAt),
-    };
-    pressActive = false;
-    previousPosition = null;
-  };
 
   const run = (list, free, arg) => {
     for (const entry of [...list]) {
@@ -192,43 +184,45 @@ function createDispatcher(
     }
   };
 
-  handler.setInputAction((event) => {
-    pressActive = true;
-    pressStartedAt = now();
-    previousPosition = null;
-    travelPx = 0;
-    completedGesture = null;
-    appendTravel(event?.position);
-    run(pointerSubscribers.down, isPointerFree(), event);
-  }, eventTypes.LEFT_DOWN);
-
-  handler.setInputAction((event) => {
-    appendTravel(event?.endPosition ?? event?.position);
-    run(pointerSubscribers.move, true, event);
-  }, eventTypes.MOUSE_MOVE);
-
-  handler.setInputAction((event) => {
-    finishPress(event?.position);
-    run(pointerSubscribers.up, true, event);
-  }, eventTypes.LEFT_UP);
-
-  handler.setInputAction((click) => {
-    if (pressActive) finishPress(click?.position);
-    const gesture = completedGesture || { travelPx: 0, durationMs: 0 };
-    completedGesture = null;
-    const free = isPointerFree();
-    const event = createClickEvent(viewer, click, gesture);
-    run(pointerSubscribers.click, free, event);
-    if (free) run(clickSubscribers, true, event);
-  }, eventTypes.LEFT_CLICK);
-
-  handler.setInputAction((event) => {
-    run(pointerSubscribers.dblclick, isPointerFree(), event);
-  }, eventTypes.LEFT_DOUBLE_CLICK);
-
-  // Once the handler is bound, so a setup that throws holds no share of the
-  // scene's camera input.
-  const cameraInput = acquireCameraInput(scene);
+  const cartesian = (p) => new Cesium.Cartesian2(p.x, p.y);
+  // Each type is one port listener; the pointer's owner is read once per
+  // event, before any subscriber runs.
+  const offPort = [
+    port.on('down', (ev) => {
+      if (!unmodifiedLeft(ev)) return;
+      run(pointerSubscribers.down, isPointerFree(), {
+        position: cartesian(ev.position),
+      });
+    }),
+    port.on('move', (ev) => {
+      if (!unmodified(ev)) return;
+      run(pointerSubscribers.move, true, {
+        startPosition: cartesian(ev.position),
+        endPosition: cartesian(ev.endPosition ?? ev.position),
+      });
+    }),
+    port.on('up', (ev) => {
+      if (!unmodifiedLeft(ev)) return;
+      run(pointerSubscribers.up, true, { position: cartesian(ev.position) });
+    }),
+    port.on('click', (ev) => {
+      if (!unmodifiedLeft(ev)) return;
+      const free = isPointerFree();
+      const event = createClickEvent(
+        viewer,
+        { position: cartesian(ev.position) },
+        ev.gesture ?? { travelPx: 0, durationMs: 0 },
+      );
+      run(pointerSubscribers.click, free, event);
+      if (free) run(clickSubscribers, true, event);
+    }),
+    port.on('dblclick', (ev) => {
+      if (!unmodifiedLeft(ev)) return;
+      run(pointerSubscribers.dblclick, isPointerFree(), {
+        position: cartesian(ev.position),
+      });
+    }),
+  ];
 
   const subscribe = (list, entry) => {
     if (destroyed) return () => {};
@@ -237,22 +231,6 @@ function createDispatcher(
       const at = list.indexOf(entry);
       if (at >= 0) list.splice(at, 1);
     };
-  };
-
-  const stockHandler = () => viewer.screenSpaceEventHandler;
-  const stockTypes = () => [
-    eventTypes.LEFT_CLICK,
-    eventTypes.LEFT_DOUBLE_CLICK,
-  ];
-
-  const restoreStock = () => {
-    const stock = stockHandler();
-    if (stockSaved && stock && !stock.isDestroyed?.()) {
-      for (const [type, action] of stockSaved) {
-        if (action) stock.setInputAction(action, type);
-      }
-    }
-    stockSaved = null;
   };
 
   return {
@@ -273,25 +251,21 @@ function createDispatcher(
 
     suppressStockClicks() {
       if (destroyed) return () => {};
-      const hold = {};
-      if (stockHolds.size === 0) {
-        const stock = stockHandler();
-        if (stock) {
-          // Cesium's own select and double-click-track run on the viewer's
-          // handler and never see the pointer lease.
-          stockSaved = stockTypes().map((type) => [
-            type,
-            stock.getInputAction(type),
-          ]);
-          for (const type of stockTypes()) stock.removeInputAction(type);
-        }
-      }
-      stockHolds.add(hold);
-      return () => {
-        if (!stockHolds.delete(hold) || stockHolds.size > 0) return;
-        restoreStock();
+      // Cesium's own select and double-click-track never see the pointer
+      // lease; the port runs them, and holds them off here.
+      const releases = [
+        port.behaviours.select.suppress(),
+        port.behaviours.dblclickFollow.suppress(),
+      ];
+      const hold = () => {
+        if (!stockHolds.delete(hold)) return;
+        for (const release of releases) release();
       };
+      stockHolds.add(hold);
+      return hold;
     },
+
+    stockEnabled: (name) => port.behaviours[name]?.enabled ?? false,
 
     subscriberCount() {
       return POINTER_TYPES.reduce(
@@ -306,12 +280,10 @@ function createDispatcher(
       dispatchers.delete(scene);
       clickSubscribers.length = 0;
       for (const type of POINTER_TYPES) pointerSubscribers[type].length = 0;
+      for (const off of offPort) off();
+      for (const hold of [...stockHolds]) hold();
       cameraInput.release();
-      if (stockHolds.size) {
-        stockHolds.clear();
-        restoreStock();
-      }
-      if (!handler.isDestroyed?.()) handler.destroy?.();
+      if (!shared) cesiumInput.dispose();
     },
   };
 }

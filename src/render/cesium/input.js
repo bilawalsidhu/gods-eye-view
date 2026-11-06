@@ -91,17 +91,33 @@ function pointerTypeOf(dom, otherwise = 'mouse') {
   return otherwise;
 }
 
+/** @type {WeakMap<object, object>} scene -> its input port */
+const inputs = new WeakMap();
+
 /**
+ * The input port made for a scene, while it lives: the application's
+ * dispatcher (src/input/dispatcher.js) delivers through it.
+ * @param {object} scene
+ * @returns {ReturnType<typeof createCesiumInput> | null}
+ */
+export const cesiumInputOf = (scene) => inputs.get(scene) ?? null;
+
+/**
+ * One per scene: a second would find the stock actions already taken.
  * @param {object} widget A Cesium `CesiumWidget` or `Viewer`.
  * @param {object} options
- * @param {object} options.query The renderer's query port: clicks pick
- *   through it.
+ * @param {object} [options.query] The renderer's query port: clicks pick
+ *   through it. Without one, clicks carry no picks, for a caller that makes
+ *   its own (the application's dispatcher, over a viewer of its own).
  * @param {(error: unknown) => void} options.report Where a listener's or a
  *   `grab`'s error goes.
  * @param {(canvas: object) => object} [options.createHandler]
  * @param {() => number} [options.now] Event time, ms.
  * @param {object} [options.document] Where the DOM events are watched.
  * @param {typeof installTrackpadPinchZoom} [options.ctrlWheelZoom]
+ * @param {boolean} [options.takeStock] False leaves the viewer's stock
+ *   actions on its own handler, taken off only while suppressed, for a
+ *   viewer that is not this renderer's: its owner may still rebind them.
  * @returns {{port: object, feed: Function, listenerCount: () => number, dispose: () => void}}
  *   `feed(type, x, y, extra)` delivers one event as the handler would, for
  *   the conformance harness.
@@ -115,20 +131,43 @@ export function createCesiumInput(
     now = () => performance.now(),
     document: dom = globalThis.document,
     ctrlWheelZoom = installTrackpadPinchZoom,
+    takeStock = true,
   },
 ) {
   const scene = widget.scene;
+  if (inputs.has(scene))
+    throw new TypeError('This scene already has an input port');
   const canvas = scene.canvas;
   let disposed = false;
 
-  // The viewer's stock actions, now this port's to run.
+  // The viewer's stock actions, now this port's to run; or, not taking
+  // them, borrowed from its handler while suppressed.
   const stockHandler = widget.screenSpaceEventHandler;
   const stock = {};
+  const has = {};
   for (const [name, type] of Object.entries(STOCK)) {
     const action = stockHandler?.getInputAction?.(type);
-    if (!action) continue;
+    has[name] = Boolean(action);
+    if (!action || !takeStock) continue;
     stock[name] = action;
     stockHandler.removeInputAction(type);
+  }
+  /** Actions borrowed while suppressed, to give back by identity. */
+  const borrowed = {};
+  const giveBack = (name) => {
+    const action = borrowed[name];
+    delete borrowed[name];
+    if (!action || !stockHandler || stockHandler.isDestroyed?.()) return;
+    if (!stockHandler.getInputAction(STOCK[name]))
+      stockHandler.setInputAction(action, STOCK[name]);
+  };
+  function borrowStock(name, enabled) {
+    if (takeStock || !stockHandler) return;
+    if (enabled) return giveBack(name);
+    const action = stockHandler.getInputAction?.(STOCK[name]);
+    if (!action) return;
+    borrowed[name] = action;
+    stockHandler.removeInputAction(STOCK[name]);
   }
 
   const cameraInput = acquireCameraInput(scene);
@@ -136,10 +175,8 @@ export function createCesiumInput(
   const router = createInputRouter({
     report,
     suspendCamera: (reason) => cameraInput.suspend(reason),
-    supported: {
-      select: Boolean(stock.select),
-      dblclickFollow: Boolean(stock.dblclickFollow),
-    },
+    supported: { select: has.select, dblclickFollow: has.dblclickFollow },
+    onBehaviour: borrowStock,
     onCtrlWheelZoom(on) {
       if (disposed) return;
       if (on && !uninstallCtrlWheel) uninstallCtrlWheel = ctrlWheelZoom(widget);
@@ -179,6 +216,13 @@ export function createCesiumInput(
   const finished = new Map();
   /** The button of the last event, when it was an up. */
   let lastUp = null;
+  /** The type of the last event delivered. */
+  let lastType = null;
+  /**
+   * The stock behaviours as they stood at the last left down: a press that
+   * began suppressed stays so, even when its tool lets go on the up.
+   */
+  let stockAtDown = null;
   const heldButton = () => {
     for (const button of [0, 1, 2]) if (pressing.has(button)) return button;
     return 0;
@@ -277,6 +321,18 @@ export function createCesiumInput(
     track(type, at, end ?? at, button);
     const justUp = lastUp;
     lastUp = type === 'up' ? button : null;
+    const previous = lastType;
+    lastType = type;
+    if (type === 'down' && button === 0)
+      stockAtDown = {
+        select: behaviours.select.enabled,
+        dblclickFollow: behaviours.dblclickFollow.enabled,
+      };
+    // A click straight after its up, and a double-click straight after
+    // that click, belong to the last press.
+    const ofPress =
+      (type === 'click' && justUp === 0) ||
+      (type === 'dblclick' && previous === 'click');
     const ev = {
       type,
       position: at,
@@ -300,15 +356,22 @@ export function createCesiumInput(
           : undefined;
       finished.delete(button);
       ev.gesture = extra.gesture ?? press ?? { travelPx: 0, durationMs: 0 };
-      withPicks(ev);
+      if (query) withPicks(ev);
     }
     // The viewer's own select and follow run first, as they did on its
     // handler.
-    router.dispatch(ev, (to) => runStock(ev, to));
+    router.dispatch(ev, (to) => runStock(ev, to, ofPress ? stockAtDown : null));
+    // A hold a down subscriber takes covers its press too.
+    if (type === 'down' && button === 0 && stockAtDown)
+      stockAtDown = {
+        select: stockAtDown.select && behaviours.select.enabled,
+        dblclickFollow:
+          stockAtDown.dblclickFollow && behaviours.dblclickFollow.enabled,
+      };
   }
 
   /** The viewer's own select or follow, as it would have run. */
-  function runStock(ev, to) {
+  function runStock(ev, to, atDown) {
     const name =
       ev.type === 'click'
         ? 'select'
@@ -319,6 +382,7 @@ export function createCesiumInput(
     // Cesium bound them with no modifier: a modified click never ran them.
     const { shift, ctrl, alt } = ev.modifiers;
     if (shift || ctrl || alt || !behaviours[name].enabled) return;
+    if (atDown && !atDown[name]) return;
     try {
       stock[name]({
         position: new Cesium.Cartesian2(ev.position.x, ev.position.y),
@@ -352,7 +416,10 @@ export function createCesiumInput(
     deliver('dblclick', e.position, { button: 0, modifier }),
   );
   bind(T.MOUSE_MOVE, (e, modifier) =>
-    deliver('move', e.startPosition, { endPosition: e.endPosition, modifier }),
+    deliver('move', e.startPosition ?? e.endPosition, {
+      endPosition: e.endPosition,
+      modifier,
+    }),
   );
   // Pinch is at the two fingers' midpoint where it started; its delta is
   // the scale since the last event.
@@ -390,7 +457,7 @@ export function createCesiumInput(
   };
   canvas?.addEventListener?.('wheel', onWheel, { passive: true });
 
-  return {
+  const self = {
     port: router.port,
     feed(type, x, y, extra = {}) {
       deliver(type, { x, y }, extra, null);
@@ -400,6 +467,7 @@ export function createCesiumInput(
       if (disposed) return;
       disposed = true;
       router.dispose();
+      if (inputs.get(scene) === self) inputs.delete(scene);
       canvas?.removeEventListener?.('wheel', onWheel, { passive: true });
       for (const type of DOM_EVENTS)
         dom?.removeEventListener?.(type, record, { capture: true });
@@ -407,10 +475,13 @@ export function createCesiumInput(
       uninstallCtrlWheel?.();
       uninstallCtrlWheel = null;
       cameraInput.release();
+      for (const name of Object.keys(borrowed)) giveBack(name);
       if (stockHandler && !stockHandler.isDestroyed?.())
         for (const [name, type] of Object.entries(STOCK))
           if (stock[name] && !stockHandler.getInputAction(type))
             stockHandler.setInputAction(stock[name], type);
     },
   };
+  inputs.set(scene, self);
+  return self;
 }
