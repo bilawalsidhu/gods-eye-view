@@ -405,96 +405,19 @@ function harness(
     },
   };
 }
-test('explicit cyclone selection publishes shared context without auto-claiming it', async () => {
-  let next = snapshot([storm(), storm('ep162026')]);
-  const records = new Map();
-  let selectedContext = null;
-  let selectedEvents = 0;
-  const context = {
-    registerEntityContext(entity, metadata) {
-      entity.__gevContextId = metadata.id;
-      const record = { ...metadata, entity };
-      records.set(metadata.id, record);
-      return record;
-    },
-    selectEntityContext(entity) {
-      selectedContext = records.get(entity.__gevContextId) || null;
-      selectedEvents += 1;
-      return selectedContext;
-    },
-    removeEntityContextsForLayer(layerId, { retainIds } = {}) {
-      for (const [id, record] of records) {
-        if (record.layerId === layerId && !retainIds?.has(id))
-          records.delete(id);
-      }
-      if (selectedContext && !records.has(selectedContext.id))
-        selectedContext = null;
-    },
-  };
-  const h = harness({ getSnapshot: async () => next }, { context });
-  h.layer.enable();
-  await h.layer.update();
-
-  assert.equal(
-    selectedEvents,
-    0,
-    'the automatic first-storm row selection must not claim shared context',
-  );
-  assert.equal(records.size, 0);
-
-  h.layer.setParams({ stormId: 'ep162026' });
-  assert.equal(selectedEvents, 1);
-  assert.equal(selectedContext?.layerId, 'weather-cyclones');
-  assert.equal(selectedContext?.source, 'NOAA NHC / CPHC');
-  assert.equal(selectedContext?.label, 'Another system');
-  assert.equal(selectedContext?.latitude, 15.5);
-  assert.equal(selectedContext?.longitude, -125.8);
-  assert.equal(selectedContext?.properties.advisoryNumber, '10');
-
-  h.layer.setParams({ stormId: 'ep152026' });
-  assert.deepEqual([...records.keys()], ['cyclone:ep152026']);
-  assert.equal(selectedContext?.id, 'cyclone:ep152026');
-  h.layer.setParams({ stormId: 'ep162026' });
-  assert.deepEqual([...records.keys()], ['cyclone:ep162026']);
-  assert.equal(selectedContext?.id, 'cyclone:ep162026');
-  assert.equal(selectedEvents, 3, 'each explicit storm switch announces once');
-
-  await h.layer.update();
-  assert.equal(
-    selectedEvents,
-    3,
-    'refresh updates the selected record without re-announcing the click',
-  );
-
-  next = snapshot([storm()]);
-  await h.layer.update();
-  assert.equal(
-    selectedContext,
-    null,
-    'a vanished user-selected storm must clear instead of transferring context to the fallback row',
-  );
-  assert.equal(records.size, 0);
-
-  h.layer.setParams({ stormId: 'ep152026' });
-  assert.equal(selectedEvents, 4);
-  h.layer.setParams({ clear: true });
-  assert.equal(selectedContext, null);
-  assert.equal(records.size, 0);
-
-  h.layer.destroy();
-});
-
-test('shared cyclone context distinguishes switches, deliberate clears and feed eviction', async (t) => {
+// Runs a test body against the real shared-context store on a stand-in window,
+// with the voice runner reading the same store.
+async function withSharedContext(t, body) {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const host = new EventTarget();
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: host,
   });
-  let h;
+  const layers = [];
   t.after(() => {
     try {
-      h?.layer.destroy();
+      for (const layer of layers) layer.destroy();
     } finally {
       if (previousWindow)
         Object.defineProperty(globalThis, 'window', previousWindow);
@@ -506,9 +429,9 @@ test('shared cyclone context distinguishes switches, deliberate clears and feed 
     events.push(['selected', detail.id]),
   );
   host.addEventListener('gev:entity-selection-cleared', ({ detail }) =>
-    events.push(['cleared', detail.reason]),
+    events.push(['cleared', detail.layerId, detail.reason]),
   );
-  // The voice runner reads the same store and bounds its basemap wait.
+  // The voice runner bounds its basemap wait with the window timers.
   Object.assign(host, { setTimeout, clearTimeout });
   const position = Cesium.Cartesian3.fromDegrees(-125.8, 15.5, 5_000_000);
   const runner = createGevActionRunner({
@@ -535,55 +458,221 @@ test('shared cyclone context distinguishes switches, deliberate clears and feed 
     assert.equal(result.scope, 'selected');
     return result.selected.properties;
   };
-  let next = snapshot([
-    { ...storm(), movement: { directionDegrees: 315, speedKt: 12 } },
-    { ...storm('ep162026'), movement: { directionDegrees: 0, speedKt: 0 } },
-  ]);
-  h = harness({ getSnapshot: async () => next }, { context: contextStore });
-  h.layer.enable();
-  await h.layer.update();
-  h.layer.setParams({ stormId: 'ep152026' });
-  let properties = await selectedProperties();
-  assert.equal(
-    properties.movementDirectionDegrees,
-    '315',
-    'selected storm movement should survive voice summarization',
-  );
-  assert.equal(properties.movementSpeedKt, '12');
-  h.layer.setParams({ stormId: 'ep162026' });
-  properties = await selectedProperties();
-  assert.equal(
-    properties.movementDirectionDegrees,
-    '0',
-    'a due-north heading is a value, not a missing one',
-  );
-  assert.equal(properties.movementSpeedKt, '0', 'stationary is a value');
-  assert.deepEqual(events, [
-    ['selected', 'cyclone:ep152026'],
-    ['selected', 'cyclone:ep162026'],
-  ]);
-  assert.deepEqual(
-    [...contextStore.getContextStore().entities.keys()],
-    ['cyclone:ep162026'],
-  );
-  await h.layer.update();
-  assert.equal(events.length, 2, 'refresh must not announce selection');
+  const store = contextStore.getContextStore();
+  const open = (feed) => {
+    const h = harness(feed, { context: contextStore });
+    layers.push(h.layer);
+    return h;
+  };
+  await body({ events, selectedProperties, store, open });
+}
 
-  h.layer.setParams({ clear: true });
-  assert.deepEqual(events.at(-1), ['cleared', 'deliberate']);
-  assert.equal(contextStore.getContextStore().entities.size, 0);
+test('shared cyclone context distinguishes switches, deliberate clears and feed eviction', async (t) => {
+  await withSharedContext(
+    t,
+    async ({ events, selectedProperties, store, open }) => {
+      let next = snapshot([
+        { ...storm(), movement: { directionDegrees: 315, speedKt: 12 } },
+        {
+          ...storm('ep162026'),
+          movement: { directionDegrees: 0, speedKt: 10 },
+        },
+      ]);
+      const h = open({ getSnapshot: async () => next });
+      h.layer.enable();
+      await h.layer.update();
+      assert.deepEqual(
+        events,
+        [],
+        'the automatic first-storm row selection must not claim shared context',
+      );
+      assert.equal(store.entities.size, 0);
 
-  h.layer.setParams({ stormId: 'ep162026' });
-  next = snapshot([storm()]);
-  await h.layer.update();
-  assert.deepEqual(events.at(-1), ['cleared', 'evicted']);
-  assert.equal(contextStore.getContextStore().entities.size, 0);
-  assert.equal(contextStore.getContextStore().selectedEntityId, null);
+      h.layer.setParams({ stormId: 'ep152026' });
+      const record = store.entities.get('cyclone:ep152026');
+      assert.equal(record.layerId, 'weather-cyclones');
+      assert.equal(record.source, 'NOAA NHC / CPHC');
+      assert.equal(record.label, 'Fifteen-E');
+      assert.equal(record.latitude, 15.5);
+      assert.equal(record.longitude, -125.8);
+      let properties = await selectedProperties();
+      assert.equal(properties.classification, 'PTC');
+      assert.equal(properties.classificationName, 'Post-tropical cyclone');
+      assert.equal(properties.advisoryNumber, '10');
+      assert.equal(
+        properties.movementDirectionDegrees,
+        '315',
+        'selected storm movement should survive voice summarization',
+      );
+      assert.equal(properties.movementSpeedKt, '12');
+      assert.equal(
+        properties.advisoryUrl,
+        'https://www.nhc.noaa.gov/text/MIATCMEP5.shtml',
+      );
+      assert.equal(properties.staleCacheFetchedAt, undefined);
 
-  h.layer.setParams({ stormId: 'ep152026' });
-  h.layer.disable();
-  assert.deepEqual(events.at(-1), ['cleared', 'deliberate']);
-  assert.equal(contextStore.getContextStore().entities.size, 0);
+      h.layer.setParams({ stormId: 'ep162026' });
+      properties = await selectedProperties();
+      assert.equal(
+        properties.movementDirectionDegrees,
+        '0',
+        'a due-north heading is a value, not a missing one',
+      );
+      assert.equal(properties.movementSpeedKt, '10');
+      assert.deepEqual(events, [
+        ['selected', 'cyclone:ep152026'],
+        ['selected', 'cyclone:ep162026'],
+      ]);
+      assert.deepEqual([...store.entities.keys()], ['cyclone:ep162026']);
+
+      next = snapshot([
+        { ...storm(), movement: { directionDegrees: 315, speedKt: 12 } },
+        { ...storm('ep162026'), movement: { directionDegrees: 0, speedKt: 0 } },
+      ]);
+      await h.layer.update();
+      assert.equal(events.length, 2, 'refresh must not announce selection');
+      properties = await selectedProperties();
+      assert.equal(
+        properties.movementSpeedKt,
+        '0',
+        'stationary is a value, refreshed into the selected record',
+      );
+
+      h.layer.setParams({ clear: true });
+      assert.deepEqual(events.at(-1), [
+        'cleared',
+        'weather-cyclones',
+        'deliberate',
+      ]);
+      assert.equal(store.entities.size, 0);
+
+      h.layer.setParams({ stormId: 'ep162026' });
+      next = snapshot([storm()]);
+      await h.layer.update();
+      assert.deepEqual(
+        events.at(-1),
+        ['cleared', 'weather-cyclones', 'evicted'],
+        'a vanished user-selected storm must clear instead of transferring context to the fallback row',
+      );
+      assert.equal(store.entities.size, 0);
+      assert.equal(store.selectedEntityId, null);
+
+      h.layer.setParams({ stormId: 'ep152026' });
+      h.layer.disable();
+      assert.deepEqual(events.at(-1), [
+        'cleared',
+        'weather-cyclones',
+        'deliberate',
+      ]);
+      assert.equal(store.entities.size, 0);
+    },
+  );
+});
+
+test('shared cyclone context is evicted when the source fails and marks a stale cache', async (t) => {
+  await withSharedContext(
+    t,
+    async ({ events, selectedProperties, store, open }) => {
+      let next = snapshot([{ ...storm(), classification: 'XX' }]);
+      let fail = false;
+      const h = open({
+        getSnapshot: async () => {
+          if (fail) throw new Error('Network unavailable');
+          return next;
+        },
+      });
+      h.layer.enable();
+      await h.layer.update();
+      h.layer.setParams({ stormId: 'ep152026' });
+      let properties = await selectedProperties();
+      assert.equal(properties.classification, 'XX');
+      assert.equal(
+        properties.classificationName,
+        undefined,
+        'an unknown code is not given a guessed meaning',
+      );
+
+      next = { ...snapshot(), stale: true };
+      await h.layer.update();
+      properties = await selectedProperties();
+      assert.equal(properties.staleCacheFetchedAt, time);
+      assert.equal(events.length, 1, 'refresh must not announce selection');
+
+      next = {
+        ...snapshot([]),
+        unavailable: true,
+        reason: 'Cyclone data unavailable',
+      };
+      await h.layer.update();
+      assert.deepEqual(events.at(-1), [
+        'cleared',
+        'weather-cyclones',
+        'evicted',
+      ]);
+      assert.equal(store.entities.size, 0);
+
+      next = snapshot();
+      await h.layer.update();
+      h.layer.setParams({ stormId: 'ep152026' });
+      assert.equal(store.selectedEntityId, 'cyclone:ep152026');
+      fail = true;
+      await h.layer.update();
+      assert.deepEqual(events.at(-1), [
+        'cleared',
+        'weather-cyclones',
+        'evicted',
+      ]);
+      assert.equal(store.entities.size, 0);
+      assert.equal(store.selectedEntityId, null);
+    },
+  );
+});
+
+test('cyclone clears leave another layer selection and its records alone', async (t) => {
+  await withSharedContext(t, async ({ events, store, open }) => {
+    const h = open({ getSnapshot: async () => snapshot() });
+    h.layer.enable();
+    await h.layer.update();
+    h.layer.setParams({ stormId: 'ep152026' });
+    const foreign = {};
+    contextStore.registerEntityContext(foreign, {
+      id: 'flight:abc123',
+      layerId: 'flights',
+      label: 'Foreign',
+    });
+    contextStore.selectEntityContext(foreign);
+    const before = events.length;
+
+    h.layer.setParams({ clear: true });
+    assert.equal(store.selectedEntityId, 'flight:abc123');
+    assert.ok(store.entities.has('flight:abc123'));
+    assert.equal(store.entities.has('cyclone:ep152026'), false);
+    assert.equal(
+      events.length,
+      before,
+      'no clear is reported for a foreign selection',
+    );
+
+    h.layer.disable();
+    assert.equal(store.selectedEntityId, 'flight:abc123');
+    assert.equal(events.length, before);
+
+    // A foreign record removed without clearing its selection: a cyclone
+    // feed failure must not report that selection as evicted by cyclones.
+    store.entities.delete('flight:abc123');
+    let fail = false;
+    const other = open({
+      getSnapshot: async () => {
+        if (fail) throw new Error('Network unavailable');
+        return snapshot();
+      },
+    });
+    other.layer.enable();
+    await other.layer.update();
+    fail = true;
+    await other.layer.update();
+    assert.equal(events.length, before);
+  });
 });
 
 test('refresh preserves selection intent, including explicit clears and missing storms', async () => {

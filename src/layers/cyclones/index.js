@@ -96,19 +96,19 @@ export function createCyclonesLayer({
   const selected = () =>
     snapshot?.storms.find((storm) => storm.id === selectedId) || null;
   function clearSelectedContext({ evicted = false } = {}) {
-    if (!evicted)
-      context?.clearSelectedEntityContextForLayer?.('weather-cyclones');
-    context?.removeEntityContextsForLayer?.('weather-cyclones');
+    if (selectedContextStormId) {
+      if (!evicted)
+        context?.clearSelectedEntityContextForLayer?.('weather-cyclones');
+      context?.removeEntityContextsForLayer?.('weather-cyclones');
+    }
     selectedContextStormId = null;
     selectedContextEntity = null;
   }
 
+  // Callers publish only while selectedId names a storm in the snapshot.
   function publishSelectedContext({ announce = false } = {}) {
     const storm = selected();
-    if (!storm || !context) {
-      if (!storm) clearSelectedContext({ evicted: true });
-      return null;
-    }
+    if (!context) return;
     selectedContextEntity ||= { show: true };
     const contextId = `cyclone:${storm.id}`;
     const record = context.registerEntityContext?.(selectedContextEntity, {
@@ -116,13 +116,20 @@ export function createCyclonesLayer({
       layerId: 'weather-cyclones',
       layerName: 'Cyclone advisories',
       source: 'NOAA NHC / CPHC',
-      // Layer identity is already carried separately. Keep source names literal
-      // rather than adding an untranslated user-facing prefix.
+      // Keep official storm names verbatim; layerName identifies the layer.
       label: storm.name,
       latitude: storm.position.latitude,
       longitude: storm.position.longitude,
+      // At most 12 properties reach the voice summary; keep the list short.
       properties: {
         classification: storm.classification,
+        // English source meaning; unknown codes stay unexpanded.
+        classificationName: Object.hasOwn(
+          CLASSIFICATION_NAMES,
+          storm.classification,
+        )
+          ? CLASSIFICATION_NAMES[storm.classification]
+          : undefined,
         basin: storm.basin,
         advisoryNumber: storm.advisoryNumber,
         issuedAt: storm.issuedAt,
@@ -133,15 +140,19 @@ export function createCyclonesLayer({
         movementDirectionDegrees: storm.movement?.directionDegrees,
         movementSpeedKt: storm.movement?.speedKt,
         advisoryUrl: storm.advisoryUrl,
+        // Present only while the server serves its cache with NHC unreachable.
+        staleCacheFetchedAt:
+          snapshot.stale && Number.isFinite(snapshot.fetchedAt)
+            ? new Date(snapshot.fetchedAt).toISOString()
+            : undefined,
       },
     });
-    if (!record) return null;
+    if (!record) return;
     selectedContextStormId = storm.id;
     if (announce) context.selectEntityContext?.(selectedContextEntity);
     context.removeEntityContextsForLayer?.('weather-cyclones', {
       retainIds: new Set([contextId]),
     });
-    return record;
   }
 
   function select(id) {
