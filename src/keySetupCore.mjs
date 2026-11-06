@@ -91,6 +91,17 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'metered',
   }),
   Object.freeze({
+    id: 'bedrock',
+    title: 'AMAZON BEDROCK', // i18n-ignore: provider product name
+    unlocks: msg(
+      'Typed chat with any Converse model on Bedrock (Claude, Nova, Llama, …)',
+    ),
+    getUrl:
+      'https://console.aws.amazon.com/bedrock/home#/api-keys/long-term/create',
+    envVars: Object.freeze(['AWS_BEARER_TOKEN_BEDROCK']),
+    tier: 'metered',
+  }),
+  Object.freeze({
     id: 'aisstream',
     title: 'AISSTREAM', // i18n-ignore: provider product name
     unlocks: msg('Live ships, worldwide'),

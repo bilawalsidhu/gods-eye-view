@@ -23,6 +23,7 @@ import { openAiRealtimeProxy } from './openai.js';
 import { geminiLiveProxy } from './gemini.js';
 import { anthropicChatProxy } from './anthropic.js';
 import { vertexChatProxy } from './vertex.js';
+import { bedrockChatProxy } from './bedrock.js';
 import { googlePlacesContextProxy } from './places.js';
 import { mapillaryProxy } from './mapillary.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
@@ -40,7 +41,8 @@ import { windProxy } from './wind.js';
  * Construct the local provider plugins in their established order.
  * `realtime` configures OpenAI; `gemini` explicitly opts into Gemini Live;
  * `anthropic` explicitly opts into Anthropic typed chat; `vertex` explicitly
- * opts into Vertex AI (Express Mode) typed chat.
+ * opts into Vertex AI (Express Mode) typed chat; `bedrock` explicitly opts
+ * into Amazon Bedrock (Converse API) typed chat.
  * `nominatimStorageDir` binds an owned absolute directory before construction;
  * omission retains the durable per-source cache and policy state.
  */
@@ -49,6 +51,7 @@ function localProviderPlugins({
   gemini,
   anthropic,
   vertex,
+  bedrock,
   nominatimStorageDir = NOMINATIM_CACHE_DIR,
 } = {}) {
   if (
@@ -82,6 +85,7 @@ function localProviderPlugins({
     ...(gemini ? [geminiLiveProxy({ realtime: gemini })] : []),
     ...(anthropic ? [anthropicChatProxy({ realtime: anthropic })] : []),
     ...(vertex ? [vertexChatProxy({ realtime: vertex })] : []),
+    ...(bedrock ? [bedrockChatProxy({ realtime: bedrock })] : []),
     googlePlacesContextProxy(),
     windProxy(),
     weatherProxy(),
@@ -131,6 +135,7 @@ export { fetchOverpassPayload } from './overpass/transport.js';
 export { openAiRealtimeProxy } from './openai.js';
 export { anthropicChatProxy } from './anthropic.js';
 export { vertexChatProxy } from './vertex.js';
+export { bedrockChatProxy } from './bedrock.js';
 export { MILITARY_INSTALLATION_ELEMENT_CAP } from './military-installations/constants.js';
 export { quantizeMilitaryInstallationBox } from './military-installations/query.js';
 export { militaryInstallationCacheKey } from './military-installations/query.js';

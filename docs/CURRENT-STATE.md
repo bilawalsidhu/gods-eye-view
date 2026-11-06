@@ -900,6 +900,20 @@ Vertex does not accept are left out, and a tool without arguments declares no
 parameters), while the route still checks each call against the full schema. Gemini 2.5 and earlier models are sent no
 `thinkingLevel`, which they refuse; later ones get `LOW` as Gemini does. A
 `finishReason` of `STOP` (or its proto name `FINISH_REASON_STOP`) ends a turn.
+Amazon Bedrock is chat only as well: it sends a Converse API request
+(`https://bedrock-runtime.REGION.amazonaws.com/model/MODEL_ID/converse`, the
+model id URL-encoded) with the Bedrock API key in `AWS_BEARER_TOKEN_BEDROCK` as
+a bearer token, `BEDROCK_REGION` (default `us-east-1`) and `BEDROCK_CHAT_MODEL`
+(default `global.anthropic.claude-haiku-5-5`; any Converse model or inference
+profile id, including an ARN). An invalid Region or model id answers `503`
+without calling Bedrock. Tool schemas go through unchanged as
+`inputSchema.json`, and tool results go back as one JSON object each. Only
+text, tool and reasoning blocks cross the route. Reasoning blocks (Claude Haiku
+5.5 thinks by default, and the route sends no model-specific fields to turn it
+off) are kept in history unchanged and never shown. Claude binds each one to
+the exact conversation before it, and the chat shortens or drops earlier
+turns, so only the current turn's reasoning is sent back. A `stopReason` of
+`end_turn` ends a turn.
 Only one mode runs at a time: the microphone closes chat, and opening chat
 stops voice. Enter sends, Shift+Enter adds a line, and Up or Down at the start
 of the field recall recent messages and restore the draft. Attachments are up
@@ -911,7 +925,7 @@ stay in memory for the page.
 The chat routes answer a missing key with `503` and code `API_KEY_MISSING`.
 OpenAI chat can only bill `OPENAI_API_KEY`, so while `GEV_PREFER_CODEX_OAUTH`
 pins OpenAI to ChatGPT OAuth it answers `503` with code `CODEX_OAUTH_REQUIRED`
-instead; Gemini, Claude and Vertex AI chat are unaffected. An upstream `429` or `503` keeps
+instead; Gemini, Claude, Vertex AI and Amazon Bedrock chat are unaffected. An upstream `429` or `503` keeps
 its status, and Anthropic's overload `529` is answered as `503`; each passes on
 a `Retry-After` given in seconds, capped at an hour; the chat
 names the wait, and a throttled reply carries code `RATE_LIMITED`. A refused
@@ -921,7 +935,14 @@ key changes: `API_KEY_REJECTED` for a `401` or Gemini's `400` with reason
 OpenAI's `429` `insufficient_quota`. The same codes apply to Claude: `401` is
 `API_KEY_REJECTED` and `403` is `ACCESS_DENIED`. Vertex AI answers with
 Google's errors as Gemini does, so the same codes apply: `400` `API_KEY_INVALID`
-is `API_KEY_REJECTED` and `403` is `ACCESS_DENIED`. Each refusal answers `502`
+is `API_KEY_REJECTED` and `403` is `ACCESS_DENIED`. Amazon Bedrock answers a
+`403` `AccessDeniedException` with `ACCESS_DENIED`; a bad bearer key, or a
+long-term key used outside the Region it was created in, is a `403` or a `400`
+(`Credential should be scoped to a valid region`), and the chat's message
+("check the key's project, region or permissions") covers it. Bedrock's `429`
+(`ThrottlingException`, `ModelNotReadyException`) is `RATE_LIMITED`, its `503`
+passes through, and its other errors (`400` validation, `404` unknown model,
+`408`, `424`, `500`) answer `502`. Each refusal answers `502`
 with its code, and the chat shows a matching message.
 
 Chat and the voice panel sit above the dock or dock into the right rail's lane,
@@ -1089,7 +1110,7 @@ Source factories have dedicated `layers/<family>/source` exports. ALPR and earth
 
 Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/progress/result, interruption, completion and turn-metrics events; stopping or replacing a session cancels pending actions. An active session's normal Stop publishes one idle transition, including adapters that emit their own terminal state; a restart triggered by that transition keeps ownership of its new startup state. Alternate adapters can use the same controls and action runner.
 
-The standalone app offers OpenAI, Gemini Live, Claude and Vertex AI through the **AI Provider** setting, shared by voice and typed chat. Claude and Vertex AI have no voice (Vertex AI Express Mode offers no Live models): with either selected, the mic button opens chat and a voice start reports an error without requesting the microphone. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
+The standalone app offers OpenAI, Gemini Live, Claude, Vertex AI and Amazon Bedrock through the **AI Provider** setting, shared by voice and typed chat. Claude, Vertex AI and Amazon Bedrock have no voice (Vertex AI Express Mode offers no Live models, and Bedrock has no realtime voice API): with any of them selected, the mic button opens chat and a voice start reports an error without requesting the microphone. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
 Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 33 tools using separate description-only metadata; a session is offered 32 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
 
@@ -2009,12 +2030,14 @@ those; exactly `0` disables the limiter, while a value that cannot be read as a
 number falls back to the default rather than to unlimited. Over-limit requests
 receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
 Typed chat (`/api/openai/chat`, `/api/gemini/chat`, `/api/anthropic/chat`,
-`/api/vertex/chat`) counts in its own window, set by
+`/api/vertex/chat`, `/api/bedrock/chat`) counts in its own window, set by
 `GEV_RATELIMIT_OPENAI_CHAT_PER_MIN`, `GEV_RATELIMIT_GEMINI_CHAT_PER_MIN`,
-`GEV_RATELIMIT_ANTHROPIC_CHAT_PER_MIN` and `GEV_RATELIMIT_VERTEX_CHAT_PER_MIN`.
+`GEV_RATELIMIT_ANTHROPIC_CHAT_PER_MIN`, `GEV_RATELIMIT_VERTEX_CHAT_PER_MIN` and
+`GEV_RATELIMIT_BEDROCK_CHAT_PER_MIN`.
 Left unset, each takes its provider's resolved cap — `GEV_RATELIMIT_OPENAI_PER_MIN`,
-`GEV_RATELIMIT_GEMINI_PER_MIN`, `GEV_RATELIMIT_ANTHROPIC_PER_MIN` or
-`GEV_RATELIMIT_VERTEX_PER_MIN`, all 30 by default — so lowering a provider
+`GEV_RATELIMIT_GEMINI_PER_MIN`, `GEV_RATELIMIT_ANTHROPIC_PER_MIN`,
+`GEV_RATELIMIT_VERTEX_PER_MIN` or `GEV_RATELIMIT_BEDROCK_PER_MIN`, all 30 by
+default — so lowering a provider
 throttle lowers chat too; an explicit chat value, including `0`, wins. Its
 over-limit reply carries `Retry-After: 60`.
 The client key is the socket peer address only — a forwarded-for header is not

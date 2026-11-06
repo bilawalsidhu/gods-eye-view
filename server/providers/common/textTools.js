@@ -39,6 +39,22 @@ export function parseUsage(provider, data) {
       cachedInputTokens: cacheRead,
     };
   }
+  // Bedrock's totalTokens already includes cache reads and writes, so input
+  // is what the total leaves after the output.
+  if (provider === 'bedrock') {
+    const outputTokens = number(raw?.outputTokens);
+    const totalTokens = number(raw?.totalTokens);
+    if (outputTokens === null || totalTokens === null) return null;
+    const inputTokens = totalTokens - outputTokens;
+    if (inputTokens < 0) return null;
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      reasoningTokens: 0,
+      cachedInputTokens: number(raw?.cacheReadInputTokens) ?? 0,
+    };
+  }
   const inputTokens = number(
     geminiShape ? raw?.promptTokenCount : raw?.prompt_tokens,
   );

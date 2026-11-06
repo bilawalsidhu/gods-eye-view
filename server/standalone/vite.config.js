@@ -28,6 +28,7 @@ export function standaloneConfig(
         gemini: { tools },
         anthropic: { tools },
         vertex: { tools },
+        bedrock: { tools },
         nominatimStorageDir,
       }),
       localMcpPlugin(),

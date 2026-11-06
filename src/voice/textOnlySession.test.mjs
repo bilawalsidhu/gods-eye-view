@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAnthropicSession } from './anthropicSession.js';
 import { createVertexSession } from './vertexSession.js';
+import { createBedrockSession } from './bedrockSession.js';
 import { t } from '../i18n/index.js';
 
 // Each chat-only provider: its session factory, route, reply and messages.
@@ -30,6 +31,19 @@ const providers = {
     advisory: () =>
       t(
         'Vertex AI answers in chat only; voice is not available for this provider.',
+      ),
+  },
+  bedrock: {
+    create: createBedrockSession,
+    endpoint: '/api/bedrock/chat',
+    reply: {
+      content: { role: 'assistant', content: [{ text: 'Hi' }] },
+      finishReason: 'end_turn',
+    },
+    refusal: () => t('Amazon Bedrock has no voice. Open CHAT to type instead.'),
+    advisory: () =>
+      t(
+        'Amazon Bedrock answers in chat only; voice is not available for this provider.',
       ),
   },
 };

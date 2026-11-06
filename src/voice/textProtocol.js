@@ -195,6 +195,73 @@ export const textProtocols = {
       };
     },
   },
+  bedrock: {
+    endpoint: '/api/bedrock/chat',
+    keyEnv: 'AWS_BEARER_TOKEN_BEDROCK',
+    user: (text) => ({ role: 'user', content: [{ text }] }),
+    note: (text) => ({ role: 'assistant', content: [{ text }] }),
+    // A toolResult message is not a user turn boundary.
+    isUser: (item) =>
+      item.role === 'user' && item.content.some((block) => 'text' in block),
+    request: (messages) => ({ messages }),
+    decode(data) {
+      const content = data?.content;
+      if (
+        content?.role !== 'assistant' ||
+        !Array.isArray(content.content) ||
+        !content.content.length ||
+        content.content.length > 32
+      )
+        throw Error('Invalid response');
+      // Reasoning blocks stay in content for history and are never shown.
+      return {
+        content,
+        text: content.content
+          .filter((block) => typeof block.text === 'string')
+          .map((block) => block.text)
+          .join(''),
+        calls: content.content
+          .filter((block) => block.toolUse)
+          .map(({ toolUse }) => ({
+            id: toolUse.toolUseId,
+            name: toolUse.name,
+            args: toolUse.input,
+          })),
+        finished: data.finishReason === 'end_turn',
+      };
+    },
+    results: (pairs) => [
+      {
+        role: 'user',
+        content: pairs.map(({ call, result }) => ({
+          toolResult: { toolUseId: call.id, content: [{ json: result }] },
+        })),
+      },
+    ],
+    compactResult: (item, maxBytes) =>
+      item.role === 'user' && item.content.some((block) => block.toolResult)
+        ? {
+            ...item,
+            content: item.content.map((block) =>
+              block.toolResult
+                ? {
+                    toolResult: {
+                      ...block.toolResult,
+                      content: [
+                        {
+                          json: boundedToolResult(
+                            block.toolResult.content[0]?.json,
+                            maxBytes,
+                          ),
+                        },
+                      ],
+                    },
+                  }
+                : block,
+            ),
+          }
+        : item,
+  },
 };
 
 export const emptyTextUsage = () => ({

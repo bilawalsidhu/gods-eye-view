@@ -3248,6 +3248,9 @@
   "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI solo responde en el chat; la voz no está disponible para este proveedor.",
   "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AI no tiene voz. Abre CHAT para escribir en su lugar.",
   "Gemini typed chat through Vertex AI Express Mode": "Chat escrito con Gemini a través de Vertex AI en modo exprés",
+  "Amazon Bedrock answers in chat only; voice is not available for this provider.": "Amazon Bedrock solo responde en el chat; la voz no está disponible para este proveedor.",
+  "Amazon Bedrock has no voice. Open CHAT to type instead.": "Amazon Bedrock no tiene voz. Abre CHAT para escribir en su lugar.",
+  "Typed chat with any Converse model on Bedrock (Claude, Nova, Llama, …)": "Chat escrito con cualquier modelo de Converse en Bedrock (Claude, Nova, Llama, …)",
   "Open chat": "Abrir el chat",
   "This provider answers in chat only": "Este proveedor solo responde en el chat"
 }

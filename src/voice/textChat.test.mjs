@@ -109,6 +109,40 @@ const wire = {
 // Vertex AI carries Gemini's contents through its own route and key.
 wire.vertex = { ...wire.gemini, keyEnv: 'VERTEX_API_KEY' };
 
+wire.bedrock = {
+  final: (text) => ({
+    content: { role: 'assistant', content: [{ text }] },
+    finishReason: 'end_turn',
+  }),
+  calls: (count, prefix = 'call') => ({
+    content: {
+      role: 'assistant',
+      content: Array.from({ length: count }, (_, index) => ({
+        toolUse: { toolUseId: `${prefix}-${index}`, name: 'fly_to', input: {} },
+      })),
+    },
+  }),
+  items: (body) => body.messages,
+  userTexts: (items) =>
+    items
+      .filter(
+        (item) =>
+          item.role === 'user' && item.content.some((block) => 'text' in block),
+      )
+      .map((item) => item.content[0].text),
+  keyEnv: 'AWS_BEARER_TOKEN_BEDROCK',
+  noteRole: 'assistant',
+  noteText: (item) => item.content[0].text,
+  results: (items) =>
+    items.flatMap((item) =>
+      item.role === 'user'
+        ? item.content
+            .filter((block) => block.toolResult)
+            .map((block) => block.toolResult.content[0].json)
+        : [],
+    ),
+};
+
 function harness(provider, replies, options = {}) {
   const events = [];
   const requests = [];
@@ -138,7 +172,7 @@ function harness(provider, replies, options = {}) {
   return { chat, events, requests, actions, errors, completions };
 }
 
-for (const provider of ['openai', 'gemini', 'anthropic', 'vertex']) {
+for (const provider of ['openai', 'gemini', 'anthropic', 'vertex', 'bedrock']) {
   const w = wire[provider];
 
   test(`${provider}: a failed turn keeps the conversation for the next message`, async () => {
@@ -644,4 +678,116 @@ test('vertex: requests go to the Vertex route', async () => {
   await settle();
   assert.deepEqual(urls, ['/api/vertex/chat']);
   chat.stop();
+});
+
+test('bedrock: a round of calls is answered by one user message of JSON results, in call order', async () => {
+  const w = wire.bedrock;
+  const thought = {
+    reasoningContent: { reasoningText: { text: 'Plan', signature: 'sig' } },
+  };
+  const h = harness(
+    'bedrock',
+    (n) =>
+      n === 1
+        ? {
+            content: {
+              ...w.calls(3).content,
+              content: [thought, ...w.calls(3).content.content],
+            },
+          }
+        : n === 2
+          ? w.final('Done')
+          : w.final('Ok'),
+    {
+      runAction: async () => ({
+        ok: true,
+        say: 'Found',
+        records: ['x'.repeat(11000)],
+      }),
+    },
+  );
+  h.chat.start();
+  h.chat.sendText('Do three');
+  await settle();
+  // Reasoning stays in history and never reaches the transcript.
+  assert.ok(
+    !h.events.some(
+      (event) => event.type === 'transcript' && event.text.includes('Plan'),
+    ),
+  );
+  const [, calls, answer] = w.items(h.requests[1]);
+  assert.equal(calls.role, 'assistant');
+  assert.deepEqual(calls.content[0], thought);
+  assert.equal(answer.role, 'user');
+  assert.deepEqual(
+    answer.content.map((block) => Object.keys(block)),
+    [['toolResult'], ['toolResult'], ['toolResult']],
+  );
+  assert.deepEqual(
+    answer.content.map((block) => block.toolResult.toolUseId),
+    ['call-0', 'call-1', 'call-2'],
+  );
+  for (const block of answer.content) {
+    assert.deepEqual(Object.keys(block.toolResult), ['toolUseId', 'content']);
+    assert.equal(block.toolResult.content.length, 1);
+    assert.deepEqual(Object.keys(block.toolResult.content[0]), ['json']);
+  }
+  assert.ok(bytes(answer.content[0].toolResult.content[0].json) > 10000);
+  // Once a later turn completes, the earlier results shrink, still paired.
+  h.chat.sendText('Next');
+  await settle();
+  h.chat.sendText('Again');
+  await settle();
+  const items = w.items(h.requests[3]);
+  assert.deepEqual(
+    items.map((item) => item.role),
+    ['user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user'],
+  );
+  assert.deepEqual(w.userTexts(items), ['Do three', 'Next', 'Again']);
+  const compacted = items[2];
+  assert.deepEqual(
+    compacted.content.map((block) => block.toolResult.toolUseId),
+    ['call-0', 'call-1', 'call-2'],
+  );
+  for (const block of compacted.content) {
+    const { json } = block.toolResult.content[0];
+    assert.ok(bytes(json) <= 1500);
+    assert.equal(json.ok, true);
+    assert.equal(json.say, 'Found');
+  }
+  assert.equal(h.completions().length, 3);
+  h.chat.stop();
+});
+
+test('bedrock: only end_turn ends a turn, on its own route', async () => {
+  const urls = [];
+  const chat = createTextChat({
+    provider: 'bedrock',
+    emit: () => {},
+    runAction: async () => ({ ok: true }),
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return Response.json(wire.bedrock.final('Hi'));
+    },
+  });
+  chat.start();
+  chat.sendText('Hello');
+  await settle();
+  assert.deepEqual(urls, ['/api/bedrock/chat']);
+  chat.stop();
+  for (const finishReason of ['max_tokens', 'guardrail_intervened']) {
+    const h = harness('bedrock', () => ({
+      ...wire.bedrock.final('Cut'),
+      finishReason,
+    }));
+    h.chat.start();
+    h.chat.sendText('Hello');
+    await settle();
+    assert.equal(
+      h.errors()[0].detail,
+      t('Reply interrupted. You can try again.'),
+      finishReason,
+    );
+    h.chat.stop();
+  }
 });

@@ -6,6 +6,7 @@ import { createGeminiChatHandler } from '../server/providers/gemini/chat.js';
 import { createOpenAiChatHandler } from '../server/providers/openai/chat.js';
 import { createAnthropicChatHandler } from '../server/providers/anthropic/chat.js';
 import { createVertexChatHandler } from '../server/providers/vertex/chat.js';
+import { createBedrockChatHandler } from '../server/providers/bedrock/chat.js';
 import { parseUsage } from '../server/providers/common/textTools.js';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import {
@@ -105,6 +106,28 @@ const providers = {
       usage: { input_tokens: 7, output_tokens: 3 },
     }),
   },
+  bedrock: {
+    create: createBedrockChatHandler,
+    input: { messages: [{ role: 'user', content: [{ text: 'Hello' }] }] },
+    reply: (bad = false) => ({
+      output: {
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              toolUse: {
+                toolUseId: 'c',
+                name: 'fly_to',
+                input: { lat: bad ? 100 : 1 },
+              },
+            },
+          ],
+        },
+      },
+      stopReason: 'tool_use',
+      usage: { inputTokens: 7, outputTokens: 3, totalTokens: 10 },
+    }),
+  },
 };
 // Vertex AI Express Mode takes and answers the same contents as Gemini.
 providers.vertex = {
@@ -181,6 +204,8 @@ for (const [name, provider] of Object.entries(providers)) {
     if (geminiShape)
       nullCall.candidates[0].content.parts[0].functionCall.args = null;
     else if (name === 'anthropic') nullCall.content[0].input = null;
+    else if (name === 'bedrock')
+      nullCall.output.message.content[0].toolUse.input = null;
     else nullCall.choices[0].message.tool_calls[0].function.arguments = 'null';
     const nullFixture = await fixture(t, provider, async () =>
       Response.json(nullCall),
@@ -225,13 +250,31 @@ for (const [name, provider] of Object.entries(providers)) {
               },
             ],
           }
-        : {
-            messages: [
-              ...provider.input.messages,
-              body.content,
-              { role: 'tool', tool_call_id: 'c', content: '{"ok":false}' },
-            ],
-          };
+        : name === 'bedrock'
+          ? {
+              messages: [
+                ...provider.input.messages,
+                body.content,
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      toolResult: {
+                        toolUseId: 'c',
+                        content: [{ json: { ok: false } }],
+                      },
+                    },
+                  ],
+                },
+              ],
+            }
+          : {
+              messages: [
+                ...provider.input.messages,
+                body.content,
+                { role: 'tool', tool_call_id: 'c', content: '{"ok":false}' },
+              ],
+            };
     assert.equal((await f.send(input)).status, 200);
     const orphan = geminiShape
       ? { contents: [...input.contents.slice(0, -1)] }
@@ -330,6 +373,42 @@ for (const [name, provider] of Object.entries(providers)) {
         400,
       );
     }
+    if (name === 'bedrock') {
+      const [{ url, body: sent, options }] = f.calls;
+      assert.equal(
+        url,
+        'https://bedrock-runtime.us-east-1.amazonaws.com/model/global.anthropic.claude-haiku-5-5/converse',
+      );
+      assert.equal(options.headers.Authorization, 'Bearer fixture-only');
+      assert.equal(options.headers['Content-Type'], 'application/json');
+      // Only the Converse fields this route owns; the model is in the URL.
+      assert.deepEqual(Object.keys(sent).sort(), [
+        'inferenceConfig',
+        'messages',
+        'system',
+        'toolConfig',
+      ]);
+      assert.equal(sent.system.length, 1);
+      assert.equal(typeof sent.system[0].text, 'string');
+      assert.deepEqual(sent.messages, provider.input.messages);
+      assert.deepEqual(sent.toolConfig, {
+        tools: [
+          {
+            toolSpec: {
+              name: 'fly_to',
+              description: 'Fly',
+              inputSchema: { json: tools[0].parameters },
+            },
+          },
+        ],
+      });
+      assert.deepEqual(sent.inferenceConfig, { maxTokens: 4096 });
+      assert.equal(
+        (await f.send({ messages: [{ role: 'system', content: 'override' }] }))
+          .status,
+        400,
+      );
+    }
   });
   test(
     `${name} client disconnect aborts upstream and cancels a late body`,
@@ -383,7 +462,9 @@ for (const [name, provider] of Object.entries(providers)) {
           ? { candidates: [] }
           : name === 'anthropic'
             ? { content: [] }
-            : { choices: [] }),
+            : name === 'bedrock'
+              ? { output: { message: { role: 'assistant', content: [] } } }
+              : { choices: [] }),
       }),
     );
     const response = await f.send();
@@ -479,6 +560,8 @@ for (const [name, provider] of Object.entries(providers)) {
       echo.candidates[0].content.parts = [{ text: 'key fixture-only' }];
     else if (name === 'anthropic')
       echo.content = [{ type: 'text', text: 'key fixture-only' }];
+    else if (name === 'bedrock')
+      echo.output.message.content = [{ text: 'key fixture-only' }];
     else
       echo.choices[0].message = {
         role: 'assistant',
@@ -654,13 +737,17 @@ for (const [name, provider] of Object.entries(providers)) {
           ? body.tools.map((tool) => tool.function.name)
           : name === 'anthropic'
             ? body.tools.map((tool) => tool.name)
-            : body.tools[0].functionDeclarations.map((tool) => tool.name);
+            : name === 'bedrock'
+              ? body.toolConfig.tools.map((tool) => tool.toolSpec.name)
+              : body.tools[0].functionDeclarations.map((tool) => tool.name);
       const prompt =
         name === 'openai'
           ? body.messages[0].content
           : name === 'anthropic'
             ? body.system
-            : body.systemInstruction.parts[0].text;
+            : name === 'bedrock'
+              ? body.system[0].text
+              : body.systemInstruction.parts[0].text;
       assert.equal(offered.includes('osm_query'), overpass);
       assert.equal(prompt.includes('osm_query'), overpass);
       assert.ok(offered.includes('resolve_area'));
@@ -765,6 +852,8 @@ test('chat throttles read their own variables and fall back per provider', async
     'GEV_RATELIMIT_ANTHROPIC_PER_MIN',
     'GEV_RATELIMIT_VERTEX_CHAT_PER_MIN',
     'GEV_RATELIMIT_VERTEX_PER_MIN',
+    'GEV_RATELIMIT_BEDROCK_CHAT_PER_MIN',
+    'GEV_RATELIMIT_BEDROCK_PER_MIN',
   ];
   const saved = Object.fromEntries(names.map((key) => [key, process.env[key]]));
   t.after(() => {
@@ -785,18 +874,22 @@ test('chat throttles read their own variables and fall back per provider', async
   process.env.GEV_RATELIMIT_GEMINI_PER_MIN = '3';
   process.env.GEV_RATELIMIT_ANTHROPIC_PER_MIN = '1';
   process.env.GEV_RATELIMIT_VERTEX_PER_MIN = '4';
+  process.env.GEV_RATELIMIT_BEDROCK_PER_MIN = '3';
   assert.equal(await allowed(providers.openai, 5), 2);
   assert.equal(await allowed(providers.gemini, 5), 3);
   assert.equal(await allowed(providers.anthropic, 5), 1);
   assert.equal(await allowed(providers.vertex, 6), 4);
+  assert.equal(await allowed(providers.bedrock, 5), 3);
   process.env.GEV_RATELIMIT_OPENAI_CHAT_PER_MIN = '4';
   process.env.GEV_RATELIMIT_GEMINI_CHAT_PER_MIN = '0';
   process.env.GEV_RATELIMIT_ANTHROPIC_CHAT_PER_MIN = '2';
   process.env.GEV_RATELIMIT_VERTEX_CHAT_PER_MIN = '5';
+  process.env.GEV_RATELIMIT_BEDROCK_CHAT_PER_MIN = '1';
   assert.equal(await allowed(providers.openai, 6), 4);
   assert.equal(await allowed(providers.gemini, 6), 6);
   assert.equal(await allowed(providers.anthropic, 6), 2);
   assert.equal(await allowed(providers.vertex, 7), 5);
+  assert.equal(await allowed(providers.bedrock, 4), 1);
 });
 
 test('the ChatGPT OAuth lock refuses OpenAI chat but not Gemini chat', async (t) => {
@@ -1103,4 +1196,302 @@ test('parseUsage reads Vertex usageMetadata exactly as Gemini', () => {
     assert.equal(vertex.totalTokens, 10);
   }
   assert.equal(parseUsage('vertex', { usage: { prompt_tokens: 1 } }), null);
+});
+
+test('Bedrock URL-encodes an ARN model id and takes the Region from BEDROCK_REGION', async (t) => {
+  const arn =
+    'arn:aws:bedrock:eu-west-1:123456789012:inference-profile/eu.anthropic.claude-haiku-5-5';
+  const f = await fixture(t, providers.bedrock, undefined, {
+    resolveChatModel: () => arn,
+    resolveRegion: () => 'eu-west-1',
+  });
+  assert.equal((await f.send()).status, 200);
+  assert.equal(
+    f.calls[0].url,
+    `https://bedrock-runtime.eu-west-1.amazonaws.com/model/${encodeURIComponent(arn)}/converse`,
+  );
+  assert.ok(!f.calls[0].url.slice(8).includes(':'));
+  assert.equal(f.calls[0].body.model, undefined);
+});
+
+test('Bedrock refuses an invalid BEDROCK_REGION or model before upstream', async (t) => {
+  for (const overrides of [
+    { resolveRegion: () => 'us-east-1.evil.test' },
+    { resolveRegion: () => 'US-EAST-1' },
+    { resolveRegion: () => '' },
+    { resolveChatModel: () => '../converse' },
+    { resolveChatModel: () => 'model id' },
+    { resolveChatModel: () => 'x'.repeat(2049) },
+  ]) {
+    const f = await fixture(t, providers.bedrock, undefined, overrides);
+    assert.equal((await f.send()).status, 503);
+    assert.equal(f.calls.length, 0);
+  }
+  const gov = await fixture(t, providers.bedrock, undefined, {
+    resolveRegion: () => 'us-gov-west-1',
+  });
+  assert.equal((await gov.send()).status, 200);
+  assert.match(gov.calls[0].url, /^https:\/\/bedrock-runtime\.us-gov-west-1\./);
+});
+
+test('Bedrock history must alternate and answer each toolUse batch in order', async (t) => {
+  const f = await fixture(t, providers.bedrock);
+  const user = (text) => ({ role: 'user', content: [{ text }] });
+  const use = (toolUseId, lat) => ({
+    toolUse: { toolUseId, name: 'fly_to', input: { lat } },
+  });
+  const calls = {
+    role: 'assistant',
+    content: [{ text: 'Flying' }, use('a', 1), use('b', 2)],
+  };
+  const results = (...ids) => ({
+    role: 'user',
+    content: ids.map((toolUseId) => ({
+      toolResult: { toolUseId, content: [{ json: { ok: true } }] },
+    })),
+  });
+  const done = { role: 'assistant', content: [{ text: 'Done' }] };
+  const send = async (messages) => (await f.send({ messages })).status;
+  assert.equal(
+    await send([user('Go'), calls, results('a', 'b'), done, user('Next')]),
+    200,
+  );
+  assert.equal(await send([user('Go'), calls, results('a', 'b')]), 200);
+  // Results out of order, missing, or mixed with text.
+  assert.equal(await send([user('Go'), calls, results('b', 'a')]), 400);
+  assert.equal(await send([user('Go'), calls, results('a')]), 400);
+  const mixed = results('a', 'b');
+  mixed.content.push({ text: 'And more' });
+  assert.equal(await send([user('Go'), calls, mixed]), 400);
+  // A result with no call before it, and a call left unanswered.
+  assert.equal(await send([results('a')]), 400);
+  assert.equal(await send([user('Go'), done, results('a')]), 400);
+  assert.equal(await send([user('Go'), calls]), 400);
+  assert.equal(await send([user('Go'), calls, user('Never mind')]), 400);
+  // Roles alternate from the user and the history ends with the user.
+  assert.equal(await send([user('Go'), user('Again')]), 400);
+  assert.equal(await send([done, user('Go')]), 400);
+  assert.equal(await send([user('Go'), done]), 400);
+  // Only one member per block, and only text, tool and reasoning blocks.
+  assert.equal(
+    await send([{ role: 'user', content: [{ text: 'Hi', cachePoint: {} }] }]),
+    400,
+  );
+  for (const block of [
+    { image: { format: 'png', source: { bytes: 'AA==' } } },
+    { document: { name: 'd', format: 'txt', source: { bytes: 'AA==' } } },
+    { cachePoint: { type: 'default' } },
+    { guardContent: { text: { text: 'Hi' } } },
+    {},
+  ])
+    assert.equal(await send([{ role: 'user', content: [block] }]), 400);
+  // Tool results carry one JSON object, with no status or text wrapping.
+  for (const toolResult of [
+    { toolUseId: 'a', content: [{ text: '{"ok":true}' }] },
+    { toolUseId: 'a', content: [{ json: { ok: true } }], status: 'success' },
+    { toolUseId: 'a', content: [{ json: { ok: true }, text: 'x' }] },
+    { toolUseId: 'a', content: [] },
+  ]) {
+    const answer = results('a', 'b');
+    answer.content[0] = { toolResult };
+    assert.equal(await send([user('Go'), calls, answer]), 400);
+  }
+  // Ids and names follow Converse's own patterns.
+  for (const [toolUseId, name] of [
+    ['a b', 'fly_to'],
+    ['x'.repeat(65), 'fly_to'],
+    ['a', 'fly to'],
+    ['a', 'x'.repeat(65)],
+  ])
+    assert.equal(
+      await send([
+        user('Go'),
+        {
+          role: 'assistant',
+          content: [{ toolUse: { toolUseId, name, input: {} } }],
+        },
+        results(toolUseId),
+      ]),
+      400,
+    );
+  assert.equal(
+    await send([{ role: 'user', content: 'Hi' }]),
+    400,
+    'Converse content is always an array of blocks',
+  );
+  assert.equal(
+    await send([{ role: 'user', content: [{ text: 'Hi' }], name: 'x' }]),
+    400,
+  );
+  assert.equal(await send([user('')]), 400);
+  assert.equal(f.calls.length, 2);
+});
+
+test('Bedrock keeps reasoning blocks opaquely and refuses other reply blocks', async (t) => {
+  const upstream = [];
+  const reply =
+    (content, stopReason = 'end_turn') =>
+    async (url, options) => {
+      upstream.push(JSON.parse(options.body));
+      return Response.json({
+        ...providers.bedrock.reply(),
+        output: { message: { role: 'assistant', content } },
+        stopReason,
+      });
+    };
+  const thought = {
+    reasoningContent: { reasoningText: { text: 'Think', signature: 'sig' } },
+  };
+  const redacted = { reasoningContent: { redactedContent: 'b3BhcXVl' } };
+  const f = await fixture(
+    t,
+    providers.bedrock,
+    reply([thought, redacted, { text: '' }, { text: 'Hi' }]),
+  );
+  const body = await (await f.send()).json();
+  assert.deepEqual(body.content, {
+    role: 'assistant',
+    content: [thought, redacted, { text: 'Hi' }],
+  });
+  assert.equal(body.finishReason, 'end_turn');
+  // Fields outside the accepted members are left out of history.
+  const extra = await fixture(
+    t,
+    providers.bedrock,
+    reply([
+      {
+        reasoningContent: {
+          reasoningText: { text: 'Think', signature: 'sig', extra: 1 },
+        },
+      },
+      { toolUse: { toolUseId: 'c', name: 'fly_to', input: {}, extra: 1 } },
+    ]),
+  );
+  assert.deepEqual((await (await extra.send()).json()).content.content, [
+    thought,
+    { toolUse: { toolUseId: 'c', name: 'fly_to', input: {} } },
+  ]);
+  for (const content of [
+    [{ image: { format: 'png', source: { bytes: 'AA==' } } }, { text: 'Hi' }],
+    [{ text: 'Hi', citationsContent: {} }],
+    [{ citationsContent: { content: [{ text: 'Hi' }], citations: [] } }],
+    [{ reasoningContent: { reasoningText: { text: 'x'.repeat(64001) } } }],
+    [
+      {
+        reasoningContent: {
+          reasoningText: { text: 'a' },
+          redactedContent: 'b',
+        },
+      },
+    ],
+    [{ text: '' }],
+  ]) {
+    const refused = await fixture(t, providers.bedrock, reply(content));
+    assert.equal((await refused.send()).status, 502, JSON.stringify(content));
+  }
+
+  // The reply's reasoning goes back unchanged within the turn that made it.
+  const round = await fixture(
+    t,
+    providers.bedrock,
+    reply(
+      [
+        thought,
+        { toolUse: { toolUseId: 'c', name: 'fly_to', input: { lat: 1 } } },
+      ],
+      'tool_use',
+    ),
+  );
+  const calls = (await (await round.send()).json()).content;
+  assert.deepEqual(calls.content[0], thought);
+  const results = {
+    role: 'user',
+    content: [
+      { toolResult: { toolUseId: 'c', content: [{ json: { ok: true } }] } },
+    ],
+  };
+  const sameTurn = [...providers.bedrock.input.messages, calls, results];
+  assert.equal((await round.send({ messages: sameTurn })).status, 200);
+  assert.deepEqual(upstream.at(-1).messages, sameTurn);
+  // An earlier turn's reasoning is left out: the chat shortens earlier turns,
+  // and a block whose prefix changed is refused upstream.
+  const done = { role: 'assistant', content: [thought, { text: 'Done' }] };
+  const later = [
+    ...sameTurn,
+    done,
+    { role: 'user', content: [{ text: 'Next' }] },
+  ];
+  assert.equal((await round.send({ messages: later })).status, 200);
+  const sent = upstream.at(-1).messages;
+  assert.deepEqual(sent[1].content, [calls.content[1]]);
+  assert.deepEqual(sent[3].content, [{ text: 'Done' }]);
+  assert.deepEqual(sent.at(-1), later.at(-1));
+  // Reasoning is the assistant's own; a user message cannot carry it.
+  assert.equal(
+    (
+      await round.send({
+        messages: [{ role: 'user', content: [{ text: 'Hi' }, thought] }],
+      })
+    ).status,
+    400,
+  );
+});
+
+test('parseUsage derives Bedrock input from its total and keeps cache reads', () => {
+  assert.deepEqual(
+    parseUsage('bedrock', {
+      usage: { inputTokens: 7, outputTokens: 3, totalTokens: 10 },
+    }),
+    {
+      inputTokens: 7,
+      outputTokens: 3,
+      totalTokens: 10,
+      reasoningTokens: 0,
+      cachedInputTokens: 0,
+    },
+  );
+  assert.deepEqual(
+    parseUsage('bedrock', {
+      usage: {
+        inputTokens: 7,
+        outputTokens: 3,
+        totalTokens: 130,
+        cacheReadInputTokens: 100,
+        cacheWriteInputTokens: 20,
+      },
+    }),
+    {
+      inputTokens: 127,
+      outputTokens: 3,
+      totalTokens: 130,
+      reasoningTokens: 0,
+      cachedInputTokens: 100,
+    },
+  );
+  assert.equal(
+    parseUsage('bedrock', { usage: { inputTokens: 7, outputTokens: 3 } }),
+    null,
+  );
+  assert.equal(
+    parseUsage('bedrock', { usage: { outputTokens: 11, totalTokens: 10 } }),
+    null,
+  );
+  assert.equal(
+    parseUsage('bedrock', { usage: { outputTokens: -1, totalTokens: 10 } }),
+    null,
+  );
+  assert.equal(parseUsage('bedrock', {}), null);
+  // The other providers read their own shapes, unchanged.
+  assert.equal(
+    parseUsage('anthropic', {
+      usage: { inputTokens: 7, outputTokens: 3, totalTokens: 10 },
+    }),
+    null,
+  );
+});
+
+test('every GEV tool name fits a Converse toolSpec name', () => {
+  assert.ok(GEV_REALTIME_TOOLS.length > 0);
+  for (const tool of GEV_REALTIME_TOOLS)
+    assert.match(tool.name, /^[a-zA-Z0-9_-]{1,64}$/);
 });
