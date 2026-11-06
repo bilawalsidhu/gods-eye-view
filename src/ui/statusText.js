@@ -269,10 +269,8 @@ export function translateStatusLine(text) {
 /** Thousands separators out of an English number ("3,000" → 3000). */
 const englishNumber = (text) => Number(text.replace(/,/g, ''));
 
-// Coverage notes of a layer whose view has no feed, whole lines with a number
-// in them: transit (transit/queries.js) and bikeshare (bikeshare/controls.js).
-// Their " · " is part of one sentence, so they are matched before the line is
-// split into pieces. Keep these in step with the producers.
+// Coverage notes (transit/queries.js, bikeshare/controls.js). Their " · " is
+// inside one sentence, so they match whole before the line is split.
 const COVERAGE_NOTE_PATTERNS = [
   [
     /^Fly below ([\d,]+) km to a covered region$/,

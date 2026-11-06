@@ -245,9 +245,8 @@ export function createQueries({ state, parts }) {
       const health = aggregateTransitFeedHealth(statuses, now);
       const count = state._vehicles.size;
       if (state._enabled && active.length === 0) {
-        // English data (the analyst's empty note to the model, and the Layers
-        // row's prompt); both show it through translateStatusMessage
-        // (ui/statusText.js).
+        // English: the analyst's empty note and the row's prompt, both shown
+        // through translateStatusMessage (ui/statusText.js).
         const note = state._altitudeGateOpen
           ? `No feed here yet · ${TRANSIT_REGION_COUNT} regions available`
           : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;

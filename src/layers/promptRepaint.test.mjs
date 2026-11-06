@@ -1,7 +1,5 @@
-// When the camera changes which coverage prompt a Transit or
-// Bike Share row shows, the layer asks the panel to repaint at once, instead
-// of leaving the old prompt up until the manager's next tick (Transit 15 s,
-// Bike Share 60 s).
+// A camera move that changes a Transit or Bike Share coverage prompt repaints
+// the row at once, not at the next manager tick (15 s, 60 s).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createState as createBikeState } from './bikeshare/state.js';

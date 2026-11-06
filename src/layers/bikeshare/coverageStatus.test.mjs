@@ -1,10 +1,7 @@
 // BIKESHARE COVERAGE STATUS — a view with no system says so.
 //
-// Over a city with no catalogued system (London, Tokyo) the layer drew nothing
-// and reported nothing, so its row read "ON · — · GBFS · never": the same as a
-// feed that had never answered. These cases pin the rule that replaced it:
-// with no system in range the layer reports a guidance status that says why,
-// and a view it left keeps no date for data it no longer draws.
+// With no system in range (London, Tokyo) the layer says why instead of
+// "never", and keeps no date for data it no longer draws.
 //
 // Run with: npm test
 import { test } from 'node:test';

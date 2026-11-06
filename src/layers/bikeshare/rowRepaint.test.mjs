@@ -1,5 +1,3 @@
-// Bike Share row repaints: entering a city, leaving it or nudging the camera
-// mid-load, and leaving a failed city.
 // Bike Share: after the camera settles, the last row the panel painted must
 // match what the layer reports now. Each case drives the real viewport,
 // ingestion, rendering and controls; the manager is a spy that records the

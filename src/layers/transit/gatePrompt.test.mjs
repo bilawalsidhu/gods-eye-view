@@ -1,7 +1,5 @@
-// The Transit coverage prompt names the altitude the closed gate
-// actually opens at. Descending over Boston to 2,900 km (below 3,000 km, above
-// the 2,850 km enter threshold) loads nothing, so a prompt "Fly below 3,000 km"
-// asks for something the camera has already done.
+// The Transit prompt names the altitude the gate opens at: at 2,900 km over
+// Boston (under 3,000 km, above the 2,850 km enter threshold) nothing loads.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createState } from './state.js';

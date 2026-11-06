@@ -111,8 +111,7 @@ export function createViewport({ state, services, parts }) {
         changed = true;
       }
     }
-    // Leaving coverage leaves nothing on the map to date: a row that read
-    // "26s ago" over an empty view would claim a feed that is no longer here.
+    // Nothing is left on the map to date.
     if (desired.size === 0) state._lastUpdate = null;
     for (const [feedId, feed] of desired) {
       if (!state._activeFeeds.has(feedId)) {
@@ -124,8 +123,7 @@ export function createViewport({ state, services, parts }) {
     parts.ingestion.sweepAgedVehicles(Date.now());
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-proximity');
-    // The row's text follows the camera (coverage prompt, feed list), so it
-    // repaints now instead of at the next 15 s manager tick.
+    // Repaint now: the row follows the camera, the manager tick is 15 s.
     if (changed) state._dataManager?.refreshLayerStats?.('transit');
   }
 

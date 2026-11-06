@@ -2393,9 +2393,8 @@ export class LayerLifecycle {
   }
 
   /**
-   * A tick's failure belongs to the feed it polled. Once the layer's own stats
-   * stop reporting one (the camera left that feed), the row stops showing it
-   * instead of waiting for the next tick.
+   * Drop a tick failure the layer's stats no longer report (the camera left
+   * that feed) instead of showing it until the next tick.
    */
   _dropRecoveredRefreshError(layerId) {
     const entry = layerId ? this.layers.get(layerId) : null;

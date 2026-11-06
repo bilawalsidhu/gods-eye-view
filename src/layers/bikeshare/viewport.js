@@ -116,10 +116,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     parts.rendering.removeCityPoints(cityId);
   }
 
-  /**
-   * Repaint the layer's row now. Its text follows the camera (coverage
-   * prompt, station count), and the manager tick is 60 s.
-   */
+  /** Repaint the row now: it follows the camera, the manager tick is 60 s. */
   function refreshRow() {
     layerState._dataManager?.refreshLayerStats?.('bikeshare');
   }

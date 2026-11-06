@@ -15,8 +15,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     updateInterval: STATUS_POLL_MS,
 
     /**
-     * Keep the manager so camera-driven coverage changes can repaint the row
-     * before the next status poll.
+     * Kept so camera moves can repaint the row before the next status poll.
      * @param {object} dataManager DataLayerManager instance.
      */
     attachDataManager(dataManager) {
@@ -84,18 +83,16 @@ export function createControls({ state: layerState, services, parts, source }) {
         lastUpdate: layerState._lastUpdate,
         loading,
       };
-      // No system in range is guidance, not an empty feed: the camera is too
-      // high, or no catalogued system is near the view. A city that failed
-      // leaves range empty too, and reports its failure below instead.
+      // No system in range: the camera is too high or no system is near. A
+      // failed city also leaves range empty and reports its failure below.
       if (
         layerState._enabled &&
         !loading &&
         layerState._activeCityIds.size === 0 &&
         layerState._failedCityIds.size === 0
       ) {
-        // English data (the analyst's empty note to the model, and the Layers
-        // row's prompt); both show it through translateStatusMessage
-        // (ui/statusText.js).
+        // English: the analyst's empty note and the row's prompt, both shown
+        // through translateStatusMessage (ui/statusText.js).
         const note = layerState._altitudeGateEnabled
           ? `No bike share here yet · ${GBFS_CITY_REGISTRY.length} systems available`
           : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered city`;
