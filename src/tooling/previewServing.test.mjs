@@ -7,10 +7,17 @@ import { localProviderPlugins } from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
 import { makeFixtureRoot } from './fixtureRoot.mjs';
 
+const nominatimStorageDir = await makeFixtureRoot('gev-preview-composition-');
+test.after(() => rm(nominatimStorageDir, { recursive: true, force: true }));
+
 test('data providers have both hooks; credential editing stays development-only', () => {
-  const plugins = localProviderPlugins();
+  const plugins = localProviderPlugins({ nominatimStorageDir });
   assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
   assert.ok(plugins.some(({ name }) => name === 'gnss-integrity'));
+  assert.ok(plugins.some(({ name }) => name === 'ghostmaps'));
+  assert.ok(plugins.some(({ name }) => name === 'drone-airspace'));
+  assert.ok(plugins.some(({ name }) => name === 'inaturalist'));
+  assert.ok(plugins.some(({ name }) => name === 'acartia'));
   assert.ok(plugins.some(({ name }) => name === 'sea-state'));
   assert.ok(plugins.some(({ name }) => name === 'ocean-currents'));
   assert.ok(plugins.some(({ name }) => name === 'sea-surface-temperature'));
@@ -94,7 +101,10 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
   for (const isPreview of [false, true]) {
     const config = {
       ...base,
-      plugins: [...localProviderPlugins(), apiNotFoundPlugin()],
+      plugins: [
+        ...localProviderPlugins({ nominatimStorageDir }),
+        apiNotFoundPlugin(),
+      ],
       server: { host: '127.0.0.1', port: 0, hmr: false },
       preview: { host: '127.0.0.1', port: 0 },
     };
@@ -111,6 +121,9 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/firms/status', 200],
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
         ['/api/gnss-integrity?lat=invalid', 400],
+        ['/api/ghostmaps/unknown', 404],
+        ['/api/inaturalist/unknown', 404],
+        ['/api/acartia/unknown', 404],
         ['/api/sea-state/grid/unknown.bin', 404],
         ['/api/ocean-currents/grid/unknown.bin', 404],
         ['/api/sea-surface-temperature/grid/unknown.bin', 404],

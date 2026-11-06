@@ -1209,6 +1209,16 @@ export function createRecentImageryLayer({
       notify('alpha');
     },
 
+    /** Stop catalog/preview work owned by a cancelled voice action. */
+    cancelPendingSearch() {
+      // Without a note the emptied strip would read as "no imagery".
+      if (_searching) _notice = msg('Search cancelled');
+      cancelSearch();
+      clearPending();
+      syncRender();
+      notify();
+    },
+
     /**
      * Forget the box, the candidates, both pins, the preview and any pending
      * pick; reset opacity and split and cancel the box tool. Mode and

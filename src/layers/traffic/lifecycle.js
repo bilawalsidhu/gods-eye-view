@@ -42,6 +42,8 @@ export function createLifecycle({
       layerState._lastViewCenter = null;
       layerState._flowRoads = null;
       layerState._flowError = null;
+      layerState._flowStale = false;
+      layerState._flowOldestTileAt = null;
       if (TRAFFIC_TIMING_ENABLED) {
         layerState._trafficTimingCurrentAnchor = null;
         layerState._trafficTimingSequence = 0;
@@ -159,6 +161,8 @@ export function createLifecycle({
       // A stale outage from the last session would misreport a fresh enable —
       // the next load re-derives feed health from real evidence.
       layerState._flowError = null;
+      layerState._flowStale = false;
+      layerState._flowOldestTileAt = null;
 
       layerState._surfaceFrameRemover?.();
       layerState._surfaceFrameRemover = null;

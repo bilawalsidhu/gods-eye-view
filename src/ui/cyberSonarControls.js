@@ -13,14 +13,23 @@ const SETTING_FIELDS = Object.freeze({
   sectorDeg: ['sector', 8, 60],
 });
 
-/** Read configuration separately from whether map effects can currently run. */
-export function getCyberSonarControlState(doc = globalThis.document) {
+/**
+ * Read configuration separately from whether map effects can currently run.
+ * @param {Document} [doc]
+ * @param {{hudActive?: boolean}} [state] The HUD's visibility from IntelHUD,
+ *   which the view renders only on its next update.
+ */
+export function getCyberSonarControlState(
+  doc = globalThis.document,
+  { hudActive } = {},
+) {
   const root = doc?.documentElement;
   const settings = readCyberSonarSettings(root);
   const options = {
     root,
     body: doc?.body,
     hud: doc?.getElementById?.('intel-hud') ?? null,
+    hudActive,
   };
   return {
     enabled: isCyberSonarEnabled(root),
@@ -47,7 +56,7 @@ export function setCyberSonarControls(
   const fail = (error) => ({
     ok: false,
     error,
-    sonar: getCyberSonarControlState(doc),
+    sonar: getCyberSonarControlState(doc, { hudActive: owner?.hud?.visible }),
   });
   if (!request || typeof request !== 'object' || Array.isArray(request)) {
     return fail('Provide Cyber sonar settings as an object.');
@@ -82,5 +91,8 @@ export function setCyberSonarControls(
   if (Object.hasOwn(request, 'enabled')) {
     owner._setCyberSonarEnabled(request.enabled);
   }
-  return { ok: true, sonar: getCyberSonarControlState(doc) };
+  return {
+    ok: true,
+    sonar: getCyberSonarControlState(doc, { hudActive: owner?.hud?.visible }),
+  };
 }

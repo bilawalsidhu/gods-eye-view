@@ -75,4 +75,5 @@ test('the Docker install path keeps its loopback-only, launcher-owned contract',
   assert.match(compose, /^\s+- GEV_KEY_SETUP_TRUSTED_PEERS$/m, 'the operator policy reaches the launcher without a hard-coded address');
   assert.match(compose, /^\s+- GEV_ALLOWED_HOSTS$/m, 'the host allowlist reaches Vite');
   assert.doesNotMatch(compose, /network_mode/, 'the container keeps its own network namespace');
+  assert.match(compose, /^\s+- \.:\/app:z$/m, 'SELinux hosts can read the bind-mounted checkout');
 });

@@ -1,0 +1,1700 @@
+/* The dock offers two input choices; detail lives in the panels. */
+#command-dock > #gev-voice-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 3.65rem;
+  margin: 0;
+  padding: 0 0.6rem;
+}
+#command-dock
+  #gev-voice-control
+  > :is(.gev-voice-heading, .gev-voice-visualizer, .gev-voice-readout),
+#command-dock #gev-voice-control > .gev-voice-provider-field {
+  display: none;
+}
+#command-dock #gev-voice-button,
+#command-dock #gev-chat-button {
+  position: static;
+  display: grid;
+  grid-template-rows: 2.45rem 0.55rem;
+  justify-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  width: 3rem;
+  height: 3.2rem;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  box-shadow: none;
+}
+#command-dock #gev-chat-button > svg {
+  box-sizing: border-box;
+  width: 2.45rem;
+  height: 2.45rem;
+  padding: 0.48rem;
+  border: 1px solid rgba(232, 234, 237, 0.36);
+  border-radius: 0.65rem;
+  background: rgba(232, 234, 237, 0.04);
+  box-shadow:
+    0 0 0 0.18rem rgba(232, 234, 237, 0.04),
+    0 0 0.75rem rgba(232, 234, 237, 0.08);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+#command-dock #gev-chat-button:hover:not(:disabled) > svg,
+#command-dock
+  #gev-voice-control[data-assistant-mode='chat']
+  #gev-chat-button
+  > svg {
+  border-color: rgba(54, 220, 255, 0.48);
+  box-shadow:
+    0 0 0 0.18rem #36dcff0f,
+    0 0 0.75rem #36dcff1f;
+}
+#command-dock :is(.gev-mic-label, .gev-chat-label) {
+  margin: 0;
+  font: 0.48rem var(--font-mono);
+  letter-spacing: 0.08em;
+}
+#command-dock #gev-chat-button:hover,
+#command-dock #gev-voice-control[data-assistant-mode='chat'] #gev-chat-button,
+#command-dock #gev-voice-button:hover {
+  color: var(--accent);
+  background: rgba(54, 220, 255, 0.08);
+}
+#command-dock #gev-chat-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+#gev-chat-panel {
+  position: absolute;
+  bottom: calc(100% + 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(25rem, calc(100vw - 1.5rem));
+  max-height: min(34rem, calc(100dvh - 10rem));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: rgba(7, 22, 31, 0.97);
+  border: 1px solid rgba(54, 220, 255, 0.3);
+  border-radius: 0.9rem;
+  box-shadow: 0 1rem 3rem #0008;
+  text-align: left;
+  font: 0.8rem/1.5 var(--font-sans);
+  color-scheme: dark;
+}
+#gev-chat-panel[hidden],
+#gev-chat-panel [hidden] {
+  display: none;
+}
+#command-dock > #gev-voice-control[data-chat-open='true'] {
+  z-index: 102;
+}
+/* An open Location or Visual Presets tray draws over an idle assistant panel
+   left undocked above it; active voice or chat stays in front. */
+#command-dock > :is(#location-bar, #control-panel):not(.collapsed) {
+  z-index: 103;
+}
+#command-dock
+  > #gev-voice-control:is(
+    [data-assistant-mode='voice'],
+    [data-assistant-mode='chat']
+  ) {
+  z-index: 104;
+}
+#gev-voice-control[data-chat-open='true']
+  :is(.gev-voice-panel, .gev-voice-card, .gev-voice-help-tray) {
+  display: none;
+}
+.gev-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+.gev-chat-header strong {
+  font: 600 0.7rem var(--font-mono);
+  letter-spacing: 0.15em;
+  color: var(--accent);
+}
+.gev-chat-header p {
+  margin: 0.3rem 0 0;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+#gev-chat-header-actions {
+  display: flex;
+  align-items: center;
+}
+#gev-chat-header-actions button {
+  position: static;
+  display: grid;
+  place-items: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0.3rem;
+  color: var(--text-secondary);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+#gev-chat-close {
+  font-size: 1.25rem;
+}
+#gev-chat-messages {
+  min-height: 8rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+#gev-chat-empty {
+  text-align: center;
+  padding: 1.5rem 0.2rem;
+  color: var(--text-secondary);
+}
+#gev-chat-empty > span {
+  font-size: 32px;
+  color: var(--accent);
+  opacity: 0.7;
+}
+#gev-chat-empty h3 {
+  color: var(--text-primary);
+  margin: 0.6rem 0 0.3rem;
+  font-size: 1rem;
+  font-weight: 500;
+}
+#gev-chat-empty p {
+  margin: 0 0 1rem;
+}
+#gev-chat-auth-note {
+  margin: 0;
+  padding: 0 1rem 0.3rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+#gev-chat-empty button {
+  border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+  background: #ffffff05;
+  color: var(--text-secondary);
+  padding: 0.35rem 0.65rem;
+  margin: 0.2rem;
+  cursor: pointer;
+  font: inherit;
+}
+.gev-chat-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.6rem;
+  background: #ffffff05;
+}
+.gev-chat-message[data-role='user'] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  align-self: flex-end;
+  max-width: 90%;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.gev-chat-message small {
+  display: block;
+  margin-bottom: 0.3rem;
+  font: 0.6rem var(--font-mono);
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+#gev-chat-status {
+  margin: 0;
+  padding: 0.3rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+#gev-chat-form {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.4rem 0.8rem 0.8rem;
+  padding: 0.65rem;
+  border: 1px solid #36dcff40;
+  border-radius: 0.65rem;
+  background: #020a1080;
+}
+#gev-chat-input {
+  box-sizing: border-box;
+  field-sizing: content;
+  min-height: 2rem;
+  max-height: 7rem;
+  padding: 0.4rem 0;
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.2rem;
+}
+#gev-chat-form:focus-within {
+  border-color: rgba(54, 220, 255, 0.45);
+}
+#gev-chat-send {
+  width: 2rem;
+  height: 2rem;
+  align-self: center;
+  border: 0;
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: #06141b;
+  cursor: pointer;
+}
+#gev-chat-send:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+#gev-voice-settings-panel .gev-voice-provider-field {
+  position: static;
+  display: flex;
+  width: auto;
+  margin: 0 0 0.75rem;
+  transform: none;
+}
+#gev-chat-panel button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#command-dock
+  #gev-voice-control
+  #gev-chat-header-actions
+  #gev-voice-settings-button {
+  position: static;
+  inset: auto;
+  transform: none;
+  flex: 0 0 2rem;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+}
+#gev-chat-header-actions {
+  flex: 0 0 auto;
+  gap: 0.25rem;
+}
+#gev-chat-panel .gev-chat-header > div:first-child {
+  min-width: 0;
+}
+
+/* Keep the original voice-card height while giving the selected mode room. */
+#command-dock > #gev-voice-control {
+  height: 5.35rem;
+  margin-top: -0.97rem;
+  margin-bottom: -0.97rem;
+  transition:
+    width 220ms ease,
+    flex-basis 220ms ease;
+}
+#command-dock
+  #gev-voice-control[data-assistant-mode='voice']
+  > .gev-voice-visualizer {
+  display: flex;
+  order: 2;
+  width: 3.5rem;
+  height: 2rem;
+  align-self: center;
+  align-items: center;
+  transform: translateY(-0.375rem);
+  padding: 0;
+  border: 0;
+}
+#command-dock #gev-voice-button {
+  order: 1;
+  flex-shrink: 0;
+}
+#command-dock #gev-chat-button {
+  order: 3;
+  flex-shrink: 0;
+}
+#command-dock :is(#gev-voice-button, #gev-chat-button):disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  background: transparent;
+  box-shadow: none;
+}
+#command-dock:has(
+  #gev-voice-control[data-assistant-mode]:not([data-assistant-mode='idle'])
+) {
+  --dock-side-compact: 3.25rem;
+}
+#command-dock > :is(#location-bar, #control-panel) {
+  transition:
+    width 240ms ease,
+    flex-basis 240ms ease,
+    transform 240ms ease;
+}
+#command-dock:has(
+    #gev-voice-control[data-assistant-mode]:not([data-assistant-mode='idle'])
+  )
+  :is(.location-toolbar-label, .panel-header .panel-title) {
+  font-size: 0;
+  letter-spacing: 0;
+  gap: 0;
+  justify-content: center;
+}
+#command-dock:has(
+    #gev-voice-control[data-assistant-mode]:not([data-assistant-mode='idle'])
+  )
+  .dock-label-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-basis: 1.25rem;
+}
+/* At this width main shows the wings' icons only (command-dock-trays.css);
+   centre them in the slim wings. Cyber keeps its labels. */
+@media (max-width: 900px) {
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    > :is(#location-bar, #control-panel)
+    .dock-tray-toggle {
+    justify-content: center;
+  }
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    :is(.location-toolbar-label, .panel-title) {
+    width: auto;
+    min-width: 0;
+    justify-content: center;
+  }
+  :root:not([data-ui-theme='cyber']) #command-dock .dock-label-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-basis: 1.25rem;
+  }
+}
+#command-dock #gev-voice-control .gev-panel-layout {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+#command-dock #gev-voice-control .gev-panel-layout button {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  min-width: 1.65rem;
+  height: 1.8rem;
+  min-height: 1.8rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+#command-dock
+  #gev-voice-control
+  .gev-panel-layout
+  button:is(:hover, [aria-pressed='true']) {
+  color: var(--accent);
+  background: #36dcff14;
+}
+#gev-chat-panel .gev-chat-header {
+  align-items: flex-start;
+  padding: 0.75rem;
+}
+#gev-chat-panel .gev-chat-header p {
+  max-width: none;
+}
+#gev-chat-header-actions {
+  gap: 0;
+}
+#gev-chat-panel {
+  width: min(25rem, calc(100vw - 1.5rem));
+}
+@media (prefers-reduced-motion: reduce) {
+  #command-dock > :is(#location-bar, #control-panel, #gev-voice-control) {
+    transition: none;
+  }
+}
+
+#gev-chat-attach {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  flex: 0 0 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+#gev-chat-attach:is(:hover, [aria-expanded='true']) {
+  color: var(--accent);
+  background: #36dcff14;
+}
+#gev-chat-attach:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+#gev-chat-attach-menu {
+  margin: 0.4rem 0.8rem;
+  padding: 0.7rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.6rem;
+  background: #020a10;
+}
+#gev-chat-attach-menu label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+#gev-chat-attach-menu select,
+#gev-chat-attach-menu button {
+  max-width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.3rem;
+  color: var(--text-primary);
+  background: #10232d;
+  font: inherit;
+}
+#gev-chat-layer-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+#gev-chat-layer-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#gev-chat-attach-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+#gev-chat-attach-menu p {
+  margin-bottom: 0;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+#gev-chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.4rem 0.8rem;
+}
+#gev-chat-attachments button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #36dcff40;
+  border-radius: 1rem;
+  background: #36dcff14;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+/* The composer owns focus indication; avoid a second box around its textarea. */
+#gev-chat-panel #gev-chat-input:focus-visible {
+  /* Override the global white focus ring; the composer shows focus instead. */
+  outline: none !important;
+  box-shadow: none;
+}
+
+#gev-chat-restore {
+  display: none;
+}
+#gev-chat-panel[data-minimized='true'] {
+  width: min(15rem, calc(100vw - 1.5rem));
+  transition: width 180ms ease;
+  border-radius: 1rem;
+  overflow: visible;
+}
+#gev-chat-panel[data-minimized='true'] > :not(#gev-chat-form) {
+  display: none;
+}
+#gev-chat-panel[data-minimized='true'] #gev-chat-form {
+  align-items: center;
+  margin: 0;
+  padding: 0.55rem;
+  border: 0;
+  border-radius: inherit;
+  gap: 0.4rem;
+}
+#gev-chat-panel[data-minimized='true'] #gev-chat-attach {
+  display: none;
+}
+#gev-chat-panel[data-minimized='true'] #gev-chat-restore {
+  display: grid;
+  place-items: center;
+  flex: 0 0 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.5rem;
+  color: var(--accent);
+  background: #36dcff14;
+  cursor: pointer;
+}
+#gev-chat-panel[data-minimized='true'] #gev-chat-input {
+  height: 2rem;
+  max-height: 2rem;
+  padding: 0.4rem 0;
+}
+#gev-chat-panel[data-minimized='true'] #gev-chat-send {
+  align-self: center;
+}
+
+#gev-chat-panel[data-minimized='true']:focus-within {
+  width: min(25rem, calc(100vw - 1.5rem));
+  border-color: rgba(54, 220, 255, 0.45);
+  box-shadow:
+    0 0.5rem 1.5rem #0006,
+    0 0 0 1px #36dcff14;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #gev-chat-panel[data-minimized='true'] {
+    transition: none;
+  }
+}
+
+#gev-chat-mini-reply {
+  display: none;
+}
+#gev-chat-panel[data-minimized='true'] > #gev-chat-mini-reply:not([hidden]) {
+  display: block;
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #36dcff26;
+  border-radius: 0.85rem;
+  background: rgba(12, 26, 34, 0.96);
+  box-shadow: 0 0.5rem 1.5rem #0005;
+  animation: gev-reply-slide 180ms ease-out;
+}
+#gev-chat-mini-reply header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font: 0.6rem var(--font-mono);
+  letter-spacing: 0.1em;
+}
+#gev-chat-expand-reply {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.3rem;
+  color: var(--text-secondary);
+  background: #ffffff06;
+  cursor: pointer;
+}
+#gev-chat-expand-reply:hover {
+  color: var(--accent);
+  background: #36dcff14;
+}
+#gev-chat-mini-text {
+  margin: 0.4rem 0 0;
+  max-height: 6.5rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+@keyframes gev-reply-slide {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #gev-chat-panel[data-minimized='true'] > #gev-chat-mini-reply {
+    animation: none;
+  }
+}
+
+#gev-voice-control > .gev-chat-thinking {
+  display: none;
+}
+#command-dock
+  #gev-voice-control[data-assistant-mode='chat']
+  > .gev-chat-thinking {
+  display: flex;
+  order: 2;
+  flex: 0 0 3.5rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transform: translateY(-0.375rem);
+}
+.gev-chat-thinking span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.3;
+}
+#gev-voice-control[data-chat-busy='true'] .gev-chat-thinking span {
+  animation: gev-thinking-pulse 1.2s ease-in-out infinite;
+}
+#gev-voice-control .gev-chat-thinking span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+#gev-voice-control .gev-chat-thinking span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+@keyframes gev-thinking-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 0.95;
+    transform: translateY(-0.2rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #gev-voice-control[data-chat-busy='true'] .gev-chat-thinking span {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
+#gev-voice-control .gev-voice-panel #gev-chat-back[hidden] {
+  display: none;
+}
+#gev-voice-control .gev-voice-panel :is(#gev-chat-back, #gev-voice-back) {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.75rem 0.3rem 0.45rem;
+  border: 1px solid #36dcff66;
+  border-radius: 0.45rem;
+  background: #36dcff1f;
+  color: var(--accent);
+  font: 600 0.75rem var(--font-sans);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+#gev-voice-control .gev-voice-panel :is(#gev-chat-back, #gev-voice-back):hover {
+  background: #36dcff33;
+}
+#gev-chat-back:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+#gev-voice-panel[data-context='chat'] .gev-voice-panel-title {
+  display: none;
+}
+
+#gev-chat-send .gev-chat-stop-icon {
+  display: none;
+}
+#gev-chat-send[data-busy='true'] .gev-chat-enter-icon {
+  display: none;
+}
+#gev-chat-send[data-busy='true'] .gev-chat-stop-icon {
+  display: block;
+}
+
+.gev-chat-message[data-role='user'] small {
+  order: 2;
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0.4rem 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #132630;
+  font-size: 0;
+  letter-spacing: 0;
+}
+.gev-chat-message[data-role='user'] small::after {
+  content: '';
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Ccircle cx='12' cy='7' r='3.5'/%3E%3Cpath d='M5 21v-2a7 7 0 0 1 14 0v2'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.gev-chat-message[data-role='user'] > span {
+  min-width: 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.6rem;
+  background: #36dcff14;
+  border: 1px solid #36dcff20;
+}
+
+.gev-chat-message[data-role='assistant'] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0;
+  background: transparent;
+}
+.gev-chat-message[data-role='assistant'] > span {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.6rem;
+  background: #ffffff05;
+}
+.gev-chat-message[data-role='assistant'] small {
+  order: 0;
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0.4rem 0 0;
+  border-radius: 0.45rem;
+  background: #10242e url('/logo.svg') center / 1.45rem 1.45rem no-repeat;
+  font-size: 0;
+  letter-spacing: 0;
+}
+
+/* Raised teal instrument dock, with quiet detail and real activity indicators. */
+#command-dock,
+#command-dock:has(#gev-voice-control[data-assistant-mode]) {
+  --dock-voice-width: 11rem;
+}
+#command-dock > :is(#location-bar, #control-panel) {
+  background: linear-gradient(
+    160deg,
+    rgba(26, 30, 34, 0.96),
+    rgba(16, 21, 26, 0.97)
+  );
+  border-color: rgba(125, 158, 169, 0.25);
+  box-shadow:
+    inset 0 1px 0 #b3f1ff0d,
+    inset 0 -1px 0 #74d2e50a,
+    0 6px 18px #0005;
+}
+#command-dock .dock-label-icon {
+  color: #91aab2;
+}
+#command-dock :is(.location-toolbar-label, .panel-header .panel-title) {
+  color: #b8c9cf;
+}
+#command-dock > #gev-voice-control {
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.9rem 0.85rem;
+  border: 1px solid rgba(54, 220, 255, 0.32);
+  border-radius: 1.35rem;
+  background: linear-gradient(
+    155deg,
+    rgba(14, 39, 50, 0.98),
+    rgba(7, 25, 35, 0.98) 70%
+  );
+  box-shadow:
+    inset 0 0 0 1px #8ae5f00a,
+    inset 0 1px 0 #c3f5ff14,
+    0 8px 24px #0006,
+    0 0 18px #36dcff12;
+}
+#command-dock #gev-voice-button,
+#command-dock #gev-chat-button {
+  color: #a8c5ce;
+  transform: translateY(0.1rem);
+}
+#command-dock #gev-voice-control .gev-mic-orbit,
+#command-dock #gev-chat-button > svg {
+  border-color: #90b7c366;
+  background: linear-gradient(145deg, #1a3743, #0b202b);
+  box-shadow:
+    0 0 0 3px #061d2980,
+    0 0 0 4px #a4e7f029,
+    inset 0 1px 3px #c6f5ff12,
+    0 3px 7px #0006;
+}
+#command-dock #gev-voice-control > .gev-chat-thinking,
+#command-dock
+  #gev-voice-control[data-assistant-mode='chat']
+  > .gev-chat-thinking {
+  display: flex;
+  position: absolute;
+  top: 0.65rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  height: 0.3rem;
+  gap: 0.35rem;
+  align-items: center;
+}
+#gev-voice-control[data-assistant-mode='idle']
+  .gev-chat-thinking
+  span:first-child {
+  opacity: 0.7;
+}
+#command-dock #gev-voice-control > .gev-voice-visualizer,
+#command-dock
+  #gev-voice-control[data-assistant-mode='voice']
+  > .gev-voice-visualizer {
+  position: absolute;
+  display: flex;
+  bottom: 0.45rem;
+  left: 1rem;
+  right: 1rem;
+  width: auto;
+  height: 0.6rem;
+  transform: none;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+  opacity: 0.8;
+}
+#command-dock
+  #gev-voice-control:not([data-assistant-mode='voice'])
+  > .gev-voice-visualizer
+  span {
+  height: 5px;
+  animation: none;
+  opacity: 0.4;
+}
+#command-dock
+  #gev-voice-control[data-assistant-mode='chat']
+  > .gev-voice-visualizer {
+  opacity: 0.25;
+}
+
+#gev-voice-control #gev-voice-panel {
+  width: min(25rem, calc(100vw - 1.5rem));
+}
+#gev-voice-panel .gev-voice-panel-header [role='tablist'] {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+/* Bring the selected mode's indicator between the two controls. */
+#command-dock:has(
+  #gev-voice-control:is(
+    [data-assistant-mode='chat'],
+    [data-assistant-mode='voice']
+  )
+) {
+  --dock-voice-width: 14rem;
+}
+#command-dock
+  > #gev-voice-control:is(
+    [data-assistant-mode='chat'],
+    [data-assistant-mode='voice']
+  ) {
+  justify-content: space-between;
+}
+#command-dock
+  #gev-voice-control[data-assistant-mode='chat']
+  > .gev-chat-thinking {
+  top: 50%;
+  height: 2rem;
+  gap: 0.5rem;
+  transform: translate(-50%, -50%);
+}
+#gev-voice-control[data-assistant-mode='chat'] .gev-chat-thinking span {
+  width: 0.6rem;
+  height: 0.6rem;
+  opacity: 0.65;
+}
+#command-dock
+  #gev-voice-control[data-assistant-mode='voice']
+  > .gev-voice-visualizer {
+  top: 50%;
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  width: 3.75rem;
+  height: 2rem;
+  gap: 2px;
+  align-items: center;
+  transform: translate(-50%, -50%);
+}
+#command-dock
+  #gev-voice-control[data-assistant-mode='voice']
+  > .gev-voice-visualizer
+  span {
+  min-height: 6px;
+  max-height: 2rem;
+}
+@media (prefers-reduced-motion: no-preference) {
+  #command-dock #gev-voice-control > .gev-chat-thinking {
+    transition:
+      top 220ms ease,
+      height 220ms ease,
+      transform 220ms ease,
+      gap 220ms ease;
+  }
+  #gev-voice-control .gev-chat-thinking span {
+    transition:
+      width 220ms ease,
+      height 220ms ease;
+  }
+}
+
+#gev-chat-panel .gev-chat-message > span,
+#gev-chat-panel #gev-chat-input,
+#gev-chat-panel #gev-chat-mini-text {
+  color: #dcebf0;
+  font-size: 13px;
+}
+#gev-chat-suggestions {
+  padding: 0 14px 8px;
+}
+#gev-chat-suggestions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+#gev-chat-suggestions small {
+  width: 100%;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+#gev-chat-suggestions button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 5px 8px;
+  border: 1px solid #70c8dd26;
+  border-radius: 6px;
+  color: #b4cdd5;
+  background: #36dcff08;
+  font: 11px var(--font-sans);
+  cursor: pointer;
+}
+#gev-chat-suggestions button:hover {
+  background: #36dcff18;
+}
+#gev-chat-panel[data-minimized='true'] #gev-chat-suggestions {
+  display: none;
+}
+
+#gev-voice-panel .gev-voice-preference-toggle {
+  min-height: 2.2rem;
+}
+#gev-voice-panel .gev-voice-timeout-group {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+}
+
+#command-dock > #gev-voice-control[data-assistant-mode='idle']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1px;
+  height: 2rem;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(
+    transparent,
+    rgba(145, 190, 204, 0.35) 25%,
+    rgba(145, 190, 204, 0.35) 75%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+@property --gev-edge-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.gev-active-border {
+  display: none;
+}
+#command-dock
+  > #gev-voice-control:is(
+    [data-assistant-mode='voice'],
+    [data-assistant-mode='chat']
+  )
+  > .gev-active-border {
+  display: block;
+  position: absolute;
+  inset: -1px;
+  padding: 2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--gev-edge-angle),
+    transparent 0deg,
+    #36dcff18 55deg,
+    #36dcffb3 90deg,
+    #b6f5ff 105deg,
+    transparent 145deg,
+    transparent 220deg,
+    #36dcff70 270deg,
+    transparent 310deg
+  );
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+/* The edge orbits only while voice is live or a chat reply is on its way;
+   an idle or minimized chat keeps it still. Touch screens and reduced
+   motion keep it still too. */
+@media (prefers-reduced-motion: no-preference) and (pointer: fine) {
+  #command-dock
+    > #gev-voice-control:is(
+      [data-assistant-mode='voice'],
+      [data-assistant-mode='chat'][data-chat-busy='true']
+    )
+    > .gev-active-border {
+    animation: gev-border-orbit 4s linear infinite;
+  }
+}
+@keyframes gev-border-orbit {
+  to {
+    --gev-edge-angle: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #command-dock > #gev-voice-control > .gev-active-border {
+    animation: none;
+    --gev-edge-angle: 45deg;
+  }
+}
+
+/* A rounded, tapered waveform; live audio still owns each bar's height. */
+#command-dock #gev-voice-control > .gev-voice-visualizer {
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  filter: drop-shadow(0 0 3px #36dcff24);
+}
+#command-dock #gev-voice-control > .gev-voice-visualizer span {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #a3edf4, #42bfd7 55%, #238ba8);
+  box-shadow: none;
+  transform-origin: center;
+  transform: scaleY(calc(0.4 + min(var(--bar), 14 - var(--bar)) * 0.085));
+  transition:
+    height 120ms ease-out,
+    opacity 180ms ease-out;
+}
+#command-dock
+  #gev-voice-control:not([data-assistant-mode='voice'])
+  > .gev-voice-visualizer {
+  left: 50%;
+  right: auto;
+  width: 4.5rem;
+  height: 0.75rem;
+  transform: translateX(-50%);
+}
+#command-dock
+  #gev-voice-control:not([data-assistant-mode='voice'])
+  > .gev-voice-visualizer
+  span {
+  height: 7px;
+  opacity: 0.4;
+}
+#command-dock
+  #gev-voice-control[data-assistant-mode='voice']
+  > .gev-voice-visualizer {
+  width: 4rem;
+  height: 2rem;
+}
+#command-dock
+  #gev-voice-control[data-speaker='user']
+  > .gev-voice-visualizer
+  span {
+  background: linear-gradient(180deg, #f4dcab, #d9ac61);
+}
+@media (prefers-reduced-motion: reduce) {
+  #command-dock #gev-voice-control > .gev-voice-visualizer span {
+    transition: none;
+  }
+}
+
+/* Errors use the alert tray without changing the two-button dock layout. */
+#command-dock #gev-voice-control[data-status='error'] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 1.35rem;
+}
+#command-dock #gev-voice-control[data-status='error'] > .gev-voice-readout {
+  display: none;
+}
+
+#gev-voice-settings-panel > .gev-voice-provider-field {
+  position: static;
+  display: flex;
+  opacity: 1;
+  pointer-events: auto;
+  margin: 4px 0 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+#gev-voice-settings-panel > .gev-voice-provider-field[hidden] {
+  display: none;
+}
+#gev-voice-settings-panel > .gev-voice-provider-field {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font: inherit;
+  color: var(--text-primary);
+}
+#gev-voice-settings-panel > .gev-voice-provider-field select {
+  flex: 0 1 10rem;
+  width: 10rem;
+  min-width: 0;
+  font: inherit;
+}
+
+/* Keep connection/turn state beside the selected mode's indicator. */
+#command-dock #gev-assistant-phase {
+  position: absolute;
+  top: calc(50% + 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 6rem;
+  color: #a8c5ce;
+  font: 8px/1.2 var(--font-mono, monospace);
+  text-align: center;
+  pointer-events: none;
+}
+#command-dock #gev-assistant-phase:empty {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  #command-dock
+    #gev-voice-control[data-assistant-mode='voice'][data-status='connecting']
+    > .gev-voice-visualizer
+    span {
+    animation: gev-voice-connecting 1.2s ease-in-out infinite;
+    animation-delay: calc(var(--bar) * 60ms);
+  }
+}
+@keyframes gev-voice-connecting {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Placement: above the dock by default, or docked into the right rail lane. */
+body[data-assistant-docked='true'] #right-context-rail {
+  visibility: hidden;
+  pointer-events: none;
+}
+#gev-voice-control [data-assistant-panel] {
+  max-width: calc(100vw - 1rem);
+}
+#gev-voice-control [data-assistant-panel][data-placement='docked'] {
+  max-width: none;
+  max-height: none;
+}
+#gev-chat-panel[data-placement='docked'] #gev-chat-messages {
+  flex: 1 1 auto;
+}
+/* The lane is narrow: quick commands below already offer these prompts. */
+#gev-chat-panel[data-placement='docked'] #gev-chat-empty > :is(svg, button) {
+  display: none;
+}
+
+/* Settings opened from chat: same frame as chat, chat options first, then
+   the voice preferences, the only pointer route to them while Preview is off. */
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-context='chat']
+  :is(.gev-voice-panel-tabs, .gev-panel-layout),
+#gev-voice-panel:not([data-context='chat']) #gev-settings-chat {
+  display: none;
+}
+#gev-voice-panel[data-context='chat'] #gev-settings-voice {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--glass-border);
+}
+#gev-voice-control
+  #gev-voice-panel[data-context='chat'][data-placement='compact']:not(
+    [data-minimized]
+  ) {
+  width: var(--chat-frame-width, min(25rem, calc(100vw - 1.5rem)));
+  height: var(--chat-frame-height, auto);
+  max-height: none;
+}
+#gev-voice-panel[data-context='chat'] .gev-voice-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Minimized voice reads like chat's minimized reply card. */
+#command-dock #gev-voice-control #gev-voice-panel[data-minimized] {
+  width: min(15rem, calc(100vw - 1rem));
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  justify-content: center;
+  gap: 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #36dcff26;
+  border-radius: 0.85rem;
+  background: rgba(12, 26, 34, 0.96);
+  box-shadow: 0 0.5rem 1.5rem #0005;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]
+  .gev-voice-panel-header {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]
+  .gev-voice-panel-title {
+  color: var(--text-secondary);
+  font: 0.6rem var(--font-mono);
+  letter-spacing: 0.1em;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]
+  .gev-voice-panel-header
+  button:not(#gev-chat-back, #gev-voice-back) {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  min-width: 1.65rem;
+  height: 1.65rem;
+  min-height: 1.65rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.3rem;
+  color: var(--text-secondary);
+  background: #ffffff06;
+  box-shadow: none;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]
+  .gev-voice-panel-header
+  button:not(#gev-chat-back, #gev-voice-back):hover {
+  color: var(--accent);
+  background: #36dcff14;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]
+  :is(
+    .gev-voice-panel-body,
+    .gev-voice-panel-tabs,
+    .gev-panel-layout [data-layout-dock]
+  ) {
+  display: none;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel:not([data-context='chat'])
+  #gev-chat-back {
+  display: none;
+}
+
+/* Title leads; tabs, layout and close group on the right. */
+#gev-voice-panel .gev-voice-panel-title {
+  margin-right: auto;
+}
+
+/* Phones have no right rail to dock into. It outranks the shared header
+   button rule, which would otherwise show the dock button again. */
+@media (max-width: 720px) {
+  #command-dock #gev-voice-control .gev-panel-layout [data-layout-dock] {
+    display: none !important;
+  }
+}
+
+/* Minimized voice previews the last sentence from each side. */
+.gev-voice-mini {
+  display: none;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]
+  .gev-voice-mini {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]:has(.gev-voice-mini p:not([hidden])) {
+  width: min(25rem, calc(100vw - 1rem));
+}
+.gev-voice-mini p {
+  display: flex;
+  gap: 0.6rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  font: 0.75rem/1.5 var(--font-sans);
+}
+.gev-voice-mini p[hidden] {
+  display: none;
+}
+.gev-voice-mini-who {
+  flex: 0 0 2.25rem;
+  padding-top: 0.15rem;
+  color: var(--text-secondary);
+  font: 0.6rem var(--font-mono);
+  letter-spacing: 0.1em;
+}
+.gev-voice-mini p > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* The mode not in use steps back until pointed at. */
+#command-dock #gev-voice-control :is(#gev-voice-button, #gev-chat-button) {
+  transition: opacity 160ms ease;
+}
+#command-dock
+  #gev-voice-control[data-assistant-mode='voice']
+  #gev-chat-button:not(:hover, :focus-visible),
+#command-dock
+  #gev-voice-control[data-assistant-mode='chat']
+  #gev-voice-button:not(:hover, :focus-visible) {
+  opacity: 0.4;
+}
+
+/* A focused tab that is already selected shows one highlight, not two. */
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel
+  [role='tab'][aria-selected='true']:is(:focus, :focus-visible) {
+  outline: none !important;
+  box-shadow:
+    0 0 0 1px currentColor,
+    0 -2px 0 currentColor inset;
+}
+
+/* Minimized, like chat's reply card: the preview reads above and the
+   controls sit at the bottom. The expanded panel keeps its header on top. */
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]
+  .gev-voice-panel-header {
+  order: 2;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-minimized]
+  .gev-voice-mini {
+  order: 1;
+  margin: 0 0 0.4rem;
+}
+
+/* A focused toggle that is already pressed shows one highlight, not two. */
+#command-dock
+  #gev-voice-control
+  .gev-panel-layout
+  button[aria-pressed='true']:is(:focus, :focus-visible) {
+  outline: none !important;
+  box-shadow: 0 0 0 1px currentColor;
+}
+
+/* Assistant panels share the left panels' glass surface (layers.css). Cyber
+   keeps its own surfaces. */
+:root:not([data-ui-theme='cyber']) #gev-voice-control {
+  --assistant-glass: var(--glass-bg);
+  --assistant-glass-border: var(--glass-border);
+  --assistant-glass-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+:root:not([data-ui-theme='cyber'])
+  #command-dock
+  #gev-voice-control
+  :is(
+    #gev-chat-panel,
+    #gev-voice-panel,
+    #gev-voice-panel[data-minimized],
+    #gev-chat-panel[data-minimized='true'] > #gev-chat-mini-reply
+  ) {
+  background: var(--assistant-glass);
+  border-color: var(--assistant-glass-border);
+  box-shadow: var(--assistant-glass-shadow);
+}
+/* The mini reply sits inside the chat panel, whose own blur makes it the
+   backdrop root: a blur on the reply could not reach the map. */
+:root:not([data-ui-theme='cyber'])
+  #command-dock
+  #gev-voice-control
+  :is(#gev-chat-panel, #gev-voice-panel, #gev-voice-panel[data-minimized]) {
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+}
+:root:not([data-ui-theme='cyber'])
+  #command-dock
+  #gev-voice-control
+  #gev-chat-panel[data-minimized='true']:focus-within {
+  border-color: rgba(54, 220, 255, 0.45);
+}
+
+/* A backdrop-filter on the voice control would stop the panels inside it
+   from blurring the map, so its own blur moves to a layer behind it. */
+:root:not([data-ui-theme='cyber']) #command-dock > #gev-voice-control {
+  isolation: isolate;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root:not([data-ui-theme='cyber']) #command-dock > #gev-voice-control::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+}
+
+/* The empty voice preview suggests a few things to say until voice starts. */
+.gev-voice-hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  color: var(--text-secondary);
+  font: 0.75rem/1.4 var(--font-sans);
+}
+.gev-voice-hints small {
+  flex-basis: 100%;
+  text-align: center;
+  font: 0.6rem var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.gev-voice-hints q {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.45rem;
+  color: var(--text-primary);
+}
+#gev-voice-preview-empty[hidden] + .gev-voice-hints,
+#gev-voice-control[data-voice-exchange] .gev-voice-hints {
+  display: none;
+}
+
+/* One icon-button style across the chat and voice headers: plain at rest,
+   a soft fill on hover, accent only when the button is active. */
+#command-dock #gev-voice-control #gev-voice-preview-tab {
+  display: none;
+}
+#command-dock
+  #gev-voice-control
+  :is(
+    #gev-chat-header-actions,
+    #gev-voice-panel:not([data-minimized]) .gev-voice-panel-header
+  )
+  button:not(#gev-chat-back, #gev-voice-back, #gev-voice-preview-tab) {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+#command-dock
+  #gev-voice-control
+  :is(
+    #gev-chat-header-actions,
+    #gev-voice-panel:not([data-minimized]) .gev-voice-panel-header
+  )
+  button:not(#gev-chat-back, #gev-voice-back, #gev-voice-preview-tab):hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+#command-dock
+  #gev-voice-control
+  :is(
+    #gev-chat-header-actions,
+    #gev-voice-panel:not([data-minimized]) .gev-voice-panel-header
+  )
+  button:not(#gev-chat-back, #gev-voice-back, #gev-voice-preview-tab):is(
+    [aria-pressed='true'],
+    [aria-selected='true']
+  ) {
+  color: var(--accent);
+  background: rgba(54, 220, 255, 0.12);
+  border-color: rgba(54, 220, 255, 0.35);
+}
+#command-dock
+  #gev-voice-control
+  :is(
+    #gev-chat-header-actions,
+    #gev-voice-panel:not([data-minimized]) .gev-voice-panel-header
+  )
+  button:not(#gev-chat-back, #gev-voice-back, #gev-voice-preview-tab):is(
+    [aria-pressed='true'],
+    [aria-selected='true']
+  ):is(:focus, :focus-visible) {
+  outline: none !important;
+  box-shadow: 0 0 0 1px currentColor;
+}
+
+/* Keyboard focus on Back to chat uses the accent, matching the button. */
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel
+  :is(#gev-chat-back, #gev-voice-back):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+/* Inside the panel, the reply card's own title and close repeat the
+   panel's; its status stays. The standalone card keeps both. */
+#command-dock
+  #gev-voice-control
+  #gev-voice-preview-panel
+  :is(.gev-voice-card-kicker, #gev-voice-card-dismiss) {
+  display: none;
+}
+
+/* Voice Settings follow chat Settings: Back to voice and close only. */
+#command-dock #gev-voice-control #gev-voice-panel #gev-voice-back {
+  display: none;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-view='settings']:not(
+    [data-context='chat'],
+    [data-minimized]
+  )
+  #gev-voice-back {
+  display: inline-flex;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel[data-view='settings']:not(
+    [data-context='chat'],
+    [data-minimized]
+  )
+  :is(.gev-voice-panel-title, .gev-voice-panel-tabs, .gev-panel-layout) {
+  display: none;
+}
+
+/* Voice header buttons follow chat's order: dock, minimize, settings, close. */
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel
+  .gev-voice-panel-header
+  .gev-panel-layout {
+  order: 1;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel
+  .gev-voice-panel-header
+  .gev-voice-panel-tabs {
+  order: 2;
+  margin-left: 0;
+}
+#command-dock
+  #gev-voice-control
+  #gev-voice-panel
+  .gev-voice-panel-header
+  #gev-voice-settings-close {
+  order: 3;
+}
+
+/* The empty voice preview centres like chat's empty state. */
+#command-dock
+  #gev-voice-control
+  #gev-voice-preview-panel
+  #gev-voice-preview-empty {
+  padding-top: 0.5rem;
+  text-align: center;
+}
+#command-dock #gev-voice-control #gev-voice-preview-panel .gev-voice-hints {
+  padding-bottom: 0.5rem;
+}
+
+/* Inside the voice panel the reply card sits on the panel's glass; its own
+   standalone blur would draw a grey box there. */
+#command-dock #gev-voice-control #gev-voice-panel .gev-voice-card {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* The dock's Location and Visual Presets wings sit 5px narrower on desktop.
+   The chat or voice mode keeps its own compact width; the narrow breakpoints
+   restate theirs (command-dock-compact.css, command-dock-trays.css), which
+   this later rule would otherwise override. */
+#command-dock {
+  --dock-side-compact: calc(clamp(9.5rem, 12vw, 10.5rem) - 5px);
+}
+@media (max-width: 900px) {
+  #command-dock {
+    --dock-side-compact: 4.25rem;
+  }
+}
+@media (max-width: 620px) {
+  #command-dock {
+    --dock-side-compact: 3.25rem;
+  }
+}
