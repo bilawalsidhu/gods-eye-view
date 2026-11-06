@@ -60,6 +60,43 @@ html:lang(ar) :is(#intel-hud, #cockpit-hud) {
     Tahoma, monospace;
 }
 
+/* Hebrew: JetBrains Mono and Inter also lack Hebrew glyphs. Noto Sans Hebrew
+   (loaded with the other Google fonts; its files download only when the page
+   shows Hebrew) leads the stack so the body text keeps one proportional
+   Hebrew face across platforms. Hebrew letters do not join like Arabic, but
+   tracking still reads as gaps inside a word, so the body is released from it
+   the same way; Latin marked translate="no" keeps its tracking. The intel and
+   cockpit HUDs keep JetBrains Mono for their Latin telemetry. */
+html:lang(he) {
+  --font-mono:
+    'Noto Sans Hebrew', 'JetBrains Mono', 'SF Mono', 'Fira Code', Tahoma,
+    monospace;
+  --font-sans:
+    'Inter', 'Noto Sans Hebrew', -apple-system, BlinkMacSystemFont, Tahoma,
+    sans-serif;
+}
+html:lang(he)
+  :is(
+    #military-awareness-panel,
+    .military-awareness-controls button,
+    .military-awareness-standby button,
+    .military-awareness-compass-label,
+    .military-awareness-compass-heading,
+    .military-awareness-direction-label,
+    .tr3b-toggle
+  ) {
+  font-family: var(--font-mono);
+}
+html:lang(he) :is(#intel-hud, #cockpit-hud) {
+  --font-mono:
+    'JetBrains Mono', 'SF Mono', 'Fira Code', 'Noto Sans Hebrew', Tahoma,
+    monospace;
+}
+html:lang(he) body
+  :not(#intel-hud, #intel-hud *, [translate='no'], [translate='no'] *) {
+  letter-spacing: 0 !important;
+}
+
 /* The Display/Context rail moves to the left edge. It keeps a physical
    `right` in layers.css because the attribution-clearance model
    (creditAttribution.test.mjs) reads that rule; the swap only applies above

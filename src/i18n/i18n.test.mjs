@@ -41,6 +41,9 @@ test('normalizeLocale folds regional variants and rejects unshipped tags', () =>
   assert.equal(normalizeLocale('de'), 'de');
   assert.equal(normalizeLocale('de-AT'), 'de');
   assert.equal(normalizeLocale('de_CH'), 'de');
+  // Hebrew keeps Western digits like its catalog; regional tags fold to he.
+  assert.equal(normalizeLocale('he'), 'he');
+  assert.equal(normalizeLocale('he-IL'), 'he');
   assert.equal(normalizeLocale('fr'), 'fr');
   assert.equal(normalizeLocale('fr-CA'), 'fr');
   assert.equal(normalizeLocale('FR_be'), 'fr');
