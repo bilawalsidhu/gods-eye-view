@@ -1,3 +1,8 @@
+import {
+  CCTV_DEFAULT_FOV_DEG,
+  CCTV_DEFAULT_PITCH_DEG,
+  cctvFallbackHeadingFromId,
+} from '../../../src/sources/cctvPose.js';
 /** Server-side admission policy for billed CCTV Street View requests. */
 export const STREET_VIEW_WINDOW_MS = 60_000;
 export const STREET_VIEW_DAY_MS = 86_400_000;
@@ -6,6 +11,8 @@ export const STREET_VIEW_MAX_REQUESTS = 32;
 export const STREET_VIEW_DAILY_MAX_REQUESTS = 512;
 export const STREET_VIEW_MAX_PENDING = 8;
 export const STREET_VIEW_MAX_TRACKED_KEYS = 256;
+/** A refusal is not a failed Google fetch; clients should retain their last frame. */
+export const STREET_VIEW_DEFERRED = Object.freeze({ deferred: true });
 
 /**
  * Accept only a registered source with valid geographic coordinates.
@@ -32,15 +39,27 @@ export function registeredStreetViewLocation(source) {
     lon > 180
   )
     return null;
-  const heading = Number(source.headingDeg);
-  const fov = Number(source.fovDeg);
-  const pitch = Number(source.pitchDeg);
+  const optionalNumber = (value) =>
+    value == null ||
+    typeof value === 'boolean' ||
+    (typeof value === 'string' && !value.trim())
+      ? NaN
+      : Number(value);
+  const heading = optionalNumber(source.headingDeg);
+  const fov = optionalNumber(source.fovDeg);
+  const pitch = optionalNumber(source.pitchDeg);
   return {
     lat,
     lon,
-    heading: Number.isFinite(heading) ? ((heading % 360) + 360) % 360 : 0,
-    fov: Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80,
-    pitch: Number.isFinite(pitch) ? Math.max(-40, Math.min(20, pitch)) : 0,
+    heading: Number.isFinite(heading)
+      ? ((heading % 360) + 360) % 360
+      : cctvFallbackHeadingFromId(source.id),
+    fov: Number.isFinite(fov)
+      ? Math.max(20, Math.min(120, fov))
+      : CCTV_DEFAULT_FOV_DEG,
+    pitch: Number.isFinite(pitch)
+      ? Math.max(-55, Math.min(-2, pitch))
+      : CCTV_DEFAULT_PITCH_DEG,
   };
 }
 
@@ -101,7 +120,10 @@ export function createStreetViewAdmission({
   };
   let minuteStart = now();
   let minuteUsed = 0;
-  let dayStart = minuteStart;
+  // Sliding 24-hour history: a fixed window could admit 2x the configured
+  // ceiling in a burst across the reset boundary.
+  let dayTimes = [];
+  let dayCursor = 0;
   let dayUsed = 0;
 
   return {
@@ -129,16 +151,26 @@ export function createStreetViewAdmission({
       const until = cooldowns.get(cameraKey);
       if (until !== undefined && time < until) {
         stats.cooldown += 1;
-        return Promise.resolve(null);
+        return Promise.resolve(STREET_VIEW_DEFERRED);
       }
       if (time - minuteStart >= windowMs) {
         minuteStart = time;
         minuteUsed = 0;
       }
-      if (time - dayStart >= dailyWindowMs) {
-        dayStart = time;
-        dayUsed = 0;
+      while (
+        dayCursor < dayTimes.length &&
+        (time < dayTimes[dayCursor] ||
+          time - dayTimes[dayCursor] >= dailyWindowMs)
+      )
+        dayCursor += 1;
+      if (dayCursor === dayTimes.length) {
+        dayTimes = [];
+        dayCursor = 0;
+      } else if (dayCursor > 1024 && dayCursor * 2 >= dayTimes.length) {
+        dayTimes = dayTimes.slice(dayCursor);
+        dayCursor = 0;
       }
+      dayUsed = dayTimes.length - dayCursor;
       const recent = clients.get(client);
       const clientUsed =
         recent && time - recent.start < windowMs ? recent.used : 0;
@@ -152,7 +184,7 @@ export function createStreetViewAdmission({
         pending.size >= maxPending
       ) {
         stats.denied += 1;
-        return Promise.resolve(null);
+        return Promise.resolve(STREET_VIEW_DEFERRED);
       }
 
       // Atomic reservation in a single JS turn; no awaits before charging.
@@ -164,6 +196,7 @@ export function createStreetViewAdmission({
         used: clientUsed + 1,
       });
       minuteUsed += 1;
+      dayTimes.push(time);
       dayUsed += 1;
       stats.attempts += 1;
 
@@ -172,13 +205,15 @@ export function createStreetViewAdmission({
         .catch(() => null)
         .then((result) => {
           if (!result?.ok) stats.failures += 1;
+          // No success cooldown by default: repeated valid refreshes may
+          // spend a fresh admission without retaining Google's image bytes.
+          const duration = result?.ok ? successCooldownMs : failureCooldownMs;
           if (cooldowns.has(cameraKey)) cooldowns.delete(cameraKey);
-          else if (cooldowns.size >= maxTracked)
-            cooldowns.delete(cooldowns.keys().next().value);
-          cooldowns.set(
-            cameraKey,
-            now() + (result?.ok ? successCooldownMs : failureCooldownMs),
-          );
+          if (duration > 0) {
+            if (cooldowns.size >= maxTracked)
+              cooldowns.delete(cooldowns.keys().next().value);
+            cooldowns.set(cameraKey, now() + duration);
+          }
           return result;
         })
         .finally(() => {
