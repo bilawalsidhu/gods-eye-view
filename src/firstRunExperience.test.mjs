@@ -983,7 +983,13 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
   const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter(
-    (tool) => tool.name !== 'set_cyber_sonar',
+    (tool) =>
+      ![
+        'set_cyber_sonar',
+        'resolve_area',
+        'find_imagery',
+        'osm_query',
+      ].includes(tool.name),
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;
@@ -1014,6 +1020,14 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
     'noir',
   ]);
   visualStyle.enum = [...visualStyle.enum, 'snow'];
+  // Tilt to an angle adds pitchDeg and rewords direction; restore
+  // the legacy camera fields to keep the pin.
+  const camera = legacyTools.find((tool) => tool.name === 'move_camera')
+    .parameters.properties;
+  assert.equal(camera.pitchDeg.type, 'number');
+  delete camera.pitchDeg;
+  camera.direction.description =
+    'Required for pan/tilt/rotate; orbit/rotate_globe default right.';
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt
@@ -1031,11 +1045,13 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // S2 GhostMaps extends the generated layer enums; both feature contracts remain.
   // The layer alias hint leaves out aliases the layer id already spells.
   // The Utilities panel adds one set_panel_open target; Sea Marks and Ski
-  // Pistes extend the generated layer enums and alias hint.
-  assert.equal(block.length, 31026, 'serialized tool schema length drifted');
+  // Pistes extend the generated layer enums and alias hint; voice geometry
+  // adds the analyst area scopes and the osm-places layer.
+  // control_cockpit states the own-layer entry rule (Contacts not required).
+  assert.equal(block.length, 31372, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '5f5275cd6e320afef4fd224b235f3e0f191ec06599b257ffe1f60b703a255199',
+    '7f593e78c232db972b04441f830b6a60f93916a6e5bc5a68eca7422cd1035508',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
