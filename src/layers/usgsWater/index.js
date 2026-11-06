@@ -147,24 +147,31 @@ export function createUsgsWaterLayers(
     }
 
     const loadFeatures = async ({ signal, viewer }) => {
-      const m = await loadManifest(signal);
-      const cls = m?.classes?.[spec.cls];
-      if (!cls) throw new Error(`manifest has no ${spec.cls} class`);
-      if (!spec.viewport) {
-        viewStatus = 'ok';
-        return parseJsonl(
-          await fetchText(`${base}/${cls.file}`, signal, fetchImpl),
+      try {
+        const m = await loadManifest(signal);
+        const cls = m?.classes?.[spec.cls];
+        if (!cls) throw new Error(`manifest has no ${spec.cls} class`);
+        if (!spec.viewport) {
+          viewStatus = 'ok';
+          return parseJsonl(
+            await fetchText(`${base}/${cls.file}`, signal, fetchImpl),
+          );
+        }
+        const pick = selectStreamTiles(cls.tiles, viewBoxDegrees(viewer));
+        viewStatus = pick.status;
+        tileKeys = pick.tiles.map((t) => t.key).join(',');
+        const bodies = await Promise.all(
+          pick.tiles.map((t) =>
+            fetchText(`${base}/${t.file}`, signal, fetchImpl),
+          ),
         );
+        return bodies.flatMap(parseJsonl);
+      } catch (error) {
+        // localGeojsonCore logs this error and copies its message into status.
+        // Upstream text can carry credentials; keep both surfaces fixed.
+        if (error?.name === 'AbortError') throw error;
+        throw new Error('USGS request failed');
       }
-      const pick = selectStreamTiles(cls.tiles, viewBoxDegrees(viewer));
-      viewStatus = pick.status;
-      tileKeys = pick.tiles.map((t) => t.key).join(',');
-      const bodies = await Promise.all(
-        pick.tiles.map((t) =>
-          fetchText(`${base}/${t.file}`, signal, fetchImpl),
-        ),
-      );
-      return bodies.flatMap(parseJsonl);
     };
 
     const layer = createLocalGeoJsonLayer(
