@@ -3096,6 +3096,7 @@
   "All markers": "所有標記",
   "Show markers of every age": "顯示所有時間的標記",
   "Maximum event age: {days}d; undated markers are kept": "事件最長保留時間：{days}天；保留無日期標記",
+  "event age filter|All": "全部",
   "Event age": "事件時間",
   "Event age: {days}d · undated kept": "事件時間：{days}天內 · 保留無日期標記"
 }

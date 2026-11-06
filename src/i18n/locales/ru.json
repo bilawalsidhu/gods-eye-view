@@ -3321,6 +3321,7 @@
   "All markers": "Все метки",
   "Show markers of every age": "Показать метки любого возраста",
   "Maximum event age: {days}d; undated markers are kept": "Максимальный возраст события: {days} дн.; метки без даты сохранены",
+  "event age filter|All": "Все",
   "Event age": "Возраст события",
   "Event age: {days}d · undated kept": "Возраст события: {days} дн. · метки без даты сохранены"
 }

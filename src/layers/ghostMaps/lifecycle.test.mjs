@@ -558,3 +558,54 @@ test('a report dated yesterday is shown by 1d one hour into today (UTC)', async 
   await ageChip(layer, 1).onClick();
   assert.equal(layer.getStats().count, 1);
 });
+
+test('a widened reload that returns a different report at the selected index closes its card', async (t) => {
+  let click;
+  const cards = [];
+  const reports = [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')];
+  const { layer, viewer } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 3, 12),
+    reports,
+    controls: {
+      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
+      screenSpaceEventHandlerFactory: () => ({
+        setInputAction: (fn) => {
+          click = fn;
+        },
+        destroy() {},
+      }),
+      picking: { resolvePickId: (picked) => picked },
+    },
+  });
+  await layer.update(viewer);
+  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
+  click({ position: { x: 0, y: 0 } });
+  assert.equal(cards.at(-1).length, 1);
+  // The server answers the pinned version with a newer edition's bytes.
+  reports[0] = dated('Replacement', '11/2/2026');
+  await ageChip(layer, 30).onClick();
+  assert.equal(layer.getStats().count, 2);
+  assert.equal(
+    cards.at(-1).length,
+    0,
+    'a different report must not keep the old card',
+  );
+});
+
+test('narrowing to a window the loaded data covers clears a failed wider reload', async (t) => {
+  let fail = false;
+  const { layer, viewer } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 3, 12),
+    reports: [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')],
+    beforeFileReturns: () => {
+      if (fail) throw new Error('network down');
+    },
+  });
+  await layer.update(viewer);
+  fail = true;
+  await ageChip(layer, 30).onClick();
+  assert.ok(layer.getStats().error, 'the wider reload failed');
+  await ageChip(layer, 3).onClick();
+  assert.equal(layer.getStats().error, null);
+  assert.equal(layer.getStats().count, 1);
+});

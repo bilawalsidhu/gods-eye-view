@@ -423,9 +423,18 @@ export function createGhostMapsLayer({
           // Cull before the first frame so far-side pins never flash.
           _horizon.update(next.pins);
           await _viewer.dataSources.add(next.dataSource);
-          // The new edition is on the globe before the old one leaves. A wider
-          // window over the same edition keeps indices, so the card stays.
-          unload(product.id, loaded?.version === next.version);
+          // The new edition is on the globe before the old one leaves. The card
+          // stays only if its index still holds the same report: the server
+          // may answer a pinned version with newer bytes.
+          const index = Number(_selectedKey?.split(':')[1]);
+          const before = loaded?.features.get(index);
+          const after = next.features.get(index);
+          unload(
+            product.id,
+            Boolean(before && after) &&
+              before.name === after.name &&
+              before.description === after.description,
+          );
           _loaded.set(product.id, next);
         } catch (error) {
           if (signal.aborted) return;
@@ -477,12 +486,15 @@ export function createGhostMapsLayer({
     // Narrowing only removes markers. A product loaded with a narrower window
     // keeps its old ageDays, so sync() restores omitted placemarks from the
     // cached KMZ even though its upstream version has not changed.
-    for (const item of _loaded.values())
+    for (const [id, item] of _loaded)
       if (
         item.ageDays === null ||
         (ageDays !== null && item.ageDays >= ageDays)
-      )
+      ) {
         item.ageDays = ageDays;
+        // A failed wider reload no longer matters; a stale edition retries.
+        _failed.delete(id);
+      }
     notifyRow();
     return sync();
   }
@@ -745,7 +757,7 @@ export function createGhostMapsLayer({
             id: `age-${days ?? 'all'}`,
             label:
               days === null
-                ? t('All markers')
+                ? t('All', { context: 'event age filter' })
                 : t('{days}d', { days: formatNumber(days) }),
             title:
               days === null
