@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   STREET_VIEW_DAILY_MAX_REQUESTS,
+  STREET_VIEW_DEFERRED,
   STREET_VIEW_MAX_REQUESTS,
   STREET_VIEW_PER_CLIENT_MAX_REQUESTS,
   createStreetViewAdmission,
@@ -10,6 +11,7 @@ import {
   streetViewCapFromEnv,
 } from './streetViewGuard.js';
 import { cctvProxy } from '../cctv.js';
+import { cctvFallbackHeadingFromId } from '../../../src/sources/cctvPose.js';
 
 test('only catalog cameras with valid coordinates can reach Google', () => {
   for (const invalid of [
@@ -35,11 +37,23 @@ test('only catalog cameras with valid coordinates can reach Google', () => {
       fovDeg: 900,
       pitchDeg: -900,
     }),
-    { lat: 10, lon: -20, heading: 350, fov: 120, pitch: -40 },
+    { lat: 10, lon: -20, heading: 350, fov: 120, pitch: -55 },
   );
   assert.deepEqual(
     registeredStreetViewLocation({ id: 'zero', lat: 0, lon: 0 }),
-    { lat: 0, lon: 0, heading: 0, fov: 80, pitch: 0 },
+    { lat: 0, lon: 0, heading: 0, fov: 74, pitch: -17 },
+  );
+  assert.equal(cctvFallbackHeadingFromId('camera-0'), 135);
+  assert.deepEqual(
+    registeredStreetViewLocation({
+      id: 'camera-0',
+      lat: 35,
+      lon: 139,
+      headingDeg: null,
+      pitchDeg: '',
+      fovDeg: ' ',
+    }),
+    { lat: 35, lon: 139, heading: 135, fov: 74, pitch: -17 },
   );
 });
 
@@ -77,13 +91,17 @@ test('client, process and daily caps allow a 15-camera burst', async () => {
   for (let i = 0; i < 15; i += 1)
     assert.equal((await ask('a', 'a-' + i))?.ok, true);
   assert.equal((await ask('a', 'a-15'))?.ok, true);
-  assert.equal(await ask('a', 'a-16'), null);
+  assert.strictEqual(await ask('a', 'a-16'), STREET_VIEW_DEFERRED);
   for (let i = 0; i < 16; i += 1)
     assert.equal((await ask('b', 'b-' + i))?.ok, true);
-  assert.equal(await ask('c', 'c-1'), null);
+  assert.strictEqual(await ask('c', 'c-1'), STREET_VIEW_DEFERRED);
   assert.equal(calls, 32);
   clock = 1000;
-  assert.equal(await ask('c', 'c-1'), null, 'daily cap survives minute reset');
+  assert.strictEqual(
+    await ask('c', 'c-1'),
+    STREET_VIEW_DEFERRED,
+    'daily cap survives minute reset',
+  );
   clock = 10_000;
   assert.equal((await ask('c', 'c-1'))?.ok, true);
   assert.equal(calls, 33);
@@ -139,7 +157,7 @@ test('concurrent misses coalesce without a completed-image cache', async () => {
         throw new Error('cooldown should block');
       },
     }),
-    null,
+    STREET_VIEW_DEFERRED,
   );
   clock = 110;
   const another = await admission.run({
@@ -172,7 +190,7 @@ test('failed camera cooldown does not block other cameras', async () => {
       },
     });
   assert.equal(await miss('camera-a'), null);
-  assert.equal(await miss('camera-a'), null);
+  assert.strictEqual(await miss('camera-a'), STREET_VIEW_DEFERRED);
   assert.equal(calls, 1);
   assert.equal(await miss('camera-b'), null);
   assert.equal(calls, 2);
@@ -236,7 +254,9 @@ test('frame route protects catalog pose, 15 cameras and forwarded requests', asy
   });
 
   let handler;
-  cctvProxy().configureServer({
+  cctvProxy({
+    streetViewAdmission: createStreetViewAdmission(),
+  }).configureServer({
     middlewares: {
       use: (_route, middleware) => {
         handler = middleware;
@@ -274,7 +294,8 @@ test('frame route protects catalog pose, 15 cameras and forwarded requests', asy
     streetViewCalls[0].searchParams.get('location'),
     '30.2672,-97.7431',
   );
-  assert.equal(streetViewCalls[0].searchParams.get('heading'), '0');
+  assert.equal(streetViewCalls[0].searchParams.get('heading'), '135');
+  assert.equal(streetViewCalls[0].searchParams.get('pitch'), '-17');
   assert.equal(
     await frame('camera-15', '', { 'x-forwarded-for': '127.0.0.1' }),
     'synthetic',
@@ -286,6 +307,66 @@ test('frame route protects catalog pose, 15 cameras and forwarded requests', asy
   // Successful images are not retained: a new lookup consumes another slot.
   assert.equal(await frame('camera-0'), 'streetview');
   assert.equal(streetViewCalls.length, 16);
-  assert.equal(await frame('camera-15'), 'synthetic');
+  assert.equal(await frame('camera-15'), 'deferred');
   assert.equal(streetViewCalls.length, 16);
+});
+
+test('rolling daily budget never doubles across the period boundary', async () => {
+  let clock = 99;
+  const admission = createStreetViewAdmission({
+    now: () => clock,
+    windowMs: 100,
+    dailyWindowMs: 1000,
+    perClientMax: 10,
+    globalMax: 10,
+    dailyMax: 2,
+  });
+  const request = (id) =>
+    admission.run({
+      client: 'viewer',
+      cameraKey: id,
+      fetchFrame: async () => ({ ok: true }),
+    });
+  assert.equal((await request('a'))?.ok, true);
+  clock = 100;
+  assert.equal((await request('b'))?.ok, true);
+  clock = 199;
+  assert.strictEqual(await request('c'), STREET_VIEW_DEFERRED);
+  clock = 1099;
+  assert.equal((await request('c'))?.ok, true);
+  assert.strictEqual(await request('d'), STREET_VIEW_DEFERRED);
+  clock = 1100;
+  assert.equal((await request('d'))?.ok, true);
+});
+
+test('15 concurrent different cameras are bounded by eight pending slots', async () => {
+  let release;
+  let calls = 0;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const admission = createStreetViewAdmission({
+    perClientMax: 16,
+    globalMax: 32,
+    maxPending: 8,
+  });
+  const promises = Array.from({ length: 15 }, (_, index) =>
+    admission.run({
+      client: 'same-viewer',
+      cameraKey: 'camera-' + index,
+      fetchFrame: async () => {
+        calls += 1;
+        await gate;
+        return { ok: true };
+      },
+    }),
+  );
+  assert.equal(admission.stats().attempts, 8);
+  assert.equal(admission.stats().pending, 8);
+  assert.equal(admission.stats().denied, 7);
+  release();
+  const results = await Promise.all(promises);
+  assert.equal(results.filter((result) => result?.ok).length, 8);
+  assert.equal(results.filter((result) => result === STREET_VIEW_DEFERRED).length, 7);
+  assert.equal(calls, 8);
 });
