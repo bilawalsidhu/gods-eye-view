@@ -109,3 +109,21 @@ test('Wildlife docs describe one source link, name declutter and globe glow limi
   assert.match(section, /5% radius margin/);
   assert.match(section, /add no per-frame work/);
 });
+
+test('Wildlife docs cite the documented UTFGrid endpoint and the Acartia key request', () => {
+  for (const path of [
+    'docs/KNOWN-ISSUES.md',
+    'DATA_SOURCES.md',
+    'docs/CURRENT-STATE.md',
+  ]) {
+    const text = read(path);
+    assert.doesNotMatch(text, /undocumented (iNaturalist|UTFGrid) endpoint/i);
+    assert.doesNotMatch(text, /grid \(undocumented/i);
+  }
+  for (const path of ['docs/KNOWN-ISSUES.md', 'DATA_SOURCES.md'])
+    assert.match(read(path), /Grid Tiles UTFGrid/);
+  assert.match(
+    read('DATA_SOURCES.md'),
+    /create an account and generate an API key/,
+  );
+});

@@ -160,7 +160,8 @@ adjacent-zoom tiles publish before network waits; each arriving tile replaces
 its covered area, including healthy empty tiles. Grid tiles publish even while
 the independent observation request is pending or failed. Enable waits for one
 camera settle; camera acquisition uses moveEnd with a 600 ms debounce. The
-undocumented UTFGrid endpoint has a schema guard; see `KNOWN-ISSUES.md`.
+documented UTFGrid endpoint's unspecified cell records have a schema guard;
+see `KNOWN-ISSUES.md`.
 
 Ambient cards use a fixed 96 px image width and a short creator name credit,
 with a bounded frame cache. New cards fill free screen regions; visible cards
