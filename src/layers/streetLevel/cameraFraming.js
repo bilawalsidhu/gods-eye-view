@@ -1,7 +1,7 @@
 import * as Cesium from 'cesium';
 import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
 import { heightsFor } from '../../queries/heights.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 
 /** Fly the globe camera once to frame a photo after it opens. */
 export function createCameraFraming({ state }) {

@@ -13,6 +13,7 @@
 
 import * as Cesium from 'cesium';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
+import { cameraOf } from '../render/cesium/camera.js';
 import { annotationsFromParams, createView } from '../view/index.js';
 
 const EMBED_VIEW_MESSAGE = 'gev:view';
@@ -147,21 +148,19 @@ const delay = (ms, signal) =>
 function flyTo(viewer, camera) {
   announceNavigationAuthority('embed-view');
   return new Promise((resolve) => {
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        camera.lon,
-        camera.lat,
-        camera.altitude_m,
-      ),
-      orientation: {
-        heading: Cesium.Math.toRadians(camera.heading_deg),
-        pitch: Cesium.Math.toRadians(camera.pitch_deg),
-        roll: 0,
+    cameraOf(viewer).flyTo(
+      { lon: camera.lon, lat: camera.lat, height: camera.altitude_m },
+      {
+        orientation: {
+          heading: Cesium.Math.toRadians(camera.heading_deg),
+          pitch: Cesium.Math.toRadians(camera.pitch_deg),
+          roll: 0,
+        },
+        durationS: FLIGHT_SECONDS,
+        onComplete: () => resolve(true),
+        onCancel: () => resolve(false),
       },
-      duration: FLIGHT_SECONDS,
-      complete: () => resolve(true),
-      cancel: () => resolve(false),
-    });
+    );
   });
 }
 

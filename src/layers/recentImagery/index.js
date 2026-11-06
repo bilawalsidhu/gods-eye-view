@@ -34,7 +34,7 @@ import {
 } from './model.js';
 import { msg, t } from '../../i18n/index.js';
 import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { findCamera } from '../../render/rendererOf.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -980,15 +980,17 @@ export function createRecentImageryLayer({
       const target = _boxError ? _refusalTarget : null;
       const camera = _viewer?.camera;
       const ellipsoid = ellipsoidOf(_viewer);
-      if (!target || !camera?.flyTo || !ellipsoid?.cartographicToCartesian)
-        return null;
+      // No camera port: a viewer of the caller's own whose renderer did not
+      // bring the camera factory (GEV's own imagery renderer does).
+      const port = findCamera(_viewer);
+      if (!target || !port || !ellipsoid?.cartographicToCartesian) return null;
       const canvas = _viewer.scene?.canvas;
       const height = fitViewHeightM({
         width: canvas?.clientWidth,
         height: canvas?.clientHeight,
-        fovy: camera.frustum?.fovy,
+        fovy: camera?.frustum?.fovy,
       });
-      cameraOf(_viewer).flyTo(
+      port.flyTo(
         ellipsoid.cartographicToCartesian({
           longitude: toRadians(target.lon),
           latitude: toRadians(target.lat),

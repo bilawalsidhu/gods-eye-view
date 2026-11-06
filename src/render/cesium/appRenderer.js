@@ -121,11 +121,13 @@ export function createCesiumRendererPlugin({
         },
         destroy() {
           try {
-            unbind();
             input.dispose();
             ports.dispose();
             if (!viewer.isDestroyed()) viewer.destroy();
           } finally {
+            // Bound until the viewer is gone: a late `cameraOf` must not
+            // build a camera of its own over the application's viewer.
+            unbind();
             creditContainer.remove();
           }
         },

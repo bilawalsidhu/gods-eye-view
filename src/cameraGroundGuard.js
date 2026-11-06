@@ -17,6 +17,7 @@
 import * as Cesium from 'cesium';
 import { ownCameraArrival } from './data/cameraArrival.js';
 import { heightsFor } from './queries/heights.js';
+import { cameraOf } from './render/cesium/camera.js';
 import { cameraFlightActive } from './render/cesium/internals.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
@@ -196,20 +197,22 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
       );
       if (deficit > 0) {
         stop();
-        camera.flyTo({
-          destination: Cesium.Cartesian3.fromRadians(
+        cameraOf(viewer).flyTo(
+          Cesium.Cartesian3.fromRadians(
             carto.longitude,
             carto.latitude,
             carto.height + deficit,
           ),
-          orientation: {
-            heading: camera.heading,
-            pitch: camera.pitch,
-            roll: camera.roll,
+          {
+            orientation: {
+              heading: camera.heading,
+              pitch: camera.pitch,
+              roll: camera.roll,
+            },
+            durationS: 0.9,
+            easing: 'cubicInOut',
           },
-          duration: 0.9,
-          easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        });
+        );
         try {
           onLift?.(deficit);
         } catch {

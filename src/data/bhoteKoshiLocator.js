@@ -4,6 +4,7 @@ import {
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
 import { governorRequestRender } from '../renderGovernor.js';
+import { cameraOf } from '../render/cesium/camera.js';
 import {
   BHOTE_KOSHI_LOCATOR_CREDIT,
   registerDynamicCredit,
@@ -620,6 +621,7 @@ export function createBhoteKoshiLocatorLayer({
     requestRender('bhote-koshi-trigger-record-reveal');
     const camera = _viewer?.camera;
     if (!camera?.flyTo) return;
+    const port = cameraOf(_viewer);
     const generation = _generation;
     _triggerApproachInFlight = true;
     const finish = () => {
@@ -627,50 +629,54 @@ export function createBhoteKoshiLocatorLayer({
       attempt.phase = 'finished';
       _triggerApproachInFlight = false;
     };
-    camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        TRIGGER_APPROACH_CAMERA.lon,
-        TRIGGER_APPROACH_CAMERA.lat,
-        TRIGGER_APPROACH_CAMERA.alt,
-      ),
-      orientation: {
-        heading: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.heading),
-        pitch: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.pitch),
-        roll: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.roll),
+    port.flyTo(
+      {
+        lon: TRIGGER_APPROACH_CAMERA.lon,
+        lat: TRIGGER_APPROACH_CAMERA.lat,
+        height: TRIGGER_APPROACH_CAMERA.alt,
       },
-      duration: TRIGGER_APPROACH_DURATION_SEC,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-      complete: () => {
-        if (_triggerApproachAttempt !== attempt || attempt.phase !== 'flying')
-          return;
-        if (
-          !_enabled ||
-          generation !== _generation ||
-          _presentation !== BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION
-        ) {
-          finish();
-          return;
-        }
-        attempt.phase = 'orbiting';
-        camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(
-            TRIGGER_ORBIT_CAMERA.lon,
-            TRIGGER_ORBIT_CAMERA.lat,
-            TRIGGER_ORBIT_CAMERA.alt,
-          ),
-          orientation: {
-            heading: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.heading),
-            pitch: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.pitch),
-            roll: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.roll),
-          },
-          duration: TRIGGER_ORBIT_DURATION_SEC,
-          easingFunction: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
-          complete: finish,
-          cancel: finish,
-        });
+      {
+        orientation: {
+          heading: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.heading),
+          pitch: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.pitch),
+          roll: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.roll),
+        },
+        durationS: TRIGGER_APPROACH_DURATION_SEC,
+        easing: 'cubicInOut',
+        onComplete: () => {
+          if (_triggerApproachAttempt !== attempt || attempt.phase !== 'flying')
+            return;
+          if (
+            !_enabled ||
+            generation !== _generation ||
+            _presentation !== BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION
+          ) {
+            finish();
+            return;
+          }
+          attempt.phase = 'orbiting';
+          port.flyTo(
+            {
+              lon: TRIGGER_ORBIT_CAMERA.lon,
+              lat: TRIGGER_ORBIT_CAMERA.lat,
+              height: TRIGGER_ORBIT_CAMERA.alt,
+            },
+            {
+              orientation: {
+                heading: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.heading),
+                pitch: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.pitch),
+                roll: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.roll),
+              },
+              durationS: TRIGGER_ORBIT_DURATION_SEC,
+              easing: 'sineInOut',
+              onComplete: finish,
+              onCancel: finish,
+            },
+          );
+        },
+        onCancel: finish,
       },
-      cancel: finish,
-    });
+    );
   }
 
   function armTriggerApproach() {

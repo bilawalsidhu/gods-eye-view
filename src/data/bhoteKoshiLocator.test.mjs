@@ -1,3 +1,4 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -647,6 +648,7 @@ test('Bhote Koshi trigger-record waits for the scene camera, zooms, then orbits'
     },
     cancelFlight() {},
   };
+  bindFakeCesiumCamera(viewer);
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => null,
     requestRender() {},
@@ -703,6 +705,9 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
       },
       cancelFlight() {},
     };
+    bindFakeCesiumCamera(viewer);
+    // The renderer's camera port relays these; the layer's own come on top.
+    const portListeners = [moveStart, moveEnd].map((e) => e.numberOfListeners);
     const layer = createBhoteKoshiLocatorLayer({
       boundaryResolver: async () => null,
       overlayHost: overlayHostFixture(),
@@ -745,8 +750,10 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
       const oldFlights = [...flights];
       SceneDirector.prototype.stopScene.call(director);
       assert.equal(timers.size, 0, 'Stop cancels the actual delayed work');
-      assert.equal(moveStart.numberOfListeners, 0);
-      assert.equal(moveEnd.numberOfListeners, 0);
+      assert.deepEqual(
+        [moveStart, moveEnd].map((e) => e.numberOfListeners),
+        portListeners,
+      );
       callbacks[0]();
       moveEnd.raiseEvent();
       for (const flight of oldFlights) flight.complete();

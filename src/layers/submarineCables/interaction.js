@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { cablePicks } from './pickState.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 
 export function createInteraction({ state, inputFor }) {
   function registerPickEntity(entity, info) {

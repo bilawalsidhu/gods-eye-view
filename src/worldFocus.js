@@ -2,7 +2,7 @@
  * One-click camera transfer for layer-owned world targets.
  */
 import { WGS84, toRadians } from './geo/index.js';
-import { rendererOf } from './render/rendererOf.js';
+import { findCamera } from './render/rendererOf.js';
 
 export const WORLD_FOCUS_REQUEST_EVENT = 'gev:world-request-focus';
 export const WORLD_CLICK_FOCUS_DURATION_SEC = 1.9;
@@ -69,7 +69,7 @@ export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
 
 /** Fly to a world target after ownership has been released. */
 export function flyToWorldTarget(viewer, target = {}) {
-  const camera = rendererOf(viewer)?.camera;
+  const camera = findCamera(viewer);
   const framing = WORLD_FOCUS_FRAMING[target.kind];
   if (!camera || !framing || !isValidWorldFocusTarget(target)) return false;
   const poseHeading = camera.pose().heading;

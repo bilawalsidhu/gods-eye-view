@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
+import { cameraOf } from '../../render/cesium/camera.js';
 
 export function createSelection({
   state: layerState,
@@ -32,20 +33,23 @@ export function createSelection({
     );
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromRadians(
+    const camera = cameraOf(viewer);
+    camera.flyTo(
+      Cesium.Cartesian3.fromRadians(
         cartographic.longitude,
         cartographic.latitude,
         altitude,
       ),
-      orientation: {
-        heading: viewer.camera.heading,
-        pitch: -Cesium.Math.PI_OVER_TWO,
-        roll: 0,
+      {
+        orientation: {
+          heading: camera.pose().heading,
+          pitch: -Cesium.Math.PI_OVER_TWO,
+          roll: 0,
+        },
+        durationS: duration,
+        easing: 'cubicInOut',
       },
-      duration,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-    });
+    );
   }
 
   function entityLaunchId(entity) {
@@ -187,11 +191,10 @@ export function createSelection({
       Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3()),
       new Cesium.Cartesian3(),
     );
-    layerState._viewer.camera.flyTo({
-      destination,
+    cameraOf(layerState._viewer).flyTo(destination, {
       orientation: { direction, up },
-      duration: 1.1,
-      complete: () => {
+      durationS: 1.1,
+      onComplete: () => {
         if (layerState._selectedLaunchId === launch.id)
           startMissionZoomAnchor(launch, range);
       },
@@ -202,24 +205,20 @@ export function createSelection({
     if (!layerState._viewer || !launch) return;
     parts.replay.stopMissionReplay();
     stopMissionZoomAnchor();
-    const launchPosition = Cesium.Cartesian3.fromDegrees(
-      launch.lon,
-      launch.lat,
-    );
     layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
       `rocket-launch:${launch.id}`,
     );
-    layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(launchPosition, 0),
+    cameraOf(layerState._viewer).flyToBounds(
+      { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
       {
-        offset: new Cesium.HeadingPitchRange(
-          0,
-          Cesium.Math.toRadians(-42),
-          MISSION_FOCUS_RANGE_M,
-        ),
-        duration: 1.4,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: () => {
+        offset: {
+          heading: 0,
+          pitch: Cesium.Math.toRadians(-42),
+          range: MISSION_FOCUS_RANGE_M,
+        },
+        durationS: 1.4,
+        easing: 'cubicInOut',
+        onComplete: () => {
           if (layerState._selectedLaunchId === launch.id) {
             startMissionZoomAnchor(launch, MISSION_FOCUS_RANGE_M);
           }

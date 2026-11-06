@@ -1,5 +1,6 @@
 /** Tracking identity, entry, exit and contact navigation for the Cockpit controller. */
 import { t } from '../i18n/index.js';
+import { cameraOf } from '../render/rendererOf.js';
 import {
   formatHeadingReadout,
   normalizeHeading,
@@ -150,7 +151,7 @@ export function enter() {
       : null;
   // Retire deferred navigation before cancelFlight can run its callbacks.
   this.onCameraTakeover?.();
-  this.viewer.camera.cancelFlight();
+  cameraOf(this.viewer).cancelFlight();
   this.trackedEntity = entity;
   this.trackedEntityWasShown = entity.show;
   entity.show = false;

@@ -13,7 +13,7 @@ import { cancelCameraArrival } from './data/cameraArrival.js';
 import { guardCameraAboveGround } from './cameraGroundGuard.js';
 import { CITY_POIS } from './cityPois.js';
 import { heightsFor } from './queries/heights.js';
-import { cameraOf } from './render/rendererOf.js';
+import { cameraOf } from './render/cesium/camera.js';
 
 /** Newest landmark arrival; an older post-arrival ground guard yields to it. */
 let arrivalGeneration = 0;
