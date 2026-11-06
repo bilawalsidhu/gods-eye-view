@@ -34,6 +34,14 @@ export const OPENMAPTILES_CREDIT = {
   html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
 };
 
+/** Conditional Salish Sea coverage; registered when its sightings first render. */
+export const ACARTIA_CREDIT = Object.freeze({
+  key: 'acartia',
+  html:
+    'Wildlife sightings: <a href="https://acartia.io" target="_blank" rel="noopener">Acartia</a> (CC BY 4.0; each provider credited per sighting) · ' +
+    '<a href="https://www.bewhalewise.org" target="_blank" rel="noopener">Be Whale Wise</a>',
+});
+
 const osmDisplays = new WeakMap();
 
 function updateOsmDisplay(viewer, state) {
@@ -204,6 +212,10 @@ export const DATA_CREDITS = [
       ', taken live every 10 minutes; each card shows when its reading was taken' +
       ' (raw data, not quality controlled; informational only)' +
       ' · river lines: OpenStreetMap contributors via OpenFreeMap',
+  },
+  {
+    key: 'inaturalist',
+    html: 'Wildlife sightings: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> contributors (licences per record; photos credited on each card)',
   },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,

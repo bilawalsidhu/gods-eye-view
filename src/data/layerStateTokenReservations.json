@@ -20,7 +20,7 @@
   ["military-installations", "i"],
   ["radio", "r"],
   ["recent-imagery", "1"],
-  ["river-levels", "9"],
+  ["river-levels", "00"],
   ["rocket-launches", "x"],
   ["s2-ghostmaps", "5"],
   ["satellites", "s"],
@@ -34,5 +34,6 @@
   ["weather-lightning", "l"],
   ["weather-radar", "v"],
   ["weather-satellite", "o"],
+  ["wildlife-sightings", "9"],
   ["wind", "k"]
 ]

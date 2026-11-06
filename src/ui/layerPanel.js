@@ -81,6 +81,10 @@ const PANEL_GROUPS = [
     ],
   },
   {
+    label: msg('Wildlife'),
+    ids: ['wildlife-sightings'],
+  },
+  {
     label: msg('Weather'),
     ids: [
       'air-quality',

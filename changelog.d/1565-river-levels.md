@@ -11,4 +11,4 @@
   its own published references, rivers are drawn in their gauge's colour from
   the OpenStreetMap waterways in the OpenFreeMap tiles, and gauges up close
   get columns marked with their references. Off by default; share-link token
-  `9` (IMBrandao, #1565).
+  `00` (IMBrandao, #1565).
