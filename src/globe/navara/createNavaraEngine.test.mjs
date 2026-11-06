@@ -562,6 +562,21 @@ test('the floor does not fight flights or a lookAt target', () => {
   engine.destroy();
 });
 
+test('the floor stands aside while the camera inputs are off (the cockpit drives it)', () => {
+  const { engine, view } = setup();
+  view.sampleTerrainHeight = () => 100;
+  engine.input.setCameraInputs(false);
+  engine.camera.setView({
+    destination: cartesian3.fromDegrees(2.35, 48.85, 112),
+  });
+  view.emit('preRender', 1);
+  near(heightOf(engine), 112, 1e-6, 'the cockpit eye 12 m up is kept');
+  engine.input.setCameraInputs(true);
+  view.emit('preRender', 2);
+  near(heightOf(engine), 130, 1e-6, 'lifted once the inputs are back');
+  engine.destroy();
+});
+
 test('the ground floor reports its own ground and margin (diagnostics, not contract)', () => {
   const { engine } = setup();
   assert.equal(typeof engine.groundFloor.ground, 'function');

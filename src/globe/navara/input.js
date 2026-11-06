@@ -167,6 +167,8 @@ export function createNavaraInput(
   };
   return {
     input,
+    /** Whether the app leaves the camera to the user (setCameraInputs). */
+    cameraInputs: () => cameraInputs,
     destroy() {
       if (destroyed) return;
       destroyed = true;

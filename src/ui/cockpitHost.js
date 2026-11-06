@@ -19,6 +19,7 @@ export function cockpitHost(viewer, engine) {
       },
       camera: viewer.camera,
       cartographic: () => viewer.camera.positionCartographic,
+      terrainHeight: (place) => viewer.scene.globe?.getHeight(place),
       surface: viewer.scene,
       inputs: (enabled) => {
         viewer.scene.screenSpaceCameraController.enableInputs = enabled;
@@ -40,6 +41,7 @@ export function cockpitHost(viewer, engine) {
     restore: (target) => target.resumeAircraftFollow(),
     camera: engine.camera,
     cartographic: () => engine.camera.pose().cartographic,
+    terrainHeight: (place) => engine.surface.terrainHeight(place),
     surface: engine,
     inputs: (enabled) => engine.input.setCameraInputs(enabled),
   };

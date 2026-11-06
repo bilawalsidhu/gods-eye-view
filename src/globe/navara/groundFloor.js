@@ -5,8 +5,8 @@
 // controller stops at the surface.
 //
 // Each frame (engine preRender, after the camera model reads Navara's
-// camera), while the camera is free (no flight running, no lookAt target)
-// and below MAX_HEIGHT:
+// camera), while the camera is free (no flight running, no lookAt target,
+// camera inputs on) and below MAX_HEIGHT:
 // - the ground under the camera is sampled (surface.sampleHeight: tiles,
 //   else terrain; else the ellipsoid), at most every RESAMPLE_MS or after a
 //   RESAMPLE_METRES move;

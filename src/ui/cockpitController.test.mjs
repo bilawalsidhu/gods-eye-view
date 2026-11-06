@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CockpitViewController } from './cockpitController.js';
+import { COCKPIT_MIN_GROUND_CLEARANCE_M } from './cockpitPresentation.js';
+import * as geo from '../geo/index.js';
 
 function environment() {
   const original = { document: globalThis.document, window: globalThis.window };
@@ -239,6 +241,68 @@ test('the weather toggle flips from its own state, however fast it is pressed', 
     toggle.dispatchEvent(new Event('click'));
     assert.deepEqual(requested, [true, false, false]);
     assert.deepEqual(published, [true, false, true, false]);
+    owner.dispose();
+  } finally {
+    env.restore();
+  }
+});
+
+test('the cockpit eye stays above the engine surface when the aircraft reads below it', () => {
+  const env = environment();
+  try {
+    // A landing contact whose reported height is 13 m under the terrain, on
+    // a cell the ground floors have not sampled yet. Cesium lifts a camera
+    // under its globe every frame, between the cockpit's 20 Hz updates, so
+    // an eye below the surface jumped up and down.
+    const SURFACE_M = 120;
+    const place = { longitude: -1.7047, latitude: 0.5268 };
+    const aircraft = geo.cartesian3.fromRadians(
+      place.longitude,
+      place.latitude,
+      107,
+    );
+    const views = [];
+    Object.assign(env.viewer, {
+      clock: { currentTime: 0 },
+      camera: {
+        setView: ({ destination }) =>
+          views.push(geo.cartographic.fromCartesian(destination).height),
+        positionCartographic: { ...place, height: 130 },
+      },
+      entities: { contains: () => true },
+    });
+    env.viewer.scene.globe = { getHeight: () => SURFACE_M };
+    const entity = {
+      position: {
+        getValue: (time, result) => geo.cartesian3.clone(aircraft, result),
+      },
+    };
+    const owner = new CockpitViewController(env.viewer, {
+      services: {
+        cachedGroundFloor: () => undefined,
+        GROUND_FLOOR_LIFT_M: 1.5,
+      },
+    });
+    Object.assign(owner, {
+      active: true,
+      trackedEntity: entity,
+      readAircraftInfo: () => ({
+        latitude: geo.math.toDegrees(place.latitude),
+        longitude: geo.math.toDegrees(place.longitude),
+        track: 180,
+        velocityMps: 70,
+        onGround: false,
+      }),
+      _adoptTrackedEntity() {},
+      updateHud() {},
+    });
+    owner.update();
+    assert.equal(views.length, 1);
+    assert.ok(
+      views[0] >= SURFACE_M + COCKPIT_MIN_GROUND_CLEARANCE_M - 1e-6,
+      `eye at ${views[0]} m, surface at ${SURFACE_M} m`,
+    );
+    owner.active = false;
     owner.dispose();
   } finally {
     env.restore();

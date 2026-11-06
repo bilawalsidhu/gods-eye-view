@@ -216,10 +216,12 @@ export function createNavaraEngine(
   const maps = createNavaraMaps(view, fetch ? { fetch } : {});
   const { surface } = createNavaraSurface(view, hooks);
   // Navara's controller zooms through the ground; keep the camera above it.
+  // With the camera inputs off nothing zooms, and the app places the camera
+  // itself (the cockpit eye, 12 m up): the floor's 30 m would fight it.
   groundFloor = createGroundFloor({
     surface,
     position: () => model.camera.livePosition,
-    isFree: () => model.isFree(),
+    isFree: () => model.isFree() && input.cameraInputs(),
     lift: (position) => model.lift(position),
     setMinimumZoomDistance: (distance) =>
       input.input.setCameraOptions({ minimumZoomDistance: distance }),

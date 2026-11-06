@@ -317,12 +317,20 @@ export function update() {
   if (cameraCartographic) {
     const cameraLat = geo.math.toDegrees(cameraCartographic.latitude);
     const cameraLon = geo.math.toDegrees(cameraCartographic.longitude);
-    const cameraFloorM = this.services.cachedGroundFloor(cameraLat, cameraLon);
-    if (Number.isFinite(cameraFloorM)) {
-      cockpitFloorM = Math.max(
-        cockpitFloorM ?? Number.NEGATIVE_INFINITY,
-        cameraFloorM,
-      );
+    // The engine's own surface under the eye counts too: Cesium lifts a
+    // camera below its globe every frame, between these 20 Hz updates, so an
+    // eye under it (a contact reading below the terrain on a cold floor
+    // cell) jumped up and down.
+    for (const floorM of [
+      this.services.cachedGroundFloor(cameraLat, cameraLon),
+      this.host.terrainHeight(cameraCartographic),
+    ]) {
+      if (Number.isFinite(floorM)) {
+        cockpitFloorM = Math.max(
+          cockpitFloorM ?? Number.NEGATIVE_INFINITY,
+          floorM,
+        );
+      }
     }
     const safeHeightM = cockpitGroundSafeHeight(
       cameraCartographic.height,
