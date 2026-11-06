@@ -968,6 +968,11 @@ export function createStubRenderer(options = {}) {
     modulation: null,
   };
   const effectListeners = [];
+  /** The styles a setStyle replaced, drawing until their intensity is 0. */
+  const fading = new Set();
+  const styleIntensity = (id) => effectState.intensity[id] ?? 1;
+  const styleDraws = (id) =>
+    (id === effectState.style || fading.has(id)) && styleIntensity(id) > 0;
   /** Styles Core defined, by id. */
   const defined = new Map();
   const STYLES = Object.freeze([
@@ -1015,17 +1020,24 @@ export function createStubRenderer(options = {}) {
         removed = true;
         if (defined.get(entry.id) !== entry) return;
         defined.delete(entry.id);
+        fading.delete(entry.id);
         if (effectState.style === entry.id) effectState.style = null;
         effectsChanged();
       };
     },
     setStyle(id, params) {
+      if (id !== effectState.style) {
+        if (effectState.style !== null && styleIntensity(effectState.style) > 0)
+          fading.add(effectState.style);
+        fading.delete(id);
+      }
       effectState.style = id;
       if (params) effectState.params[id] = { ...params };
       effectsChanged();
     },
     setStyleIntensity(id, value) {
       effectState.intensity[id] = value;
+      if (!(value > 0)) fading.delete(id);
       effectsChanged();
     },
     setStyleParams(id, params) {
@@ -1045,7 +1057,10 @@ export function createStubRenderer(options = {}) {
     diagnostics: () => ({
       style: effectState.style,
       passes: [
-        ...(effectState.style ? [`style:${effectState.style}`] : []),
+        ...effects
+          .styles()
+          .filter((s) => styleDraws(s.id))
+          .map((s) => `style:${s.id}`),
         ...(effectState.bloom?.enabled ? ['bloom'] : []),
         ...(effectState.sharpen?.enabled ? ['sharpen'] : []),
         ...(effectState.modulation ? ['modulation'] : []),

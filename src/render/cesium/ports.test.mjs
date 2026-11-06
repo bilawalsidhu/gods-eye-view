@@ -9,9 +9,11 @@ import {
 import { updateCameraChanged } from './internals.js';
 
 test('capabilities follow what the scene supports', () => {
-  assert.deepEqual(cesiumCapabilities({}), ['models']);
+  const effects = ['styles', 'bloom', 'sharpen'];
+  assert.deepEqual(cesiumCapabilities({}), ['models', ...effects]);
   assert.deepEqual(cesiumCapabilities({ pickPositionSupported: true }), [
     'models',
+    ...effects,
     'pickPosition',
   ]);
   assert.deepEqual(
@@ -19,7 +21,14 @@ test('capabilities follow what the scene supports', () => {
       pickPositionSupported: true,
       sampleHeightSupported: true,
     }),
-    ['models', 'pickPosition', 'sampleHeight', 'finestHeights', 'rayCast'],
+    [
+      'models',
+      ...effects,
+      'pickPosition',
+      'sampleHeight',
+      'finestHeights',
+      'rayCast',
+    ],
   );
 });
 

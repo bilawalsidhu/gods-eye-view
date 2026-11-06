@@ -55,6 +55,7 @@ export interface ModulationSector {
 
 export interface EffectsDiagnostics {
   style: string | null;
+  /** The passes that draw: `style:<id>` for each style, `bloom`, ... */
   passes: string[];
 }
 
@@ -67,12 +68,19 @@ export interface EffectsPort {
    * languages; the Off removes it (turning it off when it is the style).
    */
   defineStyle(definition: StyleDefinition): Off | null;
+  /**
+   * Make `id` the style, or none. The style it replaces, if its intensity
+   * is above 0, keeps drawing with the new one until its intensity is set
+   * to 0, so Core crossfades by fading one out as it fades the other in.
+   * Styles draw in the order they were defined.
+   */
   setStyle(id: string | null, params?: Record<string, number>): void;
+  /** A style's intensity, 0..1; kept while it is not the style. 1 at first. */
   setStyleIntensity(id: string, intensity: number): void;
   setStyleParams(id: string, params: Record<string, number>): void;
-  /** `bloom`. */
+  /** `bloom`. `strength`, 0..1, is kept while bloom is off. */
   bloom(settings: { enabled: boolean; strength?: number }): void;
-  /** `sharpen`. */
+  /** `sharpen`. `amount`, 0..1, is kept while sharpen is off. */
   sharpen(settings: { enabled: boolean; amount?: number }): void;
   /** `screenModulation`. */
   screenModulation?(sector: ModulationSector | null): void;

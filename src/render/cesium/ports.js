@@ -17,6 +17,7 @@ import { heightsFor } from '../../queries/heights.js';
 import { createCesiumCamera } from './camera.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
+import { createCesiumEffects } from './effects.js';
 import {
   atEndOfTick,
   billboardLoadError,
@@ -103,13 +104,14 @@ function cameraEqual(camera0, camera1, epsilon) {
  * What a Cesium scene can do, as contract capabilities; `only` limits them
  * to those it lists. Depth picks, height samples and ray casts all need
  * depth textures, which `sampleHeightSupported` and `pickPositionSupported`
- * report.
+ * report. Styles, bloom and sharpen are post-process stages every scene
+ * runs.
  * @param {object} scene
  * @param {Iterable<string>} [only]
  * @returns {string[]}
  */
 export function cesiumCapabilities(scene, only) {
-  const all = ['models'];
+  const all = ['models', 'styles', 'bloom', 'sharpen'];
   if (scene.pickPositionSupported) all.push('pickPosition');
   if (scene.sampleHeightSupported)
     all.push('sampleHeight', 'finestHeights', 'rayCast');
@@ -735,6 +737,11 @@ export function createCesiumPorts(widget, { capabilities }) {
 
   const cameraPart = createCesiumCamera({ scene, camera, report, widget });
   const cameraPort = cameraPart.port;
+  const effectsPart = createCesiumEffects(scene, {
+    capabilities,
+    frame,
+    report,
+  });
 
   const creditsPart = createCesiumCredits({
     display: widget.creditDisplay,
@@ -1086,6 +1093,7 @@ export function createCesiumPorts(widget, { capabilities }) {
     camera: cameraPort,
     credits: creditsPart.port,
     query,
+    effects: effectsPart.port,
     capture,
     modelSets,
     iconState,
@@ -1102,6 +1110,7 @@ export function createCesiumPorts(widget, { capabilities }) {
       for (const list of Object.values(frameListeners)) list.clear();
       cameraPart.dispose();
       creditsPart.dispose();
+      effectsPart.dispose();
       for (const done of [...pendingRenders]) done();
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) record.host = null;

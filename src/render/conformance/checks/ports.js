@@ -185,6 +185,27 @@ const SET_KINDS = [
   ['orbits', 'orbits'],
 ];
 
+/** A plain style that swaps colour channels by its intensity. */
+const swapStyle = (id) => ({
+  id,
+  params: [],
+  animated: false,
+  shader: {
+    glsl: `uniform sampler2D colorTexture;
+uniform float intensity;
+in vec2 v_textureCoordinates;
+void main() {
+  vec4 c = texture(colorTexture, v_textureCoordinates);
+  out_FragColor = vec4(mix(c.rgb, c.gbr, intensity), 1.0);
+}`,
+    wgsl: `@fragment
+fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+  let c = textureSample(colorTexture, colorSampler, uv);
+  return vec4f(mix(c.rgb, c.gbr, params.intensity), 1.0);
+}`,
+  },
+});
+
 export function portChecks() {
   return [
     // --- Shape -------------------------------------------------------------
@@ -1956,6 +1977,10 @@ export function portChecks() {
       'effects.styles',
       'a style is set, tuned and cleared; diagnostics follow',
       (h, r) => {
+        // Core defines its styles on a renderer with none of its own.
+        const off = r.effects.styles().length
+          ? null
+          : r.effects.defineStyle(swapStyle('conf:plain'));
         const styles = r.effects.styles();
         ok(styles.length > 0, 'styles listed');
         const changes = [];
@@ -1966,6 +1991,8 @@ export function portChecks() {
         r.effects.setStyle(null);
         equal(r.effects.diagnostics().style, null, 'cleared');
         ok(changes.length >= 2, 'change events');
+        r.effects.setStyleIntensity(styles[0].id, 0);
+        off?.();
       },
       { capability: 'styles' },
     ),
@@ -2024,6 +2051,61 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
         ok(!r.effects.styles().some((s) => s.id === 'conf:tint'), 'removed');
         equal(r.effects.diagnostics().style, null, 'and turned off');
         offAgain();
+      },
+      { capability: 'styles' },
+    ),
+    check(
+      'effects.crossfade',
+      'a replaced style draws until its intensity is 0',
+      (h, r) => {
+        const define = (id) => r.effects.defineStyle(swapStyle(id));
+        const offs = [define('conf:a'), define('conf:b')];
+        const drawn = () =>
+          r.effects
+            .diagnostics()
+            .passes.filter((p) => p === 'style:conf:a' || p === 'style:conf:b')
+            .sort();
+        try {
+          r.effects.setStyle('conf:a');
+          deepEqual(drawn(), ['style:conf:a'], 'the style draws');
+          r.effects.setStyleIntensity('conf:b', 0);
+          r.effects.setStyle('conf:b');
+          deepEqual(
+            drawn(),
+            ['style:conf:a'],
+            'the new style at 0 draws nothing yet',
+          );
+          r.effects.setStyleIntensity('conf:a', 0.6);
+          r.effects.setStyleIntensity('conf:b', 0.4);
+          deepEqual(
+            drawn(),
+            ['style:conf:a', 'style:conf:b'],
+            'both draw mid-fade',
+          );
+          r.effects.setStyleIntensity('conf:a', 0);
+          deepEqual(drawn(), ['style:conf:b'], 'the old one stops at 0');
+          r.effects.setStyle('conf:a');
+          r.effects.setStyle('conf:b');
+          r.effects.setStyleIntensity('conf:a', 1);
+          deepEqual(
+            drawn(),
+            ['style:conf:b'],
+            'a style replaced at 0 does not fade',
+          );
+          r.effects.setStyleIntensity('conf:a', 0);
+          r.effects.setStyleIntensity('conf:a', 1);
+          deepEqual(
+            drawn(),
+            ['style:conf:b'],
+            'a faded-out style does not come back by intensity alone',
+          );
+          r.effects.setStyle(null);
+          deepEqual(drawn(), ['style:conf:b'], 'cleared, it fades');
+          r.effects.setStyleIntensity('conf:b', 0);
+          deepEqual(drawn(), [], 'and stops');
+        } finally {
+          for (const off of offs) off?.();
+        }
       },
       { capability: 'styles' },
     ),
