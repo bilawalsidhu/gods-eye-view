@@ -127,7 +127,10 @@ test('concurrent misses coalesce without a completed-image cache', async () => {
   release();
   const frames = await Promise.all([first, ...others]);
   assert.equal(calls, 1);
-  assert.equal(frames.every((result) => result?.ok), true);
+  assert.equal(
+    frames.every((result) => result?.ok),
+    true,
+  );
   assert.equal(
     await admission.run({
       client: 'client-a',
