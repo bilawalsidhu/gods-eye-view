@@ -13,11 +13,16 @@ import {
   moveCamera,
 } from './cameraVerbs.js';
 import { getRenderGovernorDiagnostics } from './renderGovernor.js';
-import { MIN_GLOBE_FRAME_SHARE, globeFrameShare } from './globeInView.js';
+import {
+  MIN_GLOBE_FRAME_SHARE,
+  globeFrameShare,
+  globeOutOfFrame,
+} from './globeInView.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
 import { setScopeMaskEnabled } from './scopeMask.js';
 
 const radians = Cesium.Math.toRadians;
+const degrees = Cesium.Math.toDegrees;
 const clone = (value) => Cesium.Cartesian3.clone(value);
 const longitude = (camera) =>
   Cesium.Cartographic.fromCartesian(camera.positionWC).longitude;
@@ -1427,9 +1432,9 @@ test('voice tilt from orbit stops with the planet still on screen and then says 
 });
 
 // The frame limit judges a tilt by the way its pitch moves, not by the
-// direction word: a tilt sent as left or right turns down.
-for (const direction of ['left', 'right']) {
-  test(`a tilt ${direction} from the frame limit is judged as the look down it is`, (t) => {
+// direction word: a tilt down or to a steeper angle turns toward the planet.
+for (const args of [{ direction: 'down' }, { pitchDeg: -80 }]) {
+  test(`a tilt ${JSON.stringify(args)} from the frame limit is judged as the look down it is`, (t) => {
     withScope(t, false);
     const { camera, finishOnce } = harness(t, {
       pitch: -80,
@@ -1439,12 +1444,139 @@ for (const direction of ['left', 'right']) {
     assert.equal(moveCamera({ motion: 'tilt', direction: 'up' }).ok, true);
     finishOnce();
     const atLimit = camera.pitch;
-    const result = moveCamera({ motion: 'tilt', direction });
+    const result = moveCamera({ motion: 'tilt', ...args });
     assert.equal(result.ok, true, result.error);
     finishOnce();
     assert.ok(camera.pitch < atLimit - radians(5), 'the tilt turned down');
   });
 }
+
+for (const args of [{ pitchDeg: -10 }, {}]) {
+  test(`a tilt ${JSON.stringify(args)} up from the frame limit is refused, not reported as done`, (t) => {
+    withScope(t, false);
+    const { camera, finishOnce } = harness(t, {
+      pitch: -80,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    assert.equal(moveCamera({ motion: 'tilt', direction: 'up' }).ok, true);
+    finishOnce();
+    const atLimit = camera.pitch;
+    // A bare tilt means -45°: up from the -67° limit.
+    const result = moveCamera({ motion: 'tilt', ...args });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /globe out of view/);
+    assert.equal(camera.pitch, atLimit);
+  });
+}
+
+// A tilt to an angle, or a bare tilt (-45°), from orbit turns in place like
+// a nudge and must keep the planet in frame the whole way, or the globe
+// recovery would snap the view back down.
+for (const [label, args, options] of [
+  ['a bare tilt', { motion: 'tilt' }, { pitch: -90 }],
+  ['a tilt to -10°', { motion: 'tilt', pitchDeg: -10 }, { pitch: -90 }],
+  [
+    'a continuous tilt up',
+    { motion: 'tilt', direction: 'up', mode: 'continuous' },
+    { pitch: -90 },
+  ],
+  [
+    'a tilt to -5° from 2,000 km',
+    { motion: 'tilt', pitchDeg: -5 },
+    { pitch: -90, height: 2_000_000 },
+  ],
+]) {
+  test(`${label} from top-down never turns the planet out of frame`, (t) => {
+    withScope(t, false);
+    const { camera, tick } = harness(t, {
+      ...options,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    const startPitch = camera.pitch;
+    const result = moveCamera(args);
+    for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) {
+      tick();
+      assert.ok(
+        surfacePixelShare(camera, 1600, 900) >=
+          MIN_GLOBE_FRAME_SHARE - SHARE_SLACK,
+        `frame ${i}: the planet left the frame`,
+      );
+    }
+    assert.equal(getActiveCameraMotion(), null, 'the tilt must stop');
+    assert.equal(globeOutOfFrame(camera), false, 'no snap-back');
+    if (result.ok) assert.ok(camera.pitch > startPitch, 'the tilt moved');
+  });
+}
+
+// The frame limit stops a tilt to an angle short of it: the reply names the
+// angle the camera reaches, not the one asked for (a tilt to -10° from
+// top-down reported -10° and ended at -66.5°).
+for (const [label, args, options] of [
+  ['a bare tilt', { motion: 'tilt' }, { pitch: -90 }],
+  ['a tilt to -10°', { motion: 'tilt', pitchDeg: -10 }, { pitch: -90 }],
+  [
+    'a tilt to -10° from -80°',
+    { motion: 'tilt', pitchDeg: -10 },
+    { pitch: -80 },
+  ],
+  [
+    'a tilt to -5° from 2,000 km',
+    { motion: 'tilt', pitchDeg: -5 },
+    { pitch: -90, height: 2_000_000 },
+  ],
+  // A rolled camera's look turns its pitch by less than the look angle:
+  // reported -25°, ended at -27.3°.
+  [
+    'a tilt to -5° from 2,000 km rolled 30°',
+    { motion: 'tilt', pitchDeg: -5 },
+    { pitch: -70, roll: 30, height: 2_000_000 },
+  ],
+]) {
+  test(`${label} from orbit reports the angle it reaches`, (t) => {
+    withScope(t, false);
+    const { camera, tick } = harness(t, {
+      ...options,
+      viewportWidth: 1600,
+      viewportHeight: 900,
+    });
+    const result = moveCamera(args);
+    assert.equal(result.ok, true, result.error);
+    for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) tick();
+    assert.equal(getActiveCameraMotion(), null, 'the tilt must stop');
+    const reached = degrees(camera.pitch);
+    assert.ok(
+      Math.abs(reached - result.pitchDeg) < 1,
+      `reported ${result.pitchDeg}°, reached ${reached}°`,
+    );
+    const asked = args.pitchDeg ?? -45;
+    if (Math.abs(reached - asked) >= 1)
+      assert.match(result.note ?? '', /globe out of view/);
+    else assert.equal(result.note, undefined);
+  });
+}
+
+// A continuous tilt promises no angle: it runs until stopped or the frame
+// limit ends it.
+test('a continuous tilt up from orbit claims no angle it may not reach', (t) => {
+  withScope(t, false);
+  const { tick } = harness(t, {
+    pitch: -90,
+    viewportWidth: 1600,
+    viewportHeight: 900,
+  });
+  const result = moveCamera({
+    motion: 'tilt',
+    direction: 'up',
+    mode: 'continuous',
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal('pitchDeg' in result, false);
+  assert.equal(result.mode, 'continuous');
+  for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) tick();
+  assert.equal(getActiveCameraMotion(), null, 'the frame limit ends it');
+});
 
 test('voice turn in place from orbit stops with the planet still on screen', (t) => {
   withScope(t, false); // the whole frame is visible
