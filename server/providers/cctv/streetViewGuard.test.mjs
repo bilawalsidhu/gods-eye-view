@@ -275,15 +275,17 @@ test('frame route protects catalog pose, 15 cameras and forwarded requests', asy
     '30.2672,-97.7431',
   );
   assert.equal(streetViewCalls[0].searchParams.get('heading'), '0');
-  for (let i = 1; i < 15; i += 1)
-    assert.equal(await frame('camera-' + i), 'streetview');
-  assert.equal(streetViewCalls.length, 15);
-  assert.equal(await frame('camera-0'), 'synthetic');
   assert.equal(
     await frame('camera-15', '', { 'x-forwarded-for': '127.0.0.1' }),
     'synthetic',
   );
+  assert.equal(streetViewCalls.length, 1);
+  for (let i = 1; i < 15; i += 1)
+    assert.equal(await frame('camera-' + i), 'streetview');
   assert.equal(streetViewCalls.length, 15);
-  assert.equal(await frame('camera-15'), 'streetview');
+  // Successful images are not retained: a new lookup consumes another slot.
+  assert.equal(await frame('camera-0'), 'streetview');
+  assert.equal(streetViewCalls.length, 16);
+  assert.equal(await frame('camera-15'), 'synthetic');
   assert.equal(streetViewCalls.length, 16);
 });
