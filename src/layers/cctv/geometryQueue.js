@@ -1,3 +1,4 @@
+import { followedOf } from '../../data/followed.js';
 import * as Cesium from 'cesium';
 import {
   GEO_PROGRESS_NOTIFY_INTERVAL_MS,
@@ -125,16 +126,16 @@ export function createGeometryQueue({
    * throughput without restarting the queue.
    *
    * @param {Object} [ownership={}] Current camera-ownership state.
-   * @param {*} [ownership.trackedEntity] Cesium tracked entity, if any.
+   * @param {*} [ownership.followed] What the camera follows, if anything.
    * @param {boolean} [ownership.cockpitActive] Whether cockpit owns the camera.
    * @returns {{ batchSize: number, delayMs: number }} Drain pacing.
    */
 
   function cctvGeometryDrainPacing({
-    trackedEntity = null,
+    followed = null,
     cockpitActive = false,
   } = {}) {
-    if (trackedEntity || cockpitActive) {
+    if (followed || cockpitActive) {
       return {
         batchSize: GEO_TRACKING_BATCH_SIZE,
         delayMs: GEO_TRACKING_BATCH_DELAY_MS,
@@ -213,7 +214,7 @@ export function createGeometryQueue({
     const batchResult = processCctvGeometryDrainBatch({
       queue: layerState._geoQueue,
       readOwnership: () => ({
-        trackedEntity: layerState._viewer.trackedEntity,
+        followed: followedOf(layerState._viewer),
         cockpitActive:
           typeof document !== 'undefined' &&
           document.body?.classList.contains('cockpit-mode'),

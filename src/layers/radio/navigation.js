@@ -1,3 +1,4 @@
+import { isFollowing } from '../../data/followed.js';
 import * as Cesium from 'cesium';
 import {
   HORIZON_CAMERA_MOVE_EPSILON_M,
@@ -149,7 +150,7 @@ export function createNavigation({
   /** Radio may move the globe only while no tracked entity owns the follow camera. */
 
   function radioCameraNavigationAllowed(viewer = layerState._viewer) {
-    return Boolean(viewer?.camera) && !viewer.trackedEntity;
+    return Boolean(viewer?.camera) && !isFollowing(viewer);
   }
 
   function radioGlobeRecenterPlan(viewer = layerState._viewer) {

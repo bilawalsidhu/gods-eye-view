@@ -9,13 +9,14 @@ import { createCameraEvents } from '../camera/events.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { cameraFlightActive } from './internals.js';
 import { createCesiumFollow } from './follow.js';
-import { cameraOf, provideUnboundCamera } from '../rendererOf.js';
+import { cameraOf, findCamera, provideUnboundCamera } from '../rendererOf.js';
 
 /**
- * `cameraOf`, for code that already reaches Cesium: importing it from here
- * loads the factory a viewer with no renderer bound gets its camera from.
+ * `cameraOf` and `findCamera`, for code that already reaches Cesium:
+ * importing them from here loads the factory a viewer with no renderer
+ * bound gets its camera from.
  */
-export { cameraOf };
+export { cameraOf, findCamera };
 
 /** The contract's easings as Cesium's. */
 export const EASINGS = Object.freeze({

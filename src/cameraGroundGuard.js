@@ -14,6 +14,7 @@
  * lifts the eye if it sits below a usable clearance. Heading and pitch are
  * held, so the correction reads as the shot settling.
  */
+import { onFollowChanged } from './data/followed.js';
 import * as Cesium from 'cesium';
 import { ownCameraArrival } from './data/cameraArrival.js';
 import { heightsFor } from './queries/heights.js';
@@ -164,8 +165,7 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     release();
   };
   release = ownCameraArrival(viewer, stop);
-  const removeTracking = viewer.trackedEntityChanged?.addEventListener(stop);
-  if (removeTracking) removers.push(removeTracking);
+  removers.push(onFollowChanged(viewer, stop));
   documentRef?.addEventListener?.('keydown', stop, true);
   // A manual gesture ends the guard, as it interrupts camera motion elsewhere.
   for (const type of ['pointerdown', 'wheel'])

@@ -1,3 +1,4 @@
+import { isFollowing } from '../../data/followed.js';
 import * as Cesium from 'cesium';
 import { inputFor } from '../../input/dispatcher.js';
 import {
@@ -499,7 +500,7 @@ export function createAlprPresentation({ state, services, source }) {
 
   function focusNearest() {
     const camera = state.viewer?.camera;
-    if (!state.enabled || !camera?.positionWC || state.viewer.trackedEntity)
+    if (!state.enabled || !camera?.positionWC || isFollowing(state.viewer))
       return false;
     let nearest = null,
       distance = Infinity;

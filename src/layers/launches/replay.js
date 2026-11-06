@@ -1,3 +1,4 @@
+import { stopFollowing } from '../../data/followed.js';
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import { cameraOf } from '../../render/cesium/camera.js';
@@ -354,7 +355,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     syncReplayButton();
     parts.overlays.syncMissionOverlayEntries();
     parts.policyHelpers.releaseAircraftTracking(layerState._dataManager);
-    layerState._viewer.trackedEntity = undefined;
+    stopFollowing(layerState._viewer);
     const camera = cameraOf(layerState._viewer);
     camera.cancelFlight();
     layerState._animationStarts.set(

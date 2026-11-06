@@ -205,7 +205,9 @@ for (const handoff of [
         },
       });
     } else if (handoff === 'tracking') {
-      viewer.trackedEntityChanged.raiseEvent({ id: 'contact' });
+      // As Cesium's setter does: the value changes, then the event fires.
+      viewer.trackedEntity = { id: 'contact' };
+      viewer.trackedEntityChanged.raiseEvent(viewer.trackedEntity);
     } else if (handoff === 'follow' || handoff === 'UI') {
       navigation._stampNavigation({ cancelPendingSelection: false });
     } else if (handoff === 'keyboard') {

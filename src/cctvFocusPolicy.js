@@ -1,22 +1,23 @@
 /**
  * Activates the nearest CCTV record on layer enable and flies only when no
- * aircraft tracker or cockpit camera owns the view.
+ * followed target or cockpit camera owns the view.
  * @param {Object} options Layer-enable focus inputs.
- * @param {*} options.trackedEntity Current Cesium tracked entity, if any.
+ * @param {*} options.followed What the camera follows, if anything
+ *   (`followedOf`).
  * @param {boolean} options.cockpitActive Whether cockpit mode owns the camera.
  * @param {() => (string|null)} options.activate Nearest-camera activation.
  * @param {(cameraId: string) => *} options.fly Optional camera flight.
  * @returns {*} Activated camera ID for a held view, or the flight result.
  */
 export function runCctvLayerEnableFocus({
-  trackedEntity = null,
+  followed = null,
   cockpitActive = false,
   activate,
   fly,
 } = {}) {
   const cameraId = activate?.();
   if (!cameraId) return false;
-  if (trackedEntity || cockpitActive) return cameraId;
+  if (followed || cockpitActive) return cameraId;
   return fly?.(cameraId);
 }
 
@@ -25,11 +26,11 @@ export function runCctvLayerEnableFocus({
  * chain. Either observation suppresses the optional CCTV focus flight.
  * @param {Object} [before={}] Ownership immediately before the await.
  * @param {Object} [after={}] Ownership immediately after the await.
- * @returns {{ trackedEntity: *, cockpitActive: boolean }} Conservative ownership.
+ * @returns {{ followed: *, cockpitActive: boolean }} Conservative ownership.
  */
 function mergeCctvEnableOwnership(before = {}, after = {}) {
   return {
-    trackedEntity: before.trackedEntity || after.trackedEntity || null,
+    followed: before.followed || after.followed || null,
     cockpitActive: !!(before.cockpitActive || after.cockpitActive),
   };
 }
@@ -60,7 +61,7 @@ export async function runCctvLayerEnableTransition({
   const ownershipBefore = readOwnership?.() || {};
   if (target === true) {
     debug?.('[UI:CCTV] ownership before setEnabled await', {
-      trackedId: ownershipBefore.trackedEntity?.id ?? null,
+      trackedId: ownershipBefore.followed?.key ?? null,
       cockpitActive: !!ownershipBefore.cockpitActive,
     });
   }
@@ -68,7 +69,7 @@ export async function runCctvLayerEnableTransition({
   const ownershipAfter = readOwnership?.() || {};
   if (target === true) {
     debug?.('[UI:CCTV] ownership after setEnabled await', {
-      trackedId: ownershipAfter.trackedEntity?.id ?? null,
+      trackedId: ownershipAfter.followed?.key ?? null,
       cockpitActive: !!ownershipAfter.cockpitActive,
     });
   }

@@ -289,9 +289,12 @@ test('replaced viewer releases the old tracking listener without duplicate subsc
     true,
   );
   const id = activeCameraMotionId();
-  first.viewer.trackedEntityChanged.raiseEvent({ id: 'stale-aircraft' });
+  // As Cesium's setter does: the value changes, then the event fires.
+  first.viewer.trackedEntity = { id: 'stale-aircraft' };
+  first.viewer.trackedEntityChanged.raiseEvent(first.viewer.trackedEntity);
   assert.equal(activeCameraMotionId(), id);
-  next.viewer.trackedEntityChanged.raiseEvent({ id: 'new-aircraft' });
+  next.viewer.trackedEntity = { id: 'new-aircraft' };
+  next.viewer.trackedEntityChanged.raiseEvent(next.viewer.trackedEntity);
   assert.equal(getActiveCameraMotion(), null);
   assert.equal(hasRenderHold(), false);
 });
@@ -598,7 +601,7 @@ for (const mode of ['once', 'continuous']) {
 
 test('direct globe rotation refuses a tracked camera without disturbing its reference frame', (t) => {
   const { viewer, camera, target } = harness(t);
-  viewer.trackedEntity = { id: 'tracked-aircraft' };
+  viewer.trackedEntity = { id: 'tracked-aircraft', name: 'tracked-aircraft' };
   camera.lookAt(target, new Cesium.HeadingPitchRange(0, radians(-40), 1_000));
   const before = pose(camera);
   const transform = Cesium.Matrix4.clone(camera.transform);

@@ -1,3 +1,4 @@
+import { followedOf, stopFollowing } from './followed.js';
 import * as Cesium from 'cesium';
 
 const STYLE = [
@@ -113,8 +114,9 @@ export function createImportedPins(dataSource, viewer) {
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      if (viewer.trackedEntity && pins.includes(viewer.trackedEntity))
-        viewer.trackedEntity = undefined;
+      const followedEntity = followedOf(viewer)?.entity;
+      if (followedEntity && pins.includes(followedEntity))
+        stopFollowing(viewer);
       if (viewer.selectedEntity && pins.includes(viewer.selectedEntity))
         viewer.selectedEntity = undefined;
       if (mounted && !viewer.scene.primitives?.isDestroyed?.())

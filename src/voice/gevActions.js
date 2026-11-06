@@ -1,3 +1,4 @@
+import { isFollowing, stopFollowing } from '../data/followed.js';
 import { interruptGlobeRotation } from '../cameraVerbs.js';
 import {
   layerSnapshot,
@@ -396,7 +397,7 @@ export function createGevActionRunner({
     // Explicit navigation while TRACKING supersedes the follow camera —
     // otherwise the tracker drags the view back and "I flew there but can't
     // do anything" (field finding). track_entity manages its own handoff.
-    if (name === 'zoom_to_globe' && viewer.trackedEntity) {
+    if (name === 'zoom_to_globe' && isFollowing(viewer)) {
       stopAllTracking(viewer, dataManager);
     }
 
@@ -1130,7 +1131,7 @@ export function createGevActionRunner({
             return;
           }
           interruptCameraMotion('nav:fly_to_location');
-          if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
+          if (isFollowing(viewer)) stopAllTracking(viewer, dataManager);
         },
       });
     }
@@ -2570,7 +2571,7 @@ function stopAllTracking(viewer, dataManager) {
       failed.add(layerId);
     }
   }
-  if (viewer) viewer.trackedEntity = undefined;
+  stopFollowing(viewer);
   if (failed.size) {
     const failedLayerIds = [...failed];
     return {

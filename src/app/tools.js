@@ -1,3 +1,4 @@
+import { onFollowChanged } from '../data/followed.js';
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
@@ -146,12 +147,10 @@ export function createApplicationTools({
 
   // The follow camera recomputes the tracked target's dead-reckon position
   // every frame — tracking anything is a per-frame animation. (perf wave 2)
-  const removeTrackingListener = viewer.trackedEntityChanged.addEventListener(
-    () => {
-      if (viewer.trackedEntity) holdContinuousRender('tracked-entity');
-      else releaseContinuousRender('tracked-entity');
-    },
-  );
+  const removeTrackingListener = onFollowChanged(viewer, (followed) => {
+    if (followed) holdContinuousRender('tracked-entity');
+    else releaseContinuousRender('tracked-entity');
+  });
 
   // Hidden-state suspension (perf wave 2): when the window/tab is hidden,
   // stop the default render loop outright — a hidden canvas repaints for

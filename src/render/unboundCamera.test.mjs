@@ -33,6 +33,13 @@ const INJECTED = {
   './layers/recent-imagery': 'src/layers/recentImagery/rendering.js',
 };
 
+/**
+ * Modules whose use of the bridge holds up without the factory: with no
+ * port they read Cesium's `trackedEntity` instead, which is all an unbound
+ * viewer can follow by.
+ */
+const FALLS_BACK = new Set(['src/data/followed.js']);
+
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 /** The browser module an export resolves to, or null for Node-only ones. */
@@ -112,6 +119,7 @@ function reachable(entry, { eager = false } = {}) {
     for (const { specifier, lazy } of specifiersOf(file)) {
       if (eager && lazy) continue;
       const next = resolve(file, specifier);
+      if (next === BRIDGE && FALLS_BACK.has(file)) continue;
       if (next && !seen.has(next)) {
         seen.add(next);
         queue.push(next);
