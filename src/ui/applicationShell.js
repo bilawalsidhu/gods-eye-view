@@ -1159,6 +1159,7 @@ export class StyleManager extends ShellFacade {
         _cctvSummary: this._cctvSummary,
       },
       cctv: cctvLayer,
+      viewer: this.viewer,
       actions: {
         isEnabled: () => this._dataManager?.isEnabled('cctv'),
         setParams: (params, options) =>
