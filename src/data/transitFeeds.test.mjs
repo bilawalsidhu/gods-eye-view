@@ -578,3 +578,36 @@ test('Szczecin is CC0, live, covers the city and not Berlin', () => {
     'Szczecin has a DATA_SOURCES row',
   );
 });
+
+test('Carris Metropolitana covers Lisbon from Mafra to Setúbal, not Porto', () => {
+  const feed = getTransitFeed('carris-metropolitana-lisboa');
+  assert.equal(feed.defaultEnabled, true);
+  assert.equal(feed.url, 'https://api.carrismetropolitana.pt/v2/vehicles.pb');
+  assert.equal(feed.speedUnit, 'km/h');
+  assert.match(feed.terms.note, /no licence for the realtime endpoint/);
+  const ids = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
+  for (const [place, lat, lon] of [
+    ['Lisbon', 38.7223, -9.1393],
+    ['Mafra', 38.9369, -9.3277],
+    ['Setúbal', 38.5244, -8.8882],
+  ]) {
+    assert.ok(ids(lat, lon).includes(feed.id), place);
+  }
+  assert.ok(!ids(41.1579, -8.6291).includes(feed.id), 'Porto');
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources.split('\n').some((l) => l.startsWith('| **Carris Metropolitana')),
+    'Lisbon has a DATA_SOURCES row',
+  );
+});
+
+test('Carris Metropolitana route ids read as the line number on the bus', () => {
+  const feed = getTransitFeed('carris-metropolitana-lisboa');
+  assert.equal(transitRouteLabel(feed, '[LA77N]1708_0'), '1708');
+  assert.equal(transitRouteLabel(feed, '[BNA17]2772_1'), '2772');
+  assert.equal(transitRouteLabel(feed, 'unexpected'), 'unexpected');
+  assert.equal(transitRouteLabel(feed, null), null);
+});

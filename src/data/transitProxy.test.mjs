@@ -294,6 +294,27 @@ test('Rio speeds pass through as the m/s they are published in', () => {
   assert.equal(rio.vehicles[0].speedMps, 10);
 });
 
+test('Carris Metropolitana km/h speeds leave the proxy as m/s', () => {
+  // 2026-11-07: readings of 31-33 matched 6-9 m/s of measured movement.
+  const bytes = encodeFeed({
+    entities: [
+      { id: 'moving', lat: 38.72, lon: -9.14, speed: 36 },
+      { id: 'parked', lat: 38.73, lon: -9.15 },
+    ],
+  });
+  const feed = getTransitFeed('carris-metropolitana-lisboa');
+  const lisbon = buildTransitSnapshot(feed, bytes, 1);
+  const byId = Object.fromEntries(lisbon.vehicles.map((v) => [v.id, v]));
+  assert.ok(Math.abs(byId.moving.speedMps - 10) < 1e-6);
+  assert.equal(byId.parked.speedMps, null, 'no speed stays no speed');
+  const szczecin = buildTransitSnapshot(
+    getTransitFeed('zditm-szczecin'),
+    encodeFeed({ entities: [{ id: 'm', lat: 53.43, lon: 14.55, speed: 10 }] }),
+    1,
+  );
+  assert.equal(szczecin.vehicles[0].speedMps, 10, 'm/s feeds are untouched');
+});
+
 test('conditional-request validators and gzip ride along with feed identification', () => {
   const entur = getTransitFeed('entur-norway');
   const plain = transitUpstreamHeaders(entur);

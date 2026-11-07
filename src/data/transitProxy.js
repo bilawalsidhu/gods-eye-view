@@ -257,7 +257,11 @@ export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
     truncated: decoded.truncated,
     count: decoded.vehicles.length,
     vehicles: repairVehicleTimestamps(
-      decoded.vehicles,
+      feed.speedUnit === 'km/h'
+        ? decoded.vehicles.map((v) =>
+            v.speedMps === null ? v : { ...v, speedMps: v.speedMps / 3.6 },
+          )
+        : decoded.vehicles,
       decoded.timestamp,
       Math.floor(now / 1000),
     ),

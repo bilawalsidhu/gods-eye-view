@@ -390,6 +390,19 @@ function rioRouteLabel(routeId) {
 }
 
 /**
+ * Carris Metropolitana realtime route ids wrap the GTFS route id in an
+ * operator-area prefix and keep its pattern suffix: `[LA77N]1708_0` is GTFS
+ * route `1708_0`, whose `short_name` (the number on the bus) is `1708`, per
+ * the operator's own `/v2/routes` API. Anything else passes through.
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+function carrisMetropolitanaRouteLabel(routeId) {
+  const match = /^\[[A-Z0-9]+\](\d{4})_\d+$/.exec(routeId ?? '');
+  return match ? match[1] : routeId;
+}
+
+/**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
  * @type {ReadonlyArray<Readonly<{
@@ -398,7 +411,10 @@ function rioRouteLabel(routeId) {
  *   url: string, headers?: Record<string, string>,
  *   license: string, licenseUrl: string, attribution: string,
  *   defaultMode: string, routeMode?: (routeId: string|null) => string,
+ *   speedUnit?: 'km/h',
  * }>>}
+ * `speedUnit` marks a feed that publishes km/h where the spec requires m/s;
+ * the proxy converts it before the snapshot leaves the server.
  */
 export const TRANSIT_FEED_REGISTRY = Object.freeze([
   Object.freeze({
@@ -810,6 +826,29 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'CC0 needs no credit; it is given anyway as a courtesy. ZDiTM gives no guarantee of accuracy or completeness. The developer page says the feed updates every minute; measured on 2026-11-05 the file changed about every 20 seconds, with vehicle timestamps up to 50 seconds old. Speeds are m/s: checked against vehicle movement between two snapshots. The feed carries no route id at all, so every vehicle takes the feed default mode even though the city also runs trams.',
     }),
     defaultMode: 'bus',
+  }),
+  Object.freeze({
+    id: 'carris-metropolitana-lisboa',
+    name: 'Carris Metropolitana',
+    operator: 'Carris Metropolitana (TML), Lisbon Metropolitan Area',
+    region: 'Lisbon Metropolitan Area, Portugal',
+    // Every vehicle in a 2026-11-07 snapshot, from Mafra to Setúbal, sat
+    // between 38.47–39.00 N and 9.47–8.79 W, inside 40 km of this point.
+    center: Object.freeze({ lat: 38.73, lon: -9.13 }),
+    loadRadiusKm: 45,
+    url: 'https://api.carrismetropolitana.pt/v2/vehicles.pb',
+    license: 'No separate licence for the realtime feed',
+    licenseUrl: 'https://github.com/carrismetropolitana/api',
+    attribution: 'Carris Metropolitana',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'GET /vehicles.pb — Returns vehicle locations in Protobuf format, following the GTFS-RT Vehicle Locations standard.',
+      note: 'The operator publishes this feed keyless and documented for developers in its public API repository, but states no licence for the realtime endpoint; its static GTFS (github.com/carrismetropolitana/gtfs) is CC BY 4.0. Credited as a courtesy, on the same basis as the Metro Transit and OVapi feeds; switch it off if Carris objects. The quote above is the API README, not a licence. `/vehicles.pb` answers with a 307 to `/v2/vehicles.pb`, so the registry points at the target. Speeds are km/h, not the m/s the spec requires: 2026-11-07 readings of 31–33 matched 6–9 m/s of measured movement, so the proxy converts them. Vehicle reports arrive every 30–50 seconds. Route ids are the GTFS route id inside an area prefix and are read as the line number.',
+    }),
+    defaultMode: 'bus',
+    routeLabel: carrisMetropolitanaRouteLabel,
+    speedUnit: 'km/h',
   }),
 ]);
 
