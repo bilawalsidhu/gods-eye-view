@@ -1,3 +1,4 @@
+import { createExclusivePointer } from '../exclusivePointer.js';
 // A GlobeEngine built on src/geo alone, for tests of shell modules. It keeps a
 // controllable perspective camera on the WGS84 ellipsoid, projects and picks
 // against it, records every contract call and lets tests emit events, drive
@@ -689,6 +690,7 @@ export function createFakeEngine(options = {}) {
       fake.renderRequests++;
     },
   });
+  const pointer = createExclusivePointer();
   const engine = {
     kind: options.kind ?? 'cesium',
     host,
@@ -801,6 +803,7 @@ export function createFakeEngine(options = {}) {
       tilesLoaded: () => scripted('tilesLoaded', [], () => true),
     },
     input: {
+      acquirePointer: () => pointer.acquire(),
       on(type, listener, inputOptions = {}) {
         record('input.on', [type, inputOptions]);
         const { modifier, pick, drill } = normalizeInputOptions(
@@ -808,7 +811,13 @@ export function createFakeEngine(options = {}) {
           inputOptions,
         );
         const listeners = inputs.get(type);
-        const entry = { listener, modifier, pick, drill };
+        const entry = {
+          listener,
+          modifier,
+          pick,
+          drill,
+          pointer: inputOptions.pointer,
+        };
         listeners.add(entry);
         return () => listeners.delete(entry);
       },
@@ -884,9 +893,11 @@ export function createFakeEngine(options = {}) {
     },
     destroy() {
       record('destroy', []);
+      follow.destroy();
       cancelCurrentFlight();
       moverRegistry.destroyAll();
       lineRegistry.destroyAll();
+      pointer.destroy();
       meshRegistry.destroy();
       groundRegistry.destroyAll();
       imageryRegistry.destroyAll();
@@ -937,7 +948,9 @@ export function createFakeEngine(options = {}) {
     input(type, event, modifier) {
       const listeners = inputs.get(type);
       if (!listeners) throw new TypeError(`Unknown input type: ${type}`);
+      const accepts = pointer.delivery();
       for (const entry of [...listeners]) {
+        if (!listeners.has(entry) || !accepts(entry)) continue;
         if (entry.modifier !== modifier) continue;
         if (!entry.pick) {
           entry.listener(event);

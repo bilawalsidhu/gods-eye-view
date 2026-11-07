@@ -566,3 +566,27 @@ Annotation drapes still use their existing renderers. Their bounded building
 classification volumes, animated fills and wire cages are not ordinary world
 triangles; they need a classification contract before that migration can
 preserve Cesium's behaviour.
+
+## Shared follow offsets and manual drawing
+
+`engine.camera.follow({ position, viewFrom, swingTo })` can swing from the
+initial follow frame to `swingTo`, an east/north/up offset in metres. Each
+frame turns at most 60 degrees and interpolates range, preserving Cesium's
+tracked-camera crossing guard. `handle.retarget({ swingTo })` changes only
+the pending swing; `null` cancels it. Stopping or replacing the follow, a
+camera command or engine destruction ends it. Share links read the current
+handle's target and label identity and the camera pose through the contract.
+
+`engine.input.acquirePointer()` returns an exclusive claim, or `null` if
+one is held. Pass it to `input.on(type, listener, { pointer: claim })` and
+call `claim.release()` when done. Other screen subscriptions yield, including
+picks that settle after ownership changes. Camera gestures stay enabled.
+Cesium suspends its stock select and track clicks and restores the original
+functions when the claim is released or the engine is destroyed.
+
+The Draw tool uses one `drawSurface.js` on every engine: a dashed geodesic
+line and a point mover set at the clicked heights. The dim, occluded band
+uses the selected colour as well as the visible band. Finished geometry still
+goes through the annotation board. Detaching the scene releases the claim,
+listeners and preview while retaining the chosen shape and colour. The
+page's pointer lease still arbitrates Draw against other tools.

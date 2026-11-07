@@ -13,7 +13,6 @@ import {
   uninstallRenderGovernor,
 } from '../renderGovernor.js';
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
-import { navaraDrawSurface } from '../annotations/drawInputNavara.js';
 
 /** The Navara globe module, loaded on demand. */
 const loadNavaraGlobeModule = async () =>
@@ -153,9 +152,8 @@ export function navaraToolBackend({ engine }) {
       drawn
         ? { engine, renderer: createNavaraAnnotationRenderer(engine, views) }
         : null,
-    // The session's tool on the engine's input and preview
-    // (src/annotations/drawInputNavara.js).
-    draw: () => ({ surface: navaraDrawSurface(engine) }),
+    // The session's tool on the engine's input and preview.
+    draw: () => ({ engine }),
     recentImagery: () => ({ engine }),
     // Holds drive engine.render.setContinuous; requests go to the engine. A
     // parked engine uninstalls it (createNavaraScene suspend).

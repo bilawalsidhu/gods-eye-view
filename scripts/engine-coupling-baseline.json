@@ -2,15 +2,15 @@
   "metrics": {
     "cesiumLayerRendererLines": 210,
     "navaraLayerRendererLines": 794,
-    "cesiumImportFiles": 7,
-    "viewerLines": 1005,
+    "cesiumImportFiles": 5,
+    "viewerLines": 953,
     "navaraKindChecks": 2,
     "engineSniffCalls": 0,
     "engineExtensionReads": 6,
     "groundEffectPasses": 1,
     "cesiumSdkLoads": 3,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 39
+    "engineNameLines": 37
   },
-  "measuredAt": "engine.meshes: CCTV and data packs on one primitive; dead Navara stems helper removed"
+  "measuredAt": "Move shared follow offsets and Draw input and previews onto the globe contract"
 }

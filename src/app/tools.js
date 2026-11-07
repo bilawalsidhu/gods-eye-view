@@ -270,7 +270,7 @@ function cesiumToolBackend({ engine, tileset }) {
   return {
     viewer,
     board: () => ({ viewer, engine, tileset }),
-    draw: () => ({ viewer, engine }),
+    draw: () => ({ engine }),
     // The tileset lets the layer drape while the globe is hidden.
     recentImagery(layer) {
       layer.attachTileset(tileset);

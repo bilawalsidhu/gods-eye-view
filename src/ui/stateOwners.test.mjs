@@ -69,7 +69,7 @@ test('share teardown settles its promise, removes gestures and rejects a retaine
   let stamps = 0;
   let applies = 0;
   const owner = new ShareRestoration({
-    viewer: { canvas },
+    engine: { host: { canvas } },
     navigation: {
       _beginDeferredNavigation: () => 1,
       _reassertNavigationHandoff: () => true,

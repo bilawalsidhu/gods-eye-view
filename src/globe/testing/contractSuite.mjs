@@ -9,6 +9,7 @@
 // Checks request renders themselves, so engines in request-render mode work.
 // Each check sets the view it needs; checks may leave the camera anywhere.
 
+import { enuOffset } from '../follow.js';
 import * as geo from '../../geo/index.js';
 import {
   INPUT_TYPES,
@@ -1678,6 +1679,98 @@ export function createContractSuite(
           value === undefined || Number.isFinite(value),
           `sampleHeight returned ${value}`,
         );
+      },
+    ],
+    [
+      'input.acquirePointer: exclusive subscriptions, release and camera gestures',
+      async () => {
+        const input = engine.input;
+        const before = input.cameraInputsEnabled();
+        const claim = input.acquirePointer();
+        ensure(claim, 'no pointer claim');
+        const removers = [];
+        let ambient = 0,
+          owned = 0;
+        try {
+          ensure(input.acquirePointer() === null, 'a second claim succeeded');
+          ensure(
+            input.cameraInputsEnabled() === before,
+            'claim disabled camera gestures',
+          );
+          removers.push(input.on('click', () => ambient++));
+          removers.push(input.on('click', () => owned++, { pointer: claim }));
+          if (pointer) {
+            await pointer.click(100, 100);
+            await settle();
+            ensure(owned === 1 && ambient === 0, 'exclusive click leaked');
+          }
+          claim.release();
+          claim.release();
+          if (pointer) {
+            await pointer.click(100, 100);
+            await settle();
+            ensure(
+              owned === 1 && ambient === 1,
+              'released click stayed exclusive',
+            );
+          }
+          const next = input.acquirePointer();
+          ensure(next, 'release did not free the pointer');
+          claim.release();
+          ensure(
+            input.acquirePointer() === null,
+            'stale release freed its successor',
+          );
+          next.release();
+        } finally {
+          claim.release();
+          for (const remove of removers) remove();
+        }
+      },
+    ],
+    [
+      'camera.follow: swings to an ENU offset and cancels on handoff',
+      async () => {
+        const target = cartesian3.fromDegrees(10, 30, 5000);
+        const goal = { x: 0, y: 4800, z: 3300 };
+        const handle = camera.follow({
+          position: () => target,
+          viewFrom: { x: 0, y: -4800, z: 3300 },
+          swingTo: goal,
+        });
+        try {
+          await until(
+            () =>
+              cartesian3.distance(
+                enuOffset(target, camera.pose().position),
+                goal,
+              ) < 5,
+            'the shared follow offset',
+          );
+          ensure(camera.following() === handle, 'swing replaced the follow');
+          handle.retarget({ swingTo: { x: 0, y: -4800, z: 3300 } });
+          handle.retarget({ swingTo: null });
+          await settle(3);
+          near(
+            cartesian3.distance(
+              enuOffset(target, camera.pose().position),
+              goal,
+            ),
+            0,
+            5,
+            'cancelled swing moved the camera',
+          );
+          camera.setView({
+            destination: cartesian3.fromDegrees(10, 30, 50000),
+          });
+          await settle(3);
+          ensure(
+            camera.following() === null,
+            'camera handoff retained the swing',
+          );
+        } finally {
+          handle.stop();
+        }
       },
     ],
     [

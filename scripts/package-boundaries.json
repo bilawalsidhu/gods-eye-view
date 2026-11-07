@@ -3401,7 +3401,7 @@
       "src/app/engineChoice.js",
       "src/app/navaraMode.js",
       "src/annotations/navaraAnnotationRenderer.js",
-      "src/annotations/drawInputNavara.js",
+      "src/annotations/drawSurface.js",
       "src/globe/cesium/sceneProjection.js",
       "src/globe/cesium/screenEvents.js",
       "src/globe/cesium/trail.js",
@@ -3579,7 +3579,9 @@
       "src/data/geoImportDisplay.js",
       "src/globe/cesium/meshes.js",
       "src/globe/meshes.js",
-      "src/globe/navara/meshes.js"
+      "src/globe/navara/meshes.js",
+      "src/globe/exclusivePointer.js",
+      "src/globe/cesium/followOffset.js"
     ],
     "external": [
       "hls.js",
@@ -4339,7 +4341,9 @@
       "src/data/geoImportKml.js",
       "src/data/geoImportDisplay.js",
       "src/globe/cesium/meshes.js",
-      "src/globe/meshes.js"
+      "src/globe/meshes.js",
+      "src/globe/exclusivePointer.js",
+      "src/globe/cesium/followOffset.js"
     ],
     "external": [
       "hls.js",
@@ -5103,7 +5107,8 @@
       "src/styles/anime.js",
       "src/styles/noir.js",
       "src/globe/cesium/meshes.js",
-      "src/globe/meshes.js"
+      "src/globe/meshes.js",
+      "src/globe/exclusivePointer.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },

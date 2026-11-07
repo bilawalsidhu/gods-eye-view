@@ -108,8 +108,8 @@ export function sharedFixNotice(entity, observedAtMs, nowMs = Date.now()) {
 /** Own initial share restoration, durable layer state and restoration notices. */
 export class ShareRestoration {
   constructor({
-    viewer,
-    canvas = viewer?.canvas,
+    engine,
+    canvas = engine?.host.canvas,
     handoffLayers = null,
     navigation,
     syncShareState,
@@ -120,7 +120,7 @@ export class ShareRestoration {
     applyFollowOffset = null,
   }) {
     Object.assign(this, {
-      viewer,
+      engine,
       canvas,
       handoffLayers,
       navigation,
@@ -129,7 +129,7 @@ export class ShareRestoration {
       showStatus,
       feedback,
       updateFeedback,
-      // (entity, offset) => disposer: frame a followed entity from a shared
+      // (handle, offset) => disposer: frame a followed entity from a shared
       // follow offset (shareFollow.js).
       applyFollowOffset,
     });
@@ -477,17 +477,17 @@ export class ShareRestoration {
   /** Frame a shared entity the camera now follows from the shared offset. */
   _applySharedFollowOffset(result) {
     const view = this._sharedThingFor(result);
-    const entity = this.viewer?.trackedEntity;
+    const handle = this.engine?.camera.following();
     // Only a link made while following carries a real offset (with the fix);
     // a long link's follow keeps the app's own framing.
     if (
       !view?.lastKnown ||
-      String(entity?.gevTrackedId || '') !==
+      String(handle?.label?.id || handle?.native?.gevTrackedId || '') !==
         `${result.layerId}:${result.targetId}`
     )
       return;
     this._stopFollowOffset?.();
-    this._stopFollowOffset = this.applyFollowOffset?.(entity, view.offset);
+    this._stopFollowOffset = this.applyFollowOffset?.(handle, view.offset);
   }
 
   cancelSelection() {

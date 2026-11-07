@@ -221,3 +221,44 @@ test('destroy ends an engine follow and leaves an app-tracked entity alone', () 
   second.destroy();
   assert.equal(second.viewer.trackedEntity, appEntity);
 });
+
+test('a swing uses the displayed target without sampling the position again', () => {
+  const { viewer, camera, frame } = setup();
+  let samples = 0;
+  const handle = camera.follow({
+    native: { gevDisplayPosition: () => TARGET },
+    position: () => {
+      samples++;
+      return TARGET;
+    },
+    viewFrom: { x: 0, y: -900, z: 400 },
+  });
+  frame();
+  handle.retarget({ swingTo: { x: 0, y: 900, z: 400 } });
+  const before = samples;
+  for (let i = 0; i < 8; i++) frame();
+  assert.equal(samples, before);
+  assert.ok(Math.abs(viewer.camera.position.y - 900) < 1e-6);
+  handle.stop();
+});
+
+test('an app-tracked entity swings without replacing its follow handle', () => {
+  const { viewer, camera, frame, destroy } = setup();
+  const entity = new Cesium.Entity({ position: TARGET });
+  viewer.trackedEntity = entity;
+  viewer.camera.lookAtTransform(
+    Cesium.Transforms.eastNorthUpToFixedFrame(TARGET),
+    new Cesium.Cartesian3(0, -900, 400),
+  );
+  const handle = camera.following();
+  handle.retarget({ swingTo: { x: 0, y: 900, z: 400 } });
+  for (let i = 0; i < 8; i++) frame();
+  assert.equal(camera.following(), handle);
+  assert.ok(Math.abs(viewer.camera.position.y - 900) < 1e-6);
+  handle.retarget({ swingTo: { x: 0, y: -900, z: 400 } });
+  handle.retarget({ swingTo: null });
+  frame();
+  frame();
+  assert.ok(Math.abs(viewer.camera.position.y - 900) < 1e-6);
+  destroy();
+});

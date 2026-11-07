@@ -1,3 +1,4 @@
+import { createExclusivePointer } from '../exclusivePointer.js';
 // Screen input on one lazily created ScreenSpaceEventHandler. Cesium keeps
 // one action per (type, modifier); the engine fans it out to its listeners.
 
@@ -53,6 +54,19 @@ export function createCesiumInput(
   // setCameraInputs asked for since.
   let suspended = 0;
   let resumeTo = true;
+  const pointer = createExclusivePointer(() => {
+    const stock = viewer.screenSpaceEventHandler;
+    const saved = [TYPES.click, TYPES.doubleClick].map((type) => {
+      const action = stock?.getInputAction(type);
+      stock?.removeInputAction(type);
+      return [type, action];
+    });
+    return () => {
+      if (stock?.isDestroyed?.()) return;
+      for (const [type, action] of saved)
+        if (action) stock?.setInputAction(action, type);
+    };
+  });
   const delivery = createPickDelivery({
     pick: (position) => picker?.pick(position),
     drill: (position, limit) => picker?.drillPick(position, limit) ?? [],
@@ -60,6 +74,7 @@ export function createCesiumInput(
   });
 
   const input = {
+    acquirePointer: () => pointer.acquire(),
     on(type, listener, options = {}) {
       const { modifier, pick, drill } = normalizeInputOptions(type, options);
       if (destroyed) return () => {};
@@ -71,15 +86,16 @@ export function createCesiumInput(
         groups.set(key, listeners);
         handler.setInputAction(
           (event) => {
+            const accepts = pointer.delivery();
             delivery.deliver(type, toEvent(event), [...listeners], {
-              isLive: (entry) => listeners.has(entry),
+              isLive: (entry) => listeners.has(entry) && accepts(entry),
             });
           },
           TYPES[type],
           KEYS[modifier],
         );
       }
-      const entry = { listener, pick, drill };
+      const entry = { listener, pick, drill, pointer: options.pointer };
       listeners.add(entry);
       return () => {
         if (!listeners.delete(entry) || listeners.size) return;
@@ -111,6 +127,7 @@ export function createCesiumInput(
   return {
     input,
     destroy() {
+      pointer.destroy();
       destroyed = true;
       groups.clear();
       handler?.destroy();

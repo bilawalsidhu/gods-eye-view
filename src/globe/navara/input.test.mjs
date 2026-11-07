@@ -220,3 +220,48 @@ test('clicks with pick wait for the click pick; moves with pick use the CPU pick
   assert.deepEqual(seen.at(-1)[1].picked, { id: 'cpu' });
   assert.deepEqual(calls.at(-1), ['cpu', { x: 21, y: 21 }]);
 });
+
+test('exclusive pointer drops deferred picks across ownership changes and releases on destroy', async () => {
+  const canvas = fakeCanvas();
+  const answers = [];
+  const { input, destroy } = createNavaraInput(
+    { canvas, camera: {} },
+    {
+      picker: {
+        clickPick: () => new Promise((resolve) => answers.push(resolve)),
+      },
+    },
+  );
+  const click = () => {
+    canvas.dispatchEvent(pointer('pointerdown', 110, 60));
+    canvas.dispatchEvent(pointer('pointerup', 110, 60));
+  };
+  let ambient = 0,
+    owned = 0;
+  input.on('click', () => ambient++, { pick: true });
+  click();
+  const claim = input.acquirePointer();
+  input.on('click', () => owned++, { pick: true, pointer: claim });
+  answers.shift()({ id: 'late' });
+  await Promise.resolve();
+  assert.equal(ambient, 0);
+  click();
+  answers.shift()({ id: 'owned' });
+  await Promise.resolve();
+  assert.equal(owned, 1);
+  assert.equal(ambient, 0);
+  click();
+  claim.release();
+  answers.shift()({ id: 'released' });
+  await Promise.resolve();
+  assert.equal(owned, 1);
+  assert.equal(ambient, 0);
+  click();
+  answers.shift()({ id: 'ambient' });
+  await Promise.resolve();
+  assert.equal(ambient, 1);
+  const next = input.acquirePointer();
+  destroy();
+  next.release();
+  assert.equal(input.acquirePointer(), null);
+});

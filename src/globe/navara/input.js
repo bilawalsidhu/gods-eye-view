@@ -1,3 +1,4 @@
+import { createExclusivePointer } from '../exclusivePointer.js';
 // Screen input for the Navara engine, from DOM pointer events on Navara's
 // canvas, with Cesium's ScreenSpaceEventHandler semantics: left button only,
 // a click is a down and up within 5 px, positions are CSS px from the
@@ -48,6 +49,7 @@ export function createNavaraInput(
   let downAt = null;
   let last = null;
 
+  const pointer = createExclusivePointer();
   const delivery = createPickDelivery({
     pick: (position, type) =>
       type === 'move' ? picker?.pick(position) : picker?.clickPick(position),
@@ -61,11 +63,12 @@ export function createNavaraInput(
   const emit = (type, event, payload) => {
     const modifier = modifierOf(event);
     const group = listeners.get(type);
+    const accepts = pointer.delivery();
     delivery.deliver(
       type,
       payload,
       [...group].filter((entry) => entry.modifier === modifier),
-      { isLive: (entry) => group.has(entry) },
+      { isLive: (entry) => group.has(entry) && accepts(entry) },
     );
   };
 
@@ -121,6 +124,7 @@ export function createNavaraInput(
     });
   };
   const input = {
+    acquirePointer: () => pointer.acquire(),
     on(type, listener, options = {}) {
       const { modifier, pick, drill } = normalizeInputOptions(type, options);
       if (destroyed) return () => {};
@@ -129,7 +133,13 @@ export function createNavaraInput(
         for (const name of SCREEN_EVENTS)
           canvas.addEventListener(name, onScreenEvent);
       }
-      const entry = { listener, modifier, pick, drill };
+      const entry = {
+        listener,
+        modifier,
+        pick,
+        drill,
+        pointer: options.pointer,
+      };
       listeners.get(type).add(entry);
       return () => {
         listeners.get(type).delete(entry);
@@ -174,6 +184,7 @@ export function createNavaraInput(
     cameraInputs: () => cameraInputs,
     destroy() {
       if (destroyed) return;
+      pointer.destroy();
       destroyed = true;
       for (const type of CAMERA_EVENTS)
         canvas.removeEventListener(type, onCameraEvent, { capture: true });

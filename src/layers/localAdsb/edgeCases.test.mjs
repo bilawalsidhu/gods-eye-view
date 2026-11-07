@@ -241,21 +241,16 @@ test('edge:local-adsb: a selected local aircraft never reaches a share link', as
   );
   assert.ok(marker, 'the local marker carries its tracked id');
 
-  const shareViewer = {
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(20, 9.9, 20_000),
-    },
-    clock: { currentTime: Cesium.JulianDate.now() },
-    trackedEntity: marker,
-  };
-  assert.equal(readShareFollowSubject({ viewer: shareViewer }), null);
-  // Control: the same entity under a shareable layer id would be named.
-  const control = {
-    ...shareViewer,
-    trackedEntity: {
-      gevTrackedId: 'flights:abc123',
-      gevDisplayPosition: marker.gevDisplayPosition,
-    },
-  };
-  assert.equal(readShareFollowSubject({ viewer: control })?.id, 'abc123');
+  const engine = createFakeEngine();
+  const options = { native: marker, position: marker.gevDisplayPosition,
+    viewFrom: { x: 0, y: -1000, z: 500 } };
+  engine.camera.follow(options);
+  engine.fake.frame();
+  assert.equal(readShareFollowSubject({ engine }), null);
+  engine.camera.follow({ ...options, native: {
+    gevTrackedId: 'flights:abc123',
+  } });
+  engine.fake.frame();
+  assert.equal(readShareFollowSubject({ engine })?.id, 'abc123');
+  engine.destroy();
 });

@@ -5,6 +5,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { createCesiumMoversEngine } from '../testSupport/cesiumMoversEngine.mjs';
+import { createFakeEventHandlers } from '../globe/cesium/testing/fakeViewer.mjs';
 import { createSessionDrawTool, initDrawTool } from './drawTool.js';
 import {
   isPointerFree,
@@ -141,45 +143,20 @@ function fakeDom() {
 
 /* ── viewer double ─────────────────────────────────────────────────────── */
 
-function fakeViewer() {
-  const canvas = new FakeElement('CANVAS');
-  canvas.clientWidth = 800;
-  canvas.clientHeight = 600;
+function drawEngine() {
+  const handlers = createFakeEventHandlers();
+  const fixture = createCesiumMoversEngine({
+    engineOptions: {
+      createEventHandler: handlers.create,
+    },
+  });
   const actions = new Map();
-  const stockHandler = {
+  fixture.viewer.screenSpaceEventHandler = {
     getInputAction: (type) => actions.get(type),
     setInputAction: (action, type) => actions.set(type, action),
     removeInputAction: (type) => actions.delete(type),
   };
-  const attached = [];
-  const pendingAdds = [];
-  const dataSources = {
-    get length() {
-      return attached.length;
-    },
-    get: (index) => attached[index],
-    add(source) {
-      // Cesium resolves this on a later tick — the whole point of finding 7.
-      const promise = Promise.resolve().then(() => {
-        attached.push(source);
-        return source;
-      });
-      pendingAdds.push(promise);
-      return promise;
-    },
-    remove(source) {
-      const at = attached.indexOf(source);
-      if (at >= 0) attached.splice(at, 1);
-      return at >= 0;
-    },
-  };
-  return {
-    scene: { canvas, requestRender() {} },
-    screenSpaceEventHandler: stockHandler,
-    dataSources,
-    _attached: attached,
-    _actions: actions,
-  };
+  return fixture;
 }
 
 function fakeAnnotations() {
@@ -241,7 +218,7 @@ function fakeAnnotations() {
 function harness({ navigation = null, session = false } = {}) {
   resetPointerOwnership();
   const { byId, documentDouble } = fakeDom();
-  const viewer = fakeViewer();
+  const { viewer, engine, primitive } = drawEngine();
   const annotations = fakeAnnotations();
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
@@ -261,12 +238,13 @@ function harness({ navigation = null, session = false } = {}) {
   };
   const tool = session
     ? createSessionDrawTool(options)
-    : initDrawTool({ viewer, ...options });
-  if (session) tool.attachScene({ viewer });
+    : initDrawTool({ engine, ...options });
+  if (session) tool.attachScene({ engine });
   return {
     tool,
     shown,
     viewer,
+    engine,
     annotations,
     byId,
     documentDouble,
@@ -275,6 +253,8 @@ function harness({ navigation = null, session = false } = {}) {
     /** A control's change, as the view sends it. */
     act: (name, ...args) => controls.actions?.[name]?.(...args),
     restore() {
+      tool.destroy();
+      engine.destroy();
       resetPointerOwnership();
       if (previousDocument === undefined) delete globalThis.document;
       else globalThis.document = previousDocument;
@@ -447,14 +427,19 @@ test('the live preview hangs at the height the click landed on', async () => {
     h.tool.addVertex(-97.74, 30.26, 212.25);
 
     await h.tool.whenSettled();
-    const source = h.viewer._attached[0] ?? null;
-    assert.ok(source, 'the preview data source is attached');
-    const points = source.entities.values.filter((entity) => entity.point);
-    assert.equal(points.length, 2, 'one preview dot per vertex');
-    const heights = points.map((entity) => {
-      const position = entity.position.getValue(Cesium.JulianDate.now());
-      return Cesium.Cartographic.fromCartesian(position).height;
-    });
+    const line = h.engine.lines
+      .list()
+      .find(({ id }) => id === 'gev-draw-preview');
+    assert.equal(
+      h.engine.movers.list().find(({ id }) => id === 'gev-draw-vertices').count,
+      2,
+    );
+    assert.ok(line, 'the preview is attached');
+    const primitive = h.viewer.scene.primitives.get(0).get(0).get(0);
+    const positions = primitive.geometryInstances.geometry._positions;
+    const heights = positions.map(
+      (position) => Cesium.Cartographic.fromCartesian(position).height,
+    );
     assert.ok(Math.abs(heights[0] - 187.5) < 0.5, `got ${heights[0]}`);
     assert.ok(Math.abs(heights[1] - 212.25) < 0.5, `got ${heights[1]}`);
 
@@ -476,15 +461,15 @@ test('the live preview hangs at the height the click landed on', async () => {
   }
 });
 
-test('destroy in the same tick as init still removes the preview data source', async () => {
+test('destroy in the same tick as init still removes the preview', async () => {
   const h = harness();
   try {
-    // Nothing has been attached yet — dataSources.add() resolves later.
-    assert.equal(h.viewer._attached.length, 0, 'the add is still pending');
+    // Preview allocation is lazy.
+    assert.equal(h.engine.lines.list().length, 0, 'no preview before drawing');
     await h.tool.destroy();
     await Promise.resolve();
     assert.equal(
-      h.viewer._attached.length,
+      h.engine.lines.list().length,
       0,
       'the preview must not be left attached behind the teardown',
     );
@@ -519,11 +504,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
       stockClick,
       'the viewer got its selecting click back',
     );
-    assert.equal(
-      h.viewer._attached.length,
-      0,
-      'the preview data source is detached',
-    );
+    assert.equal(h.engine.lines.list().length, 0, 'the preview is detached');
     assert.equal(
       h.annotations.listeners.size,
       0,
@@ -723,7 +704,7 @@ test('a page without the Draw controls gets no draw tool', () => {
   try {
     let connected = false;
     const tool = initDrawTool({
-      viewer: fakeViewer(),
+      engine: {},
       annotations: fakeAnnotations(),
       connect: () => {
         connected = true;
@@ -756,7 +737,7 @@ test('an engine switch ends an open sketch and keeps the chosen shape and colour
     assert.equal(h.controls.actions, null, 'no viewer answers the controls');
     assert.equal(globalThis.window.__gevDrawTool, handle);
 
-    handle.attachScene({ viewer: fakeViewer() });
+    handle.attachScene({ engine: h.engine });
     assert.equal(handle.attached, true);
     assert.equal(handle.shape, 'line');
     assert.equal(handle.color, 'amber');

@@ -284,7 +284,7 @@ export class StyleManager extends ShellFacade {
       initialShareCode,
     });
     this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
-      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+      readShareFollowSubject({ engine: this._scene?.engine, nowMs }),
     );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
@@ -451,7 +451,7 @@ export class StyleManager extends ShellFacade {
     const services = this.services;
     const layerSession = this._layerSession;
     this._shareRestoration = new ShareRestoration({
-      viewer,
+      engine,
       canvas: engine?.host.canvas ?? viewer?.canvas,
       handoffLayers: layerSession?.handoffLayers,
       navigation: this._navigation,
@@ -461,8 +461,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
-      applyFollowOffset: (entity, offset) =>
-        applyShareFollowOffset(viewer, entity, offset),
+      applyFollowOffset: (handle, offset) =>
+        applyShareFollowOffset(engine, handle, offset),
     });
 
     this._visualSettings = new VisualSettings({

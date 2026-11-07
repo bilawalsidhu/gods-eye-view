@@ -1,10 +1,3 @@
-// UTILITIES ▸ Draw on a globe engine without a Cesium viewer (Navara): the
-// draw surface src/annotations/drawTool.js runs on. Clicks, moves and the
-// double click come from engine.input (the pointer claim the tool holds
-// makes every layer's own click yield, as on Cesium); the open shape shows
-// as a dashed engine line (the rubber band) and a dot per vertex, at the
-// height each click landed on. No Cesium, no three.
-
 import * as geo from '../geo/index.js';
 import { pickWorldFromScreen } from './annotationResolver.js';
 import { DRAW_COLOR_CSS } from './drawMarks.js';
@@ -32,7 +25,7 @@ const world = (v) => geo.cartesian3.fromDegrees(v.lon, v.lat, v.height || 0);
  * input and preview initDrawTool runs on.
  * @param {import('../globe/contract.js').GlobeEngine} engine
  */
-export function navaraDrawSurface(engine) {
+export function createDrawSurface(engine) {
   return (live) => {
     let line = null;
     let dots = null;
@@ -44,6 +37,7 @@ export function navaraDrawSurface(engine) {
       line ??= engine.lines.createLine({
         id: LINE_ID,
         widthPx: 3,
+        arc: 'geodesic',
         color: cssRgba(DRAW_COLOR_CSS.primary, 0.9),
         // Cesium's depth-fail dash at 0.35 of the colour, 0.9 in front.
         depthFailAlpha: 0.35 / 0.9,
@@ -120,12 +114,12 @@ export function navaraDrawSurface(engine) {
         engine.render.request('draw');
       },
       bound: () => Boolean(removers),
-      bind({ click, move, doubleClick }) {
+      bind({ click, move, doubleClick }, pointer) {
         if (removers || destroyed) return;
         removers = [
-          engine.input.on('click', click),
-          engine.input.on('move', move),
-          engine.input.on('doubleClick', doubleClick),
+          engine.input.on('click', click, { pointer }),
+          engine.input.on('move', move, { pointer }),
+          engine.input.on('doubleClick', doubleClick, { pointer }),
         ];
       },
       unbind() {
@@ -134,16 +128,13 @@ export function navaraDrawSurface(engine) {
       },
       diagnostics: ({ destroyed: toolDestroyed }) => ({
         sceneHandler: Boolean(removers),
-        // Navara draws no Cesium data source; its preview is one line and
-        // one dot per vertex.
+        // One line and one dot per vertex.
         previewDataSources: 0,
         previewEntities: toolDestroyed
           ? 0
           : (line ? 1 : 0) + (dots ? dots.count() : 0),
         previewLines: engine.lines.list().filter(({ id }) => id === LINE_ID)
           .length,
-        stockSingleClick: false,
-        stockDoubleClick: false,
       }),
       settled: () => Promise.resolve(),
       destroy() {

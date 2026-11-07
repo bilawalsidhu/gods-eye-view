@@ -40,6 +40,12 @@ export function normalizeFollowOptions(options) {
     throw new TypeError(`camera.follow minRange must be >= 0: ${minRange}`);
   if (options.frame !== undefined && options.frame !== 'enu')
     throw new TypeError("camera.follow frame must be 'enu'");
+  if (
+    options.swingTo != null &&
+    (!isCartesian(options.swingTo) ||
+      cartesian3.magnitude(options.swingTo) === 0)
+  )
+    throw new TypeError('camera.follow swingTo must be a nonzero ENU offset');
   const { label } = options;
   if (
     label !== undefined &&
@@ -56,6 +62,7 @@ export function normalizeFollowOptions(options) {
     position: options.position,
     viewFrom: viewFromOf,
     minRange,
+    swingTo: options.swingTo ? cartesian3.clone(options.swingTo) : null,
     native: options.native,
     label,
   };
@@ -318,6 +325,16 @@ export function createFollowController({
       cartesian3.distance(handle.previous, target) > STILL_M
     )
       changed = true;
+    if (handle.swingTo && handle.previous) {
+      const angle = cartesian3.angleBetween(handle.offset, handle.swingTo);
+      handle.offset =
+        angle > MAX_FOLLOW_TURN
+          ? turnFollowOffset(handle.offset, handle.swingTo)
+          : cartesian3.clone(handle.swingTo);
+      if (!(angle > MAX_FOLLOW_TURN)) handle.swingTo = null;
+      changed = true;
+    }
+    if (handle.swingTo) changed = true;
     const pose = followPose(target, handle.offset, handle.options.minRange);
     handle.previous = cartesian3.clone(target, handle.previous ?? undefined);
     // The offset in force (the minimum range applied).
@@ -343,6 +360,7 @@ export function createFollowController({
         options,
         native: options.native,
         label: options.label,
+        swingTo: options.swingTo,
         offset: null,
         previous: null,
         target() {
@@ -354,7 +372,17 @@ export function createFollowController({
         },
         stop: () => end(handle),
         retarget(next) {
-          const updated = normalizeFollowOptions({ ...options, ...next });
+          if (current !== handle) return;
+          const updated = normalizeFollowOptions({
+            ...handle.options,
+            ...next,
+          });
+          handle.swingTo = updated.swingTo;
+          if (Object.keys(next).every((key) => key === 'swingTo')) {
+            handle.options = updated;
+            requestRender();
+            return;
+          }
           handle.options = updated;
           handle.native = updated.native;
           handle.label = updated.label;
@@ -378,4 +406,38 @@ export function createFollowController({
       if (current) end(current);
     },
   };
+}
+
+export const MAX_FOLLOW_TURN = Math.PI / 3;
+
+/**
+ * `from` turned `step` radians toward `to`, with its length moved the same
+ * fraction of the way: one frame of the swing round the entity.
+ */
+export function turnFollowOffset(from, to, step = MAX_FOLLOW_TURN) {
+  const angle = cartesian3.angleBetween(from, to);
+  const unitFrom = cartesian3.normalize(from, cartesian3.create());
+  // The direction perpendicular to `from` in the plane toward `to` (or any
+  // perpendicular when they are opposite).
+  let toward = cartesian3.subtract(
+    cartesian3.normalize(to, cartesian3.create()),
+    cartesian3.multiplyByScalar(unitFrom, Math.cos(angle), cartesian3.create()),
+    cartesian3.create(),
+  );
+  if (cartesian3.magnitude(toward) < 1e-9)
+    toward = cartesian3.cross(
+      unitFrom,
+      Math.abs(unitFrom.z) < 0.9 ? cartesian3.UNIT_Z : cartesian3.UNIT_X,
+      cartesian3.create(),
+    );
+  cartesian3.normalize(toward, toward);
+  const length =
+    cartesian3.magnitude(from) +
+    (cartesian3.magnitude(to) - cartesian3.magnitude(from)) * (step / angle);
+  const direction = cartesian3.add(
+    cartesian3.multiplyByScalar(unitFrom, Math.cos(step), cartesian3.create()),
+    cartesian3.multiplyByScalar(toward, Math.sin(step), cartesian3.create()),
+    cartesian3.create(),
+  );
+  return cartesian3.multiplyByScalar(direction, length, direction);
 }

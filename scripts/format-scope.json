@@ -1680,5 +1680,10 @@
   "src/scenes/dataPacks/shapes.test.mjs",
   "src/globe/cesium/meshes.test.mjs",
   "src/globe/meshes.test.mjs",
-  "src/scenes/dataPacks/display.test.mjs"
+  "src/scenes/dataPacks/display.test.mjs",
+  "src/globe/exclusivePointer.js",
+  "src/globe/cesium/followOffset.js",
+  "src/annotations/drawSurface.js",
+  "src/annotations/drawSurface.test.mjs",
+  "src/annotations/drawToolBehaviour.test.mjs"
 ]

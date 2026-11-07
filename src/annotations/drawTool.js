@@ -1,5 +1,5 @@
 /**
- * Manual whiteboard drawing: the Cesium + DOM half.
+ * Manual whiteboard drawing through the globe engine and DOM.
  *
  * UTILITIES ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
  * shape (area, line or pin) and a colour, click the vertices on the real world,
@@ -16,13 +16,8 @@
  *   so a vertex clicked on top of an aircraft or a camera is a vertex and
  *   nothing else. It is one claim consulted by all of them, not a list of
  *   exceptions inside each.
- * - Cesium's Viewer binds its OWN left click (select the entity under the
- *   pointer) and double click (track it) on the viewer's handler, outside every
- *   layer and therefore outside the shared claim. Both are borrowed for the
- *   session and given back on the way out, and `destroy()` gives back every
- *   listener, the Cesium handler, the preview data source and the window
- *   handle, so the tool can be turned off or the shell disposed without leaving
- *   anything behind.
+ * - The engine's exclusive pointer suspends other screen subscriptions and
+ *   stock select/track actions until drawing ends.
  *
  * A vertex carries the height the click landed on — a roof, a hillside — and
  * that height is what the live preview hangs on, so the rubber band follows the
@@ -30,8 +25,7 @@
  * drapes finished areas and routes onto the surface, so the height is dropped
  * at finish, deliberately and in one place — see `finishSpec` in drawMode.js.
  */
-import * as Cesium from 'cesium';
-import { pickWorldFromScreen } from './annotationResolver.js';
+import { createDrawSurface } from './drawSurface.js';
 import {
   claimPointer,
   pointerOwner,
@@ -50,14 +44,11 @@ import {
   removeLastVertex,
 } from './drawMode.js';
 
-import { DRAW_COLORS, DRAW_COLOR_CSS, presentDrawMarks } from './drawMarks.js';
+import { DRAW_COLORS, presentDrawMarks } from './drawMarks.js';
 
 import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
 /** The id this tool claims the pointer under. */
 const DRAW_POINTER_OWNER = 'draw';
-const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
-
-const PREVIEW = DRAW_COLOR_CSS;
 
 /**
  * Run the Draw control. Returns a handle with a `destroy()` the application
@@ -67,18 +58,12 @@ const PREVIEW = DRAW_COLOR_CSS;
  * through the actions it gives `connect`, which returns their disconnect.
  * A row's fly-to is an immediate navigation through `navigation`, like
  * Import's, so Cockpit can refuse it and a running orbit or follow lets go.
- * The globe it draws on is a Cesium `viewer` (with its `engine`, which
- * answers the picks) or a draw `surface` factory (`surface({ session,
- * cursor })`: the input and preview of a globe without a viewer,
- * src/annotations/drawInputNavara.js), which gets the open shape and the
- * rubber band's end as live getters.
- * @param {{viewer?: Cesium.Viewer, engine?: object, surface?: Function, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
+ * Input and preview use the attached globe engine.
+ * @param {{engine: object, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
  * @returns {{destroy: Function}|null}
  */
 export function initDrawTool({
-  viewer = null,
   engine = null,
-  surface: makeSurface = null,
   annotations,
   navigation = null,
   publish = () => {},
@@ -88,11 +73,7 @@ export function initDrawTool({
 }) {
   // A page without the Draw controls (the Display controls view omitted) has
   // no draw tool.
-  if (
-    (!viewer && !makeSurface) ||
-    !annotations ||
-    !document.getElementById('draw-toggle')
-  )
+  if (!engine || !annotations || !document.getElementById('draw-toggle'))
     return null;
 
   let active = false;
@@ -102,6 +83,7 @@ export function initDrawTool({
   let color = DRAW_COLORS.includes(initialColor) ? initialColor : 'primary';
   let hint = '';
   let lease = null;
+  let pointer = null;
   // The last pointer position on the globe ({ lon, lat, height }), for the
   // rubber band.
   let cursor = null;
@@ -117,11 +99,8 @@ export function initDrawTool({
     domListeners.push([target, type, listener, options]);
   };
 
-  // The globe's input and preview: Cesium's here, or the surface's.
   const live = { session: () => session, cursor: () => cursor };
-  const surface = makeSurface
-    ? makeSurface(live)
-    : cesiumDrawSurface(viewer, engine, live);
+  const surface = createDrawSurface(engine)(live);
 
   const present = () =>
     publish({
@@ -297,7 +276,10 @@ export function initDrawTool({
     if (destroyed || next === active) return active;
     if (next) {
       lease = claimPointer(DRAW_POINTER_OWNER);
-      if (!lease) {
+      if (lease) pointer = engine.input.acquirePointer();
+      if (!lease || !pointer) {
+        releasePointer(lease);
+        lease = null;
         // Somebody else is using the pointer — possibly an older instance of
         // this same tool that has not finished tearing down. Say so instead of
         // half-starting.
@@ -321,6 +303,8 @@ export function initDrawTool({
       session = null;
       cursor = null;
       releaseSceneHandler();
+      pointer?.release();
+      pointer = null;
       releasePointer(lease);
       lease = null;
       syncPreview();
@@ -330,13 +314,16 @@ export function initDrawTool({
 
   function bindSceneHandler() {
     if (surface.bound()) return;
-    surface.bind({
-      click: onClick,
-      move: onMove,
-      doubleClick: () => {
-        void finish();
+    surface.bind(
+      {
+        click: onClick,
+        move: onMove,
+        doubleClick: () => {
+          void finish();
+        },
       },
-    });
+      pointer,
+    );
     listen(document, 'keydown', onKey, true);
   }
 
@@ -443,8 +430,7 @@ export function initDrawTool({
         destroyed,
         domListeners: domListeners.length,
         pointerOwner: pointerOwner(),
-        // The globe's handler, preview and (Cesium) the viewer's OWN click
-        // actions: see the surface's diagnostics.
+        // The globe's input and preview.
         ...surface.diagnostics({ destroyed }),
       };
     },
@@ -462,6 +448,8 @@ export function initDrawTool({
       offBoard();
       disconnect();
       releaseSceneHandler();
+      pointer?.release();
+      pointer = null;
       releasePointer(lease);
       lease = null;
       for (const [target, type, listener, options] of domListeners.splice(0)) {
@@ -481,191 +469,11 @@ export function initDrawTool({
 }
 
 /**
- * The Draw tool's input and preview on a Cesium viewer: a dashed rubber band
- * and a dot per vertex in a preview data source, and a ScreenSpaceEventHandler
- * for clicks, moves and the double click. Cesium's Viewer binds BOTH stock
- * click actions on its own handler (select, track); they are borrowed while a
- * sketch is open and given back on the way out.
- */
-function cesiumDrawSurface(viewer, engine, live) {
-  const previewEntities = [];
-  const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
-  // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
-  // remove a source that had not been attached yet and leave the attachment to
-  // land afterwards — a preview data source nobody owns. Chain the removal onto
-  // the attachment instead of racing it.
-  let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
-    () => null,
-  );
-  let handler = null;
-  let savedSingleClick = null;
-  let savedDoubleClick = null;
-  const toCartesian = (v) =>
-    Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height || 0);
-  const previewLine = dataSource.entities.add({
-    show: false,
-    polyline: {
-      positions: new Cesium.CallbackProperty(() => {
-        const session = live.session();
-        if (!session) return [];
-        const pts = session.vertices.map(toCartesian);
-        const cursor = live.cursor();
-        if (cursor && session.shape !== 'pin') pts.push(toCartesian(cursor));
-        if (session.shape === 'area' && pts.length >= 3) pts.push(pts[0]);
-        return pts;
-      }, false),
-      width: 3,
-      material: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.9),
-        dashLength: 16,
-      }),
-      depthFailMaterial: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.35),
-        dashLength: 16,
-      }),
-      clampToGround: false,
-    },
-  });
-  return {
-    canvas: viewer.scene.canvas,
-    /** The world point under a canvas position (the engine's picks), or null. */
-    pick(position) {
-      if (!engine) return null;
-      const { width, height } = engine.host.size();
-      return pickWorldFromScreen(
-        engine,
-        position.x / (width || 1),
-        position.y / (height || 1),
-      );
-    },
-    /** Show the open shape (null: none) in `color`. */
-    sync(session, color) {
-      previewEntities.forEach((e) => dataSource.entities.remove(e));
-      previewEntities.length = 0;
-      if (!session) {
-        previewLine.show = false;
-        viewer.scene.requestRender();
-        return;
-      }
-      const stroke = Cesium.Color.fromCssColorString(
-        PREVIEW[color] || PREVIEW.primary,
-      );
-      previewLine.polyline.material = new Cesium.PolylineDashMaterialProperty({
-        color: stroke.withAlpha(0.9),
-        dashLength: 16,
-      });
-      previewLine.show = session.shape !== 'pin';
-      for (const v of session.vertices) {
-        previewEntities.push(
-          dataSource.entities.add({
-            position: toCartesian(v),
-            point: {
-              pixelSize: 8,
-              color: stroke,
-              outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
-              outlineWidth: 2,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
-          }),
-        );
-      }
-      viewer.scene.requestRender();
-    },
-    /** The rubber band's end moved (read live by the preview line). */
-    moved() {
-      viewer.scene.requestRender();
-    },
-    bound: () => Boolean(handler),
-    bind({ click, move, doubleClick }) {
-      if (handler) return;
-      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      handler.setInputAction(click, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-      handler.setInputAction(move, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-      handler.setInputAction(
-        doubleClick,
-        Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-      );
-      // Neither stock action goes through a layer, so neither can be fixed by
-      // the shared pointer claim — they are borrowed outright for the session.
-      // Borrowing the single click is what stops a vertex placed on a contact
-      // from also selecting it.
-      const stock = viewer.screenSpaceEventHandler;
-      savedSingleClick =
-        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null;
-      savedDoubleClick =
-        stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
-        null;
-      stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-      stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-    },
-    unbind() {
-      if (handler) {
-        handler.destroy();
-        handler = null;
-      }
-      if (savedSingleClick) {
-        viewer.screenSpaceEventHandler.setInputAction(
-          savedSingleClick,
-          Cesium.ScreenSpaceEventType.LEFT_CLICK,
-        );
-        savedSingleClick = null;
-      }
-      if (savedDoubleClick) {
-        viewer.screenSpaceEventHandler.setInputAction(
-          savedDoubleClick,
-          Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-        );
-        savedDoubleClick = null;
-      }
-    },
-    diagnostics: ({ destroyed }) => ({
-      sceneHandler: Boolean(handler),
-      previewDataSources: countPreviewDataSources(viewer),
-      previewEntities: destroyed ? 0 : dataSource.entities.values.length,
-      // The viewer's OWN click actions. While a session is open both are
-      // borrowed (absent here); after it closes both are back. A harness can
-      // compare the restored functions by identity with what it captured
-      // before, which is the only way to prove they were given back rather
-      // than replaced.
-      stockSingleClick: Boolean(
-        viewer.screenSpaceEventHandler?.getInputAction?.(
-          Cesium.ScreenSpaceEventType.LEFT_CLICK,
-        ),
-      ),
-      stockDoubleClick: Boolean(
-        viewer.screenSpaceEventHandler?.getInputAction?.(
-          Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-        ),
-      ),
-    }),
-    /** Resolves once every deferred teardown step has run. */
-    settled: () => attaching,
-    destroy() {
-      previewEntities.length = 0;
-      dataSource.entities.removeAll();
-      // Wait for the pending add() before removing: a destroy() in the same
-      // tick as init would otherwise remove nothing and let the attachment
-      // land behind it.
-      attaching = attaching.then(() => {
-        try {
-          viewer.dataSources.remove(dataSource, true);
-        } catch {
-          /* viewer already disposed — nothing to detach from */
-        }
-      });
-      return attaching;
-    },
-  };
-}
-
-/**
  * The Draw control for the page session. The marks live on the annotation
  * board and the chosen shape and colour here; the drawing tool itself (its
  * preview, click handler and Escape/Enter keys) belongs to the attached
- * globe. `attachScene({ viewer, engine, navigation })` starts the tool on
- * a Cesium viewer, `attachScene({ surface, navigation })` on a globe without one
- * (Navara: src/annotations/drawInputNavara.js), with the shape and colour
- * last chosen; `detachScene()` ends it, an open shape included. Without a
+ * globe. `attachScene({ engine, navigation })` starts the tool with the shape
+ * and colour last chosen; `detachScene()` ends the open shape. Without a
  * globe the controls answer nothing. Same handle as initDrawTool's
  * (`window.__gevDrawTool`), kept across switches.
  */
@@ -734,20 +542,13 @@ export function createSessionDrawTool({
         pointerOwner: pointerOwner(),
       },
     whenSettled: () => inner?.whenSettled() ?? settled,
-    attachScene({
-      viewer = null,
-      engine = null,
-      surface = null,
-      navigation: next = navigation,
-    } = {}) {
+    attachScene({ engine = null, navigation: next = navigation } = {}) {
       if (destroyed) return;
       detachScene();
       navigation = next;
-      if (!viewer && !surface) return;
+      if (!engine) return;
       inner = initDrawTool({
-        viewer,
         engine,
-        surface,
         annotations,
         navigation,
         publish,
@@ -768,15 +569,4 @@ export function createSessionDrawTool({
   };
   window.__gevDrawTool = wrapper;
   return wrapper;
-}
-
-/** How many draw previews are attached — more than one means a leaked tool. */
-function countPreviewDataSources(viewer) {
-  const sources = viewer?.dataSources;
-  if (!sources) return 0;
-  let found = 0;
-  for (let index = 0; index < sources.length; index += 1) {
-    if (sources.get(index)?.name === PREVIEW_DATA_SOURCE_NAME) found += 1;
-  }
-  return found;
 }

@@ -10,6 +10,7 @@
 // its `name` (the Entity's name, else its id): what the camera verbs say they
 // are following.
 
+import { swingFollowOffset } from './followOffset.js';
 import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { createEngineEvent } from '../contract.js';
@@ -200,6 +201,7 @@ export function createCesiumFollow(viewer, { commanded }) {
   // Handles for entities the app tracked itself, one per entity.
   const wrapped = new WeakMap();
   let switching = false;
+  let stopExternalSwing = null;
 
   const wrap = (entity) => {
     let handle = wrapped.get(entity);
@@ -214,16 +216,36 @@ export function createCesiumFollow(viewer, { commanded }) {
         stop() {
           if (viewer.trackedEntity === entity) viewer.trackedEntity = undefined;
         },
-        retarget: (next) =>
-          follow({
+        retarget(next) {
+          if (viewer.trackedEntity !== entity) return;
+          const options = normalizeFollowOptions({
             native: entity,
-            position: () =>
-              displayPosition(entity, viewer.clock.currentTime, undefined),
+            position: handle.target,
             viewFrom: () =>
               entity.viewFrom?.getValue?.(viewer.clock.currentTime) ??
               entity.viewFrom,
             ...next,
-          }),
+          });
+          if (!Object.keys(next).every((key) => key === 'swingTo'))
+            return follow(options);
+          watchTracking();
+          stopExternalSwing?.();
+          if (!options.swingTo) return;
+          const stop = swingFollowOffset(
+            viewer,
+            entity,
+            options.swingTo,
+            handle.target,
+          );
+          const offCommand = commanded.addEventListener(() =>
+            stopExternalSwing?.(),
+          );
+          stopExternalSwing = () => {
+            stop();
+            offCommand();
+            stopExternalSwing = null;
+          };
+        },
       };
       wrapped.set(entity, handle);
     }
@@ -242,6 +264,7 @@ export function createCesiumFollow(viewer, { commanded }) {
   let removeTracked = null;
   const onTracked = () => {
     if (switching) return;
+    stopExternalSwing?.();
     if (own && viewer.trackedEntity !== own.entity) release(own);
     followChanged.raiseEvent(following());
   };
@@ -257,6 +280,8 @@ export function createCesiumFollow(viewer, { commanded }) {
 
   // Undo what one follow put on the viewer (not trackedEntity itself).
   function teardown(state) {
+    state.stopSwing?.();
+    state.stopSwing = null;
     state.stopFrame?.();
     state.stopFrame = null;
     state.removeCommanded?.();
@@ -319,6 +344,10 @@ export function createCesiumFollow(viewer, { commanded }) {
       applyTrackedCameraFrame(viewer, entity, viewFrom, {
         minRange: options.minRange,
       }) ?? null;
+    if (options.swingTo)
+      state.stopSwing = swingFollowOffset(viewer, entity, options.swingTo, () =>
+        displayPosition(entity, viewer.clock.currentTime),
+      );
     // A command that takes the camera ends the follow; so does another
     // tracked entity (Cesium raises commanded for that too).
     state.removeCommanded = commanded.addEventListener(() => {
@@ -332,6 +361,7 @@ export function createCesiumFollow(viewer, { commanded }) {
 
   function follow(input) {
     const options = normalizeFollowOptions(input);
+    stopExternalSwing?.();
     watchTracking();
     if (own) {
       const previous = own;
@@ -360,6 +390,16 @@ export function createCesiumFollow(viewer, { commanded }) {
       retarget(next) {
         if (own !== state) return;
         const updated = normalizeFollowOptions({ ...state.options, ...next });
+        if (Object.keys(next).every((key) => key === 'swingTo')) {
+          state.options = updated;
+          state.stopSwing?.();
+          state.stopSwing = updated.swingTo
+            ? swingFollowOffset(viewer, state.entity, updated.swingTo, () =>
+                displayPosition(state.entity, viewer.clock.currentTime),
+              )
+            : null;
+          return;
+        }
         switching = true;
         try {
           teardown(state);
@@ -379,6 +419,7 @@ export function createCesiumFollow(viewer, { commanded }) {
   return {
     camera: { follow, following, followChanged },
     destroy() {
+      stopExternalSwing?.();
       if (own) {
         const state = own;
         if (viewer.trackedEntity === state.entity)

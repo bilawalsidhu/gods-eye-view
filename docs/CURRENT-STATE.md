@@ -218,6 +218,13 @@ one application, and only the globe-bound parts move to the next engine.
     engines, and `scripts/qa-ground-looks.mjs` drew the jam line and the
     route on Cesium as the old materials did, with no pixel changed at four
     moments of the pulse and the dashes.
+- **Shared follow and Draw.** Share links read the follow target, identity and
+  camera pose through the engine; their saved offset uses `camera.follow`'s
+  `swingTo` option on both engines. Cesium keeps its guarded 60-degree frame
+  swing. Draw uses one contract surface with lines, point movers and an
+  exclusive `engine.input` pointer claim. Cesium's stock select/track actions
+  are suspended by the engine while drawing and restored on release. Scene
+  detach ends the sketch and removes the preview, retaining shape and colour.
 - **Engine-owned effects and camera input.** Cesium's viewer, atmosphere
   compatibility, zoom guard, starry sky and map implementation live in
   `src/globe/cesium/`. Styles, bloom and contact sonar use `engine.render`.

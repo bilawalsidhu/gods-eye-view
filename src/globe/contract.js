@@ -139,6 +139,11 @@
  * @property {() => Cartesian3} position Where the target is (read each frame).
  * @property {Cartesian3 | (() => Cartesian3)} viewFrom The camera's offset
  *   from the target in its east-north-up frame, metres.
+ * @property {Cartesian3 | null} [swingTo] Desired ENU offset after the first
+ *   follow frame. Turns at most 60 degrees per frame, interpolating range,
+ *   then leaves the offset to user gestures. retarget({ swingTo }) keeps the
+ *   current follow; null cancels a pending swing. Stop or camera handoff
+ *   cancels it as well.
  * @property {number} [minRange] Closest the camera comes (150 m).
  * @property {'enu'} [frame]
  * @property {any} [native] What is followed, as the handle's `native`. On
@@ -175,6 +180,7 @@
  *   under the position, nearest first.
  *
  * @typedef {object} InputOptions
+ * @property {{ release: () => void }} [pointer] The live exclusive pointer claim.
  * @property {InputModifier} [modifier]
  * @property {boolean} [pick] click, doubleClick and move only. A move
  *   listener with pick gets at most one payload per frame (the latest).
@@ -300,6 +306,12 @@
  * @typedef {{ intensity: number, uniforms: Record<string, number> }} StyleState
  *
  * @typedef {object} GlobeInput
+ * @property {() => ({ release: () => void } | null)} acquirePointer Claim
+ *   exclusive screen events, or null while another claim is held. Pass the
+ *   claim as InputOptions.pointer; other subscriptions yield. Release is
+ *   idempotent, and engine destruction releases it. Camera gestures remain
+ *   enabled. Cesium's stock select/track clicks are suspended and restored
+ *   by identity. Deferred picks cannot cross a claim or release.
  * @property {(type: InputType, listener: (event: InputEvent) => void, options?: InputOptions) => () => void} on
  *   As in Cesium, a listener with a modifier fires only while that key is
  *   held and one without fires only while no modifier is held.
@@ -893,6 +905,7 @@ const SHAPE = {
   input: {
     on: isFunction,
     setCameraInputs: isFunction,
+    acquirePointer: isFunction,
     suspendCameraInputs: isFunction,
     cameraInputsEnabled: isFunction,
   },

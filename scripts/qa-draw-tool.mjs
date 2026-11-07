@@ -329,13 +329,12 @@ try {
   check(
     'three enable/disable cycles add no listener, handler or preview data source',
     after.domListeners === before.domListeners &&
-      after.previewDataSources === 1 &&
-      before.previewDataSources === 1 &&
+      after.previewDataSources === 0 &&
+      before.previewDataSources === 0 &&
       after.sceneHandler === false &&
-      after.pointerOwner === null &&
-      after.stockDoubleClick === before.stockDoubleClick,
+      after.pointerOwner === null,
     `listeners ${before.domListeners}→${after.domListeners}, previews ${after.previewDataSources}, ` +
-      `handler ${after.sceneHandler}, owner ${after.pointerOwner}, stock dblclick ${after.stockDoubleClick}`,
+      `handler ${after.sceneHandler}, owner ${after.pointerOwner}`,
   );
 
   // ── the viewer's own click actions are borrowed, then given back ────────
@@ -873,7 +872,7 @@ try {
     finalState.active === false &&
       finalState.pointerOwner === null &&
       finalState.sceneHandler === false &&
-      finalState.previewDataSources === 1,
+      finalState.previewDataSources === 0,
     JSON.stringify(finalState),
   );
   // ── destroy(): the shell disposing the tool leaves nothing behind ───────
@@ -919,9 +918,9 @@ try {
     JSON.stringify(destroyed.diagnostics),
   );
   check(
-    'destroy() detaches the preview data source and gives the window handle back',
+    'destroy() leaves no preview data source and gives the window handle back',
     destroyed.previews === 0 &&
-      destroyed.dataSources === beforeDestroy - 1 &&
+      destroyed.dataSources === beforeDestroy &&
       destroyed.handleGone,
     `previews ${destroyed.previews}, dataSources ${beforeDestroy} → ${destroyed.dataSources}, handle gone ${destroyed.handleGone}`,
   );

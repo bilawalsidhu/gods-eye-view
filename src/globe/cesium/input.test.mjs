@@ -220,3 +220,47 @@ test('click listeners with pick and drill get the picker answers once per click'
   assert.equal(hovers.length, 1);
   assert.deepEqual({ ...calls.at(-1)[1] }, { x: 2, y: 0 });
 });
+
+test('exclusive pointer suppresses ambient and stock clicks, restores exact actions on destruction', () => {
+  const { viewer, input, destroy, handlers } = setup();
+  const actions = new Map();
+  const click = () => {};
+  const double = () => {};
+  actions.set(Type.LEFT_CLICK, click);
+  actions.set(Type.LEFT_DOUBLE_CLICK, double);
+  viewer.screenSpaceEventHandler = {
+    getInputAction: (type) => actions.get(type),
+    setInputAction: (action, type) => actions.set(type, action),
+    removeInputAction: (type) => actions.delete(type),
+  };
+  let ambient = 0,
+    owned = 0;
+  input.on('click', () => ambient++);
+  const pointer = input.acquirePointer();
+  assert.equal(input.acquirePointer(), null);
+  assert.equal(actions.size, 0);
+  input.on('click', () => owned++, { pointer });
+  handlers[0].fire(Type.LEFT_CLICK, { position: { x: 1, y: 1 } });
+  assert.equal(ambient, 0);
+  assert.equal(owned, 1);
+  assert.equal(input.cameraInputsEnabled(), true);
+  pointer.release();
+  pointer.release();
+  assert.equal(actions.get(Type.LEFT_CLICK), click);
+  assert.equal(actions.get(Type.LEFT_DOUBLE_CLICK), double);
+  handlers[0].fire(Type.LEFT_CLICK, { position: { x: 1, y: 1 } });
+  assert.equal(ambient, 1);
+  assert.equal(owned, 1, 'released subscriptions stay inert');
+  const next = input.acquirePointer();
+  pointer.release();
+  assert.equal(
+    input.acquirePointer(),
+    null,
+    'an old claim cannot release a new one',
+  );
+  destroy();
+  next.release();
+  assert.equal(actions.get(Type.LEFT_CLICK), click);
+  assert.equal(actions.get(Type.LEFT_DOUBLE_CLICK), double);
+  assert.equal(input.acquirePointer(), null);
+});
