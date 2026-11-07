@@ -168,7 +168,7 @@ the surface. `exclude` lists draw set ids to see through, of those drawn with
 miss is `null`, and every caller treats it as one; `batch` and `clampBatch`
 reject when the query itself fails. Without depth-texture support the Cesium
 renderer answers no `surface` or `tiles` height; `now` still answers
-`terrain` from the loaded tiles.
+`terrain` from the loaded tiles, while `batch` misses terrain too.
 
 ## Cesium internals
 

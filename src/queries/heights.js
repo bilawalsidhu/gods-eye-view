@@ -5,7 +5,8 @@
  * asked of the renderer's query port (`src/render/contract/query.d.ts`).
  *
  * `now()` answers from what is already loaded and may return `null`: tiles
- * not streamed yet, no depth support, no renderer, a point off screen. Every
+ * not streamed yet, no depth support (below), no renderer, a point off
+ * screen. Every
  * caller treats that as a miss, holding its last value or placing first and
  * patching when `batch()` resolves. `batch()` and `clampBatch()` answer null
  * per point they miss, and reject when the query itself fails (a tile
@@ -15,7 +16,7 @@
  * What the renderer cannot answer is a miss: without depth textures (its
  * `sampleHeight` capability) the Cesium renderer answers no `'surface'` or
  * `'tiles'` height; `now()` still answers `'terrain'` from the globe's
- * loaded tiles.
+ * loaded tiles, while `batch()` misses there too.
  *
  * `against` picks the surface: `'surface'` is what is drawn (tiles, the
  * globe, and draw sets drawn as ground), `'terrain'` the terrain alone,
