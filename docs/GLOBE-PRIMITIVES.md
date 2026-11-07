@@ -1,14 +1,15 @@
 # Globe primitives
 
 A layer draws through the globe-engine contract (`src/globe/contract.js`),
-not through Cesium or Navara. The contract has four drawing primitives:
+not through Cesium or Navara. The contract has five drawing primitives:
 
 - `engine.movers`: things at points;
 - `engine.lines`: lines in the air;
 - `engine.ground`: fills on the ground;
-- `engine.imagery`: rasters on the ground.
+- `engine.imagery`: rasters on the ground;
+- `engine.meshes`: textured or coloured world triangles.
 
-Each engine implements all four. Cesium's are in `src/globe/cesium/`,
+Each engine implements all five. Cesium's are in `src/globe/cesium/`,
 Navara's in `src/globe/navara/`, and the fake engine's in
 `src/globe/testing/fakeEngine.js`. The checks every engine must pass are in
 `src/globe/testing/contractSuite.mjs`.
@@ -522,3 +523,46 @@ sharpening on both engines, following Cesium.
   the engine animates.
 - **Pixels on the ground** (tiles, a raster, a photo): an imagery layer.
   Fade it with `setAlpha`, and give a new raster to `setSource`.
+
+## Meshes: world triangles
+
+`engine.meshes.createMesh({ id, positions, indices, uv, image, color, show,
+depthTest, pickId })` draws indexed triangles on both sides. Positions are
+flat Earth-fixed xyz metres and indices name their vertices. Optional UVs run
+from (0, 0) at the image's bottom left to (1, 1) at its top right. The engine
+copies geometry arrays; the caller owns the canvas, image or video.
+
+`update(patch)` replaces only supplied fields. Repeating `image` uploads new
+canvas pixels; videos update on rendered frames. RGBA `color` multiplies the
+image, white by default. `show()` reads visibility and `show(boolean)` changes
+it. `depthTest` is `normal` or `always`; null `pickId` disables picking. Picks
+return the authored id and the mesh id as owner. `destroy()` is idempotent;
+`engine.meshes.list()` returns live ids in creation order.
+
+Cesium draws a synchronous Primitive with a flat material, no back-face
+culling and no depth writes. Colour, image and visibility changes retain the
+primitive; geometry, pick-id and depth-test changes replace it. The engine
+requests frames while the primitive or its image is preparing. Navara draws
+local coordinates relative to a double-precision world origin in its
+scene pass, with scene depth and triangle picking. Its meshes receive the
+scene effects, as Cesium primitives do.
+Both engines own geometry, material and texture disposal. The fake engine
+keeps the same state and tests triangle intersections for picks.
+
+CCTV's `render/meshes.js` describes its live monitor quad and viewshed pyramid
+through this primitive. Its markers and outlines remain movers and lines.
+Obstruction probes use `engine.surface.raycast`; exclusions accept owned mesh,
+line and mover handles on Cesium and restore their visibility after the query.
+
+Data packs use one `src/scenes/dataPacks/display.js`: points on movers,
+straight raised paths on lines, raised polygons and image rectangles on
+meshes, and media markers with captions in a composed sprite. Polygon holes
+and authored vertex heights are retained. Shared triangulation uses `earcut`,
+with tests comparing its area to Cesium's polygon geometry. Images retain
+Cesium's one-degree rectangle grid. Scene detach releases drawn resources and
+pick targets; reattach redraws the retained decoded assets.
+
+Annotation drapes still use their existing renderers. Their bounded building
+classification volumes, animated fills and wire cages are not ordinary world
+triangles; they need a classification contract before that migration can
+preserve Cesium's behaviour.

@@ -8,6 +8,7 @@ import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useDataPacksStore } from '../../ui/stores/dataPacks.js';
 import DataPacks from '../../ui/views/panels/DataPacks.vue';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createPackPresentations } from './presentation.js';
 
 const ANCHOR = { id: 'here', lat: 30, lon: -97, alt: 10 };
@@ -18,16 +19,24 @@ const pack = (id, url) => ({
 });
 
 function fixture(t) {
+  const previousContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = () => ({
+    measureText: (text) => ({ width: text.length * 8 }),
+    fillText() {},
+    beginPath() {},
+    arc() {},
+    fill() {},
+  });
+  t.after(() => {
+    HTMLCanvasElement.prototype.getContext = previousContext;
+  });
   document.body.replaceChildren();
   const container = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
   const app = createApp(DataPacks).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
-  const viewer = {
-    container,
-    scene: { requestRender() {} },
-    entities: { add: (spec) => spec, remove() {} },
-  };
+  const viewer = createFakeEngine({ container });
+  t.after(() => viewer.destroy());
   const store = useDataPacksStore(pinia);
   const presentations = createPackPresentations(viewer, new Map(), { store });
   t.after(() => app.unmount());

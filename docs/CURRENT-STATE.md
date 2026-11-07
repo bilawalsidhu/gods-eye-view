@@ -280,17 +280,19 @@ one application, and only the globe-bound parts move to the next engine.
   layer manifest loads and passes in).
   The Active Fires far-zoom heatmap is an `engine.imagery` layer, and Recent
   Imagery draws its days through `engine.imagery` from its own
-  `render/display.js`. CCTV's monitor plane and viewshed volume, which the
-  contract has no primitive for yet, draw behind one seam,
-  `src/layers/cctv/render/meshes.js` (`render/cesiumMeshes.js` on Cesium;
-  `render/navaraMeshes.js`, which the layer manifest loads and passes in).
+  `render/display.js`. CCTV's monitor plane and viewshed volume use
+  `engine.meshes` through `src/layers/cctv/render/meshes.js`, with no layer
+  backend per engine. Data packs share `src/scenes/dataPacks/display.js`:
+  movers, lines and world meshes retain authored heights, polygon holes,
+  images and picking across scene detach and reattach. Annotation drapes
+  remain on their existing renderers pending bounded classification support.
   Navara ground effects (heat, pulses, trails, pads, drapes) are declared
   with `defineGroundEffect` (`src/layers/shared/render/navaraGroundEffect.js`);
   their insert order is pinned by `navaraGroundOrder.test.mjs`.
 - **One layer manifest.** `LAYER_MANIFEST` in `src/app/layers/renderers.js`
   says how each directory layer draws: its display with the contract
   primitives it needs (and an engine-specific backend option keyed by engine
-  kind: CCTV's meshes and Global Context's pulses on Navara), a layer that
+  kind: Global Context's pulses on Navara), a layer that
   draws itself through the contract (Wildlife Sightings), or, without a
   display, its drawing per engine kind (wind, the weather rasters and the
   Bhote Koshi event and locator draw themselves on Cesium and through a

@@ -67,6 +67,7 @@ test('the engine draws the visual styles, bloom and contact sonar, not the cloud
     lines: true,
     ground: true,
     imagery: true,
+    meshes: true,
   });
   assert.equal(engine.contactSonarDiagnostics().contacts, 0);
   engine.destroy();

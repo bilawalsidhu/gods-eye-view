@@ -85,7 +85,7 @@ const cesiumLayerRenderer = (file) =>
   /\/render\/cesium(?:[^/]*|\/[^/]+)\.js$/.test(file);
 // Navara renderers outside a layer's render/ directory: like those, they
 // reach the app only through the Navara mode's import().
-const NAVARA_SCENE_RENDERERS = new Set(['src/scenes/dataPacks/navara.js']);
+const NAVARA_SCENE_RENDERERS = new Set();
 // The modules that load Navara renderers, each through import().
 const NAVARA_RENDERER_LOADERS = new Set([
   'src/app/navaraMode.js',

@@ -1,4 +1,4 @@
-// The CCTV cameras on the globe contract (engine.movers, engine.lines,
+// The CCTV cameras on the globe contract (engine.movers, engine.lines, engine.meshes,
 // engine.input, engine.picker, engine.camera, engine.projector,
 // engine.surface, engine.credits), the same on every engine:
 // - the camera markers, one sprite set (24 px, shrinking with distance,
@@ -9,8 +9,8 @@
 //   or depth fail changes;
 // - the calibration gizmo: rings and arrow shafts as lines, arrow tips and
 //   handles in one point set, drags through engine.input;
-// - the monitor plane and the viewshed volume behind render/meshes.js, the
-//   engine-specific part the contract has no primitive for yet.
+// - the monitor plane and the viewshed volume as world triangles through
+//   engine.meshes (render/meshes.js).
 // The layer (../index.js) keeps the records, the policy and the style
 // choices (../rendering.js, ./style.js).
 
@@ -86,16 +86,11 @@ export function planeOutline(shape, positions, orientation) {
 
 /**
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
- * @param {{ state: object, services: object, navaraMeshes?: Function }} options
- *   The layer's state and services; `navaraMeshes` is the Navara meshes
- *   backend (render/navaraMeshes.js), which the Navara mode passes in.
+ * @param {{ state: object, services: object }} options
  */
-export function createCctvDisplay(
-  engine,
-  { state, services = {}, navaraMeshes } = {},
-) {
+export function createCctvDisplay(engine, { state, services = {} } = {}) {
   if (!engine) throw new TypeError('The CCTV display needs a globe engine');
-  const meshes = createCctvMeshes(engine, { navaraMeshes });
+  const meshes = createCctvMeshes(engine);
   const markers = [];
   const markerHandles = new WeakSet();
   const changedMarkers = new Set();
@@ -328,25 +323,6 @@ export function createCctvDisplay(
   const engineObjects = (handles = []) => [
     ...new Set(handles.flatMap(drawnObjects)),
   ];
-  /**
-   * The same for a ray pick that skips objects by pick id (Cesium's): every
-   * marker, as the whole set was, and the listed lines, planes and volumes.
-   */
-  function rayExclusions(handles = []) {
-    const exclude = markers.map((marker) => marker.id);
-    for (const handle of handles) {
-      if (!handle || ownsMarker(handle)) continue;
-      if (lines.get(handle.id) === handle) exclude.push(handle.pickId);
-      else if (planes.has(handle))
-        exclude.push(
-          handle.outline.pickId,
-          ...[meshes.drawnBy(handle.mesh)].filter(Boolean),
-        );
-      else exclude.push(...[meshes.drawnBy(handle)].filter(Boolean));
-    }
-    return exclude;
-  }
-
   // ── Gizmo ───────────────────────────────────────────────────────────────
   function createGizmoRenderer() {
     const handles = new Map();
@@ -727,12 +703,7 @@ export function createCctvDisplay(
           far,
           exclude: [markerSet, ...engineObjects(exclude)].filter(Boolean),
         });
-      return meshes.obstructionRay(
-        origin,
-        direction,
-        far,
-        rayExclusions(exclude),
-      );
+      return undefined;
     },
     createPlaneMaterial: (image) => meshes.createMaterial(image),
     createTestPlaneMaterial: () => meshes.createMaterial(null),

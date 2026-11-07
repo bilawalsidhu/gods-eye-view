@@ -91,15 +91,10 @@ test('the layers drawn through one display, and the ones that draw without one',
   // Engine-specific options of a display: the Navara backends.
   assert.deepEqual(
     kinds((entry) => Object.keys(entry.backends ?? {}).length),
-    [
-      'bhote-koshi-2026',
-      'bhote-koshi-locator',
-      'cctv',
-      'military-awareness',
-      'wind',
-    ],
+    ['bhote-koshi-2026', 'bhote-koshi-locator', 'military-awareness', 'wind'],
   );
-  assert.deepEqual(Object.keys(LAYER_MANIFEST.cctv.backends), ['navara']);
+  assert.deepEqual(Object.keys(LAYER_MANIFEST.cctv.backends), []);
+  assert.ok(LAYER_MANIFEST.cctv.needs.includes('meshes'));
   // The layer that draws itself through the contract.
   assert.deepEqual(
     kinds((entry) => !entry.display && entry.needs),

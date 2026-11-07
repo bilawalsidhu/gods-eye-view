@@ -343,6 +343,20 @@ test('imagery is required and reported as a capability', () => {
   assert.ok(names.some((name) => name.startsWith('imagery:')));
 });
 
+test('meshes are required and reported as a capability', () => {
+  const engine = createFakeEngine();
+  assert.equal(engineCapabilities(engine).meshes, true);
+  assert.throws(
+    () => assertGlobeEngine({ ...engine, meshes: undefined }),
+    /meshes/,
+  );
+  assert.throws(
+    () => assertGlobeEngine({ ...engine, meshes: { createMesh() {} } }),
+    /meshes.list/,
+  );
+  engine.destroy();
+});
+
 test('engineCapabilities names the optional capabilities an engine has whole', () => {
   const plain = createFakeEngine();
   for (const flag of ['visualStyles', 'bloom', 'cloudCover', 'contactSonar'])

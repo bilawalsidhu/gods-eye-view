@@ -294,8 +294,8 @@ function installRenderFramesHelper(page) {
 // lines named `cctv-<camera>-<role>` and `cctv-gizmo-<part>`, and the gizmo's
 // handles in the `cctv-gizmo-points` point set. engine.lines.list() names the
 // live lines (id, points, shown); their positions are what the layer's own
-// line handles hold (record.coverageEntities). The monitor plane is still a
-// Cesium plane Entity (render/cesiumMeshes.js), read as before.
+// line handles hold (record.coverageEntities). The monitor plane is a
+// world mesh, with placement held by the display's plane handle.
 const CONTRACT_SRC = `
   function cctvRecord(camId) {
     const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
@@ -354,18 +354,15 @@ const CONTRACT_SRC = `
     );
     return shown.every(Boolean) ? 'shown' : 'hidden';
   }
-  // The viewshed volumes the layer holds (record.viewshedPrimitive), with
-  // their Cesium Primitive, only where that primitive is in the scene.
+  // The layer's viewshed volumes whose engine meshes are still live.
   function viewshedVolumes() {
     const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
-    const primitives = window.__godsEyeView.viewer.scene.primitives;
+    const live = new Set(window.__godsEyeView.engine.meshes.list());
     const out = [];
     for (const record of mod._cctvRecordsForTest()) {
       const volume = record.viewshedPrimitive;
-      const primitive = volume && !volume.destroyed && volume.native
-        ? volume.native.primitive
-        : null;
-      if (primitive && primitives.contains(primitive))
+      const primitive = volume && !volume.destroyed ? volume.mesh : null;
+      if (primitive && live.has(primitive.id))
         out.push({ camera: record.camera.id, volume, primitive });
     }
     return out;
@@ -379,23 +376,21 @@ const CONTRACT_SRC = `
 const SERIALIZE_GEOM_SRC = `
   ${CONTRACT_SRC}
   function serializeGeom(camId) {
-    const viewer = window.__godsEyeView.viewer;
-    const time = viewer.clock.currentTime;
     const roles = ['ray-tl', 'ray-tr', 'ray-br', 'ray-bl', 'cap'];
     const lines = liveLines();
     const poly = {};
     for (const role of roles)
       poly[role] = coverageLinePositions(camId, role, lines);
-    const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
+    const planeEnt = cctvRecord(camId)?.projection?.planeEntity;
+    const live = window.__godsEyeView.engine.meshes.list().includes(planeEnt?.id);
     let plane = null;
-    if (planeEnt) {
-      const pos = planeEnt.position.getValue(time);
-      const orient = planeEnt.orientation.getValue(time);
-      const dims = planeEnt.plane.dimensions.getValue(time);
+    if (live) {
+      const { positions, orientation: orient, shape } = planeEnt.mesh;
+      const pos = positions.capCenter;
       plane = {
         position: [pos.x, pos.y, pos.z],
         orientation: [orient.x, orient.y, orient.z, orient.w],
-        dimensions: [dims.x, dims.y],
+        dimensions: [shape.halfW * 2, shape.halfH * 2],
       };
     }
     return { poly, plane };
@@ -1036,7 +1031,7 @@ async function main() {
       // source. Assert the migrated surface via the host diagnostics.
       const diag = window.__gevWorldOverlay?.getDiagnostics?.();
       g.hasLabel = (diag?.entriesBySource?.['cctv-projection'] || 0) >= 1;
-      const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
+      const planeEnt = cctvRecord(camId)?.projection?.planeEntity;
       g.planeShow = planeEnt ? planeEnt.show : null;
       return g;
     })(${JSON.stringify(activeId)})`);
@@ -1056,7 +1051,7 @@ async function main() {
         .join(', '),
     );
     record(
-      'plane + plane-label entities exist for the active camera',
+      'plane mesh and label exist for the active camera',
       !!geomInfo.plane && geomInfo.hasLabel,
       `plane=${!!geomInfo.plane} label=${geomInfo.hasLabel} show=${geomInfo.planeShow}`,
     );
@@ -1424,15 +1419,11 @@ async function main() {
     // never null/undefined once the runtime exists, i.e. there's no gap where
     // the plane shows nothing.
     const materialInfo = await page.evaluate((camId) => {
-      const viewer = window.__godsEyeView.viewer;
-      const time = viewer.clock.currentTime;
-      const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
-      const mat = planeEnt?.plane?.material;
-      const image = mat?.image;
-      const resolved =
-        image && typeof image.getValue === 'function'
-          ? image.getValue(time)
-          : image;
+      const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const runtime = mod._cctvRecordsForTest().find((r) => r.camera.id === camId)?.projection;
+      const planeEnt = runtime?.planeEntity;
+      const mat = runtime?.planeMaterial;
+      const resolved = mat?.image;
       return {
         hasMaterial: !!mat,
         hasImage: !!resolved,
@@ -1863,9 +1854,7 @@ async function main() {
     console.log(
       'Checking viewshed mode (coverage tri-state + color-coded volumes)...',
     );
-    // The volumes are the layer's (record.viewshedPrimitive), each a Cesium
-    // Primitive in scene.primitives (render/cesiumMeshes.js); they carry no
-    // tag of their own any more.
+    // Every layer volume owns one engine mesh.
     const countVolumes = () =>
       page.evaluate(`(function(){
         ${CONTRACT_SRC}
@@ -1875,29 +1864,20 @@ async function main() {
     const cBeforeViewshed = await readCounters();
     await page.evaluate(`(function(){
       ${CONTRACT_SRC}
-      const primitives = window.__godsEyeView.viewer.scene.primitives;
+      const meshes = window.__godsEyeView.engine.meshes;
       const events = [];
       window.__qaViewshedTrace = events;
-      // A volume is a synchronous Primitive the pick pass skips; which
-      // camera it belongs to is looked up when the trace is read.
-      const isVolume = (primitive) =>
-        primitive &&
-        primitive.allowPicking === false &&
-        primitive.asynchronous === false &&
-        typeof primitive.get !== 'function';
-      for (const method of ['add', 'remove']) {
-        const original = primitives[method].bind(primitives);
-        primitives[method] = (primitive, ...args) => {
-          if (isVolume(primitive))
-            events.push({
-              method,
-              primitive,
-              at: performance.now(),
-              stack: new Error().stack,
-            });
-          return original(primitive, ...args);
-        };
-      }
+      const create = meshes.createMesh.bind(meshes);
+      meshes.createMesh = (options) => {
+        const primitive = create(options);
+        if (options.id.startsWith('cctv-volume-')) {
+          const record = (method) => events.push({ method, primitive, at: performance.now(), stack: new Error().stack });
+          record('add');
+          const destroy = primitive.destroy.bind(primitive);
+          primitive.destroy = () => { record('remove'); destroy(); };
+        }
+        return primitive;
+      };
       window.__qaViewshedTraceRead = () => {
         const owners = new Map(
           viewshedVolumes().map((entry) => [entry.primitive, entry.camera]),

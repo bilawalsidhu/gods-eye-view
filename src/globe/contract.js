@@ -198,8 +198,8 @@
  *   sampleHeight with the answer's quality (src/globe/surfaceDetail.js):
  *   from the tiles drawn now (Navara: where they miss, the finest loaded
  *   ones; Cesium samples what it has loaded). Where no tile answers, the
- *   terrain. `exclude` takes this engine's mover sets as well as engine
- *   objects.
+ *   terrain. `exclude` takes this engine's mover sets, lines and meshes as
+ *   well as native engine objects.
  * @property {boolean} supported Whether sampleHeight works.
  * @property {(cartographic: Cartographic) => (number | undefined)} terrainHeight
  *   Height of the terrain/globe surface only (Cesium's globe.getHeight).
@@ -209,7 +209,8 @@
  * @property {boolean} clampToHeightSupported
  * @property {() => boolean} tilesLoaded
  * @property {(ray: { origin: Cartesian3, direction: Cartesian3, far: number, exclude?: any[] }) => ({ position: Cartesian3, distance: number, object: any } | undefined)} [raycast]
- *   Nearest visible tile triangle within finite positive `far` metres. Direction
+ *   Nearest visible scene object within finite positive `far` metres (Navara:
+ *   loaded tile triangles). Direction
  *   is normalized by the adapter. Excluded roots/meshes and hidden objects do
  *   not obstruct; a miss or unsupported geometry returns undefined, not terrain.
  *
@@ -641,6 +642,28 @@
  *   now: the globe, 3D tiles, or nothing (a Cesium stack with neither
  *   draws no imagery until one shows; the layers wait).
  *
+ * @typedef {object} MeshOptions
+ * @property {string} id Unique within the engine.
+ * @property {ArrayLike<number>} positions Flat Earth-fixed xyz metres, copied.
+ * @property {ArrayLike<number>} indices Triangle vertex indices, copied.
+ * @property {ArrayLike<number>} [uv] Texture coordinates, (0,0) at bottom left.
+ * @property {number[]} [color] RGBA in 0..1, white by default; multiplies image.
+ * @property {object|null} [image] Canvas, image or video; caller owns its lifetime.
+ * @property {boolean} [show=true]
+ * @property {'normal'|'always'} [depthTest='normal']
+ * @property {any} [pickId] Null disables picking. Both faces draw and pick.
+ *
+ * @typedef {object} GlobeMesh
+ * @property {string} id
+ * @property {(patch: Partial<MeshOptions>) => void} update Updates geometry or style.
+ *   Repeating an image uploads changed pixels. Omitted fields retain their values.
+ * @property {(visible?: boolean) => (boolean|void)} show Read or set visibility.
+ * @property {() => void} destroy Idempotent; releases engine-owned resources.
+ *
+ * @typedef {object} GlobeMeshes
+ * @property {(options: MeshOptions) => GlobeMesh} createMesh
+ * @property {() => string[]} list Live mesh ids in creation order.
+ *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
@@ -662,6 +685,7 @@
  * @property {GlobeMovers} movers The layers' moving objects (sprites,
  *   points, models), drawn by the engine.
  * @property {GlobeLines} lines The layers' dynamic polylines.
+ * @property {GlobeMeshes} meshes World triangles.
  * @property {GlobeGround} ground The layers' fills on the ground.
  * @property {GlobeImagery} imagery The layers' rasters on the ground.
  * @property {() => void} destroy
@@ -876,6 +900,7 @@ const SHAPE = {
   clock: { now: isFunction, frameTime: isFunction },
   movers: { createSet: isFunction, list: isFunction },
   lines: { createLine: isFunction, list: isFunction },
+  meshes: { createMesh: isFunction, list: isFunction },
   ground: { createSet: isFunction, list: isFunction },
   imagery: {
     createLayer: isFunction,
@@ -924,7 +949,7 @@ const OPTIONAL_SHAPE = {
 
 // Required capabilities engineCapabilities reports as well: true for an
 // engine that has them whole, as every valid engine does.
-const REPORTED_REQUIRED = ['movers', 'lines', 'ground', 'imagery'];
+const REPORTED_REQUIRED = ['movers', 'lines', 'ground', 'imagery', 'meshes'];
 
 const memberAt = (engine, path) =>
   path.split('.').reduce((value, key) => value?.[key], engine);
@@ -934,7 +959,7 @@ const memberAt = (engine, path) =>
  * booleans. A caller that refuses a feature on an engine without one
  * (voice, say) asks here. Cesium and Navara draw the styles, bloom and
  * contact sonar; only Navara has cloudCover. `movers`, `lines`, `ground`
- * and `imagery` are required; they are reported too, true for every valid
+ * and `imagery`, plus `meshes`, are required; they are reported too, true for every valid
  * engine.
  */
 export function engineCapabilities(engine) {

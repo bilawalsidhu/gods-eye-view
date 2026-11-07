@@ -1,8 +1,5 @@
-// Pack polygons and images as Navara mesh geometry, without the Cesium SDK (a
-// page that starts on Navara never loads it). A shape is what Cesium's
-// Geometry gives the renderer: Earth-fixed positions, triangle indices, an
-// optional texture coordinate per vertex and a centre to draw relative to.
-import { ShapeUtils, Vector2 } from 'three';
+// Pack polygons and image rectangles as indexed world triangles.
+import earcut from 'earcut';
 import * as geo from '../../geo/index.js';
 
 // Cesium's default granularity: no edge or cell spans more than one degree.
@@ -24,30 +21,6 @@ function shape(positions, indices, st = null) {
   };
 }
 
-/** A [lon, lat, height?] ring with long edges split along great circles. */
-function densify(ring) {
-  const out = [];
-  ring.forEach((a, i) => {
-    const b = ring[(i + 1) % ring.length];
-    const steps = Math.max(
-      1,
-      Math.ceil(
-        Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) /
-          GRANULARITY_DEGREES,
-      ),
-    );
-    for (let k = 0; k < steps; k++) {
-      const t = k / steps;
-      out.push([
-        a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
-        (a[2] ?? 0) + ((b[2] ?? 0) - (a[2] ?? 0)) * t,
-      ]);
-    }
-  });
-  return out;
-}
-
 /**
  * A filled polygon: `rings` are GeoJSON-style [lon, lat, height?] rings, the
  * first the outline and the rest holes, each vertex at its own height (as
@@ -63,7 +36,7 @@ export function polygonShape(rings) {
         ring[0][1] === ring.at(-1)[1]
           ? ring.slice(0, -1)
           : ring;
-      return densify(open);
+      return open;
     })
     .filter((ring) => ring.length >= 3);
   if (!loops.length) return null;
@@ -82,23 +55,20 @@ export function polygonShape(rings) {
   const offset = geo.cartesian3.create();
   const plane = world.map((p) => {
     geo.cartesian3.subtract(p, middle, offset);
-    return new Vector2(
+    return [
       geo.cartesian3.dot(offset, east),
       geo.cartesian3.dot(offset, north),
-    );
+    ];
   });
   let start = outline.length;
-  const holePoints = holes.map((hole) => {
-    const ring = plane.slice(start, start + hole.length);
+  const holeIndices = holes.map((hole) => {
+    const index = start;
     start += hole.length;
-    return ring;
+    return index;
   });
-  const triangles = ShapeUtils.triangulateShape(
-    plane.slice(0, outline.length),
-    holePoints,
-  );
+  const triangles = earcut(plane.flat(), holeIndices);
   if (!triangles.length) return null;
-  return shape(world, triangles.flat());
+  return shape(world, triangles);
 }
 
 /**

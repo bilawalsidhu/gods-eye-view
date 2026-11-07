@@ -1302,7 +1302,8 @@
       "src/director/packs/manifest.js",
       "src/scenes/dataPacks/controller.js",
       "src/scenes/dataPacks/presentation.js",
-      "src/scenes/dataPacks/geometry.js",
+      "src/scenes/dataPacks/display.js",
+      "src/scenes/dataPacks/shapes.js",
       "src/director/interactions/document.js",
       "src/director/interactions/session.js",
       "src/scenes/interactions.js",
@@ -1341,7 +1342,7 @@
       "src/globe/contract.js",
       "src/geo/"
     ],
-    "external": ["cesium", "vue", "pinia", "vue-i18n"]
+    "external": ["cesium", "vue", "pinia", "vue-i18n", "earcut"]
   },
   "live-observations": {
     "exports": ["./sources/live"],
@@ -3150,7 +3151,8 @@
       "src/director/packs/manifest.js",
       "src/scenes/dataPacks/controller.js",
       "src/scenes/dataPacks/presentation.js",
-      "src/scenes/dataPacks/geometry.js",
+      "src/scenes/dataPacks/display.js",
+      "src/scenes/dataPacks/shapes.js",
       "src/director/interactions/document.js",
       "src/director/interactions/session.js",
       "src/scenes/interactions.js",
@@ -3456,10 +3458,7 @@
       "src/celestialRing/view.js",
       "src/layers/shared/render/navaraPolygons.js",
       "src/layers/awareness/render/navaraPulses.js",
-      "src/layers/shared/render/navaraStems.js",
-      "src/layers/shared/render/navaraSceneDepth.js",
-      "src/scenes/dataPacks/navara.js",
-      "src/scenes/dataPacks/navaraGeometry.js",
+      "src/globe/navara/sceneDepth.js",
       "src/layers/shared/render/navaraStory.js",
       "src/layers/wind/render/flowMesh.js",
       "src/layers/shared/render/navaraGroundPicks.js",
@@ -3469,7 +3468,6 @@
       "src/layers/firms/rectangle.js",
       "src/layers/shared/render/navaraMoverBank.js",
       "src/layers/shared/render/moverBank.js",
-      "src/layers/cctv/render/navaraMeshes.js",
       "src/layers/radio/screenClusters.js",
       "src/layers/shared/render/imageAtlas.js",
       "src/layers/shared/render/navaraGroundSurface.js",
@@ -3538,7 +3536,6 @@
       "src/globe/navara/ground/pass.js",
       "src/globe/navara/ground/pack.js",
       "src/globe/navara/ground/index.js",
-      "src/layers/cctv/render/cesiumMeshes.js",
       "src/layers/cctv/render/meshes.js",
       "src/layers/cctv/render/display.js",
       "src/layers/cctv/worldClick.js",
@@ -3579,7 +3576,10 @@
       "src/globe/cesium/postStages.js",
       "src/data/geoImportRecords.js",
       "src/data/geoImportKml.js",
-      "src/data/geoImportDisplay.js"
+      "src/data/geoImportDisplay.js",
+      "src/globe/cesium/meshes.js",
+      "src/globe/meshes.js",
+      "src/globe/navara/meshes.js"
     ],
     "external": [
       "hls.js",
@@ -3598,7 +3598,8 @@
       "@navaramap/three",
       "@navaramap/three-default-plugin",
       "three",
-      "postprocessing"
+      "postprocessing",
+      "earcut"
     ]
   },
   "application-catalog": {
@@ -4289,7 +4290,6 @@
       "src/layers/radio/render/display.js",
       "src/layers/transit/render/style.js",
       "src/layers/cctv/render/style.js",
-      "src/layers/cctv/render/cesiumMeshes.js",
       "src/layers/cctv/render/meshes.js",
       "src/layers/cctv/render/display.js",
       "src/layers/cctv/worldClick.js",
@@ -4322,7 +4322,6 @@
       "src/layers/wind/render/navaraFlow.js",
       "src/layers/bhoteKoshi/render/display.js",
       "src/layers/shared/render/navaraStory.js",
-      "src/layers/cctv/render/navaraMeshes.js",
       "src/layers/shared/render/navaraGroundSurface.js",
       "src/layers/wind/render/flowMesh.js",
       "src/layers/shared/render/navaraGroundEffect.js",
@@ -4338,7 +4337,9 @@
       "src/styles/noir.js",
       "src/data/geoImportRecords.js",
       "src/data/geoImportKml.js",
-      "src/data/geoImportDisplay.js"
+      "src/data/geoImportDisplay.js",
+      "src/globe/cesium/meshes.js",
+      "src/globe/meshes.js"
     ],
     "external": [
       "hls.js",
@@ -5100,7 +5101,9 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/styles/anime.js",
-      "src/styles/noir.js"
+      "src/styles/noir.js",
+      "src/globe/cesium/meshes.js",
+      "src/globe/meshes.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },

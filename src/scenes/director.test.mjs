@@ -2090,7 +2090,6 @@ test('a failed scene-pack rebind releases the partial renderer and a stopped sho
         {},
         { host: { container: {} } },
         {},
-        null,
         () => true,
       ),
     /could not attach polygon/,

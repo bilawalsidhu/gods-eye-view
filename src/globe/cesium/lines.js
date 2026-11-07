@@ -231,6 +231,16 @@ export function createCesiumLines(
   });
   return {
     lines: registry.lines,
+    primitiveOf(handle) {
+      const state = [...registry.live.values()].find(
+        (entry) => entry.line === handle,
+      );
+      if (!state) return null;
+      const entry = ordered.find(
+        ({ slot }) => slot.get(0)?.gevLine === state.options.id,
+      );
+      return entry?.slot ?? null;
+    },
     /** The live line a Cesium pick result belongs to, with its pickId, or null. */
     identify(picked) {
       const owner = picked?.primitive?.gevLine;

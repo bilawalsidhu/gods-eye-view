@@ -76,10 +76,9 @@ export async function createApplicationScene({
       signal,
       ...resources,
     });
-  const { viewer, engine, tileset, mapStackController, packRenderer } =
-    rendererCache
-      ? await rendererCache.acquire(options.engineKind, build, defer)
-      : await build({ defer });
+  const { viewer, engine, tileset, mapStackController } = rendererCache
+    ? await rendererCache.acquire(options.engineKind, build, defer)
+    : await build({ defer });
   if (layerSession) {
     // DEM cells belong to the session. Mesh samples came from the outgoing
     // scene, including when the incoming canvas was warm in the cache.
@@ -94,7 +93,6 @@ export async function createApplicationScene({
     tileset,
     mapStackController,
     operations,
-    packRenderer,
   };
 }
 

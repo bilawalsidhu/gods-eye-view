@@ -7,6 +7,7 @@
 // set is hidden for the sample instead (synchronous: nothing draws in
 // between) and shown again after it.
 
+import * as Cesium from 'cesium';
 import { firstVisibleTileset } from '../../services/groundSnap.js';
 import { normalizeSurfaceOptions } from '../surfaceDetail.js';
 import { toGeo3 } from './convert.js';
@@ -63,6 +64,21 @@ export function createCesiumSurface(
     scene.globe ? finite(scene.globe.getHeight(cartographic)) : undefined;
 
   const surface = {
+    raycast({ origin, direction, far, exclude = [] }) {
+      if (!scene.pickFromRay || !Number.isFinite(far) || far <= 0)
+        return undefined;
+      return excluding(exclude, (native) => {
+        const hit = scene.pickFromRay(
+          new Cesium.Ray(origin, direction),
+          native,
+        );
+        if (!hit?.position) return undefined;
+        const distance = Cesium.Cartesian3.distance(origin, hit.position);
+        return distance <= far
+          ? { position: toGeo3(hit.position), distance, object: hit.object }
+          : undefined;
+      });
+    },
     sampleHeight,
     // Cesium samples the tiles it has loaded and does not say which tile
     // answered.

@@ -742,7 +742,7 @@ test('real active monitor plane owns one protected host label and no native labe
     setVisible: (...args) => calls.push(['visible', ...args]),
     clearSource: (...args) => calls.push(['clear', ...args]),
   };
-  const { engine, viewer } = createCesiumMoversEngine();
+  const { engine, viewer, primitive } = createCesiumMoversEngine();
   const record = {
     camera: {
       ...UNCLAMPED_CAMERA,
@@ -770,9 +770,11 @@ test('real active monitor plane owns one protected host label and no native labe
       runtime.planeEntity,
       'runtime guard requires a real monitor plane',
     );
-    const planeEntity = viewer.entities.getById(runtime.planeEntity.id);
-    assert.equal(planeEntity.label, undefined);
-    assert.ok(planeEntity.plane, 'monitor plane geometry remains native');
+    assert.ok(
+      engine.meshes.list().includes(runtime.planeEntity.id),
+      'monitor plane geometry is an engine mesh',
+    );
+    assert.equal(viewer.entities.getById(runtime.planeEntity.id), undefined);
     assert.ok(
       viewer.entities.values.every((entity) => entity.label === undefined),
     );
@@ -819,7 +821,7 @@ test('real active monitor plane owns one protected host label and no native labe
     });
     refreshCoverageStyles();
     assert.equal(runtime.planeEntity.show, false);
-    assert.equal(planeEntity.show, false);
+    assert.equal(primitive(runtime.planeEntity.id).show, false);
     assert.deepEqual(calls.slice(-2), [
       ['clear', 'cctv-projection'],
       ['visible', 'cctv-projection', false],

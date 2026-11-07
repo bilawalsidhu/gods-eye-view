@@ -106,7 +106,7 @@ export class SceneDirector {
     this._isMapStackAvailable = isMapStackAvailable;
     this._scenePacks = scenePacks;
     this._bundleAssets = createBundleAssets();
-    this._dataPacks = createSceneDataPacks(viewer, {
+    this._dataPacks = createSceneDataPacks(engine, {
       ...dataPacks,
       container: engine?.host?.container ?? viewer?.container,
       sources: {
@@ -256,18 +256,18 @@ export class SceneDirector {
     this._cameraHandoffUnsubscribe?.();
     this._removeCameraInput?.();
     this._interactions.setScene(null);
-    this._dataPacks.setScene(null, null);
+    this._dataPacks.setScene(null);
     this._flight?.suspend();
     this.engine = this.viewer = null;
   }
 
-  attachScene(viewer, engine, styleManager, native, isAvailable) {
+  attachScene(viewer, engine, styleManager, isAvailable) {
     this.viewer = viewer;
     this.engine = engine;
     this.styleManager = styleManager;
     this._isMapStackAvailable = isAvailable;
     try {
-      this._dataPacks.setScene(viewer, native, engine.host.container);
+      this._dataPacks.setScene(engine, engine.host.container);
       this._interactions.setScene(engine, this._dataPacks.getTargets());
     } catch (error) {
       // Release any packs already drawn before the caller parks the failed globe.

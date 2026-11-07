@@ -48,6 +48,12 @@ const NO_LINES = Object.freeze({
   },
   list: () => [],
 });
+const NO_MESHES = Object.freeze({
+  createMesh() {
+    throw new Error('Navara meshes need the view runtime');
+  },
+  list: () => [],
+});
 const NO_GROUND = Object.freeze({
   createSet() {
     throw new Error("Navara ground needs the view's three runtime (ground/)");
@@ -125,6 +131,7 @@ export function createNavaraEngine(
     lines: linesPort = null,
     ground: groundPort = null,
     imagery: imageryPort = null,
+    meshes: meshesPort = null,
     sharpen: sharpenPort = null,
     styles: stylesPort = null,
     bloom: bloomPort = null,
@@ -305,6 +312,7 @@ export function createNavaraEngine(
     },
   };
 
+  const meshes = meshesPort?.({ camera: model.camera, picker }) ?? null;
   let sharpen = { ...SHARPEN_INITIAL };
   let destroyed = false;
   // render.visualStyles/setStyle/style, with a styles port only.
@@ -434,6 +442,7 @@ export function createNavaraEngine(
     movers: moversPort?.movers ?? NO_MOVERS,
     lines: linesPort?.lines ?? NO_LINES,
     ground: groundPort?.ground ?? NO_GROUND,
+    meshes: meshes?.meshes ?? NO_MESHES,
     imagery: imagery?.imagery ?? NO_IMAGERY,
     destroy() {
       if (destroyed) return;
@@ -456,6 +465,7 @@ export function createNavaraEngine(
       moversPort?.destroy();
       linesPort?.destroy();
       groundPort?.destroy();
+      meshes?.destroy();
     },
     isDestroyed: () => destroyed,
     // Navara only, not contract: the post pipeline as QA reads it (the

@@ -186,9 +186,6 @@ export function createStandaloneApplication({
     get mapStackController() {
       return current?.mapStackController ?? null;
     },
-    get packRenderer() {
-      return current?.packRenderer ?? null;
-    },
     get catalog() {
       return current?.catalog ?? null;
     },

@@ -47,7 +47,9 @@ const load = () =>
 try {
   await page.setViewport({ width: 1440, height: 900 });
   await page.goto(
-    `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
+    // A view in the link: the app starts there instead of flying to a city
+    // after the shot has placed the camera.
+    `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0#v=2&lat=30.2672&lon=-97.742&alt=4000&heading=0&pitch=-90&l=`,
     { waitUntil: 'domcontentloaded' },
   );
   await page.waitForFunction(
@@ -105,7 +107,7 @@ try {
                 from: { ...camera, alt: 4100, altitudeReference: 'ellipsoid' },
                 easing: 'linear',
               },
-              visual: { style: 'normal', mapStack: 'photoreal' },
+              visual: { style: 'normal', mapStack: 'sentinel2' },
               layers: { traffic: false },
               dataPackIds: ['data'],
               interactions: [
@@ -162,21 +164,26 @@ try {
     ),
   );
   await page.waitForFunction(
-    () => window.__godsEyeView.tileset?.tilesLoaded === true,
+    () => window.__godsEyeView.sceneDirector.engine.surface.tilesLoaded(),
     { timeout: 60000 },
   );
   await new Promise((r) => setTimeout(r, 2000));
   const point = await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
-    const entity = d.viewer.entities.values.find(
-      (e) => e.name === 'data / point',
-    );
-    const pos = entity.position.getValue(d.viewer.clock.currentTime);
-    const screen = d.viewer.scene.cartesianToCanvasCoordinates(pos);
-    const rect = d.viewer.scene.canvas.getBoundingClientRect();
+    const { cartesian3 } = await import('/src/geo/index.js');
+    const pos = cartesian3.fromDegrees(-97.742, 30.2672, 600);
+    const screen = d.engine.projector.worldToWindow(pos);
+    const rect = d.engine.host.canvas.getBoundingClientRect();
     return { x: screen.x + rect.left, y: screen.y + rect.top };
   });
   await page.mouse.click(point.x, point.y);
+  // The click's pick answers asynchronously; the focus follows it.
+  await page
+    .waitForFunction(
+      () => document.activeElement?.dataset.directorAction === 'card',
+      { timeout: 10000 },
+    )
+    .catch(() => {});
   check(
     'real globe pick selects the feature and focuses its keyboard action',
     await page.evaluate(
@@ -204,7 +211,8 @@ try {
     `${output}/report.json`,
     JSON.stringify(
       await page.evaluate(() => ({
-        tilesSettled: window.__godsEyeView.tileset?.tilesLoaded === true,
+        tilesSettled:
+          window.__godsEyeView.sceneDirector.engine.surface.tilesLoaded(),
       })),
       null,
       2,

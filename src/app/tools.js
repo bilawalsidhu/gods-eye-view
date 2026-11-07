@@ -75,7 +75,7 @@ export async function createApplicationTools({
     layerSession?.director ??
     new SceneDirector(first.viewer, styleManager, dataManager, {
       engine: first.engine,
-      dataPacks: { ...sceneDataPacks, native: first.packRenderer },
+      dataPacks: sceneDataPacks,
       isMapStackAvailable: isStackAvailable(first.mapStackController),
     });
   // The Director built on this globe is attached to it already.
@@ -126,7 +126,6 @@ export async function createApplicationTools({
           next.viewer,
           next.engine,
           styleManager,
-          next.packRenderer,
           isStackAvailable(next.mapStackController),
         );
       },

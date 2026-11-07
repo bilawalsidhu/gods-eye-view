@@ -53,7 +53,7 @@ test('the scene constructs the engine with the viewer and returns it beside the 
   assert.match(scene, /tilesetRef\.current = tileset;/);
   assert.match(
     scene.replace(/\s+/g, ' '),
-    /return \{ viewer, engine, tileset, mapStackController, operations, packRenderer,? \};/,
+    /return \{ viewer, engine, tileset, mapStackController, operations,? \};/,
   );
 });
 

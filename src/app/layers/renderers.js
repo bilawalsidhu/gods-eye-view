@@ -15,7 +15,7 @@
 //   default); the entry's `display` is its loader. `backends` is the
 //   display's engine-specific option, keyed by engine kind: an import()
 //   loader of `{ option: value }` merged into the display's options on that
-//   engine (CCTV's meshes, Global Context's pulses on Navara).
+//   engine (Global Context's pulses on Navara).
 // - `drawsItself(needs)`: no renderer; the layer draws itself through the
 //   contract primitives in `needs` (Wildlife Sightings).
 // - `perEngine({ [kind]: loader | DRAWS_ITSELF })`: a layer with no display
@@ -60,6 +60,7 @@ export const CONTRACT_PRIMITIVES = Object.freeze([
   'lines',
   'ground',
   'imagery',
+  'meshes',
 ]);
 
 /** The primitives an engine kind draws with: all of them, on every kind. */
@@ -174,14 +175,7 @@ export const LAYER_MANIFEST = Object.freeze({
   satellites: display('createSatellitesDisplay', ['movers', 'lines']),
   'rocket-launches': display('createLaunchesDisplay', ['movers', 'lines']),
   traffic: display('createTrafficDisplay', ['movers', 'ground']),
-  // CCTV's display, with the Navara backend of its plane and volume
-  // (render/meshes.js).
-  cctv: display('createCctvDisplay', ['movers', 'lines'], {
-    navara: async () => ({
-      navaraMeshes: (await import('../../layers/cctv/render/navaraMeshes.js'))
-        .createCctvNavaraMeshes,
-    }),
-  }),
+  cctv: display('createCctvDisplay', ['movers', 'lines', 'meshes']),
   radio: display('createRadioDisplay', ['movers']),
   transit: display('createTransitDisplay', ['movers', 'lines']),
   bikeshare: display('createBikeshareDisplay', ['movers']),

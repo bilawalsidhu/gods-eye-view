@@ -1,14 +1,13 @@
 import { createDataPackSession } from '../../director/packs/session.js';
 import { createPackPresentations } from './presentation.js';
 
-/** Bind selected shot packs to one viewer and expose copied lifecycle diagnostics. */
+/** Bind selected shot packs to one engine and expose copied lifecycle diagnostics. */
 export function createSceneDataPacks(
-  viewer,
-  { sources = {}, native = null, container = viewer?.container } = {},
+  engine,
+  { sources = {}, container = engine?.host?.container } = {},
 ) {
   const targets = new Map();
-  const presentations = createPackPresentations(viewer, targets, {
-    native,
+  const presentations = createPackPresentations(engine, targets, {
     container,
   });
   const session = createDataPackSession({

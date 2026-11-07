@@ -65,6 +65,7 @@
     "@navaramap/three": "0.2.1",
     "@navaramap/three-default-plugin": "0.2.1",
     "cesium": "^1.124.0",
+    "earcut": "^3.0.2",
     "egm96-universal": "^1.1.1",
     "hls.js": "^1.7.3",
     "kdbush": "4.0.2",

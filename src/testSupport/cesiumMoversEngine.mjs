@@ -74,7 +74,7 @@ export function createCesiumMoversEngine({ engineOptions = {} } = {}) {
   const primitive = (id) => {
     for (const root of items(viewer.scene.primitives))
       for (const child of items(root)) {
-        if (child.gevMoverSet === id) return child;
+        if (child.gevMoverSet === id || child.gevMesh === id) return child;
         if (child instanceof Cesium.PrimitiveCollection)
           for (const inner of items(child))
             if (inner.gevLine === id) return inner;

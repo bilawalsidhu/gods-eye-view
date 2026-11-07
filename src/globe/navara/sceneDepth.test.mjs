@@ -11,9 +11,9 @@ import {
   SCENE_DEPTH_BIAS,
   createSceneDepthTest,
   withSceneDepthTest,
-} from './navaraSceneDepth.js';
-import { createStemBatch } from './navaraStems.js';
-import { createNavaraPackRenderer } from '../../../scenes/dataPacks/navara.js';
+} from './sceneDepth.js';
+import { createPackRenderer } from '../../scenes/dataPacks/display.js';
+import { createNavaraMeshes } from './meshes.js';
 
 const count = (text, part) => text.split(part).length - 1;
 
@@ -92,6 +92,7 @@ function fakeView() {
     onDestroy() {}
   }
   const view = {
+    forceUpdate() {},
     registerMesh: (kind, desc) => kinds.set(kind, desc),
     addMesh(config) {
       const kind = Object.keys(config)[0];
@@ -137,21 +138,24 @@ function assertTested(object, mrt) {
   }
 }
 
-test('stems and pack meshes stay transparent and test the scene depth', () => {
-  const stems = fakeView();
-  createStemBatch(stems, 0xffffff, 4);
+test('pack meshes stay transparent and test the scene depth', () => {
   const packs = fakeView();
   const owned = [];
-  const engine = { render: { request() {} } };
-  createNavaraPackRenderer(engine, packs).image(
+  const port = createNavaraMeshes(packs.view, {
+    MeshDesc: packs.MeshDesc,
+    camera: {},
+    picker: { registerMeshPicker: () => () => {} },
+  });
+  const engine = { meshes: port.meshes, render: { request() {} } };
+  createPackRenderer(engine).image(
     { id: 'p', placement: { bounds: [0, 0, 0.01, 0.01], height: 300 } },
     {},
     { own: (fn) => owned.push(fn) },
   );
-  for (const { created, mrt } of [stems, packs]) {
-    assert.equal(created.length, 1);
-    assert.equal(created[0].pass, 'transparent', created[0].kind);
-    assertTested(created[0].object, mrt);
-  }
+  assert.equal(packs.created.length, 1);
+  assert.equal(packs.created[0].pass, 'transparent');
+  assertTested(packs.created[0].object, packs.mrt);
+  assert.equal(packs.created[0].object.children[0].material.depthTest, true);
   for (const release of owned) release();
+  port.destroy();
 });

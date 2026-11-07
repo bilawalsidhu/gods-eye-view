@@ -1231,8 +1231,6 @@
   "src/layers/bikeshare/presentation.test.mjs",
   "src/layers/bikeshare/selectionModel.js",
   "src/layers/cctv/projectionScheduling.test.mjs",
-  "src/layers/cctv/render/navaraMeshes.js",
-  "src/layers/cctv/render/navaraMeshes.test.mjs",
   "src/layers/cctv/lifecycle.test.mjs",
   "src/layers/cctv/projectionMedia.test.mjs",
   "src/layers/cctv/ingestion.test.mjs",
@@ -1563,7 +1561,6 @@
   "src/testSupport/vesselViewerRenderer.mjs",
   "scripts/qa-wildlife-switch.mjs",
   "scripts/fixtures/wildlife.mjs",
-  "src/layers/cctv/render/cesiumMeshes.js",
   "src/layers/cctv/render/display.js",
   "src/layers/cctv/render/display.test.mjs",
   "src/layers/cctv/render/displayGizmo.test.mjs",
@@ -1673,5 +1670,15 @@
   "src/globe/cesium/sonarCommands.test.mjs",
   "src/globe/cesium/starrySky.js",
   "src/globe/cesium/zoomOutGuard.js",
-  "scripts/qa-geo-import-probe.mjs"
+  "scripts/qa-geo-import-probe.mjs",
+  "src/globe/cesium/meshes.js",
+  "src/globe/meshes.js",
+  "src/globe/navara/meshes.js",
+  "src/globe/navara/meshes.test.mjs",
+  "src/scenes/dataPacks/display.js",
+  "src/scenes/dataPacks/shapes.js",
+  "src/scenes/dataPacks/shapes.test.mjs",
+  "src/globe/cesium/meshes.test.mjs",
+  "src/globe/meshes.test.mjs",
+  "src/scenes/dataPacks/display.test.mjs"
 ]

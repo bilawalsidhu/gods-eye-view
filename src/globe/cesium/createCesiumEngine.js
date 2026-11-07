@@ -12,6 +12,7 @@ import { createCesiumCamera } from './camera.js';
 import { createCesiumClock } from './clock.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumFrames } from './frames.js';
+import { createCesiumMeshes } from './meshes.js';
 import { createCesiumGround } from './ground.js';
 import { createCesiumImagery } from './imagery.js';
 import { createCesiumInput } from './input.js';
@@ -67,6 +68,7 @@ export function createCesiumEngine(viewer, options = {}) {
     requestRender,
     ...(options.groundFactories ? { factories: options.groundFactories } : {}),
   });
+  const meshes = createCesiumMeshes(viewer, { requestRender });
   const maps = createCesiumMaps(viewer, {
     ...options,
     credits: credits.credits,
@@ -77,7 +79,8 @@ export function createCesiumEngine(viewer, options = {}) {
     identify: (picked) =>
       movers.identify(picked) ??
       lines.identify(picked) ??
-      ground.identify(picked),
+      ground.identify(picked) ??
+      meshes.identify(picked),
   });
   const parts = {
     camera: createCesiumCamera(viewer),
@@ -88,10 +91,14 @@ export function createCesiumEngine(viewer, options = {}) {
     movers,
     lines,
     ground,
+    meshes,
     render,
     // Mover sets in a surface `exclude` are hidden for the sample.
     surface: createCesiumSurface(viewer, {
-      engineExclude: (entry) => movers.primitiveOf(entry),
+      engineExclude: (entry) =>
+        movers.primitiveOf(entry) ??
+        meshes.primitiveOf(entry) ??
+        lines.primitiveOf(entry),
     }),
     input: createCesiumInput(viewer, { ...options, picker: picker.picker }),
     credits,

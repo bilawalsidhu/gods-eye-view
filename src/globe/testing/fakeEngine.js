@@ -50,6 +50,7 @@ import {
   viewRectangle,
 } from '../cameraMath.js';
 import { createGroundPicks, createGroundRegistry } from '../ground.js';
+import { createMeshRegistry, meshRayDistance } from '../meshes.js';
 import { createImageryRegistry } from '../imagery.js';
 import { createLineRegistry } from '../lines.js';
 import { createMoverRegistry } from '../movers.js';
@@ -261,6 +262,10 @@ export function createFakeEngine(options = {}) {
   });
   // Ground sets keep their items for tests; commit counts as a render
   // request, and so does every frame while a shown set animates.
+  const meshRegistry = createMeshRegistry(() => ({
+    update() {},
+    destroy() {},
+  }));
   const groundRegistry = createGroundRegistry(() => ({
     commit() {
       fake.renderRequests++;
@@ -636,7 +641,30 @@ export function createFakeEngine(options = {}) {
           modelMatrix: state.modelMatrix,
         })),
     // Ground items under the picked globe point (src/globe/ground.js).
-    meshes: (at) => groundPicks(at),
+    meshes: (at) => {
+      const ray = engine.camera.pickRay(at);
+      const surface =
+        engine.picker.pickPosition(at) ?? engine.picker.pickGlobe(at);
+      const distance =
+        surface && ray ? cartesian3.distance(ray.origin, surface) : Infinity;
+      const hits = [];
+      for (const { state } of meshRegistry.live.values()) {
+        if (!state.show || state.pickId == null) continue;
+        const depth = meshRayDistance(state, ray);
+        if (
+          !Number.isFinite(depth) ||
+          (state.depthTest !== 'always' && depth > distance + 0.1)
+        )
+          continue;
+        hits.push({
+          onTop: state.depthTest === 'always' ? 1 : 0,
+          order: 0,
+          depth,
+          result: { id: state.pickId, owner: state.id },
+        });
+      }
+      return [...hits, ...groundPicks(at)];
+    },
   });
   const groundPicks = createGroundPicks({
     pickGlobe: (screen) => engine.picker.pickGlobe(screen),
@@ -704,6 +732,7 @@ export function createFakeEngine(options = {}) {
     },
     movers: moverRegistry.movers,
     lines: lineRegistry.lines,
+    meshes: meshRegistry.meshes,
     ground: groundRegistry.ground,
     imagery: imageryRegistry.imagery,
     clock: {
@@ -858,6 +887,7 @@ export function createFakeEngine(options = {}) {
       cancelCurrentFlight();
       moverRegistry.destroyAll();
       lineRegistry.destroyAll();
+      meshRegistry.destroy();
       groundRegistry.destroyAll();
       imageryRegistry.destroyAll();
       fake.destroyed = true;
@@ -951,6 +981,7 @@ export function createFakeEngine(options = {}) {
      * A live imagery layer's state, by id: { options, source, alpha, shown,
      * split, raise, detail, staging }; `layers()` all of them in draw order.
      */
+    mesh: (id) => meshRegistry.live.get(id)?.state,
     imageryLayer(id) {
       const state = imageryRegistry.live.get(id);
       return state

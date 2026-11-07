@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 344,
-    "navaraLayerRendererLines": 1294,
-    "cesiumImportFiles": 9,
-    "viewerLines": 1026,
+    "cesiumLayerRendererLines": 210,
+    "navaraLayerRendererLines": 794,
+    "cesiumImportFiles": 7,
+    "viewerLines": 1005,
     "navaraKindChecks": 2,
     "engineSniffCalls": 0,
-    "engineExtensionReads": 9,
+    "engineExtensionReads": 6,
     "groundEffectPasses": 1,
     "cesiumSdkLoads": 3,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 42
+    "engineNameLines": 39
   },
-  "measuredAt": "Move Cesium internals into the engine and draw imported records through shared primitives"
+  "measuredAt": "engine.meshes: CCTV and data packs on one primitive; dead Navara stems helper removed"
 }

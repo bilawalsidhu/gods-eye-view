@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parsers } from 'prettier/plugins/babel.mjs';
 
 // Existing entity graphics only. Remove entries as these callers migrate.
-const legacyFiles = new Set(['src/scenes/dataPacks/presentation.js']);
+const legacyFiles = new Set();
 const root = fileURLToPath(new URL('../', import.meta.url));
 const propertyName = (node) => node?.name ?? node?.value;
 const memberName = (node) =>

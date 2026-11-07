@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as geo from '../../geo/index.js';
-import { polygonShape, rectangleShape } from './navaraGeometry.js';
+import { polygonShape, rectangleShape } from './shapes.js';
 
 const vertex = (shape, index) => {
   const v = shape.attributes.position.values;
@@ -53,7 +53,7 @@ test('a pack polygon fills its outline less its holes, each vertex at its own he
   assert.equal(polygonShape([[square[0], square[1]]]), null);
 });
 
-test('a long pack edge is split so no step spans more than a degree', () => {
+test('a raised polygon keeps its authored vertices as on Cesium', () => {
   const shape = polygonShape([
     [
       [0, 0],
@@ -62,7 +62,7 @@ test('a long pack edge is split so no step spans more than a degree', () => {
       [0, 1],
     ],
   ]);
-  assert.equal(shape.attributes.position.values.length / 3, 8);
+  assert.equal(shape.attributes.position.values.length / 3, 4);
 });
 
 test('a pack image rectangle maps its texture from the south-west corner', () => {
@@ -78,4 +78,57 @@ test('a pack image rectangle maps its texture from the south-west corner', () =>
   assert.equal(shape.indices.length, 6);
   const wide = rectangleShape([10, 0, 13.5, 1]);
   assert.equal(wide.indices.length, 4 * 1 * 6, 'cells of at most a degree');
+});
+
+test('pack polygon triangle area follows Cesium for concave rings, holes and the antimeridian', async () => {
+  const C = await import('cesium');
+  for (const rings of [
+    [
+      [
+        [20, 10, 200],
+        [21, 10, 300],
+        [20.5, 10.5, 200],
+        [21, 11, 300],
+        [20, 11, 200],
+      ],
+    ],
+    [
+      [
+        [20, 10, 200],
+        [21, 10, 200],
+        [21, 11, 200],
+        [20, 11, 200],
+      ],
+      [
+        [20.2, 10.2, 200],
+        [20.8, 10.2, 200],
+        [20.8, 10.8, 200],
+        [20.2, 10.8, 200],
+      ],
+    ],
+    [
+      [
+        [179.8, 10, 50],
+        [-179.8, 10, 50],
+        [-179.8, 10.2, 50],
+        [179.8, 10.2, 50],
+      ],
+    ],
+  ]) {
+    const hierarchy = (ring) =>
+      new C.PolygonHierarchy(ring.map((p) => C.Cartesian3.fromDegrees(...p)));
+    const outer = hierarchy(rings[0]);
+    outer.holes = rings.slice(1).map(hierarchy);
+    const native = C.PolygonGeometry.createGeometry(
+      new C.PolygonGeometry({
+        polygonHierarchy: outer,
+        perPositionHeight: true,
+        vertexFormat: C.PerInstanceColorAppearance.VERTEX_FORMAT,
+        arcType: C.ArcType.GEODESIC,
+      }),
+    );
+    const shared = polygonShape(rings);
+    assert.ok(Math.abs(area(shared) / area(native) - 1) < 0.00001);
+    assert.equal(shared.indices.length, native.indices.length);
+  }
 });

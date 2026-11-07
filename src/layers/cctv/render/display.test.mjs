@@ -359,17 +359,11 @@ for (const makeHarness of CCTV_HARNESSES) {
       near(geo.cartesian3.distance(corners[index], expected), 0, 'corner');
     }
     if (h.cesium) {
-      const entity = h.viewer.entities.getById('cctv-a-plane');
-      const now = Cesium.JulianDate.now();
-      assert.equal(entity.show, true);
-      assert.deepEqual(
-        entity.plane.dimensions.getValue(now),
-        new Cesium.Cartesian2(40, 22.5),
-      );
-      assert.equal(entity.plane.outline, undefined, 'the outline is a line');
-      assert.equal(entity.plane.material.color.getValue(now).alpha, 0.95);
-      assert.equal(entity.plane.material.transparent.getValue(now), true);
-      h.scriptPicks({ native: { id: entity, primitive: {} } });
+      const primitive = h.primitive('cctv-a-plane');
+      assert.equal(primitive.show, true);
+      assert.equal(primitive.appearance.material.uniforms.color.alpha, 0.95);
+      assert.equal(primitive.allowPicking, true);
+      h.scriptPicks({ native: { id: 'cctv-a-plane', primitive } });
       assert.equal(
         h.display.extractPickedCameraId(h.display.pick({ x: 1, y: 1 })),
         null,
@@ -433,10 +427,10 @@ for (const makeHarness of CCTV_HARNESSES) {
     assert.equal(excludeObjects.length, 6);
     const direction = p(0, 1, 0);
     if (h.cesium) {
-      const primitive = volume.native.primitive;
+      const primitive = h.primitive(volume.mesh.id);
       assert.equal(primitive.allowPicking, false);
       assert.equal(primitive.asynchronous, false);
-      assert.ok(h.viewer.scene.primitives.contains(primitive));
+      assert.ok(primitive);
       let query;
       h.viewer.scene.pickFromRay = (ray, exclusions) => {
         query = { ray, exclusions };
@@ -458,15 +452,10 @@ for (const makeHarness of CCTV_HARNESSES) {
         h.display.obstructionRay(POSITIONS.mount, direction, exclude, 30),
       );
       assert.ok(query.ray instanceof Cesium.Ray);
-      assert.deepEqual(
-        query.exclusions.slice(0, 2),
-        ['a', 'b'],
-        'every marker',
-      );
-      assert.ok(query.exclusions.includes('cctv-a-ray-tl'));
-      assert.ok(query.exclusions.includes(primitive));
+      assert.equal(primitive.show, true, 'the excluded volume is restored');
+      assert.ok(query.exclusions.every((item) => typeof item !== 'string'));
       h.display.removeVolume(volume);
-      assert.ok(!h.viewer.scene.primitives.contains(primitive));
+      assert.equal(h.primitive(volume.mesh.id), undefined);
     } else {
       assert.equal(
         h.display.obstructionRay(POSITIONS.mount, direction, [], 30),
@@ -598,34 +587,11 @@ test('the plane outline closes on its first corner', () => {
   assert.deepEqual({ ...corners[2] }, { x: 12, y: -1, z: 0 });
 });
 
-test('on Navara the display draws its plane through the backend it is given', async (t) => {
-  const { createCctvNavaraMeshes } = await import('./navaraMeshes.js');
-  const engine = createFakeEngine({ kind: 'navara' });
-  const descriptors = new Map();
-  const view = {
-    registerMesh: (key, value) => descriptors.set(key, value),
-    addMesh(config) {
-      const key = Object.keys(config)[0];
-      const desc = new (descriptors.get(key))(view, {}, config);
-      desc.createMesh();
-      return { delete: () => desc.onDestroy() };
-    },
-  };
-  class MeshDesc {
-    onDestroy() {}
-  }
-  const pickers = new Set();
-  engine.picker.registerMeshPicker = (pick) => {
-    pickers.add(pick);
-    return () => pickers.delete(pick);
-  };
-  engine.extensions = { navara: { view, MeshDesc } };
-  const state = { _recordById: new Map(), _projectionEntities: [] };
-  const display = createCctvDisplay(engine, {
-    state,
-    navaraMeshes: createCctvNavaraMeshes,
-  });
+test('the display draws and picks a plane on the fake engine', (t) => {
+  const engine = createFakeEngine();
   t.after(() => engine.destroy());
+  const state = { _recordById: new Map(), _projectionEntities: [] };
+  const display = createCctvDisplay(engine, { state });
   display.attach();
   const record = recordFor(state, 'a');
   const runtime = { planeMaterial: display.createPlaneMaterial(null) };
@@ -637,12 +603,11 @@ test('on Navara the display draws its plane through the backend it is given', as
     { x: 0, y: 0, z: 0, w: 1 },
   );
   record.projection = runtime;
-  assert.equal(pickers.size, 1);
   const picked = { id: 'cctv-a-plane', owner: 'cctv-a-plane' };
   assert.equal(display.extractPickedCameraId(picked), null, 'hidden');
   display.setPlaneVisible(runtime, true);
-  assert.equal(runtime.planeEntity.mesh.native.group.visible, true);
+  assert.equal(engine.fake.mesh(picked.id).show, true);
   assert.equal(display.extractPickedCameraId(picked), 'a');
   display.destroy();
-  assert.equal(pickers.size, 0);
+  assert.deepEqual(engine.meshes.list(), []);
 });
