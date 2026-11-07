@@ -609,7 +609,7 @@ test('the phone shell keeps the required attribution visible', () => {
   assert.match(idleCredit, /white-space: normal;/);
   assert.match(
     idleCredit,
-    /[^-]width: calc\(\(100vw - 20px\) \/ 0\.8\) !important;/,
+    /[^-]width: calc\(\(100vw - var\(--mobile-left-inset\) - var\(--mobile-right-inset\) - 20px\) \/ 0\.8\) !important;/,
   );
   assert.match(idleCredit, /max-width: none !important;/);
   assert.match(idleCredit, /scale: 0\.8;/);

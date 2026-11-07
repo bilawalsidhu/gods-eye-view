@@ -101,11 +101,15 @@ test('phone top-bar actions mirror with the logo', () => {
   const mobile = sheet('mobile-shell.css');
   const actions = ruleBody(mobile, 'body.mobile-shell #top-center-actions');
   assert.match(actions, /inset-inline-start: auto;/);
-  assert.match(actions, /inset-inline-end: 12px;/);
+  assert.match(actions, /inset-inline-end: calc\(var\(--mobile-inline-end-inset\) \+ 12px\);/);
   assert.doesNotMatch(actions, /(?:^|\s)right:/);
   const corner = ruleBody(mobile, 'body.mobile-shell #corner-actions');
-  assert.match(corner, /inset-inline-end: 12px;/);
+  assert.match(corner, /inset-inline-end: calc\(var\(--mobile-inline-end-inset\) \+ 12px\);/);
   assert.doesNotMatch(corner, /(?:^|\s)right:/);
+  assert.match(
+    ruleBody(mobile, 'body.mobile-shell:dir(rtl)'),
+    /--mobile-inline-start-inset: var\(--mobile-right-inset\);\s*--mobile-inline-end-inset: var\(--mobile-left-inset\);/,
+  );
 });
 
 test('the Space Missions counter reads as a number pair in right-to-left', () => {

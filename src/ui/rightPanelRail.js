@@ -2,7 +2,10 @@ import {
   allocatePanelStackHeights,
   panelStackAutoCollapseIndices,
 } from '../panelStackLayout.js';
-import { resolveHudRailLayout } from './panelRailGeometry.js';
+import {
+  MOBILE_SHELL_MEDIA_QUERY,
+  resolveHudRailLayout,
+} from './panelRailGeometry.js';
 
 import { displayPanelScroller } from './displayPanelScroll.js';
 import { settleSideAccordion } from './panelAccordion.js';
@@ -89,7 +92,7 @@ export function layoutRightPanelRail({
   }
   // One panel is open per desktop side; this marker is distinct from
   // Tactical's space-based collapse.
-  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  const isMobile = windowRef.matchMedia(MOBILE_SHELL_MEDIA_QUERY).matches;
   settleSideAccordion({
     panels,
     enabled: !isMobile,

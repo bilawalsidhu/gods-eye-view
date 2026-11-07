@@ -6,6 +6,7 @@ import {
 } from '../panelStackLayout.js';
 import { measurePanelNaturalHeight } from './panelMeasurement.js';
 import { settleSideAccordion } from './panelAccordion.js';
+import { MOBILE_SHELL_MEDIA_QUERY } from './panelRailGeometry.js';
 
 /**
  * Measure and place the left panel rail for one synchronous layout pass.
@@ -52,7 +53,7 @@ export function layoutLeftPanelRail({
 
   // The existing narrow-screen composition has its own full-width stack.
   // Keep this desktop lane engine from fighting those dedicated rules.
-  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  const isMobile = windowRef.matchMedia(MOBILE_SHELL_MEDIA_QUERY).matches;
   if (isMobile) {
     stack.classList.remove('layout-focus');
     stack.classList.remove('layout-tail');
