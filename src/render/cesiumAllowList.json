@@ -40,7 +40,6 @@
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",
   "src/layers/airQuality/index.js",
-  "src/layers/cctv/geometry.js",
   "src/layers/cctv/projection.js",
   "src/layers/cctv/rendering.js",
   "src/layers/directions/index.js",

@@ -34,7 +34,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
         record.probeClampRangeM,
       );
     const positions =
-      record.frustumPositions || parts.geometry.frustumCartesians(geometry);
+      record.frustumPositions || parts.rendering.frustumCartesians(geometry);
     record.frustumGeometry = geometry;
     record.frustumPositions = positions;
     const runtime = {

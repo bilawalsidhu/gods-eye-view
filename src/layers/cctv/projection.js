@@ -74,7 +74,7 @@ export function createProjection({
         record.probeClampRangeM,
       );
     const positions =
-      record.frustumPositions || parts.geometry.frustumCartesians(geometry);
+      record.frustumPositions || parts.rendering.frustumCartesians(geometry);
     runtime.planeEntity.position = positions.capCenter;
     runtime.planeEntity.orientation = planeOrientation(
       record.camera,
@@ -299,7 +299,7 @@ export function createProjection({
         record.probeClampRangeM,
       );
     const positions =
-      record.frustumPositions || parts.geometry.frustumCartesians(geometry);
+      record.frustumPositions || parts.rendering.frustumCartesians(geometry);
     runtime.planeMaterial = new Cesium.ImageMaterialProperty({
       image: canvas,
       transparent: true,

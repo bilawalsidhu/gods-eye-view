@@ -11,6 +11,7 @@ import {
   ACTIVE_COVERAGE_EDGE as ACTIVE_COVERAGE_EDGE_RGBA,
   IDLE_COVERAGE_EDGE_MUTED as IDLE_COVERAGE_EDGE_MUTED_RGBA,
   ACTIVE_COVERAGE_EDGE_DEPTHFAIL as ACTIVE_COVERAGE_EDGE_DEPTHFAIL_RGBA,
+  IDLE_COVERAGE_COLOR as IDLE_COVERAGE_RGBA,
   VIEW_CELL_PX,
   VIEW_ICON_MARGIN,
   VIEW_MIN_CELL_M,
@@ -19,6 +20,9 @@ import { createIconSet } from '../../data/iconSet.js';
 import { writeHoldSegment } from '../../data/iconSegment.js';
 import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
 import { iconAtlas } from '../../data/iconAtlas.js';
+import { cctvPicks } from './pickState.js';
+import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
+import { entityRecord } from '../../data/entityRecords.js';
 import { toColor } from '../../render/cesium/draw.js';
 // Loads the factory a viewer of a caller's own gets its camera port from,
 // which the rest of the layer reads the eye through.
@@ -35,6 +39,7 @@ const ACTIVE_COVERAGE_CENTER_DEPTHFAIL = toColor(
 );
 const ACTIVE_COVERAGE_EDGE = toColor(ACTIVE_COVERAGE_EDGE_RGBA);
 const IDLE_COVERAGE_EDGE_MUTED = toColor(IDLE_COVERAGE_EDGE_MUTED_RGBA);
+const IDLE_COVERAGE_COLOR = toColor(IDLE_COVERAGE_RGBA);
 const ACTIVE_COVERAGE_EDGE_DEPTHFAIL = toColor(
   ACTIVE_COVERAGE_EDGE_DEPTHFAIL_RGBA,
 );
@@ -463,7 +468,7 @@ export function createRendering({
   function hideCctvVisuals() {
     hideCctvRecordVisuals(
       layerState._records,
-      parts.geometry.destroyViewshedVolume,
+      destroyViewshedVolume,
       layerState._activeCameraId,
     );
     parts.projection.clearProjectionOverlay();
@@ -589,10 +594,10 @@ export function createRendering({
           !record.viewshedPrimitive ||
           record.viewshedActiveTint !== isActive
         ) {
-          parts.geometry.rebuildViewshedVolume(record, isActive);
+          rebuildViewshedVolume(record, isActive);
         }
       } else if (record.viewshedPrimitive) {
-        parts.geometry.destroyViewshedVolume(record);
+        destroyViewshedVolume(record);
       }
 
       if (record.projection) {
@@ -603,7 +608,206 @@ export function createRendering({
     if (layerState._icons) layerState._icons.show = !!layerState._enabled;
     parts.projection.pauseInactiveProjectionFeeds(activeId);
   }
+
+  /**
+   * Reports whether the active Google Photorealistic 3D Tileset (if any) has
+   * finished loading the tiles in view. Shared mesh-floor sampling is gated on
+   * this so a one-shot cell never bakes in a miss from still-streaming tiles.
+   * Discovers + caches the tileset lazily from scene
+   * primitives (the CCTV module holds only a `_viewer` reference). When no
+   * tileset is present (OSM fallback) this returns true so ground sampling is
+   * not permanently blocked.
+   *
+   * Task 5 (review correction, spec §2): a HIDDEN tileset (`show === false`,
+   * i.e. a globe stack is active) must NOT report ready — Cesium 1.138's
+   * the shared sampler can only inspect *visible* 3D tilesets, so a sample taken
+   * against the hidden Google tileset would silently miss.
+   *
+   * @returns {boolean} True when tiles are loaded AND visible (or no tileset
+   *   exists to wait on).
+   */
+
+  function projectionTilesReady() {
+    if (
+      !layerState._activeTileset ||
+      layerState._activeTileset.isDestroyed?.()
+    ) {
+      layerState._activeTileset = null;
+      const primitives = layerState._viewer?.scene?.primitives;
+      if (primitives && typeof primitives.get === 'function') {
+        for (let i = 0; i < primitives.length; i++) {
+          const p = primitives.get(i);
+          if (p instanceof Cesium.Cesium3DTileset && !p.isDestroyed?.()) {
+            layerState._activeTileset = p;
+            break;
+          }
+        }
+      }
+    }
+    if (!layerState._activeTileset) return true;
+    if (layerState._activeTileset.show === false) return false;
+    return layerState._activeTileset.tilesLoaded === true;
+  }
+
+  /**
+   * Converts a computeFrustumGeometry result into the Cartesian3 positions the
+   * entities consume. Fresh objects per call (geometry updates are rare —
+   * slider/save/activation — and entities must never share scratch objects).
+   * @param {Object} geometry - Result of computeFrustumGeometry.
+   * @returns {{ mount: Cesium.Cartesian3, capCenter: Cesium.Cartesian3,
+   *   tl: Cesium.Cartesian3, tr: Cesium.Cartesian3, br: Cesium.Cartesian3,
+   *   bl: Cesium.Cartesian3, label: Cesium.Cartesian3 }}
+   */
+
+  function frustumCartesians(geometry) {
+    const at = (p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt);
+    return {
+      mount: at(geometry.mount),
+      capCenter: at(geometry.capCenter),
+      tl: at(geometry.corners.tl),
+      tr: at(geometry.corners.tr),
+      br: at(geometry.corners.br),
+      bl: at(geometry.corners.bl),
+      label: Cesium.Cartesian3.fromDegrees(
+        geometry.topCenter.lon,
+        geometry.topCenter.lat,
+        geometry.topCenter.alt + 1.2,
+      ),
+    };
+  }
+
+  /**
+   * Creates the five Cesium polyline entities that visualize a camera's pitched
+   * frustum: 4 corner rays (mount → far-plane corner) + the closed far-plane
+   * rectangle. Entity ids stay in the `cctv-<id>-<role>` scheme (pick-owner
+   * regex depends on it): roles ray-tl / ray-tr / ray-br / ray-bl / cap.
+   * @param {Object} record - Camera record.
+   * @returns {Cesium.Entity[]} Array of five coverage entities.
+   */
+
+  function buildCoverageEntities(record) {
+    const { camera } = record;
+    // Prefer the record's already-refined geometry. Lazy creation commonly
+    // happens after the staggered ground pass; recomputing from the catalog
+    // prior here would regress the camera to its pre-sampled datum.
+    let geometry = record.frustumGeometry;
+    let positions = record.frustumPositions;
+    if (!geometry || !positions) {
+      geometry = parts.geometry.computeFrustumGeometry(
+        camera,
+        parts.ground.groundPriorAltFor(record),
+        record.probeClampRangeM,
+      );
+      positions = frustumCartesians(geometry);
+      record.frustumGeometry = geometry;
+      record.frustumPositions = positions;
+      record.position = positions.mount;
+      moveCameraIcon(record);
+    }
+
+    const addPolyline = (role, linePositions) => {
+      const entity = layerState._viewer.entities.add({
+        id: `cctv-${camera.id}-${role}`,
+        polyline: {
+          positions: linePositions,
+          width: 1.2,
+          material: IDLE_COVERAGE_COLOR,
+        },
+      });
+      cctvPicks.write(entity).cameraId = camera.id;
+      return entity;
+    };
+
+    const entities = [
+      addPolyline('ray-tl', [positions.mount, positions.tl]),
+      addPolyline('ray-tr', [positions.mount, positions.tr]),
+      addPolyline('ray-br', [positions.mount, positions.br]),
+      addPolyline('ray-bl', [positions.mount, positions.bl]),
+      addPolyline('cap', [
+        positions.tl,
+        positions.tr,
+        positions.br,
+        positions.bl,
+        positions.tl,
+      ]),
+    ];
+
+    entities[0]._coverageRole = 'edge';
+    entities[1]._coverageRole = 'edge';
+    entities[2]._coverageRole = 'edge';
+    entities[3]._coverageRole = 'edge';
+    entities[4]._coverageRole = 'cap';
+    return entities;
+  }
+
+  /**
+   * The activation obstruction probe's one ray pick against the scene: the
+   * first thing along the ray from `origin`, seeing through `exclude` (the
+   * layer's own entities).
+   * @param {{x: number, y: number, z: number}} origin - ECEF ray origin.
+   * @param {{x: number, y: number, z: number}} direction - Unit ECEF direction.
+   * @param {Object[]} exclude - Entities to see through.
+   * @returns {{position?: object}|undefined}
+   */
+
+  function pickFromRay(origin, direction, exclude) {
+    const scene = layerState._viewer.scene;
+    return scene.pickFromRay(new Cesium.Ray(origin, direction), exclude);
+  }
+
+  /**
+   * Removes (and destroys) a record's viewshed volume primitive, if any.
+   * @param {Object} record - Camera record.
+   */
+
+  function destroyViewshedVolume(record) {
+    if (!record) return;
+    if (record.viewshedPrimitive && layerState._viewer) {
+      layerState._viewer.scene.primitives.remove(record.viewshedPrimitive);
+    }
+    record.viewshedPrimitive = null;
+  }
+
+  /**
+   * (Re)builds a record's translucent viewshed volume from its CURRENT
+   * frustumPositions — the same 5 Cartesians the wireframe draws, so the volume
+   * is welded to the cone by construction. Called only where the wireframe
+   * already rewrites (style refresh on mode/visible-set/active changes,
+   * applyFrustumGeometry on pose edits) — no new update cadence, zero scene
+   * queries (viewshed design §3b).
+   * @param {Object} record - Camera record.
+   * @param {boolean} isActive - Active camera gets the brighter fill.
+   */
+
+  function rebuildViewshedVolume(record, isActive) {
+    destroyViewshedVolume(record);
+    if (
+      !layerState._viewer ||
+      !record?.frustumPositions ||
+      !record.viewshedColors
+    )
+      return;
+    const color = isActive
+      ? record.viewshedColors.fillActive
+      : record.viewshedColors.fill;
+    const primitive = createFrustumVolumePrimitive(
+      record.frustumPositions,
+      color,
+    );
+    // QA tag: the harness counts viewshed volumes by this record field.
+    entityRecord(primitive).viewshedCameraId = record.camera.id;
+    record.viewshedPrimitive =
+      layerState._viewer.scene.primitives.add(primitive);
+    record.viewshedActiveTint = !!isActive;
+  }
+
   return {
+    projectionTilesReady,
+    frustumCartesians,
+    buildCoverageEntities,
+    pickFromRay,
+    destroyViewshedVolume,
+    rebuildViewshedVolume,
     createCameraIcons,
     destroyCameraIcons,
     addCameraIcon,

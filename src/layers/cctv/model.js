@@ -370,13 +370,13 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Whether the photoreal tiles in view have finished loading; the geometry
+   * Whether the photoreal tiles in view have finished loading; the rendering
    * part, which reads the scene, answers.
    * @returns {boolean}
    */
 
   function projectionTilesReady() {
-    return parts.geometry.projectionTilesReady();
+    return parts.rendering.projectionTilesReady();
   }
 
   /**
