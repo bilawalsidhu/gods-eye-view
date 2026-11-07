@@ -1649,6 +1649,9 @@ test('a draped line with segment colours and shows draws a ground instance a seg
       empty instanceof Cesium.PolylineCollection,
       'no ground primitive',
     );
+    // Its looks changing builds nothing either.
+    none.upsert([{ ...still, segmentShow: [false] }]);
+    assert.equal(scene.added.at(-1), empty, 'not rebuilt');
     none.upsert([{ ...still, positions: trail(1, []).positions }]);
     assert.notEqual(scene.added.at(-1), empty, 'drawn once it has length');
     none.dispose();
@@ -3485,3 +3488,138 @@ test('a contact trail draws its history and moving head as depth-fail geodesic l
     assert.equal(scene.added.length, 0);
   });
 });
+
+test('a transit trail moves its head, across subdivisions too, and fades its body in place, frame to frame', async () => {
+  const { createContactTrailRenderer } =
+    await import('../../data/contactTrailRenderer.js');
+  withImageClasses(() =>
+    withTerrainHeights(() => {
+      const scene = fakeScene();
+      const viewer = { scene, isDestroyed: () => false };
+      const frame = () => {
+        scene.preRender.raiseEvent();
+        scene.postRender.raiseEvent();
+      };
+      const hostOf = (suffix) =>
+        scene.added.find((host) => host.drawSetId?.endsWith(suffix));
+      // Every ground primitive built so far reads as ready, with attributes.
+      const settle = () => {
+        for (const host of scene.added)
+          for (let i = 0; i < host.length; i++) {
+            const part = host.get(i);
+            if (!(part instanceof Cesium.GroundPolylinePrimitive)) continue;
+            if (part.ready) continue;
+            Object.defineProperty(part, 'ready', { value: true });
+            const attributes = new Map();
+            part.getGeometryInstanceAttributes = (id) => {
+              if (!attributes.has(id))
+                attributes.set(id, {
+                  color: new Uint8Array(4),
+                  show: new Uint8Array([1]),
+                });
+              return attributes.get(id);
+            };
+          }
+        frame();
+      };
+      const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 0);
+      const renderer = createContactTrailRenderer(viewer);
+      renderer.replaceHistory({
+        revision: 1,
+        segments: [
+          {
+            fromSeq: 0,
+            toSeq: 1,
+            fromT: 0,
+            toT: 10000,
+            positions: [at(0), at(0.0002)],
+          },
+          {
+            fromSeq: 0,
+            toSeq: 1,
+            fromT: 10000,
+            toT: 20000,
+            positions: [at(0.0002), at(0.0004)],
+          },
+        ],
+      });
+      settle();
+      const sample = (t) => ({
+        displayT: t,
+        fromSeq: 0,
+        toSeq: 1,
+        fraction: t / 20000,
+      });
+      renderer.setDisplaySample(sample(5000), at(0.0001));
+      settle();
+      const body = hostOf(':body'),
+        head = hostOf(':head');
+      assert.ok(body && head);
+      // Into the next subdivision: the head moves there in the same frame.
+      const before = scene.added.length;
+      renderer.setDisplaySample(sample(12000), at(0.00024));
+      assert.equal(scene.added.length, before, 'not built anew');
+      assert.equal(hostOf(':head'), head);
+      settle();
+      const lanes = Array.from({ length: head.length }, (_, i) =>
+        head.get(i),
+      ).filter((part) => part instanceof Cesium.GroundPolylinePrimitive);
+      assert.equal(lanes.length, 2, 'a backing lane and a line lane');
+      const added = scene.added.length;
+      // A second and a half of frames within the subdivision.
+      for (let t = 12016; t < 13500; t += 16)
+        renderer.setDisplaySample(
+          sample(t),
+          at(0.0002 + (0.0002 * (t - 10000)) / 10000),
+        );
+      frame();
+      assert.equal(scene.added.length, added, 'nothing built anew');
+      assert.equal(hostOf(':body'), body);
+      assert.equal(hostOf(':head'), head);
+      for (const lane of lanes) {
+        const reveal = lane.appearance.material.uniforms.reveal;
+        assert.ok(Math.abs(reveal - 0.348) < 0.01, `revealed to ${reveal}`);
+      }
+      assert.equal(renderer.diagnostics().rebuilds, 1);
+      assert.equal(renderer.diagnostics().headRebuilds, 2, 'one a subdivision');
+      renderer.destroy();
+    }),
+  );
+});
+
+test('a segmented line, then plain and moved while its set rebuilds, is hidden segment by segment where it was', () =>
+  withImageClasses(() =>
+    withTerrainHeights(() => {
+      const { scene, draw, frame } = drawOver();
+      const set = draw.lines({ id: 'resegmented' });
+      const line = (id, lon, extra = {}) => ({
+        id,
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon: lon / 2, lat: 0.5 },
+          { lon, lat: 1 },
+        ],
+        widthPx: 3,
+        mode: 'draped',
+        style: { kind: 'solid', color: '#fff' },
+        ...extra,
+      });
+      set.set([line('a', 1, { segmentShow: [true, true] })]);
+      const first = scene.added[0];
+      const ground = first.get(1);
+      Object.defineProperty(ground, 'ready', { value: true });
+      const shows = new Map();
+      ground.getGeometryInstanceAttributes = (id) => {
+        if (!shows.has(id)) shows.set(id, { show: new Uint8Array([1]) });
+        return shows.get(id);
+      };
+      frame();
+      // Plain now: a new look, rebuilt; then moved before that is ready.
+      set.upsert([line('a', 1)]);
+      assert.ok(scene.added.includes(first), 'the first still draws');
+      assert.doesNotThrow(() => set.upsert([line('a', 2)]));
+      assert.equal(shows.size, 2, 'both segments');
+      for (const { show } of shows.values()) assert.deepEqual([...show], [0]);
+      set.dispose();
+    }),
+  ));

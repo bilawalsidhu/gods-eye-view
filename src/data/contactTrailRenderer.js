@@ -9,8 +9,8 @@
  * with its age; both change in place (`segmentShow`, `segmentColors`), so
  * the body is rebuilt only when the history changes. The head is the
  * subdivision the vehicle is on, revealed up to the vehicle
- * (`revealFraction`): it is drawn anew only where the vehicle crosses into
- * the next subdivision, and a frame writes how far it is revealed.
+ * (`revealFraction`): it moves only where the vehicle crosses into the
+ * next subdivision, and a frame writes how far it is revealed.
  */
 import { cssColor } from '../render/color.js';
 import { findDraw } from '../render/rendererOf.js';
@@ -222,7 +222,9 @@ export function createContactTrailRenderer(viewer) {
       active = segment;
       restyled = false;
       revealed = fraction;
-      headLines?.set(headItems(segment, fraction));
+      // Upserted, not set: a renderer can move a draped line to where it
+      // now runs in the same frame, instead of building it anew.
+      headLines?.upsert(headItems(segment, fraction));
     } else if (fraction !== revealed) {
       revealed = fraction;
       headLines?.upsert(headItems(segment, fraction));

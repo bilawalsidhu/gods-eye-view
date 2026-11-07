@@ -1499,14 +1499,16 @@ export function createCesiumDraw({
     for (const item of list) {
       const was = parts.get(item.id);
       if (!was || was.look !== lineLook(item)) return false;
-      // A segmented line that drew nothing is built anew.
-      if (was.segments && !was.ground) return false;
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
       if (!was.clampTo) continue;
       const flat = flatPositions(item.positions);
-      // A segmented line that moves is built anew, segment by segment.
+      // A segmented line that moves is built anew, segment by segment (so
+      // one that moves every frame is not drawn until it stops: segments
+      // are for lines that move only now and then).
       if (was.segments && !samePositions(flat, was.positions)) return false;
+      // One with no length draws nothing, whatever its segments' looks.
+      if (was.segments && !was.ground) continue;
       if (!drapedPatchable(record, was, flat)) return false;
       flats.set(item.id, flat);
     }
@@ -1541,6 +1543,7 @@ export function createCesiumDraw({
       }
       was.id.meta = item.meta;
       if (was.segments) {
+        if (!was.ground) continue;
         // A newer write supersedes one queued while the ground built.
         was.pendingItem = was.ground.ready ? undefined : item;
         if (was.ground.ready) writeSegments(was, item);
@@ -1611,8 +1614,13 @@ export function createCesiumDraw({
   function hideRetiring(record, id) {
     const part = record.retiring && record.retiringParts?.get(id);
     const ground = part?.ground;
-    if (ground && !ground.isDestroyed() && ground.ready)
-      showOn(ground, part.id, false);
+    if (!ground || ground.isDestroyed() || !ground.ready) return;
+    // A segmented line draws under a pick id a segment.
+    if (part.segments)
+      for (const segment of part.segments) {
+        if (segment) showOn(ground, segment, false);
+      }
+    else showOn(ground, part.id, false);
   }
 
   /** A draped line part's show, on its ready ground primitive. */
