@@ -324,9 +324,11 @@ export const DATA_CREDITS = [
   {
     key: 'iceland-cctv',
     html:
-      'CCTV cameras &amp; frames (Iceland): ' +
+      'CCTV cameras &amp; frames (Iceland): road camera images, fetched live, from the ' +
       '<a href="https://www.vegagerdin.is/" target="_blank" rel="noopener">Icelandic Road and Coastal Administration (Vegagerðin)</a> — ' +
-      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> ' +
+      '(<a href="https://www.vegagerdin.is/vegagerdin/gagnasafn/vefthjonustur/terms-and-conditions" target="_blank" rel="noopener">terms</a>); ' +
+      'no endorsement by IRCA is implied',
   },
   {
     key: 'kingcounty-cctv',

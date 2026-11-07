@@ -2051,15 +2051,22 @@ const ICELAND_DIRECTION_HEADINGS = {
   vestur: 270,
   norðvestur: 315,
 };
-const ICELAND_DIRECTION_RE =
-  /(?<![\p{L}])(?:til|í|séð)\s+(norðaustur|norðvestur|suðaustur|suðvestur|norður|suður|austur|vestur)s?(?![\p{L}])/gu;
+const ICELAND_DIRECTION_WORD =
+  '(norðaustur|norðvestur|suðaustur|suðvestur|norður|suður|austur|vestur)s?';
+/** A facing, plus a second one joined by "og" ("til austurs og vesturs"). */
+const ICELAND_DIRECTION_RE = new RegExp(
+  `(?<![\\p{L}])(?:til|í|séð)\\s+${ICELAND_DIRECTION_WORD}` +
+    `(?:\\s+og\\s+(?:til\\s+|í\\s+)?${ICELAND_DIRECTION_WORD})?(?![\\p{L}])`,
+  'gu',
+);
 
 /**
  * The compass heading an Icelandic view description states, or NaN. Only an
  * explicit "til <átt>", "í <átt>" or "séð <átt>" counts: a bare place name or
- * a road direction ("Miklabraut austur") is not a facing. A description naming two
- * different directions is ambiguous and yields NaN, and "niður á veg" (down
- * onto the road) states none.
+ * a road direction ("Miklabraut austur") is not a facing. A description naming
+ * two different directions ("til norðurs og til suðurs", "til austurs og
+ * vesturs") is ambiguous and yields NaN, and "niður á veg" (down onto the
+ * road) states none.
  *
  * @param {string} text - The feed's `Skyring` field.
  * @returns {number} Heading in degrees [0..360), or NaN.
@@ -2069,7 +2076,9 @@ export function icelandHeadingFromDescription(text) {
   for (const match of String(text || '')
     .toLowerCase()
     .matchAll(ICELAND_DIRECTION_RE)) {
-    headings.add(ICELAND_DIRECTION_HEADINGS[match[1]]);
+    for (const word of [match[1], match[2]]) {
+      if (word) headings.add(ICELAND_DIRECTION_HEADINGS[word]);
+    }
   }
   return headings.size === 1 ? headings.values().next().value : NaN;
 }
@@ -2097,14 +2106,16 @@ export function icelandCameraToSource(row) {
   const cameraId = `is-vegagerdin-${stem}`;
   const description = String(row.Skyring || '')
     .replace(/\s+/g, ' ')
-    .replace(/\b(\p{L}+) \1\b/giu, '$1')
+    // Letter lookarounds, not \b: \b is ASCII-only and would join "Þverá
+    // Árnessýslu" while missing "séð séð".
+    .replace(/(?<!\p{L})(\p{L}+) \1(?!\p{L})/giu, '$1')
     .trim();
   const station = String(row.Myndavel || '').trim();
   const heading = icelandHeadingFromDescription(description);
   const hasHeading = Number.isFinite(heading);
   return {
     id: cameraId,
-    name: description || station || `Vegagerðin ${row.Maelist_nr}`,
+    name: description || station || `Vegagerðin ${row.Maelist_nr ?? stem}`,
     city: 'Iceland',
     cityId: 'iceland',
     provider: 'Vegagerðin (IRCA)',
