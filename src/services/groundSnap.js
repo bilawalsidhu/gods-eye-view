@@ -48,6 +48,12 @@
 
 import * as Cesium from 'cesium';
 import { heightsFor } from '../render/cesium/heights.js';
+// The application operations entry reaches the annotation resolver and
+// locations.js, whose flights and heights go through the camera and query
+// ports and which cannot load the Cesium adapter themselves; this listed
+// module, on the same entry, loads the factories a viewer with no renderer
+// bound gets them from.
+import '../render/cesium/camera.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a

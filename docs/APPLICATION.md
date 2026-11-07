@@ -166,8 +166,9 @@ with `includeInHeightQueries`; `clampNow` and `clampBatch` always clamp to
 the surface. `exclude` lists draw set ids to see through, of those drawn with
 `includeInHeightQueries`; every other draw set is seen through already. Every
 miss is `null`, and every caller treats it as one; `batch` and `clampBatch`
-reject when the query itself fails. The Cesium renderer answers no height,
-terrain included, without depth-texture support.
+reject when the query itself fails. Without depth-texture support the Cesium
+renderer answers no `surface` or `tiles` height; `now` still answers
+`terrain` from the loaded tiles.
 
 ## Cesium internals
 

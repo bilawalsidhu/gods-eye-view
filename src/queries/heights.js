@@ -12,9 +12,10 @@
  * request error, a destroyed scene), so a caller can tell a failure from
  * points that are merely uncovered.
  *
- * What the renderer cannot answer is a miss: the Cesium renderer answers no
- * height, terrain included, without depth textures (its `sampleHeight`
- * capability).
+ * What the renderer cannot answer is a miss: without depth textures (its
+ * `sampleHeight` capability) the Cesium renderer answers no `'surface'` or
+ * `'tiles'` height; `now()` still answers `'terrain'` from the globe's
+ * loaded tiles.
  *
  * `against` picks the surface: `'surface'` is what is drawn (tiles, the
  * globe, and draw sets drawn as ground), `'terrain'` the terrain alone,

@@ -4,7 +4,8 @@ import { rangeForBoundingSphere } from '../data/cameraFraming.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { distance, fromDegrees, toLonLatH } from '../geo/index.js';
 import { sphereFromPoints } from '../geo/sphere.js';
-import { findCamera, findQuery } from '../render/rendererOf.js';
+import { heightsOf } from '../queries/heights.js';
+import { findCamera } from '../render/rendererOf.js';
 
 /**
  * Fly synchronously to a footprint, `[lon, lat, height]` points (degrees,
@@ -30,9 +31,9 @@ export function flyToFootprint(
     height: 0,
   };
   const { lat, lon } = center;
-  const terrain =
-    findQuery(viewer)?.sampleHeightNow({ lon, lat }, { against: 'terrain' }) ??
-    null;
+  const terrain = viewer
+    ? heightsOf(viewer).now({ lon, lat }, { against: 'terrain' })
+    : null;
   const cached = ground?.cachedGroundFloor?.(lat, lon);
   const height =
     Number.isFinite(terrain) && terrain > 0

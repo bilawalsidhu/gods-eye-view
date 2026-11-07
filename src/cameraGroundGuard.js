@@ -17,7 +17,8 @@
 import { onFollowChanged } from './data/followed.js';
 import { ownCameraArrival } from './data/cameraArrival.js';
 import { distance, dot, fromDegrees, toLonLatH } from './geo/index.js';
-import { findCamera, findQuery } from './render/rendererOf.js';
+import { heightsOf } from './queries/heights.js';
+import { findCamera } from './render/rendererOf.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
 export const MIN_EYE_CLEARANCE_M = 120;
@@ -33,17 +34,18 @@ const TURNED_COS = 1 - 1e-9;
 /**
  * Highest rendered surface across a few cells, with how many cells answered.
  * A cell whose tiles are not streamed yet contributes nothing.
- * @param {object|null} query The scene's query port.
+ * @param {import('./queries/heights.js').HeightService|null} heights The
+ *   scene's height service.
  * @param {Array<{lat: number, lon: number}>} cells Cells to probe.
  * @returns {{heightM: number, sampled: number}} Reading.
  */
-function sampleSurfaceM(query, cells) {
+function sampleSurfaceM(heights, cells) {
   let heightM = Number.NaN;
   let sampled = 0;
-  if (!query) return { heightM, sampled };
+  if (!heights) return { heightM, sampled };
   for (const cell of cells) {
     // A miss is a cell whose tiles are not ready.
-    const height = query.sampleHeightNow({ lon: cell.lon, lat: cell.lat });
+    const height = heights.now(cell);
     if (!Number.isFinite(height)) continue;
     sampled += 1;
     heightM = Number.isFinite(heightM) ? Math.max(heightM, height) : height;
@@ -180,10 +182,10 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     remaining -= 1;
     // The eye must clear both the framed target and the ground beneath it.
     const below = { lat: now.lat, lon: now.lon };
-    const { heightM, sampled } = sampleSurfaceM(findQuery(viewer), [
-      { lat: at.lat, lon: at.lon },
-      below,
-    ]);
+    const { heightM, sampled } = sampleSurfaceM(
+      viewer ? heightsOf(viewer) : null,
+      [{ lat: at.lat, lon: at.lon }, below],
+    );
     if (sampled > 0 && Number.isFinite(heightM)) {
       const deficit = groundClearanceDeficitM(now.height, heightM, clearanceM);
       if (deficit > 0) {

@@ -12,7 +12,8 @@ import { cancelCameraArrival } from './data/cameraArrival.js';
 import { guardCameraAboveGround } from './cameraGroundGuard.js';
 import { CITY_POIS } from './cityPois.js';
 import { fromDegrees, toRadians } from './geo/index.js';
-import { cameraOf, findQuery } from './render/rendererOf.js';
+import { heightsOf } from './queries/heights.js';
+import { cameraOf } from './render/rendererOf.js';
 
 /** Newest landmark arrival; an older post-arrival ground guard yields to it. */
 let arrivalGeneration = 0;
@@ -102,9 +103,9 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
   } = options;
 
   // Sample terrain height (sync — uses loaded tiles; 0 if globe/terrain not ready)
-  const sampledHeight =
-    findQuery(viewer)?.sampleHeightNow({ lon, lat }, { against: 'terrain' }) ??
-    null;
+  const sampledHeight = viewer
+    ? heightsOf(viewer).now({ lon, lat }, { against: 'terrain' })
+    : null;
 
   // Use sampled height if available, otherwise the cached ground-floor
   // elevation (same ellipsoidal datum), then the pre-baked city elevation.
