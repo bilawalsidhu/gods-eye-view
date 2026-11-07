@@ -363,6 +363,9 @@
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/lithuania.js",
       "server/providers/cctv/taiwan.js",
+      "server/providers/cctv/quebec.js",
+      "server/providers/cctv/ottawa.js",
+      "server/providers/cctv/worldCameras.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
       "server/providers/cctv/normalize.js",
@@ -806,6 +809,7 @@
   "cctv-controls": {
     "exports": ["./ui/cctv"],
     "modules": [
+      "src/data/iconOrientation.js",
       "src/data/headingDegrees.js",
       "src/ui/cctv.js",
       "src/ui/cctvBindings.js",
@@ -814,6 +818,7 @@
       "src/ui/cctvFrames.js",
       "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
+      "src/ui/quebecCctvOverlay.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/ar.json",
@@ -833,7 +838,7 @@
       "src/ui/stores/status.js",
       "src/ui/i18n.js"
     ],
-    "external": ["vue", "pinia", "vue-i18n"]
+    "external": ["vue", "pinia", "vue-i18n", "cesium"]
   },
   "context-controls": {
     "exports": ["./ui/context", "./ui/context/policy"],
@@ -1006,6 +1011,8 @@
       "src/ui/cctvFrames.js",
       "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
+      "src/data/iconOrientation.js",
+      "src/ui/quebecCctvOverlay.js",
       "src/ui/clearLayersControl.js",
       "src/ui/cockpit.js",
       "src/ui/cockpitBriefing.js",
@@ -1197,6 +1204,7 @@
       "src/ui/styles/layers.css",
       "src/ui/styles/radio.css",
       "src/ui/styles/cctv.css",
+      "src/ui/styles/quebecCctvOverlay.css",
       "src/ui/styles/scenes.css",
       "src/ui/styles/bhote-koshi.css",
       "src/ui/styles/recording.css",
@@ -2808,6 +2816,7 @@
       "src/ui/cctvFrames.js",
       "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
+      "src/ui/quebecCctvOverlay.js",
       "src/ui/clearLayersControl.js",
       "src/ui/cockpit.js",
       "src/ui/cockpitBriefing.js",
