@@ -55,6 +55,46 @@ export function createRendering({
     layerState._dataSource = null;
   }
 
+  /** Whether the missions' entities are shown. */
+  function missionsShown() {
+    return Boolean(layerState._dataSource?.show);
+  }
+
+  /** Show or hide the missions' entities. */
+  function showMissions(shown) {
+    if (layerState._dataSource) layerState._dataSource.show = shown;
+  }
+
+  /** Remove every mission entity, ahead of a rebuild. */
+  function clearLaunchEntities() {
+    layerState._dataSource?.entities.removeAll();
+  }
+
+  /** The launch id of a mission entity, or null for anything else. */
+  function entityLaunchId(entity) {
+    if (!entity?.id || typeof entity.id !== 'string') return null;
+    const match = entity.id.match(/^rocket-[^:]+:([^:]+)/);
+    return match?.[1] || null;
+  }
+
+  /** The launch of the first mission entity among a click's drilled picks. */
+  function launchIdFromPicks(picks) {
+    for (const picked of picks) {
+      const launchId = entityLaunchId(picked?.id);
+      if (launchId) return launchId;
+    }
+    return null;
+  }
+
+  /** Whether a mission entity is under a screen position (CSS px). */
+  function launchMarkerAt(position) {
+    const scene = layerState._viewer?.scene;
+    if (!scene) return false;
+    return scene
+      .drillPick(position, 12)
+      .some((picked) => entityLaunchId(picked?.id));
+  }
+
   /** Make a launch's site marker the viewer's selected entity, or none. */
   function selectLaunchEntity(launchId) {
     const viewer = layerState._viewer;
@@ -71,7 +111,7 @@ export function createRendering({
   function isolateMission(launchId) {
     if (!layerState._dataSource) return;
     for (const entity of layerState._dataSource.entities.values) {
-      const relatedId = parts.selection.entityLaunchId(entity);
+      const relatedId = entityLaunchId(entity);
       entity.show = launchId
         ? relatedId === launchId
         : entity.id.startsWith('rocket-launch:');
@@ -103,7 +143,7 @@ export function createRendering({
     for (const entity of layerState._dataSource.entities.values) {
       if (!entity.show) continue;
       if (!entity.position) continue;
-      const id = parts.selection.entityLaunchId(entity);
+      const id = entityLaunchId(entity);
       if (!id) continue;
       const position = entity.position.getValue(time);
       let horizonVisible = Boolean(
@@ -646,6 +686,11 @@ export function createRendering({
   return {
     attach,
     detach,
+    missionsShown,
+    showMissions,
+    clearLaunchEntities,
+    launchIdFromPicks,
+    launchMarkerAt,
     setGraphicVisibility,
     selectLaunchEntity,
     isolateMission,

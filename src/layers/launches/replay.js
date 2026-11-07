@@ -2,7 +2,7 @@ import { stopFollowing } from '../../data/followed.js';
 import { toCartographicRadians } from '../../geo/ellipsoid.js';
 import { clamp, distance, toRadians } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
-import { cameraOf, findCamera } from '../../render/rendererOf.js';
+import { cameraOf, findCamera, findFrame } from '../../render/rendererOf.js';
 import { lerp } from './geometry.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
@@ -329,7 +329,9 @@ export function createReplay({ state: layerState, services, parts, source }) {
   function startMissionReplay(launchId) {
     const launch = layerState._launches.find((item) => item.id === launchId);
     const track = layerState._replayTracks.get(launchId);
-    if (!layerState._viewer || !launch || !track) return false;
+    // The chase camera moves on the frame loop; without one, no replay.
+    const frame = findFrame(layerState._viewer);
+    if (!layerState._viewer || !launch || !track || !frame) return false;
     if (layerState._replayCameraLaunchId === launchId) {
       stopMissionReplay();
       return false;
@@ -366,122 +368,112 @@ export function createReplay({ state: layerState, services, parts, source }) {
     // Move the chase camera before scene traversal. Mutating it in preRender
     // makes Cesium discover a new view after 3D-tile refinement, which can cause
     // a self-sustaining refinement loop and visible stutter during slow replay.
-    layerState._replayCameraRemover =
-      layerState._viewer.scene.preUpdate.addEventListener(() => {
-        if (
-          token !== layerState._replayCameraToken ||
-          layerState._replayCameraLaunchId !== launchId
-        )
-          return;
-        const state = track.beginReplayFrame();
-        // Asked for each frame, not kept: a renderer bound meanwhile
-        // replaces the port.
-        const chaseCamera = cameraOf(layerState._viewer);
-        syncReplayCountdownButton(state);
-        if (!cameraReady) return;
-        const path = state.ascending
-          ? track.ascentPath
-          : track.animatedOrbitPath;
-        const position = parts.paths.samplePath(path, state.phaseProgress);
-        if (!position) return;
-        const pathHeading = parts.camera.cameraHeadingForPath(
-          path,
-          state.phaseProgress,
-          track.lastCameraHeading,
-        );
-        const orbitBlend = !state.ascending
-          ? clamp(
-              (Number(state.phaseProgress) || 0) /
-                REPLAY_ORBIT_PULLBACK_FRACTION,
-              0,
-              1,
-            )
-          : 0;
-        const desiredHeading = parts.camera.replayChaseCameraHeading(
-          pathHeading,
-          orbitBlend,
-        );
-        if (state.ascending) track.orbitCameraWorldFrame = false;
-        const nowMs = performance.now();
-        const frameDurationMs = Number.isFinite(lastCameraUpdateMs)
-          ? clamp(nowMs - lastCameraUpdateMs, 4, 50)
-          : 1000 / 60;
-        lastCameraUpdateMs = nowMs;
-        track.lastCameraHeading = parts.camera.smoothReplayCameraHeading(
-          track.lastCameraHeading,
-          desiredHeading,
-          (toRadians(2) * frameDurationMs) / (1000 / 60),
-        );
-        const cartographic = toCartographicRadians(position);
-        const altitude = Math.max(0, cartographic?.height || 0);
-        const cameraView = parts.camera.replayCameraView(state, altitude);
-        const defaultOrbitTarget = !state.ascending
-          ? parts.camera.replayOrbitGlobeAnchor(position, orbitBlend)
-          : position;
-        const cameraTarget = !state.ascending
-          ? parts.camera.replayOrbitCameraTarget(
-              defaultOrbitTarget,
-              track.orbitFrameSphere?.center,
-              orbitBlend,
-            )
-          : defaultOrbitTarget;
-        const cameraRange = !state.ascending
-          ? parts.camera.replayOrbitGlobeRange(
-              cameraView.range,
-              altitude,
-              orbitBlend,
-              track.orbitFrameSphere?.radius,
-            )
-          : cameraView.range;
-        if (state.ascending) {
-          chaseCamera.lookAt(cameraTarget, {
-            heading: track.lastCameraHeading,
-            pitch: cameraView.pitch,
-            range: cameraRange,
-          });
-        } else {
-          const tangentStep = Math.max(
-            0.002,
-            0.8 / Math.max(2, path.length - 1),
-          );
-          const tangentProgress = Math.min(
+    layerState._replayCameraRemover = frame.on('preUpdate', () => {
+      if (
+        token !== layerState._replayCameraToken ||
+        layerState._replayCameraLaunchId !== launchId
+      )
+        return;
+      const state = track.beginReplayFrame();
+      // Asked for each frame, not kept: a renderer bound meanwhile
+      // replaces the port.
+      const chaseCamera = cameraOf(layerState._viewer);
+      syncReplayCountdownButton(state);
+      if (!cameraReady) return;
+      const path = state.ascending ? track.ascentPath : track.animatedOrbitPath;
+      const position = parts.paths.samplePath(path, state.phaseProgress);
+      if (!position) return;
+      const pathHeading = parts.camera.cameraHeadingForPath(
+        path,
+        state.phaseProgress,
+        track.lastCameraHeading,
+      );
+      const orbitBlend = !state.ascending
+        ? clamp(
+            (Number(state.phaseProgress) || 0) / REPLAY_ORBIT_PULLBACK_FRACTION,
+            0,
             1,
-            state.phaseProgress + tangentStep,
-          );
-          const tangentPosition = parts.paths.samplePath(
-            path,
-            tangentProgress > state.phaseProgress
-              ? tangentProgress
-              : Math.max(0, state.phaseProgress - tangentStep),
-          );
-          const orbitPose = parts.camera.replayOrbitCameraPose(
-            position,
-            tangentPosition,
-            cameraTarget,
-            cameraRange,
-            cameraView.pitch,
-          );
-          if (orbitPose) {
-            if (!track.orbitCameraWorldFrame) {
-              chaseCamera.release();
-              track.orbitCameraWorldFrame = true;
-            }
-            chaseCamera.setView({
-              destination: orbitPose.destination,
-              orientation: {
-                direction: orbitPose.direction,
-                up: orbitPose.up,
-              },
-            });
+          )
+        : 0;
+      const desiredHeading = parts.camera.replayChaseCameraHeading(
+        pathHeading,
+        orbitBlend,
+      );
+      if (state.ascending) track.orbitCameraWorldFrame = false;
+      const nowMs = performance.now();
+      const frameDurationMs = Number.isFinite(lastCameraUpdateMs)
+        ? clamp(nowMs - lastCameraUpdateMs, 4, 50)
+        : 1000 / 60;
+      lastCameraUpdateMs = nowMs;
+      track.lastCameraHeading = parts.camera.smoothReplayCameraHeading(
+        track.lastCameraHeading,
+        desiredHeading,
+        (toRadians(2) * frameDurationMs) / (1000 / 60),
+      );
+      const cartographic = toCartographicRadians(position);
+      const altitude = Math.max(0, cartographic?.height || 0);
+      const cameraView = parts.camera.replayCameraView(state, altitude);
+      const defaultOrbitTarget = !state.ascending
+        ? parts.camera.replayOrbitGlobeAnchor(position, orbitBlend)
+        : position;
+      const cameraTarget = !state.ascending
+        ? parts.camera.replayOrbitCameraTarget(
+            defaultOrbitTarget,
+            track.orbitFrameSphere?.center,
+            orbitBlend,
+          )
+        : defaultOrbitTarget;
+      const cameraRange = !state.ascending
+        ? parts.camera.replayOrbitGlobeRange(
+            cameraView.range,
+            altitude,
+            orbitBlend,
+            track.orbitFrameSphere?.radius,
+          )
+        : cameraView.range;
+      if (state.ascending) {
+        chaseCamera.lookAt(cameraTarget, {
+          heading: track.lastCameraHeading,
+          pitch: cameraView.pitch,
+          range: cameraRange,
+        });
+      } else {
+        const tangentStep = Math.max(0.002, 0.8 / Math.max(2, path.length - 1));
+        const tangentProgress = Math.min(1, state.phaseProgress + tangentStep);
+        const tangentPosition = parts.paths.samplePath(
+          path,
+          tangentProgress > state.phaseProgress
+            ? tangentProgress
+            : Math.max(0, state.phaseProgress - tangentStep),
+        );
+        const orbitPose = parts.camera.replayOrbitCameraPose(
+          position,
+          tangentPosition,
+          cameraTarget,
+          cameraRange,
+          cameraView.pitch,
+        );
+        if (orbitPose) {
+          if (!track.orbitCameraWorldFrame) {
+            chaseCamera.release();
+            track.orbitCameraWorldFrame = true;
           }
+          chaseCamera.setView({
+            destination: orbitPose.destination,
+            orientation: {
+              direction: orbitPose.direction,
+              up: orbitPose.up,
+            },
+          });
         }
-        if (
-          state.elapsedSinceStart >=
-          ascentDurationSec + REPLAY_ORBIT_DURATION_SEC
-        ) {
-          stopMissionReplay();
-        }
-      });
+      }
+      if (
+        state.elapsedSinceStart >=
+        ascentDurationSec + REPLAY_ORBIT_DURATION_SEC
+      ) {
+        stopMissionReplay();
+      }
+    });
 
     camera.flyToBounds(
       { center: track.ascentPath[0], radius: 0 },

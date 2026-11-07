@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Event } from 'cesium';
 import { createLaunchHover } from './lifecycle.js';
+import {
+  bindFakeCesiumCamera,
+  fakeCameraPort,
+} from '../../testSupport/fakeCameraPort.mjs';
+import { bindRenderer } from '../../render/rendererOf.js';
 
 function fakeTimers() {
   const timers = new Map();
@@ -31,20 +36,17 @@ function hoverRig({ overMarker }) {
     enabled = true,
     free = true;
   const timers = fakeTimers();
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     camera: { moveStart: new Event(), moveEnd: new Event() },
-    scene: {
-      canvas: { style: { cursor: '' } },
-      drillPick(position) {
-        picks++;
-        return overMarker(position) ? [{ id: 'launch' }] : [];
-      },
-    },
-  };
+    scene: { canvas: { style: { cursor: '' } } },
+  });
   const hover = createLaunchHover({
     viewer,
     enabled: () => enabled,
-    entityLaunchId: (id) => id === 'launch',
+    launchAt(position) {
+      picks++;
+      return overMarker(position);
+    },
     now: () => at,
     documentRef: { hidden: false },
     pointerFree: () => free,
@@ -153,20 +155,16 @@ test('mission hover throttles, clears on motion/hidden, and releases listeners',
     addEventListener: (_n, fn) => listeners.add(fn),
     removeEventListener: (_n, fn) => listeners.delete(fn),
   };
-  const viewer = {
-    camera: { moveStart: new Event(), moveEnd: new Event() },
-    scene: {
-      canvas: { style: {} },
-      drillPick() {
-        picks++;
-        return [{ id: 'launch' }];
-      },
-    },
-  };
+  const camera = fakeCameraPort();
+  const viewer = { scene: { canvas: { style: {} } } };
+  bindRenderer(viewer, { camera: camera.port });
   const hover = createLaunchHover({
     viewer,
     enabled: () => enabled,
-    entityLaunchId: (id) => id === 'launch',
+    launchAt() {
+      picks++;
+      return true;
+    },
     now: () => at,
     documentRef: doc,
     pointerFree: () => true,
@@ -177,12 +175,12 @@ test('mission hover throttles, clears on motion/hidden, and releases listeners',
   assert.equal(viewer.scene.canvas.style.cursor, 'pointer');
   hover.move({ endPosition: {} });
   assert.equal(picks, 2);
-  viewer.camera.moveStart.raiseEvent();
+  camera.emit('moveStart');
   at = 500;
   hover.move({ endPosition: {} });
   assert.equal(picks, 2);
   assert.equal(viewer.scene.canvas.style.cursor, '');
-  viewer.camera.moveEnd.raiseEvent();
+  camera.emit('moveEnd');
   hover.move({ endPosition: {} });
   assert.equal(picks, 3);
   doc.hidden = true;
@@ -196,27 +194,24 @@ test('mission hover throttles, clears on motion/hidden, and releases listeners',
   assert.equal(picks, 3);
   hover.destroy();
   assert.equal(listeners.size, 0);
-  assert.equal(viewer.camera.moveStart.numberOfListeners, 0);
-  assert.equal(viewer.camera.moveEnd.numberOfListeners, 0);
+  assert.equal(camera.listenerCount('moveStart'), 0);
+  assert.equal(camera.listenerCount('moveEnd'), 0);
 });
 
 test('mission hover preserves the cursor of a pointer-owning tool', () => {
   let free = true,
     picks = 0;
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     camera: { moveStart: new Event(), moveEnd: new Event() },
-    scene: {
-      canvas: { style: { cursor: '' } },
-      drillPick() {
-        picks++;
-        return [{ id: 'launch' }];
-      },
-    },
-  };
+    scene: { canvas: { style: { cursor: '' } } },
+  });
   const hover = createLaunchHover({
     viewer,
     enabled: () => true,
-    entityLaunchId: () => true,
+    launchAt() {
+      picks++;
+      return true;
+    },
     documentRef: null,
     pointerFree: () => free,
   });
@@ -229,4 +224,34 @@ test('mission hover preserves the cursor of a pointer-owning tool', () => {
   hover.destroy();
   assert.equal(picks, 1);
   assert.equal(viewer.scene.canvas.style.cursor, 'crosshair');
+});
+
+test('mission picks are read by the rendering part, which owns the entities', async () => {
+  const { createRendering } = await import('./rendering.js');
+  const mission = { id: 'rocket-launch:abc' };
+  const drilled = [];
+  const state = {
+    _viewer: {
+      scene: {
+        drillPick(position, limit) {
+          drilled.push([position, limit]);
+          return [{ id: { id: 'cable:1' } }, { id: mission }];
+        },
+      },
+    },
+  };
+  const rendering = createRendering({
+    state,
+    services: { satellites: {} },
+    parts: {},
+  });
+  assert.equal(rendering.launchMarkerAt({ x: 3, y: 4 }), true);
+  assert.deepEqual(drilled, [[{ x: 3, y: 4 }, 12]]);
+  assert.equal(
+    rendering.launchIdFromPicks([{ id: 'x' }, { id: mission }]),
+    'abc',
+  );
+  assert.equal(rendering.launchIdFromPicks([{ id: 'x' }]), null);
+  state._viewer = null;
+  assert.equal(rendering.launchMarkerAt({ x: 3, y: 4 }), false);
 });

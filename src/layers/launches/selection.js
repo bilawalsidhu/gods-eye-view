@@ -60,12 +60,6 @@ export function createSelection({
     );
   }
 
-  function entityLaunchId(entity) {
-    if (!entity?.id || typeof entity.id !== 'string') return null;
-    const match = entity.id.match(/^rocket-[^:]+:([^:]+)/);
-    return match?.[1] || null;
-  }
-
   function setSelectedMission(launchId, isolate = true) {
     if (launchId) parts.panel.clearMissionRosterHover();
     if (
@@ -187,7 +181,6 @@ export function createSelection({
   }
   return {
     focusFullGlobe,
-    entityLaunchId,
     setSelectedMission,
     stopMissionZoomAnchor,
     startMissionZoomAnchor,

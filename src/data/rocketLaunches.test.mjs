@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import { gstime } from 'satellite.js';
 import { createModel } from '../layers/launches/model.js';
 import rocketLaunchesLayer, {
@@ -1187,6 +1189,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     },
     selectedEntity: undefined,
   };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
   const hostCalls = [];
   const host = {
     setEntries: (...args) => hostCalls.push(['entries', ...args]),

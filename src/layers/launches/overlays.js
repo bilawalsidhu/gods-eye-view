@@ -352,7 +352,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
   }
 
   function syncMissionOverlayEntries() {
-    if (!layerState._enabled || !layerState._dataSource?.show) {
+    if (!layerState._enabled || !parts.rendering.missionsShown()) {
       clearMissionOverlaySources();
       return;
     }

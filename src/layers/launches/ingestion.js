@@ -189,7 +189,7 @@ export function createIngestion({
       if (layerState._replayCameraLaunchId) parts.replay.stopMissionReplay();
       layerState._launches = launches;
       parts.orbitRendering.removeMissionOrbitPrimitives();
-      layerState._dataSource.entities.removeAll();
+      parts.rendering.clearLaunchEntities();
       layerState._missionOverlayRecords.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();

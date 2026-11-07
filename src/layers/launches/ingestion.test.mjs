@@ -10,6 +10,8 @@ import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { layerFeedState } from '../../data/feedState.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 
 const noop = () => {};
 
@@ -79,6 +81,7 @@ async function fixture({ legacySource = false } = {}) {
     dataSources: new Cesium.DataSourceCollection(),
     scene: { canvas, preRender: new Cesium.Event(), drillPick: () => [] },
   };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
   await viewer.dataSources.add(state._dataSource);
   // Only presentation boundaries are inert. Source, normalization, state,
   // ingestion, lifecycle, stats and feed-state policy execute unchanged.
@@ -124,6 +127,13 @@ async function fixture({ legacySource = false } = {}) {
         state._dataSource = null;
       },
       updateMissionFrame: noop,
+      missionsShown: () => Boolean(state._dataSource?.show),
+      showMissions(shown) {
+        if (state._dataSource) state._dataSource.show = shown;
+      },
+      clearLaunchEntities: () => state._dataSource?.entities.removeAll(),
+      launchIdFromPicks: () => null,
+      launchMarkerAt: () => false,
       addLaunchEntity(record) {
         state._dataSource.entities.add({
           id: record.id,

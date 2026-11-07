@@ -1,5 +1,6 @@
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { findCamera, findFrame } from '../../render/rendererOf.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
 
@@ -11,7 +12,7 @@ const HOVER_PICK_INTERVAL_MS = 120;
 export function createLaunchHover({
   viewer,
   enabled,
-  entityLaunchId,
+  launchAt,
   now = () => performance.now(),
   documentRef = globalThis.document,
   pointerFree = isPointerFree,
@@ -58,10 +59,7 @@ export function createLaunchHover({
     pointerFree();
   const pick = (position, at) => {
     lastPick = at;
-    const found = viewer.scene
-      .drillPick(position, 12)
-      .some((picked) => entityLaunchId(picked?.id));
-    if (found) {
+    if (launchAt(position)) {
       viewer.scene.canvas.style.cursor = 'pointer';
       ownsCursor = true;
     } else clearCursor();
@@ -78,8 +76,9 @@ export function createLaunchHover({
     }
     pick(position, now());
   };
-  const removeStart = viewer.camera?.moveStart?.addEventListener(start);
-  const removeEnd = viewer.camera?.moveEnd?.addEventListener(end);
+  const camera = findCamera(viewer);
+  const removeStart = camera?.on('moveStart', start);
+  const removeEnd = camera?.on('moveEnd', end);
   documentRef?.addEventListener?.('visibilitychange', visibility);
   return {
     move(movement) {
@@ -139,12 +138,8 @@ export function createLifecycle({
       parts.overlays.clearMissionOverlaySources();
       const input = inputFor(viewer);
       const unsubscribeClick = input.onClick((event) => {
-        if (!layerState._enabled || !layerState._dataSource?.show) return;
-        const entity = event
-          .drill(12)
-          .map((picked) => picked?.id)
-          .find((candidate) => parts.selection.entityLaunchId(candidate));
-        const launchId = parts.selection.entityLaunchId(entity);
+        if (!layerState._enabled || !parts.rendering.missionsShown()) return;
+        const launchId = parts.rendering.launchIdFromPicks(event.drill(12));
         if (!launchId) return;
         parts.selection.setSelectedMission(launchId);
         parts.selection.focusMission(
@@ -153,8 +148,8 @@ export function createLifecycle({
       });
       hover = createLaunchHover({
         viewer,
-        enabled: () => layerState._enabled && layerState._dataSource?.show,
-        entityLaunchId: parts.selection.entityLaunchId,
+        enabled: () => layerState._enabled && parts.rendering.missionsShown(),
+        launchAt: parts.rendering.launchMarkerAt,
       });
       const unsubscribeHover = input.onPointer('move', hover.move);
       layerState._inputSubscription = () => {
@@ -164,9 +159,10 @@ export function createLifecycle({
       // Apply horizon visibility before Cesium traverses and picks the scene.
       // A postRender write is one frame late and can remain visibly stale when
       // request-on-demand rendering stops after a globe camera move.
-      layerState._declutterHandler = viewer.scene.preRender.addEventListener(
-        parts.rendering.updateMissionFrame,
-      );
+      layerState._declutterHandler =
+        findFrame(viewer)?.on('preRender', () =>
+          parts.rendering.updateMissionFrame(),
+        ) ?? null;
       parts.launchPad.initLaunchPadZonePrimitive();
     },
 
@@ -194,7 +190,7 @@ export function createLifecycle({
 
     async _enableBody() {
       layerState._updateDirty = false;
-      if (layerState._dataSource) layerState._dataSource.show = true;
+      parts.rendering.showMissions(true);
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
       parts.selection.focusFullGlobe(layerState._viewer);
       if (layerState._selectedLaunchId)
@@ -217,7 +213,7 @@ export function createLifecycle({
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
       parts.selection.stopMissionZoomAnchor();
-      if (layerState._dataSource) layerState._dataSource.show = false;
+      parts.rendering.showMissions(false);
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
       if (layerState._viewer?.scene?.canvas)
         layerState._viewer.scene.canvas.style.cursor = '';
