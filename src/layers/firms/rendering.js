@@ -1,13 +1,12 @@
 import * as Cesium from 'cesium';
-// Still Cesium for its icons, so this layer loads the unbound camera and
-// draw factories its other parts reach the renderer through; see also
-// scenePorts below.
+// Still Cesium for its icons, so this layer loads the unbound camera
+// factory, which loads the draw, frame and query factories its other parts
+// reach the renderer through.
 import '../../render/cesium/camera.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { rendererOf } from '../../render/rendererOf.js';
+import { findFrame, findQuery } from '../../render/rendererOf.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 import { LOD_LEVELS, CONTEXT_TOP_N, GLOW_SPRITE_PX } from './policy.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import { createIconSet, ICON_CULL_LIFT } from '../../data/iconSet.js';
 import { writeHoldSegment } from '../../data/iconSegment.js';
 import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
@@ -371,47 +370,15 @@ export function createRendering({
   }
 
   /**
-   * The renderer's query and frame ports the cards and the LOD watcher use.
-   * A viewer with no renderer bound has neither yet;
-   * for one, this part (Cesium already, for its icons) answers the members
-   * the layer uses over the viewer's scene, as the layer did before.
+   * The renderer's query and frame ports the cards and the LOD watcher use:
+   * the bound renderer's, or for a viewer with no
+   * renderer bound, those the Cesium adapter builds over it (`findQuery`,
+   * `findFrame`; the camera factory loaded above loads theirs).
    * @returns {{query: object|null, frame: object|null}}
    */
   function scenePorts() {
     const viewer = layerState._viewer;
-    const bound = rendererOf(viewer);
-    if (bound?.query && bound?.frame)
-      return { query: bound.query, frame: bound.frame };
-    const scene = viewer?.scene;
-    if (!scene)
-      return { query: bound?.query ?? null, frame: bound?.frame ?? null };
-    const eye = () =>
-      viewer.camera?.positionWC ? viewer.camera : scene.camera;
-    const query = bound?.query ?? {
-      project(position) {
-        const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          Cesium.Cartesian3.clone(position),
-        );
-        return screen ? { x: screen.x, y: screen.y } : null;
-      },
-      isOccluded(position) {
-        const camera = eye();
-        if (!camera?.positionWC) return false;
-        return !horizonOccluder(camera).isPointVisible(
-          Cesium.Cartesian3.clone(position),
-        );
-      },
-    };
-    const frame = bound?.frame ?? {
-      on(phase, listener) {
-        const event = scene[phase];
-        return event?.addEventListener
-          ? event.addEventListener(listener)
-          : () => {};
-      },
-    };
-    return { query, frame };
+    return { query: findQuery(viewer), frame: findFrame(viewer) };
   }
 
   return {

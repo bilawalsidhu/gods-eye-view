@@ -66,6 +66,7 @@ const unboundCredits = unboundPorts('credits');
 /** Draw ports are `{port, dispose, release}`, as credits ports are. */
 const unboundDraws = unboundPorts('draw');
 const unboundQueries = unboundPorts('query');
+const unboundFrames = unboundPorts('frame');
 
 /**
  * Provide the factory `cameraOf` builds a camera port with for a scene
@@ -108,6 +109,15 @@ export function provideUnboundDraw(build) {
  */
 export function provideUnboundQuery(build) {
   unboundQueries.provide(build);
+}
+
+/**
+ * Provide the factory `findFrame` builds a frame port with for a scene
+ * object no renderer is bound to, as `provideUnboundCamera` does.
+ * @param {(host: object) => ({port: object, dispose: () => void} | null)} build
+ */
+export function provideUnboundFrame(build) {
+  unboundFrames.provide(build);
 }
 
 /**
@@ -163,6 +173,7 @@ export function bindRenderer(host, renderer) {
   unboundCredits.supersede(host);
   unboundDraws.supersede(host);
   unboundQueries.drop(host);
+  unboundFrames.drop(host);
   renderers.set(host, renderer);
   return () => {
     if (renderers.get(host) === renderer) renderers.delete(host);
@@ -293,6 +304,31 @@ export function queryOf(host) {
   const query = findQuery(host);
   if (query) return query;
   throw noPort(host, 'query');
+}
+
+/**
+ * The frame port of the renderer bound to `host`; with no renderer bound,
+ * one built over `host` by the provided factory and kept with it while
+ * `host` lives, as `findCamera` does. A built one listens to the loop
+ * `host`'s owner runs, as they set it up. Bound later, a renderer's own
+ * replaces it: its listeners hear nothing more and its holds end.
+ * @param {object|null|undefined} host
+ * @returns {import('./contract/frame').FramePort | null}
+ */
+export function findFrame(host) {
+  return unboundFrames.find(host);
+}
+
+/**
+ * `findFrame`, for code that cannot start without one.
+ * @param {object} host
+ * @returns {import('./contract/frame').FramePort}
+ * @throws When there is no frame port for `host`.
+ */
+export function frameOf(host) {
+  const frame = findFrame(host);
+  if (frame) return frame;
+  throw noPort(host, 'run frames with');
 }
 
 /**

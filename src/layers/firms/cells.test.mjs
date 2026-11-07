@@ -70,10 +70,22 @@ function harness(fires, heightM, { sceneFromViewer = false } = {}) {
   };
   const ports = bindFakeCesiumScene(viewer);
   const { draw } = ports;
-  // A renderer with no query or frame: the layer reads the viewer's scene.
+  // A renderer with no query or frame: the Cesium adapter builds them over
+  // the viewer's scene, as it does for a viewer with no renderer.
   if (sceneFromViewer) {
     ports.unbind();
     bindRenderer(viewer, { draw, camera: ports.camera });
+    Object.assign(viewer.scene, {
+      preUpdate: new Cesium.Event(),
+      postRender: new Cesium.Event(),
+      requestRender() {},
+      forceRender() {},
+      pick: () => undefined,
+      drillPick: () => [],
+      camera: viewer.camera,
+    });
+    viewer.camera.pickEllipsoid = () => undefined;
+    viewer.clock = { currentTime: Cesium.JulianDate.now() };
   }
   const input = fakeInput(viewer);
   const layer = createFirmsHeatmapLayer({
@@ -168,7 +180,7 @@ test('close in, detections replace the cells', async () => {
   }
 });
 
-test("with no query or frame port, the layer still follows the camera through the viewer's scene", async () => {
+test("with no query or frame port, the layer still follows the camera through ports built over the viewer's scene", async () => {
   const h = harness([raw(30.5, -98.2, 1500)], 12_000_000, {
     sceneFromViewer: true,
   });

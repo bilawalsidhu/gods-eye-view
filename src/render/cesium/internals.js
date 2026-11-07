@@ -109,7 +109,8 @@ export function onEngineWorkCompleted({ RequestScheduler, TaskProcessor }, cb) {
  * @param {() => void} fn
  */
 export function atEndOfTick(scene, fn) {
-  scene._frameState.afterRender.push(fn);
+  // A scene without Cesium's frame state (a stand-in) has no tick to end.
+  scene._frameState?.afterRender?.push(fn);
 }
 
 /**

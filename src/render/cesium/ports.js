@@ -18,14 +18,13 @@ import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
 import { createCesiumEffects } from './effects.js';
+import { willDraw } from './frame.js';
 import { createCesiumGlobe } from './globe.js';
 import { createCesiumQuery, queryCapabilities } from './query.js';
 import { createCesiumQuality } from './quality.js';
 import {
   atEndOfTick,
   billboardLoadError,
-  lastRenderTime,
-  lastSeenCamera,
   onEngineWorkCompleted,
   renderPending,
   trimGlobeTiles,
@@ -33,52 +32,6 @@ import {
 
 export { listenerList, toCartesian };
 export { toColor, toImage } from './draw.js';
-
-const scratchPosition0 = new Cesium.Cartesian3();
-const scratchPosition1 = new Cesium.Cartesian3();
-
-/** Cesium's own test (`View.js`) for whether the camera moved. */
-function cameraEqual(camera0, camera1, epsilon) {
-  const maximumPositionComponent = Math.max(
-    Cesium.Cartesian3.maximumComponent(
-      Cesium.Cartesian3.abs(camera0.position, scratchPosition0),
-    ),
-    Cesium.Cartesian3.maximumComponent(
-      Cesium.Cartesian3.abs(camera1.position, scratchPosition1),
-    ),
-  );
-  const scalar = 1 / Math.max(1, maximumPositionComponent);
-  Cesium.Cartesian3.multiplyByScalar(
-    camera0.position,
-    scalar,
-    scratchPosition0,
-  );
-  Cesium.Cartesian3.multiplyByScalar(
-    camera1.position,
-    scalar,
-    scratchPosition1,
-  );
-  return (
-    Cesium.Cartesian3.equalsEpsilon(
-      scratchPosition0,
-      scratchPosition1,
-      epsilon,
-    ) &&
-    Cesium.Cartesian3.equalsEpsilon(
-      camera0.direction,
-      camera1.direction,
-      epsilon,
-    ) &&
-    Cesium.Cartesian3.equalsEpsilon(camera0.up, camera1.up, epsilon) &&
-    Cesium.Cartesian3.equalsEpsilon(camera0.right, camera1.right, epsilon) &&
-    Cesium.Matrix4.equalsEpsilon(
-      camera0.transform,
-      camera1.transform,
-      epsilon,
-    ) &&
-    camera0.frustum.equalsEpsilon(camera1.frustum, epsilon)
-  );
-}
 
 /**
  * What every Cesium globe does: photoreal tiles, terrain, imagery draped on
@@ -192,7 +145,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
       Object.defineProperty(t, 'rendering', {
         enumerable: true,
         configurable: true,
-        get: () => willDraw(time),
+        get: () => willDraw(scene, time),
       });
       liveTick = t;
     }
@@ -223,31 +176,6 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
     scene.postRender.addEventListener(() => drawPart.afterRender()),
     scene.postRender.addEventListener(() => trimGlobeAfterDraw()),
   ];
-
-  /**
-   * Whether this tick draws: the test `Scene.render` makes just after
-   * `preUpdate`, made here so `preUpdate` can say. Not seen: a request made
-   * in between, by a `camera.moveEnd` listener (Cesium raises it there); no
-   * listener of the app's does that, and the answer is corrected at preRender.
-   */
-  function willDraw(time) {
-    if (!scene.requestRenderMode || renderPending(scene)) return true;
-    if (scene.mode === Cesium.SceneMode.MORPHING) return true;
-    const seen = lastSeenCamera(scene);
-    if (!seen || !cameraEqual(camera, seen, Cesium.Math.EPSILON15)) return true;
-    const last = lastRenderTime(scene);
-    const max = scene.maximumRenderTimeChange;
-    return (
-      last !== undefined &&
-      max !== undefined &&
-      Math.abs(
-        Cesium.JulianDate.secondsDifference(
-          last,
-          time ?? Cesium.JulianDate.now(),
-        ),
-      ) > max
-    );
-  }
 
   // Holds keep the loop drawing every frame; counted per reason.
   const holds = new Map();

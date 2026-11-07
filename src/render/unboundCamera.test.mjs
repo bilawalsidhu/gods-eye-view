@@ -13,8 +13,10 @@
  * unless it is Cesium-free: then it is listed in `DRAW_FROM_CALLER`, and
  * a caller handing it a viewer with no renderer bound loads the package's
  * `./render/cesium/unbound` export once. An entry that reaches a caller of
- * `findQuery` or `queryOf` loads `render/cesium/query.js` (the camera
- * factory loads it too), or is such a Cesium-free entry.
+ * `findQuery` or `queryOf` loads `render/cesium/query.js`, and one that
+ * reaches a caller of `findFrame` or `frameOf` loads
+ * `render/cesium/frame.js` (the camera factory loads both), or is such a
+ * Cesium-free entry.
  *
  * The graph is every static import, re-export and literal dynamic import of
  * the entry's module and those it reaches, read by the parsers the Cesium
@@ -38,6 +40,7 @@ const EFFECTS_FACTORY = 'src/render/cesium/effects.js';
 const GLOBE_FACTORY = 'src/render/cesium/globe.js';
 const DRAW_FACTORY = 'src/render/cesium/draw.js';
 const QUERY_FACTORY = 'src/render/cesium/query.js';
+const FRAME_FACTORY = 'src/render/cesium/frame.js';
 const UNBOUND = 'src/render/cesium/unbound.js';
 
 /**
@@ -246,15 +249,25 @@ test('every public entry that reaches a findGlobe caller loads the unbound globe
 });
 
 test('every public entry that reaches a findQuery or queryOf caller loads the unbound query factory, or its caller can', () => {
-  for (const lookup of ['findQuery', 'queryOf'])
-    checkLookupFactory(lookup, QUERY_FACTORY, {
-      reached: false,
-      fromCaller: true,
-    });
+  checkLookupFactory('findQuery', QUERY_FACTORY, { fromCaller: true });
+  checkLookupFactory('queryOf', QUERY_FACTORY, {
+    reached: false,
+    fromCaller: true,
+  });
 });
 
-test('the unbound camera factory loads the unbound query factory', () => {
-  assert.ok(reachable(FACTORY, { eager: true }).has(QUERY_FACTORY));
+test('every public entry that reaches a findFrame or frameOf caller loads the unbound frame factory, or its caller can', () => {
+  checkLookupFactory('findFrame', FRAME_FACTORY, { fromCaller: true });
+  checkLookupFactory('frameOf', FRAME_FACTORY, {
+    reached: false,
+    fromCaller: true,
+  });
+});
+
+test('the unbound camera factory loads the unbound query and frame factories', () => {
+  const loaded = reachable(FACTORY, { eager: true });
+  assert.ok(loaded.has(QUERY_FACTORY));
+  assert.ok(loaded.has(FRAME_FACTORY));
 });
 
 test('the unbound export brings every unbound factory', () => {
@@ -264,6 +277,7 @@ test('the unbound export brings every unbound factory', () => {
     EFFECTS_FACTORY,
     DRAW_FACTORY,
     QUERY_FACTORY,
+    FRAME_FACTORY,
     'src/render/cesium/credits.js',
   ])
     assert.ok(loaded.has(factory), factory);
