@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test from 'node:test';
 import { bindRenderer, drawOf, findDraw } from '../rendererOf.js';
-import './draw.js';
+import { createCesiumDraw } from './draw.js';
 
 // Node has no WebGL context to report line-width limits.
 Cesium.ContextLimits._minimumAliasedLineWidth = 1;
@@ -1225,5 +1225,177 @@ test('icons blend as their set says', () => {
     scene.added[0].blendOption,
     Cesium.BlendOption.OPAQUE_AND_TRANSLUCENT,
   );
+  set.dispose();
+});
+
+test('icon sets change their billboards in place: restyled, moved, re-imaged, added and removed', () => {
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const set = part.port.icons({ id: 'icons:in-place', horizonCull: true });
+  const record = part.sets.get('icons:in-place');
+  const icon = (id, lon, extra = {}) => ({
+    id,
+    pos: { lon, lat: 0 },
+    image: 'a.png',
+    size: [10, 10],
+    ...extra,
+  });
+  set.set([icon('a', 0), icon('b', 1)]);
+  const [host] = scene.added;
+  const [a, b] = [host.get(0), host.get(1)];
+  const version = part.version();
+
+  set.upsert([
+    icon('a', 2, {
+      color: [0, 1, 0, 1],
+      scale: 2,
+      meta: { n: 1 },
+      rotationMode: 'screen',
+      rotation: 0.5,
+      image: 'b.png',
+    }),
+  ]);
+  assert.equal(scene.added[0], host, 'the same collection');
+  assert.equal(host.get(0), a, 'the same billboard');
+  assert.ok(Cesium.Color.equals(a.color, Cesium.Color.LIME));
+  assert.equal(a.width, 20);
+  assert.equal(a.rotation, 0.5);
+  assert.equal(a.image, 'b.png', 'its image swapped');
+  assert.equal(b.image, 'a.png', 'the others keep theirs');
+  assert.deepEqual(a.id.meta, { n: 1 }, 'picks read the new meta');
+  const moved = Cesium.Cartographic.fromCartesian(a.position);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(moved.longitude) - 2) < 1e-9);
+  assert.ok(part.version() > version, 'height queries see the change');
+
+  // Back to the defaults it dropped.
+  set.upsert([icon('a', 2)]);
+  assert.equal(a.rotation, 0);
+  assert.equal(a.width, 10);
+
+  set.upsert([icon('c', 3)]);
+  assert.equal(scene.added[0], host, 'a new icon is added to it');
+  assert.equal(host.length, 3);
+  set.remove(['b']);
+  assert.equal(scene.added[0], host, 'and one removed from it');
+  assert.equal(host.length, 2);
+  assert.deepEqual(
+    record.pickIds.map((id) => id.id).sort(),
+    ['a', 'c'],
+    'height queries no longer see through what went',
+  );
+  assert.deepEqual(
+    record.placed.map((p) => p.primitive),
+    [a, host.get(1)],
+    'the horizon cull no longer tests it',
+  );
+
+  // Hidden in place, then culled with the rest.
+  set.upsert([icon('a', 2, { show: false })]);
+  assert.equal(a.show, false);
+
+  // A set in the same order patches; a new order rebuilds.
+  set.set([icon('a', 2), icon('c', 3)]);
+  assert.equal(scene.added[0], host);
+  set.set([icon('c', 3), icon('a', 2)]);
+  assert.notEqual(scene.added[0], host, 'reordered: rebuilt');
+  assert.equal(scene.added[0].get(0).id.id, 'c');
+  set.clear();
+  assert.equal(scene.added[0].length, 0);
+  set.dispose();
+  assert.equal(scene.added.length, 0);
+});
+
+test('an icon drawn from an atlas slot takes a re-registered slot in place', () => {
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const set = part.port.icons({ id: 'icons:atlas' });
+  const icon = (id, slot, lon) => ({
+    id,
+    pos: { lon, lat: 0 },
+    image: { atlas: 'marks', slot },
+    size: [8, 8],
+  });
+  set.set([icon('one', 'dot', 0), icon('two', 'ring', 1)]);
+  const [host] = scene.added;
+  assert.equal(host.length, 0, 'nothing to draw until the atlas comes');
+  part.port.atlas('marks', { dot: 'dot.png' });
+  assert.equal(scene.added[0], host);
+  const one = host.get(0);
+  assert.equal(one.image, 'dot.png');
+  part.port.atlas('marks', { dot: 'next.png', ring: 'ring.png' });
+  assert.equal(scene.added[0], host, 'not rebuilt');
+  assert.equal(host.get(0), one, 'the same billboard');
+  assert.equal(one.image, 'next.png');
+  assert.equal(host.get(1).image, 'ring.png', 'the slot that came draws');
+  part.port.atlas('marks', { ring: 'ring.png' });
+  assert.equal(host.length, 1, 'a slot gone takes its icon down');
+  assert.equal(host.get(0).id.id, 'two');
+  // A slot that comes for an icon ahead of one drawn rebuilds, in order.
+  part.port.atlas('marks', { dot: 'dot.png', ring: 'ring.png' });
+  assert.notEqual(scene.added[0], host);
+  assert.deepEqual(
+    [scene.added[0].get(0).id.id, scene.added[0].get(1).id.id],
+    ['one', 'two'],
+  );
+  set.dispose();
+});
+
+test('an icon set is built anew where changing it in place would draw out of order or keep stale images', () => {
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const set = part.port.icons({ id: 'icons:anew' });
+  const icon = (id, image = 'a.png') => ({
+    id,
+    pos: { lon: 0, lat: 0 },
+    image,
+    size: [8, 8],
+  });
+  set.set([icon('a'), icon('c')]);
+  let host = scene.added[0];
+  set.set([icon('a'), icon('b'), icon('c')]);
+  assert.notEqual(scene.added[0], host, 'one put between two drawn: rebuilt');
+  assert.deepEqual(
+    [0, 1, 2].map((i) => scene.added[0].get(i).id.id),
+    ['a', 'b', 'c'],
+  );
+
+  // A generated image swaps under a new key; a new canvas under the key it
+  // had cannot change that key's texture, so it rebuilds.
+  const canvas = { width: 8, height: 8 };
+  set.set([icon('a', { canvas, key: 'one' })]);
+  host = scene.added[0];
+  const a = host.get(0);
+  set.upsert([icon('a', { canvas, key: 'two' })]);
+  assert.equal(scene.added[0], host, 'a new key swaps in place');
+  assert.equal(host.get(0), a);
+  set.upsert([icon('a', { canvas: { width: 8, height: 8 }, key: 'two' })]);
+  assert.notEqual(scene.added[0], host, 'a new canvas, same key: rebuilt');
+
+  // Its collection keeps what it loaded, so cycling images rebuilds now and
+  // then, holding only what it draws.
+  host = scene.added[0];
+  let rebuilds = 0;
+  for (let i = 0; i < 200; i++) {
+    set.upsert([icon('a', `cycle-${i}.png`)]);
+    if (scene.added[0] !== host) {
+      rebuilds += 1;
+      host = scene.added[0];
+    }
+  }
+  assert.ok(rebuilds >= 2 && rebuilds <= 4, `rebuilt ${rebuilds} times`);
+  assert.ok(part.sets.get('icons:anew').imageKeys.size <= 64);
+
+  set.clear();
+  assert.notEqual(scene.added[0], host, 'emptied: built anew, empty');
+  assert.equal(scene.added[0].length, 0);
   set.dispose();
 });

@@ -1172,6 +1172,56 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.icons.update',
+      'an upserted icon keeps drawing, as it now is, from the next frame: picked at its new size with its new meta, even while a new image loads; a removed one is gone',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.icons({ id: 'conf:icons-update' });
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const icon = (extra = {}) => ({
+          id: 'one',
+          pos,
+          image: DOT,
+          size: [16, 16],
+          meta: { n: 1 },
+          ...extra,
+        });
+        set.set([icon()]);
+        await drawn(h, r);
+        await settled(r);
+        const s = r.query.project(pos);
+        ok(s, 'the icon projects');
+        equal(r.query.pick(s.x, s.y)?.id, 'one', 'drawn and picked');
+        const off = () => r.query.pick(s.x + 20, s.y);
+        ok(off()?.set !== 'conf:icons-update', 'not picked 20 px off');
+        // Not settled again: a restyle keeps drawing, with no reload.
+        set.upsert([
+          icon({ size: [64, 64], color: '#00ff00', meta: { n: 2 } }),
+        ]);
+        await drawn(h, r);
+        const hit = off();
+        equal(hit?.id, 'one', 'picked at its new size in the next frame');
+        deepEqual(hit?.meta, { n: 2 }, 'with its new meta');
+        // A new image keeps the icon drawn while it loads.
+        set.upsert([
+          icon({
+            size: [64, 64],
+            meta: { n: 3 },
+            image: { svg: DOT.svg.replace('#fff', '#ff0') },
+          }),
+        ]);
+        await drawn(h, r);
+        equal(off()?.id, 'one', 'a new image: still drawn in the next frame');
+        await settled(r);
+        deepEqual(off()?.meta, { n: 3 }, 'and drawn with it once loaded');
+        set.remove(['one']);
+        await drawn(h, r);
+        const gone = r.query.pick(s.x, s.y);
+        ok(!gone || gone.set !== 'conf:icons-update', 'removed: not picked');
+        set.dispose();
+      },
+    ),
+    check(
       'draw.columns',
       'column updates are rows: sized, picked, removed',
       async (h, r) => {

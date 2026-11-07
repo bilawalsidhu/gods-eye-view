@@ -675,7 +675,7 @@ test('clampState drapes without tiles and overlays shown ones, told on change', 
   ports.dispose();
 });
 
-test('an icon draws its atlas slot once the atlas has it, and again when it changes', () => {
+test('an icon draws its atlas slot once the atlas has it, and swaps it when it changes', () => {
   const { widget, scene } = tickingWidget();
   const list = [];
   scene.primitives = listedPrimitives(list);
@@ -698,10 +698,12 @@ test('an icon draws its atlas slot once the atlas has it, and again when it chan
   assert.equal(first.get(0).image, 'dot.png');
   ports.draw.atlas('other', { dot: 'other.png' });
   assert.equal(list.at(-1), first, 'another atlas leaves the set alone');
+  const dot = first.get(0);
   ports.draw.atlas('conf', { dot: 'next.png', ring: 'ring.png' });
-  assert.notEqual(list.at(-1), first, 'rebuilt');
+  assert.equal(list.at(-1), first, 'changed in place');
+  assert.equal(first.get(0), dot, 'the same billboard, its image swapped');
   assert.deepEqual(
-    [list.at(-1).get(0).image, list.at(-1).get(1).image],
+    [first.get(0).image, first.get(1).image],
     ['next.png', 'ring.png'],
   );
   ports.dispose();

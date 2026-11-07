@@ -36,6 +36,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.atlas',
   'draw.clampState',
   'draw.drillPick',
+  'draw.icons.update',
   'draw.ids',
   'draw.models',
   'draw.pick',

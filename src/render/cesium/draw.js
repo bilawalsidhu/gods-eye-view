@@ -2,7 +2,8 @@
  * @module render/cesium/draw
  * @description The Cesium renderer's draw port
  * (`src/render/contract/draw.d.ts`): batched sets of items, each set one
- * primitive collection in the scene, rebuilt when its items change. Every
+ * primitive collection in the scene, rebuilt when its items change (icon
+ * sets, and points restyled where they are, change in place). Every
  * item carries a pick id `{set, id, meta, lodGroup}`, which the query port
  * (`ports.js`) reads picks back through.
  *
@@ -99,6 +100,12 @@ class UnpickableGroundPrimitive extends Cesium.GroundPrimitive {
   }
 }
 
+/**
+ * Images an icon set's collection may hold, or twice those it draws when
+ * that is more, before it is built anew holding only those it draws.
+ */
+const MAX_SPARE_IMAGES = 64;
+
 const ANCHORS = {
   center: Cesium.VerticalOrigin.CENTER,
   bottom: Cesium.VerticalOrigin.BOTTOM,
@@ -153,11 +160,18 @@ export function createCesiumDraw({ scene, report }) {
       setsVersion += 1;
     };
     record.rebuild = rebuild;
+    // Changed in place: what height queries see through may have changed.
+    const patched = () => {
+      setsVersion += 1;
+      requestRender();
+    };
     const handle = {
       id: spec.id,
       set(list) {
         items.clear();
         for (const item of list) items.set(item.id, item);
+        // Icons are changed where they are, when they can be.
+        if (syncIcons(record, items.keys(), true)) return patched();
         rebuild();
         requestRender();
       },
@@ -170,16 +184,25 @@ export function createCesiumDraw({ scene, report }) {
           return;
         }
         for (const item of list) items.set(item.id, item);
+        if (
+          syncIcons(
+            record,
+            list.map((item) => item.id),
+          )
+        )
+          return patched();
         rebuild();
         requestRender();
       },
       remove(ids) {
         for (const id of ids) items.delete(id);
+        if (syncIcons(record, [])) return patched();
         rebuild();
         requestRender();
       },
       clear() {
         items.clear();
+        if (syncIcons(record, [])) return patched();
         rebuild();
         requestRender();
       },
@@ -368,8 +391,8 @@ export function createCesiumDraw({ scene, report }) {
   }
 
   // Atlases icons name images from, by id: `{atlas, slot}` reads the slot
-  // when its set is built, and registering an atlas again rebuilds the icon
-  // sets that drew from it.
+  // when its icon is drawn, and registering an atlas again swaps the images
+  // of the icons that drew from it.
   const atlases = new Map();
 
   /**
@@ -388,40 +411,209 @@ export function createCesiumDraw({ scene, report }) {
       blendOption: pointBlendOf(record.spec.blend),
     });
     record.atlases = new Set();
+    // Each drawn icon's billboard, in the order the collection draws them.
+    record.billboards = new Map();
+    record.billboardHost = host;
+    // Every image loaded into the collection's texture atlas, which keeps
+    // each until the collection goes.
+    record.imageKeys = new Set();
     for (const item of record.items.values()) {
       const image = iconImage(record, item.image);
-      if (image === undefined) continue;
-      // A generated image is one texture under its key, however many icons
-      // draw it.
-      const keyed = image?.canvas && typeof image.key === 'string';
-      const position = toCartesian(item.pos);
-      const options = {
-        position,
-        ...(keyed ? {} : { image: toImage(image) }),
-        width: item.size[0] * (item.scale ?? 1),
-        height: item.size[1] * (item.scale ?? 1),
-        color: toColor(item.color, item.alpha ?? 1),
-        verticalOrigin: ANCHORS[item.anchor ?? 'center'],
-        disableDepthTestDistance: item.disableDepthTest ?? 0,
-        heightReference: heightReferenceOf(item.height, record.spec.clampTo),
-        show: item.show !== false,
-        id: pickId(record, item),
-      };
-      if (item.rotationMode === 'screen') options.rotation = item.rotation ?? 0;
-      if (item.rotationMode === 'course') {
-        const enu = Cesium.Transforms.eastNorthUpToFixedFrame(position);
-        options.alignedAxis = Cesium.Matrix4.multiplyByPointAsVector(
-          enu,
-          Cesium.Cartesian3.UNIT_Y,
-          new Cesium.Cartesian3(),
-        );
-        options.rotation = -Cesium.Math.toRadians(item.course ?? 0);
-      }
-      const billboard = host.add(options);
-      if (keyed) billboard.setImage(image.key, image.canvas);
-      place(record, billboard, position, options.show);
+      if (image !== undefined) addIcon(record, item, image);
     }
     replaceHost(record, host);
+  }
+
+  /** A generated image, drawn as one texture under its key. */
+  const isKeyed = (image) => image?.canvas && typeof image.key === 'string';
+
+  /** What tells one image from another, for an icon whose image changes. */
+  function imageKeyOf(image) {
+    if (typeof image === 'string') return image;
+    if (typeof image?.svg === 'string') return `\u0000svg\u0000${image.svg}`;
+    if (isKeyed(image)) return `\u0000key\u0000${image.key}`;
+    return image?.canvas ?? image;
+  }
+
+  /** How a billboard draws an icon item at `position`, but its image and id. */
+  function iconLook(record, item, position) {
+    const look = {
+      position,
+      width: item.size[0] * (item.scale ?? 1),
+      height: item.size[1] * (item.scale ?? 1),
+      color: toColor(item.color, item.alpha ?? 1),
+      verticalOrigin: ANCHORS[item.anchor ?? 'center'],
+      disableDepthTestDistance: item.disableDepthTest ?? 0,
+      heightReference: heightReferenceOf(item.height, record.spec.clampTo),
+      show: item.show !== false,
+      // The defaults, so a restyle in place puts back what an item dropped.
+      rotation: 0,
+      alignedAxis: Cesium.Cartesian3.ZERO,
+    };
+    if (item.rotationMode === 'screen') look.rotation = item.rotation ?? 0;
+    if (item.rotationMode === 'course') {
+      const enu = Cesium.Transforms.eastNorthUpToFixedFrame(position);
+      look.alignedAxis = Cesium.Matrix4.multiplyByPointAsVector(
+        enu,
+        Cesium.Cartesian3.UNIT_Y,
+        new Cesium.Cartesian3(),
+      );
+      look.rotation = -Cesium.Math.toRadians(item.course ?? 0);
+    }
+    return look;
+  }
+
+  /** Give a billboard its image: a generated one under its key. */
+  function setIconImage(record, billboard, image) {
+    if (isKeyed(image)) billboard.setImage(image.key, image.canvas);
+    else billboard.image = toImage(image);
+    record.imageKeys.add(imageKeyOf(image));
+  }
+
+  /** Draw an icon item as a new billboard, after the set's others. */
+  function addIcon(record, item, image) {
+    const position = toCartesian(item.pos);
+    const options = {
+      ...iconLook(record, item, position),
+      id: pickId(record, item),
+    };
+    const billboard = record.billboardHost.add(options);
+    setIconImage(record, billboard, image);
+    const placed = place(record, billboard, position, options.show);
+    record.billboards.set(item.id, {
+      billboard,
+      placed,
+      image: imageKeyOf(image),
+      canvas: image?.canvas,
+    });
+  }
+
+  /**
+   * Draw a drawn icon as its item now is, on the billboard it has: its
+   * image is loaded again only when it changes, so restyled icons never
+   * blink. An SVG drawn at a new size keeps the raster it was loaded at, as
+   * Cesium's entities do.
+   */
+  function patchIcon(record, entry, item, image) {
+    const { billboard, placed } = entry;
+    const position = toCartesian(item.pos);
+    const look = iconLook(record, item, position);
+    // Sized first: a new SVG image rasterises at the billboard's size.
+    Object.assign(billboard, look);
+    const key = imageKeyOf(image);
+    if (key !== entry.image) {
+      setIconImage(record, billboard, image);
+      entry.image = key;
+      entry.canvas = image?.canvas;
+    }
+    // Picks and height queries hold this id object: changed, not replaced.
+    billboard.id.meta = item.meta;
+    billboard.id.lodGroup = item.lodGroup;
+    placed.position = position;
+    // As a rebuild would; the horizon cull, where it runs, hides it again
+    // past the horizon before the next frame draws.
+    placed.shown = look.show;
+  }
+
+  /**
+   * Bring an icon set's billboards in line with its items without a
+   * rebuild: those of items gone (or whose image is gone) are removed, the
+   * items `touched` are drawn as they now are, and new ones are added. A
+   * collection draws in the order its billboards were added, so this is
+   * done only when that stays the items' order: new icons come after every
+   * one kept and, with `reordered` (a `set`), the kept ones keep their
+   * order. A collection keeps every image it loaded, so it is also rebuilt
+   * (anew, holding only what it draws) when it would hold many more images
+   * than it draws, when it is emptied, and when a generated image under a
+   * key it has comes as a new canvas (its key's texture would not change).
+   * False, changing nothing, otherwise, and when the set has no live
+   * collection of its own.
+   * @param {object} record
+   * @param {Iterable<string>} touched Ids of items that may have changed.
+   * @param {boolean} [reordered] The items were replaced, in a new order.
+   */
+  function syncIcons(record, touched, reordered = false) {
+    const drawn = record.billboards;
+    const host = record.billboardHost;
+    if (
+      record.kind !== 'icons' ||
+      !drawn ||
+      !host ||
+      record.host !== host ||
+      host.isDestroyed()
+    )
+      return false;
+    const images = new Map();
+    for (const id of touched) {
+      const item = record.items.get(id);
+      if (item) images.set(id, iconImage(record, item.image));
+    }
+    if (record.items.size === 0) return false;
+    const keeps = (id) =>
+      record.items.has(id) && (!images.has(id) || images.get(id) !== undefined);
+    const adds = (id) =>
+      !drawn.has(id) && images.has(id) && images.get(id) !== undefined;
+    let adding = false;
+    const kept = [];
+    for (const id of record.items.keys()) {
+      if (adds(id)) adding = true;
+      else if (drawn.has(id) && keeps(id)) {
+        if (adding) return false;
+        kept.push(id);
+      }
+    }
+    if (reordered) {
+      let at = 0;
+      for (const id of drawn.keys())
+        if (keeps(id) && kept[at++] !== id) return false;
+    }
+    // The images drawn once this is done, and those it would load.
+    const drawing = new Set();
+    let loading = 0;
+    for (const id of kept) {
+      const entry = drawn.get(id);
+      if (!images.has(id)) {
+        drawing.add(entry.image);
+        continue;
+      }
+      const image = images.get(id);
+      const key = imageKeyOf(image);
+      if (
+        isKeyed(image) &&
+        key === entry.image &&
+        image.canvas !== entry.canvas
+      )
+        return false;
+      drawing.add(key);
+    }
+    for (const [id, image] of images)
+      if (image !== undefined && !drawn.has(id)) drawing.add(imageKeyOf(image));
+    for (const key of drawing) if (!record.imageKeys.has(key)) loading += 1;
+    if (
+      record.imageKeys.size + loading >
+      Math.max(MAX_SPARE_IMAGES, 2 * drawing.size)
+    )
+      return false;
+    const gone = new Set();
+    for (const [id, entry] of drawn)
+      if (!keeps(id)) {
+        host.remove(entry.billboard);
+        drawn.delete(id);
+        gone.add(entry.billboard);
+      }
+    if (gone.size) {
+      record.placed = record.placed.filter((p) => !gone.has(p.primitive));
+      const ids = new Set([...gone].map((billboard) => billboard.id));
+      record.pickIds = record.pickIds.filter((id) => !ids.has(id));
+    }
+    for (const [id, item] of record.items) {
+      const image = images.get(id);
+      if (image === undefined) continue;
+      const entry = drawn.get(id);
+      if (entry) patchIcon(record, entry, item, image);
+      else addIcon(record, item, image);
+    }
+    return true;
   }
 
   function buildPoints(record) {
@@ -1131,13 +1323,19 @@ export function createCesiumDraw({ scene, report }) {
     },
     atlas(id, images) {
       atlases.set(id, { ...images });
-      let rebuilt = false;
+      let changed = false;
       for (const record of [...sets.values()])
         if (record.kind === 'icons' && record.atlases?.has(id)) {
-          record.rebuild();
-          rebuilt = true;
+          // Its icons that draw from the atlas take their new images where
+          // they are; a set that cannot is rebuilt.
+          const drawing = [];
+          for (const [itemId, item] of record.items)
+            if (item.image?.atlas === id) drawing.push(itemId);
+          if (syncIcons(record, drawing)) setsVersion += 1;
+          else record.rebuild();
+          changed = true;
         }
-      if (rebuilt) scene.requestRender();
+      if (changed) scene.requestRender();
     },
   };
 
