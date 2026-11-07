@@ -528,3 +528,30 @@ test('a forwarded same-origin request reaches every CCTV route but not the Stree
   assert.equal(direct.body, 'street-view');
   assert.equal(streetViewCalls(), 1);
 });
+
+test('the Street View fallback frames catalog cameras only, from the catalog position', async (t) => {
+  const app = mount(t, ({ url }) =>
+    url.startsWith('https://maps.googleapis.com/')
+      ? trackedUpstream({
+          headers: { 'content-type': 'image/jpeg' },
+          body: 'street-view',
+        }).response
+      : upstreamResponse({ status: 503 }),
+  );
+  process.env.GOOGLE_MAPS_SERVER_API_KEY = 'fixture-key';
+  const streetView = () =>
+    app.requests.filter(({ url }) =>
+      url.startsWith('https://maps.googleapis.com/'),
+    );
+
+  const unknown = await app.call('/frame/not-a-camera?lat=48.85&lon=2.29');
+  assert.equal(unknown.headers['X-CCTV-Source'], 'synthetic');
+  assert.deepEqual(streetView(), [], 'no Google call for an unknown id');
+
+  const steered = await app.call(
+    `/frame/${STILL.id}?lat=48.85&lon=2.29&heading=90`,
+  );
+  assert.equal(steered.headers['X-CCTV-Source'], 'streetview');
+  const location = new URL(streetView()[0].url).searchParams.get('location');
+  assert.equal(location, `${STILL.lat},${STILL.lon}`);
+});
