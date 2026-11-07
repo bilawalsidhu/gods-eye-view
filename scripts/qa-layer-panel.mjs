@@ -31,7 +31,7 @@ try {
     const entry = document.querySelector(
       'script[type="module"][src*="/src/main.js"]',
     );
-    const { application } = await import(entry.src);
+    const application = await (await import(entry.src)).application;
     const { presentation } = application.getComponents().data;
     const container = presentation.panel._toggleContainer;
     const id = 'qa-panel-lifecycle';

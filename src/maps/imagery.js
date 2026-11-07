@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { ionRequestOptions } from '../sources/serverKeys.js';
 
 // Attribution and service rights are documented in DATA_SOURCES.md.
 export const ESRI_ATTRIBUTION_HTML =
@@ -25,19 +26,25 @@ export function createEsriImagery() {
 export function createIonImagery(style, accessToken) {
   accessToken = String(accessToken || '').trim();
   if (!accessToken) throw new Error('Ion imagery requires an explicit token');
+  // The ion token stays on the server; ionRequestOptions routes the
+  // endpoint request to this app's /api/ion/ when the token is server-managed.
+  const options = ionRequestOptions(accessToken);
   if (
     style === Cesium.IonWorldImageryStyle.AERIAL ||
     style === Cesium.IonWorldImageryStyle.AERIAL_WITH_LABELS
   ) {
-    return createBingIonImagery(style, accessToken);
+    return createBingIonImagery(style, options);
   }
-  return Cesium.IonImageryProvider.fromAssetId(style, { accessToken });
+  return Cesium.IonImageryProvider.fromAssetId(style, options);
 }
 
-async function createBingIonImagery(style, accessToken) {
+async function createBingIonImagery(style, { accessToken, server }) {
   const endpoint = await new Cesium.Resource({
-    url: `https://api.cesium.com/v1/assets/${style}/endpoint`,
-    queryParameters: { access_token: accessToken },
+    url: new URL(
+      `v1/assets/${style}/endpoint`,
+      server || 'https://api.cesium.com/',
+    ).href,
+    queryParameters: accessToken ? { access_token: accessToken } : {},
   }).fetchJson();
   if (
     endpoint?.type !== 'IMAGERY' ||

@@ -1553,7 +1553,7 @@ try {
         getStats: () => ({ count: 1, lastUpdate: Date.now(), source: 'Local focus fixture' }),
       });
       state.ids.push(transitionId);
-      const { application } = await import('/src/main.js');
+      const application = await (await import('/src/main.js')).application;
       application.getComponents().data.presentation.panel._renderToggles();
       const offId = manager.getAll().find((layer) => !state.ids.includes(layer.id) && layer.showInTogglePanel && !layer.enabled)?.id;
       return {
@@ -1605,7 +1605,7 @@ try {
               const focusBefore = document.activeElement;
               const productionBefore = JSON.stringify(probe.production());
               const durableBefore = localStorage.getItem('gev:layer-state:v2');
-              const { application } = await import('/src/main.js');
+              const application = await (await import('/src/main.js')).application;
               application.getComponents().data.presentation.refresh();
               return {
                 focusRetained: document.activeElement === focusBefore
@@ -1713,7 +1713,7 @@ try {
       state.transition?.releaseDisable?.();
       const removed = [];
       for (const id of state.ids) removed.push(await window.__gevQaUnregisterLayer(manager, id));
-      const { application } = await import('/src/main.js');
+      const application = await (await import('/src/main.js')).application;
       application.getComponents().data.presentation.panel._renderToggles();
       window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', state.collapsed, { persist: false, syncShare: false });
       // A native user-origin toggle legitimately asks the production state
