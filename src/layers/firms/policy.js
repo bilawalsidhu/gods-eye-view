@@ -1,5 +1,4 @@
 import { FIRMS_AMBIENT_COHORT_LIMIT } from '../../data/firmsLabels.js';
-import * as Cesium from 'cesium';
 
 /** Client poll interval; the proxy's 30 min TTL is what guards upstream quota. */
 
@@ -80,10 +79,13 @@ export const LABEL_VIEW_MARGIN_PX = 16;
 
 export const GLOW_SPRITE_PX = 56;
 
-/** Color stops shared by cell heat fills and detection glow sprites. */
+/**
+ * Color stops shared by cell heat fills and detection glow sprites, as
+ * renderer colours `[r, g, b, a]` (CSS red, orange and yellow).
+ */
 
 export const DETECTION_COLOR_STOPS = [
-  { name: 'red', color: Cesium.Color.RED },
-  { name: 'orange', color: Cesium.Color.ORANGE },
-  { name: 'yellow', color: Cesium.Color.YELLOW },
+  { name: 'red', color: Object.freeze([1, 0, 0, 1]) },
+  { name: 'orange', color: Object.freeze([1, 165 / 255, 0, 1]) },
+  { name: 'yellow', color: Object.freeze([1, 1, 0, 1]) },
 ];

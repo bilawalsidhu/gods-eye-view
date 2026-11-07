@@ -184,7 +184,8 @@ export function createSelection({
       layerId: id,
       layerName: name,
       source: 'NASA FIRMS',
-      dataSource: layerState._dataSource,
+      // Hidden with the layer: the context store reads its `show`.
+      dataSource: layerState._cells,
       // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
       label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
       latitude: fire.lat,

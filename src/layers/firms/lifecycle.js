@@ -1,5 +1,12 @@
-import * as Cesium from 'cesium';
+import { drawOf } from '../../render/rendererOf.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
+
+/**
+ * The heat cells' draw sets start with this; each layer has its own
+ * (`firms:1:cells`, …), so several can share a renderer.
+ */
+export const FIRMS_CELL_SET_PREFIX = 'firms';
+let instances = 0;
 
 export function createLifecycle({
   layerState,
@@ -17,17 +24,19 @@ export function createLifecycle({
     init(viewer) {
       if (layerState._destroyed) return;
       layerState._viewer = viewer;
-      layerState._dataSource = new Cesium.CustomDataSource(id);
-      layerState._dataSource.show = false;
-      viewer.dataSources.add(layerState._dataSource);
+      layerState._cells = drawOf(viewer).shapes({
+        id: `${FIRMS_CELL_SET_PREFIX}:${++instances}:cells`,
+        clampTo: 'both',
+        show: false,
+      });
     },
 
     async enable(viewer) {
       if (layerState._destroyed) return;
       layerState._enabled = true;
       layerState._viewer = viewer;
-      if (!layerState._dataSource) this.init(viewer);
-      if (layerState._dataSource) layerState._dataSource.show = true;
+      if (!layerState._cells) this.init(viewer);
+      if (layerState._cells) layerState._cells.show = true;
       // The GPU culls the far side each frame, so retained rows are right
       // for wherever the camera went while the layer was off.
       if (layerState._icons) layerState._icons.show = true;
@@ -54,7 +63,7 @@ export function createLifecycle({
       layerState._loading = false;
       layerState._enabled = false;
       components.selection.clearFireSelection();
-      if (layerState._dataSource) layerState._dataSource.show = false;
+      if (layerState._cells) layerState._cells.show = false;
       if (layerState._icons) layerState._icons.show = false;
       overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
@@ -76,10 +85,8 @@ export function createLifecycle({
       components.viewport.removeMoveEndWatcher();
       components.selection.removeClickHandler();
       unregisterPickOwner(id);
-      if (layerState._dataSource && viewer) {
-        viewer.dataSources.remove(layerState._dataSource, true);
-      }
-      layerState._dataSource = null;
+      layerState._cells?.dispose();
+      layerState._cells = null;
       components.rendering.removeDetectionCollections(viewer);
       components.selection.clearContextRegistrations();
       clearSelectedEntityContextForLayer(id);

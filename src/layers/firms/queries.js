@@ -130,7 +130,8 @@ export function createQueries({
      * layer's greedy declutter as the SELECTOR and the shared overlay remains
      * the renderer. Walks the FRP-sorted index so the strongest fires come first.
      * @param {{maxCount?: number}} [options]
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string}>}
+     * @returns {Array<{position: {x: number, y: number, z: number}, id: string, type: string}>}
+     *   Positions are ECEF.
      */
     getDetectableObjects(options = {}) {
       if (!layerState._enabled || !layerState._firesByFrp.length) return [];

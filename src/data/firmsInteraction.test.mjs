@@ -16,6 +16,7 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakeInput } from '../input/testDoubles.mjs';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
 
 const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
@@ -81,6 +82,7 @@ function harness({
     },
     dataSources: { add() {}, remove() {} },
   };
+  bindFakeCesiumScene(viewer);
   const input = fakeInput(viewer);
   // The LOD rebuild (and with it the context-registration sweep) is inert
   // without a data source, so tests that drive a real refresh need one.

@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
   FIRMS_OVERLAY_SOURCE_ID,
@@ -19,8 +18,8 @@ export function createCards({
    * Rebuild the card entries for the shared world-overlay host: the
    * selected-fire detail card (if any) plus at most MAX_AMBIENT_LABELS
    * ambient cards picked by a greedy screen-space declutter — walk the
-   * priority-ranked candidates, project each with
-   * SceneTransforms.worldToWindowCoordinates, and accept only candidates
+   * priority-ranked candidates, project each with the renderer's
+   * `query.project`, and accept only candidates
    * ≥ LABEL_MIN_SEP_PX from every already-accepted card. Candidates whose
    * projection fails are dropped silently. SELECTION runs here, on LOD/
    * viewport rebuilds and camera moveEnd — never per frame; RENDERING is
@@ -31,19 +30,21 @@ export function createCards({
   function rebuildAmbientLabels() {
     if (!layerState._viewer) return;
     const scene = layerState._viewer.scene;
+    const { query } = components.rendering.scenePorts();
+    const project = (position) => query?.project(position) ?? null;
     const now = Date.now();
     const entries = [];
     /** @type {Array<{x: number, y: number}>} Screen positions of accepted labels. */
     const accepted = [];
-    // worldToWindowCoordinates happily projects points on the FAR side of the
-    // planet, so without this the ≤18 ambient slots get spent on fires the
-    // overlay host will then horizon-cull at paint time (`horizonCull: true`
-    // in applyFirmsOverlayPolicy) — near-side fires silently lose their cards.
-    // Shared with the sprite pass (fireHorizonOccluder) so cards and sprites
-    // never disagree about which hemisphere a detection is on.
-    const occluder = components.rendering.fireHorizonOccluder();
+    // Projection happily answers for points on the FAR side of the planet,
+    // so without this the ≤18 ambient slots get spent on fires the overlay
+    // host will then horizon-cull at paint time (`horizonCull: true` in
+    // applyFirmsOverlayPolicy) — near-side fires silently lose their cards.
+    // The renderer's ellipsoid horizon from the eye, the test the sprites'
+    // GPU cull makes, so cards and sprites never disagree about which
+    // hemisphere a detection is on.
     const beyondHorizon = (position) =>
-      occluder ? occluder.isPointVisible(position) !== true : false;
+      query ? query.isOccluded(position) : false;
     layerState._fireByCardId.clear();
 
     if (layerState._selectedFire) {
@@ -53,10 +54,8 @@ export function createCards({
       );
       layerState._fireByCardId.set(selectedCard.id, layerState._selectedFire);
       entries.push(selectedCard);
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
+      const screen = project(
         components.model.firePosition(layerState._selectedFire),
-        layerState.scratchWindowCoord,
       );
       // Seed the accepted list so ambient cards keep clear of the detail card.
       // A selected fire behind the limb is not painted, so it must not reserve
@@ -83,11 +82,7 @@ export function createCards({
       // LOD, far-side cells can still project on-canvas; accepting those first
       // starves front-side cards before the host applies its authoritative cull.
       if (beyondHorizon(candidate.cullPosition || candidate.position)) continue;
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        candidate.position,
-        layerState.scratchWindowCoord,
-      );
+      const screen = project(candidate.position);
       if (!screen) continue; // projection failed (e.g. behind camera) — drop silently
       if (
         screen.x < -LABEL_VIEW_MARGIN_PX ||

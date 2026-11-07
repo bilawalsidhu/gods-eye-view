@@ -14,6 +14,7 @@ import { isOverlayPointVisible, normalizeOverlayEntry } from '../overlays/worldO
 import { createIconSet, ICON_CULL_LIFT } from './iconSet.js';
 import { writeHoldSegment } from './iconSegment.js';
 import { fakeInput } from '../input/testDoubles.mjs';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
 
 const AUSTIN = { lon: -97.7, lat: 30.2 };
 /** Antipode of Austin — as far behind the limb as a point on Earth can be. */
@@ -379,6 +380,7 @@ function createHarness(rawFires) {
       mapProjection: new Cesium.GeographicProjection(),
     },
   };
+  bindFakeCesiumScene(viewer);
   fakeInput(viewer);
 
   const layer = createFirmsHeatmapLayer({

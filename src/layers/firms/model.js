@@ -1,4 +1,11 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { rectangleHeight, rectangleWidth } from '../../geo/rectangle.js';
+import {
+  PI_OVER_TWO,
+  TWO_PI,
+  negativePiToPi,
+  toDegrees,
+} from '../../geo/vector.js';
 import { formatNumber, getLocale, isolate, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
@@ -58,35 +65,36 @@ export function createModel({
    * Expand a view rectangle by VIEW_PADDING per side and convert to degree
    * bounds with an explicit anti-meridian wrap flag. Returns null for
    * near-global views where clipping would be pointless.
-   * @param {Cesium.Rectangle} rect - Camera view rectangle (radians).
+   * @param {{west: number, south: number, east: number, north: number}} rect
+   *   Camera view rectangle, radians.
    * @returns {?{west: number, south: number, east: number, north: number, wraps: boolean}}
    */
 
   function paddedDegreeBounds(rect) {
-    const width = Cesium.Rectangle.computeWidth(rect);
-    const height = Cesium.Rectangle.computeHeight(rect);
+    const width = rectangleWidth(rect);
+    const height = rectangleHeight(rect);
     if (width >= Math.PI * 1.85) return null;
     const padLon = width * VIEW_PADDING;
     const padLat = height * VIEW_PADDING;
-    const south = Math.max(-Cesium.Math.PI_OVER_TWO, rect.south - padLat);
-    const north = Math.min(Cesium.Math.PI_OVER_TWO, rect.north + padLat);
+    const south = Math.max(-PI_OVER_TWO, rect.south - padLat);
+    const north = Math.min(PI_OVER_TWO, rect.north + padLat);
     let west = rect.west - padLon;
     let east = rect.east + padLon;
     let wraps;
-    if (width + padLon * 2 >= Cesium.Math.TWO_PI) {
+    if (width + padLon * 2 >= TWO_PI) {
       west = -Math.PI;
       east = Math.PI;
       wraps = false;
     } else {
-      west = Cesium.Math.negativePiToPi(west);
-      east = Cesium.Math.negativePiToPi(east);
+      west = negativePiToPi(west);
+      east = negativePiToPi(east);
       wraps = west > east;
     }
     return {
-      west: Cesium.Math.toDegrees(west),
-      south: Cesium.Math.toDegrees(south),
-      east: Cesium.Math.toDegrees(east),
-      north: Cesium.Math.toDegrees(north),
+      west: toDegrees(west),
+      south: toDegrees(south),
+      east: toDegrees(east),
+      north: toDegrees(north),
       wraps,
     };
   }
@@ -119,17 +127,17 @@ export function createModel({
     );
   }
 
+  /** A cell's heat colour, `[r, g, b, alpha]`, on the detection stops. */
   function heatColor(value, alpha) {
-    if (value > 0.72) return Cesium.Color.RED.withAlpha(alpha);
-    if (value > 0.42) return Cesium.Color.ORANGE.withAlpha(alpha);
-    return Cesium.Color.YELLOW.withAlpha(alpha);
+    const stop = DETECTION_COLOR_STOPS[value > 0.72 ? 0 : value > 0.42 ? 1 : 2];
+    return [stop.color[0], stop.color[1], stop.color[2], alpha];
   }
 
   /**
    * Pick a sprite color stop from FRP + confidence, reusing the same
    * yellow → orange → red thresholds as the aggregated heat cells.
    * @param {Object} fire - Detection record.
-   * @returns {{name: string, color: Cesium.Color}}
+   * @returns {{name: string, color: number[]}}
    */
 
   function detectionColorStop(fire) {
@@ -162,7 +170,7 @@ export function createModel({
    * through the stop color to a transparent edge. The glow lives in the
    * sprite itself because global bloom defaults OFF. One raster per color
    * (GLOW_SPRITE_PX); each fire draws it at its own size.
-   * @param {{name: string, color: Cesium.Color}} stop - Color stop.
+   * @param {{name: string, color: number[]}} stop - Color stop.
    * @returns {string} PNG data URL.
    */
 
@@ -178,9 +186,9 @@ export function createModel({
     if (!context) return '';
     const radius = dimension / 2;
     const rgb = [
-      Math.round(stop.color.red * 255),
-      Math.round(stop.color.green * 255),
-      Math.round(stop.color.blue * 255),
+      Math.round(stop.color[0] * 255),
+      Math.round(stop.color[1] * 255),
+      Math.round(stop.color[2] * 255),
     ].join(',');
     const gradient = context.createRadialGradient(
       radius,
@@ -203,7 +211,7 @@ export function createModel({
   }
 
   /**
-   * Lazily-cached Cartesian3 anchor at the shared ground floor (DEM/mesh cell
+   * Lazily-cached ECEF anchor at the shared ground floor (DEM/mesh cell
    * + lift) when the floor is warm, else ellipsoid height 0 (owner field
    * finding 2026-07-21: height-0 anchors read as buried under high terrain at
    * close/oblique zoom). Warm-cache read only — floors are warmed in batch by
@@ -214,13 +222,13 @@ export function createModel({
    * free either way (contacts are ALWAYS visible — never below the surface,
    * slightly above is fine).
    * @param {Object} fire - Detection record.
-   * @returns {Cesium.Cartesian3}
+   * @returns {{x: number, y: number, z: number}} ECEF.
    */
 
   function firePosition(fire) {
     const height = fireAnchorHeight(fire.lat, fire.lon);
     if (!fire.position || fire.positionHeight !== height) {
-      fire.position = Cesium.Cartesian3.fromDegrees(fire.lon, fire.lat, height);
+      fire.position = fromDegrees(fire.lon, fire.lat, height);
       fire.positionHeight = height;
     }
     return fire.position;
@@ -237,18 +245,14 @@ export function createModel({
    * feeds rendering: the datum-correct anchor from {@link firePosition} is what
    * the sprite and the card are drawn at.
    * @param {Object} fire - Detection record.
-   * @returns {Cesium.Cartesian3}
+   * @returns {{x: number, y: number, z: number}} ECEF.
    */
 
   function fireCullPosition(fire) {
     const position = firePosition(fire);
     if (fire.positionHeight >= ICON_CULL_HEIGHT_M) return position;
     if (!fire.cullPosition) {
-      fire.cullPosition = Cesium.Cartesian3.fromDegrees(
-        fire.lon,
-        fire.lat,
-        ICON_CULL_HEIGHT_M,
-      );
+      fire.cullPosition = fromDegrees(fire.lon, fire.lat, ICON_CULL_HEIGHT_M);
     }
     return fire.cullPosition;
   }
@@ -259,18 +263,18 @@ export function createModel({
    * boundary case, so they get the same lift as sub-ellipsoid fire anchors.
    * @param {number} lon - Cell center longitude in degrees.
    * @param {number} lat - Cell center latitude in degrees.
-   * @returns {Cesium.Cartesian3}
+   * @returns {{x: number, y: number, z: number}} ECEF.
    */
 
   function cellCullPosition(lon, lat) {
-    return Cesium.Cartesian3.fromDegrees(lon, lat, ICON_CULL_HEIGHT_M);
+    return fromDegrees(lon, lat, ICON_CULL_HEIGHT_M);
   }
 
   /**
    * True when `screen` is at least LABEL_MIN_SEP_PX away from every accepted
    * screen position (greedy declutter accept test).
    * @param {Array<{x: number, y: number}>} accepted - Accepted label positions.
-   * @param {Cesium.Cartesian2} screen - Candidate window coordinates.
+   * @param {{x: number, y: number}} screen - Candidate window coordinates.
    * @returns {boolean}
    */
 
@@ -331,7 +335,7 @@ export function createModel({
    * "high · 14h · N20". Ages are computed against each detection's acquisition
    * time — with the live feed everything reads under 24 h (and a stale cache
    * reads truthfully old). Exported for unit tests.
-   * @param {{fire: Object, position: Cesium.Cartesian3}} candidate - Label candidate.
+   * @param {{fire: Object, position: {x: number, y: number, z: number}}} candidate - Label candidate.
    * @param {number} nowMs - Current epoch milliseconds.
    * @returns {Object} firmsLabels entry.
    */
@@ -363,7 +367,7 @@ export function createModel({
    * Card model for an aggregated heat cell, e.g. title "14 FIRES", detail
    * "max 210 MW · new 3h". Accent comes from the candidate (heat-normalized
    * score is only known at renderCells time). Exported for unit tests.
-   * @param {{cell: Object, position: Cesium.Cartesian3, accent: string}} candidate
+   * @param {{cell: Object, position: {x: number, y: number, z: number}, accent: string}} candidate
    * @param {number} nowMs - Current epoch milliseconds.
    * @returns {Object} firmsLabels entry.
    */

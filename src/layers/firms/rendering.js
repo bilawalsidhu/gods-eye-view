@@ -1,7 +1,13 @@
 import * as Cesium from 'cesium';
+// Still Cesium for its icons, so this layer loads the unbound camera and
+// draw factories its other parts reach the renderer through; see also
+// scenePorts below.
+import '../../render/cesium/camera.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { rendererOf } from '../../render/rendererOf.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import { LOD_LEVELS, CONTEXT_TOP_N, GLOW_SPRITE_PX } from './policy.js';
+import { horizonOccluder } from '../../data/iconOrientation.js';
 import { createIconSet, ICON_CULL_LIFT } from '../../data/iconSet.js';
 import { writeHoldSegment } from '../../data/iconSegment.js';
 import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
@@ -27,7 +33,7 @@ export function createRendering({
    */
 
   function renderCurrentLod(force = false) {
-    if (!layerState._dataSource || !layerState._viewer) return false;
+    if (!layerState._cells || !layerState._viewer) return false;
     if (!layerState._fires.length) {
       // A refresh that came back empty takes down what the last one drew, so
       // no sprite or card is left on screen (and clickable) for a fire that is
@@ -48,9 +54,7 @@ export function createRendering({
       return false;
     layerState._currentLodIndex = lodIndex;
     layerState._currentLodId = lod.id;
-    layerState._lastViewRect = viewRect
-      ? Cesium.Rectangle.clone(viewRect)
-      : null;
+    layerState._lastViewRect = viewRect ? { ...viewRect } : null;
     const bounds = viewRect
       ? components.model.paddedDegreeBounds(viewRect)
       : null;
@@ -63,8 +67,13 @@ export function createRendering({
     return true;
   }
 
+  /** Take every heat cell down (no write when there are none). */
+  function clearCells() {
+    if (layerState._cells?.size()) layerState._cells.clear();
+  }
+
   function clearRendered() {
-    layerState._dataSource.entities.removeAll();
+    clearCells();
     layerState._icons?.clear();
     layerState._pickIndexById.clear();
     layerState._cellCount = 0;
@@ -134,7 +143,7 @@ export function createRendering({
 
   /**
    * Render aggregated heat cells (global/regional bands) as ground-clamped
-   * rectangles. Cell labels do NOT live on the entities anymore — they go
+   * rectangles, one draw set. Cell labels do NOT live on the cells — they go
    * through the same unclamped, screen-space-decluttered label pipeline as
    * detections (see {@link rebuildAmbientLabels}).
    * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
@@ -144,7 +153,6 @@ export function createRendering({
 
   function renderCells(cells, lod, bounds) {
     ensureDetectionCollections();
-    layerState._dataSource.entities.removeAll();
     layerState._icons?.clear();
     layerState._pickIndexById.clear();
     layerState._cellCount = cells.length;
@@ -153,6 +161,7 @@ export function createRendering({
     layerState._labelCandidates = [];
     layerState._labelLodDistance = lod.labelDistance;
 
+    const items = [];
     for (const cell of cells) {
       const score = components.model.heatScore(cell);
       const normalized = Math.min(1, Math.sqrt(score / maxScore));
@@ -160,26 +169,21 @@ export function createRendering({
       const color = components.model.heatColor(normalized, alpha);
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
-      const position = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0);
+      const position = fromDegrees(centerLon, centerLat, 0);
 
-      layerState._dataSource.entities.add({
-        rectangle: {
-          coordinates: Cesium.Rectangle.fromDegrees(
-            cell.lonCell,
-            cell.latCell,
-            cell.lonCell + lod.gridDegrees,
-            cell.latCell + lod.gridDegrees,
-          ),
-          material: new Cesium.ColorMaterialProperty(color),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      items.push({
+        id: `firms-cell:${lod.gridDegrees}:${cell.latCell}:${cell.lonCell}`,
+        geometry: {
+          kind: 'rectangle',
+          rect: {
+            west: cell.lonCell,
+            south: cell.latCell,
+            east: cell.lonCell + lod.gridDegrees,
+            north: cell.latCell + lod.gridDegrees,
+          },
         },
-        position,
-        properties: {
-          count: cell.count,
-          intensity: score,
-          maxFrp: cell.maxFrp,
-          night: cell.night,
-        },
+        fill: color,
+        height: 'clampGround',
       });
 
       // Cells arrive heat-sorted, so candidate order doubles as label priority.
@@ -193,6 +197,7 @@ export function createRendering({
       });
     }
 
+    layerState._cells.set(items);
     components.cards.rebuildAmbientLabels();
     components.selection.refreshContextRegistrations(
       components.selection.topFiresWithinBounds(bounds),
@@ -216,7 +221,7 @@ export function createRendering({
 
   function renderDetections(lod, bounds) {
     ensureDetectionCollections();
-    layerState._dataSource.entities.removeAll();
+    clearCells();
     const set = layerState._icons;
     if (!set) return;
     layerState._pickIndexById.clear();
@@ -366,29 +371,56 @@ export function createRendering({
   }
 
   /**
-   * Shared horizon occluder positioned at the current camera, or null when
-   * there is no usable camera yet (init order / headless stubs).
-   * `viewer.camera` and `viewer.scene.camera` are the SAME object in Cesium;
-   * both are probed so a partial stub (either shape) still gets a real
-   * occluder rather than silently degrading to "nothing is ever occluded".
-   * @returns {?Cesium.EllipsoidalOccluder}
+   * The renderer's query and frame ports the cards and the LOD watcher use.
+   * A viewer with no renderer bound has neither yet;
+   * for one, this part (Cesium already, for its icons) answers the members
+   * the layer uses over the viewer's scene, as the layer did before.
+   * @returns {{query: object|null, frame: object|null}}
    */
-
-  function fireHorizonOccluder() {
-    const camera = layerState._viewer?.camera?.positionWC
-      ? layerState._viewer.camera
-      : layerState._viewer?.scene?.camera;
-    if (!camera?.positionWC) return null;
-    return horizonOccluder(camera);
+  function scenePorts() {
+    const viewer = layerState._viewer;
+    const bound = rendererOf(viewer);
+    if (bound?.query && bound?.frame)
+      return { query: bound.query, frame: bound.frame };
+    const scene = viewer?.scene;
+    if (!scene)
+      return { query: bound?.query ?? null, frame: bound?.frame ?? null };
+    const eye = () =>
+      viewer.camera?.positionWC ? viewer.camera : scene.camera;
+    const query = bound?.query ?? {
+      project(position) {
+        const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
+          scene,
+          Cesium.Cartesian3.clone(position),
+        );
+        return screen ? { x: screen.x, y: screen.y } : null;
+      },
+      isOccluded(position) {
+        const camera = eye();
+        if (!camera?.positionWC) return false;
+        return !horizonOccluder(camera).isPointVisible(
+          Cesium.Cartesian3.clone(position),
+        );
+      },
+    };
+    const frame = bound?.frame ?? {
+      on(phase, listener) {
+        const event = scene[phase];
+        return event?.addEventListener
+          ? event.addEventListener(listener)
+          : () => {};
+      },
+    };
+    return { query, frame };
   }
 
   return {
+    scenePorts,
     renderCurrentLod,
     aggregateFires,
     renderCells,
     renderDetections,
     ensureDetectionCollections,
     removeDetectionCollections,
-    fireHorizonOccluder,
   };
 }

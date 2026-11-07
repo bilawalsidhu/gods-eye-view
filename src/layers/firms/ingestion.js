@@ -15,7 +15,7 @@ export function createIngestion({
   /** Replace a validated snapshot while preserving source freshness and selection identity. */
 
   async function loadHeatmap() {
-    if (!layerState._dataSource || !layerState._enabled) return;
+    if (!layerState._cells || !layerState._enabled) return;
     layerState.request?.abort();
     const request = new AbortController();
     layerState.request = request;

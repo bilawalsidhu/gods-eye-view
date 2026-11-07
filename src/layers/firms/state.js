@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 export function createFirmsState({ services, config }) {
   const layerState = {};
 
@@ -7,17 +5,11 @@ export function createFirmsState({ services, config }) {
 
   layerState.glowSpriteCache = new Map();
 
-  layerState.scratchViewRect = new Cesium.Rectangle();
-
-  layerState.scratchCenterA = new Cesium.Cartographic();
-
-  layerState.scratchCenterB = new Cesium.Cartographic();
-
-  layerState.scratchWindowCoord = new Cesium.Cartesian2();
-
   layerState._viewer = null;
 
-  layerState._dataSource = null;
+  /** The heat cells' draw set (made at `init`). */
+
+  layerState._cells = null;
 
   /** Detection glow rows and the primitive that draws them. */
 
@@ -101,9 +93,9 @@ export function createFirmsState({ services, config }) {
 
   layerState._camSnapValid = false;
 
-  layerState._camPos = new Cesium.Cartesian3();
+  layerState._camPos = { x: 0, y: 0, z: 0 };
 
-  layerState._camDir = new Cesium.Cartesian3();
+  layerState._camDir = { x: 0, y: 0, z: 0 };
   layerState.request = null;
   return layerState;
 }

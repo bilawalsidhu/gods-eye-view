@@ -851,3 +851,83 @@ test('the GNSS layer draws its cells as ground fills that stay out of the pick p
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });
+
+test('the fires layer draws its heat cells as ground fills through the Cesium draw port', async (t) => {
+  const { createFirmsHeatmapLayer } =
+    await import('../../data/firmsHeatmap.js');
+  const { unregisterSpriteCollection } =
+    await import('../../data/spriteOrder.js');
+  const { fakeInput } = await import('../../input/testDoubles.mjs');
+  const { bindFakeCesiumScene } =
+    await import('../../testSupport/fakeCesiumScene.mjs');
+  const saved = globalThis.window;
+  globalThis.window = new EventTarget();
+  const scene = fakeScene();
+  // The layer keeps its detection icons over other sprites.
+  scene.primitives.contains = (p) => scene.added.includes(p);
+  scene.primitives.raiseToTop = () => {};
+  // Far out, where the layer draws heat cells rather than detections.
+  const viewer = {
+    scene,
+    camera: {
+      moveEnd: new Cesium.Event(),
+      positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 2e7),
+      directionWC: new Cesium.Cartesian3(0, 0, -1),
+      positionCartographic: Cesium.Cartographic.fromDegrees(-97.7, 30.2, 2e7),
+    },
+  };
+  // The real Cesium draw port; camera and frame from the viewer double.
+  const { unbind } = bindFakeCesiumScene(viewer, { draw: drawOf(viewer) });
+  const input = fakeInput(viewer);
+  const raw = (lat, lon, frp) => ({
+    lat,
+    lon,
+    frp,
+    confidence: 'h',
+    brightness: 340,
+    daynight: 'D',
+    acqDate: '2026-08-03',
+    acqTime: '0412',
+    instrument: 'VIIRS',
+    satellite: 'N20',
+  });
+  const layer = createFirmsHeatmapLayer({
+    id: 'firms',
+    name: 'FIRMS',
+    feed: {
+      getSnapshot: async () => ({
+        fires: [raw(30.5, -98.2, 1500), raw(-12.1, 131.4, 5)],
+        fetchedAt: Date.now(),
+      }),
+    },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  t.after(() => {
+    input.destroy();
+    unbind();
+    unregisterSpriteCollection('firms');
+    if (saved === undefined) delete globalThis.window;
+    else globalThis.window = saved;
+  });
+  layer.init(viewer);
+  await layer.enable(viewer);
+  const all = (host, out = []) => {
+    out.push(host);
+    if (host instanceof Cesium.PrimitiveCollection)
+      for (let i = 0; i < host.length; i++) all(host.get(i), out);
+    return out;
+  };
+  const grounds = () =>
+    scene.added
+      .flatMap((host) => all(host))
+      .filter((p) => p instanceof Cesium.GroundPrimitive);
+  const instances = grounds().flatMap((g) => g.geometryInstances);
+  assert.equal(instances.length, 2, 'one fill per cell');
+  for (const instance of instances) {
+    assert.ok(instance.geometry instanceof Cesium.RectangleGeometry);
+    assert.match(instance.id.set, /^firms:\d+:cells$/);
+  }
+  assert.equal(grounds()[0].classificationType, Cesium.ClassificationType.BOTH);
+  layer.destroy(viewer);
+  assert.equal(grounds().length, 0);
+});
