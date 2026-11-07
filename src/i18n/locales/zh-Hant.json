@@ -1042,6 +1042,11 @@
   "TomTom roads first; OpenStreetMap fills the rest, simulated": "優先使用 TomTom 道路及實時路況；缺失路段由 OpenStreetMap 補充，並模擬其路況",
   "TomTom roads first; OpenStreetMap fills the rest, simulated (needs a TomTom key)": "優先使用 TomTom 道路及實時路況；缺失路段由 OpenStreetMap 補充，並模擬其路況（需要 TomTom 密鑰）",
   "Hybrid": "混合",
+  "Lines": "線條",
+  "Dots": "圓點",
+  "Road lines colored by live flow: green to red": "依即時路況著色的道路線條：由綠到紅",
+  "Moving dots colored by live flow": "依即時路況著色的移動圓點",
+  "Moving dots": "移動圓點",
   "TomTom key unavailable": "TomTom 密鑰不可用",
   "TomTom daily budget reached": "已達 TomTom 每日配額",
   "Monthly traffic allowance used": "本月交通流量額度已用完",
@@ -2563,6 +2568,8 @@
   "AVAILABLE MISSIONS": "可用任務",
   "SELECT A MISSION TO INSPECT": "選擇一項任務以查看",
   "LOADING 30-DAY MISSION INDEX": "正在加載 30 天任務索引",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "太空任務無法使用：無法載入任務索引。請稍後再試。",
+  "30-DAY MISSION INDEX UNAVAILABLE": "30 天任務索引不可用",
   "TAB PREVIEWS · ENTER / SPACE SELECTS": "TAB 預覽 · ENTER / 空格鍵選擇",
   "Internet radio and local SDR": "網絡電臺與本地 SDR",
   "STATION TAG": "電臺標籤",
@@ -3111,5 +3118,9 @@
   "Maximum event age: {days}d; undated markers are kept": "事件最長保留時間：{days}天；保留無日期標記",
   "event age filter|All": "全部",
   "Event age": "事件時間",
-  "Event age: {days}d · undated kept": "事件時間：{days}天內 · 保留無日期標記"
+  "Event age: {days}d · undated kept": "事件時間：{days}天內 · 保留無日期標記",
+  "Close camera preview": "關閉攝影機預覽",
+  "Refresh map still": "重新整理地圖靜態畫面",
+  "The map still uses a separate request and may show a different moment.": "地圖靜態畫面使用獨立請求，顯示的時間可能不同。",
+  "Video plays from Québec 511, which sees your IP address.": "影片從 Québec 511 播放，Québec 511 會看到你的 IP 位址。"
 }

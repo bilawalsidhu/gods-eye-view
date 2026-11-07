@@ -1118,6 +1118,11 @@
   "TomTom roads first; OpenStreetMap fills the rest, simulated": "Спершу дороги TomTom; решту доповнює OpenStreetMap з імітацією потоку",
   "TomTom roads first; OpenStreetMap fills the rest, simulated (needs a TomTom key)": "Спершу дороги TomTom; решту доповнює OpenStreetMap з імітацією потоку (потрібен ключ TomTom)",
   "Hybrid": "Гібрид",
+  "Lines": "Лінії",
+  "Dots": "Точки",
+  "Road lines colored by live flow: green to red": "Лінії доріг за потоком онлайн: від зеленого до червоного",
+  "Moving dots colored by live flow": "Рухомі точки, забарвлені за потоком онлайн",
+  "Moving dots": "Рухомі точки",
   "TomTom key unavailable": "Ключ TomTom недоступний",
   "TomTom daily budget reached": "Вичерпано денний ліміт TomTom",
   "Monthly traffic allowance used": "Місячний ліміт даних про трафік вичерпано",
@@ -2888,6 +2893,8 @@
   "AVAILABLE MISSIONS": "ДОСТУПНІ МІСІЇ",
   "SELECT A MISSION TO INSPECT": "ВИБЕРІТЬ МІСІЮ ДЛЯ ПЕРЕГЛЯДУ",
   "LOADING 30-DAY MISSION INDEX": "ЗАВАНТАЖЕННЯ ІНДЕКСУ МІСІЙ ЗА 30 ДНІВ",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "Космічні місії недоступні: не вдалося завантажити список місій. Спробуйте пізніше.",
+  "30-DAY MISSION INDEX UNAVAILABLE": "ІНДЕКС МІСІЙ ЗА 30 ДНІВ НЕДОСТУПНИЙ",
   "TAB PREVIEWS · ENTER / SPACE SELECTS": "TAB — ОГЛЯД · ENTER / SPACE — ВИБІР",
   "Internet radio and local SDR": "Інтернет-радіо та локальний SDR",
   "STATION TAG": "ТЕГ СТАНЦІЇ",
@@ -3336,5 +3343,9 @@
   "Maximum event age: {days}d; undated markers are kept": "Максимальний вік події: {days} дн.; позначки без дати збережено",
   "event age filter|All": "Усі",
   "Event age": "Вік події",
-  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено"
+  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено",
+  "Close camera preview": "Закрити перегляд камери",
+  "Refresh map still": "Оновити кадр на карті",
+  "The map still uses a separate request and may show a different moment.": "Кадр на карті запитується окремо та може показувати інший момент.",
+  "Video plays from Québec 511, which sees your IP address.": "Відео відтворюється з Québec 511, який бачить вашу IP-адресу."
 }

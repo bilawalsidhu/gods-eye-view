@@ -1103,6 +1103,11 @@
   "TomTom roads first; OpenStreetMap fills the rest, simulated": "Routes TomTom d'abord ; OpenStreetMap complète le reste, en simulation",
   "TomTom roads first; OpenStreetMap fills the rest, simulated (needs a TomTom key)": "Routes TomTom d'abord ; OpenStreetMap complète le reste, en simulation (nécessite une clé TomTom)",
   "Hybrid": "Hybride",
+  "Lines": "Lignes",
+  "Dots": "Points",
+  "Road lines colored by live flow: green to red": "Routes colorées selon le trafic en direct : du vert au rouge",
+  "Moving dots colored by live flow": "Points mobiles colorés selon le trafic en direct",
+  "Moving dots": "Points mobiles",
   "TomTom key unavailable": "Clé TomTom indisponible",
   "TomTom daily budget reached": "Quota quotidien TomTom atteint",
   "Monthly traffic allowance used": "Quota mensuel de trafic épuisé",
@@ -2818,6 +2823,8 @@
   "AVAILABLE MISSIONS": "MISSIONS DISPONIBLES",
   "SELECT A MISSION TO INSPECT": "CHOISIR UNE MISSION À EXAMINER",
   "LOADING 30-DAY MISSION INDEX": "CHARGEMENT DE L'INDEX DES MISSIONS À 30 JOURS",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "Missions spatiales indisponibles : impossible de charger l’index des missions. Réessayez plus tard.",
+  "30-DAY MISSION INDEX UNAVAILABLE": "INDEX DES MISSIONS À 30 JOURS INDISPONIBLE",
   "TAB PREVIEWS · ENTER / SPACE SELECTS": "TAB APERÇU · ENTER / SPACE SÉLECTIONNE",
   "Internet radio and local SDR": "Radio Internet et SDR local",
   "STATION TAG": "TAG DE STATION",
@@ -3261,5 +3268,9 @@
   "Maximum event age: {days}d; undated markers are kept": "Ancienneté maximale : {days} j ; marqueurs sans date conservés",
   "event age filter|All": "Tous",
   "Event age": "Ancienneté",
-  "Event age: {days}d · undated kept": "Ancienneté : {days} j · marqueurs sans date conservés"
+  "Event age: {days}d · undated kept": "Ancienneté : {days} j · marqueurs sans date conservés",
+  "Close camera preview": "Fermer l’aperçu de la caméra",
+  "Refresh map still": "Actualiser l’image fixe sur la carte",
+  "The map still uses a separate request and may show a different moment.": "L’image fixe de la carte utilise une requête distincte et peut montrer un autre moment.",
+  "Video plays from Québec 511, which sees your IP address.": "La vidéo est lue depuis Québec 511, qui voit votre adresse IP."
 }
