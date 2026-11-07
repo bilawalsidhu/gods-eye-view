@@ -952,6 +952,11 @@
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/i18n/marker.js",
+      "src/solunar/panel.js",
+      "src/solunar/rating.js",
+      "src/solunar/solunarDay.js",
+      "src/solunar/solunarShell.js",
+      "src/solunar/zone.js",
       "src/ui/mobileShell.js",
       "src/exclusiveSurfaces.js",
       "src/ui/placeNames.js",
@@ -1181,7 +1186,14 @@
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js"
     ],
-    "external": ["cesium", "vue", "pinia", "vue-i18n"]
+    "external": [
+      "cesium",
+      "vue",
+      "pinia",
+      "vue-i18n",
+      "astronomy-engine",
+      "tz-lookup"
+    ]
   },
   "ui-styles": {
     "exports": ["./ui/styles"],
@@ -2297,6 +2309,11 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/solunar/panel.js",
+      "src/solunar/rating.js",
+      "src/solunar/solunarDay.js",
+      "src/solunar/solunarShell.js",
+      "src/solunar/zone.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
@@ -3323,6 +3340,7 @@
       "src/layers/wildlifeSightings/performance.js"
     ],
     "external": [
+      "astronomy-engine",
       "hls.js",
       "@mapbox/vector-tile",
       "cesium",
@@ -3332,6 +3350,7 @@
       "satellite.js",
       "mapillary-js",
       "@jtarrio/webrtlsdr",
+      "tz-lookup",
       "vue",
       "pinia",
       "vue-i18n"

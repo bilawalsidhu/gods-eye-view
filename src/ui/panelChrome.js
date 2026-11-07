@@ -42,6 +42,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'cctv-panel',
   'weather-panel',
   'recent-imagery-panel',
+  'solunar-panel',
   'street-level-panel',
   'scene-panel',
   'utilities-panel',
