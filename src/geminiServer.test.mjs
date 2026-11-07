@@ -280,6 +280,36 @@ test('the interface language from ?lang= closes the locked Gemini instructions',
   );
 });
 
+test('the locked Gemini instructions name osm_query only when Overpass is configured, in any language', async (t) => {
+  const instructionsFor = async (overpass, path) => {
+    const f = await fixture(t, { overpassConfigured: () => overpass });
+    const response = await fetch(`${f.origin}${path}`, {
+      method: 'POST',
+      body: '{}',
+      headers: { Origin: f.origin, 'Content-Type': 'application/json' },
+    });
+    assert.equal(response.status, 200, path);
+    const request = JSON.parse(f.calls.at(-1)[1].body);
+    return request.bidiGenerateContentSetup.systemInstruction.parts[0].text;
+  };
+  for (const overpass of [false, true]) {
+    for (const [path, language] of [
+      ['/', undefined],
+      ['/?lang=es', 'es'],
+    ]) {
+      assert.equal(
+        await instructionsFor(overpass, path),
+        realtimeInstructions(undefined, { overpass, language }),
+        `${path} overpass ${overpass}`,
+      );
+    }
+  }
+  assert.notEqual(
+    await instructionsFor(true, '/'),
+    await instructionsFor(false, '/'),
+  );
+});
+
 test('missing key and malformed model fail without an upstream request', async (t) => {
   const missing = await fixture(t, { resolveApiKey: () => '' });
   assert.equal((await missing.send()).status, 503);
