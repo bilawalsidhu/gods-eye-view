@@ -231,12 +231,10 @@ await strict.run({}, async (b) => {
     await setEnabled('osm-places', true);
     const places = await p.evaluate(() => {
       const d = window.__godsEyeView;
+      // Both engines draw the places as one movers point set.
       const drawn =
-        d.engine.kind === 'navara'
-          ? (d.engine.movers.list().find((set) => set.id === 'osm-places')
-              ?.count ?? 0)
-          : (d.viewer.dataSources.getByName('osm-places')[0]?.entities.values
-              .length ?? 0);
+        d.engine.movers.list().find((set) => set.id === 'osm-places')?.count ??
+        0;
       return {
         records: window.qaModels['osm-places'].getAnalystRecords().length,
         drawn,
