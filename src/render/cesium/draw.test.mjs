@@ -926,11 +926,39 @@ test('a point moved in place is horizon culled where it now is', () => {
   assert.equal(point.show, true, 'under the eye');
   set.upsert([dot(180)]);
   assert.equal(scene.added[0].get(0), point, 'the same point');
+  assert.equal(
+    point.show,
+    false,
+    'hidden at once, as a frame listener moving it after the cull needs',
+  );
   frame();
   assert.equal(point.show, false, 'past the horizon');
   set.upsert([dot(1)]);
+  assert.equal(point.show, true, 'shown at once');
   frame();
   assert.equal(point.show, true, 'back in view');
+  set.dispose();
+});
+
+test('an icon moved in place past the horizon is hidden at once', () => {
+  const { scene, draw, frame } = drawOver();
+  const set = draw.icons({ id: 'culled-icons', horizonCull: true });
+  const icon = (lon) => ({
+    id: 'a',
+    pos: { lon, lat: 0, height: 10 },
+    image: { svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' },
+    size: [8, 8],
+  });
+  // The eye is over lon 0.
+  set.set([icon(0)]);
+  frame();
+  const billboard = scene.added[0].get(0);
+  assert.equal(billboard.show, true, 'under the eye');
+  set.upsert([icon(180)]);
+  assert.equal(scene.added[0].get(0), billboard, 'the same billboard');
+  assert.equal(billboard.show, false, 'past the horizon, before a frame');
+  set.upsert([icon(1)]);
+  assert.equal(billboard.show, true);
   set.dispose();
 });
 

@@ -503,23 +503,40 @@ export function createCesiumDraw({
   function cullHorizon() {
     for (const record of sets.values()) {
       if (!record.spec.horizonCull || !record.placed.length) continue;
-      const eye = scene.camera?.positionWC;
-      // The eye is ECEF in 3D only.
-      if (
-        !eye ||
-        (scene.mode ?? Cesium.SceneMode.SCENE3D) !== Cesium.SceneMode.SCENE3D
-      )
-        return;
-      occluder ??= new Cesium.EllipsoidalOccluder(
-        scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84,
-        eye,
-      );
-      occluder.cameraPosition = eye;
+      const horizon = horizonNow();
+      if (!horizon) return;
       for (const placed of record.placed) {
-        const show = placed.shown && occluder.isPointVisible(placed.position);
+        const show = placed.shown && horizon.isPointVisible(placed.position);
         if (placed.primitive.show !== show) placed.primitive.show = show;
       }
     }
+  }
+
+  /** The horizon from the eye as it is now; null where there is none (2D). */
+  function horizonNow() {
+    const eye = scene.camera?.positionWC;
+    // The eye is ECEF in 3D only.
+    if (
+      !eye ||
+      (scene.mode ?? Cesium.SceneMode.SCENE3D) !== Cesium.SceneMode.SCENE3D
+    )
+      return null;
+    occluder ??= new Cesium.EllipsoidalOccluder(
+      scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84,
+      eye,
+    );
+    occluder.cameraPosition = eye;
+    return occluder;
+  }
+
+  /**
+   * Whether a point or icon updated in place shows now: past the horizon
+   * of a culled set it stays hidden, even when the update comes after this
+   * frame's cull (a frame listener that moves its items).
+   */
+  function shownNow(record, placed) {
+    if (!placed.shown || !record.spec.horizonCull) return placed.shown;
+    return horizonNow()?.isPointVisible(placed.position) ?? true;
   }
 
   /** Each frame, before it draws: the flow lines' clock. */
@@ -690,9 +707,8 @@ export function createCesiumDraw({
     billboard.id.meta = item.meta;
     billboard.id.lodGroup = item.lodGroup;
     placed.position = position;
-    // As a rebuild would; the horizon cull, where it runs, hides it again
-    // past the horizon before the next frame draws.
     placed.shown = look.show;
+    billboard.show = shownNow(record, placed);
   }
 
   /**
@@ -905,9 +921,7 @@ export function createCesiumDraw({
       Object.assign(was.primitive, pointLook(item));
       was.primitive.id.meta = item.meta;
       was.placed.shown = show;
-      // As a rebuild would; the horizon cull, where it runs, hides it again
-      // past the horizon before the next frame draws.
-      was.primitive.show = show;
+      was.primitive.show = shownNow(record, was.placed);
     }
     return true;
   }
