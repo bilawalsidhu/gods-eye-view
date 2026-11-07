@@ -5,19 +5,11 @@ import {
   DEFAULT_WORLD_CCTV_SOURCE_FILE,
   MLIT_RIVER_IMAGE_ORIGIN,
   TRIPCHECK_IMAGE_ORIGIN,
-  VEGAGERDIN_IMAGE_ORIGIN,
   WORLD_CCTV_SOURCE_COUNT,
 } from './constants.js';
 import { pinnedCameraUrl } from './normalize.js';
 
 const SOURCE_POLICIES = Object.freeze({
-  'vegagerdin-road': {
-    idPrefix: 'world-is-',
-    origin: VEGAGERDIN_IMAGE_ORIGIN,
-    bounds: [63, 68, -26, -12],
-    filename: /^\/vgdata\/vefmyndavelar\/[^/]+\.jpg$/i,
-    frameRefreshMs: 5 * 60 * 1000,
-  },
   'tripcheck-odot': {
     idPrefix: 'world-or-',
     origin: TRIPCHECK_IMAGE_ORIGIN,
@@ -72,7 +64,9 @@ function inBounds(lat, lon, [minLat, maxLat, minLon, maxLon]) {
 /**
  * Load only the new image-backed networks from the add-on export. Existing
  * Canadian networks, Québec entries, JMA placeholder images, and NZTA's
- * scraped Journey Planner rows are deliberately excluded.
+ * scraped Journey Planner rows are deliberately excluded. Vegagerðin (Iceland)
+ * rows are excluded too: the Iceland pack loads the full live list of those
+ * cameras, so a World copy would draw each one twice.
  */
 export function loadWorldCameraSources({ sourceRoot = process.cwd() } = {}) {
   const filename = path.resolve(sourceRoot, DEFAULT_WORLD_CCTV_SOURCE_FILE);

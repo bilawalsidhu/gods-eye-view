@@ -106,7 +106,7 @@ test('duplicate ids resolve last-pack-wins and count against the winning pack', 
 const reservedFixture = () => [
   ...Array.from({ length: 20 }, (_, i) => pack(`shared${i}`, 250)),
   { ...pack('quebec', 1120), reservedCount: 1120 },
-  { ...pack('world', 2396), reservedCount: 2396 },
+  { ...pack('world', 2230), reservedCount: 2230 },
 ];
 const keptByName = (packs) =>
   Object.fromEntries(packs.map(({ name, kept }) => [name, kept]));
@@ -128,7 +128,7 @@ test('at the default cap reserved packs are whole and shared packs keep the floo
   const kept = keptByName(packs);
   assert.equal(sources.length, DEFAULT_CCTV_MAX_SOURCES);
   assert.equal(kept.quebec, 1120);
-  assert.equal(kept.world, 2396);
+  assert.equal(kept.world, 2230);
   for (let i = 0; i < 20; i++) assert.equal(kept[`shared${i}`], 200);
   assert.match(
     sources[0].id,

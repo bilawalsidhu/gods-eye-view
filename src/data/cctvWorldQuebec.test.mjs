@@ -58,16 +58,15 @@ function sourceRoot(t, { world = [], quebec = null } = {}) {
   return root;
 }
 
-const icelandRow = (overrides = {}) => ({
-  id: 'world-is-7075',
-  name: 'Almannaskarð - norður',
-  provider: 'Vegagerðin road cameras',
-  lat: 64.291877,
-  lon: -15.028035,
-  sourceKind: 'vegagerdin-road',
-  url: 'https://www.vegagerdin.is/vgdata/vefmyndavelar/almannaskard_1.jpg',
-  snapshotUrl:
-    'https://www.vegagerdin.is/vgdata/vefmyndavelar/almannaskard_1.jpg',
+const oregonRow = (overrides = {}) => ({
+  id: 'world-or-764',
+  name: '3rd St at Harwood MP18.35',
+  provider: 'TripCheck (ODOT)',
+  lat: 44.3029,
+  lon: -120.8549,
+  sourceKind: 'tripcheck-odot',
+  url: 'https://www.tripcheck.com/roadcams/cams/Harwood_pid3527.jpg',
+  snapshotUrl: 'https://www.tripcheck.com/roadcams/cams/Harwood_pid3527.jpg',
   ...overrides,
 });
 
@@ -76,7 +75,8 @@ test('the shipped World catalog loads every curated row', (t) => {
   const sources = loadWorldCameraSources({ sourceRoot: REPO_ROOT });
   assert.equal(sources.length, WORLD_CCTV_SOURCE_COUNT);
   const byKind = Object.groupBy(sources, (source) => source.sourceKind);
-  assert.equal(byKind['vegagerdin-road'].length, 166);
+  // Iceland comes from the live Iceland pack, never a second World copy.
+  assert.equal(byKind['vegagerdin-road'], undefined);
   assert.equal(byKind['tripcheck-odot'].length, 1176);
   assert.equal(byKind['mlit-river'].length, 1054);
   for (const source of byKind['mlit-river'])
@@ -87,31 +87,41 @@ test('the World loader accepts a pinned row and rejects anything outside its pol
   quiet(t);
   const rejected = [
     ['unknown kind', { sourceKind: 'nzta-journeys' }],
-    ['wrong id prefix', { id: 'world-or-7075' }],
+    [
+      'Iceland duplicates the Iceland pack',
+      {
+        sourceKind: 'vegagerdin-road',
+        lat: 64.291877,
+        lon: -15.028035,
+        url: 'https://www.vegagerdin.is/vgdata/vefmyndavelar/almannaskard_1.jpg',
+        snapshotUrl: 'https://www.vegagerdin.is/vgdata/vefmyndavelar/almannaskard_1.jpg',
+      },
+    ],
+    ['wrong id prefix', { id: 'world-jp-river-7075' }],
     ['outside bounds', { lat: 40, lon: -15 }],
-    ['other host', { url: 'https://evil.test/vgdata/vefmyndavelar/a.jpg' }],
-    ['other directory', { url: 'https://www.vegagerdin.is/other/a.jpg' }],
-    ['query string', { url: icelandRow().url + '?x=1' }],
-    ['not a jpg', { url: 'https://www.vegagerdin.is/vgdata/vefmyndavelar/a.png' }],
-    ['plain http', { url: icelandRow().url.replace('https:', 'http:') }],
+    ['other host', { url: 'https://evil.test/roadcams/cams/a.jpg' }],
+    ['other directory', { url: 'https://www.tripcheck.com/other/a.jpg' }],
+    ['query string', { url: oregonRow().url + '?x=1' }],
+    ['not a jpg', { url: 'https://www.tripcheck.com/roadcams/cams/a.png' }],
+    ['plain http', { url: oregonRow().url.replace('https:', 'http:') }],
     [
       'url and snapshot differ',
-      { snapshotUrl: 'https://www.vegagerdin.is/vgdata/vefmyndavelar/b.jpg' },
+      { snapshotUrl: 'https://www.tripcheck.com/roadcams/cams/b.jpg' },
     ],
   ];
   const root = sourceRoot(t, {
     world: [
-      icelandRow(),
-      icelandRow(), // duplicate id
+      oregonRow(),
+      oregonRow(), // duplicate id
       ...rejected.map(([, overrides], i) =>
-        icelandRow({ id: `world-is-${9000 + i}`, ...overrides }),
+        oregonRow({ id: `world-or-${9000 + i}`, ...overrides }),
       ),
     ],
   });
   const sources = loadWorldCameraSources({ sourceRoot: root });
   assert.deepEqual(
     sources.map((source) => source.id),
-    ['world-is-7075'],
+    ['world-or-764'],
   );
   assert.equal(sources[0].frameRefreshMs, 5 * 60 * 1000);
   assert.equal(sources[0].feedType, 'image');
@@ -238,14 +248,14 @@ test('/sources lists Québec browser media only when the operator opts in', asyn
 
 test('a World frame is fetched once per refresh floor and the cooldown never spends Street View', async (t) => {
   quiet(t);
-  const root = sourceRoot(t, { world: [icelandRow()] });
+  const root = sourceRoot(t, { world: [oregonRow()] });
   let answer = () => new Response(JPEG, { headers: { 'content-type': 'image/jpeg' } });
   const app = mount(t, root, (url) =>
-    url === icelandRow().url ? answer() : null,
+    url === oregonRow().url ? answer() : null,
   );
-  const frame = '/frame/world-is-7075';
+  const frame = '/frame/world-or-764';
   const upstreamHits = () =>
-    app.requests.filter((url) => url === icelandRow().url).length;
+    app.requests.filter((url) => url === oregonRow().url).length;
 
   const first = await app.call(frame);
   assert.equal(first.headers['X-CCTV-Source'], 'upstream-image');
@@ -255,17 +265,17 @@ test('a World frame is fetched once per refresh floor and the cooldown never spe
 
   // A camera whose first fetch fails is inside its failure backoff: it gets
   // the placeholder, not Google Street View, and no second upstream request.
-  const failRoot = sourceRoot(t, { world: [icelandRow()] });
+  const failRoot = sourceRoot(t, { world: [oregonRow()] });
   answer = () => new Response('down', { status: 503 });
   const failing = mount(t, failRoot, (url) =>
-    url === icelandRow().url ? answer() : null,
+    url === oregonRow().url ? answer() : null,
   );
   const failed = await failing.call(frame);
   assert.notEqual(failed.headers['X-CCTV-Source'], 'upstream-image');
   const retry = await failing.call(frame);
   assert.equal(retry.headers['X-CCTV-Source'], 'synthetic');
   assert.equal(
-    failing.requests.filter((url) => url === icelandRow().url).length,
+    failing.requests.filter((url) => url === oregonRow().url).length,
     1,
     'the backoff holds the provider cadence',
   );

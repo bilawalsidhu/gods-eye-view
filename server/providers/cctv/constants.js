@@ -12,9 +12,9 @@ export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
 export const CCTV_SHARED_SOURCE_SLOTS = 4000;
 /**
  * Catalog-wide default: the 4,000 shared slots plus room reserved for the
- * 1,120 Québec and 2,396 World image locations.
+ * 1,120 Québec and 2,230 World image locations.
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 7516;
+export const DEFAULT_CCTV_MAX_SOURCES = 7350;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
 export const CCTV_MAX_SOURCES_CEILING = 8000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
@@ -227,14 +227,12 @@ export const TAIWAN_HIGHWAY_IMAGE_ORIGINS = Object.freeze(
   [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `https://cctv-ss0${n}.thb.gov.tw/`),
 );
 /** Direct still-image directories from the World cams add-on's eligible packs. */
-export const VEGAGERDIN_IMAGE_ORIGIN =
-  'https://www.vegagerdin.is/vgdata/vefmyndavelar/';
 export const TRIPCHECK_IMAGE_ORIGIN =
   'https://www.tripcheck.com/roadcams/cams/';
 export const MLIT_RIVER_IMAGE_ORIGIN = 'https://cam.river.go.jp/cam/now/';
 export const DEFAULT_WORLD_CCTV_SOURCE_FILE =
   'config/cctv_sources.world-image-cameras.json';
-export const WORLD_CCTV_SOURCE_COUNT = 2396;
+export const WORLD_CCTV_SOURCE_COUNT = 2230;
 /** Tallinn intersection cameras: curated catalog + public stills on ristmikud.tallinn.ee. */
 export const DEFAULT_TALLINN_SOURCE_FILE = 'config/cctv_sources.tallinn.json';
 export const DEFAULT_TALLINN_MAX_SOURCES = 255;

@@ -1574,8 +1574,8 @@ id-hash fallback at low confidence.
 
 Once enabled, the 250 cameras nearest the five borough cores load.
 `CCTV_NYC_MAX_SOURCES` sets the pack cap (8–400). The default catalog limit is
-7,516: 4,000 shared round-robin slots, plus room above them for the 1,120
-Québec locations and 2,396 World image sources. Lower explicit
+7,350: 4,000 shared round-robin slots, plus room above them for the 1,120
+Québec locations and 2,230 World image sources. Lower explicit
 `CCTV_MAX_SOURCES` values are honored; reservations only use the capacity
 above the 4,000 shared slots.
 
@@ -1594,7 +1594,7 @@ cameras return a 200 "Image Unavailable" placeholder frame instead of an error.
 By default all ~336 cameras load, nearest downtown first.
 `CCTV_TORONTO_MAX_SOURCES` sets the pack cap (8–500) and
 `CCTV_TORONTO_ENABLED=0` turns the pack off. The pack shares the default
-7,516-source catalog limit with the other packs; Québec and the World image
+7,350-source catalog limit with the other packs; Québec and the World image
 pack have reserved slots and the remaining sources use round-robin allocation.
 
 ## Lithuania CCTV source pack
@@ -5409,8 +5409,8 @@ silently demoting every later lookup for the session.
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
   covering the whole country, where one _preset_ (a station's fixed view) is one camera — 806
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
-  on the main road spine. `CCTV_MAX_SOURCES` defaults to 7,516: 4,000 shared
-  round-robin slots plus 3,516 reserved Québec and World image slots.
+  on the main road spine. `CCTV_MAX_SOURCES` defaults to 7,350: 4,000 shared
+  round-robin slots plus 3,350 reserved Québec and World image slots.
   Reservations only use capacity above the 4,000 shared slots, so at 4,000 or
   less every pack, Québec and World included, shares the cap round-robin.
   ~1,100 cameras total, all RAW PRIOR poses, stills-first. The catalog lives for 15 minutes; once
@@ -7095,8 +7095,8 @@ configure automatic restarts.
 The regular CCTV source loader reads `public/quebec-cameras.json` by default
 when `CCTV_QUEBEC_ENABLED` is not `0`. The pack contains 1,120 records: 680
 MTQ highway cameras, 426 Montréal OSM camera locations, and 14 scenic webcams.
-The default catalog limit is 7,516: it reserves all 1,120 Québec locations and
-2,396 World image feeds, and keeps 4,000 slots for the existing round-robin
+The default catalog limit is 7,350: it reserves all 1,120 Québec locations and
+2,230 World image feeds, and keeps 4,000 slots for the existing round-robin
 camera packs. Reservations only use capacity above those 4,000 slots: a lower
 explicit `CCTV_MAX_SOURCES` thins every pack round-robin, Québec and World
 included, instead of taking the shared slots.
@@ -7143,16 +7143,16 @@ id-hash fallback at low confidence. `CCTV_OTTAWA_MAX_SOURCES` caps the pack
 ## World camera image feeds
 
 The default `world-cameras` pack reads only the checked-in, curated
-`config/cctv_sources.world-image-cameras.json` file. It adds 166 Vegagerðin,
-1,176 Oregon TripCheck, and 1,054 MLIT river cameras. Duplicate Canadian feeds
-are excluded because DriveBC, Ottawa, and Québec already have app packs. NZTA's
+`config/cctv_sources.world-image-cameras.json` file. It adds 1,176 Oregon
+TripCheck and 1,054 MLIT river cameras. Duplicate feeds are excluded because
+DriveBC, Ottawa, Québec and Iceland (Vegagerðin) already have app packs. NZTA's
 249 rows are excluded because they were collected from a Journey Planner web
 cache whose current terms prohibit automated scraping; an authorized API feed
 or permission is required before adding them. The wider discovery export is
 not shipped with the app.
 
 The app validates and pins each still-image URL to its provider directory
-before the server proxy uses it. Iceland and Oregon frames refresh no faster
+before the server proxy uses it. Oregon frames refresh no faster
 than every five minutes; MLIT river frames refresh every ten minutes to reduce
 requests. Images are not persisted; the proxy reuses frames in a bounded 32 MB
 in-memory cache until their provider cadence. Set
