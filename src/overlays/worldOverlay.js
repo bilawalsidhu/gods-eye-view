@@ -1,3 +1,5 @@
+import { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
+export { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
 import * as Cesium from 'cesium';
 import {
   createCyberSonarSampler,
@@ -19,6 +21,7 @@ import {
   measureOverlayEntry,
   paintOverlayEntry,
   placementVariants,
+  truncateOverlayTitle,
 } from './worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
 import { t } from '../i18n/index.js';
@@ -33,9 +36,6 @@ import { t } from '../i18n/index.js';
 const ROOT_ID = 'world-overlay-root';
 const CANVAS_ID = 'world-overlay-canvas';
 const DETECTION_SURFACE_ID = 'world-overlay-detection-surface';
-const ACCESSIBILITY_ROOT_ID = 'world-overlay-actions';
-const ACCESSIBILITY_LIST_ID = 'world-overlay-action-list';
-const ACCESSIBILITY_STATUS_ID = 'world-overlay-status';
 const PAINT_TARGET_SHARED = 'shared';
 const PAINT_TARGET_DETECTION = 'detection';
 const OCCLUDER_PADDING_PX = 6;
@@ -75,57 +75,6 @@ const PAINT_LANE_INDEX = new Map(
   WORLD_OVERLAY_PAINT_LANES.map((lane, index) => [lane, index]),
 );
 
-/**
- * Unified UI exclusion inventory. Selectors may match multiple elements; the
- * service caches their rectangles and observes layout/visibility changes.
- *
- * These rectangles are a PLACEMENT policy, never a paint mask. Every element
- * listed here composites ABOVE the overlay host — map chrome sits at z90–z1000
- * and the cockpit HUD at z145, against this host's z5/z6 — so the browser
- * already keeps overlay pixels off it and no canvas needs clipping. What the
- * inventory buys is readability: a card placed under solid chrome is simply
- * lost, so the solver PREFERS placements clear of it. When nothing is clear the
- * entry still renders and the chrome covers it, exactly as it did before the
- * host existed.
- *
- * The list therefore holds only chrome dense enough to swallow a card. The
- * cockpit's thin translucent line art — rims, arcs, rails, tapes, toplines,
- * readouts — is deliberately ABSENT under the owner's AR-HUD ruling:
- * world-space overlay content renders beneath the cockpit's screen-space HUD,
- * which paints over it by z-order. Those elements are also enormous (the
- * altitude rim is keyhole-tall, the topline viewport-wide), and excluding them
- * suppressed essentially the entire cockpit view. Only the two solid,
- * backdrop-filled cockpit windows survive as exclusions.
- */
-export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
-  '#title-bar',
-  '#style-indicator',
-  '#top-center-actions',
-  '#traffic-sync-chip',
-  '#cctv-sync-chip',
-  '#left-panel-stack',
-  '#right-context-rail',
-  '.weather-summary',
-  '#pp-toggles',
-  '#command-dock',
-  '#gev-voice-control',
-  '#cesium-credits',
-  '.hud-top-left',
-  '.hud-top-right',
-  '.hud-bottom-left',
-  '.hud-bottom-right',
-  '.hud-bottom-bar',
-  '#space-mission-panel',
-  '#space-mission-panel-host',
-  '#military-awareness-panel',
-  '#bhote-koshi-event-panel',
-  // Cockpit: solid backdrop-filled windows only (both bounded to
-  // `min(340px, 28vw)` wide and `min(42vh, 410px)` tall, both `hidden` until
-  // toggled). Every other cockpit selector was removed — see the block comment.
-  '#cockpit-context',
-  '#cockpit-signal-stream',
-]);
-
 /** @typedef {{x:number,y:number,w:number,h:number}} OverlayRect */
 /**
  * @typedef {object} WorldOverlayEntry
@@ -146,6 +95,8 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
  * @property {number} [maxVisible=Infinity] Source ceiling within a shared domain.
  * @property {boolean} [moving=false] Enables bounded interval re-solves.
  * @property {number} [solveIntervalMs=125]
+ * @property {function(Set<string>):void} [onVisibilityChange] Painted entry ids,
+ *   reported only on membership changes. The borrowed Set is read-only.
  */
 
 /** @type {Cesium.Viewer|null} */
@@ -156,12 +107,16 @@ let _root = null;
 let _canvas = null;
 /** @type {CanvasRenderingContext2D|null} */
 let _ctx = null;
-/** @type {HTMLElement|null} Focusable mirror of painted actionable cards. */
-let _accessibilityRoot = null;
-/** @type {HTMLElement|null} */
-let _accessibilityList = null;
-/** @type {HTMLElement|null} */
-let _accessibilityStatus = null;
+/**
+ * The focusable mirror of painted actionable cards, as its view renders it:
+ * `{owner, items, status, announced}`, or null without a host. `announced`
+ * counts accepted focuses, so a repeated announcement is spoken again. Subscribers (the
+ * application shell, which publishes it to a store) receive every change;
+ * the module itself needs no Vue, for the portable transit entry.
+ * @type {?{owner: object, items: object[], status: string, announced: number}}
+ */
+let _actions = null;
+const _actionsListeners = new Set();
 let _accessibilitySignature = '';
 const _accessibleActivatorByKey = new Map();
 /** @type {HTMLCanvasElement|null} Host-owned detection blend-isolation surface. */
@@ -469,6 +424,11 @@ export function normalizeOverlayEntry(sourceId, entry) {
     collisionGroup: String(
       entry.collisionGroup || defaultCollisionGroup(variant),
     ),
+    // Optional lower-priority content must fit around the actual painted
+    // members of another domain, including its sticky positions and exit fades.
+    yieldToCollisionGroup: entry.yieldToCollisionGroup
+      ? String(entry.yieldToCollisionGroup)
+      : null,
     // Explicit field pick rather than `{ ...entry, variant }`: the lane
     // resolver reads only these four, and a full spread re-invokes every
     // accessor the source put on its entry (a throwing one would abort
@@ -591,12 +551,15 @@ export function normalizeOverlayEntry(sourceId, entry) {
     metadata: entry.metadata ?? null,
     thumbnailWidth: entry.thumbnailWidth,
     thumbnailHeight: entry.thumbnailHeight,
+    thumbnailFit: entry.thumbnailFit === 'contain' ? 'contain' : null,
+    thumbnailFixedWidth: entry.thumbnailFixedWidth === true,
     thumbnailPadX: entry.thumbnailPadX,
     thumbnailPadTop: entry.thumbnailPadTop,
     thumbnailPadBottom: entry.thumbnailPadBottom,
     thumbnailTitleGap: entry.thumbnailTitleGap,
     thumbnailTitleHeight: entry.thumbnailTitleHeight,
     thumbnailTitleChars: entry.thumbnailTitleChars,
+    thumbnailTitleWordBoundary: entry.thumbnailTitleWordBoundary === true,
     thumbnailBackground: entry.thumbnailBackground,
     thumbnailTitleColor: entry.thumbnailTitleColor,
     thumbnailTitleFont: entry.thumbnailTitleFont,
@@ -610,13 +573,21 @@ export function normalizeOverlayEntry(sourceId, entry) {
     _overlayTrackDisplayText: '',
     _overlayThumbnailTitle:
       variant === 'thumbnail'
-        ? String(entry.title ?? '')
-            .toUpperCase()
-            .slice(
-              0,
+        ? entry.thumbnailTitleWordBoundary === true
+          ? truncateOverlayTitle(
+              String(entry.title ?? '').toUpperCase(),
               Math.max(0, Math.floor(Number(entry.thumbnailTitleChars) || 0)) ||
-                undefined,
+                Infinity,
             )
+          : String(entry.title ?? '')
+              .toUpperCase()
+              .slice(
+                0,
+                Math.max(
+                  0,
+                  Math.floor(Number(entry.thumbnailTitleChars) || 0),
+                ) || undefined,
+              )
         : '',
   };
   normalized._overlayKey = entryKey(source, id);
@@ -713,6 +684,12 @@ function normalizeSourceOptions(options = {}, previous = {}) {
           DEFAULT_MOVING_SOLVE_MS,
       ) || 0,
     ),
+    onVisibilityChange:
+      options.onVisibilityChange === undefined
+        ? previous.onVisibilityChange || null
+        : typeof options.onVisibilityChange === 'function'
+          ? options.onVisibilityChange
+          : null,
   };
 }
 
@@ -843,6 +820,7 @@ function getOrCreateSource(sourceId, options = {}) {
       cohortLists: [],
       cohortCount: 0,
       demandByDomain: new Map(),
+      visibleIds: new Set(),
       options: normalizeSourceOptions(options),
     };
     _sources.set(id, source);
@@ -1156,16 +1134,15 @@ export function isOverlayPointVisible(
  */
 function overlayRectIntersectsAny(rect, exclusions, count = exclusions.length) {
   for (let i = 0; i < count; i++) {
-    const other = exclusions[i];
-    if (
-      rect.x < other.x + other.w &&
-      rect.x + rect.w > other.x &&
-      rect.y < other.y + other.h &&
-      rect.y + rect.h > other.y
-    )
-      return true;
+    if (overlayRectsOverlap(rect, exclusions[i])) return true;
   }
   return false;
+}
+
+function overlayRectsOverlap(a, b) {
+  return (
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+  );
 }
 
 /**
@@ -1179,14 +1156,7 @@ function overlayRectIntersectsAnyHard(
 ) {
   for (let i = 0; i < count; i++) {
     const other = exclusions[i];
-    if (!other.hard) continue;
-    if (
-      rect.x < other.x + other.w &&
-      rect.x + rect.w > other.x &&
-      rect.y < other.y + other.h &&
-      rect.y + rect.h > other.y
-    )
-      return true;
+    if (other.hard && overlayRectsOverlap(rect, other)) return true;
   }
   return false;
 }
@@ -1259,30 +1229,10 @@ function ensureOverlayDom() {
   _root.setAttribute('aria-hidden', 'true');
   _canvas.setAttribute('aria-hidden', 'true');
   _detectionSurface.setAttribute('aria-hidden', 'true');
-  _accessibilityRoot = document.getElementById(ACCESSIBILITY_ROOT_ID);
-  if (!_accessibilityRoot) {
-    _accessibilityRoot = document.createElement('div');
-    _accessibilityRoot.id = ACCESSIBILITY_ROOT_ID;
-    _accessibilityRoot.className = 'world-overlay-accessibility';
-    _accessibilityRoot.setAttribute('role', 'region');
-    _accessibilityRoot.setAttribute('aria-label', t('Visible map targets'));
-    document.body.appendChild(_accessibilityRoot);
-  }
-  _accessibilityList = document.getElementById(ACCESSIBILITY_LIST_ID);
-  if (!_accessibilityList) {
-    _accessibilityList = document.createElement('div');
-    _accessibilityList.id = ACCESSIBILITY_LIST_ID;
-    _accessibilityRoot.appendChild(_accessibilityList);
-  }
-  _accessibilityStatus = document.getElementById(ACCESSIBILITY_STATUS_ID);
-  if (!_accessibilityStatus) {
-    _accessibilityStatus = document.createElement('div');
-    _accessibilityStatus.id = ACCESSIBILITY_STATUS_ID;
-    _accessibilityStatus.setAttribute('role', 'status');
-    _accessibilityStatus.setAttribute('aria-live', 'polite');
-    _accessibilityStatus.setAttribute('aria-atomic', 'true');
-    _accessibilityRoot.appendChild(_accessibilityStatus);
-  }
+  // Each host owns its action list; a click from an earlier host's list is
+  // ignored.
+  if (!_actions)
+    presentActions({ owner: {}, items: [], status: '', announced: 0 });
   _ctx = _canvas.getContext('2d', { alpha: true, desynchronized: true });
   _detectionCtx = _detectionSurface.getContext('2d', {
     alpha: true,
@@ -2272,6 +2222,7 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
   item.lane = paintLaneForOverlayEntry(record.entry);
   item.zIndex = record.entry.zIndex;
   item.key = record.key;
+  item.collisionHidden = false;
   _paintQueue[_paintCount++] = item;
 }
 
@@ -2371,9 +2322,46 @@ function publishPaintRect(item) {
   if (record.entry.interactive) _hitRects[_hitRectCount++] = rect;
 }
 
+/** Publish the action list to every subscriber. */
+function presentActions(next) {
+  _actions = next && Object.freeze(next);
+  for (const listener of _actionsListeners) listener(_actions);
+}
+
+/**
+ * Receive the visible map target list now and after every change.
+ * @param {(view: ?object) => void} listener
+ * @returns {() => void} Unsubscribe.
+ */
+export function subscribeWorldOverlayActions(listener) {
+  _actionsListeners.add(listener);
+  listener(_actions);
+  return () => _actionsListeners.delete(listener);
+}
+
+/**
+ * Focus a listed target, as its button does, announcing an accepted focus.
+ * @param {object} owner The `owner` of the list the button belongs to.
+ * @param {string} key The item's key.
+ */
+export function activateWorldOverlayAction(owner, key) {
+  if (!_actions || owner !== _actions.owner) return;
+  const item = _actions.items.find((candidate) => candidate.key === key);
+  const activate = _accessibleActivatorByKey.get(key);
+  if (!item || !activate) return;
+  const accepted = activate();
+  if (accepted !== false && _actions?.owner === owner) {
+    presentActions({
+      ..._actions,
+      status: t('Focusing {label}', { label: item.label }),
+      announced: _actions.announced + 1,
+    });
+  }
+}
+
 /** Keep a stable, bounded accessible mirror of currently painted actions. */
 function syncAccessibleActions() {
-  if (!_accessibilityList) return;
+  if (!_actions) return;
   _accessibleActivatorByKey.clear();
   const items = [];
   for (let i = _hitRectCount - 1; i >= 0; i--) {
@@ -2397,31 +2385,7 @@ function syncAccessibleActions() {
     .join('\u0001');
   if (signature === _accessibilitySignature) return;
   _accessibilitySignature = signature;
-  if (typeof _accessibilityList.replaceChildren === 'function') {
-    _accessibilityList.replaceChildren();
-  } else {
-    while (_accessibilityList.firstChild)
-      _accessibilityList.removeChild(_accessibilityList.firstChild);
-  }
-  for (const item of items) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = item.label;
-    button.setAttribute('aria-label', item.label);
-    button.setAttribute('aria-pressed', String(item.selected));
-    button.dataset.overlayActionKey = item.key;
-    button.addEventListener?.('click', () => {
-      const activate = _accessibleActivatorByKey.get(item.key);
-      if (!activate) return;
-      const accepted = activate();
-      if (accepted !== false && _accessibilityStatus) {
-        _accessibilityStatus.textContent = t('Focusing {label}', {
-          label: item.label,
-        });
-      }
-    });
-    _accessibilityList.appendChild(button);
-  }
+  presentActions({ ..._actions, items });
 }
 
 let _detectionSurfacePrepared = false;
@@ -2460,6 +2424,7 @@ function paintCustomLane(lane) {
 }
 
 function paintEntryItem(item, keyhole, sonar) {
+  if (item.collisionHidden) return;
   const { record, placement } = item;
   const entry = record.entry;
   let keyholeAlpha = 1;
@@ -2523,6 +2488,90 @@ function paintEntryItem(item, keyhole, sonar) {
   _paintedBySource[entry.source]++;
 }
 
+function compareYieldingPaintItems(a, b) {
+  const aYields = !!a.record.entry.yieldToCollisionGroup;
+  const bYields = !!b.record.entry.yieldToCollisionGroup;
+  return (
+    Number(aYields) - Number(bYields) ||
+    b.record.entry.priority - a.record.entry.priority ||
+    compareStableKeys(a.key, b.key)
+  );
+}
+
+/** Recheck yielding content every painted frame, even between camera solves.
+ * The arbiter's sticky/exit placements are intentionally retained for cards;
+ * labels can only use the remaining rectangles. All buffers are reused. */
+function declutterYieldingEntries() {
+  let hasYielding = false;
+  for (let i = 0; i < _paintCount; i++)
+    if (_paintQueue[i].record.entry.yieldToCollisionGroup) {
+      hasYielding = true;
+      break;
+    }
+  if (!hasYielding) return;
+  sortPooledRange(_paintQueue, _paintCount, compareYieldingPaintItems);
+  for (let i = 0; i < _paintCount; i++) {
+    const item = _paintQueue[i];
+    const entry = item.record.entry;
+    if (!entry.yieldToCollisionGroup) continue;
+    const placements = item.record.placements;
+    let accepted = null;
+    // Try the arbiter's chosen corner first, then its other valid placements.
+    for (let p = -1; p < placements.length; p++) {
+      const placement = p < 0 ? item.placement : placements[p];
+      if (p >= 0 && placement === item.placement) continue;
+      let blocked = false;
+      for (let j = 0; j < i; j++) {
+        const other = _paintQueue[j];
+        if (other.collisionHidden) continue;
+        const group = other.record.entry.collisionGroup;
+        if (
+          (group === entry.collisionGroup ||
+            group === entry.yieldToCollisionGroup) &&
+          overlayRectsOverlap(placement.rect, other.placement.rect)
+        ) {
+          blocked = true;
+          break;
+        }
+      }
+      if (!blocked) {
+        accepted = placement;
+        break;
+      }
+    }
+    if (accepted) item.placement = accepted;
+    else item.collisionHidden = true;
+  }
+}
+
+function syncPaintVisibility(painted = true) {
+  for (let s = 0; s < _sourceList.length; s++) {
+    const source = _sourceList[s];
+    const callback = source.options.onVisibilityChange;
+    if (!callback) continue;
+    const count = painted ? _paintedBySource[source.id] || 0 : 0;
+    let changed = count !== source.visibleIds.size;
+    if (!changed && painted) {
+      for (const id of source.visibleIds) {
+        if (
+          _paintRectByKey.get(entryKey(source.id, id))?.stamp !== _frameStamp
+        ) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) continue;
+    source.visibleIds.clear();
+    if (painted)
+      for (let i = 0; i < _paintRectCount; i++) {
+        const rect = _paintRectPool[i];
+        if (rect.sourceId === source.id) source.visibleIds.add(rect.entryId);
+      }
+    callback(source.visibleIds);
+  }
+}
+
 function paintFrame(keyhole) {
   const started = nowMs();
   const sonar = isCyberSonarActive()
@@ -2537,6 +2586,7 @@ function paintFrame(keyhole) {
     clearCanvas(false, true);
   _paintRectCount = 0;
   _hitRectCount = 0;
+  declutterYieldingEntries();
   sortPooledRange(_paintQueue, _paintCount, comparePaintItems);
   // The shared canvas is not clipped either. Cards already avoid solid chrome
   // by placement, and every occluder composites above this host in the DOM, so
@@ -2559,6 +2609,7 @@ function paintFrame(keyhole) {
   _diagnostics.paintRectPoolSize = _paintRectPool.length;
   _diagnostics.paintMs = nowMs() - started;
   syncAccessibleActions();
+  syncPaintVisibility();
   _canvasNeedsClear =
     _paintRectCount > 0 || activeCustomPaintLaneCount(PAINT_TARGET_SHARED) > 0;
 }
@@ -2615,6 +2666,7 @@ function drawWorldOverlay() {
       _hitRectCount = 0;
       syncAccessibleActions();
     }
+    syncPaintVisibility(false);
     return;
   }
   if (_resizeDirty) ensureCanvasSize();
@@ -2739,7 +2791,6 @@ export function destroyWorldOverlay() {
   if (_occluderRefreshTimer != null) clearTimeout(_occluderRefreshTimer);
   _occluderRefreshTimer = null;
   _root?.remove?.();
-  _accessibilityRoot?.remove?.();
   // The detection surface is not a child of `_root` (it lives in the Cesium
   // container so its `screen` blend reaches the scene), so it has to be torn
   // down explicitly rather than by the root's removal.
@@ -2750,6 +2801,7 @@ export function destroyWorldOverlay() {
   ) {
     delete window.__gevWorldOverlay;
   }
+  syncPaintVisibility(false);
   _sources.clear();
   _sourceList.length = 0;
   for (let i = 0; i < _customPaintLaneList.length; i++) {
@@ -2787,9 +2839,7 @@ export function destroyWorldOverlay() {
   _root = null;
   _canvas = null;
   _ctx = null;
-  _accessibilityRoot = null;
-  _accessibilityList = null;
-  _accessibilityStatus = null;
+  if (_actions) presentActions(null);
   _detectionSurface = null;
   _detectionCtx = null;
   _occluder = null;

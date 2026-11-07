@@ -12,6 +12,7 @@ import {
   roadDotBudget,
 } from './policy.js';
 import { msg } from '../../i18n/index.js';
+import { nextTask } from '../../sources/vectorTiles.js';
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
@@ -37,7 +38,15 @@ export function createFlow({ state: layerState, services, parts, source }) {
     const status = Number.isFinite(error.status)
       ? error.status
       : Number(message.match(/HTTP (\d{3})/)?.[1]);
+    const code = typeof error.code === 'string' ? error.code : null;
     // English in state; trafficFeedPresentation translates it for the panel.
+    // A hosted deployment limits each account (code from the server); the
+    // local proxy has one daily budget (`budget`) and answers `no_key`.
+    if (code === 'USAGE_LIMIT_REACHED')
+      return msg('Monthly traffic allowance used');
+    if (code === 'RATE_LIMITED') return msg('Traffic rate limit reached');
+    if (status === 503 && code && code !== 'no_key')
+      return msg('Traffic service unavailable');
     if (status === 503) return msg('TomTom key unavailable');
     if (status === 429) return msg('TomTom daily budget reached');
     if (status === 502 || status === 504)
@@ -253,6 +262,9 @@ export function createFlow({ state: layerState, services, parts, source }) {
       parts.rendering.renderRoadsForAltitude([], altitude, label, trace);
       return true;
     }
+    // Separate whole-graph preparation from tile completion and publication.
+    await nextTask();
+    if (!current()) return false;
     const scene = layerState._viewer.scene;
     // The enable-time estimate can predate the first local mesh (especially
     // after an intercontinental jump). Once previews have measured roads, use
@@ -476,6 +488,9 @@ export function createFlow({ state: layerState, services, parts, source }) {
         if (!lastPaint || performance.now() - lastPaint >= 120) paint();
       },
     };
+    // The first bounded surface slice needs its own task, not the prefix's tail.
+    await nextTask();
+    if (!current()) return false;
     let prepared = await prepareRoadSurfaces(
       unresolved,
       layerState._viewer.scene,

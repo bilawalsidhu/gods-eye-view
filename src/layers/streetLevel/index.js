@@ -126,8 +126,17 @@ export function createStreetLevelLayer({
     });
   }
 
-  // One source at a time: the first provider that defaults on.
-  const startsOn = defs.find((def) => def.defaultOn !== false);
+  /** `def` if its key is ready, else the first keyless provider not refused. */
+  function keylessInstead(def, refused = () => false) {
+    if (def.keyReady?.() !== false) return def;
+    return defs.find((d) => !d.requiresKeyId && !refused(d.id)) || def;
+  }
+
+  // One source at a time: the first provider that defaults on. Without its
+  // key, the first keyless source instead, so a fresh keyless install opens
+  // on coverage rather than KEY REQUIRED.
+  const preferred = defs.find((def) => def.defaultOn !== false);
+  const startsOn = preferred && keylessInstead(preferred);
   for (const def of defs) {
     const entry = {
       def,
@@ -365,8 +374,9 @@ export function createStreetLevelLayer({
   /** The hint a ground-click provider shows, or the provider's own. */
   function hintFor(entry, stats) {
     if (entry.def.groundClick && stats.hint && !state.groundClickReady)
+      // No-break spaces keep a provider name (Google Street View) on one line.
       return t('zoom in to a street to open {name}', {
-        name: translateKnown(entry.def.name),
+        name: translateKnown(entry.def.name).replace(/ /g, '\u00a0'),
       });
     return stats.hint || '';
   }
@@ -584,7 +594,17 @@ export function createStreetLevelLayer({
         providerIds: state.providers.keys(),
         filter: state.filter,
       });
-      const lit = litByParams(decoded.providers);
+      // A restored "Mapillary on" (the codec default) would light a source a
+      // keyless install cannot draw. Only redirect a provider the params switch
+      // on: a filter-only update keeps whatever the user chose.
+      const asked = litByParams(decoded.providers);
+      const lit =
+        asked && decoded.providers.get(asked) === true
+          ? keylessInstead(
+              state.providers.get(asked).def,
+              (id) => decoded.providers.get(id) === false,
+            ).id
+          : asked;
       const before = litIds();
       for (const [id, entry] of state.providers)
         if (id !== lit) switchProvider(entry, false);

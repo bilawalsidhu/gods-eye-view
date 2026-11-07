@@ -5,6 +5,7 @@ import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
+  governorRequestRender,
 } from '../renderGovernor.js';
 import {
   isRateLimitedOutcome,
@@ -12,6 +13,12 @@ import {
   sampleGroundHeight,
 } from './annotationResolver.js';
 import { ringCentroid } from './drawMode.js';
+import {
+  createWorkTrace,
+  phaseTiming,
+  recordWorkSlice,
+} from '../sources/phaseTiming.js';
+import { formatDistanceText } from '../data/distanceFormat.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -63,9 +70,9 @@ const OUTLINE_UPGRADE_CONCURRENCY = 2;
  *   null            — DEFINITIVE no-polygon (never retried; the honest point stands);
  *   undefined       — TRANSIENT failure (re-run once per delaysMs entry, then give up);
  *   rate-limit object — OVERPASS THROTTLE (one retry, honoring Retry-After + ladder).
- * `isStale()` is consulted after each backoff wait so a cleared/superseded board stops
- * retrying immediately. A thrown resolver counts as definitive — the pre-retry
- * catch→point behavior. Exported for tests.
+ * `signal` cancels backoff waits; `isStale()` guards each continuation so a
+ * cleared/superseded board stops retrying immediately. A thrown resolver counts as
+ * definitive — the pre-retry catch→point behavior. Exported for tests.
  */
 export async function resolveOutlineWithRetry(
   resolveOutline,
@@ -73,16 +80,19 @@ export async function resolveOutlineWithRetry(
     delaysMs = OUTLINE_RETRY_DELAYS_MS,
     isStale = () => false,
     waitFn = wait,
+    signal,
   } = {},
 ) {
   let retriedRateLimit = false;
   for (let attempt = 0; ; attempt += 1) {
+    if (signal?.aborted || isStale()) return undefined;
     let fp;
     try {
       fp = await resolveOutline();
     } catch {
       fp = null; // hard failure — definitive, keep the honest point
     }
+    if (signal?.aborted || isStale()) return undefined;
     if (isUnavailableCapability(fp)) return fp;
     if (isRateLimitedOutcome(fp)) {
       // A throttle gets one deliberately spaced retry. If that retry is throttled
@@ -91,15 +101,15 @@ export async function resolveOutlineWithRetry(
       const retryAfterMs = Number.isFinite(fp.retryAfterMs)
         ? fp.retryAfterMs
         : 0;
-      await waitFn(Math.max(retryAfterMs, delaysMs[attempt]));
-      if (isStale()) return undefined;
+      await waitFn(Math.max(retryAfterMs, delaysMs[attempt]), signal);
+      if (signal?.aborted || isStale()) return undefined;
       retriedRateLimit = true;
       continue;
     }
     if (fp !== undefined) return fp;
     if (attempt >= delaysMs.length) return undefined; // transient budget exhausted
-    await waitFn(delaysMs[attempt]);
-    if (isStale()) return undefined; // board cleared/superseded mid-backoff
+    await waitFn(delaysMs[attempt], signal);
+    if (signal?.aborted || isStale()) return undefined; // board cleared/superseded mid-backoff
   }
 }
 
@@ -136,6 +146,7 @@ export function createAnnotationEngine({
   // draw after a clear() (or after a newer clearPrevious) has wiped the board.
   let generation = 0;
   const activeControllers = new Set();
+  const buildingInstalls = new WeakMap();
   // Outline upgrades are intentionally narrower than the concurrent anchor phase:
   // points render immediately, then expensive Overpass continuations drain FIFO.
   const outlineQueue = [];
@@ -144,6 +155,17 @@ export function createAnnotationEngine({
   // task with the FINAL outcome — resolved or failed — so narration that said
   // "tracing the boundary now" can later honestly confirm or correct itself.
   const outlineListeners = new Set();
+  // Told whenever the set of marks, or one mark's look, changes (Draw's list).
+  const changeListeners = new Set();
+  const notifyChange = () => {
+    for (const listener of changeListeners) {
+      try {
+        listener();
+      } catch {
+        /* one listener's failure must not stop the others */
+      }
+    }
+  };
 
   function emitOutlineEvent(evt) {
     for (const listener of outlineListeners) {
@@ -189,8 +211,11 @@ export function createAnnotationEngine({
   // World annotations carry persistent per-frame scene animation (pulsing
   // live colors, camera-scaled rings, route-flow uniforms in the renderer),
   // so the scene must render continuously while any mark exists. (perf wave 2)
+  // Only a mark someone can see needs every frame drawn: a board of marks
+  // hidden from Draw's list lets the scene idle.
   function syncAnnotationHold() {
-    if (annotations.size > 0) holdContinuousRender('annotations');
+    const visible = [...annotations.values()].some((anno) => !anno.hidden);
+    if (visible) holdContinuousRender('annotations');
     else releaseContinuousRender('annotations');
   }
 
@@ -207,9 +232,120 @@ export function createAnnotationEngine({
    */
   function rollbackRendererState(anno) {
     try {
-      renderer.remove(anno);
+      removeRendered(anno);
     } catch {
       /* the renderer is already in a bad way; the original error wins */
+    }
+  }
+
+  function removeRendered(anno) {
+    if (anno._pendingReplacement) {
+      const replacement = anno._pendingReplacement;
+      anno._pendingReplacement = null;
+      retainCleanup(anno, replacement);
+    }
+    let failure;
+    try {
+      cleanupRetired(anno);
+    } catch (error) {
+      failure = error;
+    }
+    try {
+      renderer.remove(anno);
+    } catch (error) {
+      failure ||= error;
+    }
+    if (failure) {
+      anno.cleanupPending = true;
+      throw failure;
+    }
+    delete anno.cleanupPending;
+  }
+
+  function retainCleanup(owner, route) {
+    const retired = (owner._retiredRoutes ||= new Set());
+    for (const previous of route._retiredRoutes || [])
+      if (previous !== owner) retired.add(previous);
+    delete route._retiredRoutes;
+    if (route._pendingReplacement && route._pendingReplacement !== owner)
+      retired.add(route._pendingReplacement);
+    route._pendingReplacement = null;
+    if (route !== owner) retired.add(route);
+  }
+
+  function cleanupRetired(anno) {
+    let failure;
+    for (const route of anno._retiredRoutes || []) {
+      try {
+        renderer.remove(route);
+        anno._retiredRoutes.delete(route);
+      } catch (error) {
+        failure ||= error;
+      }
+    }
+    if (failure) {
+      anno.cleanupPending = true;
+      throw failure;
+    }
+    delete anno.cleanupPending;
+  }
+
+  function cancelReplacement(anno) {
+    if (!anno._pendingReplacement) return;
+    const replacement = anno._pendingReplacement;
+    anno._pendingReplacement = null;
+    retainCleanup(anno, replacement);
+    try {
+      cleanupRetired(anno);
+    } catch {
+      /* cleanup-only ownership remains visible; active authority is revoked */
+    }
+  }
+
+  function installOptions(
+    anno,
+    controller,
+    myGen,
+    current = () => annotations.get(anno.id) === anno,
+  ) {
+    return {
+      signal: controller.signal,
+      isCurrent: () =>
+        !destroyed &&
+        myGen === generation &&
+        !controller.signal.aborted &&
+        current(),
+    };
+  }
+
+  function beginBuildingInstall(anno) {
+    let settle;
+    const record = {
+      settled: new Promise((resolve) => {
+        settle = resolve;
+      }),
+      accepted: false,
+      error: null,
+    };
+    buildingInstalls.set(anno, record);
+    record.finish = () => {
+      if (buildingInstalls.get(anno) === record) buildingInstalls.delete(anno);
+      settle();
+    };
+    return record;
+  }
+
+  function installedOutcome(anno, outcome) {
+    if (outcome?.status === 'cancelled')
+      throw new Error('Annotation installation cancelled');
+    anno.pendingOutline = false;
+    if (outcome?.status === 'timeout') {
+      anno.ring = null;
+      anno.polygons = null;
+      anno.footprintKind = null;
+      anno.outlineCredit = null;
+      anno.outlineUnavailable = true;
+      renderer.update(anno);
     }
   }
 
@@ -219,6 +355,7 @@ export function createAnnotationEngine({
       const now = performance.now();
       let changed = false;
       let pending = false; // any mark still fading in / out, or with a TTL fade ahead
+      let expired = false;
       for (const anno of annotations.values()) {
         const next = computeAlpha(anno, now);
         if (next !== anno.alpha) {
@@ -226,9 +363,15 @@ export function createAnnotationEngine({
           changed = true;
         }
         if (anno.alpha <= 0 && anno.expiring) {
-          annotations.delete(anno.id);
-          renderer.remove(anno);
-          changed = true;
+          try {
+            removeRendered(anno);
+            annotations.delete(anno.id);
+            changed = true;
+            expired = true;
+          } catch {
+            // Leave failed cleanup addressable without stopping every other mark's tick.
+            anno.cleanupPending = true;
+          }
           continue;
         }
         if (pendingAnimation(anno, now)) pending = true;
@@ -236,7 +379,11 @@ export function createAnnotationEngine({
       if (changed) {
         renderer.sync(annotations);
         syncAnnotationHold();
+        // The frame that takes a just-hidden mark off: with every mark hidden
+        // the hold is gone, and nothing else would draw it.
+        governorRequestRender('annotations');
       }
+      if (expired) notifyChange();
       // Stop once the board is STABLE — persistent marks (persist=true is the default)
       // finish fading in after ~260ms and never change again, so without this the loop
       // would spin O(N) every frame forever. ensureTicking() restarts on the next
@@ -259,6 +406,8 @@ export function createAnnotationEngine({
    * @param {boolean} [opts.clearPrevious]
    * @param {boolean} [opts.persist]  Keep until cleared (default true).
    * @param {boolean} [opts.flyTo]    Frame the first resolved annotation.
+   * @param {AbortSignal} [opts.signal] Caller lifetime for this mutation.
+   * @param {() => boolean} [opts.isCurrent] Whether the caller still owns the board mutation.
    * @returns {Promise<{ok, drawn, failed, ids, results}>}
    */
   async function annotate(requests, opts = {}) {
@@ -271,18 +420,86 @@ export function createAnnotationEngine({
         results: [],
         error: 'destroyed',
       };
-    const list = Array.isArray(requests) ? requests : [requests];
+    const list = (Array.isArray(requests) ? requests : [requests]).map(
+      promoteStreetHighlight,
+    );
     if (opts.clearPrevious) clear(); // bumps generation + aborts older pending work
 
     const persist = opts.persist !== false;
     // Per-call cancellation: bumped/aborted by any later clear() or destroy().
     const controller = new AbortController();
+    const abortFromCaller = () => controller.abort(opts.signal?.reason);
+    opts.signal?.addEventListener?.('abort', abortFromCaller, { once: true });
+    if (opts.signal?.aborted) abortFromCaller();
     retainController(controller);
     const myGen = generation;
-    const superseded = () => myGen !== generation || controller.signal.aborted;
+    const superseded = () =>
+      myGen !== generation ||
+      controller.signal.aborted ||
+      (typeof opts.isCurrent === 'function' && !opts.isCurrent());
 
     const results = [];
     const ids = [];
+    const installations = [];
+    // Result slots an installation settles; only these are re-validated after the await.
+    const installed = new Set();
+    const trackBuildingInstall = (
+      anno,
+      resolved,
+      spec,
+      completion,
+      ownership,
+      duplicate = false,
+    ) => {
+      anno.pendingOutline = true;
+      ensureTicking();
+      const index = results.length;
+      results.push(null);
+      installed.add(index);
+      const record = beginBuildingInstall(anno);
+      installations.push(
+        Promise.resolve(completion)
+          .then((outcome) => {
+            if (!ownership.isCurrent())
+              throw new Error('Annotation superseded');
+            installedOutcome(anno, outcome);
+            results[index] = {
+              ...okResult(anno, resolved, anno.id),
+              ...(duplicate ? { duplicate: true } : {}),
+            };
+            if (
+              typeof resolved.resolveOutline === 'function' &&
+              !anno.outlineUnavailable
+            )
+              startOutlineUpgrade(
+                anno,
+                resolved.resolveOutline,
+                myGen,
+                controller,
+              );
+            record.accepted = true;
+          })
+          .catch((error) => {
+            // i18n-ignore: structured annotation tool diagnostic, not UI text.
+            record.error = error?.message || 'Annotation installation failed';
+            anno.pendingOutline = false;
+            anno.outlineUnavailable = true;
+            try {
+              removeRendered(anno);
+              if (annotations.get(anno.id) === anno)
+                annotations.delete(anno.id);
+            } catch {
+              /* keep failed cleanup addressable */
+            }
+            syncAnnotationHold();
+            results[index] = failResult(
+              spec,
+              error?.message || 'Annotation installation failed',
+            );
+          })
+          .finally(record.finish),
+      );
+    };
     let firstAnchor = null;
     let capped = false;
 
@@ -334,19 +551,137 @@ export function createAnnotationEngine({
               // A progressive replacement inherits the dup's already-resolved geometry so an
               // outline never visibly vanishes during a recaption; its own upgrade (below)
               // refreshes it — usually instantly from the footprint cache.
-              if (anno.pendingOutline && !anno.ring && dup.ring) {
+              if (
+                anno.pendingOutline &&
+                !anno.ring &&
+                dup.ring &&
+                !dup.pendingOutline
+              ) {
                 anno.ring = dup.ring;
                 anno.polygons = dup.polygons || null;
                 anno.footprintKind = dup.footprintKind || null;
                 anno.buildingHeight = dup.buildingHeight || null;
                 anno.synthesized = Boolean(dup.synthesized);
+                anno.outlineCredit = dup.outlineCredit || null;
                 anno.anchor = { ...dup.anchor };
               }
+              if (anno.ring?.length >= 3 && anno.footprintKind === 'building') {
+                if (dup.pendingOutline) {
+                  // No valid old volume exists: replace its pending point and its task,
+                  // so an older installation failure cannot erase the newer intent.
+                  removeRendered(dup);
+                  annotations.delete(dup.id);
+                  annotations.set(anno.id, anno);
+                  syncAnnotationHold();
+                  const ownership = installOptions(anno, controller, myGen);
+                  try {
+                    const completion = renderer.add(anno, ownership);
+                    trackBuildingInstall(
+                      anno,
+                      resolved,
+                      spec,
+                      completion,
+                      ownership,
+                      true,
+                    );
+                  } catch (error) {
+                    rollbackRendererState(anno);
+                    annotations.delete(anno.id);
+                    syncAnnotationHold();
+                    throw error;
+                  }
+                  continue;
+                }
+                // A recaption inherits the current mark's visible opacity while sampling.
+                anno.alpha = dup.alpha;
+                cancelReplacement(dup);
+                dup._pendingReplacement = anno;
+                const ownership = installOptions(
+                  anno,
+                  controller,
+                  myGen,
+                  () =>
+                    annotations.get(dup.id) === dup &&
+                    dup._pendingReplacement === anno,
+                );
+                let completion;
+                try {
+                  completion = renderer.add(anno, {
+                    ...ownership,
+                    pendingVisible: false,
+                  });
+                } catch (error) {
+                  if (dup._pendingReplacement === anno)
+                    dup._pendingReplacement = null;
+                  try {
+                    removeRendered(anno);
+                  } catch {
+                    retainCleanup(dup, anno);
+                  }
+                  throw error;
+                }
+                const index = results.length;
+                results.push(null);
+                installed.add(index);
+                anno.pendingOutline = true;
+                installations.push(
+                  Promise.resolve(completion)
+                    .then((outcome) => {
+                      if (!ownership.isCurrent())
+                        throw new Error('Replacement superseded');
+                      if (outcome?.status === 'timeout')
+                        throw new Error(
+                          'Building refresh timed out; previous outline retained',
+                        );
+                      installedOutcome(anno, outcome);
+                      // No await between releasing the old slot and reserving its successor.
+                      dup._pendingReplacement = null;
+                      retainCleanup(anno, dup);
+                      annotations.delete(dup.id);
+                      annotations.set(anno.id, anno);
+                      syncAnnotationHold();
+                      ensureTicking();
+                      try {
+                        cleanupRetired(anno);
+                      } catch {
+                        /* new route is valid; report pending old-route cleanup */
+                      }
+                      results[index] = {
+                        ...okResult(anno, resolved, anno.id),
+                        duplicate: true,
+                      };
+                      if (typeof resolved.resolveOutline === 'function')
+                        startOutlineUpgrade(
+                          anno,
+                          resolved.resolveOutline,
+                          myGen,
+                          controller,
+                        );
+                    })
+                    .catch((error) => {
+                      if (dup._pendingReplacement === anno)
+                        dup._pendingReplacement = null;
+                      try {
+                        removeRendered(anno);
+                      } catch {
+                        // Keep failed partial replacement cleanup reachable through the old slot.
+                        if (annotations.get(dup.id) === dup)
+                          retainCleanup(dup, anno);
+                      }
+                      results[index] = failResult(
+                        spec,
+                        error?.message || 'Building refresh failed',
+                      );
+                    }),
+                );
+                continue;
+              }
+              // Remove before delete: a failed cleanup stays addressable through the old slot.
+              removeRendered(dup);
               annotations.delete(dup.id);
               annotations.set(anno.id, anno);
               syncAnnotationHold();
               try {
-                renderer.remove(dup);
                 renderer.add(anno);
               } catch (swapError) {
                 // Same contract as the fresh path: a renderer/WebGL throw must
@@ -373,6 +708,7 @@ export function createAnnotationEngine({
                 duplicate: true,
               });
             } else {
+              cancelReplacement(dup);
               // Identical re-narration → refresh the existing mark's lifecycle in place (keep
               // it visible whether persistent or TTL-based, and revive a fading-out one).
               if (persist) {
@@ -385,6 +721,39 @@ export function createAnnotationEngine({
               dup.fadeStart = null;
               ids.push(dup.id);
               if (!firstAnchor) firstAnchor = dup;
+              let record = buildingInstalls.get(dup);
+              if (record) {
+                const index = results.length;
+                results.push(null);
+                installed.add(index);
+                installations.push(
+                  (async () => {
+                    do {
+                      await record.settled;
+                      if (
+                        superseded() ||
+                        annotations.get(dup.id) !== dup ||
+                        !record.accepted
+                      ) {
+                        results[index] = failResult(
+                          spec,
+                          record.error ||
+                            'Annotation installation failed or superseded',
+                        );
+                        return;
+                      }
+                      // Follow only a physical install already started by the owner,
+                      // never its progressive network work or a replacement's task.
+                      record = buildingInstalls.get(dup);
+                    } while (record);
+                    results[index] = {
+                      ...okResult(dup, resolved, dup.id),
+                      duplicate: true,
+                    };
+                  })(),
+                );
+                continue;
+              }
               // A re-narration is also a RETRY: if the existing mark never got its outline
               // (transient Overpass miss), attach this call's deferred resolver to it.
               if (!dup.ring && typeof resolved.resolveOutline === 'function') {
@@ -398,7 +767,7 @@ export function createAnnotationEngine({
               // Same result builder as the fresh path (full metadata) but the existing id —
               // route fallback / approximate honesty fields survive a re-narration.
               results.push({
-                ...okResult(anno, resolved, dup.id),
+                ...okResult(dup, resolved, dup.id),
                 duplicate: true,
               });
             }
@@ -414,7 +783,12 @@ export function createAnnotationEngine({
           annotations.set(anno.id, anno);
           syncAnnotationHold();
           try {
-            renderer.add(anno);
+            const ownership = installOptions(anno, controller, myGen);
+            const completion = renderer.add(anno, ownership);
+            if (completion?.then) {
+              trackBuildingInstall(anno, resolved, spec, completion, ownership);
+              continue;
+            }
           } catch (addError) {
             // A failed renderer add must not retain a phantom annotation (and
             // with it a phantom continuous-render hold). (perf wave 2 fix)
@@ -446,7 +820,42 @@ export function createAnnotationEngine({
           );
         }
       }
+      if (installations.length) {
+        await Promise.all(installations);
+        for (let index = 0; index < results.length; index += 1) {
+          const result = results[index];
+          if (!result?.ok || !installed.has(index)) continue;
+          const current = annotations.get(result.id);
+          if (
+            !current ||
+            (current.cleanupPending && current.outlineUnavailable)
+          ) {
+            results[index] = failResult(
+              list[index],
+              'Annotation installation failed or superseded',
+            );
+            continue;
+          }
+          result.outline = Boolean(current.ring) && !current.pendingOutline;
+          if (current.pendingOutline) result.outlinePending = true;
+          else delete result.outlinePending;
+          if (current.outlineUnavailable) {
+            result.outlineUnavailable = true;
+            result.message = 'Detailed outline unavailable';
+          } else delete result.outlineUnavailable;
+          if (current.cleanupPending || current._retiredRoutes?.size)
+            result.cleanupPending = true;
+          else delete result.cleanupPending;
+        }
+        ids.splice(
+          0,
+          ids.length,
+          ...results.filter((r) => r?.ok).map((r) => r.id),
+        );
+        firstAnchor = annotations.get(ids[0]) || null;
+      }
     } finally {
+      opts.signal?.removeEventListener?.('abort', abortFromCaller);
       releaseController(controller);
     }
 
@@ -466,6 +875,7 @@ export function createAnnotationEngine({
     if (ids.length) {
       renderer.sync(annotations);
       ensureTicking();
+      notifyChange();
     }
     if (opts.flyTo && firstAnchor) frameAnnotation(firstAnchor);
     else if (ids.length) ensureMarksVisible(ids);
@@ -662,6 +1072,9 @@ export function createAnnotationEngine({
 
   async function runOutlineUpgrade(task) {
     const { anno, resolveOutline, myGen, controller } = task;
+    let installRecord;
+    let workTrace;
+    let workStart = null;
     try {
       let fp = null;
       // Geometry upgrade is best-effort — the point stays on any failure. A TRANSIENT
@@ -669,6 +1082,7 @@ export function createAnnotationEngine({
       // proxy caches the late completion, so the retry is usually a warm cache hit.
       fp = await resolveOutlineWithRetry(resolveOutline, {
         delaysMs: outlineRetryDelaysMs,
+        signal: controller.signal,
         isStale: () =>
           myGen !== generation ||
           controller.signal.aborted ||
@@ -678,11 +1092,24 @@ export function createAnnotationEngine({
       if (!annotations.has(anno.id)) return; // mark replaced/removed while resolving
       anno.pendingOutline = false;
       anno.outlineUnavailable = isUnavailableCapability(fp);
+      const installStart = performance.now();
+      let groundInstallation = null;
+      let schedulingMs = 0;
+      let completionStart = null;
       if (anno.outlineUnavailable) renderer.update(anno);
       if (fp && !anno.outlineUnavailable) {
+        if (import.meta.env?.DEV && fp.footprintKind === 'building') {
+          workTrace = createWorkTrace();
+          if (workTrace) {
+            workTrace.callerStart = installStart;
+            workStart = installStart;
+          }
+        }
+        anno.pendingOutline = true;
         anno.ring = fp.ring;
         anno.polygons = fp.polygons || null;
         anno.footprintKind = fp.footprintKind || null;
+        anno.outlineCredit = fp.outlineCredit || null;
         anno.buildingHeight = fp.buildingHeight || null;
         anno.synthesized = Boolean(fp.synthesized);
         // Re-center on the footprint centroid, as the inline path always did.
@@ -694,7 +1121,25 @@ export function createAnnotationEngine({
           };
         }
         // Re-route: ring presence decides world-drape vs screen-space in the renderer.
-        renderer.update(anno);
+        const ownership = installOptions(anno, controller, myGen);
+        if (workTrace) ownership.workTrace = workTrace;
+        const completion = renderer.update(anno, ownership);
+        if (completion?.then) {
+          installRecord = beginBuildingInstall(anno);
+          schedulingMs = performance.now() - installStart;
+          if (workTrace) {
+            recordWorkSlice(workTrace, 'engine-schedule', workStart);
+            workStart = null;
+          }
+          groundInstallation = await completion;
+          completionStart = performance.now();
+          if (workTrace) workStart = completionStart;
+          if (!ownership.isCurrent()) {
+            if (workTrace) workTrace.status = 'cancelled';
+            return;
+          }
+          installedOutcome(anno, groundInstallation);
+        } else anno.pendingOutline = false;
         // GEOMETRY dedup, now that geometry is known: two DIFFERENT targets can resolve
         // to the SAME polygon ("Marina" / "Marina District") — the identity-is-geometry
         // invariant says they are ONE mark. The pending-phase dedup keys on target (it
@@ -702,32 +1147,71 @@ export function createAnnotationEngine({
         // resolved area with the same anchor + ring, keeping THIS mark (latest caption
         // wins, exactly like the add-time replace path). Not an auto-clear — it removes
         // a second representation of the same mark, never a distinct one.
-        for (const other of annotations.values()) {
-          if (
-            other.id === anno.id ||
-            other.type !== 'area' ||
-            other.pendingOutline
-          )
-            continue;
-          if (
-            !other.anchor ||
-            Math.abs(other.anchor.lon - anno.anchor.lon) >= 5e-4 ||
-            Math.abs(other.anchor.lat - anno.anchor.lat) >= 5e-4
-          )
-            continue;
-          if (Boolean(other.synthesized) !== Boolean(anno.synthesized))
-            continue;
-          if ((other.footprintKind || null) !== (anno.footprintKind || null))
-            continue;
-          if (!ringsEqual(other.ring, anno.ring)) continue;
-          annotations.delete(other.id);
-          renderer.remove(other);
-        }
+        if (!anno.outlineUnavailable)
+          for (const other of annotations.values()) {
+            if (
+              other.id === anno.id ||
+              other.type !== 'area' ||
+              other.pendingOutline
+            )
+              continue;
+            if (
+              !other.anchor ||
+              Math.abs(other.anchor.lon - anno.anchor.lon) >= 5e-4 ||
+              Math.abs(other.anchor.lat - anno.anchor.lat) >= 5e-4
+            )
+              continue;
+            if (Boolean(other.synthesized) !== Boolean(anno.synthesized))
+              continue;
+            if ((other.footprintKind || null) !== (anno.footprintKind || null))
+              continue;
+            if (!outlinesEqual(other, anno)) continue;
+            try {
+              removeRendered(other);
+              annotations.delete(other.id);
+            } catch {
+              // The duplicate's failure is its own: leave it addressable for
+              // later cleanup and keep this mark's installed outline.
+            }
+          }
       }
       renderer.sync(annotations);
+      if (groundInstallation || (fp && !anno.outlineUnavailable))
+        phaseTiming(
+          'install',
+          installStart,
+          {
+            kind: anno.footprintKind || null,
+            parts: anno.polygons?.length || (anno.ring ? 1 : 0),
+            points: anno.ring?.length || 0,
+            ...(groundInstallation?.timing
+              ? {
+                  groundSampling: groundInstallation.timing,
+                  ownedWorkMs:
+                    schedulingMs +
+                    groundInstallation.timing.workMs +
+                    performance.now() -
+                    completionStart,
+                  maxOwnedSliceMs: Math.max(
+                    schedulingMs,
+                    groundInstallation.timing.maxSliceMs,
+                    groundInstallation.timing.lastSliceMs +
+                      performance.now() -
+                      completionStart,
+                  ),
+                  installStatus: groundInstallation.status,
+                }
+              : {}),
+          },
+          'outlines',
+        );
       // Final outcome → the voice layer (place names ride as structured DATA fields).
       // 'failed' covers both the definitive no-polygon and an exhausted transient
       // retry — either way the mark honestly stays a point.
+      if (workTrace && workStart !== null) {
+        recordWorkSlice(workTrace, 'engine-process', workStart);
+        workStart = null;
+      }
       emitOutlineEvent({
         id: anno.id,
         label: anno.label || null,
@@ -742,11 +1226,101 @@ export function createAnnotationEngine({
           : {}),
         ...(fp && anno.synthesized ? { approximate: true } : {}),
       });
+      if (workTrace) workStart = performance.now();
+      if (installRecord) installRecord.accepted = true;
+    } catch (error) {
+      if (workTrace) {
+        if (workStart !== null)
+          recordWorkSlice(workTrace, 'engine-error', workStart);
+        workTrace.status = controller.signal.aborted ? 'cancelled' : 'failed';
+        workStart = performance.now();
+      }
+      if (installRecord)
+        // i18n-ignore: structured annotation tool diagnostic, not UI text.
+        installRecord.error = error?.message || 'Outline installation failed';
+      if (
+        myGen === generation &&
+        !controller.signal.aborted &&
+        annotations.get(anno.id) === anno
+      ) {
+        anno.pendingOutline = false;
+        anno.outlineUnavailable = true;
+        try {
+          removeRendered(anno);
+          anno.ring = null;
+          anno.polygons = null;
+          anno.footprintKind = null;
+          anno.outlineCredit = null;
+          renderer.add(anno);
+          if (installRecord) installRecord.accepted = true;
+        } catch {
+          try {
+            removeRendered(anno);
+            annotations.delete(anno.id);
+          } catch {
+            /* retain failed partial state in the map for later cleanup */
+          }
+          syncAnnotationHold();
+        }
+        if (workTrace) {
+          recordWorkSlice(workTrace, 'engine-recovery', workStart);
+          workStart = null;
+        }
+        emitOutlineEvent({
+          id: anno.id,
+          label: anno.label || null,
+          target: anno.targetKey || null,
+          status: 'failed',
+          message: 'Outline installation failed',
+        });
+        if (workTrace) workStart = performance.now();
+      }
     } finally {
+      if (workTrace && workStart === null) workStart = performance.now();
       if (anno._outlineTask === task) anno._outlineTask = null;
       releaseController(controller);
       activeOutlineUpgrades -= 1;
+      if (workTrace) {
+        recordWorkSlice(workTrace, 'engine-finalize', workStart);
+        workStart = null;
+      }
       drainOutlineQueue();
+      if (workTrace) workStart = performance.now();
+      installRecord?.finish();
+      if (workTrace) {
+        if (workTrace.status === 'pending') {
+          const rendererStatus =
+            workTrace.rendererStatus || workTrace.samplerStatus || 'failed';
+          workTrace.status =
+            rendererStatus !== 'installed'
+              ? rendererStatus
+              : installRecord?.accepted &&
+                  workTrace.samplerStatus === 'installed' &&
+                  !anno.outlineUnavailable &&
+                  !controller.signal.aborted &&
+                  myGen === generation &&
+                  annotations.get(anno.id) === anno
+                ? 'installed'
+                : 'cancelled';
+        }
+        workTrace.completedAt = performance.now();
+        recordWorkSlice(
+          workTrace,
+          'engine-settle',
+          workStart,
+          workTrace.completedAt,
+        );
+        try {
+          phaseTiming(
+            'install-work',
+            workTrace.callerStart,
+            workTrace,
+            'outlines',
+          );
+        } catch {
+          /* Development telemetry must not change the installation outcome. */
+        }
+      }
     }
   }
 
@@ -762,6 +1336,9 @@ export function createAnnotationEngine({
       longitude: round5(anno.anchor.lon),
       resolvedVia: resolved.source,
       outline: Boolean(anno.ring),
+      ...(anno.cleanupPending || anno._retiredRoutes?.size
+        ? { cleanupPending: true }
+        : {}),
       // The anchor is placed and returned fast; the footprint is still being traced and
       // will appear on its own (or the mark honestly stays a point). Lets the voice
       // layer narrate without waiting out a slow Overpass — and without calling the
@@ -795,6 +1372,11 @@ export function createAnnotationEngine({
    *  degenerate geocode stacks on one point (several Capitol monuments) would erase each other. */
   function findDuplicate(anno) {
     if (!anno.anchor) return null;
+    // A shape drawn by hand is always new: each click is meant, and every
+    // shape is unnamed until its row names it, so two nearby pins would
+    // otherwise read as one and the second would replace or vanish into the
+    // first.
+    if (anno.manual) return null;
     const near = (a, b) =>
       a &&
       b &&
@@ -803,7 +1385,6 @@ export function createAnnotationEngine({
     // FULL per-vertex geometry comparison (the live cap is only 120 and this runs solely for
     // candidates that already matched type+label+anchor, so it's cheap) — so two DIFFERENT
     // same-length rings/paths at the same anchor are never falsely merged.
-    const ringSame = ringsEqual;
     const pathSame = (a, b) => {
       const la = a ? a.length : 0;
       const lb = b ? b.length : 0;
@@ -813,6 +1394,10 @@ export function createAnnotationEngine({
     };
     for (const ex of annotations.values()) {
       if (ex.type !== anno.type || !ex.anchor) continue;
+      // A shape drawn by hand and a voice mark are never the same mark: a
+      // match would let a voice TTL expire the drawn one, or replace it. A
+      // hidden mark is not refreshed either; a new shape there is new.
+      if (Boolean(ex.manual) !== Boolean(anno.manual) || ex.hidden) continue;
       // Identity is GEOMETRY, not label: "Marina" and "Marina District" resolve to the SAME
       // polygon/anchor and must collapse to one mark (the caller replaces label/color in place
       // so the latest caption wins). Resolution is deterministic, so the same place re-resolves
@@ -837,7 +1422,7 @@ export function createAnnotationEngine({
           if (Boolean(ex.synthesized) !== Boolean(anno.synthesized)) continue;
           if ((ex.footprintKind || null) !== (anno.footprintKind || null))
             continue;
-          if (!ringSame(ex.ring, anno.ring)) continue;
+          if (!outlinesEqual(ex, anno)) continue;
         }
       } else if (anno.type === 'arrow') {
         if (!near(ex.to, anno.to)) continue;
@@ -885,6 +1470,11 @@ export function createAnnotationEngine({
       alpha: 0, // animate in
       bornAt: now,
       expiring: false,
+      // Drawn by hand (drawTool.js): listed under Draw, renamed and recoloured
+      // there. `name` is the person's own label, before any distance is added.
+      manual: spec?.manual === true,
+      name: spec?.manual === true ? cleanLabel(spec?.label) || null : null,
+      hidden: false,
     };
 
     if (type === 'route') {
@@ -939,7 +1529,20 @@ export function createAnnotationEngine({
       // Every part with its holes ([outer, ...holes][]), when the outline has
       // more than the main ring (Hawaii's islands, Berlin inside Brandenburg).
       polygons: resolved.polygons || null,
+      // A voice area handle's id: counting reads the handle's full geometry,
+      // never this drawing (see voice/areaActions.js).
+      areaId:
+        typeof spec?.areaId === 'string' ? spec.areaId.slice(0, 120) : null,
+      // Who made the outline: the draw tool, a voice area handle, or a voice
+      // annotation resolved from a name.
+      origin:
+        spec?.manual === true
+          ? spec.origin === 'area'
+            ? 'area'
+            : 'drawn'
+          : 'voice',
       footprintKind: resolved.footprintKind || null, // 'building' | 'area'
+      outlineCredit: resolved.outlineCredit || null,
       buildingHeight: resolved.buildingHeight || null, // meters, for extruded volume
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
       // Progressive outline: the anchor is placed, the footprint is still resolving —
@@ -966,10 +1569,111 @@ export function createAnnotationEngine({
     abortPending();
     dropQueuedOutlineUpgrades();
     if (!annotations.size) return;
-    for (const anno of annotations.values()) renderer.remove(anno);
-    annotations.clear();
+    let failure;
+    for (const anno of annotations.values()) {
+      try {
+        removeRendered(anno);
+        annotations.delete(anno.id);
+      } catch (error) {
+        failure ||= error;
+      }
+    }
     renderer.sync(annotations);
     syncAnnotationHold();
+    notifyChange();
+    if (failure) throw failure;
+  }
+
+  /** Take one mark off the board at once. */
+  function remove(id) {
+    const anno = annotations.get(id);
+    if (!anno) return false;
+    // Through removeRendered, like clear(): a failed cleanup leaves the mark on
+    // the board, still addressable, instead of an orphan nothing owns.
+    removeRendered(anno);
+    annotations.delete(id);
+    renderer.sync(annotations);
+    syncAnnotationHold();
+    notifyChange();
+    return true;
+  }
+
+  /** Hide or show one mark; a hidden mark stays on the board at alpha 0. */
+  function setHidden(id, hidden) {
+    const anno = annotations.get(id);
+    if (!anno) return false;
+    anno.hidden = Boolean(hidden);
+    // Skip the fade-in, so showing it again is immediate.
+    anno.bornAt = Math.min(anno.bornAt, performance.now() - 260);
+    // Take it off (or put it back) now, not when its alpha next changes: a
+    // mark hidden before its first frame has no alpha change to wait for.
+    renderer.sync(annotations);
+    syncAnnotationHold();
+    governorRequestRender('annotations');
+    ensureTicking();
+    notifyChange();
+    return true;
+  }
+
+  /**
+   * Rename or recolour a hand-drawn mark. The renderers build a mark's look
+   * when it is added, so the mark is added again with the new look.
+   */
+  function restyle(id, { name, color } = {}) {
+    const anno = annotations.get(id);
+    if (!anno?.manual) return false;
+    if (name !== undefined) {
+      anno.name = cleanLabel(name) || null;
+      anno.label =
+        anno.type === 'route'
+          ? composeRouteLabel(anno.name, anno.distanceM, null, 'manual', false)
+          : anno.name;
+    }
+    if (color !== undefined && COLORS.has(color)) anno.color = color;
+    renderer.remove(anno);
+    try {
+      renderer.add(anno);
+    } catch (error) {
+      rollbackRendererState(anno);
+      annotations.delete(id);
+      renderer.sync(annotations);
+      syncAnnotationHold();
+      notifyChange();
+      throw error;
+    }
+    renderer.sync(annotations);
+    ensureTicking();
+    notifyChange();
+    return true;
+  }
+
+  /** Fly the camera to one mark; a line is framed whole, not by its start. */
+  function frame(id) {
+    const anno = annotations.get(id);
+    if (!anno) return false;
+    if (anno.type === 'route' && anno.path?.length) {
+      const ring = anno.path.map((p) => [p.lon, p.lat]);
+      // Unwrap around the first vertex, as ringRange does, so a line across
+      // the antimeridian is centred on it, not on the far side of the globe.
+      const ref = ring[0][0];
+      const lons = ring.map(
+        ([lon]) => lon - 360 * Math.round((lon - ref) / 360),
+      );
+      const lats = ring.map(([, lat]) => lat);
+      const midLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+      frameAnnotation({
+        ...anno,
+        to: null,
+        ring,
+        polygons: null,
+        anchor: {
+          lon: ((((midLon + 180) % 360) + 360) % 360) - 180,
+          lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+          height: 0,
+        },
+      });
+    } else frameAnnotation(anno);
+    return true;
   }
 
   /** Begin a graceful fade-out of everything, then remove. */
@@ -1100,6 +1804,16 @@ export function createAnnotationEngine({
   const engine = {
     annotate,
     clear,
+    remove,
+    setHidden,
+    restyle,
+    frame,
+    /** Subscribe to board changes; returns an unsubscribe fn. */
+    onChange(listener) {
+      if (destroyed || typeof listener !== 'function') return () => {};
+      changeListeners.add(listener);
+      return () => changeListeners.delete(listener);
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -1109,12 +1823,19 @@ export function createAnnotationEngine({
         if (tickHandle != null) cancelAnimationFrame(tickHandle);
         tickHandle = null;
         outlineListeners.clear();
+        changeListeners.clear();
         releaseContinuousRender('annotations');
         renderer.destroy();
       }
     },
     fadeOutAll,
     count: () => annotations.size,
+    /**
+     * The board generation: advanced by every clear. A caller that resolves
+     * something before drawing captures it first and draws only while it is
+     * unchanged, so a clear during a slow lookup is never undone.
+     */
+    generation: () => generation,
     list: () => Array.from(annotations.values()),
 
     /**
@@ -1301,8 +2022,17 @@ export function createAnnotationEngine({
   return engine;
 }
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function wait(ms, signal) {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const finish = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener('abort', finish, { once: true });
+  });
 }
 
 /** Exact per-vertex ring equality ([[lon,lat],…], ~1m epsilon) — the geometry-identity test. */
@@ -1318,6 +2048,49 @@ function ringsEqual(a, b) {
       return false;
   }
   return true;
+}
+
+/**
+ * Whole-outline equality: the main ring AND every part with its holes. Two
+ * outlines sharing an outer ring but differing in parts or holes are two marks.
+ */
+function outlinesEqual(a, b) {
+  if (!ringsEqual(a?.ring, b?.ring)) return false;
+  const parts = (anno) =>
+    Array.isArray(anno?.polygons) && anno.polygons.length
+      ? anno.polygons
+      : [[anno?.ring || []]];
+  const pa = parts(a);
+  const pb = parts(b);
+  if (pa.length !== pb.length) return false;
+  for (let i = 0; i < pa.length; i++) {
+    if (pa[i].length !== pb[i].length) return false;
+    for (let j = 0; j < pa[i].length; j++)
+      if (!ringsEqual(pa[i][j], pb[i][j])) return false;
+  }
+  return true;
+}
+
+const STREET_WORD_RE =
+  /\b(?:street|st|avenue|ave|boulevard|blvd|road|rd|drive|dr|lane|ln|highway|hwy|parkway|pkwy|alley)\.?$/i;
+
+/**
+ * "Highlight Congress Avenue" asks for the street, not a dot. A highlight
+ * whose entity is a street (by entityKind or by its name) becomes an area
+ * ask, so it resolves the street outline like any other area, unless the
+ * caller explicitly turned the footprint off.
+ */
+export function promoteStreetHighlight(spec) {
+  if (!spec || typeof spec !== 'object' || spec.footprint === false)
+    return spec;
+  if (normalizeType(spec.type) !== 'highlight') return spec;
+  if (spec.entityKind && spec.entityKind !== 'street') return spec;
+  const target = String(spec.target || '').split(',')[0];
+  const street =
+    spec.entityKind === 'street' || STREET_WORD_RE.test(target.trim());
+  return street && target.trim()
+    ? { ...spec, type: 'area', entityKind: 'street' }
+    : spec;
 }
 
 // --- helpers ----------------------------------------------------------------
@@ -1364,6 +2137,7 @@ function normalizeType(type) {
 }
 
 function computeAlpha(anno, now) {
+  if (anno.hidden) return 0;
   const inT = (now - anno.bornAt) / 260;
   const fadeIn = inT >= 1 ? 1 : Math.max(0, inT);
 
@@ -1453,11 +2227,38 @@ function isManualSpec(spec, type) {
   if (!spec || spec.manual !== true) return false;
   if (type === 'route')
     return Array.isArray(spec.path) && spec.path.length >= 2;
-  if (type === 'area') return Array.isArray(spec.ring) && spec.ring.length >= 3;
+  if (type === 'area')
+    return (
+      (Array.isArray(spec.ring) && spec.ring.length >= 3) ||
+      (spec.origin === 'area' && Array.isArray(spec.polygons))
+    );
   return (
     Number.isFinite(Number(spec.latitude)) &&
     Number.isFinite(Number(spec.longitude))
   );
+}
+
+/**
+ * Parts of a voice area handle, `[[outer, ...holes], …]` of [lon, lat] pairs.
+ * Longitudes may run to ±540 (a part unwrapped across the antimeridian draws
+ * as one shape). Null when no part has a usable outer ring.
+ */
+function areaPolygons(list) {
+  const ringOf = (ring) =>
+    (Array.isArray(ring) ? ring : []).filter(
+      (p) =>
+        Array.isArray(p) &&
+        Number.isFinite(p[0]) &&
+        Number.isFinite(p[1]) &&
+        Math.abs(p[0]) <= 540 &&
+        Math.abs(p[1]) <= 90,
+    );
+  const polygons = (Array.isArray(list) ? list : [])
+    .slice(0, 64)
+    .map((rings) => (Array.isArray(rings) ? rings.map(ringOf) : []))
+    .filter((rings) => rings[0]?.length >= 3)
+    .map(([outer, ...holes]) => [outer, ...holes.filter((h) => h.length >= 3)]);
+  return polygons.length ? polygons : null;
 }
 
 /** [lon, lat] pairs or {lon, lat} objects → [lon, lat] pairs, invalid entries dropped. */
@@ -1506,7 +2307,9 @@ function resolveManualSpec(spec, type, viewer) {
     };
   }
   if (type === 'area') {
-    const ring = manualPairs(spec.ring);
+    const polygons =
+      spec.origin === 'area' ? areaPolygons(spec.polygons) : null;
+    const ring = polygons ? polygons[0][0] : manualPairs(spec.ring);
     if (ring.length < 3)
       throw new Error('a drawn area needs at least 3 points');
     // Averaged through ringCentroid, which unwraps longitudes first: a ring
@@ -1523,9 +2326,11 @@ function resolveManualSpec(spec, type, viewer) {
       lat,
       height: sampleGroundHeight(viewer, lon, lat),
       ring,
+      ...(polygons ? { polygons } : {}),
       footprintKind: 'area',
       buildingHeight: null,
-      synthesized: false,
+      // An approximate area (a buffer around a landmark) draws dashed.
+      synthesized: spec.approximate === true,
       source: 'manual',
     };
   }
@@ -1572,9 +2377,7 @@ function greatCircleM(a, b) {
 }
 
 function formatDistance(m) {
-  if (!Number.isFinite(m)) return null;
-  if (m >= 1000) return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
-  return `${Math.round(m / 10) * 10} m`;
+  return formatDistanceText(m, { metreStep: 10 });
 }
 
 function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {

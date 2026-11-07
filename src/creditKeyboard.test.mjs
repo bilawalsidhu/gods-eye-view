@@ -221,3 +221,16 @@ for (const [locale, link, title] of [
       setLocale('en');
     }
   });
+
+test('setting up again after a switch back to English restores the English texts', () => {
+  const f = textFixture();
+  setLocale('ru');
+  try {
+    configureCreditKeyboardAccess(f.root);
+  } finally {
+    setLocale('en');
+  }
+  configureCreditKeyboardAccess(f.root);
+  assert.equal(f.expand.textContent, 'Data attribution');
+  assert.equal(f.title.textContent, 'Data provided by:');
+});

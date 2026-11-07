@@ -75,7 +75,7 @@ export function nominatimLongitude(value) {
 export function typesFromNominatim(hit) {
   const addresstype = String(hit?.addresstype || '').toLowerCase();
   const osmType = String(hit?.type || '').toLowerCase();
-  const osmClass = String(hit?.class || '').toLowerCase();
+  const osmClass = String(hit?.category || hit?.class || '').toLowerCase();
   const mapped =
     ADDRESS_TYPE_MAP[addresstype] ||
     ADDRESS_TYPE_MAP[osmType] ||

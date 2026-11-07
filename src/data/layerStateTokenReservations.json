@@ -7,6 +7,7 @@
   ["bikeshare", "b"],
   ["cctv", "c"],
   ["directions", "n"],
+  ["drone-airspace", "8"],
   ["earthquakes", "e"],
   ["fire-perimeters", "2"],
   ["flights", "f"],
@@ -14,7 +15,7 @@
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],
-  ["message-signs", "6"],
+  ["message-signs", "00"],
   ["military", "m"],
   ["military-awareness", "g"],
   ["military-installations", "i"],
@@ -23,6 +24,8 @@
   ["rocket-launches", "x"],
   ["s2-ghostmaps", "5"],
   ["satellites", "s"],
+  ["sea-marks", "6"],
+  ["ski-pistes", "7"],
   ["street-level", "0"],
   ["telegeography-submarine-cables", "u"],
   ["traffic", "t"],
@@ -31,5 +34,6 @@
   ["weather-lightning", "l"],
   ["weather-radar", "v"],
   ["weather-satellite", "o"],
+  ["wildlife-sightings", "9"],
   ["wind", "k"]
 ]

@@ -1,5 +1,5 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
-import { msg, t } from '../../i18n/index.js';
+import { isolate, msg, t } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -97,6 +97,8 @@ export function createPresentation({
     const health = layerState._healthById.get(active.camera.id) || null;
     const calBadge = parts.calibration.deriveCalBadge(active.camera);
 
+    // Each part is isolated: in right-to-left text a code keeps its own value
+    // (FOV 44°) instead of trading it with its neighbour.
     return [
       t('{city} CCTV', {
         city: active.camera.city.toUpperCase(),
@@ -140,6 +142,7 @@ export function createPresentation({
         : null,
     ]
       .filter(Boolean)
+      .map(isolate)
       .join(' · ');
   }
 

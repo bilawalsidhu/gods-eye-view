@@ -2,7 +2,7 @@
   "name": "gods-eye-view",
   "private": true,
   "version": "0.3.0",
-  "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
@@ -47,6 +47,7 @@
     "build:panel": "node scripts/build-panel.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
+    "test:perf": "node scripts/run-perf-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:street-level": "node scripts/qa-street-level.mjs",
@@ -66,9 +67,16 @@
     "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
+    "pinia": "^2.3.1",
+    "satellite.js": "^6.0.2",
+    "vue": "^3.5.44",
+    "vue-i18n": "^11.4.15"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.14.6",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/test-utils": "^2.5.1",
+    "happy-dom": "^20.14.6",
     "prettier": "3.9.6",
     "puppeteer": "^25.16.0",
     "sharp": "^0.35.4",
@@ -169,6 +177,7 @@
     "./layers/perimeters": "./src/layers/perimeters/index.js",
     "./layers/gnss": "./src/layers/gnss/index.js",
     "./layers/ghostmaps": "./src/layers/ghostMaps/index.js",
+    "./layers/drone-airspace": "./src/layers/droneAirspace/index.js",
     "./sources/firms-csv": "./src/data/firmsCsv.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",
@@ -213,8 +222,8 @@
     "./voice/actions": "./src/voice/gevActions.js",
     "./annotations": "./src/annotations/index.js",
     "./context": "./src/data/contextStore.js",
-    "./build/html": {
-      "node": "./build/application-html.js"
+    "./build/register-vue": {
+      "node": "./build/registerVue.js"
     },
     "./application/catalog": "./src/app/catalog.js",
     "./standalone/catalog": "./src/standalone/catalog.js",
@@ -248,6 +257,7 @@
     "./layers/perimeters/source": "./src/layers/perimeters/source.js",
     "./layers/gnss/source": "./src/layers/gnss/source.js",
     "./layers/ghostmaps/source": "./src/layers/ghostMaps/source.js",
+    "./layers/drone-airspace/source": "./src/layers/droneAirspace/source.js",
     "./layers/firms/source": "./src/layers/firms/source.js",
     "./layers/installations/source": "./src/layers/installations/source.js",
     "./layers/launches/source": "./src/layers/launches/source.js",
@@ -283,6 +293,8 @@
     "./tools/panel": "./src/tools/panel.js",
     "./tools/services": "./src/tools/services.js",
     "./view": "./src/view/index.js",
-    "./agent/world-packet": "./src/agent/worldPacket.js"
+    "./agent/world-packet": "./src/agent/worldPacket.js",
+    "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",
+    "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js"
   }
 }
