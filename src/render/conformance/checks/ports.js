@@ -2261,6 +2261,44 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
       },
     ),
     check(
+      'renderer.readPixels',
+      'readPixels reads the drawn frame, cropped and scaled, at once',
+      async (h, r) => {
+        await overAustin(h, r);
+        r.frame.renderNow();
+        const full = r.readPixels();
+        equal(full.width, SCRIPT_VIEWPORT.width, 'the canvas’s CSS width');
+        equal(full.height, SCRIPT_VIEWPORT.height, 'the canvas’s CSS height');
+        equal(full.data.length, full.width * full.height * 4, 'RGBA bytes');
+        const part = r.readPixels({
+          crop: { x: 10, y: 20, width: 40, height: 30 },
+          scale: 0.5,
+        });
+        deepEqual(
+          [part.width, part.height, part.data.length],
+          [20, 15, 20 * 15 * 4],
+          'a crop, scaled',
+        );
+      },
+    ),
+    check(
+      'renderer.releaseUnused',
+      'releaseUnused keeps what is in view drawn and picked',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.points({ id: 'conf:release' });
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        set.set([{ id: 'kept', pos, pixelSize: 20, color: '#f00' }]);
+        await drawn(h, r);
+        r.releaseUnused();
+        await drawn(h, r);
+        const s = r.query.project(pos);
+        ok(s, 'the point projects');
+        equal(r.query.pick(s.x, s.y)?.id, 'kept', 'still picked');
+        set.dispose();
+      },
+    ),
+    check(
       'quality.signals',
       'frame signals arrive for drawn frames',
       async (h, r) => {

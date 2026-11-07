@@ -64,6 +64,8 @@ export const CESIUM_CHECKS = new Set([
   'quality',
   'quality.signals',
   'renderer.listeners',
+  'renderer.readPixels',
+  'renderer.releaseUnused',
   'renderer.whenSettled',
 ]);
 

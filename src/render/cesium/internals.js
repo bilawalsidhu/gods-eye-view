@@ -180,6 +180,17 @@ export function billboardLoadError(billboard) {
   return billboard.loadError;
 }
 
+/**
+ * Frees the globe tiles the frame just drawn did not use. Cesium trims its
+ * tile cache only while tiles are loading, so a settled view never would;
+ * the renderer's `releaseUnused` trims it after a drawn frame, while the
+ * queue still marks what that frame drew.
+ * @param {object} globe Cesium Globe.
+ */
+export function trimGlobeTiles(globe) {
+  globe?._surface?._tileReplacementQueue?.trimTiles(0);
+}
+
 const NO_CREDITS = Object.freeze([]);
 
 /**
