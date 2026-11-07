@@ -3484,5 +3484,18 @@
   "Close camera preview": "إغلاق معاينة الكاميرا",
   "Refresh map still": "تحديث صورة الخريطة الثابتة",
   "The map still uses a separate request and may show a different moment.": "تستخدم صورة الخريطة طلبًا منفصلًا وقد تعرض لحظة مختلفة.",
-  "Video plays from Québec 511, which sees your IP address.": "يُشغَّل الفيديو من Québec 511، الذي يرى عنوان IP الخاص بك."
+  "Video plays from Québec 511, which sees your IP address.": "يُشغَّل الفيديو من Québec 511، الذي يرى عنوان IP الخاص بك.",
+  "Airfield": "مهبط طائرات",
+  "International": "دولي",
+  "Regional": "إقليمي",
+  "Public": "عام",
+  "Military / public": "عسكري / عام",
+  "Private": "خاص",
+  "Civil": "مدني",
+  "Gliding": "طيران شراعي",
+  "Under construction": "قيد الإنشاء",
+  "opens {year}": "يُفتتح {year}",
+  "runway {length}": "مدرج {length}",
+  "Airports": "المطارات",
+  "OpenStreetMap · Norway": "OpenStreetMap · النرويج"
 }

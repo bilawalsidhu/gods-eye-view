@@ -714,13 +714,14 @@ test('without an operator Overpass the prompt never offers place search', () => 
 });
 
 test('the Realtime prompt stays within its size budget', () => {
-  // Instructions plus tool schemas, in characters, under the same 55,500
+  // Instructions plus tool schemas, in characters, under the same 55,700
   // ceiling as the deixis prompt lint. Voice geometry adds resolve_area,
   // find_imagery and the analyst area scopes (osm_query only with an
-  // operator Overpass).
+  // operator Overpass); the Airports layer and main's tilt pitchDeg bring
+  // the Overpass prompt to 55,606.
   const size = (overpass) =>
     realtimeInstructions(undefined, { overpass }).length +
     JSON.stringify(realtimeTools({ overpass })).length;
-  assert.ok(size(false) <= 55_500, `default prompt ${size(false)} chars`);
-  assert.ok(size(true) <= 55_500, `with Overpass ${size(true)} chars`);
+  assert.ok(size(false) <= 55_700, `default prompt ${size(false)} chars`);
+  assert.ok(size(true) <= 55_700, `with Overpass ${size(true)} chars`);
 });
