@@ -134,6 +134,12 @@ import {
   HOUSTON_MAX_CATALOG_BYTES,
   HOUSTON_GROUND_ELEVATION_M,
   HOUSTON_ANCHORS,
+  ICELAND_CAMERAS_URL,
+  ICELAND_IMAGE_ORIGIN,
+  ICELAND_MAX_CATALOG_BYTES,
+  ICELAND_GROUND_ELEVATION_M,
+  DEFAULT_ICELAND_MAX_SOURCES,
+  ICELAND_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -152,6 +158,7 @@ import {
   isLikelyCalgaryCoordinate,
   isLikelyFloridaCoordinate,
   isLikelyCataloniaCoordinate,
+  isLikelyIcelandCoordinate,
   decodeNumericEntities,
   isLikelyNycCoordinate,
   isLikelyHoustonCoordinate,
@@ -2023,6 +2030,174 @@ export async function loadCataloniaSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Catalonia camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * Compass headings for Icelandic direction words, as they appear after "til"
+ * (genitive: "til vesturs"), "í" (accusative: "í vestur") or "séð" ("seen",
+ * as in "séð austur").
+ */
+const ICELAND_DIRECTION_HEADINGS = {
+  norður: 0,
+  norðaustur: 45,
+  austur: 90,
+  suðaustur: 135,
+  suður: 180,
+  suðvestur: 225,
+  vestur: 270,
+  norðvestur: 315,
+};
+const ICELAND_DIRECTION_WORD =
+  '(norðaustur|norðvestur|suðaustur|suðvestur|norður|suður|austur|vestur)s?';
+/** A facing, plus a second one joined by "og" ("til austurs og vesturs"). */
+const ICELAND_DIRECTION_RE = new RegExp(
+  `(?<![\\p{L}])(?:til|í|séð)\\s+${ICELAND_DIRECTION_WORD}` +
+    `(?:\\s+og\\s+(?:til\\s+|í\\s+)?${ICELAND_DIRECTION_WORD})?(?![\\p{L}])`,
+  'gu',
+);
+
+/**
+ * The compass heading an Icelandic view description states, or NaN. Only an
+ * explicit "til <átt>", "í <átt>" or "séð <átt>" counts: a bare place name or
+ * a road direction ("Miklabraut austur") is not a facing. A description naming
+ * two different directions ("til norðurs og til suðurs", "til austurs og
+ * vesturs") is ambiguous and yields NaN, and "niður á veg" (down onto the
+ * road) states none.
+ *
+ * @param {string} text - The feed's `Skyring` field.
+ * @returns {number} Heading in degrees [0..360), or NaN.
+ */
+export function icelandHeadingFromDescription(text) {
+  const headings = new Set();
+  for (const match of String(text || '')
+    .toLowerCase()
+    .matchAll(ICELAND_DIRECTION_RE)) {
+    for (const word of [match[1], match[2]]) {
+      if (word) headings.add(ICELAND_DIRECTION_HEADINGS[word]);
+    }
+  }
+  return headings.size === 1 ? headings.values().next().value : NaN;
+}
+
+/**
+ * One Vegagerðin camera row -> one catalog source, or null. A row is one camera
+ * view; a station (`Maelist_nr`) carries several. The id comes from the frame
+ * file name, which is unique per view in the live feed.
+ *
+ * @param {object} row - Element of the `vefmyndavelar2014_1` array.
+ * @returns {?object}
+ */
+export function icelandCameraToSource(row) {
+  const url = pinnedCameraUrl(row?.Slod, ICELAND_IMAGE_ORIGIN);
+  if (!url || !/\.jpe?g$/i.test(new URL(url).pathname)) return null;
+  // Numbers only: Number(null) and Number('') are 0.
+  const lat = typeof row.Breidd === 'number' ? row.Breidd : NaN;
+  const lon = typeof row.Lengd === 'number' ? row.Lengd : NaN;
+  if (!isLikelyIcelandCoordinate(lat, lon)) return null;
+  const stem = new URL(url).pathname
+    .slice(new URL(ICELAND_IMAGE_ORIGIN).pathname.length)
+    .replace(/\.jpe?g$/i, '')
+    .toLowerCase();
+  if (!/^[a-z0-9_-]+$/.test(stem)) return null;
+  const cameraId = `is-vegagerdin-${stem}`;
+  const description = String(row.Skyring || '')
+    .replace(/\s+/g, ' ')
+    // Letter lookarounds, not \b: \b is ASCII-only and would join "Þverá
+    // Árnessýslu" while missing "séð séð".
+    .replace(/(?<!\p{L})(\p{L}+) \1(?!\p{L})/giu, '$1')
+    .trim();
+  const station = String(row.Myndavel || '').trim();
+  const heading = icelandHeadingFromDescription(description);
+  const hasHeading = Number.isFinite(heading);
+  return {
+    id: cameraId,
+    name: description || station || `Vegagerðin ${row.Maelist_nr ?? stem}`,
+    city: 'Iceland',
+    cityId: 'iceland',
+    provider: 'Vegagerðin (IRCA)',
+    lat,
+    lon,
+    headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasHeading ? 'high' : 'low',
+    pitchDeg: hasHeading ? -24 : -18,
+    fovDeg: hasHeading ? 56 : 44,
+    rangeM: hasHeading ? 210 : 145,
+    mountHeightM: hasHeading ? 10 : 8,
+    groundElevationM: ICELAND_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url,
+    snapshotUrl: url,
+    sourceKind: 'iceland-vegagerdin',
+    license:
+      'Icelandic Road and Coastal Administration (IRCA) — road camera images, CC BY 4.0',
+    code: cameraDisplayCode(station.toUpperCase() || description),
+  };
+}
+
+/**
+ * Fetch Icelandic road cameras (Vegagerðin / IRCA), keyless: one JSON list.
+ * Frames are stills on the IRCA host and the loader registers only links
+ * inside that host's camera directory (ICELAND_IMAGE_ORIGIN). The list decides
+ * ids, coordinates, labels and which frame path is proxied, so it is fetched
+ * over https, redirects are refused and the body read is capped at
+ * ICELAND_MAX_CATALOG_BYTES.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadIcelandSourcesFromOpenData() {
+  try {
+    const resp = await fetch(ICELAND_CAMERAS_URL, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    // A response this loader will not read still owns its transport until the
+    // body is released, so every rejection path cancels before returning.
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Iceland catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Iceland camera download failed:', resp.status);
+      return discard();
+    }
+    const body = await readResponseJsonCapped(resp, ICELAND_MAX_CATALOG_BYTES);
+    const rows = Array.isArray(body) ? body : [];
+    const cameras = rows.map(icelandCameraToSource).filter(Boolean);
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const maxRaw = Number(
+      process.env.CCTV_ICELAND_MAX_SOURCES || DEFAULT_ICELAND_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+      : DEFAULT_ICELAND_MAX_SOURCES;
+    const prioritized = prioritizeSources(unique, maxCount, ICELAND_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Iceland camera sources: ${unique.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Iceland camera download error:',
       error?.message || error,
     );
     return [];
