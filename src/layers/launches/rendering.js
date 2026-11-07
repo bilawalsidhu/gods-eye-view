@@ -37,6 +37,37 @@ export function createRendering({
     if (current !== next) graphic.show = next;
   }
 
+  /** Make a launch's site marker the viewer's selected entity, or none. */
+  function selectLaunchEntity(launchId) {
+    const viewer = layerState._viewer;
+    if (!viewer) return;
+    viewer.selectedEntity = launchId
+      ? layerState._dataSource?.entities.getById(`rocket-launch:${launchId}`)
+      : undefined;
+  }
+
+  /**
+   * Show only the selected mission's entities, or every site marker and
+   * nothing else when none is selected.
+   */
+  function isolateMission(launchId) {
+    if (!layerState._dataSource) return;
+    for (const entity of layerState._dataSource.entities.values) {
+      const relatedId = parts.selection.entityLaunchId(entity);
+      entity.show = launchId
+        ? relatedId === launchId
+        : entity.id.startsWith('rocket-launch:');
+    }
+  }
+
+  /**
+   * The projected (estimated) orbit drawn as an entity for a launch, ECEF;
+   * null when its orbit is a live satellite ring or it has none.
+   */
+  function projectedOrbitPath(launchId) {
+    return layerState._replayTracks.get(launchId)?.projectedOrbitPath ?? null;
+  }
+
   function updateMissionFrame() {
     if (
       !layerState._enabled ||
@@ -526,6 +557,7 @@ export function createRendering({
             source: 'Approximate mission orbit',
           },
         });
+        layerState._replayTracks.get(launch.id).projectedOrbitPath = orbitPath;
       }
       const orbitLabelBakePosition = cartesian(ascentPath.at(-1));
       let orbitLabelPosition = orbitLabelBakePosition;
@@ -593,5 +625,12 @@ export function createRendering({
       });
     }
   }
-  return { setGraphicVisibility, updateMissionFrame, addLaunchEntity };
+  return {
+    setGraphicVisibility,
+    selectLaunchEntity,
+    isolateMission,
+    projectedOrbitPath,
+    updateMissionFrame,
+    addLaunchEntity,
+  };
 }
