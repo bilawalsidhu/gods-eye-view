@@ -1136,7 +1136,7 @@ export function createBhoteKoshiEventLayer({
     if (!_enabled || generation !== _comparisonSurfaceGeneration) return;
     syncFloodSurfaceMode();
     updateProgress(_progress);
-    renderHost.request('bhote-koshi-comparison-ready');
+    renderHost.request('bhote-koshi-comparison-ready', _engine);
   }
 
   function attachDataManager(dataManager) {
@@ -1421,7 +1421,8 @@ export function createBhoteKoshiEventLayer({
     }
     _sceneMediaPlaybackBeatId = null;
     if (pauseMedia) _embeddedMedia?.pause?.();
-    if (hadPlayback) renderHost.request('bhote-koshi-scene-media-hold');
+    if (hadPlayback)
+      renderHost.request('bhote-koshi-scene-media-hold', _engine);
   }
 
   function completeSceneMediaPlayback() {
@@ -1439,7 +1440,7 @@ export function createBhoteKoshiEventLayer({
         if (_sceneMediaPlaybackBeatId !== beatId) return;
         _sceneMediaPlaybackTimer = null;
         _sceneMediaPlaybackBeatId = null;
-        renderHost.request('bhote-koshi-scene-media-exit');
+        renderHost.request('bhote-koshi-scene-media-exit', _engine);
       }, exitDurationSec * 1000) ?? null;
   }
 
@@ -1762,7 +1763,8 @@ export function createBhoteKoshiEventLayer({
     if (_sceneRevealAnimationFrame != null)
       cancelAnimationFrame(_sceneRevealAnimationFrame);
     _sceneRevealAnimationFrame = null;
-    if (_sceneRevealHoldActive) renderHost.release(SCENE_REVEAL_RENDER_HOLD);
+    if (_sceneRevealHoldActive)
+      renderHost.release(SCENE_REVEAL_RENDER_HOLD, _engine);
     _sceneRevealHoldActive = false;
   }
 
@@ -1773,7 +1775,8 @@ export function createBhoteKoshiEventLayer({
     if (_scenePathDeadlineTimer != null)
       globalThis.window?.clearTimeout?.(_scenePathDeadlineTimer);
     _scenePathDeadlineTimer = null;
-    if (_scenePathHoldActive) renderHost.release(SCENE_PATH_RENDER_HOLD);
+    if (_scenePathHoldActive)
+      renderHost.release(SCENE_PATH_RENDER_HOLD, _engine);
     _scenePathHoldActive = false;
   }
 
@@ -1787,8 +1790,9 @@ export function createBhoteKoshiEventLayer({
     _scenePathRevealProgress = targetProgress;
     updateFloodTrace(_scenePathRevealProgress);
     updateSurgeFront(_scenePathRevealProgress);
-    renderHost.request(requestReason);
-    if (_scenePathHoldActive) renderHost.release(SCENE_PATH_RENDER_HOLD);
+    renderHost.request(requestReason, _engine);
+    if (_scenePathHoldActive)
+      renderHost.release(SCENE_PATH_RENDER_HOLD, _engine);
     _scenePathHoldActive = false;
   }
 
@@ -1959,7 +1963,7 @@ export function createBhoteKoshiEventLayer({
       lastTickAt = tickAt;
       return activeElapsedMs;
     };
-    renderHost.hold(SCENE_PATH_RENDER_HOLD);
+    renderHost.hold(SCENE_PATH_RENDER_HOLD, _engine);
     _scenePathHoldActive = true;
     // RAF normally paints every intermediate frame. This independent deadline
     // is registered before Cesium starts the flight, so a throttled or briefly
@@ -2008,7 +2012,7 @@ export function createBhoteKoshiEventLayer({
         startProgress + (targetProgress - startProgress) * eased;
       updateFloodTrace(_scenePathRevealProgress);
       updateSurgeFront(_scenePathRevealProgress);
-      renderHost.request('bhote-koshi-scene-path-travel');
+      renderHost.request('bhote-koshi-scene-path-travel', _engine);
       if (linear < 1) {
         _scenePathAnimationFrame = requestAnimationFrame(step);
       } else {
@@ -2066,7 +2070,7 @@ export function createBhoteKoshiEventLayer({
     if (sequenceWindow) updateProgress(sequenceWindow.startProgress);
     let lastTickAt = performance.now();
     let activeElapsedMs = 0;
-    renderHost.hold(SCENE_REVEAL_RENDER_HOLD);
+    renderHost.hold(SCENE_REVEAL_RENDER_HOLD, _engine);
     _sceneRevealHoldActive = true;
     const step = (now) => {
       if (
@@ -2097,12 +2101,12 @@ export function createBhoteKoshiEventLayer({
         updateFloodTrace(floodProgress);
         updateSurgeFront(floodProgress);
       }
-      renderHost.request('bhote-koshi-scene-beat-reveal');
+      renderHost.request('bhote-koshi-scene-beat-reveal', _engine);
       if (linear < 1) {
         _sceneRevealAnimationFrame = requestAnimationFrame(step);
       } else {
         _sceneRevealAnimationFrame = null;
-        renderHost.release(SCENE_REVEAL_RENDER_HOLD);
+        renderHost.release(SCENE_REVEAL_RENDER_HOLD, _engine);
         _sceneRevealHoldActive = false;
       }
     };
@@ -2147,7 +2151,7 @@ export function createBhoteKoshiEventLayer({
           ),
         })
       ) {
-        renderHost.request('bhote-koshi-evidence-video-frame');
+        renderHost.request('bhote-koshi-evidence-video-frame', _engine);
       }
       _evidenceVideoFrameHandle = video.requestVideoFrameCallback(drawFrame);
     };
@@ -2176,7 +2180,7 @@ export function createBhoteKoshiEventLayer({
       previousIndex >= 0 &&
       redrawEvidenceSlot(previousIndex)
     ) {
-      renderHost.request('bhote-koshi-evidence-poster-restore');
+      renderHost.request('bhote-koshi-evidence-poster-restore', _engine);
     }
   }
 
@@ -2204,7 +2208,7 @@ export function createBhoteKoshiEventLayer({
       )
         return;
       _evidenceVideoReady = true;
-      renderHost.request('bhote-koshi-evidence-video-ready');
+      renderHost.request('bhote-koshi-evidence-video-ready', _engine);
       syncEvidenceMedia();
     };
     video.addEventListener?.('loadeddata', markReady, { once: true });
@@ -2215,7 +2219,7 @@ export function createBhoteKoshiEventLayer({
         video !== _evidenceVideo
       )
         return;
-      renderHost.request('bhote-koshi-evidence-video-seek');
+      renderHost.request('bhote-koshi-evidence-video-seek', _engine);
     });
     video.src = eventAsset(videoPath);
     video.load?.();
@@ -2363,7 +2367,7 @@ export function createBhoteKoshiEventLayer({
         mediaProgress: presentation.localProgress,
       })
     ) {
-      renderHost.request('bhote-koshi-evidence-video-frame');
+      renderHost.request('bhote-koshi-evidence-video-frame', _engine);
     }
   }
 
@@ -2509,7 +2513,7 @@ export function createBhoteKoshiEventLayer({
           slot.poster = poster;
           poster = null;
           if (!redrawEvidenceSlot(index)) return;
-          renderHost.request('bhote-koshi-evidence-poster');
+          renderHost.request('bhote-koshi-evidence-poster', _engine);
         } catch (error) {
           closeFrame(poster);
           if (
@@ -2785,7 +2789,7 @@ export function createBhoteKoshiEventLayer({
     if (releaseCamera)
       cameraForScene()?.lookAtTransform?.(Cesium.Matrix4.IDENTITY);
     syncCinematicButton();
-    renderHost.request('bhote-koshi-cinematic-stop');
+    renderHost.request('bhote-koshi-cinematic-stop', _engine);
   }
 
   function startCinematic({ play = true } = {}) {
@@ -3446,7 +3450,7 @@ export function createBhoteKoshiEventLayer({
     applyCinematicCamera();
     syncEvidenceMedia();
     syncPanel();
-    renderHost.request('bhote-koshi-progress');
+    renderHost.request('bhote-koshi-progress', _engine);
   }
 
   function setSplit(split) {
@@ -3454,7 +3458,7 @@ export function createBhoteKoshiEventLayer({
     _splitControl?.setValue(_split);
     _native?.setSplit(_split);
     syncPanel();
-    renderHost.request('bhote-koshi-split');
+    renderHost.request('bhote-koshi-split', _engine);
   }
 
   function stopPlayback() {
@@ -3462,7 +3466,7 @@ export function createBhoteKoshiEventLayer({
     _playing = false;
     if (_animationFrame != null) cancelAnimationFrame(_animationFrame);
     _animationFrame = null;
-    renderHost.release(FLOOD_RENDER_HOLD);
+    renderHost.release(FLOOD_RENDER_HOLD, _engine);
     syncEvidenceMedia();
     syncPanel();
   }
@@ -3486,7 +3490,7 @@ export function createBhoteKoshiEventLayer({
     _playing = true;
     _playStartProgress = _progress;
     _playStartedAt = performance.now();
-    renderHost.hold(FLOOD_RENDER_HOLD);
+    renderHost.hold(FLOOD_RENDER_HOLD, _engine);
     syncEvidenceMedia();
     syncPanel();
     _animationFrame = requestAnimationFrame(animationTick);
@@ -3832,7 +3836,7 @@ export function createBhoteKoshiEventLayer({
     try {
       await comparisonLease?.release();
     } finally {
-      renderHost.request('bhote-koshi-disable');
+      renderHost.request('bhote-koshi-disable', _engine);
     }
     return true;
   }

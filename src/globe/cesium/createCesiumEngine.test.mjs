@@ -2,11 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { assertGlobeEngine, engineCapabilities } from '../contract.js';
-import {
-  _resetRenderGovernorForTest,
-  getRenderGovernorDiagnostics,
-  installRenderGovernor,
-} from '../../renderGovernor.js';
 import { createContractSuite } from '../testing/contractSuite.mjs';
 import { createCesiumEngine } from './createCesiumEngine.js';
 import { createCameraViewer } from './testing/cameraViewer.mjs';
@@ -14,8 +9,6 @@ import {
   createFakeEventHandlers,
   createFakeViewer,
 } from './testing/fakeViewer.mjs';
-
-test.afterEach(() => _resetRenderGovernorForTest());
 
 function snapshot(viewer) {
   const { scene } = viewer;
@@ -85,7 +78,6 @@ test('the render option reaches render.request', () => {
 
 test('destroy releases holds, listeners, handlers and engine-owned map state', async () => {
   const viewer = createFakeViewer();
-  installRenderGovernor(viewer);
   const handlers = createFakeEventHandlers();
   const engine = createCesiumEngine(viewer, {
     createEventHandler: handlers.create,
@@ -104,7 +96,7 @@ test('destroy releases holds, listeners, handlers and engine-owned map state', a
   assert.equal(viewer.scene.camera.changed.numberOfListeners, 0);
   assert.equal(viewer.scene.postRender.numberOfListeners, 0);
   assert.equal(handlers.handlers[0].destroyed, true);
-  assert.deepEqual(getRenderGovernorDiagnostics().holds, []);
+  assert.equal(viewer.scene.requestRenderMode, true);
   assert.deepEqual(viewer.staticCredits, []);
   assert.deepEqual(viewer.imageryList, []);
 });

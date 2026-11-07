@@ -193,7 +193,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       true,
     );
     assert.ok(
-      getRenderGovernorDiagnostics().holds.includes('directions'),
+      getRenderGovernorDiagnostics(f.engine).holds.includes('directions'),
       'a drawn route holds continuous render',
     );
     if (f.cesium) {
@@ -215,7 +215,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     f.layer.setParams({ clear: true });
     assert.equal(f.set(IDS.route), undefined);
     assert.ok(
-      !getRenderGovernorDiagnostics().holds.includes('directions'),
+      !getRenderGovernorDiagnostics(f.engine).holds.includes('directions'),
       'a cleared route releases it',
     );
   });

@@ -168,7 +168,10 @@ export function createRendering({ state, services, parts }) {
             placeSample(entry);
             schedulePlayback(entry);
             syncRenderHold();
-            governorRequestRender('transit-motion-boundary');
+            governorRequestRender(
+              'transit-motion-boundary',
+              parts.renderer?.engine,
+            );
           },
           Math.max(1, sample.nextWakeMonoMs - performance.now()),
         );
@@ -280,7 +283,7 @@ export function createRendering({ state, services, parts }) {
     state._stylePreset = next;
     for (const entry of state._vehicles.values()) applySpriteStyle(entry);
     parts.trails.style();
-    governorRequestRender('transit-style');
+    governorRequestRender('transit-style', parts.renderer?.engine);
   }
 
   /**
@@ -358,12 +361,12 @@ export function createRendering({ state, services, parts }) {
     // frames on — it is not moving.
     const working = state._enabled && state._moving.size > 0;
     if (working && !state._renderHeld) {
-      holdContinuousRender('transit');
+      holdContinuousRender('transit', parts.renderer?.engine);
       state._renderHeld = true;
     } else if (!working && state._renderHeld) {
-      releaseContinuousRender('transit');
+      releaseContinuousRender('transit', parts.renderer?.engine);
       state._renderHeld = false;
-      governorRequestRender('transit-settled');
+      governorRequestRender('transit-settled', parts.renderer?.engine);
     }
   }
 
@@ -421,7 +424,8 @@ export function createRendering({ state, services, parts }) {
           )
         : 0;
     }
-    if (state._heightDirty.size) governorRequestRender('transit-height-batch');
+    if (state._heightDirty.size)
+      governorRequestRender('transit-height-batch', parts.renderer?.engine);
     syncRenderHold();
   }
 
@@ -508,7 +512,7 @@ export function createRendering({ state, services, parts }) {
     state._shownCount = state._visible.size;
     if (changed) state._detectRevision++;
     syncRenderHold();
-    governorRequestRender('transit-visibility');
+    governorRequestRender('transit-visibility', parts.renderer?.engine);
     return state._shownCount;
   }
   function resumePlayback() {
@@ -529,7 +533,7 @@ export function createRendering({ state, services, parts }) {
     parts.selection.refreshSelectedCard(true);
     state._detectRevision++;
     syncRenderHold();
-    governorRequestRender('transit-re-entry');
+    governorRequestRender('transit-re-entry', parts.renderer?.engine);
   }
   // Text and membership refreshes are bounded timer work, never paint work.
   function maintainPresentation() {

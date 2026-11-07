@@ -1,6 +1,5 @@
 import * as Cesium from 'cesium';
 import { loadBundledJson } from '../../data/bundledJson.js';
-import { governorRequestRender } from '../../renderGovernor.js';
 import { buildStarVertices, STAR_VERTEX_FLOATS } from '../../sky/stars.js';
 
 /**
@@ -143,9 +142,7 @@ export class StarrySky {
    * @param {() => void} [options.requestRender] renders one frame when an
    *   asset or the precise rotation arrives; the idle governor by default.
    */
-  constructor({
-    requestRender = () => governorRequestRender('sky-assets'),
-  } = {}) {
+  constructor({ requestRender = () => {} } = {}) {
     /** Matches `SkyBox#show`. */
     this.show = true;
     this.milkyWayIntensity = MILKY_WAY_INTENSITY;

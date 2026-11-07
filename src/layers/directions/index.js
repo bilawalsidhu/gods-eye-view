@@ -999,8 +999,9 @@ export function createDirectionsLayer({
     const shouldHold = _enabled && _routeDrawn;
     if (shouldHold === _renderHeld) return;
     _renderHeld = shouldHold;
-    if (shouldHold) services.render.holdContinuousRender?.('directions');
-    else services.render.releaseContinuousRender?.('directions');
+    if (shouldHold)
+      services.render.holdContinuousRender?.('directions', _engine);
+    else services.render.releaseContinuousRender?.('directions', _engine);
   }
 
   function clearRouteGraphics() {
@@ -1053,7 +1054,7 @@ export function createDirectionsLayer({
     pushSteps();
     // A card already open on a step that has just been anchored moves with it.
     if (_selectedStep !== null) refreshStepCard(_selectedStep);
-    services.render.governorRequestRender('directions-anchor');
+    services.render.governorRequestRender('directions-anchor', _engine);
     if (!unresolved) {
       _anchorAttempts = 0;
       _anchorStartedAt = 0;
@@ -1089,7 +1090,7 @@ export function createDirectionsLayer({
     _anchorAttempts = 0;
     _anchorStartedAt = Date.now();
     anchorStepPoints();
-    services.render.governorRequestRender('directions-route');
+    services.render.governorRequestRender('directions-route', _engine);
   }
 
   async function requestRoute() {
@@ -1149,7 +1150,7 @@ export function createDirectionsLayer({
       clearTimeout(timer);
       if (_routeAbort === controller) _routeAbort = null;
       if (seq === _routeSeq) notifyRow();
-      services.render.governorRequestRender('directions-route');
+      services.render.governorRequestRender('directions-route', _engine);
     }
   }
 
@@ -1214,7 +1215,7 @@ export function createDirectionsLayer({
     placeMarker(which, point);
     if (_a && _b) void requestRoute();
     else notifyRow();
-    services.render.governorRequestRender('directions-place');
+    services.render.governorRequestRender('directions-place', _engine);
     return true;
   }
 
@@ -1277,7 +1278,7 @@ export function createDirectionsLayer({
     placeMarker('a', null);
     placeMarker('b', null);
     clearRouteGraphics();
-    services.render.governorRequestRender('directions-clear');
+    services.render.governorRequestRender('directions-clear', _engine);
   }
 
   /**
@@ -1434,7 +1435,7 @@ export function createDirectionsLayer({
     }
     _selectedStep = index;
     _display?.selectStep(index);
-    services.render.governorRequestRender('directions-select');
+    services.render.governorRequestRender('directions-select', _engine);
     return true;
   }
 
@@ -1601,7 +1602,7 @@ export function createDirectionsLayer({
       }
       if (patch.fly) flyCurrentRoute();
       notifyRow();
-      services.render.governorRequestRender('directions-params');
+      services.render.governorRequestRender('directions-params', _engine);
       return true;
     },
 

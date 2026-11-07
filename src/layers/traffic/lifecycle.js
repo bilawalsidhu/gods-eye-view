@@ -199,7 +199,7 @@ export function createLifecycle({
       // The dots keep their look (`dot.point`) for the next engine.
       layerState._display?.destroy();
       if (layerState._renderHeld)
-        services.render.releaseContinuousRender('traffic');
+        services.render.releaseContinuousRender('traffic', layerState._engine);
       layerState._renderHeld = false;
       layerState._engine = layerState._display = null;
       layerState._waitForScene ??= new Promise((resolve) => {

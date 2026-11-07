@@ -67,7 +67,7 @@ export function createSequenceCones({
   const { render } = state.services;
 
   function requestRender() {
-    render?.governorRequestRender?.(renderKey);
+    render?.governorRequestRender?.(renderKey, state.map?.engine);
   }
 
   function notify() {

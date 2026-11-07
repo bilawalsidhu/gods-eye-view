@@ -246,7 +246,8 @@ export function createLifecycle({
       state._detectBuiltAt = -Infinity;
       state._visible.clear();
       state._moving.clear();
-      if (state._renderHeld) releaseContinuousRender('transit');
+      if (state._renderHeld)
+        releaseContinuousRender('transit', parts.renderer?.engine);
       state._renderHeld = false;
       parts.renderer.destroy();
       parts.renderer =
@@ -309,7 +310,7 @@ export function createLifecycle({
       state._rotationPose = null;
       state._rotationDirty = false;
       if (state._renderHeld) {
-        releaseContinuousRender('transit');
+        releaseContinuousRender('transit', parts.renderer?.engine);
         state._renderHeld = false;
       }
     },

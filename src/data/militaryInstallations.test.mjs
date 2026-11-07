@@ -19,9 +19,8 @@ import {
 } from './groundFloor.js';
 import { _resetFireAnchorsForTest } from './fireAnchors.js';
 import {
-  _resetRenderGovernorForTest,
   getRenderGovernorDiagnostics,
-  installRenderGovernor,
+  renderGovernorFor,
 } from '../renderGovernor.js';
 import * as Cesium from 'cesium';
 import { getContextStore, registerEntityContext, selectEntityContext, getSelectedEntityContext, clearSelectedEntityContextForLayer } from './contextStore.js';
@@ -283,7 +282,6 @@ async function runInstallationLoad({
   const originalFetch = globalThis.fetch;
   const requests = [];
   const contextEvents = [];
-  _resetRenderGovernorForTest();
   globalThis.document = { addEventListener() {}, removeEventListener() {} };
   globalThis.window = {
     dispatchEvent(event) {
@@ -312,17 +310,8 @@ async function runInstallationLoad({
     return { ok: true, status: 200, json: async () => payload };
   };
   const engine = engineOver(VIEWPORT);
-  // Enough of a viewer for the real render governor, so one-shot render
-  // requests are observable.
-  const viewer = {
-    scene: {
-      requestRenderMode: false,
-      maximumRenderTimeChange: 0,
-      requestRender() {},
-    },
-  };
   militaryInstallationsLayer.init(null, { engine });
-  installRenderGovernor(viewer);
+  renderGovernorFor(engine).install();
   militaryInstallationsLayer.enable();
   await militaryInstallationsLayer.update();
 
@@ -338,11 +327,11 @@ async function runInstallationLoad({
       engine.fake.input('click', { position: { x: 0, y: 0 } });
       engine.fake.unscript('pick');
     },
-    renderRequests: () => getRenderGovernorDiagnostics().recentRequests.map((item) => item.reason),
+    renderRequests: () => getRenderGovernorDiagnostics(engine).recentRequests.map((item) => item.reason),
     restore() {
       militaryInstallationsLayer.destroy();
+      renderGovernorFor(engine).destroy();
       engine.destroy();
-      _resetRenderGovernorForTest();
       globalThis.fetch = originalFetch;
       if (originalDocument === undefined) delete globalThis.document;
       else globalThis.document = originalDocument;

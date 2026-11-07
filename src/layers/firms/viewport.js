@@ -150,7 +150,10 @@ export function createViewport({
           settleTimer = setTimeout(() => {
             settleTimer = null;
             if (layerState._enabled && !layerState._destroyed)
-              governorRequestRender('firms-lod-settle');
+              governorRequestRender(
+                'firms-lod-settle',
+                layerState._renderer?.engine,
+              );
           }, LOD_CHECK_MS + 40);
         });
     }

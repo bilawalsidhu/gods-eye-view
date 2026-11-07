@@ -37,7 +37,7 @@ export function createStationPoints({ state, services, parts }, points) {
   function ensureCityPoints(cityId, stationMap) {
     // Deferred debounce/fetch completions change points after the camera
     // settled: each commit needs one frame in idle mode.
-    services.render.governorRequestRender('bikeshare-points');
+    services.render.governorRequestRender('bikeshare-points', state._engine);
     const runtime = ensureCityRuntime(cityId);
 
     for (const station of stationMap.values()) {
@@ -120,7 +120,7 @@ export function createStationPoints({ state, services, parts }, points) {
    * @param {Map<string, Object>} statusMap - Parsed station status map.
    */
   function applyStatusToPoints(cityId, statusMap) {
-    services.render.governorRequestRender('bikeshare-status');
+    services.render.governorRequestRender('bikeshare-status', state._engine);
     const runtime = state._cityRuntime.get(cityId);
     if (!runtime) return;
 

@@ -291,10 +291,7 @@ export function createBhoteKoshiLocatorLayer({
   let _native = null;
   let _pausedApproach = null;
   const cameraForScene = () => _engine?.camera ?? _viewer?.camera;
-  const requestRender = (reason) =>
-    _engine?.kind === 'navara'
-      ? _engine.render.request(reason)
-      : requestSceneRender(reason);
+  const requestRender = (reason) => requestSceneRender(reason, _engine);
   let _dataSource = null;
   let _enabled = false;
   let _boundaryReady = false;

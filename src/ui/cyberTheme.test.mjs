@@ -694,7 +694,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(detection, /sonarSampler\.label\(sonarFactor\)/);
   assert.match(detection, /createCyberSonarSampler\(width, height, now\)/);
   assert.match(cyberStyles, /data-cyber-sonar='off'/);
-  assert.match(detection, /governorRequestRender\('cyber-sonar-cadence'\)/);
+  assert.match(detection, /governorRequestRender\('cyber-sonar-cadence', _engine\)/);
   assert.match(
     detection,
     /const animatingCount = countAnimatingRenderEntries\(renderEntries\);/,

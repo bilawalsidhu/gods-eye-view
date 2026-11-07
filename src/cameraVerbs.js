@@ -34,10 +34,7 @@ import {
   KEYHOLE_OUTER_RADIUS,
 } from './celestialRing.js';
 import { isScopeMaskEnabled } from './scopeMask.js';
-import {
-  holdContinuousRender,
-  releaseContinuousRender,
-} from './renderGovernor.js';
+import { renderGovernorFor } from './renderGovernor.js';
 
 let _isCockpitActive = null;
 /** °/s by speed word — orbit; pan uses fractions of view height/s. */
@@ -1372,7 +1369,7 @@ export function suspendRouteFlight(id) {
   const state = _active;
   _active = null;
   unbindEngineMotion();
-  releaseContinuousRender('camera-verb');
+  state.renderGovernor?.releaseContinuousRender('camera-verb');
   return state;
 }
 
@@ -1383,9 +1380,10 @@ export function suspendRouteFlight(id) {
 export function resumeRouteFlight(state, engine) {
   if (!state || !engine || _active) return false;
   state.rig = engineRigFor(engine);
+  state.renderGovernor = renderGovernorFor(engine);
   _active = state;
   bindEngineMotion(state.rig);
-  holdContinuousRender('camera-verb');
+  _active?.renderGovernor?.holdContinuousRender('camera-verb');
   return true;
 }
 /** Monotonic id for the motion currently running; 0 means "no motion". */
@@ -1447,6 +1445,7 @@ function countManualInput(engine) {
 function setActiveMotion(state) {
   _motionSeq += 1;
   state.motionId = _motionSeq;
+  state.renderGovernor = renderGovernorFor(state.rig.engine);
   _active = state;
   bindEngineMotion(state.rig);
   return state;
@@ -1694,7 +1693,7 @@ export function interruptCameraMotion(reason = 'interrupt') {
   }
   unbindEngineMotion();
   _active = null;
-  releaseContinuousRender('camera-verb');
+  motion?.renderGovernor?.releaseContinuousRender('camera-verb');
   return { wasActive, reason, leveled };
 }
 
@@ -2604,7 +2603,7 @@ export function moveCamera(args = {}, runNavigation = null) {
           mode,
           pending: true,
         });
-        holdContinuousRender('camera-verb');
+        _active?.renderGovernor?.holdContinuousRender('camera-verb');
         return {
           ok: true,
           action: 'move_camera',
@@ -2623,7 +2622,7 @@ export function moveCamera(args = {}, runNavigation = null) {
     setActiveMotion(state);
     // Verb motion drives the camera per frame — hold until interrupted;
     // interruptCameraMotion is the single release path. (perf wave 2)
-    holdContinuousRender('camera-verb');
+    _active?.renderGovernor?.holdContinuousRender('camera-verb');
     return {
       ok: true,
       action: 'move_camera',
@@ -2860,7 +2859,7 @@ export function flyRoute(
     });
     flight.rig = rig;
     setActiveMotion(flight);
-    holdContinuousRender('camera-verb');
+    _active?.renderGovernor?.holdContinuousRender('camera-verb');
     return {
       ok: true,
       action: 'fly_route',

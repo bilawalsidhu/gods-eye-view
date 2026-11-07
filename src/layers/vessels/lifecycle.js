@@ -189,7 +189,7 @@ export function createLifecycle({
       state.preRenderRemover?.();
       state.preRenderRemover = null;
       components.rendering.cancelTrailingVisibilityPass();
-      releaseContinuousRender('ais-vessels');
+      releaseContinuousRender('ais-vessels', state.renderer?.engine);
       unregisterPickOwner('ais-live-vessels', state.renderer?.engine);
       components.tracking.detachSelectedVesselTrail();
       for (const record of state.records.all)
@@ -242,7 +242,7 @@ export function createLifecycle({
       removeViewListener();
       state.feed.enabled = false;
       invalidateAisSession();
-      releaseContinuousRender('ais-vessels');
+      releaseContinuousRender('ais-vessels', state.renderer?.engine);
       components.rendering.cancelTrailingVisibilityPass();
       unregisterPickOwner('ais-live-vessels', state.renderer?.engine);
       components.rendering.setVisible(false);
@@ -261,7 +261,7 @@ export function createLifecycle({
     destroy() {
       removeViewListener();
       invalidateAisSession();
-      releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
+      releaseContinuousRender('ais-vessels', state.renderer?.engine); // direct-destroy path (perf wave 2 fix)
       components.rendering.cancelTrailingVisibilityPass();
       if (state.feed.abort) state.feed.abort.abort();
       unregisterPickOwner('ais-live-vessels', state.renderer?.engine);

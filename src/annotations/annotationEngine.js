@@ -2,11 +2,7 @@ import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as geo from '../geo/index.js';
 import { greatCircleMeters } from '../geoDistance.js';
-import {
-  holdContinuousRender,
-  releaseContinuousRender,
-  governorRequestRender,
-} from '../renderGovernor.js';
+import { renderGovernorFor } from '../renderGovernor.js';
 import {
   isRateLimitedOutcome,
   resolveAnnotationTarget,
@@ -141,6 +137,7 @@ export function createAnnotationEngine({
   outlineRetryDelaysMs = OUTLINE_RETRY_DELAYS_MS,
   resolveTarget = resolveAnnotationTarget,
 }) {
+  let renderGovernor = renderGovernorFor(globe);
   /** @type {Map<string, object>} live annotations keyed by id */
   const annotations = new Map();
   let destroyed = false;
@@ -220,8 +217,8 @@ export function createAnnotationEngine({
   // hidden from Draw's list lets the scene idle.
   function syncAnnotationHold() {
     const visible = [...annotations.values()].some((anno) => !anno.hidden);
-    if (visible) holdContinuousRender('annotations');
-    else releaseContinuousRender('annotations');
+    if (visible) renderGovernor?.holdContinuousRender('annotations');
+    else renderGovernor?.releaseContinuousRender('annotations');
   }
 
   /**
@@ -386,7 +383,7 @@ export function createAnnotationEngine({
         syncAnnotationHold();
         // The frame that takes a just-hidden mark off: with every mark hidden
         // the hold is gone, and nothing else would draw it.
-        governorRequestRender('annotations');
+        renderGovernor?.governorRequestRender('annotations');
       }
       if (expired) notifyChange();
       // Stop once the board is STABLE — persistent marks (persist=true is the default)
@@ -1616,7 +1613,7 @@ export function createAnnotationEngine({
     // mark hidden before its first frame has no alpha change to wait for.
     renderer.sync(annotations);
     syncAnnotationHold();
-    governorRequestRender('annotations');
+    renderGovernor?.governorRequestRender('annotations');
     ensureTicking();
     notifyChange();
     return true;
@@ -1817,6 +1814,8 @@ export function createAnnotationEngine({
       dropQueuedOutlineUpgrades();
       generation++;
       const previous = renderer;
+      const previousGovernor = renderGovernor;
+      renderGovernor = null;
       renderer = DETACHED_RENDERER;
       globe = null;
       for (const anno of annotations.values()) {
@@ -1830,7 +1829,7 @@ export function createAnnotationEngine({
       try {
         previous.destroy();
       } finally {
-        releaseContinuousRender('annotations');
+        previousGovernor?.releaseContinuousRender('annotations');
       }
     },
     /**
@@ -1841,6 +1840,7 @@ export function createAnnotationEngine({
       if (destroyed) return;
       engine.detachRenderer();
       globe = nextGlobe;
+      renderGovernor = renderGovernorFor(globe);
       renderer = nextRenderer ?? DETACHED_RENDERER;
       for (const anno of annotations.values()) {
         try {
@@ -1853,7 +1853,7 @@ export function createAnnotationEngine({
       renderer.sync(annotations);
       syncAnnotationHold();
       ensureTicking();
-      governorRequestRender('annotations');
+      renderGovernor?.governorRequestRender('annotations');
     },
     /** Whether a globe draws the marks now. */
     get attached() {
@@ -1869,7 +1869,7 @@ export function createAnnotationEngine({
         tickHandle = null;
         outlineListeners.clear();
         changeListeners.clear();
-        releaseContinuousRender('annotations');
+        renderGovernor?.releaseContinuousRender('annotations');
         renderer.destroy();
       }
     },

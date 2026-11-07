@@ -7,11 +7,6 @@ import { t } from '../i18n/index.js';
 
 import { DATA_CREDITS, registerDataCredits } from '../data/dataCredits.js';
 import { createLayerAvailability } from './layers/renderers.js';
-import {
-  governorRequestRender,
-  installEngineRenderGovernor,
-  uninstallRenderGovernor,
-} from '../renderGovernor.js';
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
 
 /** The Navara globe module, loaded on demand. */
@@ -93,12 +88,10 @@ export async function createNavaraScene({
   });
   defer(() => globe.destroy());
   const { engine } = globe;
-  // The tools install the governor on this engine; it goes before the engine.
-  defer(() => uninstallRenderGovernor(engine));
   signal.throwIfAborted();
   loaderStatus.textContent = t('Initializing systems...');
   const mapStackController = new MapController(null, {
-    requestRender: governorRequestRender,
+    requestRender: (reason) => engine.render.request(reason),
     engine,
     ...mapOptions,
     cesiumToken,
@@ -125,7 +118,6 @@ export async function createNavaraScene({
     engine,
     tileset: null,
     suspend() {
-      uninstallRenderGovernor(engine);
       engine.camera.cancelFlight();
       engine.render.setContinuous(false);
       globe.setRenderLoop(false);
@@ -156,9 +148,6 @@ export function navaraToolBackend({ engine }) {
     // The session's tool on the engine's input and preview.
     draw: () => ({ engine }),
     recentImagery: () => ({ engine }),
-    // Holds drive engine.render.setContinuous; requests go to the engine. A
-    // parked engine uninstalls it (createNavaraScene suspend).
-    installGovernor: () => installEngineRenderGovernor(engine),
     attach({ data, styleManager }, { signal, defer }) {
       void styleManager.initialRestorePromise?.then(() => {
         if (!signal.aborted) views.alignDaylightToRestoredView();

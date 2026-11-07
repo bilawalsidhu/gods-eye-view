@@ -22,13 +22,7 @@ import {
 import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
 import { installGlobeInViewRecovery } from '../globe/cesium/viewer.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
-import {
-  installRenderGovernor,
-  getRenderGovernorDiagnostics,
-  governorRequestRender,
-  holdContinuousRender,
-  releaseContinuousRender,
-} from '../renderGovernor.js';
+import { renderGovernorFor } from '../renderGovernor.js';
 
 /**
  * Attach scene tools, rendering listeners and the application debug handle.
@@ -148,9 +142,11 @@ export async function createApplicationTools({
     weatherEffects: controls.weatherEffects ?? null,
     cockpitCloudEffects: null,
     voiceCommands: null,
-    getRenderGovernorDiagnostics,
+    getRenderGovernorDiagnostics: () =>
+      renderGovernorFor(debug.engine)?.getRenderGovernorDiagnostics(),
     surfaceServices: operations.surface,
-    requestRender: governorRequestRender,
+    requestRender: (reason) =>
+      renderGovernorFor(debug.engine)?.governorRequestRender(reason),
   };
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
@@ -266,6 +262,11 @@ const TOOL_BACKENDS = Object.freeze({
 /** The Cesium tool backend: the shared tools and its own on the viewer. */
 function cesiumToolBackend({ engine, tileset }) {
   const viewer = cesiumViewerOf(engine);
+  const {
+    governorRequestRender,
+    holdContinuousRender,
+    releaseContinuousRender,
+  } = renderGovernorFor(engine);
   return {
     viewer,
     startupChrome: {},
@@ -276,10 +277,6 @@ function cesiumToolBackend({ engine, tileset }) {
       layer.attachTileset(tileset);
       return { viewer };
     },
-    // Idle render governor: flips the scene into requestRenderMode whenever
-    // nothing animates per frame. (perf wave 2) A parked viewer uninstalls
-    // it (src/app/scene.js suspend).
-    installGovernor: () => installRenderGovernor(viewer),
     attach({ dataManager }, { defer }) {
       // Cesium keeps a turned-off layer's draw commands (and so all its
       // entities) alive in reused per-pass arrays; trim them after each
@@ -336,7 +333,7 @@ function cesiumToolBackend({ engine, tileset }) {
  * engine kind's backend (TOOL_BACKENDS) says where the shared tools draw:
  * `board()` and `draw()` give their attachScene arguments (null: not on
  * this engine), `recentImagery(layer)` the panel's globe,
- * `installGovernor()` the governor's; `attach(context, attachment)` adds
+ * `attach(context, attachment)` adds
  * the engine's own tools, `suspend(hidden, controls)` its hidden-tab
  * handling and `attachViews(context, attachment)` its embedded views. The
  * shared tools keep their session state across engines. Returns the
@@ -358,6 +355,7 @@ async function attachEngineTools(
   { signal, defer },
 ) {
   const { engine, mapStackController } = scene;
+  const governor = scene.services?.render ?? renderGovernorFor(engine);
   const backend = (await TOOL_BACKENDS[engine.kind]())(scene);
   // The page session's board, Draw and Import (src/app/sessionTools.js):
   // an engine switch only takes their drawing off this globe.
@@ -412,7 +410,7 @@ async function attachEngineTools(
   }
   // Installed AFTER every module above has had its chance to register
   // pre-install holds.
-  backend.installGovernor();
+  governor.install();
   backend.attach?.({ data, styleManager, dataManager }, { signal, defer });
 
   // Install the explicit scope mask used by the DISPLAY controls: a canvas
@@ -430,7 +428,7 @@ async function attachEngineTools(
     backend.suspend?.(hidden, controls);
     if (!hidden) {
       data.presentation.flushVisible();
-      governorRequestRender('visibility-restore');
+      governor.governorRequestRender('visibility-restore');
     }
   };
   document.addEventListener('visibilitychange', syncVisibilitySuspension);

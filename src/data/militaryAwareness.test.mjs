@@ -32,9 +32,8 @@ import aisLiveVesselsLayer, {
 } from './aisLiveVessels.js';
 import militaryInstallationsLayer from './militaryInstallations.js';
 import {
-  _resetRenderGovernorForTest,
   getRenderGovernorDiagnostics,
-  installRenderGovernor,
+  renderGovernorFor,
 } from '../renderGovernor.js';
 import {
   AWARENESS_RADIUS_M,
@@ -54,7 +53,10 @@ import { registerLayerRenderers } from '../app/layers/renderers.js';
 // the layer through the renderer registry, under an engine kind of its own.
 const VIEWER_ENGINE = 'awareness-viewer-test';
 registerLayerRenderers(VIEWER_ENGINE, {
-  'military-awareness': ({ viewer }) => ({
+  'military-awareness': (engine) => {
+    const { viewer } = engine;
+    return {
+    engine,
     container: viewer.container,
     canvas: viewer.canvas,
     get camera() {
@@ -70,9 +72,21 @@ registerLayerRenderers(VIEWER_ENGINE, {
       viewer.camera.flyToBoundingSphere({ center, radius }, { duration }),
     createRim: () => ({ move() {}, setAlpha() {}, destroy() {} }),
     createPulses: () => null,
-  }),
+  };
+  },
 });
-const viewerEngine = (viewer) => ({ kind: VIEWER_ENGINE, viewer });
+const viewerEngines = new WeakMap();
+const viewerEngine = (viewer) => {
+  if (!viewerEngines.has(viewer)) viewerEngines.set(viewer, {
+    kind: VIEWER_ENGINE, viewer,
+    render: {
+      request: () => viewer.scene.requestRender?.(),
+      setContinuous: (enabled) => { viewer.scene.requestRenderMode = !enabled; },
+      isContinuous: () => viewer.scene.requestRenderMode === false,
+    },
+  });
+  return viewerEngines.get(viewer);
+};
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
@@ -3922,13 +3936,12 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
       { icao24: 'neighbour-flight', position: neighbour, distanceM: 4000 },
     ],
   });
-  _resetRenderGovernorForTest();
   const runtime = installAwarenessRuntime();
-  const holds = () => getRenderGovernorDiagnostics().holds;
+  const holds = () => getRenderGovernorDiagnostics(viewerEngine(runtime.viewer)).holds;
 
   try {
     Date.now = () => clockMs;
-    installRenderGovernor(runtime.viewer);
+    renderGovernorFor(viewerEngine(runtime.viewer)).install();
     runtime.viewer.camera = {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
@@ -4003,7 +4016,6 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
     Date.now = realNow;
     runtime.restore();
     restoreCollections();
-    _resetRenderGovernorForTest();
   }
 });
 
@@ -4058,13 +4070,12 @@ test('a moving view over failed feeds takes no continuous-render hold', () => {
   // Every dependency reports unavailable, so every cohort summarizes to count
   // null — the exact state the old Boolean(state.results) gate still held for.
   const restoreCollections = stubAwarenessCollections({});
-  _resetRenderGovernorForTest();
   const runtime = installAwarenessRuntime({ isEnabled: () => false });
-  const holds = () => getRenderGovernorDiagnostics().holds;
+  const holds = () => getRenderGovernorDiagnostics(viewerEngine(runtime.viewer)).holds;
 
   try {
     Date.now = () => clockMs;
-    installRenderGovernor(runtime.viewer);
+    renderGovernorFor(viewerEngine(runtime.viewer)).install();
     runtime.viewer.camera = {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
@@ -4096,7 +4107,6 @@ test('a moving view over failed feeds takes no continuous-render hold', () => {
     Date.now = realNow;
     runtime.restore();
     restoreCollections();
-    _resetRenderGovernorForTest();
   }
 });
 

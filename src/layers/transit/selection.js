@@ -106,7 +106,7 @@ export function createSelection({ state, services, parts }) {
     parts.rendering.paintSelected(entry, true);
     parts.trails.select(entry);
     refreshSelectedCard(true);
-    governorRequestRender('transit-select');
+    governorRequestRender('transit-select', parts.renderer?.engine);
   }
 
   function onKeyDown(event) {

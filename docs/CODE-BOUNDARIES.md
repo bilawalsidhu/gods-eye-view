@@ -534,7 +534,7 @@ perform no network requests and discover no additional modules.
 `maps/controller` coordinates scene changes and lifetimes. `maps/imagery`,
 `maps/terrain` and `maps/3d` supply constructors; `maps/defaults` selects the
 standard sources and their setup/fallback policy. The standalone facade wires
-these to the application's render governor.
+these to their engine's render requests.
 
 A registry supplies `sources`, `defaultId`, `unknownId` and optional `recoveryId`.
 Each source has a user-facing `descriptor`, availability/reason, and either an
@@ -638,8 +638,11 @@ refresh policy. `app/layerSession.js` defines the retained session fields and
 handoff predicate. `standalone/sceneSwitcher.js` coordinates page handoff;
 `ui/shellScene.js` owns scene-bound shell construction, while `applicationShell`
 keeps page controls and policy. Request, host and shell queues are not yet one
-queue. Overlay, render-governor, tracked-readout and pick services still include
-module singletons; debug access still exposes the native viewer and tileset.
+queue. Pick ownership, selection dispatch and render demand belong to
+`scene.services`; render demand drives the engine contract, with no dependency
+from the Cesium render backend to the governor. Overlay and tracked-readout
+services still include module singletons; debug access still exposes the native
+viewer and tileset.
 
 ## UI state owners
 

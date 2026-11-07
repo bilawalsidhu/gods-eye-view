@@ -457,7 +457,7 @@ export function createRendering({
       visual.rim.destroy();
       visual.disc?.destroy();
       // Idle mode renders only on request; a removed ring must not linger.
-      governorRequestRender('awareness-visual');
+      governorRequestRender('awareness-visual', layerState.display?.engine);
     }
     layerState.visual = null;
   }
@@ -529,7 +529,7 @@ export function createRendering({
       if (performance.now() < wake.untilMs && !belowRim())
         timer = globalThis.setTimeout(() => {
           timer = null;
-          governorRequestRender('awareness-pulse');
+          governorRequestRender('awareness-pulse', layerState.display?.engine);
         }, CYBER_SONAR_RENDER_INTERVAL_MS);
     });
     setAwarenessEchoField({
@@ -612,7 +612,7 @@ export function createRendering({
       stopPulses,
       removeMotionListener: watchReducedMotion(),
     };
-    governorRequestRender('awareness-visual');
+    governorRequestRender('awareness-visual', layerState.display?.engine);
   }
 
   function renderVisual(subject) {
@@ -642,7 +642,7 @@ export function createRendering({
         if (performance.now() < visual.wake?.untilMs)
           visual.disc?.move(groundCenter);
         // Content actually changed — buy exactly one frame instead of holding.
-        governorRequestRender('awareness-visual');
+        governorRequestRender('awareness-visual', layerState.display?.engine);
       }
       return;
     }

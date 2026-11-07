@@ -27,7 +27,7 @@ export function createMarker({ state }) {
   const { render } = state.services;
 
   function requestRender() {
-    render?.governorRequestRender?.('street-level-marker');
+    render?.governorRequestRender?.('street-level-marker', state.map?.engine);
   }
 
   function ensure(view) {

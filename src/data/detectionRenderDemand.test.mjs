@@ -275,9 +275,9 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
   assert.doesNotMatch(source, /releaseContinuousRender/,
     'and with no hold there is nothing to release');
 
-  assert.match(source, /governorRequestRender\('detection-visibility'\)/,
+  assert.match(source, /governorRequestRender\('detection-visibility', _engine\)/,
     'mode/suspend transitions request their own repaint');
-  assert.match(source, /if \(\s*detectionNeedsFollowUpFrame\(\{[\s\S]*?\}\)\s*\) \{\s*\n\s*governorRequestRender\('detection-animation'\);/,
+  assert.match(source, /if \(\s*detectionNeedsFollowUpFrame\(\{[\s\S]*?\}\)\s*\) \{\s*\n\s*governorRequestRender\('detection-animation', _engine\);/,
     'the follow-up frame is gated on the policy, never unconditional');
 
   // The demand call must read the FRAME's timestamp, not a fresh sample.
@@ -339,7 +339,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
     'the valve asks the shared policy instead of inlining its own threshold');
   assert.doesNotMatch(shouldPaint, /_lastPaintMs > 22/,
     'the old inline threshold must be gone, not shadowing the policy');
-  assert.match(shouldPaint, /if \(decision\.requestFollowUp\)\s*governorRequestRender\('detection-paint-skipped'\)/,
+  assert.match(shouldPaint, /if \(decision\.requestFollowUp\)\s*governorRequestRender\('detection-paint-skipped', _engine\)/,
     'skipping a paint must hand the request forward, not swallow it');
 
   // The scanline must not go back to the frame counter: that is what made a
@@ -478,13 +478,13 @@ test('aircraft brackets stay prompt because the aircraft layers hold the render 
     assert.ok(enable, `${file}: enable() is still identifiable`);
     assert.match(
       enable,
-      /holdContinuousRender\('(flights|military)'\)/,
+      /holdContinuousRender\(\s*'(flights|military)',\s*flightState\._renderer\?\.engine,?\s*\)/,
       `${file}: enabling the layer must hold continuous render — detection no longer ` +
       'holds one, so this is what keeps its AIR brackets repainting on a parked scene',
     );
     assert.match(
       source,
-      /releaseContinuousRender\('(flights|military)'\)/,
+      /releaseContinuousRender\(\s*'(flights|military)',\s*flightState\._renderer\?\.engine,?\s*\)/,
       `${file}: and the hold must be released, or the governor can never idle`,
     );
   }

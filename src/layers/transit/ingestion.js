@@ -147,7 +147,7 @@ export function createIngestion({ state, services, parts, source }) {
       // Nothing else would notice: the per-frame pass returns early on an empty
       // fleet, so the hold would sit there held by a fleet that no longer exists.
       parts.rendering.syncRenderHold();
-      governorRequestRender('transit-evict');
+      governorRequestRender('transit-evict', parts.renderer?.engine);
       state._dataManager?.refreshLayerStats?.();
     }
     return removed;
@@ -190,7 +190,7 @@ export function createIngestion({ state, services, parts, source }) {
       removeFeedVehicles(feed.id);
       status.count = 0;
       parts.rendering.syncRenderHold();
-      governorRequestRender('transit-stale-refused');
+      governorRequestRender('transit-stale-refused', parts.renderer?.engine);
       state._dataManager?.refreshLayerStats?.();
       return;
     }
@@ -414,7 +414,7 @@ export function createIngestion({ state, services, parts, source }) {
     state._detectRevision++;
     parts.rendering.requestVisibility();
     parts.rendering.syncRenderHold();
-    governorRequestRender('transit-poll');
+    governorRequestRender('transit-poll', parts.renderer?.engine);
     state._dataManager?.refreshLayerStats?.();
   }
 

@@ -111,8 +111,9 @@ export function createLifecycle({
 
   function syncAwarenessRenderHold() {
     if (layerState.enabled && parts.model.awarenessNeedsContinuousRender())
-      holdContinuousRender('military-awareness');
-    else releaseContinuousRender('military-awareness');
+      holdContinuousRender('military-awareness', layerState.display?.engine);
+    else
+      releaseContinuousRender('military-awareness', layerState.display?.engine);
   }
 
   function attachRuntimeListeners() {
@@ -218,7 +219,7 @@ export function createLifecycle({
     layerState.cameraMoving = false;
     // No frames will arrive to run the per-frame release once the listener is
     // gone, so drop the hold here.
-    releaseContinuousRender('military-awareness');
+    releaseContinuousRender('military-awareness', layerState.display?.engine);
     parts.rendering.cancelDirectionOverlayUpdate();
     layerState.runtimeListenersAttached = false;
   }
@@ -320,7 +321,7 @@ export function createLifecycle({
 
     disable() {
       layerState.enabled = false;
-      releaseContinuousRender('military-awareness');
+      releaseContinuousRender('military-awareness', layerState.display?.engine);
       detachRuntimeListeners();
       parts.panel.stopAwarenessPageRotation();
       layerState.cohortPages.clear();

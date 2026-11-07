@@ -3,12 +3,7 @@ import assert from 'node:assert/strict';
 import * as geo from './geo/index.js';
 import { createFakeEngine } from './globe/testing/fakeEngine.js';
 import { OrbitController } from './orbit.js';
-import {
-  _resetRenderGovernorForTest,
-  getRenderGovernorDiagnostics,
-} from './renderGovernor.js';
-
-test.afterEach(() => _resetRenderGovernorForTest());
+import { getRenderGovernorDiagnostics } from './renderGovernor.js';
 
 test('orbit locks onto the target every frame from the current heading, and stop releases it', (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: 1000 });
@@ -25,7 +20,9 @@ test('orbit locks onto the target every frame from the current heading, and stop
     orbit.toggle(target, { radius: 800, pitch: -20, speed: 10 }),
     true,
   );
-  assert.ok(getRenderGovernorDiagnostics().holds.includes('camera-orbit'));
+  assert.ok(
+    getRenderGovernorDiagnostics(engine).holds.includes('camera-orbit'),
+  );
   t.mock.timers.tick(500);
   engine.fake.frame();
   const [first] = engine.fake.callsOf('camera.lookAt');
@@ -37,7 +34,9 @@ test('orbit locks onto the target every frame from the current heading, and stop
   assert.equal(first.args[1].range, 800);
   assert.equal(orbit.toggle(), false);
   assert.equal(engine.fake.callsOf('camera.release').length, 1);
-  assert.ok(!getRenderGovernorDiagnostics().holds.includes('camera-orbit'));
+  assert.ok(
+    !getRenderGovernorDiagnostics(engine).holds.includes('camera-orbit'),
+  );
   engine.fake.frame();
   assert.equal(
     engine.fake.callsOf('camera.lookAt').length,

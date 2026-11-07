@@ -17,8 +17,7 @@ import {
 import { DataLayerManager } from './manager.js';
 import {
   getRenderGovernorDiagnostics,
-  installRenderGovernor,
-  _resetRenderGovernorForTest,
+  renderGovernorFor,
 } from '../renderGovernor.js';
 import { loadLayerRenderers } from '../app/layers/renderers.js';
 
@@ -214,6 +213,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
   const originalFetch = globalThis.fetch;
   const renderRequests = [];
   const ground = createFakeGroundHarness();
+  ground.engine.render.request = () => renderRequests.push(Date.now());
   const viewer = {
     scene: { requestRenderMode: false, requestRender: () => renderRequests.push(Date.now()) },
   };
@@ -231,8 +231,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
     }),
   });
 
-  _resetRenderGovernorForTest();
-  installRenderGovernor(viewer);
+  renderGovernorFor(ground.engine).install();
   // Installing the governor enters idle mode, which itself paints one settling
   // frame. Drop that from the baseline or the enable assertion below can pass on
   // the install alone, without the manager ever requesting anything.
@@ -244,9 +243,9 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
     await manager.setEnabled('earthquakes', true, { origin: 'test' });
 
     // The whole point of the change: enabling quakes must not pin the loop on.
-    assert.equal(getRenderGovernorDiagnostics().mode, 'idle', 'quakes must not force continuous render');
-    assert.deepEqual(getRenderGovernorDiagnostics().holds, []);
-    assert.equal(viewer.scene.requestRenderMode, true, 'the governor really is in idle mode');
+    assert.equal(getRenderGovernorDiagnostics(ground.engine).mode, 'idle', 'quakes must not force continuous render');
+    assert.deepEqual(getRenderGovernorDiagnostics(ground.engine).holds, []);
+    assert.equal(ground.engine.render.isContinuous(), false, 'the governor really is in idle mode');
 
     // ...and the poll that populated the discs must still have asked for a frame,
     // because in idle mode nothing repaints on its own.
@@ -255,7 +254,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
     // Named, not merely counted: the frame has to come from the manager's
     // visibility request, not from some incidental repaint.
     assert.ok(
-      getRenderGovernorDiagnostics().recentRequests.some(({ reason }) => reason === 'layer-visibility'),
+      getRenderGovernorDiagnostics(ground.engine).recentRequests.some(({ reason }) => reason === 'layer-visibility'),
       'the enable frame must be the manager\'s layer-visibility request',
     );
 
@@ -267,7 +266,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
       renderRequests.length > beforeRefresh,
       'each refresh tick must request its own render while the loop is idle',
     );
-    const reasons = getRenderGovernorDiagnostics().recentRequests.map(({ reason }) => reason);
+    const reasons = getRenderGovernorDiagnostics(ground.engine).recentRequests.map(({ reason }) => reason);
     assert.ok(
       reasons.includes('layer-tick:earthquakes'),
       `the tick request must be attributed to the layer, got ${JSON.stringify(reasons)}`,
@@ -275,7 +274,6 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
   } finally {
     globalThis.fetch = originalFetch;
     await manager.setEnabled('earthquakes', false, { origin: 'test' }).catch(() => {});
-    _resetRenderGovernorForTest();
     ground.destroy();
   }
 });

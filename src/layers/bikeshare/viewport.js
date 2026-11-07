@@ -66,7 +66,7 @@ export function createViewport({ state: layerState, services, parts, camera }) {
    */
 
   function deactivateCity(cityId) {
-    governorRequestRender('bikeshare-deactivate');
+    governorRequestRender('bikeshare-deactivate', layerState._engine);
     parts.ingestion.abortInFlight(layerState._inFlightInfo, cityId);
     parts.ingestion.abortInFlight(layerState._inFlightStatus, cityId);
     parts.rendering?.removeCityPoints(cityId);

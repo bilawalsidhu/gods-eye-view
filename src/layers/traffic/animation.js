@@ -29,9 +29,10 @@ export function createAnimation({
     layerState._renderHeld = needed;
     if (needed) {
       layerState._lastAnimTime = 0;
-      services.render.holdContinuousRender('traffic');
+      services.render.holdContinuousRender('traffic', layerState._engine);
       layerState._engine?.render.request('traffic');
-    } else services.render.releaseContinuousRender('traffic');
+    } else
+      services.render.releaseContinuousRender('traffic', layerState._engine);
   }
 
   /** Writes the dots to the engine's display (once a frame, and on a clear). */

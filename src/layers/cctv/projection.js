@@ -389,7 +389,7 @@ export function createProjection({
       layerState._projectionRaf = 0;
       layerState._projectionTimer = 0;
       if (!parts.renderer?.ready || !parts.model.projectionLoopIsNeeded()) {
-        releaseContinuousRender('cctv-projection');
+        releaseContinuousRender('cctv-projection', parts.renderer?.engine);
         return;
       }
 
@@ -401,7 +401,10 @@ export function createProjection({
         if (active.projection && !active.projection.video) {
           parts.frames.drawProjectionFrame(active);
           if (parts.frames.refreshProjectionTextures(active))
-            governorRequestRender('cctv-projection-image');
+            governorRequestRender(
+              'cctv-projection-image',
+              parts.renderer?.engine,
+            );
         }
       }
 
@@ -412,12 +415,12 @@ export function createProjection({
           layerState._activeFocusStyleCount,
         );
       if (continuous) {
-        holdContinuousRender('cctv-projection');
+        holdContinuousRender('cctv-projection', parts.renderer?.engine);
         layerState._projectionRaf = requestAnimationFrame(tick);
       } else {
         // Stills retain the existing fetch/texture cadence without rendering
         // unchanged pixels at display refresh rate.
-        releaseContinuousRender('cctv-projection');
+        releaseContinuousRender('cctv-projection', parts.renderer?.engine);
         layerState._projectionTimer = setTimeout(
           tick,
           PROJECTION_TEXTURE_SWAP_MS,
@@ -438,7 +441,7 @@ export function createProjection({
       cancelAnimationFrame(layerState._projectionRaf);
       layerState._projectionRaf = 0;
     }
-    releaseContinuousRender('cctv-projection');
+    releaseContinuousRender('cctv-projection', parts.renderer?.engine);
   }
 
   /**

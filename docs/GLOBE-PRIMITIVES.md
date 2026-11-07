@@ -547,6 +547,24 @@ the same services on first use. The application destroys them on detach and
 creates fresh services when reattaching a parked engine. Identical layer IDs in
 simultaneous scenes cannot replace or unregister one another's picks.
 
+## Render demand
+
+`scene.services.render` owns continuous-render holds and the last 16 idle
+request reasons for one attachment. `holdContinuousRender(id)` and
+`releaseContinuousRender(id)` are idempotent per owner; the last release
+requests one settling frame. `governorRequestRender(reason)` forwards a
+one-shot request even while another owner holds continuous rendering.
+The tools call `install()` after scene consumers have registered their holds.
+
+The governor drives `engine.render` on every engine. Cesium implements
+`setContinuous` with its scene's `requestRenderMode` and disables automatic
+simulation-time renders with `maximumRenderTimeChange = Infinity`. Engine
+internals request their own scene directly and never import the governor.
+Layer service helpers take their attached engine as the final argument;
+attachment-bound callbacks can capture `renderGovernorFor(engine)` directly.
+Destroying the scene clears its holds and makes the captured service inert.
+A parked engine gets a fresh service when reattached.
+
 ## Render effects
 
 The optional `visualStyles`, `bloom` and `contactSonar` capabilities are

@@ -83,7 +83,10 @@ export function createAircraftSceneBinding({
       const renderer = flightState._renderer;
       if (!renderer) return;
       removeSceneListeners();
-      services.render.releaseContinuousRender(id);
+      services.render.releaseContinuousRender(
+        id,
+        flightState._renderer?.engine,
+      );
       flightState._trackedCameraFrameStop?.();
       flightState._trackedCameraFrameStop = null;
       if (flightState._trackedEntity) {

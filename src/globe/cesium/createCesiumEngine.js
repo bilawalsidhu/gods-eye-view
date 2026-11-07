@@ -45,9 +45,7 @@ import { createCesiumSurface } from './surface.js';
  *   imagery.js) are test seams, `createStage` and `createSonar` too
  *   (render.js).
  *
- * `render.setContinuous` takes a hold on the app's singleton renderGovernor
- * (src/renderGovernor.js), which governs the one viewer it was installed on;
- * so one Cesium engine per page, on that viewer.
+ * `render` owns this scene's requests and continuous-render mode.
  * @returns {import('../contract.js').GlobeEngine}
  */
 export function createCesiumEngine(viewer, options = {}) {

@@ -136,7 +136,7 @@ export function createLocalAdsbLayer({
     onChange: () => {
       for (const marker of markers.values()) refreshClass(marker);
       refreshSelectedCard();
-      governorRequestRender('local-adsb-enrichment');
+      governorRequestRender('local-adsb-enrichment', renderer?.engine);
     },
   });
 
@@ -441,8 +441,8 @@ export function createLocalAdsbLayer({
     const want = Boolean(renderer) && enabled && markers.size > 0;
     if (want === renderHeld) return;
     renderHeld = want;
-    if (want) holdContinuousRender(RENDER_HOLD_ID);
-    else releaseContinuousRender(RENDER_HOLD_ID);
+    if (want) holdContinuousRender(RENDER_HOLD_ID, renderer?.engine);
+    else releaseContinuousRender(RENDER_HOLD_ID, renderer?.engine);
   }
 
   function requestEnrichment() {
@@ -488,7 +488,8 @@ export function createLocalAdsbLayer({
     }
     requestEnrichment();
     updateRenderHold();
-    if (live.size || removed) governorRequestRender('local-adsb-update');
+    if (live.size || removed)
+      governorRequestRender('local-adsb-update', renderer?.engine);
     // Detection re-solves labels only when the set of contacts changes, not
     // on every position report.
     if (added || removed) markSourcesChanged('local-adsb-update');
@@ -521,7 +522,7 @@ export function createLocalAdsbLayer({
     marker.entity.gevLabelModel = cardModel(marker, now());
     selectEntityContext(marker.entity);
     if (!reselect) startTrail(marker);
-    governorRequestRender('local-adsb-selection');
+    governorRequestRender('local-adsb-selection', renderer?.engine);
     return true;
   }
 
@@ -560,7 +561,7 @@ export function createLocalAdsbLayer({
       onEmptyClick() {
         if (!enabled || !selectedId) return;
         clearSelection();
-        governorRequestRender('local-adsb-selection');
+        governorRequestRender('local-adsb-selection', renderer?.engine);
       },
     });
   }
@@ -667,6 +668,8 @@ export function createLocalAdsbLayer({
       releaseTrail();
       models?.destroy();
       models = null;
+      releaseContinuousRender(RENDER_HOLD_ID, renderer.engine);
+      renderHeld = false;
       renderer.detach();
       renderer.destroy();
       renderer = null;

@@ -1,3 +1,4 @@
+import { createRenderGovernor } from '../renderGovernor.js';
 import { createPickRegistry } from './pickRegistry.js';
 import { createSelectionDispatcher } from './selectionDispatcher.js';
 
@@ -8,17 +9,20 @@ const scenes = new WeakMap();
 /** Create the services for one attachment, including reuse of a parked engine. */
 export function createSceneServices(engine, options = {}) {
   scenes.get(engine)?.destroy();
+  const render = createRenderGovernor(engine);
   const picking = createPickRegistry();
   const selection = createSelectionDispatcher(engine, { ...options, picking });
   let destroyed = false;
   const services = {
     picking,
     selection,
+    render,
     destroy() {
       if (destroyed) return;
       destroyed = true;
       selection.destroy();
       picking.destroy();
+      render.destroy();
     },
   };
   scenes.set(engine, services);

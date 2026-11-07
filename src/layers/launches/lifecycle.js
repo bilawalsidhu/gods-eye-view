@@ -70,7 +70,7 @@ export function createLifecycle({
     );
     parts.launchPad.initLaunchPadZonePrimitive();
     if (layerState._enabled) {
-      holdContinuousRender('rocket-launches');
+      holdContinuousRender('rocket-launches', layerState._engine);
       getRenderer().setVisible(true);
       layerState._orbitMatches = 0;
       for (const launch of layerState._launches)
@@ -144,16 +144,17 @@ export function createLifecycle({
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
       parts.rendering.removeMissionElements();
+      if (layerState._enabled)
+        releaseContinuousRender('rocket-launches', layerState._engine);
       layerState._renderer.destroy();
       layerState._renderer = layerState._engine = null;
-      if (layerState._enabled) releaseContinuousRender('rocket-launches');
     },
 
     async enable() {
       layerState._sourceController.abort();
       layerState._sourceController = new AbortController();
       layerState._enabled = true;
-      holdContinuousRender('rocket-launches'); // per-frame animator (perf wave 2)
+      holdContinuousRender('rocket-launches', layerState._engine); // per-frame animator (perf wave 2)
       layerState._lifecycleToken++;
       layerState._postTleRetryCount = 0;
       try {
@@ -218,7 +219,7 @@ export function createLifecycle({
           entryView,
           layerState._entryLandedView,
         );
-      releaseContinuousRender('rocket-launches');
+      releaseContinuousRender('rocket-launches', layerState._engine);
       layerState._lifecycleToken++;
       layerState._updateDirty = false;
       parts.ingestion.clearPostTleRetry();
@@ -244,7 +245,7 @@ export function createLifecycle({
       layerState._resumeRenderer?.();
       layerState._waitForRenderer = layerState._resumeRenderer = null;
       layerState._sourceController.abort();
-      releaseContinuousRender('rocket-launches'); // direct-destroy path (perf wave 2 fix)
+      releaseContinuousRender('rocket-launches', layerState._engine); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
       layerState._lifecycleToken++;
       layerState._updateDirty = false;

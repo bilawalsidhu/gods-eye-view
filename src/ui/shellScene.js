@@ -1,3 +1,4 @@
+import { renderGovernorFor } from '../renderGovernor.js';
 import { retainsLayerSession } from '../app/layerSession.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { LayerBindings } from './layerBindings.js';
@@ -28,7 +29,10 @@ export class ShellScene extends ShellFacade {
   /** Share restoration, visual settings and layer bindings of this globe. */
   _buildSceneControls() {
     const { viewer, engine, mapStackController } = this._scene;
-    const services = this.services;
+    const services = {
+      ...this.services,
+      ...renderGovernorFor(this._scene.engine),
+    };
     const layerSession = this._layerSession;
     this._shareRestoration = new ShareRestoration({
       engine,
@@ -141,7 +145,10 @@ export class ShellScene extends ShellFacade {
   /** Cockpit and the celestial ring of this globe. */
   _buildSceneCockpit() {
     const { viewer, engine } = this._scene;
-    const services = this.services;
+    const services = {
+      ...this.services,
+      ...renderGovernorFor(this._scene.engine),
+    };
     const { CelestialRing } = services;
     this._cockpitCoordinator = new CockpitCoordinator({
       viewer,

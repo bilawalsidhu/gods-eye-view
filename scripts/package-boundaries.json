@@ -191,7 +191,6 @@
       "src/globe/cesium/starrySky.js",
       "src/sky/stars.js",
       "src/data/bundledJson.js",
-      "src/renderGovernor.js",
       "src/globe/contract.js",
       "src/maps/google3d.js"
     ],
@@ -980,6 +979,11 @@
   "ui-shell": {
     "exports": ["./ui/shell"],
     "modules": [
+      "src/renderGovernor.js",
+      "src/data/sceneServices.js",
+      "src/data/pickRegistry.js",
+      "src/data/selectionDispatcher.js",
+      "src/data/trackingGesture.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/i18n/marker.js",

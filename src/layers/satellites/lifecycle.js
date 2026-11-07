@@ -126,13 +126,14 @@ export function createLifecycle({
       }
       layerState._detectionObjects.clear();
       renderer.removePoints(layerState._pointCollection);
+      if (layerState._enabled)
+        releaseContinuousRender('satellites', layerState._engine);
       renderer.destroy();
       layerState._engine =
         layerState._renderer =
         layerState._pointCollection =
           null;
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
-      if (layerState._enabled) releaseContinuousRender('satellites');
     },
 
     attachRenderer(
@@ -187,7 +188,7 @@ export function createLifecycle({
 
     enable() {
       layerState._enabled = true;
-      holdContinuousRender('satellites'); // per-frame animator (perf wave 2)
+      holdContinuousRender('satellites', layerState._engine); // per-frame animator (perf wave 2)
       if (layerState._pointCollection)
         layerState._pointCollection.show =
           parts.controls.satelliteVisualsVisible(
@@ -225,7 +226,7 @@ export function createLifecycle({
       parts.catalog._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       layerState._enabled = false;
-      releaseContinuousRender('satellites');
+      releaseContinuousRender('satellites', layerState._engine);
       if (layerState._pointCollection) layerState._pointCollection.show = false;
       for (const path of layerState._orbitPaths.values())
         path.primitive.show = false;
@@ -252,7 +253,7 @@ export function createLifecycle({
       layerState._resumeRenderer?.();
       layerState._waitForRenderer = layerState._resumeRenderer = null;
       parts.catalog._abortActiveUpdates();
-      releaseContinuousRender('satellites'); // direct-destroy path (perf wave 2 fix)
+      releaseContinuousRender('satellites', layerState._engine); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
       parts.tracking._clearTracking();
       parts.tracking._cancelPendingTrackingRestore();

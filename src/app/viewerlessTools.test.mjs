@@ -5,9 +5,8 @@ import { navaraModeNotice } from './navaraMode.js';
 import { LAYER_MANIFEST, createLayerAvailability } from './layers/renderers.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import {
-  _resetRenderGovernorForTest,
+  renderGovernorFor,
   holdContinuousRender,
-  isRenderGovernorInstalled,
   releaseContinuousRender,
 } from '../renderGovernor.js';
 
@@ -47,7 +46,6 @@ test('without a viewer the tools run the governor on the engine, show the notice
     },
   };
   t.after(() => {
-    _resetRenderGovernorForTest();
     for (const [name, value] of Object.entries(saved)) {
       if (value === undefined) delete globalThis[name];
       else globalThis[name] = value;
@@ -146,10 +144,13 @@ test('without a viewer the tools run the governor on the engine, show the notice
     'Data layers: Live Flights, Satellites',
   );
   // The governor drives the engine's continuous rendering.
-  assert.equal(isRenderGovernorInstalled(engine), true);
-  holdContinuousRender('qa');
+  assert.equal(
+    renderGovernorFor(engine).getRenderGovernorDiagnostics().installed,
+    true,
+  );
+  holdContinuousRender('qa', engine);
   assert.equal(engine.render.isContinuous(), true);
-  releaseContinuousRender('qa');
+  releaseContinuousRender('qa', engine);
   assert.equal(engine.render.isContinuous(), false);
   const debug = window.__godsEyeView;
   assert.equal(debug.viewer, null);

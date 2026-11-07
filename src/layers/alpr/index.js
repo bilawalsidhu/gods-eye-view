@@ -75,7 +75,7 @@ export function createAlprCamerasLayer({
     if (state.status === status && state.error === error) return;
     state.status = status;
     state.error = error;
-    governorRequestRender('alpr-status');
+    governorRequestRender('alpr-status', sceneEngine);
   }
 
   function scheduleUnavailableRetry() {
@@ -260,7 +260,7 @@ export function createAlprCamerasLayer({
         state.pendingQueryBox = null;
         state.loading = false;
         state.retrying = false;
-        governorRequestRender('alpr-status');
+        governorRequestRender('alpr-status', sceneEngine);
       }
     }
   }

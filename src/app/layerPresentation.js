@@ -8,7 +8,7 @@ export class LayerPresentation {
     manager,
     {
       weatherClock,
-      requestRender = governorRequestRender,
+      requestRender = (reason) => governorRequestRender(reason, manager.engine),
       invalidateDetection = markDetectionSourcesChanged,
     } = {},
   ) {

@@ -3,10 +3,7 @@ import assert from 'node:assert/strict';
 import { createApplicationScene } from './scene.js';
 import { sceneServicesFor } from '../data/sceneServices.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
-import {
-  installEngineRenderGovernor,
-  isRenderGovernorInstalled,
-} from '../renderGovernor.js';
+import { renderGovernorFor } from '../renderGovernor.js';
 
 // The scene's Navara branch in Node: the globe loader is a seam, so the fake
 // engine stands in for Navara and nothing Cesium is built.
@@ -165,12 +162,15 @@ test('the Navara scene tears down the controller, then the globe', async (t) => 
   const run = await startScene();
   // The tools install the governor on the engine (src/app/tools.js); the
   // scene removes it before the engine goes.
-  installEngineRenderGovernor(run.engine);
+  renderGovernorFor(run.engine).install();
   const view = globalThis.window;
   await run.teardown();
   assert.equal(run.globeDestroyed(), 1);
   assert.equal(run.engine.isDestroyed(), true);
-  assert.equal(isRenderGovernorInstalled(run.engine), false);
+  assert.equal(
+    renderGovernorFor(run.engine).getRenderGovernorDiagnostics().installed,
+    false,
+  );
   assert.equal(view.__GOOGLE_MAPS_API_KEY__, undefined);
 });
 
@@ -262,16 +262,21 @@ test('parking or tearing down the Navara scene releases a running camera verb', 
   }
 });
 
-test('the application scene owns and releases its pick services', async () => {
+test('the application scene owns and releases its pick and render services', async () => {
   const run = await startScene({ googleApiKey: '' });
   const { engine, services } = run.scene;
   try {
     assert.equal(sceneServicesFor(engine), services);
+    services.render.install();
+    services.render.holdContinuousRender('flights');
+    assert.equal(engine.render.isContinuous(), true);
     services.selection.register('flights', { owns: (id) => id === 'contact' });
     assert.equal(services.picking.findPickOwner('contact'), 'flights');
   } finally {
     await run.teardown();
   }
+  assert.equal(services.render.getRenderGovernorDiagnostics().installed, false);
+  assert.deepEqual(services.render.getRenderGovernorDiagnostics().holds, []);
   assert.equal(services.picking.findPickOwner('contact'), null);
   services.picking.registerPickOwner('late', () => true);
   assert.equal(services.picking.findPickOwner('contact'), null);

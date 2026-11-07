@@ -400,7 +400,7 @@ function _scheduleCyberSonarRender(nowMs) {
   _cyberSonarRenderTimer = globalThis.setTimeout(() => {
     _cyberSonarRenderTimer = null;
     if (isCyberSonarActive()) {
-      governorRequestRender('cyber-sonar-cadence');
+      governorRequestRender('cyber-sonar-cadence', _engine);
     }
   }, delay);
 }
@@ -655,7 +655,7 @@ function _syncSurfaceVisibility() {
   // owes itself follow-up frames only while a bounded animation is in flight
   // (see `detectionRenderDemand.js` for why a hold was wrong here, and why
   // removing it is safe).
-  governorRequestRender('detection-visibility');
+  governorRequestRender('detection-visibility', _engine);
   if (!_hostSurface) return;
   _hostSurface.style.display = _mode === MODE_OFF ? 'none' : 'block';
   _hostSurface.style.opacity = _suspended ? '0' : '1';
@@ -750,7 +750,7 @@ function _shouldPaintDetectionLane(frame) {
     if (_lastDiagnostics)
       _lastDiagnostics.throttleSkipCount = _throttleSkipCount;
     if (decision.requestFollowUp)
-      governorRequestRender('detection-paint-skipped');
+      governorRequestRender('detection-paint-skipped', _engine);
     return false;
   }
   return true;
@@ -815,7 +815,7 @@ function _paintDetectionLane(frame) {
       solvePending: result.solvePending === true,
     })
   ) {
-    governorRequestRender('detection-animation');
+    governorRequestRender('detection-animation', _engine);
   }
 }
 

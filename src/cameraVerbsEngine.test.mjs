@@ -27,8 +27,8 @@ import { getRenderGovernorDiagnostics } from './renderGovernor.js';
 const WIDTH = 1280;
 const HEIGHT = 800;
 const radians = geo.math.toRadians;
-const hasRenderHold = () =>
-  getRenderGovernorDiagnostics().holds.includes('camera-verb');
+const hasRenderHold = (engine) =>
+  getRenderGovernorDiagnostics(engine).holds.includes('camera-verb');
 
 /** Wall clock the verbs read (performance.now), moved only by the tests. */
 function installClock(t) {
@@ -279,12 +279,12 @@ test('a once nudge spends its budget in 0.9 s and then lets go', (t) => {
   initCameraVerbs(engine);
   const before = camera();
   assert.equal(moveCamera({ motion: 'tilt', direction: 'up' }).ok, true);
-  assert.equal(hasRenderHold(), true);
+  assert.equal(hasRenderHold(engine), true);
   run(0.8);
   assert.equal(getActiveCameraMotion()?.kind, 'tilt', 'still easing');
   run(0.2);
   assert.equal(getActiveCameraMotion(), null, 'finished after 0.9 s');
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
   near(
     geo.math.toDegrees(camera().pitch - before.pitch),
     15,
@@ -337,7 +337,7 @@ test('manual input on the canvas stops the motion and releases the hold', (t) =>
     run(0.3);
     engine.host.canvas.dispatchEvent(new Event(event));
     assert.equal(getActiveCameraMotion(), null, event);
-    assert.equal(hasRenderHold(), false, event);
+    assert.equal(hasRenderHold(engine), false, event);
     assert.deepEqual(engine.camera.transform(), [...geo.matrix4.IDENTITY]);
     engine.fake.resetCalls();
     run(0.3);
@@ -367,7 +367,7 @@ test('a new verb supersedes the running one and stop ends it', (t) => {
     motion: 'stop',
     stopped: true,
   });
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 
 test('one frame listener and three input listeners exist only while a motion runs', (t) => {
@@ -407,7 +407,7 @@ test('an engine switch releases the verb: the parked engine is never driven agai
   // What the Navara scene's suspend does (src/app/scene.js).
   releaseCameraVerbs(first.engine);
   assert.equal(getActiveCameraMotion(), null);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(first.engine), false);
   first.engine.fake.resetCalls();
   first.run(0.5);
   assert.equal(first.engine.fake.callsOf('camera.setView').length, 0);
@@ -454,7 +454,7 @@ test('globe rotation yields when a follow takes the engine camera', (t) => {
     viewFrom: geo.cartesian3.create(0, -2000, 1000),
   });
   assert.equal(getActiveCameraMotion(), null);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
   // And a request while following is refused before any handoff.
   let handoffs = 0;
   const refused = moveCamera({ motion: 'rotate_globe' }, () => {
@@ -514,7 +514,7 @@ test('fly_route flies the installed engine camera and lands level', (t) => {
   run(result.durationS + 2);
   assert.equal(getActiveCameraMotion(), null, 'landed');
   near(geo.math.negativePiToPi(engine.camera.pose().roll), 0, 1e-5, 'roll');
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 
 test('a parked route flight resumes on another engine without jumping', (t) => {

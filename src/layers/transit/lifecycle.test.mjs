@@ -37,13 +37,11 @@ import {
   releaseCameraSensitivity,
 } from '../../data/cameraSensitivity.js';
 import {
-  _resetRenderGovernorForTest,
   getRenderGovernorDiagnostics,
   governorRequestRender,
   holdContinuousRender,
-  installRenderGovernor,
+  renderGovernorFor,
   releaseContinuousRender,
-  uninstallRenderGovernor,
 } from '../../renderGovernor.js';
 
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
@@ -283,7 +281,7 @@ function harness(
     },
   });
 
-  installRenderGovernor(viewer);
+  renderGovernorFor(engine).install();
   layer.init(viewer, { engine });
 
   t.after(() => {
@@ -293,8 +291,8 @@ function harness(
       /* a test may already have destroyed it */
     }
     engine.destroy();
-    uninstallRenderGovernor(viewer);
-    _resetRenderGovernorForTest();
+    renderGovernorFor(engine).destroy();
+
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
@@ -361,7 +359,7 @@ function harness(
         frame();
       }
     },
-    holds: () => getRenderGovernorDiagnostics().holds,
+    holds: () => getRenderGovernorDiagnostics(engine).holds,
     ground,
     meshCalls,
     /**
@@ -839,7 +837,7 @@ test('the render hold follows real motion, and is released when everything settl
   );
   app.frame();
   assert.equal(app.holds().includes('transit'), false);
-  assert.equal(app.viewer.scene.requestRenderMode, true);
+  assert.equal(!app.engine.render.isContinuous(), true);
 
   // A second fix IS motion to come: the vehicle is armed and the loop held.
   app.advance(TRANSIT_POLL_MS);
@@ -861,7 +859,7 @@ test('the render hold follows real motion, and is released when everything settl
     app.holds().includes('transit'),
     'a moving vehicle keeps the loop awake',
   );
-  assert.equal(app.viewer.scene.requestRenderMode, false);
+  assert.equal(!app.engine.render.isContinuous(), false);
 
   // Past the second fix it holds and the loop is released again.
   app.run(TRANSIT_POLL_MS);
@@ -870,7 +868,7 @@ test('the render hold follows real motion, and is released when everything settl
     false,
     'a settled fleet does not hold the GPU',
   );
-  assert.equal(app.viewer.scene.requestRenderMode, true);
+  assert.equal(!app.engine.render.isContinuous(), true);
 });
 test('disable hands back the camera sensitivity it borrowed', async (t) => {
   const app = harness(t);
@@ -1112,7 +1110,7 @@ test('a parked fleet that keeps reporting the same position stops asking for fra
     );
     assert.equal(app.state()._moving.size, 0);
   }
-  assert.equal(app.viewer.scene.requestRenderMode, true);
+  assert.equal(!app.engine.render.isContinuous(), true);
   assert.equal(app.vehicles().length, 2, 'and the fleet is still on screen');
 
   // One vehicle finally moves: that IS work, and the hold comes back.
@@ -1198,7 +1196,7 @@ test('the last vehicle leaving mid-segment takes the render hold with it', async
     false,
     'no hold may outlive the fleet that justified it',
   );
-  assert.equal(app.viewer.scene.requestRenderMode, true);
+  assert.equal(!app.engine.render.isContinuous(), true);
   assert.ok(Date.now() - fetchedAt > FEED_EVICT_AFTER_MS);
 });
 test('only the vehicles near the view are animated frame by frame', async (t) => {
@@ -3110,7 +3108,7 @@ for (const bounds of ['null', 'stale']) {
     parts.rendering.refreshVisibility();
     assert.equal(state._visible.size, loaded.count);
     assert.equal(state._moving.size, loaded.count);
-    assert.equal(app.viewer.scene.requestRenderMode, false);
+    assert.equal(!app.engine.render.isContinuous(), false);
     const entry = app.vehicles()[0],
       before = Cesium.Cartesian3.clone(entry.marker.position);
     app.run(1000, 16);
@@ -3182,7 +3180,7 @@ for (const count of [800, 3000]) {
       before = Cesium.Cartesian3.clone(entry.marker.position);
     app.run(1000, 16);
     assert.ok(Cesium.Cartesian3.distance(before, entry.marker.position) > 0.9);
-    assert.equal(app.viewer.scene.requestRenderMode, false);
+    assert.equal(!app.engine.render.isContinuous(), false);
   });
 }
 
@@ -3235,7 +3233,7 @@ test('intercepted scripted reports resolve their explicit floor and wake without
   assert.equal(entry.surfaceReady, true);
   assert.equal(entry.marker.show, true);
   assert.ok(app.state()._moving.has(entry));
-  assert.equal(app.viewer.scene.requestRenderMode, false);
+  assert.equal(!app.engine.render.isContinuous(), false);
   const before = Cesium.Cartesian3.clone(entry.marker.position);
   app.run(1000, 16);
   assert.ok(Cesium.Cartesian3.distance(before, entry.marker.position) > 1);

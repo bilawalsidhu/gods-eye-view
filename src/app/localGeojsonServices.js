@@ -1,5 +1,4 @@
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
-import { governorRequestRender } from '../renderGovernor.js';
 import {
   clearSelectedEntityContextForLayer,
   registerEntityContext,
@@ -24,7 +23,6 @@ export const localGeoJsonServices = Object.freeze({
   removeEntityContextsForLayer,
   selectEntityContext,
   getSelectedEntityContext,
-  governorRequestRender,
   showOsmCredit,
   hideOsmCredit,
 });

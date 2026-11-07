@@ -189,7 +189,10 @@ export function createTrails({ state, services, parts, source }) {
         });
         entry.trailVertices = vertices;
         entry.trailSegments = all;
-        services.render.governorRequestRender('transit-trail-history');
+        services.render.governorRequestRender(
+          'transit-trail-history',
+          parts.renderer?.engine,
+        );
       }
     }
     return changed;
@@ -300,7 +303,10 @@ export function createTrails({ state, services, parts, source }) {
           parts.height.anchorFloors();
           prepareEntry(entry);
           update();
-          services.render.governorRequestRender('transit-trail-backfill');
+          services.render.governorRequestRender(
+            'transit-trail-backfill',
+            parts.renderer?.engine,
+          );
         })
         .catch(() => {
           // Session history remains usable if the optional retained read fails.
@@ -313,7 +319,10 @@ export function createTrails({ state, services, parts, source }) {
       if (!state._enabled || selected !== entry) return;
       parts.rendering.sampleIdle(entry);
       update();
-      services.render.governorRequestRender('transit-trail-age');
+      services.render.governorRequestRender(
+        'transit-trail-age',
+        parts.renderer?.engine,
+      );
     }, 1000);
   }
   function detachRenderer() {

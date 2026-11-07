@@ -101,7 +101,7 @@ export function createNamedMarkers(
 
   function cameraChanged() {
     refresh();
-    services.render.governorRequestRender('installation-names');
+    services.render.governorRequestRender('installation-names', engine);
   }
 
   // Small pose changes raise no camera event: test the discs before the
@@ -232,7 +232,7 @@ export function createNamedMarkers(
     points.commit();
     if (state.enabled) publishLabels();
     refresh();
-    services.render.governorRequestRender('installation-names');
+    services.render.governorRequestRender('installation-names', engine);
   }
 
   return {

@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import { createApplicationTools } from './tools.js';
 import { createSceneHost } from './sceneHost.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
-import { _resetRenderGovernorForTest } from '../renderGovernor.js';
 
 test('the debug handle leaves window between engines and comes back the same', async (t) => {
   const saved = {
@@ -32,7 +31,6 @@ test('the debug handle leaves window between engines and comes back the same', a
     removeEventListener() {},
   };
   t.after(() => {
-    _resetRenderGovernorForTest();
     for (const [name, value] of Object.entries(saved)) {
       if (value === undefined) delete globalThis[name];
       else globalThis[name] = value;

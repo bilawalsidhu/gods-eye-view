@@ -98,7 +98,8 @@ export function createLifecycle({
       const renderer = flightState._renderer;
       flightState.enabled = true;
       renderer?.fleet.setVisible(true);
-      if (renderer) holdContinuousRender('military'); // per-frame animator
+      if (renderer)
+        holdContinuousRender('military', flightState._renderer?.engine); // per-frame animator
       renderer?.models.setVisible(true);
       parts.tracking._setCockpitContactMode(
         globalThis.document?.body.classList.contains('cockpit-mode') === true,
@@ -161,7 +162,7 @@ export function createLifecycle({
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       flightState._renderer?.fleet.setVisible(false);
-      releaseContinuousRender('military');
+      releaseContinuousRender('military', flightState._renderer?.engine);
       parts.rendering._releaseModels();
       flightState._renderer?.models.setVisible(false);
       parts.tracking._clearTracking();
@@ -181,7 +182,7 @@ export function createLifecycle({
       setMilitaryLayerActive(false);
       flightState.lifetime.abort();
       parts.controller._abortActiveUpdates();
-      releaseContinuousRender('military'); // direct-destroy path (perf wave 2 fix)
+      releaseContinuousRender('military', flightState._renderer?.engine); // direct-destroy path (perf wave 2 fix)
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       parts.tracking._cancelPendingTrackingRestore();

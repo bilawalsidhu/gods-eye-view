@@ -126,7 +126,7 @@ export function createLineCoverage({
     : Infinity;
 
   function requestRender() {
-    render?.governorRequestRender?.(renderKey);
+    render?.governorRequestRender?.(renderKey, state.map?.engine);
   }
 
   function tileKey({ x, y, z }) {

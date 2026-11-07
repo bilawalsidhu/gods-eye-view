@@ -327,7 +327,7 @@ export function createInstallationsDisplay(
       })),
     );
     fill.commit();
-    governorRequestRender('installation-selection-fill');
+    governorRequestRender('installation-selection-fill', engine);
   }
 
   function clearRendered() {
@@ -433,7 +433,7 @@ export function createInstallationsDisplay(
     }
     // Post-moveEnd debounced fetches commit after the camera settles; the
     // rebuilt sets need one frame in idle mode.
-    governorRequestRender('installations-render');
+    governorRequestRender('installations-render', engine);
     syncOsmCredit(state.records);
     syncPlacesCredit(state.records);
     const records = renderableRecords();

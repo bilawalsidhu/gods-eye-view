@@ -46,6 +46,7 @@ export function createAwarenessDisplay(engine) {
   });
   const style = AWARENESS_RANGE_RING_STYLE;
   return {
+    engine,
     container: engine.host.container,
     canvas: engine.host.canvas,
     // Camera-shaped: positionWC, heading, rightWC, upWC, refreshed per frame.

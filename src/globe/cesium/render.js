@@ -1,15 +1,5 @@
-// GlobeRender on the app's render governor, which owns Cesium's
-// requestRenderMode and maximumRenderTimeChange; the engine only takes a
-// hold under its own owner id. The full-frame effects (visual styles,
-// bloom, sharpening) are the scene's post stages (postStages.js), the
-// contact sonar the scene's native draw commands (sonar.js).
+// Cesium owns its render mode and scene effects. Scene services drive this API.
 
-import {
-  governorRequestRender,
-  holdContinuousRender,
-  isRenderGovernorInstalled,
-  releaseContinuousRender,
-} from '../../renderGovernor.js';
 import { CONTACT_SONAR_INITIAL, mergeContactSonar } from '../contract.js';
 import { createCesiumPostStages } from './postStages.js';
 import { createCesiumSonar } from './sonar.js';
@@ -21,8 +11,7 @@ export const RENDER_OWNER = 'globe-engine';
  * @param {{ requestRender?: (reason: string) => void,
  *   createStage?: (options: object) => object,
  *   createSonar?: typeof createCesiumSonar }} [options] `requestRender`
- *   defaults to the render governor when it governs this viewer, else the
- *   scene itself (before the governor is installed, or on another viewer);
+ *   defaults to the scene itself;
  *   `createStage` (postStages.js) and `createSonar` are test seams.
  * @returns {{ render: import('../contract.js').GlobeRender,
  *   sonarDiagnostics: () => object, destroy: () => void }}
@@ -30,15 +19,12 @@ export const RENDER_OWNER = 'globe-engine';
 export function createCesiumRender(
   viewer,
   {
-    requestRender = (reason) => {
-      if (isRenderGovernorInstalled(viewer)) governorRequestRender(reason);
-      else viewer.scene.requestRender?.();
-    },
+    requestRender = () => viewer.scene.requestRender?.(),
     createStage,
     createSonar = createCesiumSonar,
   } = {},
 ) {
-  let held = false;
+  viewer.scene.maximumRenderTimeChange = Infinity;
   const effects = createCesiumPostStages(viewer, {
     requestRender,
     ...(createStage ? { createStage } : {}),
@@ -69,11 +55,8 @@ export function createCesiumRender(
       requestRender(reason);
     },
     setContinuous(enabled) {
-      held = Boolean(enabled);
-      if (held) holdContinuousRender(RENDER_OWNER);
-      else releaseContinuousRender(RENDER_OWNER);
+      viewer.scene.requestRenderMode = !enabled;
     },
-    // The scene's real mode: another owner's hold keeps it continuous.
     isContinuous: () => viewer.scene.requestRenderMode === false,
     ...effects.render,
     setContactSonar(options) {
@@ -93,7 +76,7 @@ export function createCesiumRender(
     render,
     sonarDiagnostics: () => sonar.diagnostics(),
     destroy() {
-      if (held) render.setContinuous(false);
+      render.setContinuous(false);
       removeFrameWatch?.();
       sonar.destroy();
       effects.destroy();

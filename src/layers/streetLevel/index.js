@@ -95,7 +95,16 @@ export function createStreetLevelLayer({
 
   function providerContext(entry) {
     return Object.freeze({
-      services: state.services,
+      services: {
+        ...state.services,
+        render: {
+          governorRequestRender: (reason) =>
+            state.services.render?.governorRequestRender?.(
+              reason,
+              state.map?.engine,
+            ),
+        },
+      },
       /** Resolved against now, so "since N days" keeps up with the clock. */
       getFilter: () => resolveFilter(state.filter),
       /** The layer and this provider's switch are both on. */

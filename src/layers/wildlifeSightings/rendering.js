@@ -104,7 +104,10 @@ export function createRendering({ state, services, parts }) {
       return;
     }
     commit();
-    services.render?.governorRequestRender?.(`wildlife-sightings-${reason}`);
+    services.render?.governorRequestRender?.(
+      `wildlife-sightings-${reason}`,
+      state.engine,
+    );
   };
   function beginBatch() {
     batchDepth += 1;

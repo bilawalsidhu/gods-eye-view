@@ -69,7 +69,7 @@ export function createIngestion({
     if (layerState.status === status && layerState.error === error) return;
     layerState.status = status;
     layerState.error = error;
-    governorRequestRender('installations-status');
+    governorRequestRender('installations-status', layerState.engine);
   }
 
   async function loadInstallations() {

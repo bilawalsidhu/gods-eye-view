@@ -7,7 +7,7 @@ import {
 } from './globe/cesium/celestial.js';
 import { createCelestialEphemeris } from './celestialRing/ephemeris.js';
 import { appClock } from './time/clock.js';
-import { governorRequestRender } from './renderGovernor.js';
+import { renderGovernorFor } from './renderGovernor.js';
 
 /** Outer edge of the existing NVG/FLIR keyhole in normalized shader space. */
 export const KEYHOLE_OUTER_RADIUS = 1.05;
@@ -413,6 +413,9 @@ export class CelestialRing {
     this._engineView = viewer?.kind ? createCelestialView(viewer) : null;
     this.viewer = this._engineView?.view ?? viewer;
     this._projector = engine?.projector ?? null;
+    this._renderGovernor = renderGovernorFor(
+      engine ?? (viewer?.kind ? viewer : null),
+    );
     this.enabled = !!enabled;
     this.visible = false;
     this._onAutoDisable =
@@ -460,7 +463,7 @@ export class CelestialRing {
       // dirty flag up immediately. (review finding)
       this._ephemerisDirty = true;
       if (typeof document !== 'undefined' && document.hidden) return;
-      governorRequestRender('celestial-ephemeris');
+      this._renderGovernor?.governorRequestRender('celestial-ephemeris');
     }, 60_000);
     this.setEnabled(this.enabled);
   }
@@ -526,7 +529,8 @@ export class CelestialRing {
       this._moonCtx = ctx;
       this._moonRenderKey = '';
     } else return;
-    if (canvas && this.enabled) governorRequestRender('celestial-ring');
+    if (canvas && this.enabled)
+      this._renderGovernor?.governorRequestRender('celestial-ring');
   }
 
   /** Enable or disable the user preference for the effect. */
@@ -539,7 +543,8 @@ export class CelestialRing {
     // clearing disable) must request its frame or the ring never draws at
     // all. Camera motion covers every later repaint; the 60 s ephemeris
     // timer requests its own. (perf wave 2 fix — owner playtest finding)
-    if (this.enabled !== wasEnabled) governorRequestRender('celestial-ring');
+    if (this.enabled !== wasEnabled)
+      this._renderGovernor?.governorRequestRender('celestial-ring');
     if (!this.enabled) {
       this.visible = false;
       this._clear();

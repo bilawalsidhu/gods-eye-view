@@ -3,14 +3,14 @@
     "cesiumLayerRendererLines": 0,
     "navaraLayerRendererLines": 189,
     "cesiumImportFiles": 3,
-    "viewerLines": 910,
-    "navaraKindChecks": 2,
+    "viewerLines": 891,
+    "navaraKindChecks": 1,
     "engineSniffCalls": 0,
     "engineExtensionReads": 3,
     "groundEffectPasses": 1,
     "cesiumSdkLoads": 3,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 33
+    "engineNameLines": 32
   },
-  "measuredAt": "Enforce SDK ownership, relocate annotation and wind backends, and rehearse every shared display"
+  "measuredAt": "Scope render demand to scene attachments and make the Cesium render backend independent"
 }

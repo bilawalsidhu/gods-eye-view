@@ -47,11 +47,6 @@ import {
 } from '../data/detection.js';
 import { isTr3b, toggleTr3b } from '../data/tr3bRegistry.js';
 import {
-  holdContinuousRender,
-  releaseContinuousRender,
-  governorRequestRender,
-} from '../renderGovernor.js';
-import {
   setScopeMaskEnabled,
   isScopeMaskEnabled,
   setScopeMaskFeather,
@@ -105,9 +100,6 @@ export class StyleManager extends ApplicationShell {
         setDetectionTuning,
         isTr3b,
         toggleTr3b,
-        holdContinuousRender,
-        releaseContinuousRender,
-        governorRequestRender,
         setScopeMaskEnabled,
         isScopeMaskEnabled,
         setScopeMaskFeather,

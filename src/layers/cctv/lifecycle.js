@@ -453,7 +453,10 @@ export function createLifecycle({
       if (layerState._calibrationMode) {
         parts.calibration.ensureGizmo();
         layerState._gizmo?.setEnabled(true);
-        services.render.holdContinuousRender('cctv-adjust');
+        services.render.holdContinuousRender(
+          'cctv-adjust',
+          parts.renderer?.engine,
+        );
       }
       settleView();
     },
@@ -481,7 +484,7 @@ export function createLifecycle({
           null;
       layerState._gizmo?.destroy();
       layerState._gizmo = null;
-      releaseContinuousRender('cctv-adjust');
+      releaseContinuousRender('cctv-adjust', parts.renderer?.engine);
       layerState._removeClick?.();
       layerState._removeClick = null;
       parts.projection.stopProjectionLoop();
@@ -580,7 +583,7 @@ export function createLifecycle({
       unregisterPickOwner('cctv', parts.renderer?.engine);
       // ADJUST mode does not survive a layer toggle — predictable re-entry.
       layerState._calibrationMode = false;
-      releaseContinuousRender('cctv-adjust');
+      releaseContinuousRender('cctv-adjust', parts.renderer?.engine);
       layerState._gizmo?.setEnabled(false);
       layerState._removeFocusAppearListener?.();
       layerState._removeFocusAppearListener = null;
@@ -631,7 +634,7 @@ export function createLifecycle({
         layerState._gizmo = null;
       }
       layerState._calibrationMode = false;
-      releaseContinuousRender('cctv-adjust');
+      releaseContinuousRender('cctv-adjust', parts.renderer?.engine);
       layerState._removeClick?.();
       layerState._removeClick = null;
       parts.projection.stopProjectionLoop();

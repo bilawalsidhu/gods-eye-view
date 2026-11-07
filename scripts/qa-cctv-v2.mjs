@@ -1226,7 +1226,7 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       remove();
       return { frames, durationMs: performance.now() - started,
-        governor: getRenderGovernorDiagnostics() };
+        governor: getRenderGovernorDiagnostics(app.engine) };
     });
     const geomAfter30s = await serializeGeom(activeId);
     evidence.geometry = {

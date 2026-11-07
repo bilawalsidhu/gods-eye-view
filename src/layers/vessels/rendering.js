@@ -215,7 +215,8 @@ export function createRendering({
     );
     state.trailingVisibilityTimer = vesselState._aisRuntime.setTimeout(() => {
       state.trailingVisibilityTimer = null;
-      if (state.feed.enabled) governorRequestRender('ais-vessels-visibility');
+      if (state.feed.enabled)
+        governorRequestRender('ais-vessels-visibility', state.renderer?.engine);
     }, waitMs);
   }
 
@@ -232,7 +233,8 @@ export function createRendering({
 
   function updateVisibility(force = false) {
     if (!state.feed.enabled || (!state.renderer && !state.viewer)) return;
-    if (force) governorRequestRender('ais-vessels-update');
+    if (force)
+      governorRequestRender('ais-vessels-update', state.renderer?.engine);
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
     const regularPass =
@@ -261,7 +263,7 @@ export function createRendering({
       }
       if (focusPass) {
         state.activeFocusCount = 0;
-        releaseContinuousRender('ais-vessels');
+        releaseContinuousRender('ais-vessels', state.renderer?.engine);
       }
       return;
     }
@@ -314,8 +316,8 @@ export function createRendering({
       });
       state.activeFocusCount = result.activeCount;
       if (result.activeCount > 0 || result.transitioning)
-        holdContinuousRender('ais-vessels');
-      else releaseContinuousRender('ais-vessels');
+        holdContinuousRender('ais-vessels', state.renderer?.engine);
+      else releaseContinuousRender('ais-vessels', state.renderer?.engine);
     }
   }
 

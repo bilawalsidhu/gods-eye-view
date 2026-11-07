@@ -45,7 +45,9 @@ test('the scene engine defaults to the Cesium engine factory', () => {
 
 test('the scene constructs the engine with the viewer and returns it beside the viewer', () => {
   const scene = read('src/app/scene.js');
-  const viewerTeardown = scene.indexOf('uninstallRenderGovernor(viewer);');
+  const viewerTeardown = scene.indexOf(
+    'if (!viewer.isDestroyed()) viewer.destroy();',
+  );
   const engineAt = scene.indexOf('createSceneEngine(viewer, {');
   assert.ok(viewerTeardown >= 0 && engineAt >= 0);
   // Cleanups run last-in first-out: the engine goes before the viewer.

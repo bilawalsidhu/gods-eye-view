@@ -387,7 +387,7 @@ export const loadCesiumPhotorealTileset = (keys) =>
   loadPhotorealisticTileset(Cesium, keys);
 
 /** Cesium.Viewer options of the standard globe viewer. */
-export function applicationViewerOptions(creditContainer) {
+export function applicationViewerOptions(creditContainer, requestRender) {
   return {
     timeline: false,
     animation: false,
@@ -403,7 +403,7 @@ export function applicationViewerOptions(creditContainer) {
     baseLayer: false,
     // Replaces the blocky Tycho-2 default. An option, not `skyBox: false`,
     // which would also stop CesiumWidget from creating the Sun and Moon.
-    skyBox: new StarrySky(),
+    skyBox: new StarrySky({ requestRender }),
     creditContainer,
     msaaSamples: 4,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
@@ -416,7 +416,9 @@ export function createApplicationViewer({ container, creditContainer }) {
     throw new TypeError('Viewer and credit containers are required');
   const viewer = new Cesium.Viewer(
     container,
-    applicationViewerOptions(creditContainer),
+    applicationViewerOptions(creditContainer, () =>
+      viewer.scene.requestRender(),
+    ),
   );
   try {
     viewer.targetFrameRate = 60;

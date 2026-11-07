@@ -11,10 +11,6 @@ import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
 import { initLogoGaze } from '../logoGaze.js';
-import {
-  uninstallRenderGovernor,
-  governorRequestRender,
-} from '../renderGovernor.js';
 import { describeError } from './errors.js';
 import { createSceneEngine } from './globeEngine.js';
 import { onLocaleChange, t } from '../i18n/index.js';
@@ -157,7 +153,6 @@ async function createRenderer({
     creditContainer,
   });
   defer(() => {
-    uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
   // The globe engine over this viewer; Google's startup tileset is named
@@ -216,7 +211,7 @@ async function createRenderer({
   loaderStatus.textContent = t('Initializing systems...');
 
   const mapStackController = new MapController(viewer, {
-    requestRender: governorRequestRender,
+    requestRender: (reason) => engine.render.request(reason),
     // Map sources reach the scene through the globe engine's maps.
     engine,
     ...mapOptions,
@@ -247,7 +242,6 @@ async function createRenderer({
     tileset,
     mapStackController,
     suspend() {
-      uninstallRenderGovernor(viewer);
       engine.camera.cancelFlight();
       releaseCameraVerbs(engine);
       viewer.useDefaultRenderLoop = false;

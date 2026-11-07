@@ -277,8 +277,13 @@ one application, and only the globe-bound parts move to the next engine.
   resolve these services with their attached engine; simultaneous engines do
   not share owner predicates or click subscriptions. Detach releases both
   services before the renderer is parked. Reattachment creates fresh services,
-  while retained layers register their current picks again. The overlay host,
-  render governor and tracked readout still have module-owned state.
+  while retained layers register their current picks again.
+- **Scene render demand.** `scene.services.render` owns the attachment's holds
+  and recent idle requests. It drives `engine.render` on both engines;
+  Cesium implements its render mode directly. Retained layers identify their
+  attached engine, and scene callbacks capture their governor. Teardown clears
+  only that scene's holds; an old service cannot release a replacement's hold.
+  The overlay host and tracked readout still have module-owned state.
 - **The session owns the state.** Catalog, layer models, sources, selection,
   camera mode and URL state outlive a switch. A layer that is a session model
   gets `attachRenderer(viewer, { engine })` / `detachRenderer()` instead of being rebuilt,

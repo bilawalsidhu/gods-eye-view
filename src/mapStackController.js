@@ -22,7 +22,9 @@ export class MapStackController extends MapSourceController {
         ? options.initialStack || 'photoreal'
         : registry.defaultId,
       ...options,
-      requestRender: governorRequestRender,
+      requestRender:
+        options.requestRender ??
+        ((reason) => governorRequestRender(reason, options.engine)),
     });
     this.googleTileset = options.googleTileset || null;
     this.cesiumToken = String(options.cesiumToken || '').trim();

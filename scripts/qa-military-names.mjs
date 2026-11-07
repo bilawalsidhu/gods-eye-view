@@ -190,7 +190,7 @@ try {
       // Use the governor's hold so an asynchronous idle transition cannot
       // overwrite a raw scene flag during the sustained-render measurement.
       const { holdContinuousRender } = await import('/src/renderGovernor.js');
-      holdContinuousRender('qa-military-names-fps');
+      holdContinuousRender('qa-military-names-fps', window.__godsEyeView.engine);
     });
     const t0 = await pageNow(page);
     await sleep(3500);
@@ -198,7 +198,7 @@ try {
     await page.evaluate(async () => {
       const { releaseContinuousRender } =
         await import('/src/renderGovernor.js');
-      releaseContinuousRender('qa-military-names-fps');
+      releaseContinuousRender('qa-military-names-fps', window.__godsEyeView.engine);
     });
     const metrics = frameStats(frames);
     const seconds = frames.reduce((sum, frame) => sum + frame.dt, 0) / 1000;

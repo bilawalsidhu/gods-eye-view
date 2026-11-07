@@ -196,7 +196,7 @@ export function createHeight({ state, services, parts }) {
     // adopted by the next bounded reread.
     for (const entry of entries) parts.trails.prepareEntry(entry);
     parts.rendering.requestVisibility();
-    governorRequestRender('transit-floor');
+    governorRequestRender('transit-floor', parts.renderer?.engine);
     if (state._floorAttempts++ < FLOOR_REREAD_ATTEMPTS)
       state._floorTimer = setTimeout(rereadFloors, FLOOR_REREAD_MS);
   }

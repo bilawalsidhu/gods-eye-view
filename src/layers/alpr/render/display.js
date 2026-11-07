@@ -296,7 +296,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     }
     resolveFloors();
     flushSprites();
-    governorRequestRender('alpr-surface');
+    governorRequestRender('alpr-surface', engine);
   }
 
   /**
@@ -352,7 +352,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
         }
         if (!moved) return;
         flushSprites();
-        governorRequestRender('alpr-floor');
+        governorRequestRender('alpr-floor', engine);
       });
     floorRequest = request;
   }
@@ -399,7 +399,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     creditTimer = null;
     removeCredit?.();
     removeCredit = null;
-    governorRequestRender('alpr-credit');
+    governorRequestRender('alpr-credit', engine);
   }
 
   /**
@@ -419,7 +419,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     creditPresented = true;
     removeCredit = engine.credits.addStatic(creditMarkup, { onScreen: true });
     creditTimer = setTimeout(hideOnMapCredit, CREDIT_DISPLAY_MS);
-    governorRequestRender('alpr-credit');
+    governorRequestRender('alpr-credit', engine);
   }
 
   function renderRecords() {
@@ -442,7 +442,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
       dropSelectedSprite();
       clearSelectedEntityContextForLayer(LAYER_ID);
     }
-    governorRequestRender('alpr-render');
+    governorRequestRender('alpr-render', engine);
     const ids = new Set(shown.map((record) => record.id));
     let changed = false;
     for (const id of [...markers.keys()])
@@ -553,7 +553,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     updateSelectedAnchor();
     overlay.sync(visibleRecords);
     flushSprites();
-    governorRequestRender('alpr-selection');
+    governorRequestRender('alpr-selection', engine);
     return true;
   }
 
@@ -566,7 +566,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     overlay.sync(visibleRecords);
     flushSprites();
     clearSelectedEntityContextForLayer(LAYER_ID);
-    governorRequestRender('alpr-selection');
+    governorRequestRender('alpr-selection', engine);
   }
 
   /**
@@ -600,7 +600,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
       geo.cartesian3.distance(next, marker.displayPosition) > 0.1
     ) {
       marker.displayPosition = next;
-      governorRequestRender('alpr-anchor');
+      governorRequestRender('alpr-anchor', engine);
     }
   }
 
@@ -637,7 +637,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
         range: 800,
       },
     );
-    governorRequestRender('alpr-focus');
+    governorRequestRender('alpr-focus', engine);
     return true;
   }
 

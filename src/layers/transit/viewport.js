@@ -113,7 +113,7 @@ export function createViewport({ state, services, parts }) {
     }
     parts.ingestion.sweepAgedVehicles(Date.now());
     parts.rendering.syncRenderHold();
-    governorRequestRender('transit-proximity');
+    governorRequestRender('transit-proximity', parts.renderer?.engine);
   }
 
   function onCameraChanged() {

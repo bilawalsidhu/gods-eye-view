@@ -1,8 +1,5 @@
 import * as geo from './geo/index.js';
-import {
-  holdContinuousRender,
-  releaseContinuousRender,
-} from './renderGovernor.js';
+import { renderGovernorFor } from './renderGovernor.js';
 
 /**
  * OrbitController — smooth orbit around a target point.
@@ -43,7 +40,8 @@ export class OrbitController {
     this.active = true;
     // Orbit mutates the camera from preRender — without a hold the loop
     // starves after its first idle frame. (perf wave 2)
-    holdContinuousRender('camera-orbit');
+    this._renderGovernor = renderGovernorFor(this.engine);
+    this._renderGovernor?.holdContinuousRender('camera-orbit');
 
     // Start from the camera's current heading for seamless transition
     this.angle = camera.pose().heading;
@@ -71,7 +69,7 @@ export class OrbitController {
    */
   stop() {
     this.active = false;
-    releaseContinuousRender('camera-orbit');
+    this._renderGovernor?.releaseContinuousRender('camera-orbit');
     if (this._removeListener) {
       this._removeListener();
       this._removeListener = null;
@@ -87,7 +85,7 @@ export class OrbitController {
   attachEngine(engine) {
     if (this.active || this._removeListener) {
       this.active = false;
-      releaseContinuousRender('camera-orbit');
+      this._renderGovernor?.releaseContinuousRender('camera-orbit');
       this._removeListener?.();
       this._removeListener = null;
     }
