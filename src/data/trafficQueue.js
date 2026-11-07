@@ -1,7 +1,7 @@
 /**
  * @file Queue-spawn helpers for jammed roads — platoon position math only.
  * Cesium-free so bumper-to-bumper spacing is unit-testable; the traffic
- * layer maps the returned distances onto Cartesian3 waypoints at spawn time.
+ * layer maps the returned distances onto ECEF waypoints at spawn time.
  *
  * Only ever used for live-flow jam-bucket roads (jamViz 'density'/'both');
  * the keyless simulation never calls into this module.

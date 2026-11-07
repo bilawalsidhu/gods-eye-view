@@ -1,5 +1,4 @@
 import { normalizeRoadMode } from './roadModes.js';
-import * as Cesium from 'cesium';
 import { FLOW_BUCKET_COLORS } from './policy.js';
 
 export function createState({ services }) {
@@ -14,15 +13,15 @@ export function createState({ services }) {
   layerState._roadModeUrlOverride = layerState._roadMode;
 
   // ─── Module State ──────────────────────────────────────────
-  /** @type {Cesium.Viewer|null} */
+  /** @type {object|null} The scene's viewer. */
 
   layerState._viewer = null;
 
-  /** @type {Cesium.PointPrimitiveCollection|null} */
+  /** @type {object|null} The dots' point collection. */
 
   layerState._pointCollection = null;
 
-  /** @type {Array<{point:Cesium.PointPrimitive, waypoints:Cesium.Cartesian3[], segmentDist:number[], numSegments:number, segIdx:number, t:number, mps:number, direction:number, stoppedUntil:number}>} Active animated dots */
+  /** @type {Array<{point:object, waypoints:Array<{x:number, y:number, z:number}>, segmentDist:number[], numSegments:number, segIdx:number, t:number, mps:number, direction:number, stoppedUntil:number}>} Active animated dots */
 
   layerState._dots = [];
   layerState._nextDotId = 1;
@@ -34,7 +33,7 @@ export function createState({ services }) {
     recycled: 0,
   };
 
-  /** @type {Array<{coords:number[][], type:string, waypoints:Cesium.Cartesian3[], segmentDist:number[]}>} Parsed roads with pre-computed Cartesian3 waypoints */
+  /** @type {Array<{coords:number[][], type:string, waypoints:Array<{x:number, y:number, z:number}>, segmentDist:number[]}>} Parsed roads with pre-computed ECEF waypoints */
 
   layerState._roads = [];
 
@@ -172,12 +171,12 @@ export function createState({ services }) {
    * rendered 3D tiles (ClassificationType.CESIUM_3D_TILE). One
    * primitive per bucket so the jam batch can pulse via a single shared
    * material uniform.
-   * @type {Cesium.GroundPolylinePrimitive|null}
+   * @type {object|null}
    */
 
   layerState._heatJamPrim = null;
 
-  /** @type {Cesium.GroundPolylinePrimitive|null} Slow-bucket heat-line batch. */
+  /** @type {object|null} Slow-bucket heat-line batch. */
 
   layerState._heatSlowPrim = null;
 
@@ -217,7 +216,8 @@ export function createState({ services }) {
    * Effective per-bucket dot colors: preset override when one applies, else
    * the shipped FLOW_BUCKET_COLORS. Rebuilt on style/param change only —
    * spawn/recolor/restyle all read from here, no per-dot allocation.
-   * @type {{free:Cesium.Color, slow:Cesium.Color, jam:Cesium.Color}}
+   * Renderer colours (`[r, g, b, a]`, 0..1).
+   * @type {{free:number[], slow:number[], jam:number[]}}
    */
 
   layerState._activeBucketColors = { ...FLOW_BUCKET_COLORS };
@@ -287,10 +287,6 @@ export function createState({ services }) {
    */
 
   layerState._tileCache = new Map();
-
-  /** Reusable scratch Cartesian3 to avoid per-frame allocation / GC pressure */
-
-  layerState._scratchLerp = new Cesium.Cartesian3();
 
   // ─── Animation ─────────────────────────────────────────────
 

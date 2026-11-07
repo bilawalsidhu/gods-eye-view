@@ -106,7 +106,10 @@ export function createRendering({
           (c) =>
             new Cesium.GeometryInstance({
               geometry: new Cesium.GroundPolylineGeometry({
-                positions: c.road.waypoints,
+                // A snapshot of the waypoints, as the renderer's points.
+                positions: c.road.waypoints.map((p) =>
+                  Cesium.Cartesian3.clone(p),
+                ),
                 width,
               }),
             }),
@@ -117,10 +120,12 @@ export function createRendering({
     const monoHeat =
       layerState._presetDots === 'on' &&
       trafficStyleProfile(layerState._stylePreset) === 'mono';
-    const jamLineColor = monoHeat ? Cesium.Color.WHITE : HEAT_JAM_COLOR;
+    const jamLineColor = monoHeat
+      ? Cesium.Color.WHITE
+      : new Cesium.Color(...HEAT_JAM_COLOR);
     const slowLineColor = monoHeat
-      ? new Cesium.Color(0.7, 0.7, 0.7, HEAT_SLOW_COLOR.alpha)
-      : HEAT_SLOW_COLOR;
+      ? new Cesium.Color(0.7, 0.7, 0.7, HEAT_SLOW_COLOR[3])
+      : new Cesium.Color(...HEAT_SLOW_COLOR);
 
     const jamInstances = instancesFor('jam', HEAT_LINE_JAM_WIDTH);
     if (jamInstances.length) {

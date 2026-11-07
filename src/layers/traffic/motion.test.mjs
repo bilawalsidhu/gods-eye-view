@@ -5,6 +5,7 @@ import { createState } from './state.js';
 import { createStyle } from './style.js';
 import { createModel } from './model.js';
 import { createAnimation } from './animation.js';
+import { DOT_HEIGHT_OFFSET } from './policy.js';
 import {
   createRetention,
   DOT_CHANGE_BUDGET,
@@ -670,4 +671,40 @@ test('retained road density follows the settled view without requiring a toggle'
     count,
     'fresh toggle and retained view have the same budget',
   );
+});
+
+test('parsed roads carry plain ECEF waypoints that dots spawn on and move along', (t) => {
+  const h = setup(t);
+  const [road] = h.parts.model.parseRoads({
+    roads: [
+      {
+        type: 'primary',
+        oneway: 1,
+        coordinates: [
+          [0, 0],
+          [0.003, 0],
+        ],
+      },
+    ],
+  });
+  assert.ok(!(road.waypoints[0] instanceof C.Cartesian3), 'plain points');
+  const expected = C.Cartesian3.fromDegrees(
+    ...road.coords[1],
+    DOT_HEIGHT_OFFSET,
+  );
+  assert.deepEqual({ ...road.waypoints[1] }, { ...expected });
+  for (let i = 0; i < road.segmentDist.length; i++)
+    assert.equal(
+      road.segmentDist[i],
+      C.Cartesian3.distance(road.waypoints[i], road.waypoints[i + 1]),
+    );
+  h.parts.retention.reconcile([road], 450, true);
+  h.settle();
+  assert.ok(h.state._dots.length > 0);
+  const dot = h.state._dots[0];
+  const before = C.Cartesian3.clone(dot.point.position);
+  h.frame(500);
+  const after = dot.point.position;
+  assert.ok(Number.isFinite(after.x) && Number.isFinite(after.z));
+  assert.ok(C.Cartesian3.distance(before, after) > 0, 'the dot moves');
 });

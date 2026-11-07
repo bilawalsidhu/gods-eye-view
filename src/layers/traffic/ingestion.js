@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { requestWithDeadline } from '../../sources/requestDeadline.js';
 import { resolveRoadMode, ROAD_SOURCE_LABELS } from './roadModes.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
@@ -272,7 +271,7 @@ export function createIngestion({
     const centerLat = (clamped.south + clamped.north) / 2;
     const centerLon = (clamped.west + clamped.east) / 2;
     const scene = layerState._viewer?.scene;
-    const location = Cesium.Cartographic.fromDegrees(centerLon, centerLat);
+    const location = { lon: centerLon, lat: centerLat };
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
     // A miss is the local mesh still loading.
     if (!Number.isFinite(estimated) && scene) {

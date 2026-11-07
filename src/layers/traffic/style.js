@@ -9,9 +9,52 @@ import {
   SIZE_BY_TYPE,
   STYLED_MIN_BASE_PX,
   FLOW_BUCKET_COLORS,
+  JAM_DOT_FAR_SCALE,
+  SIM_DOT_COLOR,
 } from './policy.js';
 
 export function createStyle({ state: layerState, services, parts, source }) {
+  // The dots' renderer colours as the point primitives take them, one per
+  // colour, so painting a dot allocates nothing. Keyed by identity: the
+  // colours are frozen, and a preset change makes new ones.
+  const pointColors = new WeakMap();
+
+  /** A renderer colour (`[r, g, b, a]`) as a point primitive colour. */
+  function pointColor(rgba) {
+    let color = pointColors.get(rgba);
+    if (!color) {
+      color = new Cesium.Color(rgba[0], rgba[1], rgba[2], rgba[3]);
+      pointColors.set(rgba, color);
+    }
+    return color;
+  }
+
+  /** The point colour of a dot in `bucket` (null: simulated white). */
+  function dotColor(bucket) {
+    return pointColor(
+      bucket ? layerState._activeBucketColors[bucket] : SIM_DOT_COLOR,
+    );
+  }
+
+  /** Paint a dot's point in its bucket's colour, as a late flow update does. */
+  function paintDot(dot, bucket) {
+    dot.point.color = dotColor(bucket);
+  }
+
+  /** Show or hide a dot's point. */
+  function showDot(dot, show) {
+    dot.point.show = show;
+  }
+
+  /** Keep a prominent jam dot larger at range. */
+  function emphasizeJamDot(dot) {
+    dot.point.scaleByDistance = new Cesium.NearFarScalar(
+      100,
+      1.5,
+      layerState._fadeScaleFar,
+      JAM_DOT_FAR_SCALE,
+    );
+  }
   /** @returns {boolean} A non-normal preset profile is active and enabled. */
 
   function presetProfileActive() {
@@ -58,7 +101,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
           ? presetDotRgba(layerState._stylePreset, bucket)
           : null;
       layerState._activeBucketColors[bucket] = rgba
-        ? new Cesium.Color(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3])
+        ? Object.freeze([rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3]])
         : FLOW_BUCKET_COLORS[bucket];
     }
   }
@@ -103,7 +146,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
     for (const dot of layerState._dots) {
       const bucket = dot.bucket;
       if (!bucket) continue; // sim/uncovered dots stay byte-identical
-      dot.point.color = layerState._activeBucketColors[bucket];
+      dot.point.color = dotColor(bucket);
       dot.nominalSize = dot.point.pixelSize =
         baseDotSize(dot.road?.type, bucket) +
         (bucket === 'jam' ? 1 : 0) +
@@ -143,6 +186,10 @@ export function createStyle({ state: layerState, services, parts, source }) {
     return layerState._jamViz === 'heatline' || layerState._jamViz === 'both';
   }
   return {
+    dotColor,
+    paintDot,
+    showDot,
+    emphasizeJamDot,
     presetProfileActive,
     activeSizeDelta,
     baseDotSize,

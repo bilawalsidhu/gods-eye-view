@@ -20,6 +20,9 @@ export function createAnimation({
   parts,
   source,
 }) {
+  /** Scratch point for the per-frame lerp, so a frame allocates nothing. */
+  const scratchLerp = new Cesium.Cartesian3();
+
   function syncRenderDemand() {
     const needed = Boolean(
       layerState._enabled &&
@@ -44,7 +47,7 @@ export function createAnimation({
    * randomized speed (base +/-30%), and given a direction (alternating
    * forward/backward to simulate two-way traffic).
    *
-   * @param {{waypoints:Cesium.Cartesian3[], segmentDist:number[], type:string, coords:number[][]}} road
+   * @param {{waypoints:Array<{x:number, y:number, z:number}>, segmentDist:number[], type:string, coords:number[][]}} road
    *   Parsed road object with pre-computed waypoints.
    * @param {number} altitude      - Camera altitude (used if budgetCount is null).
    * @param {number|null} [budgetCount=null] - Pre-allocated dot count. Falls back
@@ -74,7 +77,6 @@ export function createAnimation({
       parts.style.baseDotSize(road.type, bucket) +
       (bucket === 'jam' ? 1 : 0) +
       parts.style.activeSizeDelta(bucket);
-    const flowColor = bucket ? layerState._activeBucketColors[bucket] : null;
     // Dark-halo outline under styled presets (null = shipped no-outline).
     const outlineSpec =
       bucket && layerState._presetDots === 'on'
@@ -143,7 +145,7 @@ export function createAnimation({
         road.waypoints[segIdx],
         road.waypoints[segIdx + 1],
         t,
-        layerState._scratchLerp,
+        scratchLerp,
       );
 
       // Grounded traffic respects building/terrain occlusion. The former
@@ -151,10 +153,10 @@ export function createAnimation({
       const jamProminent = bucket === 'jam' && parts.style.jamDensityOn();
       const id = layerState._nextDotId++;
       const point = layerState._pointCollection.add({
-        position: Cesium.Cartesian3.clone(layerState._scratchLerp),
+        position: Cesium.Cartesian3.clone(scratchLerp),
         pixelSize,
         // No flow data → today's exact simulated white.
-        color: flowColor || Cesium.Color.WHITE.withAlpha(0.85),
+        color: parts.style.dotColor(bucket),
         scaleByDistance: new Cesium.NearFarScalar(
           100,
           1.5,
@@ -312,8 +314,8 @@ export function createAnimation({
       // garbage across 6000 dots. (perf item 5)
       const a = dot.waypoints[dot.segIdx];
       const b = dot.waypoints[dot.segIdx + 1];
-      Cesium.Cartesian3.lerp(a, b, dot.t, layerState._scratchLerp);
-      dot.point.position = layerState._scratchLerp;
+      Cesium.Cartesian3.lerp(a, b, dot.t, scratchLerp);
+      dot.point.position = scratchLerp;
     }
 
     // Jam heat-lines throb (~1.6 s period) — one shared material uniform for
