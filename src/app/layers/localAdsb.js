@@ -29,7 +29,7 @@ export function createApplicationLocalAdsb({
   resolveAsset = (url) =>
     `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
   // Test seam: the renderer factory (default: the engine's, from the
-  // registry: the Local ADS-B display on every engine).
+  // manifest: the Local ADS-B display on every engine).
   renderer = {
     create: ({ engine = null } = {}) => rendererFor('local-adsb', engine),
   },
@@ -43,7 +43,7 @@ export function createApplicationLocalAdsb({
       context,
       picking,
       selection,
-      // The engine's Local ADS-B renderer from the registry (render/display.js).
+      // The engine's Local ADS-B renderer from the manifest (render/display.js).
       renderer,
       geoid,
       groundSnap: surface?.groundSnap || null,

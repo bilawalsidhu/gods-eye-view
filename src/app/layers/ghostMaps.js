@@ -6,7 +6,7 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 
 /**
  * Wire the S2 Underground GhostMaps layer into the application catalog; it
- * draws with the engine's renderer from the registry (render/display.js on
+ * draws with the engine's renderer from the manifest (render/display.js on
  * every engine).
  */
 export function createApplicationGhostMaps(options) {

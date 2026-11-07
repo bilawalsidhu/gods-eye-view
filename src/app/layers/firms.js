@@ -15,7 +15,7 @@ export const firmsServices = {
 
 /**
  * Bind a supplied fire feed to the application scene service owners; it
- * draws with the engine's renderer from the registry (render/display.js on
+ * draws with the engine's renderer from the manifest (render/display.js on
  * every engine).
  */
 export function createApplicationFirms({ surface, ...options }) {

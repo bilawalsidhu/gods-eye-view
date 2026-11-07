@@ -7,7 +7,7 @@ import * as render from '../../renderGovernor.js';
 
 /**
  * Construct one layer using the application scene owners and a supplied
- * source; it draws with the engine's renderer from the registry
+ * source; it draws with the engine's renderer from the manifest
  * (render/display.js on every engine).
  */
 export function createApplicationRadio({

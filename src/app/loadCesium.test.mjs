@@ -107,8 +107,8 @@ test('the standalone startup graph can be imported before the Cesium SDK exists'
       return code ? { url: 'data:text/javascript,' + encodeURIComponent(code), shortCircuit: true } : next(specifier, context);
     }});
     await import('./src/standalone/application.js');
-    const { registerNavaraLayerRenderers } = await import('./src/app/navaraMode.js');
-    await registerNavaraLayerRenderers();
+    const { loadLayerRenderers } = await import('./src/app/layers/renderers.js');
+    await loadLayerRenderers('navara');
     const { createStandaloneCatalog } = await import('./src/standalone/catalog.js');
     const lifetime = new AbortController();
     const catalog = createStandaloneCatalog({ engineKind: 'navara', signal: lifetime.signal });

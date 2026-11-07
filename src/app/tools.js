@@ -35,9 +35,10 @@ import {
  * handle belong to the application; the tools bound to one globe (render
  * governor, release trim, scope mask, imagery box, tracking and visibility
  * listeners, embedded views, the debug handle's globe fields) attach to each
- * engine the page shows (src/app/sceneParts.js). Navara attaches the shared
- * annotation board, Draw, Import, scope mask and voice through its engine
- * adapters (src/app/navaraMode.js); the Director follows the attached engine.
+ * engine the page shows (src/app/sceneParts.js), one tree for every engine
+ * (attachEngineTools): each engine kind's tool backend says where the shared
+ * tools draw on it, and the tools that still drive the Cesium viewer attach
+ * only where there is one. The Director follows the attached engine.
  */
 export async function createApplicationTools({
   scene,
@@ -99,9 +100,10 @@ export async function createApplicationTools({
       // Cesium only for now: it reads Cesium's camera (positionWC, its
       // running flight).
       attachScene(next, { defer: deferScene }) {
-        if (!next.viewer) return;
+        const viewer = cesiumViewerOf(next.engine);
+        if (!viewer) return;
         deferScene(
-          installGlobeInViewRecovery(next.viewer, {
+          installGlobeInViewRecovery(viewer, {
             // The scope mask hides everything outside its keyhole.
             keyholeRadius: () =>
               isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0,
@@ -175,11 +177,7 @@ export async function createApplicationTools({
     {
       name: 'tools',
       async attachScene(next, attachment) {
-        const tools = next.viewer
-          ? attachViewerTools(next, context, attachment)
-          : await import('./navaraMode.js').then(({ attachViewerlessTools }) =>
-              attachViewerlessTools(next, context, attachment),
-            );
+        const tools = await attachEngineTools(next, context, attachment);
         attached.annotations = tools.annotations;
         attached.voiceCommands = tools.voiceCommands;
         attachment.defer(() => {
@@ -250,8 +248,103 @@ export async function createApplicationTools({
   };
 }
 
-/** The tools bound to a Cesium viewer. Returns its annotations and voice. */
-function attachViewerTools(
+/**
+ * The Cesium viewer under an engine, or null on an engine without one: the
+ * one place the tools read it.
+ */
+const cesiumViewerOf = (engine) => engine?.extensions?.cesium?.viewer ?? null;
+
+/**
+ * The tool backend of each engine kind (see attachEngineTools). Cesium's
+ * holds the tools that still drive its viewer, so they stay absent on
+ * other engines; Navara's loads with its mode (src/app/navaraMode.js), so
+ * the Cesium-mode bundle carries none of it.
+ */
+const TOOL_BACKENDS = Object.freeze({
+  cesium: async () => cesiumToolBackend,
+  navara: async () => (await import('./navaraMode.js')).navaraToolBackend,
+});
+
+/** The Cesium tool backend: the shared tools and its own on the viewer. */
+function cesiumToolBackend({ engine, tileset }) {
+  const viewer = cesiumViewerOf(engine);
+  return {
+    viewer,
+    board: () => ({ viewer, engine, tileset }),
+    draw: () => ({ viewer, engine }),
+    geoImport: () => ({ viewer, engine }),
+    // The tileset lets the layer drape while the globe is hidden.
+    recentImagery(layer) {
+      layer.attachTileset(tileset);
+      return { viewer };
+    },
+    // Idle render governor: flips the scene into requestRenderMode whenever
+    // nothing animates per frame. (perf wave 2) A parked viewer uninstalls
+    // it (src/app/scene.js suspend).
+    installGovernor: () => installRenderGovernor(viewer),
+    attach({ dataManager }, { defer }) {
+      // Cesium keeps a turned-off layer's draw commands (and so all its
+      // entities) alive in reused per-pass arrays; trim them after each
+      // disable.
+      defer(
+        installLayerReleaseTrim({
+          scene: viewer.scene,
+          dataManager,
+          requestRender: governorRequestRender,
+        }),
+      );
+      // The follow camera recomputes the tracked target's dead-reckon
+      // position every frame — tracking anything is a per-frame animation.
+      // (perf wave 2)
+      const removeTrackingListener =
+        viewer.trackedEntityChanged.addEventListener(() => {
+          if (viewer.trackedEntity) holdContinuousRender('tracked-entity');
+          else releaseContinuousRender('tracked-entity');
+        });
+      defer(() => {
+        removeTrackingListener();
+        releaseContinuousRender('tracked-entity');
+      });
+    },
+    // Hidden-state suspension (perf wave 2): when the window/tab is hidden,
+    // stop the default render loop outright — a hidden canvas repaints for
+    // nobody, and browser rAF throttling still lets throttled frames burn
+    // GPU.
+    suspend(hidden, { cockpitCloudEffects }) {
+      viewer.useDefaultRenderLoop = !hidden;
+      cockpitCloudEffects?.setSuspended?.(hidden);
+    },
+    attachViews(
+      { styleManager, dataManager, voiceCommands },
+      { signal, defer },
+    ) {
+      defer(
+        installViews({
+          shell: styleManager,
+          viewer,
+          dataManager,
+          run: (name, args) => voiceCommands.runner(name, args, { signal }),
+          signal,
+        }),
+      );
+    },
+  };
+}
+
+/**
+ * The tools of one globe, on any engine: the annotation board, Draw,
+ * Import, the Recent Imagery box and panel, the render governor, the scope
+ * mask, hidden-tab handling and voice, and the engine's own tools. The
+ * engine kind's backend (TOOL_BACKENDS) says where the shared tools draw:
+ * `board()`, `draw()` and `geoImport()` give their attachScene arguments
+ * (null: not on this engine), `recentImagery(layer)` the panel's globe,
+ * `installGovernor()` the governor's; `attach(context, attachment)` adds
+ * the engine's own tools, `suspend(hidden, controls)` its hidden-tab
+ * handling and `attachViews(context, attachment)` its embedded views. The
+ * shared tools keep their session state across engines. Returns the
+ * annotation board (null without one) and voice commands.
+ */
+async function attachEngineTools(
   scene,
   {
     controls,
@@ -266,48 +359,26 @@ function attachViewerTools(
   },
   { signal, defer },
 ) {
-  const { viewer, engine, tileset, mapStackController } = scene;
-  // The annotation board belongs to the page session when there is one: an
-  // engine switch only takes its drawing off this viewer.
-  const annotations = sessionAnnotations({
-    layerSession,
-    placeSearch,
-    resolver: operations.annotationResolver,
+  const { engine, mapStackController } = scene;
+  const backend = (await TOOL_BACKENDS[engine.kind]())(scene);
+  // The page session's board, Draw and Import (src/app/sessionTools.js):
+  // an engine switch only takes their drawing off this globe.
+  const annotations = attachBoard(
+    backend.board(),
+    { layerSession, placeSearch, operations },
     defer,
-  });
-  annotations.attachScene({ viewer, engine, tileset });
-  defer(() => annotations.detachScene());
-  // UTILITIES ▸ Draw on this viewer (src/app/sessionTools.js): the tool
-  // claims this viewer's pointer while a sketch is open.
-  const drawTool = sessionDrawTool({
-    layerSession,
-    annotations,
-    styleManager,
+  );
+  attachDraw(backend.draw, { layerSession, annotations, styleManager }, defer);
+  attachGeoImport(
+    backend.geoImport(),
+    { layerSession, styleManager, operations, mapStackController },
     defer,
-  });
-  drawTool?.attachScene({ viewer, engine, navigation: styleManager });
-  defer(() => drawTool?.detachScene());
-  // UTILITIES ▸ Import on this viewer: the next Cesium viewer reads the
-  // session's files again. The drop listeners belong to this viewer.
-  const geoFileImport = sessionGeoImport({
-    layerSession,
-    styleManager,
-    operations,
-    defer,
-  });
-  geoFileImport?.attachScene({
-    viewer,
-    engine,
-    navigation: styleManager,
-    subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
-  });
-  defer(() => geoFileImport?.detachScene());
+  );
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
-  // panel lives on the right rail, so both belong to this globe. The tileset
-  // lets the layer drape while the globe is hidden.
+  // panel lives on the right rail, so both belong to this globe.
   const recentImagery = dataManager.layers.get('recent-imagery')?.module;
   if (recentImagery) {
-    recentImagery.attachTileset(tileset);
+    const panelGlobe = backend.recentImagery(recentImagery);
     const imageryBoxTool = initImageryBoxTool({
       engine,
       onBox: (box) => recentImagery.setBox(box),
@@ -325,7 +396,7 @@ function attachViewerTools(
     data.presentation.attachRecentImagery((container) =>
       createRecentImageryPanel({
         container,
-        viewer,
+        ...panelGlobe,
         layer: recentImagery,
         tool: imageryBoxTool,
       }),
@@ -340,45 +411,24 @@ function attachViewerTools(
       imageryBoxTool?.destroy();
     });
   }
-  // Idle render governor: flips the scene into requestRenderMode whenever
-  // nothing animates per frame. Installed AFTER every module above has had
-  // its chance to register pre-install holds. (perf wave 2) A parked viewer
-  // uninstalls it (src/app/scene.js suspend).
-  installRenderGovernor(viewer);
-  // Cesium keeps a turned-off layer's draw commands (and so all its entities)
-  // alive in reused per-pass arrays; trim them after each disable.
-  defer(
-    installLayerReleaseTrim({
-      scene: viewer.scene,
-      dataManager,
-      requestRender: governorRequestRender,
-    }),
-  );
+  // Installed AFTER every module above has had its chance to register
+  // pre-install holds.
+  backend.installGovernor();
+  backend.attach?.({ data, styleManager, dataManager }, { signal, defer });
 
-  // Install the explicit scope mask used by the DISPLAY controls.
+  // Install the explicit scope mask used by the DISPLAY controls: a canvas
+  // in the engine's container, its terminus following the camera's height.
   installScopeMask(engine);
   defer(() => destroyScopeMask());
 
-  // The follow camera recomputes the tracked target's dead-reckon position
-  // every frame — tracking anything is a per-frame animation. (perf wave 2)
-  const removeTrackingListener = viewer.trackedEntityChanged.addEventListener(
-    () => {
-      if (viewer.trackedEntity) holdContinuousRender('tracked-entity');
-      else releaseContinuousRender('tracked-entity');
-    },
-  );
-
-  // Hidden-state suspension (perf wave 2): when the window/tab is hidden,
-  // stop the default render loop outright — a hidden canvas repaints for
-  // nobody, and browser rAF throttling still lets throttled frames burn
-  // GPU. Holder/data state is untouched, so return is seamless: restore
-  // the loop, refresh the one DOM surface we gated, render a frame.
+  // A hidden tab: the engine's own suspension, if any; holder/data state is
+  // untouched, so return is seamless: restore the loop, refresh the one DOM
+  // surface we gated, render a frame.
   const syncVisibilitySuspension = () => {
     // A panel's host may report it hidden while it is on screen; the panel
     // keeps drawing itself (see keepPanelRendering in embed.js).
     const hidden = document.hidden && !isEmbeddedInline();
-    viewer.useDefaultRenderLoop = !hidden;
-    controls.cockpitCloudEffects?.setSuspended?.(hidden);
+    backend.suspend?.(hidden, controls);
     if (!hidden) {
       data.presentation.flushVisible();
       governorRequestRender('visibility-restore');
@@ -388,33 +438,102 @@ function attachViewerTools(
   defer(() =>
     document.removeEventListener('visibilitychange', syncVisibilitySuspension),
   );
-  defer(() => {
-    removeTrackingListener();
-    releaseContinuousRender('tracked-entity');
-  });
-  // Apply the CURRENT state too — bootstrap can complete while the tab is
-  // already hidden, and waiting for the next transition would leave the
-  // loop burning behind a hidden tab. (perf wave 2 fix)
-  syncVisibilitySuspension();
+  // Apply the CURRENT state to a suspending engine too — bootstrap can
+  // complete while the tab is already hidden, and waiting for the next
+  // transition would leave the loop burning behind a hidden tab. (perf wave
+  // 2 fix)
+  if (backend.suspend) syncVisibilitySuspension();
 
+  // Voice uses the engine and shared session services; each action checks
+  // the capabilities it needs on the attached scene.
   const voiceCommands = attachSessionVoice({
     layerSession,
     voice,
     operations,
     placeSearch,
     dataManager,
-    scene: { viewer, engine, styleManager, sceneDirector, annotations },
+    scene: {
+      viewer: backend.viewer ?? null,
+      engine,
+      styleManager,
+      sceneDirector,
+      annotations,
+    },
     signal,
     defer,
   });
-  defer(
-    installViews({
-      shell: styleManager,
-      viewer,
-      dataManager,
-      run: (name, args) => voiceCommands.runner(name, args, { signal }),
-      signal,
-    }),
+  backend.attachViews?.(
+    { styleManager, dataManager, voiceCommands },
+    { signal, defer },
   );
   return { annotations, voiceCommands };
+}
+
+/** The annotation board drawn on this globe (`boardScene`), or null. */
+function attachBoard(
+  boardScene,
+  { layerSession, placeSearch, operations },
+  defer,
+) {
+  if (!boardScene) return null;
+  // The board belongs to the page session when there is one: an engine
+  // switch only takes its drawing off this globe.
+  const annotations = sessionAnnotations({
+    layerSession,
+    placeSearch,
+    resolver: operations.annotationResolver,
+    defer,
+  });
+  annotations.attachScene(boardScene);
+  defer(() => annotations.detachScene());
+  return annotations;
+}
+
+/**
+ * UTILITIES ▸ Draw on this globe (`drawScene()`: its input and preview):
+ * the tool claims the globe's pointer while a sketch is open, so a switch
+ * ends an open sketch and keeps the chosen shape and colour. Returns the
+ * tool (null on a page without it or without the board).
+ */
+function attachDraw(
+  drawScene,
+  { layerSession, annotations, styleManager },
+  defer,
+) {
+  if (!annotations) return null;
+  const drawTool = sessionDrawTool({
+    layerSession,
+    annotations,
+    styleManager,
+    defer,
+  });
+  drawTool?.attachScene({ ...drawScene(), navigation: styleManager });
+  defer(() => drawTool?.detachScene());
+  return drawTool;
+}
+
+/**
+ * UTILITIES ▸ Import on this globe (`importScene`, null: not on it): the
+ * next globe reads the session's files again. The drop listeners belong to
+ * this globe. Returns the control (null on a page without it).
+ */
+function attachGeoImport(
+  importScene,
+  { layerSession, styleManager, operations, mapStackController },
+  defer,
+) {
+  if (!importScene) return null;
+  const geoFileImport = sessionGeoImport({
+    layerSession,
+    styleManager,
+    operations,
+    defer,
+  });
+  geoFileImport?.attachScene({
+    ...importScene,
+    navigation: styleManager,
+    subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
+  });
+  defer(() => geoFileImport?.detachScene());
+  return geoFileImport;
 }

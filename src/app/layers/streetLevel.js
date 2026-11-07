@@ -30,7 +30,7 @@ function defaultProviders(sources) {
  * Inject providers, or use the defaults. An explicit provider list replaces
  * them; an unused sources.mapillary is neither constructed nor validated,
  * including when the list is empty. The layer draws with the engine's
- * renderer from the registry (render/display.js on every engine).
+ * renderer from the manifest (render/display.js on every engine).
  */
 export function createApplicationStreetLevel({
   sources = {},

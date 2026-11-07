@@ -1,95 +1,121 @@
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
-  CESIUM_BUILTIN,
-  CESIUM_LAYER_RENDERERS,
-  rendererFor,
+  CONTRACT_PRIMITIVES,
+  DRAWS_ITSELF,
+  LAYER_MANIFEST,
   createLayerAvailability,
-  createRendererRegistry,
   layerAvailableOn,
+  registerLayerRenderers,
+  rendererFor,
 } from './renderers.js';
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
+import { ENGINE_KINDS, engineCapabilities } from '../../globe/contract.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
-test('a registry knows which engine renders which layer', () => {
-  const registry = createRendererRegistry();
-  const made = [];
-  registry.register('navara', {
-    flights: (engine, options) => {
-      made.push([engine.kind, options]);
-      return { destroy() {} };
-    },
-  });
-  registry.register('cesium', {
-    flights: CESIUM_BUILTIN,
-    satellites: CESIUM_BUILTIN,
-  });
-  assert.equal(registry.layerAvailableOn('flights', 'navara'), true);
-  assert.equal(registry.layerAvailableOn('satellites', 'navara'), false);
-  assert.equal(registry.layerAvailableOn('satellites', 'cesium'), true);
-  assert.equal(registry.layerAvailableOn('flights', 'other'), false);
-  const renderer = registry.rendererFor(
-    'flights',
-    { kind: 'navara' },
-    { tint: 1 },
+test('the manifest lists every directory layer, in its order', () => {
+  assert.deepEqual(
+    Object.keys(LAYER_MANIFEST),
+    APPLICATION_LAYER_DIRECTORY.map(({ id }) => id),
   );
-  assert.ok(renderer);
-  assert.deepEqual(made, [['navara', { tint: 1 }]]);
-  // A Cesium layer that still renders itself has no separate renderer.
-  assert.equal(registry.rendererFor('flights', { kind: 'cesium' }), null);
-  assert.equal(registry.rendererFor('satellites', { kind: 'navara' }), null);
-  assert.deepEqual(registry.availableIds('cesium').sort(), [
-    'flights',
-    'satellites',
-  ]);
-  assert.throws(() => registry.register('navara', { x: 42 }), TypeError);
-  assert.throws(
-    () => registry.register('navara', { flights: () => ({}) }),
-    /already/,
-    'one renderer per layer and engine',
-  );
+  assert.ok(Object.isFrozen(LAYER_MANIFEST));
+  for (const entry of Object.values(LAYER_MANIFEST))
+    assert.ok(Object.isFrozen(entry));
 });
 
-test('the default registry: every layer on Cesium, none yet on Navara', () => {
-  for (const { id } of APPLICATION_LAYER_DIRECTORY) {
-    assert.equal(layerAvailableOn(id, 'cesium'), true, id);
-    assert.equal(layerAvailableOn(id, 'navara'), false, id);
-  }
+test('the primitives a display needs are the contract primitives every engine has', () => {
+  const capabilities = engineCapabilities(createFakeEngine());
+  for (const name of CONTRACT_PRIMITIVES)
+    assert.equal(capabilities[name], true, name);
+  for (const [id, entry] of Object.entries(LAYER_MANIFEST))
+    for (const name of entry.needs ?? [])
+      assert.ok(CONTRACT_PRIMITIVES.includes(name), `${id} needs ${name}`);
 });
 
-test('the layers with extracted renderers', () => {
-  assert.deepEqual(Object.keys(CESIUM_LAYER_RENDERERS), [
-    'earthquakes',
-    'air-quality',
-    'gnss-integrity',
-    'fire-perimeters',
-    'drone-airspace',
-    'osm-places',
-    'alpr-cameras',
-    'bikeshare',
-    'radio',
-    'transit',
-    'local-firms',
-    's2-ghostmaps',
-    'weather-cyclones',
-    'telegeography-submarine-cables',
-    'local-datacenters',
-    'local-dams',
-    'rocket-launches',
-    'satellites',
-    'flights',
-    'military',
-    'local-adsb',
-    'ais-live-vessels',
-    'cctv',
-    'military-installations',
-    'military-awareness',
-    'street-level',
-    'traffic',
-    'directions',
-    'recent-imagery',
-  ]);
+test('every layer shows on both engines, as before', () => {
+  for (const { id } of APPLICATION_LAYER_DIRECTORY)
+    for (const kind of ENGINE_KINDS)
+      assert.equal(layerAvailableOn(id, kind), true, `${id} on ${kind}`);
+  assert.equal(layerAvailableOn('flights', 'vulkan'), false);
+  assert.equal(layerAvailableOn('unknown', 'cesium'), false);
+  assert.equal(layerAvailableOn('toString', 'cesium'), false);
+  assert.equal(rendererFor('toString', createFakeEngine()), null);
+});
+
+test('the layers drawn through one display, and the ones that draw without one', () => {
+  const kinds = (filter) =>
+    Object.entries(LAYER_MANIFEST)
+      .filter(([, entry]) => filter(entry))
+      .map(([id]) => id);
+  assert.deepEqual(
+    kinds((entry) => entry.display),
+    [
+      'flights',
+      'military',
+      'local-adsb',
+      'earthquakes',
+      'air-quality',
+      'fire-perimeters',
+      'gnss-integrity',
+      's2-ghostmaps',
+      'drone-airspace',
+      'alpr-cameras',
+      'street-level',
+      'satellites',
+      'rocket-launches',
+      'traffic',
+      'cctv',
+      'radio',
+      'transit',
+      'bikeshare',
+      'directions',
+      'recent-imagery',
+      'osm-places',
+      'ais-live-vessels',
+      'military-installations',
+      'military-awareness',
+      'weather-cyclones',
+      'local-datacenters',
+      'local-dams',
+      'telegeography-submarine-cables',
+      'local-firms',
+    ],
+  );
+  // Engine-specific options of a display: the Navara backends.
+  assert.deepEqual(
+    kinds((entry) => Object.keys(entry.backends ?? {}).length),
+    ['cctv', 'military-awareness'],
+  );
+  assert.deepEqual(Object.keys(LAYER_MANIFEST.cctv.backends), ['navara']);
+  // The layer that draws itself through the contract.
+  assert.deepEqual(
+    kinds((entry) => !entry.display && entry.needs),
+    ['wildlife-sightings'],
+  );
+  // Without a display: drawn by the layer itself or by an engine-specific
+  // renderer.
+  const engines = Object.fromEntries(
+    kinds((entry) => entry.engines).map((id) => [
+      id,
+      Object.fromEntries(
+        Object.entries(LAYER_MANIFEST[id].engines).map(([kind, drawing]) => [
+          kind,
+          drawing === DRAWS_ITSELF ? 'itself' : 'renderer',
+        ]),
+      ),
+    ]),
+  );
+  const navaraRenderer = { cesium: 'itself', navara: 'renderer' };
+  assert.deepEqual(engines, {
+    'bhote-koshi-2026': navaraRenderer,
+    'bhote-koshi-locator': navaraRenderer,
+    wind: navaraRenderer,
+    'weather-radar': navaraRenderer,
+    'weather-satellite': navaraRenderer,
+    'weather-lightning': navaraRenderer,
+    'sea-marks': { cesium: 'itself', navara: 'itself' },
+    'ski-pistes': { cesium: 'itself', navara: 'itself' },
+  });
 });
 
 test('the layers drawn through one display get the same factory on every engine', async () => {
@@ -105,6 +131,7 @@ test('the layers drawn through one display get the same factory on every engine'
     bikeshare: ['bikeshare', 'createBikeshareDisplay'],
     radio: ['radio', 'createRadioDisplay'],
     transit: ['transit', 'createTransitDisplay'],
+    cctv: ['cctv', 'createCctvDisplay'],
     earthquakes: ['earthquakes', 'createEarthquakesDisplay'],
     'air-quality': ['airQuality', 'createAirQualityDisplay'],
     'gnss-integrity': ['gnss', 'createGnssDisplay'],
@@ -115,6 +142,7 @@ test('the layers drawn through one display get the same factory on every engine'
     'local-datacenters': ['infrastructure', 'createInfrastructureDisplay'],
     'local-dams': ['infrastructure', 'createInfrastructureDisplay'],
     'military-installations': ['installations', 'createInstallationsDisplay'],
+    'military-awareness': ['awareness', 'createAwarenessDisplay'],
     'street-level': ['streetLevel', 'createStreetLevelDisplay'],
     traffic: ['traffic', 'createTrafficDisplay'],
     directions: ['directions', 'createDirectionsDisplay'],
@@ -125,30 +153,24 @@ test('the layers drawn through one display get the same factory on every engine'
       'createCablesDisplay',
     ],
   };
-  // The Navara mode registers the same modules' factories.
-  const navaraMode = readFileSync(
-    new URL('../navaraMode.js', import.meta.url),
-    'utf8',
+  assert.deepEqual(
+    Object.keys(displays).sort(),
+    Object.keys(LAYER_MANIFEST)
+      .filter((id) => LAYER_MANIFEST[id].display)
+      .sort(),
   );
   const drawAtlas = async () => ({ canvas: {}, cells: {} });
   for (const [id, [directory, name]] of Object.entries(displays)) {
     const factory = (
       await import(`../../layers/${directory}/render/display.js`)
     )[name];
-    assert.equal(CESIUM_LAYER_RENDERERS[id], factory, id);
-    assert.match(
-      navaraMode,
-      new RegExp(
-        `'?${id}'?: async \\(\\) =>\\s*\\(await import\\('[^']+/render/display\\.js'\\)\\)\\s*\\.${name}\\b`,
-      ),
-      id,
-    );
+    assert.equal(LAYER_MANIFEST[id].display, factory, id);
     // Each display's own tests build it with its services; the aircraft
     // family needs none beyond an atlas.
     if (!['flights', 'military', 'local-adsb'].includes(id)) continue;
-    for (const kind of ['cesium', 'navara']) {
+    for (const kind of ENGINE_KINDS) {
       const engine = createFakeEngine({ kind });
-      const display = factory(engine, { drawAtlas });
+      const display = rendererFor(id, engine, { drawAtlas });
       assert.equal(display.engine, engine, `${id} on ${kind}`);
       display.destroy();
       engine.destroy();
@@ -156,21 +178,75 @@ test('the layers drawn through one display get the same factory on every engine'
   }
 });
 
+test('a layer that draws itself has no renderer; an unknown engine none either', () => {
+  const engine = createFakeEngine();
+  for (const id of [
+    'wildlife-sightings',
+    'sea-marks',
+    'ski-pistes',
+    'wind',
+    'weather-radar',
+    'bhote-koshi-2026',
+  ])
+    assert.equal(rendererFor(id, engine), null, id);
+  assert.equal(rendererFor('flights', null), null);
+  assert.equal(rendererFor('flights', { kind: 'vulkan' }), null);
+  engine.destroy();
+});
+
+test('an engine-specific renderer answers only after its engine loaded them', () => {
+  const engine = createFakeEngine({ kind: 'navara' });
+  // This test file never loads Navara's renderers.
+  assert.throws(
+    () => rendererFor('weather-radar', engine),
+    /weather-radar on navara: its renderer is not loaded/,
+  );
+  assert.throws(() => rendererFor('cctv', engine), /not loaded/);
+  engine.destroy();
+});
+
+test('a test engine of its own kind brings its renderers', () => {
+  const made = [];
+  registerLayerRenderers('renderers-test', {
+    flights: (engine, options) => {
+      made.push([engine.kind, options]);
+      return { destroy() {} };
+    },
+  });
+  const engine = { kind: 'renderers-test' };
+  assert.ok(rendererFor('flights', engine, { tint: 1 }));
+  assert.deepEqual(made, [['renderers-test', { tint: 1 }]]);
+  assert.equal(rendererFor('satellites', engine), null);
+  assert.throws(
+    () => registerLayerRenderers('renderers-test', { flights: () => ({}) }),
+    /already/,
+    'one renderer per layer and engine',
+  );
+  assert.throws(
+    () => registerLayerRenderers('renderers-test', { x: 42 }),
+    TypeError,
+  );
+  for (const kind of ENGINE_KINDS)
+    assert.throws(
+      () => registerLayerRenderers(kind, { flights: () => ({}) }),
+      /manifest/,
+    );
+});
+
 test('the layer availability API: engine, isAvailable, available, unavailable', () => {
-  const registry = createRendererRegistry();
-  registry.register('navara', { flights: () => ({}) });
   const directory = [
     { id: 'flights', name: 'Live Flights' },
     { id: 'satellites', name: 'Satellites' },
   ];
   const availability = createLayerAvailability('navara', {
-    registry,
+    manifest: { flights: LAYER_MANIFEST.flights },
     directory,
   });
   assert.equal(availability.engine, 'navara');
   assert.equal(availability.isAvailable('flights'), true);
   assert.equal(availability.isAvailable('satellites'), false);
   assert.equal(availability.isAvailable('unknown'), false);
+  assert.equal(availability.isAvailable('toString'), false);
   assert.deepEqual(availability.available(), [
     { id: 'flights', name: 'Live Flights' },
   ]);
@@ -181,8 +257,25 @@ test('the layer availability API: engine, isAvailable, available, unavailable', 
   availability.unavailable().push({ id: 'x', name: 'x' });
   assert.equal(availability.unavailable().length, 1);
   assert.ok(Object.isFrozen(availability));
-  const cesium = createLayerAvailability('cesium');
-  assert.equal(cesium.unavailable().length, 0);
-  assert.equal(cesium.available().length, APPLICATION_LAYER_DIRECTORY.length);
+  // A layer without a display shows only on the engine kinds it lists.
+  const cesiumOnly = { wind: { engines: { cesium: DRAWS_ITSELF } } };
+  const wind = [{ id: 'wind', name: 'Wind' }];
+  for (const [kind, shown] of [
+    ['cesium', true],
+    ['navara', false],
+  ])
+    assert.equal(
+      createLayerAvailability(kind, {
+        manifest: cesiumOnly,
+        directory: wind,
+      }).isAvailable('wind'),
+      shown,
+      kind,
+    );
+  for (const kind of ENGINE_KINDS) {
+    const all = createLayerAvailability(kind);
+    assert.equal(all.unavailable().length, 0, kind);
+    assert.equal(all.available().length, APPLICATION_LAYER_DIRECTORY.length);
+  }
   assert.throws(() => createLayerAvailability('vulkan'), TypeError);
 });

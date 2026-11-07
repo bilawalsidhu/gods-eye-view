@@ -5,7 +5,7 @@ import { overlayHost as applicationOverlayHost } from './overlayHost.js';
 
 /**
  * Wire cable source geometry to the application overlay host and map-stack
- * events; it draws with the engine's renderer from the registry
+ * events; it draws with the engine's renderer from the manifest
  * (render/display.js on every engine).
  */
 export function createApplicationCables({

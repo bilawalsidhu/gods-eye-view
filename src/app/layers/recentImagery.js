@@ -4,7 +4,7 @@ import { rendererFor } from './renderers.js';
 
 /**
  * Construct imagery presentation over one explicitly supplied acquisition
- * source; it draws with the engine's renderer from the registry
+ * source; it draws with the engine's renderer from the manifest
  * (render/display.js on every engine).
  */
 export function createApplicationRecentImagery({ source }) {

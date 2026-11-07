@@ -200,9 +200,9 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
   );
 });
 
-test('the catalog per engine: Cesium as before, Navara only what it can show', async (t) => {
+test('the catalog per engine: the same layers on both, a subset when the manifest says so', async (t) => {
   const { APPLICATION_LAYER_DIRECTORY } = await import('./layers/directory.js');
-  const { createLayerAvailability, createRendererRegistry } =
+  const { createLayerAvailability, LAYER_MANIFEST } =
     await import('./layers/renderers.js');
   const controller = new AbortController();
   t.after(() => controller.abort());
@@ -224,20 +224,20 @@ test('the catalog per engine: Cesium as before, Navara only what it can show', a
   assert.equal(cesium.availability.unavailable().length, 0);
 
   const navara = build({ engineKind: 'navara' });
-  assert.equal(navara.layers.length, 0, 'no Navara renderers yet');
-  assert.equal(navara.unavailableMetadata.length, cesium.metadata.length);
+  assert.equal(navara.layers.length, cesium.layers.length);
+  assert.deepEqual(navara.unavailableMetadata, []);
   assert.equal(navara.availability.engine, 'navara');
 
-  // With Navara renderers for two layers, only those are constructed, in
-  // catalog order, with their metadata.
-  const registry = createRendererRegistry();
-  registry.register('navara', {
-    satellites: () => ({}),
-    flights: () => ({}),
-  });
+  // When the engine can show only two layers, only those are constructed,
+  // in catalog order, with their metadata.
   const subset = build({
     engineKind: 'navara',
-    availability: createLayerAvailability('navara', { registry }),
+    availability: createLayerAvailability('navara', {
+      manifest: {
+        satellites: LAYER_MANIFEST.satellites,
+        flights: LAYER_MANIFEST.flights,
+      },
+    }),
   });
   assert.deepEqual(
     subset.layers.map(({ id }) => id),
@@ -251,8 +251,8 @@ test('the catalog per engine: Cesium as before, Navara only what it can show', a
   assert.equal(subset.get('military'), undefined);
 });
 
-test('both production registries attach to the same 38 session models', async (t) => {
-  const { registerNavaraLayerRenderers } = await import('./navaraMode.js');
+test('both engines attach to the same 38 session models', async (t) => {
+  const { loadLayerRenderers } = await import('./layers/renderers.js');
   const lifetime = new AbortController();
   t.after(() => lifetime.abort());
   const options = {
@@ -262,7 +262,7 @@ test('both production registries attach to the same 38 session models', async (t
     surface: fixtureSurface(lifetime.signal),
   };
   const cesium = createApplicationCatalog(options);
-  await registerNavaraLayerRenderers();
+  await loadLayerRenderers('navara');
   const navara = createApplicationCatalog({ ...options, engineKind: 'navara' });
   assert.equal(cesium.layers.length, 38);
   assert.deepEqual(

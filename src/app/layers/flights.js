@@ -20,7 +20,7 @@ export function createApplicationFlights({
   resolveAsset = (url) =>
     `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
   // Test seam: the renderer factory (default: the engine's, from the
-  // registry: the flights display on every engine).
+  // manifest: the flights display on every engine).
   renderer = {
     create: ({ engine = null } = {}) => rendererFor('flights', engine),
   },
@@ -32,7 +32,7 @@ export function createApplicationFlights({
     services: {
       picking,
       selection,
-      // The engine's flights renderer from the registry (render/display.js).
+      // The engine's flights renderer from the manifest (render/display.js).
       renderer,
       aircraftPresentation,
       camera: trackedCamera,

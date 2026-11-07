@@ -4,7 +4,7 @@ import { rendererFor } from './renderers.js';
 
 /**
  * Wire cyclone selection to the application shared context; the layer draws
- * with the engine's renderer from the registry (render/display.js on every
+ * with the engine's renderer from the manifest (render/display.js on every
  * engine). The catalog passes the same factory as `createNativeRendering`.
  */
 export function createApplicationCyclones({

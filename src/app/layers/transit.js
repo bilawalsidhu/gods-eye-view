@@ -18,7 +18,7 @@ import {
  * cell is the floor transit draws on, and a transit-only session warms its
  * own mesh floors. An earlier cut imported the legacy module-level singleton
  * instead and could not see either. It draws with the engine's renderer from
- * the registry (render/display.js on every engine).
+ * the manifest (render/display.js on every engine).
  *
  * @param {{surface: object}} options
  * @returns {object}

@@ -18,6 +18,7 @@ import { createGoogleTokenSource } from '../maps/googleTokens.js';
 import { engineOfChoice, resolveEngineKind } from '../app/engineChoice.js';
 import { createSceneHost } from '../app/sceneHost.js';
 import { attachScenePart } from '../app/sceneParts.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
 
 // Only one engine may own the page at a time.
 let owner = null;
@@ -109,6 +110,10 @@ export function createStandaloneApplication({
         throw new AggregateError(errors, 'The globe could not be released');
     };
     const signal = AbortSignal.any([controller.signal, lifetime]);
+    // The layers' engine-specific renderers of this engine (the layer
+    // manifest's import()s, none on Cesium) load beside its globe.
+    const layerRenderers = loadLayerRenderers(engineOfChoice(kind));
+    layerRenderers.catch(() => {});
     try {
       const scene = await createStandaloneScene({
         ...sessionContext,
@@ -125,8 +130,10 @@ export function createStandaloneApplication({
         layerSession,
       });
       signal.throwIfAborted();
-      // The catalog of this engine: on Navara only the layers with a Navara
-      // renderer (src/app/layers/renderers.js), the others' state kept for
+      await layerRenderers;
+      signal.throwIfAborted();
+      // The catalog of this engine: only the layers it can show (the layer
+      // manifest, src/app/layers/renderers.js), the others' state kept for
       // links. The layer models are the session's (layerSession.models).
       // Session models keep the catalog's closures past this scene: they
       // capture the operations, never the scene (it holds the engine).

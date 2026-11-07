@@ -1,42 +1,30 @@
 import { t } from '../i18n/index.js';
 // The experimental Navara mode (?engine=navara) of the application: its
-// scene and its viewerless tools. src/app/scene.js and src/app/tools.js load
-// this module with import() only in that mode, and it loads the Navara globe
-// the same way, so the Cesium-mode bundle carries none of it.
+// scene and the Navara side of the application tools. src/app/scene.js and
+// src/app/tools.js load this module with import() only in that mode, and it
+// loads the Navara globe the same way, so the Cesium-mode bundle carries
+// none of it.
 
 import { DATA_CREDITS, registerDataCredits } from '../data/dataCredits.js';
-import { isEmbeddedInline } from './embed.js';
-import {
-  createLayerAvailability,
-  layerAvailableOn,
-  registerLayerRenderers,
-} from './layers/renderers.js';
+import { createLayerAvailability } from './layers/renderers.js';
 import {
   governorRequestRender,
   installEngineRenderGovernor,
   uninstallRenderGovernor,
 } from '../renderGovernor.js';
-import { attachSessionVoice } from './sessionVoice.js';
-import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
-import {
-  attachNavaraAnnotations,
-  attachNavaraDraw,
-  attachNavaraGeoImport,
-  attachNavaraScopeMask,
-} from './navaraTools.js';
-import { createRecentImageryPanel } from '../ui/recentImagery.js';
+import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
+import { navaraDrawSurface } from '../annotations/drawInputNavara.js';
 
 /**
- * An imported file's data source drawn on `engine` (UTILITIES ▸ Import); the
- * drawing loads on first use, like the layers' Navara renderers.
+ * An imported file's data source drawn on `engine` with Navara's `views`
+ * (UTILITIES ▸ Import); the drawing loads on first use, like the layers'
+ * Navara renderers.
  */
-async function drawImported(engine, dataSource) {
+async function drawImported(engine, views, dataSource) {
   const { drawImportedSource, measureImportImages } =
     await import('../layers/shared/render/navaraStory.js');
   const sizes = await measureImportImages(dataSource);
-  return drawImportedSource(engine, engine.extensions.navara, dataSource, {
-    sizes,
-  });
+  return drawImportedSource(engine, views, dataSource, { sizes });
 }
 
 /** The Navara globe module, loaded on demand. */
@@ -45,8 +33,8 @@ const loadNavaraGlobeModule = async () =>
 
 /**
  * The shell's notice in the experimental Navara mode (label and detail): the
- * data layers this engine shows (its catalog, from the renderer registry)
- * and what it does not have.
+ * data layers this engine shows (its catalog, from the layer manifest) and
+ * what it does not have.
  * @param {import('./layers/renderers.js').LayerAvailability} availability
  */
 export function navaraModeNotice(availability) {
@@ -89,169 +77,6 @@ const NAVARA_CREDIT_KEYS = new Set([
 ]);
 
 /**
- * Registers the Navara layer renderers (once per page). Each loads only
- * here, through import(), so Cesium mode never fetches them.
- */
-export async function registerNavaraLayerRenderers() {
-  const loaders = {
-    'recent-imagery': async () =>
-      (await import('../layers/recentImagery/render/display.js'))
-        .createRecentImageryDisplay,
-    transit: async () =>
-      (await import('../layers/transit/render/display.js'))
-        .createTransitDisplay,
-    // CCTV's display, with the Navara backend of its plane and volume.
-    cctv: async () => {
-      const [{ createCctvDisplay }, { createCctvNavaraMeshes }] =
-        await Promise.all([
-          import('../layers/cctv/render/display.js'),
-          import('../layers/cctv/render/navaraMeshes.js'),
-        ]);
-      return (engine, options) =>
-        createCctvDisplay(engine, {
-          ...options,
-          navaraMeshes: createCctvNavaraMeshes,
-        });
-    },
-    'alpr-cameras': async () =>
-      (await import('../layers/alpr/render/display.js')).createAlprDisplay,
-    radio: async () =>
-      (await import('../layers/radio/render/display.js')).createRadioDisplay,
-    bikeshare: async () =>
-      (await import('../layers/bikeshare/render/display.js'))
-        .createBikeshareDisplay,
-    ...Object.fromEntries(
-      ['weather-radar', 'weather-satellite', 'weather-lightning'].map((id) => [
-        id,
-        async () => {
-          const { createWeatherNavaraRenderer } =
-            await import('../layers/weather/render/navara.js');
-          return (engine, options) =>
-            createWeatherNavaraRenderer(
-              engine,
-              engine.extensions.navara,
-              options,
-            );
-        },
-      ]),
-    ),
-    'bhote-koshi-2026': async () => {
-      const { createNepalEventDisplay } =
-        await import('../layers/bhoteKoshi/render/navara.js');
-      return (engine) =>
-        createNepalEventDisplay(engine, engine.extensions.navara);
-    },
-    'bhote-koshi-locator': async () => {
-      const { drawStorySource } =
-        await import('../layers/shared/render/navaraStory.js');
-      return (engine, { data }) =>
-        drawStorySource(engine, engine.extensions.navara, data);
-    },
-    'street-level': async () =>
-      (await import('../layers/streetLevel/render/display.js'))
-        .createStreetLevelDisplay,
-    traffic: async () =>
-      (await import('../layers/traffic/render/display.js'))
-        .createTrafficDisplay,
-    directions: async () =>
-      (await import('../layers/directions/render/display.js'))
-        .createDirectionsDisplay,
-    'telegeography-submarine-cables': async () =>
-      (await import('../layers/submarineCables/render/display.js'))
-        .createCablesDisplay,
-    wind: async () => {
-      const { createWindNavaraRenderer } =
-        await import('../layers/wind/render/navara.js');
-      return (engine) =>
-        createWindNavaraRenderer(engine, engine.extensions.navara);
-    },
-    'weather-cyclones': async () =>
-      (await import('../layers/cyclones/render/display.js'))
-        .createCyclonesDisplay,
-    'local-datacenters': async () =>
-      (await import('../layers/infrastructure/render/display.js'))
-        .createInfrastructureDisplay,
-    'local-dams': async () =>
-      (await import('../layers/infrastructure/render/display.js'))
-        .createInfrastructureDisplay,
-    's2-ghostmaps': async () =>
-      (await import('../layers/ghostMaps/render/display.js'))
-        .createGhostMapsDisplay,
-    // Global Context's display, with the Navara backend of its range pulses.
-    'military-awareness': async () => {
-      const [{ createAwarenessDisplay }, { createAwarenessPulseDisc }] =
-        await Promise.all([
-          import('../layers/awareness/render/display.js'),
-          import('../layers/awareness/render/navaraPulses.js'),
-        ]);
-      return (engine) =>
-        createAwarenessDisplay(engine, {
-          navaraPulses: createAwarenessPulseDisc,
-        });
-    },
-    'military-installations': async () =>
-      (await import('../layers/installations/render/display.js'))
-        .createInstallationsDisplay,
-    'local-firms': async () =>
-      (await import('../layers/firms/render/display.js')).createFirmsDisplay,
-    'osm-places': async () =>
-      (await import('../layers/osmPlaces/render/display.js'))
-        .createOsmPlacesDisplay,
-    // Draws itself through the globe contract (engine.movers, engine.lines).
-    'wildlife-sightings': async () => () => null,
-    'drone-airspace': async () =>
-      (await import('../layers/droneAirspace/render/display.js'))
-        .createDroneAirspaceDisplay,
-    'fire-perimeters': async () =>
-      (await import('../layers/perimeters/render/display.js'))
-        .createPerimetersDisplay,
-    'gnss-integrity': async () =>
-      (await import('../layers/gnss/render/display.js')).createGnssDisplay,
-    'air-quality': async () =>
-      (await import('../layers/airQuality/render/display.js'))
-        .createAirQualityDisplay,
-    earthquakes: async () =>
-      (await import('../layers/earthquakes/render/display.js'))
-        .createEarthquakesDisplay,
-    // The same displays as on Cesium (renderers.js).
-    'rocket-launches': async () =>
-      (await import('../layers/launches/render/display.js'))
-        .createLaunchesDisplay,
-    satellites: async () =>
-      (await import('../layers/satellites/render/display.js'))
-        .createSatellitesDisplay,
-    // The aircraft family: the same displays as on Cesium (renderers.js).
-    flights: async () =>
-      (await import('../layers/flights/render/display.js'))
-        .createFlightsDisplay,
-    military: async () =>
-      (await import('../layers/military/render/display.js'))
-        .createMilitaryDisplay,
-    'local-adsb': async () =>
-      (await import('../layers/localAdsb/render/display.js'))
-        .createLocalAdsbDisplay,
-    'ais-live-vessels': async () =>
-      (await import('../layers/vessels/render/display.js'))
-        .createVesselsDisplay,
-    // The open map overlays drape themselves through engine.maps.addOverlay.
-    'sea-marks': async () => () => null,
-    'ski-pistes': async () => () => null,
-  };
-  const missing = Object.keys(loaders).filter(
-    (id) => !layerAvailableOn(id, 'navara'),
-  );
-  if (!missing.length) return;
-  const factories = await Promise.all(missing.map((id) => loaders[id]()));
-  // A concurrent call may have registered some meanwhile.
-  const fresh = Object.fromEntries(
-    missing
-      .map((id, index) => [id, factories[index]])
-      .filter(([id]) => !layerAvailableOn(id, 'navara')),
-  );
-  if (Object.keys(fresh).length) registerLayerRenderers('navara', fresh);
-}
-
-/**
  * The scene on the experimental Navara engine: no viewer and no Cesium
  * objects. Navara builds the map sources from the controller's descriptions
  * (Google 3D tiles from the browser key, else base imagery) and shows their
@@ -281,10 +106,6 @@ export async function createNavaraScene({
   });
   defer(() => globe.destroy());
   const { engine } = globe;
-  // The layers drawn on Navara (their render/navara.js), before the catalog
-  // asks the registry which layers this engine shows.
-  await registerNavaraLayerRenderers();
-  signal.throwIfAborted();
   // The tools install the governor on this engine; it goes before the engine.
   defer(() => uninstallRenderGovernor(engine));
   signal.throwIfAborted();
@@ -343,116 +164,50 @@ export async function createNavaraScene({
 }
 
 /**
- * The tools without a viewer (the experimental Navara engine), attached to
- * one Navara scene: the render governor, hidden-tab handling, imagery box,
- * engine notice, annotations, Draw, Import, scope mask and voice. The shared
- * tools keep their session state across engines. Returns the annotation
- * board (null without a Navara view) and voice commands.
+ * The Navara tool backend (src/app/tools.js) of one Navara scene: where the
+ * annotation board, Draw and Import draw (on the engine and Navara's view;
+ * null without the view), the Recent Imagery panel's globe, the render
+ * governor on the engine, and this engine's own parts: the daylight of a
+ * restored view and the engine notice.
  */
-export function attachViewerlessTools(
-  { engine, mapStackController = null },
-  {
-    data,
-    operations,
-    placeSearch,
-    voice = {},
-    sceneDirector,
-    layerSession = null,
-    styleManager,
-  },
-  { signal, defer },
-) {
-  const { dataManager } = data;
-  void styleManager.initialRestorePromise?.then(() => {
-    if (!signal.aborted) engine.extensions.navara.alignDaylightToRestoredView();
-  });
-  const recentImagery = dataManager.layers.get('recent-imagery')?.module;
-  if (recentImagery) {
-    const tool = initImageryBoxTool({
-      engine,
-      onBox: (box) => recentImagery.setBox(box),
-      onPreview: (box) => recentImagery.setBoxPreview(box),
-      onCancel: (reason, message, box) => {
-        if (message) recentImagery.reportBoxRefusal(message, box);
-      },
-      onActive: (active) => recentImagery.setToolActive(active),
-      onEscape: () => recentImagery.clearPreview(),
-    });
-    data.presentation.attachRecentImagery((container) =>
-      createRecentImageryPanel({
-        container,
-        engine,
-        layer: recentImagery,
-        tool,
-      }),
-    );
-    const handle = { layer: recentImagery, tool };
-    window.__gevRecentImagery = handle;
-    defer(() => {
-      if (window.__gevRecentImagery === handle)
-        delete window.__gevRecentImagery;
-      data.presentation.attachRecentImagery(null);
-      tool.destroy();
-    });
-  }
-  // Holds drive engine.render.setContinuous; requests go to the engine. A
-  // parked engine uninstalls it (createNavaraScene suspend).
-  installEngineRenderGovernor(engine);
-  const syncVisibility = () => {
-    if (document.hidden && !isEmbeddedInline()) return;
-    data.presentation.flushVisible();
-    governorRequestRender('visibility-restore');
-  };
-  document.addEventListener('visibilitychange', syncVisibility);
-  defer(() => document.removeEventListener('visibilitychange', syncVisibility));
-  const notice = navaraModeNotice(
-    data.catalog?.availability ?? createLayerAvailability('navara'),
-  );
-  styleManager._showGlobalStatusNotice?.(notice.label, {
-    state: 'retry',
-    detail: notice.detail,
-    persistent: true,
-  });
-  // The notice is this engine's: it goes when the engine does.
-  defer(() => styleManager._clearPersistentStatusNotice?.());
-  // The page session's annotation board, Draw and Import on this engine
-  // (src/app/navaraTools.js).
-  const tools = {
-    engine,
-    views: engine.extensions?.navara,
-    mapStackController,
-  };
-  const context = {
-    operations,
-    placeSearch,
-    layerSession,
-    styleManager,
-    drawImported,
-  };
-  const annotations = attachNavaraAnnotations(tools, context, {
-    signal,
-    defer,
-  });
-  attachNavaraDraw(tools, { ...context, annotations }, { signal, defer });
-  attachNavaraGeoImport(tools, context, { signal, defer });
-  attachNavaraScopeMask(tools, context, { signal, defer });
-  // Voice uses the engine and shared session services; each action checks
-  // the capabilities it needs on the attached scene.
-  const voiceCommands = attachSessionVoice({
-    layerSession,
-    voice,
-    operations,
-    placeSearch,
-    dataManager,
-    scene: {
-      viewer: null,
-      engine,
-      styleManager,
-      sceneDirector,
-      annotations,
+export function navaraToolBackend({ engine }) {
+  const views = engine.extensions?.navara ?? null;
+  const drawn = Boolean(views?.view);
+  return {
+    board: () =>
+      drawn
+        ? { engine, renderer: createNavaraAnnotationRenderer(engine, views) }
+        : null,
+    // The session's tool on the engine's input and preview
+    // (src/annotations/drawInputNavara.js).
+    draw: () => ({ surface: navaraDrawSurface(engine) }),
+    // The session's files drawn by src/layers/shared/render/navaraStory.js;
+    // what Navara leaves out of them is reported in the control's hint.
+    geoImport: () =>
+      drawn
+        ? {
+            engine,
+            draw: (dataSource) => drawImported(engine, views, dataSource),
+          }
+        : null,
+    recentImagery: () => ({ engine }),
+    // Holds drive engine.render.setContinuous; requests go to the engine. A
+    // parked engine uninstalls it (createNavaraScene suspend).
+    installGovernor: () => installEngineRenderGovernor(engine),
+    attach({ data, styleManager }, { signal, defer }) {
+      void styleManager.initialRestorePromise?.then(() => {
+        if (!signal.aborted) views.alignDaylightToRestoredView();
+      });
+      const notice = navaraModeNotice(
+        data.catalog?.availability ?? createLayerAvailability(engine.kind),
+      );
+      styleManager._showGlobalStatusNotice?.(notice.label, {
+        state: 'retry',
+        detail: notice.detail,
+        persistent: true,
+      });
+      // The notice is this engine's: it goes when the engine does.
+      defer(() => styleManager._clearPersistentStatusNotice?.());
     },
-    signal,
-    defer,
-  });
-  return { annotations, voiceCommands };
+  };
 }

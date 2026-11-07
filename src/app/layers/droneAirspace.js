@@ -6,7 +6,7 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 
 /**
  * Wire FAA special-use airspace into the application catalog; the zones are
- * the engine's renderer from the registry (render/display.js on every
+ * the engine's renderer from the manifest (render/display.js on every
  * engine).
  */
 export function createApplicationDroneAirspace(options) {

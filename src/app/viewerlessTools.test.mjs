@@ -2,10 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApplicationTools } from './tools.js';
 import { navaraModeNotice } from './navaraMode.js';
-import {
-  createLayerAvailability,
-  createRendererRegistry,
-} from './layers/renderers.js';
+import { LAYER_MANIFEST, createLayerAvailability } from './layers/renderers.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import {
   _resetRenderGovernorForTest,
@@ -14,8 +11,8 @@ import {
   releaseContinuousRender,
 } from '../renderGovernor.js';
 
-// The tools without a viewer (the experimental Navara engine); they load
-// from src/app/navaraMode.js.
+// The tools on an engine without a viewer (the experimental Navara engine):
+// the same tree, with Navara's tool backend (src/app/navaraMode.js).
 test('without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine', async (t) => {
   const saved = {
     window: globalThis.window,
@@ -121,6 +118,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
   assert.equal(chrome[0].initializeWelcome, null, 'no first-run welcome');
   assert.equal(chrome[0].styleManager, styleManager);
   const notice = navaraModeNotice(createLayerAvailability('navara'));
+  assert.match(notice.detail, /^Data layers: Bhote Koshi Flood, /);
   assert.deepEqual(notices, [
     {
       label: notice.label,
@@ -131,15 +129,20 @@ test('without a viewer the tools run the governor on the engine, show the notice
       },
     },
   ]);
+  const none = navaraModeNotice(
+    createLayerAvailability('navara', { manifest: {} }),
+  );
   assert.match(
-    `${notice.label}: ${notice.detail}`,
+    `${none.label}: ${none.detail}`,
     /^Experimental Navara engine: no registered data layers$/i,
   );
-  // With Navara renderers, the notice names the layers it shows.
-  const registry = createRendererRegistry();
-  registry.register('navara', { satellites: () => ({}), flights: () => ({}) });
+  // The notice names the layers the engine shows, in catalog order.
+  const manifest = {
+    satellites: LAYER_MANIFEST.satellites,
+    flights: LAYER_MANIFEST.flights,
+  };
   assert.equal(
-    navaraModeNotice(createLayerAvailability('navara', { registry })).detail,
+    navaraModeNotice(createLayerAvailability('navara', { manifest })).detail,
     'Data layers: Live Flights, Satellites',
   );
   // The governor drives the engine's continuous rendering.

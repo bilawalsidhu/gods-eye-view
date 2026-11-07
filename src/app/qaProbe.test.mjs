@@ -3,10 +3,7 @@ import assert from 'node:assert/strict';
 import * as geo from '../geo/index.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { createQaProbe } from './qaProbe.js';
-import {
-  createLayerAvailability,
-  createRendererRegistry,
-} from './layers/renderers.js';
+import { LAYER_MANIFEST, createLayerAvailability } from './layers/renderers.js';
 
 function fakeManager(modules) {
   const enabled = new Set();
@@ -33,12 +30,12 @@ test('the probe lists, toggles and reads layers through the engine', async () =>
     getTrackedInfo: () => ({ icao24: 'ae01ce' }),
   };
   const manager = fakeManager([flights]);
-  const registry = createRendererRegistry();
-  registry.register('navara', { flights: () => ({}) });
   const probe = createQaProbe({
     engine,
     dataManager: manager,
-    availability: createLayerAvailability('navara', { registry }),
+    availability: createLayerAvailability('navara', {
+      manifest: { flights: LAYER_MANIFEST.flights },
+    }),
   });
   assert.deepEqual(probe.list(), [
     { id: 'flights', name: 'Live Flights', enabled: false, available: true },

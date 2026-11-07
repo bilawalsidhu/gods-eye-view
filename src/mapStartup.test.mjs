@@ -81,6 +81,8 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     engineOfChoice: (choice) => (choice === 'cesium' ? 'cesium' : 'navara'),
     createStandalonePlaceSearch: () => ({}),
     createStandaloneCatalog: () => ({}),
+    // Cesium's displays are in the main chunk: nothing to load.
+    loadLayerRenderers: async () => {},
     createGoogleTokenSource: () => createGoogleTokenSource({ fetchImpl }),
     selectMapStartupRoute,
     // The real scene forwards these credentials to this same loader.

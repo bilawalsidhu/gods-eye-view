@@ -9,7 +9,7 @@ export function createApplicationLaunches({
   source,
   satellites,
   // Test seam: the display factory (default: the engine's, from the
-  // registry: render/display.js on every engine).
+  // manifest: render/display.js on every engine).
   renderer = {
     create: ({ engine }) => rendererFor('rocket-launches', engine),
   },

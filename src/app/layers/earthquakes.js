@@ -3,7 +3,7 @@ import { createEarthquakesLayer } from '../../layers/earthquakes/index.js';
 import { overlayHost } from './overlayHost.js';
 /**
  * Wire earthquake observations to the application overlay host; the discs
- * are the engine's renderer from the registry (render/display.js on every
+ * are the engine's renderer from the manifest (render/display.js on every
  * engine).
  */
 export function createApplicationEarthquakes({

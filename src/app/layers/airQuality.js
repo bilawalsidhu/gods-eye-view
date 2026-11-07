@@ -3,7 +3,7 @@ import { createAirQualityLayer } from '../../layers/airQuality/index.js';
 import { overlayHost } from './overlayHost.js';
 /**
  * Wire air-quality readings to the application overlay host; the station
- * discs are the engine's renderer from the registry (render/display.js on
+ * discs are the engine's renderer from the manifest (render/display.js on
  * every engine).
  */
 export function createApplicationAirQuality(options) {

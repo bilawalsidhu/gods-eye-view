@@ -20,7 +20,7 @@ export function createApplicationMilitary({
   resolveAsset = (url) =>
     `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
   // Test seam: the renderer factory (default: the engine's, from the
-  // registry: the military display on every engine).
+  // manifest: the military display on every engine).
   renderer = {
     create: ({ engine = null } = {}) => rendererFor('military', engine),
   },
@@ -32,7 +32,7 @@ export function createApplicationMilitary({
     services: {
       picking,
       selection,
-      // The engine's military renderer from the registry (render/display.js).
+      // The engine's military renderer from the manifest (render/display.js).
       renderer,
       aircraftPresentation,
       camera: trackedCamera,

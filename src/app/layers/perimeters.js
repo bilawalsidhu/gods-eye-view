@@ -10,7 +10,7 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 
 /**
  * Wire WFIGS fire perimeters into the application catalog; the perimeters
- * are the engine's renderer from the registry (render/display.js on every
+ * are the engine's renderer from the manifest (render/display.js on every
  * engine).
  */
 export function createApplicationFirePerimeters(options) {

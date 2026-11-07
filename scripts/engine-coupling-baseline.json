@@ -3,14 +3,14 @@
     "cesiumLayerRendererLines": 330,
     "navaraLayerRendererLines": 2304,
     "cesiumImportFiles": 27,
-    "viewerLines": 1234,
+    "viewerLines": 1232,
     "navaraKindChecks": 5,
     "engineSniffCalls": 0,
-    "engineExtensionReads": 12,
+    "engineExtensionReads": 8,
     "groundEffectPasses": 3,
     "cesiumSdkLoads": 4,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 73
+    "engineNameLines": 66
   },
-  "measuredAt": "after the phase 7 feature moves, 2026-11-07"
+  "measuredAt": "after one layer manifest and one tools tree, 2026-11-07"
 }

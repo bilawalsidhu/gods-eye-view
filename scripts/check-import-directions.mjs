@@ -86,6 +86,11 @@ const cesiumLayerRenderer = (file) =>
 // Navara renderers outside a layer's render/ directory: like those, they
 // reach the app only through the Navara mode's import().
 const NAVARA_SCENE_RENDERERS = new Set(['src/scenes/dataPacks/navara.js']);
+// The modules that load Navara renderers, each through import().
+const NAVARA_RENDERER_LOADERS = new Set([
+  'src/app/navaraMode.js',
+  'src/app/layers/renderers.js',
+]);
 const navaraLayerRenderer = (file) =>
   /\/render\/navara[^/]*\.js$/.test(file) || NAVARA_SCENE_RENDERERS.has(file);
 const renderer = (file) =>
@@ -227,12 +232,13 @@ export function checkImportDirections(root) {
           `The Navara engine loads only through a dynamic import(): ${to}`,
         );
       // Like the engine, a layer's Navara renderer reaches the app only
-      // through the Navara mode's import() (src/app/navaraMode.js).
+      // through an import() of the Navara mode (src/app/navaraMode.js) or
+      // of the layer manifest (src/app/layers/renderers.js).
       if (
         navaraLayerRenderer(to) &&
         !navaraLayerRenderer(file) &&
         !(
-          file === 'src/app/navaraMode.js' &&
+          NAVARA_RENDERER_LOADERS.has(file) &&
           analysis.dynamicImports.includes(specifier)
         )
       )

@@ -1,8 +1,8 @@
 // The page session's tools that outlive a globe engine: the annotation board,
 // UTILITIES ▸ Draw and UTILITIES ▸ Import. Each is created once per page
 // session (destroyed with the page) and attaches its drawing to whichever
-// engine the page shows: src/app/tools.js on a Cesium viewer,
-// src/app/navaraTools.js on Navara.
+// engine the page shows (src/app/tools.js; on Navara through its tool
+// backend, src/app/navaraMode.js).
 
 import { createSessionAnnotations } from '../annotations/index.js';
 import { createSessionDrawTool } from '../annotations/drawTool.js';

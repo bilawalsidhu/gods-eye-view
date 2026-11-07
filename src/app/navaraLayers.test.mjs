@@ -1,87 +1,39 @@
-// The layers the Navara mode draws (registerNavaraLayerRenderers): each W1
-// layer with a Navara renderer, registered once, through import().
+// The layers on Navara: every directory layer, with the manifest's Navara
+// renderers and backends loaded once, through import() (loadLayerRenderers).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { registerNavaraLayerRenderers } from './navaraMode.js';
 import {
   createLayerAvailability,
-  layerAvailableOn,
+  loadLayerRenderers,
   rendererFor,
 } from './layers/renderers.js';
+import { APPLICATION_LAYER_DIRECTORY } from './layers/directory.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
-test('the Navara mode registers migrated renderers once', async () => {
-  assert.equal(layerAvailableOn('military', 'navara'), false);
-  await Promise.all([
-    registerNavaraLayerRenderers(),
-    registerNavaraLayerRenderers(),
-  ]);
-  await registerNavaraLayerRenderers();
-  for (const id of [
-    'flights',
-    'military',
-    'local-adsb',
-    'rocket-launches',
-    'satellites',
-    'ais-live-vessels',
-    'earthquakes',
-    'air-quality',
-    'fire-perimeters',
-    'gnss-integrity',
-    'local-firms',
-    'military-installations',
-    'bikeshare',
-    'radio',
-    'alpr-cameras',
-    'cctv',
-    'transit',
-    'recent-imagery',
-  ])
-    assert.equal(layerAvailableOn(id, 'navara'), true, id);
+test('Navara loads its renderers once and shows every layer', async () => {
+  const engine = createFakeEngine({ kind: 'navara' });
+  assert.throws(() => rendererFor('wind', engine), /not loaded/);
+  const first = loadLayerRenderers('navara');
+  assert.equal(loadLayerRenderers('navara'), first, 'one load at a time');
+  await Promise.all([first, loadLayerRenderers('navara')]);
+  await loadLayerRenderers('navara');
   assert.deepEqual(
     createLayerAvailability('navara')
       .available()
       .map(({ id }) => id),
-    [
-      'bhote-koshi-2026',
-      'bhote-koshi-locator',
-      'flights',
-      'military',
-      'local-adsb',
-      'earthquakes',
-      'air-quality',
-      'fire-perimeters',
-      'gnss-integrity',
-      's2-ghostmaps',
-      'drone-airspace',
-      'wildlife-sightings',
-      'alpr-cameras',
-      'street-level',
-      'satellites',
-      'rocket-launches',
-      'traffic',
-      'cctv',
-      'radio',
-      'transit',
-      'bikeshare',
-      'directions',
-      'recent-imagery',
-      'osm-places',
-      'ais-live-vessels',
-      'military-installations',
-      'military-awareness',
-      'wind',
-      'weather-radar',
-      'weather-satellite',
-      'weather-lightning',
-      'weather-cyclones',
-      'sea-marks',
-      'ski-pistes',
-      'local-datacenters',
-      'local-dams',
-      'telegeography-submarine-cables',
-      'local-firms',
-    ],
+    APPLICATION_LAYER_DIRECTORY.map(({ id }) => id),
   );
-  assert.equal(layerAvailableOn('satellites', 'navara'), true);
+  // Navara's own renderers answer now, with its view: a weather renderer
+  // draws nothing until it has a frame.
+  const viewed = { ...engine, extensions: { navara: {} } };
+  const weather = rendererFor('weather-radar', viewed, {});
+  assert.equal(typeof weather, 'object');
+  // The layers that draw themselves still have none.
+  for (const id of ['wildlife-sightings', 'sea-marks', 'ski-pistes'])
+    assert.equal(rendererFor(id, engine), null, id);
+  assert.throws(() => loadLayerRenderers('vulkan'), TypeError);
+  // Cesium has nothing to load.
+  await loadLayerRenderers('cesium');
+  assert.equal(rendererFor('wind', createFakeEngine()), null);
 });

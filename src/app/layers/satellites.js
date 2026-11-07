@@ -12,7 +12,7 @@ import * as layerState from '../../data/layerState.js';
 export function createApplicationSatellites({
   source,
   // Test seam: the renderer factory (default: the engine's, from the
-  // registry: the satellites display on every engine).
+  // manifest: the satellites display on every engine).
   renderer = {
     create: ({ engine = null } = {}) => rendererFor('satellites', engine),
   },

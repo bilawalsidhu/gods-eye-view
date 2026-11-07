@@ -2,7 +2,8 @@ import '../testSupport/registerDom.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
-import { attachNavaraAnnotations } from './navaraTools.js';
+import { navaraToolBackend } from './navaraMode.js';
+import { sessionAnnotations } from './sessionTools.js';
 
 function fakeViews() {
   const meshes = [];
@@ -37,22 +38,25 @@ function fakeViews() {
   };
 }
 
-test('Navara attaches the page session board and its switch takes only the drawing', async () => {
+test('Navara draws the page session board and its switch takes only the drawing', async () => {
   const lifetime = new AbortController();
   const layerSession = { lifetime };
-  const engine = createFakeEngine({ kind: 'navara' });
   const { views, meshes } = fakeViews();
-  const context = {
-    layerSession,
-    placeSearch: null,
-    operations: { annotationResolver: null },
+  const engine = {
+    ...createFakeEngine({ kind: 'navara' }),
+    extensions: { navara: views },
   };
+  // As src/app/tools.js attaches the board on the backend's scene.
   const attach = () => {
     const cleanups = [];
-    const board = attachNavaraAnnotations({ engine, views }, context, {
+    const board = sessionAnnotations({
+      layerSession,
+      placeSearch: null,
+      resolver: null,
       defer: (cleanup) => cleanups.push(cleanup),
     });
-    return { board, detach: () => cleanups.reverse().forEach((c) => c()) };
+    board.attachScene(navaraToolBackend({ engine }).board());
+    return { board, detach: () => board.detachScene() };
   };
   const first = attach();
   assert.ok(first.board);
@@ -85,11 +89,12 @@ test('Navara attaches the page session board and its switch takes only the drawi
   second.detach();
   lifetime.abort();
   assert.equal(window.__gevAnnotations, undefined);
-  // Without the Navara view there is nothing to draw on.
-  assert.equal(
-    attachNavaraAnnotations({ engine, views: undefined }, context, {
-      defer() {},
-    }),
-    null,
-  );
+  // Without the Navara view there is nothing to draw on: no board, no
+  // Import.
+  const viewless = navaraToolBackend({
+    engine: createFakeEngine({ kind: 'navara' }),
+  });
+  assert.equal(viewless.board(), null);
+  assert.equal(viewless.geoImport(), null);
+  assert.deepEqual(Object.keys(viewless.recentImagery()), ['engine']);
 });

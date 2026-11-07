@@ -3402,7 +3402,6 @@
       "src/globe/navara/viewOptions.js",
       "src/app/engineChoice.js",
       "src/app/navaraMode.js",
-      "src/app/navaraTools.js",
       "src/annotations/navaraAnnotationRenderer.js",
       "src/annotations/drawInputNavara.js",
       "src/data/render/cesiumProjection.js",
@@ -4316,7 +4315,18 @@
       "src/layers/directions/render/display.js",
       "src/layers/streetLevel/render/display.js",
       "src/layers/traffic/render/display.js",
-      "src/layers/recentImagery/render/display.js"
+      "src/layers/recentImagery/render/display.js",
+      "src/layers/shared/render/navaraStory.js",
+      "src/layers/cctv/render/navaraMeshes.js",
+      "src/layers/recentImagery/render/navaraGround.js",
+      "src/layers/shared/render/navaraGroundSurface.js",
+      "src/layers/wind/render/flowMesh.js",
+      "src/layers/wind/render/navara.js",
+      "src/layers/shared/render/navaraGroundEffect.js",
+      "src/layers/awareness/render/navaraPulses.js",
+      "src/layers/weather/render/navaraSurface.js",
+      "src/layers/weather/render/navara.js",
+      "src/layers/bhoteKoshi/render/navara.js"
     ],
     "external": [
       "hls.js",
@@ -4331,7 +4341,11 @@
       "vue",
       "pinia",
       "vue-i18n",
-      "kdbush"
+      "kdbush",
+      "postprocessing",
+      "@navaramap/three",
+      "@navaramap/three-default-plugin",
+      "three"
     ]
   },
   "application-operations": {

@@ -17,7 +17,7 @@ export function createApplicationVessels({
   source,
   options = {},
   // Test seam: the renderer factory (default: the engine's, from the
-  // registry: the vessels display on every engine; none without an engine).
+  // manifest: the vessels display on every engine; none without an engine).
   renderer = {
     create: ({ engine = null } = {}) => rendererFor('ais-live-vessels', engine),
   },
@@ -36,7 +36,7 @@ export function createApplicationVessels({
       worldFocus,
       render,
       selection,
-      // The engine's vessel display from the registry (render/display.js).
+      // The engine's vessel display from the manifest (render/display.js).
       renderer,
       readouts,
     },

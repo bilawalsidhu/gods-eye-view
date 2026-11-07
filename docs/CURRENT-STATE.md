@@ -194,14 +194,25 @@ one application, and only the globe-bound parts move to the next engine.
   corridors (a width in px or m), draped over terrain and 3D tiles. Each
   item has its own fill, outline and `pickId`. A set has a draw `order`, and
   shows, hides and replaces its items in bulk.
+  - A pixel corridor can take Cesium's old looks: a `glow`
+    (PolylineGlow's falloff), an alpha `pulse` and a flowing `dash` (the
+    annotation route's). The GPU works them out from the time each frame;
+    while a shown set has a pulse or a dash, the engine draws a frame after
+    every frame, as Cesium's continuous render did. Traffic's jam heat
+    lines glow and pulse, and the Directions route's dashes flow (it also
+    holds continuous render again while drawn).
   - Cesium draws them with batched `GroundPrimitive` and
-    `GroundPolylinePrimitive`.
+    `GroundPolylinePrimitive`; a corridor with a look draws through one
+    material of its own (`GevGroundCorridor`), which drew the jam lines and
+    the route pixel for pixel as the old PolylineGlow and route flow
+    materials did.
   - Navara draws them in one screen pass classified on the scene depth
-    (`src/globe/navara/ground/`).
+    (`src/globe/navara/ground/`). A corridor set is tiles of binned
+    segments (`corridors.js`): 10,000 corridors draw in about 12 ms still
+    and 15 ms moving, where Cesium takes 23 ms (the chunks before took 151
+    and 196 ms).
   - Navara's vector layers were measured against that pass and lost
     (`docs/GLOBE-PRIMITIVES.md`).
-  - No layer draws through `engine.ground` yet. Earthquakes and fire
-    perimeters have prototypes in `render/ground.js`.
   - On November 7, 2026, `scripts/qa-ground-suite.mjs` (the ground checks
     with pixels) passed 3 of 3 on both engines.
 - **Rasters on the ground** (`engine.imagery`) are required of every engine
@@ -254,20 +265,42 @@ one application, and only the globe-bound parts move to the next engine.
   contract has no primitive for yet, draw behind one seam,
   `src/layers/awareness/render/pulseDisc.js` (`render/cesiumPulses.js`, a
   material disc, on Cesium; `render/navaraPulses.js`, a surface pass that the
-  Navara mode loads and passes in).
+  layer manifest loads and passes in).
   The Active Fires far-zoom heatmap is an `engine.imagery` layer, and Recent
   Imagery draws its days through `engine.imagery` from its own
   `render/display.js`. CCTV's monitor plane and viewshed volume, which the
   contract has no primitive for yet, draw behind one seam,
   `src/layers/cctv/render/meshes.js` (`render/cesiumMeshes.js` on Cesium;
-  `render/navaraMeshes.js`, which the Navara mode loads and passes in). Cesium
-  renderers are listed in `src/app/layers/renderers.js`
-  (`CESIUM_LAYER_RENDERERS`), Navara ones are loaded by
-  `registerNavaraLayerRenderers` in `src/app/navaraMode.js`; both register the
-  same display factory for a layer that has one. Navara
-  ground effects (heat, pulses, trails, pads, drapes) are declared with
-  `defineGroundEffect` (`src/layers/shared/render/navaraGroundEffect.js`);
+  `render/navaraMeshes.js`, which the layer manifest loads and passes in).
+  Navara ground effects (heat, pulses, trails, pads, drapes) are declared
+  with `defineGroundEffect` (`src/layers/shared/render/navaraGroundEffect.js`);
   their insert order is pinned by `navaraGroundOrder.test.mjs`.
+- **One layer manifest.** `LAYER_MANIFEST` in `src/app/layers/renderers.js`
+  says how each directory layer draws: its display with the contract
+  primitives it needs (and an engine-specific backend option keyed by engine
+  kind: CCTV's meshes and Global Context's pulses on Navara), a layer that
+  draws itself through the contract (Wildlife Sightings), or, without a
+  display, its drawing per engine kind (wind, the weather rasters and the
+  Bhote Koshi event and locator draw themselves on Cesium and through a
+  Navara renderer on Navara; Sea Marks and Ski Pistes drape themselves on
+  both). A layer is available on an engine when that engine has the
+  primitives it needs, or, without a display, when its entry lists that
+  kind; today every layer shows on both. The manifest's Navara backends
+  and renderers load through `import()` (`loadLayerRenderers(kind)`, awaited
+  by `src/standalone/application.js` before the engine's catalog), so
+  Cesium mode fetches none of them; `rendererFor(id, engine, options)`
+  answers synchronously after that. The layer list reads
+  `createLayerAvailability(kind)`.
+- **One tools tree.** `src/app/tools.js` attaches the same tools to every
+  engine (`attachEngineTools`): the annotation board, Draw, Import, the
+  Recent Imagery box and panel, the render governor, the scope mask,
+  hidden-tab handling and voice. Each engine kind's tool backend says where
+  they draw; Cesium's also holds the tools that still drive its viewer
+  (release trim, tracked-entity hold, the render-loop suspension, the
+  embedded views), which read it through `engine.extensions.cesium?.viewer`
+  and so stay absent on Navara. Navara's backend (`navaraToolBackend` in
+  `src/app/navaraMode.js`, loaded with its mode) adds the daylight of a
+  restored view and the engine notice.
 - **Cesium only on demand.** The production build loads `/cesium/Cesium.js`
   when a Cesium globe starts or a Navara user turns on a feature that still
   uses Cesium's maths or entity model (traffic, Street Level, the Bhote Koshi

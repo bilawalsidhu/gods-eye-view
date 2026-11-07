@@ -86,6 +86,31 @@ Item options:
 - `drape` is `'both'` (the default), `'terrain'` or `'tiles'`. Cesium
   honours it; Navara drapes on whatever surface it draws.
 
+A `widthPx` corridor can also take the looks Cesium's ground polyline
+materials gave it. The GPU works them out every frame from the time, so a
+commit never rebuilds them:
+
+| look    | fields                                           | Cesium's                                                         |
+| ------- | ------------------------------------------------ | ---------------------------------------------------------------- |
+| `glow`  | `power`, `taper` (1: none)                       | `PolylineGlow`'s `glowPower` and `taperPower`                    |
+| `pulse` | `periodMs`, `min`, `max`                         | the alpha times a factor from `min` to `max` and back, a sine    |
+| `dash`  | `cells`, `duty`, `speed`, `gapAlpha`, `emission` | the annotation route's `GevRouteFlow`: dashes flowing to the end |
+
+- `glow` brightens the line toward white along its centre and fades it to
+  nothing at its edges.
+- `pulse` follows the page's monotonic clock (`performance.now()`), as the
+  old materials did, not the app clock.
+- `dash` lays `cells` dashes along the whole line. Each is lit for its first
+  `duty`, with soft edges of 0.08 of a cell, and brightened by `emission`
+  times its colour. Between them the alpha is times `gapAlpha`. The dashes
+  move toward the line's end at `speed` cells a second.
+- A shown set with a `pulse` or a `dash` makes the engine draw a frame after
+  every frame, as Cesium's continuous render did. `list()` reports it as
+  `animated`. A `glow` alone does not animate.
+
+Traffic's jam heat lines glow (power 0.25) and pulse (alpha 0.35 to 0.75,
+1.63 s). The Directions route's 64 dashes flow at 0.55 cells a second.
+
 ### How each engine draws the ground
 
 **Cesium** (`src/globe/cesium/ground.js`) builds at most two batches per set:
@@ -94,7 +119,11 @@ Item options:
   metre corridors);
 - one `GroundPolylinePrimitive` for all the outlines and pixel corridors.
 
-Both use per-instance colours and the set's `classificationType`. Cesium
+Both use per-instance colours and the set's `classificationType`. A
+corridor with a look draws in a `GroundPolylinePrimitive` of its own look
+and colour, over the set's other batches. Its material does the glow, pulse
+and dash. The engine writes its time before every frame, and asks for the
+next frame after every frame while the set is shown. Cesium
 builds them in workers; the set's `ready()` turns true once they are drawn.
 A set that is not pickable stays out of the pick pass, so it never hides
 what lies under it.
@@ -106,7 +135,7 @@ its screen cell:
 
 - a disc against its radius;
 - an area against its edges;
-- a corridor against its distance to the line.
+- a corridor tile against the corridor segments near the pixel.
 
 The tests run in each item's own gnomonic plane, so great-circle edges stay
 straight. Fills and outlines are anti-aliased across one pixel and blended
@@ -116,8 +145,37 @@ Large shapes get extra structure:
 
 - An area with more than 32 edges gets a grid of bins. A pixel then tests
   only the edges of its own bin.
-- A long corridor is split into chunks of 4 segments.
+- A corridor set becomes tiles, set-wide grids of bins
+  (`src/globe/navara/ground/corridors.js`). See below.
 - The terrain heights under each item bound its screen box.
+
+**Corridor tiles.** A set's lines are cut into pieces of at most 0.5°
+along their great circles. The pieces fall into a tree of longitude and
+latitude tiles, each with at most 20 000 pieces and at most 20° a side. A
+tile is one pass item:
+
+- a gnomonic plane of its own;
+- the pieces that come near it, as segments in that plane;
+- a pyramid of square bins. A bin of level z is 2^z times the finest bin.
+  It lists runs of segments, item by item in draw order: the segments that
+  reach within its margin. The margin is half a bin for the set's thinnest
+  corridor, more for a wider one, plus a width in metres.
+
+The finest bin is sized so that it holds about two runs per piece. The
+coarsest level has at most 8 bins across.
+
+A pixel finds its ground in world space once. It takes the one tile of the
+set whose cell holds it: the cells are tested with the meridians' normals
+and the parallels' sines, so two neighbouring tiles never both draw a
+pixel. The pixel then takes the finest level whose margin covers the
+reach of the set's thinnest corridor, and tests only its bin's runs. Each
+item takes its nearest segment there, and blends once, in item order. When
+the pixel is wider than the coarsest margin covers (a tile under about 30
+pixels), lines near a tile's edge can lose a little of a neighbour's
+reach; the tile is a solid blur by then.
+
+A commit packs the tiles once. Only the heights are sampled again when the
+terrain loads later.
 
 Picks are CPU picks at the ground under the pointer (`src/globe/ground.js`).
 
@@ -178,6 +236,24 @@ Corridors (40-point lines, 2.5 px), still / moving:
 At 10 000 corridors Cesium allocated 613 MB of WebGL memory, the pass 44 MB
 and the vector layers about 70 MB.
 
+The pass with corridor tiles, measured again with the pass before them on
+the same afternoon (the machine busier, the empty scene 6.0–8.9 ms):
+
+| N      | Cesium         | pass before    | pass with tiles |
+| ------ | -------------- | -------------- | --------------- |
+| 1 000  | 12.8 / 13.9 ms | 19.8 / 24.9 ms | 9.1 / 12.6 ms   |
+| 10 000 | 23.1 / 23.2 ms | 151 / 196 ms   | 12.1 / 15.4 ms  |
+| 15 000 | 31.8 / 31.4 ms | 226 / 289 ms   | 17.7 / 19.7 ms  |
+
+The tiles hold about what the chunks held: 47 MB of textures at 10 000
+corridors (46 MB before), 68 MB at 15 000 (69 MB). Packing takes longer:
+the commit of 10 000 corridors went from 0.6 s to about 1.9 s, and 15 000
+from 0.8 s to 3.0 s.
+
+A pixel corridor's width is now measured across the line (the gradient of
+the distance to it), so it is the same at any angle, as on Cesium. Before,
+a diagonal line drew up to √2 wider.
+
 Edge quality over the Hajar mountains, oblique view:
 
 - **Cesium:** a sharp drape with its outline.
@@ -207,10 +283,9 @@ more on every frame the camera moves, whatever their count. They draw no
 ground outlines and no metre widths. Their colours are lit, and hiding them
 needs a rebuild.
 
-Corridors are the pass's limit: about 1 000 lines draw at 18 ms, but 10 000
-take 135 ms. A layer with more lines than that (Street Level's up to 14 400
-sequences) needs a set-wide grid of bins first, as areas have, before it
-moves to `engine.ground`.
+Corridors were the pass's limit: 10 000 lines took 135 ms. With a
+set-wide grid of bins (corridor tiles), 10 000 take 12 ms, under Cesium's
+23 ms.
 
 ## Imagery: rasters on the ground
 
@@ -335,7 +410,8 @@ near the camera from one 8×8 atlas over the whole view.
   - a line on the ground: `corridor`, with `widthM` when its width is a
     real width (an outline in metres) and `widthPx` otherwise.
 - Group items that change together into one set, and replace them in bulk.
-  A ground set is rebuilt on every commit, so an animated fill (a pulse, a
-  flowing route) is not a ground set yet.
+  A ground set is rebuilt on every commit, so a fill that changes over time
+  is not a ground set, except a pixel corridor's glow, pulse and dash, which
+  the engine animates.
 - **Pixels on the ground** (tiles, a raster, a photo): an imagery layer.
   Fade it with `setAlpha`, and give a new raster to `setSource`.

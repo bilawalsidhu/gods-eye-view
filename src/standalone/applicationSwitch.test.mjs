@@ -40,6 +40,7 @@ function standalone({ failOpen = null } = {}) {
     engineOfChoice: (choice) => (choice === 'cesium' ? 'cesium' : 'navara'),
     createStandalonePlaceSearch: () => ({ kind: 'search' }),
     createStandaloneCatalog: ({ engineKind }) => ({ engineKind }),
+    loadLayerRenderers: async () => {},
     createGoogleTokenSource: () => null,
     createStandaloneScene: async ({ engineKind, defer }) => {
       if (failOpen === engineKind) throw new Error(`${engineKind} refused`);
