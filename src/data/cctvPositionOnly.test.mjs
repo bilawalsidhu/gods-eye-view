@@ -205,7 +205,7 @@ test('/media refuses a position-only camera too', async (t) => {
 
 test('health reports position-only as its own state, not as degraded', async (t) => {
   const app = mount(t);
-  await app.call(`/frame/${POSITION_ONLY.id}`);
+  // Normal clients never request media for this source.
   const entry = await app.health(POSITION_ONLY.id);
 
   // 'degraded' would read as "this feed is having trouble". It is not having

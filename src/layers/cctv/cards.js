@@ -103,7 +103,12 @@ export function createCards({ state: layerState, services, parts, source }) {
     // Cards go only on the icons the view pass shows (refreshHorizonCulling).
     for (const record of layerState._viewRecords) {
       const id = record.camera.id;
-      if (id === activeId || !record.position) continue;
+      if (
+        id === activeId ||
+        !record.position ||
+        isPositionOnlySource(record.camera)
+      )
+        continue;
       let inView = false;
       let sx = NaN;
       let sy = NaN;
@@ -232,7 +237,7 @@ export function createCards({ state: layerState, services, parts, source }) {
     let rank = 0;
     const push = (id, { pinned = false, active = false } = {}) => {
       const record = layerState._recordById.get(id);
-      if (!record?.position) return;
+      if (!record?.position || isPositionOnlySource(record.camera)) return;
       entries.push(
         createCctvThumbnailOverlayEntry({
           id,

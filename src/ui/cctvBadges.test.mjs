@@ -81,3 +81,23 @@ test('localization changes badge copy while preserving machine state ids', (test
     calBadge: 'edited',
   });
 });
+
+test('position-only badge is localized and takes precedence over stale frame errors', (testContext) => {
+  testContext.after(() => setLocale('en'));
+  const camera = { mediaAvailability: 'position-only', sourceStatus: 'ok' };
+  for (const locale of ['en', 'es', 'ru', 'zh-CN']) {
+    setLocale(locale);
+    const label = `${t('NO PUBLIC FEED')} · ${t('POSITION ONLY')}`;
+    for (const frame of [
+      IDLE,
+      { ...IDLE, error: true },
+      { ...IDLE, loading: true },
+    ])
+      assert.deepEqual(presentCctvSourceBadge(camera, true, frame), {
+        label,
+        state: 'position-only',
+      });
+    if (locale !== 'en') assert.notEqual(t('POSITION ONLY'), 'POSITION ONLY');
+  }
+  assert.equal(presentCctvSourceBadge(camera, false, IDLE).state, 'idle');
+});

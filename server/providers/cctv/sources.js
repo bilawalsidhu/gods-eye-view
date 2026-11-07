@@ -2882,6 +2882,9 @@ export async function loadAmsterdamSourcesFromOpenData() {
         redirect: 'error',
       });
       if (!resp.ok) {
+        try {
+          await resp.body?.cancel();
+        } catch {}
         console.warn(
           '[CCTV] Amsterdam camera register download failed:',
           resp.status,
@@ -2913,7 +2916,7 @@ export async function loadAmsterdamSourcesFromOpenData() {
     return prioritized;
   } catch (error) {
     console.warn(
-      '[CCTV] King County camera download error:',
+      '[CCTV] Amsterdam camera register download error:',
       error?.message || error,
     );
     return [];
@@ -3857,7 +3860,6 @@ export async function loadTorontoSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Toronto camera download error:',
-      '[CCTV] Amsterdam camera register download error:',
       error?.message || error,
     );
     return [];

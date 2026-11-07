@@ -1,5 +1,9 @@
 /** Public camera and radio queries over the CCTV and radio sources. */
 
+import {
+  isPositionOnlySource,
+  normalizeMediaAvailability,
+} from '../../sources/cctvTypes.js';
 import { suggestView } from '../views.js';
 import { defineTool, ToolError } from '../catalog.js';
 import {
@@ -56,7 +60,8 @@ export const findCctvCameras = defineTool({
   title: 'Public cameras in an area',
   description:
     'Public traffic and city cameras in an area, nearest the center first. ' +
-    'Use get_cctv_snapshot with a camera id to see its current view.',
+    'Rows marked media_availability position-only publish no imagery. ' +
+    'Use get_cctv_snapshot only for cameras with public media.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA, limit: LIMIT_SCHEMA },
@@ -87,6 +92,9 @@ export const findCctvCameras = defineTool({
         lon: round(camera.lon, 6),
         heading_deg: round(camera.headingDeg, 0),
         feed_type: text(camera.feedType),
+        media_availability: normalizeMediaAvailability(
+          camera.mediaAvailability,
+        ),
         credit: text(camera.credit),
         distance_km: round(distanceKm(center, camera), 2),
       }))
@@ -138,6 +146,11 @@ export const getCctvSnapshot = defineTool({
       throw new ToolError(
         'invalid_arguments',
         `No camera has id ${args.camera_id}; use find_cctv_cameras first`,
+      );
+    if (isPositionOnlySource(camera))
+      throw new ToolError(
+        'unavailable',
+        `Camera ${camera.name || camera.id} publishes no public imagery; this register provides positions only`,
       );
     const frame = await services.cctv.getFrame(camera, { signal });
     if (frame.sourceKind === 'synthetic' || !FRAME_TYPES.has(frame.contentType))

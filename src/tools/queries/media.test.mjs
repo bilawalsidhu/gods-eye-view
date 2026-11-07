@@ -71,6 +71,7 @@ test('cameras in an area are listed nearest first', async () => {
     lon: -97.7425,
     heading_deg: 180,
     feed_type: 'image',
+    media_availability: 'public',
     credit: 'City of Austin',
     distance_km: 0.16,
   });
@@ -508,4 +509,22 @@ test('an area the catalog trimmed away entirely is not reported complete', async
     elsewhere.summary,
     'The camera catalog has no cameras in 3 km around 40.700, -74.000.',
   );
+});
+
+test('position-only cameras are discoverable but never request a snapshot', async () => {
+  const source = cctv();
+  source.getCatalog = async () => ({
+    sources: [{ ...cameras[0], mediaAvailability: 'position-only' }],
+  });
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { cctv: source },
+  });
+  const result = await catalog.call('find_cctv_cameras', { area: downtown });
+  assert.equal(result.data.rows[0].media_availability, 'position-only');
+  await assert.rejects(
+    catalog.call('get_cctv_snapshot', { camera_id: 'austin-1' }),
+    /publishes no public imagery/,
+  );
+  assert.deepEqual(source.frames, []);
 });

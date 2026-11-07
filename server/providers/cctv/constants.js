@@ -637,7 +637,7 @@ export const WSDOT_ANCHORS = [
  */
 export const AMSTERDAM_CAMERA_ORIGIN = 'https://api.data.amsterdam.nl/';
 export const AMSTERDAM_CAMERA_URL = `${AMSTERDAM_CAMERA_ORIGIN}v1/verkeersinformatiesystemen/verkeersinformatiesystemen/`;
-/** The register holds ~390 cameras; one page covers it with room to grow. */
+/** The register holds ~500 camera rows; one page covers it with room to grow. */
 export const AMSTERDAM_CAMERA_PAGE_SIZE = 1000;
 /** Hard stop on `_links.next` following, so a paging bug cannot loop forever. */
 export const AMSTERDAM_MAX_PAGES = 4;

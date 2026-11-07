@@ -1,3 +1,4 @@
+import { isPositionOnlySource } from '../../sources/cctvTypes.js';
 import {
   CCTV_CARD_FETCH_BURST_LIMIT,
   frameFetchDue,
@@ -47,6 +48,7 @@ export function createHover({ state: layerState, services, parts, source }) {
     // stills-only — same rule as the LOD selection).
     const eligible =
       !!record &&
+      !isPositionOnlySource(record.camera) &&
       cameraId !== layerState._activeCameraId &&
       !layerState._cardIds.has(cameraId) &&
       !parts.model.isVideoFeedType(

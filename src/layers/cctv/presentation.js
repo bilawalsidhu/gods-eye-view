@@ -197,14 +197,20 @@ export function createPresentation({
       active: isActive,
       feedType: camera.feedType,
       isVideo:
+        !isPositionOnlySource(camera) &&
         parts.model.isVideoFeedType(camera.feedType) &&
         record.projection?.mode !== 'image',
-      sourceKind:
-        health?.sourceKind ||
-        camera.sourceKind ||
-        (camera.feedConfigured ? 'configured' : 'seed'),
-      sourceStatus: health?.status || 'unknown',
-      sourceMessage: health?.message || '',
+      sourceKind: isPositionOnlySource(camera)
+        ? 'position-only'
+        : health?.sourceKind ||
+          camera.sourceKind ||
+          (camera.feedConfigured ? 'configured' : 'seed'),
+      sourceStatus: isPositionOnlySource(camera)
+        ? 'position-only'
+        : health?.status || 'unknown',
+      sourceMessage: isPositionOnlySource(camera)
+        ? 'No public media published for this camera'
+        : health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
       calibration: {

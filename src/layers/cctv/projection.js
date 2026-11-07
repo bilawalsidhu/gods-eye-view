@@ -1,3 +1,4 @@
+import { isPositionOnlySource } from '../../sources/cctvTypes.js';
 import { attachCctvVideo } from './videoPlayback.js';
 import * as Cesium from 'cesium';
 import {
@@ -177,7 +178,11 @@ export function createProjection({
     const ctx = canvas.getContext('2d', { alpha: true });
 
     const feedType = parts.model.normalizeFeedType(record.camera.feedType);
-    const mode = parts.model.isVideoFeedType(feedType) ? 'video' : 'image';
+    const mode =
+      !isPositionOnlySource(record.camera) &&
+      parts.model.isVideoFeedType(feedType)
+        ? 'video'
+        : 'image';
     const runtime = {
       mode,
       canvas,

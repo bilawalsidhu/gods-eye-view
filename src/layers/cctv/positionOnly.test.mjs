@@ -9,6 +9,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCatalog } from './catalog.js';
 import { createModel } from './model.js';
+import { createCards } from './cards.js';
+import { createHover } from './hover.js';
+import { createProjection } from './projection.js';
+import { createPresentation } from './presentation.js';
+import * as Cesium from 'cesium';
 
 const POSITION_ONLY_SOURCE = {
   id: 'ams-fixture',
@@ -128,4 +133,87 @@ test('the card pacer still requests frames for ordinary cameras', () => {
 test('a position-only camera does not starve its neighbours in the rotation', () => {
   const cameras = buildCatalog([POSITION_ONLY_SOURCE, PUBLIC_SOURCE]);
   assert.deepEqual(runCardFrameTick(cameras), ['public-fixture']);
+});
+
+
+test('position-only video declarations never create a video player or media request', (t) => {
+  const priorDocument = globalThis.document;
+  const priorImage = globalThis.Image;
+  const created = [];
+  globalThis.document = { createElement(tag) {
+    created.push(tag);
+    assert.equal(tag, 'canvas', 'no video player for a position-only source');
+    return { getContext: () => ({}) };
+  } };
+  globalThis.Image = class {};
+  t.after(() => { globalThis.document = priorDocument; globalThis.Image = priorImage; });
+  const projection = createProjection({
+    state: { _viewer: { entities: { add: (entry) => entry } } },
+    services: { render: {} },
+    parts: {
+      model: { normalizeFeedType: (value) => value, isVideoFeedType: () => true, planeOrientationFor: () => Cesium.Quaternion.IDENTITY },
+      frames: { paintProjectionPlaceholder() {}, mediaUrlFor() { assert.fail('no media URL'); } },
+    }, source: {},
+  });
+  for (const feedType of ['mp4', 'webm', 'hls']) {
+    const runtime = projection.createProjectionRuntime({
+      camera: { ...POSITION_ONLY_SOURCE, feedType },
+      frustumGeometry: { halfW: 1, halfH: 1 },
+      frustumPositions: { capCenter: Cesium.Cartesian3.ZERO, label: Cesium.Cartesian3.ZERO },
+    });
+    assert.equal(runtime.mode, 'image');
+    assert.equal(runtime.video, null);
+  }
+  assert.deepEqual(created, ['canvas', 'canvas', 'canvas']);
+});
+
+test('public camera state declares position-only before the first health poll', () => {
+  const presentation = createPresentation({
+    state: { _healthById: new Map() }, services: {}, source: {},
+    parts: {
+      selection: { getActiveRecord: () => null },
+      model: { isVideoFeedType: () => true },
+      calibration: { normalizeCalibration: () => ({}), deriveCalBadge: () => 'raw-prior' },
+      frames: { frameUrlFor() { assert.fail('no frame URL'); }, mediaUrlFor() { assert.fail('no media URL'); } },
+    },
+  });
+  const camera = presentation.getPublicCameraState({ camera: { ...POSITION_ONLY_SOURCE, feedType: 'hls' } });
+  assert.equal(camera.sourceStatus, 'position-only');
+  assert.equal(camera.sourceKind, 'position-only');
+  assert.equal(camera.isVideo, false);
+  assert.equal(camera.frameUrl, null);
+  assert.equal(camera.mediaUrl, null);
+});
+
+
+test('position-only markers never allocate ambient or hover thumbnails', () => {
+  const camera = POSITION_ONLY_SOURCE;
+  const record = { camera, position: Cesium.Cartesian3.fromDegrees(camera.lon, camera.lat) };
+  const published = [];
+  const state = {
+    _enabled: true, _records: [record], _viewRecords: [record], _recordById: new Map([[camera.id, record]]),
+    _cardIds: new Set(), _cardGraceState: new Map(), _cardFrameSlots: new Map(),
+    _hoverLastPickAt: 0, _hoverCardId: null,
+    _viewer: { isDestroyed: () => false,
+      camera: { positionWC: Cesium.Cartesian3.fromDegrees(camera.lon, camera.lat, 1000), positionCartographic: { latitude: camera.lat * Math.PI / 180, longitude: camera.lon * Math.PI / 180, height: 1000 } },
+      scene: { canvas: { width: 1280, height: 800 }, cartesianToCanvasCoordinates: () => ({ x: 640, y: 400 }), pick: () => ({}) },
+    },
+    _cctvOverlayHost: { setEntries: (_, entries) => published.push(entries) },
+  };
+  const parts = {
+    model: { haversineKm: () => 0, normalizeFeedType: (v) => v, isVideoFeedType: () => false },
+    selection: { extractPickedCameraId: () => camera.id },
+  };
+  parts.cards = createCards({ state, services: {}, parts, source: {} });
+  parts.cards.refreshAmbientCards();
+  assert.equal(state._cardIds.size, 0);
+  const hover = createHover({ state, services: {}, parts, source: {} });
+  hover.handleHoverMove({ x: 640, y: 400 });
+  assert.equal(state._hoverCardId, null);
+  // Even stale/pinned selection state cannot publish an empty card.
+  state._cardIds.add(camera.id);
+  state._hoverCardId = camera.id;
+  parts.cards.pushAmbientCardEntries();
+  assert.deepEqual(published.flat(), []);
+  assert.equal(state._cardFrameSlots.size, 0);
 });

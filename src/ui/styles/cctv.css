@@ -300,9 +300,9 @@ html:not([lang='en']) .cctv-controls .scene-btn {
 /* Not an error state: this camera's operator publishes no imagery at all.
    Muted rather than red, so it does not read as a feed in trouble. */
 #cctv-source-badge[data-frame-state='position-only'] {
-  color: #b9c6d2;
-  border-color: rgba(150, 174, 196, 0.42);
-  background: rgba(150, 174, 196, 0.1);
+  --status-badge-color: #b9c6d2;
+  --status-badge-border: rgba(150, 174, 196, 0.42);
+  --status-badge-background: rgba(150, 174, 196, 0.1);
 }
 
 .cctv-summary-label {

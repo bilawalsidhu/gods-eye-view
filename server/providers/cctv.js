@@ -78,7 +78,22 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   };
 
   /** Snapshot all camera health entries as an array. */
-  const listHealth = () => Array.from(health.values());
+  const positionOnlyHealth = (source) => ({
+    id: source.id,
+    status: MEDIA_AVAILABILITY_POSITION_ONLY,
+    sourceKind: MEDIA_AVAILABILITY_POSITION_ONLY,
+    label: source.provider || 'Position-only register',
+    message: 'No public media published for this camera',
+    updatedAt: health.get(source.id)?.updatedAt || 0,
+  });
+  const listHealth = (sources) => {
+    const entries = new Map(health);
+    for (const source of sources) {
+      if (isPositionOnlySource(source))
+        entries.set(source.id, positionOnlyHealth(source));
+    }
+    return Array.from(entries.values());
+  };
 
   /** Build a JSON payload describing stream info (feedType, URLs) for a camera. */
   const buildStreamPayload = (source, cameraId) => {
@@ -258,7 +273,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
           });
-          res.end(JSON.stringify({ cameras: listHealth() }));
+          res.end(JSON.stringify({ cameras: listHealth(sources) }));
           return;
         }
 

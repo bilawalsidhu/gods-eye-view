@@ -1679,7 +1679,7 @@ round-robin, so adding this pack does not silently drop another region.
 The CCTV catalog adds the City of Amsterdam's public traffic-information asset
 register, read keyless from
 `https://api.data.amsterdam.nl/v1/verkeersinformatiesystemen/verkeersinformatiesystemen/`
-filtered server-side to `objectSoort=Camera` (~390 rows: mast traffic cameras
+filtered server-side to `objectSoort=Camera` (~500 rows, ~400 with a position: mast traffic cameras
 plus the travel-time, environmental-zone, S100-ring and mobile ANPR networks).
 Two request headers are load-bearing and both fail silently if dropped: the API
 answers 406 to a plain `application/json`, so `Accept: application/hal+json` is
@@ -1701,16 +1701,20 @@ cameras, *before* the upstream → Street View → synthetic fallback chain runs
 health records the state as its own `position-only` status rather than
 `degraded`. The client refuses the request symmetrically: the ambient card pacer
 never selects such a camera, the projection plane keeps a `NO PUBLIC FEED ·
-POSITION ONLY` placeholder, and the panel badge reads the same. The chain still
+POSITION ONLY` placeholder, and the panel badge reads the same. Position-only
+records stay out of ambient and hover thumbnails, including video-shaped custom
+sources. Health and public camera state identify them before any media request.
+Camera discovery tools expose `media_availability`; snapshot tools explain that
+no public imagery exists without requesting a frame. The chain still
 answers an outage for every other pack, which is what it is for; the default for
 an undeclared or unrecognized value is `public`, so no existing pack changes
 behavior. The register publishes no bearing, so every row takes the headingless
 low-confidence RAW PRIOR pose (id-hash heading, −18° / 44° / 145 m / 8 m) and an
 orthometric 2 m ground prior matching the Caltrans/TfL convention.
 
-By default the 250 cameras nearest Dam square load.
-`CCTV_AMSTERDAM_MAX_SOURCES` sets the pack cap (8–600) and
-`CCTV_AMSTERDAM_ENABLED=0` turns the pack off. The Gemeente Amsterdam
+The pack is off unless `CCTV_AMSTERDAM_ENABLED=1`; unset or other values make
+no Amsterdam request. Once enabled, the 250 cameras nearest Dam square load.
+`CCTV_AMSTERDAM_MAX_SOURCES` sets the pack cap (8–600). The Gemeente Amsterdam
 attribution is registered in the Data attribution popover.
 
 Live Rijkswaterstaat motorway cameras near Amsterdam are deliberately not used:

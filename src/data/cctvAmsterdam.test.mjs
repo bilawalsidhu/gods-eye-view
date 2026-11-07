@@ -11,6 +11,7 @@ import {
   normalizeAmsterdamCameraRecords,
   amsterdamCameraTypeLabel,
   loadAmsterdamSourcesFromOpenData,
+  loadTorontoSourcesFromOpenData,
 } from '../../server/providers/cctv/sources.js';
 import { normalizeSourceItem } from '../../server/providers/cctv/normalize.js';
 import { isPositionOnlySource } from '../sources/cctvTypes.js';
@@ -285,13 +286,15 @@ test('the pack is capped and ordered nearest-to-Dam-square', async (t) => {
   // Dam square is 52.373/4.8926; the far row sits out by the A10 ring.
   const near = row({ objectnummer: 'NEAR-1', geometrie: { type: 'Point', coordinates: [4.8926, 52.373] } });
   const far = row({ objectnummer: 'FAR-1', geometrie: { type: 'Point', coordinates: [4.78, 52.33] } });
-  withUpstream(t, () => halPage([far, near]));
+  const middle = Array.from({ length: 10 }, (_, i) => row({
+    objectnummer: `MID-${i}`, geometrie: { type: 'Point', coordinates: [4.9 + i * 0.001, 52.37] },
+  }));
+  withUpstream(t, () => halPage([far, ...middle, near]));
 
   const cameras = await loadAmsterdamSourcesFromOpenData();
-  assert.deepEqual(
-    cameras.map((camera) => camera.id),
-    ['ams-near-1', 'ams-far-1'],
-  );
+  assert.equal(cameras.length, 8);
+  assert.equal(cameras[0].id, 'ams-near-1');
+  assert.ok(!cameras.some((camera) => camera.id === 'ams-far-1'));
 });
 
 test('the provider string matches the LOD cadence lookup key', () => {
@@ -302,4 +305,46 @@ test('the provider string matches the LOD cadence lookup key', () => {
     staticFrameRefreshMs(camera),
     staticFrameRefreshMs({ provider: 'some-unlisted-provider' }),
   );
+});
+
+test('an unsuccessful catalog response releases its body', async (t) => {
+  let cancelled = false;
+  withUpstream(t, () => new Response(new ReadableStream({
+    cancel() { cancelled = true; },
+  }), { status: 503 }));
+  assert.deepEqual(await loadAmsterdamSourcesFromOpenData(), []);
+  assert.equal(cancelled, true);
+});
+
+/** Collect console.warn lines for the duration of one test. */
+function captureWarnings(t) {
+  const nativeWarn = console.warn;
+  const lines = [];
+  console.warn = (...args) => lines.push(args.map(String).join(' '));
+  t.after(() => {
+    console.warn = nativeWarn;
+  });
+  return lines;
+}
+
+test('a failed register download is logged under Amsterdam, not another pack', async (t) => {
+  withUpstream(t, () => {
+    throw new Error('network down');
+  });
+  const warnings = captureWarnings(t);
+  assert.deepEqual(await loadAmsterdamSourcesFromOpenData(), []);
+  assert.deepEqual(warnings, [
+    '[CCTV] Amsterdam camera register download error: network down',
+  ]);
+});
+
+test('a failed Toronto download names only Toronto', async (t) => {
+  withUpstream(t, () => {
+    throw new Error('network down');
+  });
+  const warnings = captureWarnings(t);
+  assert.deepEqual(await loadTorontoSourcesFromOpenData(), []);
+  assert.deepEqual(warnings, [
+    '[CCTV] Toronto camera download error: network down',
+  ]);
 });

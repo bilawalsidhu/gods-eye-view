@@ -4955,6 +4955,7 @@
       "src/tools/queries/space.js",
       "src/tools/queries/aviation.js",
       "src/tools/queries/media.js",
+      "src/sources/cctvTypes.js",
       "src/tools/queries/places.js",
       "src/tools/queries/mobility.js",
       "src/tools/queries/environment.js",
