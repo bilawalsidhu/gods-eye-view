@@ -94,7 +94,7 @@ test('before the controller presents, the card shows the state it starts in', (t
   const card = $('#cockpit-context');
   assert.equal(card.hidden, true);
   assert.equal(card.hasAttribute('data-state'), false);
-  assert.equal(text('#cockpit-context-subject'), 'CONTACTS · 250 KM');
+  assert.equal(text('#cockpit-context-subject'), 'CONTACTS · 250\u00a0KM');
   assert.equal($('#cockpit-context-previous').disabled, false);
   assert.equal($('#cockpit-context-next').disabled, false);
   assert.deepEqual(
@@ -407,8 +407,10 @@ test('the card is labelled in the UI language', async (t) => {
   t.after(() => setLocale('en'));
   setLocale('ru');
   const { $, text, owner } = fixture(t);
-  const subject = translate('CONTACTS · 250 KM');
-  assert.notEqual(subject, 'CONTACTS · 250 KM');
+  const subject = translate('CONTACTS · {distance}', {
+    distance: '250\u00a0КМ',
+  });
+  assert.notEqual(subject, 'CONTACTS · 250\u00a0КМ');
   assert.equal(text('#cockpit-context-subject'), subject);
   assert.equal(text('#cockpit-weather-state'), translate('OFF'));
   syncWeatherToggle.call(owner, true);

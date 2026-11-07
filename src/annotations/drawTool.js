@@ -53,6 +53,7 @@ import {
 import { DRAW_COLORS, DRAW_COLOR_CSS, presentDrawMarks } from './drawMarks.js';
 
 import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
+import { onUnitSystemChange } from '../ui/unitLabels.js';
 /** The id this tool claims the pointer under. */
 const DRAW_POINTER_OWNER = 'draw';
 const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
@@ -132,6 +133,10 @@ export function initDrawTool({
     present();
   };
   const offLocale = onLocaleChange(() => {
+    if (!destroyed) setHint(hintText);
+  });
+  // The hint's running length or area follows the unit system.
+  const offUnits = onUnitSystemChange(() => {
     if (!destroyed) setHint(hintText);
   });
 
@@ -556,6 +561,7 @@ export function initDrawTool({
       if (active) setActive(false);
       destroyed = true;
       offLocale();
+      offUnits();
       offBoard();
       disconnect();
       releaseSceneHandler();

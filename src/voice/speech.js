@@ -38,7 +38,12 @@ import {
 } from '../ui/layerNames.js';
 import { localizePlaceName } from '../ui/placeNames.js';
 import { CITY_POIS } from '../cityPois.js';
-import { formatQuantity } from '../ui/unitLabels.js';
+import {
+  convertQuantity,
+  formatQuantity,
+  getUnitSystem,
+} from '../ui/unitLabels.js';
+import { METRES_PER_FOOT, METRES_PER_MILE } from '../data/distanceFormat.js';
 
 const LAYER_NOUNS = Object.freeze({
   flights: 'aircraft',
@@ -123,21 +128,41 @@ function shownFeet(meters) {
   return t('{value} feet', { value: formatNumber(rounded) });
 }
 
-function roundedKm(km) {
+/**
+ * A distance in the page's unit system (km, or miles under imperial units),
+ * one decimal under 10 and whole beyond: `{value, unit}`, or null when
+ * unknown. Tool results keep kilometres; only what is said and shown follows
+ * Display → Units.
+ */
+function roundedDistance(km) {
+  // A missing distance is unknown, not zero: Number(null) is 0.
+  if (km === null || km === undefined || km === '') return null;
   const value = Number(km);
   if (!Number.isFinite(value)) return null;
-  return value < 10 ? Number(value.toFixed(1)) : Math.round(value);
+  const shown = convertQuantity(value, 'km');
+  return {
+    value:
+      shown.value < 10
+        ? Number(shown.value.toFixed(1))
+        : Math.round(shown.value),
+    unit: shown.unit,
+  };
 }
 
+/** The spoken distance: "12 km", or "7.5 miles" / "1 mile" under imperial units. */
 function kilometers(km) {
-  const value = roundedKm(km);
-  return value === null ? null : `${value} km`;
+  const distance = roundedDistance(km);
+  if (distance === null) return null;
+  if (distance.unit !== 'mi') return `${distance.value} km`;
+  return `${distance.value} ${distance.value === 1 ? 'mile' : 'miles'}`;
 }
 
-/** The card's distance, in the active language: "2,5 км". */
+/** The card's distance, in the active language: "2,5 км" (or "1,6 mi"). */
 function shownKm(km) {
-  const value = roundedKm(km);
-  return value === null ? null : formatQuantity(value, 'km');
+  const distance = roundedDistance(km);
+  return distance === null
+    ? null
+    : formatQuantity(distance.value, distance.unit);
 }
 
 /** Sources as the card lists them. */
@@ -685,14 +710,28 @@ function getEntityContext(result) {
   };
 }
 
+/**
+ * The camera height as said: "12 km up" / "850 m up", or "7 miles up" /
+ * "2,790 feet up" under imperial units.
+ */
+function spokenHeight(heightM) {
+  if (getUnitSystem() === 'imperial') {
+    // Said whole, as the metric "12 km up" is; one is singular.
+    const miles = Math.round(heightM / METRES_PER_MILE);
+    if (heightM >= METRES_PER_MILE)
+      return `${miles.toLocaleString('en-US')} ${miles === 1 ? 'mile' : 'miles'} up`;
+    const feet = Math.round(heightM / METRES_PER_FOOT);
+    return `${feet.toLocaleString('en-US')} ${feet === 1 ? 'foot' : 'feet'} up`;
+  }
+  return heightM >= 1000
+    ? `${Math.round(heightM / 1000).toLocaleString('en-US')} km up`
+    : `${Math.round(heightM)} m up`;
+}
+
 function getCurrentViewState(result) {
   if (!result?.ok) return null;
   const heightM = Number(result.camera?.heightM);
-  const height = Number.isFinite(heightM)
-    ? heightM >= 1000
-      ? `${Math.round(heightM / 1000).toLocaleString('en-US')} km up`
-      : `${Math.round(heightM)} m up`
-    : null;
+  const height = Number.isFinite(heightM) ? spokenHeight(heightM) : null;
   const layers = Array.isArray(result.layers) ? result.layers : [];
   const enabled = layers.filter((layer) => layer.enabled !== false);
   const names = enabled.map((layer) => spokenLabel(layer.name || layer.id, 24));

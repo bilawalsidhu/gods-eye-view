@@ -33,8 +33,8 @@ for (const locale of ['es', 'ru']) {
     try {
       // What streetLevel/index.js openNearest writes into street.error.
       const refusal = t(
-        'No street-level imagery within {radius} m of that point',
-        { radius: 50 },
+        'No street-level imagery within {distance} of that point',
+        { distance: '50 m' },
       );
       assert.notEqual(refusal, NO_IMAGERY, 'should be translated');
       assert.match(refusal, /50/, 'keeps the radius');

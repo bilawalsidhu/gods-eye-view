@@ -448,6 +448,66 @@ the original HUD presentation; Cyber retains its existing skin.
 `node scripts/qa-scope-hud.mjs` checks native input, range, layout persistence,
 restoration and both Scope presentations. `QA_SCREENSHOT_DIR` saves screenshots.
 
+## Measurement units — November 2026
+
+Display's **Units** switch (`#units-row`: Metric | Imperial) chooses the units
+measurements are shown in. The choice is kept per browser
+(`gev:units:v1`). Without one the page starts in metric, whatever the
+browser's language; the standalone application resolves it at boot, next to
+the locale. It is display only: layer
+data, stored values, tool data fields (distances, radii, altitudes) and
+`annotate_map` labels stay SI, and share links do not carry the choice (like
+the language, a recipient keeps their own). Lines the assistant says and status
+text it reads (the mapped-installation status, for example) follow the display
+units, so what is said matches what is shown.
+
+The converting formatters live beside the unit labels in `src/ui/unitLabels.js`
+(`formatMeasure`, `formatDistance`, `formatSpeed`, `formatTemperature`,
+`formatArea`, `formatCompactLength`). Distances below 1,000 ft read in feet,
+then in miles with one decimal below 10 mi (metric keeps metres below 1 km,
+then kilometres the same way); each cut is taken after rounding. km/h, m/s and
+km/s read in mph, °C in °F, km² in mi² and millimetres of precipitation in
+inches. A missing or non-numeric reading reads `—`, and a reading that rounds
+to zero never reads `-0`.
+
+Converted surfaces: the HUD summary line (altitude, view window, locality
+distance) and its GSD/ALT corner readouts; the Cockpit Contact card (window,
+contact distances), nearby-signal distances and the local weather brief
+(temperature, wind, precipitation); the Contacts panel (window, reasons,
+coverage, world-label distances) and the mapped-installation status; route
+directions; the wind card's temperature reading, the temperature legend and
+field unit; launch telemetry (altitude, speed, downrange); the tracked
+satellite card; transit's reported speed; Street Level's search radius; the
+CCTV readout (range, coverage, night-vision range) and its calibration chips,
+whose typed values are read in the shown unit and stored in metres; Recent
+Imagery's box size, box limit and product resolution; Draw's running length or
+area (ft, acres, mi²) and line and arrow captions on the map; and the voice
+card's radii, areas and distances. Voice speech says miles and feet under
+imperial ("1 mile", "1 foot up" in the singular). A route caption on the map
+follows the units while the label `annotate_map` returns stays metric, and
+`fly_route` matches and answers with that metric label. The Contacts snapshot
+keeps the installation coverage as English data (`WITHIN 62 KM`); the panel
+and the Cockpit word it when they show it. CCTV calibration commits nothing
+when a length is left as shown, since the shown feet are rounded. A Street
+Level "no imagery" message already on screen keeps its units until the next
+lookup.
+
+Unchanged by design: aviation feet, flight levels and knots, marine nautical
+miles and knots, cyclone winds in knots, hPa, dB, dBZ, lightning density per
+km², wildfire acres as reported, and product descriptions that name a
+measurement (the 2 m temperature and 10 m wind fields, imagery product
+resolutions in their source descriptions). Wind speed keeps the wind layer's
+own UNITS chips (km/h, m/s, mph), which share links carry as layer state.
+
+Switching re-renders in place, as a language switch does: views that format
+while rendering follow a Vue ref bound in `src/ui/i18n.js`, and owners that
+publish formatted text word it again through `onUnitSystemChange` (HUD,
+Cockpit, Contacts, launches, layer panel, CCTV, Recent Imagery, Draw and the
+annotation board). `src/ui/unitLabels.test.mjs`,
+`src/ui/unitSurfaces.test.mjs` and `src/ui/displayPanel.test.mjs` cover the
+conversions, thresholds, default and persistence, each surface family in both
+systems and the re-render.
+
 ## HUD layouts — October 29, 2026
 
 Display > HUD > Layout offers Tactical, Minimal and Cyber; the `set_hud` voice

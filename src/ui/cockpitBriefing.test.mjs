@@ -155,7 +155,7 @@ test('regional news and local conditions render what the region returned', async
   assert.match(links[0].querySelector('span').textContent, /^example\.com · /);
   assert.equal(text('#cockpit-local-place'), 'AUSTIN, TEXAS');
   assert.equal(text('#cockpit-local-temperature'), '22°C');
-  assert.equal(text('#cockpit-local-wind'), '12 KM/H');
+  assert.equal(text('#cockpit-local-wind'), '12\u00a0KM/H');
   assert.equal(text('#cockpit-local-condition'), 'RAIN');
   assert.equal(text('#cockpit-local-cloud'), 'CLOUD 40%');
   assert.equal(text('#cockpit-local-precipitation'), '1.3');

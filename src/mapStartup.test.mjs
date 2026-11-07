@@ -66,6 +66,8 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     },
     resolveLocale: () => 'en',
     setLocale() {},
+    resolveUnitSystem: () => 'metric',
+    setUnitSystem() {},
     getLocale: () => 'en',
     onLocaleChange: () => () => {},
     mountApplicationViews() {},

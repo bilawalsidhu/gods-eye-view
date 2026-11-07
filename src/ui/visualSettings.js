@@ -6,6 +6,12 @@ import { applicationPinia } from './vueRuntime.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
+  getUnitSystem,
+  onUnitSystemChange,
+  persistUnitSystem,
+  setUnitSystem,
+} from './unitLabels.js';
+import {
   VisualEffects,
   STYLES,
   GLOBAL_POST_DEFAULTS,
@@ -189,6 +195,8 @@ export class VisualSettings {
         this._refreshParameters();
       }),
     );
+    // The Units switch shows the active system, however it changed.
+    this._lifetime.own(onUnitSystemChange(() => this._publishDisplay()));
     // The active style's published parameter rows; null while it has none.
     this._parameters = null;
     this._parametersToken = store.connect({
@@ -481,7 +489,22 @@ export class VisualSettings {
         featherPct: this._scopeFeatherShown,
       },
       celestial: this._celestialShown,
+      units: getUnitSystem(),
     };
+  }
+
+  /**
+   * Show measurements in `system` ('metric' or 'imperial') and keep the
+   * choice for this browser. Display only: data, share links and AI-tool
+   * readings stay SI, so the choice is not part of the share state.
+   * @param {string} system
+   * @returns {'metric'|'imperial'} The system applied.
+   */
+  _setUnitSystem(system) {
+    const applied = setUnitSystem(system);
+    persistUnitSystem(applied);
+    this._publishDisplay();
+    return applied;
   }
 
   /**

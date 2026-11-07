@@ -1,4 +1,5 @@
 import { getLocale, keepCodesWithValues, msg, t, tn } from '../i18n/index.js';
+import { formatCompactLength } from './unitLabels.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
@@ -105,12 +106,12 @@ function metaText(state, enabled, activeCamera, catalogCount) {
     const projLabel = state?.showProjection !== false ? t('MONITOR') : t('OFF');
     return keepCodesWithValues(
       t(
-        '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
+        '{city} · HDG {heading} · FOV {fov} · RANGE {range} · {projection}{calBadge} · {provider}{status}',
         {
           city: activeCamera.city,
           heading: `${roundHeadingDegrees(Number(activeCamera.headingDeg)) ?? 0}°`,
           fov: `${Math.round(activeCamera.fovDeg)}°`,
-          range: Math.round(activeCamera.rangeM),
+          range: formatCompactLength(Number(activeCamera.rangeM)),
           projection: projLabel,
           calBadge: calBadge ? ` · ${calBadge}` : '',
           provider,

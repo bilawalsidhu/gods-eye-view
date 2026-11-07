@@ -27,6 +27,7 @@ import {
 } from '../../i18n/index.js';
 import { pointerOwnerName } from '../../data/pointerOwnerNames.js';
 import {
+  formatDistance,
   formatQuantity,
   quantitySeparator,
   unitLabel,
@@ -104,17 +105,14 @@ export const FLIGHT_PROGRESS_MS = 250;
 
 /**
  * Localized "850 m", "1.2 km", "21 km" (the rounding of `formatRouteDistance`
- * in src/data/routeSteps.js); number and unit never break apart.
+ * in src/data/routeSteps.js), or "820 ft", "0.7 mi", "13 mi" under imperial
+ * units; number and unit never break apart. '' for no distance.
  * @param {number} meters
  * @returns {string}
  */
 export function routeDistanceText(meters) {
-  const parts = distanceParts(meters, { metreStep: 10, exactBelowM: 100 });
-  if (!parts) return '';
-  return formatQuantity(parts.value, parts.unit, {
-    minimumFractionDigits: parts.digits,
-    maximumFractionDigits: parts.digits,
-  });
+  if (!distanceParts(meters)) return '';
+  return formatDistance(meters, { metreStep: 10, exactBelowM: 100 });
 }
 
 /**
