@@ -51,7 +51,7 @@ for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce th
 });
 
 test('Nepal locator introduces the shared OSM credit', async (t) => {
-  const v = viewer(t);
+  const v = viewer(t, { draw: fakeDrawPort() });
   const layer = createBhoteKoshiLocatorLayer({ boundaryResolver: async () => ({ name: 'Nepal', ring: [[80, 26], [88, 26], [88, 30], [80, 30]] }), overlayHost, requestRender: noop, scheduleFrame: () => 1, cancelFrame: noop });
   await layer.init(v); await layer.enable(v, { origin: 'scene' });
   assertCredit(v); await layer.destroy(v);
