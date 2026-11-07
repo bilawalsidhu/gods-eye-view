@@ -9,6 +9,7 @@ import {
   ICON_CULL_LIFT,
   ICON_ROTATES,
   ICON_SHOWN,
+  ICON_CULL_LIFT_BELOW_M,
 } from './iconSet.js';
 import {
   writeArcSegment,
@@ -333,4 +334,41 @@ test('removing a row moves its switch, proxy and depth-test columns too', () => 
   assert.equal(set.pickProxyWidth(moved), 44);
   assert.equal(set.pickProxyHeight(moved), 33);
   assert.equal(set.depthTestDistance(moved), 0);
+});
+
+test('a horizon-culled draw set lifts what the aircraft layers lift, and lifts the rest no lower', () => {
+  const set = createIconSet();
+  const row = set.add('a');
+  set.setFlag(row, ICON_CULL_LIFT, true);
+  const heightOf = (p) => Cesium.Cartographic.fromCartesian(p).height;
+  // The aircraft layers' rule, by fix height h for a row drawn at d.
+  const aircraft = (h, d) =>
+    h < ICON_CULL_LIFT_BELOW_M ? Math.max(d, ICON_CULL_HEIGHT_M) : d;
+  for (const [h, d] of [
+    [-31, -31],
+    [5, 5],
+    [9.99, 9.99],
+    [12, 12],
+    [400, 400],
+    [9, 15],
+    [20, 20],
+  ]) {
+    const at = Cesium.Cartesian3.fromDegrees(-97.04, 32.9, d);
+    const judged = heightOf(set.cullPoint(row, at));
+    assert.ok(
+      Math.abs(judged - aircraft(h, d)) < 1e-3,
+      `${h}/${d} m: ${judged}`,
+    );
+  }
+  // Unflagged by the aircraft rule, drawn below 12 m: judged higher, never lower.
+  for (const [h, d] of [
+    [10, 10],
+    [11, 11],
+    [20, 5],
+  ]) {
+    const at = Cesium.Cartesian3.fromDegrees(4.1, 51.95, d);
+    const judged = heightOf(set.cullPoint(row, at));
+    assert.ok(Math.abs(judged - ICON_CULL_HEIGHT_M) < 1e-3, `${h}/${d} m`);
+    assert.ok(judged > aircraft(h, d), 'judged higher');
+  }
 });

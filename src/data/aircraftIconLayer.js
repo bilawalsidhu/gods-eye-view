@@ -7,6 +7,7 @@ import {
 import {
   createIconSet,
   ICON_CULL_LIFT,
+  ICON_CULL_LIFT_BELOW_M,
   ICON_RECEDES,
   ICON_ROTATES,
 } from './iconSet.js';
@@ -42,9 +43,6 @@ const COCKPIT_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
   8000000,
   0.65,
 );
-/** Contacts drawn below this height (m) are judged for the horizon a little
- *  above the ellipsoid (ICON_CULL_LIFT). */
-const CULL_LIFT_BELOW_M = 10;
 
 /**
  * An aircraft layer's contacts as one icon set: each row's motion segment
@@ -333,7 +331,7 @@ export function createAircraftIcons({
       row,
       ICON_CULL_LIFT,
       Number.isFinite(info?.renderAltitudeM) &&
-        info.renderAltitudeM < CULL_LIFT_BELOW_M,
+        info.renderAltitudeM < ICON_CULL_LIFT_BELOW_M,
     );
     set.setAlpha(row, state.records.missingPolls.get(icao24) ? 0.45 : 1);
   }

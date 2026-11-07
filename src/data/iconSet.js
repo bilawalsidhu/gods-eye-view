@@ -65,6 +65,22 @@ export const ICON_RECEDES = 4;
 export const ICON_CULL_LIFT = 8;
 /** The ellipsoid height a CULL_LIFT row is raised to for the horizon test. */
 export const ICON_CULL_HEIGHT_M = HORIZON_LIFT_M;
+/**
+ * Contacts whose fix is below this height (m) get CULL_LIFT in the aircraft
+ * layers' icon sets; theirs are the only rows flagged by height.
+ *
+ * Through the draw port a `horizonCull` set flags every row, so every row
+ * drawn below ICON_CULL_HEIGHT_M is lifted. The two agree on every row this
+ * rule flags (lifted either way) and every row drawn at or above
+ * ICON_CULL_HEIGHT_M (no lift either way). They differ only on rows this
+ * rule leaves unflagged (fix at or above 10 m) while drawn below 12 m: a
+ * contact between 10 and 12 m (judged up to 2 m higher), or one whose drawn
+ * position sits lower than its fix (a climb-out from a lower earlier fix, a
+ * dead-reckoned ground drift). The port judges those higher, so it never
+ * hides what this rule shows, and shows near-ground contacts at the limb that
+ * this rule culled, which is what the lift is for.
+ */
+export const ICON_CULL_LIFT_BELOW_M = 10;
 
 /** Move the epoch once render times are this many seconds from it. */
 const REBASE_AFTER_SEC = 1800;
