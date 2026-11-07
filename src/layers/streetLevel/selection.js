@@ -1,4 +1,8 @@
-import { CLICK_PICK_WINDOW_PX, STREET_LEVEL_LAYER_ID } from './policy.js';
+import {
+  CLICK_PICK_WINDOW_PX,
+  STREET_LEVEL_LAYER_ID,
+  STREET_LEVEL_SET_PREFIX,
+} from './policy.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { toLonLatH } from '../../geo/index.js';
 
@@ -6,33 +10,39 @@ import { toLonLatH } from '../../geo/index.js';
 export function createSelection({ state, parts }) {
   const { picking } = state.services;
 
+  /**
+   * The pick id a click hit: a line part of ours answers for its sequence
+   * (`meta.pick`); anything else by its own id.
+   */
+  function pickIdOf({ drawHit, id }) {
+    if (drawHit?.set.startsWith(STREET_LEVEL_SET_PREFIX))
+      return drawHit.meta?.pick ?? drawHit.id;
+    return id;
+  }
+
   /** The id carries a provider's prefix: that provider handles the pick. */
   function onClick(event) {
-    const viewer = state.viewer;
-    if (!viewer || !state.enabled) return;
-    const picked = event.pickWindow(CLICK_PICK_WINDOW_PX, CLICK_PICK_WINDOW_PX);
-    const id = picking?.resolvePickId
-      ? picking.resolvePickId(picked)
-      : picked?.id;
-    const route = parts.router.resolve(id);
+    if (!state.viewer || !state.enabled) return;
+    const hit = event.windowHit(CLICK_PICK_WINDOW_PX, CLICK_PICK_WINDOW_PX);
+    const route = parts.router.resolve(pickIdOf(hit));
     // Not ours: the ground handler decides whether it is the map itself.
     if (!route) {
-      parts.openAtGround?.(event.position, picked);
+      parts.openAtGround?.({ surface: hit.surface, ground: groundOf(event) });
       return;
     }
     // The position marker is the core's own: nothing to select.
     if (!route.instance) return;
     route.instance.handlePick(route.id, {
-      groundPoint: () => groundPointAt(viewer, event.position),
+      groundPoint: () => groundPointOf(event),
     });
   }
 
-  /** Lon/lat of the ground under a screen point, or null (sky, no picker). */
-  function groundPointAt(viewer, screenPosition) {
-    const position = state.services.scenePick?.pickGroundPosition?.(
-      viewer,
-      screenPosition,
-    );
+  /** The world position under a click, measured when first asked; null over the sky. */
+  const groundOf = (event) => () => event.ground();
+
+  /** Lon/lat of the ground under a click, or null (sky). */
+  function groundPointOf(event) {
+    const position = event.ground();
     const ground = position && toLonLatH(position);
     return ground ? { lon: ground.lon, lat: ground.lat } : null;
   }

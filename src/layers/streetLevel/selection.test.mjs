@@ -6,7 +6,12 @@ import { createPickRouter } from './pickRouter.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 
 /** The selection installed on a stand-in viewer, with what its clicks reach. */
-function harness({ selected = false, services = {}, providers = [] } = {}) {
+function harness({
+  selected = false,
+  services = {},
+  providers = [],
+  sceneExtras = {},
+} = {}) {
   const saved = globalThis.document;
   globalThis.document = new EventTarget();
   // The document's keydown listeners, so a test can hand them any target.
@@ -36,7 +41,11 @@ function harness({ selected = false, services = {}, providers = [] } = {}) {
     onwheel: null,
   });
   const viewer = {
-    scene: { canvas, pick: () => scene.under && { id: scene.under } },
+    scene: {
+      canvas,
+      pick: () => scene.under && { id: scene.under },
+      ...sceneExtras,
+    },
   };
   const state = {
     viewer,
@@ -66,7 +75,7 @@ function harness({ selected = false, services = {}, providers = [] } = {}) {
       positionId: 'sl:pos',
     }),
     hasSelectedSequence: () => sequences.selected,
-    openAtGround: (position, picked) => groundClicks.push({ position, picked }),
+    openAtGround: (click) => groundClicks.push(click),
     clearSequences() {
       sequences.cleared++;
       sequences.selected = false;
@@ -118,8 +127,8 @@ test('a click on a line selects its sequence, on a cone opens its image, elsewhe
     assert.deepEqual([h.sequences.selects, h.opened], [['abc'], ['42']]);
     // The marker is ours; nothing and another layer's pick go to the ground.
     assert.deepEqual(
-      h.groundClicks.map(({ picked }) => picked?.id),
-      [undefined, 'cctv:7'],
+      h.groundClicks.map(({ surface }) => surface),
+      [true, false],
     );
   } finally {
     h.restore();
@@ -193,18 +202,43 @@ test('a click on the position marker neither selects nor opens at the ground', (
   }
 });
 
-test('a click on nothing of ours goes to the ground handler with the pick, which decides', () => {
+test('a click on nothing of ours goes to the ground handler, told whether it hit the map', () => {
   const h = harness();
   try {
     h.click(5);
     h.scene.under = 'flight:abc';
     h.click(6);
     assert.deepEqual(
-      h.groundClicks.map(({ position, picked }) => [position.x, picked?.id]),
-      [
-        [5, undefined],
-        [6, 'flight:abc'],
-      ],
+      h.groundClicks.map(({ surface }) => surface),
+      [true, false],
+    );
+    assert.equal(h.groundClicks[0].ground(), null, 'no ground in this scene');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a click on a part of a drawn line selects the sequence it belongs to', () => {
+  const h = harness();
+  try {
+    h.scene.under = {
+      set: 'street-level:mapillary-coverage:1',
+      id: 'mly:seq:abc#2',
+      meta: { pick: 'mly:seq:abc' },
+    };
+    h.click();
+    assert.deepEqual(h.sequences.selects, ['abc']);
+    // Another layer's set is not read for a Street Level pick.
+    h.scene.under = {
+      set: 'flights:1',
+      id: 'flight:1',
+      meta: { pick: 'mly:seq:xyz' },
+    };
+    h.click();
+    assert.deepEqual(h.sequences.selects, ['abc']);
+    assert.deepEqual(
+      h.groundClicks.map(({ surface }) => surface),
+      [false],
     );
   } finally {
     h.restore();
@@ -226,12 +260,11 @@ test('a click on a provider line hands it the ground under the click, measured o
         },
       ],
     ],
-    services: {
-      scenePick: {
-        pickGroundPosition: (viewer, position) => {
-          groundPicks.push(position);
-          return Cesium.Cartesian3.fromDegrees(-83.0458, 42.3314, 190);
-        },
+    sceneExtras: {
+      pickPositionSupported: true,
+      pickPosition: (position) => {
+        groundPicks.push(position);
+        return Cesium.Cartesian3.fromDegrees(-83.0458, 42.3314, 190);
       },
     },
   });

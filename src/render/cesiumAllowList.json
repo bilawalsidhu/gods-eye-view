@@ -86,7 +86,6 @@
   "src/layers/satellites/state.js",
   "src/layers/satellites/testing.js",
   "src/layers/satellites/tracking.js",
-  "src/layers/streetLevel/lineCoverage.js",
   "src/layers/traffic/animation.js",
   "src/layers/traffic/lifecycle.js",
   "src/layers/traffic/rendering.js",

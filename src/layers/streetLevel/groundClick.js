@@ -13,15 +13,14 @@ export function groundClickHeightOk(viewer) {
  * active `groundClick` providers, without moving the camera. The height is
  * measured at the click, not read from the cached flag.
  * @param {{state: object, openNearest: Function, isAvailable: (entry: object) => boolean}} options
- * @returns {(screenPosition: {x: number, y: number}, picked?: object) => Promise<boolean>|false}
+ * @returns {(click: {surface: boolean, ground: () => {x: number, y: number, z: number}|null}) => Promise<boolean>|false}
+ *   `surface`: whether the click hit the map itself; `ground`: the world
+ *   position under it, null over the sky.
  */
 export function createGroundClick({ state, openNearest, isAvailable }) {
-  return function openAtGround(screenPosition, picked) {
-    const scenePick = state.services.scenePick;
-    if (!state.enabled || !state.viewer || !scenePick?.pickGroundPosition)
-      return false;
-    if (!scenePick.isSurfacePick(picked) || !groundClickHeightOk(state.viewer))
-      return false;
+  return function openAtGround({ surface, ground: groundAt }) {
+    if (!state.enabled || !state.viewer) return false;
+    if (!surface || !groundClickHeightOk(state.viewer)) return false;
     const providerIds = [...state.providers.values()]
       .filter(
         (entry) =>
@@ -32,7 +31,7 @@ export function createGroundClick({ state, openNearest, isAvailable }) {
       )
       .map((entry) => entry.def.id);
     if (!providerIds.length) return false;
-    const position = scenePick.pickGroundPosition(state.viewer, screenPosition);
+    const position = groundAt();
     const ground = position && toLonLatH(position);
     if (!ground) return false;
     return openNearest(

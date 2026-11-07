@@ -87,14 +87,6 @@ test('cone thinning across the date line drops images metres apart', () => {
 
 /** A viewer looking straight down on downtown Sacramento from 900 m. */
 function streetViewer() {
-  const collection = () => ({
-    add: (item) => item,
-    remove: () => true,
-    contains: () => false,
-    get length() {
-      return 0;
-    },
-  });
   const event = () => ({ addEventListener: () => () => {} });
   const camera = Object.assign(
     rayCamera({
@@ -112,8 +104,6 @@ function streetViewer() {
     scene: {
       canvas: { clientWidth: 100, clientHeight: 100 },
       globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
-      primitives: collection(),
-      groundPrimitives: collection(),
       preRender: event(),
       postRender: event(),
       requestRender() {},
@@ -123,13 +113,7 @@ function streetViewer() {
   return viewer;
 }
 
-test('coverage asks for no tiles before the key status is known, and none without a key', async (t) => {
-  // Skip Cesium's one-time terrain table download for draped lines.
-  t.mock.method(
-    Cesium.GroundPolylinePrimitive,
-    'initializeTerrainHeights',
-    async () => {},
-  );
+test('coverage asks for no tiles before the key status is known, and none without a key', async () => {
   for (const configured of [false, true]) {
     let answer;
     const tiles = [];

@@ -1386,6 +1386,35 @@ test('lines that change only whether they show, or where an undraped one runs, c
     set.dispose();
   }));
 
+test('a draped line shown after it is ready keeps that show through the swap', () =>
+  withImageClasses(() => {
+    const { draw, frame, scene } = drawOver();
+    const set = draw.lines({ id: 'swapped' });
+    const draped = (show) => ({
+      id: 'a',
+      positions: [
+        { lon: 0, lat: 0 },
+        { lon: 1, lat: 1 },
+      ],
+      widthPx: 2.5,
+      mode: 'draped',
+      style: { kind: 'solid', color: '#7fe6ed' },
+      show,
+    });
+    set.set([draped(true)]);
+    const ground = scene.added[0].get(1);
+    const show = new Uint8Array([1]);
+    ground.getGeometryInstanceAttributes = () => ({ show });
+    // Hidden while it builds: queued for the swap.
+    set.upsert([draped(false)]);
+    // Ready, but not yet swapped in, when it is shown again.
+    Object.defineProperty(ground, 'ready', { value: true });
+    set.upsert([draped(true)]);
+    frame();
+    assert.deepEqual([...show], [1], 'the newer show, not the queued one');
+    set.dispose();
+  }));
+
 test('icons blend as their set says', () => {
   const { scene, draw } = drawOver();
   const set = draw.icons({ id: 'pins', blend: 'translucent' });

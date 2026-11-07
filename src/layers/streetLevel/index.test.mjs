@@ -920,7 +920,6 @@ test('off Google 3D not even Google\u2019s script is loaded for Street View', as
 
 test('the button’s “centre of the view” is the ground under the middle of the screen', async (t) => {
   const { createStreetLevelLayer: create } = await import('./index.js');
-  const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
     nearestImage: async (point) => {
@@ -941,7 +940,7 @@ test('the button’s “centre of the view” is the ground under the middle of 
   });
   viewer.scene.canvas.clientWidth = 1000;
   viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
+  const layer = create({ providers: [provider] });
   layer.init(viewer);
   layer.enable(viewer);
   t.after(() => {
@@ -954,9 +953,45 @@ test('the button’s “centre of the view” is the ground under the middle of 
   assert.ok(Math.abs(lookups[0].lon - -121.4937) < 1e-9);
 });
 
+test('a pick that fails at the screen centre counts as a miss, and the ellipsoid answers', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point) => {
+      lookups.push(point);
+      return null;
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  Object.assign(viewer.scene, {
+    pickPositionSupported: true,
+    pickPosition: () => {
+      throw new Error('no depth');
+    },
+  });
+  viewer.camera.pickEllipsoid = () =>
+    Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  viewer.scene.canvas.clientWidth = 1000;
+  viewer.scene.canvas.clientHeight = 600;
+  const layer = create({ providers: [provider] });
+  layer.init(viewer);
+  layer.enable(viewer);
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  await layer.openNearest(undefined, { aim: 'screen-centre' });
+  assert.equal(lookups.length, 1);
+  assert.ok(Math.abs(lookups[0].lat - 38.5799) < 1e-9);
+});
+
 test('the button aimed at the sky opens nothing, and says to aim at a street', async (t) => {
   const { createStreetLevelLayer: create } = await import('./index.js');
-  const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
     nearestImage: async (point) => {
@@ -978,7 +1013,7 @@ test('the button aimed at the sky opens nothing, and says to aim at a street', a
   viewer.camera.pickEllipsoid = () => undefined;
   viewer.scene.canvas.clientWidth = 1000;
   viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
+  const layer = create({ providers: [provider] });
   layer.init(viewer);
   layer.enable(viewer);
   t.after(() => {

@@ -15,7 +15,8 @@ import {
 } from './uiState.js';
 import { canvasSize, groundUnderCamera, viewCentre } from './view.js';
 import { toLonLatH } from '../../geo/index.js';
-import { findCamera } from '../../render/rendererOf.js';
+import { findCamera, findQuery } from '../../render/rendererOf.js';
+import { isPickedWorldPosition } from '../../data/scenePick.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import { msg, t, translateKnown } from '../../i18n/index.js';
 import {
@@ -258,12 +259,27 @@ export function createStreetLevelLayer({
     nearestLookup = null;
   }
 
-  /** Ground under the screen centre; null for sky, undefined when it cannot aim. */
+  /**
+   * Ground under the screen centre: the drawn surface, else the ellipsoid;
+   * null for sky, undefined when it cannot aim.
+   */
   function screenCentreGround() {
     const { width, height } = canvasSize(state.viewer);
-    const pick = state.services.scenePick?.pickGroundPosition;
-    if (!pick || !width || !height) return undefined;
-    const position = pick(state.viewer, { x: width / 2, y: height / 2 });
+    const query = state.viewer ? findQuery(state.viewer) : null;
+    if (!query || !width || !height) return undefined;
+    const [x, y] = [width / 2, height / 2];
+    // A pick that fails is a miss, as the ellipsoid's is.
+    const attempt = (pick) => {
+      try {
+        const position = pick();
+        return isPickedWorldPosition(position) ? position : null;
+      } catch {
+        return null;
+      }
+    };
+    const position =
+      attempt(() => query.pickPosition(x, y)) ??
+      attempt(() => query.pickEllipsoid(x, y));
     const ground = position && toLonLatH(position);
     return ground ? { lon: ground.lon, lat: ground.lat } : null;
   }

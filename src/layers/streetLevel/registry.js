@@ -27,7 +27,7 @@ export function filtersOf(provider) {
  * @property {(context: ProviderContext) => ProviderInstance} create
  *
  * @typedef {object} ProviderContext   Handed to `create()` once by the core.
- * @property {object} services         Scene services: picking, input, render, sprites, scenePick (ground clicks need it).
+ * @property {object} services         Scene services: picking, input, render, sprites (a `scenePick` given is not read).
  * @property {() => {pano: string, sinceMs: number|null}} getFilter   Filter resolved against now; read it on every use so "since N days" keeps up.
  * @property {() => boolean} isActive  Layer enabled and this provider switched on.
  * @property {() => void} notify       Ask the core to publish a new UI snapshot.

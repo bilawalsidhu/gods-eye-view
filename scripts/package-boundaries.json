@@ -2517,6 +2517,7 @@
       "src/layers/streetLevel/policy.js",
       "src/layers/streetLevel/state.js",
       "src/layers/streetLevel/lineCoverage.js",
+      "src/render/color.js",
       "src/layers/streetLevel/sequenceCones.js",
       "src/layers/streetLevel/glyphs.js",
       "src/layers/streetLevel/providers/mapillary/decode.js",

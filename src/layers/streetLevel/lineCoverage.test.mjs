@@ -10,7 +10,13 @@ import {
 import { resolveFilter } from './filter.js';
 import { encodeCoverageTile } from './providers/mapillary/coverageFixture.mjs';
 import { decodeCoverageTile } from './providers/mapillary/decode.js';
-import { rayCamera, streetPorts } from '../../testSupport/streetLevelFakes.mjs';
+import {
+  drawnLineSets,
+  rayCamera,
+  streetPorts,
+} from '../../testSupport/streetLevelFakes.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import { createCesiumDraw } from '../../render/cesium/draw.js';
 import { bindRenderer } from '../../render/rendererOf.js';
 import {
   COLORS,
@@ -52,25 +58,10 @@ function createCoverage({ state, source, zoomFor = coverageZoomForHeight }) {
 
 const RAD = Math.PI / 180;
 // Node has no WebGL context to report line-width limits; a browser's
-// context sets these on startup, and appearances validate against them.
+// context sets these on startup, and the renderer's lines validate against them.
 Cesium.ContextLimits._minimumAliasedLineWidth = 1;
 Cesium.ContextLimits._maximumAliasedLineWidth = 10;
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-/** A scene collection that remembers what is on the globe. */
-function collection() {
-  const items = new Set();
-  return {
-    items,
-    add(primitive) {
-      items.add(primitive);
-      return primitive;
-    },
-    remove(primitive) {
-      return items.delete(primitive);
-    },
-  };
-}
 
 /** The centre of the z14 tile holding a point, so a small view is one tile. */
 function tileCentre(lon, lat) {
@@ -84,15 +75,14 @@ function tileCentre(lon, lat) {
   };
 }
 
-/** A viewer looking straight down on a 0.004° square around `view`. */
-function fakeViewer(view) {
+/** A viewer looking straight down on a 0.004° square around `view`, drawing on a fake draw port. */
+function fakeViewer(view, { draw = fakeDrawPort() } = {}) {
   const viewer = {
     view,
+    draw,
     scene: {
       canvas: { clientWidth: 100, clientHeight: 100 },
       globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
-      groundPrimitives: collection(),
-      primitives: collection(),
     },
     camera: {
       get positionCartographic() {
@@ -113,7 +103,7 @@ function fakeViewer(view) {
       },
     },
   };
-  bindRenderer(viewer, streetPorts(viewer, { camera: true }));
+  bindRenderer(viewer, streetPorts(viewer, { camera: true, draw }));
   return viewer;
 }
 
@@ -130,9 +120,12 @@ function deferredSource() {
   };
 }
 
-function setup({ zoomFor } = {}) {
+function setup({ zoomFor, draw } = {}) {
   const centre = tileCentre(-121.4944, 38.5816);
-  const viewer = fakeViewer({ lon: centre.lon, lat: centre.lat, height: 900 });
+  const viewer = fakeViewer(
+    { lon: centre.lon, lat: centre.lat, height: 900 },
+    draw ? { draw } : {},
+  );
   const source = deferredSource();
   const state = {
     viewer,
@@ -147,9 +140,8 @@ function setup({ zoomFor } = {}) {
     },
     coverage: {
       ...freshCoverage(),
-      // The key status is in; skip Cesium's one-time terrain table download.
+      // The key status is in.
       blocked: null,
-      terrainReady: Promise.resolve(),
     },
     sequence: { selectedId: null },
   };
@@ -169,8 +161,8 @@ function setup({ zoomFor } = {}) {
   });
   const tileKey = `14/${centre.tile.x}/${centre.tile.y}`;
   const onGlobe = () =>
-    viewer.scene.groundPrimitives.items.size +
-    viewer.scene.primitives.items.size;
+    drawnLineSets(viewer, { empty: true }).filter((set) => set.items.size)
+      .length;
   return { viewer, source, state, coverage, bytes, tileKey, onGlobe, centre };
 }
 
@@ -211,18 +203,55 @@ test('a superseded tile request cannot strand lines on the globe', async () => {
 });
 
 test('sequence lines are draped on the globe and on 3D tiles alike', async () => {
-  const { viewer, source, coverage, bytes } = setup();
+  const { viewer, source, coverage, bytes, centre } = setup();
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  const { groundPrimitives, primitives } = viewer.scene;
-  assert.equal(primitives.items.size, 0);
-  assert.equal(groundPrimitives.items.size, 1);
-  const [line] = groundPrimitives.items;
-  assert.ok(line instanceof Cesium.GroundPolylinePrimitive);
-  assert.equal(line.classificationType, Cesium.ClassificationType.BOTH);
+  const sets = drawnLineSets(viewer, { empty: true });
+  assert.equal(sets.length, 1);
+  const [line] = sets[0].items.values();
+  assert.equal(
+    line.id,
+    `${PICK_PREFIX.sequence}seq-1`,
+    'it picks its sequence',
+  );
+  assert.equal(line.meta.pick, `${PICK_PREFIX.sequence}seq-1`);
+  assert.equal(line.mode, 'draped');
+  assert.equal(line.clampTo, 'both');
+  assert.equal(line.widthPx, COVERAGE_TUNING.lineWidthPx);
+  assert.equal(line.style.kind, 'solid');
+  assert.equal(line.style.color[3], 0.92);
+  assert.equal(line.positions.length, 2);
+  const start = Cesium.Cartesian3.fromDegrees(centre.lon - 0.001, centre.lat);
+  // Within the tile encoding's rounding.
+  assert.ok(Cesium.Cartesian3.distance(line.positions[0], start) < 1);
   coverage.clear();
-  assert.equal(groundPrimitives.items.size, 0);
+  assert.equal(drawnLineSets(viewer, { empty: true }).length, 0);
+});
+
+test("a sequence's parts are drawn apart, every one picking the sequence", async () => {
+  const { viewer, source, coverage, centre } = setup();
+  coverage.refresh();
+  const part = (dLat) => [
+    [centre.lon - 0.001, centre.lat + dLat],
+    [centre.lon + 0.001, centre.lat + dLat],
+  ];
+  source.calls[0].resolve(
+    encodeCoverageTile(centre.tile, {
+      sequences: [{ id: 'seq-1', parts: [part(0), part(0.0005)] }],
+    }),
+  );
+  await settle();
+  const items = [...drawnLineSets(viewer, { empty: true })[0].items.values()];
+  const pick = `${PICK_PREFIX.sequence}seq-1`;
+  assert.deepEqual(
+    items.map(({ id, meta }) => [id, meta.pick]),
+    [
+      [pick, pick],
+      [`${pick}#1`, pick],
+    ],
+  );
+  coverage.clear();
 });
 
 test('panning off a tile that is still loading stops counting it as loading', async () => {
@@ -249,7 +278,7 @@ test('panning off a tile that is still loading stops counting it as loading', as
 test('a zoomFor in the older {zoom, kind} shape still draws its lines', async () => {
   // Providers written before the core went slim (#1139's Vegbilder) answer
   // an object: it must not ask for no tiles and say nothing.
-  const { viewer, source, coverage, bytes } = setup({
+  const { source, coverage, bytes, onGlobe } = setup({
     zoomFor: (height) => {
       const zoom = coverageZoomForHeight(height);
       return zoom == null ? null : { zoom, kind: 'sequence' };
@@ -260,7 +289,7 @@ test('a zoomFor in the older {zoom, kind} shape still draws its lines', async ()
   assert.equal(source.calls[0].z, 14);
   source.calls[0].resolve(bytes);
   await settle();
-  assert.equal(viewer.scene.groundPrimitives.items.size, 1, 'its line drawn');
+  assert.equal(onGlobe(), 1, 'its line drawn');
   assert.equal(coverage.stats().hint, '');
   coverage.clear();
 });
@@ -278,15 +307,15 @@ test('a zoom level is read from either shape; an overview or a bad answer draws 
 });
 
 test('from orbit nothing is requested or drawn, and the hint says to zoom in', async () => {
-  const { viewer, source, state, coverage, bytes } = setup();
+  const { viewer, source, state, coverage, bytes, onGlobe } = setup();
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  assert.ok(viewer.scene.groundPrimitives.items.size > 0, 'street lines');
+  assert.ok(onGlobe() > 0, 'street lines');
   viewer.view.height = 20_000_000;
   coverage.refresh();
   assert.equal(source.calls.length, 1, 'no tile is asked for');
-  assert.equal(viewer.scene.groundPrimitives.items.size, 0, 'nothing drawn');
+  assert.equal(onGlobe(), 0, 'nothing drawn');
   assert.equal(state.coverage.zoom, null);
   assert.equal(coverage.stats().hint, ZOOM_IN_HINT);
   viewer.view.height = 900;
@@ -537,22 +566,112 @@ test('the selected sequence is drawn over the coverage, and goes with the select
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  const lines = () => [...viewer.scene.groundPrimitives.items];
+  const lines = () => drawnLineSets(viewer, { empty: true });
   assert.equal(lines().length, 1, 'the coverage');
+  const [tile] = lines();
+  const own = () => [...tile.items.values()][0];
+  const writes = tile.writes;
   coverage.highlight('seq-1');
   assert.equal(lines().length, 2);
   const highlight = lines().at(-1);
-  assert.equal(state.coverage.highlight, highlight, 'drawn last, on top');
-  assert.equal(highlight.classificationType, Cesium.ClassificationType.BOTH);
+  assert.equal(state.coverage.highlight.set.id, highlight.spec.id);
+  const [line] = highlight.items.values();
+  assert.equal(line.mode, 'draped');
+  assert.equal(line.clampTo, 'both');
+  assert.equal(line.widthPx, COVERAGE_TUNING.lineWidthPx + 1);
+  assert.equal(line.style.color, COLORS.selected);
+  assert.equal(line.meta.pick, `${PICK_PREFIX.sequence}seq-1`);
+  // The tile hides its own line of it, whichever set draws over which.
+  assert.equal(own().show, false, 'hidden under the highlight');
+  assert.equal(tile.writes, writes + 1, 'one write: only its show changed');
+  // Selected again: the one highlight, redrawn in place.
+  coverage.highlight('seq-1');
+  assert.equal(lines().at(-1), highlight, 'the same set');
   coverage.highlight('not-drawn');
   assert.equal(lines().length, 1, 'nothing to highlight off the map');
+  assert.equal(own().show, true, 'the tile draws it again');
+  coverage.highlight('seq-1');
   coverage.highlight(null);
   assert.equal(state.coverage.highlight, null);
+  assert.equal(own().show, true);
   coverage.clear();
   assert.equal(lines().length, 0);
 });
 
-test('a tile that lands with the selected sequence draws the highlight again, on top', async () => {
+test('parts and repeated ids each keep their own line', async () => {
+  const { viewer, source, coverage, centre } = setup();
+  coverage.refresh();
+  const part = (dLat) => [
+    [centre.lon - 0.001, centre.lat + dLat],
+    [centre.lon + 0.001, centre.lat + dLat],
+  ];
+  source.calls[0].resolve(
+    encodeCoverageTile(centre.tile, {
+      sequences: [
+        { id: 'a', parts: [part(0), part(0.0002)] },
+        // Its id is what a second part of `a` would be numbered.
+        { id: 'a#1', parts: [part(0.0004)] },
+      ],
+    }),
+  );
+  await settle();
+  const items = [...drawnLineSets(viewer, { empty: true })[0].items.values()];
+  assert.equal(items.length, 3, 'no line drawn over another');
+  assert.deepEqual(items.map(({ meta }) => meta.sequenceId).sort(), [
+    'a',
+    'a',
+    'a#1',
+  ]);
+  coverage.clear();
+});
+
+test('a rebuild draws in place, with a set more or fewer as the batches need', async () => {
+  const { viewer, source, state, coverage, centre } = setup();
+  const line = (n) => [
+    [
+      [centre.lon - 0.001, centre.lat + n * 1e-6],
+      [centre.lon + 0.001, centre.lat + n * 1e-6],
+    ],
+  ];
+  const sequences = Array.from({ length: 130 }, (_, i) => ({
+    id: `s-${i}`,
+    parts: line(i),
+    capturedAt: 1_000 + i,
+    isPano: i === 0,
+  }));
+  coverage.refresh();
+  source.calls[0].resolve(encodeCoverageTile(centre.tile, { sequences }));
+  await settle();
+  const sets = () => drawnLineSets(viewer, { empty: true });
+  const [first] = sets();
+  assert.equal(sets().length, 2, '120 parts, then 10');
+  state.sequence.selectedId = 's-0';
+  coverage.highlight();
+  // 360° only: one line left, in the first set, redrawn in place.
+  state.filter = { pano: 'pano', sinceDays: 0 };
+  coverage.rebuild();
+  assert.deepEqual(
+    sets().map((set) => set.spec.id),
+    [first.spec.id, state.coverage.highlight.set.id],
+    'the second set goes; the first draws in place',
+  );
+  assert.equal(first.items.get(`${PICK_PREFIX.sequence}s-0`).show, false);
+  // Everything again: a set more for the second batch.
+  state.filter = { pano: 'all', sinceDays: 0 };
+  coverage.rebuild();
+  assert.equal(sets().length, 3);
+  assert.equal(sets()[0], first);
+  const own = sets()
+    .filter((set) => set.spec.id !== state.coverage.highlight.set.id)
+    .map((set) => set.items.get(`${PICK_PREFIX.sequence}s-0`))
+    .filter(Boolean);
+  assert.equal(own.length, 1, 'drawn once, oldest last');
+  assert.equal(own[0].show, false, 'still hidden under the highlight');
+  coverage.clear();
+  assert.equal(sets().length, 0);
+});
+
+test('a tile that lands with the selected sequence is highlighted, its own line hidden', async () => {
   const { viewer, source, state, coverage, bytes } = setup();
   state.sequence.selectedId = 'seq-1';
   coverage.refresh();
@@ -560,9 +679,12 @@ test('a tile that lands with the selected sequence draws the highlight again, on
   source.calls[0].resolve(bytes);
   await settle();
   assert.ok(state.coverage.highlight, 'highlighted once its tile is in');
+  const [tile, highlight] = drawnLineSets(viewer, { empty: true });
+  assert.equal(highlight.spec.id, state.coverage.highlight.set.id);
   assert.equal(
-    [...viewer.scene.groundPrimitives.items].at(-1),
-    state.coverage.highlight,
+    tile.items.get(`${PICK_PREFIX.sequence}seq-1`).show,
+    false,
+    'the tile hides its own line of it',
   );
   coverage.clear();
 });
@@ -572,12 +694,12 @@ test("a zoom change drops the old zoom's lines", async () => {
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  const [old] = viewer.scene.groundPrimitives.items;
+  const [old] = drawnLineSets(viewer, { empty: true });
   assert.ok(old, 'the z14 lines are drawn');
   viewer.view.height = 3000; // zoom out to z13
   coverage.refresh();
   assert.equal(state.coverage.zoom, 13);
-  assert.equal(viewer.scene.groundPrimitives.items.has(old), false);
+  assert.equal(old.disposed, true);
   assert.ok(state.coverage.pending.size > 0, 'the new zoom is loading');
   coverage.clear();
 });
@@ -606,12 +728,8 @@ test('a rate limit holds every refresh inside its wait, not only the first', asy
   coverage.unblock();
 });
 
-test('a tile that fails before the terrain table loads is reported at once, never unhandled', async () => {
+test('a tile that fails is reported at once, never unhandled', async () => {
   const { source, state, coverage, tileKey } = setup();
-  let terrainLoaded;
-  state.coverage.terrainReady = new Promise((resolve) => {
-    terrainLoaded = resolve;
-  });
   const unhandled = [];
   const onUnhandled = (reason) => unhandled.push(reason);
   process.on('unhandledRejection', onUnhandled);
@@ -624,8 +742,6 @@ test('a tile that fails before the terrain table loads is reported at once, neve
     assert.equal(state.coverage.lastError, 'Mapillary tiles HTTP 500');
     assert.deepEqual(unhandled, []);
   } finally {
-    terrainLoaded();
-    await settle();
     process.off('unhandledRejection', onUnhandled);
   }
 });
@@ -658,5 +774,96 @@ test('the selected sequence is drawn and highlighted even past the per-tile cap'
   assert.ok(entry.sequences.has('old'), 'the selected line is drawn');
   coverage.highlight('old');
   assert.ok(state.coverage.highlight, 'the selected line is highlighted');
+  coverage.clear();
+});
+
+test('on the Cesium renderer the lines drape on terrain and tiles, and the highlight stays on top', async () => {
+  const added = [];
+  const scene = {
+    camera: { positionWC: new Cesium.Cartesian3(2e7, 0, 0) },
+    frameState: { mode: Cesium.SceneMode.SCENE3D },
+    primitives: {
+      add: (primitive) => (added.push(primitive), primitive),
+      remove: (primitive) => {
+        const at = added.indexOf(primitive);
+        if (at >= 0) added.splice(at, 1);
+        return at >= 0;
+      },
+      get length() {
+        return added.length;
+      },
+      get: (i) => added[i],
+    },
+    requestRender() {},
+  };
+  const { port } = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const { source, state, coverage, bytes } = setup({ draw: port });
+  state.sequence.selectedId = 'seq-1';
+  coverage.refresh();
+  source.calls[0].resolve(bytes);
+  await settle();
+  const grounds = () => added.map((host) => host.get(host.length - 1));
+  const [tile, highlight] = grounds();
+  assert.equal(state.coverage.lastError, null);
+  assert.equal(added.length, 2, 'the tile, then the highlight over it');
+  assert.ok(tile instanceof Cesium.GroundPolylinePrimitive);
+  assert.equal(tile.classificationType, Cesium.ClassificationType.BOTH);
+  const [instance] = tile.geometryInstances;
+  assert.equal(instance.id.id, `${PICK_PREFIX.sequence}seq-1`);
+  assert.equal(instance.id.meta.pick, `${PICK_PREFIX.sequence}seq-1`);
+  assert.equal(
+    highlight.geometryInstances[0].geometry.width,
+    COVERAGE_TUNING.lineWidthPx + 1,
+  );
+  assert.equal(
+    added.at(-1).drawSetId,
+    state.coverage.highlight.set.id,
+    'drawn last, on top',
+  );
+  coverage.clear();
+  assert.equal(added.length, 0, 'nothing left in the scene');
+});
+
+test('a new selection hands the highlight over; a filter that hides it lets the tiles go back', async () => {
+  const { viewer, source, state, coverage, centre } = setup();
+  const line = (dLat) => [
+    [
+      [centre.lon - 0.001, centre.lat + dLat],
+      [centre.lon + 0.001, centre.lat + dLat],
+    ],
+  ];
+  coverage.refresh();
+  source.calls[0].resolve(
+    encodeCoverageTile(centre.tile, {
+      sequences: [
+        { id: 'a', parts: line(0), isPano: true },
+        { id: 'b', parts: line(0.0005) },
+      ],
+    }),
+  );
+  await settle();
+  const [tile] = drawnLineSets(viewer, { empty: true });
+  // An item drawn without a `show` shows.
+  const shown = (id) =>
+    tile.items.get(`${PICK_PREFIX.sequence}${id}`)?.show !== false;
+  coverage.highlight('a');
+  assert.deepEqual([shown('a'), shown('b')], [false, true]);
+  coverage.highlight('b');
+  assert.deepEqual([shown('a'), shown('b')], [true, false], 'a back, b hidden');
+  const highlight = drawnLineSets(viewer).at(-1);
+  assert.equal(
+    [...highlight.items.values()][0].meta.sequenceId,
+    'b',
+    'the one set now draws b',
+  );
+  // 360° only: b is filtered out, so nothing is highlighted or hidden.
+  state.sequence.selectedId = 'b';
+  state.filter = { pano: 'pano', sinceDays: 0 };
+  coverage.rebuild();
+  assert.equal(state.coverage.highlight, null);
+  assert.equal(shown('a'), true, 'the tile draws a itself again');
   coverage.clear();
 });

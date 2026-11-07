@@ -198,12 +198,6 @@ export function fakeCesiumViewer({ view = false } = {}) {
     flights,
     scene: {
       canvas,
-      primitives: { add: (p) => p, remove() {} },
-      groundPrimitives: { add: (p) => p, remove() {} },
-      // Enough of a scene for the position marker to clamp to the ground.
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
     },
     camera,
     creditDisplay: {
@@ -286,7 +280,9 @@ export function rayCamera({
  * through what its `pickEllipsoid` hits), heights from its scene's
  * `sampleHeight` (3D tiles: only while its globe is hidden) and its
  * globe's `getHeight` (terrain), and pre-render from its scene's
- * `preRender`; drawing goes to `draw` (a fake draw port by default), and
+ * `preRender`; positions under a screen point from its scene's
+ * `pickPosition` (when `pickPositionSupported`) and its camera's
+ * `pickEllipsoid`; drawing goes to `draw` (a fake draw port by default), and
  * with `camera` the camera is `liveCamera`'s. For `bindFakeCesiumCamera`'s
  * `ports`, or `bindRenderer`.
  * @param {object} viewer
@@ -318,6 +314,14 @@ export function streetPorts(
           new Cesium.Cartesian3(),
         );
         return { origin, direction };
+      },
+      pickPosition(x, y) {
+        const scene = viewer.scene ?? {};
+        if (!scene.pickPositionSupported) return null;
+        return scene.pickPosition?.({ x, y }) ?? null;
+      },
+      pickEllipsoid(x, y) {
+        return viewer.camera?.pickEllipsoid?.({ x, y }) ?? null;
       },
       sampleHeightNow(point, { against = 'surface' } = {}) {
         const scene = viewer.scene ?? {};
@@ -394,36 +398,13 @@ export function tileCentre(lon, lat, z = 14) {
   };
 }
 
-/** A scene collection that remembers what is on the globe. */
-function sceneCollection() {
-  const items = new Set();
-  return {
-    items,
-    add(primitive) {
-      items.add(primitive);
-      return primitive;
-    },
-    remove(primitive) {
-      return items.delete(primitive);
-    },
-  };
-}
-
 /**
  * A viewer looking straight down on a 0.004° square around `view`
  * (`{lon, lat, height}`, mutable), enough for line coverage to attach,
- * refresh and draw. Cesium's one-time terrain-height download is skipped.
+ * refresh and draw, on a fake draw port (`viewer.draw`; `drawnLineSets`
+ * lists what it draws).
  */
-export function coverageViewer(view, t) {
-  const initialize = Cesium.GroundPolylinePrimitive.initializeTerrainHeights;
-  Cesium.GroundPolylinePrimitive.initializeTerrainHeights = () =>
-    Promise.resolve();
-  t?.after(() => {
-    Cesium.GroundPolylinePrimitive.initializeTerrainHeights = initialize;
-  });
-  // Node has no WebGL context to report line-width limits.
-  Cesium.ContextLimits._minimumAliasedLineWidth = 1;
-  Cesium.ContextLimits._maximumAliasedLineWidth = 10;
+export function coverageViewer(view) {
   const listeners = () => {
     const set = new Set();
     return {
@@ -439,11 +420,6 @@ export function coverageViewer(view, t) {
     scene: {
       canvas: { clientWidth: 100, clientHeight: 100 },
       globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      groundPrimitives: sceneCollection(),
-      primitives: sceneCollection(),
       postRender: listeners(),
       preRender: listeners(),
     },
@@ -469,5 +445,23 @@ export function coverageViewer(view, t) {
       computeViewRectangle: () => undefined,
     },
   };
-  return bindFakeCesiumCamera(viewer, streetPorts(viewer));
+  viewer.draw = fakeDrawPort();
+  return bindFakeCesiumCamera(
+    viewer,
+    streetPorts(viewer, { draw: viewer.draw }),
+  );
+}
+
+/**
+ * The live Street Level line sets on `viewer.draw`, oldest (drawn lowest)
+ * first: those with lines in them, or with `empty` every one.
+ */
+export function drawnLineSets(viewer, { empty = false } = {}) {
+  return [...viewer.draw.sets.values()].filter(
+    (set) =>
+      !set.disposed &&
+      set.kind === 'lines' &&
+      set.spec.id.startsWith('street-level:') &&
+      (empty || set.items.size > 0),
+  );
 }

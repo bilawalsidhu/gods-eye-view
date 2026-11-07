@@ -17,6 +17,7 @@ import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
   bindStreetViewer,
   coverageViewer,
+  drawnLineSets,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
 import { fakeDrawPort } from '../../../../testSupport/fakeDrawPort.mjs';
@@ -735,10 +736,7 @@ function coverageSetup(
     return { query };
   };
   const centre = tileCentre(-83.0458, 42.3314);
-  const viewer = coverageViewer(
-    { lon: centre.lon, lat: centre.lat, height },
-    t,
-  );
+  const viewer = coverageViewer({ lon: centre.lon, lat: centre.lat, height });
   const tiles = [];
   let hold = null;
   env.source.getTile = (tile) => {
@@ -817,7 +815,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
   env.instance.setFilter();
   assert.ok(await until(() => env.instance.coverageStats().loading));
   assert.equal(
-    env.viewer.scene.groundPrimitives.items.size,
+    drawnLineSets(env.viewer).length,
     0,
     'the unfiltered lines are not shown as filtered ones',
   );
@@ -834,7 +832,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
     `startDate=${new Date(since).toISOString().slice(0, 10)}`,
   );
   assert.equal(env.instance.coverageStats().hint, NO_COVERAGE_HINT);
-  assert.equal(env.viewer.scene.groundPrimitives.items.size, 0);
+  assert.equal(drawnLineSets(env.viewer).length, 0);
   // The same filter again asks KartaView for nothing.
   env.instance.setFilter();
   for (let i = 0; i < 5; i++) await settle();

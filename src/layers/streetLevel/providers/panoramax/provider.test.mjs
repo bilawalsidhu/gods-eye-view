@@ -18,6 +18,7 @@ import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
   bindStreetViewer,
   coverageViewer,
+  drawnLineSets,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
 import { fakeDrawPort } from '../../../../testSupport/fakeDrawPort.mjs';
@@ -636,7 +637,7 @@ function coverageSetup(t, { sequences = [], filter, height = 900 } = {}) {
     },
     { filter },
   );
-  const viewer = coverageViewer({ ...centre, height }, t);
+  const viewer = coverageViewer({ ...centre, height });
   env.instance.init(viewer);
   t.after(() => env.instance.destroy(viewer));
   return {
@@ -693,12 +694,12 @@ test('the selected sequence’s line is drawn again over the coverage, and goes 
   const env = coverageSetup(t, { sequences: [line('a'), line('b')] });
   env.instance.activate(env.viewer);
   assert.ok(await until(() => env.instance.coverageStats().count === 2));
-  const ground = env.viewer.scene.groundPrimitives.items;
-  const drawn = ground.size;
+  const lines = () => drawnLineSets(env.viewer).length;
+  const drawn = lines();
   await env.instance.selectSequence('a');
-  assert.equal(ground.size, drawn + 1, 'one highlight over the lines');
+  assert.equal(lines(), drawn + 1, 'one highlight over the lines');
   env.instance.clearSequence();
-  assert.equal(ground.size, drawn);
+  assert.equal(lines(), drawn);
 });
 
 test('coverage hints: nothing while loading, “no pictures” once an empty view has loaded', async (t) => {
@@ -721,7 +722,7 @@ test('from high up nothing is drawn or fetched, and the panel says to zoom in', 
   assert.equal(env.instance.coverageStats().count, 0);
   assert.equal(env.instance.coverageStats().loading, false);
   assert.deepEqual(env.source.calls.tiles, []);
-  assert.equal(env.viewer.scene.groundPrimitives.items.size, 0);
+  assert.equal(drawnLineSets(env.viewer).length, 0);
 });
 
 test('switching off clears the cones and forgets a pending line click', async (t) => {

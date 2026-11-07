@@ -16,6 +16,8 @@ const viewerWith = (viewer) =>
 /**
  * A layer state with providers `{id, on, groundClick, configured, available}`;
  * `picked` is where the depth buffer lands, `ellipsoid` the fallback hit.
+ * `click(pick)` clicks as the click dispatcher reports it: whether `pick`
+ * is the map itself, and the ground under the click.
  */
 function harness({
   providers = [
@@ -30,7 +32,7 @@ function harness({
   const opened = [];
   const state = {
     enabled,
-    services: { scenePick },
+    services: {},
     providers: new Map(
       providers.map(
         ({
@@ -65,7 +67,12 @@ function harness({
     },
     isAvailable: (entry) => entry.available,
   });
-  return { opened, openAtGround };
+  const click = (pick) =>
+    openAtGround({
+      surface: scenePick.isSurfacePick(pick),
+      ground: () => scenePick.pickGroundPosition(state.viewer, { x: 1, y: 1 }),
+    });
+  return { opened, click };
 }
 
 const near = (point) =>
@@ -74,8 +81,8 @@ const near = (point) =>
 
 test('a click on the map opens the click-to-open providers there, without moving the camera', () => {
   for (const picked of [undefined, { primitive: TILESET }, { content: {} }]) {
-    const { opened, openAtGround } = harness();
-    openAtGround({ x: 10, y: 20 }, picked);
+    const { opened, click } = harness();
+    click(picked);
     assert.equal(opened.length, 1, JSON.stringify(picked));
     assert.ok(near(opened[0].point));
     assert.deepEqual(opened[0].options, {
@@ -86,11 +93,11 @@ test('a click on the map opens the click-to-open providers there, without moving
 });
 
 test('where the depth buffer names no place, the ellipsoid answers', () => {
-  const { opened, openAtGround } = harness({
+  const { opened, click } = harness({
     picked: new Cesium.Cartesian3(500, 0, 0),
     ellipsoid: GROUND,
   });
-  openAtGround({ x: 1, y: 1 });
+  click(undefined);
   assert.ok(near(opened[0].point));
 });
 
@@ -119,8 +126,8 @@ test('nothing opens over another layer’s object, the sky, from high up, off it
     { options: { enabled: false }, label: 'layer off' },
   ];
   for (const { picked, options = {}, label } of cases) {
-    const { opened, openAtGround } = harness(options);
-    assert.equal(openAtGround({ x: 1, y: 1 }, picked), false, label);
+    const { opened, click } = harness(options);
+    assert.equal(click(picked), false, label);
     assert.equal(opened.length, 0, label);
   }
 });

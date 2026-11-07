@@ -108,6 +108,9 @@ const dispatchers = new WeakMap();
  * @property {boolean} surface Whether the hit is the map itself.
  * @property {(width: number, height: number) => object|undefined} pickWindow
  *   `scene.pick` with a wider window.
+ * @property {(width: number, height: number) => {id: string|null, drawHit: import('../render/contract/query').Hit|null, surface: boolean}} windowHit
+ *   `pickWindow` read as `id`, `drawHit` and `surface` are: for layers that
+ *   pick wider than the click without reading the renderer's pick.
  * @property {(limit?: number, width?: number, height?: number) => object[]} drill
  *   `scene.drillPick`, at most `limit` hits.
  * @property {() => Cesium.Cartesian3|null} ground The world position under
@@ -345,6 +348,16 @@ function createClickEvent(viewer, click, gesture) {
       return once(`window:${width}x${height}`, () =>
         pickThroughFollowHelper(scene.pick(position, width, height)),
       );
+    },
+    windowHit(width, height) {
+      return once(`windowHit:${width}x${height}`, () => {
+        const picked = this.pickWindow(width, height);
+        return {
+          id: resolvePickId(picked),
+          drawHit: drawHitOf(picked),
+          surface: isSurfacePick(picked),
+        };
+      });
     },
     drill(limit = DRILL_DEPTH, width, height) {
       const key = `${width}x${height}`;

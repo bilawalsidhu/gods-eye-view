@@ -1060,8 +1060,11 @@ export function createCesiumDraw({
       was.id.meta = item.meta;
       // A ground primitive still building takes its show once it is ready
       // (`swapReady`), so a show change never restarts the build.
-      if (was.ground.ready) showPart(was, show);
-      else was.pendingShow = show;
+      // A show queued while it built is stale once a newer one is applied.
+      if (was.ground.ready) {
+        showPart(was, show);
+        was.pendingShow = undefined;
+      } else was.pendingShow = show;
     }
     return true;
   }
