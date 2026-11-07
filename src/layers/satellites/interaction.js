@@ -1,5 +1,5 @@
 import { inputFor } from '../../input/dispatcher.js';
-import { readEntityRecord } from '../../data/entityRecords.js';
+import { onFollowChanged } from '../../data/followed.js';
 
 export function createInteraction({
   state: layerState,
@@ -25,22 +25,22 @@ export function createInteraction({
     // new owner controls it). Guarded so our OWN switch (viewer.trackedEntity
     // briefly undefined mid-_trackSatellite) doesn't self-clear.
     if (!layerState._trackedEntityChangedRemove) {
-      layerState._trackedEntityChangedRemove =
-        viewer.trackedEntityChanged.addEventListener(() => {
+      layerState._trackedEntityChangedRemove = onFollowChanged(
+        viewer,
+        (followed) => {
           if (!layerState._enabled) return;
           if (
             layerState._trackedNorad &&
             layerState._viewer &&
-            layerState._viewer.trackedEntity &&
-            layerState._viewer.trackedEntity !== layerState._trackedEntity
+            followed &&
+            followed !== layerState._followTarget
           ) {
             parts.tracking._clearTracking(true, {
-              origin:
-                readEntityRecord(layerState._viewer.trackedEntity)
-                  ?.selectionOrigin || 'programmatic',
+              origin: followed.selectionOrigin || 'programmatic',
             });
           }
-        });
+        },
+      );
     }
 
     layerState._clickSubscription = inputFor(viewer).onClick((event) => {

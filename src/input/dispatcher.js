@@ -33,6 +33,7 @@
  * A dispatcher is made per scene on first use ({@link inputFor}) and lives
  * until {@link InputDispatcher.destroy}; the application scene owns it.
  */
+import { pickThroughFollowHelper } from '../render/cesium/follow.js';
 import * as Cesium from 'cesium';
 import { isLeaseCurrent, isPointerFree } from '../data/inputOwnership.js';
 import { acquireCameraInput } from '../render/cesium/cameraInput.js';
@@ -310,7 +311,7 @@ function createClickEvent(viewer, click, gesture) {
     position,
     gesture,
     get pick() {
-      return once('pick', () => scene.pick(position));
+      return once('pick', () => pickThroughFollowHelper(scene.pick(position)));
     },
     get hit() {
       return once('hit', () =>
@@ -335,7 +336,7 @@ function createClickEvent(viewer, click, gesture) {
     },
     pickWindow(width, height) {
       return once(`window:${width}x${height}`, () =>
-        scene.pick(position, width, height),
+        pickThroughFollowHelper(scene.pick(position, width, height)),
       );
     },
     drill(limit = DRILL_DEPTH, width, height) {
@@ -350,7 +351,9 @@ function createClickEvent(viewer, click, gesture) {
         width === undefined && height === undefined
           ? Math.max(limit, DRILL_DEPTH)
           : limit;
-      const hits = scene.drillPick(position, depth, width, height) || [];
+      const hits = (scene.drillPick(position, depth, width, height) || [])
+        .map(pickThroughFollowHelper)
+        .filter(Boolean);
       drills.set(key, { limit: depth, hits });
       return hits.slice(0, limit);
     },

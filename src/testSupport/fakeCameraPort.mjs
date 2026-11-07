@@ -71,7 +71,9 @@ export function fakeCameraPort({ pose = {}, viewRectangle = null } = {}) {
  * (`flyTo({destination: Cartesian3, ...})`), while poses are read leniently
  * from what the fake has (`positionCartographic`, `heading`, `pitch`,
  * `roll`) and events come from the fake's own `changed`, `moveStart` and
- * `moveEnd`. Binding a viewer twice keeps the first. Returns the viewer.
+ * `moveEnd`. A fake with `trackedEntityChanged` and `entities` follows
+ * through the port, as the renderer does. Binding a viewer twice keeps the
+ * first. Returns the viewer.
  * @template {{camera: object}} V
  * @param {V} viewer
  * @returns {V}
@@ -119,11 +121,18 @@ export function bindFakeCesiumCamera(viewer) {
   });
   const scene = {
     postUpdate: noEvent,
+    preUpdate: viewer.scene?.preUpdate ?? noEvent,
+    get screenSpaceCameraController() {
+      return viewer.scene?.screenSpaceCameraController ?? undefined;
+    },
     requestRender: () => viewer.scene?.requestRender?.(),
   };
+  // A fake with Cesium's entity tracking follows as the renderer does.
+  const tracks = Boolean(viewer.trackedEntityChanged && viewer.entities);
   const real = createCesiumCamera({
     scene,
     camera,
+    ...(tracks ? { widget: viewer } : {}),
     report: (error) => {
       throw error;
     },

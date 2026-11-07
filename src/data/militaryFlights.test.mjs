@@ -3,6 +3,8 @@
 // Pure function — no viewer/DOM needed; imported directly.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { followedOf } from './followed.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import * as Cesium from 'cesium';
 import militaryFlightsLayer, {
   _addMilitaryTrackingCandidateForTest,
@@ -367,6 +369,7 @@ test('real military track path creates no native label and publishes every cache
     isDestroyed: () => false,
   };
   viewer.scene.camera = viewer.camera;
+  bindFakeCesiumCamera(viewer);
   Object.defineProperty(viewer, 'trackedEntity', {
     get: () => trackedEntity,
     set(value) {
@@ -434,7 +437,7 @@ test('real military track path creates no native label and publishes every cache
       militaryFlightsLayer.trackById(icao24, { origin: 'programmatic' }),
       true,
     );
-    const entity = viewer.trackedEntity;
+    const entity = followedOf(viewer)?.entity;
     assert.ok(
       entity instanceof Cesium.Entity,
       'trackById must create the real Cesium entity',
@@ -482,7 +485,7 @@ test('real military track path creates no native label and publishes every cache
     assert.equal(militaryFlightsLayer.refocusTrackedById(icao24), true);
     viewer.scene.preUpdate.raiseEvent();
     assert.equal(
-      viewer.trackedEntity,
+      followedOf(viewer)?.entity,
       entity,
       'refocus must retain the exact tracked entity',
     );

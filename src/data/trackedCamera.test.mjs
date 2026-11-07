@@ -1,12 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import {
-  clampTrackedCameraPosition,
-  trackedDisplayPositionForCamera,
-  trackedModelScaleForPixelCap,
-} from './trackedCamera.js';
-import { withEntityRecord } from './entityRecords.js';
+import { trackedModelScaleForPixelCap } from './trackedCamera.js';
+import { clampFollowEye as clampTrackedCameraPosition } from '../render/cesium/follow.js';
 
 test('tracked camera origin crossing returns to the prior side at the minimum range', () => {
   const camera = {
@@ -70,23 +66,4 @@ test('tracked model shrinks smoothly when close enough to exceed the pixel cap',
   const projectedDiameterPx = (2 * 1.43 * scale * focalLengthPx) / 150;
   assert.ok(scale < 24);
   assert.ok(Math.abs(projectedDiameterPx - 104) < 1e-9);
-});
-
-test('tracked camera prefers the already-rendered display cache', () => {
-  let callbackReads = 0;
-  const cached = new Cesium.Cartesian3(1, 2, 3);
-  const entity = withEntityRecord({ position: {
-      getValue: () => {
-        callbackReads += 1;
-        return new Cesium.Cartesian3(4, 5, 6);
-      },
-    } }, { displayPosition: () => cached });
-  const result = trackedDisplayPositionForCamera(
-    entity,
-    Cesium.JulianDate.now(),
-    new Cesium.Cartesian3(),
-  );
-  assert.deepEqual(result, cached);
-  assert.notEqual(result, cached);
-  assert.equal(callbackReads, 0);
 });

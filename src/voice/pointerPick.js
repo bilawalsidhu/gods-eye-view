@@ -1,3 +1,4 @@
+import { pickThroughFollowHelper } from '../render/cesium/follow.js';
 import * as Cesium from 'cesium';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { cameraPoseKey } from './pointerContext.js';
@@ -34,7 +35,7 @@ export function createPointerPicker({
     if (!width || !height) return null;
     let picked = null;
     try {
-      picked = scene.pick(new Cesium.Cartesian2(x, y));
+      picked = pickThroughFollowHelper(scene.pick(new Cesium.Cartesian2(x, y)));
     } catch {
       picked = null;
     }

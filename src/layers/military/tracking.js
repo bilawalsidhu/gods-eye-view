@@ -1,3 +1,9 @@
+import { cameraOf } from '../../render/cesium/camera.js';
+import {
+  entityFollowTarget,
+  onFollowChanged,
+  stopFollowing,
+} from '../../data/followed.js';
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
@@ -26,7 +32,7 @@ import {
   TRACKED_BILLBOARD_SCALE_BY_DISTANCE,
 } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
-import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
+import { entityRecord } from '../../data/entityRecords.js';
 
 export function createTracking({
   flightState,
@@ -48,7 +54,7 @@ export function createTracking({
   const { createTrail } = services.trails;
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
-  const { applyTrackedCameraFrame } = services.camera;
+  const { FOLLOW_MIN_RANGE_M } = services.camera;
   const { resolvePickId, isOwnedByOtherLayer } = services.picking;
 
   function _emitAwarenessEvent(type, detail) {
@@ -751,7 +757,7 @@ export function createTracking({
    * and voice stopTracking.
    *
    * @param {boolean} [skipViewerUntrack=false] - ANOTHER layer just grabbed the
-   *   follow-camera: tear down our own state but leave viewer.trackedEntity
+   *   follow-camera: tear down our own state but leave the camera's follow
    *   alone (the new owner controls it).
    * @param {object} [options] - Clear origin.
    * @param {boolean} [options.evicted=false] - The contact aged out of the feed
@@ -764,8 +770,7 @@ export function createTracking({
     skipViewerUntrack = false,
     { evicted = false, origin = 'programmatic' } = {},
   ) {
-    flightState._trackedCameraFrameStop?.();
-    flightState._trackedCameraFrameStop = null;
+    flightState._followTarget = null;
     if (!flightState._trackedIcao) {
       clearFocusTarget('militaryFlights');
       return;
@@ -778,11 +783,11 @@ export function createTracking({
     const trackedCourseDeg = flightState._displayCourse.get(clearedIcao);
 
     // Stop tracking and remove the entity. skipViewerUntrack: another layer just grabbed the
-    // follow-camera, so tear down our state but DON'T clear viewer.trackedEntity (they own it now).
+    // follow-camera, so tear down our state but DON'T clear the camera's follow (they own it now).
     // Releasing trackedEntity does NOT move the camera: Cesium resets the lookAt transform in
     // place, so the view stays where the follow left it and the user can immediately orbit/zoom.
     if (flightState._viewer && !skipViewerUntrack) {
-      flightState._viewer.trackedEntity = undefined;
+      stopFollowing(flightState._viewer);
     }
     if (flightState._trackedEntity) {
       flightState._viewer.entities.remove(flightState._trackedEntity);
@@ -891,15 +896,11 @@ export function createTracking({
     // resolves into an aircraft.
     //
     // The billboard stays SHOWN at all times and is hidden by going TRANSPARENT (alpha 0), not by
-    // show=false. This is deliberate: viewer.trackedEntity derives the follow-camera framing from
-    // the entity's bounding sphere, and a 3D model graphic reports a PENDING sphere until its glTF
-    // finishes loading. If we hid the billboard outright, tracking a plane while already zoomed in
-    // would stall the centering until the model loaded. A shown-but-transparent billboard always
-    // supplies a ready sphere, so framing is instant; we only drop its alpha once the model GLB is
-    // preloaded (_planeModelLoaded), so there's neither a billboard+model double-image nor a gap.
+    // show=false: it drops its alpha only once the model GLB is preloaded (_planeModelLoaded), so
+    // there's neither a billboard+model double-image nor a gap. The camera follows its own target
+    // through the camera port, so nothing here frames the camera.
     // The tracked entity is a PURE BILLBOARD — no label or model graphic. The tracked plane's 3D
-    // model is the standalone primitive driven by _updateTrackedModel(); keeping it off the entity is
-    // what makes the follow-camera's bounding sphere always ready (see _trackedModel).
+    // model is the standalone primitive driven by _updateTrackedModel(); it stays off the entity (see _trackedModel).
     // What the tracked billboard is drawn at, kept in its entity record so the
     // camera guard and screen annotations size it from Core.
     const sprite = {
@@ -914,9 +915,6 @@ export function createTracking({
     };
     flightState._trackedEntity = flightState._viewer.entities.add({
       position: positionProperty,
-      // Keep Cesium's EntityView in the same ENU frame as the close-range
-      // camera guard; AUTO may otherwise alternate with a velocity frame.
-      trackingReferenceFrame: Cesium.TrackingReferenceFrame.ENU,
       billboard: {
         image: aircraftIcon(
           parts.rendering._iconKind(
@@ -981,7 +979,7 @@ export function createTracking({
     // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
     const altM = info?.altitudeFt ? info.altitudeFt * 0.3048 : 1500;
     const followRange = Math.min(Math.max(altM * 1.1 + 2500, 3000), 30000);
-    flightState._trackedEntity.viewFrom = new Cesium.Cartesian3(
+    const viewFrom = new Cesium.Cartesian3(
       0,
       -followRange * 0.8,
       followRange * 0.55,
@@ -1000,15 +998,18 @@ export function createTracking({
     entityRecord(flightState._trackedEntity).visualPosition =
       parts.motion._trackedVisualCached;
     refreshTrackedReadout(flightState._trackedEntity);
-    flightState._viewer.camera.cancelFlight();
-    // Camera follows the tracked entity
-    flightState._viewer.trackedEntity = flightState._trackedEntity;
-    flightState._trackedCameraFrameStop =
-      applyTrackedCameraFrame(
-        flightState._viewer,
-        flightState._trackedEntity,
-        flightState._trackedEntity.viewFrom,
-      ) || null;
+    // The camera follows through its port: a target framed from viewFrom in
+    // ENU, never closer than the readable minimum, whose presentation (key,
+    // label, sprite, display position) reads the tracked entity's record.
+    const camera = cameraOf(flightState._viewer);
+    camera.cancelFlight();
+    flightState._followTarget = entityFollowTarget(flightState._trackedEntity, {
+      position: getTrackedPosition,
+      frame: 'enu',
+      viewFrom,
+      minRange: FOLLOW_MIN_RANGE_M,
+    });
+    camera.follow(flightState._followTarget);
 
     // Track-history trail (PRD F2): seed from local history + async backfill.
     // Ground traffic draws NO trail — if the plane takes off while tracked, the
@@ -1050,23 +1051,23 @@ export function createTracking({
     if (flightState._clickSubscription) return; // already installed
 
     // Cross-layer untrack (mirror of flights): if another layer grabs the follow-camera, drop our
-    // tracking without touching viewer.trackedEntity (the new owner controls it).
+    // tracking without touching the camera's follow (the new owner controls it).
     if (!flightState._trackedEntityChangedRemove) {
-      flightState._trackedEntityChangedRemove =
-        viewer.trackedEntityChanged.addEventListener(() => {
+      flightState._trackedEntityChangedRemove = onFollowChanged(
+        viewer,
+        (followed) => {
           if (
             flightState._trackedIcao &&
             flightState._viewer &&
-            flightState._viewer.trackedEntity &&
-            flightState._viewer.trackedEntity !== flightState._trackedEntity
+            followed &&
+            followed !== flightState._followTarget
           ) {
             _clearTracking(true, {
-              origin:
-                readEntityRecord(flightState._viewer.trackedEntity)
-                  ?.selectionOrigin || 'programmatic',
+              origin: followed.selectionOrigin || 'programmatic',
             });
           }
-        });
+        },
+      );
     }
 
     flightState._clickSubscription = inputFor(viewer).onClick((event) => {

@@ -1,3 +1,5 @@
+import { cameraOf } from '../../render/cesium/camera.js';
+import { followedOf } from '../../data/followed.js';
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import * as Cesium from 'cesium';
@@ -28,7 +30,6 @@ export function createQueries({
   const { tr3bTypeLabel, tr3bAircraftClass } = services.aircraftPresentation;
   const { formatFlightLevel } = services.labels;
   const { isMilitaryIcao } = services.militaryRegistry;
-  const { applyTrackedCameraFrame } = services.camera;
   const {
     setFocusDeemphasisParams,
     getFocusDeemphasisParams,
@@ -828,18 +829,13 @@ export function createQueries({
       if (
         id !== flightState._trackedIcao ||
         !flightState._viewer.entities?.contains?.(flightState._trackedEntity) ||
-        flightState._viewer.trackedEntity !== flightState._trackedEntity
+        followedOf(flightState._viewer) !== flightState._followTarget
       )
         return false;
-      flightState._trackedCameraFrameStop?.();
-      flightState._viewer.camera.cancelFlight();
-      flightState._viewer.trackedEntity = flightState._trackedEntity;
-      flightState._trackedCameraFrameStop =
-        applyTrackedCameraFrame(
-          flightState._viewer,
-          flightState._trackedEntity,
-          flightState._trackedEntity.viewFrom,
-        ) || null;
+      // Following the same target again frames it afresh.
+      const camera = cameraOf(flightState._viewer);
+      camera.cancelFlight();
+      camera.follow(flightState._followTarget);
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
     },
