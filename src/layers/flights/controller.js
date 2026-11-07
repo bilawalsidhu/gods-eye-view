@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { findCamera } from '../../render/rendererOf.js';
 
 export function createController({
   flightState,
@@ -13,13 +13,12 @@ export function createController({
     flightState.feed._activeUpdateControllers.clear();
   }
 
+  /** The feed query around the camera's ground point, or {} with none. */
   function _flightQuery(viewer) {
-    const cartographic = viewer?.camera?.positionCartographic;
-    return cartographic
-      ? {
-          latitude: Cesium.Math.toDegrees(cartographic.latitude),
-          longitude: Cesium.Math.toDegrees(cartographic.longitude),
-        }
+    const pose = viewer ? findCamera(viewer)?.pose() : null;
+    // An eye at the earth's centre has no ground point: the pose gives NaN.
+    return pose && Number.isFinite(pose.lat) && Number.isFinite(pose.lon)
+      ? { latitude: pose.lat, longitude: pose.lon }
       : {};
   }
   return { _abortActiveUpdates, _flightQuery };

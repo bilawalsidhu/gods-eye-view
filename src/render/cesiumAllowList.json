@@ -42,7 +42,6 @@
   "src/layers/cctv/rendering.js",
   "src/layers/directions/index.js",
   "src/layers/firms/rendering.js",
-  "src/layers/flights/controller.js",
   "src/layers/flights/enrichment.js",
   "src/layers/flights/evidence.js",
   "src/layers/flights/icons.js",

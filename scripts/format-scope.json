@@ -745,6 +745,7 @@
   "src/layers/flights/snapshotRenderer.js",
   "src/layers/flights/records.test.mjs",
   "src/layers/flights/ingestion.test.mjs",
+  "src/layers/flights/controller.test.mjs",
   "src/layers/military/records.js",
   "src/layers/military/recordPolicy.js",
   "src/layers/military/snapshotRenderer.js",
