@@ -20,6 +20,30 @@ export const cross = (a, b) =>
 export const magnitude = (a) => Math.sqrt(dot(a, a));
 /** Straight-line (chord) distance, not along the surface. */
 export const distance = (a, b) => magnitude(sub(a, b));
+/**
+ * The squared chord distance, allocating nothing: what per-frame code
+ * compares and, through `Math.sqrt`, measures with (bit for bit `distance`).
+ */
+export function distanceSquared(a, b) {
+  const x = a.x - b.x,
+    y = a.y - b.y,
+    z = a.z - b.z;
+  return x * x + y * y + z * z;
+}
+/** Write `from` into `out` and return it. */
+export function copyInto(from, out) {
+  out.x = from.x;
+  out.y = from.y;
+  out.z = from.z;
+  return out;
+}
+/** Linear interpolation from `a` (t = 0) to `b` (t = 1), written into `out`. */
+export function lerpInto(a, b, t, out) {
+  out.x = (1 - t) * a.x + t * b.x;
+  out.y = (1 - t) * a.y + t * b.y;
+  out.z = (1 - t) * a.z + t * b.z;
+  return out;
+}
 export function normalize(a) {
   const m = magnitude(a);
   return vec(a.x / m, a.y / m, a.z / m);

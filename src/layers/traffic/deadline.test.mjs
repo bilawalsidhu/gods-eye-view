@@ -6,6 +6,7 @@ import { createFlow } from './flow.js';
 import { createRetention } from './retention.js';
 import { createControls } from './controls.js';
 import { createState } from './state.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 
 const bounds = { west: 0, east: 0.01, south: 0, north: 0.01 };
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
@@ -75,6 +76,23 @@ test('superseding a stalled pass aborts promptly without clearing newer loading'
   clearTimeout(h.state._retryTimer);
 });
 
+// The camera-plane scenes below, as the renderer's ports see them: the eye
+// and the near plane, and window positions from the scene itself.
+const ANGLE = 35 * Math.PI / 180;
+function portView(scene) {
+  const viewer = { scene };
+  const position = { x: 0, y: 0, z: 450 };
+  const direction = { x: 0, y: Math.cos(ANGLE), z: -Math.sin(ANGLE) };
+  bindRenderer(viewer, {
+    camera: { pose: () => ({ position: { ...position }, direction: { ...direction }, near: scene.camera.frustum.near }) },
+    query: { project(p) {
+      const s = C.SceneTransforms.worldToWindowCoordinates(scene, new C.Cartesian3(p.x, p.y, p.z));
+      return s ? { x: s.x, y: s.y } : null;
+    } },
+  });
+  return viewer;
+}
+
 for (const y of [-175, -200, -300]) test(`off-screen camera-plane height correction settles without holding public loading (${y})`, () => {
   const angle = 35 * Math.PI / 180;
   const scene = {
@@ -87,7 +105,7 @@ for (const y of [-175, -200, -300]) test(`off-screen camera-plane height correct
   };
   const point = new C.Cartesian3(0, y, 100), target = new C.Cartesian3(0, y, 197);
   const state = createState({ services: {} });
-  Object.assign(state, { _viewer: { scene }, _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] });
+  Object.assign(state, { _viewer: portView(scene), _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] });
   const retention = createRetention({ state, parts: {} });
   retention.easeHeights(1 / 60);
   const controls = createControls({ state, services: {}, source: { getFlowSessionStats: () => ({}) }, parts: { model: { trafficFeedPresentation: () => ({}) } } });
@@ -111,7 +129,7 @@ test('visible corrections use the pixel limit without the off-screen world-speed
     frustum: new C.PerspectiveFrustum({ fov: Math.PI / 3, aspectRatio: 1.6, near: 1, far: 1e7 }) },
   };
   const point = new C.Cartesian3(0, 1000, 0), target = new C.Cartesian3(0, 1000, 300);
-  const state = { _viewer: { scene }, _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] };
+  const state = { _viewer: portView(scene), _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] };
   const retention = createRetention({ state, parts: {} });
   let loadingFrames = 0, maxPixels = 0;
   for (let frame = 0; frame < 180; frame++) {
@@ -137,7 +155,7 @@ for (const targetHeight of [200, 2000]) test(`visible height steps stay pixel-li
     frustum: new C.PerspectiveFrustum({ fov: Math.PI / 3, aspectRatio: 1.6, near: 1, far: 1e7 }) },
   };
   const point = new C.Cartesian3(0, 50, 400), target = new C.Cartesian3(0, 50, targetHeight);
-  const state = { _viewer: { scene }, _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] };
+  const state = { _viewer: portView(scene), _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] };
   const before = C.SceneTransforms.worldToWindowCoordinates(scene, point);
   assert.ok(before.y > 0 && before.y < 800);
   const trial = C.Cartesian3.lerp(point, target, 0.2, new C.Cartesian3());

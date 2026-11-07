@@ -6,6 +6,8 @@ import { createStyle } from './style.js';
 import { createModel } from './model.js';
 import { createAnimation } from './animation.js';
 import { DOT_HEIGHT_OFFSET } from './policy.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import '../../render/cesium/camera.js';
 import {
   createRetention,
   DOT_CHANGE_BUDGET,
@@ -597,23 +599,31 @@ test('a closure that empties the population mid-correction settles heights and c
   assert.equal(h.state._renderHeld, false);
 });
 
-test('large height corrections obey a screen-pixel bound and reuse projection scratch objects', (t) => {
+test('large height corrections obey a screen-pixel bound through the query port', (t) => {
   const h = setup(t);
   h.state._viewer.scene = {
     canvas: { clientWidth: 1280, clientHeight: 2000 },
     camera: {},
     frameState: {},
   };
-  const scratch = new Set();
-  t.mock.method(
-    C.SceneTransforms,
-    'worldToWindowCoordinates',
-    (_scene, point, result) => {
-      scratch.add(result);
-      result.x = 0;
-      result.y = C.Cartographic.fromCartesian(point).height * 10;
-      return result;
-    },
+  // The eye at the earth's centre looking out through the roads, so every
+  // waypoint is beyond the near plane; window y is ten pixels a metre.
+  t.after(
+    bindRenderer(h.state._viewer, {
+      camera: {
+        pose: () => ({
+          position: { x: 0, y: 0, z: 0 },
+          direction: { x: 1, y: 0, z: 0 },
+          near: 1,
+        }),
+      },
+      query: {
+        project(point) {
+          const p = new C.Cartesian3(point.x, point.y, point.z);
+          return { x: 0, y: C.Cartographic.fromCartesian(p).height * 10 };
+        },
+      },
+    }),
   );
   h.parts.retention.reconcile(h.roads(), 450, true);
   h.settle();
@@ -632,7 +642,6 @@ test('large height corrections obey a screen-pixel bound and reuse projection sc
   );
   assert.equal(dot.id, id);
   assert.equal(h.state._heightPending, false);
-  assert.equal(scratch.size, 2);
 });
 
 test('grounded vehicles respect mesh occlusion even after live congestion changes', (t) => {
@@ -800,4 +809,141 @@ test('selection asks the query port for depth and screen positions, and the came
   } finally {
     unbind();
   }
+});
+
+test('height easing stops visible waypoints at the camera near plane', () => {
+  const viewer = {
+    scene: {
+      canvas: { clientWidth: 1000, clientHeight: 800 },
+      camera: {},
+      frameState: {},
+    },
+  };
+  // Every point projects to the same pixel, so only the near plane can stop
+  // a step: the eye at the origin looks along +x with its near plane at 1.
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => ({
+        position: { x: 0, y: 0, z: 0 },
+        direction: { x: 1, y: 0, z: 0 },
+        near: 1,
+      }),
+    },
+    query: { project: () => ({ x: 10, y: 10 }) },
+  });
+  try {
+    const point = { x: 100, y: 0, z: 0 };
+    const state = {
+      _viewer: viewer,
+      _roads: [
+        {
+          heightMoving: true,
+          waypoints: [point],
+          targetWaypoints: [{ x: -100, y: 0, z: 0 }],
+          segmentDist: [],
+        },
+      ],
+    };
+    const retention = createRetention({ state, parts: {} });
+    for (let frame = 0; frame < 120; frame++) retention.easeHeights(1 / 60);
+    assert.ok(point.x > 1, `stopped short of the near plane at ${point.x}`);
+    assert.ok(point.x < 2, 'but eased up to it');
+    assert.equal(state._heightPending, true);
+  } finally {
+    unbind();
+  }
+});
+
+/** A scene with a real camera, which the Cesium camera and query ports read. */
+function cesiumScene() {
+  const scene = {
+    canvas: { clientWidth: 1280, clientHeight: 800, width: 1280, height: 800 },
+    drawingBufferWidth: 1280,
+    drawingBufferHeight: 800,
+    mapProjection: new C.GeographicProjection(),
+    mode: C.SceneMode.SCENE3D,
+    frameState: { mode: C.SceneMode.SCENE3D },
+    pick: () => undefined,
+    drillPick: () => [],
+  };
+  for (const name of ['preUpdate', 'preRender', 'postRender', 'postUpdate'])
+    scene[name] = new C.Event();
+  scene.camera = new C.Camera(scene);
+  scene.camera.frustum.near = 1;
+  scene.camera.frustum.aspectRatio = 1.6;
+  return scene;
+}
+
+test('height easing through the Cesium ports stops at the near plane of a looked-at camera', () => {
+  const scene = cesiumScene();
+  const centre = C.Cartesian3.fromDegrees(0, 0, 0);
+  // A transformed camera: lookAt leaves the camera in the target's frame.
+  scene.camera.lookAt(centre, new C.HeadingPitchRange(0, -0.5, 600));
+  const viewer = { scene, camera: scene.camera };
+  const eyeDepth = (p) =>
+    -C.Matrix4.multiplyByPoint(scene.camera.viewMatrix, p, new C.Cartesian3())
+      .z;
+  // Along the view ray through the eye: the point stays at the canvas
+  // centre, so only the near plane can stop it.
+  const { positionWC: eye, directionWC: ahead } = scene.camera;
+  const along = (metres) =>
+    C.Cartesian3.add(
+      eye,
+      C.Cartesian3.multiplyByScalar(ahead, metres, new C.Cartesian3()),
+      new C.Cartesian3(),
+    );
+  const point = along(300);
+  const target = along(-300);
+  assert.ok(eyeDepth(point) > 1 && eyeDepth(target) < 1);
+  const state = {
+    _viewer: viewer,
+    _roads: [
+      {
+        heightMoving: true,
+        waypoints: [point],
+        targetWaypoints: [target],
+        segmentDist: [],
+      },
+    ],
+  };
+  const retention = createRetention({ state, parts: {} });
+  let maxPixels = 0;
+  for (let frame = 0; frame < 240; frame++) {
+    const before = C.SceneTransforms.worldToWindowCoordinates(scene, point);
+    retention.easeHeights(1 / 60);
+    const after = C.SceneTransforms.worldToWindowCoordinates(scene, point);
+    if (before && after)
+      maxPixels = Math.max(maxPixels, C.Cartesian2.distance(before, after));
+    assert.ok(
+      eyeDepth(point) > 1,
+      `frame ${frame} stays beyond the near plane`,
+    );
+  }
+  assert.ok(maxPixels <= 12.01, `${maxPixels} px a frame`);
+  assert.ok(
+    eyeDepth(point) < 3,
+    `eased up to the near plane: ${eyeDepth(point)}`,
+  );
+  assert.equal(state._heightPending, true);
+});
+
+test('height easing without a query port moves at the world-speed cap', () => {
+  const scene = {
+    canvas: { clientWidth: 1280, clientHeight: 800 },
+  };
+  const point = { x: 0, y: 0, z: 0 };
+  const state = {
+    _viewer: { scene },
+    _roads: [
+      {
+        heightMoving: true,
+        waypoints: [point],
+        targetWaypoints: [{ x: 0, y: 0, z: 100 }],
+        segmentDist: [],
+      },
+    ],
+  };
+  createRetention({ state, parts: {} }).easeHeights(1 / 60);
+  assert.ok(Math.abs(point.z - 2) < 1e-9, `${point.z} m, 120 m/s for a frame`);
+  assert.equal(state._heightPending, true);
 });

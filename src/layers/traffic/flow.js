@@ -1,6 +1,6 @@
 import { roadIdentity } from './retention.js';
 import { fromDegrees, toCartographicRadians } from '../../geo/ellipsoid.js';
-import { distance, dot, sub } from '../../geo/vector.js';
+import { copyInto, distance, distanceSquared } from '../../geo/vector.js';
 import { findCamera, findQuery } from '../../render/rendererOf.js';
 import {
   prepareRoadSurfaces,
@@ -15,19 +15,6 @@ import {
 } from './policy.js';
 import { msg } from '../../i18n/index.js';
 import { nextTask } from '../../sources/vectorTiles.js';
-
-/** Squared straight-line distance, as the default renderer computes it. */
-function distanceSquared(a, b) {
-  const d = sub(a, b);
-  return dot(d, d);
-}
-
-/** Copy `from`'s coordinates into the point `to`, in place. */
-function copyPoint(from, to) {
-  to.x = from.x;
-  to.y = from.y;
-  to.z = from.z;
-}
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
@@ -314,7 +301,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       const prepared = !refining && preparedRoads.get(road.key);
       if (prepared) {
         for (let i = 0; i < road.waypoints.length; i++)
-          copyPoint(prepared.waypoints[i], road.waypoints[i]);
+          copyInto(prepared.waypoints[i], road.waypoints[i]);
       } else if (
         (!road.surfaceReady || refining) &&
         (localHeights.length || depthHeight !== undefined)
@@ -330,7 +317,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
             Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? Math.max(floor, layerState._viewHeightEstimate)
               : layerState._viewHeightEstimate;
-          copyPoint(
+          copyInto(
             fromDegrees(lon, lat, height + DOT_HEIGHT_OFFSET),
             road.waypoints[i],
           );
@@ -442,7 +429,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       const prepared = !refining && preparedRoads.get(road.key);
       if (prepared) {
         for (let i = 0; i < road.waypoints.length; i++)
-          copyPoint(prepared.waypoints[i], road.waypoints[i]);
+          copyInto(prepared.waypoints[i], road.waypoints[i]);
         for (let i = 0; i < road.segmentDist.length; i++)
           road.segmentDist[i] = prepared.segmentDist[i];
         road.surfaceReady = true;

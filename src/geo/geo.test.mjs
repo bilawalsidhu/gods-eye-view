@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
+  copyInto,
   distance,
+  distanceSquared,
   eastNorthUp,
   fromDegrees,
   geodeticSurfaceNormal,
+  lerpInto,
   rayEllipsoid,
   scaleToGeodeticSurface,
   toCartographicRadians,
@@ -208,4 +211,37 @@ test('a ray meets the ellipsoid where Cesium picks it', () => {
     assert.ok(distance(ours, expected) < 1e-3, `ray ${i}`);
   }
   assert.ok(misses > 0 && misses < 200, 'hits and misses both tried');
+});
+
+test('in-place vector helpers match the default renderer bit for bit', () => {
+  const a = fromDegrees(-97.7431, 30.2672, 151.25);
+  const b = fromDegrees(-97.7402, 30.2691, 180.5);
+  const ca = new Cesium.Cartesian3(a.x, a.y, a.z);
+  const cb = new Cesium.Cartesian3(b.x, b.y, b.z);
+  assert.equal(
+    distanceSquared(a, b),
+    Cesium.Cartesian3.distanceSquared(ca, cb),
+  );
+  assert.equal(
+    Math.sqrt(distanceSquared(a, b)),
+    Cesium.Cartesian3.distance(ca, cb),
+  );
+  for (const t of [0, 0.137, 0.5, 1]) {
+    const out = { x: 0, y: 0, z: 0 };
+    assert.equal(lerpInto(a, b, t, out), out);
+    assert.deepEqual(
+      { ...out },
+      { ...Cesium.Cartesian3.lerp(ca, cb, t, new Cesium.Cartesian3()) },
+    );
+  }
+  const into = { x: 1, y: 2, z: 3 };
+  assert.equal(copyInto(a, into), into);
+  assert.deepEqual(into, { x: a.x, y: a.y, z: a.z });
+  // In place: lerping a point toward a target writes over it safely.
+  const p = { ...a };
+  lerpInto(p, b, 0.25, p);
+  assert.deepEqual(
+    { ...p },
+    { ...Cesium.Cartesian3.lerp(ca, cb, 0.25, new Cesium.Cartesian3()) },
+  );
 });
