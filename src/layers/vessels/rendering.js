@@ -15,6 +15,7 @@ import {
   findFrame,
   findQuery,
 } from '../../render/rendererOf.js';
+import { poseSignature } from '../../render/camera/poseSignature.js';
 import { createVesselIconBook } from './iconBook.js';
 import {
   VESSEL_LIFT_M,
@@ -30,18 +31,6 @@ import {
 const SHIP_ICON_PX = 32;
 
 let instances = 0;
-
-/**
- * The camera pose a pass evaluated, to the precision that moves what it
- * draws: the eye to 10 m and its angles to a milliradian.
- */
-function poseSignature(pose) {
-  const p = pose.position;
-  return (
-    `${Math.round(p.x / 10)}:${Math.round(p.y / 10)}:${Math.round(p.z / 10)}:` +
-    `${pose.heading.toFixed(3)}:${pose.pitch.toFixed(3)}:${pose.roll.toFixed(3)}`
-  );
-}
 
 export function createRendering({
   vesselState,
@@ -103,6 +92,7 @@ export function createRendering({
   }
 
   const { registerSpriteSet } = services.sprites;
+  let warnedNoSpriteOrder = false;
   const {
     forgetSpriteFocus,
     focusNowMs,
@@ -153,7 +143,14 @@ export function createRendering({
     set.setColumns?.({ ids: [] });
     state.icons = createVesselIconBook(set);
     state.icons.show = state.feed.enabled;
-    registerSpriteSet?.('ais', set.id);
+    if (registerSpriteSet) registerSpriteSet('ais', set.id);
+    else if (!warnedNoSpriteOrder) {
+      // Drawn still, but not raised over the other sprite layers.
+      warnedNoSpriteOrder = true;
+      console.warn(
+        '[Data:ais-live-vessels] the host has no registerSpriteSet; ships keep their draw order',
+      );
+    }
   }
 
   /** Let the icon draw set go (the layer is destroyed). */
@@ -313,12 +310,19 @@ export function createRendering({
     if (force) governorRequestRender('ais-vessels-update');
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
-    const pose = state.viewer ? findCamera(state.viewer)?.pose() : null;
     const regularPass =
       force || now - state.lastVisibilityUpdate >= VISIBILITY_UPDATE_MS;
     const focusPass =
       focusPassIsNeeded(focusTarget, state.activeFocusCount) &&
       (force || now - state.lastFocusUpdate >= FOCUS_UPDATE_MS);
+    // The pose is read only when a pass runs or a moved camera could still
+    // need its trailing pass: most frames fall inside the cadence with one
+    // already waiting.
+    const pose =
+      state.viewer &&
+      (regularPass || focusPass || !state.trailingVisibilityTimer)
+        ? findCamera(state.viewer)?.pose()
+        : null;
     if (
       !regularPass &&
       pose &&

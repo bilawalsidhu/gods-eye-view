@@ -22,6 +22,7 @@
  * unverified math swap, decides whether exact projection becomes preferred.
  */
 import * as Cesium from 'cesium';
+import { poseSignature } from '../render/camera/poseSignature.js';
 
 /** Meters used to give the course vector a stable projection magnitude. */
 const FORWARD_PROBE_M = 2000;
@@ -257,11 +258,12 @@ export function horizonOccluder(camera) {
  * @returns {string}
  */
 export function cameraPoseSignature(camera) {
-  const p = camera.positionWC;
-  return (
-    `${Math.round(p.x / 10)}:${Math.round(p.y / 10)}:${Math.round(p.z / 10)}:` +
-    `${camera.heading.toFixed(3)}:${camera.pitch.toFixed(3)}:${camera.roll.toFixed(3)}`
-  );
+  return poseSignature({
+    position: camera.positionWC,
+    heading: camera.heading,
+    pitch: camera.pitch,
+    roll: camera.roll,
+  });
 }
 
 /**

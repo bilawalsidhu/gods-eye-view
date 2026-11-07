@@ -139,13 +139,18 @@ const ANCHORS = {
  * sets by id, a version that changes with them, the scene's 3D tilesets and
  * the clamp-state watch the frame loop runs after each draw.
  * @param {{scene: object, report: (error: unknown) => void,
- *   capabilities?: ReadonlySet<string>}} options `capabilities` gate the
- *   GPU icon sets' members (by default they all are).
+ *   capabilities?: ReadonlySet<string>,
+ *   requestRender?: (reason: string) => void}} options `capabilities` gate
+ *   the GPU icon sets' members (by default they all are); `requestRender`,
+ *   the frame port's, asks for the frames a GPU icon set needs on its own
+ *   (its images packed), under the reason `icons:<set id>` (by default the
+ *   scene's, with no reason).
  */
 export function createCesiumDraw({
   scene,
   report,
   capabilities = new Set(GPU_ICON_CAPABILITIES),
+  requestRender: requestFrame = null,
 }) {
   const sets = new Map();
   // Bumped on every change to the sets or what they hold.
@@ -322,7 +327,11 @@ export function createCesiumDraw({
     toColor,
     imageOf: (record, image) => iconImage(record, image),
     peekImage: (image) => atlases.get(image.atlas)?.[image.slot],
-    requestRender,
+    requestRender: (reason) => {
+      if (!live()) return;
+      if (requestFrame) requestFrame(reason);
+      else scene.requestRender();
+    },
   });
 
   /**

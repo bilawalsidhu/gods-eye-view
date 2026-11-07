@@ -10,7 +10,7 @@ import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 
 const noop = () => {};
 
-function setup() {
+function setup({ focusPassIsNeeded = () => false } = {}) {
   let clock = 10_000;
   const requests = [];
   const holds = new Set();
@@ -34,11 +34,11 @@ function setup() {
         clearOverlaySource: noop,
       },
       geoid: {},
-      sprites: {},
+      sprites: { registerSpriteSet: noop },
       focus: {
         focusNowMs: () => clock,
         getFocusTarget: () => null,
-        focusPassIsNeeded: () => false,
+        focusPassIsNeeded,
         forgetSpriteFocus: noop,
       },
       worldFocus: {},
@@ -138,4 +138,49 @@ test('destroy cancels a pending trailing frame', (t) => {
   assert.equal(timers.size, 0);
   advance(VISIBILITY_UPDATE_MS);
   assert.deepEqual(requests, []);
+});
+
+test('frames inside the cadence with a trailing frame waiting read no camera pose', () => {
+  const { camera, timers, advance, frame } = setup();
+  let reads = 0;
+  const position = camera.positionWC;
+  Object.defineProperty(camera, 'positionWC', {
+    get: () => (reads++, position),
+  });
+  frame();
+  assert.ok(reads > 0, 'the cadence pass reads it');
+  advance(100);
+  camera.heading = 0.5;
+  reads = 0;
+  frame();
+  assert.ok(reads > 0, 'a skipped frame reads it to see the camera moved');
+  assert.equal(timers.size, 1);
+  reads = 0;
+  for (let i = 0; i < 5; i += 1) {
+    advance(100);
+    frame();
+  }
+  assert.equal(reads, 0, 'the trailing frame already waits');
+});
+
+test('a focus pass reads the camera pose even with a trailing frame waiting', () => {
+  let focusing = false;
+  const { camera, timers, advance, frame } = setup({
+    focusPassIsNeeded: () => focusing,
+  });
+  let reads = 0;
+  const position = camera.positionWC;
+  Object.defineProperty(camera, 'positionWC', {
+    get: () => (reads++, position),
+  });
+  frame();
+  advance(100);
+  camera.heading = 0.5;
+  frame();
+  assert.equal(timers.size, 1);
+  focusing = true;
+  reads = 0;
+  advance(100);
+  frame();
+  assert.ok(reads > 0, 'the focus pass needs the eye');
 });

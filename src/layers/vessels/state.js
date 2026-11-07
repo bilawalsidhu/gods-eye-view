@@ -17,9 +17,6 @@ export function createVesselState({ source, services }) {
 
   vesselState._lastCamPoseSig = '';
 
-  /** Screen position the focus pass projects into, reused every pass. */
-  vesselState._scratchFocusScreen = { x: 0, y: 0 };
-
   vesselState.DEFAULT_VESSEL_OVERLAY_HOST = Object.freeze({
     setEntries: setOverlayEntries,
     setVisible: setOverlaySourceVisible,

@@ -32,7 +32,7 @@ function services() {
       clearOverlaySource: noop,
     },
     geoid: {},
-    sprites: {},
+    sprites: { registerSpriteSet: noop },
     focus: {
       focusNowMs: (now) => now,
       getFocusTarget: () => null,
@@ -99,7 +99,7 @@ test('vessel construction is inert and each instance owns its records, icon cach
   };
   const one = createVesselState({ source, services: services() });
   const two = createVesselState({ source, services: services() });
-  for (const key of ['state', 'shipIconCache', '_scratchFocusScreen'])
+  for (const key of ['state', 'shipIconCache'])
     assert.notEqual(one[key], two[key]);
   assert.notEqual(one.state.records.byMmsi, two.state.records.byMmsi);
   assert.notEqual(one.state.feed, two.state.feed);

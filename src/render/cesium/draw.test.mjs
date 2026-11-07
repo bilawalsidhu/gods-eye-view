@@ -1704,12 +1704,12 @@ test('icons scale, fade and show by eye distance, and drop the curves in place',
   set.dispose();
 });
 
-test('the vessels layer draws its ships as one GPU icon set that holds them on course', async () => {
+/**
+ * The vessels layer over a fake scene, drawing through the draw port, with
+ * `sprites` as its sprite-order services.
+ */
+async function vesselLayerOver(scene, sprites) {
   const { createVesselLayer } = await import('../../layers/vessels/index.js');
-  const { IconSetPrimitive } = await import('../../data/iconSetPrimitive.js');
-  const { ICON_CULL_LIFT, ICON_ROTATES } =
-    await import('../../data/iconSet.js');
-  const scene = fakeScene();
   const part = createCesiumDraw({
     scene,
     report: (error) => assert.fail(error),
@@ -1738,7 +1738,7 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
         clearOverlaySource: noop,
       },
       geoid: {},
-      sprites: {},
+      sprites,
       focus: {
         focusNowMs: (now) => now,
         getFocusTarget: () => null,
@@ -1753,46 +1753,130 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
       },
     },
   });
-  layer.testing._setVesselStateForTest({ viewer, icons: null });
-  layer.testing._reconcileVesselsForTest(viewer, [
-    { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90, speed: 12 },
-    { mmsi: '244000002', lat: 51.96, lon: 4.2, course: 200, speed: 2 },
-  ]);
-  const [host] = scene.added;
-  assert.ok(host instanceof IconSetPrimitive, 'one GPU icon set');
-  assert.match(host.drawSetId, /^ais-vessels:\d+$/);
-  const record = part.sets.get(host.drawSetId);
-  const set = record.gpu.set;
-  assert.equal(set.count, 2);
-  const row = set.row('244000001');
-  const tau = set.seconds(Cesium.JulianDate.now());
-  assert.equal(set.course(row, tau), 90, 'held on its heading');
-  assert.equal(set.course(set.row('244000002'), tau), 200, 'or its course');
-  assert.equal(set.width(row), 32);
-  assert.ok(Math.abs(set.scale(row) - 0.68) < 1e-6, 'scaled by speed');
-  assert.equal(set.flags(row) & ICON_ROTATES, ICON_ROTATES);
-  assert.equal(set.flags(row) & ICON_CULL_LIFT, ICON_CULL_LIFT);
-  assert.ok(set.depthTestDistance(row) >= 1e30, 'over depth everywhere');
-  const at = Cesium.Cartographic.fromCartesian(set.position(row, tau));
-  assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) - 4.1) < 1e-6);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(at.latitude) - 51.95) < 1e-6);
-  const facade = { show: true };
-  assert.deepEqual(drawHitOf(host._pickObject('244000001', null, facade)), {
-    set: host.drawSetId,
-    id: '244000001',
-    meta: { layer: 'ais-live-vessels', id: '244000001' },
-    surface: false,
+  return { layer, viewer, part, unbind };
+}
+
+test('the vessels layer draws its ships as one GPU icon set that holds them on course', async () => {
+  const { IconSetPrimitive } = await import('../../data/iconSetPrimitive.js');
+  const { ICON_CULL_LIFT, ICON_ROTATES } =
+    await import('../../data/iconSet.js');
+  const spriteOrder = await import('../../data/spriteOrder.js');
+  const scene = fakeScene();
+  const registered = [];
+  const { layer, viewer, part, unbind } = await vesselLayerOver(scene, {
+    registerSpriteSet(layerId, setId) {
+      registered.push([layerId, setId]);
+      return spriteOrder.registerSpriteSet(layerId, setId);
+    },
   });
+  const military = { name: 'military' };
+  try {
+    layer.testing._setVesselStateForTest({ viewer, icons: null });
+    layer.testing._reconcileVesselsForTest(viewer, [
+      { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90, speed: 12 },
+      { mmsi: '244000002', lat: 51.96, lon: 4.2, course: 200, speed: 2 },
+    ]);
+    const [host] = scene.added;
+    assert.ok(host instanceof IconSetPrimitive, 'one GPU icon set');
+    assert.match(host.drawSetId, /^ais-vessels:\d+$/);
+    const record = part.sets.get(host.drawSetId);
+    const set = record.gpu.set;
+    assert.equal(set.count, 2);
+    const row = set.row('244000001');
+    const tau = set.seconds(Cesium.JulianDate.now());
+    assert.equal(set.course(row, tau), 90, 'held on its heading');
+    assert.equal(set.course(set.row('244000002'), tau), 200, 'or its course');
+    assert.equal(set.width(row), 32);
+    assert.ok(Math.abs(set.scale(row) - 0.68) < 1e-6, 'scaled by speed');
+    assert.equal(set.flags(row) & ICON_ROTATES, ICON_ROTATES);
+    assert.equal(set.flags(row) & ICON_CULL_LIFT, ICON_CULL_LIFT);
+    assert.ok(set.depthTestDistance(row) >= 1e30, 'over depth everywhere');
+    const at = Cesium.Cartographic.fromCartesian(set.position(row, tau));
+    assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) - 4.1) < 1e-6);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(at.latitude) - 51.95) < 1e-6);
+    const facade = { show: true };
+    assert.deepEqual(drawHitOf(host._pickObject('244000001', null, facade)), {
+      set: host.drawSetId,
+      id: '244000001',
+      meta: { layer: 'ais-live-vessels', id: '244000001' },
+      surface: false,
+    });
 
-  // A poll that moves one and drops the other writes rows, not a new host.
-  layer.testing._reconcileVesselsForTest(viewer, [
-    { mmsi: '244000001', lat: 51.95, lon: 4.12, heading: 95, speed: 12 },
-  ]);
-  assert.equal(scene.added[0], host);
-  assert.equal(set.count, 1);
-  assert.equal(set.course(set.row('244000001'), tau), 95);
+    // A poll that moves one and drops the other writes rows, not a new host.
+    layer.testing._reconcileVesselsForTest(viewer, [
+      { mmsi: '244000001', lat: 51.95, lon: 4.12, heading: 95, speed: 12 },
+    ]);
+    assert.equal(scene.added[0], host);
+    assert.equal(set.count, 1);
+    assert.equal(set.course(set.row('244000001'), tau), 95);
 
+    // The sprite order finds the host by its set id and stacks it under the
+    // military sprites.
+    assert.deepEqual(registered, [['ais', host.drawSetId]]);
+    spriteOrder.registerSpriteCollection('military', military);
+    const stack = (list) => ({
+      scene: {
+        primitives: {
+          get: (i) => list[i],
+          get length() {
+            return list.length;
+          },
+          contains: (p) => list.includes(p),
+          raiseToTop(p) {
+            list.splice(list.indexOf(p), 1);
+            list.push(p);
+          },
+        },
+      },
+    });
+    const order = [military, host, { name: 'other' }];
+    spriteOrder.restoreSpriteOrder(stack(order));
+    assert.deepEqual(
+      order.map((p) => p.name ?? p.drawSetId),
+      ['other', host.drawSetId, 'military'],
+    );
+
+    // Torn down and drawn again: a new set, registered in the old one's
+    // place, with the old host gone from the scene.
+    layer.destroy(viewer);
+    assert.equal(scene.added.length, 0, 'destroyed: the set goes');
+    layer.testing._setVesselStateForTest({ viewer, icons: null });
+    layer.testing._reconcileVesselsForTest(viewer, [
+      { mmsi: '244000003', lat: 51.9, lon: 4.0, heading: 10, speed: 5 },
+    ]);
+    assert.equal(scene.added.length, 1);
+    const [again] = scene.added;
+    assert.notEqual(again, host);
+    assert.notEqual(again.drawSetId, host.drawSetId, 'a new set id');
+    assert.equal(part.sets.has(host.drawSetId), false);
+    assert.deepEqual(registered.at(-1), ['ais', again.drawSetId]);
+    const stray = { name: 'stray' };
+    const next = [military, again, stray];
+    spriteOrder.restoreSpriteOrder(stack(next));
+    assert.deepEqual(next, [stray, again, military], 'the new host is raised');
+    layer.destroy(viewer);
+    assert.equal(scene.added.length, 0);
+  } finally {
+    spriteOrder.unregisterSpriteCollection('military', military);
+    spriteOrder.unregisterSpriteCollection('ais');
+    unbind();
+  }
+});
+
+test('vessels on a host with no sprite-set registry still draw, and say so once', async (t) => {
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+  const scene = fakeScene();
+  const { layer, viewer, unbind } = await vesselLayerOver(scene, {});
+  const ship = { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90 };
+  layer.testing._setVesselStateForTest({ viewer, icons: null });
+  layer.testing._reconcileVesselsForTest(viewer, [ship]);
+  assert.equal(scene.added.length, 1, 'drawn');
   layer.destroy(viewer);
-  assert.equal(scene.added.length, 0, 'destroyed: the set goes');
+  layer.testing._setVesselStateForTest({ viewer, icons: null });
+  layer.testing._reconcileVesselsForTest(viewer, [ship]);
+  const said = warnings.filter((w) => w.includes('registerSpriteSet'));
+  assert.equal(said.length, 1, 'once, not per set');
+  layer.destroy(viewer);
   unbind();
 });

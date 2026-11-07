@@ -290,7 +290,12 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
 
   // --- Draw ------------------------------------------------------------------
 
-  const drawPart = createCesiumDraw({ scene, report, capabilities });
+  const drawPart = createCesiumDraw({
+    scene,
+    report,
+    capabilities,
+    requestRender: (reason) => frame.requestRender(reason),
+  });
   const { port: draw, sets, tilesets } = drawPart;
 
   const cameraPart = createCesiumCamera({ scene, camera, report, widget });

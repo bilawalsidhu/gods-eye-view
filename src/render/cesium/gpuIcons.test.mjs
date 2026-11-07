@@ -833,3 +833,36 @@ test('the atlas holds more than 64 images, every one addressed on WebGL 2', asyn
   );
   assert.equal(slots.size, 70, 'each its own slot');
 });
+
+test('a GPU icon set asks the frame port for its atlas frames, under its own reason', async () => {
+  const { iconAtlas } = await import('../../data/iconAtlas.js');
+  const onChange = iconAtlas.onChange;
+  const heard = [];
+  iconAtlas.onChange = (listener) => (heard.push(listener), () => {});
+  try {
+    const reasons = [];
+    const { scene, draw } = drawOver({
+      requestRender: (reason) => reasons.push(reason),
+    });
+    const set = draw.icons({ id: 'gpu:reason' });
+    set.set([icon('a', { motion: { kind: 'hold' } })]);
+    assert.equal(heard.length, 1, 'its host listens for packed images');
+    const before = scene.renders;
+    heard[0]();
+    assert.deepEqual(reasons, ['icons:gpu:reason']);
+    assert.equal(scene.renders, before, 'through the frame port only');
+    set.dispose();
+
+    // With no frame port, the scene's own request, as before.
+    const bare = drawOver();
+    const bareSet = bare.draw.icons({ id: 'gpu:bare' });
+    bareSet.set([icon('a', { motion: { kind: 'hold' } })]);
+    assert.equal(heard.length, 2);
+    const was = bare.scene.renders;
+    heard[1]();
+    assert.equal(bare.scene.renders, was + 1);
+    bareSet.dispose();
+  } finally {
+    iconAtlas.onChange = onChange;
+  }
+});

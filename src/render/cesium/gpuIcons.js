@@ -174,7 +174,7 @@ function rasterPxOf(url, item) {
  *   toColor: (color: unknown) => Cesium.Color,
  *   imageOf: (record: object, image: unknown) => unknown,
  *   peekImage: (ref: {atlas: string, slot: string}) => unknown,
- *   requestRender: () => void}} options `imageOf` reads an atlas slot
+ *   requestRender: (reason: string) => void}} options `imageOf` reads an atlas slot
  *   through the draw port's atlases (undefined while it is not registered),
  *   noting that the set draws from it; `peekImage` only reads it.
  */
@@ -286,7 +286,7 @@ export function createGpuIcons({
       set,
       renderTime: (frameState) =>
         clockTime(frameState, new Cesium.JulianDate()),
-      requestRender,
+      requestRender: () => requestRender(`icons:${spec.id}`),
       cull: () => spec.horizonCull === true,
       // Picked as the draw port's other items are: `{set, id, meta,
       // lodGroup}` as the item now is, hidden row by row for drill picks.
