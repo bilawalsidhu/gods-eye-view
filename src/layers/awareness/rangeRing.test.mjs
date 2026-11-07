@@ -970,7 +970,7 @@ test('the pulse level fades in, holds, fades out and keeps its level when woken'
   assert.equal(awarenessPulseLevel(at + activeMs, wake), 0);
 });
 
-test('an engine without a pulse backend gets the static ring only', (t) => {
+test('the fake engine carries the same pulse field and echo lifecycle', (t) => {
   const engine = createFakeEngine();
   const preRender = engine.frames.preRender.numberOfListeners;
   const ring = ringRendering(t, { engine });
@@ -978,10 +978,14 @@ test('an engine without a pulse backend gets the static ring only', (t) => {
   rendering.renderVisual(flight(3));
   assert.ok(engine.fake.line(RING_ID));
   assert.ok(engine.fake.line(RING_HALO_ID));
-  assert.equal(ring.state.visual.disc, null);
-  assert.equal(engine.frames.preRender.numberOfListeners, preRender);
-  assert.equal(getAwarenessEchoField(), null);
+  assert.ok(ring.state.visual.disc);
+  assert.ok(engine.fake.groundPulse('gev-awareness-pulses'));
+  assert.ok(engine.frames.preRender.numberOfListeners > preRender);
+  assert.ok(getAwarenessEchoField());
   rendering.clearVisual();
+  assert.equal(engine.frames.preRender.numberOfListeners, preRender);
+  assert.equal(engine.fake.groundPulse('gev-awareness-pulses'), undefined);
+  assert.equal(getAwarenessEchoField(), null);
   assert.equal(pulseFrames(), 0);
 });
 

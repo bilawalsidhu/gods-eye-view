@@ -4,7 +4,7 @@
 // contact and a contact flight) and the 250 km range ring, a core line over
 // a wider dark halo at the rim height, with straight chords between
 // positions that already follow the surface. The pulses inside the ring sit
-// behind ./pulseDisc.js. Nothing here takes picks.
+// through engine.ground. Nothing here takes picks.
 //
 // Cesium's ring was one polyline in its outline material: a 4 px line whose
 // inner 3 px are the core and whose outer pixel is the halo, half on each
@@ -21,7 +21,6 @@ import {
   CONTEXT_RIM_HEIGHT_M,
 } from '../policy.js';
 import { awarenessRangeRingPositions } from '../rendering.js';
-import { createAwarenessPulseField } from './pulseDisc.js';
 
 export const RING_ID = 'gev-awareness-rim';
 export const RING_HALO_ID = 'gev-awareness-rim-halo';
@@ -38,10 +37,8 @@ const withAlpha = (rgba, alpha) => [rgba[0], rgba[1], rgba[2], rgba[3] * alpha];
 /**
  * The layer's view of `engine`.
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
- * @param {{ navaraPulses?: Function }} [options] The pulses' Navara backend
- *   (render/navaraPulses.js), which the Navara mode passes in.
  */
-export function createAwarenessDisplay(engine, { navaraPulses } = {}) {
+export function createAwarenessDisplay(engine) {
   if (!engine?.lines)
     throw new TypeError('The awareness display needs a globe engine');
   const binding = createEngineLayerView(engine, {
@@ -114,26 +111,24 @@ export function createAwarenessDisplay(engine, { navaraPulses } = {}) {
       };
     },
 
-    /** The pulse disc around `center`, or null on an engine without one. */
+    /** The pulse field around `center`. */
     createPulses: (center) =>
-      createAwarenessPulseField(
-        engine,
-        {
-          center: geo.cartesian3.clone(center),
-          radiusM: AWARENESS_RADIUS_M,
-          // The band's own opacity, as the pulse material sets it.
-          color: [
-            ...RING_CORE.slice(0, 3),
-            AWARENESS_RANGE_PULSE.gradientOpacity,
-          ],
-          lineColor: RING_CORE,
-          haloColor: RING_HALO,
-          depth: AWARENESS_RANGE_PULSE.gradientDepthFraction,
-          lineWidth: AWARENESS_RANGE_PULSE.width,
-          haloWidth: AWARENESS_RANGE_PULSE.outlineWidth,
-        },
-        { navaraPulses },
-      ),
+      engine.ground.createPulseField({
+        id: 'gev-awareness-pulses',
+        heightM: CONTEXT_RIM_HEIGHT_M,
+        center: geo.cartesian3.clone(center),
+        radiusM: AWARENESS_RADIUS_M,
+        // The band's own opacity, as the pulse material sets it.
+        color: [
+          ...RING_CORE.slice(0, 3),
+          AWARENESS_RANGE_PULSE.gradientOpacity,
+        ],
+        lineColor: RING_CORE,
+        haloColor: RING_HALO,
+        depth: AWARENESS_RANGE_PULSE.gradientDepthFraction,
+        lineWidth: AWARENESS_RANGE_PULSE.width,
+        haloWidth: AWARENESS_RANGE_PULSE.outlineWidth,
+      }),
     destroy: binding.destroy,
   };
 }

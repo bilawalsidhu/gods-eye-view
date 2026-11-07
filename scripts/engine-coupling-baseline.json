@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 210,
-    "navaraLayerRendererLines": 794,
+    "cesiumLayerRendererLines": 14,
+    "navaraLayerRendererLines": 314,
     "cesiumImportFiles": 5,
-    "viewerLines": 953,
+    "viewerLines": 948,
     "navaraKindChecks": 2,
     "engineSniffCalls": 0,
-    "engineExtensionReads": 6,
+    "engineExtensionReads": 4,
     "groundEffectPasses": 1,
     "cesiumSdkLoads": 3,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 37
+    "engineNameLines": 36
   },
-  "measuredAt": "Move shared follow offsets and Draw input and previews onto the globe contract"
+  "measuredAt": "Draw Bhote Koshi story graphics and range pulse fields through engine.ground"
 }

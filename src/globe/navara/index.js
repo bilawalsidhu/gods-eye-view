@@ -36,6 +36,7 @@ import { createNavaraMovers } from './movers/index.js';
 import { createNavaraLines } from './lines/index.js';
 import { createNavaraMeshes } from './meshes.js';
 import { createNavaraGround } from './ground/index.js';
+import { createNavaraPulseField } from './ground/pulse.js';
 import { createGroundPass } from './ground/pass.js';
 import { createNavaraImagery } from './imagery/index.js';
 import { createImageryPass } from './imagery/pass.js';
@@ -176,7 +177,14 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
       }),
       lines: createNavaraLines(view, { overlay }),
       meshes: (parts) => createNavaraMeshes(view, { MeshDesc, ...parts }),
-      ground: createNavaraGround(view, { createPass: createGroundPass }),
+      ground: createNavaraGround(view, {
+        createPass: createGroundPass,
+        pulseField: (options) =>
+          createNavaraPulseField(
+            { view, EffectDesc, NavaraEffect, canvas },
+            options,
+          ),
+      }),
       imagery: (parts) =>
         createNavaraImagery(view, { ...parts, createPass: createImageryPass }),
     });

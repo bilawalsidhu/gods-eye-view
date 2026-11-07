@@ -1,14 +1,8 @@
-// The range pulses' Cesium backend (render/pulseDisc.js): one flat,
-// translucent, unpickable disc the size of the range, CONTEXT_RIM_HEIGHT_M
-// above the ellipsoid, whose material draws each pulse line and the band
-// behind it. Moving pulses only change its uniforms. The disc follows the
-// subject by a rotation about the Earth's centre and is rebuilt only past
-// `gradientRebuildM` from where it was built.
+// A ground pulse field: one unpickable ellipse with uniform-only pulse updates.
 import * as Cesium from 'cesium';
-import { AWARENESS_RANGE_PULSE, CONTEXT_RIM_HEIGHT_M } from '../policy.js';
 
 /** The pulse disc's Cesium material type, one cached template per page. */
-const MATERIAL_TYPE = 'GevAwarenessPulseGradient';
+const MATERIAL_TYPE = 'GevGroundPulseField';
 
 // Ellipse texture coordinates put the centre at (0.5, 0.5) and the rim at
 // distance 0.5, so `r` is the fraction of the range. Each pulse is a line
@@ -96,17 +90,15 @@ export function discFollowMatrix(from, to, result = new Cesium.Matrix4()) {
   );
 }
 
-function createDisc(center, radiusM, material) {
+function createDisc(center, radiusM, heightM, material) {
   return new Cesium.Primitive({
     geometryInstances: new Cesium.GeometryInstance({
       geometry: new Cesium.EllipseGeometry({
         center,
         semiMajorAxis: radiusM,
         semiMinorAxis: radiusM,
-        height: CONTEXT_RIM_HEIGHT_M,
-        granularity: Cesium.Math.toRadians(
-          AWARENESS_RANGE_PULSE.gradientGranularityDeg,
-        ),
+        height: heightM,
+        granularity: Cesium.Math.toRadians(0.25),
         vertexFormat:
           Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
       }),
@@ -126,11 +118,20 @@ function createDisc(center, radiusM, material) {
  * The pulse disc on a Cesium viewer, or null when its scene has no
  * primitive collection: `draw({ radii, alphas, level })`, `move(center)`,
  * `destroy()`. Colours are rgba arrays in 0..1.
- * @param {{ viewer: object }} cesium The engine's Cesium extension.
  */
-export function createAwarenessCesiumPulses(
-  { viewer },
-  { center, radiusM, color, lineColor, haloColor, depth, lineWidth, haloWidth },
+export function createCesiumPulseField(
+  viewer,
+  {
+    center,
+    radiusM,
+    heightM,
+    color,
+    lineColor,
+    haloColor,
+    depth,
+    lineWidth,
+    haloWidth,
+  },
 ) {
   const primitives = viewer?.scene?.primitives;
   if (!primitives?.add) return null;
@@ -154,7 +155,7 @@ export function createAwarenessCesiumPulses(
   });
   Object.assign(material.uniforms, uniforms);
   const built = Cesium.Cartesian3.clone(center);
-  let disc = primitives.add(createDisc(built, radiusM, material));
+  let disc = primitives.add(createDisc(built, radiusM, heightM, material));
   let destroyed = false;
   return {
     draw({ radii, alphas, level }) {
@@ -164,23 +165,20 @@ export function createAwarenessCesiumPulses(
       Cesium.Cartesian4.fromArray(alphas, 0, material.uniforms.alphas);
     },
     /**
-     * Centres the disc on `next`: within `gradientRebuildM` of where it was
+     * Centres the disc on `next`: within 20 km of where it was
      * built by its model matrix (the ellipsoid curves a little differently
      * from that sphere, tens of metres in height at 20 km), further away by
      * a rebuild, which costs a few milliseconds.
      */
     move(next) {
       if (destroyed) return;
-      if (
-        Cesium.Cartesian3.distance(built, next) <
-        AWARENESS_RANGE_PULSE.gradientRebuildM
-      ) {
+      if (Cesium.Cartesian3.distance(built, next) < 20000) {
         disc.modelMatrix = discFollowMatrix(built, next, disc.modelMatrix);
         return;
       }
       const previous = disc;
       Cesium.Cartesian3.clone(next, built);
-      disc = primitives.add(createDisc(built, radiusM, material));
+      disc = primitives.add(createDisc(built, radiusM, heightM, material));
       disc.show = previous.show;
       // Primitive.destroy leaves the material alone, so the new disc keeps
       // sharing it.

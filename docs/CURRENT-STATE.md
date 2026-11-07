@@ -280,11 +280,14 @@ one application, and only the globe-bound parts move to the next engine.
   S2 GhostMaps, cyclone advisories, submarine cables, Mapped Installations,
   Global Context, datacenters and dams through their own `render/display.js`;
   the fills of the ground layers, installation outlines and the selection fill
-  are `engine.ground` sets. Global Context's range pulses, an animated disc the
-  contract has no primitive for yet, draw behind one seam,
-  `src/layers/awareness/render/pulseDisc.js` (`render/cesiumPulses.js`, a
-  material disc, on Cesium; `render/navaraPulses.js`, a surface pass that the
-  layer manifest loads and passes in).
+  are `engine.ground` sets. Global Context's range pulses use
+  `engine.ground.createPulseField`: the same fronts, halos, inward bands,
+  wake/rest timing and raised ellipsoid on every engine. Cesium retains its
+  material disc; Navara's shader is owned by `src/globe/navara/ground` and
+  draws after tone mapping. Bhote Koshi's event and locator share
+  `src/layers/bhoteKoshi/render/story.js`, using ground polygons and corridors
+  with Cesium's dashed halo and glowing core, plus point movers with animated
+  outline opacity. Their authored property records remain in the story model.
   The Active Fires far-zoom heatmap is an `engine.imagery` layer, and Recent
   Imagery draws its days through `engine.imagery` from its own
   `render/display.js`. CCTV's monitor plane and viewshed volume use
@@ -293,18 +296,13 @@ one application, and only the globe-bound parts move to the next engine.
   movers, lines and world meshes retain authored heights, polygon holes,
   images and picking across scene detach and reattach. Annotation drapes
   remain on their existing renderers pending bounded classification support.
-  Navara ground effects (heat, pulses, trails, pads, drapes) are declared
-  with `defineGroundEffect` (`src/layers/shared/render/navaraGroundEffect.js`);
-  their insert order is pinned by `navaraGroundOrder.test.mjs`.
 - **One layer manifest.** `LAYER_MANIFEST` in `src/app/layers/renderers.js`
   says how each directory layer draws: its display with the contract
   primitives it needs (and an engine-specific backend option keyed by engine
-  kind: Global Context's pulses on Navara), a layer that
+  kind: wind streamlines), a layer that
   draws itself through the contract (Wildlife Sightings), or, without a
-  display, its drawing per engine kind (wind, the weather rasters and the
-  Bhote Koshi event and locator draw themselves on Cesium and through a
-  Navara renderer on Navara; Sea Marks and Ski Pistes drape themselves on
-  both). A layer is available on an engine when that engine has the
+  display, its drawing per engine kind. Weather, wind imagery and Bhote Koshi
+  use shared displays; Sea Marks and Ski Pistes drape themselves on both. A layer is available on an engine when that engine has the
   primitives it needs, or, without a display, when its entry lists that
   kind; today every layer shows on both. The manifest's Navara backends
   and renderers load through `import()` (`loadLayerRenderers(kind)`, awaited

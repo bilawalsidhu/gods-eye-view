@@ -1,6 +1,4 @@
-// The Bhote Koshi displays on the fake engine: the event's before and after
-// images split at the engine's split position; the story through the
-// engine's backend, or none.
+// The Bhote Koshi imagery and story lifetimes on the fake engine.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
@@ -33,12 +31,12 @@ test('the before and after images split left and right at alpha 0.96', async () 
       .imageryLayers()
       .every((id) => engine.fake.imageryLayer(id).shown === false),
   );
-  assert.equal(display.draw({ entities: { values: [] } }), null, 'no backend');
+  assert.ok(display.draw({ entities: { values: [] } }));
   display.destroy();
   assert.deepEqual(engine.fake.imageryLayers(), []);
 });
 
-test('an image that will not load rejects; the story draws through the backend', async () => {
+test('an image that will not load rejects; story displays release their frame listeners', async () => {
   const engine = createFakeEngine();
   const stage = engine.imagery.createLayer;
   // A layer whose staged source fails, as an engine's whose image 404s.
@@ -47,25 +45,20 @@ test('an image that will not load rejects; the story draws through the backend',
     layer.setSource = async () => false;
     return layer;
   };
-  const drawn = [];
-  const display = createBhoteKoshiDisplay(engine, {
-    drawStory: (target, data) => {
-      drawn.push([target, data]);
-      return { destroy() {} };
-    },
-  });
+  const display = createBhoteKoshiDisplay(engine);
   await assert.rejects(
     display.loadImages(BOX, ['pre.webp', 'post.webp']),
     /imagery unavailable/,
   );
-  const data = { name: 'flood' };
-  assert.ok(display.draw(data));
-  assert.deepEqual(drawn, [[engine, data]]);
-  assert.equal(createBhoteKoshiLocatorDisplay(engine, { data }), null);
-  assert.ok(
-    createBhoteKoshiLocatorDisplay(engine, {
-      data,
-      drawStory: () => ({ destroy() {} }),
-    }),
-  );
+  const data = { name: 'flood', entities: { values: [] } };
+  const before = engine.frames.preRender.numberOfListeners;
+  const story = display.draw(data);
+  const locator = createBhoteKoshiLocatorDisplay(engine, { data });
+  assert.equal(engine.frames.preRender.numberOfListeners, before + 2);
+  story.destroy();
+  locator.destroy();
+  assert.equal(engine.frames.preRender.numberOfListeners, before);
+  display.draw(data);
+  display.destroy();
+  assert.equal(engine.frames.preRender.numberOfListeners, before);
 });

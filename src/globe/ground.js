@@ -7,6 +7,7 @@
 // as GeoJSON stores them; colours rgba in 0..1. No engine imports.
 
 import * as geo from '../geo/index.js';
+import { createGroundPulseRegistry } from './groundPulse.js';
 
 export const GROUND_KINDS = Object.freeze([
   'polygon',
@@ -44,10 +45,19 @@ export function normalizeGroundSetOptions(options) {
   if (!isFiniteNumber(order)) fail(`order must be a number: ${order}`);
   if (options.pickable !== undefined && typeof options.pickable !== 'boolean')
     fail('pickable must be a boolean');
+  if (options.dynamic !== undefined && typeof options.dynamic !== 'boolean')
+    fail('dynamic must be a boolean');
   const drape = options.drape ?? 'both';
   if (!GROUND_DRAPES.includes(drape))
     fail(`drape must be one of ${GROUND_DRAPES.join(', ')}: ${drape}`);
-  return { id, kind, order, pickable: options.pickable === true, drape };
+  return {
+    id,
+    kind,
+    order,
+    pickable: options.pickable === true,
+    drape,
+    ...(options.dynamic ? { dynamic: true } : {}),
+  };
 }
 
 function lonLat(value, label) {
@@ -234,8 +244,27 @@ const unit = (value) => isFiniteNumber(value) && value >= 0 && value <= 1;
 // alpha going up and down, `dash` the annotation route's flowing dashes.
 // Null without any.
 function animationOf(item, index) {
-  const { glow, pulse, dash } = item;
-  if (glow == null && pulse == null && dash == null) return null;
+  const { glow, pulse, dash, dashPattern } = item;
+  if (glow == null && pulse == null && dash == null && dashPattern == null)
+    return null;
+  if (dashPattern != null) {
+    if (
+      !isObject(dashPattern) ||
+      !isFiniteNumber(dashPattern.lengthPx) ||
+      dashPattern.lengthPx <= 0
+    )
+      fail(`item ${index} dashPattern.lengthPx must be positive`);
+    const pattern = dashPattern.pattern ?? 255;
+    if (!Number.isInteger(pattern) || pattern < 0 || pattern > 65535)
+      fail(`item ${index} dashPattern.pattern must be a 16-bit integer`);
+    if (glow != null || pulse != null || dash != null)
+      fail(
+        `item ${index} dashPattern cannot combine with other corridor looks`,
+      );
+    return Object.freeze({
+      pattern: Object.freeze({ lengthPx: dashPattern.lengthPx, pattern }),
+    });
+  }
   const label = `item ${index}`;
   let glowOut = null;
   if (glow != null) {
@@ -377,12 +406,14 @@ export function areaRings(kind, item, { discSegments = 64, cellStepDeg } = {}) {
  * ready?() }), called with checked items. Set ids are unique while the set
  * lives; destroyAll() is for the engine's destroy.
  */
-export function createGroundRegistry(build) {
+export function createGroundRegistry(build, { pulseField } = {}) {
   const live = new Map();
+  const pulses = createGroundPulseRegistry(pulseField, (id) => live.has(id));
   const ground = {
+    createPulseField: pulses.create,
     createSet(input) {
       const options = normalizeGroundSetOptions(input);
-      if (live.has(options.id))
+      if (live.has(options.id) || pulses.live.has(options.id))
         throw new Error(`Ground set ${options.id} already exists`);
       const part = build(options);
       const state = {
@@ -439,18 +470,21 @@ export function createGroundRegistry(build) {
       return set;
     },
     list: () =>
-      [...live.values()].map(({ options, items, shown, animated }) => ({
-        id: options.id,
-        kind: options.kind,
-        count: items.length,
-        shown,
-        order: options.order,
-        animated,
-      })),
+      [...live.values()]
+        .map(({ options, items, shown, animated }) => ({
+          id: options.id,
+          kind: options.kind,
+          count: items.length,
+          shown,
+          order: options.order,
+          animated,
+        }))
+        .concat(pulses.list()),
   };
   return {
     ground,
     live,
+    pulses: pulses.live,
     /**
      * Whether a shown set has a pulse or a dash: the engine draws a frame
      * after every frame while it does, as Cesium's continuous render did.
@@ -461,6 +495,7 @@ export function createGroundRegistry(build) {
       return false;
     },
     destroyAll() {
+      pulses.destroyAll();
       for (const state of [...live.values()]) state.set.destroy();
     },
   };

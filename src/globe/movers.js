@@ -165,6 +165,10 @@ export function createMoverStore(options) {
   let positions = new Float64Array(capacity * 3);
   let orientations = new Float64Array(capacity * 4);
   let colors = new Float32Array(capacity * 4).fill(1);
+  let outlineColors = kind === 'point' ? new Float32Array(capacity * 4) : null;
+  if (outlineColors)
+    for (let index = 0; index < capacity; index++)
+      outlineColors.set(options.point.outlineColor, index * 4);
   let rotations = new Float32Array(capacity);
   let scales = new Float32Array(capacity).fill(1);
   let cells = new Uint16Array(capacity);
@@ -221,6 +225,19 @@ export function createMoverStore(options) {
       )
     )
       throw new TypeError('Mover color must be [r, g, b, a]');
+    if (
+      fields.outlineColor !== undefined &&
+      (kind !== 'point' ||
+        !(
+          Array.isArray(fields.outlineColor) ||
+          ArrayBuffer.isView(fields.outlineColor)
+        ) ||
+        fields.outlineColor.length !== 4 ||
+        !Array.from(fields.outlineColor).every(
+          (v) => isFiniteNumber(v) && v >= 0 && v <= 1,
+        ))
+    )
+      throw new TypeError('Mover outlineColor must be point rgba in 0..1');
     if (rotation !== undefined && !isFiniteNumber(rotation))
       throw new TypeError('Mover rotation must be a number');
     if (scale !== undefined && !(isFiniteNumber(scale) && scale >= 0))
@@ -234,6 +251,7 @@ export function createMoverStore(options) {
     positions,
     orientations,
     colors,
+    outlineColors,
     rotations,
     scales,
     cells,
@@ -261,6 +279,8 @@ export function createMoverStore(options) {
       if (color)
         for (let channel = 0; channel < 4; channel++)
           colors[index * 4 + channel] = color[channel];
+      if (fields.outlineColor)
+        outlineColors.set(fields.outlineColor, index * 4);
       if (rotation !== undefined) rotations[index] = rotation;
       if (scale !== undefined) scales[index] = scale;
       if (cell !== undefined) cells[index] = cellIndex.get(cell);
@@ -284,6 +304,7 @@ export function createMoverStore(options) {
       positions = new Float64Array(0);
       orientations = new Float64Array(0);
       colors = new Float32Array(0);
+      outlineColors = outlineColors ? new Float32Array(0) : null;
       rotations = new Float32Array(0);
       scales = new Float32Array(0);
       cells = new Uint16Array(0);
@@ -293,6 +314,7 @@ export function createMoverStore(options) {
         positions,
         orientations,
         colors,
+        outlineColors,
         rotations,
         scales,
         cells,

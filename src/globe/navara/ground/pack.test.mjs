@@ -460,3 +460,23 @@ test('each bin of a packed area points at its own segments', () => {
   }
   assert.equal(pack.segments.length / 4, expected);
 });
+
+test('screen-space dash masks keep their CSS length and all sixteen bits in the pass', () => {
+  const pack = packSet(
+    'corridor',
+    items('corridor', [
+      {
+        positions: [
+          [85, 28],
+          [85.1, 28.1],
+        ],
+        color: [0.8, 0.5, 0.3, 0.38],
+        widthPx: 18,
+        dashPattern: { lengthPx: 18, pattern: 0xa55a },
+      },
+    ]),
+  );
+  assert.equal(pack.items[7], LOOK.pattern);
+  assert.deepEqual(Array.from(pack.items.slice(18, 20)), [18, 0xa55a]);
+  assert.equal(pack.items.length, ITEM_TEXELS * 4);
+});

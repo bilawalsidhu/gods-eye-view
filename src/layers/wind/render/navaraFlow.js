@@ -1,10 +1,10 @@
 import {
   bakeWindStreamlines,
+  WIND_DISPLAY_HEIGHT_METERS,
   WIND_NARROW_PATH_LIMIT,
   WIND_PATH_LIMIT,
 } from '../streamlines.js';
 import { sameWind } from '../model.js';
-import { createWindFlowMesh } from './flowMesh.js';
 
 const clamp = (n) => Math.max(0, Math.min(1, n));
 
@@ -14,7 +14,7 @@ const clamp = (n) => Math.max(0, Math.min(1, n));
  * in with the camera's height and moved by the page clock while the scene
  * is shown and motion is allowed. The colour field is the display's.
  */
-export function createWindNavaraFlow(engine, native) {
+export function createWindNavaraFlow(engine, native, createWindFlowMesh) {
   const canvas = engine.host.canvas,
     media = matchMedia('(prefers-reduced-motion: reduce)');
   let snapshot = null,
@@ -37,7 +37,8 @@ export function createWindNavaraFlow(engine, native) {
     budget = limit();
     const baked = bakeWindStreamlines(field, { count: budget });
     paths = baked.length;
-    if (paths) mesh = createWindFlowMesh(native, baked);
+    if (paths)
+      mesh = createWindFlowMesh(native, baked, WIND_DISPLAY_HEIGHT_METERS);
   };
   const frame = () => {
     if (!running || document.hidden) {

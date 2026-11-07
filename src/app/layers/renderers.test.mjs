@@ -91,7 +91,7 @@ test('the layers drawn through one display, and the ones that draw without one',
   // Engine-specific options of a display: the Navara backends.
   assert.deepEqual(
     kinds((entry) => Object.keys(entry.backends ?? {}).length),
-    ['bhote-koshi-2026', 'bhote-koshi-locator', 'military-awareness', 'wind'],
+    ['wind'],
   );
   assert.deepEqual(Object.keys(LAYER_MANIFEST.cctv.backends), []);
   assert.ok(LAYER_MANIFEST.cctv.needs.includes('meshes'));

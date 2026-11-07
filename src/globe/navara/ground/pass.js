@@ -55,6 +55,7 @@ uniform mat4 uInverseProjection;
 uniform mat4 uViewToWorld;
 uniform float uLogDepthFC;
 uniform float uTime;
+uniform float uPixelRatio;
 // Rows of ${ROW} texels (pack.js texelStorage).
 vec4 atSlot(highp sampler2D image, int slot) {
   return texelFetch(image, ivec2(slot & ${ROW - 1}, slot >> ${Math.log2(ROW)}), 0);
@@ -94,6 +95,13 @@ vec3 blendCorridor(vec3 color, int item, float nearest, vec2 normal, float along
         glow *= min(1.0, glowPulse.y / (0.5 - s * 0.5) - glowPulse.y / 0.5);
       rgb = max(vec3(glow - 1.0) + rgb, rgb);
       alpha *= clamp(glow, 0.0, 1.0);
+    }
+    if ((look & ${LOOK.pattern}) != 0) {
+      // A screen-aligned 16-bit mask, as the ground PolylineDash material.
+      vec2 tangent = normalize(vec2(-dot(normal, localDy), dot(normal, localDx)));
+      float across = dot(gl_FragCoord.xy, tangent);
+      float bit = floor(fract(across / (dash.z * uPixelRatio)) * 16.0);
+      alpha *= mod(floor(dash.w / exp2(bit)), 2.0);
     }
     if ((look & ${LOOK.dash}) != 0) {
       float flow = fract(s * pulseDash.y - uTime * pulseDash.w);
@@ -400,6 +408,7 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
         ['uViewToWorld', new Uniform(new Matrix4())],
         ['uLogDepthFC', new Uniform(1)],
         ['uTime', new Uniform(0)],
+        ['uPixelRatio', new Uniform(1)],
       ]),
     });
     return new NavaraEffect(camera, this.effect);
@@ -439,6 +448,8 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
     u.get('uViewToWorld').value.copy(camera.matrixWorld);
     u.get('uLogDepthFC').value = 2 / Math.log2(camera.far + 1);
     u.get('uTime').value = groundSeconds();
+    const cssWidth = this.view.canvas?.clientWidth;
+    u.get('uPixelRatio').value = cssWidth > 0 ? input.width / cssWidth : 1;
     u.get('tFrames').value = owner.textures.frames;
     u.get('tStyles').value = owner.textures.styles;
     u.get('tSegments').value = owner.textures.segments;

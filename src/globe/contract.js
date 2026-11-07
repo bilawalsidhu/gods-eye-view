@@ -437,10 +437,12 @@
  *   Models: the rotation of the glTF's own axes (as the file stores them,
  *   +Y up) into Earth-fixed axes; no engine adds an axis correction.
  * @property {number[]} [color] rgba in 0..1; multiplies the sprite's texels.
+ * @property {number[]} [outlineColor] Points: rgba in 0..1, initially the set
+ *   outlineColor. Updates the outline independently of the fill.
  * @property {number} [scale]
  * @property {string} [cell] An atlas cell key.
  * @property {boolean} [show]
- * @property {string|number} [pickId] What a pick of this instance returns.
+ * @property {any} [pickId] Opaque caller-owned identity returned by a pick.
  *
  * @typedef {object} MoverSet
  * @property {(index: number, fields: MoverFields) => void} set Stored only;
@@ -502,6 +504,9 @@
  *   set (GroundItem).
  * @property {number} [order] Draw order among ground sets (higher draws
  *   later, on top); 0 by default. Within a set a later item draws on top.
+ * @property {boolean} [dynamic] Changing paths: build synchronously once
+ *   terrain-height bounds are loaded, so a reveal does not replace worker
+ *   geometry faster than it can become ready. False by default.
  * @property {boolean} [pickable] Whether picks return the set's items (those
  *   with a pickId); false by default: picks pass through to what lies under.
  * @property {'both'|'terrain'|'tiles'} [drape] What the fills drape on:
@@ -532,6 +537,9 @@
  *     alpha times `gapAlpha`; a lit dash brightened by `emission` times its
  *     colour). A shown set with a pulse or a dash keeps the engine drawing
  *     a frame after every frame, as Cesium's continuous render did.
+ *   A corridor may instead take `dashPattern` ({ lengthPx, pattern = 255 }):
+ *   a static 16-bit mask repeated every lengthPx CSS pixels, with clear
+ *   gaps, as PolylineDash. It cannot combine with the other looks.
  *   Polygons, discs and cells take `fill` (omitted: none) and `outline`
  *   ({ color, widthPx }, a ground line on the boundary of every ring;
  *   omitted: none). Every kind takes `pickId`: what a pick of the item
@@ -551,8 +559,35 @@
  *   builds ground geometry in workers, a few frames later).
  * @property {() => void} destroy
  *
+ * @typedef {object} GroundPulseOptions
+ *   An unpickable radial field on the ellipsoid, raised by heightM. Up to
+ *   four fronts have a CSS-pixel line and halo with a quadratic band fading
+ *   inward. The caller owns timing and frame requests; updates do not
+ *   rebuild geometry or start a render loop.
+ * @property {string} id Unique among ground sets and pulse fields.
+ * @property {Cartesian3} center Earth-fixed metres on the ellipsoid.
+ * @property {number} radiusM Radius along the surface, metres.
+ * @property {number} [heightM] Height above the ellipsoid, default 0.
+ * @property {number[]} color Band rgba in 0..1.
+ * @property {number[]} lineColor Front rgba in 0..1.
+ * @property {number[]} haloColor Halo rgba in 0..1.
+ * @property {number} depth Band depth as a fraction of radiusM, in (0, 1].
+ * @property {number} lineWidth Front width including its halo, CSS pixels.
+ * @property {number} haloWidth Halo width, half on each side, CSS pixels.
+ *
+ * @typedef {object} GroundPulseField
+ * @property {string} id
+ * @property {(state: { radii: number[], alphas: number[], level: number }) => void} draw
+ *   Copies up to four front radii (fractions of radiusM) and opacities in
+ *   0..1; absent slots are zero. Level in 0..1 controls visibility (zero
+ *   hides); alphas already include the level. Initially hidden.
+ * @property {(center: Cartesian3) => void} move
+ * @property {() => void} destroy Idempotent; later draw/move calls do nothing.
+ * @property {() => boolean} isDestroyed
+ *
  * @typedef {object} GlobeGround
  * @property {(options: GroundSetOptions) => GroundSet} createSet
+ * @property {(options: GroundPulseOptions) => GroundPulseField} createPulseField
  * @property {() => { id: string, kind: string, count: number, shown: boolean, order: number, animated: boolean }[]} list
  *   `animated`: the last commit has a pulse or a dash.
  *
@@ -914,7 +949,11 @@ const SHAPE = {
   movers: { createSet: isFunction, list: isFunction },
   lines: { createLine: isFunction, list: isFunction },
   meshes: { createMesh: isFunction, list: isFunction },
-  ground: { createSet: isFunction, list: isFunction },
+  ground: {
+    createSet: isFunction,
+    createPulseField: isFunction,
+    list: isFunction,
+  },
   imagery: {
     createLayer: isFunction,
     list: isFunction,

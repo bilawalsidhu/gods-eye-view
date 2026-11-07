@@ -44,7 +44,7 @@ const E2 =
   1 - (ellipsoid.WGS84.minimumRadius / ellipsoid.WGS84.maximumRadius) ** 2;
 
 /** Item looks as the shader reads them: glow, pulse and dash bits. */
-export const LOOK = Object.freeze({ glow: 1, pulse: 2, dash: 4 });
+export const LOOK = Object.freeze({ glow: 1, pulse: 2, dash: 4, pattern: 8 });
 /** RGBA32F texels per corridor item. */
 export const ITEM_TEXELS = 5;
 
@@ -56,9 +56,12 @@ const geodetic = (latcDeg) =>
 
 /** One item's look: five texels (colour, widths, glow/pulse, dash). */
 function itemTexels(item, lengthM) {
-  const { glow, pulse, dash } = item.animation ?? {};
+  const { glow, pulse, dash, pattern } = item.animation ?? {};
   const flags =
-    (glow ? LOOK.glow : 0) | (pulse ? LOOK.pulse : 0) | (dash ? LOOK.dash : 0);
+    (glow ? LOOK.glow : 0) |
+    (pulse ? LOOK.pulse : 0) |
+    (dash ? LOOK.dash : 0) |
+    (pattern ? LOOK.pattern : 0);
   return [
     ...item.fill,
     item.widthPx ?? 0,
@@ -75,8 +78,8 @@ function itemTexels(item, lengthM) {
     dash?.speed ?? 0,
     dash?.gapAlpha ?? 0,
     dash?.emission ?? 0,
-    0,
-    0,
+    pattern?.lengthPx ?? 0,
+    pattern?.pattern ?? 0,
   ];
 }
 

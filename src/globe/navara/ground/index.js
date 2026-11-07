@@ -35,6 +35,7 @@ export function createNavaraGround(
   view,
   {
     createPass,
+    pulseField,
     nextFrame = (run) =>
       globalThis.requestAnimationFrame
         ? globalThis.requestAnimationFrame(run)
@@ -89,7 +90,7 @@ export function createNavaraGround(
     if (changed || registry.animating()) askNextFrame();
   };
   view.on('postRender', retry);
-  const registry = createGroundRegistry((options) => {
+  const build = (options) => {
     const entry = {
       options,
       shown: true,
@@ -119,7 +120,8 @@ export function createNavaraGround(
         compose();
       },
     };
-  });
+  };
+  const registry = createGroundRegistry(build, { pulseField });
   return {
     ground: registry.ground,
     /** Every live set's state ({ options, items, shown }) for CPU picks. */

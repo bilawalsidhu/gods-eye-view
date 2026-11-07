@@ -18,6 +18,7 @@
 // under it); identify() names a picked item.
 
 import * as Cesium from 'cesium';
+import { createCesiumPulseField } from './groundPulse.js';
 import {
   areaRings,
   createGroundRegistry,
@@ -119,14 +120,21 @@ export function corridorUniforms(item) {
 }
 
 const corridorMaterial = (item) =>
-  new Cesium.Material({
-    fabric: {
-      type: CORRIDOR_MATERIAL,
-      uniforms: corridorUniforms(item),
-      source: CORRIDOR_SOURCE,
-    },
-    translucent: true,
-  });
+  item.animation.pattern
+    ? Cesium.Material.fromType('PolylineDash', {
+        color: colorOf(item.fill),
+        gapColor: Cesium.Color.TRANSPARENT,
+        dashLength: item.animation.pattern.lengthPx,
+        dashPattern: item.animation.pattern.pattern,
+      })
+    : new Cesium.Material({
+        fabric: {
+          type: CORRIDOR_MATERIAL,
+          uniforms: corridorUniforms(item),
+          source: CORRIDOR_SOURCE,
+        },
+        translucent: true,
+      });
 
 // Items of one look and colour share a primitive.
 const lookKey = (item) =>
@@ -270,6 +278,10 @@ export function createCesiumGround(
 ) {
   const make = { ...DEFAULT_FACTORIES, ...factories };
   const { scene } = viewer;
+  let heightsReady =
+    make.lines !== DEFAULT_FACTORIES.lines &&
+    make.fills !== DEFAULT_FACTORIES.fills;
+  let heightsPromise = null;
   let root = null;
   const ordered = [];
   const building = new Set();
@@ -322,7 +334,7 @@ export function createCesiumGround(
     }
     return root;
   };
-  const registry = createGroundRegistry((options) => {
+  const build = (options) => {
     const slot = new Cesium.PrimitiveCollection({ destroyPrimitives: true });
     const at = ordered.filter((entry) => entry.order <= options.order).length;
     ordered.splice(at, 0, { order: options.order, slot });
@@ -331,14 +343,37 @@ export function createCesiumGround(
     let looks = [];
     const classificationType = classificationOf(options.drape);
     const allowPicking = options.pickable;
+    let pending = null;
+    let waiting = false;
+    let destroyed = false;
     const forget = () => {
       for (const primitive of drawn) building.delete(primitive);
       for (const material of looks) materials.delete(material);
       drawn = [];
       looks = [];
     };
-    return {
+    const part = {
       commit(items) {
+        pending = items;
+        if (options.dynamic && !heightsReady) {
+          if (!waiting) {
+            waiting = true;
+            heightsPromise ??=
+              Cesium.GroundPrimitive.initializeTerrainHeights();
+            heightsPromise.then(
+              () => {
+                heightsReady = true;
+                waiting = false;
+                if (!destroyed) part.commit(pending);
+              },
+              () => {
+                heightsPromise = null;
+                waiting = false;
+              },
+            );
+          }
+          return;
+        }
         forget();
         slot.removeAll();
         const { fills, lines, animated } = groundInstances(options, items);
@@ -352,6 +387,7 @@ export function createCesiumGround(
               }),
               classificationType,
               allowPicking,
+              asynchronous: !options.dynamic,
             }),
           );
         if (lines.length)
@@ -361,6 +397,7 @@ export function createCesiumGround(
               appearance: new Cesium.PolylineColorAppearance(),
               classificationType,
               allowPicking,
+              asynchronous: !options.dynamic,
             }),
           );
         for (const { item, instances } of animated) {
@@ -374,6 +411,7 @@ export function createCesiumGround(
               appearance: new Cesium.PolylineMaterialAppearance({ material }),
               classificationType,
               allowPicking,
+              asynchronous: !options.dynamic,
             }),
           );
         }
@@ -391,8 +429,13 @@ export function createCesiumGround(
         animate();
         requestRender('ground');
       },
-      ready: () => drawn.every((primitive) => primitive.ready === true),
+      ready: () =>
+        (!options.dynamic || heightsReady) &&
+        !waiting &&
+        drawn.every((primitive) => primitive.ready === true),
       destroy() {
+        destroyed = true;
+        pending = null;
         forget();
         animate();
         ordered.splice(
@@ -403,6 +446,10 @@ export function createCesiumGround(
         requestRender('ground');
       },
     };
+    return part;
+  };
+  const registry = createGroundRegistry(build, {
+    pulseField: (options) => createCesiumPulseField(viewer, options),
   });
   return {
     ground: registry.ground,

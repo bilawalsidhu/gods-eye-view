@@ -35,6 +35,10 @@ import { DETACHED_SONAR, SONAR_VERTEX } from '../sonar.js';
 const VERTEX_HEAD = /* glsl */ `
 attribute vec4 gevStyle;
 attribute vec4 gevColor;
+#ifdef GEV_POINT
+attribute vec4 gevOutlineColor;
+varying vec4 vGevOutlineColor;
+#endif
 attribute vec4 gevUv;
 uniform float uGevSizePx;
 uniform float uGevFootprint;
@@ -84,6 +88,7 @@ float gevSizePx = uGevSizePx * gevScale;
 vGevOutline = 0.0;
 vGevPixelDistance = 0.0;
 #ifdef GEV_POINT
+vGevOutlineColor = gevOutlineColor;
 float gevBorderPx = 2.0 * uGevOutlinePx * gevDistanceScale;
 float gevOutlinedSize = gevSizePx + gevBorderPx;
 vGevOutline = gevBorderPx / max(gevOutlinedSize, 1e-3);
@@ -118,7 +123,9 @@ vMapUv = mix(gevUv.xy, gevUv.zw, uv);
 `;
 
 const FRAGMENT_HEAD = /* glsl */ `
-uniform vec4 uGevOutlineColor;
+#ifdef GEV_POINT
+varying vec4 vGevOutlineColor;
+#endif
 varying vec4 vGevColor;
 varying vec2 vGevLocal;
 varying float vGevOutline;
@@ -143,7 +150,7 @@ float gevDistanceToCenter = gevRadius * 0.5;
 float gevWholeAlpha = 1.0 - smoothstep(gevMaxDistance, 0.5, gevDistanceToCenter);
 float gevInner = 1.0 - vGevOutline;
 float gevInnerAlpha = 1.0 - smoothstep(gevMaxDistance * gevInner, 0.5 * gevInner, gevDistanceToCenter);
-vec4 gevOutline = vec4(uGevOutlineColor.rgb, uGevOutlineColor.a * vGevSonarFactor);
+vec4 gevOutline = vec4(vGevOutlineColor.rgb, vGevOutlineColor.a * vGevSonarFactor);
 diffuseColor *= sRGBTransferEOTF(mix(gevOutline, vGevColor, gevInnerAlpha));
 diffuseColor.a *= gevWholeAlpha * vGevTranslucency;
 if (diffuseColor.a < 0.005) discard;
@@ -183,7 +190,7 @@ export function patchMoverShader(
   let fragment = replace(
     shader.fragmentShader,
     'void main() {',
-    `${FRAGMENT_HEAD}\nvoid main() {`,
+    `${point ? '#define GEV_POINT\n' : ''}${FRAGMENT_HEAD}\nvoid main() {`,
   );
   let colorFragment = fragmentColor(point);
   if (alwaysVisible)
@@ -268,6 +275,7 @@ export function createMoverMesh(
   const styleAttribute = attribute('gevStyle', 4);
   const colorAttribute = attribute('gevColor', 4);
   const uvAttribute = attribute('gevUv', 4);
+  const outlineAttribute = point ? attribute('gevOutlineColor', 4) : null;
   const uvRects = point
     ? null
     : atlasUvRects(options.sprite.atlas.cells, options.cellKeys);
@@ -284,9 +292,6 @@ export function createMoverMesh(
       value: typeof depthTest === 'object' ? depthTest.disableWithinM : -1,
     },
     uGevOutlinePx: { value: point ? options.point.outlinePx : 0 },
-    uGevOutlineColor: {
-      value: point ? [...options.point.outlineColor] : [0, 0, 0, 1],
-    },
     uGevPixelRatio: { value: 1 },
     uGevDepthMode: {
       value:
@@ -347,6 +352,7 @@ export function createMoverMesh(
     matrices: mesh.instanceMatrix.array,
     style: styleAttribute.array,
     colors: colorAttribute.array,
+    outlineColors: outlineAttribute?.array,
     uvs: uvAttribute.array,
   };
   const upload = (from, to) => {
@@ -356,6 +362,7 @@ export function createMoverMesh(
       [styleAttribute, 4],
       [colorAttribute, 4],
       [uvAttribute, 4],
+      ...(outlineAttribute ? [[outlineAttribute, 4]] : []),
     ]) {
       // Ranges add up until three uploads them (and clears them): a
       // partial commit after a full rewrite in the same frame (an origin

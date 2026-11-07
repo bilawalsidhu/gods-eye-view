@@ -1,18 +1,9 @@
-// The Global Context range pulses on Navara: the pulse disc the Cesium globe
-// draws as a translucent ellipse primitive (rendering.js), drawn here over
-// visible terrain and 3D tiles by one non-pickable classification pass.
-// Each surface pixel's distance from the subject along the Earth sets where
-// it lies within the range, and the same pulse lines, halos and inward band
-// as Cesium's material are drawn there. Nothing above the surface is touched.
+// Ground pulse fields over the visible globe, after tone mapping.
 import { Matrix4, Uniform, Vector3, Vector4 } from 'three';
-import {
-  groundSurfaceUniforms,
-  updateGroundSurface,
-} from '../../shared/render/navaraGroundSurface.js';
-import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
+import { groundSurfaceUniforms, updateGroundSurface } from './surface.js';
+import { defineGroundEffect } from './effect.js';
 
-const KEY = 'gevAwarenessPulses';
-const MEAN_EARTH_RADIUS_M = 6_371_000;
+const KEY = 'gevGroundPulses';
 
 const fragmentShader = /* glsl */ `
 uniform sampler2D tAllDepth;
@@ -22,6 +13,7 @@ uniform mat4 uInverseView;
 uniform float uLogDepthFC;
 uniform vec3 uCenter;
 uniform float uRadiusAngle;
+uniform vec3 uRadiiM;
 uniform vec4 uColor;
 uniform vec4 uLineColor;
 uniform vec4 uHaloColor;
@@ -48,16 +40,22 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
   float distance=exp2(2.0*depth/uLogDepthFC)-1.0;
   vec4 ray=uInverseProjection*vec4(uv*2.0-1.0,-1.0,1.0);
   vec3 point=ray.xyz*(distance/-ray.z);
-  vec3 world=(uInverseView*vec4(point,1.0)).xyz;
+  vec3 origin=uInverseView[3].xyz;
+  vec3 direction=normalize((uInverseView*vec4(ray.xyz,0.0)).xyz);
+  vec3 o=origin/uRadiiM;
+  vec3 d=direction/uRadiiM;
+  float a=dot(d,d);
+  float b=dot(o,d);
+  float c=dot(o,o)-1.0;
+  float discriminant=b*b-a*c;
+  float hit=(-b-sqrt(max(discriminant,0.0)))/a;
+  vec3 world=origin+direction*hit;
   vec3 up=normalize(world);
-  // The angle to the subject along the Earth, well conditioned near it too;
-  // r is the fraction of the range, as the Cesium disc's texture radius.
-  float r=atan(length(cross(up,uCenter)),dot(up,uCenter))/uRadiusAngle;
-  // Change in r per CSS pixel, taken before any branch.
+  float r=length(cross(up,uCenter))/sin(uRadiusAngle);
   float cssPx=max(length(vec2(dFdx(r),dFdy(r))),1e-7)*uPixelRatio;
-  if(depth>=1.0||r>1.0) return;
-  float surface=texture2D(tSurfaceDepth,uv).r;
-  if(depth<surface-2e-7) return;
+  if(discriminant<0.0||hit<=0.0||dot(up,uCenter)<=0.0||r>1.0) return;
+  // The raised ellipsoid is depth tested, as the material disc is.
+  if(depth<1.0 && hit>length(point)+1.0) return;
   float band=0.0;
   for(int i=0;i<4;i++) {
     float inside=uRadii[i]-r;
@@ -85,7 +83,7 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
 
 const pulseEffect = defineGroundEffect({
   key: KEY,
-  name: 'GevAwarenessPulses',
+  name: 'GevGroundPulses',
   fragmentShader,
   insertAfter: [
     'gevGround',
@@ -107,6 +105,7 @@ const pulseEffect = defineGroundEffect({
     ['uInverseView', new Uniform(new Matrix4())],
     ['uCenter', new Uniform(new Vector3(1, 0, 0))],
     ['uRadiusAngle', new Uniform(1)],
+    ['uRadiiM', new Uniform(new Vector3())],
     ['uColor', new Uniform(new Vector4())],
     ['uLineColor', new Uniform(new Vector4())],
     ['uHaloColor', new Uniform(new Vector4())],
@@ -126,6 +125,11 @@ const pulseEffect = defineGroundEffect({
     u.get('uInverseView').value.copy(camera.matrixWorld);
     u.get('uCenter').value.copy(owner.center);
     u.get('uRadiusAngle').value = owner.radiusAngle;
+    u.get('uRadiiM').value.set(
+      6378137 + owner.heightM,
+      6378137 + owner.heightM,
+      6356752.314245179 + owner.heightM,
+    );
     u.get('uColor').value.fromArray(owner.color);
     u.get('uLineColor').value.fromArray(owner.lineColor);
     u.get('uHaloColor').value.fromArray(owner.haloColor);
@@ -150,16 +154,26 @@ const pulseEffect = defineGroundEffect({
  * `radiusM` and their opacities, `move(center)`, and `destroy()`. Colors are
  * rgba arrays in 0..1: the band, the pulse line and its halo.
  */
-export function createAwarenessPulseDisc(
-  engine,
-  { view, EffectDesc, NavaraEffect },
-  { center, radiusM, color, lineColor, haloColor, depth, lineWidth, haloWidth },
+export function createNavaraPulseField(
+  { view, EffectDesc, NavaraEffect, canvas },
+  {
+    center,
+    radiusM,
+    heightM,
+    color,
+    lineColor,
+    haloColor,
+    depth,
+    lineWidth,
+    haloWidth,
+  },
 ) {
   pulseEffect.register(view, { EffectDesc, NavaraEffect });
   const owner = {
-    cssWidth: () => engine.host?.canvas?.clientWidth ?? 0,
+    cssWidth: () => canvas?.clientWidth ?? 0,
     center: new Vector3(),
-    radiusAngle: radiusM / MEAN_EARTH_RADIUS_M,
+    radiusAngle: radiusM / Math.hypot(center.x, center.y, center.z),
+    heightM,
     color,
     lineColor,
     haloColor,
@@ -196,7 +210,7 @@ export function createAwarenessPulseDisc(
       destroyed = true;
       handle?.delete();
       handle = null;
-      engine.render.request('awareness-pulses-destroy');
+      view.forceUpdate();
     },
   };
 }

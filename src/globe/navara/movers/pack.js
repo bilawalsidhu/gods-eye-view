@@ -63,6 +63,8 @@ export function packInstances(store, from, to, origin, uvRects, out) {
     colorOut[s + 1] = colors[s + 1];
     colorOut[s + 2] = colors[s + 2];
     colorOut[s + 3] = colors[s + 3];
+    if (out.outlineColors && store.outlineColors)
+      out.outlineColors.set(store.outlineColors.subarray(s, s + 4), s);
     if (uvs && uvRects) {
       const r = cells[index] * 4;
       uvs[s] = uvRects[r];

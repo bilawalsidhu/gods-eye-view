@@ -182,7 +182,7 @@ class ImageryEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
     'gevNepalEvent',
     'gevObservedWeather',
     'gevEarthquakeGround',
-    'gevAwarenessPulses',
+    'gevGroundPulses',
     'gevGround',
     'gevPreSharpenOverlay',
     'gevSharpen',

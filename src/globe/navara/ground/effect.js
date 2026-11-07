@@ -1,4 +1,5 @@
 import { Effect, EffectAttribute } from 'postprocessing';
+import { withFrameUpdates, withPassDisposal } from '../frameDescriptor.js';
 
 /**
  * A screen-space pass on a Navara view, registered once per view under `key`.
@@ -20,7 +21,10 @@ export function defineGroundEffect({
 }) {
   const registered = new WeakSet();
   const descriptor = (EffectDesc, NavaraEffect) =>
-    class GroundEffectDesc extends EffectDesc {
+    class GroundEffectDesc extends withPassDisposal(
+      withFrameUpdates(EffectDesc),
+    ) {
+      static allowDuplication = true;
       static key = key;
       static insertAfter = insertAfter;
       static insertBefore = insertBefore;

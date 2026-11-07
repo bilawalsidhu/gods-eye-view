@@ -325,7 +325,10 @@ test('ground is required and reported as a capability', () => {
   assert.throws(() => assertGlobeEngine(without), /\bground\b/);
   assert.equal(engineCapabilities(without).ground, false);
   const half = { ...engine, ground: { createSet: () => {} } };
-  assert.throws(() => assertGlobeEngine(half), /ground\.list/);
+  assert.throws(
+    () => assertGlobeEngine(half),
+    /ground\.(?:list|createPulseField)/,
+  );
 });
 
 test('imagery is required and reported as a capability', () => {

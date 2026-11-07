@@ -227,6 +227,24 @@ test('points take the size, scale, outline, translucency and depth test of the s
   assert.equal(point.disableDepthTestDistance, 5000);
   assert.equal(point.id, 25544);
   assert.ok(Cesium.Color.equals(point.color, new Cesium.Color(0, 1, 0, 1)));
+  set.set(0, { outlineColor: [0.5, 0, 1, 0.25] });
+  set.commit();
+  assert.deepEqual(
+    Cesium.Color.pack(point.outlineColor, []),
+    [0.5, 0, 1, 0.25],
+  );
+  assert.ok(Cesium.Color.equals(point.color, new Cesium.Color(0, 1, 0, 1)));
+  assert.equal(point.outlineWidth, 1);
+  assert.throws(
+    () => set.set(0, { scale: 9, outlineColor: [1, 0, 0, 2] }),
+    TypeError,
+  );
+  set.commit();
+  assert.equal(
+    point.pixelSize,
+    6,
+    'an invalid outline update leaves the point unchanged',
+  );
   // 'normal' keeps Cesium's depth test.
   const normal = movers.createSet({
     id: 'normal',

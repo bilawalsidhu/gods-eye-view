@@ -19,6 +19,76 @@ for (const name of [
 const items = (kind, list) =>
   list.map((item, index) => normalizeGroundItem(kind, item, index));
 
+test('dynamic reveals wait for height bounds, draw the latest path and cancel on release', async (t) => {
+  const viewer = createFakeViewer();
+  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
+  let resolve;
+  let loads = 0;
+  t.mock.method(Cesium.GroundPrimitive, 'initializeTerrainHeights', () => {
+    loads++;
+    return new Promise((done) => {
+      resolve = done;
+    });
+  });
+  const part = createCesiumGround(viewer, {
+    factories: {
+      lines: (options) => ({
+        ...options,
+        ready: false,
+        destroy() {},
+        isDestroyed: () => false,
+      }),
+    },
+  });
+  t.after(() => part.destroy());
+  const reveal = part.ground.createSet({
+    id: 'reveal',
+    kind: 'corridor',
+    dynamic: true,
+  });
+  const cancelled = part.ground.createSet({
+    id: 'cancelled',
+    kind: 'corridor',
+    dynamic: true,
+  });
+  const path = (lon) => [
+    {
+      positions: [
+        [0, 0],
+        [lon, 1],
+      ],
+      color: [0, 1, 1, 1],
+      widthPx: 3,
+    },
+  ];
+  reveal.replace(path(1));
+  reveal.commit();
+  cancelled.replace(path(1));
+  cancelled.commit();
+  assert.equal(loads, 1, 'sets share the pending height bounds');
+  assert.equal(reveal.ready(), false);
+  reveal.replace(path(2));
+  reveal.commit();
+  cancelled.destroy();
+  resolve();
+  await Promise.resolve();
+  const root = viewer.scene.groundPrimitives.get(0);
+  assert.equal(
+    root.length,
+    1,
+    'released set does not return when bounds arrive',
+  );
+  const primitive = root.get(0).get(0);
+  assert.equal(primitive.asynchronous, false);
+  const end = primitive.geometryInstances[0].geometry._positions.at(-1);
+  assert.ok(
+    Math.abs(
+      Cesium.Math.toDegrees(Cesium.Cartographic.fromCartesian(end).longitude) -
+        2,
+    ) < 1e-9,
+  );
+});
+
 test('fills batch into GroundPrimitive instances, outlines into ground polylines', () => {
   const options = { id: 'zones', kind: 'polygon' };
   const { fills, lines } = groundInstances(

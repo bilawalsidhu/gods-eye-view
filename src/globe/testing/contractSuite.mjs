@@ -2939,6 +2939,103 @@ function groundChecks(
   };
   return [
     [
+      'ground: pulse fields update fronts, move, hide and release without a clock',
+      async () => {
+        const options = {
+          id: 'contract-ground-pulses',
+          center: cartesian3.fromDegrees(20, 10),
+          radiusM: 250000,
+          heightM: 2500,
+          color: [0, 1, 1, 0.25],
+          lineColor: [0, 1, 1, 1],
+          haloColor: [0, 0, 0, 0.8],
+          depth: 0.35,
+          lineWidth: 3,
+          haloWidth: 1,
+        };
+        throwsType(
+          () => ground.createPulseField({ ...options, radiusM: -1 }),
+          'negative radius',
+        );
+        const field = ground.createPulseField(options);
+        const listed = () => ground.list().find(({ id }) => id === options.id);
+        try {
+          ensure(!listed().shown, 'new field is visible');
+          field.draw({ radii: [0.2, 0.6], alphas: [0.4, 0.2], level: 1 });
+          ensure(
+            listed().shown && !listed().animated,
+            'caller-driven field starts no clock',
+          );
+          throwsType(
+            () => field.draw({ radii: [2], alphas: [1], level: 1 }),
+            'invalid front',
+          );
+          ensure(listed().shown, 'invalid update changed visibility');
+          field.move(cartesian3.fromDegrees(21, 10));
+          await settle();
+          field.draw({ radii: [], alphas: [], level: 0 });
+          ensure(!listed().shown, 'resting field is visible');
+        } finally {
+          field.destroy();
+        }
+        field.destroy();
+        field.draw({ radii: [0.5], alphas: [1], level: 1 });
+        ensure(field.isDestroyed() && !listed(), 'destroyed field retained');
+      },
+    ],
+    [
+      'ground: pulse bands change pixels and rest clears them',
+      async () => {
+        if (!readRegion) return;
+        await nadirView(1e6);
+        const at = engine.projector.worldToWindow(
+          cartesian3.fromDegrees(20.9, 10, 2500),
+        );
+        const sample = () =>
+          readRegion(Math.round(at.x) - 3, Math.round(at.y) - 3, 6, 6);
+        const base = sample();
+        const difference = (a, b) => {
+          let sum = 0;
+          for (let i = 0; i < a.length; i++)
+            if (i % 4 !== 3) sum += Math.abs(a[i] - b[i]);
+          return sum / (a.length * 0.75);
+        };
+        const field = ground.createPulseField({
+          id: 'contract-pulse-pixels',
+          center: cartesian3.fromDegrees(20, 10),
+          radiusM: 200000,
+          heightM: 2500,
+          color: [1, 0, 1, 1],
+          lineColor: [1, 0, 1, 1],
+          haloColor: [0, 0, 0, 1],
+          depth: 0.5,
+          lineWidth: 3,
+          haloWidth: 1,
+        });
+        try {
+          field.draw({ radii: [0.6], alphas: [1], level: 1 });
+          await until(
+            () => difference(sample(), base) > 25,
+            'pulse band draws',
+          );
+          field.draw({ radii: [0.2], alphas: [1], level: 1 });
+          await until(
+            () => difference(sample(), base) < 10,
+            'front moves past the sampled band',
+          );
+          field.draw({ radii: [0.6], alphas: [1], level: 1 });
+          await until(() => difference(sample(), base) > 25, 'front returns');
+          field.draw({ radii: [0.6], alphas: [1], level: 0 });
+          await until(
+            () => difference(sample(), base) < 10,
+            'rest clears the field',
+          );
+        } finally {
+          field.destroy();
+        }
+      },
+    ],
+    [
       'ground: sets are created, committed, listed, shown, hidden and destroyed',
       async () => {
         throwsType(

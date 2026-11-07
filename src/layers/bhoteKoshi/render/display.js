@@ -1,13 +1,5 @@
-// The Bhote Koshi flood event and its locator on the globe contract, the
-// same on every engine. The event's before and after imagery are two
-// engine.imagery layers of the event's image URLs over one rectangle, at
-// alpha 0.96, the before image left of the engine's split position and the
-// after image right of it. The story graphics (the flood corridor, the
-// surge front, the locator's border, path and rings) are Cesium entities
-// the layers sample (src/data/bhoteKoshiEvent.js, bhoteKoshiLocator.js):
-// Cesium draws them itself; another engine draws them through its
-// story backend (`drawStory`, src/layers/shared/render/navaraStory.js on
-// Navara), which the manifest passes in.
+// The story's imagery, ground graphics and points on the globe contract.
+import { drawStorySource } from './story.js';
 
 const IMAGERY_ALPHA = 0.96;
 // Over Recent Imagery (10), under the weather (20 and up).
@@ -24,13 +16,13 @@ let events = 0;
 /**
  * The event layer's renderer (bhoteKoshiEvent.js `createNativeRenderer`).
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
- * @param {{ drawStory?: (engine: object, dataSource: object) => { destroy: () => void } }} [options]
  */
-export function createBhoteKoshiDisplay(engine, { drawStory = null } = {}) {
+export function createBhoteKoshiDisplay(engine) {
   if (!engine?.imagery)
     throw new TypeError('The Bhote Koshi display needs a globe engine');
   const id = `bhote-koshi-imagery-${++events}`;
   let layers = [];
+  const stories = new Set();
   let visible = true;
   let loads = 0;
   let destroyed = false;
@@ -41,9 +33,16 @@ export function createBhoteKoshiDisplay(engine, { drawStory = null } = {}) {
     engine.render.request('nepal-imagery');
   }
   return {
-    /** The story's entities through the engine's backend, or null: the
-     * layer adds them to Cesium. */
-    draw: (dataSource) => drawStory?.(engine, dataSource) ?? null,
+    draw(dataSource) {
+      const story = drawStorySource(engine, dataSource);
+      stories.add(story);
+      return {
+        destroy() {
+          story.destroy();
+          stories.delete(story);
+        },
+      };
+    },
     /**
      * The before and after images over `box` (degrees); resolves once both
      * draw, rejects when one would not load (unless replaced or cleared
@@ -102,19 +101,14 @@ export function createBhoteKoshiDisplay(engine, { drawStory = null } = {}) {
     clear,
     destroy() {
       destroyed = true;
+      for (const story of stories) story.destroy();
+      stories.clear();
       clear();
     },
   };
 }
 
-/**
- * The locator layer's renderer (bhoteKoshiLocator.js `createNativeRenderer`):
- * its story source through the engine's backend; null where Cesium
- * draws it.
- */
-export function createBhoteKoshiLocatorDisplay(
-  engine,
-  { data, drawStory = null } = {},
-) {
-  return drawStory ? drawStory(engine, data) : null;
+/** The locator's border, flood path and callouts on the same display. */
+export function createBhoteKoshiLocatorDisplay(engine, { data } = {}) {
+  return drawStorySource(engine, data);
 }

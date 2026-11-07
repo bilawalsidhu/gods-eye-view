@@ -19,8 +19,7 @@ const PALETTE = {
 
 /**
  * A map colour (0xRRGGBB) on `view`: the planet's photographic exposure is
- * compensated before its tone-mapping pass, as for the story overlays
- * (src/layers/shared/render/navaraStory.js), so the palette stays readable.
+ * compensated before its tone-mapping pass so the palette stays readable.
  */
 function displayColor({ view, NavaraColor }, hex) {
   const c = new NavaraColor().setHex(hex);

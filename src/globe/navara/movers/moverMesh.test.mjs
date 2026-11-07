@@ -156,6 +156,7 @@ test('the shader patch sizes the quad in pixels and colours it per instance', ()
   );
   assert.doesNotMatch(shader.fragmentShader, /gevRadius > 1\.0\) discard/);
   const point = patchMoverShader(basicShader(), {}, { point: true });
+  assert.match(point.fragmentShader, /#define GEV_POINT/);
   assert.match(point.fragmentShader, /if \(gevRadius > 1\.0\) discard;/);
 });
 
@@ -223,12 +224,39 @@ test('points have no atlas and draw a disc', () => {
     depthTest: 'always',
     point: { sizePx: 6, outlinePx: 1 },
   });
-  const mover = createMoverMesh(options, createMoverStore(options));
+  const store = createMoverStore(options);
+  const mover = createMoverMesh(options, store);
   assert.equal(mover.mesh.material.map, null);
   assert.equal(mover.mesh.material.depthTest, false);
   assert.equal(mover.mesh.material.side, FrontSide);
   assert.equal(mover.uniforms.uGevDepthMode.value, 0, "'always': no test");
   assert.equal(mover.uniforms.uGevOutlinePx.value, 1);
+  store.set(0, {
+    position: { x: 6378137, y: 0, z: 0 },
+    color: [0, 1, 1, 0.5],
+    outlineColor: [1, 0, 0, 0.25],
+  });
+  store.setCount(1);
+  mover.commit(store.dirty());
+  assert.deepEqual(
+    Array.from(mover.mesh.geometry.getAttribute('gevOutlineColor').array),
+    [1, 0, 0, 0.25],
+  );
+  assert.deepEqual(
+    Array.from(mover.mesh.geometry.getAttribute('gevColor').array),
+    [0, 1, 1, 0.5],
+  );
+  store.clean();
+  store.set(0, { outlineColor: [0, 0, 1, 0.75] });
+  mover.commit(store.dirty());
+  assert.deepEqual(
+    Array.from(mover.mesh.geometry.getAttribute('gevOutlineColor').array),
+    [0, 0, 1, 0.75],
+  );
+  assert.deepEqual(
+    Array.from(mover.mesh.geometry.getAttribute('gevColor').array),
+    [0, 1, 1, 0.5],
+  );
   mover.dispose();
 });
 

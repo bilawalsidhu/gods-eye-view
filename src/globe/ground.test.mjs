@@ -236,6 +236,29 @@ test("a pixel corridor's glow, pulse and dash are checked and defaulted", () => 
     false,
     'a glow alone is still',
   );
+  const patterned = normalizeGroundItem(
+    'corridor',
+    line({ dashPattern: { lengthPx: 18 } }),
+  );
+  assert.deepEqual(patterned.animation, {
+    pattern: { lengthPx: 18, pattern: 255 },
+  });
+  assert.equal(
+    animates(patterned),
+    false,
+    'a screen-space pattern does not keep rendering',
+  );
+  for (const extra of [
+    { dashPattern: { lengthPx: 0 } },
+    { dashPattern: { lengthPx: 18, pattern: 65536 } },
+    { dashPattern: { lengthPx: 18, pattern: 1.5 } },
+    { dashPattern: { lengthPx: 18 }, glow: { power: 0.2 } },
+    { dashPattern: { lengthPx: 18 }, widthPx: undefined, widthM: 20 },
+  ])
+    assert.throws(
+      () => normalizeGroundItem('corridor', line(extra)),
+      TypeError,
+    );
   assert.equal(normalizeGroundItem('corridor', line()).animation, null);
   for (const extra of [
     { glow: { power: 0.6 } },

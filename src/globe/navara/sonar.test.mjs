@@ -106,7 +106,7 @@ test('the mover shaders treat contacts by their anchor and keep their position',
     if (point)
       assert.match(
         shader.fragmentShader,
-        /uGevOutlineColor\.a \* vGevSonarFactor/,
+        /vGevOutlineColor\.a \* vGevSonarFactor/,
       );
   }
 });

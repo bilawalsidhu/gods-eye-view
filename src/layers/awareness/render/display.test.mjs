@@ -1,7 +1,6 @@
 // The Global Context display on the engine contract, on the fake engine and
 // on the Cesium engine: the camera it reads, the followed contact, a contact
-// flight, its frames, the ring lines and the pulse disc only where the
-// engine has a backend for it.
+// flight, its frames, the ring lines and the pulse field.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -103,7 +102,7 @@ for (const makeHarness of HARNESSES) {
     ]);
   });
 
-  test(`the ring is a 3 px core over a 4 px halo; pulses only with a backend (${name})`, (t) => {
+  test(`the ring is a 3 px core over a 4 px halo with a ground pulse field (${name})`, (t) => {
     const h = makeHarness();
     const display = createAwarenessDisplay(h.engine);
     t.after(() => {
@@ -138,7 +137,16 @@ for (const makeHarness of HARNESSES) {
     } else {
       assert.equal(h.engine.fake.line(RING_ID).options.widthPx, 3);
       assert.equal(h.engine.fake.line(RING_HALO_ID).options.widthPx, 4);
-      assert.equal(disc, null, 'the fake engine has no pulse backend');
+      assert.ok(disc);
+      disc.draw({ radii: [0.5], alphas: [0.4], level: 1 });
+      const field = h.engine.fake.groundPulse('gev-awareness-pulses');
+      assert.deepEqual(field.radii, [0.5, 0, 0, 0]);
+      assert.deepEqual(field.alphas, [0.4, 0, 0, 0]);
+      disc.destroy();
+      assert.equal(
+        h.engine.fake.groundPulse('gev-awareness-pulses'),
+        undefined,
+      );
     }
     rim.setAlpha(0.4);
     const alpha = h.cesium

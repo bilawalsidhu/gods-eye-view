@@ -1046,8 +1046,9 @@ export function createBhoteKoshiLocatorLayer({
 
   function connectDisplay() {
     if (!_dataSource) return;
-    if (_viewer) _viewer.dataSources.add(_dataSource);
-    else if (_engine) _native = createNativeRenderer(_engine, _dataSource);
+    if (_engine && createNativeRenderer)
+      _native = createNativeRenderer(_engine, _dataSource);
+    else if (_viewer) _viewer.dataSources.add(_dataSource);
     registerDynamicCredit(_engine, BHOTE_KOSHI_LOCATOR_CREDIT);
     showOsmCredit(_engine, BHOTE_KOSHI_LOCATOR_LAYER_ID);
   }

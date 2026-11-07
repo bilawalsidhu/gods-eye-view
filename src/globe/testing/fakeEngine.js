@@ -980,6 +980,9 @@ export function createFakeEngine(options = {}) {
     /** A live line's options, positions, colour, matrix and visibility, by id. */
     line: (id) => fakeLines.get(id),
     /** A live mover set's options, store and commit count, by id. */
+    groundPulse(id) {
+      return groundRegistry.pulses.get(id);
+    },
     moverSet(id) {
       const entry = moverRegistry.sets.get(id);
       return entry

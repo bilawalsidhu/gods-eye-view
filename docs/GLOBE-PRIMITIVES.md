@@ -31,6 +31,9 @@ There are three kinds:
 Use movers for aircraft, vessels, satellites, cameras, stations: anything
 that has a position and is drawn the same size on screen (or as a model).
 
+Point instances may also set `outlineColor` independently of the fill,
+so an expanding callout can fade its outline without changing its width.
+
 Instances move every frame without a rebuild. `depthTest` decides whether
 the scene hides them. A pick returns the instance's `pickId` when the set is
 `pickable`.
@@ -111,6 +114,46 @@ commit never rebuilds them:
 
 Traffic's jam heat lines glow (power 0.25) and pulse (alpha 0.35 to 0.75,
 1.63 s). The Directions route's 64 dashes flow at 0.55 cells a second.
+
+A pixel corridor may instead use `dashPattern: { lengthPx, pattern: 255 }`,
+a static 16-bit screen-space dash mask with transparent gaps, as Cesium's
+PolylineDash material. It cannot combine with the other corridor looks.
+Bhote Koshi uses an 18 px dash behind its 5 px glowing flood core.
+
+Use `dynamic: true` on a set whose path changes each frame. Cesium waits
+for its shared terrain-height bounds, then builds these small reveals
+synchronously so successive frames do not discard unfinished worker jobs.
+Other sets retain asynchronous building.
+
+### Radial pulse fields
+
+`engine.ground.createPulseField({ id, center, radiusM, heightM, color,
+lineColor, haloColor, depth, lineWidth, haloWidth })` draws up to four
+concentric pulse fronts. The centre is Earth-fixed metres; the radius is
+metres along the surface. The disc lies on the ellipsoid raised by
+`heightM` (default 0), with normal scene depth testing. Colours are rgba in
+0..1, widths are CSS pixels, and `depth` is the inward band depth as a
+fraction of the radius. A band's opacity falls quadratically to zero.
+
+Call `draw({ radii, alphas, level })` with up to four radius fractions and
+opacities in 0..1. Missing fronts are zero. `level` controls visibility;
+the caller includes it in the alphas. The field starts hidden. `move(center)`
+follows a new centre; `destroy()` releases it and is safe to repeat.
+`ground.list()` includes it as `kind: 'pulse-field'`. The caller owns its
+clock and render requests; the field starts no animation loop.
+
+Global Context keeps its 2,500 m pulse height, fixed-width front and halo,
+wake and rest windows, reduced-motion behaviour and 80 ms frame cadence.
+Cesium retains one material disc, updating its uniforms and rotating for
+small moves. Navara evaluates the same bands after tone mapping against a
+raised ellipsoid and scene depth; its shader lives in
+`src/globe/navara/ground/pulse.js`. The fake engine records the same state.
+
+Bhote Koshi's event and locator share `src/layers/bhoteKoshi/render/story.js`:
+the authored reveal properties feed ground corridors and polygons, and
+point movers retain their independent fill and outline opacity. No story
+backend is selected by engine. The authored model still uses its existing
+property records; removing that model dependency is separate work.
 
 ### How each engine draws the ground
 
@@ -451,8 +494,8 @@ near the camera from one 8×8 atlas over the whole view.
 - **The Bhote Koshi event imagery** (`src/layers/bhoteKoshi/render/display.js`):
   two `url` images over the event's rectangle at alpha 0.96, split left
   and right at the engine's split position, order 15. The event's and the
-  locator's story entities still draw on Cesium itself and through
-  Navara's story backend (`src/layers/shared/render/navaraStory.js`).
+  locator's story graphics use the shared ground and mover display described
+  above.
 
 - **Imported KML/KMZ ground images** (`src/data/geoImportDisplay.js`): one
   image layer per rectangle at order 30, with the authored alpha capped at
@@ -518,9 +561,9 @@ sharpening on both engines, following Cesium.
   - a line on the ground: `corridor`, with `widthM` when its width is a
     real width (an outline in metres) and `widthPx` otherwise.
 - Group items that change together into one set, and replace them in bulk.
-  A ground set is rebuilt on every commit, so a fill that changes over time
-  is not a ground set, except a pixel corridor's glow, pulse and dash, which
-  the engine animates.
+  A ground set rebuilds on commit. Small paths revealed each frame use
+  `dynamic: true`; corridor looks animate without a rebuild, and radial
+  fronts use `ground.createPulseField`.
 - **Pixels on the ground** (tiles, a raster, a photo): an imagery layer.
   Fade it with `setAlpha`, and give a new raster to `setSource`.
 

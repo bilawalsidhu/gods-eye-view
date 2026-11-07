@@ -205,6 +205,10 @@ function pointPart(options, store, { factories, requestRender, owners }) {
           }
           item.position = readPosition(store, index);
           item.pixelSize = point.sizePx * store.scales[index];
+          item.outlineColor = Cesium.Color.unpack(
+            store.outlineColors,
+            index * 4,
+          );
           item.color = readColor(store, index);
           item.show = store.shows[index] === 1;
           item.id = store.pickIds[index];

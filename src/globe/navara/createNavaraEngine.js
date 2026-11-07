@@ -55,6 +55,9 @@ const NO_MESHES = Object.freeze({
   list: () => [],
 });
 const NO_GROUND = Object.freeze({
+  createPulseField() {
+    throw new Error('Navara ground needs the view runtime');
+  },
   createSet() {
     throw new Error("Navara ground needs the view's three runtime (ground/)");
   },

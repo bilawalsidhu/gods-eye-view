@@ -119,28 +119,20 @@ const perEngine = (engines) =>
 /** Navara's own view and classes, for the renderers that still use them. */
 const navaraNative = (engine) => engine.extensions.navara;
 
-// Navara's backends of the Bhote Koshi and wind displays, loaded only
-// here, through import(), when a page loads Navara's renderers: the story
-// entities sampled into Navara's view (Cesium draws them itself) and the
-// wind's flow mesh.
-const navaraStory = async () => {
-  const { drawStorySource } =
-    await import('../../layers/shared/render/navaraStory.js');
-  return {
-    drawStory: (engine, data) =>
-      drawStorySource(engine, navaraNative(engine), data),
-  };
-};
+// Wind streamlines retain their engine backends.
 const cesiumWindFlow = async () => {
   const { createWindCesiumFlow } =
     await import('../../layers/wind/render/cesiumFlow.js');
   return { flow: createWindCesiumFlow };
 };
 const navaraWindFlow = async () => {
-  const { createWindNavaraFlow } =
-    await import('../../layers/wind/render/navaraFlow.js');
+  const [{ createWindNavaraFlow }, { createWindFlowMesh }] = await Promise.all([
+    import('../../layers/wind/render/navaraFlow.js'),
+    import('../../globe/navara/windFlowMesh.js'),
+  ]);
   return {
-    flow: (engine) => createWindNavaraFlow(engine, navaraNative(engine)),
+    flow: (engine) =>
+      createWindNavaraFlow(engine, navaraNative(engine), createWindFlowMesh),
   };
 };
 
@@ -149,15 +141,15 @@ const displays = () => import('./displays.js');
 
 /** How every application layer draws, by id, in directory order. */
 export const LAYER_MANIFEST = Object.freeze({
-  // The Bhote Koshi event's imagery on engine.imagery; the event's and the
-  // locator's story entities draw on Cesium itself, or through Navara's
-  // story backend.
-  'bhote-koshi-2026': display('createBhoteKoshiDisplay', ['imagery'], {
-    navara: navaraStory,
-  }),
-  'bhote-koshi-locator': display('createBhoteKoshiLocatorDisplay', ['movers'], {
-    navara: navaraStory,
-  }),
+  'bhote-koshi-2026': display('createBhoteKoshiDisplay', [
+    'imagery',
+    'ground',
+    'movers',
+  ]),
+  'bhote-koshi-locator': display('createBhoteKoshiLocatorDisplay', [
+    'ground',
+    'movers',
+  ]),
   // The aircraft family.
   flights: display('createFlightsDisplay', ['movers', 'lines']),
   military: display('createMilitaryDisplay', ['movers', 'lines']),
@@ -190,15 +182,7 @@ export const LAYER_MANIFEST = Object.freeze({
     'movers',
     'ground',
   ]),
-  // Global Context's display, with the Navara backend of its range pulses
-  // (render/pulseDisc.js).
-  'military-awareness': display('createAwarenessDisplay', ['lines'], {
-    navara: async () => ({
-      navaraPulses: (
-        await import('../../layers/awareness/render/navaraPulses.js')
-      ).createAwarenessPulseDisc,
-    }),
-  }),
+  'military-awareness': display('createAwarenessDisplay', ['lines', 'ground']),
   // The wind field and the weather rasters on engine.imagery; the wind's
   // streamlines are each engine's backend (Cesium's wind renderer, Navara's
   // flow mesh).

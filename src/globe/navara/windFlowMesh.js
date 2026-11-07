@@ -7,8 +7,7 @@ import {
   Vector2,
   DoubleSide,
 } from 'three';
-import { fromDegrees } from '../../../geo/cartesian3.js';
-import { WIND_DISPLAY_HEIGHT_METERS } from '../streamlines.js';
+import { fromDegrees } from '../../geo/cartesian3.js';
 
 const KEY = 'gevWindFlow';
 const registered = new WeakSet();
@@ -47,7 +46,7 @@ void main() {
   gl_FragColor=vec4(mix(vec3(0.50,0.79,0.90),vec3(0.91,0.99,1.0),tip),alpha);
 }`;
 
-export function createWindFlowMesh({ view, MeshDesc }, paths) {
+export function createWindFlowMesh({ view, MeshDesc }, paths, heightM) {
   if (!registered.has(view)) {
     view.registerMesh(
       KEY,
@@ -81,7 +80,7 @@ export function createWindFlowMesh({ view, MeshDesc }, paths) {
     const n = path.coordinates.length - 1;
     for (let j = 0; j <= n; j++) {
       const [lon, lat] = path.coordinates[j];
-      const next = fromDegrees(lon, lat, WIND_DISPLAY_HEIGHT_METERS);
+      const next = fromDegrees(lon, lat, heightM);
       if (previous) {
         begin.set([previous.x, previous.y, previous.z], i);
         end.set([next.x, next.y, next.z], i);
