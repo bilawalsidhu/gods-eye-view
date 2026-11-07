@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor } from '../../input/dispatcher.js';
 
@@ -91,11 +90,15 @@ export function createLaunchHover({
       const at = now();
       const wait = HOVER_PICK_INTERVAL_MS - (at - lastPick);
       if (wait > 0) {
-        // Cesium reuses the movement object, so keep a copy of the position.
-        pendingPosition = Cesium.Cartesian2.clone(
-          movement.endPosition,
-          pendingPosition ?? undefined,
-        );
+        // The input source may reuse the movement object, so keep a copy of
+        // the position.
+        const end = movement.endPosition;
+        if (end == null) pendingPosition = undefined;
+        else {
+          pendingPosition ??= { x: 0, y: 0 };
+          pendingPosition.x = end.x;
+          pendingPosition.y = end.y;
+        }
         if (trailingTimer === null) trailingTimer = setTimer(trailing, wait);
         return;
       }
@@ -127,9 +130,7 @@ export function createLifecycle({
       layerState._enabled = false;
       parts.panel.createMissionPanel();
       parts.overlays.createReplayVehicleOverlay();
-      layerState._dataSource = new Cesium.CustomDataSource('rocket-launches');
-      layerState._dataSource.show = false;
-      viewer.dataSources.add(layerState._dataSource);
+      parts.rendering.attach(viewer);
       layerState._count = 0;
       layerState._lastUpdate = null;
       layerState._stale = false;
@@ -256,9 +257,7 @@ export function createLifecycle({
       layerState._replayTracks.clear();
       parts.panel.clearMissionPanel();
       layerState._viewer = null;
-      if (layerState._dataSource)
-        viewer.dataSources.remove(layerState._dataSource, true);
-      layerState._dataSource = null;
+      parts.rendering.detach(viewer);
       layerState._count = 0;
       layerState._orbitMatches = 0;
       layerState._lastUpdate = null;

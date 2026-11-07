@@ -112,6 +112,17 @@ async function fixture({ legacySource = false } = {}) {
       destroyLaunchPadZonePrimitive: noop,
     },
     rendering: {
+      // As the rendering part owns the entities' data source.
+      attach(target) {
+        state._dataSource = new Cesium.CustomDataSource('rocket-launches');
+        state._dataSource.show = false;
+        target.dataSources.add(state._dataSource);
+      },
+      detach(target) {
+        if (state._dataSource)
+          target.dataSources.remove(state._dataSource, true);
+        state._dataSource = null;
+      },
       updateMissionFrame: noop,
       addLaunchEntity(record) {
         state._dataSource.entities.add({

@@ -37,6 +37,24 @@ export function createRendering({
     if (current !== next) graphic.show = next;
   }
 
+  /**
+   * The layer's entities, hidden until enabled. They stay entities: the
+   * replay vehicle and the live payload move every frame, the selected site
+   * is the viewer's selected entity, and the orbits draw with their own
+   * materials.
+   */
+  function attach(viewer) {
+    layerState._dataSource = new Cesium.CustomDataSource('rocket-launches');
+    layerState._dataSource.show = false;
+    viewer.dataSources.add(layerState._dataSource);
+  }
+
+  function detach(viewer) {
+    if (layerState._dataSource)
+      viewer.dataSources.remove(layerState._dataSource, true);
+    layerState._dataSource = null;
+  }
+
   /** Make a launch's site marker the viewer's selected entity, or none. */
   function selectLaunchEntity(launchId) {
     const viewer = layerState._viewer;
@@ -626,6 +644,8 @@ export function createRendering({
     }
   }
   return {
+    attach,
+    detach,
     setGraphicVisibility,
     selectLaunchEntity,
     isolateMission,
