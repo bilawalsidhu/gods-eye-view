@@ -8,6 +8,7 @@ import {
   eastNorthUp,
   ellipsoidOf,
   fromDegrees,
+  fromDegreesInto,
   geodeticSurfaceNormal,
   lerpInto,
   offsetEllipsoid,
@@ -77,6 +78,34 @@ test('geodetic to ECEF matches the default renderer', () => {
     const theirs = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height);
     closeVec(ours, theirs, 0, `${p.lon},${p.lat},${p.height}`);
   }
+});
+
+test('geodetic to ECEF in place gives the same bits, into the object given', () => {
+  const out = { x: 0, y: 0, z: 0 };
+  const cartesian = new Cesium.Cartesian3();
+  for (const p of points()) {
+    const at = `${p.lon},${p.lat},${p.height}`;
+    assert.equal(fromDegreesInto(p.lon, p.lat, p.height, out), out, at);
+    assert.deepEqual(
+      { ...out },
+      { ...fromDegrees(p.lon, p.lat, p.height) },
+      at,
+    );
+    assert.equal(
+      fromDegreesInto(p.lon, p.lat, p.height, cartesian),
+      cartesian,
+      at,
+    );
+    assert.ok(
+      Cesium.Cartesian3.equals(
+        cartesian,
+        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height),
+      ),
+      at,
+    );
+  }
+  fromDegreesInto(10, 20, undefined, out);
+  assert.deepEqual({ ...out }, { ...fromDegrees(10, 20) });
 });
 
 test('ECEF to geodetic matches the default renderer', () => {

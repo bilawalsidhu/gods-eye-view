@@ -1,5 +1,5 @@
 import { twoline2satrec } from 'satellite.js';
-import { fromDegrees } from '../../geo/ellipsoid.js';
+import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import {
   DENSE_REFRESH_FRAMES,
@@ -9,6 +9,8 @@ import {
 } from './policy.js';
 
 export function createCatalog({ state: layerState, services, parts, source }) {
+  // _movePoint copies the position, so one scratch point serves every move.
+  const scratch = { x: 0, y: 0, z: 0 };
   function _abortActiveUpdates() {
     for (const controller of layerState._activeUpdateControllers)
       controller.abort();
@@ -44,7 +46,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       if (pos) {
         parts.rendering._movePoint(
           noradId,
-          fromDegrees(pos.longitude, pos.latitude, pos.altitude),
+          fromDegreesInto(pos.longitude, pos.latitude, pos.altitude, scratch),
         );
       }
     }

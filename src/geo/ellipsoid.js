@@ -111,6 +111,43 @@ export const fromDegrees = (lon, lat, height = 0) =>
   fromRadians(toRadians(lon), toRadians(lat), height);
 
 /**
+ * `fromDegrees` written into `out` (any object with x, y, z) without
+ * allocating, for per-frame paths. Same steps in the same order, so the
+ * same bits.
+ * @template {{x: number, y: number, z: number}} T
+ * @param {number} lon
+ * @param {number} lat
+ * @param {number} height
+ * @param {T} out
+ * @returns {T}
+ */
+export function fromDegreesInto(lon, lat, height, out) {
+  const lonR = toRadians(lon);
+  const latR = toRadians(lat);
+  const cosLat = Math.cos(latR);
+  let nx = cosLat * Math.cos(lonR);
+  let ny = cosLat * Math.sin(lonR);
+  let nz = Math.sin(latR);
+  const m = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  nx /= m;
+  ny /= m;
+  nz /= m;
+  const r = WGS84.radiiSquared;
+  let kx = r.x * nx;
+  let ky = r.y * ny;
+  let kz = r.z * nz;
+  const gamma = Math.sqrt(nx * kx + ny * ky + nz * kz);
+  kx /= gamma;
+  ky /= gamma;
+  kz /= gamma;
+  const h = height ?? 0;
+  out.x = kx + nx * h;
+  out.y = ky + ny * h;
+  out.z = kz + nz * h;
+  return out;
+}
+
+/**
  * A position as ECEF (a new object): `{lon, lat, height?}` (degrees, metres
  * above the ellipsoid) or `{x, y, z}`, the render contract's `Position`.
  */

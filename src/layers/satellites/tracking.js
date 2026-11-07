@@ -1,8 +1,8 @@
 import { cameraOf } from '../../render/rendererOf.js';
 import { entityFollowTarget, stopFollowing } from '../../data/followed.js';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
-import { fromDegrees } from '../../geo/ellipsoid.js';
-import { clone, copyInto, scale } from '../../geo/vector.js';
+import { fromDegreesInto } from '../../geo/ellipsoid.js';
+import { clone, scale } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
 import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
 import {
@@ -155,8 +155,10 @@ export function createTracking({ state: layerState, services, parts, source }) {
       );
       if (!pos) return layerState._trackedFrameGeo; // propagation hiccup — keep last good sample
       layerState._trackedFrameGeo = pos;
-      copyInto(
-        fromDegrees(pos.longitude, pos.latitude, pos.altitude),
+      fromDegreesInto(
+        pos.longitude,
+        pos.latitude,
+        pos.altitude,
         layerState._trackedFrameCartesian,
       );
       layerState._trackedFrameNumber = frameNumber;

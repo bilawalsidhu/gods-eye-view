@@ -93,11 +93,18 @@ test('only the rendering part drives Cesium', () => {
     /\.scene\b/,
     /\bscene\./,
     /\.primitive\b/,
-    // The dots and rings are the rendering part's: ids only elsewhere.
-    /_pointCollection\./,
-    /_points\.(get|values|entries|forEach)\b/,
-    /of (layerState|state)\._points\)/,
-    /_orbitPaths\.(get|values|entries|forEach)\b/,
+    // The dots, rings and tracked entity are the rendering part's. Elsewhere
+    // the handles are only stored, cleared, tested or passed on whole, and
+    // the maps answer by id: no member of a handle is read, with or without
+    // optional chaining, and no handle is taken into a local name.
+    /\b_(pointCollection|trackedEntity)\s*(\?\.|\.|\[)/,
+    /\b_(points|orbitPaths)\s*(\?\.|\.|\[)\s*(?!(has|keys|size|clear|set|delete)\b)/,
+    /of\s+[\w.?]*\b_(points|orbitPaths)\s*\)/,
+    /(\.\.\.|Array\.from\()\s*[\w.?]*\b_(points|orbitPaths)\b(?!\s*\??\.)/,
+    /(^|[;{}(\s])\w+\s*=\s*\(*\s*[\w.?]*\b_(pointCollection|trackedEntity|points|orbitPaths)\s*(;|,|\)|\?\?|\|\||&&)/,
+    /\}\s*=\s*\(*\s*[\w.?]*\b_(pointCollection|trackedEntity|points|orbitPaths)\b/,
+    /[\w)\]]\s*(\?\.)?\[\s*['"`]_(pointCollection|trackedEntity|points|orbitPaths)\b/,
+    /\{[^}]*\b_(pointCollection|trackedEntity|points|orbitPaths)\b[^}]*\}\s*=[^=]/,
   ];
   for (const name of offList) {
     const source = readFileSync(
@@ -107,6 +114,51 @@ test('only the rendering part drives Cesium', () => {
     for (const pattern of forbidden)
       assert.doesNotMatch(source, pattern, `${name}.js: ${pattern}`);
   }
+  // The patterns themselves still catch what they are for.
+  const caught = [
+    'layerState._trackedEntity.position.setValue(p)',
+    'layerState._pointCollection?.removeAll()',
+    'state._trackedEntity?.["position"]',
+    'layerState._points.get(id).show = false',
+    'layerState._orbitPaths?.values()',
+    'for (const p of layerState._points) {}',
+    'const pc = layerState._pointCollection;',
+    'const { _trackedEntity: e } = layerState;',
+    'const e = layerState?._trackedEntity;',
+    'for (const p of layerState?._points) {}',
+    '[...layerState._points]',
+    'Array.from(layerState._orbitPaths)',
+    'e = layerState._trackedEntity;',
+    'let e; e = layerState._trackedEntity;',
+    'const { position } = layerState._trackedEntity;',
+    'const e = layerState._trackedEntity ?? null;',
+    'const e = (layerState._trackedEntity);',
+    'const { get } = layerState._points;',
+    'layerState["_trackedEntity"].position',
+  ];
+  for (const line of caught)
+    assert.ok(
+      forbidden.some((pattern) => pattern.test(line)),
+      `not caught: ${line}`,
+    );
+  const allowed = [
+    'layerState._points.has(id)',
+    'layerState._points.size',
+    'layerState._trackedEntity = null;',
+    'parts.rendering._removeTrackedEntity(layerState._trackedEntity);',
+    'layerState._trackedEntityChangedRemove();',
+    'const had = layerState._points.has(id);',
+    'const t = layerState._trackedEntity\n    ? a\n    : b;',
+    'const ids = ["_points", "_orbitPaths"];',
+    'const n = layerState._orbitPaths.size;',
+    '[...layerState._points.keys()]',
+    'layerState._trackedEntity = parts.rendering._addTrackedEntity({',
+  ];
+  for (const line of allowed)
+    assert.ok(
+      !forbidden.some((pattern) => pattern.test(line)),
+      `wrongly caught: ${line}`,
+    );
 });
 
 test('the rendering part draws the dots and rings in Cesium colours', () => {
