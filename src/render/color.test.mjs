@@ -29,3 +29,18 @@ test('CSS colours read as the default renderer reads them', async () => {
   assert.equal(cssColor('not a colour'), null);
   assert.equal(cssColor(undefined), null);
 });
+
+test('HSL colours read as the default renderer computes them', async () => {
+  const Cesium = await import('cesium');
+  const { hslColor } = await import('./color.js');
+  for (const [h, s, l, a] of [
+    [0, 0.85, 0.6, 0.12],
+    [0.3819660112501051, 0.9, 0.65, 0.85],
+    [0.7639320225002102, 0.9, 0.7, 1],
+    [1.25, 0.5, 0.25, 0.4],
+    [0.5, 0, 0.4, 1],
+  ]) {
+    const c = Cesium.Color.fromHsl(h, s, l, a);
+    assert.deepEqual(hslColor(h, s, l, a), [c.red, c.green, c.blue, c.alpha]);
+  }
+});

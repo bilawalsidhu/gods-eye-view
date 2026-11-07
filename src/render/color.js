@@ -1,6 +1,6 @@
 /**
  * Renderer colours (`[r, g, b, a]`, 0..1) from the CSS-style colours layers
- * keep in their palettes.
+ * keep in their palettes, and from hue, saturation and lightness.
  */
 
 /** A `#rrggbb` colour at `alpha`, as a renderer colour. */
@@ -67,10 +67,20 @@ export function cssColor(text) {
     ];
   m = HSL.exec(css);
   if (!m) return null;
-  const hue = (Number.parseFloat(m[1]) / 360) % 1;
-  const saturation = Number.parseFloat(m[2]) / 100;
-  const lightness = Number.parseFloat(m[3]) / 100;
-  const alpha = Number.parseFloat(m[4] ?? '1.0');
+  return hslColor(
+    Number.parseFloat(m[1]) / 360,
+    Number.parseFloat(m[2]) / 100,
+    Number.parseFloat(m[3]) / 100,
+    Number.parseFloat(m[4] ?? '1.0'),
+  );
+}
+
+/**
+ * A hue, saturation and lightness colour (each 0..1; the hue wraps) as a
+ * renderer colour, computed as the default renderer computes it.
+ */
+export function hslColor(hue, saturation, lightness, alpha = 1) {
+  hue %= 1;
   if (saturation === 0) return [lightness, lightness, lightness, alpha];
   const m2 =
     lightness < 0.5

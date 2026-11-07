@@ -21,7 +21,7 @@ import { writeHoldSegment } from '../../data/iconSegment.js';
 import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
 import { iconAtlas } from '../../data/iconAtlas.js';
 import { cctvPicks } from './pickState.js';
-import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
+import { frustumVolumeGeometryData } from '../../data/cctvViewshed.js';
 import { entityRecord } from '../../data/entityRecords.js';
 import { toColor } from '../../render/cesium/draw.js';
 // Loads the factory a viewer of a caller's own gets its camera port from,
@@ -57,6 +57,70 @@ const CAMERA_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
   4_000_000,
   0.42,
 );
+
+/**
+ * Builds the translucent frustum-volume primitive for one camera.
+ * Synchronous (6 triangles — cheaper than the async geometry pipeline's
+ * bookkeeping), unlit flat color, both faces visible (the viewer is routinely
+ * inside or behind a cone), never pickable (clicks fall through to the
+ * billboard/wireframe/plane, whose pick semantics are established).
+ * @param {Object} positions - frustumCartesians shape (see frustumVolumeGeometryData).
+ * @param {Cesium.Color} color - Per-camera fill color (already alpha'd).
+ * @returns {Cesium.Primitive}
+ */
+function createFrustumVolumePrimitive(positions, color) {
+  const { positions: flat, indices } = frustumVolumeGeometryData(positions);
+  const geometry = new Cesium.Geometry({
+    attributes: {
+      position: new Cesium.GeometryAttribute({
+        componentDatatype: Cesium.ComponentDatatype.DOUBLE,
+        componentsPerAttribute: 3,
+        values: flat,
+      }),
+    },
+    indices,
+    primitiveType: Cesium.PrimitiveType.TRIANGLES,
+    boundingSphere: Cesium.BoundingSphere.fromVertices(Array.from(flat)),
+  });
+  return new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry,
+      attributes: {
+        color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
+      },
+    }),
+    appearance: new Cesium.PerInstanceColorAppearance({
+      flat: true,
+      translucent: true,
+      renderState: {
+        cull: { enabled: false },
+      },
+    }),
+    asynchronous: false,
+    allowPicking: false,
+  });
+}
+
+/**
+ * A record's viewshed colours as Cesium colours, made once per palette
+ * object: a record gets a new palette rather than having one changed in place.
+ */
+const viewshedCesium = new WeakMap();
+function viewshedCesiumColors(record) {
+  const colors = record.viewshedColors;
+  if (!colors) return null;
+  let cesium = viewshedCesium.get(colors);
+  if (!cesium) {
+    cesium = {
+      fill: toColor(colors.fill),
+      fillActive: toColor(colors.fillActive),
+      line: toColor(colors.line),
+      lineActive: toColor(colors.lineActive),
+    };
+    viewshedCesium.set(colors, cesium);
+  }
+  return cesium;
+}
 
 /** FNV-1a over a camera id: a stable, well-spread order for crowded cells. */
 function idHash(id) {
@@ -544,7 +608,7 @@ export function createRendering({
         // Viewshed mode swaps the cyan/green scheme for the camera's own hue so
         // adjacent cones read as distinct coverage claims (design §3b); the
         // active camera keeps its width/alpha emphasis in both schemes.
-        const hue = viewshedOn ? record.viewshedColors : null;
+        const hue = viewshedOn ? viewshedCesiumColors(record) : null;
         if (entity._coverageRole === 'cap') {
           entity.polyline.material = lineMaterial(
             hue
@@ -787,9 +851,8 @@ export function createRendering({
       !record.viewshedColors
     )
       return;
-    const color = isActive
-      ? record.viewshedColors.fillActive
-      : record.viewshedColors.fill;
+    const colors = viewshedCesiumColors(record);
+    const color = isActive ? colors.fillActive : colors.fill;
     const primitive = createFrustumVolumePrimitive(
       record.frustumPositions,
       color,

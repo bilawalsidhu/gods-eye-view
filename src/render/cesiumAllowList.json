@@ -22,7 +22,6 @@
   "src/data/bhoteKoshiLocator.js",
   "src/data/cameraFraming.js",
   "src/data/cctvGizmo.js",
-  "src/data/cctvViewshed.js",
   "src/data/contactTrailRenderer.js",
   "src/data/detection.js",
   "src/data/focusDeemphasis.js",
