@@ -1,3 +1,4 @@
+import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import * as Cesium from 'cesium';
 import {
   AMBIENT_CARD_COLLISION_CAPACITY,
@@ -320,6 +321,7 @@ function installMockEnvironment({ width, height, dpr }) {
     },
     scene: { postRender, requestRender() {} },
   };
+  bindOverlayPorts(viewer);
 
   return {
     viewer,

@@ -207,8 +207,9 @@ test('isOverlayPointVisible: horizon test prefers entry.cullPosition when presen
 
 test('normalizeOverlayEntry: carries a valid cullPosition, nulls a junk one', () => {
   const position = { x: 1, y: 2, z: 3 };
-  const kept = normalizeOverlayEntry('firms', { id: 'a', position, cullPosition: { x: 4, y: 5, z: 6 } });
-  assert.ok(kept.cullPosition instanceof Cesium.Cartesian3, 'stored as a host-owned Cartesian3');
+  const cullPosition = { x: 4, y: 5, z: 6 };
+  const kept = normalizeOverlayEntry('firms', { id: 'a', position, cullPosition });
+  assert.notEqual(kept.cullPosition, cullPosition, 'stored as a host-owned copy');
   assert.deepEqual(
     [kept.cullPosition.x, kept.cullPosition.y, kept.cullPosition.z],
     [4, 5, 6],

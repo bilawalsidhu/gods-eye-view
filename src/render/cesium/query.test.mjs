@@ -89,6 +89,11 @@ test('a viewer of its own, with no renderer bound, is queried through a built po
   assert.equal(query.pickEllipsoid(0, 0), null);
   assert.equal(query.isOccluded({ x: 6378137, y: 0, z: 0 }), false);
   assert.equal(query.isOccluded({ x: -6378137, y: 0, z: 0 }), true);
+  // The horizon follows the eye.
+  Cesium.Cartesian3.fromElements(-2e7, 0, 0, scene.camera.positionWC);
+  assert.equal(query.isOccluded({ x: 6378137, y: 0, z: 0 }), true);
+  assert.equal(query.isOccluded({ x: -6378137, y: 0, z: 0 }), false);
+  Cesium.Cartesian3.fromElements(2e7, 0, 0, scene.camera.positionWC);
 
   // A renderer bound later answers new callers.
   const unbind = bindRenderer(viewer, { query: { id: 'renderer' } });

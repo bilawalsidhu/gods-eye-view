@@ -192,6 +192,12 @@ export function createCesiumQuery({
       : 'tiles';
   }
 
+  /** `isOccluded`'s horizon, rebuilt when the eye or ellipsoid moves. */
+  let occluder = null;
+  let occluderEllipsoid = null;
+  const occluderEye = new Cesium.Cartesian3(NaN, NaN, NaN);
+  const occludedPoint = new Cesium.Cartesian3();
+
   const query = {
     pick(x, y, window = {}) {
       const owner = ownerOf(
@@ -246,11 +252,23 @@ export function createCesiumQuery({
       }
     },
     isOccluded(position) {
-      const occluder = new Cesium.EllipsoidalOccluder(
-        scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84,
-        camera.positionWC,
-      );
-      return !occluder.isPointVisible(toCartesian(position));
+      // One occluder per eye and ellipsoid, and one scratch point, so a
+      // per-frame pass over many labels allocates nothing.
+      const ellipsoid = scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
+      const eye = camera.positionWC;
+      if (
+        !occluder ||
+        occluderEllipsoid !== ellipsoid ||
+        !Cesium.Cartesian3.equals(occluderEye, eye)
+      ) {
+        occluder = new Cesium.EllipsoidalOccluder(ellipsoid, eye);
+        occluderEllipsoid = ellipsoid;
+        Cesium.Cartesian3.clone(eye, occluderEye);
+      }
+      occludedPoint.x = position.x;
+      occludedPoint.y = position.y;
+      occludedPoint.z = position.z;
+      return !occluder.isPointVisible(occludedPoint);
     },
     sampleHeightNow(point, { against = 'surface', exclude } = {}) {
       // Terrain answers from the globe's own tiles, without depth textures.

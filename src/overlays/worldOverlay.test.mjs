@@ -1,3 +1,4 @@
+import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
 import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
 import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
@@ -381,9 +382,11 @@ function installMockEnvironment({
       requestRender() { this.requestRenderCount++; },
     },
   };
+  const ports = bindOverlayPorts(viewer);
 
   return {
     viewer,
+    ports,
     ctx,
     detectionCtx,
     paintTrace,
@@ -1178,7 +1181,10 @@ test('custom detection lane receives the shared host frame and paints below ordi
   assert.equal(capturedFrame.dpr, 2);
   assert.equal(capturedFrame.viewProjectionMatrix[0], 1);
   assert.equal(capturedFrame.viewProjection.m0, 1);
-  assert.equal(capturedFrame.cameraPosition, env.viewer.camera.positionWC);
+  assert.deepEqual(
+    { ...capturedFrame.cameraPosition },
+    { x: env.viewer.camera.positionWC.x, y: env.viewer.camera.positionWC.y, z: env.viewer.camera.positionWC.z },
+  );
   assert.ok(capturedFrame.occluder);
   assert.equal(capturedFrame.uiRects.length, capturedFrame.uiRectCount);
   assert.ok(capturedFrame.uiRectCount > 0);
@@ -2259,6 +2265,7 @@ test('installation titles share persistent card arbitration and retain a bounded
     scratch.x = scratch.y = 100; return scratch;
   });
   const state = { enabled: true, viewer: env.viewer, contextAnchor: {} };
+  env.ports.unbind();
   bindFakeCesiumScene(env.viewer);
   const markers = createNamedMarkers({ state,
     services: { render: { governorRequestRender() {} } },

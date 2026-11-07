@@ -6,7 +6,8 @@
  *
  * - camera: `pose()` from the double's camera (`viewer.camera`, else
  *   `viewer.scene.camera`): `positionWC`, `directionWC` and
- *   `positionCartographic`; `viewRectangle()` from its
+ *   `positionCartographic`; `matrices()` from its `viewMatrix` and
+ *   `frustum.projectionMatrix`; `viewRectangle()` from its
  *   `computeViewRectangle()`, in degrees; events from its own `moveEnd`,
  *   `moveStart` and `changed`.
  * - query: `sampleHeightNow` through the scene's height service;
@@ -153,6 +154,16 @@ export function bindFakeCesiumScene(viewer, { draw = fakeDrawPort() } = {}) {
         near: 1,
         far: 5e8,
         frameIsIdentity: true,
+      };
+    },
+    /** The double camera's `viewMatrix` and `frustum.projectionMatrix`. */
+    matrices() {
+      const c = cam();
+      return {
+        view: Float64Array.from(Cesium.Matrix4.toArray(c.viewMatrix)),
+        projection: Float64Array.from(
+          Cesium.Matrix4.toArray(c.frustum.projectionMatrix),
+        ),
       };
     },
     viewRectangle() {

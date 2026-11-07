@@ -90,7 +90,6 @@
   "src/maps/google3d.js",
   "src/maps/imagery.js",
   "src/maps/terrain.js",
-  "src/overlays/worldOverlay.js",
   "src/sceneCommandRelease.js",
   "src/scenes/dataPacks/geometry.js",
   "src/scenes/dataPacks/presentation.js",

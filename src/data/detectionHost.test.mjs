@@ -1,3 +1,4 @@
+import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -246,6 +247,7 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
     },
     scene: { postRender, requestRender() {} },
   };
+  bindOverlayPorts(viewer);
 
   return {
     viewer,
