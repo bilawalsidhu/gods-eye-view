@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+CCTV includes Montevisión's public Peatonal Dufaur camera in Monte Hermoso,
+Argentina, as published by Noticias Monte Hermoso. The pack uses the existing
+HLS MPEG-TS relay and is disabled with `CCTV_MONTE_HERMOSO_ENABLED=0`.
+Its label and credit identify an approximate pedestrian-area map reference,
+and the synthetic bearing retains the estimated-heading presentation.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
