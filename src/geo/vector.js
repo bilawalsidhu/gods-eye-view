@@ -56,6 +56,8 @@ export const DEGREES_PER_RADIAN = 180 / Math.PI;
 export const toRadians = (degrees) => degrees * RADIANS_PER_DEGREE;
 export const toDegrees = (radians) => radians * DEGREES_PER_RADIAN;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** `a` to `b` by `t`, written as the default renderer writes it. */
+export const lerp = (a, b, t) => (1 - t) * a + t * b;
 /** Degrees in [0, 360). */
 export const norm360 = (deg) => ((deg % 360) + 360) % 360;
 /** Degrees in (-180, 180]. */

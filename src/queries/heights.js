@@ -95,9 +95,10 @@ function portOptions({ against, exclude } = NO_OPTIONS, extra) {
  * @property {(position: {x: number, y: number, z: number}, options?: {exclude?: string[]}) => {x: number, y: number, z: number}|null} clampNow
  *   `position` (ECEF) moved onto the drawn surface along the ellipsoid
  *   normal, or null.
- * @property {(points: HeightPoint[], options?: HeightOptions) => Promise<Array<number|null>>} batch
+ * @property {(points: HeightPoint[], options?: HeightOptions & {ellipsoidMisses?: boolean}) => Promise<Array<number|null>>} batch
  *   Heights once the most detailed data has loaded; null per miss. A failed
- *   query rejects.
+ *   query rejects. With `ellipsoidMisses`, an answer from the bare
+ *   ellipsoid (no terrain loaded there, or none at all) is a miss too.
  * @property {(positions: Array<{x: number, y: number, z: number}>, options?: {exclude?: string[]}) => Promise<Array<{x: number, y: number, z: number}|null>>} clampBatch
  *   Clamped copies of `positions`; null per miss, rejecting as `batch` does.
  * @property {() => {surface: boolean, clamp: boolean}} supported
@@ -163,9 +164,13 @@ function createHeights(host) {
         portOptions(options, { mostDetailed: true }),
       );
       let next = 0;
-      return at.map((point) =>
-        point ? metres(samples[next++]?.height) : null,
-      );
+      return at.map((point) => {
+        if (!point) return null;
+        const sample = samples[next++];
+        if (options.ellipsoidMisses && sample?.source === 'ellipsoid')
+          return null;
+        return metres(sample?.height);
+      });
     },
 
     async clampBatch(positions, { exclude } = NO_OPTIONS) {

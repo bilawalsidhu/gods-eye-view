@@ -135,6 +135,31 @@ test('batch asks for the finest heights, null per miss and per bad point', async
   assert.deepEqual(options, { exclude: ['own:1'], mostDetailed: true });
 });
 
+test('batch can count an answer from the bare ellipsoid as a miss', async () => {
+  const sources = ['terrain', 'ellipsoid'];
+  const { viewer, calls } = bound({
+    async sampleHeight(points, options) {
+      calls.push(['sample', points, options]);
+      return points.map((_, i) => ({
+        height: 120,
+        confidence: 1,
+        source: sources[i],
+        lod: 'finest',
+      }));
+    },
+  });
+  const points = [AUSTIN, { lon: 0, lat: 0 }];
+  assert.deepEqual(await heightsOf(viewer).batch(points), [120, 120]);
+  assert.deepEqual(
+    await heightsOf(viewer).batch(points, {
+      against: 'terrain',
+      ellipsoidMisses: true,
+    }),
+    [120, null],
+  );
+  assert.deepEqual(calls.at(-1)[2], { against: 'terrain', mostDetailed: true });
+});
+
 test('batch misses everything without a renderer, and rejects when the query fails', async () => {
   assert.deepEqual(await heightsOf({}).batch([AUSTIN]), [null]);
   assert.deepEqual(await heightsOf({}).clampBatch([{ x: 1, y: 0, z: 0 }]), [

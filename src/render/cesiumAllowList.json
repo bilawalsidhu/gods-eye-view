@@ -11,7 +11,6 @@
   "src/cyberSonarScene.js",
   "src/data/aircraftModelLayer.js",
   "src/data/aircraftMotionRegime.js",
-  "src/data/bhoteKoshiEvent.js",
   "src/data/cctvGizmo.js",
   "src/data/contactTrailRenderer.js",
   "src/data/detection.js",
