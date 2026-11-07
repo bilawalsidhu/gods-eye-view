@@ -59,25 +59,60 @@ export function holdFollowZoom(controller, owner, minRange) {
     ZOOM_STATES.set(controller, state);
   }
   state.owners.set(owner, minRange);
-  const apply = (current) => {
-    controller.inertiaZoom = 0;
-    controller.minimumZoomDistance = Math.max(
-      current.minimumZoomDistance,
-      ...current.owners.values(),
-    );
-  };
-  apply(state);
+  applyFollowZoom(controller, state);
   return () => {
     const current = ZOOM_STATES.get(controller);
     if (!current?.owners.delete(owner)) return;
     if (current.owners.size > 0) {
-      apply(current);
+      applyFollowZoom(controller, current);
       return;
     }
     controller.inertiaZoom = current.inertiaZoom;
     controller.minimumZoomDistance = current.minimumZoomDistance;
     ZOOM_STATES.delete(controller);
   };
+}
+
+/**
+ * The controller's own zoom coast or zoom floor: while a follow holds them,
+ * the value it gives back on release, not the one in force.
+ * @param {object} controller A ScreenSpaceCameraController.
+ * @param {'inertiaZoom'|'minimumZoomDistance'} key
+ * @returns {number}
+ */
+export function followZoomBase(controller, key) {
+  const state = ZOOM_STATES.get(controller);
+  return state ? state[key] : controller[key];
+}
+
+/**
+ * Set the controller's own zoom coast or zoom floor. While a follow holds
+ * them it is what the follow gives back on release, and a zoom floor above
+ * the follow's holds takes effect at once.
+ * @param {object} controller A ScreenSpaceCameraController.
+ * @param {'inertiaZoom'|'minimumZoomDistance'} key
+ * @param {number} value
+ */
+export function setFollowZoomBase(controller, key, value) {
+  const state = ZOOM_STATES.get(controller);
+  if (!state) {
+    controller[key] = value;
+    return;
+  }
+  state[key] = value;
+  applyFollowZoom(controller, state);
+}
+
+function applyFollowZoom(controller, state) {
+  // The hold's coast is Cesium's shortest coefficient, 0; a controller of
+  // its own already coasting less (1 or more is no coast, under 0 is faster
+  // decay) keeps its own.
+  const own = state.inertiaZoom;
+  controller.inertiaZoom = own >= 1 || own < 0 ? own : 0;
+  controller.minimumZoomDistance = Math.max(
+    state.minimumZoomDistance,
+    ...state.owners.values(),
+  );
 }
 
 /**

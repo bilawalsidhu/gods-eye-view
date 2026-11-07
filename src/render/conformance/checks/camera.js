@@ -266,6 +266,53 @@ export function cameraChecks() {
       },
     },
     {
+      id: 'camera.controls.settings',
+      port: 'camera',
+      title: 'camera control settings read back as they were set',
+      async run(h) {
+        const r = await fresh(h);
+        const c = r.camera.controls;
+        for (const key of ['enableTilt', 'enableRotate', 'enableZoom']) {
+          equal(typeof c[key], 'boolean', `${key} is a boolean`);
+          c[key] = false;
+          equal(c[key], false, `${key} turns off`);
+          c[key] = true;
+          equal(c[key], true, `${key} turns back on`);
+        }
+        ok(
+          0 <= c.minDistance && c.minDistance <= c.maxDistance,
+          'the zoom distances are an ordered range',
+        );
+        c.minDistance = 25;
+        c.maxDistance = 3e7;
+        equal(c.minDistance, 25, 'minDistance is settable');
+        equal(c.maxDistance, 3e7, 'maxDistance is settable');
+        ok(c.zoomFactor > 0, 'zoomFactor is positive');
+        c.zoomFactor = 12;
+        equal(c.zoomFactor, 12, 'zoomFactor is settable');
+        ok(
+          ['none', 'terrain', 'tiles', 'both'].includes(c.collision),
+          'collision is a known setting',
+        );
+        for (const setting of ['none', 'terrain', 'tiles', 'both']) {
+          c.collision = setting;
+          equal(c.collision, setting, `collision ${setting} reads back`);
+        }
+        const inputs = ['wheel', 'pinch', 'rightDrag', 'ctrlWheel'];
+        ok(
+          c.zoomInputs.every((name) => inputs.includes(name)),
+          'zoomInputs are known bindings',
+        );
+        c.zoomInputs = ['wheel', 'ctrlWheel'];
+        deepEqual(
+          [...c.zoomInputs].sort(),
+          ['ctrlWheel', 'wheel'],
+          'zoomInputs are settable',
+        );
+        r.destroy();
+      },
+    },
+    {
       id: 'camera.onCommand',
       port: 'camera',
       title: 'every camera command is announced before it runs',
