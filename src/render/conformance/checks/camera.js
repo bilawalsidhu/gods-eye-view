@@ -222,7 +222,15 @@ export function cameraChecks() {
         const release = r.input.suspendCameraControls('drag');
         ok(!r.camera.controls.enabled, 'a hold disables input');
         r.camera.flyTo({ lon: 0, lat: 0, height: 1e6 }, { durationS: 0.1 });
-        for (let i = 0; i < 20 && r.camera.flying; i++) await h.frame(r);
+        // By the clock, not a frame count: a page's frames come at the
+        // display's rate, so 20 of them can pass inside the 100 ms flight.
+        const flownAt = h.now(r);
+        for (
+          let i = 0;
+          i < 600 && r.camera.flying && h.now(r) - flownAt < 1000;
+          i++
+        )
+          await h.frame(r);
         ok(!r.camera.flying, 'the flight ended');
         ok(!r.camera.controls.enabled, 'the drag hold survives the flight end');
         const second = r.camera.controls.suspend('cockpit');
