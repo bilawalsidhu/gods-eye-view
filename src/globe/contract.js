@@ -462,6 +462,57 @@
  * @property {(options: LineOptions) => Line} createLine
  * @property {() => { id: string, points: number, shown: boolean }[]} list
  *
+ * @typedef {object} GroundSetOptions
+ *   A set of flat fills draped on the ground: on terrain and 3D tiles,
+ *   following their relief, under every mover, line and model (Cesium:
+ *   GroundPrimitive and GroundPolylinePrimitive; src/globe/ground.js checks
+ *   and defaults these). Nothing is extruded.
+ * @property {string} id Unique among the engine's live ground sets.
+ * @property {'polygon'|'disc'|'cell'|'corridor'} kind One kind of item per
+ *   set (GroundItem).
+ * @property {number} [order] Draw order among ground sets (higher draws
+ *   later, on top); 0 by default. Within a set a later item draws on top.
+ * @property {boolean} [pickable] Whether picks return the set's items (those
+ *   with a pickId); false by default: picks pass through to what lies under.
+ * @property {'both'|'terrain'|'tiles'} [drape] What the fills drape on:
+ *   terrain and 3D tiles ('both', the default), or only one of them
+ *   (Cesium's classificationType). Navara drapes on whatever surface it
+ *   draws.
+ *
+ * @typedef {object} GroundItem
+ *   One fill, by its set's kind. Positions are [longitude, latitude] in
+ *   degrees (GeoJSON order); edges follow great circles; colours are rgba in
+ *   0..1 (the alpha is the fill's opacity).
+ *   - polygon: `rings` [outer, ...holes], each a list of positions (a
+ *     closing copy of the first is allowed);
+ *   - disc: `center` and `radiusM`, metres along the ground;
+ *   - cell: `west`, `south`, `east`, `north` (west > east across the
+ *     antimeridian), edges along meridians and parallels;
+ *   - corridor: `positions` (a line), `color`, and `widthPx` (CSS pixels) or
+ *     `widthM` (metres).
+ *   Polygons, discs and cells take `fill` (omitted: none) and `outline`
+ *   ({ color, widthPx }, a ground line on the boundary of every ring;
+ *   omitted: none). Every kind takes `pickId`: what a pick of the item
+ *   returns (an item without one is not picked).
+ *
+ * @typedef {object} GroundSet
+ * @property {string} id
+ * @property {(items: GroundItem[]) => void} replace Checks and stores every
+ *   item at once (the previous items go); drawn after commit().
+ * @property {() => void} commit Draws the stored items in place of the last
+ *   ones (one rebuild) and requests a render; picks answer from what was
+ *   committed.
+ * @property {(visible: boolean) => void} show Shown when created.
+ * @property {() => boolean} shown
+ * @property {() => number} count Items committed.
+ * @property {() => boolean} ready Whether the last commit is drawn (Cesium
+ *   builds ground geometry in workers, a few frames later).
+ * @property {() => void} destroy
+ *
+ * @typedef {object} GlobeGround
+ * @property {(options: GroundSetOptions) => GroundSet} createSet
+ * @property {() => { id: string, kind: string, count: number, shown: boolean, order: number }[]} list
+ *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
@@ -485,6 +536,7 @@
  * @property {GlobeMovers} movers The layers' moving objects (sprites,
  *   points, models), drawn by the engine.
  * @property {GlobeLines} lines The layers' dynamic polylines.
+ * @property {GlobeGround} ground The layers' fills on the ground.
  * @property {() => void} destroy
  * @property {() => boolean} isDestroyed True once destroy() has run.
  * @property {{ cesium?: object, navara?: object }} [extensions]
@@ -692,6 +744,7 @@ const SHAPE = {
   clock: { now: isFunction, frameTime: isFunction },
   movers: { createSet: isFunction, list: isFunction },
   lines: { createLine: isFunction, list: isFunction },
+  ground: { createSet: isFunction, list: isFunction },
   maps: {
     setBaseImagery: isFunction,
     setTerrain: isFunction,
@@ -732,7 +785,7 @@ const OPTIONAL_SHAPE = {
 
 // Required capabilities engineCapabilities reports as well: true for an
 // engine that has them whole, as every valid engine does.
-const REPORTED_REQUIRED = ['movers', 'lines'];
+const REPORTED_REQUIRED = ['movers', 'lines', 'ground'];
 
 const memberAt = (engine, path) =>
   path.split('.').reduce((value, key) => value?.[key], engine);
@@ -741,8 +794,8 @@ const memberAt = (engine, path) =>
  * Which optional capabilities an engine has: { visualStyles, ... } as
  * booleans. A caller that refuses a feature on an engine without a Cesium
  * viewer (voice, say) asks here instead: Cesium draws these through the app's
- * own stages and reports false. `movers` and `lines` are required; they are
- * reported too, true for every valid engine.
+ * own stages and reports false. `movers`, `lines` and `ground` are
+ * required; they are reported too, true for every valid engine.
  */
 export function engineCapabilities(engine) {
   const whole = (members, prefix = '') =>

@@ -2745,6 +2745,9 @@ export function createContractSuite(
       },
     ],
   ];
+  checks.push(
+    ...groundChecks(engine, { settle, until, nadirView, readRegion, pointer }),
+  );
   if (mapSources?.photoreal && mapSources.imagery?.length >= 2)
     checks.push(...mapChecks(engine.maps, mapSources));
   if (capabilities.visualStyles)
@@ -2755,6 +2758,487 @@ export function createContractSuite(
   if (capabilities.contactSonar)
     checks.push(...contactSonarChecks(engine.render, settle));
   return checks.map(([name, run]) => ({ name, run }));
+}
+
+// engine.ground: sets of fills on the ground (every engine).
+function groundChecks(
+  engine,
+  { settle, until, nadirView, readRegion, pointer },
+) {
+  const { ground } = engine;
+  const cell = (west, south, east, north, extra = {}) => ({
+    west,
+    south,
+    east,
+    north,
+    ...extra,
+  });
+  const square = (lon, lat, half) => [
+    [lon - half, lat - half],
+    [lon + half, lat - half],
+    [lon + half, lat + half],
+    [lon - half, lat + half],
+  ];
+  const screenOf = (lon, lat) =>
+    engine.projector.worldToWindow(cartesian3.fromDegrees(lon, lat));
+  const throwsType = (run, label) => {
+    let error = null;
+    try {
+      run();
+    } catch (caught) {
+      error = caught;
+    }
+    ensure(error instanceof TypeError, `${label} did not throw a TypeError`);
+  };
+  return [
+    [
+      'ground: sets are created, committed, listed, shown, hidden and destroyed',
+      async () => {
+        throwsType(
+          () => ground.createSet({ id: 'contract-bad', kind: 'blob' }),
+          'an unknown kind',
+        );
+        throwsType(
+          () =>
+            ground.createSet({ id: 'contract-bad', kind: 'cell', drape: 'x' }),
+          'an unknown drape',
+        );
+        const set = ground.createSet({
+          id: 'contract-ground',
+          kind: 'polygon',
+          order: 3,
+        });
+        const others = [];
+        try {
+          let duplicate = null;
+          try {
+            ground.createSet({ id: 'contract-ground', kind: 'disc' });
+          } catch (error) {
+            duplicate = error;
+          }
+          ensure(duplicate, 'a second live set with the same id');
+          ensure(set.id === 'contract-ground', `id ${set.id}`);
+          ensure(
+            listed()?.kind === 'polygon' &&
+              listed().count === 0 &&
+              listed().shown === true &&
+              listed().order === 3,
+            `list() before a commit: ${JSON.stringify(listed())}`,
+          );
+          set.replace([
+            {
+              rings: [square(20, 10, 0.5), square(20, 10, 0.2).reverse()],
+              fill: [1, 0, 0, 0.5],
+              outline: { color: [1, 1, 1, 1], widthPx: 2 },
+              pickId: 'p1',
+            },
+            {
+              rings: [[...square(21, 10, 0.3), [20.7, 9.7]]],
+              fill: [0, 1, 0, 1],
+            },
+          ]);
+          ensure(set.count() === 0, 'replace() drew before commit()');
+          set.commit();
+          ensure(set.count() === 2, `count ${set.count()} after commit`);
+          ensure(listed()?.count === 2, 'list() missed the commit');
+          throwsType(
+            () =>
+              set.replace([
+                {
+                  rings: [
+                    [
+                      [0, 0],
+                      [1, 1],
+                    ],
+                  ],
+                },
+              ]),
+            'a ring of two positions',
+          );
+          throwsType(
+            () =>
+              set.replace([{ rings: [square(0, 0, 1)], fill: [2, 0, 0, 1] }]),
+            'a fill outside 0..1',
+          );
+          set.commit();
+          ensure(set.count() === 2, 'a refused replace() changed the set');
+          await until(() => set.ready(), 'the polygons drawn');
+          set.show(false);
+          ensure(
+            set.shown() === false && listed()?.shown === false,
+            'show(false) not reported',
+          );
+          set.show(true);
+          ensure(set.shown() === true, 'show(true) not reported');
+          // Every kind takes its own items.
+          const disc = ground.createSet({ id: 'contract-discs', kind: 'disc' });
+          others.push(disc);
+          disc.replace([
+            {
+              center: [20, 10],
+              radiusM: 20_000,
+              fill: [0, 0, 1, 0.4],
+              outline: { color: [0, 0, 1, 1], widthPx: 3 },
+            },
+          ]);
+          disc.commit();
+          const cells = ground.createSet({
+            id: 'contract-cells',
+            kind: 'cell',
+          });
+          others.push(cells);
+          cells.replace([
+            cell(179.5, 0, -179.5, 1, { fill: [1, 1, 0, 0.5] }),
+            cell(20, 10, 20.5, 10.5, { fill: [1, 1, 0, 0.5] }),
+          ]);
+          cells.commit();
+          const corridors = ground.createSet({
+            id: 'contract-corridors',
+            kind: 'corridor',
+          });
+          others.push(corridors);
+          corridors.replace([
+            {
+              positions: [
+                [19, 9],
+                [21, 9],
+              ],
+              color: [1, 0, 1, 1],
+              widthPx: 4,
+            },
+            {
+              positions: [
+                [19, 11],
+                [20, 11.2],
+                [21, 11],
+              ],
+              color: [0, 1, 1, 1],
+              widthM: 5000,
+            },
+          ]);
+          corridors.commit();
+          throwsType(
+            () =>
+              corridors.replace([
+                {
+                  positions: [
+                    [0, 0],
+                    [1, 0],
+                  ],
+                  color: [1, 1, 1, 1],
+                },
+              ]),
+            'a corridor without a width',
+          );
+          await until(
+            () => others.every((other) => other.ready()),
+            'discs, cells and corridors drawn',
+          );
+          ensure(
+            ['contract-discs', 'contract-cells', 'contract-corridors'].every(
+              (id) => ground.list().some((entry) => entry.id === id),
+            ),
+            'list() misses a set',
+          );
+          set.replace([]);
+          set.commit();
+          ensure(set.count() === 0, 'an empty commit kept items');
+        } finally {
+          set.destroy();
+          for (const other of others) other.destroy();
+        }
+        ensure(!listed(), 'a destroyed set is still listed');
+        set.destroy();
+        let refused = null;
+        try {
+          set.commit();
+        } catch (error) {
+          refused = error;
+        }
+        ensure(refused, 'a destroyed set took a commit');
+        function listed() {
+          return ground.list().find(({ id }) => id === 'contract-ground');
+        }
+      },
+    ],
+    [
+      'ground: picks resolve to the pickId of the item on top',
+      async () => {
+        await nadirView(1e6);
+        const cells = ground.createSet({
+          id: 'contract-ground-cells',
+          kind: 'cell',
+          pickable: true,
+        });
+        const polygons = ground.createSet({
+          id: 'contract-ground-polygons',
+          kind: 'polygon',
+          pickable: true,
+          order: 1,
+        });
+        const quiet = ground.createSet({
+          id: 'contract-ground-quiet',
+          kind: 'disc',
+        });
+        const clicks = [];
+        const remove = engine.input.on('click', (event) => clicks.push(event), {
+          pick: true,
+        });
+        try {
+          cells.replace([
+            cell(19, 9.5, 20, 10.5, { fill: [1, 0, 0, 0.6], pickId: 'cell-a' }),
+            cell(19.2, 9.7, 19.4, 9.9, { fill: [1, 0, 0, 0.6] }),
+          ]);
+          cells.commit();
+          polygons.replace([
+            {
+              rings: [square(20.6, 10, 0.4)],
+              fill: [0, 0, 1, 0.6],
+              pickId: 'poly-b',
+            },
+          ]);
+          polygons.commit();
+          quiet.replace([
+            {
+              center: [20.6, 10],
+              radiusM: 15_000,
+              fill: [0, 1, 0, 0.6],
+              pickId: 'q',
+            },
+          ]);
+          quiet.commit();
+          await until(
+            () => cells.ready() && polygons.ready() && quiet.ready(),
+            'the pickable fills drawn',
+          );
+          await settle(3);
+          const pickAt = (lon, lat) => engine.picker.pick(screenOf(lon, lat));
+          const onCell = pickAt(19.5, 10.2);
+          ensure(
+            onCell?.id === 'cell-a' && onCell.owner === 'contract-ground-cells',
+            `a pick on the cell found ${JSON.stringify(onCell?.id)} of ${onCell?.owner}`,
+          );
+          ensure(onCell.instance === 0, `instance ${onCell.instance}`);
+          const noId = pickAt(19.3, 9.8);
+          ensure(
+            noId?.owner !== 'contract-ground-cells' || noId.id === 'cell-a',
+            `an item without a pickId was picked (${JSON.stringify(noId?.id)})`,
+          );
+          // Higher order on top, an unpickable set under it never answers.
+          const onPolygon = pickAt(20.6, 10.25);
+          ensure(
+            onPolygon?.id === 'poly-b',
+            `a pick on the polygon found ${JSON.stringify(onPolygon?.id)}`,
+          );
+          const onQuiet = pickAt(20.6, 10);
+          ensure(
+            onQuiet?.id === 'poly-b' &&
+              onQuiet.owner !== 'contract-ground-quiet',
+            `the unpickable disc answered (${JSON.stringify(onQuiet?.id)} of ${onQuiet?.owner})`,
+          );
+          const outside = pickAt(18, 12);
+          ensure(
+            outside === undefined || outside.id === undefined,
+            `a pick off every fill found ${JSON.stringify(outside?.id)}`,
+          );
+          polygons.show(false);
+          await settle(3);
+          const hidden = pickAt(20.6, 10.25);
+          ensure(hidden?.id !== 'poly-b', 'a hidden set answered a pick');
+          polygons.show(true);
+          await settle(3);
+          if (!pointer) return;
+          const before = clicks.length;
+          const at = screenOf(19.5, 10.2);
+          await pointer.click(at.x, at.y);
+          await until(() => clicks.length > before, 'a click payload');
+          const clicked = clicks.at(-1);
+          ensure(
+            clicked.picked?.id === 'cell-a',
+            `a click on the cell picked ${JSON.stringify(clicked.picked?.id)}`,
+          );
+        } finally {
+          remove();
+          cells.destroy();
+          polygons.destroy();
+          quiet.destroy();
+        }
+      },
+    ],
+    [
+      'ground: fills, outlines and corridors draw on the globe (pixels)',
+      async () => {
+        if (!readRegion) return;
+        await nadirView(1e6);
+        const MAGENTA = [1, 0, 1, 1];
+        const GREEN = [0, 1, 0, 1];
+        const like = (colour, data, i) =>
+          colour.every(
+            (channel, k) =>
+              k > 2 || Math.abs(data[i + k] - channel * 255) <= 40,
+          );
+        // Pixels of a colour in a box centred on a ground point.
+        const countAt = (lon, lat, colour, half = 12) => {
+          const { x, y } = screenOf(lon, lat);
+          const data = readRegion(
+            Math.round(x) - half,
+            Math.round(y) - half,
+            2 * half,
+            2 * half,
+          );
+          let count = 0;
+          for (let i = 0; i < data.length; i += 4)
+            if (like(colour, data, i)) count++;
+          return count / (4 * half * half);
+        };
+        const cells = ground.createSet({
+          id: 'contract-paint-cells',
+          kind: 'cell',
+        });
+        const discs = ground.createSet({
+          id: 'contract-paint-discs',
+          kind: 'disc',
+          order: 1,
+        });
+        const corridors = ground.createSet({
+          id: 'contract-paint-corridors',
+          kind: 'corridor',
+          order: 2,
+        });
+        const extra = [];
+        try {
+          ensure(
+            countAt(19.5, 10, MAGENTA) < 0.05,
+            'the globe is already magenta under the cell',
+          );
+          cells.replace([cell(19, 9.5, 20, 10.5, { fill: MAGENTA })]);
+          cells.commit();
+          discs.replace([
+            {
+              center: [21, 10],
+              radiusM: 40_000,
+              fill: GREEN,
+              outline: { color: MAGENTA, widthPx: 4 },
+            },
+          ]);
+          discs.commit();
+          corridors.replace([
+            {
+              positions: [
+                [19, 8.5],
+                [21, 8.5],
+              ],
+              color: GREEN,
+              widthPx: 6,
+            },
+          ]);
+          corridors.commit();
+          await until(
+            () => cells.ready() && discs.ready() && corridors.ready(),
+            'the fills built',
+          );
+          await until(
+            () => countAt(19.5, 10, MAGENTA) > 0.9,
+            'the magenta cell drawn',
+          );
+          ensure(
+            countAt(21, 10, GREEN, 8) > 0.9,
+            `the disc's centre is ${countAt(21, 10, GREEN, 8).toFixed(2)} green`,
+          );
+          // The outline: magenta on the disc's rim, 40 km east of its centre.
+          const rimLon = 21 + 40_000 / (111_320 * Math.cos(math.toRadians(10)));
+          ensure(
+            countAt(rimLon, 10, MAGENTA, 3) > 0.3,
+            `the disc's outline is ${countAt(rimLon, 10, MAGENTA, 3).toFixed(2)} magenta at the rim`,
+          );
+          // A 6 px corridor: a column of pixels across it.
+          const mid = screenOf(20, 8.5);
+          const column = readRegion(
+            Math.round(mid.x),
+            Math.round(mid.y) - 10,
+            1,
+            20,
+          );
+          let lit = 0;
+          for (let i = 0; i < column.length; i += 4)
+            if (like(GREEN, column, i)) lit++;
+          ensure(lit >= 4 && lit <= 8, `the 6 px corridor is ${lit} px wide`);
+          cells.show(false);
+          await until(
+            () => countAt(19.5, 10, MAGENTA) < 0.05,
+            'the hidden cell gone',
+          );
+          cells.show(true);
+          await until(
+            () => countAt(19.5, 10, MAGENTA) > 0.9,
+            'the cell shown again',
+          );
+          cells.replace([]);
+          cells.commit();
+          await until(
+            () => countAt(19.5, 10, MAGENTA) < 0.05,
+            'the emptied cell gone',
+          );
+          // A polygon of many vertices with a hole (engines may bin it).
+          const ring = (radius, count) =>
+            Array.from({ length: count }, (_, index) => {
+              const angle = (index / count) * 2 * Math.PI;
+              return [
+                18 + radius * Math.cos(angle),
+                11 + radius * Math.sin(angle),
+              ];
+            });
+          const many = ground.createSet({
+            id: 'contract-paint-polygon',
+            kind: 'polygon',
+          });
+          extra.push(many);
+          many.replace([
+            { rings: [ring(0.7, 240), ring(0.25, 120)], fill: MAGENTA },
+          ]);
+          many.commit();
+          await until(() => many.ready(), 'the large polygon built');
+          await until(
+            () => countAt(18.45, 11, MAGENTA, 6) > 0.9,
+            'the large polygon drawn',
+          );
+          ensure(
+            countAt(18, 11, MAGENTA, 6) < 0.05,
+            `the hole is ${countAt(18, 11, MAGENTA, 6).toFixed(2)} magenta`,
+          );
+          ensure(
+            countAt(18, 12.2, MAGENTA, 6) < 0.05,
+            'the large polygon spills outside its ring',
+          );
+          // Round both rings, just inside and just outside each.
+          for (let step = 0; step < 12; step++) {
+            const angle = (step / 12) * 2 * Math.PI + 0.1;
+            const at = (radius) => [
+              18 + radius * Math.cos(angle),
+              11 + radius * Math.sin(angle),
+            ];
+            for (const [radius, filled] of [
+              [0.62, true],
+              [0.78, false],
+              [0.33, true],
+              [0.17, false],
+            ]) {
+              const share = countAt(...at(radius), MAGENTA, 2);
+              ensure(
+                filled ? share > 0.9 : share < 0.1,
+                `at ${radius}° from the centre, ${(step * 30).toFixed(0)}° round: ${share.toFixed(2)} magenta`,
+              );
+            }
+          }
+        } finally {
+          cells.destroy();
+          discs.destroy();
+          corridors.destroy();
+          for (const set of extra) set.destroy();
+        }
+      },
+    ],
+  ];
 }
 
 // The optional contactSonar capability (render.setContactSonar).

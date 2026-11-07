@@ -49,6 +49,7 @@ import {
   viewProjection,
   viewRectangle,
 } from '../cameraMath.js';
+import { createGroundPicks, createGroundRegistry } from '../ground.js';
 import { createLineRegistry } from '../lines.js';
 import { createMoverRegistry } from '../movers.js';
 import { createCpuPicker } from '../cpuPicks.js';
@@ -257,6 +258,16 @@ export function createFakeEngine(options = {}) {
     };
     return part;
   });
+  // Ground sets keep their items for tests; commit counts as a render request.
+  const groundRegistry = createGroundRegistry(() => ({
+    commit() {
+      fake.renderRequests++;
+    },
+    show() {
+      fake.renderRequests++;
+    },
+    destroy() {},
+  }));
   const inputs = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
   const livePosition = cartesian3.create();
   let lastBaseImagery = null;
@@ -557,8 +568,8 @@ export function createFakeEngine(options = {}) {
     size: () => ({ width, height }),
   };
 
-  // Unscripted picks find the fake's own movers and lines, as Navara's CPU
-  // pick does (src/globe/cpuPicks.js).
+  // Unscripted picks find the fake's own movers, lines and ground items, as
+  // Navara's CPU pick does (src/globe/cpuPicks.js, src/globe/ground.js).
   const cpuPick = createCpuPicker({
     projector: {
       worldToWindow: (position, result) =>
@@ -583,6 +594,19 @@ export function createFakeEngine(options = {}) {
           flat: state.positions,
           modelMatrix: state.modelMatrix,
         })),
+    // Ground items under the picked globe point (src/globe/ground.js).
+    meshes: (at) => groundPicks(at),
+  });
+  const groundPicks = createGroundPicks({
+    pickGlobe: (screen) => engine.picker.pickGlobe(screen),
+    camera: {
+      get livePosition() {
+        return engine.camera.livePosition;
+      },
+      pose: () => engine.camera.pose(),
+    },
+    size: () => ({ width, height }),
+    sets: () => [...groundRegistry.live.values()],
   });
   // camera.follow on the fake's frames (src/globe/follow.js), as Navara.
   const follow = createFollowController({
@@ -639,6 +663,7 @@ export function createFakeEngine(options = {}) {
     },
     movers: moverRegistry.movers,
     lines: lineRegistry.lines,
+    ground: groundRegistry.ground,
     clock: {
       now: () => appClock.now(),
       frameTime: () => appClock.frameTime(),
@@ -776,6 +801,7 @@ export function createFakeEngine(options = {}) {
       cancelCurrentFlight();
       moverRegistry.destroyAll();
       lineRegistry.destroyAll();
+      groundRegistry.destroyAll();
       fake.destroyed = true;
     },
     isDestroyed: () => fake.destroyed,

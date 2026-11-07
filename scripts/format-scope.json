@@ -1609,5 +1609,22 @@
   "src/layers/transit/render/style.js",
   "src/layers/transit/render/testAtlas.mjs",
   "src/testSupport/cctvEngines.mjs",
-  "src/testSupport/radioTestEngine.mjs"
+  "src/testSupport/radioTestEngine.mjs",
+  "src/globe/ground.js",
+  "src/globe/ground.test.mjs",
+  "src/globe/cesium/ground.js",
+  "src/globe/cesium/ground.test.mjs",
+  "src/globe/navara/ground/index.js",
+  "src/globe/navara/ground/index.test.mjs",
+  "src/globe/navara/ground/pack.js",
+  "src/globe/navara/ground/pack.test.mjs",
+  "src/globe/navara/ground/pass.js",
+  "src/globe/navara/ground/vector.js",
+  "src/layers/earthquakes/render/ground.js",
+  "src/layers/perimeters/render/ground.js",
+  "scripts/qa-ground-suite.mjs",
+  "scripts/qa-ground-bench.mjs",
+  "scripts/qa-ground-prototypes.mjs",
+  "scripts/qa-ground-switch.mjs",
+  "docs/GLOBE-PRIMITIVES.md"
 ]

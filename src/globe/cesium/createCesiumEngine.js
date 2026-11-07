@@ -5,12 +5,13 @@
 // engine clock's frame latch on viewer.clock.onTick (clock.js), attached at
 // creation so it runs before onTick listeners added later. Mover sets and
 // lines join the scene in one engine-owned collection each, with the first
-// set or line.
+// set or line; ground sets join scene.groundPrimitives the same way.
 
 import { createCesiumCamera } from './camera.js';
 import { createCesiumClock } from './clock.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumFrames } from './frames.js';
+import { createCesiumGround } from './ground.js';
 import { createCesiumInput } from './input.js';
 import { createCesiumLines } from './lines.js';
 import { createCesiumMaps } from './maps.js';
@@ -31,9 +32,10 @@ import { createCesiumSurface } from './surface.js';
  *   appClock?: import('../../time/clock.js').AppClock,
  *   moverFactories?: object,
  *   lineFactories?: object,
+ *   groundFactories?: object,
  * }} [options] `requestRender` defaults to the render governor; `appClock`
  *   to the page's app clock; the `create*`/`load*` options and the mover and
- *   line factories (movers.js, lines.js) are test seams.
+ *   line and ground factories (movers.js, lines.js, ground.js) are test seams.
  *
  * `render.setContinuous` takes a hold on the app's singleton renderGovernor
  * (src/renderGovernor.js), which governs the one viewer it was installed on;
@@ -54,9 +56,16 @@ export function createCesiumEngine(viewer, options = {}) {
     requestRender,
     ...(options.lineFactories ? { factories: options.lineFactories } : {}),
   });
-  // Picks name the mover set or line they hit, with its pickId.
+  const ground = createCesiumGround(viewer, {
+    requestRender,
+    ...(options.groundFactories ? { factories: options.groundFactories } : {}),
+  });
+  // Picks name the mover set, line or ground set they hit, with its pickId.
   const picker = createCesiumPicker(viewer, {
-    identify: (picked) => movers.identify(picked) ?? lines.identify(picked),
+    identify: (picked) =>
+      movers.identify(picked) ??
+      lines.identify(picked) ??
+      ground.identify(picked),
   });
   const parts = {
     camera: createCesiumCamera(viewer),
@@ -66,6 +75,7 @@ export function createCesiumEngine(viewer, options = {}) {
     clock: createCesiumClock(viewer, options),
     movers,
     lines,
+    ground,
     render,
     // Mover sets in a surface `exclude` are hidden for the sample.
     surface: createCesiumSurface(viewer, {

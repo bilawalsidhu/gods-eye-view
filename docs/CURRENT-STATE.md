@@ -183,10 +183,25 @@ one application, and only the globe-bound parts move to the next engine.
   `node scripts/qa-contract-suite.mjs <origin>` runs them in headless Chrome
   on the real Cesium and Navara of a keyless dev server, with a real pointer
   and real canvases; checks of state the app drives itself (contact sonar)
-  are skipped and named. On November 7, 2026 Cesium passed 63 of 63 and
-  Navara 66 of 66. `movers` and `lines` are required of every engine: Cesium
+  are skipped and named. On November 7, 2026 Cesium passed 66 of 66 and
+  Navara 69 of 69. `movers` and `lines` are required of every engine: Cesium
   draws them with billboards, points, models and polyline primitives
   (`src/globe/cesium/movers.js`, `lines.js`).
+- **Fills on the ground** (`engine.ground`) are required of every engine
+  too. They come in sets of polygons with holes, discs, lon/lat cells or
+  corridors (a width in px or m), draped over terrain and 3D tiles. Each
+  item has its own fill, outline and `pickId`. A set has a draw `order`, and
+  shows, hides and replaces its items in bulk.
+  - Cesium draws them with batched `GroundPrimitive` and
+    `GroundPolylinePrimitive`.
+  - Navara draws them in one screen pass classified on the scene depth
+    (`src/globe/navara/ground/`).
+  - Navara's vector layers were measured against that pass and lost
+    (`docs/GLOBE-PRIMITIVES.md`).
+  - No layer draws through `engine.ground` yet. Earthquakes and fire
+    perimeters have prototypes in `render/ground.js`.
+  - On November 7, 2026, `scripts/qa-ground-suite.mjs` (the ground checks
+    with pixels) passed 3 of 3 on both engines.
 - **Engine coupling.** `node scripts/report-engine-coupling.mjs` counts the
   engine-specific code outside the engines: renderer lines per engine, Cesium
   imports, `viewer` mentions, engine-name checks, raw Navara reads, Navara

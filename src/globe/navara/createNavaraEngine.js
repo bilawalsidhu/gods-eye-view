@@ -27,6 +27,7 @@ import { createNavaraCredits } from './credits.js';
 import { createNavaraInput } from './input.js';
 import { createNavaraPicking } from './picking.js';
 import { createFollowController } from '../follow.js';
+import { createGroundPicks } from '../ground.js';
 import { navaraFollowGestures } from './followGestures.js';
 import { createNavaraMaps } from './maps.js';
 import { createNavaraSurface } from './surface.js';
@@ -44,6 +45,12 @@ const NO_MOVERS = Object.freeze({
 const NO_LINES = Object.freeze({
   createLine() {
     throw new Error("Navara lines need the view's three runtime (lines/)");
+  },
+  list: () => [],
+});
+const NO_GROUND = Object.freeze({
+  createSet() {
+    throw new Error("Navara ground needs the view's three runtime (ground/)");
   },
   list: () => [],
 });
@@ -89,7 +96,8 @@ function readCamera(raw) {
  *   `appClock` (the engine clock's time) defaults to the page's app clock;
  *   `movers` is engine.movers on the view's three runtime (movers/index.js;
  *   without it createSet throws), `lines` engine.lines (lines/index.js;
- *   likewise), both destroyed with the engine;
+ *   likewise), `ground` engine.ground (ground/index.js; likewise), all
+ *   destroyed with the engine;
  *   `fetch` and `clock` (the camera model's timers) are test seams.
  * @returns {import('../contract.js').GlobeEngine}
  */
@@ -103,6 +111,7 @@ export function createNavaraEngine(
     appClock,
     movers: moversPort = null,
     lines: linesPort = null,
+    ground: groundPort = null,
     sharpen: sharpenPort = null,
     styles: stylesPort = null,
     bloom: bloomPort = null,
@@ -228,6 +237,16 @@ export function createNavaraEngine(
     ...(clock ? { now: () => clock.now() } : {}),
   });
 
+  // Ground items are picked on the CPU at the globe under the pointer
+  // (src/globe/ground.js), under every mover and line.
+  const removeGroundPicks = picking.registerMeshPicker(
+    createGroundPicks({
+      pickGlobe: (screen) => picker.pickGlobe(screen),
+      camera: model.camera,
+      size,
+      sets: () => groundPort?.pickables?.() ?? [],
+    }),
+  );
   const picker = {
     // Navara mesh owners supply exact triangle hits for sync/hover/click picks.
     registerMeshPicker: (pick) => picking.registerMeshPicker(pick),
@@ -394,6 +413,7 @@ export function createNavaraEngine(
     clock: engineClock.clock,
     movers: moversPort?.movers ?? NO_MOVERS,
     lines: linesPort?.lines ?? NO_LINES,
+    ground: groundPort?.ground ?? NO_GROUND,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -402,6 +422,7 @@ export function createNavaraEngine(
       follow.destroy();
       model.destroy();
       input.destroy();
+      removeGroundPicks();
       picking.destroy();
       credits.destroy();
       maps.destroy();
@@ -412,6 +433,7 @@ export function createNavaraEngine(
       sonarPort?.destroy();
       moversPort?.destroy();
       linesPort?.destroy();
+      groundPort?.destroy();
     },
     isDestroyed: () => destroyed,
     // Navara only, not contract: the post pipeline as QA reads it (the
@@ -426,6 +448,8 @@ export function createNavaraEngine(
         passes: styles?.passes ?? glow?.passes ?? null,
       };
     },
+    // Navara only, not contract: what the ground pass holds (QA reads it).
+    groundDiagnostics: () => groundPort?.diagnostics?.() ?? null,
     // Navara only, not contract: the ground the floor last sampled under
     // the camera and the margin it keeps above it (QA measures against it).
     groundFloor: {

@@ -34,6 +34,8 @@ import { animeShader } from '../../styles/anime.js';
 import { noirShader } from '../../styles/noir.js';
 import { createNavaraMovers } from './movers/index.js';
 import { createNavaraLines } from './lines/index.js';
+import { createNavaraGround } from './ground/index.js';
+import { createGroundPass } from './ground/pass.js';
 import { createNavaraOverlay } from './overlay.js';
 import { createPostSampling } from './postSampling.js';
 import {
@@ -170,6 +172,7 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
         ),
       }),
       lines: createNavaraLines(view, { overlay }),
+      ground: createNavaraGround(view, { createPass: createGroundPass }),
     });
     const camera = engine.camera;
     let ground = Number.NaN;

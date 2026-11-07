@@ -310,11 +310,22 @@ test('movers and lines are required and reported as capabilities', () => {
   const names = createContractSuite(engine, {
     waitFrames: async () => {},
   }).map(({ name }) => name);
-  for (const prefix of ['movers:', 'lines:', 'colours:'])
+  for (const prefix of ['movers:', 'lines:', 'colours:', 'ground:'])
     assert.ok(
       names.some((name) => name.startsWith(prefix)),
       prefix,
     );
+});
+
+test('ground is required and reported as a capability', () => {
+  const engine = createFakeEngine();
+  assert.equal(engineCapabilities(engine).ground, true);
+  const without = { ...engine };
+  delete without.ground;
+  assert.throws(() => assertGlobeEngine(without), /\bground\b/);
+  assert.equal(engineCapabilities(without).ground, false);
+  const half = { ...engine, ground: { createSet: () => {} } };
+  assert.throws(() => assertGlobeEngine(half), /ground\.list/);
 });
 
 test('engineCapabilities names the optional capabilities an engine has whole', () => {
