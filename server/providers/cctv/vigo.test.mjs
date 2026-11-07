@@ -5,7 +5,12 @@ import {
   normalizeVigoImageUrl,
   loadVigoSourcesFromOpenData,
 } from './sources.js';
-import { VIGO_IMAGE_ORIGIN } from './constants.js';
+import {
+  VIGO_ATTRIBUTION,
+  VIGO_CAMERAS_URL,
+  VIGO_IMAGE_ORIGIN,
+} from './constants.js';
+import { createCctvCatalog } from './catalog.js';
 
 const VIGO_CENTER_FEATURE = (overrides = {}) => ({
   type: 'Feature',
@@ -40,6 +45,19 @@ test('normalizeVigoImageUrl rejects any other host, protocol, or malformed value
   );
   assert.equal(
     normalizeVigoImageUrl('ftp://camaras.vigo.org/camv2.php?id=1'),
+    null,
+  );
+  // Same origin text, but a port, credentials or an encoded slash.
+  assert.equal(
+    normalizeVigoImageUrl('https://camaras.vigo.org:8443/camv2.php?id=1'),
+    null,
+  );
+  assert.equal(
+    normalizeVigoImageUrl('https://user:pw@camaras.vigo.org/camv2.php?id=1'),
+    null,
+  );
+  assert.equal(
+    normalizeVigoImageUrl('https://camaras.vigo.org/a%2f..%2fb.php'),
     null,
   );
   assert.equal(normalizeVigoImageUrl('not a url'), null);
@@ -128,4 +146,84 @@ test('loadVigoSourcesFromOpenData de-duplicates cameras sharing the same id', as
   const ids = cameras.map((camera) => camera.id);
   assert.equal(ids.length, new Set(ids).size, 'ids must be unique');
   assert.deepEqual([...new Set(ids)].sort(), ['vigo-7', 'vigo-8']);
+});
+
+// --- Attribution -----------------------------------------------------------
+
+test('every Vigo camera carries the attribution the conditions of use require', () => {
+  const camera = vigoCameraToSource(VIGO_CENTER_FEATURE());
+  assert.equal(VIGO_ATTRIBUTION, 'Fuente de los datos: Ayuntamiento de Vigo');
+  // `credit` is what the CCTV panel prints beside the provider name.
+  assert.equal(camera.credit, VIGO_ATTRIBUTION);
+  assert.ok(camera.license.includes(VIGO_ATTRIBUTION));
+});
+
+// --- Opt-in ----------------------------------------------------------------
+
+const runCatalogWithMockedUpstreams = async (t) => {
+  const requested = [];
+  t.mock.restoreAll();
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const href = String(url);
+    requested.push(href);
+    if (href === VIGO_CAMERAS_URL) {
+      return Response.json({
+        type: 'FeatureCollection',
+        features: [VIGO_CENTER_FEATURE({ id: '3' })],
+      });
+    }
+    return Response.json([]);
+  });
+  const sources = await createCctvCatalog({ sourceRoot: '/nonexistent' })();
+  return { requested, sources };
+};
+
+const withEnv = async (fn) => {
+  const saved = { ...process.env };
+  try {
+    delete process.env.CCTV_SOURCES_FILE;
+    delete process.env.CCTV_SOURCES_JSON;
+    delete process.env.CCTV_VIGO_ROWS_URL;
+    await fn();
+  } finally {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in saved)) delete process.env[key];
+    }
+    Object.assign(process.env, saved);
+  }
+};
+
+test('Vigo stays unloaded unless CCTV_VIGO_ENABLED=1', async (t) => {
+  await withEnv(async () => {
+    for (const value of [undefined, '0', 'true']) {
+      if (value === undefined) delete process.env.CCTV_VIGO_ENABLED;
+      else process.env.CCTV_VIGO_ENABLED = value;
+      const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+      assert.equal(
+        requested.includes(VIGO_CAMERAS_URL),
+        false,
+        `the pack reaches datos.vigo.org only after an explicit opt-in (${value})`,
+      );
+      assert.deepEqual(
+        sources.filter((s) => s.cityId === 'vigo'),
+        [],
+      );
+    }
+  });
+});
+
+test('with CCTV_VIGO_ENABLED=1 the Vigo lane is wired into the catalog', async (t) => {
+  await withEnv(async () => {
+    process.env.CCTV_VIGO_ENABLED = '1';
+    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+    assert.ok(requested.includes(VIGO_CAMERAS_URL));
+    const vigo = sources.filter((s) => s.cityId === 'vigo');
+    assert.deepEqual(
+      vigo.map((s) => s.id),
+      ['vigo-3'],
+    );
+    assert.equal(vigo[0].credit, VIGO_ATTRIBUTION);
+  });
 });
