@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import {
   DEFAULT_DIRECTIONS_MODE,
   DIRECTIONS_MODES,
@@ -969,7 +970,6 @@ test('a placed endpoint draws its letter through the overlay, not as entity text
   const published = [];
   const cleared = [];
   const visibility = [];
-  const entities = [];
   const markerVisibility = () =>
     visibility
       .filter(([source]) => source === DIRECTIONS_MARKER_OVERLAY_SOURCE_ID)
@@ -983,23 +983,11 @@ test('a placed endpoint draws its letter through the overlay, not as entity text
   resetPointerOwnership();
   const viewer = {
     isDestroyed: () => false,
-    entities: {
-      add: (spec) => (entities.push(spec), spec),
-      remove() {},
-    },
-    scene: {
-      requestRender() {},
-      primitives: {
-        add: (primitive) => primitive,
-        remove() {},
-        raiseToTop() {},
-        lowerToBottom() {},
-        contains: () => true,
-        length: 0,
-      },
-    },
+    scene: { requestRender() {} },
   };
+  const { draw, unbind } = bindFakeDraw(viewer);
   t.after(() => {
+    unbind();
     directionsLayer.destroy(viewer);
     directionsLayer._setOverlayHostForTest(null);
     resetPointerOwnership();
@@ -1008,9 +996,13 @@ test('a placed endpoint draws its letter through the overlay, not as entity text
   assert.equal(markerVisibility(), false, 'hidden until enabled');
   directionsLayer.placeEndpoint('a', { lat: 37.7955, lon: -122.3937 });
 
-  assert.equal(entities.length, 1);
-  assert.equal(entities[0].label, undefined, 'no Cesium label on the marker');
-  assert.ok(entities[0].point, 'the marker keeps its point');
+  const markers = [...draw.sets.values()].find(
+    (set) => !set.disposed && set.spec.id.endsWith(':markers'),
+  );
+  assert.deepEqual([...markers.items.keys()], ['directions:marker:A']);
+  const marker = markers.items.get('directions:marker:A');
+  assert.equal(marker.label, undefined, 'no renderer label on the marker');
+  assert.equal(marker.height, 'clampGround', 'a dot on the ground');
   const [source, entries] = published.at(-1);
   assert.equal(source, DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
   assert.deepEqual(
@@ -1027,6 +1019,7 @@ test('a placed endpoint draws its letter through the overlay, not as entity text
   assert.ok(Math.abs(Cesium.Math.toDegrees(anchor.latitude) - 37.7955) < 1e-9);
 
   directionsLayer.setParams({ clear: true });
+  assert.equal(markers.items.size, 0, 'CLEAR takes the markers');
   assert.ok(cleared.includes(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID));
   cleared.length = 0;
   directionsLayer.destroy(viewer);

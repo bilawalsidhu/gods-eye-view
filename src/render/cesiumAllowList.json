@@ -34,7 +34,6 @@
   "src/input/sensorPick.js",
   "src/layers/cctv/projection.js",
   "src/layers/cctv/rendering.js",
-  "src/layers/directions/index.js",
   "src/layers/firms/rendering.js",
   "src/layers/flights/enrichment.js",
   "src/layers/flights/evidence.js",

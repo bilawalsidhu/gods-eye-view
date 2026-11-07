@@ -84,6 +84,7 @@ const DRAW_FROM_CALLER = new Set([
   './layers/street-level/kartaview',
   './layers/street-level/panoramax',
   './layers/air-quality',
+  './layers/directions',
   // Its data packs draw through `drawOf`; its flights ask `cameraOf`, which
   // throws until then too.
   './scenes',

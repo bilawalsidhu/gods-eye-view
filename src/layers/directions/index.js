@@ -16,8 +16,10 @@
  * route.
  */
 
-import * as Cesium from 'cesium';
 import { roadLabel } from '../../data/routeSteps.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { hexColor } from '../../render/color.js';
+import { drawOf } from '../../render/rendererOf.js';
 import {
   t,
   msg,
@@ -78,10 +80,24 @@ export function presentRoutingFailure(error) {
 export const DIRECTIONS_ROUTE_COLOR = '#39d0ff';
 const MARKER_A_CSS = '#5dff9f';
 const MARKER_B_CSS = '#ff6b6b';
-const MARKER_A_COLOR = Cesium.Color.fromCssColorString(MARKER_A_CSS);
-const MARKER_B_COLOR = Cesium.Color.fromCssColorString(MARKER_B_CSS);
-const STEP_COLOR = Cesium.Color.WHITE.withAlpha(0.95);
-const STEP_OUTLINE = Cesium.Color.fromCssColorString(DIRECTIONS_ROUTE_COLOR);
+const MARKER_A_COLOR = hexColor(MARKER_A_CSS);
+const MARKER_B_COLOR = hexColor(MARKER_B_CSS);
+const MARKER_OUTLINE = [0, 0, 0, 1];
+const STEP_COLOR = [1, 1, 1, 0.95];
+const STEP_OUTLINE = hexColor(DIRECTIONS_ROUTE_COLOR);
+/**
+ * The route's flowing dashes, as the voice route annotation draws them:
+ * 64 cells along the whole route, each lit for its first 46%, running
+ * toward B at 0.55 cells a second.
+ */
+const ROUTE_STYLE = Object.freeze({
+  kind: 'flow',
+  color: hexColor(DIRECTIONS_ROUTE_COLOR, 0.95),
+  repeat: 64,
+  duty: 0.46,
+  speed: 0.55,
+});
+const ROUTE_WIDTH_PX = 9;
 const STEP_PIXEL_SIZE = 8;
 const STEP_SELECTED_PIXEL_SIZE = 13;
 /** Route request timeout (ms) — the proxy itself gives OSRM 12 s. */
@@ -776,7 +792,7 @@ export function directionsStepCopy(steps, index) {
 /**
  * Shared-host card for the selected maneuver.
  * @param {number} index
- * @param {Cesium.Cartesian3} position
+ * @param {{x: number, y: number, z: number}} position
  * @param {{title:string, details:string[]}} copy
  * @returns {object|null}
  */
@@ -809,7 +825,7 @@ export function createDirectionsStepOverlayEntry(index, position, copy) {
  * The letter above one endpoint marker, as a world-overlay label. It is
  * protected, like the step card, so it never yields to ambient labels.
  * @param {'A'|'B'} letter
- * @param {Cesium.Cartesian3|(() => Cesium.Cartesian3)} position
+ * @param {{x: number, y: number, z: number}|(() => {x: number, y: number, z: number}|null)} position
  * @param {string} accent CSS colour of the marker.
  */
 export function createDirectionsMarkerOverlayEntry(letter, position, accent) {
@@ -885,13 +901,16 @@ export function normalizeRoutePayload(payload, mode) {
   };
 }
 
+/** Directions layers made, so each one's draw sets have ids of their own. */
+let _instances = 0;
+
 /**
  * Construct one Directions layer over the application scene owners.
  *
  * Each catalog builds its own, so two applications on a page never share the
  * route, the markers, the pointer claim or the flight this layer owns. The
  * shared services are injected, which is what keeps this module's own imports
- * down to Cesium and the pure step formatter.
+ * down to the renderer's draw port, geodesy and the pure step formatter.
  * @param {{services: object, source: {getRoute: Function}}} options
  * @returns {object} The layer module the data manager registers.
  */
@@ -932,10 +951,22 @@ export function createDirectionsLayer({ services, source }) {
   let _routeSeq = 0;
   let _routeAbort = null;
   let _lastUpdate = null;
-  let _markerA = null;
-  let _markerB = null;
-  let _routeEntity = null;
-  let _stepPoints = null;
+  /**
+   * The layer's draw sets on its viewer's renderer (`drawOf`), made at
+   * `init`: the A and B markers, the maneuver dots and the route.
+   * @type {{markers: object, steps: object, route: object}|null}
+   */
+  let _sets = null;
+  /** The registration of the dots in the shared sprite order. */
+  let _spriteEntry = null;
+  /** Whether a route is drawn. */
+  let _routeDrawn = false;
+  /**
+   * Each maneuver dot drawn, by step index: where it stands (once its ground
+   * cell has answered) and whether it shows.
+   * @type {Map<number, {pos: {x: number, y: number, z: number}, show: boolean}>}
+   */
+  const _stepDots = new Map();
   let _selectedStep = null;
   let _clickSubscription = null;
   let _renderHeld = false;
@@ -969,6 +1000,18 @@ export function createDirectionsLayer({ services, source }) {
   // Internals
   // ---------------------------------------------------------------------------
 
+  /** Let the layer's draw sets go. */
+  function detachSets() {
+    if (_spriteEntry)
+      services.sprites.unregisterSpriteCollection?.('directions', _spriteEntry);
+    _spriteEntry = null;
+    if (!_sets) return;
+    for (const set of Object.values(_sets)) set.dispose();
+    _sets = null;
+    _routeDrawn = false;
+    _stepDots.clear();
+  }
+
   function state() {
     return {
       enabled: _enabled,
@@ -996,7 +1039,7 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function syncRenderHold() {
-    const shouldHold = _enabled && Boolean(_routeEntity);
+    const shouldHold = _enabled && _routeDrawn;
     if (shouldHold && !_renderHeld) {
       services.render.holdContinuousRender('directions');
       _renderHeld = true;
@@ -1006,37 +1049,35 @@ export function createDirectionsLayer({ services, source }) {
     }
   }
 
-  function pickGround(screenPosition) {
-    const cartesian = services.scenePick.pickGroundPosition(
-      _viewer,
-      screenPosition,
-    );
-    if (!cartesian) return null;
-    const carto = Cesium.Cartographic.fromCartesian(cartesian);
+  /**
+   * Where a click lands on the ground, from the click's own ground pick (the
+   * rendered surface, else the ellipsoid; null over the sky).
+   * @param {{ground: () => ({x: number, y: number, z: number}|null)}} event
+   */
+  function pickGround(event) {
+    const ecef = event.ground?.();
+    if (!ecef) return null;
+    const carto = toLonLatH(ecef);
     if (!carto) return null;
-    const point = {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
-    };
+    const point = { lat: carto.lat, lon: carto.lon };
     // A pick at the ellipsoid itself is the fallback when the drawn surface
     // gave no position; the floor path places that letter instead.
     if (Math.abs(carto.height) > 0.01) _surfaceHeights.set(point, carto.height);
     return point;
   }
 
-  function markerEntity(letter, point, color) {
-    return _viewer.entities.add({
+  /** An endpoint marker: a dot on the ground, drawn over everything. */
+  function markerItem(letter, point, color) {
+    return {
       id: `directions:marker:${letter}`,
-      position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, 0),
-      point: {
-        pixelSize: 14,
-        color,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    });
+      pos: { lon: point.lon, lat: point.lat, height: 0 },
+      height: 'clampGround',
+      pixelSize: 14,
+      color,
+      outlineColor: MARKER_OUTLINE,
+      outlineWidth: 2,
+      disableDepthTest: Number.POSITIVE_INFINITY,
+    };
   }
 
   /**
@@ -1054,7 +1095,7 @@ export function createDirectionsLayer({ services, source }) {
         _surfaceHeights.get(point) ??
         services.ground.cachedGroundFloor(point.lat, point.lon);
       if (!Number.isFinite(height) && !_floorSettled.has(point)) return null;
-      position = Cesium.Cartesian3.fromDegrees(
+      position = fromDegrees(
         point.lon,
         point.lat,
         Number.isFinite(height) ? height : 0,
@@ -1085,20 +1126,13 @@ export function createDirectionsLayer({ services, source }) {
     );
   }
 
-  function removeEntity(entity) {
-    if (entity && _viewer && !_viewer.isDestroyed?.())
-      _viewer.entities.remove(entity);
-  }
-
   function placeMarker(letter, point) {
-    if (!_viewer) return;
-    if (letter === 'a') {
-      removeEntity(_markerA);
-      _markerA = markerEntity('A', point, MARKER_A_COLOR);
-    } else {
-      removeEntity(_markerB);
-      _markerB = markerEntity('B', point, MARKER_B_COLOR);
-    }
+    if (!_viewer || !_sets) return;
+    _sets.markers.upsert([
+      letter === 'a'
+        ? markerItem('A', point, MARKER_A_COLOR)
+        : markerItem('B', point, MARKER_B_COLOR),
+    ]);
     publishMarkerLabels();
     if (_surfaceHeights.has(point)) return;
     // The letter appears when its floor cell lands, even under a still camera.
@@ -1116,9 +1150,10 @@ export function createDirectionsLayer({ services, source }) {
     services.credits?.hideOsmCredit?.(_viewer, 'directions');
     _clearStepSelection();
     stopStepAnchoring();
-    removeEntity(_routeEntity);
-    _routeEntity = null;
-    _stepPoints?.removeAll();
+    _sets?.route.clear();
+    _routeDrawn = false;
+    _stepDots.clear();
+    _sets?.steps.clear();
     syncRenderHold();
   }
 
@@ -1137,31 +1172,28 @@ export function createDirectionsLayer({ services, source }) {
    */
   function anchorStepPoints() {
     _anchorTimer = null;
-    if (!_stepPoints || !_route || !_enabled) return;
+    if (!_sets || !_route || !_enabled) return;
     const steps = _route.steps;
     const pending = [];
     let unresolved = 0;
     for (const index of stepMarkerIndices(steps)) {
       const step = steps[index];
-      const point = findStepPoint(index);
-      if (!point) continue;
+      const dot = _stepDots.get(index);
+      if (!dot) continue;
       const height = stepMarkerHeightM(
         services.ground.cachedGroundFloor(step.lat, step.lon),
         services.ground.GROUND_FLOOR_LIFT_M,
       );
       if (height === null) {
         unresolved += 1;
-        point.show = false;
+        dot.show = false;
         pending.push({ lat: step.lat, lon: step.lon });
         continue;
       }
-      point.position = Cesium.Cartesian3.fromDegrees(
-        step.lon,
-        step.lat,
-        height,
-      );
-      point.show = true;
+      dot.pos = fromDegrees(step.lon, step.lat, height);
+      dot.show = true;
     }
+    drawStepDots();
     // A card already open on a step that has just been anchored moves with it.
     if (_selectedStep !== null) refreshStepCard(_selectedStep);
     services.render.governorRequestRender('directions-anchor');
@@ -1180,45 +1212,63 @@ export function createDirectionsLayer({ services, source }) {
     _anchorTimer = setTimeout(anchorStepPoints, delay);
   }
 
+  /** One maneuver dot as the steps set draws it. */
+  function stepDotItem(index, dot) {
+    return {
+      id: `directions:step:${index}`,
+      pos: dot.pos,
+      color: STEP_COLOR,
+      pixelSize:
+        index === _selectedStep ? STEP_SELECTED_PIXEL_SIZE : STEP_PIXEL_SIZE,
+      outlineColor: STEP_OUTLINE,
+      outlineWidth: 2,
+      show: dot.show,
+      // The shared ground floor is a coarse cell, and on the photoreal stack
+      // the rendered mesh can stand above it. Keeping the dot always visible
+      // is the same choice every other anchored sprite in the app makes.
+      disableDepthTest: Number.POSITIVE_INFINITY,
+    };
+  }
+
+  /** Draw the maneuver dots as they now are (moved and restyled in place). */
+  function drawStepDots(indices = _stepDots.keys()) {
+    if (!_sets) return;
+    const items = [];
+    for (const index of indices) {
+      const dot = _stepDots.get(index);
+      if (dot) items.push(stepDotItem(index, dot));
+    }
+    if (items.length) _sets.steps.upsert(items);
+  }
+
   function drawRoute(route) {
     clearRouteGraphics();
-    if (!_viewer) return;
-    services.annotations.ensureFlowFabricRegistered();
-    const positions = Cesium.Cartesian3.fromDegreesArray(route.geometry.flat());
-    _routeEntity = _viewer.entities.add({
-      id: 'directions:route',
-      polyline: {
-        positions,
-        width: 9,
-        material: new services.annotations.FlowMaterialProperty(
-          DIRECTIONS_ROUTE_COLOR,
-        ),
-        clampToGround: true,
-        // BOTH: drape on 3D tiles when they are up and on terrain when they are
+    if (!_viewer || !_sets) return;
+    _sets.route.set([
+      {
+        id: 'directions:route',
+        positions: route.geometry.map(([lon, lat]) => fromDegrees(lon, lat, 0)),
+        widthPx: ROUTE_WIDTH_PX,
+        mode: 'draped',
+        // Draped on 3D tiles when they are up and on terrain when they are
         // not, so the keyless globe shows the route too.
-        classificationType: Cesium.ClassificationType.BOTH,
+        clampTo: 'both',
+        style: ROUTE_STYLE,
       },
-    });
+    ]);
+    _routeDrawn = true;
     // One dot per decision; A and B already mark departure and arrival. The dots
     // start hidden and appear as anchorStepPoints resolves each ground cell.
     const cells = [];
+    const dots = [];
     for (const index of stepMarkerIndices(route.steps)) {
       const step = route.steps[index];
       cells.push({ lat: step.lat, lon: step.lon });
-      _stepPoints.add({
-        id: `directions:step:${index}`,
-        position: Cesium.Cartesian3.fromDegrees(step.lon, step.lat, 0),
-        color: STEP_COLOR,
-        pixelSize: STEP_PIXEL_SIZE,
-        outlineColor: STEP_OUTLINE,
-        outlineWidth: 2,
-        show: false,
-        // The shared ground floor is a coarse cell, and on the photoreal stack
-        // the rendered mesh can stand above it. Keeping the dot always visible
-        // is the same choice every other anchored sprite in the app makes.
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      });
+      const dot = { pos: fromDegrees(step.lon, step.lat, 0), show: false };
+      _stepDots.set(index, dot);
+      dots.push(stepDotItem(index, dot));
     }
+    _sets.steps.set(dots);
     services.credits?.showOsmCredit?.(_viewer, 'directions');
     services.ground.warmGroundFloor(cells);
     _anchorAttempts = 0;
@@ -1411,10 +1461,7 @@ export function createDirectionsLayer({ services, source }) {
     _route = null;
     _status = 'idle';
     _error = null;
-    removeEntity(_markerA);
-    removeEntity(_markerB);
-    _markerA = null;
-    _markerB = null;
+    _sets?.markers.clear();
     _overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
     clearRouteGraphics();
     services.render.governorRequestRender('directions-clear');
@@ -1506,22 +1553,10 @@ export function createDirectionsLayer({ services, source }) {
   // --- Step selection ---
 
   function _clearStepSelection() {
-    if (_selectedStep !== null && _stepPoints) {
-      const point = findStepPoint(_selectedStep);
-      if (point) point.pixelSize = STEP_PIXEL_SIZE;
-    }
+    const was = _selectedStep;
     _selectedStep = null;
+    if (was !== null) drawStepDots([was]);
     _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
-  }
-
-  function findStepPoint(index) {
-    if (!_stepPoints) return null;
-    const id = `directions:step:${index}`;
-    for (let i = 0; i < _stepPoints.length; i += 1) {
-      const point = _stepPoints.get(i);
-      if (point.id === id) return point;
-    }
-    return null;
   }
 
   /**
@@ -1533,13 +1568,13 @@ export function createDirectionsLayer({ services, source }) {
    * the same shared floor, and a step whose cell is still cold has no anchor at
    * all rather than one at sea level.
    * @param {number} index Step index.
-   * @returns {Cesium.Cartesian3|null}
+   * @returns {{x: number, y: number, z: number}|null}
    */
   function stepAnchorPosition(index) {
     const step = _route?.steps?.[index];
     if (!step) return null;
-    const point = findStepPoint(index);
-    if (point?.show) return Cesium.Cartesian3.clone(point.position);
+    const dot = _stepDots.get(index);
+    if (dot?.show) return { ...dot.pos };
     const height = stepMarkerHeightM(
       services.ground.cachedGroundFloor(step.lat, step.lon),
       services.ground.GROUND_FLOOR_LIFT_M,
@@ -1548,7 +1583,7 @@ export function createDirectionsLayer({ services, source }) {
       services.ground.warmGroundFloor([{ lat: step.lat, lon: step.lon }]);
       return null;
     }
-    return Cesium.Cartesian3.fromDegrees(step.lon, step.lat, height);
+    return fromDegrees(step.lon, step.lat, height);
   }
 
   function refreshStepCard(index) {
@@ -1585,20 +1620,17 @@ export function createDirectionsLayer({ services, source }) {
       return false;
     }
     _selectedStep = index;
-    const point = findStepPoint(index);
-    if (point) point.pixelSize = STEP_SELECTED_PIXEL_SIZE;
+    drawStepDots([index]);
     services.render.governorRequestRender('directions-select');
     return true;
   }
 
-  function stepIndexFromPick(picked) {
-    const candidates = [picked?.primitive?.id, picked?.id];
-    for (const candidate of candidates) {
-      if (typeof candidate !== 'string') continue;
-      const match = /^directions:step:(\d+)$/.exec(candidate);
-      if (match) return Number(match[1]);
-    }
-    return null;
+  /** The step of a maneuver dot this layer draws under a click, or null. */
+  function stepIndexFromHit(hit) {
+    if (!hit || !_sets || hit.set !== _sets.steps.id) return null;
+    const match = /^directions:step:(\d+)$/.exec(hit.id);
+    const index = match ? Number(match[1]) : null;
+    return index !== null && _stepDots.has(index) ? index : null;
   }
 
   function _onKeyDown(event) {
@@ -1621,7 +1653,7 @@ export function createDirectionsLayer({ services, source }) {
       'click',
       (event) => {
         if (!_enabled || !_armed) return;
-        const point = pickGround(event.position);
+        const point = pickGround(event);
         if (!point) return;
         placeDirectionsEndpoint(_armed, point);
       },
@@ -1631,13 +1663,13 @@ export function createDirectionsLayer({ services, source }) {
     // yields the moment a tool (this one included) owns the click.
     const offSelect = input.onClick((event) => {
       if (!_enabled) return;
-      let picked = null;
+      let hit = null;
       try {
-        picked = event.pick;
+        hit = event.drawHit;
       } catch {
-        picked = null;
+        hit = null;
       }
-      const index = stepIndexFromPick(picked);
+      const index = stepIndexFromHit(hit);
       if (index !== null) {
         _selectStep(index);
         return;
@@ -1672,17 +1704,31 @@ export function createDirectionsLayer({ services, source }) {
     updateInterval: 0,
 
     /**
-     * Create the maneuver-dot collection. Called once at bootstrap.
-     * @param {Cesium.Viewer} viewer
+     * Make the layer's draw sets on the viewer's renderer. Called once at
+     * bootstrap.
+     * @param {object} viewer
      */
     init(viewer) {
       _viewer = viewer;
-      _stepPoints = new Cesium.PointPrimitiveCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(_stepPoints);
-      services.sprites.registerSpriteCollection('directions', _stepPoints);
-      _stepPoints.show = false;
+      detachSets();
+      const draw = drawOf(viewer);
+      const prefix = `directions:${++_instances}`;
+      _sets = {
+        markers: draw.points({ id: `${prefix}:markers` }),
+        steps: draw.points({
+          id: `${prefix}:steps`,
+          blend: 'translucent',
+          show: false,
+        }),
+        route: draw.lines({ id: `${prefix}:route` }),
+      };
+      // Drawn from the start, empty, so the dots take their place in the
+      // scene now, as their collection did; their place among the other
+      // sprite layers is the sprite order's.
+      _sets.steps.set([]);
+      _spriteEntry =
+        services.sprites.registerSpriteSet?.('directions', _sets.steps.id) ??
+        null;
       _enabled = false;
       _mode = DEFAULT_DIRECTIONS_MODE;
       disarm();
@@ -1700,12 +1746,12 @@ export function createDirectionsLayer({ services, source }) {
 
     /**
      * Show the row chips and listen for placement clicks.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     enable(viewer) {
       _enabled = true;
       _pointerBlocked = false;
-      _stepPoints.show = true;
+      if (_sets) _sets.steps.show = true;
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
       _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, true);
       _installClickHandler(viewer);
@@ -1720,7 +1766,7 @@ export function createDirectionsLayer({ services, source }) {
 
     /**
      * Remove the route, markers and listeners.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     disable(viewer) {
       _enabled = false;
@@ -1729,7 +1775,7 @@ export function createDirectionsLayer({ services, source }) {
       _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
       _removeClickHandler();
       services.picking.unregisterPickOwner('directions');
-      if (_stepPoints) _stepPoints.show = false;
+      if (_sets) _sets.steps.show = false;
       syncRenderHold();
       void viewer;
     },
@@ -1814,7 +1860,7 @@ export function createDirectionsLayer({ services, source }) {
 
     /**
      * Tear down entirely.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     destroy(viewer) {
       if (_enabled) this.disable(viewer);
@@ -1827,11 +1873,8 @@ export function createDirectionsLayer({ services, source }) {
       _shellSeams = null;
       _dataManager = null;
       _rowControlsListener = null;
-      if (_stepPoints) {
-        services.sprites.unregisterSpriteCollection('directions', _stepPoints);
-        viewer.scene.primitives.remove(_stepPoints);
-        _stepPoints = null;
-      }
+      detachSets();
+      void viewer;
       _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
       _overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
       _viewer = null;

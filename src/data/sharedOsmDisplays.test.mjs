@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from 'cesium';
 import { showOsmCredit, hideOsmCredit } from './dataCredits.js';
-import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
+import { bindFakeCesiumCredits, fakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
 import { createInfrastructureLayers } from './infrastructure.js';
 import { createBhoteKoshiLocatorLayer } from './bhoteKoshiLocator.js';
 import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
-import * as annotations from '../annotations/worldAnnotationRenderer.js';
 import { createDirectionsLayer } from '../layers/directions/index.js';
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createLifecycle as createCctvLifecycle } from '../layers/cctv/lifecycle.js';
@@ -15,7 +16,7 @@ import { createOverpassAlprSource } from '../layers/alpr/source.js';
 
 const noop = () => {};
 const overlayHost = { setEntries: noop, setVisible: noop, clearSource: noop };
-function viewer(t) {
+function viewer(t, ports = null) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   for (const name of ['HTMLCanvasElement', 'HTMLImageElement', 'ImageBitmap', 'OffscreenCanvas']) {
     const original = globalThis[name];
@@ -32,6 +33,7 @@ function viewer(t) {
     scene: { requestRender: noop, canvas: { addEventListener: noop, removeEventListener: noop }, preRender: new C.Event(),
       primitives: { add: (p) => p, remove: noop }, screenSpaceCameraController: { enableInputs: true } },
   };
+  if (ports) bindRenderer(v, { credits: fakeCesiumCredits(v), ...ports });
   return bindFakeCesiumCredits(v);
 }
 function assertCredit(v) {
@@ -64,10 +66,10 @@ test('voice route geometry introduces the shared OSM credit', (t) => {
 });
 
 test('Directions introduces the shared OSM credit when the requested route draws', async (t) => {
-  const v = viewer(t);
+  const v = viewer(t, { draw: fakeDrawPort() });
   t.mock.method(globalThis, 'fetch', async () => Response.json({ ok: true, geometry: [[0, 0], [0.01, 0.01]], steps: [] }));
   const layer = createDirectionsLayer({ source: createDirectionsSource(), services: {
-    credits: { showOsmCredit, hideOsmCredit }, annotations, input, scenePick: {}, camera: {},
+    credits: { showOsmCredit, hideOsmCredit }, input, camera: {},
     overlays: { setOverlayEntries: noop, setOverlaySourceVisible: noop, clearOverlaySource: noop },
     render: { governorRequestRender: noop, holdContinuousRender: noop, releaseContinuousRender: noop },
     sprites: { registerSpriteCollection: noop, unregisterSpriteCollection: noop, restoreSpriteOrder: noop },

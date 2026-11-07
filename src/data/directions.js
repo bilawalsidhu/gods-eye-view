@@ -4,20 +4,18 @@ import { createDirectionsSource } from '../layers/directions/source.js';
  * @description Service bundle for the Directions layer.
  *
  * The layer itself lives in `src/layers/directions/`, which imports nothing
- * but Cesium and the pure step formatter. This module is the one place that
- * names the application's shared services — the render governor, sprite order,
- * the pick registry, the world overlay, the annotation material, the camera
- * verbs, the shared ground floor and the pointer arbiter — and it re-exports
- * the layer's pure helpers for the tests and the share-link code.
+ * but the renderer's draw port, geodesy and the pure step formatter. This
+ * module is the one place that names the application's shared services —
+ * the render governor, sprite order, the pick registry, the world overlay,
+ * the camera verbs, the shared ground floor and the pointer arbiter — and it
+ * re-exports the layer's pure helpers for the tests and the share-link code.
  */
 
 import * as credits from './dataCredits.js';
 import * as render from '../renderGovernor.js';
 import * as sprites from './spriteOrder.js';
 import * as picking from './pickRegistry.js';
-import * as scenePick from './scenePick.js';
 import * as overlays from '../overlays/worldOverlay.js';
-import * as annotations from '../annotations/worldAnnotationRenderer.js';
 import * as camera from '../cameraVerbs.js';
 import * as ground from './groundFloor.js';
 import * as input from './inputOwnership.js';
@@ -29,9 +27,7 @@ const directionsServices = Object.freeze({
   render,
   sprites,
   picking,
-  scenePick,
   overlays,
-  annotations,
   camera,
   ground,
   input,

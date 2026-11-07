@@ -2524,3 +2524,146 @@ test('a draped flow line still drawing while its rebuilds build keeps flowing', 
     assert.ok(material.uniforms.time >= 0, 'and keeps its clock');
     set.dispose();
   }));
+
+test('the directions layer draws its markers, flowing route and maneuver dots on a viewer of its own', async (t) => {
+  // Materials check their uniforms against the DOM's image classes.
+  const names = ['HTMLCanvasElement', 'HTMLImageElement', 'ImageBitmap', 'OffscreenCanvas'];
+  const real = names.map((name) => globalThis[name]);
+  for (const name of names) globalThis[name] ??= class {};
+  t.after(() => names.forEach((name, i) => (globalThis[name] = real[i])));
+  {
+    const { createDirectionsLayer } =
+      await import('../../layers/directions/index.js');
+    const { fakeInput } = await import('../../input/testDoubles.mjs');
+    const ownership = await import('../../data/inputOwnership.js');
+    const scene = fakeScene();
+    scene.pickResult = undefined;
+    scene.pick = () => scene.pickResult;
+    scene.drillPick = () => [];
+    const viewer = { scene, isDestroyed: () => false };
+    const clicks = fakeInput(viewer);
+    const noop = () => {};
+    const sprites = [];
+    const overlays = [];
+    const layer = createDirectionsLayer({
+      source: {
+        getRoute: async () => ({
+          ok: true,
+          distanceM: 2000,
+          durationS: 200,
+          geometry: [
+            [-97.74, 30.26],
+            [-97.73, 30.27],
+            [-97.72, 30.27],
+          ],
+          steps: [
+            { instruction: 'Depart', lat: 30.26, lon: -97.74 },
+            { instruction: 'Turn left', lat: 30.27, lon: -97.73 },
+            { instruction: 'Arrive', lat: 30.27, lon: -97.72 },
+          ],
+        }),
+      },
+      services: {
+        render: {
+          governorRequestRender: noop,
+          holdContinuousRender: noop,
+          releaseContinuousRender: noop,
+        },
+        sprites: {
+          registerSpriteSet: (layerId, setId) => {
+            sprites.push([layerId, setId]);
+            return { drawSetId: setId };
+          },
+          unregisterSpriteCollection: noop,
+          restoreSpriteOrder: noop,
+        },
+        picking: { registerPickOwner: noop, unregisterPickOwner: noop },
+        overlays: {
+          setOverlayEntries: (source, entries) =>
+            overlays.push([source, entries]),
+          setOverlaySourceVisible: noop,
+          clearOverlaySource: noop,
+        },
+        ground: {
+          GROUND_FLOOR_LIFT_M: 2,
+          cachedGroundFloor: () => 150,
+          warmGroundFloor: noop,
+          resolveGroundFloorCells: async () => {},
+        },
+        input: ownership,
+        camera: {},
+      },
+    });
+    ownership.resetPointerOwnership();
+    // Let go even when an assertion fails, so nothing leaks into later tests.
+    t.after(() => {
+      layer.destroy(viewer);
+      clicks.destroy();
+      ownership.resetPointerOwnership();
+    });
+    layer.init(viewer);
+    layer.enable(viewer);
+    layer.placeEndpoint('a', { lat: 30.26, lon: -97.74 });
+    layer.placeEndpoint('b', { lat: 30.27, lon: -97.72 });
+
+    const hostOf = (suffix) =>
+      scene.added.find((host) => host.drawSetId?.endsWith(suffix));
+    // The route is asked for, then drawn.
+    const deadline = Date.now() + 5000;
+    while (!(hostOf(':route')?.length > 0) && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    // A and B: dots on the ground, drawn over everything.
+    const markers = hostOf(':markers');
+    assert.ok(markers instanceof Cesium.BillboardCollection);
+    assert.equal(markers.length, 2);
+    const a = markers.get(0);
+    assert.equal(a.id.id, 'directions:marker:A');
+    assert.equal(a.disableDepthTestDistance, Infinity);
+    assert.equal(a.heightReference, Cesium.HeightReference.CLAMP_TO_GROUND);
+    // The route: the annotation's flowing dashes, draped on everything.
+    const route = hostOf(':route');
+    const ground = route.get(1);
+    assert.ok(ground instanceof Cesium.GroundPolylinePrimitive);
+    assert.equal(ground.classificationType, Cesium.ClassificationType.BOTH);
+    assert.equal(ground.geometryInstances[0].geometry.width, 9);
+    assert.equal(ground.geometryInstances[0].id.id, 'directions:route');
+    const flow = ground.appearance.material.uniforms;
+    assert.deepEqual(
+      [flow.repeat, flow.duty, flow.speed, flow.color.alpha],
+      [64, 0.46, 0.55, 0.95],
+    );
+    // One maneuver dot, at its junction on the ground floor, in the sprite
+    // order.
+    const steps = hostOf(':steps');
+    assert.ok(steps instanceof Cesium.PointPrimitiveCollection);
+    assert.equal(steps.blendOption, Cesium.BlendOption.TRANSLUCENT);
+    assert.deepEqual(sprites, [['directions', steps.drawSetId]]);
+    assert.equal(steps.length, 1);
+    const dot = steps.get(0);
+    assert.equal(dot.id.id, 'directions:step:1');
+    assert.equal(dot.show, true);
+    assert.equal(dot.pixelSize, 8);
+    assert.equal(dot.disableDepthTestDistance, Infinity);
+    const at = Cesium.Cartographic.fromCartesian(dot.position);
+    assert.ok(Math.abs(at.height - 152) < 1e-6, 'floor plus its lift');
+
+    // A click on the dot opens its card and enlarges it, in place.
+    scene.pickResult = { primitive: dot, id: dot.id };
+    clicks.click({ x: 10, y: 10 });
+    assert.equal(steps.get(0), dot, 'the same point');
+    assert.equal(dot.pixelSize, 13);
+    const card = overlays.findLast(([source]) => source === 'directions-step');
+    assert.equal(card[1][0].id, 'directions-step-1');
+    // Empty map closes it.
+    scene.pickResult = undefined;
+    clicks.click({ x: 10, y: 10 });
+    assert.equal(dot.pixelSize, 8);
+
+    layer.disable(viewer);
+    assert.equal(hostOf(':markers').length, 0, 'markers cleared');
+    layer.destroy(viewer);
+    clicks.destroy();
+    ownership.resetPointerOwnership();
+    assert.equal(scene.added.length, 0, 'every set let go');
+  }
+});
