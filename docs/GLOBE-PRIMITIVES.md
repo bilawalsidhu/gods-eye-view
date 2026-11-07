@@ -289,7 +289,7 @@ moving, under Cesium's 23 ms.
 
 ## Imagery: rasters on the ground
 
-`engine.imagery.createLayer({ id, source, alpha, show, split, order })`
+`engine.imagery.createLayer({ id, source, alpha, show, split, order, raise })`
 makes one raster layer draped over the terrain and the 3D tiles, under
 every ground fill, mover, line and model. Its colours are the image's own,
 blended by the texel's alpha times the layer's `alpha`.
@@ -307,15 +307,36 @@ Both take:
   crosses the antimeridian): where the layer draws, the globe when omitted;
 - `credit`: HTML shown while the layer is.
 
-Tiles are Web Mercator XYZ tiles and stop at ±85.05°. `opaque` tiles have
-no alpha channel, and `maxRequests` caps the layer's tile requests in
-flight. An image is stretched over its rectangle in longitude and latitude,
-row 0 on the north edge; one over the whole globe wraps across 180°.
+Tiles are Web Mercator XYZ tiles, which stop at ±85.05°, or with
+`scheme: 'geographic'` EPSG:4326 tiles (2×1 at level 0, y down from 90°N,
+Cesium's `GeographicTilingScheme`). `opaque` tiles have no alpha channel,
+and `maxRequests` caps the layer's tile requests in flight.
+`transform(image)` turns each decoded tile (row 0 on the north edge) into
+the canvas or image that draws: the weather's infrared mask. An image is
+stretched over its rectangle in longitude and latitude, row 0 on the north
+edge; one over the whole globe wraps across 180°.
+
+`raise: heightM` puts an image layer on a shell that high above the
+ellipsoid instead of draping it: it draws over terrain, 3D tiles and the
+sky's edge, hidden only by what is nearer. The shell rises with the camera
+(4 m per kilometre of camera height, at most 60 km, in 500 m steps) so the
+coarse 3D tiles seen from far never hide it. Raised layers take image
+sources only.
 
 Work with a layer like this:
 
 - `setSource(source)` draws another source in its place, at its place in
-  the order; the same canvas or bytes again draw their new pixels;
+  the order; the same canvas or bytes again draw their new pixels, and a
+  source that differs only in its `credit` keeps its pixels;
+- `setSource(source, { staged: true, signal })` keeps the drawn source
+  until the new one is complete (the image loaded; the tiles in view in),
+  then swaps them. It resolves true then, and false when the new source
+  failed, `signal` aborted it, or another `setSource` replaced it first. A
+  hidden layer takes it at once. `staging()` says one is on its way;
+- `setDetail({ image, rectangle } | null)` (raised layers): inside the
+  rectangle the layer draws the detail image in place of its own (a
+  sharper view of the area in view). The last detail draws until the new
+  one is uploaded; it resolves true once it draws. null clears it;
 - `setAlpha(alpha)` fades it: at 0 it draws nothing but stays on its
   surface, so it comes back without a gap (the FIRMS hand-off);
 - `show(visible)` shows or hides it (Cesium unmaps a hidden layer's tiles);
@@ -353,7 +374,26 @@ On the engine:
 - an image: one geographic tile over the rectangle (as
   `SingleTileImageryProvider`), handed to Cesium as the canvas or image
   itself, with no PNG round trip;
-- `split` is the layer's `splitDirection`; Cesium splits on the globe only.
+- geographic tiles: a `GeographicTilingScheme`; a transform wraps
+  `requestImage` (Cesium's tile bitmaps arrive flipped, so the transform
+  gets them upright on a canvas);
+- a credit is read through the provider's `credit` getter every frame, so a
+  new credit of the same source needs no new layer;
+- a staged source is a second `ImageryLayer` at alpha 0 right over the
+  drawn one, whose tiles Cesium loads while the drawn one shows. Its own
+  requests are counted (deferrals too); once they are in (the globe's tiles
+  all loaded, or its own requests quiet for 200 ms) for two frames in a
+  row, it takes the drawn one's alpha and the drawn one goes after the next
+  frame. Throttled tiles (429, 503) retry three times; any other failed
+  tile fails the source;
+- a raised layer is a primitive of its own (`imageryShell.js`): a
+  rectangle at the height with a material of the image and the detail in
+  its window, flat, alpha blended in the opaque pass without depth writes,
+  first in `scene.primitives` in the imagery order, lifted by a uniform
+  scale about the Earth's centre. A new image on the same rectangle swaps
+  once uploaded; another rectangle is a new shell at alpha 0 until drawn;
+- `split` is the layer's `splitDirection`; Cesium splits on the globe only
+  (not raised layers).
 
 **Navara** (`src/globe/navara/imagery/`) draws every shown layer in one
 screen pass right after tone mapping, under the other drapes and
@@ -365,10 +405,18 @@ screen pass right after tone mapping, under the other drapes and
   each in its rectangle and on its side of the split (the top 8 when more
   are shown);
 - an image is one mipmapped texture, sampled in longitude and latitude;
-- tiles are an atlas of at most 8×8 Web Mercator tiles over the part of the
-  rectangle in view, at the level the camera's height asks for; it is
-  rebuilt when the camera moves to another plan and filled as tiles arrive,
-  6 loads at a time (or `maxRequests`);
+- tiles are an atlas of at most 8×8 Web Mercator or geographic tiles over
+  the part of the rectangle in view, at the level the camera's height asks
+  for (a geographic level one below Web Mercator's); it is rebuilt when the
+  camera moves to another plan and filled as tiles arrive, each through the
+  transform, 6 loads at a time (or `maxRequests`);
+- a staged source builds its own texture or atlas (for the view now, again
+  when the camera moves) while the drawn one shows, and takes its place
+  once every tile of it has settled; a failed tile fails it;
+- a raised slot is sampled where the pixel's ray meets the ellipsoid grown
+  by its lifted height, where nothing of the scene is nearer; a detail is a
+  second slot right over its layer's, which draws nothing inside the
+  detail's rectangle;
 - texels are blended in display space, as Cesium's globe blends imagery;
   mip levels come from the derivatives of the ground position, taken
   before any branch, so rectangle edges and the antimeridian show no seams.
@@ -381,23 +429,33 @@ and nothing on 3D tiles. It stays until those overlays move, which needs a
 finer Navara tiles path first: a global overlay seen obliquely gets coarse
 near the camera from one 8×8 atlas over the whole view.
 
-### What is still to move
+### Who draws through imagery
 
-- **Weather radar, satellite clouds and lightning** (`src/layers/weather/`):
-  tile templates in geographic and Web Mercator tilings, decoded canvases
-  tiled into a provider, staged frames (a new frame loads under the shown
-  one at alpha 0 and replaces it once its tiles are in), a per-tile image
-  transform (the infrared mask), a detail window over the global image,
-  and the raised shells Cesium draws over 3D tiles at a height. They need a
-  geographic `tiles` scheme, a staged `setSource` (or `ready()` per tile
-  set) and a tile transform; the raised shell is a separate primitive.
-- **The wind field** (`src/layers/wind/`): one image over the globe at a
-  fixed alpha, faded by camera height — an `image` layer — and the same
-  raised shell on 3D tiles.
-- **The Bhote Koshi event imagery** (`src/layers/bhoteKoshi/`, Cesium in
-  `src/data/bhoteKoshiEvent.js`): two image URLs over one rectangle, split
-  left and right, alpha 0.96 — two `image` layers with `url` and `split`.
-  Navara still draws them with `src/layers/recentImagery/render/navaraGround.js`.
+- **FIRMS heat** (`src/layers/firms/render/display.js`): one image.
+- **Recent Imagery** (`src/layers/recentImagery/render/display.js`): two
+  Web Mercator tile layers under a split.
+- **Weather radar, satellite clouds and lightning**
+  (`src/layers/weather/render/display.js`): on the globe, the product's
+  geographic tiles (the regional infrared through its mask, a tile
+  transform), or the global infrared mosaic as one image; each new frame a
+  staged source; clouds, radar and lightning at orders 21, 22, 23. On 3D
+  tiles, a raised layer at the product's shell height
+  (`shellRendering.js` `WEATHER_SHELL_HEIGHTS`) with the detail window
+  around the view as its detail.
+- **The wind field** (`src/layers/wind/render/display.js`): one image over
+  the globe at order 20, faded with the camera's height while streamlines
+  draw, raised at 5 km on 3D tiles. The streamlines stay each engine's,
+  behind the display's `flow` backend: Cesium's wind renderer without its
+  field (`rendering.js`, from the layer), Navara's flow mesh
+  (`render/navaraFlow.js`, from the manifest).
+- **The Bhote Koshi event imagery** (`src/layers/bhoteKoshi/render/display.js`):
+  two `url` images over the event's rectangle at alpha 0.96, split left
+  and right at the engine's split position, order 15. The event's and the
+  locator's story entities still draw on Cesium itself and through
+  Navara's story backend (`src/layers/shared/render/navaraStory.js`).
+
+`engine.imagery` is still not used by the open map overlays (Sea Marks, Ski
+Pistes; see above).
 
 ### Choosing a primitive
 

@@ -1645,6 +1645,7 @@
   "src/layers/directions/edgeCases.test.mjs",
   "src/layers/streetLevel/edgeCases.test.mjs",
   "scripts/qa-imagery-compare.mjs",
+  "scripts/qa-weather-compare.mjs",
   "src/globe/cesium/imagery.js",
   "src/globe/cesium/imagery.test.mjs",
   "src/globe/imagery.js",
@@ -1654,6 +1655,10 @@
   "src/globe/navara/imagery/pass.js",
   "src/layers/recentImagery/render/display.js",
   "src/layers/recentImagery/render/display.test.mjs",
+  "src/layers/weather/render/display.test.mjs",
+  "src/layers/wind/render/display.test.mjs",
+  "src/layers/bhoteKoshi/render/display.test.mjs",
+  "src/layers/shared/render/navaraGroundOrder.test.mjs",
   "src/globe/navara/ground/corridors.js",
   "scripts/qa-ground-looks.mjs"
 ]

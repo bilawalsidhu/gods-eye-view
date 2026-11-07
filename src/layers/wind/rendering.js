@@ -57,7 +57,9 @@ export function sameWind(previous, next, previousField, nextField) {
 }
 
 /** Globe-projected surface flow plus one owned, static colour field: globe
- * imagery on the globe host, a raised shell on the 3D Tiles host. */
+ * imagery on the globe host, a raised shell on the 3D Tiles host. With
+ * `field: false` it draws the flow alone: the wind display draws the field
+ * through the globe contract (render/display.js). */
 export function createWindRendering({
   cesium,
   container,
@@ -70,6 +72,7 @@ export function createWindRendering({
   eventTarget = globalThis.window,
   createGpuRendering = createWindGpuRendering,
   onStatusChange,
+  field: drawsField = true,
 } = {}) {
   let canvas = null;
   let context = null;
@@ -343,7 +346,7 @@ export function createWindRendering({
     removeImagery();
     imageryError = null;
     const viewer = viewerReady();
-    if (!snapshot || overlay === 'none' || !viewer) return;
+    if (!drawsField || !snapshot || overlay === 'none' || !viewer) return;
     const { collection, kind } = getHost();
     if (kind === 'none') {
       imageryError = NO_IMAGERY_HOST;
@@ -409,7 +412,7 @@ export function createWindRendering({
   }
 
   function rehome() {
-    if (!snapshot || overlay === 'none') return;
+    if (!drawsField || !snapshot || overlay === 'none') return;
     const { collection, kind } = getHost();
     const wasHidden = imageryError === NO_IMAGERY_HOST;
     if ((imagery || shell) && kind !== 'none' && kind !== imageryKind) {

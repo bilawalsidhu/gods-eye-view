@@ -271,11 +271,26 @@ export function createFakeEngine(options = {}) {
     destroy() {},
   }));
   // Imagery layers keep their state for tests; every change is a render
-  // request. They drape on the globe, or on tiles while photoreal shows.
+  // request. They drape on the globe, or on tiles while photoreal shows. A
+  // staged source or a detail is drawn on the next microtask, unless a
+  // newer one or a destroy came first.
   const imageryRegistry = createImageryRegistry(
     () => ({
       source() {
         fake.renderRequests++;
+      },
+      credit() {
+        fake.renderRequests++;
+      },
+      stage(_source, finish) {
+        queueMicrotask(() => {
+          fake.renderRequests++;
+          finish(true);
+        });
+      },
+      detail(detail, finish) {
+        fake.renderRequests++;
+        if (detail) queueMicrotask(() => finish(true));
       },
       look() {
         fake.renderRequests++;
@@ -916,7 +931,7 @@ export function createFakeEngine(options = {}) {
     },
     /**
      * A live imagery layer's state, by id: { options, source, alpha, shown,
-     * split }; `layers()` all of them in draw order.
+     * split, raise, detail, staging }; `layers()` all of them in draw order.
      */
     imageryLayer(id) {
       const state = imageryRegistry.live.get(id);
@@ -927,6 +942,9 @@ export function createFakeEngine(options = {}) {
             alpha: state.alpha,
             shown: state.shown,
             split: state.split,
+            raise: state.options.raise,
+            detail: state.detail,
+            staging: state.layer.staging(),
           }
         : undefined;
     },

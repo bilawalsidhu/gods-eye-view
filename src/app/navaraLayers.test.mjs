@@ -33,7 +33,7 @@ test('Navara loads its renderers once and shows every layer', async () => {
   for (const id of ['wildlife-sightings', 'sea-marks', 'ski-pistes'])
     assert.equal(rendererFor(id, engine), null, id);
   assert.throws(() => loadLayerRenderers('vulkan'), TypeError);
-  // Cesium has nothing to load.
+  // Cesium loads the same displays: wind draws through one there too.
   await loadLayerRenderers('cesium');
-  assert.equal(rendererFor('wind', createFakeEngine()), null);
+  assert.equal(typeof rendererFor('wind', createFakeEngine()), 'object');
 });

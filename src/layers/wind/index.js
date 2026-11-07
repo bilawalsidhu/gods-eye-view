@@ -125,23 +125,31 @@ export function createWindLayer({
     attachRenderer(nextViewer, { engine: nextEngine = null } = {}) {
       viewer = nextViewer;
       engine = nextEngine;
+      const cesiumRendering = (options) =>
+        createRendering({
+          // Read on Cesium only: the production build's Cesium global
+          // loads with the first Cesium globe.
+          cesium: cesium ?? Cesium,
+          container: container ?? nextViewer.container,
+          getViewer: () => viewer,
+          getHost: () =>
+            imageryHost?.() ?? {
+              collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
+              kind: 'globe',
+            },
+          onStatusChange: notify,
+          ...options,
+        });
+      // The engine's display (render/display.js) when the layer has one,
+      // with Cesium's flow (no field) on Cesium; an engine's own flow
+      // backend takes its place. Else the Cesium renderer draws it all.
       rendering =
-        engine?.kind === 'navara'
-          ? createNativeRendering(engine)
-          : createRendering({
-              // Read on Cesium only: the production build's Cesium global
-              // loads with the first Cesium globe.
-              cesium: cesium ?? Cesium,
-              container: container ?? nextViewer.container,
-              getViewer: () => viewer,
-              getHost: () =>
-                imageryHost?.() ?? {
-                  collection:
-                    viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-                  kind: 'globe',
-                },
+        (engine
+          ? createNativeRendering?.(engine, {
+              flow: nextViewer ? () => cesiumRendering({ field: false }) : null,
               onStatusChange: notify,
-            });
+            })
+          : null) ?? cesiumRendering();
       rendering.attach();
       rendering.setOptions?.({ overlay, paused });
       const target =

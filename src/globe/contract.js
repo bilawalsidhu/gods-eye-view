@@ -533,12 +533,16 @@
  *   What an imagery layer draws, and where (src/globe/imagery.js checks and
  *   defaults these). Two kinds:
  *   - tiles: `{ kind: 'tiles', url, subdomains?, minLevel?, maxLevel?,
- *     tileSize?, rectangle?, credit?, opaque?, maxRequests? }`, XYZ tiles in
- *     Web Mercator; `url` holds {z}, {x} and {y}, and {s} for one of
- *     `subdomains` (['a', 'b', 'c']); levels 0..18 and 256 px tiles by
- *     default; `opaque` tiles have no alpha (Cesium uploads them as RGB);
- *     `maxRequests` caps the layer's tile requests in flight (Cesium:
- *     unbounded by default; Navara loads 6 at a time);
+ *     tileSize?, rectangle?, credit?, opaque?, maxRequests?, scheme?,
+ *     transform? }`, XYZ tiles; `url` holds {z}, {x} and {y}, and {s} for
+ *     one of `subdomains` (['a', 'b', 'c']); levels 0..18 and 256 px tiles
+ *     by default; `opaque` tiles have no alpha (Cesium uploads them as
+ *     RGB); `maxRequests` caps the layer's tile requests in flight (Cesium:
+ *     unbounded by default; Navara loads 6 at a time); `scheme` is
+ *     'webMercator' (the default) or 'geographic' (EPSG:4326, 2×1 tiles at
+ *     level 0, y down from 90°N); `transform(image)` turns each decoded tile
+ *     (row 0 on the north edge) into the canvas or image that draws (the
+ *     weather's infrared mask);
  *   - image: `{ kind: 'image', image | url, rectangle?, credit? }`, one
  *     image stretched over the rectangle in longitude and latitude
  *     (equirectangular, row 0 on the north edge): a canvas, an ImageBitmap
@@ -564,13 +568,35 @@
  * @property {number} [order] Draw order among imagery layers (higher draws
  *   later, on top); 0 by default, then creation order. Every imagery layer
  *   draws above the base imagery.
+ * @property {number} [raise] Metres above the ellipsoid: the layer draws on
+ *   a shell that high instead of draping, over terrain, 3D tiles and the
+ *   sky's edge, hidden only by what is nearer; the shell rises with the
+ *   camera (imagery.js raisedLift) so coarse far tiles never hide it. Image
+ *   sources only. Cesium draws it as a primitive (no split); raised layers
+ *   draw in the imagery order among themselves.
  *
  * @typedef {object} ImageryLayer
  * @property {string} id
- * @property {(source: ImagerySource) => void} setSource Draws `source` in
- *   place of the last one, at the layer's place in the order; the same
- *   canvas again draws its new pixels.
+ * @property {(source: ImagerySource, options?: { staged?: boolean, signal?: AbortSignal }) => (Promise<boolean>|undefined)} setSource
+ *   Draws `source` in place of the last one, at the layer's place in the
+ *   order; the same canvas again draws its new pixels, and a source that
+ *   differs only in its credit keeps its pixels. `staged`: the drawn
+ *   source stays until the new one is complete (an image loaded and
+ *   uploaded; the tiles in view loaded — Cesium: its requests in and quiet,
+ *   at alpha 0 under the drawn one; Navara: its own atlas), then replaces
+ *   it; resolves true then, false when it failed (an image or a tile that
+ *   would not load), was aborted by `signal`, or was replaced by another
+ *   setSource first. A hidden layer takes a staged source at once.
  * @property {() => object} source The checked source drawn.
+ * @property {() => boolean} staging Whether a staged source is on its way.
+ * @property {(detail: { image: object, rectangle: DegreeRectangle } | null) => Promise<boolean>} setDetail
+ *   A raised layer only: inside `rectangle` (not across 180°) it draws
+ *   `image` in place of its own source (a sharper view of one area); the
+ *   last detail draws until the new one is uploaded (Cesium: its own image
+ *   covers a moved window until then); resolves true once it draws, false
+ *   when replaced first. null clears it at once.
+ * @property {() => object | null} detail
+ * @property {() => number | null} raise
  * @property {(alpha: number) => void} setAlpha A fade: at 0 the layer draws
  *   nothing but stays on its surface (Cesium keeps its tiles mapped), so it
  *   comes back without a gap.

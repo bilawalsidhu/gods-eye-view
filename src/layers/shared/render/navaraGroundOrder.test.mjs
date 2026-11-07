@@ -1,36 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import { createImageryGround } from '../../recentImagery/render/navaraGround.js';
 
 // EffectDesc gives insertAfter priority, then tries insertBefore. Check the
 // actual renderer declarations under every activation order, including the
 // minimal look, whose pipeline has no toneMapping anchor.
-const declarations = [
-  'gevImagery',
-  'gevNepalEvent',
-  'gevObservedWeather',
-  'gevGround',
-  'gevPreSharpenOverlay',
-];
-// The descriptor a renderer registers; its setup stops there.
-const stop = new Error('registered');
-function registered(create) {
-  let spec;
-  const view = {
-    camera: {},
-    registerEffect(key, Desc) {
-      spec = { key, after: Desc.insertAfter, before: Desc.insertBefore };
-      throw stop;
-    },
-  };
-  try {
-    create({ view, EffectDesc: class {}, NavaraEffect: class {} });
-  } catch (error) {
-    if (error !== stop) throw error;
-  }
-  return spec;
-}
+const declarations = ['gevImagery', 'gevGround', 'gevPreSharpenOverlay'];
 async function declared(key, path, className) {
   let source = await fs.readFile(new URL(path, import.meta.url), 'utf8');
   if (className) source = source.split(`class ${className}`)[1];
@@ -52,8 +27,6 @@ const specs = [
     '../../../globe/navara/imagery/pass.js',
     'ImageryEffectDesc',
   ),
-  registered((sdk) => createImageryGround({}, sdk, {}, 'gevNepalEvent')),
-  await declared('gevObservedWeather', '../../weather/render/navaraSurface.js'),
   await declared(
     'gevGround',
     '../../../globe/navara/ground/pass.js',

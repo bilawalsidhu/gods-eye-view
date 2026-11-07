@@ -51,6 +51,8 @@ test('the layers drawn through one display, and the ones that draw without one',
   assert.deepEqual(
     kinds((entry) => entry.display),
     [
+      'bhote-koshi-2026',
+      'bhote-koshi-locator',
       'flights',
       'military',
       'local-adsb',
@@ -75,6 +77,10 @@ test('the layers drawn through one display, and the ones that draw without one',
       'ais-live-vessels',
       'military-installations',
       'military-awareness',
+      'wind',
+      'weather-radar',
+      'weather-satellite',
+      'weather-lightning',
       'weather-cyclones',
       'local-datacenters',
       'local-dams',
@@ -85,7 +91,13 @@ test('the layers drawn through one display, and the ones that draw without one',
   // Engine-specific options of a display: the Navara backends.
   assert.deepEqual(
     kinds((entry) => Object.keys(entry.backends ?? {}).length),
-    ['cctv', 'military-awareness'],
+    [
+      'bhote-koshi-2026',
+      'bhote-koshi-locator',
+      'cctv',
+      'military-awareness',
+      'wind',
+    ],
   );
   assert.deepEqual(Object.keys(LAYER_MANIFEST.cctv.backends), ['navara']);
   // The layer that draws itself through the contract.
@@ -106,14 +118,7 @@ test('the layers drawn through one display, and the ones that draw without one',
       ),
     ]),
   );
-  const navaraRenderer = { cesium: 'itself', navara: 'renderer' };
   assert.deepEqual(engines, {
-    'bhote-koshi-2026': navaraRenderer,
-    'bhote-koshi-locator': navaraRenderer,
-    wind: navaraRenderer,
-    'weather-radar': navaraRenderer,
-    'weather-satellite': navaraRenderer,
-    'weather-lightning': navaraRenderer,
     'sea-marks': { cesium: 'itself', navara: 'itself' },
     'ski-pistes': { cesium: 'itself', navara: 'itself' },
   });
@@ -138,6 +143,8 @@ test('a display or an engine-specific renderer answers only after its engine loa
 
 test('the layers drawn through one display get the same factory on every engine', async () => {
   const displays = {
+    'bhote-koshi-2026': ['bhoteKoshi', 'createBhoteKoshiDisplay'],
+    'bhote-koshi-locator': ['bhoteKoshi', 'createBhoteKoshiLocatorDisplay'],
     flights: ['flights', 'createFlightsDisplay'],
     military: ['military', 'createMilitaryDisplay'],
     'local-adsb': ['localAdsb', 'createLocalAdsbDisplay'],
@@ -166,6 +173,10 @@ test('the layers drawn through one display get the same factory on every engine'
     directions: ['directions', 'createDirectionsDisplay'],
     'local-firms': ['firms', 'createFirmsDisplay'],
     'recent-imagery': ['recentImagery', 'createRecentImageryDisplay'],
+    wind: ['wind', 'createWindDisplay'],
+    'weather-radar': ['weather', 'createWeatherDisplay'],
+    'weather-satellite': ['weather', 'createWeatherDisplay'],
+    'weather-lightning': ['weather', 'createWeatherDisplay'],
     'telegeography-submarine-cables': [
       'submarineCables',
       'createCablesDisplay',
@@ -199,14 +210,7 @@ test('the layers drawn through one display get the same factory on every engine'
 
 test('a layer that draws itself has no renderer; an unknown engine none either', () => {
   const engine = createFakeEngine();
-  for (const id of [
-    'wildlife-sightings',
-    'sea-marks',
-    'ski-pistes',
-    'wind',
-    'weather-radar',
-    'bhote-koshi-2026',
-  ])
+  for (const id of ['wildlife-sightings', 'sea-marks', 'ski-pistes'])
     assert.equal(rendererFor(id, engine), null, id);
   assert.equal(rendererFor('flights', null), null);
   assert.equal(rendererFor('flights', { kind: 'vulkan' }), null);

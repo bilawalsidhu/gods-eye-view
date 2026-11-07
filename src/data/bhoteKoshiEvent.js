@@ -1181,6 +1181,19 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function createImagery(event, current = () => true) {
+    if (_native) {
+      // The engine's display draws the images through engine.imagery.
+      await _native.loadImages(
+        event.imagery.rectangle,
+        [
+          eventAsset(event.imagery.before.path),
+          eventAsset(event.imagery.after.path),
+        ],
+        'Vantor WorldView Open Data · CC BY-NC 4.0',
+      );
+      if (_enabled && current()) setSplit(_split);
+      return;
+    }
     const rectangle = Cesium.Rectangle.fromDegrees(
       event.imagery.rectangle.west,
       event.imagery.rectangle.south,
@@ -1198,14 +1211,6 @@ export function createBhoteKoshiEventLayer({
       }),
     ]));
     if (!_enabled || !current()) return;
-    if (_native) {
-      await _native.loadImages(event.imagery.rectangle, [
-        beforeProvider,
-        afterProvider,
-      ]);
-      if (current()) setSplit(_split);
-      return;
-    }
     _imageryLayerCollection = _viewer.imageryLayers;
     _beforeLayer = _imageryLayerCollection.addImageryProvider(beforeProvider);
     _afterLayer = _imageryLayerCollection.addImageryProvider(afterProvider);
@@ -2628,8 +2633,9 @@ export function createBhoteKoshiEventLayer({
         disableDepthTestDistance: tileSafe ? Number.POSITIVE_INFINITY : 0,
       },
     });
-    if (_native) _nativeFlood = _native.draw(_floodDataSource);
-    else _viewer.dataSources.add(_floodDataSource);
+    // The engine's story backend, or Cesium's data sources.
+    _nativeFlood = _native?.draw(_floodDataSource) ?? null;
+    if (!_nativeFlood) _viewer.dataSources.add(_floodDataSource);
   }
 
   function syncFloodSurfaceMode() {
@@ -3539,7 +3545,8 @@ export function createBhoteKoshiEventLayer({
     const stack = _mapStackController;
     _viewer = viewer;
     _engine = engine;
-    if (!_viewer && _engine) _native = createNativeRenderer(engine);
+    // The engine's display (src/layers/bhoteKoshi/render/display.js).
+    if (_engine) _native = createNativeRenderer?.(engine) ?? null;
     _embeddedMedia?.attachScene?.(viewer, engine);
     if (!_enabled) return;
     // Its enable has loaded the SDK; a restored attachment waits for it too.
@@ -3565,8 +3572,8 @@ export function createBhoteKoshiEventLayer({
     await untilSceneReleased(createImagery(_event, current), signal);
     if (!current()) return;
     if (_floodDataSource) {
-      if (_native) _nativeFlood = _native.draw(_floodDataSource);
-      else await _viewer.dataSources.add(_floodDataSource);
+      _nativeFlood = _native?.draw(_floodDataSource) ?? null;
+      if (!_nativeFlood) await _viewer.dataSources.add(_floodDataSource);
       if (!current()) return;
     }
     registerDynamicCredit(engine, BHOTE_KOSHI_CREDIT);

@@ -120,7 +120,8 @@ export const ENGINE_COUPLING_METRICS = Object.freeze([
     measure: (files) =>
       files.reduce(
         (sum, { text }) =>
-          sum + countMatches(text, /\bdefineGroundEffect\(\s*\{/),
+          // Calls only: the helper's own declaration is not a pass.
+          sum + countMatches(text, /(?<!function )\bdefineGroundEffect\(\s*\{/),
         0,
       ),
   },

@@ -386,7 +386,8 @@ export function createApplicationCatalog({
             createWindLayer({
               feed: sources.wind,
               clock: weatherClock,
-              createNativeRendering: (engine) => rendererFor('wind', engine),
+              createNativeRendering: (engine, options) =>
+                rendererFor('wind', engine, options),
             }),
           ),
       ],

@@ -31,3 +31,9 @@ export { createTrafficDisplay } from '../../layers/traffic/render/display.js';
 export { createDirectionsDisplay } from '../../layers/directions/render/display.js';
 export { createFirmsDisplay } from '../../layers/firms/render/display.js';
 export { createRecentImageryDisplay } from '../../layers/recentImagery/render/display.js';
+export { createWeatherDisplay } from '../../layers/weather/render/display.js';
+export { createWindDisplay } from '../../layers/wind/render/display.js';
+export {
+  createBhoteKoshiDisplay,
+  createBhoteKoshiLocatorDisplay,
+} from '../../layers/bhoteKoshi/render/display.js';

@@ -1,7 +1,7 @@
 import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { createWeatherRendering } from './rendering.js';
-import { imageryHostStatus } from './imageryHost.js';
+import { engineImageryHost, imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
   RADAR_MAX_GAP_MS,
@@ -107,12 +107,12 @@ export function createWeatherLayer({
           : REGIONAL_INFRARED_MAX_GAP_MS;
   const isLatest = () =>
     clock ? clock.getState().mode === 'latest' : followLatest;
+  // A display draws through engine.imagery, which follows the surface the
+  // map shows; the Cesium renderer of old resolves Cesium's imagery stack.
+  let drawsOnEngine = false;
   const getHost = () =>
-    sceneEngine?.kind === 'navara'
-      ? {
-          kind: sceneEngine.maps.photorealActive() ? 'tileset' : 'globe',
-          collection: sceneEngine,
-        }
+    drawsOnEngine
+      ? engineImageryHost(sceneEngine)
       : (imageryHost?.() ?? {
           collection: viewer?.imageryLayers,
           kind: 'globe',
@@ -313,12 +313,15 @@ export function createWeatherLayer({
       viewer = nextViewer;
       sceneEngine = engine;
       const options = { viewer, getHost, onChange: notify };
-      // The SDK is read here, on Cesium only: the production build's Cesium
-      // global loads with the first Cesium globe.
+      // The engine's display (render/display.js) when the layer has one;
+      // else the Cesium renderer, whose SDK is read here: the production
+      // build's Cesium global loads with the first Cesium globe.
+      const display = engine
+        ? (createNativeRendering?.(engine, options) ?? null)
+        : null;
+      drawsOnEngine = display !== null;
       rendering =
-        engine?.kind === 'navara'
-          ? createNativeRendering(engine, options)
-          : createRendering({ ...options, cesium: cesium ?? Cesium });
+        display ?? createRendering({ ...options, cesium: cesium ?? Cesium });
       checkHost(false);
       eventTarget?.addEventListener?.(
         'gev:map-stack-changed',
@@ -351,6 +354,7 @@ export function createWeatherLayer({
       );
       rendering?.clear();
       rendering = null;
+      drawsOnEngine = false;
       hostCollection = null;
       imageryHost = null;
       runNavigation = null;

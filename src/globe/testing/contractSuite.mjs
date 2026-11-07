@@ -3786,6 +3786,315 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
         );
       },
     ],
+    [
+      'imagery: tile schemes, transforms, staged sources and raised layers are checked and kept',
+      async () => {
+        const magenta = { kind: 'image', image: flat([255, 0, 255, 255]) };
+        const green = { kind: 'image', image: flat([0, 255, 0, 255]) };
+        const template = {
+          kind: 'tiles',
+          url: 'https://tiles.invalid/{z}/{x}/{y}.png',
+          maxLevel: 3,
+          rectangle: box,
+        };
+        throwsType(
+          () =>
+            imagery.createLayer({
+              id: 'contract-bad',
+              source: { ...template, scheme: 'polar' },
+            }),
+          'an unknown tile scheme',
+        );
+        throwsType(
+          () =>
+            imagery.createLayer({
+              id: 'contract-bad',
+              source: { ...template, transform: 'mask' },
+            }),
+          'a transform that is not a function',
+        );
+        throwsType(
+          () =>
+            imagery.createLayer({
+              id: 'contract-bad',
+              source: magenta,
+              raise: -1,
+            }),
+          'a raise below the ellipsoid',
+        );
+        throwsType(
+          () =>
+            imagery.createLayer({
+              id: 'contract-bad',
+              source: template,
+              raise: 6000,
+            }),
+          'a raised tiles layer',
+        );
+        ensure(!listed('contract-bad'), 'a refused layer is listed');
+        const geographic = imagery.createLayer({
+          id: 'contract-imagery-geographic',
+          source: { ...template, scheme: 'geographic', transform: (i) => i },
+        });
+        const staged = imagery.createLayer({
+          id: 'contract-imagery-staged',
+          source: { ...magenta, rectangle: box },
+        });
+        const raisedLayer = imagery.createLayer({
+          id: 'contract-imagery-raised',
+          source: { ...magenta, rectangle: box },
+          raise: 6000,
+        });
+        // A promise's outcome, read frame by frame.
+        const outcome = (promise) => {
+          const result = { value: undefined };
+          promise.then((value) => (result.value = value));
+          return result;
+        };
+        try {
+          ensure(
+            geographic.source().scheme === 'geographic' &&
+              typeof geographic.source().transform === 'function',
+            'the tile scheme or transform is not kept',
+          );
+          ensure(
+            listed('contract-imagery-raised') &&
+              raisedLayer.raise() === 6000 &&
+              staged.raise() === null,
+            `raise(): ${raisedLayer.raise()}, ${staged.raise()}`,
+          );
+          throwsType(
+            () => staged.setDetail({ image: flat([0, 0, 0, 255]) }),
+            'a detail on a draped layer',
+          );
+          throwsType(
+            () => raisedLayer.setSource(template),
+            'tiles on a raised layer',
+          );
+          throwsType(
+            () =>
+              raisedLayer.setDetail({
+                image: flat([0, 0, 0, 255]),
+                rectangle: { west: 170, south: 0, east: -170, north: 1 },
+              }),
+            'a detail across the antimeridian',
+          );
+          // Staged: the drawn source stays until the new one is drawn.
+          await until(() => staged.ready(), 'the staged layer ready');
+          const first = outcome(
+            staged.setSource({ ...green, rectangle: box }, { staged: true }),
+          );
+          ensure(
+            staged.source().image === magenta.image ||
+              first.value === true ||
+              staged.source().image === green.image,
+            'a staged source replaced nothing',
+          );
+          await until(() => first.value !== undefined, 'the staged source');
+          ensure(first.value === true, 'the staged source failed');
+          ensure(
+            staged.source().image === green.image && !staged.staging(),
+            'the staged source is not the layer source',
+          );
+          // A newer source wins; an aborted one leaves the drawn source.
+          const superseded = outcome(
+            staged.setSource({ ...magenta, rectangle: box }, { staged: true }),
+          );
+          const winner = outcome(
+            staged.setSource(
+              { kind: 'image', image: flat([0, 0, 255, 255]), rectangle: box },
+              { staged: true },
+            ),
+          );
+          await until(
+            () => superseded.value !== undefined && winner.value !== undefined,
+            'the superseded and the newer staged sources',
+          );
+          ensure(
+            superseded.value === false && winner.value === true,
+            `superseded ${superseded.value}, newer ${winner.value}`,
+          );
+          const drawnImage = staged.source().image;
+          const controller = new AbortController();
+          const aborted = outcome(
+            staged.setSource(
+              { ...magenta, rectangle: box },
+              { staged: true, signal: controller.signal },
+            ),
+          );
+          controller.abort();
+          await until(() => aborted.value !== undefined, 'the aborted source');
+          ensure(
+            aborted.value === false && staged.source().image === drawnImage,
+            'an aborted staged source replaced the drawn one',
+          );
+          // A new credit alone keeps the source's pixels.
+          geographic.setSource({
+            ...template,
+            scheme: 'geographic',
+            transform: geographic.source().transform,
+            credit: 'Contract credit',
+          });
+          ensure(
+            geographic.source().credit === 'Contract credit',
+            'the credit did not change',
+          );
+          // A hidden layer takes a staged source at once.
+          staged.show(false);
+          const hidden = outcome(
+            staged.setSource({ ...green, rectangle: box }, { staged: true }),
+          );
+          await until(() => hidden.value !== undefined, 'the hidden staged');
+          ensure(hidden.value === true, 'a hidden layer refused a stage');
+          // A raised layer's detail.
+          const west = { ...box, east: 19.5 };
+          await until(() => raisedLayer.ready(), 'the raised layer drawn');
+          const detail = outcome(
+            raisedLayer.setDetail({
+              image: flat([0, 255, 0, 255]),
+              rectangle: west,
+            }),
+          );
+          await until(() => detail.value !== undefined, 'the detail drawn');
+          ensure(
+            detail.value === true &&
+              raisedLayer.detail()?.rectangle.east === 19.5,
+            'the detail is not kept',
+          );
+          await raisedLayer.setDetail(null);
+          ensure(raisedLayer.detail() === null, 'the detail is not cleared');
+        } finally {
+          geographic.destroy();
+          staged.destroy();
+          raisedLayer.destroy();
+        }
+        ensure(!listed('contract-imagery-raised'), 'a raised layer is listed');
+      },
+    ],
+    [
+      'imagery: geographic tiles through a transform, staged and raised layers draw (pixels)',
+      async () => {
+        if (!readRegion) return;
+        await nadirView(1e6);
+        const MAGENTA = [255, 0, 255];
+        const GREEN = [0, 255, 0];
+        const screenOf = (lon, lat) =>
+          engine.projector.worldToWindow(cartesian3.fromDegrees(lon, lat));
+        const meanAt = (lon, lat, half = 5) => {
+          const { x, y } = screenOf(lon, lat);
+          const data = readRegion(
+            Math.round(x) - half,
+            Math.round(y) - half,
+            2 * half,
+            2 * half,
+          );
+          const mean = [0, 0, 0];
+          for (let i = 0; i < data.length; i += 4)
+            for (let k = 0; k < 3; k++) mean[k] += data[i + k];
+          return mean.map((sum) => sum / (data.length / 4));
+        };
+        const near = (actual, expected, tolerance = 40) =>
+          actual.every(
+            (value, k) => Math.abs(value - expected[k]) <= tolerance,
+          );
+        const show = (colour) =>
+          colour.map((value) => value.toFixed(0)).join(',');
+        await until(() => engine.surface.tilesLoaded(), 'the map tiles loaded');
+        await settle(4);
+        // Every tile, whatever the app serves, painted magenta by the
+        // transform: geographic tiles over the box only.
+        const painted = (image) => {
+          const size = image.width;
+          const data = new Uint8Array(size * size * 4);
+          for (let i = 0; i < data.length; i += 4)
+            data.set([255, 0, 255, 255], i);
+          if (typeof document === 'undefined') return image;
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = size;
+          const context = canvas.getContext('2d');
+          const pixels = context.createImageData(size, size);
+          pixels.data.set(data);
+          context.putImageData(pixels, 0, 0);
+          return canvas;
+        };
+        const layers = [];
+        try {
+          const tiles = imagery.createLayer({
+            id: 'contract-paint-geographic',
+            source: {
+              kind: 'tiles',
+              url: '/icons/icon-32.png?z={z}&x={x}&y={y}',
+              tileSize: 32,
+              maxLevel: 4,
+              scheme: 'geographic',
+              transform: painted,
+              rectangle: box,
+            },
+          });
+          layers.push(tiles);
+          await until(
+            () => near(meanAt(19.5, 10), MAGENTA),
+            `the transformed tiles drawn (${show(meanAt(19.5, 10))})`,
+          );
+          ensure(
+            !near(meanAt(21, 10), MAGENTA),
+            'the tiles spill outside their rectangle',
+          );
+          // Staged: green replaces the magenta tiles once it is drawn.
+          const staged = tiles.setSource(
+            { kind: 'image', image: flat([...GREEN, 255]), rectangle: box },
+            { staged: true },
+          );
+          let swapped;
+          staged.then((value) => (swapped = value));
+          await until(() => swapped !== undefined, 'the staged image');
+          ensure(swapped === true, 'the staged image failed');
+          await until(
+            () => near(meanAt(19.5, 10), GREEN),
+            `the staged image drawn (${show(meanAt(19.5, 10))})`,
+          );
+          tiles.destroy();
+          // Raised 6 km: drawn over the box (a little parallax at 1000 km),
+          // a detail in place of its west half.
+          const raisedLayer = imagery.createLayer({
+            id: 'contract-paint-raised',
+            source: {
+              kind: 'image',
+              image: flat([...MAGENTA, 255]),
+              rectangle: box,
+            },
+            raise: 6000,
+          });
+          layers.push(raisedLayer);
+          await until(
+            () => near(meanAt(19.6, 10), MAGENTA),
+            `the raised layer drawn (${show(meanAt(19.6, 10))})`,
+          );
+          raisedLayer.setDetail({
+            image: flat([...GREEN, 255]),
+            rectangle: { ...box, east: 19.5 },
+          });
+          await until(
+            () =>
+              near(meanAt(19.25, 10), GREEN) &&
+              near(meanAt(19.75, 10), MAGENTA),
+            `the detail drawn (west ${show(meanAt(19.25, 10))}, east ${show(meanAt(19.75, 10))})`,
+          );
+          raisedLayer.setDetail(null);
+          await until(
+            () => near(meanAt(19.25, 10), MAGENTA),
+            'the detail cleared',
+          );
+        } finally {
+          for (const layer of layers) layer.destroy();
+        }
+        await until(
+          () =>
+            !near(meanAt(19.5, 10), MAGENTA) && !near(meanAt(19.5, 10), GREEN),
+          'every layer gone',
+        );
+      },
+    ],
   ];
 }
 

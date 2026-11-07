@@ -343,3 +343,188 @@ test('an image URL draws once it has loaded; a newer source wins', async () => {
   assert.equal(image.name, 'after');
   assert.equal(layer.ready(), true);
 });
+
+test('geographic tiles take Cesium’s 2×1 tiling; a transform draws each tile', async () => {
+  const f = fixture();
+  const drawn = [];
+  f.imagery.createLayer({
+    id: 'radar',
+    source: tiles({
+      scheme: 'geographic',
+      transform: (image) => {
+        drawn.push(image);
+        return { masked: image };
+      },
+    }),
+  });
+  const provider = f.globe.get(0).imageryProvider;
+  assert.ok(
+    provider.options.tilingScheme instanceof Cesium.GeographicTilingScheme,
+  );
+  assert.equal(provider.options.tilingScheme.getNumberOfXTilesAtLevel(0), 2);
+  const request = provider.requestImage(1, 0, 0);
+  f.providers[0].pending[0]({ name: 'tile' });
+  assert.deepEqual(await request, { masked: { name: 'tile' } });
+  assert.deepEqual(drawn, [{ name: 'tile' }]);
+});
+
+// A fixture whose scene draws frames: postRender, a globe whose tiles load.
+function stagingFixture() {
+  const f = fixture();
+  f.viewer.scene.postRender = new Cesium.Event();
+  f.viewer.scene.globe.tilesLoaded = true;
+  f.render = () => f.viewer.scene.postRender.raiseEvent();
+  return f;
+}
+
+test('a staged source loads at alpha 0 over the drawn one and takes its place once its tiles are in', async () => {
+  const f = stagingFixture();
+  const layer = f.imagery.createLayer({ id: 'a', source: tiles(), alpha: 0.7 });
+  const drawn = f.globe.get(0);
+  const staged = layer.setSource(
+    tiles({ url: 'https://next.example/{z}/{x}/{y}.png' }),
+    { staged: true },
+  );
+  let swapped;
+  staged.then((value) => (swapped = value));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.globe.length, 2);
+  const incoming = f.globe.get(1);
+  assert.equal(incoming.alpha, 0, 'the staged layer loads unseen');
+  assert.equal(drawn.alpha, 0.7, 'the drawn layer stays');
+  const request = incoming.imageryProvider.requestImage(0, 0, 1);
+  f.render();
+  f.render();
+  assert.equal(swapped, undefined, 'a request in flight holds it back');
+  f.providers[1].pending[0]('tile');
+  await request;
+  f.render();
+  f.render();
+  await Promise.resolve();
+  assert.equal(swapped, true);
+  assert.equal(incoming.alpha, 0.7);
+  assert.match(layer.source().url, /next/);
+  assert.equal(f.globe.length, 2, 'the drawn one goes after the next frame');
+  f.render();
+  assert.deepEqual(layersOf(f.globe), [incoming]);
+  assert.equal(drawn.isDestroyed(), true);
+});
+
+test('a staged source whose tile fails leaves the drawn one', async () => {
+  const f = stagingFixture();
+  const layer = f.imagery.createLayer({ id: 'a', source: tiles() });
+  const staged = layer.setSource(
+    tiles({ url: 'https://next.example/{z}/{x}/{y}.png' }),
+    { staged: true },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  const incoming = f.globe.get(1);
+  // Throttled tiles retry; a missing one fails the source.
+  const throttled = { x: 0, y: 0, level: 1, error: { statusCode: 429 } };
+  incoming.imageryProvider.errorEvent.raiseEvent(throttled);
+  assert.equal(throttled.retry, true);
+  incoming.imageryProvider.errorEvent.raiseEvent({
+    x: 1,
+    y: 0,
+    level: 1,
+    error: { statusCode: 404 },
+  });
+  f.render();
+  assert.equal(await staged, false);
+  assert.equal(f.globe.length, 1);
+  assert.match(layer.source().url, /gibs/);
+});
+
+test('a raised layer is a shell over its rectangle; a staged image swaps once it has drawn', async () => {
+  const shells = [];
+  const preRender = new Cesium.Event();
+  const viewer = {
+    imageryLayers: new Cesium.ImageryLayerCollection(),
+    scene: { globe: { show: true }, preRender },
+  };
+  const { imagery } = createCesiumImagery(viewer, {
+    requestRender() {},
+    createCanvas: (width, height) => ({
+      width,
+      height,
+      getContext: () => ({
+        createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData() {},
+      }),
+    }),
+    factories: {
+      shell(options) {
+        const shell = {
+          options,
+          rectangle: options.rectangle,
+          image: null,
+          alpha: 1,
+          shown: true,
+          painted: false,
+          destroyed: false,
+          setImage(image) {
+            shell.image = image;
+            shell.painted = false;
+          },
+          setAlpha: (alpha) => (shell.alpha = alpha),
+          setShow: (show) => (shell.shown = show),
+          setDetail() {},
+          detail: () => null,
+          drawn: () => shell.painted,
+          paint() {
+            shell.painted = true;
+            options.onSettled();
+          },
+          destroy: () => (shell.destroyed = true),
+        };
+        shells.push(shell);
+        return shell;
+      },
+    },
+  });
+  const image = pixels(8, 4);
+  const layer = imagery.createLayer({
+    id: 'shell',
+    source: { kind: 'image', image, rectangle: BOX },
+    raise: 6000,
+    alpha: 0.7,
+  });
+  assert.equal(viewer.imageryLayers.length, 0, 'no draped layer');
+  assert.equal(shells.length, 1);
+  assert.deepEqual(shells[0].options.rectangle, BOX);
+  assert.equal(shells[0].options.height, 6000);
+  assert.equal(shells[0].alpha, 0.7);
+  assert.equal(layer.ready(), false);
+  shells[0].paint();
+  assert.equal(layer.ready(), true);
+  // The same rectangle: the shell's image, swapped once it has drawn.
+  const next = pixels(8, 4);
+  const staged = layer.setSource(
+    { kind: 'image', image: next, rectangle: BOX },
+    { staged: true },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(shells.length, 1);
+  let done;
+  staged.then((value) => (done = value));
+  await Promise.resolve();
+  assert.equal(done, undefined);
+  shells[0].paint();
+  assert.equal(await staged, true);
+  // Another rectangle: a new shell unseen until it has drawn.
+  const wider = { ...BOX, west: -98 };
+  const moved = layer.setSource(
+    { kind: 'image', image: next, rectangle: wider },
+    { staged: true },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(shells.length, 2);
+  assert.equal(shells[1].alpha, 0);
+  assert.equal(shells[0].destroyed, false);
+  shells[1].paint();
+  assert.equal(await moved, true);
+  assert.equal(shells[0].destroyed, true);
+  assert.equal(shells[1].alpha, 0.7);
+  layer.destroy();
+  assert.equal(shells[1].destroyed, true);
+});

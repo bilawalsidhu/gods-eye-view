@@ -198,3 +198,109 @@ test('a hidden tiles layer drops its atlas; shown again it builds one at the vie
   assert.ok(f.diagnostics().a.atlas);
   assert.equal(f.last().slots.length, 1);
 });
+
+test('geographic tiles draw in degrees through the source’s transform', async () => {
+  const f = fixture();
+  const masked = [];
+  f.imagery.createLayer({
+    id: 'radar',
+    source: tiles({
+      url: 'https://weather.example/tile?z={z}&x={x}&y={y}',
+      scheme: 'geographic',
+      maxLevel: 6,
+      transform: (image) => {
+        masked.push(image);
+        return { masked: image };
+      },
+    }),
+  });
+  await tick();
+  const { atlas } = f.diagnostics().radar;
+  assert.equal(atlas.level, 6, 'the source’s top level');
+  const [slot] = f.last().slots;
+  assert.equal(slot.look[2], 0, 'sampled in degrees');
+  const [west, south, east, north] = slot.bounds;
+  assert.ok(west <= BOX.west && east >= BOX.east);
+  assert.ok(south <= BOX.south && north >= BOX.north);
+  assert.match(f.jobs[0].url, /z=6&x=\d+&y=\d+$/);
+  const tile = { close() {} };
+  f.jobs[0].resolve(tile);
+  await tick();
+  assert.deepEqual(masked, [tile]);
+  assert.deepEqual(f.draws, [{ masked: tile }]);
+});
+
+test('a staged tiles source builds its own atlas under the drawn one and takes its place when complete', async () => {
+  const f = fixture();
+  const layer = f.imagery.createLayer({ id: 'a', source: tiles() });
+  await tick();
+  const drawn = f.last().slots[0].texture;
+  const firstJobs = f.jobs.length;
+  const staged = layer.setSource(
+    tiles({ url: 'https://next.example/{z}/{x}/{y}.png', credit: 'Next' }),
+    { staged: true },
+  );
+  await tick();
+  assert.equal(f.last().slots[0].texture, drawn, 'the drawn atlas stays');
+  assert.ok(f.diagnostics().a.staging, 'the staged atlas loads');
+  const next = f.jobs.slice(firstJobs);
+  assert.ok(next.length > 0 && next.every((job) => /next/.test(job.url)));
+  let done;
+  staged.then((value) => (done = value));
+  // Every tile of the staged atlas in: it takes the drawn one's place.
+  for (let round = 0; round < 20 && done === undefined; round++) {
+    for (const job of f.jobs.slice(firstJobs)) job.resolve({ close() {} });
+    await tick();
+  }
+  assert.equal(done, true);
+  assert.notEqual(f.last().slots[0].texture, drawn);
+  assert.equal(f.credits.get('Next'), 1);
+  assert.equal(f.credits.get('NASA GIBS'), 0);
+  // A failed tile leaves the drawn atlas.
+  const before = f.last().slots[0].texture;
+  const from = f.jobs.length;
+  const failed = layer.setSource(
+    tiles({ url: 'https://broken.example/{z}/{x}/{y}.png' }),
+    { staged: true },
+  );
+  await tick();
+  f.jobs[from].resolve(Promise.reject(new Error('404')));
+  let result;
+  failed.then((value) => (result = value));
+  for (let round = 0; round < 20 && result === undefined; round++) {
+    for (const job of f.jobs.slice(from + 1)) job.resolve({ close() {} });
+    await tick();
+  }
+  assert.equal(result, false);
+  assert.equal(f.last().slots[0].texture, before);
+});
+
+test('a raised image is lifted with the camera; its detail is a slot over it', async () => {
+  const f = fixture();
+  const image = { width: 2, height: 2, data: new Uint8Array(16) };
+  const layer = f.imagery.createLayer({
+    id: 'shell',
+    source: { kind: 'image', image, rectangle: BOX },
+    raise: 6000,
+  });
+  const [slot] = f.last().slots;
+  // 12 km up: a 0 m lift (48 m rounds to 0).
+  assert.equal(slot.raise, 6000);
+  const detailRectangle = { ...BOX, east: -97.74 };
+  assert.equal(
+    await layer.setDetail({ image, rectangle: detailRectangle }),
+    true,
+  );
+  const [main, detail] = f.last().slots;
+  assert.equal(main.look[3], 1, 'the next slot is its detail');
+  assert.deepEqual(detail.rect, [
+    detailRectangle.west,
+    detailRectangle.south,
+    detailRectangle.east,
+    detailRectangle.north,
+  ]);
+  assert.equal(detail.raise, 6000);
+  await layer.setDetail(null);
+  assert.equal(f.last().slots.length, 1);
+  assert.equal(f.last().slots[0].look[3], 0);
+});

@@ -1,16 +1,16 @@
 {
   "metrics": {
     "cesiumLayerRendererLines": 330,
-    "navaraLayerRendererLines": 2304,
+    "navaraLayerRendererLines": 1695,
     "cesiumImportFiles": 27,
     "viewerLines": 1232,
-    "navaraKindChecks": 5,
+    "navaraKindChecks": 2,
     "engineSniffCalls": 0,
     "engineExtensionReads": 8,
-    "groundEffectPasses": 3,
+    "groundEffectPasses": 1,
     "cesiumSdkLoads": 4,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 66
+    "engineNameLines": 63
   },
-  "measuredAt": "after animated and binned ground corridors, 2026-11-07"
+  "measuredAt": "after weather, wind and Bhote Koshi on engine.imagery, 2026-11-07"
 }
