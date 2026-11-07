@@ -42,7 +42,11 @@ const APP_FILES = [
 // scripts/ is imported by the server (key setup, Google server key), so it ships.
 const APP_DIRS = ['src', 'server', 'build', 'config', 'public', 'scripts'];
 // Runtime dependencies the dev server needs that package.json lists as dev.
-const EXTRA_RUNTIME_DEPENDENCIES = ['vite', 'vite-plugin-cesium'];
+const EXTRA_RUNTIME_DEPENDENCIES = [
+  'vite',
+  'vite-plugin-cesium',
+  '@vitejs/plugin-vue',
+];
 
 const log = (message) => console.log(`[stage] ${message}`);
 
