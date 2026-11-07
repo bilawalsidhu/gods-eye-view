@@ -1064,11 +1064,35 @@ export function createMotion({
   /** The display instant `epochMs` as a JulianDate, for `_motionRegime`. */
   const _displayTimeAt = (epochMs, result) => julianAt(epochMs, result);
 
+  /** A feed fix's ECEF position, from its degrees and render altitude. */
+  const _fixPosition = (lonDeg, latDeg, heightM) =>
+    Cesium.Cartesian3.fromDegrees(lonDeg, latDeg, heightM);
+
+  /** A copy of a fix position, for a trail that keeps it. */
+  const _copyPosition = (position) => Cesium.Cartesian3.clone(position);
+
+  /**
+   * A position-history entry for a feed fix at `epochMs`, carrying the fix's
+   * own velocity and track; it keeps a copy of `position`.
+   */
+  function _historyFix(epochMs, position, velocity, track) {
+    return {
+      time: julianAt(epochMs),
+      epochMs,
+      position: Cesium.Cartesian3.clone(position),
+      velocity,
+      track,
+    };
+  }
+
   return {
     _refloorStaleGroundedContacts,
     _deadReckon,
     _displayTimeAt,
     _fixEpochMs: fixEpochMs,
+    _fixPosition,
+    _copyPosition,
+    _historyFix,
     _motionRegime,
     _extrapolateFix,
     _isTrackWarmingUp,

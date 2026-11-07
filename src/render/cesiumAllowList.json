@@ -43,7 +43,6 @@
   "src/layers/flights/policy.js",
   "src/layers/flights/queries.js",
   "src/layers/flights/rendering.js",
-  "src/layers/flights/snapshotRenderer.js",
   "src/layers/flights/state.js",
   "src/layers/flights/testing.js",
   "src/layers/flights/tracking.js",

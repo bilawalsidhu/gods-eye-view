@@ -36,7 +36,6 @@ export function createCivilFlightLayer({
     records: flightState.records,
     militaryRegistry: services.militaryRegistry,
     groundFloor: services.groundFloor,
-    meshFloor: services.meshFloor,
     rendering: parts.rendering,
     tracking: parts.tracking,
     motion: parts.motion,

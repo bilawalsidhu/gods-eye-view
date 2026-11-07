@@ -98,7 +98,29 @@ export function createRendering({
       parts.icons._floorGroundedIcons(renderTime, t, nowMs, camera.positionWC),
   });
 
+  /**
+   * Sample the rendered mesh under the collected floor cells (see
+   * meshFloorSampler.js), leaving this layer's own icons and models out of
+   * the probe so it cannot land on an aircraft instead of the pavement.
+   */
+  function _sampleMeshFloor(points, viewerLat, viewerLon) {
+    services.meshFloor.sampleMeshFloorCells(
+      flightState._viewer?.scene,
+      points,
+      {
+        excludeObjects: [
+          ...parts.icons._iconIds(),
+          ...[...flightState._models.values()].map((record) => record.model),
+          flightState._trackedModel?.model,
+        ].filter(Boolean),
+        viewerLat,
+        viewerLon,
+      },
+    );
+  }
+
   return {
+    _sampleMeshFloor,
     _fleetBillboardColor,
     _fleetBillboardScale,
     _cockpitContactColor,
