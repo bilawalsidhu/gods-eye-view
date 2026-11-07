@@ -5,6 +5,7 @@ import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
+import { loadMndotSources } from './mndot.js';
 import { loadTaiwanSources } from './taiwan.js';
 import {
   loadAustinSourcesFromOpenData,
@@ -182,6 +183,14 @@ const LIVE_PACKS = [
     name: 'a22',
     enabled: () => envEnabled('CCTV_A22_ENABLED'),
     load: loadA22SourcesFromOpenDataHub,
+  },
+  {
+    // Opt-in until MnDOT confirms that third-party apps may relay its camera
+    // stills: the list and stills are public, but no reuse licence or terms
+    // are published for them (see DATA_SOURCES.md).
+    name: 'mndot',
+    enabled: () => envOptIn('CCTV_MNDOT_ENABLED'),
+    load: loadMndotSources,
   },
 ];
 /**
