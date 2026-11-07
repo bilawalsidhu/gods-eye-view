@@ -1,0 +1,53 @@
+# Actions are pinned by commit SHA (see ci.yml), and a pin never moves on its
+# own. Dependabot bumps the SHA and its "# vX.Y.Z" comment together, so the
+# pins stay current without anyone remembering to look. npm and the Docker
+# base image ride along in the same weekly PR, so there is one thing to review
+# instead of many.
+version: 2
+
+multi-ecosystem-groups:
+  dependencies:
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    multi-ecosystem-group: dependencies
+    patterns:
+      - '*'
+    # Wait a week before adopting a new release, in case it gets pulled or
+    # turns out to be compromised.
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: npm
+    directory: /
+    multi-ecosystem-group: dependencies
+    patterns:
+      - '*'
+    versioning-strategy: increase
+    cooldown:
+      default-days: 7
+    # Patches only. Majors and minors (vite, cesium, puppeteer) can change
+    # behaviour and need a real review, so they stay manual.
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          ['version-update:semver-major', 'version-update:semver-minor']
+
+  - package-ecosystem: docker
+    directory: /
+    multi-ecosystem-group: dependencies
+    patterns:
+      - '*'
+    cooldown:
+      default-days: 7
+    # Stay on the current Node major. A new major moves together with CI's
+    # Node matrix and the package.json engines range, by hand.
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
