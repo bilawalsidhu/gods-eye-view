@@ -625,6 +625,31 @@ stops animation and disables effects; engine destruction removes its stages
 and restores the borrowed bloom state. Sharpen intensity zero disables
 sharpening on both engines, following Cesium.
 
+## Wildlife privacy cells
+
+Wildlife privacy cells use one `cell` ground set for distinct bounds and taxon
+accents. The fill is 25% opaque and the 2 px outline is 80% opaque, matching
+Cesium's original ground geometry. Both drape on terrain and tiles and pass
+picks through to the badges. Wide views and detach release the set.
+
+## Batched line segments
+
+`engine.lines.createSegments({ id, widthPx, color, order })` groups independent
+straight segments in one batch. `replace(items)` copies pairs of Earth-fixed
+endpoints and optional per-item `widthPx`, `color` and `pickId`; `commit()`
+rebuilds the drawing once. Segments never connect to one another. `show()`
+and `destroy()` affect the whole batch; an empty replacement clears it.
+The batch shares `createLine`'s id namespace and `list()`, which includes its
+endpoint count and committed `pickIds` in item order.
+
+Cesium draws one synchronous primitive with per-instance colours and widths.
+Navara draws one ribbon mesh in the overlay after tone mapping, with scene
+depth and independent segment picks. Batches are solid and depth-tested;
+curved, dashed, transformed and depth-fail lines still use `createLine`.
+Infrastructure and cable references each use one batch for their visible
+stems, preserving Cesium's colours, widths, label winners and update cadence.
+Infrastructure excludes the whole stem batch while sampling its bases.
+
 ### Choosing a primitive
 
 - **A position and an on-screen size:** a mover.

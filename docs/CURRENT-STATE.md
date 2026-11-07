@@ -447,8 +447,10 @@ checks, is a fresh success that clears earlier rows; only a malformed or failed
 upstream reply serves stale and starts a retry cooldown. WHALES accepts only
 recognized cetaceans; other identified marine mammals appear under ALL or
 MAMMALS. Sensitive iNaturalist locations remain 0.2° privacy cells, drawn as
-outlines (`engine.lines`), with no fill yet; Acartia
-positions are rounded to 0.01° on the server. Acartia comments are never retained.
+taxon-accent fills at 25% opacity with 2 px outlines at 80% opacity through
+`engine.ground`, draped on terrain and tiles. Cells are not pickable and
+identical bounds and accents share one item. Acartia positions are rounded to
+0.01° on the server. Acartia comments are never retained.
 Observer identity is retained only for photo attribution.
 
 The layer draws on both engines through one display
