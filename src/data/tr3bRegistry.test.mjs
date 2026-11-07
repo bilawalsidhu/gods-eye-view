@@ -441,6 +441,7 @@ test('cockpit class filter matches a converted contact end to end', async () => 
   const runner = createGevActionRunner({
     viewer: {
       clock: { onTick: { addEventListener: () => () => {} } },
+      canvas: { addEventListener() {}, removeEventListener() {} },
       scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
       camera: { moveEnd: { addEventListener() {} } },
     },

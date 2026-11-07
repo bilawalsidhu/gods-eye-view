@@ -497,6 +497,7 @@ async function directActions(
   const runner = createGevActionRunner({
     viewer: {
       clock: { onTick: { addEventListener: () => () => {} } },
+      canvas: { addEventListener() {}, removeEventListener() {} },
       scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
       camera: { moveEnd: { addEventListener() {} } },
     },

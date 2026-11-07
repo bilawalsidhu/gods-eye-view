@@ -75,7 +75,8 @@ export function fakeCameraPort({ pose = {}, viewRectangle = null } = {}) {
  * `moveEnd`. A fake with `trackedEntityChanged` and `entities` follows
  * through the port, as the renderer does. Its credits are the renderer's
  * credits port over the fake's `creditDisplay`, if it has one; `ports`
- * adds other ports (a fake draw port, say). Binding a viewer twice keeps the
+ * adds other ports (a fake draw port, say). The renderer's `canvas` is the
+ * fake viewer's (`canvas`, else `scene.canvas`). Binding a viewer twice keeps the
  * first. Returns the viewer.
  * @template {{camera: object}} V
  * @param {V} viewer
@@ -189,6 +190,11 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
     },
   });
   bindRenderer(viewer, {
+    // The renderer's canvas is the fake's, as the Cesium renderer's is the
+    // viewer's: read when asked, so a fake that swaps its canvas is seen.
+    get canvas() {
+      return viewer.canvas ?? viewer.scene?.canvas;
+    },
     ...ports,
     camera: port,
     credits: fakeCesiumCredits(viewer),

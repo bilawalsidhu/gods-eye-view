@@ -1306,6 +1306,7 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
   });
   const viewer = {
     clock: { onTick: { addEventListener: () => () => {} } },
+    canvas: { addEventListener() {}, removeEventListener() {} },
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: { moveEnd: { addEventListener() {} } },
   };
@@ -1558,6 +1559,7 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
               });
               const viewer = {
                 clock: { onTick: { addEventListener: () => () => {} } },
+                canvas: { addEventListener() {}, removeEventListener() {} },
                 scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
                 camera: { moveEnd: { addEventListener() {} } },
               };

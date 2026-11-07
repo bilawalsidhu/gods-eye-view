@@ -52,7 +52,12 @@ import {
   vec,
 } from './geo/index.js';
 import { heightsOf } from './queries/heights.js';
-import { cameraOf, findCamera, findFrame } from './render/rendererOf.js';
+import {
+  cameraOf,
+  findCamera,
+  findFrame,
+  rendererOf,
+} from './render/rendererOf.js';
 
 let _isCockpitActive = null;
 /** °/s by speed word — orbit; pan uses fractions of view height/s. */
@@ -1224,6 +1229,9 @@ function liveView(camera, pose = camera.pose()) {
   return { ...pose, projection, live: true };
 }
 
+/** The canvas the renderer draws in (the viewer's own when none is bound). */
+const canvasOf = (viewer) => rendererOf(viewer)?.canvas ?? viewer.canvas;
+
 /**
  * Whether a projection is a perspective one centred on the view: what the
  * keyhole cone below assumes. Column-major, so element 11 is row 3 of
@@ -1235,7 +1243,7 @@ const centredPerspective = (p) =>
 
 /** Use the existing WGS84/CSS-pixel projection; null means unsupported, not close-up. */
 function globeRotationFitsKeyhole(view) {
-  const canvas = _viewer.scene.canvas;
+  const canvas = canvasOf(_viewer);
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   if (
@@ -1383,7 +1391,7 @@ export function initCameraVerbs(
   });
   for (const rm of _inputRemovers) rm();
   _inputRemovers = [];
-  const canvas = viewer.scene.canvas;
+  const canvas = canvasOf(viewer);
   // ANY manual camera input reclaims control — the cancelFlight reflex.
   for (const evt of ['pointerdown', 'touchstart', 'wheel']) {
     const h = () => interruptCameraMotion('manual-input');

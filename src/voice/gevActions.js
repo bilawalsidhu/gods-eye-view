@@ -21,7 +21,12 @@ import {
   toRadians,
 } from '../geo/index.js';
 import { sphereFromPoints } from '../geo/sphere.js';
-import { cameraOf, findCamera, findQuery } from '../render/rendererOf.js';
+import {
+  cameraOf,
+  findCamera,
+  findQuery,
+  rendererOf,
+} from '../render/rendererOf.js';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
 import {
@@ -3965,13 +3970,16 @@ function selectedEntityContext(dataManager) {
   return summarizeContextRecord(record, { includeProperties: true });
 }
 
+/** The canvas the renderer draws in (the viewer's own when none is bound). */
+const canvasOf = (viewer) => rendererOf(viewer)?.canvas ?? viewer.canvas;
+
 function visibleEntityContexts(
   viewer,
   dataManager,
   { layerId = null, limit = 5, target = null } = {},
 ) {
   const nearbyRecords = [];
-  const canvas = viewer.scene.canvas;
+  const canvas = canvasOf(viewer);
   const width = canvas.clientWidth || canvas.width || 0;
   const height = canvas.clientHeight || canvas.height || 0;
   const centerX = width / 2;
@@ -4322,7 +4330,7 @@ function cameraViewSignature(camera) {
 function getViewTargetCartesian(viewer) {
   const query = findQuery(viewer);
   if (!query) return null;
-  const canvas = viewer.scene.canvas;
+  const canvas = canvasOf(viewer);
   const width = canvas.clientWidth || canvas.width || 0;
   const height = canvas.clientHeight || canvas.height || 0;
   const x = width / 2;
@@ -4356,8 +4364,7 @@ function getViewTargetCartesian(viewer) {
 }
 
 function sampleViewportCartographics(viewer) {
-  const scene = viewer.scene;
-  const canvas = scene.canvas;
+  const canvas = canvasOf(viewer);
   const width = canvas.clientWidth || canvas.width || 0;
   const height = canvas.clientHeight || canvas.height || 0;
   if (!width || !height) return [];

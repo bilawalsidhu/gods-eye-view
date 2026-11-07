@@ -149,6 +149,7 @@ test('changed status without contact time retains general contact, including voi
   const runner = createGevActionRunner({
     viewer: {
       clock: { onTick: { addEventListener: () => () => {} } },
+      canvas: { addEventListener() {}, removeEventListener() {} },
       scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
       camera: {
         moveEnd: { addEventListener() {} },

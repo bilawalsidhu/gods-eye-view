@@ -54,6 +54,7 @@ export function harness({
   const enabled = new Set(on);
   const viewer = {
     clock: { onTick: { addEventListener: () => () => {} } },
+    canvas: { addEventListener() {}, removeEventListener() {} },
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: {
       moveEnd: { addEventListener() {} },

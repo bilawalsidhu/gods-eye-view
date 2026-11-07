@@ -254,6 +254,7 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
   const viewer = {
     camera: { moveEnd: { addEventListener() {} } },
     clock: { onTick: { addEventListener: () => () => {} } },
+    canvas: eventSource,
     scene: { canvas: eventSource },
   };
   const runVoiceAction = createGevActionRunner({

@@ -1111,6 +1111,7 @@ test('a route hidden from Draw is not flown; the newest visible one is', () => {
 test('a frame port bound after the verbs started runs the next motion', () => {
   // A viewer with no renderer yet, so no frame port to listen to.
   const viewer = {
+    canvas: { addEventListener() {}, removeEventListener() {} },
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
   };
   try {

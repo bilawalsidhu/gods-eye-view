@@ -18,6 +18,9 @@ function harness() {
   const viewer = {
     trackedEntity: undefined,
     clock: { onTick: { addEventListener: () => () => {} } },
+    get canvas() {
+      return this.scene.canvas;
+    },
     scene: {
       canvas: {
         clientWidth: 1200,
