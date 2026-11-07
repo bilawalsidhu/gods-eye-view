@@ -30,10 +30,11 @@ import {
   setCyberSonarControls,
 } from './cyberSonarControls.js';
 
-import * as Cesium from 'cesium';
-import { cameraOf } from '../render/cesium/camera.js';
+import { toDegrees, toRadians } from '../geo/index.js';
+import { cameraOf, findCamera } from '../render/cesium/camera.js';
 // Loads the effects factory, so visual settings on a viewer with no renderer
-// bound still get an effects port.
+// bound still get an effects port. Loading the camera and effects factories
+// is all that keeps this module on the Cesium allow-list.
 import '../render/cesium/effects.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
@@ -90,7 +91,7 @@ import { useRecordingStore } from './stores/recording.js';
 
 export class StyleManager extends ShellFacade {
   /**
-   * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
+   * @param {object} viewer - The scene object the renderer draws.
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
    *   picker, for a host that does not initialize Core's locale.
@@ -1437,15 +1438,16 @@ export class StyleManager extends ShellFacade {
    * @returns {{lat: number, lon: number, alt: number, heading: number, pitch: number, roll: number}|null}
    */
   getCameraState() {
-    const carto = this.viewer.camera.positionCartographic;
-    if (!carto) return null;
+    const pose = findCamera(this.viewer)?.pose();
+    if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon))
+      return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
-      alt: carto.height,
-      heading: Cesium.Math.toDegrees(this.viewer.camera.heading),
-      pitch: Cesium.Math.toDegrees(this.viewer.camera.pitch),
-      roll: Cesium.Math.toDegrees(this.viewer.camera.roll),
+      lat: pose.lat,
+      lon: pose.lon,
+      alt: pose.height,
+      heading: toDegrees(pose.heading),
+      pitch: toDegrees(pose.pitch),
+      roll: toDegrees(pose.roll),
     };
   }
 
@@ -1461,9 +1463,9 @@ export class StyleManager extends ShellFacade {
       { lon: cameraState.lon, lat: cameraState.lat, height: cameraState.alt },
       {
         orientation: {
-          heading: Cesium.Math.toRadians(cameraState.heading || 0),
-          pitch: Cesium.Math.toRadians(cameraState.pitch || -35),
-          roll: Cesium.Math.toRadians(cameraState.roll || 0),
+          heading: toRadians(cameraState.heading || 0),
+          pitch: toRadians(cameraState.pitch || -35),
+          roll: toRadians(cameraState.roll || 0),
         },
         durationS: Math.max(0.2, duration || 0),
         easing: 'cubicInOut',
