@@ -119,3 +119,84 @@ test('the scene chrome renders the overlay in the globe container', async (t) =>
   await nextTick();
   assert.equal(node(), null);
 });
+
+test('the replay overlay sits where the query port projects the vehicle, facing along its path', async () => {
+  const { bindRenderer } = await import('../../render/rendererOf.js');
+  const viewer = { scene: { canvas: { clientWidth: 800, clientHeight: 600 } } };
+  const projected = [];
+  let behindEye = false;
+  // The path runs along x; the port puts x metres at x pixels, y = 300.
+  const unbind = bindRenderer(viewer, {
+    query: {
+      project(position) {
+        projected.push(position);
+        return behindEye ? null : { x: position.x, y: 300 };
+      },
+    },
+  });
+  const path = [
+    { x: 0, y: 0, z: 0 },
+    { x: 400, y: 0, z: 0 },
+  ];
+  const state = {
+    _viewer: viewer,
+    _replayVehicleOverlay: null,
+    _replayVehicleOverlayListeners: new Set(),
+    _selectedLaunchId: 'l1',
+    _replayCameraLaunchId: 'l1',
+    _replayPaused: false,
+    _launches: [{ id: 'l1', name: 'Test', trajectory: [{}, {}] }],
+    _replayTracks: new Map([
+      [
+        'l1',
+        {
+          ascentPath: path,
+          getReplayState: () => ({
+            ascending: true,
+            countdownActive: false,
+            phaseProgress: 0.5,
+            elapsedSinceStart: 10,
+            eventTime: 0,
+          }),
+        },
+      ],
+    ]),
+  };
+  const parts = createOverlays({
+    state,
+    services: {},
+    parts: {
+      paths: {
+        samplePath: (points, t) => ({ x: points[1].x * t, y: 0, z: 0 }),
+      },
+      replay: {
+        replayVehicleScreenRotation: (from, to) =>
+          Math.atan2(to.x - from.x, -(to.y - from.y)),
+      },
+      policyHelpers: { formatMissionEventTime: () => 'T+00:10' },
+    },
+    source: {},
+  });
+  try {
+    parts.createReplayVehicleOverlay();
+    const occluder = { isPointVisible: () => true };
+    assert.equal(parts.updateReplayVehicleOverlay(occluder), 'ascent');
+    const view = state._replayVehicleOverlay;
+    assert.equal(view.visible, true);
+    assert.equal(
+      view.transform,
+      'translate3d(200px, 300px, 0) translate(-50%, -50%)',
+    );
+    assert.equal(view.rotation, '90deg', 'the path heads right on screen');
+    assert.equal(projected.length, 2, 'vehicle and tangent point');
+    behindEye = true;
+    assert.equal(parts.updateReplayVehicleOverlay(occluder), null);
+    assert.equal(
+      state._replayVehicleOverlay.visible,
+      false,
+      'a vehicle behind the eye hides the overlay',
+    );
+  } finally {
+    unbind();
+  }
+});

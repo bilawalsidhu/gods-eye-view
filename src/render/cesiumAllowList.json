@@ -60,7 +60,6 @@
   "src/layers/installations/rendering.js",
   "src/layers/launches/launchPad.js",
   "src/layers/launches/orbitRendering.js",
-  "src/layers/launches/overlays.js",
   "src/layers/launches/rendering.js",
   "src/layers/localAdsb/index.js",
   "src/layers/localAdsb/models.js",
