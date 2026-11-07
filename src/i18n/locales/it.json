@@ -3255,5 +3255,9 @@
   "Maximum event age: {days}d; undated markers are kept": "Età massima degli eventi: {days} giorni; indicatori senza data mantenuti",
   "event age filter|All": "Tutti",
   "Event age": "Età degli eventi",
-  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti"
+  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti",
+  "Close camera preview": "Chiudi anteprima della telecamera",
+  "Refresh map still": "Aggiorna immagine fissa sulla mappa",
+  "The map still uses a separate request and may show a different moment.": "L’immagine sulla mappa usa una richiesta separata e può mostrare un momento diverso.",
+  "Video plays from Québec 511, which sees your IP address.": "Il video viene riprodotto da Québec 511, che vede il tuo indirizzo IP."
 }

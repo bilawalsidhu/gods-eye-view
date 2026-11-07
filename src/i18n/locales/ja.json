@@ -3105,5 +3105,9 @@
   "Maximum event age: {days}d; undated markers are kept": "イベントの最大経過日数：{days}日。日付のないマーカーは保持",
   "event age filter|All": "すべて",
   "Event age": "経過日数",
-  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持"
+  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持",
+  "Close camera preview": "カメラのプレビューを閉じる",
+  "Refresh map still": "地図上の静止画を更新",
+  "The map still uses a separate request and may show a different moment.": "地図上の静止画は別のリクエストで取得されるため、異なる時点を表示する場合があります。",
+  "Video plays from Québec 511, which sees your IP address.": "動画は Québec 511 から再生され、Québec 511 にはあなたの IP アドレスが見えます。"
 }

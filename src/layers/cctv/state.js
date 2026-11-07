@@ -29,6 +29,10 @@ export function createState({ services }) {
 
   layerState._activeCameraId = null;
 
+  // Advances when a user reselects the already-active camera. The geometry
+  // activation remains a no-op, but browser-only camera UI can retry playback.
+  layerState._activeCameraReselection = 0;
+
   layerState._coverageMode = 'on';
   // 'off' | 'on' (wireframes) | 'viewshed' (color-coded volumes)
 
