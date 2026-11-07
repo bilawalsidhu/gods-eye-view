@@ -3255,5 +3255,20 @@
   "Maximum event age: {days}d; undated markers are kept": "Idade máxima do evento: {days} dias; marcadores sem data mantidos",
   "event age filter|All": "Todos",
   "Event age": "Idade do evento",
-  "Event age: {days}d · undated kept": "Idade do evento: {days} dias · sem data mantidos"
+  "Event age: {days}d · undated kept": "Idade do evento: {days} dias · sem data mantidos",
+  "Tilt up toward the horizon": "Inclinar em direção ao horizonte",
+  "Tilt down toward top-down view": "Inclinar em direção à vista superior",
+  "Top-down view": "Vista superior",
+  "Look left": "Olhar para a esquerda",
+  "Look right": "Olhar para a direita",
+  "Look up": "Olhar para cima",
+  "Look down": "Olhar para baixo",
+  "Map navigation": "Navegação do mapa",
+  "Tilt": "Inclinação",
+  "Tilt: top-down (bottom) to near horizon (top)": "Inclinação: vista superior (embaixo) até quase o horizonte (em cima)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Direção do mapa. Arraste para girar, as setas giram, Home para o norte",
+  "North, 0 degrees": "Norte, 0 graus",
+  "Look around": "Olhar ao redor",
+  "{heading} degrees from north": "{heading} graus a partir do norte",
+  "{tilt} degrees from top-down": "{tilt} graus a partir da vista superior"
 }
