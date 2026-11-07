@@ -84,6 +84,8 @@ const DRAW_FROM_CALLER = new Set([
   './layers/street-level/kartaview',
   './layers/street-level/panoramax',
   './layers/air-quality',
+  // Asks `findQuery` instead, and answers null rather than throw until the
+  // caller has loaded the factory.
   './queries/heights',
 ]);
 

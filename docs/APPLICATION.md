@@ -133,35 +133,41 @@ does this and returns the dispatcher as `scene.input`.
 
 ## Height queries
 
-`gods-eye-view/queries/heights` exports `heightsFor(scene)`, the one place
-height queries go. Layers, tools and the camera ask it instead of calling
-`scene.sampleHeight`, `globe.getHeight`, `scene.clampToHeight` or the
-`*MostDetailed` variants themselves, so a renderer that answers heights another
-way plugs in without touching them.
+`gods-eye-view/queries/heights` exports `heightsOf(viewer)`, the one place
+height queries go. Layers, tools and the camera ask it instead of asking the
+renderer's query port (`sampleHeight`, `sampleHeightNow`, `clampToSurface`)
+or the scene themselves, so how the renderer answers heights can change
+in without touching them. Pass the viewer the renderer is bound to, not its
+scene. A viewer with no renderer bound is answered by the Cesium adapter's
+fallback once the caller has loaded `gods-eye-view/render/cesium/unbound`;
+until then, every query answers `null`.
 
 ```js
-import { heightsFor } from 'gods-eye-view/queries/heights';
+import { heightsOf } from 'gods-eye-view/queries/heights';
 
-const heights = heightsFor(viewer.scene);
-const ground = heights.now({ lon, lat }, { exclude: [ownMarkers] });
+const heights = heightsOf(viewer);
+const ground = heights.now({ lon, lat }, { exclude: [ownSetId] });
 if (ground !== null) place(ground);
 ```
 
 | Member                        | What it answers                                                           |
 | ----------------------------- | ------------------------------------------------------------------------- |
 | `now(point, opts)`            | Height in metres from what is loaded, or `null`                           |
-| `clampNow(position, opts)`    | The `Cartesian3` moved onto the drawn surface, or `null`                  |
+| `clampNow(position, opts)`    | The ECEF `{ x, y, z }` moved onto the drawn surface, or `null`            |
 | `batch(points, opts)`         | A promise of heights once the most detailed tiles stream; `null` per miss |
-| `clampBatch(positions, opts)` | A promise of clamped copies of the positions; `null` per miss             |
+| `clampBatch(positions, opts)` | A promise of clamped `{ x, y, z }` copies; `null` per miss                |
 | `supported()`                 | `{ surface, clamp }`: whether the drawn surface can be queried at all     |
 
-A point is `{ lon, lat }` in degrees or a `Cesium.Cartographic` in radians.
+A point is `{ lon, lat }` in degrees or `{ longitude, latitude }` in radians.
 `against: 'surface'` (the default) reads what is drawn, 3D tiles and globe;
-`against: 'terrain'` reads the loaded terrain tiles alone. `exclude` lists the
-primitives and entities a query sees through. Every miss is `null`, including
-a Cesium throw for missing depth-texture support, and every caller treats it
-as one. Cesium answers `now()` synchronously from the scene, so it costs what
-the direct call did.
+`against: 'terrain'` reads the loaded terrain alone; `against: 'tiles'` the
+tiles without the globe. Both `surface` and `tiles` include draw sets drawn
+with `includeInHeightQueries`; `clampNow` and `clampBatch` always clamp to
+the surface. `exclude` lists draw set ids to see through, of those drawn with
+`includeInHeightQueries`; every other draw set is seen through already. Every
+miss is `null`, and every caller treats it as one; `batch` and `clampBatch`
+reject when the query itself fails. The Cesium renderer answers no height,
+terrain included, without depth-texture support.
 
 ## Cesium internals
 

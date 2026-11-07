@@ -167,13 +167,24 @@ function createHeights(host) {
     },
 
     async clampBatch(positions, { exclude } = NO_OPTIONS) {
+      // Copies taken now, so a caller changing its positions while the
+      // query runs cannot shift the answers.
+      const at = positions.map((p) =>
+        finite(p) ? { x: p.x, y: p.y, z: p.z } : null,
+      );
+      const valid = at.filter(Boolean);
       const port = asyncQuery();
-      if (!port) return positions.map(() => null);
+      if (!valid.length || !port) return at.map(() => null);
       const clamped = await port.clampToSurface(
-        positions.map((p) => ({ x: p.x, y: p.y, z: p.z })),
+        valid,
         portOptions({ exclude }),
       );
-      return clamped.map((p) => (finite(p) ? p : null));
+      let next = 0;
+      return at.map((p) => {
+        if (!p) return null;
+        const result = clamped[next++];
+        return finite(result) ? result : null;
+      });
     },
 
     supported() {

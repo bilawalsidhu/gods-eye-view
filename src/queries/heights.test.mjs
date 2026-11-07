@@ -183,6 +183,37 @@ test('clampBatch clamps copies and misses per position', async () => {
   );
 });
 
+test('clampBatch answers null for a malformed position, sending only the rest', async () => {
+  const { viewer, calls } = bound({
+    height: (point) => (point.lon > 0 ? 20 : 150),
+  });
+  const result = await heightsOf(viewer).clampBatch([
+    null,
+    fromDegrees(AUSTIN.lon, AUSTIN.lat, 0),
+    { x: Number.NaN, y: 0, z: 0 },
+    fromDegrees(10, 10, 0),
+  ]);
+  assert.equal(result.length, 4);
+  assert.equal(result[0], null);
+  assert.ok(near(toLonLatH(result[1]).height, 150));
+  assert.equal(result[2], null);
+  assert.ok(near(toLonLatH(result[3]).height, 20));
+  assert.equal(calls.at(-1)[1].length, 2);
+});
+
+test('clampBatch keeps its answers in place when the caller changes its positions meanwhile', async () => {
+  const { viewer } = bound({ height: (point) => (point.lon > 0 ? 20 : 150) });
+  const positions = [
+    fromDegrees(AUSTIN.lon, AUSTIN.lat, 0),
+    fromDegrees(10, 10, 0),
+  ];
+  const pending = heightsOf(viewer).clampBatch(positions);
+  positions[0].x = Number.NaN;
+  const [first, second] = await pending;
+  assert.ok(near(toLonLatH(first).height, 150));
+  assert.ok(near(toLonLatH(second).height, 20));
+});
+
 test('supported reports the renderer’s sampleHeight capability', () => {
   assert.deepEqual(heightsOf(bound().viewer).supported(), {
     surface: true,
@@ -214,11 +245,26 @@ test('height queries go through the service', () => {
   // that implement and call them: the Cesium adapter answers them through
   // this service.
   const CONTRACT = /^src\/render\/(contract|stub|conformance|cesium)\//;
+  // Sites that asked the query port's height members before this service
+  // went onto the port; each is to move onto `heightsOf`, and none is to be
+  // added.
+  const KNOWN = new Set([
+    'src/layers/alpr/overlay.js',
+    'src/layers/alpr/presentation.js',
+    'src/layers/streetLevel/cameraFraming.js',
+    'src/layers/streetLevel/view.js',
+  ]);
   const NAMES =
-    'sampleHeight|clampToHeight|sampleHeightMostDetailed|clampToHeightMostDetailed|getHeight';
+    'sampleHeight|sampleHeightNow|sampleHeightNowMany|clampToSurface|clampToHeight|sampleHeightMostDetailed|clampToHeightMostDetailed|getHeight';
   const direct = new RegExp(
     `\\.(${NAMES})\\b|\\[\\s*['"\`](${NAMES})['"\`]\\s*\\]|\\bsampleTerrain(MostDetailed)?\\b`,
   );
+  /** A file's code without its comments. */
+  const codeOf = (file) =>
+    fs
+      .readFileSync(path.join(ROOT, file), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
   const walk = (dir) =>
     fs
       .readdirSync(path.join(ROOT, dir), { withFileTypes: true })
@@ -228,13 +274,13 @@ test('height queries go through the service', () => {
         return /\.(js|vue)$/.test(entry.name) ? [rel] : [];
       });
   const offenders = walk('src').filter((file) => {
-    if (file === SERVICE || CONTRACT.test(file.split(path.sep).join('/')))
+    const posix = file.split(path.sep).join('/');
+    if (file === SERVICE || CONTRACT.test(posix) || KNOWN.has(posix))
       return false;
-    const code = fs
-      .readFileSync(path.join(ROOT, file), 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
-    return direct.test(code);
+    return direct.test(codeOf(file));
   });
   assert.deepEqual(offenders, []);
+  // A known site that has moved onto the service leaves the list.
+  const stale = [...KNOWN].filter((file) => !direct.test(codeOf(file)));
+  assert.deepEqual(stale, []);
 });
