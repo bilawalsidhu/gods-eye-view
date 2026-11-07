@@ -225,8 +225,7 @@ try {
     await page.evaluate(
       () =>
         Math.abs(
-          window.__godsEyeView.sceneDirector.viewer.camera.positionCartographic
-            .height - 5000,
+          window.__godsEyeView.sceneDirector.engine.camera.height() - 5000,
         ) < 1,
     ),
   );

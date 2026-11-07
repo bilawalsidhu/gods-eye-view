@@ -1,3 +1,4 @@
+import { retainsLayerSession } from './layerSession.js';
 import { SceneDirector } from '../scenes/director.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
@@ -73,8 +74,7 @@ export async function createApplicationTools({
     mapStackController?.isStackAvailable(id) === true;
   const sceneDirector =
     layerSession?.director ??
-    new SceneDirector(first.viewer, styleManager, dataManager, {
-      engine: first.engine,
+    new SceneDirector(first, styleManager, dataManager, {
       dataPacks: sceneDataPacks,
       isMapStackAvailable: isStackAvailable(first.mapStackController),
     });
@@ -85,7 +85,7 @@ export async function createApplicationTools({
     .get('bhote-koshi-2026')
     ?.module.attachSceneController(sceneDirector);
   defer(() => {
-    if (layerSession?.handoffLayers && !layerSession.lifetime.signal.aborted) {
+    if (retainsLayerSession(layerSession)) {
       sceneDirector.suspendScene();
     } else {
       if (layerSession) layerSession.director = null;
@@ -123,8 +123,7 @@ export async function createApplicationTools({
         if (next === directorScene) return;
         directorScene = null;
         sceneDirector.attachScene(
-          next.viewer,
-          next.engine,
+          next,
           styleManager,
           isStackAvailable(next.mapStackController),
         );
@@ -160,6 +159,7 @@ export async function createApplicationTools({
   // The attached engine's tools; `annotations` and the voice handle answer
   // for the engine attached now.
   const attached = { annotations: null, voiceCommands: null };
+  let startupChromeOptions;
   const context = {
     controls,
     data,
@@ -177,6 +177,7 @@ export async function createApplicationTools({
       name: 'tools',
       async attachScene(next, attachment) {
         const tools = await attachEngineTools(next, context, attachment);
+        startupChromeOptions ??= tools.startupChrome;
         attached.annotations = tools.annotations;
         attached.voiceCommands = tools.voiceCommands;
         attachment.defer(() => {
@@ -220,12 +221,10 @@ export async function createApplicationTools({
     { defer },
   );
   detachPartsOnTeardown(scene, defer, () => ({
-    handoff: Boolean(
-      layerSession?.handoffLayers && !layerSession.lifetime.signal.aborted,
-    ),
+    handoff: retainsLayerSession(layerSession),
   }));
-  // The startup chrome belongs to the page: no first-run welcome on Navara
-  // (its choices turn on data layers).
+  // Startup chrome belongs to the page and keeps the first backend
+  // policy across later engine attachments.
   if (startChrome)
     defer(
       startChrome({
@@ -233,7 +232,7 @@ export async function createApplicationTools({
         styleManager,
         dataManager,
         signal,
-        ...(first.viewer ? {} : { initializeWelcome: null }),
+        ...startupChromeOptions,
       }),
     );
   return {
@@ -269,6 +268,7 @@ function cesiumToolBackend({ engine, tileset }) {
   const viewer = cesiumViewerOf(engine);
   return {
     viewer,
+    startupChrome: {},
     board: () => ({ viewer, engine, tileset }),
     draw: () => ({ engine }),
     // The tileset lets the layer drape while the globe is hidden.
@@ -465,7 +465,7 @@ async function attachEngineTools(
     { styleManager, dataManager, voiceCommands },
     { signal, defer },
   );
-  return { annotations, voiceCommands };
+  return { annotations, voiceCommands, startupChrome: backend.startupChrome };
 }
 
 /** The annotation board drawn on this globe (`boardScene`), or null. */

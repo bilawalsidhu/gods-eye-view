@@ -148,6 +148,7 @@ export function navaraToolBackend({ engine }) {
   const views = engine.extensions?.navara ?? null;
   const drawn = Boolean(views?.view);
   return {
+    startupChrome: { initializeWelcome: null },
     board: () =>
       drawn
         ? { engine, renderer: createNavaraAnnotationRenderer(engine, views) }

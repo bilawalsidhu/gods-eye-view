@@ -3,7 +3,7 @@
     "cesiumLayerRendererLines": 14,
     "navaraLayerRendererLines": 314,
     "cesiumImportFiles": 5,
-    "viewerLines": 948,
+    "viewerLines": 933,
     "navaraKindChecks": 2,
     "engineSniffCalls": 0,
     "engineExtensionReads": 4,
@@ -12,5 +12,5 @@
     "screenSpaceHandlerFiles": 4,
     "engineNameLines": 36
   },
-  "measuredAt": "Draw Bhote Koshi story graphics and range pulse fields through engine.ground"
+  "measuredAt": "Separate scene attachment and page switching; give Director the scene"
 }

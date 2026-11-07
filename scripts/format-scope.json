@@ -1692,5 +1692,11 @@
   "src/globe/groundPulse.test.mjs",
   "src/globe/navara/ground/pulse.test.mjs",
   "src/layers/bhoteKoshi/render/story.test.mjs",
-  "src/globe/navara/windFlowMesh.js"
+  "src/globe/navara/windFlowMesh.js",
+  "src/data/layerSceneBinding.js",
+  "src/ui/shellScene.js",
+  "src/app/layerSession.js",
+  "src/standalone/sceneSwitcher.js",
+  "src/app/layerSession.test.mjs",
+  "src/standalone/sceneSwitcher.test.mjs"
 ]

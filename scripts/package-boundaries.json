@@ -1007,6 +1007,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/app/layerSession.js",
+      "src/ui/shellScene.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
@@ -2540,6 +2542,7 @@
       "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/lifecycle.js",
+      "src/data/layerSceneBinding.js",
       "src/data/localGeojsonCore.js",
       "src/data/localGeojsonLod.js",
       "src/data/local_data/natural_earth/marine.json",
@@ -2881,6 +2884,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/app/layerSession.js",
+      "src/ui/shellScene.js",
       "src/ui/mobileShell.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
@@ -4457,6 +4462,7 @@
       "src/globe/cesium/engineFromViewer.js",
       "src/globe/contract.js",
       "src/data/lifecycle.js",
+      "src/data/layerSceneBinding.js",
       "src/data/cameraArrival.js"
     ],
     "external": []

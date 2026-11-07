@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { retainsLayerSession } from '../app/layerSession.js';
 import { createSceneHost } from '../app/sceneHost.js';
 import { attachScenePart } from '../app/sceneParts.js';
 
@@ -50,6 +51,7 @@ function standalone({ failOpen = null } = {}) {
       return { viewer: null, engine, operations: { kind: 'operations' } };
     },
     createSceneHost,
+    retainsLayerSession,
     attachScenePart,
     AbortController,
     AbortSignal,
@@ -110,4 +112,53 @@ test('a failed candidate releases what it attached and the working engine attach
     ['cesium', 'cesium'],
   );
   assert.equal(opened.length, 3);
+});
+
+test('a failed resume detaches and releases its candidate once before recovery', async () => {
+  const { app, opened, released } = standalone();
+  const scene = await app.createScene({ signal: new AbortController().signal, defer() {} });
+  const detached = [];
+  await scene.sceneHost.register({
+    name: 'part',
+    attachScene(next) { this.kind = next.kind; },
+    detachScene(options) { detached.push([this.kind, options.handoff]); },
+  });
+  await app.detachScene({ handoff: true });
+  await assert.rejects(app.attachScene('navara', {
+    resume() {
+      assert.equal(scene.engine, opened[1], 'resume sees the attached candidate');
+      throw new Error('restore failed');
+    },
+  }), /restore failed/);
+  assert.equal(scene.engine, null);
+  assert.equal(scene.sceneHost.state(), 'detached');
+  assert.deepEqual(detached, [['cesium', true], ['navara', true]]);
+  assert.deepEqual(released, opened);
+  await app.attachScene('cesium');
+  assert.equal(scene.engine, opened[2]);
+  assert.equal(released.length, 2);
+});
+
+test('page teardown during resume releases the candidate only once', async () => {
+  const { app, opened, released } = standalone();
+  const lifetime = new AbortController();
+  const scene = await app.createScene({ signal: lifetime.signal, defer() {} });
+  await app.detachScene({ handoff: true });
+  let finishResume;
+  let enteredResume;
+  const entered = new Promise((resolve) => { enteredResume = resolve; });
+  const pending = app.attachScene('navara', {
+    resume: () => {
+      enteredResume();
+      return new Promise((resolve) => { finishResume = resolve; });
+    },
+  });
+  const rejected = assert.rejects(pending, { name: 'AbortError' });
+  await entered;
+  lifetime.abort();
+  const leaving = app.detachScene({ handoff: false });
+  finishResume();
+  await Promise.all([leaving, rejected]);
+  assert.equal(scene.engine, null);
+  assert.deepEqual(released, opened);
 });

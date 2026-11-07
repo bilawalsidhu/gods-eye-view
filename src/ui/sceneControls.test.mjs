@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
@@ -383,6 +384,7 @@ test('the real director preserves a selected shot label for the following double
   const f = fixture();
   const previousStorage = globalThis.localStorage;
   let director;
+  const engine = createFakeEngine();
   try {
     f.owner.destroy();
     Object.defineProperty(globalThis, 'localStorage', {
@@ -393,7 +395,7 @@ test('the real director preserves a selected shot label for the following double
         setItem() {},
       },
     });
-    director = new SceneDirector({ camera: { cancelFlight() {} } }, {}, {});
+    director = new SceneDirector({ engine }, {}, {});
     await nextTick();
     const label = f.label();
     label.click();
@@ -406,6 +408,7 @@ test('the real director preserves a selected shot label for the following double
     assert.equal(director._getSelectedScene().shots[0].title, 'Renamed');
   } finally {
     await director?.destroy();
+    engine.destroy();
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       writable: true,

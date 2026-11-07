@@ -1,3 +1,4 @@
+import { retainsLayerSession } from '../app/layerSession.js';
 import { createStandaloneCatalog } from './catalog.js';
 import { createStandalonePlaceSearch } from './placeSearch.js';
 import { CITY_POIS } from '../cityPois.js';
@@ -94,7 +95,9 @@ export function createStandaloneApplication({
   async function openScene(kind) {
     const controller = new AbortController();
     const releases = [];
-    const release = async () => {
+    let releasing;
+    const release = () => (releasing ??= releaseResources());
+    const releaseResources = async () => {
       // A reason made here would keep this call's stack, and with it the
       // released scene, alive in every closure that still holds `signal`.
       controller.abort(SCENE_RELEASED);
@@ -156,6 +159,7 @@ export function createStandaloneApplication({
       });
       return Object.freeze({
         ...scene,
+        signal,
         kind,
         catalog: sceneCatalog,
         release,
@@ -254,10 +258,7 @@ export function createStandaloneApplication({
       // the globe's renderer is parked or released.
       context.defer(async () => {
         await sceneHost.detach({
-          handoff: Boolean(
-            layerSession?.handoffLayers &&
-            !layerSession.lifetime.signal.aborted,
-          ),
+          handoff: retainsLayerSession(layerSession),
         });
         const scene = current;
         current = null;
@@ -332,14 +333,30 @@ export function createStandaloneApplication({
    * detaches what attached and releases the candidate; the session stays as
    * it was, ready for the working engine to attach again.
    */
-  async function attachScene(kind) {
+  async function attachScene(kind, { resume } = {}) {
     if (application.getState().status !== 'ready')
       throw new Error('The application is not running');
     if (current) throw new Error('A globe is attached; detach it first');
     const next = await openScene(kind);
     try {
       await sceneHost.attach(next);
+      current = next;
+      await resume?.();
+      lifetime.throwIfAborted();
     } catch (error) {
+      // attach() releases partial parts itself; a failed resume leaves a
+      // complete attachment for this transaction to detach.
+      if (current === next) {
+        current = null;
+        await sceneHost
+          .detach({ handoff: !lifetime.aborted })
+          .catch((cleanupError) =>
+            console.error(
+              'A failed globe could not be released:',
+              cleanupError,
+            ),
+          );
+      }
       await next
         .release()
         .catch((cleanupError) =>
@@ -347,7 +364,6 @@ export function createStandaloneApplication({
         );
       throw error;
     }
-    current = next;
     return sceneView;
   }
 

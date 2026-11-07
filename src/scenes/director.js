@@ -73,33 +73,31 @@ const STORAGE_CHECKPOINT_KEY = 'godsEyeView.sceneProject.checkpoint.v1';
  * Orchestrates deterministic cinematic scene playback.
  *
  * The director owns a mutable project (persisted in localStorage) containing
- * scenes and shots. It drives camera flights via Cesium, applies visual/style
- * state through the styleManager, toggles data layers via the dataManager, and
+ * scenes and shots. It drives camera flights through the globe engine, applies
+ * visual state through the styleManager, toggles data layers via the dataManager, and
  * records timestamped telemetry events during each run for later export.
  */
 export class SceneDirector {
   /**
-   * @param {Cesium.Viewer} viewer - The Cesium viewer instance
+   * @param {{ engine: import('../globe/contract.js').GlobeEngine, viewer?: object }} scene
    * @param {Object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
-   * @param {Object} [options] `engine`: the globe engine whose camera the
-   *   scene flights drive; the viewer still serves tracking, interactions and
-   *   data packs.
+   * @param {Object} [options] Scene packs, data sources and map availability.
    */
   constructor(
-    viewer,
+    scene,
     styleManager,
     dataManager,
     {
-      engine = null,
       isMapStackAvailable = () => false,
       scenePacks = createDefaultScenePacks(),
       dataPacks = {},
     } = {},
   ) {
+    const { engine } = scene;
+    this._scene = scene;
     this._destroyed = false;
     this._pendingWork = new Set();
-    this.viewer = viewer;
     this.engine = engine;
     this.styleManager = styleManager;
     this.dataManager = dataManager;
@@ -108,7 +106,7 @@ export class SceneDirector {
     this._bundleAssets = createBundleAssets();
     this._dataPacks = createSceneDataPacks(engine, {
       ...dataPacks,
-      container: engine?.host?.container ?? viewer?.container,
+      container: engine?.host?.container,
       sources: {
         ...dataPacks.sources,
         [BUNDLE_SOURCE]: this._bundleAssets.source,
@@ -119,7 +117,9 @@ export class SceneDirector {
     this._interactions = createSceneInteractions({
       engine,
       available: () =>
-        !this._destroyed && !this._running && !this.viewer?.trackedEntity,
+        !this._destroyed &&
+        !this._running &&
+        !this._scene?.viewer?.trackedEntity,
       execute: (action, signal) =>
         this._trackWork(this._executeInteraction(action, signal)),
     });
@@ -235,11 +235,11 @@ export class SceneDirector {
   }
 
   _bindCameraInput() {
-    const { viewer, engine, styleManager } = this;
+    const { engine, styleManager } = this;
     this._cameraHandoffUnsubscribe = styleManager.subscribeCameraHandoff?.(
       this._yieldCamera,
     );
-    const canvas = engine?.host.canvas ?? viewer?.scene?.canvas;
+    const canvas = engine?.host.canvas;
     for (const event of ['pointerdown', 'wheel'])
       canvas?.addEventListener?.(event, this._yieldCamera, { passive: true });
     this._removeCameraInput = () => {
@@ -258,11 +258,13 @@ export class SceneDirector {
     this._interactions.setScene(null);
     this._dataPacks.setScene(null);
     this._flight?.suspend();
-    this.engine = this.viewer = null;
+    this._scene = null;
+    this.engine = null;
   }
 
-  attachScene(viewer, engine, styleManager, isAvailable) {
-    this.viewer = viewer;
+  attachScene(scene, styleManager, isAvailable) {
+    const { engine } = scene;
+    this._scene = scene;
     this.engine = engine;
     this.styleManager = styleManager;
     this._isMapStackAvailable = isAvailable;
@@ -327,7 +329,7 @@ export class SceneDirector {
     return promise;
   }
 
-  /** Stop playback and pending loads before releasing their viewer. */
+  /** Stop playback and pending loads before releasing their engine. */
   destroy() {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
