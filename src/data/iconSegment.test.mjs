@@ -245,3 +245,54 @@ test('a zero-rate glide holds the course however the segment turns', () => {
   writeCourseGlide(seg, 0, 90, 0, 0);
   assert.ok(courseGap(segmentCourse(seg, 0, 20), 90) < 1e-4, 'arc turn held');
 });
+
+test('an arc climbs along the fix’s up axis at its climb rate, inside its clamped time', () => {
+  const seg = new Float32Array(SEGMENT_STRIDE);
+  writeArcSegment(seg, 0, {
+    fix,
+    t0: 100,
+    minDt: -10,
+    maxDt: 20,
+    speedMps: 200,
+    trackDeg: 90,
+    turnRateDps: 3,
+    climbMps: 15,
+  });
+  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(fix);
+  for (const [tau, dt] of [
+    [108, 8],
+    [130, 20],
+    [80, -10],
+  ]) {
+    const flat = productionArc(fix, 200, 90, 3, dt).position;
+    const want = Cesium.Cartesian3.add(
+      flat,
+      Cesium.Cartesian3.multiplyByScalar(up, 15 * dt, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const at = segmentPosition(seg, 0, tau);
+    assert.ok(
+      Cesium.Cartesian3.distance(at, want) < 0.05,
+      `at ${dt} s: ${Cesium.Cartesian3.distance(at, want)} m off`,
+    );
+  }
+  // The climb does not turn the course.
+  assert.ok(courseGap(segmentCourse(seg, 0, 108), 90 + 3 * 8) < 1e-3);
+});
+
+test('an arc written without a climb stays in its tangent plane', () => {
+  const seg = new Float32Array(SEGMENT_STRIDE);
+  seg.fill(7);
+  writeArcSegment(seg, 0, {
+    fix,
+    t0: 0,
+    minDt: 0,
+    maxDt: 30,
+    speedMps: 100,
+    trackDeg: 0,
+    turnRateDps: 0,
+  });
+  const at = segmentPosition(seg, 0, 30);
+  const want = productionArc(fix, 100, 0, 0, 30).position;
+  assert.ok(Cesium.Cartesian3.distance(at, want) < 0.05);
+});

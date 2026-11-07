@@ -4,6 +4,7 @@ import * as Cesium from 'cesium';
 import {
   createIconSet,
   DirtyRows,
+  ICON_ALWAYS_OVER_DEPTH,
   ICON_CULL_HEIGHT_M,
   ICON_CULL_LIFT,
   ICON_ROTATES,
@@ -14,6 +15,7 @@ import {
   writeCourseGlide,
   writeHoldSegment,
 } from './iconSegment.js';
+import { liftedForHorizon } from '../geo/horizon.js';
 
 function place(set, id, lon, course = 0) {
   const row = set.add(id, { id });
@@ -228,6 +230,21 @@ test('rebasing moves the epoch without moving any row', () => {
   assert.deepEqual(set.dirty.segments.runs(set.count), [[0, 0]]);
 });
 
+test('a clock set back more than half an hour moves the epoch back too', () => {
+  const epoch = Cesium.JulianDate.fromIso8601('2026-11-03T12:00:00Z');
+  const set = createIconSet({ epoch });
+  const row = place(set, 'a', 4);
+  const before = set.position(row, 0);
+  const earlier = (s) =>
+    Cesium.JulianDate.addSeconds(epoch, s, new Cesium.JulianDate());
+  assert.equal(set.rebase(earlier(-1000)), false);
+  assert.equal(set.rebase(earlier(-86400)), true);
+  assert.equal(set.seconds(earlier(-86400)), 0);
+  assert.ok(
+    Cesium.Cartesian3.distance(set.position(row, 86400), before) < 0.01,
+  );
+});
+
 test('a cull-lift row is judged at no lower than the cull height above the ellipsoid', () => {
   const set = createIconSet();
   const row = set.add('a');
@@ -248,4 +265,72 @@ test('a cull-lift row is judged at no lower than the cull height above the ellip
     Math.abs(height(set.cullPoint(row, at(131))) - 131) < 1e-6,
     'a contact floored higher keeps its own height',
   );
+});
+
+test('the Cesium-free horizon lift judges the point a cull-lift row is judged at', () => {
+  const set = createIconSet();
+  const row = set.add('a');
+  set.setFlag(row, ICON_CULL_LIFT, true);
+  for (const [lon, lat, h] of [
+    [4.05, 51.93, -40],
+    [4.05, 51.93, 3],
+    [-84.43, 33.64, 11.9],
+    [139.7, 35.6, 500],
+    [0, 89.5, -10],
+  ]) {
+    const p = Cesium.Cartesian3.fromDegrees(lon, lat, h);
+    const lifted = liftedForHorizon(p);
+    assert.ok(
+      Cesium.Cartesian3.distance(set.cullPoint(row, p), lifted) < 1e-6,
+      `${lon}, ${lat}, ${h} m`,
+    );
+  }
+});
+
+test('a new row draws over depth everywhere, with no proxy and the default image switch', () => {
+  const set = createIconSet();
+  const row = set.add('a');
+  assert.equal(set.depthTestDistance(row), Math.fround(ICON_ALWAYS_OVER_DEPTH));
+  assert.equal(set.pickProxyWidth(row), 0);
+  assert.equal(set.pickProxyHeight(row), 0);
+  assert.equal(set.imageSwitch(row), 0);
+});
+
+test('the switch, proxy and depth-test columns mark the row only when they change', () => {
+  const set = createIconSet();
+  const row = set.add('a');
+  settle(set);
+  set.setImageSwitch(row, 40);
+  set.setPickProxy(row, 30, 20);
+  set.setDepthTestDistance(row, 5000);
+  assert.deepEqual(set.dirty.style.runs(set.count), [[0, 0]]);
+  assert.equal(set.imageSwitch(row), 40);
+  assert.equal(set.pickProxyWidth(row), 30);
+  assert.equal(set.pickProxyHeight(row), 20);
+  assert.equal(set.depthTestDistance(row), 5000);
+  settle(set);
+  set.setImageSwitch(row, 40);
+  set.setPickProxy(row, 30, 20);
+  set.setDepthTestDistance(row, 5000);
+  assert.ok(set.dirty.style.empty, 'unchanged writes leave it clean');
+  set.setDepthTestDistance(row, Infinity);
+  assert.equal(
+    set.depthTestDistance(row),
+    Math.fround(ICON_ALWAYS_OVER_DEPTH),
+    'Infinity is carried as the always-over-depth value',
+  );
+});
+
+test('removing a row moves its switch, proxy and depth-test columns too', () => {
+  const set = createIconSet({ capacity: 4 });
+  set.add('a');
+  const b = set.add('b');
+  set.setPickProxy(b, 44, 33);
+  set.setDepthTestDistance(b, 0);
+  set.remove('a');
+  const moved = set.row('b');
+  assert.equal(moved, 0);
+  assert.equal(set.pickProxyWidth(moved), 44);
+  assert.equal(set.pickProxyHeight(moved), 33);
+  assert.equal(set.depthTestDistance(moved), 0);
 });

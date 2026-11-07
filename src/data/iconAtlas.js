@@ -54,9 +54,19 @@ function createAtlas() {
       return slot;
     },
 
+    /** Whether `url` at `sizePx` already has a slot. */
+    has(url, sizePx) {
+      return slotOfKey.has(`${sizePx}|${url}`);
+    },
+
     /** Whether a slot's image is packed and drawable. */
     ready(slot) {
       return atlas.rects[slot * 4 + 2] > 0;
+    },
+
+    /** Whether a slot's image failed to load, or had no room to pack. */
+    failed(slot) {
+      return entries[slot]?.failed === true;
     },
 
     /**

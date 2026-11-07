@@ -14,6 +14,7 @@
  * long the session runs.
  */
 import * as Cesium from 'cesium';
+import { HORIZON_LIFT_M } from '../geo/horizon.js';
 import {
   SEGMENT_STRIDE,
   segmentCourse,
@@ -21,8 +22,11 @@ import {
   shiftSegmentTimes,
 } from './iconSegment.js';
 
-/** Floats per row of style: size, scale, alpha, atlas slots, flags, focus, near/far scaler. */
-export const STYLE_STRIDE = 12;
+/**
+ * Floats per row of style: size, scale, alpha, atlas slots, flags, focus,
+ * near/far scaler, near-image switch, pick proxy and depth-test distance.
+ */
+export const STYLE_STRIDE = 16;
 
 const WIDTH = 0;
 const HEIGHT = 1;
@@ -36,6 +40,16 @@ const NEAR_DISTANCE = 8;
 const NEAR_VALUE = 9;
 const FAR_DISTANCE = 10;
 const FAR_VALUE = 11;
+const IMAGE_SWITCH = 12;
+const PROXY_WIDTH = 13;
+const PROXY_HEIGHT = 14;
+const DEPTH_TEST_DISTANCE = 15;
+
+/**
+ * A depth-test distance at or past this draws over depth at any distance
+ * (Infinity, which a float column does not carry through every GPU).
+ */
+export const ICON_ALWAYS_OVER_DEPTH = 1e30;
 
 /** Row flags, combined in the style's flags float. */
 export const ICON_SHOWN = 1;
@@ -50,9 +64,9 @@ export const ICON_RECEDES = 4;
  */
 export const ICON_CULL_LIFT = 8;
 /** The ellipsoid height a CULL_LIFT row is raised to for the horizon test. */
-export const ICON_CULL_HEIGHT_M = 12;
+export const ICON_CULL_HEIGHT_M = HORIZON_LIFT_M;
 
-/** Move the epoch forward once render times pass this many seconds. */
+/** Move the epoch once render times are this many seconds from it. */
 const REBASE_AFTER_SEC = 1800;
 
 /**
@@ -169,14 +183,14 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
     },
 
     /**
-     * Move the epoch to `julianDate` once it is more than half an hour ahead,
-     * shifting every stored time. Call between frames, never while a caller holds
+     * Move the epoch to `julianDate` once it is more than half an hour away
+     * (ahead, or behind on a clock set back), shifting every stored time. Call between frames, never while a caller holds
      * times in the old base.
      * @returns {boolean} Whether it moved.
      */
     rebase(julianDate) {
       const shift = set.seconds(julianDate);
-      if (shift < REBASE_AFTER_SEC) return false;
+      if (Math.abs(shift) < REBASE_AFTER_SEC) return false;
       for (let row = 0; row < count; row++) {
         shiftSegmentTimes(segments, row, -shift);
         expires[row] -= shift;
@@ -231,6 +245,7 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       style[o + FOCUS] = 1;
       style[o + IMAGE_FAR] = -1;
       style[o + IMAGE_NEAR] = -1;
+      style[o + DEPTH_TEST_DISTANCE] = ICON_ALWAYS_OVER_DEPTH;
       colors.fill(255, row * 4, row * 4 + 4);
       expires[row] = -Infinity;
       markRow(row);
@@ -358,6 +373,57 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
     },
     imageNear(row) {
       return style[row * STYLE_STRIDE + IMAGE_NEAR];
+    },
+
+    /**
+     * Draw the near image once the icon is wider than `px` CSS pixels on
+     * screen; 0 (the default) switches past the renderer's own device-pixel
+     * threshold.
+     */
+    setImageSwitch(row, px) {
+      writeStyle(row, IMAGE_SWITCH, px);
+    },
+    imageSwitch(row) {
+      return style[row * STYLE_STRIDE + IMAGE_SWITCH];
+    },
+
+    /**
+     * An invisible pick target of `width × height` CSS pixels, picked
+     * wherever it or the icon covers; 0 × 0 (the default) picks the icon's
+     * drawn pixels only.
+     */
+    setPickProxy(row, width, height) {
+      const o = row * STYLE_STRIDE;
+      if (
+        style[o + PROXY_WIDTH] === Math.fround(width) &&
+        style[o + PROXY_HEIGHT] === Math.fround(height)
+      )
+        return;
+      style[o + PROXY_WIDTH] = width;
+      style[o + PROXY_HEIGHT] = height;
+      set.dirty.style.mark(row);
+    },
+    pickProxyWidth(row) {
+      return style[row * STYLE_STRIDE + PROXY_WIDTH];
+    },
+    pickProxyHeight(row) {
+      return style[row * STYLE_STRIDE + PROXY_HEIGHT];
+    },
+
+    /**
+     * Draw over depth within `metres` of the eye, as a billboard's
+     * `disableDepthTestDistance`: 0 tests depth everywhere, Infinity (the
+     * default) never does.
+     */
+    setDepthTestDistance(row, metres) {
+      writeStyle(
+        row,
+        DEPTH_TEST_DISTANCE,
+        metres >= ICON_ALWAYS_OVER_DEPTH ? ICON_ALWAYS_OVER_DEPTH : metres,
+      );
+    },
+    depthTestDistance(row) {
+      return style[row * STYLE_STRIDE + DEPTH_TEST_DISTANCE];
     },
 
     /** Size by camera distance, as Cesium's NearFarScalar (unset: 1 everywhere). */

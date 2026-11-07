@@ -9,7 +9,8 @@
  * - lerp: straight from `base` to `base + U` between two fix times (the interpolation
  *   between two known fixes), course affine in the fraction;
  * - arc: a constant-rate turn from a fix in its east/north plane (`U`, `V`), with the
- *   elapsed time clamped (warm-up before the first fix, coast after the last).
+ *   elapsed time clamped (warm-up before the first fix, coast after the last),
+ *   climbing along the fix's up axis (`U × V`) at a constant rate.
  *
  * The arc uses `cos a − cos(a+b) = 2 sin(b/2) sin(a+b/2)`, so its offset is
  * `v·t·sinc(ωt/2)·(sin, cos)(a + ωt/2)`: no cancellation in float32 and no branch
@@ -43,6 +44,7 @@ const TRACK = 17; // rad, clockwise from north
 const OMEGA = 18; // rad/s
 const COURSE0 = 19; // deg
 const COURSE_SLOPE = 20; // lerp: deg per unit fraction
+const CLIMB = 20; // arc: m/s along the fix's up axis (U × V)
 const SLEW_OFFSET = 21; // deg still to glide at SLEW_T0
 const SLEW_T0 = 22; // s
 const SLEW_RATE = 23; // deg/s; negative holds the course at the glide's start
@@ -107,11 +109,13 @@ export function writeLerpSegment(out, row, segment) {
 
 /**
  * Turn at a constant rate from `fix` (at `t0`) in its east/north plane, with the
- * elapsed time clamped to `[minDt, maxDt]`.
+ * elapsed time clamped to `[minDt, maxDt]`, climbing along the fix's up axis at
+ * `climbMps` (default 0).
  * @param {Float32Array} out
  * @param {number} row
  * @param {{fix: Cesium.Cartesian3, t0: number, minDt: number, maxDt: number,
- *   speedMps: number, trackDeg: number, turnRateDps: number}} segment
+ *   speedMps: number, trackDeg: number, turnRateDps: number,
+ *   climbMps?: number}} segment
  */
 export function writeArcSegment(out, row, segment) {
   const o = row * SEGMENT_STRIDE;
@@ -135,6 +139,7 @@ export function writeArcSegment(out, row, segment) {
   out[o + TRACK] = (segment.trackDeg || 0) * DEG;
   out[o + OMEGA] = Math.abs(omega) < STRAIGHT_BELOW_RAD_PER_SEC ? 0 : omega;
   out[o + COURSE0] = norm360(segment.trackDeg || 0);
+  out[o + CLIMB] = segment.climbMps || 0;
 }
 
 /**
@@ -266,6 +271,19 @@ export function segmentPosition(
     x += seg[o + AXIS_U] * e + seg[o + AXIS_V] * n;
     y += seg[o + AXIS_U + 1] * e + seg[o + AXIS_V + 1] * n;
     z += seg[o + AXIS_U + 2] * e + seg[o + AXIS_V + 2] * n;
+    const climb = seg[o + CLIMB] * dt;
+    if (climb !== 0) {
+      // Up is east × north.
+      const ux = seg[o + AXIS_U];
+      const uy = seg[o + AXIS_U + 1];
+      const uz = seg[o + AXIS_U + 2];
+      const vx = seg[o + AXIS_V];
+      const vy = seg[o + AXIS_V + 1];
+      const vz = seg[o + AXIS_V + 2];
+      x += (uy * vz - uz * vy) * climb;
+      y += (uz * vx - ux * vz) * climb;
+      z += (ux * vy - uy * vx) * climb;
+    }
   }
   result.x = x;
   result.y = y;
@@ -293,7 +311,7 @@ float iconSegmentParameter(vec4 seg3, vec4 seg4, float tau) {
   return 0.0;
 }
 
-vec3 iconSegmentPosition(vec4 seg0, vec4 seg1, vec4 seg2, vec4 seg3, vec4 seg4, float tau) {
+vec3 iconSegmentPosition(vec4 seg0, vec4 seg1, vec4 seg2, vec4 seg3, vec4 seg4, vec4 seg5, float tau) {
   vec3 high = seg0.xyz;
   vec3 low = vec3(seg0.w, seg1.xy);
   vec3 axisU = vec3(seg1.zw, seg2.x);
@@ -309,6 +327,7 @@ vec3 iconSegmentPosition(vec4 seg0, vec4 seg1, vec4 seg2, vec4 seg3, vec4 seg4, 
     float reach = seg4.x * t * iconSinc(half_);
     float heading = seg4.y + half_;
     p += axisU * (reach * sin(heading)) + axisV * (reach * cos(heading));
+    p += cross(axisU, axisV) * (seg5.x * t);
   }
   return p;
 }

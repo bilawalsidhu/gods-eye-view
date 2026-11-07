@@ -186,6 +186,7 @@ test('consumer build includes only infrastructure code and resolves assets under
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
+    'aircraftRecession.js',
     'camera.js',
     'cameraControls.js',
     'cameraInput.js',
@@ -200,7 +201,13 @@ test('consumer build includes only infrastructure code and resolves assets under
     'events.js',
     'follow.js',
     'frame.js',
+    'gpuIcons.js',
     'heights.js',
+    'horizon.js',
+    'iconAtlas.js',
+    'iconSegment.js',
+    'iconSet.js',
+    'iconSetPrimitive.js',
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
@@ -209,6 +216,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'internals.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
+    'motionModel.js',
     'pickRegistry.js',
     'query.js',
     'rendererOf.js',

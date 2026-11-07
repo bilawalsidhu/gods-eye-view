@@ -39,6 +39,7 @@ const ATTRIBUTE_LOCATIONS = Object.freeze({
   style2: 9,
   color: 10,
   pickColor: 11,
+  style3: 12,
 });
 
 const VERTEX_SHADER = /* glsl */ `
@@ -52,6 +53,7 @@ in vec4 seg5;
 in vec4 style0; // width, height, scale, alpha
 in vec4 style1; // far image, near image, flags, focus
 in vec4 style2; // scale by distance (near, near value, far, far value)
+in vec4 style3; // near-image switch (CSS px), pick proxy size (CSS px), depth-test distance
 in vec4 color;
 in vec4 pickColor;
 
@@ -63,10 +65,13 @@ uniform vec3 u_cameraUp;
 uniform vec4 u_recession; // limb distance, start ratio, strength, enabled
 uniform vec3 u_recessionFloors; // scale, alpha, combined alpha
 uniform vec4 u_slots[${MAX_ICON_SLOTS}];
+uniform float u_cull; // 1: hide rows past the ellipsoid's horizon
+uniform float u_pickPass; // 1 while drawing for a pick
 
 out vec2 v_uv;
 out vec4 v_color;
 out vec4 v_pickColor;
+out float v_proxy;
 
 // The row's anchor in clip space before screen offsets, for effects that wrap
 // main() (cyber sonar) and must not change geometry or picks.
@@ -99,15 +104,16 @@ void main() {
   v_pickColor = pickColor;
   v_uv = vec2(0.0);
   v_color = vec4(0.0);
+  v_proxy = 0.0;
   gl_Position = vec4(0.0, 0.0, 2.0, 1.0); // outside the clip volume: not drawn
 
   float flags = style1.z;
   if (!iconFlag(flags, 1.0)) return;
 
-  vec3 rte = iconSegmentPosition(seg0, seg1, seg2, seg3, seg4, u_tau);
+  vec3 rte = iconSegmentPosition(seg0, seg1, seg2, seg3, seg4, seg5, u_tau);
   vec3 world = u_cameraPosition + rte;
   vec3 cullPoint = iconFlag(flags, ${ICON_CULL_LIFT.toFixed(1)}) ? iconCullPoint(world) : world;
-  if (occludedByEllipsoid(cullPoint)) return;
+  if (u_cull > 0.5 && occludedByEllipsoid(cullPoint)) return;
 
   vec4 positionEC = czm_modelViewRelativeToEye * vec4(rte, 1.0);
   if (positionEC.z >= 0.0) return; // behind the camera
@@ -131,12 +137,20 @@ void main() {
   }
 
   float glyphPx = style0.x * scale * distanceScale * czm_pixelRatio;
-  float slot = glyphPx > ${NEAR_IMAGE_PX.toFixed(1)} ? style1.y : style1.x;
+  bool nearImage = style3.x > 0.0
+    ? glyphPx / czm_pixelRatio > style3.x
+    : glyphPx > ${NEAR_IMAGE_PX.toFixed(1)};
+  float slot = nearImage ? style1.y : style1.x;
   if (slot < 0.0) return; // no image set
   vec4 rect = u_slots[int(slot)];
   if (rect.z <= 0.0) return; // image not loaded yet
 
   vec2 halfSize = style0.xy * (scale * distanceScale * 0.5) * corner;
+  // A pick proxy: picked over the larger of it and the drawn icon.
+  if (u_pickPass > 0.5 && style3.y > 0.0 && style3.z > 0.0) {
+    halfSize = max(abs(halfSize), style3.yz * 0.5) * corner;
+    v_proxy = 1.0;
+  }
   if (iconFlag(flags, 2.0)) {
     float course = radians(iconSegmentCourse(seg3, seg4, seg5, u_tau));
     vec3 up = czm_geodeticSurfaceNormal(world, vec3(0.0), czm_ellipsoidInverseRadii * czm_ellipsoidInverseRadii);
@@ -162,10 +176,13 @@ void main() {
 #ifdef LOG_DEPTH
   czm_vertexLogDepth();
 #endif
-  // Depth test disabled at any distance: draw on the near plane, as a billboard
-  // with disableDepthTestDistance = Infinity.
+  // Depth test disabled within the row's distance (by default at any
+  // distance): draw on the near plane, as a billboard does inside its
+  // disableDepthTestDistance.
   float zclip = gl_Position.z / gl_Position.w;
-  if (zclip >= -1.0 && zclip <= 1.0) {
+  bool overDepth = style3.w >= 1.0e30 || // ICON_ALWAYS_OVER_DEPTH
+    distanceSq < style3.w * style3.w;
+  if (overDepth && zclip >= -1.0 && zclip <= 1.0) {
     gl_Position.z = -gl_Position.w;
 #ifdef LOG_DEPTH
     v_depthFromNearPlusOne = 1.0;
@@ -183,10 +200,13 @@ uniform sampler2D u_atlas;
 in vec2 v_uv;
 in vec4 v_color;
 in vec4 v_pickColor;
+in float v_proxy;
 
 void main() {
   vec4 color = czm_gammaCorrect(texture(u_atlas, v_uv));
   color *= czm_gammaCorrect(v_color);
+  // A pick proxy is picked wherever it covers, drawn or not.
+  if (v_proxy > 0.5) color = vec4(1.0);
   if (color.a < 0.005) discard;
 #ifdef OPAQUE
   if (color.a < 0.995) discard;
@@ -208,16 +228,24 @@ const EARTH_BOUNDS = new Cesium.BoundingSphere(
 );
 
 /**
- * @param {{ set: object, renderTime: () => Cesium.JulianDate,
- *   requestRender?: () => void }} options `renderTime` gives the instant to draw
- *   at (the layer's delayed clock). `requestRender` asks for a frame when the
- *   atlas packs a newly loaded image, for a layer that does not render
- *   continuously.
+ * @param {{ set: object, renderTime: (frameState: object) => Cesium.JulianDate,
+ *   requestRender?: () => void, cull?: () => boolean,
+ *   pickObject?: (id: string, set: object, primitive: object) => object }} options
+ *   `renderTime` gives the instant to draw at (the layer's delayed clock), from
+ *   the frame being drawn. `requestRender` asks for a frame when the atlas packs
+ *   a newly loaded image, for a layer that does not render continuously.
+ *   `cull` says whether rows past the ellipsoid's horizon are hidden (by
+ *   default always). `pickObject` builds a row's pick object around the
+ *   `primitive` drill picks hide it by (by default `{ id, iconSet, meta,
+ *   primitive }`).
  */
 export class IconSetPrimitive {
-  constructor({ set, renderTime, requestRender }) {
+  constructor({ set, renderTime, requestRender, cull, pickObject }) {
     this.set = set;
     this.renderTime = renderTime;
+    this._cull = cull ?? (() => true);
+    this._pickObject = pickObject ?? null;
+    this._pickPass = 0;
     this._stopAtlasListener = requestRender
       ? iconAtlas.onChange(requestRender)
       : null;
@@ -254,6 +282,8 @@ export class IconSetPrimitive {
       u_recessionFloors: () => primitive._recessionFloors,
       u_slots: () => primitive._slots,
       u_atlas: () => primitive._texture,
+      u_cull: () => (primitive._cull() ? 1 : 0),
+      u_pickPass: () => primitive._pickPass,
     };
   }
 
@@ -272,7 +302,9 @@ export class IconSetPrimitive {
     const context = frameState.context;
     this._syncAtlas(context);
     if (!this._texture) return;
-    const renderTime = this.renderTime();
+    // Read as the commands run, which they do right after this update.
+    this._pickPass = frameState.passes.pick ? 1 : 0;
+    const renderTime = this.renderTime(frameState);
     set.rebase(renderTime);
     if (this._generation !== set.generation) this._allocate(context);
     this._upload(context);
@@ -364,7 +396,7 @@ export class IconSetPrimitive {
         strideInBytes: SEGMENT_BYTES,
         instanceDivisor: 1,
       });
-    for (let i = 0; i < 3; i++)
+    for (let i = 0; i < 4; i++)
       attributes.push({
         index: ATTRIBUTE_LOCATIONS[`style${i}`],
         vertexBuffer: buffers.style,
@@ -448,17 +480,19 @@ export class IconSetPrimitive {
         },
       };
       handle = {
-        pickId: context.createPickId({
-          id,
-          // Which set drew the pick: ownership for layers whose row ids are
-          // upstream ids a sibling may share.
-          iconSet: set,
-          get meta() {
-            const at = set.row(id);
-            return at >= 0 ? set.metaAt(at) : undefined;
+        pickId: context.createPickId(
+          this._pickObject?.(id, set, facade) ?? {
+            id,
+            // Which set drew the pick: ownership for layers whose row ids are
+            // upstream ids a sibling may share.
+            iconSet: set,
+            get meta() {
+              const at = set.row(id);
+              return at >= 0 ? set.metaAt(at) : undefined;
+            },
+            primitive: facade,
           },
-          primitive: facade,
-        }),
+        ),
       };
       set.setHandle(row, handle);
     }

@@ -18,6 +18,9 @@
  * draped lines of a set made with `pickable: false` stay out of the pick
  * pass, so they never hide the ground geometry drawn under them from picks.
  *
+ * Icon sets whose items move, glide, recede, pick by proxy or switch images
+ * by size, or that take columns, draw on the GPU instead (`gpuIcons.js`).
+ *
  * Built over a scene by `createCesiumPorts`, and on its own over a Cesium
  * viewer with no renderer bound, when code first asks
  * `findDraw` for one (`rendererOf.js`).
@@ -25,6 +28,7 @@
 import * as Cesium from 'cesium';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
+import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
 
 /** The contract's colour as Cesium's. */
 export function toColor(color, alpha = 1) {
@@ -134,9 +138,15 @@ const ANCHORS = {
  * The draw port over `scene`, and what the other ports read of it: the live
  * sets by id, a version that changes with them, the scene's 3D tilesets and
  * the clamp-state watch the frame loop runs after each draw.
- * @param {{scene: object, report: (error: unknown) => void}} options
+ * @param {{scene: object, report: (error: unknown) => void,
+ *   capabilities?: ReadonlySet<string>}} options `capabilities` gate the
+ *   GPU icon sets' members (by default they all are).
  */
-export function createCesiumDraw({ scene, report }) {
+export function createCesiumDraw({
+  scene,
+  report,
+  capabilities = new Set(GPU_ICON_CAPABILITIES),
+}) {
   const sets = new Map();
   // Bumped on every change to the sets or what they hold.
   let setsVersion = 0;
@@ -186,6 +196,12 @@ export function createCesiumDraw({ scene, report }) {
     const handle = {
       id: spec.id,
       set(list) {
+        if (onGpu(record, list, true)) {
+          items.clear();
+          for (const item of list) items.set(item.id, item);
+          record.gpu.sync();
+          return patched();
+        }
         items.clear();
         for (const item of list) items.set(item.id, item);
         // Icons are changed where they are, when they can be.
@@ -194,6 +210,11 @@ export function createCesiumDraw({ scene, report }) {
         requestRender();
       },
       upsert(list) {
+        if (onGpu(record, list)) {
+          for (const item of list) items.set(item.id, item);
+          record.gpu.write(list);
+          return patched();
+        }
         // Items that only change how they look are changed where they are.
         if (patchPoints(record, list) || patchLines(record, list)) {
           for (const item of list) items.set(item.id, item);
@@ -214,12 +235,20 @@ export function createCesiumDraw({ scene, report }) {
       },
       remove(ids) {
         for (const id of ids) items.delete(id);
+        if (record.gpu) {
+          record.gpu.drop(ids);
+          return patched();
+        }
         if (syncIcons(record, [])) return patched();
         rebuild();
         requestRender();
       },
       clear() {
         items.clear();
+        if (record.gpu) {
+          record.gpu.sync();
+          return patched();
+        }
         if (syncIcons(record, [])) return patched();
         rebuild();
         requestRender();
@@ -245,6 +274,7 @@ export function createCesiumDraw({ scene, report }) {
         // A set that stops picking lets its old ground go now: still drawn
         // while the new builds, it would keep hiding the ground from picks.
         if (pickable && spec.pickable === false) retire(record);
+        record.gpu?.restyle();
         setsVersion += 1;
         showHosts(record);
         // No longer culled: what the cull hid comes back.
@@ -274,9 +304,59 @@ export function createCesiumDraw({ scene, report }) {
         requestRender();
       },
     };
+    // `columns`: column updates of an icon set, on the GPU.
+    if (kind === 'icons' && capabilities.has('columns'))
+      handle.setColumns = (columns) => {
+        onGpu(record, [], false, true);
+        record.gpu.columns(columns);
+        patched();
+      };
     sets.set(spec.id, record);
     setsVersion += 1;
     return handle;
+  }
+
+  const gpu = createGpuIcons({
+    scene,
+    capabilities,
+    toColor,
+    imageOf: (record, image) => iconImage(record, image),
+    peekImage: (image) => atlases.get(image.atlas)?.[image.slot],
+    requestRender,
+  });
+
+  /**
+   * Whether an icon set draws `list` on the GPU: it already does, or the
+   * items (or `force`, for columns) need it to, when its billboards give way
+   * to a GPU host in their place. Refuses, changing nothing, what the GPU
+   * cannot draw: of `list`, and, unless `replacing` them, of the items the
+   * set already holds.
+   */
+  function onGpu(record, list, replacing = false, force = false) {
+    if (record.kind !== 'icons') return false;
+    const wanted = record.gpu || force ? 'needs' : gpu.wants(list);
+    if (!wanted) return false;
+    if (wanted === 'prefers') {
+      // Only a course blend: on the GPU if all of it can be, else billboards.
+      try {
+        gpu.check(list, record.spec);
+        if (!replacing) gpu.check(record.items.values(), record.spec);
+      } catch {
+        return false;
+      }
+    }
+    gpu.check(list, record.spec);
+    if (record.gpu) return true;
+    if (!replacing) gpu.check(record.items.values(), record.spec);
+    record.gpu = gpu.attach(record);
+    record.billboards = null;
+    record.billboardHost = null;
+    record.placed = [];
+    // Icons on the GPU stay out of offscreen passes: height queries never
+    // see them, so there is nothing to see through.
+    record.pickIds = [];
+    replaceHost(record, record.gpu.host);
+    return true;
   }
 
   function pickId(record, item) {
@@ -424,6 +504,8 @@ export function createCesiumDraw({ scene, report }) {
   }
 
   function buildIcons(record) {
+    // A GPU host keeps drawing: what a rebuild changes, it reads live.
+    if (record.gpu) return;
     const host = new Cesium.BillboardCollection({
       scene,
       blendOption: pointBlendOf(record.spec.blend),
@@ -459,7 +541,11 @@ export function createCesiumDraw({ scene, report }) {
       position,
       width: item.size[0] * (item.scale ?? 1),
       height: item.size[1] * (item.scale ?? 1),
-      color: toColor(item.color, item.alpha ?? 1),
+      // Focus emphasis as the GPU icons draw it: a fade, at most to none.
+      color: toColor(
+        item.color,
+        (item.alpha ?? 1) * Math.min(1, Math.max(0, item.focus ?? 1)),
+      ),
       verticalOrigin: ANCHORS[item.anchor ?? 'center'],
       disableDepthTestDistance: item.disableDepthTest ?? 0,
       heightReference: heightReferenceOf(item.height, record.spec.clampTo),
@@ -1348,6 +1434,12 @@ export function createCesiumDraw({ scene, report }) {
       let changed = false;
       for (const record of [...sets.values()])
         if (record.kind === 'icons' && record.atlases?.has(id)) {
+          if (record.gpu) {
+            record.gpu.reatlas(id);
+            setsVersion += 1;
+            changed = true;
+            continue;
+          }
           // Its icons that draw from the atlas take their new images where
           // they are; a set that cannot is rebuilt.
           const drawing = [];
@@ -1374,6 +1466,12 @@ export function createCesiumDraw({ scene, report }) {
     afterRender() {
       watchClamp();
       swapReady();
+      // Rows moving on a live clock draw on in the frames that follow.
+      for (const record of sets.values())
+        if (record.gpu?.animating()) {
+          requestRender();
+          break;
+        }
     },
     /**
      * Let go of the sets; with `removeHosts`, take what they draw out of

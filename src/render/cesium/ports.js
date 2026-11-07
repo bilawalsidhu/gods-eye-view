@@ -17,6 +17,7 @@ import { createCesiumCamera } from './camera.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
+import { GPU_ICON_CAPABILITIES } from './gpuIcons.js';
 import { createCesiumEffects } from './effects.js';
 import { willDraw } from './frame.js';
 import { createCesiumGlobe } from './globe.js';
@@ -58,6 +59,7 @@ const GLOBE_CAPABILITIES = [
 export function cesiumCapabilities(scene, only) {
   const all = [
     'models',
+    ...GPU_ICON_CAPABILITIES,
     'styles',
     'bloom',
     'sharpen',
@@ -288,7 +290,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
 
   // --- Draw ------------------------------------------------------------------
 
-  const drawPart = createCesiumDraw({ scene, report });
+  const drawPart = createCesiumDraw({ scene, report, capabilities });
   const { port: draw, sets, tilesets } = drawPart;
 
   const cameraPart = createCesiumCamera({ scene, camera, report, widget });
@@ -415,6 +417,14 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
   function iconState() {
     let loading = false;
     for (const record of sets.values()) {
+      // GPU icons read their images from the shared icon atlas.
+      if (record.gpu) {
+        if (!record.host?.show) continue;
+        const state = record.gpu.imageState();
+        if (state === 'failed') return 'failed';
+        if (state === 'loading') loading = true;
+        continue;
+      }
       const host = record.kind === 'icons' && record.host;
       if (!host || !host.show) continue;
       for (let i = 0; i < host.length; i++) {

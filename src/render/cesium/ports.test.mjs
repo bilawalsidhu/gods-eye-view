@@ -10,6 +10,9 @@ import { updateCameraChanged } from './internals.js';
 
 test('capabilities follow what the scene supports', () => {
   const effects = [
+    'columns',
+    'motionSegments',
+    'courseGlide',
     'styles',
     'bloom',
     'sharpen',
