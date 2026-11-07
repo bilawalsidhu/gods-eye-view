@@ -141,6 +141,17 @@ test("the Houston camera credit names TranStar's terms and the permission they r
   assert.match(credit.html, /TxDOT's written permission/);
 });
 
+test('the Vigo camera credit carries the attribution wording Vigo requires', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'vigo-cctv');
+  assert.ok(credit, 'Concello de Vigo camera data must be credited');
+  assert.match(credit.html, /\(Vigo, when enabled\)/);
+  assert.match(
+    credit.html,
+    /Fuente de los datos: <a [^>]+>Ayuntamiento de Vigo<\/a>/,
+  );
+  assert.match(credit.html, /ODC-BY/);
+});
+
 test('every Street Level imagery source is in the attribution lightbox', () => {
   for (const key of [
     'mapillary',

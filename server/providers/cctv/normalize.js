@@ -377,6 +377,17 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** Vigo's municipal extent, with slack for the outer ring roads. */
+export function isLikelyVigoCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 42.15 &&
+    lat <= 42.3 &&
+    lon >= -8.85 &&
+    lon <= -8.6
+  );
+}
+
 /** Florida statewide, Key West to Georgia state line, with slack at each edge */
 export function isLikelyFloridaCoordinate(lat, lon) {
   return (

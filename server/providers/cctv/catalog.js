@@ -31,6 +31,7 @@ import {
   loadFloridaSourcesFromOpenData,
   loadHoustonSourcesFromOpenData,
   loadA22SourcesFromOpenDataHub,
+  loadVigoSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -182,6 +183,14 @@ const LIVE_PACKS = [
     name: 'a22',
     enabled: () => envEnabled('CCTV_A22_ENABLED'),
     load: loadA22SourcesFromOpenDataHub,
+  },
+  {
+    // Opt-in until Concello de Vigo confirms the open-data terms cover
+    // redistributing the camera images, not only the camera list
+    // (see DATA_SOURCES.md).
+    name: 'vigo',
+    enabled: () => envOptIn('CCTV_VIGO_ENABLED'),
+    load: loadVigoSourcesFromOpenData,
   },
 ];
 /**

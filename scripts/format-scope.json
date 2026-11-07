@@ -128,6 +128,8 @@
   "server/providers/cctv/normalize.js",
   "src/data/cctvMissingNumbers.test.mjs",
   "server/providers/cctv/sources.js",
+  "server/providers/cctv/vigo.test.mjs",
+  "server/providers/cctv/media.test.mjs",
   "src/data/cctvSourcePins.test.mjs",
   "server/providers/radio.js",
   "server/providers/radio/catalog.js",

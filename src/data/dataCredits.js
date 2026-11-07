@@ -386,6 +386,15 @@ export const DATA_CREDITS = [
       '<a href="https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/" target="_blank" rel="noopener">Open Government Licence – Toronto</a>',
   },
   {
+    key: 'vigo-cctv',
+    html:
+      // Required wording from the Vigo open-data conditions of use.
+      'Traffic cameras (Vigo, when enabled): Fuente de los datos: ' +
+      '<a href="https://datos.vigo.org/" target="_blank" rel="noopener">Ayuntamiento de Vigo</a> ' +
+      '(<a href="https://datos-ckan.vigo.org/dataset/t-camaras" target="_blank" rel="noopener">Cámaras de Tráfico</a>, ' +
+      '<a href="https://opendatacommons.org/licenses/by/1-0/" target="_blank" rel="noopener">ODC-BY</a>)',
+  },
+  {
     key: 'mapillary',
     html: 'Street Level: imagery © <a href="https://www.mapillary.com" target="_blank" rel="noopener">Mapillary</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>',
   },

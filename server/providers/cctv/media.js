@@ -16,6 +16,7 @@ import {
   TARKTEE_IMAGE_ORIGIN,
   ICELAND_IMAGE_ORIGIN,
   TFL_IMAGE_ORIGIN,
+  VIGO_IMAGE_ORIGIN,
   WARENDORF_IMAGE_ORIGINS,
   WSDOT_IMAGE_ORIGIN,
 } from './constants.js';
@@ -532,6 +533,7 @@ for (const prefix of [
   KING_COUNTY_IMAGE_ORIGIN,
   WSDOT_IMAGE_ORIGIN,
   A22_IMAGE_ORIGIN,
+  VIGO_IMAGE_ORIGIN,
 ]) {
   const host = new URL(prefix).hostname;
   CCTV_PINNED_PREFIXES_BY_HOST.set(host, [
@@ -604,6 +606,10 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
  */
 const CCTV_IMAGE_USER_AGENT_BY_HOST = Object.freeze({
   [new URL(NSW_IMAGE_ORIGIN).hostname]: NSW_IMAGE_USER_AGENT,
+  // camaras.vigo.org (verified 2026-09-27) serves frames only to
+  // browser-identified clients; the proxy's own identifying User-Agent gets
+  // a different (non-image) response, same class of issue as NSW above.
+  [new URL(VIGO_IMAGE_ORIGIN).hostname]: NSW_IMAGE_USER_AGENT,
 });
 
 /**
@@ -621,6 +627,65 @@ export function cctvUpstreamUserAgent(url) {
   } catch {
     return 'gods-eye-view-cctv-proxy/1.0';
   }
+}
+
+/**
+ * Image hosts known to serve real frames with a missing or wrong
+ * `Content-Type` (Concello de Vigo's `camaras.vigo.org` sends none at all).
+ * Only these hosts get the magic-byte fallback below; every other upstream
+ * must still declare a raster type, so a non-image 2xx body elsewhere is
+ * dropped without being read.
+ */
+const CCTV_SNIFF_IMAGE_HOSTS = new Set([new URL(VIGO_IMAGE_ORIGIN).hostname]);
+
+function hostnameOf(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+
+/**
+ * Identify a raster image format from its leading magic bytes, ignoring
+ * whatever (if anything) the upstream claimed as `Content-Type`.
+ *
+ * Used only for the hosts in CCTV_SNIFF_IMAGE_HOSTS, and only when the
+ * declared type is missing or not a raster image. Every branch requires a
+ * complete image signature, and only raster types are returned, so it can
+ * never turn markup (HTML, SVG) into a relayed frame.
+ *
+ * @param {Buffer} body
+ * @returns {?string} A raster `image/*` MIME type, or null when the bytes
+ *   don't match a known signature.
+ */
+export function sniffImageContentType(body) {
+  if (!Buffer.isBuffer(body) || body.length < 4) return null;
+  if (body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    body.length >= PNG_SIGNATURE.length &&
+    body.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  ) {
+    return 'image/png';
+  }
+  if (body.length >= 6) {
+    const gif = body.toString('latin1', 0, 6);
+    if (gif === 'GIF87a' || gif === 'GIF89a') return 'image/gif';
+  }
+  if (
+    body.length >= 12 &&
+    body.toString('latin1', 0, 4) === 'RIFF' &&
+    body.toString('latin1', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
 }
 
 /**
@@ -662,10 +727,12 @@ export async function fetchCctvImageFromUpstream(
       fetchImpl,
     );
     if (!upstream) return null;
-    const contentType = cctvRasterImageType(
+    const declaredType = cctvRasterImageType(
       upstream.headers.get('content-type'),
     );
-    if (!upstream.ok || !contentType) {
+    const sniffFallback =
+      !declaredType && CCTV_SNIFF_IMAGE_HOSTS.has(hostnameOf(url));
+    if (!upstream.ok || (!declaredType && !sniffFallback)) {
       try {
         await upstream.body?.cancel();
       } catch {
@@ -675,6 +742,8 @@ export async function fetchCctvImageFromUpstream(
     }
     const body = await readCappedResponseBytes(upstream, maxBytes);
     if (!body) return null;
+    const contentType = declaredType || sniffImageContentType(body);
+    if (!contentType) return null;
     return { ok: true, body, contentType };
   } catch {
     return null;
