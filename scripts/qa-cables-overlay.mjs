@@ -138,8 +138,8 @@ try {
         out.tips += set.count;
       }
     }
-    out.stems = engine.lines.list().filter((line) =>
-      line.id.startsWith(`${layerId}-stem-`) && line.shown).length;
+    out.stems = (engine.lines.list().find((line) =>
+      line.id === `${layerId}-stems` && line.shown)?.points ?? 0) / 2;
     const diag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
     out.hostEntries = diag.entriesBySource?.[layerId] || 0;
     out.hostPainted = diag.paintedBySource?.[layerId] || 0;

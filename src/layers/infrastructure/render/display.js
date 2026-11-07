@@ -131,6 +131,8 @@ export function createInfrastructureDisplay(
   const owners = new Set();
   // record id → its stem, while the record is drawn.
   const stems = new Map();
+  let stemBatch = null,
+    stemsDirty = false;
   const removers = [];
   let dataset = null,
     tips = null,
@@ -274,13 +276,12 @@ export function createInfrastructureDisplay(
     const globe = !photoreal();
     if (globe && !engine.surface.tilesLoaded()) return false;
     // The stem stands on the sample point: out of the sample.
-    const stem = stems.get(row.id);
-    stem?.line.show(false);
+    stemBatch?.show(false);
     let sampled;
     try {
       sampled = engine.surface.sampleHeight(row.carto, exclude);
     } finally {
-      stem?.line.show(true);
+      stemBatch?.show(true);
     }
     if (!finite(sampled) || Math.abs(sampled) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M)
       return false;
@@ -353,33 +354,26 @@ export function createInfrastructureDisplay(
   }
 
   function stemOf(row) {
-    let stem = stems.get(row.id);
-    if (!stem) {
-      const lineId = `${id}-stem-${row.id}`;
-      stem = {
-        id: lineId,
-        line: engine.lines.createLine({
-          id: lineId,
-          widthPx: STEM_PX,
-          color: rgba,
-          pickId: row.pickId,
-        }),
-      };
-      stem.line.setPositions([row.base, row.tip]);
-      stem.base = geo.cartesian3.clone(row.base);
-      stem.tip = geo.cartesian3.clone(row.tip);
-      owners.add(lineId);
-      stems.set(row.id, stem);
+    if (!stemBatch) {
+      stemBatch = engine.lines.createSegments({
+        id: `${id}-stems`,
+        widthPx: STEM_PX,
+        color: rgba,
+      });
+      owners.add(`${id}-stems`);
     }
+    const stem = {
+      base: geo.cartesian3.clone(row.base),
+      tip: geo.cartesian3.clone(row.tip),
+      pickId: row.pickId,
+    };
+    stems.set(row.id, stem);
+    stemsDirty = true;
     return stem;
   }
 
   function dropStem(rowId) {
-    const stem = stems.get(rowId);
-    if (!stem) return;
-    stem.line.destroy();
-    owners.delete(stem.id);
-    stems.delete(rowId);
+    if (stems.delete(rowId)) stemsDirty = true;
   }
 
   // The LOD selection, from every record's distance and horizon.
@@ -509,12 +503,22 @@ export function createInfrastructureDisplay(
           !geo.cartesian3.equals(stem.tip, row.tip) ||
           !geo.cartesian3.equals(stem.base, row.base)
         ) {
-          stem.line.setPositions([row.base, row.tip]);
+          stemsDirty = true;
           geo.cartesian3.clone(row.base, stem.base);
           geo.cartesian3.clone(row.tip, stem.tip);
         }
         if (row.entry) visible.push(row);
       }
+    }
+    if (stemsDirty && stemBatch) {
+      stemBatch.replace(
+        [...stems.values()].map((stem) => ({
+          positions: [stem.base, stem.tip],
+          pickId: stem.pickId,
+        })),
+      );
+      stemBatch.commit();
+      stemsDirty = false;
     }
     dirty = false;
     if (tipsChanged) tips.commit();
@@ -575,7 +579,10 @@ export function createInfrastructureDisplay(
     services.hideOsmCredit?.(engine, id);
     clearGroundRetry();
     for (const remove of removers.splice(0)) remove();
-    for (const rowId of [...stems.keys()]) dropStem(rowId);
+    stems.clear();
+    stemBatch?.destroy();
+    stemBatch = null;
+    stemsDirty = false;
     for (const set of [tips, pins, footprints, corridors]) set?.destroy();
     tips = pins = footprints = corridors = null;
     exclude = [];

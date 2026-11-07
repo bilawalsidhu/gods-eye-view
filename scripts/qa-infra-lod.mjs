@@ -234,13 +234,10 @@ try {
     // ── GATE c: no churn between camera moves ───────────────────────────
     const churn = await page.evaluate(async (infraIds) => {
       const gev = window.__godsEyeView;
-      // The layer draws through the globe contract: a reference in view has
-      // a stem line `${layerId}-stem-${featureId}` (render/display.js drops
-      // it when the reference leaves the view or the LOD set).
-      const snap = () => infraIds.map((id) => gev.engine.lines.list()
-        .filter((line) => line.id.startsWith(`${id}-stem-`) && line.shown)
-        .map((line) => line.id)
-        .sort());
+      // A batch lists the visible references' pick ids in drawing order.
+      const snap = () => infraIds.map((id) => (gev.engine.lines.list()
+        .find((line) => line.id === `${id}-stems` && line.shown)?.pickIds ?? [])
+        .slice().sort());
       const before = snap();
       for (let i = 0; i < 5; i++) {
         gev.viewer.scene.requestRender?.();

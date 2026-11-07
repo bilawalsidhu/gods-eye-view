@@ -42,6 +42,13 @@ export function createNavaraLines(view, { overlay }) {
         line.setPositions(state.flat);
         request();
       },
+      setSegments(items) {
+        state.items = items;
+        const flat = new Float64Array(items.length * 6);
+        items.forEach((item, index) => flat.set(item.positions, index * 6));
+        line.setPositions(flat, items);
+        request();
+      },
       setColor(rgba) {
         line.setColor(rgba);
         request();
@@ -68,9 +75,25 @@ export function createNavaraLines(view, { overlay }) {
     lines: registry.lines,
     /** Shown lines with a pickId: options, drawn positions, matrix. */
     pickables: () =>
-      [...drawn.values()].filter(
-        (state) => state.shown && state.options.pickId !== undefined,
-      ),
+      [...drawn.values()]
+        .filter((state) => state.shown)
+        .flatMap((state) =>
+          state.options.segments
+            ? (state.items ?? [])
+                .filter((item) => item.pickId !== undefined)
+                .map((item) => ({
+                  options: {
+                    ...state.options,
+                    widthPx: item.widthPx,
+                    pickId: item.pickId,
+                  },
+                  flat: item.positions,
+                  modelMatrix: null,
+                }))
+            : state.options.pickId !== undefined
+              ? [state]
+              : [],
+        ),
     destroy: () => registry.destroyAll(),
   };
 }

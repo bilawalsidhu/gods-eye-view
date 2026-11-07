@@ -563,7 +563,12 @@ test('a real enabled cable layer publishes host entries and draws through the en
     collisionCapacity: CABLE_OVERLAY_COLLISION_CAPACITY,
     moving: false,
   });
-  assert.deepEqual(env.drawn(), { ground: 1, movers: 3, lines: 2 });
+  assert.deepEqual(env.drawn(), { ground: 1, movers: 3, lines: 1 });
+  assert.equal(
+    env.engine.lines.list()[0].points,
+    4,
+    'both stems share the batch',
+  );
   const stats = env.layer.getStats();
   assert.equal(stats.referenceLabelCount, 2);
   assert.equal(stats.count, 2);

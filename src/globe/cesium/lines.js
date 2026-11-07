@@ -197,6 +197,39 @@ export function createCesiumLines(
         slot.add(primitive);
         requestRender('lines');
       },
+      setSegments(items) {
+        drop();
+        if (items.length) {
+          primitive = make.primitive({
+            geometryInstances: items.map(
+              (item) =>
+                new Cesium.GeometryInstance({
+                  geometry: new Cesium.PolylineGeometry({
+                    positions: Cesium.Cartesian3.unpackArray(item.positions),
+                    width: item.widthPx,
+                    vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
+                    arcType: Cesium.ArcType.NONE,
+                  }),
+                  attributes: {
+                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                      toColor(item.color),
+                    ),
+                  },
+                  id: item.pickId,
+                }),
+            ),
+            appearance: new Cesium.PolylineColorAppearance({
+              translucent: true,
+            }),
+            show: shown,
+            asynchronous: false,
+            allowPicking: items.some((item) => item.pickId !== undefined),
+          });
+          primitive.gevLine = options.id;
+          slot.add(primitive);
+        }
+        requestRender('lines');
+      },
       setColor(rgba) {
         color = rgba;
         if (appearance) appearance.material.uniforms.color = toColor(rgba);
@@ -245,6 +278,13 @@ export function createCesiumLines(
     identify(picked) {
       const owner = picked?.primitive?.gevLine;
       const state = owner === undefined ? null : registry.live.get(owner);
+      if (state?.options.segments)
+        return state.shown &&
+          state.items.some(
+            (item) => item.pickId !== undefined && item.pickId === picked.id,
+          )
+          ? { owner, id: picked.id }
+          : { owner, id: picked.id, pickable: false };
       return state && state.options.pickId !== undefined
         ? { owner, id: state.options.pickId }
         : null;

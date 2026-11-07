@@ -490,9 +490,23 @@
  * @property {() => void} destroy
  *   Every call requests a render; nothing animates on its own.
  *
+ * @typedef {object} LineSegments
+ *   A batch of independent, straight, solid, depth-tested world segments.
+ *   replace copies the items; commit draws them together. Omitting an item
+ *   removes it. Width and colour default to the batch's options. Each item
+ *   has its own pickId; picks name the batch as owner. Empty batches draw nothing.
+ * @property {(items: { positions: Cartesian3[] | Float64Array, widthPx?: number, color?: number[], pickId?: any }[]) => void} replace
+ *   Exactly two positions per segment, never connected to other segments.
+ * @property {() => void} commit
+ * @property {(visible: boolean) => void} show
+ * @property {() => void} destroy
+ *
  * @typedef {object} GlobeLines
  * @property {(options: LineOptions) => Line} createLine
- * @property {() => { id: string, points: number, shown: boolean }[]} list
+ * @property {(options: { id: string, widthPx: number, color: number[], order?: number }) => LineSegments} createSegments
+ *   Shares the live id namespace and list with createLine. No dash, arc,
+ *   model matrix or depth-fail copy; each segment is two Earth-fixed endpoints.
+ * @property {() => { id: string, points: number, shown: boolean, pickIds?: any[] }[]} list
  *
  * @typedef {object} GroundSetOptions
  *   A set of flat fills draped on the ground: on terrain and 3D tiles,
@@ -947,7 +961,11 @@ const SHAPE = {
   credits: { addStatic: isFunction },
   clock: { now: isFunction, frameTime: isFunction },
   movers: { createSet: isFunction, list: isFunction },
-  lines: { createLine: isFunction, list: isFunction },
+  lines: {
+    createLine: isFunction,
+    createSegments: isFunction,
+    list: isFunction,
+  },
   meshes: { createMesh: isFunction, list: isFunction },
   ground: {
     createSet: isFunction,

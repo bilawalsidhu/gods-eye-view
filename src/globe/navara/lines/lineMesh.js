@@ -30,6 +30,11 @@ const VERTEX_HEAD = /* glsl */ `
 attribute vec3 gevEnd;
 attribute vec2 gevSide;
 attribute float gevS;
+#ifdef GEV_SEGMENTS
+attribute vec4 gevColor;
+attribute float gevWidth;
+varying vec4 vGevColor;
+#endif
 uniform vec2 uGevViewport;
 uniform float uGevWidthPx;
 varying float vGevS;
@@ -51,7 +56,12 @@ vec2 gevDirection = gevScreenB - gevScreenA;
 gevDirection = length(gevDirection) > 1e-6 ? normalize(gevDirection) : vec2(1.0, 0.0);
 vec2 gevNormal = vec2(-gevDirection.y, gevDirection.x);
 gl_Position = gevSide.x < 0.5 ? gevA : gevB;
+#ifdef GEV_SEGMENTS
+vGevColor = gevColor;
+gl_Position.xy += gevNormal * gevSide.y * gevWidth / uGevViewport * gl_Position.w;
+#else
 gl_Position.xy += gevNormal * gevSide.y * uGevWidthPx / uGevViewport * gl_Position.w;
+#endif
 vec4 mvPosition = modelViewMatrix * vec4(gevSide.x < 0.5 ? position : gevEnd, 1.0);
 vGevS = gevS;
 vGevT = gevSide.y * 0.5 + 0.5;
@@ -61,6 +71,9 @@ vGevDepthFree = 0.0;
 
 const FRAGMENT_HEAD = /* glsl */ `
 uniform vec4 uGevColor;
+#ifdef GEV_SEGMENTS
+varying vec4 vGevColor;
+#endif
 uniform float uGevAlphaScale;
 uniform float uGevPixelRatio;
 ${OVERLAY_DEPTH_FRAGMENT}
@@ -92,7 +105,11 @@ const FRAGMENT_COLOR = /* glsl */ `
 #include <color_fragment>
 if (gevOverlayHidden()) discard;
 // sRGB colours (as Cesium takes them) into the linear output.
+#ifdef GEV_SEGMENTS
+diffuseColor = sRGBTransferEOTF(vGevColor);
+#else
 diffuseColor = sRGBTransferEOTF(uGevColor);
+#endif
 diffuseColor.a *= uGevAlphaScale;
 if (uGevArrow) {
   float head = max(fwidth(vGevS) * 10.0 * uGevPixelRatio, 1e-6);
@@ -142,14 +159,16 @@ export function patchLineShader(shader, uniforms) {
  * segment 4 vertices (start/end × side) and 2 triangles; `gevS` is the
  * fraction of the line's length at the vertex's end.
  */
-export function buildRibbon(flat, origin) {
+export function buildRibbon(flat, origin, items = null) {
   const points = flat.length / 3;
-  const segments = Math.max(0, points - 1);
+  const segments = items ? items.length : Math.max(0, points - 1);
   const start = new Float32Array(segments * 12);
   const end = new Float32Array(segments * 12);
   const side = new Float32Array(segments * 8);
   const along = new Float32Array(segments * 4);
   const index = new Uint32Array(segments * 6);
+  const colors = items ? new Float32Array(segments * 16) : null;
+  const widths = items ? new Float32Array(segments * 4) : null;
   const cumulative = new Float64Array(points);
   for (let p = 1; p < points; p++)
     cumulative[p] =
@@ -161,7 +180,7 @@ export function buildRibbon(flat, origin) {
       );
   const total = cumulative[points - 1] || 1;
   for (let s = 0; s < segments; s++) {
-    const a = s * 3;
+    const a = s * (items ? 6 : 3);
     const b = a + 3;
     for (let v = 0; v < 4; v++) {
       const vertex = s * 4 + v;
@@ -172,7 +191,11 @@ export function buildRibbon(flat, origin) {
       const atEnd = v >= 2 ? 1 : 0;
       side[vertex * 2] = atEnd;
       side[vertex * 2 + 1] = v % 2 === 0 ? 1 : -1;
-      along[vertex] = cumulative[s + atEnd] / total;
+      along[vertex] = items ? atEnd : cumulative[s + atEnd] / total;
+      if (items) {
+        colors.set(items[s].color, vertex * 4);
+        widths[vertex] = items[s].widthPx;
+      }
     }
     index.set(
       [s * 4, s * 4 + 1, s * 4 + 2, s * 4 + 2, s * 4 + 1, s * 4 + 3],
@@ -184,6 +207,10 @@ export function buildRibbon(flat, origin) {
   geometry.setAttribute('gevEnd', new BufferAttribute(end, 3));
   geometry.setAttribute('gevSide', new BufferAttribute(side, 2));
   geometry.setAttribute('gevS', new BufferAttribute(along, 1));
+  if (items) {
+    geometry.setAttribute('gevColor', new BufferAttribute(colors, 4));
+    geometry.setAttribute('gevWidth', new BufferAttribute(widths, 1));
+  }
   geometry.setIndex(new BufferAttribute(index, 1));
   return geometry;
 }
@@ -228,9 +255,11 @@ export function createLineMesh(
       uGevAlphaScale: { value: alphaScale },
       uGevDepthMode: { value: depthMode },
     };
+    if (options.segments) value.defines = { GEV_SEGMENTS: 1 };
     value.userData.gevDepthMode = depthMode;
     value.onBeforeCompile = (shader) => patchLineShader(shader, uniforms);
-    value.customProgramCacheKey = () => 'gev-line';
+    value.customProgramCacheKey = () =>
+      options.segments ? 'gev-segments' : 'gev-line';
     return value;
   };
   const group = new Group();
@@ -267,10 +296,10 @@ export function createLineMesh(
     group,
     uniforms: shared,
     meshes: () => (behind ? [main, behind] : [main]),
-    setPositions(flat) {
+    setPositions(flat, items = null) {
       const previous = main.geometry;
       origin = flat.length >= 3 ? [flat[0], flat[1], flat[2]] : [0, 0, 0];
-      const geometry = buildRibbon(flat, origin);
+      const geometry = buildRibbon(flat, origin, items);
       main.geometry = geometry;
       if (behind) behind.geometry = geometry;
       previous.dispose();

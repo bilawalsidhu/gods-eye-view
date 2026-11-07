@@ -232,6 +232,10 @@ export function createFakeEngine(options = {}) {
         state.positions = flat;
         changed();
       },
+      setSegments(items) {
+        state.items = items;
+        changed();
+      },
       setColor(rgba) {
         state.color = rgba;
         changed();
@@ -636,11 +640,25 @@ export function createFakeEngine(options = {}) {
     lines: () =>
       [...fakeLines.values()]
         .filter((state) => state.shown)
-        .map((state) => ({
-          options: state.options,
-          flat: state.positions,
-          modelMatrix: state.modelMatrix,
-        })),
+        .flatMap((state) =>
+          state.options.segments
+            ? (state.items ?? []).map((item) => ({
+                options: {
+                  ...state.options,
+                  widthPx: item.widthPx,
+                  pickId: item.pickId,
+                },
+                flat: item.positions,
+                modelMatrix: null,
+              }))
+            : [
+                {
+                  options: state.options,
+                  flat: state.positions,
+                  modelMatrix: state.modelMatrix,
+                },
+              ],
+        ),
     // Ground items under the picked globe point (src/globe/ground.js).
     meshes: (at) => {
       const ray = engine.camera.pickRay(at);

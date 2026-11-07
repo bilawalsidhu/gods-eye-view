@@ -145,6 +145,7 @@ export function createCablesDisplay(
   const owners = new Set();
   // record id → its stem, while the record is a label winner.
   const stems = new Map();
+  let stemBatch = null;
   const tipSets = new Map();
   const removers = [];
   let dataset = null;
@@ -190,36 +191,6 @@ export function createCablesDisplay(
     if (dataset) buildPaths();
   }
 
-  // A winner's stem: its line and the tip it was last drawn to.
-  function stemFor(record) {
-    let stem = stems.get(record.id);
-    if (!stem) {
-      const { widthPx, color: stemColor } = KINDS[record.kind].stem;
-      const id = `${ID}-stem-${record.id}`;
-      stem = {
-        id,
-        line: engine.lines.createLine({
-          id,
-          widthPx,
-          color: stemColor,
-          pickId: record.id,
-        }),
-        tip: null,
-      };
-      owners.add(id);
-      stems.set(record.id, stem);
-    }
-    return stem;
-  }
-
-  function dropStem(recordId) {
-    const stem = stems.get(recordId);
-    if (!stem) return;
-    stem.line.destroy();
-    owners.delete(stem.id);
-    stems.delete(recordId);
-  }
-
   // The reference sweep, on the gate's cadence: horizon visibility,
   // distances, tip heights, the label cohort and the winners' stems.
   function sweep() {
@@ -254,12 +225,39 @@ export function createCablesDisplay(
     const winners = selectCableReferenceLabelWinners([...records.values()]);
     referenceLabelCount = winners.length;
     const winning = new Set(winners.map((record) => record.id));
-    for (const id of [...stems.keys()]) if (!winning.has(id)) dropStem(id);
+    let stemsChanged = false;
+    for (const id of [...stems.keys()])
+      if (!winning.has(id)) {
+        stems.delete(id);
+        stemsChanged = true;
+      }
     for (const record of winners) {
-      const stem = stemFor(record);
-      if (stem.tip && geo.cartesian3.equals(stem.tip, record.tip)) continue;
-      stem.line.setPositions([record.base, record.tip]);
-      stem.tip = geo.cartesian3.clone(record.tip, stem.tip ?? undefined);
+      const stem = stems.get(record.id);
+      if (stem && geo.cartesian3.equals(stem.tip, record.tip)) continue;
+      stems.set(record.id, {
+        ...KINDS[record.kind].stem,
+        base: record.base,
+        tip: geo.cartesian3.clone(record.tip),
+        pickId: record.id,
+      });
+      stemsChanged = true;
+    }
+    if (stemsChanged) {
+      if (!stemBatch) {
+        stemBatch = engine.lines.createSegments({
+          id: `${ID}-stems`,
+          widthPx: 2,
+          color: [1, 1, 1, 1],
+        });
+        owners.add(`${ID}-stems`);
+      }
+      stemBatch.replace(
+        [...stems.values()].map(({ base, tip, ...style }) => ({
+          ...style,
+          positions: [base, tip],
+        })),
+      );
+      stemBatch.commit();
     }
     let changed = winners.length !== lastCount;
     const entries = winners.map((record, index) => {
@@ -314,7 +312,9 @@ export function createCablesDisplay(
     markers = null;
     for (const set of tipSets.values()) set.destroy();
     tipSets.clear();
-    for (const id of [...stems.keys()]) dropStem(id);
+    stems.clear();
+    stemBatch?.destroy();
+    stemBatch = null;
     owners.clear();
     records.clear();
     pathItems = [];

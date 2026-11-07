@@ -7,6 +7,7 @@ import {
   UniformsUtils,
   Vector3,
 } from 'three';
+import { createNavaraLines } from './index.js';
 import { normalizeLineOptions } from '../../lines.js';
 import { buildRibbon, createLineMesh, patchLineShader } from './lineMesh.js';
 
@@ -86,4 +87,82 @@ test('a line places its group at the first point under its model matrix', () => 
   line.show(false);
   assert.equal(line.group.visible, false);
   line.dispose();
+});
+
+test('segment batches share an overlay mesh without connecting the endpoints', () => {
+  const groups = [];
+  let requests = 0,
+    disposed = 0;
+  const overlay = {
+    uniforms: {
+      tGevSceneDepth: { value: null },
+      uGevResolution: { value: [0, 0] },
+    },
+    add: (group) => groups.push(group),
+    remove: (group) => groups.splice(groups.indexOf(group), 1),
+  };
+  const part = createNavaraLines(
+    {
+      forceUpdate() {
+        requests++;
+      },
+      canvas: { clientWidth: 800, clientHeight: 600 },
+    },
+    { overlay },
+  );
+  const batch = part.lines.createSegments({
+    id: 'stems',
+    widthPx: 2,
+    color: [1, 0, 0, 1],
+  });
+  const items = [
+    {
+      positions: new Float64Array([6378137, 0, 0, 6378137, 10, 0]),
+      pickId: 'first',
+    },
+    {
+      positions: new Float64Array([6378137, 100, 0, 6378137, 110, 0]),
+      widthPx: 4,
+      color: [0, 1, 0, 0.5],
+      pickId: 'second',
+    },
+  ];
+  batch.replace(items);
+  batch.commit();
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].children.length, 1);
+  const mesh = groups[0].children[0];
+  const geometry = mesh.geometry;
+  assert.equal(geometry.index.count, 12, 'two quads, no bridge');
+  assert.deepEqual(
+    [...geometry.getAttribute('position').array.slice(12, 15)],
+    [0, 100, 0],
+  );
+  assert.deepEqual(
+    [...geometry.getAttribute('gevWidth').array],
+    [2, 2, 2, 2, 4, 4, 4, 4],
+  );
+  assert.deepEqual(
+    [...geometry.getAttribute('gevColor').array.slice(16, 20)],
+    [0, 1, 0, 0.5],
+  );
+  assert.equal(mesh.material.defines.GEV_SEGMENTS, 1);
+  assert.deepEqual(
+    part.pickables().map((item) => item.options.pickId),
+    ['first', 'second'],
+  );
+  geometry.addEventListener('dispose', () => disposed++);
+  batch.show(false);
+  batch.replace(items.slice(1));
+  batch.commit();
+  assert.equal(disposed, 1);
+  assert.equal(groups[0].visible, false);
+  assert.deepEqual(part.pickables(), []);
+  batch.show(true);
+  assert.equal(part.pickables()[0].options.pickId, 'second');
+  assert.equal(part.pickables()[0].options.id, 'stems');
+  part.destroy();
+  assert.deepEqual(groups, []);
+  assert.deepEqual(part.lines.list(), []);
+  assert.ok(requests >= 5);
 });

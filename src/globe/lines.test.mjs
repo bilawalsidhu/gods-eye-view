@@ -122,3 +122,50 @@ test('the tactical dash is the launches mission-orbit pattern', async () => {
     dashes: policy.MISSION_ORBIT_DASHES_PER_GROUP,
   });
 });
+
+test('segment batches copy endpoints and styles, commit atomically and share line ids', () => {
+  const draws = [];
+  let destroyed = 0;
+  const registry = createLineRegistry(() => ({
+    setSegments: (items) => draws.push(items),
+    show() {},
+    destroy() {
+      destroyed++;
+    },
+  }));
+  const options = { id: 'stems', widthPx: 3.5, color: [1, 0, 0, 0.5] };
+  const batch = registry.lines.createSegments(options);
+  assert.throws(() => registry.lines.createLine(options), /already exists/);
+  assert.throws(() => registry.lines.createSegments(options), /already exists/);
+  const positions = new Float64Array([1, 2, 3, 4, 5, 6]);
+  const color = [0, 1, 0, 1];
+  batch.replace([{ positions, color, widthPx: 2, pickId: 'first' }]);
+  positions[0] = 99;
+  color[0] = 1;
+  assert.equal(draws.length, 0);
+  for (const item of [
+    { positions: new Float64Array([1, 2, 3]) },
+    { positions, widthPx: 0 },
+    { positions, color: [1, 2] },
+  ])
+    assert.throws(() => batch.replace([item]), TypeError);
+  batch.commit();
+  assert.equal(draws[0][0].positions[0], 1);
+  assert.deepEqual(draws[0][0].color, [0, 1, 0, 1]);
+  assert.equal(draws[0][0].widthPx, 2);
+  batch.commit();
+  assert.equal(draws.length, 1, 'clean commit does not rebuild');
+  batch.show(false);
+  batch.replace([]);
+  batch.commit();
+  assert.deepEqual(registry.lines.list(), [
+    { id: 'stems', points: 0, shown: false, pickIds: [] },
+  ]);
+  registry.destroyAll();
+  batch.destroy();
+  assert.equal(destroyed, 1);
+  assert.throws(() => batch.commit(), /destroyed/);
+  assert.throws(() => batch.replace([]), /destroyed/);
+  assert.throws(() => batch.show(true), /destroyed/);
+  assert.deepEqual(registry.lines.list(), []);
+});

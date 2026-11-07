@@ -89,22 +89,44 @@ function watch(engine) {
     return set;
   };
   const lines = new Map();
-  const createLine = engine.lines.createLine.bind(engine.lines);
-  engine.lines.createLine = (options) => {
-    const line = createLine(options);
-    const record = { options, positions: null, positionsSet: 0, shows: [] };
-    lines.set(options.id, record);
-    const { setPositions, show } = line;
-    line.setPositions = (positions) => {
-      record.positionsSet++;
-      record.positions = positions.map((p) => geo.cartesian3.clone(p));
-      setPositions(positions);
+  const createSegments = engine.lines.createSegments.bind(engine.lines);
+  engine.lines.createSegments = (options) => {
+    const batch = createSegments(options);
+    const { replace, commit, show, destroy } = batch;
+    let pending = [],
+      ids = [];
+    batch.replace = (items) => {
+      replace(items);
+      pending = items.map((item) => ({
+        ...item,
+        positions: item.positions.map((p) => geo.cartesian3.clone(p)),
+      }));
     };
-    line.show = (visible) => {
-      record.shows.push(visible);
+    batch.commit = () => {
+      commit();
+      const nextIds = [];
+      for (const item of pending) {
+        const id = item.pickId.replace(':', '-stem-');
+        const record = lines.get(id) ?? { positionsSet: 0, shows: [] };
+        record.options = { ...options, ...item };
+        record.positions = item.positions;
+        record.positionsSet++;
+        record.owner = options.id;
+        lines.set(id, record);
+        nextIds.push(id);
+      }
+      for (const id of ids) if (!nextIds.includes(id)) lines.delete(id);
+      ids = nextIds;
+    };
+    batch.show = (visible) => {
+      for (const id of ids) lines.get(id).shows.push(visible);
       show(visible);
     };
-    return line;
+    batch.destroy = () => {
+      destroy();
+      for (const id of ids) lines.delete(id);
+    };
+    return batch;
   };
   const flights = [];
   engine.camera.flyTo = (options) => flights.push(options);
@@ -125,7 +147,7 @@ function watch(engine) {
     requests.push(reason);
     request(reason);
   };
-  const liveLines = () => engine.lines.list().map(({ id }) => id);
+  const liveLines = () => [...lines.keys()];
   return {
     groundSet(id) {
       const listed = engine.ground.list().find((entry) => entry.id === id);
@@ -217,8 +239,8 @@ function fakeHarness() {
               }
             : target?.line !== undefined
               ? {
-                  id: engine.fake.line(target.line).options.pickId,
-                  owner: target.line,
+                  id: watched.line(target.line).options.pickId,
+                  owner: watched.line(target.line).owner,
                 }
               : target;
       engine.fake.script('pick', picked);
@@ -321,7 +343,10 @@ function cesiumHarness() {
           : target?.mover !== undefined
             ? { primitive: primitive(target.mover).get(target.instance) }
             : target?.line !== undefined
-              ? { primitive: primitive(target.line) }
+              ? {
+                  primitive: primitive(watched.line(target.line).owner),
+                  id: watched.line(target.line).options.pickId,
+                }
               : target;
       for (const handler of handlers.handlers)
         handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
@@ -521,6 +546,7 @@ for (const makeHarness of HARNESSES) {
     assert.equal(stem.options.pickId, 'local-dams:real-dam');
     assert.equal(stem.options.depthFailAlpha ?? 0, 0, 'hidden by the scene');
     assert.ok(f.line(f.stemId('point-dam')));
+    assert.equal(f.engine.lines.list().length, 1, 'one batch draws both stems');
     // The pin sits at the base of the Point feature only.
     const pin = f.point('local-dams-pins', 0);
     assert.equal(f.point('local-dams-pins', 1), undefined);

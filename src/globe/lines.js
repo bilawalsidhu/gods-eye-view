@@ -239,11 +239,88 @@ export function createLineRegistry(build) {
       live.set(options.id, state);
       return line;
     },
+    createSegments(input) {
+      const options = normalizeLineOptions(input);
+      if (
+        options.arc !== 'none' ||
+        options.dash ||
+        options.arrow ||
+        options.modelMatrix ||
+        options.depthFailAlpha ||
+        options.pickId !== undefined
+      )
+        fail(
+          'segment batches use straight, solid, depth-tested world segments',
+        );
+      options.segments = true;
+      if (live.has(options.id))
+        throw new Error(`Line ${options.id} already exists`);
+      const part = build(options);
+      const state = {
+        options,
+        part,
+        points: 0,
+        shown: true,
+        destroyed: false,
+        items: [],
+      };
+      let pending = null;
+      const alive = () => {
+        if (state.destroyed) throw new Error('Line was destroyed');
+      };
+      const batch = {
+        replace(items) {
+          alive();
+          if (!Array.isArray(items)) fail('segments must be an array');
+          pending = items.map((item) => {
+            const positions = flattenPositions(item.positions);
+            if (positions.length !== 6)
+              fail('a segment needs exactly two positions');
+            const color = item.color ?? options.color;
+            const widthPx = item.widthPx ?? options.widthPx;
+            if (!isColor(color)) fail('color must be [r, g, b, a]');
+            if (!(isFiniteNumber(widthPx) && widthPx > 0))
+              fail('widthPx must be positive');
+            return {
+              positions,
+              color: [...color],
+              widthPx,
+              pickId: item.pickId,
+            };
+          });
+        },
+        commit() {
+          alive();
+          if (!pending) return;
+          part.setSegments(pending);
+          state.items = pending;
+          state.points = pending.length * 2;
+          pending = null;
+        },
+        show(visible) {
+          alive();
+          state.shown = Boolean(visible);
+          part.show(state.shown);
+        },
+        destroy() {
+          if (state.destroyed) return;
+          state.destroyed = true;
+          live.delete(options.id);
+          part.destroy();
+        },
+      };
+      state.line = batch;
+      live.set(options.id, state);
+      return batch;
+    },
     list: () =>
-      [...live.values()].map(({ options, points, shown }) => ({
+      [...live.values()].map(({ options, points, shown, items }) => ({
         id: options.id,
         points,
         shown,
+        ...(options.segments
+          ? { pickIds: items.map((item) => item.pickId) }
+          : {}),
       })),
   };
   return {

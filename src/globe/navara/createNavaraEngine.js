@@ -43,6 +43,9 @@ const NO_MOVERS = Object.freeze({
   list: () => [],
 });
 const NO_LINES = Object.freeze({
+  createSegments() {
+    throw new Error("Navara lines need the view's three runtime (lines/)");
+  },
   createLine() {
     throw new Error("Navara lines need the view's three runtime (lines/)");
   },

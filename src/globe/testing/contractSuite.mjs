@@ -788,6 +788,96 @@ export function createContractSuite(
       },
     ],
     [
+      'lines: batched segments stay disconnected and retain individual picks',
+      async () => {
+        await nadirView(1e6);
+        const at = (lon, lat) => cartesian3.fromDegrees(lon, lat, 20_000);
+        const id = 'contract-segments';
+        const batch = engine.lines.createSegments({
+          id,
+          widthPx: 10,
+          color: [1, 0, 1, 1],
+        });
+        const screen = (lon, lat) =>
+          engine.projector.worldToWindow(at(lon, lat));
+        const pick = (lon, lat) => engine.picker.pick(screen(lon, lat));
+        const magenta = (lon, lat) => {
+          const p = screen(lon, lat);
+          const pixels = readRegion(
+            Math.round(p.x) - 5,
+            Math.round(p.y) - 5,
+            10,
+            10,
+          );
+          let count = 0;
+          for (let i = 0; i < pixels.length; i += 4)
+            if (Math.min(pixels[i], pixels[i + 2]) - pixels[i + 1] > 30)
+              count++;
+          return count;
+        };
+        try {
+          batch.replace([
+            { positions: [at(19, 9.5), at(19, 10.5)], pickId: 'west' },
+            {
+              positions: [at(21, 9.5), at(21, 10.5)],
+              widthPx: 12,
+              pickId: 'east',
+            },
+            { positions: [at(20, 10.8), at(20, 11.2)] },
+          ]);
+          batch.commit();
+          ensure(
+            engine.lines.list().find((entry) => entry.id === id)?.points === 6,
+            'batch endpoints',
+          );
+          if (!pointer && !readRegion) return;
+          await until(
+            () => pick(19, 10)?.id === 'west' && pick(21, 10)?.id === 'east',
+            'both segment picks',
+          );
+          ensure(pick(19, 10)?.owner === id, 'batch pick owner');
+          ensure(
+            pick(20, 11)?.owner !== id,
+            'segment without a pick id is ignored',
+          );
+          ensure(pick(20, 10)?.owner !== id, 'no connecting segment pick');
+          if (readRegion) {
+            await until(
+              () => magenta(19, 10) > 10 && magenta(21, 10) > 10,
+              'both segments drawn',
+            );
+            ensure(magenta(20, 10) === 0, 'no connecting segment pixels');
+          }
+          batch.show(false);
+          await settle(3);
+          ensure(pick(19, 10)?.owner !== id, 'hidden batch is not picked');
+          batch.replace([
+            { positions: [at(21, 9.5), at(21, 10.5)], pickId: 'replacement' },
+          ]);
+          batch.commit();
+          await settle(3);
+          ensure(pick(21, 10)?.owner !== id, 'replacement stays hidden');
+          batch.show(true);
+          await until(
+            () => pick(21, 10)?.id === 'replacement',
+            'replacement pick',
+          );
+          ensure(pick(19, 10)?.owner !== id, 'removed segment is not picked');
+          batch.replace([]);
+          batch.commit();
+          await settle(3);
+          ensure(pick(21, 10)?.owner !== id, 'empty batch is not picked');
+        } finally {
+          batch.destroy();
+          batch.destroy();
+        }
+        ensure(
+          !engine.lines.list().some((entry) => entry.id === id),
+          'batch released',
+        );
+      },
+    ],
+    [
       'input: picks on click and move payloads, drill, lines',
       async () => {
         await nadirView(1e6);

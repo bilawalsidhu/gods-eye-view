@@ -51,17 +51,38 @@ function watch(engine) {
     sets.set(options.id, record);
     return set;
   };
-  const positionsSet = new Map();
-  const createLine = engine.lines.createLine.bind(engine.lines);
-  engine.lines.createLine = (options) => {
-    const line = createLine(options);
-    const { setPositions } = line;
-    positionsSet.set(options.id, 0);
-    line.setPositions = (positions) => {
-      positionsSet.set(options.id, positionsSet.get(options.id) + 1);
-      setPositions(positions);
+  const segments = new Map();
+  const createSegments = engine.lines.createSegments.bind(engine.lines);
+  engine.lines.createSegments = (options) => {
+    const batch = createSegments(options);
+    const { replace, commit, destroy } = batch;
+    let pending = [];
+    batch.replace = (items) => {
+      replace(items);
+      pending = items.map((item) => ({
+        ...item,
+        positions: item.positions.map((p) => geo.cartesian3.clone(p)),
+      }));
     };
-    return line;
+    batch.commit = () => {
+      commit();
+      const next = new Map();
+      for (const item of pending) {
+        const id = `${CABLE_OVERLAY_SOURCE_ID}-stem-${item.pickId}`;
+        next.set(id, {
+          ...item,
+          owner: options.id,
+          commits: (segments.get(id)?.commits ?? 0) + 1,
+        });
+      }
+      segments.clear();
+      for (const [id, item] of next) segments.set(id, item);
+    };
+    batch.destroy = () => {
+      destroy();
+      segments.clear();
+    };
+    return batch;
   };
   const flights = [];
   engine.camera.flyTo = (options) => flights.push(options);
@@ -72,9 +93,10 @@ function watch(engine) {
       return listed ? sets.get(id) : undefined;
     },
     /** How often a line's positions were set. */
-    positionsSet: (id) => positionsSet.get(id) ?? 0,
+    positionsSet: (id) => segments.get(id)?.commits ?? 0,
+    line: (id) => segments.get(id),
     flights,
-    lineIds: () => engine.lines.list().map(({ id }) => id),
+    lineIds: () => [...segments.keys()],
     look(lon, lat, height) {
       engine.camera.setView({
         destination: geo.cartesian3.fromDegrees(lon, lat, height),
@@ -110,10 +132,6 @@ function fakeHarness() {
         },
       };
     },
-    line(id) {
-      const line = engine.fake.line(id);
-      return line && { positions: line.positions, color: line.color };
-    },
     click(target) {
       const picked =
         target?.ground !== undefined
@@ -133,8 +151,8 @@ function fakeHarness() {
               }
             : target?.line !== undefined
               ? {
-                  id: engine.fake.line(target.line).options.pickId,
-                  owner: target.line,
+                  id: watched.line(target.line).pickId,
+                  owner: watched.line(target.line).owner,
                 }
               : target;
       engine.fake.script('pick', picked);
@@ -197,9 +215,6 @@ function cesiumHarness() {
         native: item,
       };
     },
-    line(id) {
-      return primitive(id) && { primitive: primitive(id) };
-    },
     click(target) {
       native =
         target?.ground !== undefined
@@ -207,7 +222,10 @@ function cesiumHarness() {
           : target?.mover !== undefined
             ? { primitive: primitive(target.mover).get(target.instance) }
             : target?.line !== undefined
-              ? { primitive: primitive(target.line) }
+              ? {
+                  primitive: primitive(watched.line(target.line).owner),
+                  id: watched.line(target.line).pickId,
+                }
               : target;
       for (const handler of handlers.handlers)
         handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
@@ -472,15 +490,18 @@ for (const makeHarness of HARNESSES) {
       stems.every((id) => f.line(id)),
       'each stem is drawn',
     );
-    if (!f.cesium) {
-      const cableStem = f.engine.fake.line(stems[0]);
-      assert.equal(cableStem.options.widthPx, 2);
-      near(cableStem.color, rgba(BASE_CABLE_COLOR, 0.58), 'cable stem');
-      assert.equal(cableStem.positions.length, 6, 'base and tip');
-      const landingStem = f.engine.fake.line(stems[1]);
-      assert.equal(landingStem.options.widthPx, 2.4);
-      near(landingStem.color, rgba(BASE_LANDING_COLOR, 0.68), 'landing stem');
-    }
+    assert.equal(
+      f.engine.lines.list().length,
+      1,
+      'one batch draws both styles',
+    );
+    const cableStem = f.line(stems[0]);
+    assert.equal(cableStem.widthPx, 2);
+    near(cableStem.color, rgba(BASE_CABLE_COLOR, 0.58), 'cable stem');
+    assert.equal(cableStem.positions.length, 2, 'base and tip');
+    const landingStem = f.line(stems[1]);
+    assert.equal(landingStem.widthPx, 2.4);
+    near(landingStem.color, rgba(BASE_LANDING_COLOR, 0.68), 'landing stem');
 
     // A moveEnd at an unchanged camera re-runs the sweep; the identical
     // cohort is not published again.
@@ -595,7 +616,7 @@ for (const makeHarness of HARNESSES) {
     f.preRender();
     assert.equal(f.engine.ground.list().length, 1);
     assert.equal(f.engine.movers.list().length, 3);
-    assert.equal(f.engine.lines.list().length, 2);
+    assert.equal(f.engine.lines.list().length, 1);
     f.hostCalls.length = 0;
     f.display.hide();
     assert.deepEqual(f.hostCalls, [

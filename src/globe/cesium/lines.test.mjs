@@ -240,3 +240,59 @@ test('engine destroy destroys every line and removes the root', () => {
   assert.deepEqual(lines.list(), []);
   assert.throws(() => line.setPositions(points), /destroyed/);
 });
+
+test('segments share one primitive with individual widths, colours and pick ids', () => {
+  const { lines, drawn, identify, primitiveOf, destroy } = setup();
+  const batch = lines.createSegments({
+    id: 'stems',
+    widthPx: 3.5,
+    color: [1, 0, 0, 0.5],
+  });
+  batch.replace([
+    { positions: points.slice(0, 2), pickId: 'first' },
+    {
+      positions: points.slice(1),
+      widthPx: 2.4,
+      color: [0, 1, 0, 0.7],
+      pickId: 'second',
+    },
+    { positions: points.slice(0, 2) },
+  ]);
+  batch.commit();
+  const [primitive] = drawn();
+  assert.equal(drawn().length, 1);
+  assert.equal(
+    primitiveOf(batch).get(0),
+    primitive,
+    'surface exclusions resolve the batch',
+  );
+  assert.ok(primitive.appearance instanceof Cesium.PolylineColorAppearance);
+  const [first, second] = primitive.geometryInstances;
+  assert.equal(first.geometry._width, 3.5);
+  assert.equal(second.geometry._width, 2.4);
+  assert.equal(first.geometry._positions.length, 2);
+  assert.equal(first.geometry._arcType, Cesium.ArcType.NONE);
+  assert.deepEqual([...first.attributes.color.value], [255, 0, 0, 128]);
+  assert.deepEqual([...second.attributes.color.value], [0, 255, 0, 179]);
+  assert.deepEqual(identify({ primitive, id: 'second' }), {
+    owner: 'stems',
+    id: 'second',
+  });
+  assert.equal(identify({ primitive }).pickable, false);
+  batch.show(false);
+  assert.equal(identify({ primitive, id: 'first' }).pickable, false);
+  batch.replace([{ positions: points.slice(1), pickId: 'next' }]);
+  batch.commit();
+  assert.equal(primitive.isDestroyed(), true);
+  assert.equal(drawn()[0].show, false);
+  batch.show(true);
+  assert.equal(
+    identify({ primitive: drawn()[0], id: 'first' }).pickable,
+    false,
+  );
+  batch.replace([]);
+  batch.commit();
+  assert.deepEqual(drawn(), [null]);
+  destroy();
+  assert.deepEqual(lines.list(), []);
+});
