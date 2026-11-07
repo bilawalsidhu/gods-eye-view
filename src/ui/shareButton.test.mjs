@@ -191,7 +191,7 @@ test('the shell’s camera controls answer tilt and north-up and publish their s
   const store = useGlobeActionsStore(applicationPinia());
   const navigations = [];
   const owner = {
-    viewer: { camera: { heading: 0 } },
+    viewer: bindFakeCesiumCamera({ camera: { heading: 0 } }),
     _navigation: {
       runOrientation: (noun, navigate) => {
         navigations.push(noun);
@@ -231,7 +231,7 @@ test('a shell that goes after a newer one leaves the newer one’s bar state', (
   const shellWith = () => {
     const owner = {
       _disposed: false,
-      viewer: { camera: { heading: 0 } },
+      viewer: bindFakeCesiumCamera({ camera: { heading: 0 } }),
       _navigation: { runOrientation: (_noun, navigate) => navigate() },
       _showToast() {},
       clearSelectedLayers: async () => {},
@@ -269,7 +269,7 @@ test('an older shell that answers again shows its clear and its unchanged camera
   const shellWith = (heading) => {
     const owner = {
       _disposed: false,
-      viewer: { camera: { heading } },
+      viewer: bindFakeCesiumCamera({ camera: { heading } }),
       _navigation: { runOrientation: (_noun, navigate) => navigate() },
       _showToast() {},
       clearSelectedLayers: async () => {},

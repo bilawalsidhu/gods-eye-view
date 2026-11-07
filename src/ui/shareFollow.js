@@ -190,3 +190,24 @@ function turnToward(from, to, step) {
   );
   return Cesium.Cartesian3.multiplyByScalar(direction, length, direction);
 }
+
+/**
+ * Put the eye of a camera that follows something at `offset` (heading,
+ * pitch, range) from `target`, keeping the follow's own reference frame
+ * (a satellite's included): the follow's next update carries the new offset
+ * along with the target. Returns true.
+ * @param {object} viewer
+ * @param {{x: number, y: number, z: number}} target
+ * @param {{heading: number, pitch: number, range: number}} offset
+ */
+export function placeFollowEye(viewer, target, offset) {
+  const camera = viewer.camera;
+  const trackedTransform = Cesium.Matrix4.clone(camera.transform);
+  camera.lookAt(
+    new Cesium.Cartesian3(target.x, target.y, target.z),
+    new Cesium.HeadingPitchRange(offset.heading, offset.pitch, offset.range),
+  );
+  camera.lookAtTransform(trackedTransform);
+  viewer.scene?.requestRender?.();
+  return true;
+}

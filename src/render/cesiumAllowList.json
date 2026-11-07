@@ -110,7 +110,6 @@
   "src/services/meshFloorSampler.js",
   "src/sky/starrySky.js",
   "src/ui/applicationShell.js",
-  "src/ui/cameraOrientationControls.js",
   "src/ui/cockpitCamera.js",
   "src/ui/cockpitContext.js",
   "src/ui/cockpitController.js",
