@@ -198,6 +198,9 @@ export class FlightRecords {
       !!prevMeta && (prevMeta.onGround === true) !== onGround;
     // Store flight metadata for click-to-track labels
     const cat = stickyNumber(category, prevMeta?.category, null);
+    // adsbdb enrichment, once it has answered, outranks the type database's
+    // fill on the observation (the source's /api/aircraft-types lookup).
+    const typeCode = prevMeta?.typeCode ?? observation.typeCode ?? null;
     const meta = {
       sourceReference: observation.reference,
       observedReceiptMs: Date.now(),
@@ -216,11 +219,8 @@ export class FlightRecords {
       velocity: stickyNumber(velocity, prevMeta?.velocity, 0),
       true_track: stickyNumber(true_track, prevMeta?.true_track, 0),
       category: cat,
-      // An adsbdb-enriched type code outranks the coarse OpenSky category.
-      klass: classifyAircraft({
-        typeCode: prevMeta?.typeCode ?? null,
-        category: cat,
-      }),
+      // A known type code outranks the coarse OpenSky category.
+      klass: classifyAircraft({ typeCode, category: cat }),
       turnRateDps: prevMeta?.turnRateDps || 0,
       verticalRate: stickyNumber(vertical_rate, prevMeta?.verticalRate, null),
       // Analyst seam: OpenSky origin_country (state[2]) — additive, sticky
@@ -252,10 +252,11 @@ export class FlightRecords {
         prevMeta?.lastContactEpochMs,
         null,
       ),
-      // adsbdb enrichment — written by the enrichment callbacks, carried across polls:
-      typeCode: prevMeta?.typeCode ?? null,
-      typeName: prevMeta?.typeName ?? null,
-      registration: prevMeta?.registration ?? null,
+      // adsbdb enrichment — written by the enrichment callbacks, carried across
+      // polls — else the type database's fill on the observation:
+      typeCode,
+      typeName: prevMeta?.typeName ?? observation.typeName ?? null,
+      registration: prevMeta?.registration ?? observation.registration ?? null,
       airline: prevMeta?.airline ?? null,
       route: prevMeta?.route ?? null,
       // The RAW poll fix lat/lon (this tick's OpenSky state-vector

@@ -10,6 +10,7 @@ import {
   readsbSnapshot,
   readsbIdentities,
 } from './aircraft.js';
+import { createAircraftTypeLookup } from './aircraftTypes.js';
 import { normalizeVesselTrack, vesselSnapshot } from './vessels.js';
 
 const defaultFetch = (...args) => globalThis.fetch(...args);
@@ -62,6 +63,7 @@ export function createFlightSource({
   fetchImpl = defaultFetch,
   now = () => Date.now(),
 } = {}) {
+  const types = createAircraftTypeLookup({ fetchImpl, now });
   return {
     // i18n-ignore: feed source name, replaced by the provider from each snapshot and reported to AI tools
     label: 'Flights',
@@ -78,19 +80,18 @@ export function createFlightSource({
         'Flights',
       );
       if (!response.ok) throw openSkyError(response);
-      return {
-        ...openSkySnapshot(payload, {
-          // A fallback provider names itself in X-Flight-Source.
-          source:
-            header(response, 'x-flight-source') ||
-            feedSource(response, 'Flights'),
-          coverage:
-            header(response, 'x-flight-coverage') ||
-            'worldwide upstream snapshot',
-          now: now(),
-        }),
-        status: response.status,
-      };
+      const snapshot = openSkySnapshot(payload, {
+        // A fallback provider names itself in X-Flight-Source.
+        source:
+          header(response, 'x-flight-source') ||
+          feedSource(response, 'Flights'),
+        coverage:
+          header(response, 'x-flight-coverage') ||
+          'worldwide upstream snapshot',
+        now: now(),
+      });
+      await types.fill(snapshot.records, { signal });
+      return { ...snapshot, status: response.status };
     },
     async getTrack(reference, { signal } = {}) {
       const { response, payload } = await readResponse(
@@ -108,6 +109,12 @@ export function createFlightSource({
     async getEnrichment(query, { signal } = {}) {
       if (!['type', 'route'].includes(query.kind))
         throw new LiveSourceError('unsupported', 'Enrichment unavailable');
+      // The aircraft type database answers types without adsbdb's rate
+      // bound; adsbdb covers routes and the aircraft the database lacks.
+      if (query.kind === 'type') {
+        const local = await types.lookup(query.id, { signal });
+        if (local) return { found: true, ...local };
+      }
       const { response, payload } = await readResponse(
         fetchImpl,
         `/api/adsbdb/${query.kind}/${encodeURIComponent(query.id)}`,

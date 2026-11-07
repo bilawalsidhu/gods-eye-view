@@ -197,6 +197,7 @@ export function createEnrichment({
       const cand = [];
       for (const [icao24, bb] of flightState._billboards) {
         if (flightState._enrichSeen.has(`t:${icao24}`)) continue; // answered / queued / negative this session
+        if (flightState.records.data.get(icao24)?.typeCode) continue; // the aircraft type database already answered
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
         if (!bb.position || !occluder.isPointVisible(bb.position)) continue; // beyond the limb
