@@ -1,7 +1,7 @@
 import {
   normalizeRoadMode,
   resolveRoadMode,
-  TRAFFIC_ROAD_MODES,
+  roadModesSimulate,
 } from './roadModes.js';
 import {
   trafficBucketTier,
@@ -19,19 +19,25 @@ export function createControls({ state: layerState, services, parts, source }) {
     const notes = [feed.loadingLabel];
     if (!layerState._liveMode || feed.error)
       notes.push(t('Roads: {source}', { source }));
-    // An explicit TomTom or Hybrid choice without a key draws OpenStreetMap.
+    // An explicit TomTom or Hybrid choice without a key draws OpenStreetMap;
+    // a host without OpenStreetMap draws nothing.
+    const requested = roadModesSimulate(layerState._roadModes)
+      ? layerState._roadMode
+      : resolveRoadMode(layerState._roadMode, true, layerState._roadModes);
+    // A host without OpenStreetMap waits for the probe before naming a key.
     if (
       !layerState._liveMode &&
-      ['tomtom', 'hybrid'].includes(layerState._roadMode)
+      ['tomtom', 'hybrid'].includes(requested) &&
+      (roadModesSimulate(layerState._roadModes) || layerState._flowStatusKnown)
     )
       notes.push(
         layerState._flowStatusUnavailable
-          ? layerState._roadMode === 'tomtom'
+          ? requested === 'tomtom'
             ? t(
                 'TomTom roads unavailable while the traffic service is unreachable',
               )
             : t('Hybrid unavailable while the traffic service is unreachable')
-          : layerState._roadMode === 'tomtom'
+          : requested === 'tomtom'
             ? t('TomTom roads need a TomTom key')
             : t('Hybrid needs a TomTom key'),
       );
@@ -62,10 +68,13 @@ export function createControls({ state: layerState, services, parts, source }) {
     updateInterval: 0,
 
     /**
-     * Update user-adjustable parameters (road source, density and speed scaling).
+     * Update user-adjustable parameters (road source, row toggles, density and
+     * speed scaling).
      *
      * @param {Object}  [params]
-     * @param {'tomtom'|'osm'|'hybrid'|null} [params.roadMode] - Road source; null = default.
+     * @param {'tomtom'|'osm'|'hybrid'|null} [params.roadMode] - Road source; null = default; outside the host's modes = ignored.
+     * @param {boolean} [params.lines] - Draw flow-colored road lines (live mode).
+     * @param {boolean} [params.dots]  - Draw the moving dots.
      * @param {number}  [params.densityScale] - Dot density multiplier (clamped 0.2–2.5).
      * @param {number}  [params.speedScale]   - Dot speed multiplier (clamped 0.3–3.0).
      * @param {{origin?:string}} [options] - Intent origin; restores never beat `?trafficRoads=`.
@@ -75,7 +84,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       const previousSpeed = layerState._speedScale;
       if (
         Object.hasOwn(params, 'roadMode') &&
-        (params.roadMode === null || normalizeRoadMode(params.roadMode))
+        (params.roadMode === null ||
+          normalizeRoadMode(params.roadMode, layerState._roadModes))
       ) {
         const explicit = ['user', 'voice', 'tool'].includes(origin);
         const mode =
@@ -97,6 +107,31 @@ export function createControls({ state: layerState, services, parts, source }) {
           if (layerState._enabled)
             parts.viewport.onCameraChanged({ immediate: true });
         }
+      }
+      if (
+        typeof params.lines === 'boolean' &&
+        params.lines !== layerState._showLines
+      ) {
+        layerState._showLines = params.lines;
+        // Rebuild in place from the roads on screen: no refetch, no respawn.
+        if (layerState._enabled)
+          parts.rendering.rebuildHeatLines(
+            parts.rendering.visibleRoadsForAltitude(
+              layerState._roads,
+              layerState._lastRenderAltitude,
+            ),
+          );
+      }
+      if (
+        typeof params.dots === 'boolean' &&
+        params.dots !== layerState._showDots
+      ) {
+        layerState._showDots = params.dots;
+        // Hidden dots are kept, so showing them again is instant.
+        if (layerState._enabled && layerState._pointCollection)
+          layerState._pointCollection.show = params.dots;
+        parts.animation.syncRenderDemand();
+        layerState._viewer?.scene?.requestRender?.();
       }
       if (typeof params.densityScale === 'number') {
         layerState._densityScale = Math.max(
@@ -154,11 +189,14 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Return the current user-adjustable parameters.
-     * @returns {{densityScale:number, speedScale:number}}
+     * @returns {{roadMode:string|null, lines:boolean, dots:boolean,
+     *   densityScale:number, speedScale:number}}
      */
     getParams() {
       return {
         roadMode: layerState._roadMode,
+        lines: layerState._showLines,
+        dots: layerState._showDots,
         densityScale: layerState._densityScale,
         speedScale: layerState._speedScale,
         uncoveredRoads: layerState._uncoveredMode,
@@ -167,10 +205,15 @@ export function createControls({ state: layerState, services, parts, source }) {
       };
     },
 
-    /** Road-source chips on the Street Traffic row (TomTom / OSM / Hybrid). */
+    /**
+     * Street Traffic row chips: a road-source chip per offered mode (none for
+     * a single mode), then Lines and Dots toggles while live flow colors them.
+     */
     getRowControls() {
+      const modes = layerState._roadModes;
       const selected =
-        layerState._roadMode || resolveRoadMode(null, layerState._liveMode);
+        layerState._roadMode ||
+        resolveRoadMode(null, layerState._liveMode, modes);
       const live = layerState._liveMode;
       const titles = {
         tomtom: live
@@ -187,14 +230,36 @@ export function createControls({ state: layerState, services, parts, source }) {
       };
       // TomTom and OSM are provider names and stay as they are.
       const labels = { tomtom: 'TomTom', osm: 'OSM', hybrid: t('Hybrid') };
+      const lines = {
+        id: 'lines',
+        label: t('Lines'),
+        title: t('Road lines colored by live flow: green to red'),
+        active: layerState._showLines,
+        params: { lines: !layerState._showLines },
+      };
+      const dots = {
+        id: 'dots',
+        label: t('Dots'),
+        title: live ? t('Moving dots colored by live flow') : t('Moving dots'),
+        active: layerState._showDots,
+        params: { dots: !layerState._showDots },
+      };
+      // Lines need live flow. Dots, once hidden (a live choice, a restore or
+      // a share link), stay offered so they can always be shown again.
+      const toggles = live ? [lines, dots] : layerState._showDots ? [] : [dots];
       return {
-        chips: TRAFFIC_ROAD_MODES.map((mode) => ({
-          id: `roads-${mode}`,
-          label: labels[mode],
-          title: titles[mode],
-          active: mode === selected,
-          params: { roadMode: mode },
-        })),
+        chips: [
+          ...(modes.length > 1
+            ? modes.map((mode) => ({
+                id: `roads-${mode}`,
+                label: labels[mode],
+                title: titles[mode],
+                active: mode === selected,
+                params: { roadMode: mode },
+              }))
+            : []),
+          ...toggles,
+        ],
       };
     },
 
@@ -211,7 +276,13 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}
      */
     getDetectableObjects(options = {}) {
-      if (!layerState._enabled || layerState._dots.length === 0) return [];
+      // Hidden dots are not on screen to detect.
+      if (
+        !layerState._enabled ||
+        !layerState._showDots ||
+        layerState._dots.length === 0
+      )
+        return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
         : layerState._dots.length;
@@ -259,7 +330,8 @@ export function createControls({ state: layerState, services, parts, source }) {
      * `error` carries this instant's health, so a live-configured layer whose
      * flow feed went down reads DEGRADED with the reason instead of a stale
      * LIVE coverage number. `flowCoveragePct` is shown dots on matched roads /
-     * all shown dots (0–100 int), excluding closures; `tilesFetched` counts flow-tile requests
+     * all shown dots (0–100 int, kept within 1–99 while both kinds are shown),
+     * excluding closures; `tilesFetched` counts flow-tile requests
      * issued to the proxy this session (decode-cache hits excluded).
      * @returns {{count:number, lastUpdate:number|null, loading:boolean,
      *   mode:'live'|'sim', error:string|null, flowCoveragePct:number,
@@ -304,8 +376,18 @@ export function createControls({ state: layerState, services, parts, source }) {
         Boolean(layerState._heightPending);
       const { free, slow, jam, sim } = layerState._bucketCounts;
       const matched = free + slow + jam;
+      // The label reads 0 as "no matches" and 100 as nothing simulated, so
+      // rounding must not reach either while both kinds of dot are shown.
       const flowCoveragePct =
-        matched + sim > 0 ? Math.round((100 * matched) / (matched + sim)) : 0;
+        matched + sim > 0
+          ? Math.min(
+              sim > 0 ? 99 : 100,
+              Math.max(
+                matched > 0 ? 1 : 0,
+                Math.round((100 * matched) / (matched + sim)),
+              ),
+            )
+          : 0;
       const feed = parts.model.trafficFeedPresentation({
         liveMode: layerState._liveMode,
         fetching: loading,
@@ -371,7 +453,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         // in one had better be the honest one. This is also where LIVE vs
         // SIMULATED mode is surfaced, and it must never imply a live feed the
         // layer does not have.
-        roadMode: resolveRoadMode(layerState._roadMode, layerState._liveMode),
+        roadMode: resolveRoadMode(
+          layerState._roadMode,
+          layerState._liveMode,
+          layerState._roadModes,
+        ),
         roadModeRequested: layerState._roadMode,
         roadSource: layerState._roadSource,
         source: layerState._roadSource,

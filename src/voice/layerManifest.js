@@ -72,6 +72,18 @@ const layers = [
     noQuery: 'published third-party intel placemarks; not analyst records',
   },
   {
+    id: 'sea-marks',
+    aliases: ['seamarks', 'nautical charts', 'buoys', 'openseamap'],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
+    id: 'ski-pistes',
+    aliases: ['ski slopes', 'ski runs', 'snow map', 'opensnowmap'],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -407,6 +419,23 @@ const layers = [
     noQuery: 'cable records are not loaded for queries',
   },
   {
+    // Results of the last osm_query ("hospitals in Kathmandu").
+    id: 'osm-places',
+    aliases: ['osm places', 'map search results', 'search results'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        kind: ['t'],
+        operator: ['t'],
+        emergency: ['t'],
+        wheelchair: ['t'],
+        openingHours: ['t'],
+        city: ['t'],
+      },
+    },
+  },
+  {
     // Global Context owns this layer; voice reaches it through
     // set_context_mode, never a bare toggle.
     id: 'military-awareness',
@@ -424,6 +453,12 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  // The Realtime prompt is at its 55,500-character budget; voice toggle and
+  // query for this layer wait until there is room.
+  'drone-airspace':
+    'informational airspace layer; no room in the prompt budget',
+  'wildlife-sightings':
+    'community observation layer; no room in the prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({
@@ -525,22 +560,31 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
-  // The brand is already the layer id; all spoken aliases remain accepted.
-  's2-ghostmaps',
 ]);
+
+/** Lower case with spaces and hyphens removed: "Data centers" → "datacenters". */
+const spelled = (text) => text.toLowerCase().replace(/[\s-]+/g, '');
 
 /**
  * Compact model-facing alias hint: "alias/alias→id; …" for toggleable layers
  * whose id is not already the spoken word. At most two aliases per layer keep
- * the tool JSON small; the runner accepts the full alias list.
+ * the tool JSON small; the runner accepts the full alias list. Of those two,
+ * an alias the id already spells ("dams"→local-dams, "weather radar"→
+ * weather-radar) is left out, and a layer with neither left gets no hint.
  * @returns {string} One line for the layerId description.
  */
 export function voiceLayerAliasHint() {
   return VOICE_LAYER_MANIFEST.filter(
-    (entry) =>
-      entry.toggle && entry.aliases.length && !SELF_EVIDENT_IDS.has(entry.id),
+    (entry) => entry.toggle && !SELF_EVIDENT_IDS.has(entry.id),
   )
-    .map((entry) => `${entry.aliases.slice(0, 2).join('/')}→${entry.id}`)
+    .map((entry) => ({
+      id: entry.id,
+      aliases: entry.aliases
+        .slice(0, 2)
+        .filter((alias) => !spelled(entry.id).includes(spelled(alias))),
+    }))
+    .filter((entry) => entry.aliases.length)
+    .map((entry) => `${entry.aliases.join('/')}→${entry.id}`)
     .join(';');
 }
 

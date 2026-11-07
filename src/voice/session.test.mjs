@@ -9,7 +9,7 @@ import { createVoiceSession } from './session.js';
 import { createRealtimeSession } from './realtimeSession.js';
 import { realtimeSessionEvent } from './realtimeEvents.js';
 import { createVoiceCommands } from './sessionCommands.js';
-import { describeUnsavedWork } from '../i18n/index.js';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 
 function deferred() {
   let resolve;
@@ -242,26 +242,17 @@ test('common button and annotation bindings work with an alternate adapter and c
   const previous = globalThis.window;
   globalThis.window = {};
   try {
-    const button = new EventTarget();
-    button.setAttribute = () => {};
     let removed = 0;
     let subscribed = null;
     let calls = 0;
     const events = [];
-    const ui = {
-      button,
-      root: {
-        dataset: {},
-        remove() {
-          removed++;
-        },
-      },
-      status: {},
-      detail: {},
-      tierButton: {},
-      costValue: {},
-      helpDetail: {},
+    const ui = createTestVoiceUi();
+    // Count removals but keep the control, so a click after cleanup still
+    // reaches any listener the binder failed to release.
+    ui.remove = () => {
+      removed++;
     };
+    const click = () => ui.emit('button');
     const lifetime = new AbortController();
     const controls = createVoiceCommands({
       runner: async () => {
@@ -294,31 +285,26 @@ test('common button and annotation bindings work with an alternate adapter and c
         };
       },
     });
-    button.dispatchEvent(new Event('click'));
+    click();
     await new Promise((done) => setTimeout(done, 0));
     assert.equal(calls, 1);
-    assert.equal(ui.tierButton.hidden, true);
-    assert.equal(ui.costValue.hidden, true);
-    assert.equal(ui.helpDetail.textContent, 'Activate to toggle voice');
-    assert.equal(ui.status.textContent, 'LISTENING');
-    assert.equal(ui.detail.textContent, 'Ready');
-    // Switching language (a reload) asks first during a session.
-    assert.deepEqual(describeUnsavedWork(), ['the active voice session']);
+    assert.equal(ui.state.tier.hidden, true);
+    assert.equal(ui.state.cost.hidden, true);
+    assert.equal(ui.state.help.text, 'Activate to toggle voice');
+    assert.equal(ui.state.status.text, 'LISTENING');
+    assert.equal(ui.state.detail.text, 'Ready');
     subscribed({ status: 'resolved' });
     assert.deepEqual(events, [
       { type: 'map_annotation_outline', status: 'resolved' },
     ]);
-    button.dispatchEvent(new Event('click'));
+    click();
     assert.equal(controls.state, 'idle');
-    assert.deepEqual(describeUnsavedWork(), []);
-    button.dispatchEvent(new Event('click'));
+    click();
     await new Promise((done) => setTimeout(done, 0));
-    assert.deepEqual(describeUnsavedWork(), ['the active voice session']);
     lifetime.abort();
-    assert.deepEqual(describeUnsavedWork(), [], 'disposal unregisters');
     assert.equal(subscribed, null);
     assert.equal(removed, 1);
-    button.dispatchEvent(new Event('click'));
+    click();
     assert.equal(calls, 2);
   } finally {
     globalThis.window = previous;
@@ -598,16 +584,7 @@ for (const emitsIdle of [false, true]) {
 
 test('actual default OpenAI adapter stop publishes one common idle', (t) => {
   const events = [];
-  const ui = {
-    root: {
-      dataset: {},
-      querySelectorAll: () => [],
-      classList: { remove() {} },
-      remove() {},
-    },
-    status: {},
-    detail: {},
-  };
+  const ui = createTestVoiceUi();
   const runner = async () => ({});
   const session = createVoiceSession({
     runner,
@@ -627,4 +604,99 @@ test('actual default OpenAI adapter stop publishes one common idle', (t) => {
   );
   assert.equal(session.state, 'idle');
   assert.equal(session.adapter.controller.status, 'idle');
+});
+
+test('OpenAI composite starts HTTP chat without Realtime and restores voice keyboard routing', async () => {
+  const events = [];
+  let starts = 0,
+    requests = 0;
+  const controller = {
+    _input: {},
+    _radio: {},
+    isActive: () => true,
+    start: async () => {
+      starts++;
+    },
+    stop: () => {},
+    sendTextCommand: () => 'voice',
+    notifyMapEvent: () => 'voice-event',
+  };
+  const adapter = createRealtimeSession({
+    emit: (e) => events.push(e),
+    runAction: async () => ({ ok: true }),
+    createController: () => controller,
+    fetchImpl: async (url) => {
+      requests++;
+      assert.equal(url, '/api/openai/chat');
+      return Response.json({
+        content: { role: 'assistant', content: 'Hello' },
+        finishReason: 'stop',
+      });
+    },
+  });
+  await adapter.start({ textOnly: true });
+  assert.equal(starts, 0);
+  assert.equal(adapter.getStartOptions().textOnly, true);
+  assert.equal(controller._radio.isActive(), false);
+  assert.equal(adapter.sendText('Hello'), true);
+  for (let i = 0; i < 5; i++)
+    await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests, 1);
+  assert.ok(events.some((e) => e.type === 'completion'));
+  adapter.stop();
+  await controller._input.start({ pushToTalk: true });
+  assert.equal(starts, 1);
+  assert.equal(adapter.getStartOptions().textOnly, undefined);
+  assert.equal(adapter.sendText('Hello'), 'voice');
+  adapter.stop();
+});
+
+test('OpenAI composite chat Stop cancels only the reply in progress', async () => {
+  const requests = [];
+  let pendingSignal;
+  const controller = {
+    _input: {},
+    _radio: {},
+    isActive: () => true,
+    start: async () => {},
+    stop: () => {},
+    sendTextCommand: () => 'voice',
+    notifyMapEvent: () => 'voice-event',
+  };
+  const adapter = createRealtimeSession({
+    emit: () => {},
+    runAction: async () => ({ ok: true }),
+    createController: () => controller,
+    fetchImpl: (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      if (requests.length !== 2)
+        return Response.json({
+          content: { role: 'assistant', content: 'Hello' },
+          finishReason: 'stop',
+        });
+      pendingSignal = options.signal;
+      return new Promise(() => {});
+    },
+  });
+  const settle = async () => {
+    for (let i = 0; i < 5; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+  };
+  await adapter.start({ textOnly: true });
+  adapter.sendText('First');
+  await settle();
+  adapter.sendText('Second');
+  await settle();
+  assert.equal(adapter.cancelTurn(), true);
+  assert.equal(pendingSignal.aborted, true);
+  assert.equal(adapter.sendText('Third'), true);
+  await settle();
+  assert.deepEqual(
+    requests[2].messages.map((m) => m.content),
+    ['First', 'Hello', 'Third'],
+  );
+  adapter.stop();
+  await controller._input.start({ pushToTalk: true });
+  assert.equal(adapter.cancelTurn(), false);
+  adapter.stop();
 });

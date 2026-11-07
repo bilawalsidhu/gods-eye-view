@@ -410,6 +410,18 @@ export function isLikelyHongKongCoordinate(lat, lon) {
   );
 }
 
+/** Greater Houston (the Woodlands to Galveston, Katy to Baytown). Farther
+ * TranStar partners (Dallas, Columbus) are out of this city pack. */
+export function isLikelyHoustonCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 29.2 &&
+    lat <= 30.35 &&
+    lon >= -96.05 &&
+    lon <= -94.7
+  );
+}
+
 /** Mainland Norway, with slack for the coast and the Finnmark border. */
 export function isLikelyNorwayCoordinate(lat, lon) {
   return (
@@ -445,6 +457,17 @@ export function isLikelyCataloniaCoordinate(lat, lon) {
     lat <= 42.9 &&
     lon >= 0.0 &&
     lon <= 3.4
+  );
+}
+
+/** Iceland bounding box (mainland and nearby islands, with a margin). */
+export function isLikelyIcelandCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 63.0 &&
+    lat <= 66.7 &&
+    lon >= -25.0 &&
+    lon <= -13.0
   );
 }
 

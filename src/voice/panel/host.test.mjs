@@ -1,12 +1,55 @@
+import '../../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createPinia } from 'pinia';
 import { createVoiceControl } from '../control.js';
+import { useVoiceStore } from '../../ui/stores/voice.js';
 import { createGevActionRunner } from '../gevActions.js';
 import { createVoiceCommands as bind } from '../sessionCommands.js';
 import { createVoiceCommands as compose } from '../commands.js';
 import { createProviderCommands } from '../providerCommands.js';
 import { createVoicePanelHost } from './host.js';
-import { installPanelDom, controlledClock } from './testDom.mjs';
+import { createTestVoiceUi } from '../../testSupport/voiceUi.mjs';
+import { mountVoiceView } from '../../testSupport/voiceView.mjs';
+
+const $ = (selector) => globalThis.document.querySelector(selector);
+const exists = (selector) => $(selector) !== null;
+const active = () => globalThis.document.activeElement?.id ?? null;
+const key = (node, name) =>
+  node.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: name,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+
+function controlledClock() {
+  let now = 0,
+    next = 0;
+  const tasks = new Map();
+  return {
+    now: () => now,
+    setTimer(fn, ms) {
+      const id = ++next;
+      tasks.set(id, { fn, at: now + ms });
+      return id;
+    },
+    clearTimer: (id) => tasks.delete(id),
+    advance(ms) {
+      now += ms;
+      for (const [id, task] of [...tasks])
+        if (task.at <= now && tasks.delete(id)) task.fn();
+    },
+  };
+}
+
+// The custom inactivity minutes, then the select's Custom choice.
+function chooseCustomTimeout(ui, minutes) {
+  ui.update('preferences', { timeoutMinutes: minutes });
+  ui.emit('timeout-select', 'custom');
+}
 
 function factory(instances, { stopError = null, native = false } = {}) {
   return (hooks) => {
@@ -78,8 +121,10 @@ function factory(instances, { stopError = null, native = false } = {}) {
     return adapter;
   };
 }
+// With `view`, the real VoiceControl renders the control from its store.
 function mounted(t, options = {}) {
-  const doc = installPanelDom(t);
+  const view = options.view ? mountVoiceView(t) : null;
+  const pinia = view?.pinia ?? createPinia();
   const clock = controlledClock();
   const host = createVoicePanelHost({
     storage: options.storage ?? null,
@@ -91,6 +136,7 @@ function mounted(t, options = {}) {
     runner: options.runner ?? (async () => ({ ok: true })),
     dataManager: { layers: new Map() },
     createSession: factory(instances, options),
+    createControl: (control) => createTestVoiceUi({ ...control, pinia }),
     panelHost: host,
     nativePanelProvider: options.native
       ? (options.nativeProvider ?? 'gemini')
@@ -102,43 +148,68 @@ function mounted(t, options = {}) {
     } catch {}
     host.destroy();
   });
-  return { doc, clock, host, instances, commands, ui: commands.ui };
+  return {
+    clock,
+    host,
+    instances,
+    commands,
+    ui: commands.ui,
+    settle: view?.settle,
+  };
 }
 
-test('actual control default remains opt-out; panel markup has unique controlled panes and an outside alert', (t) => {
-  const doc = installPanelDom(t);
-  const baseline = createVoiceControl();
-  assert.equal(baseline.voicePanel, null);
-  const ui = createVoiceControl({ reset: true, panel: true });
-  assert.equal(doc.getElementById('gev-voice-panel'), ui.voicePanel);
+test('actual control default remains opt-out; panel markup has unique controlled panes and an outside alert', async (t) => {
+  const view = mountVoiceView(t);
+  const store = useVoiceStore(view.pinia);
+  const baseline = createVoiceControl({ store });
+  t.after(() => baseline.remove());
+  assert.equal(baseline.panel, false);
+  await view.settle();
+  assert.equal(exists('#gev-voice-control'), true);
+  assert.equal(exists('#gev-voice-panel'), false);
+  const ui = createVoiceControl({ panel: true, store });
+  t.after(() => ui.remove());
+  await view.settle();
+  const panel = $('#gev-voice-panel');
+  assert.equal(panel !== null, true);
   assert.equal(
-    ui.voiceSettingsButton.getAttribute('aria-controls'),
-    ui.voicePanel.id,
+    $('#gev-voice-settings-button').getAttribute('aria-controls'),
+    panel.id,
   );
-  assert.equal(ui.previewTab.getAttribute('aria-controls'), ui.previewPanel.id);
+  for (const [tab, pane] of [
+    ['#gev-voice-preview-tab', 'gev-voice-preview-panel'],
+    ['#gev-voice-settings-tab', 'gev-voice-settings-panel'],
+  ]) {
+    assert.equal($(tab).getAttribute('aria-controls'), pane);
+    assert.equal(exists(`#${pane}`), true);
+  }
   assert.equal(
-    ui.settingsTab.getAttribute('aria-controls'),
-    ui.voiceSettingsPanel.id,
+    $('#gev-voice-preview-panel').contains($('#gev-voice-card')),
+    true,
   );
-  assert.equal(ui.previewPanel.contains(ui.card), true);
+  const tray = $('#gev-voice-control .gev-voice-error-tray');
+  assert.equal(tray !== null, true);
+  assert.equal(panel.contains(tray), false);
   assert.equal(
-    ui.voicePanel.contains(ui.root.querySelector('.gev-voice-error-tray')),
-    false,
+    $('#gev-voice-control').querySelectorAll('#gev-voice-card').length,
+    1,
   );
-  assert.equal(ui.root.querySelectorAll('#gev-voice-card').length, 1);
 });
 
-test('actual binder/card has launcher toggle, idempotent tabs, focus and disabled Preview', (t) => {
-  const { ui, commands, doc } = mounted(t);
-  ui.voiceSettingsButton.fire('click');
+test('actual binder/card has launcher toggle, Settings tab toggle, focus and disabled Preview', async (t) => {
+  const { ui, commands, settle } = mounted(t, { view: true });
+  await settle();
+  $('#gev-voice-settings-button').click();
   assert.equal(commands.voicePanel.snapshot().settingsOpen, true);
-  ui.voiceSettingsButton.fire('click');
+  $('#gev-voice-settings-button').click();
   assert.equal(commands.voicePanel.snapshot().panelOpen, false);
-  ui.settingsTab.fire('click');
-  ui.settingsTab.fire('keydown', { key: 'End' });
+  await settle();
+  $('#gev-voice-settings-tab').click();
+  key($('#gev-voice-settings-tab'), 'End');
   assert.equal(commands.voicePanel.snapshot().settingsOpen, true);
-  ui.settingsTab.fire('click');
-  assert.equal(commands.voicePanel.snapshot().settingsOpen, true);
+  // Preview has no visible tab, so the Settings tab toggles back to it.
+  $('#gev-voice-settings-tab').click();
+  assert.equal(commands.voicePanel.snapshot().view, 'preview');
   commands.voicePanel.select('preview');
   commands.voiceCard.handle({
     type: 'transcript',
@@ -146,17 +217,19 @@ test('actual binder/card has launcher toggle, idempotent tabs, focus and disable
     final: true,
     text: 'A visible reply',
   });
-  const dismiss = ui.root.querySelector('#gev-voice-card-dismiss');
+  await settle();
+  const dismiss = $('#gev-voice-card-dismiss');
   dismiss.focus();
-  dismiss.fire('click');
-  assert.equal(ui.card.hidden, true);
+  dismiss.click();
+  await settle();
+  assert.equal(ui.state.card.visible, false);
+  assert.equal($('#gev-voice-card').hidden, true);
   assert.equal(commands.voicePanel.snapshot().panelOpen, true);
-  assert.equal(doc.activeElement?.id, ui.previewTab.id);
-  ui.voicePanel.fire('keydown', { key: 'Escape', target: doc.activeElement });
+  assert.equal(active(), 'gev-voice-preview-tab');
+  key(globalThis.document.activeElement, 'Escape');
   assert.equal(commands.voicePanel.snapshot().panelOpen, false);
   commands.voicePanel.select('settings');
-  ui.voicePreviewInput.checked = false;
-  ui.voicePreviewInput.fire('change');
+  ui.emit('preview-change', false);
   commands.voicePanel.select('preview');
   commands.voiceCard.handle({
     type: 'transcript',
@@ -164,11 +237,13 @@ test('actual binder/card has launcher toggle, idempotent tabs, focus and disable
     final: true,
     text: 'A hidden reply',
   });
-  assert.equal(ui.card.hidden, true);
-  assert.equal(ui.previewEmpty.textContent, 'Preview is off.');
-  ui.previewTab.focus();
-  ui.voicePanel.fire('keydown', { key: 'Escape' });
-  assert.equal(doc.activeElement, ui.voiceSettingsButton);
+  assert.equal(ui.state.card.visible, false);
+  assert.equal(ui.state.previewEmpty.text, 'Preview is off.');
+  await settle();
+  $('#gev-voice-preview-tab').focus();
+  key(globalThis.document.activeElement, 'Escape');
+  await settle();
+  assert.equal(active(), 'gev-chat-button');
   commands.voiceCard.handle({
     type: 'transcript',
     role: 'assistant',
@@ -179,7 +254,7 @@ test('actual binder/card has launcher toggle, idempotent tabs, focus and disable
 });
 
 test('actual facade remount keeps failed-save live preferences/view and manual close, with no restore writes or focus theft', async (t) => {
-  const doc = installPanelDom(t);
+  const view = mountVoiceView(t);
   const writes = [];
   const storage = {
     getItem: () => null,
@@ -197,7 +272,13 @@ test('actual facade remount keeps failed-save live preferences/view and manual c
       supportedProviders: ['openai', 'gemini'],
     },
     {
-      bind: (options) => bind({ ...options, panelHost: host }),
+      bind: (options) =>
+        bind({
+          ...options,
+          panelHost: host,
+          createControl: (control) =>
+            createTestVoiceUi({ ...control, pinia: view.pinia }),
+        }),
       factories: { openai: factory(instances), gemini: factory(instances) },
       storage,
     },
@@ -208,18 +289,17 @@ test('actual facade remount keeps failed-save live preferences/view and manual c
   });
   const old = commands.ui;
   commands.voicePanel.select('settings');
-  old.voicePreviewInput.checked = false;
-  old.voicePreviewInput.fire('change');
-  old.voiceTimeoutInput.value = '7';
-  old.voiceTimeoutSelect.value = 'custom';
-  old.voiceTimeoutSelect.fire('change');
+  old.emit('preview-change', false);
+  chooseCustomTimeout(old, '7');
   const preferenceWrites = () =>
     writes.filter(([key]) => key.startsWith('godsEyeView.voice.')).length;
   assert.equal(preferenceWrites(), 2);
-  old.providerSelect.value = 'gemini';
-  old.providerSelect.fire('change');
-  assert.notEqual(commands.ui, old);
-  assert.equal(old.root.isConnected, false);
+  await view.settle();
+  const oldRoot = $('#gev-voice-control');
+  old.emit('provider-change', 'gemini');
+  assert.equal(commands.ui !== old, true);
+  await view.settle();
+  assert.equal(oldRoot.isConnected, false);
   assert.equal(commands.voicePanel.snapshot().settingsOpen, true);
   assert.deepEqual(commands.getVoicePreferences(), {
     previewEnabled: false,
@@ -227,17 +307,16 @@ test('actual facade remount keeps failed-save live preferences/view and manual c
     previewPersisted: false,
     timeoutPersisted: false,
   });
-  assert.equal(commands.ui.voicePreviewInput.checked, false);
-  assert.match(commands.ui.voiceTimeoutNote.textContent, /could not be saved/);
+  assert.equal(commands.ui.state.preferences.previewChecked, false);
+  assert.equal($('#gev-voice-preview-enabled').checked, false);
+  assert.match(commands.ui.state.preferences.timeoutNote, /could not be saved/);
   assert.equal(preferenceWrites(), 2);
-  assert.equal(doc.activeElement, commands.ui.providerSelect);
-  commands.ui.voicePreviewInput.checked = true;
-  commands.ui.voicePreviewInput.fire('change');
+  assert.equal(active(), 'gev-voice-provider');
+  commands.ui.emit('preview-change', true);
   commands.voicePanel.close();
   await commands.start();
   const retired = instances[1];
-  commands.ui.providerSelect.value = 'openai';
-  commands.ui.providerSelect.fire('change');
+  commands.ui.emit('provider-change', 'openai');
   await commands.start();
   assert.equal(commands.session.isActive(), true);
   retired.hooks.emit({
@@ -268,14 +347,14 @@ test('explicit successful mic Stop closes; failed Stop idle and startup error do
   const good = mounted(t);
   await good.commands.session.start();
   good.commands.voicePanel.select('settings');
-  good.ui.button.fire('click');
+  good.ui.emit('button');
   assert.equal(good.commands.voicePanel.snapshot().panelOpen, false);
   const error = Error('stop failed');
   const bad = mounted(t, { stopError: error });
   await bad.commands.session.start();
   bad.commands.voicePanel.select('settings');
   assert.throws(
-    () => bad.ui.button.fire('click'),
+    () => bad.ui.emit('button'),
     (value) => value === error,
   );
   assert.equal(bad.commands.session.state, 'idle');
@@ -296,7 +375,7 @@ test('reentrant manual choice/new start during Stop cannot close the successor c
     if (event.type === 'state' && event.state === 'idle')
       f.commands.voicePanel.select('preview');
   });
-  f.ui.button.fire('click');
+  f.ui.emit('button');
   assert.equal(f.commands.voicePanel.snapshot().panelOpen, true);
   assert.equal(f.commands.voicePanel.snapshot().view, 'preview');
   unsubscribe();
@@ -306,9 +385,7 @@ test('integrated inactivity rechecks held PTT at expiry, then normal stop closes
   const f = mounted(t, { native: true });
   await f.commands.session.start();
   f.commands.voicePanel.select('settings');
-  f.ui.voiceTimeoutInput.value = '1';
-  f.ui.voiceTimeoutSelect.value = 'custom';
-  f.ui.voiceTimeoutSelect.fire('change');
+  chooseCustomTimeout(f.ui, '1');
   f.instances[0].input.pushToTalkKeyHeld = true;
   f.clock.advance(60000);
   assert.equal(f.instances[0].stops, 0);
@@ -321,8 +398,7 @@ test('integrated inactivity rechecks held PTT at expiry, then normal stop closes
 test('None cancels integrated app timer and unknown custom hosts never guess expiry', async (t) => {
   const native = mounted(t, { native: true });
   await native.commands.session.start();
-  native.ui.voiceTimeoutSelect.value = '0';
-  native.ui.voiceTimeoutSelect.fire('change');
+  native.ui.emit('timeout-select', '0');
   native.clock.advance(600000);
   assert.equal(native.instances[0].stops, 0);
   assert.equal(native.commands.getVoicePreferences().minutes, 0);
@@ -330,17 +406,15 @@ test('None cancels integrated app timer and unknown custom hosts never guess exp
   await unknown.commands.session.start();
   unknown.clock.advance(600000);
   assert.equal(unknown.instances[0].stops, 0);
-  assert.match(unknown.ui.voiceTimeoutStatus.textContent, /unavailable/);
+  assert.match(unknown.ui.state.preferences.timeoutStatus, /unavailable/);
 });
 
 test('transient native OpenAI response activity does not announce connection unavailability', async (t) => {
   const f = mounted(t, { native: true, nativeProvider: 'openai' });
   await f.commands.session.start();
-  f.ui.voiceTimeoutInput.value = '1';
-  f.ui.voiceTimeoutSelect.value = 'custom';
-  f.ui.voiceTimeoutSelect.fire('change');
+  chooseCustomTimeout(f.ui, '1');
   f.instances[0].controller._turns.observeSpeech({ type: 'response.created' });
-  assert.equal(f.ui.voiceTimeoutStatus.textContent, '');
+  assert.equal(f.ui.state.preferences.timeoutStatus, '');
   f.clock.advance(60000);
   assert.equal(f.instances[0].stops, 0, 'unknown output still prevents expiry');
   f.instances[0].controller._turns.observeSpeech({
@@ -351,7 +425,6 @@ test('transient native OpenAI response activity does not announce connection una
 });
 
 test('native factory with custom controller remains uninstrumented despite panel opt-in', (t) => {
-  installPanelDom(t);
   let inspected = 0;
   const commands = compose({
     panel: true,
@@ -400,11 +473,53 @@ test('native connecting phases retain output observation; idle starts before fir
   assert.equal(adapter.stops, 1);
 });
 
+test('a failed typed turn keeps follow-up memory; a stop or voice error clears it', async (t) => {
+  let resets = 0;
+  const runner = async () => ({ ok: true });
+  runner.resetConversation = () => resets++;
+  const f = mounted(t, { runner });
+  const adapter = f.instances[0];
+  adapter.getStartOptions = () => ({ textOnly: true });
+  await f.commands.session.start({ textOnly: true });
+  adapter.hooks.emit({ type: 'state', state: 'error', detail: 'Busy' });
+  assert.equal(resets, 0, 'the typed conversation continues');
+  f.commands.session.stop();
+  assert.equal(resets, 1);
+  adapter.getStartOptions = () => ({});
+  await f.commands.session.start();
+  adapter.hooks.emit({ type: 'state', state: 'error', detail: 'Lost' });
+  assert.equal(resets, 2);
+});
+
+test('the voice inactivity timeout never ends a typed chat session', async (t) => {
+  const f = mounted(t, { native: true });
+  const adapter = f.instances[0];
+  adapter.getStartOptions = () => ({ textOnly: true });
+  await f.commands.session.start({ textOnly: true });
+  adapter.controller.handleMessage({});
+  f.clock.advance(600000);
+  assert.equal(adapter.stops, 0);
+  assert.equal(f.commands.session.isActive(), true);
+  // A quiet voice session started afterwards still times out.
+  f.commands.session.stop();
+  const stops = adapter.stops;
+  adapter.getStartOptions = () => ({});
+  await f.commands.session.start();
+  adapter.controller.handleMessage({});
+  f.clock.advance(600000);
+  assert.equal(adapter.stops, stops + 1);
+});
+
 async function directActions(
   t,
-  { storage = null, delayExit = false, exposePanel = true } = {},
+  {
+    storage = null,
+    delayExit = false,
+    exposePanel = true,
+    typed = false,
+    view = false,
+  } = {},
 ) {
-  installPanelDom(t);
   let f, releaseExit;
   const state = { active: true, exits: 0, visual: [] };
   const styleManager = {
@@ -435,8 +550,13 @@ async function directActions(
     readVoicePanelOperation: () =>
       exposePanel ? f?.commands.captureVoicePanelOperation() : undefined,
   });
-  f = mounted(t, { native: true, runner, storage });
-  await f.commands.session.start();
+  f = mounted(t, { native: true, runner, storage, view });
+  // A typed chat session starts from chat's first send instead.
+  if (typed) {
+    const adapter = f.instances[0];
+    adapter.getStartOptions = () => ({ textOnly: true });
+    adapter.sendText = () => true;
+  } else await f.commands.session.start();
   return {
     ...f,
     runner,
@@ -479,8 +599,7 @@ test('named voice settings exits Cockpit directly; Preview stays disabled and vi
   });
   assert.equal(f.state.exits, 1);
   assert.equal(result.settingsOpen, true);
-  f.ui.voicePreviewInput.checked = false;
-  f.ui.voicePreviewInput.fire('change');
+  f.ui.emit('preview-change', false);
   const preview = await f.run('set_panel_open', {
     panelId: 'voice control',
     open: true,
@@ -509,6 +628,91 @@ test('named voice settings exits Cockpit directly; Preview stays disabled and vi
     4,
     'an unnamed settings target never guesses a panel',
   );
+});
+
+for (const minimized of [false, true])
+  test(`an explicit voice panel request from ${minimized ? 'minimized ' : ''}typed chat shows the panel and keeps the chat`, async (t) => {
+    const f = await directActions(t, { typed: true });
+    const adapter = f.instances[0];
+    f.ui.emit('chat-button');
+    f.ui.emit('chat-input', 'Fly to Tokyo');
+    f.ui.emit('chat-submit');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(f.ui.state.chat.busy, true, 'the typed turn is running');
+    if (minimized) f.ui.emit('chat-minimize');
+    assert.equal(f.ui.state.root.chatOpen, true);
+    for (const [panelId, view] of [
+      ['voice-settings', 'settings'],
+      ['voice-preview', 'preview'],
+    ]) {
+      const result = await f.run('set_panel_open', { panelId, open: true });
+      assert.equal(result.ok, true);
+      // `[data-chat-open='true'] .gev-voice-panel` is display:none.
+      assert.equal(f.ui.state.root.chatOpen, false, panelId);
+      assert.equal(f.ui.state.chat.open, false);
+      assert.equal(f.ui.state.voicePanel.hidden, false);
+      assert.equal(f.ui.state.voicePanel.view, view);
+    }
+    assert.equal(adapter.stops, 0, 'the typed session continues');
+    assert.equal(f.commands.session.isActive(), true);
+    assert.equal(f.ui.state.chat.busy, true, 'the turn is not cancelled');
+    adapter.hooks.emit({
+      type: 'transcript',
+      role: 'assistant',
+      text: 'Flying to Tokyo.',
+      final: true,
+      itemId: 'reply',
+    });
+    adapter.hooks.emit({ type: 'completion', status: 'completed' });
+    assert.equal(f.ui.state.chat.busy, false);
+    f.ui.emit('chat-button');
+    assert.equal(f.ui.state.root.chatOpen, true);
+    assert.equal(f.ui.state.voicePanel.hidden, true);
+    assert.deepEqual(
+      f.ui.chatMessages.map(({ role }) => role),
+      ['user', 'assistant'],
+      'reopened chat shows the whole conversation',
+    );
+    assert.equal(f.ui.chatMessages[0].text, 'Fly to Tokyo');
+    assert.equal(adapter.stops, 0);
+  });
+
+for (const [panelId, target] of [
+  ['voice-settings', 'gev-voice-settings-tab'],
+  ['voice-preview', 'gev-voice-preview-tab'],
+])
+  test(`${panelId} asked for from the chat composer takes focus with it`, async (t) => {
+    const f = await directActions(t, { typed: true, view: true });
+    await f.settle();
+    $('#gev-chat-button').click();
+    await f.commands.session.start({ textOnly: true });
+    await f.settle();
+    $('#gev-chat-input').focus();
+    assert.equal(active(), 'gev-chat-input');
+    const result = await f.run('set_panel_open', { panelId, open: true });
+    assert.equal(result.ok, true);
+    await f.settle();
+    assert.equal($('#gev-chat-panel').hidden, true);
+    assert.equal(active(), target);
+    assert.equal(f.ui.visible('voicePanel'), true);
+  });
+
+test('a voice panel asked for from chat leaves unrelated focus alone', async (t) => {
+  const f = await directActions(t, { typed: true, view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.commands.session.start({ textOnly: true });
+  await f.settle();
+  const elsewhere = globalThis.document.body.appendChild(
+    globalThis.document.createElement('button'),
+  );
+  elsewhere.id = 'elsewhere';
+  t.after(() => elsewhere.remove());
+  elsewhere.focus();
+  await f.run('set_panel_open', { panelId: 'voice-settings', open: true });
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, true);
+  assert.equal(active(), 'elsewhere');
 });
 
 test('canonical exit reveals requested voice UI; newer manual choice or Stop defeats pending reveal', async (t) => {
@@ -575,7 +779,7 @@ test('voice timeout change preserves a pending voice reveal', async (t) => {
 });
 
 test('active provider output reveals Preview after done; manual choice wins until genuine input, replays do not reset idle', async (t) => {
-  const f = mounted(t, { native: true, nativeProvider: 'openai' });
+  const f = mounted(t, { native: true, nativeProvider: 'openai', view: true });
   await f.commands.session.start();
   const emit = f.instances[0].hooks.emit;
   const reply = (text, responseId = 'r1', extra = {}) =>
@@ -638,6 +842,7 @@ test('Preview off and actual Cockpit state suppress automatic presentation witho
   let cockpit = false;
   const f = mounted(t, {
     native: true,
+    view: true,
     readCockpitState: () => ({ active: cockpit }),
   });
   await f.commands.session.start();
@@ -645,32 +850,37 @@ test('Preview off and actual Cockpit state suppress automatic presentation witho
   const reply = (text) =>
     emit({ type: 'transcript', role: 'assistant', text, final: true });
   reply('Visible');
-  f.ui.previewTab.focus();
+  await f.settle();
+  $('#gev-voice-preview-tab').focus();
   cockpit = true;
   window.dispatchEvent(new Event('gev:cockpit-mode-changed'));
-  assert.equal(f.ui.voicePanel.hidden, true);
-  assert.equal(f.doc.activeElement, f.ui.voiceSettingsButton);
+  assert.equal(f.ui.state.voicePanel.hidden, true);
+  await f.settle();
+  assert.equal(active(), 'gev-chat-button');
   f.commands.voicePanel.select('settings', { focus: true });
-  assert.equal(f.doc.activeElement, f.ui.settingsTab);
+  await f.settle();
+  assert.equal(active(), 'gev-voice-settings-tab');
   f.commands.voicePanel.select('preview', { focus: true });
-  assert.equal(f.doc.activeElement, f.ui.voiceSettingsButton);
-  const outside = f.doc.createElement('button');
-  f.doc.body.appendChild(outside);
+  await f.settle();
+  assert.equal(active(), 'gev-chat-button');
+  const outside = document.createElement('button');
+  outside.id = 'unrelated';
+  document.body.appendChild(outside);
   outside.focus();
   window.dispatchEvent(new Event('gev:cockpit-mode-changed'));
-  assert.equal(f.doc.activeElement, outside);
+  await f.settle();
+  assert.equal(active(), 'unrelated');
   assert.equal(f.commands.voicePanel.snapshot().previewVisible, false);
   reply('Suppressed in Cockpit');
-  assert.equal(f.ui.voicePanel.hidden, true);
+  assert.equal(f.ui.state.voicePanel.hidden, true);
   f.commands.voicePanel.close();
   cockpit = false;
   window.dispatchEvent(new Event('gev:cockpit-mode-changed'));
-  assert.equal(f.ui.voicePanel.hidden, true);
-  f.ui.voicePreviewInput.checked = false;
-  f.ui.voicePreviewInput.fire('change');
+  assert.equal(f.ui.state.voicePanel.hidden, true);
+  f.ui.emit('preview-change', false);
   emit({ type: 'interruption', reason: 'user-speech' });
   reply('Preference stays off');
-  assert.equal(f.ui.voicePanel.hidden, true);
+  assert.equal(f.ui.state.voicePanel.hidden, true);
   assert.equal(f.commands.getVoicePreferences().previewEnabled, false);
 });
 
@@ -681,19 +891,12 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
     f.run('set_panel_open', { panelId: 'provider-settings', open }, options);
   assert.equal((await request(true)).unavailable, true);
   const doc = globalThis.document;
-  const chip = doc.createElement('button');
-  chip.id = 'key-setup-chip';
+  // The setup owner needs only its dialog element; the view is not mounted,
+  // so the published dialog state stands in for it.
   const panel = doc.createElement('aside');
   panel.id = 'key-setup';
-  panel.hidden = true;
-  const close = doc.createElement('button');
-  panel.appendChild(close);
-  doc.body.append(chip, panel);
-  const query = panel.querySelector.bind(panel);
-  panel.querySelector = (selector) =>
-    selector === '[data-key-setup-close]' ? close : query(selector);
-  chip.click = () => chip.fire('click');
-  close.click = () => close.fire('click');
+  doc.body.append(panel);
+  const dialog = () => settings.view?.dialog;
   let frames = 0;
   const previousFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (callback) => {
@@ -705,6 +908,10 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
     else globalThis.requestAnimationFrame = previousFrame;
   });
   const { initKeySetup } = await import('../../keySetup.js');
+  const { useProviderSettingsStore } =
+    await import('../../ui/stores/providerSettings.js');
+  const { applicationPinia } = await import('../../ui/vueRuntime.js');
+  const settings = useProviderSettingsStore(applicationPinia());
   let finishStatus;
   const pending = initKeySetup({
     documentRef: doc,
@@ -727,7 +934,7 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
   doc.body.classList.add('cockpit-mode');
   assert.equal((await request(true)).unavailable, true);
   assert.equal(
-    panel.hidden,
+    dialog().hidden,
     true,
     'a concealed view cannot schedule a later surprise reveal',
   );
@@ -737,20 +944,502 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
   await assert.rejects(() => request(true, { signal: abort.signal }), {
     name: 'AbortError',
   });
-  assert.equal(panel.hidden, true);
+  assert.equal(dialog().hidden, true);
   assert.equal((await request(true)).ok, true);
-  assert.equal(panel.hidden, false);
-  assert.equal(panel.classList.contains('visible'), true);
+  assert.equal(dialog().hidden, false);
+  assert.equal(dialog().visible, true);
   assert.equal((await request(true)).ok, true);
   assert.equal(frames, 1, 'repeated open reuses the dialog');
   assert.equal((await request(false)).ok, true);
-  assert.equal(panel.classList.contains('visible'), false);
+  assert.equal(dialog().visible, false);
   t.mock.timers.tick(400);
-  assert.equal(panel.hidden, true);
+  assert.equal(dialog().hidden, true);
   assert.equal((await request(false)).ok, true);
   assert.equal(
     f.state.visual.length,
     0,
     'provider setup never opens a visual or scene panel',
+  );
+});
+
+// Typed chat, rendered by the real VoiceControl.
+const typedChat = (f) => {
+  f.instances[0].getStartOptions = () => ({ textOnly: true });
+  f.instances[0].sendText = () => true;
+};
+const type = (text) => {
+  const input = $('#gev-chat-input');
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+test('the chat button opens, minimizes and closes chat', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, false);
+  assert.equal($('#gev-voice-control').dataset.assistantMode, 'chat');
+  assert.equal(active(), 'gev-chat-input');
+  $('#gev-chat-button').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  $('#gev-chat-restore').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  $('#gev-chat-close').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, true);
+  assert.equal($('#gev-voice-control').dataset.assistantMode, 'idle');
+});
+
+test('a typed message sends, shows the reply and is recalled with Up', async (t) => {
+  const f = mounted(t, { view: true });
+  typedChat(f);
+  const reduce = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => (globalThis.matchMedia = reduce));
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  type('Fly to Tokyo');
+  $('#gev-chat-form').dispatchEvent(new Event('submit', { cancelable: true }));
+  await f.commands.session.start({ textOnly: true });
+  for (let i = 0; i < 5; i++) await f.settle();
+  const messages = () =>
+    [...globalThis.document.querySelectorAll('.gev-chat-message')].map(
+      (row) => `${row.dataset.role}:${row.querySelector('span').textContent}`,
+    );
+  assert.deepEqual(messages(), ['user:Fly to Tokyo']);
+  assert.equal($('#gev-chat-input').value, '');
+  f.instances[0].hooks.emit({
+    type: 'transcript',
+    role: 'assistant',
+    text: 'Flying to Tokyo.',
+    final: true,
+  });
+  await f.settle();
+  assert.deepEqual(messages(), [
+    'user:Fly to Tokyo',
+    'assistant:Flying to Tokyo.',
+  ]);
+  assert.equal(f.ui.state.voicePanel.hidden, true);
+  key($('#gev-chat-input'), 'ArrowUp');
+  await f.settle();
+  assert.equal($('#gev-chat-input').value, 'Fly to Tokyo');
+});
+
+test('chat Settings keep chat context until the panel closes', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-voice-settings-button').click();
+  await f.settle();
+  assert.equal(f.ui.state.voicePanel.context, 'chat');
+  assert.equal($('#gev-chat-panel').hidden, true);
+  assert.equal($('#gev-voice-control').dataset.assistantMode, 'chat');
+  assert.equal(active(), 'gev-chat-back');
+  key($('#gev-chat-back'), 'Escape');
+  await f.settle();
+  assert.equal(f.ui.state.voicePanel.context, null);
+  assert.equal($('#gev-chat-panel').hidden, false);
+  $('#gev-voice-settings-button').click();
+  await f.settle();
+  $('#gev-chat-back').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, false);
+  assert.equal(f.ui.state.chat.backVisible, false);
+});
+
+// Shown once neither the element nor an ancestor is hidden by the page's
+// chat stylesheet or a hidden attribute.
+function shown(selector) {
+  for (let node = $(selector); node?.nodeType === 1; node = node.parentElement)
+    if (node.hidden || globalThis.getComputedStyle(node).display === 'none')
+      return false;
+  return true;
+}
+
+test('with Preview off, chat Settings reach the voice preferences', async (t) => {
+  const style = globalThis.document.createElement('style');
+  style.textContent = readFileSync(
+    new URL('../../ui/styles/ai-chat.css', import.meta.url),
+    'utf8',
+  );
+  globalThis.document.head.append(style);
+  t.after(() => style.remove());
+  const f = mounted(t, { view: true });
+  // The control renders into the command dock, as the page does.
+  globalThis.document.body.firstElementChild.id = 'command-dock';
+  f.ui.emit('preview-change', false);
+  f.commands.voicePanel.close();
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-voice-settings-button').click();
+  await f.settle();
+  assert.equal(f.ui.state.voicePanel.context, 'chat');
+  for (const selector of [
+    '#gev-settings-chat',
+    '#gev-settings-voice',
+    '#gev-voice-preview-enabled',
+    '#gev-voice-timeout-select',
+  ])
+    assert.equal(shown(selector), true, selector);
+  // Chat's frame keeps the voice tabs and dock layout buttons away.
+  assert.equal(shown('.gev-voice-panel-tabs'), false);
+  const preview = $('#gev-voice-preview-enabled');
+  preview.checked = true;
+  preview.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(f.commands.getVoicePreferences().previewEnabled, true);
+  const timeout = $('#gev-voice-timeout-select');
+  timeout.value = '10';
+  timeout.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(f.commands.getVoicePreferences().minutes, 10);
+  f.ui.update('tier', { hidden: false });
+  await f.settle();
+  assert.equal(shown('#gev-voice-tier'), true);
+  let tiers = 0;
+  t.after(f.ui.on('tier', () => tiers++));
+  $('#gev-voice-tier').click();
+  assert.equal(tiers, 1);
+  assert.equal(f.ui.state.voicePanel.context, 'chat', 'still chat Settings');
+});
+
+test('chat Settings keep only the quick commands preference', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  for (const id of [
+    'typewriter',
+    'text-color',
+    'text-size',
+    'autocomplete',
+    'recent',
+  ])
+    assert.equal(exists(`#gev-chat-${id}`), false);
+  assert.equal(exists('#gev-panel-default-position'), false);
+  assert.equal(exists('#gev-chat-quick'), true);
+});
+
+test('voice Settings step back to Preview with Back and Escape', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  f.commands.voicePanel.select('settings', { focus: true });
+  await f.settle();
+  assert.equal(active(), 'gev-voice-settings-tab');
+  $('#gev-voice-back').click();
+  await f.settle();
+  assert.equal(f.commands.voicePanel.snapshot().view, 'preview');
+  f.commands.voicePanel.select('settings');
+  key($('#gev-voice-panel'), 'Escape');
+  await f.settle();
+  assert.equal(f.commands.voicePanel.snapshot().view, 'preview');
+  assert.equal(f.commands.voicePanel.snapshot().panelOpen, true);
+  key($('#gev-voice-panel'), 'Escape');
+  assert.equal(f.commands.voicePanel.snapshot().panelOpen, false);
+});
+
+test('Escape does not minimize chat', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  key($('#gev-chat-input'), 'Escape');
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  assert.equal($('#gev-chat-panel').hidden, false);
+});
+
+function dockWing(t) {
+  const doc = globalThis.document;
+  const wing = doc.createElement('div');
+  wing.id = 'control-panel';
+  wing.className = 'panel-collapsible collapsed';
+  const toggle = doc.createElement('button');
+  toggle.className = 'dock-tray-toggle';
+  const tray = doc.createElement('div');
+  tray.className = 'dock-popover-content';
+  wing.append(toggle, tray);
+  doc.body.append(wing);
+  t.after(() => wing.remove());
+  return {
+    wing,
+    toggle,
+    open: () => wing.classList.remove('collapsed'),
+    close: () => wing.classList.add('collapsed'),
+  };
+}
+
+test('reaching for a dock wing minimizes a centred chat or voice panel', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  // The dock can mount after the layouts bind; they find it on use.
+  const wing = dockWing(t);
+  $('#gev-chat-button').click();
+  await f.settle();
+  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  // Leaving the wing with no tray open ends the yield.
+  wing.wing.dispatchEvent(new PointerEvent('pointerleave'));
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, undefined);
+  wing.toggle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, 'true');
+});
+
+test('expanding a panel over an open tray docks it right without saving', async (t) => {
+  const f = mounted(t, { view: true });
+  // The view mount resets the body; the layouts bind on the next tick.
+  const wing = dockWing(t);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+  wing.open();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
+  $('#gev-chat-restore').click();
+  await f.settle();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  assert.equal($('#gev-chat-panel').dataset.placement, 'docked');
+  assert.notEqual(globalThis.localStorage.getItem('gev.panel.docked'), 'true');
+  // The dock was only for the tray; it ends once the tray closes.
+  wing.close();
+  await f.settle();
+  await f.settle();
+  assert.equal(f.ui.state.layout.docked, false);
+  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+});
+
+test('yielding to a dock tray leaves keyboard focus where it is', async (t) => {
+  const f = mounted(t, { view: true });
+  const wing = dockWing(t);
+  const field = globalThis.document.createElement('input');
+  globalThis.document.body.append(field);
+  t.after(() => field.remove());
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  for (const target of [$('#gev-chat-input'), field]) {
+    target.focus();
+    wing.toggle.dispatchEvent(
+      new PointerEvent('pointerover', { bubbles: true }),
+    );
+    await f.settle();
+    assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+    assert.equal(globalThis.document.activeElement, target);
+    wing.wing.dispatchEvent(new PointerEvent('pointerleave'));
+    await f.settle();
+    assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+    assert.equal(globalThis.document.activeElement, target);
+  }
+});
+
+test('a panel that yielded to a tray expands in the centre once it closes', async (t) => {
+  const f = mounted(t, { view: true });
+  const wing = dockWing(t);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  wing.toggle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  wing.open();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  wing.close();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
+  assert.equal(f.ui.state.layout.yielded, null);
+});
+
+test('switching to voice while chat yields to a tray starts voice as its bar', async (t) => {
+  const f = mounted(t, { view: true });
+  const wing = dockWing(t);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, 'true');
+  assert.equal(f.ui.state.layout.yielded, 'voicePanel');
+});
+
+test('undocking while a tray is open brings the panel back as its bar', async (t) => {
+  const f = mounted(t, { view: true });
+  const wing = dockWing(t);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-chat-panel [data-layout-dock]').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.placement, 'docked');
+  wing.open();
+  await f.settle();
+  $('#gev-chat-panel [data-layout-dock]').click();
+  await f.settle();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
+});
+
+test('opening chat or closing the voice panel clears a stale voice error', async (t) => {
+  for (const leave of ['chat', 'close']) {
+    const f = mounted(t, { view: true });
+    await f.commands.session.start();
+    f.commands.voicePanel.select('preview');
+    f.instances[0].hooks.emit({
+      type: 'state',
+      state: 'error',
+      detail: 'Lost',
+    });
+    await f.settle();
+    assert.equal($('#gev-voice-control').dataset.status, 'error');
+    assert.equal(f.commands.session.isActive(), false);
+    if (leave === 'chat') $('#gev-chat-button').click();
+    else $('#gev-voice-settings-close').click();
+    await f.settle();
+    assert.equal(f.commands.session.state, 'idle', leave);
+    assert.notEqual($('#gev-voice-control').dataset.status, 'error', leave);
+  }
+});
+
+test('switching AI Provider from chat Settings keeps chat Settings on the new mount', async (t) => {
+  const view = mountVoiceView(t);
+  const host = createVoicePanelHost({ storage: null });
+  const instances = [];
+  const commands = createProviderCommands(
+    {
+      runner: async () => ({}),
+      dataManager: { layers: new Map() },
+      supportedProviders: ['openai', 'gemini'],
+    },
+    {
+      bind: (options) =>
+        bind({
+          ...options,
+          panelHost: host,
+          createControl: (control) =>
+            createTestVoiceUi({ ...control, pinia: view.pinia }),
+        }),
+      factories: { openai: factory(instances), gemini: factory(instances) },
+      storage: null,
+    },
+  );
+  t.after(() => {
+    commands.destroy();
+    host.destroy();
+  });
+  await view.settle();
+  $('#gev-chat-button').click();
+  await view.settle();
+  $('#gev-chat-panel').getBoundingClientRect = () => ({
+    width: 320,
+    height: 480,
+  });
+  $('#gev-voice-settings-button').click();
+  await view.settle();
+  const old = commands.ui;
+  assert.equal(old.state.voicePanel.context, 'chat');
+  old.emit('provider-change', 'gemini');
+  await view.settle();
+  const { ui } = commands;
+  assert.notEqual(ui, old);
+  assert.equal(ui.state.voicePanel.context, 'chat');
+  assert.equal(ui.state.voicePanel.frameWidth, 320);
+  assert.equal(ui.state.voicePanel.frameHeight, 480);
+  assert.equal(ui.state.chat.backVisible, true);
+  assert.equal(ui.state.root.assistantMode, 'chat');
+  assert.equal($('#gev-chat-back').hidden, false);
+  assert.equal(active(), 'gev-voice-provider');
+});
+
+test('the voice panel close turns voice off', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.commands.session.start();
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  $('#gev-voice-settings-close').click();
+  assert.equal(f.commands.session.isActive(), false);
+  assert.equal(f.commands.voicePanel.snapshot().panelOpen, false);
+});
+
+test('closing chat Settings ends a typed session', async (t) => {
+  const f = mounted(t, { view: true });
+  typedChat(f);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.commands.session.start({ textOnly: true });
+  await f.settle();
+  $('#gev-voice-settings-button').click();
+  await f.settle();
+  $('#gev-voice-settings-close').click();
+  await f.settle();
+  assert.equal(f.commands.session.isActive(), false);
+  assert.equal($('#gev-chat-panel').hidden, true);
+});
+
+test('opening chat stops a live voice session', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.commands.session.start();
+  await f.settle();
+  assert.equal(f.commands.session.isActive(), true);
+  $('#gev-chat-button').click();
+  await f.settle();
+  assert.equal(f.commands.session.isActive(), false);
+  assert.equal($('#gev-chat-panel').hidden, false);
+});
+
+test('the mic button closes chat and minimize collapses voice to a bar', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-voice-button').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, true);
+  assert.equal(f.commands.session.isActive(), true);
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  $('#gev-voice-panel [data-layout-minimize]').click();
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, 'true');
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, undefined);
+});
+
+test('teardown inside sendText prevents appending the submitted message', async (t) => {
+  const f = mounted(t, { view: true });
+  f.instances[0].getStartOptions = () => ({ textOnly: true });
+  f.instances[0].sendText = () => {
+    f.commands.session.destroy();
+    return true;
+  };
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  type('Hello');
+  $('#gev-chat-form').dispatchEvent(new Event('submit', { cancelable: true }));
+  await f.commands.session.start({ textOnly: true });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(
+    globalThis.document.querySelectorAll('.gev-chat-message').length,
+    0,
   );
 });
