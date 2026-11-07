@@ -1,4 +1,12 @@
 import * as Cesium from 'cesium';
+// The Cesium camera factory: given a viewer of a caller's own, with no
+// renderer bound, the layer's camera reads find a camera port.
+import '../../render/cesium/camera.js';
+import { webglContext } from '../../render/cesium/internals.js';
+import {
+  claimCameraSensitivity,
+  releaseCameraSensitivity,
+} from '../../data/cameraSensitivity.js';
 import {
   cameraPoseSignature,
   perspectiveProjectedRotation,
@@ -20,6 +28,7 @@ import {
   transitStyleProfile,
 } from '../../data/transitPresetStyle.js';
 import {
+  CAMERA_PERCENTAGE_CHANGED,
   MARKER_PIXEL_SIZE,
   ROTATION_REFRESH_MS,
   VISIBILITY_REFRESH_MS,
@@ -46,6 +55,163 @@ export function createRendering({ state, services, parts }) {
     holdContinuousRender,
     releaseContinuousRender,
   } = services.render;
+  // The application's rendered-mesh sampler. Optional so a layer built on a
+  // bare floor stub still runs; the application always supplies it.
+  const sampleMeshFloorCells = services.mesh?.sampleMeshFloorCells || null;
+
+  /**
+   * The two billboard collections, still and moving, added to the scene and
+   * to the shared sprite order, hidden.
+   * @param {object} viewer
+   */
+  function createMarkers(viewer) {
+    state._markers = new Cesium.BillboardCollection({
+      blendOption: Cesium.BlendOption.TRANSLUCENT,
+    });
+    viewer.scene.primitives.add(state._markers);
+    services.sprites.registerSpriteCollection('transit', state._markers);
+    state._animatedMarkers = new Cesium.BillboardCollection({
+      blendOption: Cesium.BlendOption.TRANSLUCENT,
+    });
+    viewer.scene.primitives.add(state._animatedMarkers);
+    services.sprites.registerSpriteCollection(
+      'transit-motion',
+      state._animatedMarkers,
+    );
+    state._animatedMarkers.show = false;
+    state._markers.show = false;
+  }
+
+  /** Show both collections. */
+  function showMarkers() {
+    state._markers.show = true;
+    state._animatedMarkers.show = true;
+  }
+
+  /** Drop every billboard and hide both collections. */
+  function clearMarkers() {
+    state._markers?.removeAll();
+    state._animatedMarkers?.removeAll();
+    if (state._animatedMarkers) state._animatedMarkers.show = false;
+    if (state._markers) state._markers.show = false;
+  }
+
+  /**
+   * Take both collections off the scene and out of the sprite order.
+   * @param {object|null|undefined} viewer
+   */
+  function destroyMarkers(viewer) {
+    if (state._markers) {
+      services.sprites.unregisterSpriteCollection('transit', state._markers);
+      viewer?.scene?.primitives?.remove(state._markers);
+      state._markers = null;
+    }
+    if (state._animatedMarkers) {
+      services.sprites.unregisterSpriteCollection(
+        'transit-motion',
+        state._animatedMarkers,
+      );
+      viewer?.scene?.primitives?.remove(state._animatedMarkers);
+      state._animatedMarkers = null;
+    }
+  }
+
+  /** Whether a vehicle's billboard is shown. */
+  function markerShown(entry) {
+    return entry.marker?.show === true;
+  }
+
+  /**
+   * Listen for the camera moving, borrowing its change sensitivity through
+   * the shared claim ledger.
+   *
+   * `camera.changed` fires on a percentage of the view moving, and this layer
+   * needs a finer trigger than the default to notice it has entered a feed's
+   * coverage. It is a single shared number, so the claim is registered by name
+   * rather than written directly: comparing the VALUE on the way out could not
+   * tell this layer's 0.05 from anybody else's, and handing back the coarse
+   * default while Bikeshare was still relying on a fine one was exactly the
+   * bug that produced.
+   * @param {object} viewer
+   * @param {() => void} onChanged
+   */
+  function watchCamera(viewer, onChanged) {
+    viewer.camera.changed.addEventListener(onChanged);
+    claimCameraSensitivity(
+      viewer?.camera,
+      'transit',
+      CAMERA_PERCENTAGE_CHANGED,
+    );
+  }
+
+  /** Stop listening and give the claim up; the camera keeps anyone else's. */
+  function unwatchCamera(viewer, onChanged) {
+    viewer.camera.changed.removeEventListener(onChanged);
+    releaseCameraSensitivity(viewer?.camera, 'transit');
+  }
+
+  /** Run the per-frame glide before each render, once. */
+  function startFrames(viewer) {
+    if (!state._preRenderRemove)
+      state._preRenderRemove =
+        viewer.scene.preRender.addEventListener(onPreRender);
+  }
+
+  /** Stop the per-frame glide. */
+  function stopFrames() {
+    if (state._preRenderRemove) {
+      state._preRenderRemove();
+      state._preRenderRemove = null;
+    }
+  }
+
+  /**
+   * The camera's height above the ellipsoid, or Infinity when it has none.
+   * @returns {number}
+   */
+  function cameraHeightM() {
+    const carto = state._viewer?.camera?.positionCartographic;
+    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
+  }
+
+  /** The camera's subpoint in degrees, for the sampler's proximity gate. */
+  function viewerSubpoint() {
+    const carto = state._viewer?.camera?.positionCartographic;
+    if (!carto) return { viewerLat: undefined, viewerLon: undefined };
+    return {
+      viewerLat: (carto.latitude * 180) / Math.PI,
+      viewerLon: (carto.longitude * 180) / Math.PI,
+    };
+  }
+
+  /**
+   * What the globe draws under the fleet: `'none'` when it is hidden (the
+   * photoreal stack), `'flat'` on the ellipsoid, `'terrain'` otherwise.
+   * @returns {'none'|'flat'|'terrain'}
+   */
+  function globeSurface() {
+    if (state._viewer?.scene?.globe?.show !== true) return 'none';
+    return state._viewer?.terrainProvider instanceof
+      Cesium.EllipsoidTerrainProvider
+      ? 'flat'
+      : 'terrain';
+  }
+
+  /**
+   * Sample the rendered mesh under floor cells, seeing through these
+   * vehicles' billboards.
+   * @param {object[]} cells
+   * @param {object[]} entries
+   */
+  function sampleMeshFloors(cells, entries) {
+    if (!sampleMeshFloorCells) return;
+    const markers = entries.map((entry) => entry.marker).filter(Boolean);
+    for (let i = 0; i < cells.length; i += 8)
+      sampleMeshFloorCells(state._viewer?.scene, cells.slice(i, i + 8), {
+        excludeObjects: markers,
+        ...viewerSubpoint(),
+      });
+  }
 
   /**
    * Cartesian position for a lat/lon at a height. Called on POLL, not per
@@ -589,7 +755,161 @@ export function createRendering({ state, services, parts }) {
     applySpriteStyle(entry);
   }
 
+  let stopProbe = null;
+  /** Stop a running frame probe, resolving it with what it has. */
+  function stopFrameProbe() {
+    stopProbe?.();
+  }
+
+  /** Measure inside Cesium postRender with fixed typed storage; no sample objects per frame. */
+  function measureFrames(durationMs = 12000) {
+    stopProbe?.();
+    const scene = state._viewer.scene;
+    const capacity = 20000,
+      stride = 12,
+      data = new Float64Array(capacity * stride);
+    const previousPositions = new Float64Array(state._vehicles.size * 3);
+    const gl = webglContext(scene);
+    let active = false,
+      upload = 0,
+      cpu = 0,
+      count = 0,
+      previous = 0;
+    const saved = [];
+    for (const name of ['bufferData', 'bufferSubData']) {
+      const original = gl[name];
+      gl[name] = function (...args) {
+        if (active) {
+          const value = args[name === 'bufferData' ? 1 : 2];
+          const offset = args[name === 'bufferData' ? 3 : 3] || 0;
+          const length = args[4];
+          upload +=
+            typeof value === 'number'
+              ? value
+              : value
+                ? length !== undefined
+                  ? length * (value.BYTES_PER_ELEMENT || 1)
+                  : value.byteLength - offset * (value.BYTES_PER_ELEMENT || 1)
+                : 0;
+        }
+        return original.apply(this, args);
+      };
+      saved.push(() => {
+        gl[name] = original;
+      });
+    }
+    for (const collection of [state._markers, state._animatedMarkers]) {
+      const original = collection.update;
+      collection.update = function (frame) {
+        active = true;
+        try {
+          return original.call(this, frame);
+        } finally {
+          active = false;
+        }
+      };
+      saved.push(() => {
+        collection.update = original;
+      });
+    }
+    state._preRenderRemove?.();
+    const removePre = scene.preRender.addEventListener(() => {
+      upload = 0;
+      const start = performance.now();
+      onPreRender();
+      cpu = performance.now() - start;
+    });
+    let removePost, timer;
+    return new Promise((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        removePre();
+        removePost?.();
+        for (const restore of saved) restore();
+        if (state._enabled)
+          state._preRenderRemove =
+            scene.preRender.addEventListener(onPreRender);
+        stopProbe = null;
+        const rows = [];
+        for (let i = 1; i < count; i++) {
+          const k = i * stride;
+          rows.push({
+            intervalMs: data[k],
+            cpuMs: data[k + 1],
+            uploadBytes: data[k + 2],
+            moving: data[k + 3],
+            x: data[k + 4],
+            y: data[k + 5],
+            z: data[k + 6],
+            displayT: data[k + 7],
+            expectedMps: data[k + 8],
+            segment: data[k + 9],
+          });
+        }
+        resolve({
+          rows,
+          dpr: devicePixelRatio,
+          width: scene.canvas.clientWidth,
+          height: scene.canvas.clientHeight,
+        });
+      };
+      stopProbe = finish;
+      removePost = scene.postRender.addEventListener(() => {
+        const now = performance.now();
+        if (count >= capacity) return;
+        const k = count++ * stride;
+        const entry = state._vehicles.get('mbta:qa-0');
+        data[k] = previous ? now - previous : 0;
+        previous = now;
+        data[k + 1] = cpu;
+        data[k + 2] = upload;
+        let actuallyMoved = 0;
+        for (const vehicle of state._visible) {
+          const p = vehicle.marker.position,
+            index = vehicle.qaIndex * 3;
+          if (
+            count > 1 &&
+            Math.hypot(
+              p.x - previousPositions[index],
+              p.y - previousPositions[index + 1],
+              p.z - previousPositions[index + 2],
+            ) > 0.00001
+          )
+            actuallyMoved++;
+          previousPositions[index] = p.x;
+          previousPositions[index + 1] = p.y;
+          previousPositions[index + 2] = p.z;
+        }
+        data[k + 3] = actuallyMoved;
+        if (entry?.marker) {
+          const p = entry.marker.position;
+          data[k + 4] = p.x;
+          data[k + 5] = p.y;
+          data[k + 6] = p.z;
+          data[k + 7] = entry.sample.displayT;
+          data[k + 8] = entry.sample.segmentSpeedMps;
+          data[k + 9] = entry.sample.fromSeq;
+        }
+      });
+      timer = setTimeout(finish, durationMs);
+    });
+  }
+
   return {
+    createMarkers,
+    showMarkers,
+    clearMarkers,
+    destroyMarkers,
+    markerShown,
+    watchCamera,
+    unwatchCamera,
+    startFrames,
+    stopFrames,
+    cameraHeightM,
+    globeSurface,
+    sampleMeshFloors,
+    measureFrames,
+    stopFrameProbe,
     resumePlayback,
     maintainPresentation,
     requestVisibility,

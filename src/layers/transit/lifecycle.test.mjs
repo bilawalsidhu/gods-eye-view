@@ -45,6 +45,7 @@ import {
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 import { framePortFor } from '../../testSupport/fakeFramePort.mjs';
 import { registerStyleStages } from '../../styles/styleStages.js';
 
@@ -308,8 +309,10 @@ function harness(
 
   // The layer reads the camera through its port; this one reads the fake
   // camera above as the Cesium port reads a real one, so a test can still
-  // move it by changing the fake.
+  // move it by changing the fake. Terrain heights come through the query
+  // port, which reads the fake globe the same way.
   const unbindCamera = bindRenderer(viewer, {
+    query: fakeSceneQuery(viewer),
     camera: {
       pose() {
         const carto = viewer.camera.positionCartographic;
@@ -2938,7 +2941,6 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
     _vehicles: new Map([[entry.key, entry]]),
     _floorCursor: 0,
     _heightDirty: new Set(),
-    _viewer: { camera: { positionCartographic: { height: 100 } } },
   };
   const height = createHeight({
     state,
@@ -2949,11 +2951,6 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
         cachedGroundFloor: () => 10,
         GROUND_FLOOR_LIFT_M: 1.5,
       },
-      mesh: {
-        sampleMeshFloorCells(scene, points) {
-          for (const point of points) probed.add(point.cell);
-        },
-      },
     },
     parts: {
       trails: {
@@ -2963,7 +2960,14 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
               collect(point, height.requestHeight(point.lat, point.lon));
         },
       },
-      rendering: { requestVisibility() {} },
+      rendering: {
+        requestVisibility() {},
+        cameraHeightM: () => 100,
+        globeSurface: () => 'none',
+        sampleMeshFloors(cells) {
+          for (const point of cells) probed.add(point.cell);
+        },
+      },
     },
   });
   t.after(() => height.clear());
@@ -3139,6 +3143,28 @@ test('keyless loaded terrain resolves a pending surface without needing a frame 
   assert.equal(entry.heightPending, false);
   assert.equal(entry.surfaceReady, true);
   assert.equal(entry.marker.show, true);
+});
+
+test('the terrain under a vehicle is asked through the query port, and a flat globe stands at the ellipsoid', (t) => {
+  const app = harness(t, { floorAt: () => undefined });
+  const parts = app.layer._transitPartsForTest();
+  const lift = parts.height.requestHeight(0, 0).height;
+  assert.equal(lift, null, 'with the globe hidden, no terrain is read');
+  const asked = [];
+  app.viewer.scene.globe.show = true;
+  app.viewer.scene.globe.getHeight = (carto) => {
+    asked.push(Cesium.Math.toDegrees(carto.latitude));
+    return 30;
+  };
+  const terrain = parts.height.requestHeight(42.36, -71.06);
+  assert.ok(Math.abs(asked[0] - 42.36) < 1e-9, 'asked at the vehicle');
+  assert.equal(parts.rendering.globeSurface(), 'terrain');
+  app.viewer.scene.globe.getHeight = () => undefined;
+  app.viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  assert.equal(parts.rendering.globeSurface(), 'flat');
+  const flat = parts.height.requestHeight(42.36, -71.06);
+  assert.equal(terrain.height - flat.height, 30, 'flat terrain is height 0');
+  assert.equal(flat.prior, null);
 });
 
 test('scripted keyless fleet keeps its known floor through selection and floor rereads', async (t) => {

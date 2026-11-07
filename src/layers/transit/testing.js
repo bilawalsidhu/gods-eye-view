@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { webglContext } from '../../render/cesium/internals.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { recordFix, updatePlayback, attachFloorToPlace } from './movement.js';
 import { seek, setRate, mergeHistory } from '../../data/contactPlayback.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
@@ -12,13 +11,12 @@ import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import { transitIconCacheSize } from '../../data/transitIcons.js';
 
 export function createTesting({ state, parts }) {
-  let stopProbe = null;
   return {
     _setTransitFixtureFloorsForTest(keys, heightM) {
       state._qaFixtureFloors = new Map(keys.map((key) => [key, heightM]));
     },
     _stopTransitProbeForTest() {
-      stopProbe?.();
+      parts.rendering.stopFrameProbe();
     },
     /** Deterministic observed-position fixtures, independent of upstream availability. */
     _loadTransitFleetForTest(count, origin, spacingM = 6, routes = ['741']) {
@@ -98,12 +96,8 @@ export function createTesting({ state, parts }) {
           entry.displayPaths.set(fixes[i].seq, {
             toSeq: fixes[i + 1].seq,
             positions: [
-              Cesium.Cartesian3.fromDegrees(fixes[i].lon, fixes[i].lat, 20),
-              Cesium.Cartesian3.fromDegrees(
-                fixes[i + 1].lon,
-                fixes[i + 1].lat,
-                20,
-              ),
+              fromDegrees(fixes[i].lon, fixes[i].lat, 20),
+              fromDegrees(fixes[i + 1].lon, fixes[i + 1].lat, 20),
             ],
           });
         }
@@ -140,12 +134,8 @@ export function createTesting({ state, parts }) {
           entry.displayPaths.set(fixes[i].seq, {
             toSeq: fixes[i + 1].seq,
             positions: [
-              Cesium.Cartesian3.fromDegrees(fixes[i].lon, fixes[i].lat, 20),
-              Cesium.Cartesian3.fromDegrees(
-                fixes[i + 1].lon,
-                fixes[i + 1].lat,
-                20,
-              ),
+              fromDegrees(fixes[i].lon, fixes[i].lat, 20),
+              fromDegrees(fixes[i + 1].lon, fixes[i + 1].lat, 20),
             ],
           });
         }
@@ -159,139 +149,9 @@ export function createTesting({ state, parts }) {
       }
       parts.rendering.syncRenderHold();
     },
-    /** Measure inside Cesium postRender with fixed typed storage; no sample objects per frame. */
+    /** Measure inside the renderer's frames with fixed typed storage. */
     _measureTransitFramesForTest(durationMs = 12000) {
-      stopProbe?.();
-      const scene = state._viewer.scene;
-      const capacity = 20000,
-        stride = 12,
-        data = new Float64Array(capacity * stride);
-      const previousPositions = new Float64Array(state._vehicles.size * 3);
-      const gl = webglContext(scene);
-      let active = false,
-        upload = 0,
-        cpu = 0,
-        count = 0,
-        previous = 0;
-      const saved = [];
-      for (const name of ['bufferData', 'bufferSubData']) {
-        const original = gl[name];
-        gl[name] = function (...args) {
-          if (active) {
-            const value = args[name === 'bufferData' ? 1 : 2];
-            const offset = args[name === 'bufferData' ? 3 : 3] || 0;
-            const length = args[4];
-            upload +=
-              typeof value === 'number'
-                ? value
-                : value
-                  ? length !== undefined
-                    ? length * (value.BYTES_PER_ELEMENT || 1)
-                    : value.byteLength - offset * (value.BYTES_PER_ELEMENT || 1)
-                  : 0;
-          }
-          return original.apply(this, args);
-        };
-        saved.push(() => {
-          gl[name] = original;
-        });
-      }
-      for (const collection of [state._markers, state._animatedMarkers]) {
-        const original = collection.update;
-        collection.update = function (frame) {
-          active = true;
-          try {
-            return original.call(this, frame);
-          } finally {
-            active = false;
-          }
-        };
-        saved.push(() => {
-          collection.update = original;
-        });
-      }
-      state._preRenderRemove?.();
-      const removePre = scene.preRender.addEventListener(() => {
-        upload = 0;
-        const start = performance.now();
-        parts.rendering.onPreRender();
-        cpu = performance.now() - start;
-      });
-      let removePost, timer;
-      return new Promise((resolve) => {
-        const finish = () => {
-          clearTimeout(timer);
-          removePre();
-          removePost?.();
-          for (const restore of saved) restore();
-          if (state._enabled)
-            state._preRenderRemove = scene.preRender.addEventListener(
-              parts.rendering.onPreRender,
-            );
-          stopProbe = null;
-          const rows = [];
-          for (let i = 1; i < count; i++) {
-            const k = i * stride;
-            rows.push({
-              intervalMs: data[k],
-              cpuMs: data[k + 1],
-              uploadBytes: data[k + 2],
-              moving: data[k + 3],
-              x: data[k + 4],
-              y: data[k + 5],
-              z: data[k + 6],
-              displayT: data[k + 7],
-              expectedMps: data[k + 8],
-              segment: data[k + 9],
-            });
-          }
-          resolve({
-            rows,
-            dpr: devicePixelRatio,
-            width: scene.canvas.clientWidth,
-            height: scene.canvas.clientHeight,
-          });
-        };
-        stopProbe = finish;
-        removePost = scene.postRender.addEventListener(() => {
-          const now = performance.now();
-          if (count >= capacity) return;
-          const k = count++ * stride;
-          const entry = state._vehicles.get('mbta:qa-0');
-          data[k] = previous ? now - previous : 0;
-          previous = now;
-          data[k + 1] = cpu;
-          data[k + 2] = upload;
-          let actuallyMoved = 0;
-          for (const vehicle of state._visible) {
-            const p = vehicle.marker.position,
-              index = vehicle.qaIndex * 3;
-            if (
-              count > 1 &&
-              Math.hypot(
-                p.x - previousPositions[index],
-                p.y - previousPositions[index + 1],
-                p.z - previousPositions[index + 2],
-              ) > 0.00001
-            )
-              actuallyMoved++;
-            previousPositions[index] = p.x;
-            previousPositions[index + 1] = p.y;
-            previousPositions[index + 2] = p.z;
-          }
-          data[k + 3] = actuallyMoved;
-          if (entry?.marker) {
-            const p = entry.marker.position;
-            data[k + 4] = p.x;
-            data[k + 5] = p.y;
-            data[k + 6] = p.z;
-            data[k + 7] = entry.sample.displayT;
-            data[k + 8] = entry.sample.segmentSpeedMps;
-            data[k + 9] = entry.sample.fromSeq;
-          }
-        });
-        timer = setTimeout(finish, durationMs);
-      });
+      return parts.rendering.measureFrames(durationMs);
     },
     _transitVisibilityForTest() {
       return [...state._vehicles.values()].map((entry) => {
@@ -308,7 +168,7 @@ export function createTesting({ state, parts }) {
         if (!state._enabled) why.push('disabled');
         return {
           key: entry.key,
-          shown: entry.marker?.show === true,
+          shown: parts.rendering.markerShown(entry),
           why,
           ...gate,
           heightPending: !!entry.heightPending,
