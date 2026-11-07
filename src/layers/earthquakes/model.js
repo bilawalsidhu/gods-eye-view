@@ -1,19 +1,31 @@
-import * as Cesium from 'cesium';
 export const EARTHQUAKE_OVERLAY_SOURCE_ID = 'earthquakes';
 export const EARTHQUAKE_OVERLAY_COHORT_LIMIT = 96;
 export const EARTHQUAKE_OVERLAY_COLLISION_CAPACITY = 48;
 
+// The depth bands' colours: CSS red, orange and yellow, as the renderer's
+// colour tuples (`[r, g, b, a]`, 0..1) and as CSS for the labels' accent.
+const SHALLOW = Object.freeze({ rgba: [1, 0, 0, 1], css: 'rgb(255,0,0)' });
+const INTERMEDIATE = Object.freeze({
+  rgba: [1, 165 / 255, 0, 1],
+  css: 'rgb(255,165,0)',
+});
+const DEEP = Object.freeze({ rgba: [1, 1, 0, 1], css: 'rgb(255,255,0)' });
+
+const depthBand = (depthKm) =>
+  depthKm < 70 ? SHALLOW : depthKm < 300 ? INTERMEDIATE : DEEP;
+
 /**
- * Color by depth:
+ * Color by depth, as a renderer colour `[r, g, b, a]` (0..1):
  *  - Shallow (<70km): Red
  *  - Intermediate (70-300km): Orange
  *  - Deep (>300km): Yellow
  */
 export function depthColor(depthKm) {
-  if (depthKm < 70) return Cesium.Color.RED;
-  if (depthKm < 300) return Cesium.Color.ORANGE;
-  return Cesium.Color.YELLOW;
+  return [...depthBand(depthKm).rgba];
 }
+
+/** The depth band's colour as CSS, for the magnitude label's accent. */
+export const depthAccent = (depthKm) => depthBand(depthKm).css;
 
 /**
  * Build the source-owned presentation for one ambient magnitude label.
@@ -21,7 +33,8 @@ export function depthColor(depthKm) {
  * shared renderer.
  * @param {object} input
  * @param {string} input.id Stable USGS or deterministic fallback id.
- * @param {Cesium.Cartesian3} input.position Ground anchor shared with the pulse.
+ * @param {{x: number, y: number, z: number}} input.position ECEF ground
+ *   anchor, shared with the disc.
  * @param {number} input.magnitude USGS magnitude.
  * @param {string} input.accent Source-owned depth-band color.
  * @returns {object}

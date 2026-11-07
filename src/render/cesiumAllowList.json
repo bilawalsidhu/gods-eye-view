@@ -70,8 +70,6 @@
   "src/layers/cyclones/index.js",
   "src/layers/cyclones/rendering.js",
   "src/layers/directions/index.js",
-  "src/layers/earthquakes/index.js",
-  "src/layers/earthquakes/model.js",
   "src/layers/firms/cards.js",
   "src/layers/firms/lifecycle.js",
   "src/layers/firms/model.js",

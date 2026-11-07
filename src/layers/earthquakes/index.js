@@ -1,9 +1,11 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf } from '../../render/rendererOf.js';
 import {
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
   EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
   depthColor,
+  depthAccent,
   createEarthquakeOverlayEntry,
   selectEarthquakeOverlayCohort,
   mapAnalystRecord,
@@ -15,15 +17,29 @@ export { createUsgsEarthquakeSource } from './source.js';
 // panel shows it translated.
 const msg = (text) => text;
 
-/** Own one earthquake display and its refresh lifecycle. */
+/**
+ * The draw sets the discs are drawn in start with this; each layer has its
+ * own (`earthquakes:1`, …), so several can share a renderer. Picks name it
+ * as `Hit.set`.
+ */
+export const EARTHQUAKE_DISC_SET_ID = 'earthquakes';
+let instances = 0;
+
+/**
+ * Own one earthquake display and its refresh lifecycle.
+ *
+ * The discs are one renderer draw set (`drawOf(viewer)`), made at `init`.
+ * Given a Cesium viewer with no renderer bound, the
+ * caller loads the package's `./render/cesium/unbound` export first.
+ */
 export function createEarthquakesLayer({ source, overlayHost } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Earthquakes require a snapshot source');
   if (!overlayHost) throw new TypeError('Earthquakes require an overlay host');
   let _viewer = null;
   let _request = null;
-  let _dataSource = null;
-  // What the discs were drawn from, so analyst reads come from the app, not the entities.
+  let _discs = null;
+  // What the discs were drawn from, so analyst reads come from the app, not the drawing.
   let _events = [];
   let _count = 0;
   let _lastUpdate = null;
@@ -39,10 +55,11 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
 
     init(viewer) {
       if (_viewer) throw new Error('Earthquake layer is already initialized');
+      _discs = drawOf(viewer).shapes({
+        id: `${EARTHQUAKE_DISC_SET_ID}:${++instances}`,
+        show: false,
+      });
       _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource('earthquakes');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -55,7 +72,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _enabled = true;
       // No continuous-render hold: the discs are static geometry now, so the
       // layer has no per-frame animator to keep the render loop alive for.
-      if (_dataSource) _dataSource.show = true;
+      if (_discs) _discs.show = true;
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, true);
     },
 
@@ -63,13 +80,13 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      if (_discs) _discs.show = false;
       overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
     },
 
     async update(viewer) {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled || !_discs) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -78,7 +95,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
 
-        const nextEntities = [];
+        const nextDiscs = [];
         const nextEvents = [];
         let count = 0;
         const overlayEntries = [];
@@ -96,43 +113,38 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           count++;
           const baseRadius = Math.pow(2, mag) * 1000;
           const color = depthColor(depthKm || 0);
+          const [r, g, b] = color;
           const isSignificant = mag >= 5.0;
           const fillAlpha = isSignificant ? 0.4 : 0.3;
-          const outlineAlpha = isSignificant ? 1.0 : 0.8;
 
-          const position = Cesium.Cartesian3.fromDegrees(lon, lat);
+          const position = fromDegrees(lon, lat);
           nextEvents.push({ usgsId, mag, place, time, depthKm, lon, lat });
-          nextEntities.push(
-            new Cesium.Entity({
-              id: `earthquake:${stableId}`,
-              position,
-              ellipse: {
-                // Static axes — see the module header. A CallbackProperty here
-                // re-tessellates the clamped ground geometry every frame.
-                semiMajorAxis: baseRadius,
-                semiMinorAxis: baseRadius,
-                material: new Cesium.ColorMaterialProperty(
-                  color.withAlpha(fillAlpha),
-                ),
-                outline: true,
-                outlineColor: color.withAlpha(outlineAlpha),
-                outlineWidth: isSignificant ? 3 : 2,
-                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-              },
-            }),
-          );
+          // A filled disc on the ground, with static axes: re-tessellating
+          // clamped ground geometry every frame is what once cost 30 fps.
+          // No outline: clamped to the ground, Cesium never drew one.
+          nextDiscs.push({
+            id: `earthquake:${stableId}`,
+            geometry: {
+              kind: 'ellipse',
+              center: { lon, lat },
+              semiMajor: baseRadius,
+              semiMinor: baseRadius,
+            },
+            fill: [r, g, b, fillAlpha],
+            height: 'clampGround',
+            clampTo: 'both',
+          });
           overlayEntries.push(
             createEarthquakeOverlayEntry({
               id: String(stableId),
               position,
               magnitude: mag,
-              accent: color.toCssColorString(),
+              accent: depthAccent(depthKm || 0),
             }),
           );
         }
 
-        _dataSource.entities.removeAll();
-        for (const entity of nextEntities) _dataSource.entities.add(entity);
+        _discs.set(nextDiscs);
         _events = nextEvents;
         if (_enabled) {
           overlayHost.setEntries(
@@ -169,10 +181,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _enabled = false;
       overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
-      if (_dataSource) {
-        viewer.dataSources.remove(_dataSource, true);
-        _dataSource = null;
-      }
+      _discs?.dispose();
+      _discs = null;
       _events = [];
       _count = 0;
       _lastUpdate = null;
@@ -188,7 +198,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (!_dataSource || !_enabled || !_events.length) return [];
+      if (!_discs || !_enabled || !_events.length) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;

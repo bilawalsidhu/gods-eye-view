@@ -248,7 +248,7 @@ export function drawOf(host) {
     host?.isDestroyed?.()
       ? 'This scene has been destroyed'
       : 'This scene has no renderer to draw with: bind one, or load the ' +
-          "Cesium adapter's draw port (render/cesium/draw.js) for a viewer " +
+          "Cesium adapter's factories (the ./render/cesium/unbound export) for a viewer " +
           'with no renderer bound',
   );
 }

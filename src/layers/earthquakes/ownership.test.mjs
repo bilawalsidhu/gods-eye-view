@@ -2,19 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEarthquakesLayer } from './index.js';
 import { createUsgsEarthquakeSource } from './source.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 function harness(source) {
-  const sources = [];
   const events = [];
-  const viewer = {
-    dataSources: {
-      add(value) {
-        sources.push(value);
-      },
-      remove(value) {
-        sources.splice(sources.indexOf(value), 1);
-      },
-    },
-  };
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const layer = createEarthquakesLayer({
     source,
     overlayHost: {
@@ -27,7 +19,7 @@ function harness(source) {
   });
   layer.init(viewer);
   layer.enable(viewer);
-  return { layer, viewer, sources, events };
+  return { layer, viewer, draw, events };
 }
 const row = {
   stableId: 'event-a',
@@ -61,17 +53,19 @@ test('late refresh cannot publish after disable, re-enable, or destroy', async (
     h.layer.destroy(h.viewer);
   }
 });
-test('two displays own separate data sources and destruction', async () => {
+test('two displays own separate draw sets and destruction', async () => {
   const a = harness({ getSnapshot: async () => [row] });
   const b = harness({ getSnapshot: async () => [] });
   await a.layer.update(a.viewer);
   await b.layer.update(b.viewer);
   assert.equal(a.layer.getStats().count, 1);
   assert.equal(b.layer.getStats().count, 0);
+  assert.equal(a.draw.find('earthquakes:').items.size, 1);
   a.layer.destroy();
-  assert.equal(a.sources.length, 0);
-  assert.equal(b.sources.length, 1);
+  assert.equal(a.draw.find('earthquakes:'), undefined, 'disposed');
+  assert.equal(b.draw.find('earthquakes:').items.size, 0);
   b.layer.destroy();
+  assert.equal(b.draw.find('earthquakes:'), undefined);
 });
 test('USGS body completion honors cancellation even with an uncooperative transport', async () => {
   const abort = new AbortController();
@@ -117,9 +111,60 @@ test('analyst records come from the events the layer drew, and only while it is 
     },
   ]);
   assert.equal(h.layer.getAnalystRecords(1).length, 1);
-  const [entity] = h.sources[0].entities.values;
-  assert.equal(entity.properties, undefined, 'the entity carries drawing only');
+  const [disc] = h.draw.find('earthquakes:').items.values();
+  assert.equal(disc.meta, undefined, 'the disc carries drawing only');
   h.layer.disable(h.viewer);
   assert.deepEqual(h.layer.getAnalystRecords(), []);
   h.layer.destroy(h.viewer);
+});
+test('two layers share one renderer, each with its own disc set', async () => {
+  const events = [];
+  const overlayHost = {
+    setEntries: (...args) => events.push(args),
+    setVisible() {},
+    clearSource() {},
+  };
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
+  const a = createEarthquakesLayer({
+    source: { getSnapshot: async () => [row] },
+    overlayHost,
+  });
+  const b = createEarthquakesLayer({
+    source: { getSnapshot: async () => [] },
+    overlayHost,
+  });
+  a.init(viewer);
+  b.init(viewer);
+  a.enable(viewer);
+  b.enable(viewer);
+  await a.update(viewer);
+  await b.update(viewer);
+  const live = [...draw.sets.values()].filter((set) => !set.disposed);
+  assert.equal(live.length, 2);
+  assert.deepEqual(
+    live.map((set) => set.items.size),
+    [1, 0],
+  );
+  a.destroy();
+  a.init(viewer);
+  assert.equal(
+    [...draw.sets.values()].filter((set) => !set.disposed).length,
+    2,
+    'destroyed, then started again',
+  );
+  a.destroy();
+  b.destroy();
+});
+test('a viewer with nothing to draw with is refused at init, and init can be retried', () => {
+  const layer = createEarthquakesLayer({
+    source: { getSnapshot: async () => [] },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  const viewer = {};
+  assert.throws(() => layer.init(viewer), /no renderer to draw with/);
+  const { unbind } = bindFakeDraw(viewer);
+  layer.init(viewer);
+  layer.destroy();
+  unbind();
 });

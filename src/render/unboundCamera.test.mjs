@@ -9,9 +9,10 @@
  * `render/cesium/effects.js`, which provides the effects factory, and one
  * that reaches a caller of `findGlobe` must load `render/cesium/globe.js`.
  * An entry that reaches a caller of `findDraw` or `drawOf` loads
- * `render/cesium/draw.js` the same way, unless it is Cesium-free: then it
- * is listed in `DRAW_FROM_CALLER`, and a caller handing it a viewer of
- * their own loads the package's `./render/cesium/draw` export once.
+ * `render/cesium/draw.js` the same way (the camera factory loads it),
+ * unless it is Cesium-free: then it is listed in `DRAW_FROM_CALLER`, and
+ * a caller handing it a viewer with no renderer bound loads the package's
+ * `./render/cesium/unbound` export once.
  *
  * The graph is every static import, re-export and literal dynamic import of
  * the entry's module and those it reaches, read by the parsers the Cesium
@@ -34,6 +35,7 @@ const FACTORY = 'src/render/cesium/camera.js';
 const EFFECTS_FACTORY = 'src/render/cesium/effects.js';
 const GLOBE_FACTORY = 'src/render/cesium/globe.js';
 const DRAW_FACTORY = 'src/render/cesium/draw.js';
+const UNBOUND = 'src/render/cesium/unbound.js';
 
 /**
  * Entries that take their Cesium code injected: the module named here is
@@ -57,10 +59,12 @@ const FALLS_BACK = new Set(['src/data/followed.js']);
 /**
  * Cesium-free entries that draw through `drawOf`: their own modules cannot
  * load the Cesium adapter (the Cesium ratchet), so a viewer with no
- * renderer bound draws once its owner has loaded `./render/cesium/draw`;
- * until then `drawOf` throws, naming it, rather than draw nothing.
+ * renderer bound draws once its owner has loaded `./render/cesium/unbound`;
+ * until then `drawOf` throws, naming it, rather than draw nothing. That
+ * export loads the camera factory too, so these entries' camera is the
+ * caller's to load the same way.
  */
-const DRAW_FROM_CALLER = new Set([]);
+const DRAW_FROM_CALLER = new Set(['./layers/earthquakes']);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 
@@ -171,6 +175,7 @@ test('every public entry that reaches the renderer bridge loads the unbound came
     bridged += 1;
     const carrier = INJECTED[key];
     const loads = (file) => reachable(file, { eager: true }).has(FACTORY);
+    if (DRAW_FROM_CALLER.has(key)) continue;
     if (!loads(entry) && !(carrier && loads(carrier))) missing.push(key);
   }
   assert.ok(bridged > 0, 'no entry reaches the bridge: the walk is broken');
@@ -220,6 +225,17 @@ test('every public entry that reaches a findGlobe caller loads the unbound globe
   checkLookupFactory('findGlobe', GLOBE_FACTORY, { reached: false });
 });
 
+test('the unbound export brings every unbound factory', () => {
+  const loaded = reachable(UNBOUND, { eager: true });
+  for (const factory of [
+    FACTORY,
+    EFFECTS_FACTORY,
+    DRAW_FACTORY,
+    'src/render/cesium/credits.js',
+  ])
+    assert.ok(loaded.has(factory), factory);
+});
+
 test('every public entry that reaches a findDraw caller loads the unbound draw factory, or its caller can', () => {
   const missing = [];
   const callsFindDraw = (file) =>
@@ -227,8 +243,8 @@ test('every public entry that reaches a findDraw caller loads the unbound draw f
     /\.(m?js|vue)$/.test(file) &&
     /\b(findDraw|drawOf)\(/.test(readFileSync(path.join(root, file), 'utf8'));
   assert.equal(
-    pkg.exports['./render/cesium/draw'],
-    `./${DRAW_FACTORY}`,
+    pkg.exports['./render/cesium/unbound'],
+    `./${UNBOUND}`,
     'the factory loads through this export',
   );
   for (const [key, declaration] of Object.entries(pkg.exports)) {

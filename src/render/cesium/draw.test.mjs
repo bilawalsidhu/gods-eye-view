@@ -322,3 +322,40 @@ test('clamped shapes refuse what they cannot draw', () => {
   );
   set.dispose();
 });
+
+test('the earthquakes layer draws its discs as ground fills on a viewer of its own', async () => {
+  const { createEarthquakesLayer } =
+    await import('../../layers/earthquakes/index.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const row = (stableId, lon, mag) => ({
+    stableId,
+    usgsId: stableId,
+    lon,
+    lat: 0,
+    depthKm: 10,
+    mag,
+    place: null,
+    time: null,
+  });
+  const layer = createEarthquakesLayer({
+    source: { getSnapshot: async () => [row('a', 0, 5), row('b', 0.2, 3)] },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init(viewer);
+  layer.enable(viewer);
+  assert.equal(await layer.update(viewer), true);
+  const host = scene.added[0];
+  const grounds = [];
+  for (let i = 0; i < host.length; i++)
+    if (host.get(i) instanceof Cesium.GroundPrimitive)
+      grounds.push(host.get(i));
+  // Overlapping discs: one batch each, as the entities' batches had them.
+  assert.equal(grounds.length, 2);
+  const [instance] = grounds[0].geometryInstances;
+  assert.ok(instance.geometry instanceof Cesium.EllipseGeometry);
+  assert.equal(instance.id.id, 'earthquake:a');
+  assert.equal(grounds[0].classificationType, Cesium.ClassificationType.BOTH);
+  layer.destroy();
+  assert.equal(scene.added.length, 0);
+});

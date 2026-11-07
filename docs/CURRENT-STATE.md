@@ -1091,8 +1091,11 @@ identity without announcing a new user selection. Source/label, LOD thresholds,
 card limits, fire identities, altitude placement and analyst records are retained.
 
 Earthquake rendering is exposed through `./layers/earthquakes`. The layer owns
-its entities and request lifecycle; the application supplies the overlay host
-and snapshot source. The standalone adapter keeps the existing USGS daily feed,
+its renderer draw set and request lifecycle and no longer reaches Cesium; the
+application supplies the overlay host and snapshot source. A caller handing
+it a Cesium viewer, with no renderer bound, loads the
+`./render/cesium/unbound` export once first. `depthColor` returns a renderer
+colour `[r, g, b, a]` and `depthAccent` its CSS. The standalone adapter keeps the existing USGS daily feed,
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
 destroying the layer cancels pending work and ignores late results.
 

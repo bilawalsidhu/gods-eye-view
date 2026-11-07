@@ -12,8 +12,9 @@ import { cameraFlightActive } from './internals.js';
 import { createCesiumFollow } from './follow.js';
 import { createCesiumControls } from './cameraControls.js';
 import { cameraOf, findCamera, provideUnboundCamera } from '../rendererOf.js';
-// Loads the factory an unbound viewer gets its credits port from.
+// Loads the factories an unbound viewer gets its credits and draw ports from.
 import './credits.js';
+import './draw.js';
 
 /**
  * `cameraOf` and `findCamera`, for code that already reaches Cesium:

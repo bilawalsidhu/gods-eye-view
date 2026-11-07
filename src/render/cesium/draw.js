@@ -22,9 +22,6 @@
 import * as Cesium from 'cesium';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
-// A caller loads this module for a viewer of its own; what draws there
-// flies through `cameraOf` too, so the camera factory comes with it.
-import './camera.js';
 
 /** The contract's colour as Cesium's. */
 export function toColor(color, alpha = 1) {
