@@ -13,6 +13,7 @@ import { createPlaceSearch } from '../search/placeSearch.js';
 // Run with: npm test   (node --test)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import {
   resolveAnnotationTarget as resolveTarget,
   selectFootprint,
@@ -157,7 +158,8 @@ test('refineScope: entityKind refines only an unresolved (auto) scope', () => {
 });
 
 function closeViewportViewer() {
-  return {
+  // The resolver reads the camera through the renderer's camera port.
+  return bindFakeCesiumCamera({
     camera: {
       positionCartographic: {
         latitude: 30.2672 * Math.PI / 180,
@@ -165,7 +167,7 @@ function closeViewportViewer() {
         height: 1000,
       },
     },
-  };
+  });
 }
 
 function geocodePayload({ lat, lon, types, label }) {
@@ -369,11 +371,11 @@ test('ask-side admin bypass: admin level 2/3 result types never grant a township
 // Synthetic footprints reproduce the real Capitol/YOTEL selection without live APIs.
 const CAPITOL_ANCHOR = { lat: 38.8899389, lon: -77.0090505 };
 function capitolViewer() {
-  return { camera: { positionCartographic: {
+  return bindFakeCesiumCamera({ camera: { positionCartographic: {
     latitude: CAPITOL_ANCHOR.lat * Math.PI / 180,
     longitude: CAPITOL_ANCHOR.lon * Math.PI / 180,
     height: 1000,
-  } } };
+  } } });
 }
 function installCapitolMocks(t, elements, components = [
   { long_name: 'Washington', types: ['locality', 'political'] },

@@ -18,6 +18,7 @@ import {
   outlineQueryText,
 } from './outlineRungs.js';
 import { createAnnotationResolver } from './resolver.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { decodeOpenFreeMapOutlineTile } from '../sources/openFreeMapOutlines.js';
 import { createNominatimOutlineClient } from '../sources/nominatimOutlines.js';
 import { createApplicationRequestServices } from '../services/requests.js';
@@ -902,15 +903,17 @@ const PLACES = {
   },
 };
 
-const viewerAt = (lat, lon, height = 4000) => ({
-  camera: {
-    positionCartographic: {
-      latitude: (lat * Math.PI) / 180,
-      longitude: (lon * Math.PI) / 180,
-      height,
+// The resolver reads the camera through the renderer's camera port.
+const viewerAt = (lat, lon, height = 4000) =>
+  bindFakeCesiumCamera({
+    camera: {
+      positionCartographic: {
+        latitude: (lat * Math.PI) / 180,
+        longitude: (lon * Math.PI) / 180,
+        height,
+      },
     },
-  },
-});
+  });
 
 test('default settings: outline, street and building asks send nothing to Overpass', async (t) => {
   const prior = process.env.OVERPASS_UPSTREAMS;

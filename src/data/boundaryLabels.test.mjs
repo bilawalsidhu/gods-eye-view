@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from '../annotations/resolver.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -110,7 +111,8 @@ test('drawing bundled place and neighborhood outlines creates no Cesium label', 
   });
   const primitives = [];
   const dataSources = [];
-  const viewer = {
+  // The resolver reads the camera through the renderer's camera port.
+  const viewer = bindFakeCesiumCamera({
     camera: {
       positionCartographic: Cesium.Cartographic.fromDegrees(
         -97.7431,
@@ -123,7 +125,7 @@ test('drawing bundled place and neighborhood outlines creates no Cesium label', 
       add: (ds) => dataSources.push(ds),
       remove() {},
     },
-  };
+  });
   const renderer = createWorldAnnotationRenderer(viewer);
   for (const [target, lon, lat] of [
     ['Austin', -97.7431, 30.2672],
@@ -135,8 +137,8 @@ test('drawing bundled place and neighborhood outlines creates no Cesium label', 
       3000,
     );
     const resolved = await resolveAnnotationTarget({
-      // The resolver reads only the camera (no scene to pick from).
-      viewer: { camera: viewer.camera },
+      // The resolver reads only the camera (no query port to pick with).
+      viewer,
       target,
       footprint: true,
       deferFootprint: true,

@@ -5,12 +5,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from './resolver.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { polygonsContain } from '../data/adminBoundaries.js';
 import { streetFootprint } from './outlineRungs.js';
 import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
 
 function viewerAt(lat, lon, height = 20_000) {
-  return {
+  // The resolver reads the camera through the renderer's camera port.
+  return bindFakeCesiumCamera({
     camera: {
       positionCartographic: {
         latitude: (lat * Math.PI) / 180,
@@ -18,7 +20,7 @@ function viewerAt(lat, lon, height = 20_000) {
         height,
       },
     },
-  };
+  });
 }
 
 /** A resolver whose boundary lookups and geocoder record every call. */

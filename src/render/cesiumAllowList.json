@@ -2,7 +2,6 @@
   "dev/conformance/main.js",
   "src/annotations/annotationEngine.js",
   "src/annotations/drawTool.js",
-  "src/annotations/resolver.js",
   "src/annotations/worldAnnotationRenderer.js",
   "src/app/embed.js",
   "src/app/scene.js",
