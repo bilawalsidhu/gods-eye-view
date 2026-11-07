@@ -41,7 +41,6 @@ export {
 export {
   cableClassificationTypeForStack,
   cableClassificationTypeForScene,
-  applyTranslucentMarkerBlend,
 } from './surface.js';
 export {
   CABLE_REFERENCE_LABEL_WINNER_CAP,

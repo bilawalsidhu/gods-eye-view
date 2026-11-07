@@ -9,6 +9,7 @@
  * Nothing runs on its own: `testing.tick()` and `testing.advance()` drive the
  * loop on a virtual clock, one frame at a time, in the contract's order.
  */
+import { horizonFrom } from '../../geo/horizon.js';
 import { createInputRouter } from '../input/router.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
@@ -27,7 +28,6 @@ import {
   toDegrees,
   toEcef,
   vec,
-  WGS84,
 } from './math.js';
 
 const FRAME_MS = 1000 / 60;
@@ -504,15 +504,7 @@ export function createStubRenderer(options = {}) {
   }
 
   function isOccluded(position) {
-    const e = eye();
-    const r = WGS84.oneOverRadii;
-    const cv = vec(e.position.x * r.x, e.position.y * r.y, e.position.z * r.z);
-    const vh = dot(cv, cv) - 1;
-    const t = vec(position.x * r.x, position.y * r.y, position.z * r.z);
-    const vt = sub(t, cv);
-    const vtDotVc = -dot(vt, cv);
-    if (vh < 0) return vtDotVc > 0;
-    return vtDotVc > vh && (vtDotVc * vtDotVc) / dot(vt, vt) > vh;
+    return !horizonFrom(eye().position).isPointVisible(position);
   }
 
   let scriptedPicks = null;

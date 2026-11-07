@@ -1097,3 +1097,133 @@ test('the context layer draws its rim as an outlined ellipse on a viewer of its 
   rendering.disposeVisual();
   assert.equal(other.added.length, 0);
 });
+
+/** Run `fn` with the image classes Cesium's materials test uniforms against. */
+function withImageClasses(fn) {
+  const names = [
+    'HTMLCanvasElement',
+    'HTMLImageElement',
+    'ImageBitmap',
+    'OffscreenCanvas',
+  ];
+  const real = names.map((name) => globalThis[name]);
+  for (const name of names) globalThis[name] ??= class {};
+  try {
+    return fn();
+  } finally {
+    names.forEach((name, i) => (globalThis[name] = real[i]));
+  }
+}
+
+test('lines that change only whether they show, or where an undraped one runs, change in place', () =>
+  withImageClasses(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.lines({ id: 'patched' });
+    const draped = (id, show = true, meta) => ({
+      id,
+      positions: [
+        { lon: 0, lat: 0 },
+        { lon: 1, lat: 1 },
+      ],
+      widthPx: 2.5,
+      mode: 'draped',
+      style: { kind: 'solid', color: '#7fe6ed' },
+      show,
+      meta,
+    });
+    const stem = (id, height, show = true) => ({
+      id,
+      positions: [
+        Cesium.Cartesian3.fromDegrees(0, 0, 0),
+        Cesium.Cartesian3.fromDegrees(0, 0, height),
+      ],
+      widthPx: 2,
+      mode: '3d',
+      style: { kind: 'solid', color: [1, 1, 1, 0.5] },
+      show,
+      meta: height,
+    });
+    const attributes = new Map();
+    const fakeAttributes = (ground) => {
+      ground.getGeometryInstanceAttributes = (id) => {
+        if (!attributes.has(id.id))
+          attributes.set(id.id, { show: new Uint8Array([1]) });
+        return attributes.get(id.id);
+      };
+    };
+    set.set([draped('a'), draped('b'), stem('s', 100)]);
+    const host = scene.added[0];
+    const ground = host.get(1);
+    fakeAttributes(ground);
+    // Still building: the show waits for the ground, and the build goes on.
+    set.upsert([draped('a', false)]);
+    assert.equal(scene.added[0], host, 'not rebuilt while its ground builds');
+    assert.equal(attributes.size, 0);
+    Object.defineProperty(ground, 'ready', { value: true });
+    frame();
+    assert.deepEqual([...attributes.get('a').show], [0], 'shown once ready');
+    set.upsert([draped('b', false)]);
+    assert.equal(scene.added[0], host, 'changed in place once ready');
+    assert.deepEqual([...attributes.get('b').show], [0]);
+    set.upsert([draped('b', true, 'new')]);
+    assert.deepEqual([...attributes.get('b').show], [1]);
+    const [, idB] = ground.geometryInstances.map((instance) => instance.id);
+    assert.equal(idB.meta, 'new', 'picks read the new meta');
+    // An undraped line moves and hides in place, and keeps its new meta.
+    const line = host.get(0).get(0);
+    set.upsert([stem('s', 2500, false)]);
+    assert.equal(scene.added[0], host);
+    assert.equal(host.get(0).get(0), line);
+    assert.equal(line.show, false);
+    assert.equal(line.id.meta, 2500);
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        line.positions[1],
+        Cesium.Cartesian3.fromDegrees(0, 0, 2500),
+        1e-6,
+      ),
+    );
+    // One item that cannot change in place rebuilds them all, and patches
+    // none of the others first.
+    set.upsert([
+      draped('a'),
+      {
+        ...draped('b'),
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon: 2, lat: 2 },
+        ],
+      },
+    ]);
+    assert.deepEqual([...attributes.get('a').show], [0], 'not patched');
+    assert.notEqual(scene.added.at(-1), host, 'a draped line that moves');
+    const moved = scene.added.at(-1);
+    set.upsert([{ ...stem('s', 2500), widthPx: 3 }]);
+    assert.notEqual(scene.added.at(-1), moved, 'a line that looks different');
+    // A ground primitive gone from under the set rebuilds too.
+    const third = scene.added.at(-1);
+    third.get(1).destroy();
+    set.upsert([draped('a', false)]);
+    assert.notEqual(scene.added.at(-1), third, 'its ground destroyed');
+    set.dispose();
+  }));
+
+test('icons blend as their set says', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.icons({ id: 'pins', blend: 'translucent' });
+  set.set([
+    {
+      id: 'a',
+      pos: { lon: 0, lat: 0 },
+      image: 'pin.png',
+      size: [6, 6],
+    },
+  ]);
+  assert.equal(scene.added[0].blendOption, Cesium.BlendOption.TRANSLUCENT);
+  set.setOptions({ blend: undefined });
+  assert.equal(
+    scene.added[0].blendOption,
+    Cesium.BlendOption.OPAQUE_AND_TRANSLUCENT,
+  );
+  set.dispose();
+});

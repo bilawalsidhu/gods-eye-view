@@ -1,3 +1,4 @@
+import { cameraOf } from '../../render/rendererOf.js';
 import {
   cableClassificationTypeForScene,
   cableClassificationTypeForStack,
@@ -14,9 +15,8 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
 
     init(viewer) {
       state._viewer = viewer;
-      state._classificationType = cableClassificationTypeForScene(
-        viewer?.scene,
-      );
+      state._clampTo = cableClassificationTypeForScene(viewer?.scene);
+      parts.rendering.attach(viewer);
       if (!state._mapStackListener && mapStackEventTarget?.addEventListener) {
         state._mapStackListener = (event) => {
           parts.rendering.applyCableClassification(
@@ -31,6 +31,12 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
         );
       }
       parts.interaction.beginInteraction(viewer);
+      // The eye the sweep gate's motion probe reads, only when it probes.
+      const eye = {
+        get positionWC() {
+          return cameraOf(viewer).pose()?.position ?? null;
+        },
+      };
       if (!state._preRenderRemover) {
         state._preRenderRemover = viewer.scene.preRender.addEventListener(
           () => {
@@ -41,7 +47,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
             if (
               !state._enabled ||
               !state._loaded ||
-              !state._referenceSweepGate.shouldRun(viewer.camera)
+              !state._referenceSweepGate.shouldRun(eye)
             )
               return;
             parts.rendering.updateReferenceVisibility();
@@ -49,7 +55,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
         );
       }
       if (!state._moveEndRemover) {
-        state._moveEndRemover = viewer.camera.moveEnd.addEventListener(() => {
+        state._moveEndRemover = cameraOf(viewer).on('moveEnd', () => {
           if (!state._enabled) return;
           state._referenceSweepGate.markDirty();
           viewer.scene.requestRender?.();
@@ -80,19 +86,21 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
         state._loading = false;
         state._loadingLabel = '';
       }
-      // Free the entities rather than hide them; enable() rebuilds from the
+      // Free the items rather than hide them; enable() rebuilds from the
       // cached JSON. An in-flight load's own post-await ownership check
-      // removes whatever that stale generation adds later.
-      parts.rendering.releaseDataSources(state._viewer);
+      // keeps that stale generation from drawing anything later.
+      parts.rendering.releaseDrawing();
+      parts.rendering.updateVisibility();
     },
 
     update(viewer) {
       return parts.ingestion.load(viewer || state._viewer);
     },
 
-    destroy(viewer) {
+    destroy() {
       if (state._abort) state._abort.abort();
-      parts.rendering.releaseDataSources(viewer || state._viewer);
+      parts.rendering.releaseDrawing({ clearSets: false });
+      parts.rendering.detach();
       state._cachedCableJson = null;
       state._cachedLandingJson = null;
       // hide() clears every published host entry and goes invisible while
@@ -126,15 +134,10 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._error = null;
       state._lastUpdate = null;
       state._loadingLabel = '';
-      state._cableDataSource = null;
-      state._landingDataSource = null;
-      state._referenceDataSource = null;
       state._referenceRecords = [];
-      state._surfaceRecords = [];
+      state._surfaceItems = [];
       state._referenceLabelCount = 0;
       state._publishScratch.length = 0;
-      state._markerBlendDone = false;
-      state._markerBlendInvariantWarned = false;
       parts.rendering.resetPublishSignature();
       state._referenceSweepGate.reset();
     },

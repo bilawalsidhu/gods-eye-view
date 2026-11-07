@@ -1,94 +1,16 @@
 /**
  * @module render/stub/geodesic
  * @description The point a fraction of the way along the WGS84 geodesic
- * between two places: Vincenty's inverse formula, then the series the
- * default renderer interpolates with, term for term, so a rectangle's
- * centre matches its to floating-point noise.
+ * between two places: Vincenty's inverse formula (`geo/geodesic`), then
+ * the series the default renderer interpolates with, term for term, so a
+ * rectangle's centre matches its to floating-point noise.
  */
-import { TWO_PI, WGS84 } from './math.js';
+import { deltaLambda, geodesicInverse as inverse } from '../../geo/geodesic.js';
+import { WGS84 } from './math.js';
 
-const EPSILON12 = 1e-12;
 const A = WGS84.radii.x;
 const B = WGS84.radii.z;
 const F = (A - B) / A;
-
-function deltaLambda(sineAlpha, cos2Alpha, sigma, sinSigma, cosSigma, cos2Sm) {
-  const C = (F * cos2Alpha * (4 + F * (4 - 3 * cos2Alpha))) / 16;
-  return (
-    (1 - C) *
-    F *
-    sineAlpha *
-    (sigma + C * sinSigma * (cos2Sm + C * cosSigma * (2 * cos2Sm * cos2Sm - 1)))
-  );
-}
-
-/** Distance, start heading and u² of the geodesic from (lon1, lat1) to (lon2, lat2), radians. */
-function inverse(lon1, lat1, lon2, lat2) {
-  const l = lon2 - lon1;
-  const u1 = Math.atan((1 - F) * Math.tan(lat1));
-  const u2 = Math.atan((1 - F) * Math.tan(lat2));
-  const cosU1 = Math.cos(u1);
-  const sinU1 = Math.sin(u1);
-  const cosU2 = Math.cos(u2);
-  const sinU2 = Math.sin(u2);
-  const cc = cosU1 * cosU2;
-  const cs = cosU1 * sinU2;
-  const ss = sinU1 * sinU2;
-  const sc = sinU1 * cosU2;
-  let lambda = l;
-  let lambdaDot = TWO_PI;
-  let cosLambda;
-  let sinLambda;
-  let sigma;
-  let cosSigma;
-  let sinSigma;
-  let cos2Alpha;
-  let cos2Sm;
-  do {
-    cosLambda = Math.cos(lambda);
-    sinLambda = Math.sin(lambda);
-    const temp = cs - sc * cosLambda;
-    sinSigma = Math.sqrt(cosU2 * cosU2 * sinLambda * sinLambda + temp * temp);
-    cosSigma = ss + cc * cosLambda;
-    sigma = Math.atan2(sinSigma, cosSigma);
-    let sineAlpha;
-    if (sinSigma === 0) {
-      sineAlpha = 0;
-      cos2Alpha = 1;
-    } else {
-      sineAlpha = (cc * sinLambda) / sinSigma;
-      cos2Alpha = 1 - sineAlpha * sineAlpha;
-    }
-    lambdaDot = lambda;
-    cos2Sm = cosSigma - (2 * ss) / cos2Alpha;
-    if (!isFinite(cos2Sm)) cos2Sm = 0;
-    lambda =
-      l + deltaLambda(sineAlpha, cos2Alpha, sigma, sinSigma, cosSigma, cos2Sm);
-  } while (Math.abs(lambda - lambdaDot) > EPSILON12);
-  const uSquared = (cos2Alpha * (A * A - B * B)) / (B * B);
-  const bigA =
-    1 +
-    (uSquared * (4096 + uSquared * (uSquared * (320 - 175 * uSquared) - 768))) /
-      16384;
-  const bigB =
-    (uSquared * (256 + uSquared * (uSquared * (74 - 47 * uSquared) - 128))) /
-    1024;
-  const cos2Sm2 = cos2Sm * cos2Sm;
-  const deltaSigma =
-    bigB *
-    sinSigma *
-    (cos2Sm +
-      (bigB *
-        (cosSigma * (2 * cos2Sm2 - 1) -
-          (bigB * cos2Sm * (4 * sinSigma * sinSigma - 3) * (4 * cos2Sm2 - 3)) /
-            6)) /
-        4);
-  return {
-    distance: B * bigA * (sigma - deltaSigma),
-    startHeading: Math.atan2(cosU2 * sinLambda, cs - sc * cosLambda),
-    uSquared,
-  };
-}
 
 /**
  * The longitude and latitude (radians) `fraction` of the way along the

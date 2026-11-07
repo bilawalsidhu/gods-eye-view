@@ -70,6 +70,7 @@ const DRAW_FROM_CALLER = new Set([
   './layers/gnss',
   './layers/perimeters',
   './layers/awareness',
+  './layers/submarine-cables',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));

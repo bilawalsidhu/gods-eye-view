@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   createCableReferenceSweepGate,
   createCableOverlayPublisher,
@@ -30,17 +29,30 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._loadGeneration = 0;
 
-  state._cableDataSource = null;
+  /**
+   * The layer's draw sets, made at init: cable and landing lines (draped),
+   * pins (landing points), fills (polygons), stems and reference points.
+   */
 
-  state._landingDataSource = null;
+  state._sets = null;
 
-  state._referenceDataSource = null;
+  /** Set ids this layer made, for matching picks. */
+
+  state._setIds = new Set();
+
+  /** What each drawn item is, by set id then item id (picks fly to it). */
+
+  state._picks = new Map();
+
+  /** Drawn surface items, culled by their feature's reference each sweep. */
+
+  state._surfaceItems = [];
 
   /**
-   * Fetched cable/landing JSON kept across disable/enable. A disable RELEASES
-   * the three data sources (see releaseDataSources) instead of hiding them,
-   * so a re-enable has to rebuild the entities; the network/parse half of
-   * that rebuild is the expensive part users would notice, so it is cached.
+   * Fetched cable/landing JSON kept across disable/enable. A disable CLEARS
+   * the draw sets (see releaseDrawing) instead of hiding them, so a
+   * re-enable has to rebuild the items; the network/parse half of that
+   * rebuild is the expensive part users would notice, so it is cached.
    */
 
   state._cachedCableJson = null;
@@ -48,8 +60,6 @@ export function createState({ sweepClock, overlayHost }) {
   state._cachedLandingJson = null;
 
   state._referenceRecords = [];
-
-  state._surfaceRecords = [];
 
   state._clickSubscription = null;
 
@@ -59,15 +69,9 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._mapStackListener = null;
 
-  /** Active ground-line classification; refined from live scene state at init. */
+  /** What ground lines drape on; refined from live scene state at init. */
 
-  state._classificationType = Cesium.ClassificationType.BOTH;
-
-  /** True once both marker collections blend translucent (or the shape probe failed). */
-
-  state._markerBlendDone = false;
-
-  state._markerBlendInvariantWarned = false;
+  state._clampTo = 'both';
 
   state._referenceLabelCount = 0;
 
@@ -96,10 +100,8 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._lastPublishedCount = -1;
 
-  state.cableColor = Cesium.Color.fromCssColorString(BASE_CABLE_COLOR);
+  state.cableColor = BASE_CABLE_COLOR;
 
-  state.cableOutline = Cesium.Color.BLACK.withAlpha(0.45);
-
-  state.landingColor = Cesium.Color.fromCssColorString(BASE_LANDING_COLOR);
+  state.landingColor = BASE_LANDING_COLOR;
   return state;
 }

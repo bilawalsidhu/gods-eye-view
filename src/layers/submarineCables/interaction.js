@@ -1,47 +1,24 @@
-import * as Cesium from 'cesium';
-import { cablePicks } from './pickState.js';
-import { cameraOf } from '../../render/cesium/camera.js';
+import { toRadians } from '../../geo/vector.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
-export function createInteraction({ state, inputFor }) {
-  function registerPickEntity(entity, info) {
-    cablePicks.write(entity).info = info;
-  }
-
+export function createInteraction({ state, parts, inputFor }) {
   function beginInteraction(viewer) {
     if (state._clickSubscription) return;
     state._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state._enabled) return;
-      const record = resolvePickRecord(event.pick);
+      const record = resolvePickRecord(event.drawHit);
       if (!record?.reference) return;
       flyToReference(viewer, record.reference);
     });
   }
 
-  function resolvePickRecord(picked) {
-    if (!picked) return null;
-    const primitive = picked.primitive;
-    if (primitive) {
-      const primitiveInfo = cablePicks.read(primitive)?.info;
-      if (primitiveInfo) return primitiveInfo;
-      if (
-        primitive.id &&
-        typeof primitive.id === 'object' &&
-        primitive.id.reference
-      ) {
-        return primitive.id;
-      }
-    }
-
-    const entity = picked.id;
-    if (entity) {
-      const entityInfo = cablePicks.read(entity)?.info;
-      if (entityInfo) return entityInfo;
-      if (entity.id && typeof entity.id === 'object' && entity.id.reference) {
-        return entity.id;
-      }
-    }
-
-    return null;
+  /**
+   * What a click's draw hit names: a cable, landing point or reference of
+   * this layer's current items, as `{ label, kind, featureId, reference }`,
+   * or null.
+   */
+  function resolvePickRecord(hit) {
+    return parts.rendering.pickInfo(hit);
   }
 
   function flyToReference(viewer, reference) {
@@ -53,7 +30,7 @@ export function createInteraction({ state, inputFor }) {
       {
         orientation: {
           heading: camera.pose().heading || 0,
-          pitch: Cesium.Math.toRadians(-52),
+          pitch: toRadians(-52),
           roll: 0,
         },
         durationS: 1.35,
@@ -62,7 +39,6 @@ export function createInteraction({ state, inputFor }) {
     );
   }
   return {
-    registerPickEntity,
     beginInteraction,
     resolvePickRecord,
     flyToReference,

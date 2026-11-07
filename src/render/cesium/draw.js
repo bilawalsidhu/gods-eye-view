@@ -148,6 +148,7 @@ export function createCesiumDraw({ scene, report }) {
       record.pickIds = [];
       record.placed = [];
       record.patchable = null;
+      record.lineParts = null;
       build(record);
       setsVersion += 1;
     };
@@ -162,7 +163,7 @@ export function createCesiumDraw({ scene, report }) {
       },
       upsert(list) {
         // Items that only change how they look are changed where they are.
-        if (patchPoints(record, list)) {
+        if (patchPoints(record, list) || patchLines(record, list)) {
           for (const item of list) items.set(item.id, item);
           setsVersion += 1;
           requestRender();
@@ -190,12 +191,12 @@ export function createCesiumDraw({ scene, report }) {
         Object.assign(spec, options);
         // What clamped items clamp to, how points blend, and whether ground
         // primitives pick, are built into them. Models clamp nothing, only
-        // points build in the blend, and only shapes and lines have ground
+        // points and icons build in the blend, and only shapes and lines have ground
         // primitives: other kinds are not rebuilt for those (models would
         // load again).
         if (
           (kind !== 'models' && spec.clampTo !== clampTo) ||
-          (kind === 'points' && spec.blend !== blend) ||
+          ((kind === 'points' || kind === 'icons') && spec.blend !== blend) ||
           ((kind === 'shapes' || kind === 'lines') &&
             (spec.pickable !== false) !== pickable)
         )
@@ -322,6 +323,7 @@ export function createCesiumDraw({ scene, report }) {
     for (const record of sets.values()) {
       const ground = record.pending;
       if (!ground || ground.some((p) => !p.isDestroyed() && !p.ready)) continue;
+      showPending(record);
       for (const primitive of ground) primitive.show = true;
       record.pending = null;
       retire(record);
@@ -381,7 +383,10 @@ export function createCesiumDraw({ scene, report }) {
   }
 
   function buildIcons(record) {
-    const host = new Cesium.BillboardCollection({ scene });
+    const host = new Cesium.BillboardCollection({
+      scene,
+      blendOption: pointBlendOf(record.spec.blend),
+    });
     record.atlases = new Set();
     for (const item of record.items.values()) {
       const image = iconImage(record, item.image);
@@ -629,12 +634,23 @@ export function createCesiumDraw({ scene, report }) {
   function buildLines(record) {
     const host = new Cesium.PolylineCollection();
     const draped = new Map();
+    // Each line as drawn, for upserts that change it in place.
+    const parts = new Map();
+    record.lineParts = parts;
     for (const item of record.items.values()) {
       if (item.mode === 'draped') {
         if (item.style.kind !== 'solid')
           throw new Error('the Cesium renderer drapes solid lines only');
         const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
         if (!draped.has(clampTo)) draped.set(clampTo, []);
+        const id = pickId(record, item);
+        parts.set(item.id, {
+          look: lineLook(item),
+          positions: flatPositions(item.positions),
+          clampTo,
+          id,
+          ground: null,
+        });
         draped.get(clampTo).push(
           new Cesium.GeometryInstance({
             geometry: new Cesium.GroundPolylineGeometry({
@@ -650,31 +666,122 @@ export function createCesiumDraw({ scene, report }) {
                 item.show !== false,
               ),
             },
-            id: pickId(record, item),
+            id,
           }),
         );
         continue;
       }
-      host.add({
+      const polyline = host.add({
         positions: linePositions(item),
         width: item.widthPx,
         material: lineMaterial(item.style),
         show: item.show !== false,
         id: pickId(record, item),
       });
+      parts.set(item.id, { look: lineLook(item), polyline });
     }
     if (!draped.size) return replaceHost(record, host);
     // Draped lines drape as the entities' clamped polylines do.
-    const ground = [...draped].map(
-      ([clampTo, geometryInstances]) =>
-        new Cesium.GroundPolylinePrimitive({
-          geometryInstances,
-          appearance: new Cesium.PolylineColorAppearance(),
-          classificationType: classificationOf(clampTo),
-          allowPicking: record.spec.pickable !== false,
-        }),
-    );
+    const byClamp = new Map();
+    const ground = [...draped].map(([clampTo, geometryInstances]) => {
+      const primitive = new Cesium.GroundPolylinePrimitive({
+        geometryInstances,
+        appearance: new Cesium.PolylineColorAppearance(),
+        classificationType: classificationOf(clampTo),
+        allowPicking: record.spec.pickable !== false,
+      });
+      byClamp.set(clampTo, primitive);
+      return primitive;
+    });
+    for (const part of parts.values())
+      if (part.clampTo) part.ground = byClamp.get(part.clampTo);
     replaceHost(record, collect(host, ground), ground, host);
+  }
+
+  /**
+   * How a line draws, but for where it runs and whether it shows: lines
+   * that keep it can be changed in place.
+   */
+  const lineLook = (item) =>
+    JSON.stringify([
+      item.mode,
+      item.widthPx,
+      item.clampTo,
+      item.style,
+      item.depthFailColor,
+      item.segmentColors,
+      item.segmentShow,
+      item.revealFraction,
+      item.frame,
+    ]);
+
+  /** A line's positions as one flat array of numbers, to compare. */
+  function flatPositions(positions) {
+    if (positions instanceof Float64Array) return Array.from(positions);
+    const flat = [];
+    for (const p of positions)
+      if ('x' in p) flat.push(p.x, p.y, p.z);
+      else flat.push(p.lon, p.lat, p.height ?? 0, NaN);
+    return flat;
+  }
+
+  const samePositions = (a, b) =>
+    a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
+
+  /**
+   * Upsert lines in place, without a rebuild, when every item is drawn now
+   * and looks the same: then only whether it shows, its `meta`, and where
+   * a line not draped runs change. A draped line keeps its positions, and
+   * its ground primitive must be ready. False, changing nothing, otherwise.
+   */
+  function patchLines(record, list) {
+    const parts = record.lineParts;
+    if (record.kind !== 'lines' || !parts) return false;
+    for (const item of list) {
+      const was = parts.get(item.id);
+      if (!was || was.look !== lineLook(item)) return false;
+      if (
+        was.ground &&
+        (was.ground.isDestroyed() ||
+          (!was.ground.ready && !record.pending?.includes(was.ground)) ||
+          !samePositions(flatPositions(item.positions), was.positions))
+      )
+        return false;
+    }
+    for (const item of list) {
+      const was = parts.get(item.id);
+      const show = item.show !== false;
+      if (was.polyline) {
+        was.polyline.positions = linePositions(item);
+        was.polyline.show = show;
+        was.polyline.id.meta = item.meta;
+        continue;
+      }
+      was.id.meta = item.meta;
+      // A ground primitive still building takes its show once it is ready
+      // (`swapReady`), so a show change never restarts the build.
+      if (was.ground.ready) showPart(was, show);
+      else was.pendingShow = show;
+    }
+    return true;
+  }
+
+  /** A draped line part's show, on its ready ground primitive. */
+  function showPart(part, show) {
+    const attributes = part.ground.getGeometryInstanceAttributes(part.id);
+    attributes.show = Cesium.ShowGeometryInstanceAttribute.toValue(
+      show,
+      attributes.show,
+    );
+  }
+
+  /** The shows patched in while a set's ground primitives were building. */
+  function showPending(record) {
+    for (const part of record.lineParts?.values() ?? [])
+      if (part.pendingShow !== undefined && !part.ground.isDestroyed()) {
+        showPart(part, part.pendingShow);
+        part.pendingShow = undefined;
+      }
   }
 
   /** One host for a set's own collection and its ground primitives. */

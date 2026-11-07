@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 export const BASE_CABLE_COLOR = '#39d5ff';
 
 export const BASE_LANDING_COLOR = '#8fffd2';
@@ -54,7 +52,7 @@ export const CABLE_SWEEP_MOTION_EPSILON_M = 250;
  * trades away (photoreal tiles occluding label TEXT at low, city-level
  * cameras) matches the sibling dams/datacenters sources, which shipped
  * host-composited under the same ruling; the anchor points/stems remain
- * Cesium-native and depth-tested. See
+ * drawn by the renderer and depth-tested. See
  * the world-overlay consolidation design notes ("Depth-testing
  * decision") for both dated decisions.
  */
@@ -81,18 +79,27 @@ export const CABLE_GLOBE_STACK_IDS = Object.freeze(
   new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']),
 );
 
-/** EntityCluster's private marker collections and their required types. */
+/** Landing-point pins: CSS pixels square, anchored at the bottom tip. */
 
-export const MARKER_COLLECTION_EXPECTATIONS = Object.freeze([
-  Object.freeze({
-    key: '_billboardCollection',
-    type: Cesium.BillboardCollection,
-  }),
-  Object.freeze({
-    key: '_pointCollection',
-    type: Cesium.PointPrimitiveCollection,
-  }),
-]);
+export const CABLE_PIN_SIZE_PX = 6;
+
+/**
+ * Pin sizes a GeoJSON feature may ask for (`marker-size`), the simplestyle
+ * names the map pins have always honoured.
+ */
+
+export const CABLE_PIN_SIZES = Object.freeze({
+  small: 24,
+  medium: 48,
+  large: 64,
+});
+
+/**
+ * Lines are placed along rhumb lines, as GeoJSON lines always were, at
+ * points no farther apart than this (metres); the renderer joins them.
+ */
+
+export const CABLE_LINE_GRANULARITY_M = 9999;
 
 /**
  * Monotonic clock for the sweep gate's motion probe. A hoisted declaration:
