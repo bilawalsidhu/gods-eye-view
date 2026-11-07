@@ -9,7 +9,9 @@
  *   `positionCartographic`; `viewRectangle()` from its
  *   `computeViewRectangle()`, in degrees; events from its own `moveEnd`,
  *   `moveStart` and `changed`.
- * - query: `project` (and `projectMany`) through `Cesium.SceneTransforms.worldToWindowCoordinates`
+ * - query: `sampleHeightNow` through the scene's height service;
+ *   `pickEllipsoid` through the double camera's, when it has one; `project`
+ *   (and `projectMany`) through `Cesium.SceneTransforms.worldToWindowCoordinates`
  *   (which a test may stub), `isOccluded` against the ellipsoid's horizon
  *   from the camera's `positionWC` (never occluded without one).
  * - frame: phases from the scene's own `preUpdate`, `preRender` and
@@ -18,6 +20,7 @@
  */
 import * as Cesium from 'cesium';
 import { bindRenderer } from '../render/rendererOf.js';
+import { heightsFor } from '../queries/heights.js';
 import { fakeDrawPort } from './fakeDrawPort.mjs';
 
 const toCartesian = (p) => new Cesium.Cartesian3(p.x, p.y, p.z);
@@ -51,6 +54,15 @@ export function fakeSceneQuery(viewer) {
       );
       return s ? { x: s.x, y: s.y } : null;
     },
+    /** The double camera's own, when it has one. */
+    get pickEllipsoid() {
+      const camera = cameraOfDouble(viewer);
+      if (typeof camera?.pickEllipsoid !== 'function') return undefined;
+      return (x, y) => {
+        const hit = camera.pickEllipsoid(new Cesium.Cartesian2(x, y));
+        return hit ? plain(hit) : null;
+      };
+    },
     projectMany(source, out) {
       for (let i = 0, j = 0; i + 2 < source.length; i += 3, j += 2) {
         const s = this.project({
@@ -61,6 +73,16 @@ export function fakeSceneQuery(viewer) {
         out[j] = s ? s.x : Number.NaN;
         out[j + 1] = s ? s.y : Number.NaN;
       }
+    },
+    // The scene's own height service, the surface only where the scene has
+    // depth support. Unlike the Cesium port it samples terrain without depth
+    // support too, and sees through nothing (`exclude` is ignored).
+    sampleHeightNow(point, { against = 'surface' } = {}) {
+      if (against === 'terrain')
+        return heightsFor(viewer.scene).now(point, { against: 'terrain' });
+      return viewer.scene?.sampleHeightSupported
+        ? heightsFor(viewer.scene).now(point)
+        : null;
     },
     isOccluded(position) {
       const eye = cameraOfDouble(viewer)?.positionWC;

@@ -1193,6 +1193,88 @@ test('the installations layer draws its named markers as outlined point primitiv
   assert.equal(scene.added.includes(host), false);
 });
 
+test('the ALPR layer draws its badges as icons that follow the ground, restyled in place', async () => {
+  const { alprMarkers, createAlprMarkerSet } =
+    await import('../../layers/alpr/markerState.js');
+  const { MARKER_IMAGE, SELECTED_IMAGE } =
+    await import('../../layers/alpr/visuals.js');
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const markers = createAlprMarkerSet();
+  markers.attach(part.port.icons({ id: 'alpr-cameras:1:markers' }));
+  const place = (id, lon, clamped) => {
+    const carrier = markers.add(id);
+    Object.assign(alprMarkers.write(carrier), {
+      position: Cesium.Cartesian3.fromDegrees(lon, 30, clamped ? 0 : 150),
+      clamped,
+    });
+    return carrier;
+  };
+  const a = place('alpr:a', -97, true);
+  place('alpr:b', -97.01, false);
+  markers.flush();
+  const [host] = scene.added;
+  assert.ok(host instanceof Cesium.BillboardCollection);
+  assert.equal(host.length, 2);
+  const badge = host.get(0);
+  assert.equal(badge.id.id, 'alpr:a');
+  assert.equal(badge.id.set, 'alpr-cameras:1:markers');
+  assert.equal(badge.heightReference, Cesium.HeightReference.CLAMP_TO_GROUND);
+  assert.equal(
+    host.get(1).heightReference,
+    Cesium.HeightReference.NONE,
+    'a marker on its floor sits at its height',
+  );
+  assert.equal(badge.image, MARKER_IMAGE);
+  assert.equal(badge.width, 38);
+  assert.equal(badge.disableDepthTestDistance, Infinity);
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      badge.scaleByDistance,
+      new Cesium.NearFarScalar(500, 1.15, 40000, 0.45),
+    ),
+  );
+
+  // Selection swaps the image on the same billboard: no blink.
+  alprMarkers.write(a).selected = true;
+  markers.changed(a);
+  markers.flush();
+  assert.equal(scene.added[0], host);
+  assert.equal(host.get(0), badge);
+  assert.equal(badge.image, SELECTED_IMAGE);
+  assert.equal(badge.width, 60);
+
+  // Under a canvas badge: a faint pick target at the canvas anchor.
+  const anchor = Cesium.Cartesian3.fromDegrees(-97, 30, 172);
+  Object.assign(alprMarkers.write(a), {
+    canvasOwned: true,
+    canvasPosition: anchor,
+  });
+  markers.changed(a);
+  markers.flush();
+  assert.equal(host.get(0), badge, 'still the same billboard');
+  assert.equal(badge.color.alpha, 0.01);
+  assert.equal(badge.heightReference, Cesium.HeightReference.NONE);
+  assert.equal(badge.scaleByDistance, undefined);
+  assert.ok(Cesium.Cartesian3.equalsEpsilon(badge.position, anchor, 0, 1e-6));
+
+  // A marker that arrives later joins the same collection.
+  place('alpr:c', -97.02, false);
+  markers.flush();
+  assert.equal(scene.added[0], host, 'appended, not rebuilt');
+  assert.equal(host.get(0), badge);
+  assert.equal(host.length, 3);
+
+  markers.remove(['alpr:b']);
+  assert.equal(scene.added[0], host);
+  assert.equal(host.length, 2);
+  markers.dispose();
+  assert.equal(scene.added.length, 0);
+});
+
 /** Run `fn` with the image classes Cesium's materials test uniforms against. */
 function withImageClasses(fn) {
   const names = [

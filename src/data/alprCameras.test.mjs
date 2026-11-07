@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import alprCamerasLayer, {
   createAlprCamerasLayer,
   configureAlprSource,
@@ -311,7 +312,7 @@ function cameraHarness(layer = alprCamerasLayer) {
       },
     });
   let box = { south: 30.26, west: -97.75, north: 30.28, east: -97.73 };
-  let source, click, picked;
+  let click, picked;
   const credits = new Set();
   const viewer = {
     creditDisplay: {
@@ -336,14 +337,9 @@ function cameraHarness(layer = alprCamerasLayer) {
       postRender: new Cesium.Event(),
       pick: () => picked,
     },
-    dataSources: {
-      add: (value) => {
-        source = value;
-      },
-      remove() {},
-    },
   };
-  bindFakeCesiumCamera(viewer);
+  const ports = fakeScenePorts(viewer);
+  bindFakeCesiumCamera(viewer, ports);
   // The renderer's camera port relays moveEnd; the layer's own come on top.
   const portMoveEndListeners = viewer.camera.moveEnd.numberOfListeners;
   const setInput = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
@@ -366,14 +362,22 @@ function cameraHarness(layer = alprCamerasLayer) {
     Cesium.ScreenSpaceEventHandler.prototype.setInputAction = setInput;
   }
   layer.enable();
+  const icons = () => {
+    const set = [...ports.draw.sets.values()].find(
+      (candidate) => candidate.kind === 'icons' && !candidate.disposed,
+    );
+    return set && { ...set, id: set.spec.id };
+  };
+  const marker = (id) =>
+    icons()?.items.has(id)
+      ? getContextStore().entities.get(id)?.entity
+      : undefined;
   return {
     viewer,
+    ports,
     portMoveEndListeners,
     requests,
     credits,
-    get source() {
-      return source;
-    },
     setFetch(fn) {
       response = fn;
     },
@@ -386,9 +390,16 @@ function cameraHarness(layer = alprCamerasLayer) {
     advance(ms) {
       now += ms;
     },
+    /** The layer's icon set, as the fake draw port holds it. */
+    icons,
+    /** The icon drawn for a camera, or undefined. */
+    icon: (id) => icons()?.items.get(id),
+    /** The drawn markers' carriers (their context entities), in draw order. */
+    markers: () => [...(icons()?.items.keys() ?? [])].map((id) => marker(id)),
+    marker,
     click(id) {
-      const entity = typeof id === 'string' ? source.entities.getById(id) : id;
-      picked = entity ? { id: entity } : undefined;
+      const item = typeof id === 'string' ? icons()?.items.get(id) : null;
+      picked = item ? { id: { set: icons().id, id: item.id } } : undefined;
       click({ position: new Cesium.Cartesian2() });
     },
     restore() {
@@ -452,14 +463,14 @@ test('all manufacturers share one ALPR title and color; only supplied metadata a
       ]),
     );
     await alprCamerasLayer.update();
-    const entities = h.source.entities.values;
+    const entities = h.markers();
     assert.equal(alprCamerasLayer.name, 'ALPR Cameras');
     assert.deepEqual(
       entities.map((entity) => readEntityRecord(entity)?.labelModel.title),
       ['ALPR-0042', 'ALPR-0043', 'ALPR-0044'],
     );
     assert.equal(
-      new Set(entities.map((entity) => entity.billboard.image.getValue())).size,
+      new Set(entities.map((entity) => h.icon(entity.id).image)).size,
       1,
     );
     assert.deepEqual(readEntityRecord(entities[0])?.labelModel.details, [
@@ -498,7 +509,7 @@ test('the camera label stays English data in a translated interface', async () =
       ]),
     );
     await alprCamerasLayer.update();
-    h.click(h.source.entities.values[0].id);
+    h.click(h.markers()[0].id);
     assert.equal(getSelectedEntityContext().label, 'ALPR camera');
     assert.equal(
       shownEntityLabel(getSelectedEntityContext().label),
@@ -535,10 +546,7 @@ test('clicking the selected camera or empty map deselects, including after refre
       h.expire();
       await alprCamerasLayer.update();
       assert.equal(getSelectedEntityContext(), null);
-      assert.equal(
-        h.source.entities.getById('alpr:42').billboard.width.getValue(),
-        38,
-      );
+      assert.equal(h.icon('alpr:42').size[0], 38);
     }
   } finally {
     h.restore();
@@ -594,10 +602,7 @@ test('disable removes contexts and highlight; cache reuse after re-enable does n
     alprCamerasLayer.enable();
     await alprCamerasLayer.update();
     assert.equal(getSelectedEntityContext(), null);
-    assert.equal(
-      h.source.entities.getById('alpr:42').billboard.width.getValue(),
-      38,
-    );
+    assert.equal(h.icon('alpr:42').size[0], 38);
   } finally {
     h.restore();
   }
@@ -686,7 +691,7 @@ test('duplicate nodes render once with a count that agrees with the entity set',
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().status, 'ready');
     assert.equal(alprCamerasLayer.getStats().count, 1);
-    assert.equal(h.source.entities.values.length, 1);
+    assert.equal(h.icons().items.size, 1);
   } finally {
     h.restore();
   }
@@ -702,7 +707,7 @@ test('zooming out hides local markers, releases selection and makes no unbounded
     assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
     assert.equal(alprCamerasLayer.getStats().count, 0);
     assert.equal(getSelectedEntityContext(), null);
-    assert.equal(h.source.entities.values.length, 0);
+    assert.equal(h.icons().items.size, 0);
     assert.equal(h.requests.length, 1);
   } finally {
     h.restore();
@@ -762,7 +767,7 @@ test('nearby camera moves reuse the snapped query but count and register only in
     await alprCamerasLayer.update();
     assert.equal(h.requests.length, 1);
     assert.deepEqual(
-      h.source.entities.values.map((e) => e.id),
+      h.markers().map((e) => e.id),
       ['alpr:43'],
     );
     assert.deepEqual([...getContextStore().entities.keys()], ['alpr:43']);
@@ -809,9 +814,8 @@ test('selected readout samples the rendered ground, not zero elevation or the di
   try {
     let samples = 0;
     h.viewer.scene.sampleHeightSupported = true;
-    h.viewer.scene.sampleHeight = (point, excluded) => {
+    h.viewer.scene.sampleHeight = () => {
       samples += 1;
-      assert.equal(excluded[0].id, 'alpr:42');
       return 187;
     };
     h.setFetch(async () =>
@@ -823,7 +827,7 @@ test('selected readout samples the rendered ground, not zero elevation or the di
     );
     await alprCamerasLayer.update();
     h.click('alpr:42');
-    const entity = h.source.entities.getById('alpr:42');
+    const entity = h.marker('alpr:42');
     const anchor = Cesium.Cartographic.fromCartesian(
       readEntityRecord(entity)?.displayPosition(),
     );
@@ -871,6 +875,7 @@ test('a late network failure after disable cannot resurrect retries or an error 
 });
 
 test('two factories keep their requests, records and destruction independent', async () => {
+  const carriers = new Map();
   const services = {
     render: { governorRequestRender() {} },
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
@@ -884,7 +889,9 @@ test('two factories keep their requests, records and destruction independent', a
       getSelectedEntityContext() {
         return null;
       },
-      registerEntityContext() {},
+      registerEntityContext(entity, metadata) {
+        carriers.set(metadata.id, entity);
+      },
       removeEntityContextsForLayer() {},
       selectEntityContext() {},
     },
@@ -930,11 +937,11 @@ test('two factories keep their requests, records and destruction independent', a
     await pending;
     assert.equal(first.getStats().count, 0);
     assert.equal(second.getStats().count, 1);
-    assert.equal(b.source.entities.values[0].id, 'directory:99');
+    assert.deepEqual([...b.icons().items.keys()], ['directory:99']);
     assert.equal(second.source, 'Test camera directory');
     assert.ok(
       readEntityRecord(
-        b.source.entities.values[0],
+        carriers.get('directory:99'),
       )?.labelModel.details.includes('Source: Test directory'),
     );
     assert.equal(
@@ -952,6 +959,7 @@ test('markers sit on the cached floor; unknown floors clamp only until they reso
   // Ground clamping re-samples every marker whenever a photoreal tile streams
   // in; a whole-city view (about 1,000 cameras) stuttered while zooming.
   const floors = new Map([['30.2672', 150]]);
+  const carriers = new Map();
   let resolveCalls = 0;
   let releaseResolve;
   const services = {
@@ -972,7 +980,9 @@ test('markers sit on the cached floor; unknown floors clamp only until they reso
       getSelectedEntityContext() {
         return null;
       },
-      registerEntityContext() {},
+      registerEntityContext(entity, metadata) {
+        carriers.set(metadata.id, entity);
+      },
       removeEntityContextsForLayer() {},
       selectEntityContext() {},
     },
@@ -993,38 +1003,29 @@ test('markers sit on the cached floor; unknown floors clamp only until they reso
   const h = cameraHarness(layer);
   try {
     await layer.update();
-    const known = h.source.entities.getById('directory:1');
-    const unknown = h.source.entities.getById('directory:2');
-    assert.equal(
-      known.billboard.heightReference.getValue(),
-      Cesium.HeightReference.NONE,
-    );
+    const known = h.icon('directory:1');
+    const unknown = () => h.icon('directory:2');
+    const unknownCarrier = carriers.get('directory:2');
+    assert.equal(known.height, 'absolute');
     assert.ok(
-      Math.abs(
-        Cesium.Cartographic.fromCartesian(known.position.getValue()).height -
-          151.5,
-      ) < 0.01,
+      Math.abs(Cesium.Cartographic.fromCartesian(known.pos).height - 151.5) <
+        0.01,
     );
-    assert.equal(
-      unknown.billboard.heightReference.getValue(),
-      Cesium.HeightReference.CLAMP_TO_GROUND,
-    );
+    assert.equal(unknown().height, 'clampGround');
     assert.equal(resolveCalls, 1);
+    const writes = h.icons().writes;
     releaseResolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(
-      unknown.billboard.heightReference.getValue(),
-      Cesium.HeightReference.NONE,
-    );
+    assert.equal(unknown().height, 'absolute');
     assert.ok(
       Math.abs(
-        Cesium.Cartographic.fromCartesian(unknown.position.getValue()).height -
-          161.5,
+        Cesium.Cartographic.fromCartesian(unknown().pos).height - 161.5,
       ) < 0.01,
     );
+    assert.equal(h.icons().writes, writes + 1, 'one write for the move');
     assert.equal(
-      h.source.entities.getById('directory:2'),
-      unknown,
+      carriers.get('directory:2'),
+      unknownCarrier,
       'placed in place, not rebuilt',
     );
   } finally {
@@ -1076,23 +1077,16 @@ test('orbit cache hits and metadata refreshes preserve marker geometry and selec
     );
     await alprCamerasLayer.update();
     h.click('alpr:42');
-    const entity = h.source.entities.getById('alpr:42');
-    const position = entity.position,
-      line = entity.polyline;
+    const entity = h.marker('alpr:42');
+    const icon = h.icon('alpr:42');
     // Ground-clamped native wedges cost ~40 ms per frame for a downtown view;
     // bearings are painted by the overlay for the nearest cameras instead.
-    assert.equal(line, undefined);
-    assert.equal(entity.polygon, undefined);
+    assert.equal(h.ports.draw.sets.size, 1, 'icons only, no wedge geometry');
     let selections = 0,
-      clears = 0,
-      collectionChanges = 0;
+      clears = 0;
     window.addEventListener('gev:entity-selected', () => selections++);
     window.addEventListener('gev:entity-selection-cleared', () => clears++);
-    h.source.entities.collectionChanged.addEventListener(
-      (_collection, added, removed) => {
-        collectionChanges += added.length + removed.length;
-      },
-    );
+    const writes = h.icons().writes;
     h.setBox({ south: 30.261, west: -97.749, north: 30.279, east: -97.731 });
     await alprCamerasLayer.update();
     h.expire();
@@ -1108,30 +1102,26 @@ test('orbit cache hits and metadata refreshes preserve marker geometry and selec
       ]),
     );
     await alprCamerasLayer.update();
-    assert.equal(h.source.entities.getById('alpr:42'), entity);
-    assert.equal(entity.position, position);
-    assert.equal(entity.polyline, line);
+    assert.equal(h.marker('alpr:42'), entity);
+    assert.equal(h.icon('alpr:42'), icon, 'the icon is not sent again');
     assert.equal(
       getSelectedEntityContext().properties.operator,
       'Updated directory',
     );
     assert.equal(selections, 0);
     assert.equal(clears, 0);
-    assert.equal(collectionChanges, 0);
+    assert.equal(h.icons().writes, writes, 'no icon added or removed');
     assert.equal(h.requests.length, 2, 'only expiry needs another request');
     h.expire();
     h.setFetch(async () => cameraResponse([cameraNode(42, { lon: -97.742 })]));
     await alprCamerasLayer.update();
-    assert.equal(h.source.entities.getById('alpr:42'), entity);
-    assert.equal(
-      entity.polyline,
-      undefined,
-      'removed direction must not persist',
-    );
+    assert.equal(h.marker('alpr:42'), entity);
     assert.ok(
-      Cesium.Cartesian3.equals(
-        entity.position.getValue(),
+      Cesium.Cartesian3.equalsEpsilon(
+        h.icon('alpr:42').pos,
         Cesium.Cartesian3.fromDegrees(-97.742, 30.2672),
+        0,
+        1e-6,
       ),
     );
   } finally {
@@ -1171,7 +1161,7 @@ test('moves inside a pending query do not restart it; moving to another city can
     resolve(cameraResponse([cameraNode(43, { lat: 51.495, lon: -0.13 })]));
     await second;
     assert.deepEqual(
-      h.source.entities.values.map((e) => e.id),
+      h.markers().map((e) => e.id),
       ['alpr:43'],
     );
   } finally {
@@ -1189,12 +1179,12 @@ test('ground-centered orbits ignore horizon rectangles while sky, distant and da
   camera.positionWC = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 1200);
   try {
     await alprCamerasLayer.update();
-    const entity = h.source.entities.getById('alpr:42');
+    const entity = h.marker('alpr:42');
     h.click('alpr:42');
     for (const box of [null, { south: 31, west: -99, north: 36, east: -95 }]) {
       h.setBox(box);
       await alprCamerasLayer.update();
-      assert.equal(h.source.entities.getById('alpr:42'), entity);
+      assert.equal(h.marker('alpr:42'), entity);
       assert.equal(getSelectedEntityContext().id, 'alpr:42');
       assert.equal(h.requests.length, 1);
     }
@@ -1205,7 +1195,7 @@ test('ground-centered orbits ignore horizon rectangles while sky, distant and da
     );
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
-    assert.equal(h.source.entities.values.length, 0);
+    assert.equal(h.icons().items.size, 0);
     camera.pickEllipsoid = () => undefined;
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
@@ -1400,7 +1390,7 @@ test('slow ALPR floors share real terrain requests across preparation, render an
     requests[1].release();
     await new Promise((done) => setTimeout(done, 0));
     assert.equal(requests.length, 2, 'queued final cells are discarded');
-    assert.equal(h.source.entities.values.length, 0);
+    assert.equal(h.icons().items.size, 0);
     layer.enable();
     await layer.update();
     assert.equal(
@@ -1419,10 +1409,11 @@ test('slow ALPR floors share real terrain requests across preparation, render an
   }
 });
 
-test('map-source changes reposition all ALPR entities and saved native appearances in place', async () => {
+test('map-source changes reposition all ALPR markers, those under canvas badges too, in place', async () => {
   let floor = 180;
   let listener;
   let removed = 0;
+  const carriers = new Map();
   const records = Array.from({ length: 70 }, (_, i) => ({
     id: `surface:${i}`,
     latitude: 30.2672 + i * 0.00001,
@@ -1448,7 +1439,9 @@ test('map-source changes reposition all ALPR entities and saved native appearanc
       context: {
         clearSelectedEntityContextForLayer() {},
         getSelectedEntityContext() {},
-        registerEntityContext() {},
+        registerEntityContext(entity, metadata) {
+          carriers.set(metadata.id, entity);
+        },
         removeEntityContextsForLayer() {},
         selectEntityContext() {},
       },
@@ -1457,40 +1450,33 @@ test('map-source changes reposition all ALPR entities and saved native appearanc
   const h = cameraHarness(layer);
   try {
     await layer.update();
-    const entities = [...h.source.entities.values];
+    const entities = [...carriers.values()];
+    // One marker under a canvas badge: its icon is the faint pick target.
     const saved = entities[1];
-    alprMarkers.write(saved).nativeAppearance = {
-      position: saved.position,
-      heightReference: saved.billboard.heightReference,
-    };
-    saved.position = Cesium.Cartesian3.fromDegrees(-97.7431, 30.26721, 190);
-    alprMarkers.write(saved).pickPosition = saved.position;
+    Object.assign(alprMarkers.write(saved), {
+      canvasOwned: true,
+      canvasPosition: Cesium.Cartesian3.fromDegrees(-97.7431, 30.26721, 190),
+    });
     for (const next of [150, 120, null, 180]) {
       floor = next;
-      // Includes a provider switch with the same globe.show value.
-      h.viewer.scene.globe.show = next !== 180;
       listener({ detail: { status: 'ready' } });
       for (const entity of entities) {
-        assert.equal(h.source.entities.getById(entity.id), entity);
+        const icon = h.icon(entity.id);
         assert.ok(
           Math.abs(
-            Cesium.Cartographic.fromCartesian(entity.position.getValue())
-              .height - (next == null ? 0 : next + 1.5),
+            Cesium.Cartographic.fromCartesian(icon.pos).height -
+              (next == null ? 0 : next + 1.5),
           ) < 0.01,
           `${entity.id} refreshes at ${next}`,
         );
-        assert.equal(
-          entity.billboard.heightReference.getValue(),
-          next == null
-            ? Cesium.HeightReference.CLAMP_TO_GROUND
-            : Cesium.HeightReference.NONE,
-        );
+        assert.equal(icon.height, next == null ? 'clampGround' : 'absolute');
+        assert.equal(icon.color, undefined, 'drawn as a badge');
         assert.equal(alprMarkers.read(entity)?.canvasPosition, null);
       }
       assert.equal(
-        alprMarkers.read(saved)?.nativeAppearance,
-        null,
-        'saved appearance restores at the new floor',
+        alprMarkers.read(saved)?.canvasOwned,
+        false,
+        'the badge comes back at the new floor',
       );
     }
   } finally {
@@ -1503,7 +1489,7 @@ test('a repeated move inside an outstanding query keeps the displayed marker set
   const h = cameraHarness();
   try {
     await alprCamerasLayer.update();
-    const previous = h.source.entities.getById('alpr:42');
+    const previous = h.marker('alpr:42');
     const revision = alprCamerasLayer.getStats().renderRevision;
     let release;
     h.setFetch(
@@ -1516,7 +1502,7 @@ test('a repeated move inside an outstanding query keeps the displayed marker set
     const pending = alprCamerasLayer.update();
     await alprCamerasLayer.update();
     assert.equal(
-      h.source.entities.getById('alpr:42'),
+      h.marker('alpr:42'),
       previous,
       'do not show an intermediate filtered snapshot while the new query prepares',
     );
@@ -1526,7 +1512,7 @@ test('a repeated move inside an outstanding query keeps the displayed marker set
     await pending;
     assert.equal(alprCamerasLayer.getStats().renderRevision, revision + 1);
     assert.deepEqual(
-      h.source.entities.values.map((e) => e.id),
+      h.markers().map((e) => e.id),
       ['alpr:43'],
     );
   } finally {

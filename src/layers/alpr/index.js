@@ -1,6 +1,6 @@
 import { isFollowing } from '../../data/followed.js';
 import { isUnavailableCapability } from '../../sources/capability.js';
-import * as Cesium from 'cesium';
+import { cameraOf, drawOf, findFrame } from '../../render/rendererOf.js';
 import {
   LAYER_ID,
   REQUEST_DEBOUNCE_MS,
@@ -15,7 +15,10 @@ import {
   alprCredit,
 } from './model.js';
 import { createAlprPresentation } from './presentation.js';
+import { createAlprMarkerSet } from './markerState.js';
 import { t, tn, msg } from '../../i18n/index.js';
+
+let instances = 0;
 
 /**
  * Own one layer's requests, records, display and viewer subscriptions.
@@ -40,7 +43,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
 
   const state = {
     viewer: null,
-    dataSource: null,
+    /** The camera markers, drawn as one icon set. */
+    markers: createAlprMarkerSet(),
     credit: null,
     creditTimer: null,
     creditPresented: false,
@@ -184,9 +188,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       }
       renderRecords();
       state.retrying = false;
-      setAlprStatus(
-        state.dataSource.entities.values.length ? 'ready' : 'empty',
-      );
+      setAlprStatus(state.markers.size ? 'ready' : 'empty');
       return;
     }
     // A move inside an in-flight query must not abort and restart that query.
@@ -254,13 +256,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       // Stale and saturated are independent facts; a cached response that also
       // hit the cap must still warn about coverage, not just about freshness.
       renderRecords();
-      setAlprStatus(
-        state.dataSource.entities.values.length
-          ? stale
-            ? 'stale'
-            : 'ready'
-          : 'empty',
-      );
+      setAlprStatus(state.markers.size ? (stale ? 'stale' : 'ready') : 'empty');
     } catch (error) {
       if (
         error?.name === 'AbortError' ||
@@ -297,13 +293,17 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     init(viewer) {
       if (state.viewer) throw new Error('ALPR layer is already initialized');
       state.viewer = viewer;
-      state.dataSource = new Cesium.CustomDataSource('alpr-cameras');
+      state.markers.attach(
+        drawOf(viewer).icons({
+          id: `${LAYER_ID}:${++instances}:markers`,
+          show: state.enabled,
+        }),
+      );
       state.credit = alprCredit(source.attribution);
-      viewer.dataSources.add(state.dataSource);
-      state.moveEndRemove =
-        viewer.camera.moveEnd.addEventListener(scheduleLoad);
+      state.moveEndRemove = cameraOf(viewer).on('moveEnd', scheduleLoad);
       state.postRenderRemove =
-        viewer.scene.postRender?.addEventListener(updateSelectedAnchor);
+        findFrame(viewer)?.on('postRender', () => updateSelectedAnchor()) ??
+        null;
       initOverlay();
       installInteraction(viewer);
     },
@@ -312,7 +312,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.enabled = true;
       state.creditPresented = false;
       registerPickOwner(LAYER_ID, (id) => state.recordById.has(id));
-      state.dataSource.show = true;
+      state.markers.icons.show = true;
       // DataLayerManager calls update() right after enable(); it owns the first fetch.
     },
     disable() {
@@ -326,7 +326,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.pendingQueryBox = null;
       state.loading = false;
       state.retrying = false;
-      if (state.dataSource) state.dataSource.show = false;
+      if (state.markers.icons) state.markers.icons.show = false;
       clearSelection();
       clearRendered();
       setAlprStatus('idle');
@@ -345,9 +345,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.clickSubscription?.();
       state.clickSubscription = null;
       clearRendered();
-      if (state.dataSource && viewer)
-        viewer.dataSources.remove(state.dataSource, true);
-      state.dataSource = null;
+      state.markers.dispose();
       state.credit = null;
       state.creditPresented = false;
       state.records = [];
@@ -362,7 +360,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.viewer = null;
     },
     getRowControls() {
-      const count = state.dataSource?.entities.values.length || 0;
+      const count = state.markers.size;
       return {
         chips: [
           {
@@ -422,21 +420,17 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     },
     getStats() {
       return {
-        count: state.dataSource?.entities.values.length || 0,
+        count: state.markers.size,
         countLabel:
           state.enabled && !state.noCoverage && state.status !== 'zoom-in'
             ? Number.isInteger(state.onScreen)
               ? tn(
-                  state.dataSource?.entities.values.length || 0,
+                  state.markers.size,
                   '{count} nearby · {onScreen} on screen',
                   '{count} nearby · {onScreen} on screen',
                   { onScreen: state.onScreen },
                 )
-              : tn(
-                  state.dataSource?.entities.values.length || 0,
-                  '{count} nearby',
-                  '{count} nearby',
-                )
+              : tn(state.markers.size, '{count} nearby', '{count} nearby')
             : '',
         noCoverage: Boolean(state.noCoverage),
         lastUpdate: state.lastUpdate,
@@ -444,7 +438,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         saturated: state.saturated || state.renderSaturated,
         renderRevision: state.renderRevision,
         onScreen: state.onScreen ?? null,
-        shown: state.dataSource?.entities.values.length || 0,
+        shown: state.markers.size,
         error: state.error,
         status: state.status,
         loading: state.loading,

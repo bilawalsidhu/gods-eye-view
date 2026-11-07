@@ -2473,6 +2473,7 @@
       "src/layers/alpr/model.js",
       "src/layers/alpr/policy.js",
       "src/layers/alpr/presentation.js",
+      "src/geo/horizon.js",
       "src/render/cesium/camera.js",
       "src/render/cesium/frame.js",
       "src/render/cesium/query.js",
