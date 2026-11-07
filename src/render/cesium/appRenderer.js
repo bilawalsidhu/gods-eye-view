@@ -7,11 +7,10 @@
  * The renderer it makes is transitional. Its ports are the shared Cesium
  * ports (`ports.js`), the ones the conformance renderer is checked with,
  * less the members that would not be true of the application yet: the
- * globe (it draws photoreal tiles the port does not know), `whenSettled`
- * (it would not wait for them), `frame.setTime` (it would stop the
- * application's clock). Those arrive with the layer families that need
- * them (phase 2 of the renderer plan); `checkRendererShape` lists what is
- * still missing.
+ * globe (it draws photoreal tiles the port does not know) and
+ * `whenSettled` (it would not wait for them). Those arrive with the layer
+ * families that need them (phase 2 of the renderer plan);
+ * `checkRendererShape` lists what is still missing.
  * Until a family is ported, its code reaches the Cesium viewer through
  * `cesiumViewerOf`, never through a renderer member, so no engine type
  * crosses the contract and each call marks code still to port. Ported code
