@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { tomtomProxy } from './traffic.js';
@@ -7,7 +8,7 @@ import { adsbdbProxy } from './aircraft/enrichment.js';
 import { overpassProxy } from './overpass.js';
 import { militaryInstallationsProxy } from './military-installations.js';
 import { regionalBriefProxy } from './regional/briefing.js';
-import { geocodeProxy } from './regional/place.js';
+import { geocodeProxy, NOMINATIM_CACHE_DIR } from './regional/place.js';
 import { weatherEffectsProxy } from './regional/weather-effects.js';
 import { cctvProxy } from './cctv.js';
 import { defaultSourceRoot } from './common/source-root.js';
@@ -19,19 +20,37 @@ import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
 import { openAiRealtimeProxy } from './openai.js';
+import { geminiLiveProxy } from './gemini.js';
 import { googlePlacesContextProxy } from './places.js';
 import { mapillaryProxy } from './mapillary.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
+import { gnssIntegrityProxy } from './gnssIntegrity.js';
+import { ghostMapsProxy } from './ghostMaps.js';
+import { droneAirspaceProxy } from './droneAirspace.js';
+import { inaturalistProxy } from './inaturalist/observations.js';
+import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 
 /**
  * Construct the local provider plugins in their established order.
- * `realtime` configures the voice session token endpoint.
+ * `realtime` configures OpenAI; `gemini` explicitly opts into Gemini Live.
+ * `nominatimStorageDir` binds an owned absolute directory before construction;
+ * omission retains the durable per-source cache and policy state.
  */
-function localProviderPlugins({ realtime } = {}) {
+function localProviderPlugins({
+  realtime,
+  gemini,
+  nominatimStorageDir = NOMINATIM_CACHE_DIR,
+} = {}) {
+  if (
+    typeof nominatimStorageDir !== 'string' ||
+    !nominatimStorageDir.trim() ||
+    !path.isAbsolute(nominatimStorageDir)
+  )
+    throw new TypeError('nominatimStorageDir must be an absolute directory');
   return [
     openSkyProxy(),
     celestrakProxy(),
@@ -43,7 +62,7 @@ function localProviderPlugins({ realtime } = {}) {
     overpassProxy(),
     militaryInstallationsProxy(),
     regionalBriefProxy(),
-    geocodeProxy(),
+    geocodeProxy({ storageDir: nominatimStorageDir }),
     weatherEffectsProxy(),
     cctvProxy({ sourceRoot: defaultSourceRoot }),
     radioBrowserProxy(),
@@ -54,12 +73,18 @@ function localProviderPlugins({ realtime } = {}) {
     aisLiveProxy(),
     trackBackfillProxies(),
     openAiRealtimeProxy({ realtime }),
+    ...(gemini ? [geminiLiveProxy({ realtime: gemini })] : []),
     googlePlacesContextProxy(),
     windProxy(),
     weatherProxy(),
     cycloneProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
+    gnssIntegrityProxy(),
+    ghostMapsProxy(),
+    droneAirspaceProxy(),
+    inaturalistProxy(),
+    acartiaProxy(),
     keySetupEndpoint(),
   ];
 }
@@ -81,6 +106,9 @@ export { LL2_CACHE_TTL_MS, launchLibraryRequestHeaders } from './space.js';
 export { googlePlacesContextProxy } from './places.js';
 export { googleServerApiKey } from './places.js';
 export { keylessGooglePlacesResponse } from './places.js';
+export { keylessGoogleGeocodeResponse } from './places.js';
+export { validateGeocodeAddress } from './places.js';
+export { geocodeBounds } from './places.js';
 export { adsbLolFallbackAnchor } from './aircraft/opensky.js';
 export { readResponseTextCapped } from './common/http.js';
 export { readResponseJsonCapped } from './common/http.js';

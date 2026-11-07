@@ -228,7 +228,7 @@ test('a valid box searches and previews the START HERE day alone in IMAGE mode',
   assert.equal(snapshot.focus.key, S18, 'focus starts on it');
   assert.equal(snapshot.preview.key, S18);
   assert.equal(snapshot.preview.slot, 'a');
-  assert.equal(snapshot.preview.label, 'Sep 18 · Sentinel-2 · 30 m');
+  assert.equal(snapshot.preview.label, 'Sep 18 · Sentinel-2 · 30\u00a0m');
   assert.equal(snapshot.candidates[1].preview, true);
   const none = {
     key: null,
@@ -1384,4 +1384,14 @@ test('with SELECT BOX armed, Escape clears the preview first and the next Escape
   assert.deepEqual(cancels, ['escape']);
   assert.equal(f.snap().toolActive, false);
   await tool.destroy();
+});
+
+test('a voice search cancelled mid-flight says so instead of looking empty', async () => {
+  const f = fixture();
+  f.layer.enable();
+  f.layer.setBox(BOX);
+  assert.equal(f.snap().searching, true);
+  f.layer.cancelPendingSearch();
+  assert.equal(f.snap().searching, false);
+  assert.equal(f.snap().notice, 'Search cancelled');
 });

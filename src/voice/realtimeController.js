@@ -10,13 +10,12 @@ import { TurnMetrics } from './turnMetrics.js';
 import { createNarrationScheduler } from './narration.js';
 import { createEarcon } from './earcon.js';
 import {
+  POINTER_NONE_KEY,
   POINTER_OPEN_MIC_RECENT_MS,
-  pointerChip,
-  pointerContextItem,
+  pointerAnnouncement,
+  pointerTurnContext,
+  pointerTurnEvent,
 } from './pointerContext.js';
-
-/** Dedupe key of the clearing pointer_context item. */
-const POINTER_NONE_KEY = 'none';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
 import { postDebugLog } from './realtimeDiagnostics.js';
@@ -55,13 +54,17 @@ export {
 
 import { createRealtimeBackend } from './realtimeBackend.js';
 
-const STATUS = {
-  idle: 'OFF',
-  connecting: 'CONNECTING',
-  listening: 'LISTENING',
-  executing: 'EXECUTING',
-  error: 'ERROR',
-};
+import { t } from '../i18n/index.js';
+import { voiceStatusLabel } from './control.js';
+
+// Machine states (dataset.status, CSS); voiceStatusLabel() translates labels.
+const STATUS_STATES = new Set([
+  'idle',
+  'connecting',
+  'listening',
+  'executing',
+  'error',
+]);
 
 /** Compose voice state owners and coordinate ordered session startup/teardown. */
 export class GevRealtimeController extends RealtimeFacade {
@@ -154,7 +157,6 @@ export class GevRealtimeController extends RealtimeFacade {
       },
     });
 
-    this.buttonHandler = null;
     this.tierHandler = null;
     this.annotationEventUnsubscribe = null;
 
@@ -283,31 +285,18 @@ export class GevRealtimeController extends RealtimeFacade {
     } catch {
       snapshot = null;
     }
-    const chip = pointerChip(snapshot);
-    this.pointerAnnounced = gesture && chip ? snapshot : null;
-    this.emitSessionEvent({
-      type: 'pointer',
-      pointer:
-        gesture && chip ? { ...chip, screenPx: snapshot.screenPx } : null,
+    const event = pointerTurnEvent(snapshot, gesture);
+    this.pointerAnnounced = event.announced;
+    this.emitSessionEvent({ type: 'pointer', pointer: event.pointer });
+    const context = pointerTurnContext(snapshot, {
+      at,
+      gesture,
+      sentKey: this.pointerSentKey,
     });
-    const item = !chip
-      ? this.pointerSentKey && this.pointerSentKey !== POINTER_NONE_KEY
-        ? { type: 'pointer_context', at, target: 'none' }
-        : null
-      : gesture
-        ? pointerContextItem(snapshot)
-        : // What kind of thing, never which: no label or coordinates.
-          {
-            type: 'pointer_context',
-            at,
-            pointing: snapshot.entity?.kind || 'ground',
-          };
-    if (!item) return snapshot;
-    const { at: _at, ...content } = item;
-    const key = chip ? JSON.stringify(content) : POINTER_NONE_KEY;
-    if (key === this.pointerSentKey) return snapshot;
-    if (this._turns.notifyMapEvent(item)) {
-      this.pointerSentKey = key;
+    if (!context) return snapshot;
+    if (this._turns.notifyMapEvent(context.item)) {
+      this.pointerSentKey = context.key;
+      const chip = context.key !== POINTER_NONE_KEY;
       this.debugLog('pointer.context', {
         at,
         target: chip ? snapshot.target : 'none',
@@ -323,13 +312,10 @@ export class GevRealtimeController extends RealtimeFacade {
    */
   announcePointer() {
     const snapshot = this.pointer?.activeSnapshot?.() || null;
-    const chip = pointerChip(snapshot);
-    if (!chip || snapshot === this.pointerAnnounced) return false;
+    const pointer = pointerAnnouncement(snapshot, this.pointerAnnounced);
+    if (!pointer) return false;
     this.pointerAnnounced = snapshot;
-    this.emitSessionEvent({
-      type: 'pointer',
-      pointer: { ...chip, screenPx: snapshot.screenPx },
-    });
+    this.emitSessionEvent({ type: 'pointer', pointer });
     return true;
   }
 
@@ -392,12 +378,8 @@ export class GevRealtimeController extends RealtimeFacade {
     this._radio.clearPendingPlayback();
     this._viewport.reset();
     this._input.resetSession();
-    if (removeUi && this.ui?.button && this.buttonHandler) {
-      this.ui.button.removeEventListener('click', this.buttonHandler);
-      this.buttonHandler = null;
-    }
-    if (removeUi && this.ui?.tierButton && this.tierHandler) {
-      this.ui.tierButton.removeEventListener('click', this.tierHandler);
+    if (removeUi && this.tierHandler) {
+      this.tierHandler();
       this.tierHandler = null;
     }
     if (removeUi) this._input.detachBindings();
@@ -408,11 +390,9 @@ export class GevRealtimeController extends RealtimeFacade {
       this.annotationEventUnsubscribe = null;
     }
     if (removeUi) this._radio.detachObservers();
-    if (removeUi && this.ui?.root) {
-      this.ui.root.remove();
-    }
+    if (removeUi) this.ui?.remove();
     if (!preserveStatus && !removeUi) {
-      this.setStatus('idle', 'Voice off');
+      this.setStatus('idle', t('Voice off'));
     }
     this.setRadioVoiceDucking(false);
     if (removeUi) this.emitSessionEvent({ type: 'disposed' });
@@ -429,29 +409,34 @@ export class GevRealtimeController extends RealtimeFacade {
   setStatus(status, detail) {
     this.status = status;
     this.emitSessionEvent({ type: 'state', state: status, detail });
-    this.ui.root.dataset.status = status;
-    if (status === 'error') this.ui.root.classList.remove('error-dismissed');
+    this.ui.update('root', {
+      status,
+      ...(status === 'error' && { errorDismissed: false }),
+    });
     this.updateVoiceButtonLabel();
-    this.ui.status.textContent = STATUS[status] || STATUS.idle;
-    const resolvedDetail =
-      status === 'listening' && this.pushToTalkMode
-        ? this.pushToTalkKeyHeld
-          ? 'Release Space to send'
-          : 'Hold Space to talk'
+    const shownStatus = STATUS_STATES.has(status) ? status : 'idle';
+    this.ui.update('status', { text: () => voiceStatusLabel(shownStatus) });
+    // Words are given as functions, so a locale change words them again.
+    const holdToTalk = status === 'listening' && this.pushToTalkMode;
+    const held = this.pushToTalkKeyHeld;
+    const resolvedDetail = () =>
+      holdToTalk
+        ? held
+          ? t('Release Space to send')
+          : t('Hold Space to talk')
         : detail;
-    const primaryDetail =
+    const primaryDetail = () =>
       status === 'error'
-        ? 'VOICE UNAVAILABLE'
-        : resolvedDetail ||
-          (status === 'idle' ? 'VOICE STANDBY' : 'VOICE ACTIVE');
-    this.ui.detail.textContent = primaryDetail;
-    this.ui.detail.title = primaryDetail;
-    if (this.ui.errorDetail) {
-      this.ui.errorDetail.textContent =
+        ? t('VOICE UNAVAILABLE')
+        : resolvedDetail() ||
+          (status === 'idle' ? t('VOICE STANDBY') : t('VOICE ACTIVE'));
+    this.ui.update('detail', { text: primaryDetail, title: primaryDetail });
+    this.ui.update('error', {
+      text: () =>
         status === 'error'
-          ? resolvedDetail || 'Voice session could not be started.'
-          : '';
-    }
+          ? resolvedDetail() || t('Voice session could not be started.')
+          : '',
+    });
     if (status === 'idle' || status === 'connecting' || status === 'error') {
       this.setVoiceSpeaker('idle');
     }

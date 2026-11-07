@@ -323,13 +323,30 @@ export function lineTouchesArea(coords, area) {
 
 /** Whether a point lies inside a ring of `[lon, lat]` vertices (ray casting). */
 function ringContains(ring, point) {
+  if (ring.length < 3) return false;
+  // Keep adjacent vertices on the same longitude sheet, as the edge tests do.
+  // Wrapping each vertex around the query point would split a dateline ring
+  // when queried from Greenwich and mistake its complement for its interior.
+  let previous = ring[0][0];
+  let west = previous;
+  let east = previous;
+  const vertices = ring.map(([lon, lat]) => {
+    if (Math.abs(lon - previous) > 180)
+      lon += 360 * Math.round((previous - lon) / 360);
+    previous = lon;
+    west = Math.min(west, lon);
+    east = Math.max(east, lon);
+    return [lon, lat];
+  });
+  const middle = (west + east) / 2;
+  const lon = point.lon + 360 * Math.round((middle - point.lon) / 360);
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
+  for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i, i += 1) {
+    const [xi, yi] = vertices[i];
+    const [xj, yj] = vertices[j];
     if (
       yi > point.lat !== yj > point.lat &&
-      point.lon < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi
+      lon < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi
     )
       inside = !inside;
   }

@@ -173,3 +173,26 @@ test('frames are read through the registered frame endpoint', async () => {
   });
   await assert.rejects(failing.getFrame(camera), /Camera frame HTTP 502/);
 });
+
+test('frame provenance admits the proxy kinds and leaves missing or unknown headers unknown', async () => {
+  for (const kind of [
+    'upstream-image',
+    'hls-pull',
+    'streetview',
+    'synthetic',
+    'other',
+    null,
+  ]) {
+    const source = createCctvSource({
+      fetchImpl: async () =>
+        new Response(new Uint8Array([1]), {
+          headers: {
+            'Content-Type': 'image/png',
+            ...(kind ? { 'X-CCTV-Source': kind } : {}),
+          },
+        }),
+    });
+    const frame = await source.getFrame(camera);
+    assert.equal(frame.sourceKind, kind === 'other' ? null : kind);
+  }
+});

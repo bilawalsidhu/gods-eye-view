@@ -1,7 +1,11 @@
 import { searchHls } from './catalog.js';
 import { gibsTemplate, wvsSnapshotUrl } from './model.js';
 
-/** NASA-compatible imagery acquisition; transport and URL builders are replaceable. */
+/**
+ * NASA-compatible imagery acquisition; transport and URL builders are replaceable.
+ * Thumbnail responses must expose Data-Present: true for image admission, or
+ * false for confirmed empty coverage, including injected getThumbnail sources.
+ */
 export function createRecentImagerySource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   search = searchHls,

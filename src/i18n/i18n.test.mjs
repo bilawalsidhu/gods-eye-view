@@ -1,0 +1,371 @@
+import { test, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  applyDocumentTranslations,
+  formatDate,
+  formatNumber,
+  formatRelativeTime,
+  msg,
+  onLocaleChange,
+  persistLocale,
+  setLocale,
+  t,
+  tn,
+} from './index.js';
+import {
+  LOCALE_STORAGE_KEY,
+  applyDocumentLanguage,
+  normalizeLocale,
+  resolveLocale,
+  writeStoredLocale,
+} from './locale.js';
+
+afterEach(() => setLocale('en'));
+
+function memoryStorage(initial = {}) {
+  const data = new Map(Object.entries(initial));
+  return {
+    getItem: (key) => (data.has(key) ? data.get(key) : null),
+    setItem: (key, value) => data.set(key, String(value)),
+    data,
+  };
+}
+
+test('normalizeLocale folds regional variants and rejects unshipped tags', () => {
+  assert.equal(normalizeLocale('ru-RU'), 'ru');
+  assert.equal(normalizeLocale(' RU '), 'ru');
+  assert.equal(normalizeLocale('uk'), 'uk');
+  assert.equal(normalizeLocale('uk-UA'), 'uk');
+  assert.equal(normalizeLocale('en_GB'), 'en');
+  assert.equal(normalizeLocale('de'), 'de');
+  assert.equal(normalizeLocale('de-AT'), 'de');
+  assert.equal(normalizeLocale('de_CH'), 'de');
+  assert.equal(normalizeLocale('fr'), 'fr');
+  assert.equal(normalizeLocale('fr-CA'), 'fr');
+  assert.equal(normalizeLocale('FR_be'), 'fr');
+  assert.equal(normalizeLocale('pt-BR'), 'pt');
+  assert.equal(normalizeLocale('pt_PT'), 'pt');
+  assert.equal(normalizeLocale('xx'), null);
+  assert.equal(normalizeLocale('it-IT'), 'it');
+  assert.equal(normalizeLocale('it_CH'), 'it');
+  assert.equal(normalizeLocale('ja'), 'ja');
+  assert.equal(normalizeLocale('ja-JP'), 'ja');
+  assert.equal(normalizeLocale('JA_jp'), 'ja');
+  // Explicit script tags take precedence over regional defaults.
+  assert.equal(normalizeLocale('zh'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-CN'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-Hans-SG'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-Hant'), 'zh-Hant');
+  assert.equal(normalizeLocale(' ZH_hant '), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-TW'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-Hant-HK'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-Hans-HK'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-Hant-CN'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh_HK'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-MO'), 'zh-Hant');
+  assert.equal(normalizeLocale('ar'), 'ar');
+  assert.equal(normalizeLocale('ar-EG'), 'ar');
+  assert.equal(normalizeLocale(' AR_sa '), 'ar');
+  assert.equal(normalizeLocale(undefined), null);
+});
+
+test('resolveLocale: ?lang= wins, then the stored choice, then browser languages, then English', () => {
+  const storage = memoryStorage({ [LOCALE_STORAGE_KEY]: 'ru' });
+  assert.equal(
+    resolveLocale({
+      location: { search: '?lang=en' },
+      storage,
+      languages: ['ru'],
+    }),
+    'en',
+  );
+  assert.equal(
+    resolveLocale({ location: { search: '' }, storage, languages: ['en'] }),
+    'ru',
+  );
+  assert.equal(
+    resolveLocale({
+      location: { search: '?lang=xx' },
+      storage: memoryStorage(),
+      languages: ['ko-KR', 'ru-RU'],
+    }),
+    'ru',
+  );
+  assert.equal(
+    resolveLocale({
+      location: { search: '' },
+      storage: memoryStorage(),
+      languages: ['de-DE', 'ru-RU'],
+    }),
+    'de',
+  );
+  assert.equal(
+    resolveLocale({
+      location: { search: '' },
+      storage: memoryStorage(),
+      languages: ['ko'],
+    }),
+    'en',
+  );
+});
+
+test('a throwing storage never escapes', () => {
+  const storage = {
+    getItem() {
+      throw new Error('blocked');
+    },
+    setItem() {
+      throw new Error('blocked');
+    },
+  };
+  assert.equal(
+    resolveLocale({ location: { search: '' }, storage, languages: [] }),
+    'en',
+  );
+  assert.equal(writeStoredLocale('ru', storage), false);
+});
+
+test('applyDocumentLanguage sets lang and dir', () => {
+  const doc = { documentElement: {} };
+  applyDocumentLanguage(doc, 'ru-RU');
+  assert.deepEqual(doc.documentElement, { lang: 'ru', dir: 'ltr' });
+  applyDocumentLanguage(doc, 'ar-EG');
+  assert.deepEqual(doc.documentElement, { lang: 'ar', dir: 'rtl' });
+  applyDocumentLanguage(doc, 'en');
+  assert.deepEqual(doc.documentElement, { lang: 'en', dir: 'ltr' });
+});
+
+test('t() returns English text in English and translates in Russian', () => {
+  assert.equal(t('POWERED UP'), 'POWERED UP');
+  setLocale('ru');
+  assert.notEqual(t('POWERED UP'), 'POWERED UP');
+});
+
+test('t() interpolates named values and keeps unknown names literal', () => {
+  assert.equal(
+    t('Save failed: {detail}', { detail: 'disk full' }),
+    'Save failed: disk full',
+  );
+  assert.equal(
+    t('Hello {who} {missing}', { who: 'pilot' }),
+    'Hello pilot {missing}',
+  );
+});
+
+test('t() falls back to English for text without a translation', () => {
+  setLocale('ru');
+  assert.equal(t('No such message {n}', { n: 1 }), 'No such message 1');
+});
+
+test('tn() picks English and Russian plural forms', () => {
+  const label = (count) =>
+    tn(
+      count,
+      'POWER UP · {count} KEY WAITING',
+      'POWER UP · {count} KEYS WAITING',
+    );
+  assert.equal(label(1), 'POWER UP · 1 KEY WAITING');
+  assert.equal(label(3), 'POWER UP · 3 KEYS WAITING');
+  setLocale('ru');
+  assert.match(label(1), / 1 КЛЮЧ(?![А-ЯЁ])/);
+  assert.match(label(3), / 3 КЛЮЧА(?![А-ЯЁ])/);
+  assert.match(label(5), / 5 КЛЮЧЕЙ(?![А-ЯЁ])/);
+  assert.match(label(21), / 21 КЛЮЧ(?![А-ЯЁ])/);
+});
+
+test('tn() picks the Portuguese one, many and other forms', () => {
+  const label = (count) =>
+    tn(
+      count,
+      'POWER UP · {count} KEY WAITING',
+      'POWER UP · {count} KEYS WAITING',
+    );
+  setLocale('pt');
+  assert.equal(label(0), 'ATIVAR · 0 CHAVE PENDENTE');
+  assert.equal(label(1), 'ATIVAR · 1 CHAVE PENDENTE');
+  assert.equal(label(3), 'ATIVAR · 3 CHAVES PENDENTES');
+  assert.equal(label(1_000_000), 'ATIVAR · 1000000 DE CHAVES PENDENTES');
+});
+
+test('tn() picks the four Ukrainian plural forms', () => {
+  const label = (count) =>
+    tn(
+      count,
+      'POWER UP · {count} KEY WAITING',
+      'POWER UP · {count} KEYS WAITING',
+    );
+  setLocale('uk');
+  assert.match(label(1), / 1 КЛЮЧ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(3), / 3 КЛЮЧІ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(5), / 5 КЛЮЧІВ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(11), / 11 КЛЮЧІВ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(21), / 21 КЛЮЧ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(1.5), / 1\.5 КЛЮЧА(?![А-ЯҐЄІЇ])/);
+});
+
+test('t() context separates identical English with different meanings', () => {
+  assert.equal(t('CLEAR', { context: 'action' }), 'CLEAR');
+  setLocale('ru');
+  assert.notEqual(t('CLEAR', { context: 'action' }), t('CLEAR'));
+});
+
+test('msg() returns its text unchanged', () => {
+  assert.equal(msg('Live Flights'), 'Live Flights');
+});
+
+test('Intl formatters follow the active locale', () => {
+  const date = new Date(Date.UTC(2026, 0, 15));
+  const options = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  };
+  assert.equal(formatDate(date, options), 'January 15, 2026');
+  assert.equal(formatNumber(1234.5), '1,234.5');
+  setLocale('ru');
+  assert.equal(formatDate(date, options), '15 января 2026 г.');
+  assert.equal(formatRelativeTime(-5, 'minute'), '5 минут назад');
+  assert.equal(formatNumber(1234.5), '1 234,5');
+  // Japanese keeps a number and its unit together, as the catalog does.
+  setLocale('ja');
+  assert.equal(formatDate(date, options), '2026年1月15日');
+  assert.equal(formatRelativeTime(-5, 'minute'), '5分前');
+  assert.equal(formatRelativeTime(-3, 'day'), '3日前');
+});
+
+function fakeElement({ text = '', attributes = {} } = {}) {
+  const attrs = new Map(Object.entries(attributes));
+  return {
+    textContent: text,
+    getAttribute: (name) => (attrs.has(name) ? attrs.get(name) : null),
+    setAttribute: (name, value) => attrs.set(name, value),
+    attrs,
+  };
+}
+
+test('applyDocumentTranslations translates opted-in text and attributes in place', () => {
+  const label = fakeElement({ text: '\n  POWERED\n  UP  ' });
+  const pin = fakeElement({ attributes: { title: 'POWERED UP' } });
+  const unknown = fakeElement({ text: 'No such message' });
+  const doc = {
+    querySelectorAll(selector) {
+      if (selector === '[data-i18n]') return [label, unknown];
+      if (selector === '[data-i18n-title]') return [pin];
+      return [];
+    },
+  };
+  assert.equal(
+    applyDocumentTranslations(doc),
+    0,
+    'English leaves markup alone',
+  );
+  setLocale('ru');
+  assert.equal(applyDocumentTranslations(doc), 2);
+  assert.equal(label.textContent, t('POWERED UP'));
+  assert.equal(pin.attrs.get('title'), t('POWERED UP'));
+  assert.equal(unknown.textContent, 'No such message');
+  // A later pass starts from the English source, so every switch applies.
+  setLocale('de');
+  applyDocumentTranslations(doc);
+  assert.equal(label.textContent, t('POWERED UP'));
+  setLocale('en');
+  assert.equal(applyDocumentTranslations(doc), 2, 'English restores');
+  assert.equal(label.textContent, 'POWERED UP');
+  assert.equal(pin.attrs.get('title'), 'POWERED UP');
+  // Text that code wrote since is the new source; a pass leaves it alone.
+  label.textContent = 'Error: offline';
+  setLocale('ru');
+  applyDocumentTranslations(doc);
+  assert.equal(label.textContent, 'Error: offline');
+});
+
+test('onLocaleChange listeners hear each change until removed', () => {
+  const heard = [];
+  const off = onLocaleChange(() => heard.push(t('POWERED UP')));
+  const broken = onLocaleChange(() => {
+    throw new Error('broken listener');
+  });
+  const error = console.error;
+  console.error = () => {};
+  try {
+    setLocale('ru');
+    setLocale('ru');
+    assert.deepEqual(heard, [t('POWERED UP')], 'once, in the new locale');
+    off();
+    setLocale('en');
+    assert.equal(heard.length, 1);
+  } finally {
+    console.error = error;
+    broken();
+  }
+});
+
+test('applyDocumentTranslations reads data-i18n-context for element text', () => {
+  const option = fakeElement({
+    text: 'All',
+    attributes: { 'data-i18n-context': 'radio tag' },
+  });
+  const doc = {
+    querySelectorAll: (selector) =>
+      selector === '[data-i18n]' ? [option] : [],
+  };
+  setLocale('pt');
+  applyDocumentTranslations(doc);
+  assert.equal(option.textContent, t('All', { context: 'radio tag' }));
+  assert.notEqual(option.textContent, t('All'));
+});
+
+test('persistLocale keeps the choice in ?lang when storage is blocked', () => {
+  const calls = [];
+  const location = { href: 'https://gev.local/?x=1#scene=a' };
+  const history = {
+    replaceState: (_s, _t, url) => calls.push(['replace', url]),
+  };
+  const storage = {
+    setItem() {
+      throw new Error('blocked');
+    },
+  };
+  assert.equal(persistLocale('ru', { location, history, storage }), 'ru');
+  assert.deepEqual(calls, [
+    ['replace', 'https://gev.local/?x=1&lang=ru#scene=a'],
+  ]);
+});
+
+test('persistLocale stores the choice, keeps the hash, strips ?lang', () => {
+  const storage = memoryStorage();
+  const calls = [];
+  const location = { href: 'https://gev.local/?lang=en&x=1#scene=a' };
+  const history = {
+    replaceState: (_s, _t, url) => calls.push(['replace', url]),
+  };
+  assert.equal(persistLocale('ru', { location, history, storage }), 'ru');
+  assert.equal(storage.data.get(LOCALE_STORAGE_KEY), 'ru');
+  assert.deepEqual(calls, [['replace', 'https://gev.local/?x=1#scene=a']]);
+  // An address without ?lang is left as it is.
+  calls.length = 0;
+  persistLocale('de', {
+    location: { href: 'https://gev.local/#scene=a' },
+    history,
+    storage,
+  });
+  assert.deepEqual(calls, []);
+});
+
+test('tn() shows a caller-formatted count and still picks the form by number', () => {
+  const label = (n) =>
+    tn(n, '{count} map object', '{count} map objects', {
+      count: formatNumber(n),
+    });
+  assert.equal(label(12345), '12,345 map objects');
+  assert.equal(tn(12345, '{count} file', '{count} files'), '12345 files');
+  setLocale('ru');
+  try {
+    assert.equal(label(12345), '12 345 объектов на карте');
+    assert.equal(label(1), '1 объект на карте');
+  } finally {
+    setLocale('en');
+  }
+});

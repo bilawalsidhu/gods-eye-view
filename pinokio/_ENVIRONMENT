@@ -30,3 +30,7 @@ PINOKIO_SHARE_VAR=__gev_sharing_disabled__
 # App-level guards, not billing caps. Provider-side budgets remain authoritative.
 GEV_RATELIMIT_OPENAI_PER_MIN=30
 GEV_RATELIMIT_GOOGLE_PER_MIN=120
+# Typed chat follows the OpenAI cap above, or Gemini voice's default of 30,
+# unless set here; 0 disables it.
+# GEV_RATELIMIT_OPENAI_CHAT_PER_MIN=
+# GEV_RATELIMIT_GEMINI_CHAT_PER_MIN=

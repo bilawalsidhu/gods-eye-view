@@ -7,10 +7,12 @@ export function celestrakTleUrl(group) {
 }
 
 export function launchLibraryRecentUrl(end) {
-  const start = new Date(end.getTime() - 30 * 86400000);
+  // Stable minute boundaries let different installations share LL2's cache.
+  const roundedEnd = new Date(Math.floor(end.getTime() / 60000) * 60000);
+  const start = new Date(roundedEnd.getTime() - 30 * 86400000);
   const url = new URL('https://ll.thespacedevs.com/2.3.0/launches/');
   url.searchParams.set('net__gte', start.toISOString());
-  url.searchParams.set('net__lte', end.toISOString());
+  url.searchParams.set('net__lte', roundedEnd.toISOString());
   url.searchParams.set('limit', '100');
   url.searchParams.set('mode', 'detailed');
   return url;

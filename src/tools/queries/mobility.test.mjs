@@ -106,6 +106,34 @@ test('bike share joins station information with live status inside the area', as
   assert.equal(result.data.rows[1].capacity, 10);
 });
 
+test('bike share returns localized names without losing stations with malformed names', async () => {
+  const informationUrl = 'https://gbfs.example/austin/station_information.json';
+  const information = structuredClone(documents[informationUrl]);
+  information.version = '3.0';
+  information.data.stations[0].name = [
+    { language: 'hu', text: 'Magyar név' },
+    { language: 'en', text: 'Congress & 2nd' },
+  ];
+  information.data.stations[2].name = [null, { language: 42, text: [] }];
+  const source = bikeshare([system('austin', 'Austin, TX', 30.27, -97.74)]);
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        ...source,
+        getStations: (url) =>
+          url === informationUrl ? information : source.getStations(url),
+      },
+    },
+  });
+  const result = await catalog.call('get_bike_share', { area: downtown });
+  assert.equal(result.data.total, 2);
+  assert.equal(result.data.rows[0].name, 'Congress & 2nd');
+  assert.equal(result.data.rows[0].bikes_available, 4);
+  assert.equal(result.data.rows[1].name, null);
+  assert.doesNotMatch(result.summary, /unavailable/);
+});
+
 test('bike share reports uncovered areas and failed systems honestly', async () => {
   const none = composeCatalog({
     tools: coreTools,
@@ -140,6 +168,46 @@ test('bike share reports uncovered areas and failed systems honestly', async () 
   await assert.rejects(
     down.call('get_bike_share', { area: downtown }),
     (error) => error.code === 'unavailable',
+  );
+});
+
+test('bike share excludes blank coordinates without losing stations on the prime meridian', async () => {
+  const stations = [
+    { station_id: 'blank', lat: 51.5, lon: ' ' },
+    { station_id: 'zero', lat: 51.5, lon: 0 },
+  ];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        systems: [system('fixture', 'Fixture Bikes', 51.5, 0)],
+        async getStations(url) {
+          return {
+            data: {
+              stations: url.endsWith('station_information.json')
+                ? stations
+                : stations.map(({ station_id }) => ({
+                    station_id,
+                    num_bikes_available: 4,
+                  })),
+            },
+          };
+        },
+      },
+    },
+  });
+  const result = await catalog.call('get_bike_share', {
+    area: { lat: 51.5, lon: 0, radius_km: 2 },
+  });
+  assert.deepEqual(
+    result.data.rows.map((row) => row.station_id),
+    ['zero'],
+  );
+  assert.equal(result.data.total, 1);
+  assert.equal(result.data.rows[0].lon, 0);
+  assert.equal(
+    result.summary,
+    '1 bike-share station in 2 km around 51.500, 0.000 with 4 bikes available.',
   );
 });
 
@@ -429,6 +497,51 @@ test('bike share names the systems it did not search', async () => {
   );
 });
 
+test('bike share over Oslo searches only the nearby Norwegian systems', async () => {
+  const requested = [];
+  const result = await composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        systems: GBFS_CITY_REGISTRY,
+        getStations: async (url) => {
+          requested.push(url);
+          return { data: { stations: [] } };
+        },
+      },
+    },
+  }).call('get_bike_share', {
+    area: { lat: 59.9139, lon: 10.7522, radius_km: 5 },
+  });
+  assert.deepEqual(result.data.systems.sort(), [
+    'Lillestrøm, Norway',
+    'Oslo, Norway',
+  ]);
+  assert.deepEqual(result.data.systems_not_searched, []);
+  assert.ok(
+    requested.every(
+      (url) =>
+        url.startsWith('https://gbfs.urbansharing.com/oslobysykkel.no/') ||
+        url.startsWith('https://api.cyclocity.fr/contracts/lillestrom/'),
+    ),
+  );
+});
+
+test('bike share over Stavanger searches Kolumbus Bysykkel', async () => {
+  const result = await composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        systems: GBFS_CITY_REGISTRY,
+        getStations: async () => ({ data: { stations: [] } }),
+      },
+    },
+  }).call('get_bike_share', {
+    area: { lat: 58.97, lon: 5.7331, radius_km: 5 },
+  });
+  assert.deepEqual(result.data.systems, ['Stavanger, Norway']);
+});
+
 test('traffic counts only roads inside a radius area and reports missing tiles', async () => {
   const flow = (segments, partial = false) => ({
     getStatus: async () => ({ hasKey: true }),
@@ -480,6 +593,47 @@ test('traffic counts only roads inside a radius area and reports missing tiles',
   const partial = await call(flow(across, true), circle);
   assert.equal(partial.data.partial, true);
   assert.match(partial.summary, /Some map tiles did not load/);
+});
+
+test('traffic says when the proxy served cached tiles, and how old the oldest is', async () => {
+  const road = [
+    {
+      coords: [
+        [-0.2, 0],
+        [0.2, 0],
+      ],
+      trafficLevel: 0.9,
+    },
+  ];
+  const call = (detail) =>
+    composeCatalog({
+      tools: coreTools,
+      services: {
+        traffic: {
+          getStatus: async () => ({ hasKey: true }),
+          fetchFlowDetail: async () => ({
+            segments: road,
+            partial: false,
+            ...detail,
+          }),
+        },
+      },
+    }).call('get_traffic_flow', { area: { lat: 0, lon: 0, radius_km: 10 } });
+  const oldest = Date.UTC(2026, 9, 16, 8);
+  const stale = await call({ stale: true, oldestTileAt: oldest });
+  assert.equal(stale.data.stale, true);
+  assert.equal(stale.data.oldest_tile_at, '2026-10-16T08:00:00.000Z');
+  assert.match(
+    stale.summary,
+    /cached copies, the oldest from 2026-10-16T08:00:00\.000Z, so traffic may be out of date\./,
+  );
+  const live = await call({ stale: false, oldestTileAt: oldest });
+  assert.equal(live.data.stale, false);
+  assert.doesNotMatch(live.summary, /out of date/);
+  // A source that can't tell (no freshness fields) isn't reported as stale.
+  const unknown = await call({});
+  assert.equal(unknown.data.stale, false);
+  assert.equal(unknown.data.oldest_tile_at, null);
 });
 
 test('a whole-world bike-share search names every system it skipped', async () => {

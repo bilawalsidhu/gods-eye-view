@@ -117,6 +117,23 @@ export const FLOW_BUCKET_COLORS = {
   jam: Cesium.Color.fromCssColorString('#e05252').withAlpha(0.9),
 };
 
+// ─── Flow road lines (`lines` row toggle, live mode only) ────────────────
+/**
+ * @const {number} Max flow-colored road lines per render. Jam first, then
+ * slow, then free-flow, longest first within a bucket, so a dense city keeps
+ * its congestion when the cap trims the free roads.
+ */
+
+export const FLOW_LINE_CAP = 1500;
+
+/** @const {number} Px — flow road-line width (every bucket). */
+
+export const FLOW_LINE_WIDTH = 4;
+
+/** @const {number} Flow road-line opacity: the bucket colors, steady. */
+
+export const FLOW_LINE_ALPHA = 0.8;
+
 // ─── Jam-viz prototype (live mode only — see 2026-07-21 design doc) ────────
 /** @const {number} Max congestion heat-line polylines per render (jam first). */
 
@@ -175,13 +192,3 @@ export const STYLED_MIN_BASE_PX = 5;
 /** @const {number} Maximum tile cache entries before LRU eviction */
 
 export const TILE_CACHE_MAX_ENTRIES = 64;
-
-/**
- * Milliseconds the first dot paint will wait for flow data. Cached flow
- * settles within this window (decode cache, 120 s TTL) and renders fully
- * colored; a cold tile fetch loses the race, dots paint immediately in
- * white, and recolorDotsInPlace applies the colors when flow arrives —
- * field-test round 1's "takes forever to load" was the sequential wait.
- */
-
-export const FLOW_RENDER_RACE_MS = 250;
