@@ -336,3 +336,102 @@ test('injected thumbnail acquisition owns requests while the loader releases obj
   loader.destroy();
   assert.deepEqual(revoked, ['blob:1']);
 });
+
+test('retain aborts stale acquisition while allowing the current intent to start', async () => {
+  const { loader, fetch } = fixture({ maxInFlight: 1 });
+  const stale = candidate('S30', '2026-09-10');
+  const current = candidate('S30', '2026-09-11');
+
+  loader.request(stale, BOX, 0);
+  loader.request(current, BOX, 1);
+  assert.equal(fetch.calls.length, 1);
+  assert.match(fetch.calls[0].url, /TIME=2026-09-10/);
+
+  loader.retain([current.key]);
+  assert.equal(fetch.calls[0].signal.aborted, true);
+  await settle();
+
+  assert.equal(
+    fetch.calls.length,
+    2,
+    'current intent starts after stale abort',
+  );
+  assert.match(fetch.calls[1].url, /TIME=2026-09-11/);
+  assert.deepEqual(loader.refinementStats(), {
+    supersededQueued: 0,
+    supersededInFlight: 1,
+  });
+  assert.equal(loader.get(stale.key).status, 'unknown');
+});
+
+test('repeat retain counts an aborted known-present re-fetch once', async () => {
+  const { loader, fetch } = fixture({ maxInFlight: 1, maxDecoded: 1 });
+  const stale = candidate('S30', '2026-09-10');
+  const newer = candidate('S30', '2026-09-11');
+
+  loader.request(stale, BOX, 0);
+  fetch.respond(0);
+  await settle();
+  const acquisitionTime = loader.get(stale.key).acquisitionTime;
+
+  loader.request(newer, BOX, 0);
+  fetch.respond(1);
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
+  assert.equal(loader.get(stale.key).objectUrl, null);
+
+  loader.request(stale, BOX, 0);
+  assert.equal(fetch.calls.length, 3, 'an evicted known day re-fetches');
+  loader.retain([]);
+  loader.retain([]);
+  assert.equal(fetch.calls[2].signal.aborted, true);
+  assert.deepEqual(loader.refinementStats(), {
+    supersededQueued: 0,
+    supersededInFlight: 1,
+  });
+
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
+  assert.equal(loader.get(stale.key).acquisitionTime, acquisitionTime);
+
+  loader.request(stale, BOX, 0);
+  assert.equal(fetch.calls.length, 4, 'a cancelled re-fetch is retryable');
+  fetch.respond(3);
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
+});
+
+for (const cancelRenewed of [false, true]) {
+  test(`a known-present day requested during abort settlement ${cancelRenewed ? 'can be cancelled again' : 'restarts without another intent change'}`, async (t) => {
+    const { loader, fetch } = fixture({ maxInFlight: 1, maxDecoded: 1 });
+    t.after(() => loader.destroy());
+    const day = candidate('S30', '2026-09-10');
+    const other = candidate('S30', '2026-09-11');
+    loader.request(day, BOX);
+    fetch.respond(0);
+    await settle();
+    const acquisitionTime = loader.get(day.key).acquisitionTime;
+    loader.request(other, BOX);
+    fetch.respond(1);
+    await settle();
+    assert.equal(loader.get(day.key).objectUrl, null);
+
+    loader.request(day, BOX);
+    loader.retain([]);
+    assert.equal(fetch.calls[2].signal.aborted, true);
+    // Deliberately do not await: the old run still owns its in-flight slot.
+    loader.request(day, BOX);
+    loader.retain(cancelRenewed ? [] : [day.key]);
+    assert.equal(fetch.calls.length, 3, 'renewal respects the concurrency cap');
+    await settle();
+    assert.equal(loader.get(day.key).acquisitionTime, acquisitionTime);
+    assert.equal(fetch.calls.length, cancelRenewed ? 3 : 4);
+    if (!cancelRenewed) {
+      assert.equal(fetch.calls[3].signal.aborted, false);
+      fetch.respond(3);
+      await settle();
+      assert.ok(loader.get(day.key).objectUrl);
+      assert.equal(loader.get(day.key).loading, false);
+    }
+  });
+}
