@@ -3330,5 +3330,9 @@
   "Maximum event age: {days}d; undated markers are kept": "Максимальный возраст события: {days} дн.; метки без даты сохранены",
   "event age filter|All": "Все",
   "Event age": "Возраст события",
-  "Event age: {days}d · undated kept": "Возраст события: {days} дн. · метки без даты сохранены"
+  "Event age: {days}d · undated kept": "Возраст события: {days} дн. · метки без даты сохранены",
+  "Close camera preview": "Закрыть просмотр камеры",
+  "Refresh map still": "Обновить кадр на карте",
+  "The map still uses a separate request and may show a different moment.": "Кадр на карте запрашивается отдельно и может показывать другой момент.",
+  "Video plays from Québec 511, which sees your IP address.": "Видео воспроизводится с Québec 511, который видит ваш IP-адрес."
 }
