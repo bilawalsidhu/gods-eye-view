@@ -57,6 +57,8 @@ export const CESIUM_CHECKS = new Set([
   'query.projectMany',
   'query.rays',
   'query.withoutCapability',
+  'quality',
+  'quality.signals',
   'renderer.listeners',
   'renderer.whenSettled',
 ]);

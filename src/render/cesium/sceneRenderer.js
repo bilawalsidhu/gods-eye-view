@@ -281,6 +281,7 @@ export async function createCesiumSceneRenderer({
     query: ports.query,
     input: input.port,
     effects: ports.effects,
+    quality: ports.quality,
     capture: ports.capture,
     credits: ports.credits,
     whenSettled,
