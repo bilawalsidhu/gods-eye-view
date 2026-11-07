@@ -30,59 +30,6 @@ const globeEngine = (file) => /^src\/globe\/(?:cesium|navara)\//.test(file);
 const cesiumPackage = /^(?:cesium(?:\/|$)|@cesium\/)/;
 // Navara renders through three.js and its postprocessing peer.
 const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
-// Layers built on layer renderers keep each engine in their renderers:
-// cesium only in render/cesium*.js, three and Navara only in
-// render/navara*.js. The list grows with each layer moved onto renderers.
-const RENDERED_LAYER_DIRS = [
-  'src/layers/streetLevel/',
-  'src/layers/traffic/',
-  'src/layers/directions/',
-  'src/layers/infrastructure/',
-  'src/layers/installations/',
-  'src/layers/awareness/',
-  'src/layers/droneAirspace/',
-  'src/layers/cyclones/',
-  'src/layers/ghostMaps/',
-  'src/layers/submarineCables/',
-  'src/layers/alpr/',
-  'src/layers/cctv/',
-  'src/layers/transit/',
-  'src/layers/airQuality/',
-  'src/layers/gnss/',
-  'src/layers/perimeters/',
-  'src/layers/radio/',
-  'src/layers/bikeshare/',
-  'src/layers/earthquakes/',
-  'src/layers/firms/',
-  'src/layers/flights/',
-  'src/layers/military/',
-  'src/layers/localAdsb/',
-  'src/layers/vessels/',
-  'src/layers/satellites/',
-  'src/layers/launches/',
-  'src/layers/aircraft/',
-  'src/layers/shared/',
-];
-const W1_SHARED_FILES = new Set(
-  [
-    'trackedCamera',
-    'trailRenderer',
-    'contactTrailRenderer',
-    'focusDeemphasis',
-    'spriteOrder',
-    'iconOrientation',
-    'modelVisualAnchor',
-    'trackingClickGesture',
-  ].map((name) => `src/data/${name}.js`),
-);
-const renderedLayer = (file) =>
-  W1_SHARED_FILES.has(file) ||
-  file.startsWith('src/data/render/') ||
-  file === 'src/celestialRing.js' ||
-  file.startsWith('src/celestialRing/') ||
-  RENDERED_LAYER_DIRS.some((dir) => file.startsWith(dir));
-const cesiumLayerRenderer = (file) =>
-  /\/render\/cesium(?:[^/]*|\/[^/]+)\.js$/.test(file);
 // Navara renderers outside a layer's render/ directory: like those, they
 // reach the app only through the Navara mode's import().
 const NAVARA_SCENE_RENDERERS = new Set();
@@ -144,6 +91,25 @@ export function checkImportDirections(root) {
     (file) =>
       code.test(file) && !tests(file) && existsSync(path.join(root, file)),
   );
+  const boundaryFile = path.join(root, 'scripts/package-boundaries.json');
+  const { engineImportExceptions = [] } = existsSync(boundaryFile)
+    ? JSON.parse(readFileSync(boundaryFile, 'utf8'))
+    : {};
+  const exceptionKeys = new Set();
+  for (const item of engineImportExceptions) {
+    const key = `${item.file}:${item.package}`;
+    if (
+      typeof item.file !== 'string' ||
+      !files.includes(item.file) ||
+      !(cesiumPackage.test(item.package) || navaraPackage.test(item.package)) ||
+      typeof item.reason !== 'string' ||
+      !item.reason.trim() ||
+      exceptionKeys.has(key)
+    )
+      throw new Error(`Invalid engine import exception: ${key}`);
+    exceptionKeys.add(key);
+  }
+  const usedExceptions = new Set();
   const errors = new Set();
   const modules = new Map();
   const relative = (file) =>
@@ -185,17 +151,18 @@ export function checkImportDirections(root) {
         target = path.resolve(root, exported);
       } else {
         record.external.push(specifier);
-        if (renderedLayer(file) && !tests(file)) {
-          if (cesiumPackage.test(specifier) && !cesiumLayerRenderer(file))
-            report(
-              file,
-              `cesium only in the layer's render/cesium*.js: ${specifier}`,
-            );
-          if (navaraPackage.test(specifier) && !navaraLayerRenderer(file))
-            report(
-              file,
-              `three and Navara only in the layer's render/navara*.js: ${specifier}`,
-            );
+        const owner = cesiumPackage.test(specifier)
+          ? 'cesium'
+          : navaraPackage.test(specifier)
+            ? 'navara'
+            : null;
+        if (owner && !file.startsWith(`src/globe/${owner}/`)) {
+          const exception = engineImportExceptions.find(
+            (item) => item.file === file && item.package === specifier,
+          );
+          if (exception) usedExceptions.add(exception);
+          else
+            report(file, `${specifier} imports belong in src/globe/${owner}/`);
         }
         if (
           file.startsWith('src/') &&
@@ -395,8 +362,17 @@ export function checkImportDirections(root) {
   }
   if (existsSync(path.join(root, 'src/voice/sessionCommands.js')))
     voice('src/voice/sessionCommands.js');
+  for (const item of engineImportExceptions) {
+    if (!usedExceptions.has(item))
+      report(item.file, `Unused engine import exception: ${item.package}`);
+  }
   if (errors.size) throw new Error([...errors].join('\n'));
-  return { modules: files.length, portableEntries: roots.size };
+  return {
+    modules: files.length,
+    portableEntries: roots.size,
+    engineImportExceptionCount: usedExceptions.size,
+    engineImportExceptions: [...usedExceptions],
+  };
 }
 
 if (

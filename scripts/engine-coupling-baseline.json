@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 14,
-    "navaraLayerRendererLines": 314,
-    "cesiumImportFiles": 5,
-    "viewerLines": 933,
+    "cesiumLayerRendererLines": 0,
+    "navaraLayerRendererLines": 189,
+    "cesiumImportFiles": 3,
+    "viewerLines": 910,
     "navaraKindChecks": 2,
     "engineSniffCalls": 0,
-    "engineExtensionReads": 4,
+    "engineExtensionReads": 3,
     "groundEffectPasses": 1,
     "cesiumSdkLoads": 3,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 36
+    "engineNameLines": 33
   },
-  "measuredAt": "Separate scene attachment and page switching; give Director the scene"
+  "measuredAt": "Enforce SDK ownership, relocate annotation and wind backends, and rehearse every shared display"
 }

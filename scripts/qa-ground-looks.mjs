@@ -151,7 +151,7 @@ async function draw(origin, variant, out, engineKind) {
             served.match(/from\s+["']([^"']*cesium[^"']*)["']/)[1]
           );
           const { FlowMaterialProperty, ensureFlowFabricRegistered } =
-            await import('/src/annotations/worldAnnotationRenderer.js');
+            await import('/src/globe/cesium/annotations/worldAnnotationRenderer.js');
           const { viewer } = engine.extensions.cesium;
           const color = new Cesium.Color(...jamRgba.slice(0, 3), 0.55);
           const jam = viewer.scene.groundPrimitives.add(

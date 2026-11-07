@@ -1,4 +1,21 @@
 {
+  "engineImportExceptions": [
+    {
+      "file": "src/data/bhoteKoshiEmbeddedMedia.js",
+      "package": "cesium",
+      "reason": "Authored story media still uses Cesium positions and property records."
+    },
+    {
+      "file": "src/data/bhoteKoshiEvent.js",
+      "package": "cesium",
+      "reason": "Authored event timing and geometry still build Cesium property records for the shared story display."
+    },
+    {
+      "file": "src/data/bhoteKoshiLocator.js",
+      "package": "cesium",
+      "reason": "Locator model still builds Cesium property records for the shared story display."
+    }
+  ],
   "infrastructure": {
     "exports": [
       "./infrastructure",
@@ -2416,9 +2433,9 @@
       "src/annotations/hybridAnnotationRenderer.js",
       "src/annotations/index.js",
       "src/annotations/resolver.js",
-      "src/annotations/screenAnnotationRenderer.js",
+      "src/globe/cesium/annotations/screenAnnotationRenderer.js",
       "src/annotations/screenScene.js",
-      "src/annotations/worldAnnotationRenderer.js",
+      "src/globe/cesium/annotations/worldAnnotationRenderer.js",
       "src/app/catalog.js",
       "src/app/constructCatalog.js",
       "src/app/sourceComposition.js",
@@ -3569,7 +3586,7 @@
       "src/layers/recentImagery/render/display.js",
       "src/layers/weather/render/display.js",
       "src/layers/wind/render/display.js",
-      "src/layers/wind/render/navaraFlow.js",
+      "src/globe/navara/windFlow.js",
       "src/layers/bhoteKoshi/render/display.js",
       "src/globe/navara/imagery/pass.js",
       "src/globe/navara/imagery/index.js",
@@ -3577,7 +3594,7 @@
       "src/globe/cesium/imagery.js",
       "src/globe/cesium/imageryShell.js",
       "src/globe/navara/ground/corridors.js",
-      "src/layers/wind/render/cesiumFlow.js",
+      "src/globe/cesium/windFlow.js",
       "src/globe/cesium/postStages.js",
       "src/data/geoImportRecords.js",
       "src/data/geoImportKml.js",
@@ -3984,7 +4001,7 @@
       "src/layers/vessels/recordPolicy.js",
       "src/layers/vessels/snapshotRenderer.js",
       "src/data/inputOwnership.js",
-      "src/annotations/worldAnnotationRenderer.js",
+      "src/globe/cesium/annotations/worldAnnotationRenderer.js",
       "src/cameraGroundGuard.js",
       "src/cameraVerbs.js",
       "src/globeInView.js",
@@ -4326,14 +4343,14 @@
       "src/layers/recentImagery/render/display.js",
       "src/layers/weather/render/display.js",
       "src/layers/wind/render/display.js",
-      "src/layers/wind/render/navaraFlow.js",
+      "src/globe/navara/windFlow.js",
       "src/layers/bhoteKoshi/render/display.js",
       "src/layers/bhoteKoshi/render/story.js",
       "src/globe/navara/ground/surface.js",
       "src/globe/navara/windFlowMesh.js",
       "src/globe/navara/ground/effect.js",
       "src/globe/navara/ground/pulse.js",
-      "src/layers/wind/render/cesiumFlow.js",
+      "src/globe/cesium/windFlow.js",
       "src/globe/cesium/postStages.js",
       "src/globe/cesium/sonar.js",
       "src/globe/cesium/sonarCommands.js",

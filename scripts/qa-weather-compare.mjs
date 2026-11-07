@@ -349,13 +349,19 @@ async function shootScene(browser, origin, kind, scene) {
         let used;
         if (display) {
           const navaraFlow = native
-            ? (await import('/src/layers/wind/render/navaraFlow.js'))
-                .createWindNavaraFlow
+            ? (
+                (await tryImport('/src/globe/navara/windFlow.js')) ??
+                (await import('/src/layers/wind/render/navaraFlow.js'))
+              ).createWindNavaraFlow
+            : null;
+          const createWindFlowMesh = native
+            ? (await import('/src/globe/navara/windFlowMesh.js'))
+                .createWindFlowMesh
             : null;
           renderer = display.createWindDisplay(engine, {
             flow: viewer
               ? () => cesiumFlow({ field: false })
-              : (e) => navaraFlow(e, native),
+              : (e) => navaraFlow(e, native, createWindFlowMesh),
           });
           used = 'display';
         } else if (viewer) {

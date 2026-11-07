@@ -15,7 +15,7 @@
 //   default); the entry's `display` is its loader. `backends` is the
 //   display's engine-specific option, keyed by engine kind: an import()
 //   loader of `{ option: value }` merged into the display's options on that
-//   engine (Global Context's pulses on Navara).
+//   engine (wind streamlines).
 // - `drawsItself(needs)`: no renderer; the layer draws itself through the
 //   contract primitives in `needs` (Wildlife Sightings).
 // - `perEngine({ [kind]: loader | DRAWS_ITSELF })`: a layer with no display
@@ -122,12 +122,12 @@ const navaraNative = (engine) => engine.extensions.navara;
 // Wind streamlines retain their engine backends.
 const cesiumWindFlow = async () => {
   const { createWindCesiumFlow } =
-    await import('../../layers/wind/render/cesiumFlow.js');
+    await import('../../globe/cesium/windFlow.js');
   return { flow: createWindCesiumFlow };
 };
 const navaraWindFlow = async () => {
   const [{ createWindNavaraFlow }, { createWindFlowMesh }] = await Promise.all([
-    import('../../layers/wind/render/navaraFlow.js'),
+    import('../../globe/navara/windFlow.js'),
     import('../../globe/navara/windFlowMesh.js'),
   ]);
   return {
@@ -194,8 +194,8 @@ export const LAYER_MANIFEST = Object.freeze({
   'weather-satellite': display('createWeatherDisplay', ['imagery']),
   'weather-lightning': display('createWeatherDisplay', ['imagery']),
   'weather-cyclones': display('createCyclonesDisplay', ['movers', 'ground']),
-  // The open map overlays drape themselves: Cesium imagery on the viewer,
-  // engine.maps.addOverlay on Navara (src/data/osmOverlays.js).
+  // The open map overlays draw through imagery, or the optional native
+  // maps.addOverlay path (src/data/osmOverlays.js).
   'sea-marks': perEngine({ cesium: DRAWS_ITSELF, navara: DRAWS_ITSELF }),
   'ski-pistes': perEngine({ cesium: DRAWS_ITSELF, navara: DRAWS_ITSELF }),
   'local-datacenters': display('createInfrastructureDisplay', [

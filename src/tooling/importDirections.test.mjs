@@ -53,7 +53,7 @@ test('portable sources can share records, and standalone can assemble rendering'
   write('src/layers/demo/source.js', "export { read } from './records.js';");
   write('src/layers/demo/records.js', 'export const read = (value) => value;');
   write('src/standalone/catalog.js', "import '../layers/demo/index.js';");
-  write('src/layers/demo/index.js', "import * as Cesium from 'cesium';");
+  write('src/layers/demo/index.js');
   assert.equal(checkImportDirections(root).modules, 5);
 });
 
@@ -83,34 +83,34 @@ for (const [name, files, pattern] of [
     /reaches browser globals/,
   ],
   [
-    'W1 shared focusDeemphasis keeps native imports in render',
+    'W1 shared focusDeemphasis keeps SDK imports in the engine',
     { 'src/data/focusDeemphasis.js': "import 'cesium';" },
-    /cesium only in the layer's render/,
+    /cesium imports belong in src\/globe\/cesium\//,
   ],
   [
-    'W1 shared trailRenderer keeps native imports in render',
+    'W1 shared trailRenderer keeps SDK imports in the engine',
     { 'src/data/trailRenderer.js': "import 'cesium';" },
-    /cesium only in the layer's render/,
+    /cesium imports belong in src\/globe\/cesium\//,
   ],
   [
-    'W1 shared contactTrailRenderer keeps native imports in render',
+    'W1 shared contactTrailRenderer keeps SDK imports in the engine',
     { 'src/data/contactTrailRenderer.js': "import 'cesium';" },
-    /cesium only in the layer's render/,
+    /cesium imports belong in src\/globe\/cesium\//,
   ],
   [
-    'W1 shared iconOrientation keeps native imports in render',
+    'W1 shared iconOrientation keeps SDK imports in the engine',
     { 'src/data/iconOrientation.js': "import 'cesium';" },
-    /cesium only in the layer's render/,
+    /cesium imports belong in src\/globe\/cesium\//,
   ],
   [
-    'W1 shared modelVisualAnchor keeps native imports in render',
+    'W1 shared modelVisualAnchor keeps SDK imports in the engine',
     { 'src/data/modelVisualAnchor.js': "import 'cesium';" },
-    /cesium only in the layer's render/,
+    /cesium imports belong in src\/globe\/cesium\//,
   ],
   [
-    'W1 shared trackingClickGesture keeps native imports in render',
+    'W1 shared trackingClickGesture keeps SDK imports in the engine',
     { 'src/data/trackingClickGesture.js': "import 'cesium';" },
-    /cesium only in the layer's render/,
+    /cesium imports belong in src\/globe\/cesium\//,
   ],
   [
     'geo module imports cesium',
@@ -326,41 +326,123 @@ test('the app reaches the Navara engine only through a dynamic import', (t) => {
   );
 });
 
-test('layers moved onto renderers keep each engine in its render file', (t) => {
-  const { root, write } = fixture(t);
-  write('src/layers/flights/rendering.js', "import './render/cesium.js';");
-  write('src/layers/flights/render/cesium.js', "import 'cesium';");
-  write(
-    'src/layers/flights/render/navara.js',
-    "import 'three'; import '@navaramap/three';",
-  );
-  write('src/layers/aircraft/render/cesium.js', "import 'cesium';");
-  write('src/layers/bikeshare/render/cesium/lifecycle.js', "import 'cesium';");
-  write('src/layers/flights/render/cesium.test.mjs', "import 'cesium';");
-  write(
-    'src/app/navaraMode.js',
-    "export const load = () => import('../layers/flights/render/navara.js');",
-  );
-  // A layer not moved yet still imports cesium anywhere (until its *a task).
-  write('src/layers/wind/rendering.js', "import 'cesium';");
-  assert.doesNotThrow(() => checkImportDirections(root));
+for (const specifier of [
+  'cesium',
+  'cesium/Source/Cesium.js',
+  '@cesium/engine',
+  'three',
+  'three/addons/controls.js',
+  'postprocessing',
+  '@navaramap/three',
+]) {
+  for (const statement of [
+    `import '${specifier}';`,
+    `export * from '${specifier}';`,
+    `const load = () => import('${specifier}');`,
+  ]) {
+    test(`SDK ownership rejects ${statement} outside an engine`, (t) => {
+      const { root, write } = fixture(t);
+      write('src/layers/new/render/display.js', statement);
+      assert.throws(
+        () => checkImportDirections(root),
+        /imports belong in src\/globe\//,
+      );
+    });
+  }
+}
 
-  write('src/layers/flights/tracking.js', "import 'cesium';");
-  assert.throws(
-    () => checkImportDirections(root),
-    /src\/layers\/flights\/tracking\.js: cesium only in the layer's render\/cesium\*\.js: cesium/,
+test('legacy renderer names grant no SDK import exemption', (t) => {
+  const { root, write } = fixture(t);
+  write('src/layers/flights/render/cesium.js', "import 'cesium';");
+  write('src/layers/flights/render/navara.js', "import 'three';");
+  assert.throws(() => checkImportDirections(root), /cesium imports belong/);
+  write('src/layers/flights/render/cesium.js');
+  assert.throws(() => checkImportDirections(root), /three imports belong/);
+});
+
+test('remaining Navara layer helpers still load through the manifest or mode', (t) => {
+  const { root, write } = fixture(t);
+  write('src/layers/shared/render/navaraPolygons.js');
+  write(
+    'src/app/layers/renderers.js',
+    "export const load = () => import('../../layers/shared/render/navaraPolygons.js');",
   );
-  write('src/layers/flights/tracking.js', '');
-  write('src/layers/aircraft/render/cesium.js', "import 'three';");
-  assert.throws(
-    () => checkImportDirections(root),
-    /src\/layers\/aircraft\/render\/cesium\.js: three and Navara only in the layer's render\/navara\*\.js: three/,
+  assert.doesNotThrow(() => checkImportDirections(root));
+  write(
+    'src/app/data.js',
+    "import '../layers/shared/render/navaraPolygons.js';",
   );
-  write('src/layers/aircraft/render/cesium.js', '');
-  write('src/app/data.js', "import '../layers/flights/render/navara.js';");
   assert.throws(
     () => checkImportDirections(root),
-    /src\/app\/data\.js: A Navara layer renderer loads only through the Navara mode's dynamic import\(\): src\/layers\/flights\/render\/navara\.js/,
+    /A Navara layer renderer loads only through/,
+  );
+});
+
+test('engine import exceptions are exact, justified and measured', (t) => {
+  const { root, write } = fixture(t);
+  const item = {
+    file: 'src/data/story.js',
+    package: 'cesium',
+    reason: 'Authored story records still use SDK properties.',
+  };
+  const allow = (items) =>
+    write(
+      'scripts/package-boundaries.json',
+      JSON.stringify({ engineImportExceptions: items }),
+    );
+  write(item.file, "import 'cesium';");
+  allow([item]);
+  assert.deepEqual(checkImportDirections(root).engineImportExceptions, [item]);
+  write('src/data/other.js', "import 'cesium';");
+  assert.throws(
+    () => checkImportDirections(root),
+    /other.js: cesium imports belong/,
+  );
+  write('src/data/other.js');
+  write(item.file, "import 'three';");
+  assert.throws(() => checkImportDirections(root), /three imports belong/);
+  write(item.file);
+  assert.throws(
+    () => checkImportDirections(root),
+    /Unused engine import exception/,
+  );
+  write(item.file, "import 'cesium';");
+  allow([{ ...item, reason: '' }]);
+  assert.throws(
+    () => checkImportDirections(root),
+    /Invalid engine import exception/,
+  );
+  allow([item, item]);
+  assert.throws(
+    () => checkImportDirections(root),
+    /Invalid engine import exception/,
+  );
+  allow([{ ...item, file: 'src/missing.js' }]);
+  assert.throws(
+    () => checkImportDirections(root),
+    /Invalid engine import exception/,
+  );
+});
+
+test('an exception cannot bypass the contract or engine graph rules', (t) => {
+  const { root, write } = fixture(t);
+  write('src/data/helper.js', "import 'cesium';");
+  write(
+    'scripts/package-boundaries.json',
+    JSON.stringify({
+      engineImportExceptions: [
+        {
+          file: 'src/data/helper.js',
+          package: 'cesium',
+          reason: 'Legacy model.',
+        },
+      ],
+    }),
+  );
+  write('src/globe/contract.js', "import '../data/helper.js';");
+  assert.throws(
+    () => checkImportDirections(root),
+    /globe contract reaches engine dependency/,
   );
 });
 
@@ -384,7 +466,7 @@ test('globe engines use their own dependencies, and globe tests may import any e
   );
   write(
     'src/globe/navara/engine.js',
-    "import 'three'; import '@navaramap/three'; import '../contract.js';",
+    "import 'three'; import 'postprocessing'; import '@navaramap/three'; import '../contract.js';",
   );
   assert.doesNotThrow(() => checkImportDirections(root));
 });

@@ -260,25 +260,34 @@ one application, and only the globe-bound parts move to the next engine.
   ground passes, Cesium SDK loads and `ScreenSpaceEventHandler` users.
   `scripts/engineCoupling.test.mjs` (in `npm test`) fails when a count grows
   past `scripts/engine-coupling-baseline.json`.
+- **SDK boundary and display rehearsal.** The import-direction gate permits
+  Cesium packages only in `src/globe/cesium/` and three, postprocessing and
+  Navara packages only in `src/globe/navara/`. The measured temporary exceptions
+  in `scripts/package-boundaries.json` are the three Bhote Koshi model modules:
+  event, locator and embedded media still build Cesium property records. The
+  gate rejects unused exceptions. `src/app/layers/displayRehearsal.test.mjs`
+  loads all 35 display entries from the manifest on a fake engine with an
+  unknown kind and no native extensions, draws fixtures, hides or releases them,
+  and checks primitives, subscriptions and service records before engine
+  destruction. The three self-drawing entries are named skips. This is a
+  display-level rehearsal; application kind registration, scene-service
+  singletons, queue consolidation and native debug access remain work.
 - **The session owns the state.** Catalog, layer models, sources, selection,
   camera mode and URL state outlive a switch. A layer that is a session model
-  gets `attachRenderer(engine)` / `detachRenderer()` instead of being rebuilt,
+  gets `attachRenderer(viewer, { engine })` / `detachRenderer()` instead of being rebuilt,
   so its data is not fetched again. The outgoing globe is parked
   (`src/standalone/rendererCache.js`), so switching back within three minutes
   is warm (60-90 ms). After that the parked globe is disposed and its WebGL
   context lost, which frees about 1.1 GiB for a parked Navara; switching back
   then builds it cold (1.5-2 s). `?parkedMs=` shortens the delay for QA
   (`scripts/qa-strict-parked-release.mjs`).
-- **Renderers per engine.** Each layer keeps its model and display policy in
-  engine-neutral files and draws through `render/cesium*.js` or
-  `render/navara*.js`, or through one `render/display.js` that runs on every
-  engine over the globe contract: the aircraft family (flights, military and
-  local ADS-B) through `src/layers/aircraft/render/display.js`, and AIS
-  vessels, satellites, Space Missions, ALPR, bikeshare, OSM Places,
-  Wildlife Sightings, radio, transit, CCTV, earthquakes, air quality, GNSS
-  Integrity, fire perimeters, Prohibited & Restricted Airspace, Active Fires,
-  S2 GhostMaps, cyclone advisories, submarine cables, Mapped Installations,
-  Global Context, datacenters and dams through their own `render/display.js`;
+- **Shared layer displays.** Every manifest display draws through the globe
+  contract from `render/display.js`; the aircraft family shares its display
+  implementation. There are 35 display entries (including the three weather
+  products and two infrastructure datasets). Wildlife Sightings draws through
+  the contract inside its layer; Sea Marks and Ski Pistes use their overlay
+  controller. Wind streamlines retain backend adapters in
+  `src/globe/cesium/windFlow.js` and `src/globe/navara/windFlow.js`;
   the fills of the ground layers, installation outlines and the selection fill
   are `engine.ground` sets. Global Context's range pulses use
   `engine.ground.createPulseField`: the same fronts, halos, inward bands,
@@ -295,7 +304,8 @@ one application, and only the globe-bound parts move to the next engine.
   backend per engine. Data packs share `src/scenes/dataPacks/display.js`:
   movers, lines and world meshes retain authored heights, polygon holes,
   images and picking across scene detach and reattach. Annotation drapes
-  remain on their existing renderers pending bounded classification support.
+  remain on their existing renderers pending bounded classification support;
+  the Cesium implementations live in `src/globe/cesium/annotations/`.
 - **One layer manifest.** `LAYER_MANIFEST` in `src/app/layers/renderers.js`
   says how each directory layer draws: its display with the contract
   primitives it needs (and an engine-specific backend option keyed by engine

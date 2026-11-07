@@ -31,7 +31,12 @@ function cesiumCollection(viewer, id) {
  */
 export function createDisplayHarness(
   makeEngine,
-  { context = contextStore, overlayHost = null, warmFloors = null } = {},
+  {
+    context = contextStore,
+    overlayHost = null,
+    warmFloors = null,
+    displayFactory = createInstallationsDisplay,
+  } = {},
 ) {
   // The context store lives on the window.
   const ownWindow = globalThis.window === undefined;
@@ -90,7 +95,7 @@ export function createDisplayHarness(
     clearUnavailableRetry() {},
   };
   parts.ingestion = { setInstallationStatus() {} };
-  Object.assign(parts, createInstallationsDisplay(h.engine, ctx));
+  Object.assign(parts, displayFactory(h.engine, ctx));
   const methods = parts.lifecycle.methods;
   return {
     ...h,

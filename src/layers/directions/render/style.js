@@ -11,7 +11,7 @@ const rgba = (css, alpha) => {
   return [red, green, blue, alpha];
 };
 
-// The route flow material (src/annotations/worldAnnotationRenderer.js): the
+// The route flow material (src/globe/cesium/annotations/worldAnnotationRenderer.js): the
 // route colour at 0.95, 64 dash cells along the route, each lit for its
 // first 46 % (brightened by 0.9 of its colour) and at 18 % alpha between,
 // flowing toward the destination at 0.55 cells a second.

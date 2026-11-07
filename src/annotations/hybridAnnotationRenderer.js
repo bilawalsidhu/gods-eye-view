@@ -1,6 +1,6 @@
 import { recordWorkSlice } from '../sources/phaseTiming.js';
-import { createWorldAnnotationRenderer } from './worldAnnotationRenderer.js';
-import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
+import { createWorldAnnotationRenderer } from '../globe/cesium/annotations/worldAnnotationRenderer.js';
+import { createScreenAnnotationRenderer } from '../globe/cesium/annotations/screenAnnotationRenderer.js';
 
 /**
  * Hybrid annotation renderer (Direction C — the recommended production blend).

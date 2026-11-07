@@ -11,7 +11,9 @@ export async function checkPackageBoundaries(root) {
   const readJson = async (name) =>
     JSON.parse(await readFile(path.join(root, name), 'utf8'));
   const pkg = await readJson('package.json');
-  const groups = await readJson('scripts/package-boundaries.json');
+  const { engineImportExceptions, ...groups } = await readJson(
+    'scripts/package-boundaries.json',
+  );
   const declaredExports = Object.keys(pkg.exports || {}).sort();
   const classifiedExports = Object.values(groups)
     .flatMap((group) => group.exports)

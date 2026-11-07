@@ -5,7 +5,7 @@
 // carry the wind near the ground). The streamlines are the engine's own,
 // behind one seam: the `flow` backend the application passes in for each
 // engine (Cesium's wind renderer, rendering.js, on the page's SDK;
-// Navara's flow mesh, render/navaraFlow.js). Without one the field draws
+// Navara's flow mesh, src/globe/navara/windFlow.js). Without one the field draws
 // alone.
 
 import { createFieldRaster, fieldUnavailableText } from '../fields.js';

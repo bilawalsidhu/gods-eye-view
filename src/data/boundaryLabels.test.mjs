@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from '../annotations/resolver.js';
-import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
+import { createWorldAnnotationRenderer } from '../globe/cesium/annotations/worldAnnotationRenderer.js';
 import { cameraOnlyEngine } from '../testSupport/viewerEngine.mjs';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -25,12 +25,14 @@ const DATA_MODULES = [
 /** Modules that use Cesium for outlines but must not draw text with it. */
 const CESIUM_MODULES = [
   '../annotations/resolver.js',
-  '../annotations/worldAnnotationRenderer.js',
+  '../globe/cesium/annotations/worldAnnotationRenderer.js',
   '../annotations/hybridAnnotationRenderer.js',
 ];
 
 /** The DOM overlay: callout elements, never Cesium label primitives. */
-const OVERLAY_MODULES = ['../annotations/screenAnnotationRenderer.js'];
+const OVERLAY_MODULES = [
+  '../globe/cesium/annotations/screenAnnotationRenderer.js',
+];
 
 const LABEL_PRIMITIVES = [
   /\bLabelCollection\b/,

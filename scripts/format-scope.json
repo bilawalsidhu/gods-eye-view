@@ -1653,7 +1653,7 @@
   "src/layers/shared/render/navaraGroundOrder.test.mjs",
   "src/globe/navara/ground/corridors.js",
   "scripts/qa-ground-looks.mjs",
-  "src/layers/wind/render/cesiumFlow.js",
+  "src/globe/cesium/windFlow.js",
   "src/testSupport/imageryDisplayEngines.mjs",
   "src/data/geoImportDisplay.js",
   "src/data/geoImportDisplay.test.mjs",
@@ -1698,5 +1698,9 @@
   "src/app/layerSession.js",
   "src/standalone/sceneSwitcher.js",
   "src/app/layerSession.test.mjs",
-  "src/standalone/sceneSwitcher.test.mjs"
+  "src/standalone/sceneSwitcher.test.mjs",
+  "src/app/layers/displayRehearsal.test.mjs",
+  "src/globe/cesium/annotations/worldAnnotationRenderer.js",
+  "src/globe/cesium/annotations/screenAnnotationRenderer.js",
+  "src/globe/navara/windFlow.js"
 ]

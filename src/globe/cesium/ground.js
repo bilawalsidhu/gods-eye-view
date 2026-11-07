@@ -69,7 +69,7 @@ const colorOf = (rgba) => new Cesium.Color(rgba[0], rgba[1], rgba[2], rgba[3]);
 
 // One material for every animated corridor: PolylineGlow's falloff across
 // the width (st.t) and taper along it (st.s), an alpha pulse, and the
-// annotation route's flowing dashes (src/annotations/worldAnnotationRenderer.js,
+// annotation route's flowing dashes (src/globe/cesium/annotations/worldAnnotationRenderer.js,
 // GevRouteFlow): its diffuse plus emission and alpha. Each part is off at
 // its zero uniform. Fragments are LDR and premultiplied, as Cesium writes
 // ground polylines.

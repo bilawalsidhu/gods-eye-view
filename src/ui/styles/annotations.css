@@ -1,4 +1,4 @@
-/* ── Screen-space annotations (src/annotations/screenAnnotationRenderer.js) ── */
+/* ── Screen-space annotations (src/globe/cesium/annotations/screenAnnotationRenderer.js) ── */
 .gev-screen-whiteboard { position: fixed; inset: 0; pointer-events: none; z-index: 90; }
 .gev-screen-whiteboard-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 /* No CSS opacity transition here on purpose: group opacity is driven per-frame in JS

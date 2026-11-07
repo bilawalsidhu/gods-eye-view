@@ -6,7 +6,7 @@ import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import ScreenAnnotations from '../ui/views/panels/ScreenAnnotations.vue';
-import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
+import { createScreenAnnotationRenderer } from '../globe/cesium/annotations/screenAnnotationRenderer.js';
 
 // happy-dom does not lay out SVG; every element measures as a 40 x 16 box.
 for (const type of [globalThis.SVGElement, globalThis.SVGGraphicsElement]) {

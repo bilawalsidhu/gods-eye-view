@@ -489,8 +489,9 @@ near the camera from one 8×8 atlas over the whole view.
   the globe at order 20, faded with the camera's height while streamlines
   draw, raised at 5 km on 3D tiles. The streamlines stay each engine's,
   behind the display's `flow` backend, loaded by the manifest:
-  `render/cesiumFlow.js` supplies Cesium's streamlines (`rendering.js`),
-  and `render/navaraFlow.js` supplies Navara's flow mesh.
+  `src/globe/cesium/windFlow.js` supplies Cesium's streamlines
+  (`src/layers/wind/rendering.js`), and `src/globe/navara/windFlow.js`
+  supplies Navara's flow mesh.
 - **The Bhote Koshi event imagery** (`src/layers/bhoteKoshi/render/display.js`):
   two `url` images over the event's rectangle at alpha 0.96, split left
   and right at the engine's split position, order 15. The event's and the
@@ -587,8 +588,8 @@ culling and no depth writes. Colour, image and visibility changes retain the
 primitive; geometry, pick-id and depth-test changes replace it. The engine
 requests frames while the primitive or its image is preparing. Navara draws
 local coordinates relative to a double-precision world origin in its
-scene pass, with scene depth and triangle picking. Its meshes receive the
-scene effects, as Cesium primitives do.
+transparent scene pass after tone mapping, with scene depth and triangle
+picking. Their authored colours are blended in display space.
 Both engines own geometry, material and texture disposal. The fake engine
 keeps the same state and tests triangle intersections for picks.
 
@@ -633,3 +634,64 @@ uses the selected colour as well as the visible band. Finished geometry still
 goes through the annotation board. Detaching the scene releases the claim,
 listeners and preview while retaining the chosen shape and colour. The
 page's pointer lease still arbitrates Draw against other tools.
+
+## How to add an engine
+
+Put the implementation in a new `src/globe/<name>/` folder. Keep SDK classes,
+shaders, resource disposal and SDK workarounds there. Use
+`src/globe/testing/fakeEngine.js` as the contract model, and
+`src/globe/contract.js` as the authoritative member and data-shape reference.
+Coordinates, colours, picks and display options crossing the boundary are plain
+data; displays do not receive native viewers or SDK types.
+
+Implement the required host, camera, picker, projector, frame, render, surface,
+input, credit, clock and map interfaces, plus all five drawing primitives:
+`movers`, `lines`, `ground`, `imagery` and `meshes`. `engineCapabilities(engine)`
+reports these and the optional visualStyles, bloom, cloudCover and contactSonar
+groups. An optional group must be complete or absent. Do not advertise a
+capability with a no-op implementation. Match Cesium's behavior where the
+contract permits both engines to implement it.
+
+Run `createContractSuite(engine, { waitFrames, ... })` from
+`src/globe/testing/contractSuite.mjs`. Supply real pointer delivery, canvases and
+pixel reads for browser checks; keep the fake-engine tests as fast contract
+checks. Test ownership and repeated destruction as well as visible output.
+The browser harness is `scripts/qa-contract-suite.mjs`; ground and imagery pixel
+checks also run through `scripts/qa-ground-suite.mjs`.
+
+The application currently registers two kinds: adding another still requires
+registration in `ENGINE_KINDS`, scene construction/choice and the corresponding
+QA harnesses. `assertGlobeEngine` currently validates that registration. The
+folder and passing contract suite are the implementation boundary, not a claim
+that arbitrary engine folders are auto-discovered today. Layers and their
+fixtures should need no new drawing implementation.
+
+The layer manifest (`src/app/layers/renderers.js`) loads shared displays and
+lists their `needs`. Today every valid engine must implement all five
+primitives; availability is checked against the registered kind's primitive
+list. `backends` supplies optional engine-specific display options, currently
+only wind's `flow`. Load a backend dynamically from its engine folder. A new
+engine can omit wind streamlines and still draw the shared raster field. Do not
+copy another engine's extensions into a new engine. The self-drawing map overlay
+entries currently list supported kinds explicitly and need registration too.
+
+Run `src/app/layers/displayRehearsal.test.mjs`: it loads every manifest display
+on the fake engine with an unknown kind and empty extensions. Its small fixtures
+exercise attachment, drawing, hiding or release, and destruction; primitive
+registries, frame/camera/input subscriptions, follow state and service records
+must be clean before the engine itself is destroyed. New display entries need a
+fixture. Wildlife Sightings and the two map overlays are explicit skips because
+they have no display factory; their layer tests remain the coverage for those
+controllers. Native wind streamlines, DOM rasterization and GPU pixels are not
+covered by this rehearsal.
+
+`node scripts/check-import-directions.mjs` enforces SDK ownership for static
+imports, re-exports and literal dynamic imports, including package subpaths.
+Cesium packages belong in `src/globe/cesium/`; three, postprocessing and Navara
+packages belong in `src/globe/navara/`. Add the new SDK's ownership rule when
+registering it. Contract graphs cannot reach any engine, and the existing
+engines cannot reach one another. The temporary exact file/package exceptions
+in `scripts/package-boundaries.json` must have reasons and must still be used;
+the checker prints them. They are migration debt, not a pattern for new layers.
+Run package boundaries, formatting, the full unit suite and the coupling report
+as well; engine coupling counts may not grow.

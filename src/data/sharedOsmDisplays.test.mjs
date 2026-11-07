@@ -4,7 +4,7 @@ import * as C from 'cesium';
 import { showOsmCredit, hideOsmCredit } from './dataCredits.js';
 import { createInfrastructureLayers } from './infrastructure.js';
 import { createBhoteKoshiLocatorLayer } from './bhoteKoshiLocator.js';
-import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
+import { createWorldAnnotationRenderer } from '../globe/cesium/annotations/worldAnnotationRenderer.js';
 import { createDirectionsLayer } from '../layers/directions/index.js';
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createLifecycle as createCctvLifecycle } from '../layers/cctv/lifecycle.js';

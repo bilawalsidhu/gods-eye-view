@@ -30,7 +30,7 @@ export inventory. Use declared exports rather than reaching into internal files.
 | `src/standalone/`      | Select the default catalog, local sources and setup controls                                            |
 | `src/ui/`              | Navigation generations, restoration, visual state, panel snapshots and their subscriptions              |
 | `src/data/`            | Lifecycle, context and feed state; legacy default-layer facades                                         |
-| `src/layers/<family>/` | Source acquisition, records and Cesium resources with explicit controller/renderer owners               |
+| `src/layers/<family>/` | Source acquisition, records and shared contract displays with explicit lifecycle owners                 |
 | `src/sources/`         | Portable protocols and source contracts; request state belongs to each factory instance                 |
 | `src/geo/`             | Engine-neutral WGS84 maths, ported from Cesium, never imports Cesium                                    |
 | `src/globe/`           | Engine-neutral globe contract and its test support; engines only in `globe/cesium`, `globe/navara`      |
@@ -76,6 +76,24 @@ reached only through a literal `import()` (the app's `?engine=navara` mode), so
 Navara stays out of the Cesium-mode bundle. Common voice controls cannot depend on a
 Realtime protocol implementation. Negative fixtures cover indirect helpers,
 self-package imports, symlinks and unreachable files.
+
+Runtime SDK imports are restricted by directory, including unreachable modules:
+`cesium` and `@cesium/*` belong in `src/globe/cesium/`; `three`,
+`postprocessing` and `@navaramap/*` belong in `src/globe/navara/`. Package
+subpaths, re-exports and literal dynamic imports obey the same rule. Tests and
+Node test support retain their existing exemptions. The production script
+loader is `src/app/loadCesium.js`; it imports no SDK package and needs no
+exception. There is no blanket exception for layer `render/` directories.
+
+The temporary `engineImportExceptions` list in `scripts/package-boundaries.json`
+contains exact file/package pairs with reasons. The checker reports the used
+entries and rejects duplicates, missing reasons and unused entries. Its three
+exceptions are the Bhote Koshi event, locator and embedded-media models in
+`src/data/`, which still construct Cesium property records. Their drawing uses
+shared displays. Exceptions do not relax the portable, contract or cross-engine
+graph checks. Cesium annotation renderers live in `src/globe/cesium/annotations/`;
+wind backend adapters live in their engine folders. Wind's older injected-SDK
+helpers and the remaining annotation migration are separate debt.
 
 Source-only factories use dedicated `layers/<family>/source` exports where
 available, preserving the same factory implementation without loading rendering.
@@ -560,12 +578,22 @@ services into each family factory. Standalone provider selection lives in
 `src/standalone/layerSources.js`. The construction export has its own checked
 dependency graph, excluding standalone setup and compatibility layer instances.
 
+`src/app/layers/renderers.js` is the layer manifest. Its lazy display loaders
+resolve the shared factories exported by `displays.js`; `needs` names required
+contract primitives. The only display backend options are wind streamlines,
+loaded from the engine folders. A missing wind backend leaves the raster field
+available. Wildlife Sightings draws itself through the contract; Sea Marks and
+Ski Pistes use their overlay controller. No layer display imports an engine SDK.
+`displayRehearsal.test.mjs` loads every manifest display on the fake engine with
+an unknown kind and no extensions, draws a small fixture and checks cleanup.
+
 Both aircraft layers share the catalog's classification registry; launches use
 its satellites and Contacts uses its aircraft, vessels and installations. Data
 registration, controls and voice actions read those same instances. Destruction
 remains the manager's responsibility; classification also observes application
-abort when startup has not reached registration. Scene engines remain page-owned,
-so this change does not introduce multiple simultaneous viewers.
+abort when startup has not reached registration. The session retains models while
+scene attachment builds displays on the active engine. A parked engine can remain
+allocated for a warm switch; its layer drawing is detached.
 
 Direct `src/data` compatibility entries retain their old defaults and testing
 exports. Browser regression probes use the registered instance's testing surface
@@ -603,6 +631,15 @@ render requests and detection invalidation. It owns hidden-panel refresh and
 listener cleanup. Application data assembly constructs both owners explicitly;
 `data/manager` is the compatibility facade for direct callers. The ordinary
 state subscriptions retain their existing event contract.
+
+`data/layerSceneBinding.js` owns renderer attach/detach, asynchronous settlement,
+parking and failed-release retries. Lifecycle keeps visibility intentions and
+refresh policy. `app/layerSession.js` defines the retained session fields and
+handoff predicate. `standalone/sceneSwitcher.js` coordinates page handoff;
+`ui/shellScene.js` owns scene-bound shell construction, while `applicationShell`
+keeps page controls and policy. Request, host and shell queues are not yet one
+queue. Overlay, render-governor, tracked-readout and pick services still include
+module singletons; debug access still exposes the native viewer and tileset.
 
 ## UI state owners
 

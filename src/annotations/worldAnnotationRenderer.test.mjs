@@ -7,7 +7,7 @@ import * as C from 'cesium';
 import {
   FlowMaterialProperty,
   createWorldAnnotationRenderer,
-} from './worldAnnotationRenderer.js';
+} from '../globe/cesium/annotations/worldAnnotationRenderer.js';
 
 const noop = () => {};
 function viewer(t) {

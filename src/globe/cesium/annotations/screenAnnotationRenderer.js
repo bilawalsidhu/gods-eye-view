@@ -1,15 +1,15 @@
 import * as Cesium from 'cesium';
-import * as geo from '../geo/index.js';
-import { getOverlayPaintRect } from '../overlays/worldOverlay.js';
+import * as geo from '../../../geo/index.js';
+import { getOverlayPaintRect } from '../../../overlays/worldOverlay.js';
 import {
   getActiveTrackedReadoutId,
   TRACKED_OVERLAY_SOURCE_ID,
-} from '../data/trackedReadout.js';
-import { t } from '../i18n/index.js';
+} from '../../../data/trackedReadout.js';
+import { t } from '../../../i18n/index.js';
 import { nextTick } from 'vue';
-import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
-import { applicationPinia } from '../ui/vueRuntime.js';
-import { isScreenScene } from './screenScene.js';
+import { useScreenAnnotationsStore } from '../../../ui/stores/screenAnnotations.js';
+import { applicationPinia } from '../../../ui/vueRuntime.js';
+import { isScreenScene } from '../../../annotations/screenScene.js';
 
 /** A label whose detailed outline could not be resolved. */
 function outlineUnavailableLabel(label) {

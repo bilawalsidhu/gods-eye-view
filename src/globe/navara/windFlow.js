@@ -3,8 +3,8 @@ import {
   WIND_DISPLAY_HEIGHT_METERS,
   WIND_NARROW_PATH_LIMIT,
   WIND_PATH_LIMIT,
-} from '../streamlines.js';
-import { sameWind } from '../model.js';
+} from '../../layers/wind/streamlines.js';
+import { sameWind } from '../../layers/wind/model.js';
 
 const clamp = (n) => Math.max(0, Math.min(1, n));
 
