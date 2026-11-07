@@ -4,7 +4,7 @@ import {
   presetDotRgba,
   presetDotOutline,
 } from '../../data/trafficPresetStyle.js';
-import * as Cesium from 'cesium';
+import { Rgba } from '../shared/color.js';
 import {
   SIZE_BY_TYPE,
   STYLED_MIN_BASE_PX,
@@ -58,7 +58,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
           ? presetDotRgba(layerState._stylePreset, bucket)
           : null;
       layerState._activeBucketColors[bucket] = rgba
-        ? new Cesium.Color(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3])
+        ? new Rgba(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3])
         : FLOW_BUCKET_COLORS[bucket];
     }
   }
@@ -68,7 +68,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
    * it back to the shipped no-outline state). NVG's auto-gain saturates the
    * scene, so brightness alone cannot separate a dot from a bright road —
    * the dark ring restores local contrast through every luma-mapping shader.
-   * @param {Cesium.PointPrimitive} point - The dot primitive.
+   * @param {object} point - The dot's look (`dot.point`).
    * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket (null = sim).
    */
 
@@ -78,7 +78,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
         ? presetDotOutline(layerState._stylePreset, bucket)
         : null;
     if (spec) {
-      point.outlineColor = new Cesium.Color(
+      point.outlineColor = new Rgba(
         spec.rgba[0] / 255,
         spec.rgba[1] / 255,
         spec.rgba[2] / 255,

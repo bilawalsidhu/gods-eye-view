@@ -3592,8 +3592,17 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
     await import('../bikeshare/render/display.js');
   const app = harness(t);
   const noop = () => {};
+  // Traffic claims through its engine's camera, as bikeshare does: the
+  // viewer's. The stub has what binding its scene subscribes to.
+  const listeners = { addEventListener: () => noop };
+  const trafficEngine = {
+    camera: app.viewer.camera,
+    frames: { preRender: listeners, postRender: listeners },
+    projector: { viewProjection: noop },
+    surface: { tilesLoaded: () => false },
+  };
   const traffic = trafficLifecycle({
-    state: { _pointCollection: {}, _loadGeneration: 0 },
+    state: { _engine: trafficEngine, _loadGeneration: 0 },
     services: {
       render: { holdContinuousRender: noop, releaseContinuousRender: noop },
     },

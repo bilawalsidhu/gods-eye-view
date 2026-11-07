@@ -1,5 +1,4 @@
 import * as geo from '../../geo/index.js';
-import { whenCesiumSdk } from '../../app/loadCesium.js';
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFraming } from './cameraFraming.js';
@@ -17,6 +16,7 @@ import {
 } from './uiState.js';
 import { groundUnderCamera, viewCentre } from './view.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
+import { createStreetLevelDisplay } from './render/display.js';
 import { msg, t, translateKnown } from '../../i18n/index.js';
 import {
   AIM_AT_GROUND_MESSAGE,
@@ -39,7 +39,9 @@ const GROUND_RETRY_MS = 1000;
  * The core owns what they share: the filter and switches, the photo viewer
  * host, the position marker, the click handler and nearest-image lookups.
  * Providers own coverage, sequences and their viewer. One source is lit at
- * a time.
+ * a time. Everything on the globe goes through the display on the engine it
+ * is attached to: `services.createDisplay(engine)` (the app's renderer
+ * registry), else render/display.js; a display of null draws nothing.
  * @param {{providers: Array<import('./registry.js').StreetLevelProvider>, services?: object}} options
  */
 export function createStreetLevelLayer({
@@ -179,9 +181,9 @@ export function createStreetLevelLayer({
     for (const entry of state.providers.values()) {
       if (!entry.def.requiresMapStack) continue;
       if (state.enabled && entry.on && providerAvailable(entry))
-        parts.credits.show(state.viewer, entry.def);
+        parts.credits.show(state.map, entry.def);
       else {
-        parts.credits.hide(state.viewer, entry.def);
+        parts.credits.hide(state.map, entry.def);
         parts.viewerHost.unmount(entry.def.id);
       }
     }
@@ -203,13 +205,13 @@ export function createStreetLevelLayer({
    */
   function syncGroundClickReady() {
     cancelGroundRetry();
-    const ready = state.enabled && groundClickHeightOk(state.viewer);
+    const ready = state.enabled && groundClickHeightOk(state.map);
     if (
       state.enabled &&
-      state.viewer &&
+      state.map &&
       !ready &&
       groundRetries < GROUND_RETRY_LIMIT &&
-      groundUnderCamera(state.viewer) === null
+      groundUnderCamera(state.map) === null
     ) {
       groundRetries++;
       groundRetry = setTimeout(syncGroundClickReady, GROUND_RETRY_MS);
@@ -226,10 +228,10 @@ export function createStreetLevelLayer({
   }
 
   let removeCameraListener = null;
-  function watchCamera(viewer) {
+  function watchCamera(view) {
     removeCameraListener?.();
     removeCameraListener =
-      viewer?.camera?.moveEnd?.addEventListener(remeasureGround) || null;
+      view?.engine?.camera.moveEnd.addEventListener(remeasureGround) || null;
   }
 
   const activeEntries = () =>
@@ -253,18 +255,18 @@ export function createStreetLevelLayer({
   }
 
   function activate(entry) {
-    if (!state.viewer) return;
-    entry.instance.activate(state.viewer);
+    if (!state.map) return;
+    entry.instance.activate(state.map);
     // Without a known key, a switch-on asks again: the server may be back,
     // or have a key now.
     if (entry.status?.configured !== true) checkStatus(entry);
-    if (providerAvailable(entry)) parts.credits.show(state.viewer, entry.def);
+    if (providerAvailable(entry)) parts.credits.show(state.map, entry.def);
   }
 
   function deactivate(entry) {
     parts.viewerHost.unmount(entry.def.id);
     entry.instance.deactivate();
-    parts.credits.hide(state.viewer, entry.def);
+    parts.credits.hide(state.map, entry.def);
   }
 
   /** The nearest-image lookup in flight; any newer user action aborts it. */
@@ -277,15 +279,11 @@ export function createStreetLevelLayer({
 
   /** Ground under the screen centre; null for sky, undefined when it cannot aim. */
   function screenCentreGround() {
-    const canvas =
-      state.viewer?.engine?.host.canvas ?? state.viewer?.scene?.canvas;
+    const engine = state.map?.engine;
+    const size = engine?.host.size();
     const pick = state.services.scenePick?.pickGroundPosition;
-    if (!pick || !canvas?.clientWidth || !canvas?.clientHeight)
-      return undefined;
-    const center = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
-    const position = state.viewer.engine
-      ? state.viewer.engine.picker.pickGlobe(center)
-      : pick(state.viewer, center);
+    if (!pick || !size?.width || !size?.height) return undefined;
+    const position = pick(engine, { x: size.width / 2, y: size.height / 2 });
     const carto = position && geo.cartographic.fromCartesian(position);
     return carto
       ? {
@@ -498,16 +496,18 @@ export function createStreetLevelLayer({
       };
     },
 
-    init(viewer, options) {
-      this.attachRenderer(viewer, options);
+    init(scene, options) {
+      this.attachRenderer(scene, options);
       for (const entry of state.providers.values()) checkStatus(entry);
     },
+    /** Draws on `engine` through its display; the first argument is not read. */
     attachRenderer(
-      viewer,
+      _scene,
       { engine = null, waitForCameraRestore = false } = {},
     ) {
-      const map = viewer ?? services.nativeRenderer?.(engine);
-      state.viewer = map;
+      const createDisplay = services.createDisplay ?? createStreetLevelDisplay;
+      const map = engine ? (createDisplay(engine) ?? null) : null;
+      state.map = map;
       waitingForView = waitForCameraRestore;
       if (!map) return;
       parts.marker.ensure(map);
@@ -534,13 +534,13 @@ export function createStreetLevelLayer({
     resumeViewport() {
       if (!waitingForView) return;
       waitingForView = false;
-      if (state.enabled && state.viewer) {
+      if (state.enabled && state.map) {
         for (const entry of activeEntries()) entry.instance.refreshCoverage?.();
         remeasureGround();
       }
     },
     detachRenderer() {
-      const map = state.viewer;
+      const map = state.map;
       if (!map) return;
       waitingForView = true;
       removeCameraListener?.();
@@ -552,26 +552,22 @@ export function createStreetLevelLayer({
         if (entry.instance.detachMap) entry.instance.detachMap();
         else if (entry.on) entry.instance.deactivate();
       }
-      parts.marker.destroy(map);
+      parts.marker.destroy();
       parts.credits.hideAll(map);
+      map.destroy?.();
       unsubscribeMapStack?.();
       unsubscribeMapStack = null;
       mapStack = null;
-      state.viewer = null;
+      state.map = null;
     },
-    enable(viewer, { signal } = {}) {
-      // The marker, cones, coverage and ground picks use Cesium's math and
-      // primitives on either globe: a Navara page loads the Cesium SDK first.
-      return whenCesiumSdk(() => {
-        state.enabled = true;
-        if (viewer) state.viewer = viewer;
-        parts.marker.setVisible(true);
-        parts.selection.install(state.viewer);
-        for (const entry of activeEntries()) activate(entry);
-        watchCamera(state.viewer);
-        remeasureGround();
-        notify();
-      }, signal);
+    enable() {
+      state.enabled = true;
+      parts.marker.setVisible(true);
+      parts.selection.install(state.map);
+      for (const entry of activeEntries()) activate(entry);
+      watchCamera(state.map);
+      remeasureGround();
+      notify();
     },
 
     disable() {
@@ -583,7 +579,7 @@ export function createStreetLevelLayer({
       parts.viewerHost.unmount();
       for (const entry of state.providers.values()) entry.instance.deactivate();
       syncGroundClickReady();
-      parts.credits.hideAll(state.viewer);
+      parts.credits.hideAll(state.map);
       parts.selection.uninstall();
       parts.marker.setVisible(false);
       notify();
@@ -594,17 +590,17 @@ export function createStreetLevelLayer({
     },
 
     destroy() {
-      const viewer = state.viewer;
+      const map = state.map;
       layer.disable();
-      for (const entry of state.providers.values())
-        entry.instance.destroy(viewer);
-      parts.marker.destroy(viewer);
+      for (const entry of state.providers.values()) entry.instance.destroy();
+      parts.marker.destroy();
+      map?.destroy?.();
       parts.framing.attachNavigation(null);
       unsubscribeMapStack?.();
       unsubscribeMapStack = null;
       mapStack = null;
       state.listeners.clear();
-      state.viewer = null;
+      state.map = null;
     },
 
     getStats() {
@@ -716,7 +712,7 @@ export function createStreetLevelLayer({
           return false;
         }
       }
-      view ||= viewCentre(state.viewer);
+      view ||= viewCentre(state.map);
       if (!Number.isFinite(view?.lat) || !Number.isFinite(view?.lon))
         return false;
       abortNearest();

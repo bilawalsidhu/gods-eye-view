@@ -1,11 +1,9 @@
 import { observeTrafficSurface } from './surface.js';
-import * as Cesium from 'cesium';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
 } from '../../data/cameraSensitivity.js';
-import { whenCesiumSdk } from '../../app/loadCesium.js';
 
 export function createLifecycle({
   state: layerState,
@@ -22,19 +20,19 @@ export function createLifecycle({
   }
 
   function bindScene() {
-    const viewer = layerState._viewer,
-      engine = layerState._engine;
-    const camera = engine?.camera ?? viewer.camera;
-    const frames = engine?.frames ?? viewer.scene;
-    if (viewer)
-      layerState._surfaceFrameRemover = observeTrafficSurface(viewer.scene);
-    layerState._pointCollection.show = true;
+    const engine = layerState._engine;
+    if (!engine) return;
+    const camera = engine.camera;
+    layerState._surfaceFrameRemover = observeTrafficSurface(engine);
+    layerState._display?.show(true);
     layerState._lastAnimTime = 0;
     parts.animation.syncRenderDemand();
-    layerState._preRenderRemover = frames.preRender.addEventListener(() => {
-      parts.animation.animate();
-      layerState._native?.points.flush();
-    });
+    layerState._preRenderRemover = engine.frames.preRender.addEventListener(
+      () => {
+        parts.animation.animate();
+        parts.animation.drawDots();
+      },
+    );
     if (TRAFFIC_TIMING_ENABLED) {
       parts.timing.clearTrafficTimingEntries();
       layerState._trafficTimingCurrentAnchor = null;
@@ -49,11 +47,11 @@ export function createLifecycle({
     layerState._arrivalRemover = camera.moveEnd.addEventListener(() =>
       parts.viewport.onCameraChanged({ immediate: true }),
     );
-    claimCameraSensitivity(engine ?? camera, 'traffic', 0.05);
+    claimCameraSensitivity(engine, 'traffic', 0.05);
   }
 
   function unbindScene() {
-    const camera = layerState._engine?.camera ?? layerState._viewer?.camera;
+    const camera = layerState._engine?.camera;
     layerState._surfaceFrameRemover?.();
     layerState._preRenderRemover?.();
     layerState._trafficTimingMoveEndRemover?.();
@@ -72,19 +70,20 @@ export function createLifecycle({
       layerState._arrivalRemover =
       layerState._trafficTimingMoveEndRemover =
         null;
-    releaseCameraSensitivity(layerState._engine ?? camera, 'traffic');
+    if (layerState._engine)
+      releaseCameraSensitivity(layerState._engine, 'traffic');
   }
 
   const methods = {
     /**
-     * One-time initialisation. Creates the PointPrimitiveCollection and adds it
-     * to the scene (hidden). The collection is never removed and re-added — only
-     * toggled via `.show` to avoid destroy-on-remove errors.
+     * One-time initialisation. Attaches the engine's traffic display (hidden
+     * until the layer is enabled).
      *
-     * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
+     * @param {null} _viewer - Unused: the layer draws through `options.engine`.
+     * @param {{ engine?: object, waitForCameraRestore?: boolean }} [options]
      */
-    init(viewer, options) {
-      this.attachRenderer(viewer, options);
+    init(_viewer, options) {
+      this.attachRenderer(_viewer, options);
       layerState._dots = [];
       layerState._roads = [];
       layerState._count = 0;
@@ -129,38 +128,28 @@ export function createLifecycle({
     },
 
     attachRenderer(
-      viewer,
+      _viewer,
       { engine = null, waitForCameraRestore = false } = {},
     ) {
       layerState._restoringViewport = waitForCameraRestore;
-      layerState._viewer = viewer;
       layerState._engine = engine;
-      layerState._native =
-        !viewer && engine ? services.nativeRenderer(engine) : null;
-      layerState._heatSupported = null;
-      const points =
-        layerState._native?.points ??
-        new Cesium.PointPrimitiveCollection({
-          blendOption: Cesium.BlendOption.TRANSLUCENT,
-        });
-      if (viewer) viewer.scene.primitives.add(points);
-      layerState._pointCollection = points;
-      for (const dot of layerState._dots) dot.point = points.add(dot.point);
-      points.show = layerState._enabled;
+      layerState._display = engine ? services.createRenderer(engine) : null;
+      layerState._display?.show(layerState._enabled);
       if (!waitForCameraRestore) readyForSurfaceWork();
       if (layerState._enabled) {
         bindScene();
+        parts.animation.drawDots();
         parts.rendering.rebuildHeatLines(layerState._roads);
         if (
           layerState._dots.length &&
           layerState._roads.some((r) => !r.directFlow)
         )
-          services.credits?.showOsmCredit?.(engine ?? viewer, 'traffic', {
+          services.credits?.showOsmCredit?.(engine, 'traffic', {
             openMapTiles: true,
           });
         if (layerState._liveMode)
           services.credits?.registerDynamicCredit?.(
-            engine ?? viewer,
+            engine,
             services.credits.TOMTOM_CREDIT,
           );
         parts.viewport.onCameraChanged({ immediate: true });
@@ -198,7 +187,7 @@ export function createLifecycle({
       parts.viewport.onCameraChanged({ immediate: true });
     },
     detachRenderer() {
-      if (!layerState._pointCollection) return;
+      if (!layerState._engine) return;
       unbindScene();
       clearTimeout(layerState._fetchTimeout);
       layerState._surfaceRefineRemove?.();
@@ -206,95 +195,62 @@ export function createLifecycle({
       layerState._surfaceRevision = (layerState._surfaceRevision || 0) + 1;
       layerState._preparedRoads?.clear();
       parts.rendering.removeHeatLines();
-      services.credits?.hideOsmCredit?.(
-        layerState._engine ?? layerState._viewer,
-        'traffic',
-      );
-      for (const dot of layerState._dots) {
-        const p = dot.point;
-        dot.point = {
-          position: Cesium.Cartesian3.clone(p.position),
-          pixelSize: p.pixelSize,
-          color: p.color,
-          show: p.show,
-          outlineColor: p.outlineColor,
-          outlineWidth: p.outlineWidth,
-          scaleByDistance: p.scaleByDistance,
-          translucencyByDistance: p.translucencyByDistance,
-          disableDepthTestDistance: 0,
-        };
-      }
-      layerState._viewer?.scene.primitives.remove(layerState._pointCollection);
-      layerState._native?.destroy();
+      services.credits?.hideOsmCredit?.(layerState._engine, 'traffic');
+      // The dots keep their look (`dot.point`) for the next engine.
+      layerState._display?.destroy();
       if (layerState._renderHeld)
         services.render.releaseContinuousRender('traffic');
       layerState._renderHeld = false;
-      layerState._pointCollection =
-        layerState._viewer =
-        layerState._engine =
-        layerState._native =
-          null;
+      layerState._engine = layerState._display = null;
       layerState._waitForScene ??= new Promise((resolve) => {
         layerState._sceneReady = resolve;
       });
     },
 
     /**
-     * Enable the traffic layer. Shows the point collection, subscribes to the
+     * Enable the traffic layer. Shows the vehicles, subscribes to the
      * preRender animation loop and camera-change events, and kicks off an
      * initial viewport check.
-     *
-     * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
-    enable(viewer, { signal } = {}) {
-      // The simulation's math is Cesium's on either globe: a Navara page
-      // loads the Cesium SDK first.
-      return whenCesiumSdk(() => {
-        if (layerState._enabled) return;
-        if (viewer) layerState._viewer = viewer;
-        layerState._enabled = true;
-        if (layerState._roadMode !== 'tomtom') source.prefetch?.();
-        bindScene();
-        // Enabling is explicit intent, not a camera gesture that needs settling.
-        parts.viewport.onCameraChanged({ immediate: true });
+    enable() {
+      if (layerState._enabled) return;
+      layerState._enabled = true;
+      if (layerState._roadMode !== 'tomtom') source.prefetch?.();
+      bindScene();
+      // Enabling is explicit intent, not a camera gesture that needs settling.
+      parts.viewport.onCameraChanged({ immediate: true });
 
-        // Boot-order guard (otherwise the layer sits empty until the user
-        // moves): when the persisted layer state re-enables traffic during the
-        // intro flyTo, the initial check bails at high altitude — and a camera
-        // that then parks never re-fires camera.changed. Retry cheaply until the
-        // first load commits, then self-clear. Also acts as a safety kick if a
-        // failed first fetch left the viewport unloaded while parked.
-        clearInterval(layerState._enableKickTimer);
-        layerState._enableKickTimer = setInterval(() => {
-          if (
-            !layerState._enabled ||
-            layerState._lastUpdate ||
-            layerState._roadRetryStopped ||
-            layerState._retryAttempts >= 3
-          ) {
-            clearInterval(layerState._enableKickTimer);
-            layerState._enableKickTimer = null;
-            return;
-          }
-          if (!layerState._fetching && !layerState._retryTimer)
-            parts.viewport.onCameraChanged();
-        }, 1500);
-      }, signal);
+      // Boot-order guard (otherwise the layer sits empty until the user
+      // moves): when the persisted layer state re-enables traffic during the
+      // intro flyTo, the initial check bails at high altitude — and a camera
+      // that then parks never re-fires camera.changed. Retry cheaply until the
+      // first load commits, then self-clear. Also acts as a safety kick if a
+      // failed first fetch left the viewport unloaded while parked.
+      clearInterval(layerState._enableKickTimer);
+      layerState._enableKickTimer = setInterval(() => {
+        if (
+          !layerState._enabled ||
+          layerState._lastUpdate ||
+          layerState._roadRetryStopped ||
+          layerState._retryAttempts >= 3
+        ) {
+          clearInterval(layerState._enableKickTimer);
+          layerState._enableKickTimer = null;
+          return;
+        }
+        if (!layerState._fetching && !layerState._retryTimer)
+          parts.viewport.onCameraChanged();
+      }, 1500);
     },
 
     /**
      * Disable the traffic layer. Cancels pending fetches, clears all dots,
-     * unsubscribes from events, and hides the point collection.
-     *
-     * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
+     * unsubscribes from events, and hides the vehicles.
      */
-    disable(viewer) {
+    disable() {
       layerState._enabled = false;
       layerState._surfaceInput = null;
-      services.credits?.hideOsmCredit?.(
-        layerState._engine ?? layerState._viewer,
-        'traffic',
-      );
+      services.credits?.hideOsmCredit?.(layerState._engine, 'traffic');
       parts.animation.syncRenderDemand();
       clearTimeout(layerState._fetchTimeout);
       clearInterval(layerState._enableKickTimer);
@@ -317,26 +273,18 @@ export function createLifecycle({
       layerState._flowOldestTileAt = null;
 
       unbindScene();
-      if (layerState._pointCollection) layerState._pointCollection.show = false;
+      layerState._display?.show(false);
     },
 
     /**
-     * Permanently tear down the layer. Disables it, removes the point collection
-     * from the scene, and clears the tile cache.
-     *
-     * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
+     * Permanently tear down the layer. Disables it, destroys the display and
+     * clears the tile cache.
      */
-    destroy(viewer) {
-      this.disable(viewer);
-      if (layerState._pointCollection) {
-        layerState._viewer?.scene.primitives.remove(
-          layerState._pointCollection,
-        );
-        layerState._native?.destroy();
-        layerState._native = null;
-        layerState._pointCollection = null;
-      }
+    destroy() {
+      this.disable();
       parts.rendering.removeHeatLines();
+      layerState._display?.destroy();
+      layerState._display = null;
       layerState._tileCache.clear();
       if (layerState._styleListenerBound && typeof window !== 'undefined') {
         window.removeEventListener(

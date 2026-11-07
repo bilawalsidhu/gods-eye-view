@@ -6,8 +6,9 @@
  * again). With both ends placed the layer asks the existing `/api/route`
  * proxy (OSRM on the FOSSGIS servers, © OpenStreetMap contributors) for the
  * street-following route with turn-by-turn steps, drapes it on the terrain
- * and 3D tiles with the same flowing dashes the voice "route from A to B"
- * annotation uses, and drops one dot per maneuver. Click a dot for the
+ * and 3D tiles in the dashes of the voice "route from A to B" annotation,
+ * and drops one dot per maneuver (render/display.js draws them on the globe
+ * contract). Click a dot for the
  * instruction; "FLY" rides the camera along the route through the shared
  * route-flight cinematic (`flyRoute`), the way voice's `fly_route` does.
  *
@@ -16,9 +17,9 @@
  * route.
  */
 
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
-import { WHITE, rgbaFromCss } from '../shared/color.js';
+import { createDirectionsDisplay } from './render/display.js';
+import { DIRECTIONS_ROUTE_COLOR } from './render/style.js';
 import { roadLabel } from '../../data/routeSteps.js';
 import {
   t,
@@ -68,16 +69,8 @@ export function presentRoutingFailure(error) {
   return error?.message || msg('Routing unavailable');
 }
 
-/** Route colour — the annotation palette's cyan, so voice routes and Directions match. */
-export const DIRECTIONS_ROUTE_COLOR = '#39d0ff';
-// Engine-neutral colours (src/layers/shared/color.js): a Navara page has no
-// Cesium SDK.
-const MARKER_A_COLOR = () => rgbaFromCss('#5dff9f');
-const MARKER_B_COLOR = () => rgbaFromCss('#ff6b6b');
-const STEP_COLOR = () => WHITE.withAlpha(0.95);
-const STEP_OUTLINE = () => rgbaFromCss(DIRECTIONS_ROUTE_COLOR);
-const STEP_PIXEL_SIZE = 8;
-const STEP_SELECTED_PIXEL_SIZE = 13;
+/** Route colour: the annotation palette's cyan, so voice routes and Directions match. */
+export { DIRECTIONS_ROUTE_COLOR };
 /** Route request timeout (ms) — the proxy itself gives OSRM 12 s. */
 const ROUTE_TIMEOUT_MS = 15_000;
 
@@ -770,7 +763,7 @@ export function directionsStepCopy(steps, index) {
 /**
  * Shared-host card for the selected maneuver.
  * @param {number} index
- * @param {Cesium.Cartesian3} position
+ * @param {{x:number, y:number, z:number}} position src/geo Cartesian3.
  * @param {{title:string, details:string[]}} copy
  * @returns {object|null}
  */
@@ -859,14 +852,17 @@ export function normalizeRoutePayload(payload, mode) {
  * Each catalog builds its own, so two applications on a page never share the
  * route, the markers, the pointer claim or the flight this layer owns. The
  * shared services are injected, which is what keeps this module's own imports
- * down to Cesium and the pure step formatter.
- * @param {{services: object, source: {getRoute: Function}}} options
+ * down to the globe contract display and the pure step formatter.
+ * @param {{services: object, source: {getRoute: Function},
+ *   createRenderer?: (engine: object) => object|null}} options
+ *   `createRenderer` builds the display on an engine (render/display.js by
+ *   default).
  * @returns {object} The layer module the data manager registers.
  */
 export function createDirectionsLayer({
   services,
   source,
-  createNativeRenderer,
+  createRenderer = createDirectionsDisplay,
 }) {
   if (typeof source?.getRoute !== 'function')
     throw new TypeError('Directions require a route source');
@@ -883,9 +879,9 @@ export function createDirectionsLayer({
   let _overlayHost = DEFAULT_OVERLAY_HOST;
 
   // --- Module state ---
-  let _viewer = null;
   let _engine = null;
-  let _native = null;
+  /** The display on the bound engine (render/display.js), or null. */
+  let _display = null;
   let _suspendedFlight = null;
   let _enabled = false;
   let _mode = DEFAULT_DIRECTIONS_MODE;
@@ -903,13 +899,11 @@ export function createDirectionsLayer({
   let _routeSeq = 0;
   let _routeAbort = null;
   let _lastUpdate = null;
-  let _markerA = null;
-  let _markerB = null;
-  let _routeEntity = null;
-  let _stepPoints = null;
+  /** Maneuver dot index → its anchored position, or null while unresolved. */
+  const _stepAnchors = new Map();
   let _selectedStep = null;
-  let _clickHandler = null;
-  let _renderHeld = false;
+  let _listening = false;
+  let _removeClick = null;
   let _rowControlsListener = null;
   let _dataManager = null;
   /** Set when arming failed because another tool holds the pointer. */
@@ -966,21 +960,10 @@ export function createDirectionsLayer({
     _dataManager?.refreshLayerStats?.();
   }
 
-  function syncRenderHold() {
-    const shouldHold = _enabled && Boolean(_routeEntity);
-    if (shouldHold && !_renderHeld) {
-      services.render.holdContinuousRender('directions');
-      _renderHeld = true;
-    } else if (!shouldHold && _renderHeld) {
-      services.render.releaseContinuousRender('directions');
-      _renderHeld = false;
-    }
-  }
-
   function pickGround(screenPosition) {
-    const cartesian = _native
-      ? _engine.picker.pickGlobe(screenPosition)
-      : services.scenePick.pickGroundPosition(_viewer, screenPosition);
+    const cartesian = _engine
+      ? services.scenePick.pickGroundPosition(_engine, screenPosition)
+      : null;
     if (!cartesian) return null;
     const carto = geo.cartographic.fromCartesian(cartesian);
     if (!carto) return null;
@@ -990,61 +973,27 @@ export function createDirectionsLayer({
     };
   }
 
-  function markerEntity(letter, point, color) {
-    if (_native) return _native.marker(letter, point, color.toCssColorString());
-    return _viewer.entities.add({
-      id: `directions:marker:${letter}`,
-      position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, 0),
-      point: {
-        pixelSize: 14,
-        color,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-      label: {
-        text: letter,
-        font: 'bold 13px "JetBrains Mono", "SF Mono", monospace',
-        fillColor: Cesium.Color.WHITE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new Cesium.Cartesian2(0, -20),
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    });
-  }
-
-  function removeEntity(entity) {
-    if (_native) {
-      entity?.destroy();
-      return;
-    }
-    if (entity && _viewer && !_viewer.isDestroyed?.())
-      _viewer.entities.remove(entity);
-  }
-
   function placeMarker(letter, point) {
-    if (!_viewer && !_native) return;
-    if (letter === 'a') {
-      removeEntity(_markerA);
-      _markerA = markerEntity('A', point, MARKER_A_COLOR());
-    } else {
-      removeEntity(_markerB);
-      _markerB = markerEntity('B', point, MARKER_B_COLOR());
-    }
+    _display?.setMarker(letter, point);
+  }
+
+  /** The maneuver dots as the display draws them: anchored or hidden. */
+  function pushSteps() {
+    _display?.setSteps(
+      stepMarkerIndices(_route?.steps).map((index) => ({
+        index,
+        position: _stepAnchors.get(index) ?? null,
+      })),
+    );
   }
 
   function clearRouteGraphics() {
-    services.credits?.hideOsmCredit?.(_viewer ?? _engine, 'directions');
+    services.credits?.hideOsmCredit?.(_engine, 'directions');
     _clearStepSelection();
     stopStepAnchoring();
-    removeEntity(_routeEntity);
-    _routeEntity = null;
-    _stepPoints?.removeAll();
-    syncRenderHold();
+    _display?.setRoute(null);
+    _stepAnchors.clear();
+    _display?.setSteps([]);
   }
 
   function stopStepAnchoring() {
@@ -1062,32 +1011,28 @@ export function createDirectionsLayer({
    */
   function anchorStepPoints() {
     _anchorTimer = null;
-    if (!_stepPoints || !_route || !_enabled) return;
+    if (!_display || !_route || !_enabled) return;
     const steps = _route.steps;
     const pending = [];
     let unresolved = 0;
     for (const index of stepMarkerIndices(steps)) {
       const step = steps[index];
-      const point = findStepPoint(index);
-      if (!point) continue;
       const height = stepMarkerHeightM(
         services.ground.cachedGroundFloor(step.lat, step.lon),
         services.ground.GROUND_FLOOR_LIFT_M,
       );
       if (height === null) {
         unresolved += 1;
-        point.show = false;
+        _stepAnchors.set(index, null);
         pending.push({ lat: step.lat, lon: step.lon });
         continue;
       }
-      point.position = Cesium.Cartesian3.fromDegrees(
-        step.lon,
-        step.lat,
-        height,
+      _stepAnchors.set(
+        index,
+        geo.cartesian3.fromDegrees(step.lon, step.lat, height),
       );
-      point.show = true;
     }
-    _native?.steps.sync();
+    pushSteps();
     // A card already open on a step that has just been anchored moves with it.
     if (_selectedStep !== null) refreshStepCard(_selectedStep);
     services.render.governorRequestRender('directions-anchor');
@@ -1108,56 +1053,22 @@ export function createDirectionsLayer({
 
   function drawRoute(route) {
     clearRouteGraphics();
-    if (!_viewer && !_native) return;
-    if (_native)
-      _routeEntity = _native.route(route.geometry, DIRECTIONS_ROUTE_COLOR);
-    else {
-      services.annotations.ensureFlowFabricRegistered();
-      const positions = Cesium.Cartesian3.fromDegreesArray(
-        route.geometry.flat(),
-      );
-      _routeEntity = _viewer.entities.add({
-        id: 'directions:route',
-        polyline: {
-          positions,
-          width: 9,
-          material: new services.annotations.FlowMaterialProperty(
-            DIRECTIONS_ROUTE_COLOR,
-          ),
-          clampToGround: true,
-          // BOTH: drape on 3D tiles when they are up and on terrain when they are
-          // not, so the keyless globe shows the route too.
-          classificationType: Cesium.ClassificationType.BOTH,
-        },
-      });
-    }
+    if (!_display) return;
+    _display.setRoute(route.geometry);
     // One dot per decision; A and B already mark departure and arrival. The dots
     // start hidden and appear as anchorStepPoints resolves each ground cell.
     const cells = [];
     for (const index of stepMarkerIndices(route.steps)) {
       const step = route.steps[index];
       cells.push({ lat: step.lat, lon: step.lon });
-      _stepPoints.add({
-        id: `directions:step:${index}`,
-        position: Cesium.Cartesian3.fromDegrees(step.lon, step.lat, 0),
-        color: STEP_COLOR(),
-        pixelSize: STEP_PIXEL_SIZE,
-        outlineColor: STEP_OUTLINE(),
-        outlineWidth: 2,
-        show: false,
-        // The shared ground floor is a coarse cell, and on the photoreal stack
-        // the rendered mesh can stand above it. Keeping the dot always visible
-        // is the same choice every other anchored sprite in the app makes.
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      });
+      _stepAnchors.set(index, null);
     }
-    services.credits?.showOsmCredit?.(_viewer ?? _engine, 'directions');
+    pushSteps();
+    services.credits?.showOsmCredit?.(_engine, 'directions');
     services.ground.warmGroundFloor(cells);
     _anchorAttempts = 0;
     _anchorStartedAt = Date.now();
     anchorStepPoints();
-    syncRenderHold();
-    if (_viewer) services.sprites.restoreSpriteOrder(_viewer);
     services.render.governorRequestRender('directions-route');
   }
 
@@ -1265,8 +1176,8 @@ export function createDirectionsLayer({
    * Place one endpoint at a picked ground point and reroute when both are set.
    *
    * The globe click handler is the only caller in the running app; it is
-   * exported because a ScreenSpaceEventHandler needs a real canvas, and the
-   * ownership timing this function decides is exactly what has to be tested.
+   * exported because the ownership timing this function decides is exactly
+   * what has to be tested without a click.
    * @param {'a'|'b'} which Which endpoint to place.
    * @param {{lat: number, lon: number}} point Ground point in degrees.
    * @returns {boolean} Whether the endpoint was placed.
@@ -1343,10 +1254,8 @@ export function createDirectionsLayer({
     _route = null;
     _status = 'idle';
     _error = null;
-    removeEntity(_markerA);
-    removeEntity(_markerB);
-    _markerA = null;
-    _markerB = null;
+    placeMarker('a', null);
+    placeMarker('b', null);
     clearRouteGraphics();
     services.render.governorRequestRender('directions-clear');
   }
@@ -1419,7 +1328,7 @@ export function createDirectionsLayer({
       typeof seams?.floorFn === 'function' ? seams.floorFn : null,
       // One camera owner: the UI shell's immediate-navigation facade stamps the
       // navigation generation and releases whatever held the camera before the
-      // flight starts. Without the shell (tests, a bare viewer) the flight still
+      // flight starts. Without the shell (tests, a bare engine) the flight still
       // runs, it just has nothing to take the camera from.
       typeof seams?.runNavigation === 'function' ? seams.runNavigation : null,
       typeof seams?.warmFn === 'function' ? seams.warmFn : null,
@@ -1438,23 +1347,9 @@ export function createDirectionsLayer({
   // --- Step selection ---
 
   function _clearStepSelection() {
-    if (_selectedStep !== null && _stepPoints) {
-      const point = findStepPoint(_selectedStep);
-      if (point) point.pixelSize = STEP_PIXEL_SIZE;
-      _native?.steps.sync();
-    }
+    if (_selectedStep !== null) _display?.selectStep(null);
     _selectedStep = null;
     _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
-  }
-
-  function findStepPoint(index) {
-    if (!_stepPoints) return null;
-    const id = `directions:step:${index}`;
-    for (let i = 0; i < _stepPoints.length; i += 1) {
-      const point = _stepPoints.get(i);
-      if (point.id === id) return point;
-    }
-    return null;
   }
 
   /**
@@ -1466,13 +1361,13 @@ export function createDirectionsLayer({
    * the same shared floor, and a step whose cell is still cold has no anchor at
    * all rather than one at sea level.
    * @param {number} index Step index.
-   * @returns {Cesium.Cartesian3|null}
+   * @returns {{x:number, y:number, z:number}|null} src/geo Cartesian3.
    */
   function stepAnchorPosition(index) {
     const step = _route?.steps?.[index];
     if (!step) return null;
-    const point = findStepPoint(index);
-    if (point?.show) return Cesium.Cartesian3.clone(point.position);
+    const drawn = _display?.stepPosition(index);
+    if (drawn) return drawn;
     const height = stepMarkerHeightM(
       services.ground.cachedGroundFloor(step.lat, step.lon),
       services.ground.GROUND_FLOOR_LIFT_M,
@@ -1481,7 +1376,7 @@ export function createDirectionsLayer({
       services.ground.warmGroundFloor([{ lat: step.lat, lon: step.lon }]);
       return null;
     }
-    return Cesium.Cartesian3.fromDegrees(step.lon, step.lat, height);
+    return geo.cartesian3.fromDegrees(step.lon, step.lat, height);
   }
 
   function refreshStepCard(index) {
@@ -1518,21 +1413,16 @@ export function createDirectionsLayer({
       return false;
     }
     _selectedStep = index;
-    const point = findStepPoint(index);
-    if (point) point.pixelSize = STEP_SELECTED_PIXEL_SIZE;
-    _native?.steps.sync();
+    _display?.selectStep(index);
     services.render.governorRequestRender('directions-select');
     return true;
   }
 
   function stepIndexFromPick(picked) {
-    const candidates = [picked?.primitive?.id, picked?.id];
-    for (const candidate of candidates) {
-      if (typeof candidate !== 'string') continue;
-      const match = /^directions:step:(\d+)$/.exec(candidate);
-      if (match) return Number(match[1]);
-    }
-    return null;
+    const match =
+      typeof picked?.id === 'string' &&
+      /^directions:step:(\d+)$/.exec(picked.id);
+    return match ? Number(match[1]) : null;
   }
 
   function _onKeyDown(event) {
@@ -1545,58 +1435,40 @@ export function createDirectionsLayer({
     }
   }
 
-  function _installClickHandler(viewer) {
-    if (_clickHandler) return;
-    const handle = (click) => {
-      if (!_enabled) return;
-      // Placement acts only while this layer actually HOLDS the pointer, and the
-      // maneuver-dot selection below is an ambient handler like any other: it
-      // yields the moment a tool (this one included) owns the click.
-      // The lease, not the owner name: a superseded instance of this layer must
-      // not act on a click its replacement owns.
-      if (_armed && services.input.isLeaseCurrent(_pointerClaim)) {
-        const point = pickGround(click.position);
-        if (!point) return;
-        placeDirectionsEndpoint(_armed, point);
-        return;
-      }
-      if (!services.input.isPointerFree()) return;
-      let picked = null;
-      try {
-        picked = _native ? click.picked : viewer.scene.pick(click.position);
-      } catch {
-        picked = null;
-      }
-      const index = stepIndexFromPick(picked);
-      if (index !== null) {
-        _selectStep(index);
-        return;
-      }
-      if (_selectedStep !== null) _clearStepSelection();
-    };
-    if (_native) {
-      const off = _engine.input.on(
-        'click',
-        (event) => handle({ position: event.position, picked: event.picked }),
-        { pick: true },
-      );
-      _clickHandler = { destroy: off };
-    } else {
-      _clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      _clickHandler.setInputAction(
-        handle,
-        Cesium.ScreenSpaceEventType.LEFT_CLICK,
-      );
+  function _onClick(click) {
+    if (!_enabled) return;
+    // Placement acts only while this layer actually HOLDS the pointer, and the
+    // maneuver-dot selection below is an ambient handler like any other: it
+    // yields the moment a tool (this one included) owns the click.
+    // The lease, not the owner name: a superseded instance of this layer must
+    // not act on a click its replacement owns.
+    if (_armed && services.input.isLeaseCurrent(_pointerClaim)) {
+      const point = pickGround(click.position);
+      if (!point) return;
+      placeDirectionsEndpoint(_armed, point);
+      return;
     }
+    if (!services.input.isPointerFree()) return;
+    const index = stepIndexFromPick(click.picked);
+    if (index !== null) {
+      _selectStep(index);
+      return;
+    }
+    if (_selectedStep !== null) _clearStepSelection();
+  }
+
+  function _installClickHandler() {
+    if (_listening) return;
+    _listening = true;
+    _removeClick = _display?.onClick(_onClick) ?? null;
     if (typeof document !== 'undefined')
       document.addEventListener('keydown', _onKeyDown);
   }
 
   function _removeClickHandler() {
-    if (_clickHandler) {
-      _clickHandler.destroy();
-      _clickHandler = null;
-    }
+    _listening = false;
+    _removeClick?.();
+    _removeClick = null;
     // Teardown can outlive the document (page unload, and every headless test).
     if (typeof document !== 'undefined')
       document.removeEventListener('keydown', _onKeyDown);
@@ -1614,31 +1486,21 @@ export function createDirectionsLayer({
     updateInterval: 0,
 
     /**
-     * Create the maneuver-dot collection. Called once at bootstrap.
-     * @param {Cesium.Viewer} viewer
+     * Bind the engine the display draws on. Called once at bootstrap.
+     * @param {unknown} _scene Unused: the layer draws through `engine`.
+     * @param {{engine?: object|null}} [options]
      */
-    init(viewer, options) {
-      return this.attachRenderer(viewer, options);
+    init(_scene, options) {
+      return this.attachRenderer(_scene, options);
     },
-    attachRenderer(viewer, { engine = null } = {}) {
-      _viewer = viewer;
+    attachRenderer(_scene, { engine = null } = {}) {
       _engine = engine;
-      if (engine?.kind === 'navara') {
-        _native = createNativeRenderer(engine);
-        _stepPoints = _native.steps;
-      } else {
-        _stepPoints = new Cesium.PointPrimitiveCollection({
-          blendOption: Cesium.BlendOption.TRANSLUCENT,
-        });
-        viewer.scene.primitives.add(_stepPoints);
-        services.sprites.registerSpriteCollection('directions', _stepPoints);
-        services.sprites.restoreSpriteOrder(viewer);
-      }
-      _stepPoints.show = _enabled;
+      _display = engine ? createRenderer(engine) : null;
+      _display?.show(_enabled);
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, _enabled);
       if (!_enabled) return;
       const step = _selectedStep;
-      this.enable(viewer);
+      this.enable();
       if (_a) placeMarker('a', _a);
       if (_b) placeMarker('b', _b);
       if (_route) drawRoute(_route);
@@ -1654,52 +1516,35 @@ export function createDirectionsLayer({
       const selected = _selectedStep;
       clearRouteGraphics();
       _selectedStep = selected;
-      removeEntity(_markerA);
-      removeEntity(_markerB);
-      _markerA = _markerB = null;
       _removeClickHandler();
       services.picking.unregisterPickOwner('directions');
-      if (_native) _native.destroy();
-      else if (_stepPoints && _viewer) {
-        services.sprites.unregisterSpriteCollection('directions', _stepPoints);
-        _viewer.scene.primitives.remove(_stepPoints);
-      }
+      _display?.destroy();
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
-      _stepPoints = _viewer = _engine = _native = null;
+      _display = _engine = null;
     },
 
-    /**
-     * Show the row chips and listen for placement clicks.
-     * @param {Cesium.Viewer} viewer
-     */
-    enable(viewer) {
+    /** Show the row chips and listen for placement clicks. */
+    enable() {
       _enabled = true;
       _pointerBlocked = false;
-      if (_stepPoints) _stepPoints.show = true;
+      _display?.show(true);
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
-      _installClickHandler(viewer);
+      _installClickHandler();
       services.picking.registerPickOwner(
         'directions',
         (pickedId) =>
           typeof pickedId === 'string' && pickedId.startsWith('directions:'),
       );
-      syncRenderHold();
-      if (viewer) services.sprites.restoreSpriteOrder(viewer);
     },
 
-    /**
-     * Remove the route, markers and listeners.
-     * @param {Cesium.Viewer} viewer
-     */
-    disable(viewer) {
+    /** Remove the route, markers and listeners. */
+    disable() {
       _enabled = false;
       clearAll();
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
       _removeClickHandler();
       services.picking.unregisterPickOwner('directions');
-      if (_stepPoints) _stepPoints.show = false;
-      syncRenderHold();
-      void viewer;
+      _display?.show(false);
     },
 
     /** Nothing to poll: routes are requested on placement and mode change. */
@@ -1797,12 +1642,9 @@ export function createDirectionsLayer({
       }
     },
 
-    /**
-     * Tear down entirely.
-     * @param {Cesium.Viewer} viewer
-     */
-    destroy(viewer) {
-      if (_enabled) this.disable(viewer);
+    /** Tear down entirely. */
+    destroy() {
+      if (_enabled) this.disable();
       // disable() has already run these, but destroy() must also be safe on a
       // layer that was never enabled: a claim or a flight left behind would
       // outlive the whole application.
@@ -1814,14 +1656,13 @@ export function createDirectionsLayer({
       _rowControlsListener = null;
       this.detachRenderer();
       _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
-      _viewer = null;
     },
 
     /**
      * Place one endpoint at a picked ground point. The globe click handler is
-     * the only caller in the running app; it is on the instance because a
-     * ScreenSpaceEventHandler needs a real canvas, and the ownership timing
-     * this decides is exactly what has to be tested.
+     * the only caller in the running app; it is on the instance because the
+     * ownership timing this decides is exactly what has to be tested without
+     * a click.
      */
     placeEndpoint: placeDirectionsEndpoint,
 

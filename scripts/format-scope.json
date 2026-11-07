@@ -1640,5 +1640,14 @@
   "src/layers/installations/navigation.test.mjs",
   "src/layers/infrastructure/index.js",
   "src/layers/infrastructure/session.test.mjs",
-  "src/data/localGeojson.test.mjs"
+  "src/data/localGeojson.test.mjs",
+  "src/layers/directions/render/display.js",
+  "src/layers/directions/render/display.test.mjs",
+  "src/layers/directions/render/style.js",
+  "src/layers/streetLevel/render/display.js",
+  "src/layers/streetLevel/render/display.test.mjs",
+  "src/layers/traffic/render/display.js",
+  "src/layers/traffic/render/display.test.mjs",
+  "src/layers/directions/edgeCases.test.mjs",
+  "src/layers/streetLevel/edgeCases.test.mjs"
 ]

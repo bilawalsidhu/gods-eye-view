@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 
@@ -66,15 +65,13 @@ export function footprintTiles(polygon, zoom, near) {
 /** Reusable camera scratch; sampled only on camera events, never in the animation loop. */
 export function createReticleFootprint() {
   const pixels = Array.from({ length: 25 }, () => geo.cartesian2.create());
-  const hits = Array.from({ length: 25 }, () => geo.cartesian3.create());
   const carto = geo.cartographic.create();
-  let ray;
-  return (viewer, altitude, engine) => {
-    const camera = engine?.camera ?? viewer?.camera;
-    if (!camera?.getPickRay && !camera?.pickRay) return null;
-    const pose = engine?.camera.pose();
-    const nadir = pose?.cartographic ?? camera.positionCartographic;
-    const canvas = engine?.host.canvas ?? viewer.scene.canvas;
+  return (engine, altitude) => {
+    const camera = engine?.camera;
+    if (!camera?.pickRay) return null;
+    const pose = camera.pose();
+    const nadir = pose.cartographic;
+    const canvas = engine.host.canvas;
     const near = {
       lat: geo.math.toDegrees(nadir.latitude),
       lon: geo.math.toDegrees(nadir.longitude),
@@ -91,9 +88,7 @@ export function createReticleFootprint() {
           p = pixels[i];
         p.x = left + (side * col) / 4;
         p.y = top + (side * row) / 4;
-        const hit = engine
-          ? camera.pickEllipsoid(p)
-          : camera.pickEllipsoid(p, Cesium.Ellipsoid.WGS84, hits[i]);
+        const hit = camera.pickEllipsoid(p);
         let dx, dy;
         if (hit) {
           geo.cartographic.fromCartesian(hit, geo.ellipsoid.WGS84, carto);
@@ -102,9 +97,7 @@ export function createReticleFootprint() {
           dlon -= 360 * Math.round(dlon / 360);
           dx = dlon * 111.195 * Math.cos(nadir.latitude);
         } else {
-          const picked = engine
-            ? camera.pickRay(p)
-            : camera.getPickRay(p, (ray ??= new Cesium.Ray())) || ray;
+          const picked = camera.pickRay(p);
           if (!picked) continue;
           const d = picked.direction;
           dx =
@@ -162,8 +155,8 @@ export function createReticleFootprint() {
           nadir.latitude,
           nadir.longitude,
           nadir.height / 10000,
-          pose?.heading ?? camera.heading,
-          pose?.pitch ?? camera.pitch,
+          pose.heading,
+          pose.pitch,
         ]
           .map((v) => Number(v || 0).toFixed(7))
           .join(','),

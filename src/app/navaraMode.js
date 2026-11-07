@@ -153,23 +153,15 @@ export async function registerNavaraLayerRenderers() {
       return (engine, { data }) =>
         drawStorySource(engine, engine.extensions.navara, data);
     },
-    'street-level': async () => {
-      const { createStreetMap } =
-        await import('../layers/streetLevel/render/navara.js');
-      return (engine) => createStreetMap(engine, engine.extensions.navara);
-    },
-    traffic: async () => {
-      const { createTrafficNavaraRenderer } =
-        await import('../layers/traffic/render/navara.js');
-      return (engine) =>
-        createTrafficNavaraRenderer(engine, engine.extensions.navara);
-    },
-    directions: async () => {
-      const { createDirectionsNavaraRenderer } =
-        await import('../layers/directions/render/navara.js');
-      return (engine) =>
-        createDirectionsNavaraRenderer(engine, engine.extensions.navara);
-    },
+    'street-level': async () =>
+      (await import('../layers/streetLevel/render/display.js'))
+        .createStreetLevelDisplay,
+    traffic: async () =>
+      (await import('../layers/traffic/render/display.js'))
+        .createTrafficDisplay,
+    directions: async () =>
+      (await import('../layers/directions/render/display.js'))
+        .createDirectionsDisplay,
     'telegeography-submarine-cables': async () =>
       (await import('../layers/submarineCables/render/display.js'))
         .createCablesDisplay,

@@ -1914,9 +1914,10 @@
       "src/i18n/locales/zh-Hant.json",
       "src/geo/",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/cesium/engineFromViewer.js",
+      "src/layers/traffic/render/display.js"
     ],
-    "external": ["cesium", "pbf", "@mapbox/vector-tile"]
+    "external": ["pbf", "@mapbox/vector-tile"]
   },
   "bikeshare-layer": {
     "exports": ["./layers/bikeshare"],
@@ -2085,9 +2086,12 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/layers/streetLevel/providers/mapillary/policy.js",
-      "src/geo/"
+      "src/geo/",
+      "src/layers/shared/color.js",
+      "src/globe/cameraMath.js",
+      "src/layers/streetLevel/render/display.js"
     ],
-    "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
+    "external": ["pbf", "@mapbox/vector-tile", "mapillary-js"]
   },
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
@@ -3463,9 +3467,6 @@
       "src/layers/awareness/render/navaraPulses.js",
       "src/layers/shared/render/navaraStems.js",
       "src/layers/shared/render/navaraSceneDepth.js",
-      "src/layers/directions/render/navara.js",
-      "src/layers/traffic/render/navara.js",
-      "src/layers/streetLevel/render/navara.js",
       "src/scenes/dataPacks/navara.js",
       "src/scenes/dataPacks/navaraGeometry.js",
       "src/layers/shared/render/navaraStory.js",
@@ -3578,7 +3579,11 @@
       "src/layers/awareness/render/display.js",
       "src/layers/installations/render/namedMarkers.js",
       "src/layers/installations/render/display.js",
-      "src/layers/infrastructure/render/display.js"
+      "src/layers/infrastructure/render/display.js",
+      "src/layers/directions/render/style.js",
+      "src/layers/directions/render/display.js",
+      "src/layers/streetLevel/render/display.js",
+      "src/layers/traffic/render/display.js"
     ],
     "external": [
       "hls.js",
@@ -4315,7 +4320,11 @@
       "src/layers/awareness/render/pulseDisc.js",
       "src/layers/awareness/render/display.js",
       "src/layers/installations/render/namedMarkers.js",
-      "src/layers/installations/render/display.js"
+      "src/layers/installations/render/display.js",
+      "src/layers/directions/render/style.js",
+      "src/layers/directions/render/display.js",
+      "src/layers/streetLevel/render/display.js",
+      "src/layers/traffic/render/display.js"
     ],
     "external": [
       "hls.js",
@@ -4674,9 +4683,11 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
-      "src/geo/"
+      "src/geo/",
+      "src/layers/directions/render/display.js",
+      "src/layers/directions/render/style.js"
     ],
-    "external": ["cesium"]
+    "external": []
   },
   "radio-browser-source": {
     "exports": ["./sources/radio-browser"],

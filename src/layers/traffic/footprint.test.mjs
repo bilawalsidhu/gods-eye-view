@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   convexFootprint,
   footprintTiles,
@@ -33,33 +33,35 @@ test('oblique horizon bearings are bounded and tile caps hold at city latitudes'
     [51.507, -0.128],
     [70, 10],
   ]) {
-    const camera = {
-      positionCartographic: Cesium.Cartographic.fromDegrees(lon, lat, 300),
-      heading: 0,
-      pitch: -Math.PI / 12,
-      pickEllipsoid(p, e, result) {
-        if (p.y < 300) return undefined;
-        return Cesium.Cartesian3.fromDegrees(
-          lon + (p.x - 640) / 100000,
-          lat + (800 - p.y) / 50000,
-          0,
-          e,
-          result,
-        );
+    // An engine-shaped stub: the camera's pose and its ellipsoid and ray
+    // picks (the sky above the 300 px line), and the canvas.
+    const engine = {
+      camera: {
+        pose: () => ({
+          cartographic: geo.cartographic.fromDegrees(lon, lat, 300),
+          heading: 0,
+          pitch: -Math.PI / 12,
+        }),
+        pickEllipsoid(p) {
+          if (p.y < 300) return undefined;
+          return geo.cartesian3.fromDegrees(
+            lon + (p.x - 640) / 100000,
+            lat + (800 - p.y) / 50000,
+            0,
+          );
+        },
+        pickRay: () => ({
+          origin: geo.cartesian3.create(),
+          direction: geo.cartesian3.create(
+            -Math.sin((lat * Math.PI) / 180) * Math.cos((lon * Math.PI) / 180),
+            -Math.sin((lat * Math.PI) / 180) * Math.sin((lon * Math.PI) / 180),
+            Math.cos((lat * Math.PI) / 180),
+          ),
+        }),
       },
-      getPickRay(p, ray) {
-        ray.direction.x =
-          -Math.sin((lat * Math.PI) / 180) * Math.cos((lon * Math.PI) / 180);
-        ray.direction.y =
-          -Math.sin((lat * Math.PI) / 180) * Math.sin((lon * Math.PI) / 180);
-        ray.direction.z = Math.cos((lat * Math.PI) / 180);
-        return ray;
-      },
+      host: { canvas: { width: 1280, height: 800 } },
     };
-    const result = createReticleFootprint()(
-      { camera, scene: { canvas: { width: 1280, height: 800 } } },
-      300,
-    );
+    const result = createReticleFootprint()(engine, 300);
     assert.ok(result.coverage.coarse.length <= 16);
     assert.ok(result.coverage.detail.length <= 16);
     assert.ok(

@@ -3,11 +3,10 @@
 // from is ignored and the lit provider keeps the panel.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { createStreetLevelLayer } from './index.js';
 import {
-  fakeCesiumViewer,
   fakeStreetLevelProvider as fakeProvider,
+  streetLevelMap,
 } from '../../testSupport/streetLevelFakes.mjs';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -25,11 +24,6 @@ async function twoProviders(t) {
   globalThis.document = Object.assign(new EventTarget(), {
     createElement: () => ({ getContext: () => drawing }),
   });
-  t.mock.method(
-    Cesium.GroundPolylinePrimitive,
-    'initializeTerrainHeights',
-    async () => {},
-  );
   const lookups = [];
   const previous = fakeProvider({
     nearestImage: (point, { signal } = {}) => {
@@ -43,10 +37,13 @@ async function twoProviders(t) {
     pickPrefix: 'pmx:',
     nearestImage: async () => 'pmx-1',
   });
-  const viewer = fakeCesiumViewer();
-  const layer = createStreetLevelLayer({ providers: [previous, lit] });
-  layer.init(viewer);
-  layer.enable(viewer);
+  const harness = streetLevelMap();
+  const layer = createStreetLevelLayer({
+    providers: [previous, lit],
+    services: { createDisplay: () => harness.map },
+  });
+  layer.init(null, { engine: harness.engine });
+  layer.enable();
   layer.attachViewerHost({});
   t.after(() => {
     layer.destroy();

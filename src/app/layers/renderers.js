@@ -49,6 +49,9 @@ import { createCablesDisplay } from '../../layers/submarineCables/render/display
 import { createInfrastructureDisplay } from '../../layers/infrastructure/render/display.js';
 import { createInstallationsDisplay } from '../../layers/installations/render/display.js';
 import { createAwarenessDisplay } from '../../layers/awareness/render/display.js';
+import { createStreetLevelDisplay } from '../../layers/streetLevel/render/display.js';
+import { createTrafficDisplay } from '../../layers/traffic/render/display.js';
+import { createDirectionsDisplay } from '../../layers/directions/render/display.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
 
@@ -133,6 +136,9 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   cctv: createCctvDisplay,
   'military-installations': createInstallationsDisplay,
   'military-awareness': createAwarenessDisplay,
+  'street-level': createStreetLevelDisplay,
+  traffic: createTrafficDisplay,
+  directions: createDirectionsDisplay,
 });
 
 // The other application layers still draw themselves on Cesium.

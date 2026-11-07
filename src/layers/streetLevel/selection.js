@@ -1,22 +1,24 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { CLICK_PICK_WINDOW_PX, STREET_LEVEL_LAYER_ID } from './policy.js';
 
-/** One click handler for every provider's lines and cones, and the marker. */
+/**
+ * One click handler for every provider's lines and cones, and the marker,
+ * on the display's engine (engine.input for the click, engine.picker for
+ * the pick: the input's own pick has no pick window).
+ */
 export function createSelection({ state, parts }) {
   const { picking, input } = state.services;
 
   /** The id carries a provider's prefix: that provider handles the pick. */
   function onClick(click) {
-    const viewer = state.viewer;
-    if (!viewer || !state.enabled) return;
+    const engine = state.map?.engine;
+    if (!engine || !state.enabled || !click?.position) return;
     if (input?.isPointerFree && !input.isPointerFree()) return;
-    const picked = viewer.engine
-      ? click.picked
-      : viewer.scene.pick(
-          click.position,
-          CLICK_PICK_WINDOW_PX,
-          CLICK_PICK_WINDOW_PX,
-        );
+    const picked = engine.picker.pick(
+      click.position,
+      CLICK_PICK_WINDOW_PX,
+      CLICK_PICK_WINDOW_PX,
+    );
     const id = picking?.resolvePickId
       ? picking.resolvePickId(picked)
       : picked?.id;
@@ -29,20 +31,21 @@ export function createSelection({ state, parts }) {
     // The position marker is the core's own: nothing to select.
     if (!route.instance) return;
     route.instance.handlePick(route.id, {
-      groundPoint: () => groundPointAt(viewer, click.position),
+      groundPoint: () => groundPointAt(engine, click.position),
     });
   }
 
   /** Lon/lat of the ground under a screen point, or null (sky, no picker). */
-  function groundPointAt(viewer, screenPosition) {
-    const position = viewer.engine
-      ? viewer.engine.picker.pickGlobe(screenPosition)
-      : state.services.scenePick?.pickGroundPosition?.(viewer, screenPosition);
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
+  function groundPointAt(engine, screenPosition) {
+    const position = state.services.scenePick?.pickGroundPosition?.(
+      engine,
+      screenPosition,
+    );
+    const carto = position && geo.cartographic.fromCartesian(position);
     return carto
       ? {
-          lon: Cesium.Math.toDegrees(carto.longitude),
-          lat: Cesium.Math.toDegrees(carto.latitude),
+          lon: geo.math.toDegrees(carto.longitude),
+          lat: geo.math.toDegrees(carto.latitude),
         }
       : null;
   }
@@ -67,20 +70,9 @@ export function createSelection({ state, parts }) {
     parts.clearSequences();
   }
 
-  function install(viewer) {
-    if (state.clickHandler) return;
-    if (viewer.engine) {
-      const remove = viewer.engine.input.on('click', onClick, { pick: true });
-      state.clickHandler = { isDestroyed: () => false, destroy: remove };
-    } else {
-      state.clickHandler = new Cesium.ScreenSpaceEventHandler(
-        viewer.scene.canvas,
-      );
-      state.clickHandler.setInputAction(
-        onClick,
-        Cesium.ScreenSpaceEventType.LEFT_CLICK,
-      );
-    }
+  function install(map) {
+    if (state.clickHandler || !map?.engine) return;
+    state.clickHandler = map.engine.input.on('click', onClick);
     document.addEventListener('keydown', onKeyDown);
     picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, parts.router.ownsPick);
   }
@@ -88,7 +80,7 @@ export function createSelection({ state, parts }) {
   function uninstall() {
     // Nothing to undo for a layer that was never enabled.
     if (!state.clickHandler) return;
-    if (!state.clickHandler.isDestroyed()) state.clickHandler.destroy();
+    state.clickHandler();
     state.clickHandler = null;
     document.removeEventListener('keydown', onKeyDown);
     picking?.unregisterPickOwner?.(STREET_LEVEL_LAYER_ID);

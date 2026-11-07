@@ -1,5 +1,4 @@
 import { createReticleFootprint } from './footprint.js';
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import {
   deriveFetchCenter,
@@ -24,9 +23,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getCameraAltitude() {
-    const carto =
-      layerState._engine?.camera.pose().cartographic ??
-      layerState._viewer?.camera.positionCartographic;
+    const carto = layerState._engine?.camera.pose().cartographic;
     return carto ? carto.height : Infinity;
   }
 
@@ -37,9 +34,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getViewBounds() {
-    const rect =
-      layerState._engine?.camera.viewRectangle() ??
-      layerState._viewer?.camera.computeViewRectangle();
+    const rect = layerState._engine?.camera.viewRectangle();
     if (!rect) return null;
     return {
       south: geo.math.toDegrees(rect.south),
@@ -64,25 +59,19 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getFetchCenter() {
-    const carto =
-      layerState._engine?.camera.pose().cartographic ??
-      layerState._viewer?.camera.positionCartographic;
+    const carto = layerState._engine?.camera.pose().cartographic;
     if (!carto) return null;
     const nadirLat = geo.math.toDegrees(carto.latitude);
     const nadirLon = geo.math.toDegrees(carto.longitude);
 
     let hitLat;
     let hitLon;
-    const canvas =
-      layerState._engine?.host.canvas ?? layerState._viewer.scene.canvas;
+    const canvas = layerState._engine.host.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     if (width > 0 && height > 0) {
-      const hit = (
-        layerState._engine?.camera ?? layerState._viewer.camera
-      ).pickEllipsoid(
+      const hit = layerState._engine.camera.pickEllipsoid(
         geo.cartesian2.create(width / 2, height / 2),
-        Cesium.Ellipsoid.WGS84,
       );
       if (hit) {
         const hitCarto = geo.cartographic.fromCartesian(hit);
@@ -219,11 +208,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
           return;
         const alt = getCameraAltitude();
         if (alt > ACTIVATION_ALTITUDE) return onCameraChanged();
-        const footprint = reticleFootprint(
-          layerState._viewer,
-          alt,
-          layerState._engine,
-        );
+        const footprint = reticleFootprint(layerState._engine, alt);
         const bounds = footprint || getViewBounds();
         if (!bounds) return;
         const center = footprint ? null : getFetchCenter();

@@ -1,4 +1,4 @@
-import { rgbaFromCss } from '../shared/color.js';
+import { WHITE, rgbaFromCss } from '../shared/color.js';
 
 /**
  * @file Street Traffic selects TomTom, OpenMapTiles or Hybrid motor roads,
@@ -108,7 +108,7 @@ export const SIZE_BY_TYPE = {
  * Live-flow bucket colors (thresholds live in `trafficFlowStyle.js`):
  * green free flow / amber slow / red jam, all at 0.9 alpha.
  * Roads without flow data (`road.flow == null`) keep the sim's white.
- * @const {Object<string, Cesium.Color>}
+ * @const {Object<string, import('../shared/color.js').Rgba>}
  */
 
 export const FLOW_BUCKET_COLORS = {
@@ -116,6 +116,9 @@ export const FLOW_BUCKET_COLORS = {
   slow: rgbaFromCss('#f0b23e').withAlpha(0.9),
   jam: rgbaFromCss('#e05252').withAlpha(0.9),
 };
+
+/** Simulated vehicles (and roads without flow data): white at 0.85. */
+export const SIM_DOT_COLOR = WHITE.withAlpha(0.85);
 
 // ─── Jam-viz prototype (live mode only — see 2026-07-21 design doc) ────────
 /** @const {number} Max congestion heat-line polylines per render (jam first). */
@@ -138,11 +141,11 @@ export const HEAT_JAM_BASE_ALPHA = 0.55;
 
 export const HEAT_JAM_PULSE_ALPHA = 0.2;
 
-/** @const {Cesium.Color} Jam corridor color (bucket red, alpha pulsed live). */
+/** @const {import('../shared/color.js').Rgba} Jam corridor color (bucket red, alpha pulsed live). */
 
 export const HEAT_JAM_COLOR = rgbaFromCss('#e05252');
 
-/** @const {Cesium.Color} Slow corridor color (bucket amber, faint + static). */
+/** @const {import('../shared/color.js').Rgba} Slow corridor color (bucket amber, faint + static). */
 
 export const HEAT_SLOW_COLOR = rgbaFromCss('#f0b23e').withAlpha(0.2);
 

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import * as scenePick from '../../data/scenePick.js';
+import { cameraEngine } from '../../testSupport/streetLevelFakes.mjs';
 
-const GROUND = Cesium.Cartesian3.fromDegrees(-121.4944, 38.5816, 10);
+const GROUND = geo.cartesian3.fromDegrees(-121.4944, 38.5816, 10);
 const TILESET = { isCesium3DTileset: true };
 
 /**
@@ -22,6 +23,15 @@ function harness({
   ellipsoid = undefined,
 } = {}) {
   const opened = [];
+  // The display's engine: the camera `height` m up, the depth buffer and the
+  // ellipsoid as scripted.
+  const engine = cameraEngine({
+    lon: -121.4944,
+    lat: 38.5816,
+    altitude: height,
+  });
+  engine.fake.script('pickPosition', () => picked);
+  engine.fake.script('pickEllipsoid', () => ellipsoid);
   const state = {
     enabled,
     services: { scenePick },
@@ -39,17 +49,7 @@ function harness({
         ],
       ),
     ),
-    viewer: {
-      scene: { pickPositionSupported: true, pickPosition: () => picked },
-      camera: {
-        pickEllipsoid: () => ellipsoid,
-        positionCartographic: Cesium.Cartographic.fromDegrees(
-          -121.4944,
-          38.5816,
-          height,
-        ),
-      },
-    },
+    map: { engine },
   };
   const openAtGround = createGroundClick({
     state,
@@ -81,7 +81,7 @@ test('a click on the map opens the click-to-open providers there, without moving
 
 test('where the depth buffer names no place, the ellipsoid answers', () => {
   const { opened, openAtGround } = harness({
-    picked: new Cesium.Cartesian3(500, 0, 0),
+    picked: geo.cartesian3.create(500, 0, 0),
     ellipsoid: GROUND,
   });
   openAtGround({ x: 1, y: 1 });
@@ -120,14 +120,13 @@ test('nothing opens over another layer’s object, the sky, from high up, off it
 });
 
 test('street zoom is measured above the ground under the camera', () => {
-  const viewer = (height) => ({
-    camera: {
-      positionCartographic: Cesium.Cartographic.fromDegrees(0, 0, height),
-    },
-    scene: { globe: { getHeight: () => 1500 } },
-  });
+  const map = (height) => {
+    const engine = cameraEngine({ lon: 0, lat: 0, altitude: height });
+    engine.fake.script('terrainHeight', () => 1500);
+    return { engine };
+  };
   // 1,500 m up a plateau, 2,000 m above it: still a street.
-  assert.equal(groundClickHeightOk(viewer(3500)), true);
-  assert.equal(groundClickHeightOk(viewer(5000)), false);
+  assert.equal(groundClickHeightOk(map(3500)), true);
+  assert.equal(groundClickHeightOk(map(5000)), false);
   assert.equal(groundClickHeightOk(null), false);
 });

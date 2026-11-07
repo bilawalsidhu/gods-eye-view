@@ -16,7 +16,9 @@ import { validateProviders } from '../../registry.js';
 import { tileBounds } from '../../tileMath.js';
 import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
-  coverageViewer,
+  cameraEngine,
+  coverageMap,
+  streetLevelMap,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
 import {
@@ -347,9 +349,8 @@ test('a picture Panoramax does not know, or an id it refuses, fails the open wit
   await assert.rejects(env.instance.viewer.open('busy'), /busy/);
 });
 
-/** Cones on a stand-in Cesium viewer; `count()` reads how many are drawn. */
+/** Cones on the display; `count()` reads how many are drawn, shown or not. */
 async function withCones(t, env) {
-  const Cesium = await import('cesium');
   // The cone glyph draws on a canvas: any drawing call is fine.
   const drawing = new Proxy({}, { get: () => () => {}, set: () => true });
   const saved = globalThis.document;
@@ -357,25 +358,32 @@ async function withCones(t, env) {
     createElement: () => ({ getContext: () => drawing }),
   };
   t.after(() => (globalThis.document = saved));
-  let collection = null;
-  env.instance.init({
-    scene: {
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      primitives: { add: (c) => (collection = c), remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-    camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
-  });
+  const harness = streetLevelMap();
+  // The cones are drawn hidden until the provider is switched on; they are
+  // read whether shown or not.
+  let group = null;
+  const sprites = harness.map.sprites;
+  harness.map.sprites = (...args) => (group = sprites(...args));
+  env.instance.init(harness.map);
+  // The cones paint on the next frame.
+  const pickIds = () => {
+    group?.show(true);
+    harness.frame();
+    return harness
+      .moverSets('street-level:panoramax-cones')
+      .flatMap((set) => set.instances)
+      .map((cone) => String(cone.pickId));
+  };
   return {
-    count: () => collection?.length ?? 0,
-    ids: () =>
-      Array.from({ length: collection?.length ?? 0 }, (_, i) =>
-        String(collection.get(i).id).replace(PICK_PREFIX.image, ''),
-      ),
+    count: () => pickIds().length,
+    ids: () => pickIds().map((id) => id.replace(PICK_PREFIX.image, '')),
   };
 }
+
+/** The display with the camera `height` m up. */
+const mapAt = (height) =>
+  streetLevelMap({ engine: cameraEngine({ lon: 0, lat: 0, altitude: height }) })
+    .map;
 
 /** z15 tiles holding every item of `items` as a picture. */
 const pictureTiles = (items) => (tile) => {
@@ -454,14 +462,7 @@ test('a line clicked from high up looks for its sequence further off; the radius
     ...sequence('line', 1, { offset: 220 }),
   ];
   const { instance, source } = setup({ items });
-  const height = (h) =>
-    instance.init({
-      camera: { positionCartographic: { height: h } },
-      scene: {
-        primitives: { add() {}, remove() {} },
-        preRender: { addEventListener: () => () => {} },
-      },
-    });
+  const height = (h) => instance.init(mapAt(h));
   const click = () =>
     instance.handlePick(`${PICK_PREFIX.sequence}line`, {
       groundPoint: () => east(0),
@@ -473,7 +474,8 @@ test('a line clicked from high up looks for its sequence further off; the radius
     'line-0',
     '220 m off, from 25 km',
   );
-  assert.equal(source.calls.nearest.at(-1).radius, 250);
+  // The camera height round-trips through the globe: to the millimetre.
+  assert.equal(Math.round(source.calls.nearest.at(-1).radius), 250);
   height(1_000);
   click();
   assert.equal(
@@ -636,12 +638,13 @@ function coverageSetup(t, { sequences = [], filter, height = 900 } = {}) {
     },
     { filter },
   );
-  const viewer = coverageViewer({ ...centre, height }, t);
-  env.instance.init(viewer);
-  t.after(() => env.instance.destroy(viewer));
+  const harness = coverageMap({ ...centre, height });
+  env.instance.init(harness.map);
+  t.after(() => env.instance.destroy());
   return {
     ...env,
-    viewer,
+    harness,
+    map: harness.map,
     centre,
     holdTiles() {
       let release;
@@ -672,7 +675,7 @@ test('sequence lines draw near the ground, and the imagery filter thins them', a
       line('old-flat', { date: '2019-06-01' }),
     ],
   });
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().count === 2));
   assert.equal(env.instance.coverageStats().keyRequired, false);
   assert.equal(env.instance.coverageStats().error, null);
@@ -685,26 +688,26 @@ test('sequence lines draw near the ground, and the imagery filter thins them', a
       line('old-flat'),
     ],
   });
-  filtered.instance.activate(filtered.viewer);
+  filtered.instance.activate(filtered.map);
   assert.ok(await until(() => filtered.instance.coverageStats().count === 1));
 });
 
 test('the selected sequence’s line is drawn again over the coverage, and goes with it', async (t) => {
   const env = coverageSetup(t, { sequences: [line('a'), line('b')] });
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().count === 2));
-  const ground = env.viewer.scene.groundPrimitives.items;
-  const drawn = ground.size;
+  const ground = () => env.harness.groundSets('panoramax-coverage:').length;
+  const drawn = ground();
   await env.instance.selectSequence('a');
-  assert.equal(ground.size, drawn + 1, 'one highlight over the lines');
+  assert.equal(ground(), drawn + 1, 'one highlight over the lines');
   env.instance.clearSequence();
-  assert.equal(ground.size, drawn);
+  assert.equal(ground(), drawn);
 });
 
 test('coverage hints: nothing while loading, “no pictures” once an empty view has loaded', async (t) => {
   const env = coverageSetup(t);
   const release = env.holdTiles();
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().loading));
   assert.equal(env.instance.coverageStats().hint, '');
   release();
@@ -714,14 +717,14 @@ test('coverage hints: nothing while loading, “no pictures” once an empty vie
 
 test('from high up nothing is drawn or fetched, and the panel says to zoom in', async (t) => {
   const env = coverageSetup(t, { height: 200_000, sequences: [line('a')] });
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(
     await until(() => env.instance.coverageStats().hint === ZOOM_IN_HINT),
   );
   assert.equal(env.instance.coverageStats().count, 0);
   assert.equal(env.instance.coverageStats().loading, false);
   assert.deepEqual(env.source.calls.tiles, []);
-  assert.equal(env.viewer.scene.groundPrimitives.items.size, 0);
+  assert.equal(env.harness.groundSets('panoramax-coverage:').length, 0);
 });
 
 test('switching off clears the cones and forgets a pending line click', async (t) => {
@@ -747,7 +750,7 @@ test('lines in view that the filter hides all of say so, not that there is nothi
     filter: { pano: 'pano', sinceMs: null },
     sequences: [line('flat-only')],
   });
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(
     await until(() => env.instance.coverageStats().hint === FILTERED_HINT),
   );
@@ -821,13 +824,7 @@ test('a line clicked from low down still searches its own sequence within 50 m',
     ...sequence('clicked', 1, { offset: 30 }),
   ];
   const { instance, source } = setup({ items });
-  instance.init({
-    camera: { positionCartographic: { height: 300 } },
-    scene: {
-      primitives: { add() {}, remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-  });
+  instance.init(mapAt(300));
   instance.handlePick(`${PICK_PREFIX.sequence}clicked`, {
     groundPoint: () => east(0),
   });
@@ -876,25 +873,25 @@ test('a coverage tile decoded a moment ago is not fetched again; switched off, t
     asked.push(`${tile.z}/${tile.x}/${tile.y}`);
     return getTile(tile, options);
   };
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   const z14 = asked.length;
   // Up a zoom band and back down: the z14 tile comes from memory.
   // (Activating again refreshes at once, without the camera debounce.)
-  env.viewer.view.height = 3_000;
-  env.instance.activate(env.viewer);
+  env.harness.view.height = 3_000;
+  env.instance.activate(env.map);
   assert.ok(await until(() => asked.some((key) => key.startsWith('13/'))));
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   const withZ13 = asked.length;
-  env.viewer.view.height = 900;
-  env.instance.activate(env.viewer);
+  env.harness.view.height = 900;
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(asked.length, withZ13, 'nothing fetched again');
   assert.ok(z14 > 0);
   // Off and on: the memory went back, so the tile is fetched again.
   env.instance.deactivate();
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   assert.ok(asked.length > withZ13);
 });

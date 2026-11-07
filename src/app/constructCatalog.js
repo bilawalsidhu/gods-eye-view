@@ -311,7 +311,6 @@ export function createApplicationCatalog({
             createApplicationTraffic({
               source: sources.traffic,
               surface,
-              nativeRenderer: (engine) => rendererFor('traffic', engine),
             }),
           ),
       ],

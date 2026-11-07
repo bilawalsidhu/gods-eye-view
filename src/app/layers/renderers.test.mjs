@@ -85,6 +85,9 @@ test('the layers with extracted renderers', () => {
     'cctv',
     'military-installations',
     'military-awareness',
+    'street-level',
+    'traffic',
+    'directions',
   ]);
 });
 
@@ -111,6 +114,9 @@ test('the layers drawn through one display get the same factory on every engine'
     'local-datacenters': ['infrastructure', 'createInfrastructureDisplay'],
     'local-dams': ['infrastructure', 'createInfrastructureDisplay'],
     'military-installations': ['installations', 'createInstallationsDisplay'],
+    'street-level': ['streetLevel', 'createStreetLevelDisplay'],
+    traffic: ['traffic', 'createTrafficDisplay'],
+    directions: ['directions', 'createDirectionsDisplay'],
     'telegeography-submarine-cables': [
       'submarineCables',
       'createCablesDisplay',

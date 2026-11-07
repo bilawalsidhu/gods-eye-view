@@ -141,7 +141,6 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
   let server;
   const cacheDir = mkdtempSync(path.join(tmpdir(), 'gev-traffic-timing-vite-'));
   let trafficLayer;
-  let viewer;
 
   const pendingDebounce = () => {
     const matches = [...timeouts].filter(([, timer]) => timer.delay === 320);
@@ -206,15 +205,18 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
 
     const preRender = eventChannel();
     const postRender = eventChannel();
+    const preUpdate = eventChannel();
     const moveEnd = eventChannel();
     const changed = eventChannel();
     let longitude = -97.74;
+    const cartographic = { latitude: Math.PI / 6, longitude: 0, height: 5000 };
     const camera = {
       moveEnd,
       changed,
       percentageChanged: 0.5,
-      positionCartographic: { latitude: Math.PI / 6, longitude: 0, height: 5000 },
-      computeViewRectangle() {
+      livePosition: { x: 0, y: 0, z: 0 },
+      pose: () => ({ cartographic: { ...cartographic }, heading: 0, pitch: -Math.PI / 2 }),
+      viewRectangle() {
         const west = longitude * Math.PI / 180;
         return {
           south: 30 * Math.PI / 180,
@@ -223,31 +225,63 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
           east: west + 0.02 * Math.PI / 180,
         };
       },
+      pickEllipsoid: () => undefined,
     };
     const setLongitude = (next) => {
       longitude = next;
-      camera.positionCartographic.longitude = next * Math.PI / 180;
+      cartographic.longitude = next * Math.PI / 180;
     };
     setLongitude(longitude);
-    viewer = {
-      camera,
-      scene: {
+    const noSet = () => ({
+      set() {},
+      setCount() {},
+      commit() {},
+      replace() {},
+      show() {},
+      destroy() {},
+    });
+    // An engine on a zero-size canvas: no pick ray (no reticle footprint),
+    // so the fetch is bounded by the view rectangle.
+    const engine = {
+      kind: 'cesium',
+      host: {
         canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
-        preRender,
-        postRender,
-        primitives: { add: (primitive) => primitive, remove: () => true },
+        size: () => ({ width: 0, height: 0 }),
       },
+      camera,
+      frames: { preUpdate, preRender, postRender },
+      projector: {
+        worldToWindow: () => undefined,
+        viewProjection: (result = new Array(16).fill(0)) => result,
+        horizonVisible: () => true,
+      },
+      picker: { pickPositionSupported: false },
+      surface: {
+        supported: false,
+        terrainHeight: () => 0,
+        sampleHeight: () => undefined,
+        tilesLoaded: () => true,
+      },
+      maps: {
+        photorealActive: () => false,
+        current: () => ({ baseImagery: null, photoreal: null }),
+      },
+      render: { request() {} },
+      credits: { addStatic: () => () => {} },
+      movers: { createSet: noSet },
+      ground: { createSet: noSet },
+      destroy() {},
     };
 
     performance.clearMarks();
     performance.clearMeasures();
-    trafficLayer.init(viewer);
+    trafficLayer.init(null, { engine });
     performance.mark('traffic:stale:mark');
     performance.measure('traffic:stale:measure', {
       start: 'traffic:stale:mark',
       end: 'traffic:stale:mark',
     });
-    trafficLayer.enable(viewer);
+    trafficLayer.enable();
     assert.equal(traffic.getTrafficTimingDiagnostics().marksInstalled, 1);
     assert.equal(moveEnd.listenerCount(), 2, 'one timing listener plus the production arrival check');
     assert.equal(performance.getEntriesByName('traffic:stale:mark').length, 0);
@@ -325,7 +359,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       entry.detail?.interactionId !== anchorB.interactionId
     )), 'the canceled/stale B load must never emit a correlated trace');
   } finally {
-    trafficLayer?.disable(viewer);
+    trafficLayer?.disable();
     await server?.close();
     globalThis.window = originalWindow;
     globalThis.document = originalDocument;

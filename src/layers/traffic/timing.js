@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { roadSurfaceChunks } from './surface.js';
 import { TRAFFIC_TIMING_ENABLED, DOT_HEIGHT_OFFSET } from './policy.js';
 
@@ -162,8 +162,8 @@ export function createTiming({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Mark Cesium's diagnostic moveEnd notification. Cesium normally emits this
-   * about 500 ms after stillness, so fetch has typically already started and
+   * Mark the camera's diagnostic moveEnd notification. The engine emits this
+   * once the camera has been still a while (Cesium: 500 ms), so fetch has typically already started and
    * never waits for this boundary.
    */
 
@@ -250,12 +250,12 @@ export function createTiming({ state: layerState, services, parts, source }) {
             (Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? floor
               : layerState._viewHeightEstimate || 0) + DOT_HEIGHT_OFFSET;
-          return Cesium.Cartesian3.fromDegrees(lng, lat, h);
+          return geo.cartesian3.fromDegrees(lng, lat, h);
         });
         const segmentDist = [];
         for (let i = 0; i < waypoints.length - 1; i++) {
           segmentDist.push(
-            Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
+            geo.cartesian3.distance(waypoints[i], waypoints[i + 1]),
           );
         }
         /* TRACE_ONLY_BEGIN */
@@ -316,7 +316,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
     return trafficTimingPass(trace, pass, source);
   }
 
-  /** Record the first Cesium postRender following a completed dot render. */
+  /** Record the first engine postRender following a completed dot render. */
 
   function scheduleTrafficTimingPostRender(
     state,
@@ -324,9 +324,9 @@ export function createTiming({ state: layerState, services, parts, source }) {
     renderId,
     renderMetrics,
   ) {
-    if (!layerState._viewer?.scene) return;
+    if (!layerState._engine) return;
     let remove = null;
-    remove = layerState._viewer.scene.postRender.addEventListener(() => {
+    remove = layerState._engine.frames.postRender.addEventListener(() => {
       remove?.();
       layerState._trafficTimingPostRenderRemovers?.delete(remove);
       const visibleTime = performance.now();

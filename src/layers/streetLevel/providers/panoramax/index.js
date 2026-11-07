@@ -164,7 +164,7 @@ export function createPanoramaxProvider({
       const state = {
         context,
         services: context.services,
-        viewer: null,
+        map: null,
         coverage: freshCoverage({ keyless: true }),
         sequence: {
           selectedId: null,
@@ -256,9 +256,7 @@ export function createPanoramaxProvider({
        * from high up the click may land tens of metres off the line.
        */
       function lineClickRadius() {
-        const height =
-          state.viewer?.engine?.camera.pose().cartographic.height ??
-          state.viewer?.camera?.positionCartographic?.height;
+        const height = state.map?.engine?.camera.height();
         if (!Number.isFinite(height)) return NEAREST_RADIUS_M;
         return Math.min(
           LINE_CLICK_RADIUS_MAX_M,
@@ -443,23 +441,23 @@ export function createPanoramaxProvider({
           return { configured: true };
         },
 
-        init(cesiumViewer) {
-          state.viewer = cesiumViewer;
-          cones.ensureCollections(cesiumViewer);
+        init(map) {
+          state.map = map;
+          cones.ensureCollections(map);
           cones.setVisible(false);
         },
 
-        activate(cesiumViewer) {
-          state.viewer = cesiumViewer;
+        activate(map) {
+          state.map = map;
           cones.setVisible(true);
-          coverage.attach(cesiumViewer);
+          coverage.attach(map);
         },
 
         refreshCoverage: () => coverage.refresh(),
         detachMap() {
           coverage.releaseGraphics();
-          cones.releaseCollection(state.viewer);
-          state.viewer = null;
+          cones.releaseCollection();
+          state.map = null;
         },
         repaintMap() {
           coverage.rebuild();
@@ -478,11 +476,11 @@ export function createPanoramaxProvider({
           pictureLists.clear();
         },
 
-        destroy(cesiumViewer) {
+        destroy() {
           coverage.detach();
           coverage.clear();
           coverage.unblock();
-          cones.destroy(cesiumViewer);
+          cones.destroy();
         },
 
         /** The filter changed: redraw. Each draw reads it from the context. */
