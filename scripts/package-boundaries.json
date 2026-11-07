@@ -2760,6 +2760,7 @@
       "src/render/creditMarkup.js",
       "src/render/rendererOf.js",
       "src/render/cesium/ports.js",
+      "src/render/cesium/quality.js",
       "src/render/cesium/credits.js",
       "src/render/cesium/effects.js",
       "src/render/cesium/common.js",

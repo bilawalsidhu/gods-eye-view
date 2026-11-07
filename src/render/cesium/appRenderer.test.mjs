@@ -338,7 +338,6 @@ const EXPECTED_MISSING = [
   'draw.on',
   'frame.setTime',
   'renderer.globe',
-  'renderer.quality',
   'renderer.readPixels',
   'renderer.releaseUnused',
   'renderer.whenSettled',
