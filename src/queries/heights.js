@@ -1,47 +1,50 @@
 /**
  * @module queries/heights
- * @description The one place height queries go: how high the rendered
- * surface or the terrain is under a point, now or after streaming.
+ * @description The one place the app's height queries go: how high the
+ * rendered surface or the terrain is under a point, now or after streaming,
+ * asked of the renderer's query port (`src/render/contract/query.d.ts`).
  *
  * `now()` answers from what is already loaded and may return `null`: tiles
- * not streamed yet, no depth support, a point off screen. Every caller treats
- * that as a miss, holding its last value or placing first and patching when
- * `batch()` resolves. Cesium answers `now()` synchronously from the scene,
- * so nothing changes on screen; a renderer that can only answer from a cache
- * or asynchronously plugs in here without touching the callers.
+ * not streamed yet, no depth support, no renderer, a point off screen. Every
+ * caller treats that as a miss, holding its last value or placing first and
+ * patching when `batch()` resolves. `batch()` and `clampBatch()` answer null
+ * per point they miss, and reject when the query itself fails (a tile
+ * request error, a destroyed scene), so a caller can tell a failure from
+ * points that are merely uncovered.
  *
- * `against` picks the surface: `'surface'` is what is drawn (3D tiles and the
- * globe), `'terrain'` the loaded terrain tiles alone. `exclude` lists what the
- * query must see through, typically the caller's own markers.
+ * What the renderer cannot answer is a miss: the Cesium renderer answers no
+ * height, terrain included, without depth textures (its `sampleHeight`
+ * capability).
+ *
+ * `against` picks the surface: `'surface'` is what is drawn (tiles, the
+ * globe, and draw sets drawn as ground), `'terrain'` the terrain alone,
+ * `'tiles'` the tiles alone. `exclude` lists draw set ids to see through, of
+ * those drawn with `includeInHeightQueries`; every other draw set is seen
+ * through already.
  */
-import * as Cesium from 'cesium';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { toDegrees } from '../geo/vector.js';
+import { findQuery, rendererOf } from '../render/rendererOf.js';
 
-/** @typedef {'surface'|'terrain'} HeightSurface */
+/** @typedef {'surface'|'terrain'|'tiles'} HeightSurface */
 /**
- * A point in degrees, or a `Cesium.Cartographic` in radians.
- * @typedef {{lon: number, lat: number}|Cesium.Cartographic} HeightPoint
+ * A point in degrees, or in radians as `longitude`/`latitude` (a
+ * cartographic).
+ * @typedef {{lon: number, lat: number}|{longitude: number, latitude: number}} HeightPoint
  */
 /**
  * @typedef {object} HeightOptions
  * @property {HeightSurface} [against] Default `'surface'`.
- * @property {object[]} [exclude] Primitives and entities to see through.
+ * @property {string[]} [exclude] Draw set ids to see through.
  */
 
-/** @type {WeakMap<object, HeightService>} scene -> service */
+/** @type {WeakMap<object, HeightService>} host -> service */
 const services = new WeakMap();
-
-const scratch = new Cesium.Cartographic();
 
 /** `supported()` answers, shared so a per-frame check allocates nothing. */
 const SUPPORT = [
-  [
-    Object.freeze({ surface: false, clamp: false }),
-    Object.freeze({ surface: false, clamp: true }),
-  ],
-  [
-    Object.freeze({ surface: true, clamp: false }),
-    Object.freeze({ surface: true, clamp: true }),
-  ],
+  Object.freeze({ surface: false, clamp: false }),
+  Object.freeze({ surface: true, clamp: true }),
 ];
 
 const NO_OPTIONS = Object.freeze({});
@@ -49,117 +52,135 @@ const NO_OPTIONS = Object.freeze({});
 /** Plain finite metres, or null. */
 const metres = (height) => (Number.isFinite(height) ? height : null);
 
+/** Finite `x, y, z`. */
+const finite = (p) =>
+  Number.isFinite(p?.x) && Number.isFinite(p?.y) && Number.isFinite(p?.z);
+
 /**
- * The point as a Cartographic in radians at height 0. Degrees go through a
- * shared scratch unless `result` is given; a Cartographic is used as it is.
+ * The point in degrees, or null. Degrees go through `result` unless the
+ * point is already in degrees.
  * @param {HeightPoint} point
- * @param {Cesium.Cartographic} [result]
- * @returns {Cesium.Cartographic|null}
+ * @param {{lon: number, lat: number}} result
+ * @returns {{lon: number, lat: number}|null}
  */
-function cartographicOf(point, result = scratch) {
-  if (Number.isFinite(point?.longitude) && Number.isFinite(point?.latitude))
-    return point;
+function degreesOf(point, result) {
+  if (Number.isFinite(point?.longitude) && Number.isFinite(point?.latitude)) {
+    result.lon = toDegrees(point.longitude);
+    result.lat = toDegrees(point.latitude);
+    return result;
+  }
   const lon = Number(point?.lon);
   const lat = Number(point?.lat);
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-  return Cesium.Cartographic.fromDegrees(lon, lat, 0, result);
+  if (lon === point.lon && lat === point.lat) return point;
+  result.lon = lon;
+  result.lat = lat;
+  return result;
+}
+
+/** The port's options, with only what the caller gave. */
+function portOptions({ against, exclude } = NO_OPTIONS, extra) {
+  const options = { ...extra };
+  if (against !== undefined) options.against = against;
+  if (exclude?.length) options.exclude = exclude;
+  return options;
 }
 
 /**
  * @typedef {object} HeightService
  * @property {(point: HeightPoint, options?: HeightOptions) => number|null} now
  *   Height in metres above the ellipsoid from what is loaded, or null.
- * @property {(position: Cesium.Cartesian3, options?: {exclude?: object[]}) => Cesium.Cartesian3|null} clampNow
- *   `position` moved onto the drawn surface along the ellipsoid normal, or null.
+ * @property {(position: {x: number, y: number, z: number}, options?: {exclude?: string[]}) => {x: number, y: number, z: number}|null} clampNow
+ *   `position` (ECEF) moved onto the drawn surface along the ellipsoid
+ *   normal, or null.
  * @property {(points: HeightPoint[], options?: HeightOptions) => Promise<Array<number|null>>} batch
- *   Heights once the most detailed tiles have streamed; null per miss. A
- *   failed query (a tile request error, a destroyed scene) rejects, so the
- *   caller can tell it from points that are merely uncovered.
- * @property {(positions: Cesium.Cartesian3[], options?: {exclude?: object[]}) => Promise<Array<Cesium.Cartesian3|null>>} clampBatch
+ *   Heights once the most detailed data has loaded; null per miss. A failed
+ *   query rejects.
+ * @property {(positions: Array<{x: number, y: number, z: number}>, options?: {exclude?: string[]}) => Promise<Array<{x: number, y: number, z: number}|null>>} clampBatch
  *   Clamped copies of `positions`; null per miss, rejecting as `batch` does.
  * @property {() => {surface: boolean, clamp: boolean}} supported
- *   Whether the drawn surface can be queried at all (Cesium needs depth
- *   textures); terrain queries are always attempted.
+ *   Whether the drawn surface can be queried at all (the renderer's
+ *   `sampleHeight` capability); a renderer bound to nothing is asked anyway.
  */
 
 /**
- * The scene's height service, made on first use.
- * @param {object} scene A Cesium scene (or a test double).
+ * The height service of the renderer that draws `host` (the scene object
+ * the caller holds, a viewer), made on first use. The query port is looked
+ * up on each query, so a renderer bound later answers.
+ * @param {object} host
  * @returns {HeightService}
  */
-export function heightsFor(scene) {
-  let service = services.get(scene);
+export function heightsOf(host) {
+  let service = services.get(host);
   if (!service) {
-    service = createHeights(scene);
-    services.set(scene, service);
+    service = createHeights(host);
+    services.set(host, service);
   }
   return service;
 }
 
-function createHeights(scene) {
-  const terrainProvider = () =>
-    scene.terrainProvider ?? scene.globe?.terrainProvider;
+function createHeights(host) {
+  const query = () => findQuery(host);
+  /** The port for an asynchronous query: a destroyed scene fails it. */
+  const asyncQuery = () => {
+    if (host?.isDestroyed?.()) throw new Error('This scene has been destroyed');
+    return query();
+  };
+  const scratch = { lon: 0, lat: 0 };
 
-  return {
-    now(point, { against = 'surface', exclude } = NO_OPTIONS) {
-      const carto = cartographicOf(point);
-      if (!carto) return null;
+  const service = {
+    now(point, options = NO_OPTIONS) {
+      const port = query();
+      const at = degreesOf(point, scratch);
+      if (!port || !at) return null;
       try {
-        if (against === 'terrain')
-          return metres(scene.globe?.getHeight?.(carto));
-        // Cesium throws without depth-texture support: that is a miss.
-        return metres(scene.sampleHeight?.(carto, exclude));
+        return metres(port.sampleHeightNow(at, portOptions(options)));
       } catch {
         return null;
       }
     },
 
     clampNow(position, { exclude } = NO_OPTIONS) {
-      if (!position) return null;
-      try {
-        return scene.clampToHeight?.(position, exclude) ?? null;
-      } catch {
-        return null;
-      }
+      const at = finite(position) ? toLonLatH(position) : null;
+      if (!at) return null;
+      const { lon, lat } = at;
+      const height = service.now({ lon, lat }, { exclude });
+      return height === null ? null : fromDegrees(lon, lat, height);
     },
 
-    async batch(points, { against = 'surface', exclude } = NO_OPTIONS) {
-      const cartos = points.map((point) => {
-        const carto = cartographicOf(point, new Cesium.Cartographic());
-        return (
-          carto && new Cesium.Cartographic(carto.longitude, carto.latitude)
-        );
+    async batch(points, options = NO_OPTIONS) {
+      const at = points.map((point) => {
+        const degrees = degreesOf(point, { lon: 0, lat: 0 });
+        return degrees && { lon: degrees.lon, lat: degrees.lat };
       });
-      const valid = cartos.filter(Boolean);
-      if (!valid.length) return cartos.map(() => null);
-      if (against === 'terrain') {
-        const provider = terrainProvider();
-        if (!provider) return cartos.map(() => null);
-        // An ellipsoid has no tiles to sample (Cesium throws for want of
-        // their availability): its terrain is the ellipsoid, height 0.
-        if (provider instanceof Cesium.EllipsoidTerrainProvider)
-          return cartos.map((carto) => (carto ? 0 : null));
-        await Cesium.sampleTerrainMostDetailed(provider, valid);
-      } else {
-        if (typeof scene.sampleHeightMostDetailed !== 'function')
-          return cartos.map(() => null);
-        await scene.sampleHeightMostDetailed(valid, exclude);
-      }
-      return cartos.map((carto) => (carto ? metres(carto.height) : null));
+      const valid = at.filter(Boolean);
+      const port = asyncQuery();
+      if (!valid.length || !port) return at.map(() => null);
+      const samples = await port.sampleHeight(
+        valid,
+        portOptions(options, { mostDetailed: true }),
+      );
+      let next = 0;
+      return at.map((point) =>
+        point ? metres(samples[next++]?.height) : null,
+      );
     },
 
     async clampBatch(positions, { exclude } = NO_OPTIONS) {
-      if (typeof scene.clampToHeightMostDetailed !== 'function')
-        return positions.map(() => null);
-      const clones = positions.map((p) => Cesium.Cartesian3.clone(p));
-      const clamped = await scene.clampToHeightMostDetailed(clones, exclude);
-      return clamped.map((p) => p ?? null);
+      const port = asyncQuery();
+      if (!port) return positions.map(() => null);
+      const clamped = await port.clampToSurface(
+        positions.map((p) => ({ x: p.x, y: p.y, z: p.z })),
+        portOptions({ exclude }),
+      );
+      return clamped.map((p) => (finite(p) ? p : null));
     },
 
     supported() {
-      return SUPPORT[+(scene.sampleHeightSupported === true)][
-        +(scene.clampToHeightSupported === true)
-      ];
+      const capabilities = rendererOf(host)?.capabilities;
+      if (!capabilities) return SUPPORT[+Boolean(query())];
+      return SUPPORT[+capabilities.has('sampleHeight')];
     },
   };
+  return service;
 }

@@ -20,7 +20,7 @@
  */
 import * as Cesium from 'cesium';
 import { bindRenderer } from '../render/rendererOf.js';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 import { fakeDrawPort } from './fakeDrawPort.mjs';
 
 const toCartesian = (p) => new Cesium.Cartesian3(p.x, p.y, p.z);

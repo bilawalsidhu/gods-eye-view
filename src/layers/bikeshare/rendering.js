@@ -14,7 +14,7 @@ import {
   POINT_FADE_BY_DISTANCE,
   POINT_DISABLE_DEPTH_TEST_M,
 } from './policy.js';
-import { heightsFor } from '../../queries/heights.js';
+import { heightsOf } from '../../queries/heights.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
 
@@ -175,9 +175,9 @@ export function createRendering({
 
     let height = POINT_HEIGHT_OFFSET_M;
     // Sample terrain height so points sit on ground rather than at ellipsoid level
-    const scene = layerState._viewer?.scene;
-    if (scene?.sampleHeightSupported) {
-      const sampled = heightsFor(scene).now({ lon, lat });
+    const viewer = layerState._viewer;
+    if (viewer && heightsOf(viewer).supported().surface) {
+      const sampled = heightsOf(viewer).now({ lon, lat });
       if (sampled !== null) height = sampled + POINT_HEIGHT_OFFSET_M;
     }
 

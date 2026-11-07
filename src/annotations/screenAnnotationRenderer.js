@@ -9,7 +9,7 @@ import { t } from '../i18n/index.js';
 import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 
 /** A label whose detailed outline could not be resolved. */
 function outlineUnavailableLabel(label) {

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as Cesium from 'cesium';
-import { heightsFor } from './heights.js';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { heightsOf } from './heights.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -14,194 +15,200 @@ const ROOT = path.resolve(
 
 const AUSTIN = { lon: -97.74, lat: 30.27 };
 
-function scene(overrides = {}) {
+/**
+ * A viewer double with a fake renderer whose query port answers `height` (a
+ * number, or a function of the point and options) and records each call.
+ */
+function bound({
+  height = 150,
+  capabilities = ['sampleHeight'],
+  ...query
+} = {}) {
   const calls = [];
-  return {
-    calls,
-    sampleHeightSupported: true,
-    clampToHeightSupported: true,
-    sampleHeight(carto, exclude) {
-      calls.push(['sampleHeight', carto, exclude]);
-      return 150;
+  const viewer = {};
+  const answer = (point, options) =>
+    typeof height === 'function' ? height(point, options) : height;
+  const port = {
+    sampleHeightNow(point, options) {
+      calls.push(['now', { ...point }, options]);
+      return answer(point, options);
     },
-    clampToHeight(position, exclude) {
-      calls.push(['clampToHeight', position, exclude]);
-      return Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, 150);
+    async sampleHeight(points, options) {
+      calls.push(['sample', points, options]);
+      return points.map((point) => {
+        const h = answer(point, options);
+        return h === null
+          ? null
+          : { height: h, confidence: 1, source: 'tiles', lod: 'finest' };
+      });
     },
-    globe: { getHeight: () => 140 },
-    ...overrides,
+    async clampToSurface(positions, options) {
+      calls.push(['clamp', positions, options]);
+      return positions.map((p) => {
+        const { lon, lat } = toLonLatH(p);
+        const h = answer({ lon, lat }, options);
+        return h === null ? null : fromDegrees(lon, lat, h);
+      });
+    },
+    ...query,
   };
+  bindRenderer(viewer, { query: port, capabilities: new Set(capabilities) });
+  return { viewer, calls, port };
 }
 
-test('now reads the drawn surface, seeing through what the caller excludes', () => {
-  const s = scene();
-  const own = [{ name: 'own marker' }];
-  assert.equal(heightsFor(s).now(AUSTIN, { exclude: own }), 150);
-  const [[, carto, exclude]] = s.calls;
-  assert.ok(
-    Math.abs(Cesium.Math.toDegrees(carto.longitude) - AUSTIN.lon) < 1e-9,
-  );
-  assert.equal(exclude, own);
+const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
+
+test('now asks the query port, seeing through the sets the caller excludes', () => {
+  const { viewer, calls } = bound();
+  assert.equal(heightsOf(viewer).now(AUSTIN, { exclude: ['own:1'] }), 150);
+  assert.deepEqual(calls, [['now', AUSTIN, { exclude: ['own:1'] }]]);
 });
 
-test('now takes a Cartographic as it is', () => {
-  const s = scene();
-  const carto = Cesium.Cartographic.fromDegrees(AUSTIN.lon, AUSTIN.lat);
-  heightsFor(s).now(carto);
-  assert.equal(s.calls[0][1], carto);
+test('now takes radians as a cartographic gives them', () => {
+  const { viewer, calls } = bound();
+  heightsOf(viewer).now({
+    longitude: (AUSTIN.lon * Math.PI) / 180,
+    latitude: (AUSTIN.lat * Math.PI) / 180,
+  });
+  const [[, point, options]] = calls;
+  assert.ok(near(point.lon, AUSTIN.lon) && near(point.lat, AUSTIN.lat));
+  assert.deepEqual(options, {});
 });
 
 test('a miss is null, whatever form it takes', () => {
-  for (const sampleHeight of [
+  for (const height of [
+    null,
     () => undefined,
-    () => Number.NaN,
+    Number.NaN,
     () => {
-      throw new Error('depth textures unsupported');
+      throw new Error('lost context');
     },
   ]) {
-    assert.equal(heightsFor(scene({ sampleHeight })).now(AUSTIN), null);
+    const { viewer } = bound({ height });
+    assert.equal(heightsOf(viewer).now(AUSTIN), null);
   }
-  assert.equal(
-    heightsFor(scene({ sampleHeight: undefined })).now(AUSTIN),
-    null,
-  );
-  assert.equal(heightsFor(scene()).now({ lon: 'x', lat: 1 }), null);
+  const { viewer, calls } = bound();
+  assert.equal(heightsOf(viewer).now({ lon: 'x', lat: 1 }), null);
+  assert.equal(calls.length, 0, 'a bad point is not asked');
+  assert.equal(heightsOf({}).now(AUSTIN), null, 'no renderer, no height');
 });
 
-test('terrain reads the loaded terrain tiles only', () => {
-  const s = scene();
-  assert.equal(heightsFor(s).now(AUSTIN, { against: 'terrain' }), 140);
-  assert.equal(s.calls.length, 0, 'the drawn surface is not sampled');
-  assert.equal(
-    heightsFor(scene({ globe: undefined })).now(AUSTIN, { against: 'terrain' }),
-    null,
-  );
+test('against picks the surface the port samples', () => {
+  const { viewer, calls } = bound({
+    height: (_, { against }) => (against === 'terrain' ? 140 : 150),
+  });
+  assert.equal(heightsOf(viewer).now(AUSTIN, { against: 'terrain' }), 140);
+  assert.deepEqual(calls[0][2], { against: 'terrain' });
 });
 
 test('clampNow moves a position onto the surface, or misses with null', () => {
-  const s = scene();
-  const own = [{}];
-  const position = Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, 0);
-  const clamped = heightsFor(s).clampNow(position, { exclude: own });
-  assert.ok(
-    Math.abs(Cesium.Cartographic.fromCartesian(clamped).height - 150) < 1e-6,
-  );
-  assert.equal(s.calls[0][2], own);
+  const { viewer, calls } = bound();
+  const position = fromDegrees(AUSTIN.lon, AUSTIN.lat, 0);
+  const clamped = heightsOf(viewer).clampNow(position, { exclude: ['own:1'] });
+  const at = toLonLatH(clamped);
+  assert.ok(near(at.height, 150) && near(at.lon, AUSTIN.lon, 1e-9));
+  assert.deepEqual(calls[0][2], { exclude: ['own:1'] });
   assert.equal(
-    heightsFor(scene({ clampToHeight: () => undefined })).clampNow(position),
+    heightsOf(bound({ height: null }).viewer).clampNow(position),
     null,
   );
+  assert.equal(heightsOf(viewer).clampNow({ x: Number.NaN, y: 0, z: 0 }), null);
+  assert.equal(heightsOf(viewer).clampNow({ x: 0, y: 0, z: 0 }), null);
 });
 
-test('batch answers each point once the tiles stream, null per miss', async () => {
-  let seen;
-  const s = scene({
-    async sampleHeightMostDetailed(cartos, exclude) {
-      seen = exclude;
-      cartos.forEach((c, i) => (c.height = i === 1 ? undefined : 100 + i));
-      return cartos;
-    },
+test('batch asks for the finest heights, null per miss and per bad point', async () => {
+  const { viewer, calls } = bound({
+    height: (point) => (point.lon === 0 ? null : 100),
   });
-  const own = [{}];
-  const heights = await heightsFor(s).batch(
+  const heights = await heightsOf(viewer).batch(
     [
       AUSTIN,
       { lon: 0, lat: 0 },
-      Cesium.Cartographic.fromDegrees(1, 1, 999),
       { lon: 'bad' },
+      { longitude: 0.1, latitude: 0.1 },
     ],
-    { exclude: own },
+    { exclude: ['own:1'] },
   );
-  assert.deepEqual(heights, [100, null, 102, null]);
-  assert.equal(seen, own);
+  assert.deepEqual(heights, [100, null, null, 100]);
+  const [[, points, options]] = calls;
+  assert.equal(points.length, 3, 'only valid points are asked');
+  assert.deepEqual(options, { exclude: ['own:1'], mostDetailed: true });
 });
 
-test('batch leaves the caller’s Cartographics alone', async () => {
-  const s = scene({
-    async sampleHeightMostDetailed(cartos) {
-      cartos.forEach((c) => (c.height = 5));
-      return cartos;
-    },
-  });
-  const carto = Cesium.Cartographic.fromDegrees(1, 1, 999);
-  await heightsFor(s).batch([carto]);
-  assert.equal(carto.height, 999);
-});
-
-test('terrain on an ellipsoid is height 0, without sampling tiles', async () => {
-  const s = scene({ terrainProvider: new Cesium.EllipsoidTerrainProvider() });
-  assert.deepEqual(
-    await heightsFor(s).batch([AUSTIN, { lon: 'x', lat: 1 }], {
-      against: 'terrain',
-    }),
-    [0, null],
-  );
-});
-
-test('batch misses everything when the scene cannot stream, and rejects when it fails', async () => {
-  assert.deepEqual(await heightsFor(scene()).batch([AUSTIN]), [null]);
-  const failing = scene({
-    sampleHeightMostDetailed: async () => {
+test('batch misses everything without a renderer, and rejects when the query fails', async () => {
+  assert.deepEqual(await heightsOf({}).batch([AUSTIN]), [null]);
+  assert.deepEqual(await heightsOf({}).clampBatch([{ x: 1, y: 0, z: 0 }]), [
+    null,
+  ]);
+  const { viewer } = bound({
+    sampleHeight: async () => {
       throw new Error('scene destroyed');
     },
-    clampToHeightMostDetailed: async () => {
+    clampToSurface: async () => {
       throw new Error('scene destroyed');
     },
   });
-  await assert.rejects(heightsFor(failing).batch([AUSTIN]), /destroyed/);
+  await assert.rejects(heightsOf(viewer).batch([AUSTIN]), /destroyed/);
   await assert.rejects(
-    heightsFor(failing).clampBatch([Cesium.Cartesian3.UNIT_X]),
+    heightsOf(viewer).clampBatch([{ x: 1, y: 0, z: 0 }]),
     /destroyed/,
   );
-  assert.deepEqual(
-    await heightsFor(scene()).batch([AUSTIN], { against: 'terrain' }),
-    [null],
-    'no terrain provider, no terrain heights',
+});
+
+test('a destroyed scene fails the asynchronous queries', async () => {
+  const viewer = { isDestroyed: () => true };
+  await assert.rejects(heightsOf(viewer).batch([AUSTIN]), /destroyed/);
+  await assert.rejects(
+    heightsOf(viewer).clampBatch([{ x: 1, y: 0, z: 0 }]),
+    /destroyed/,
   );
+  assert.equal(heightsOf(viewer).now(AUSTIN), null);
 });
 
 test('clampBatch clamps copies and misses per position', async () => {
-  const s = scene({
-    async clampToHeightMostDetailed(positions) {
-      return positions.map((p, i) => (i === 0 ? p : undefined));
-    },
+  const { viewer, calls } = bound({
+    height: (point) => (point.lon > 0 ? null : 150),
   });
-  const position = Cesium.Cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, 0);
-  const [first, second] = await heightsFor(s).clampBatch([position, position]);
-  assert.notEqual(first, position, 'the caller’s position is not mutated');
+  const position = fromDegrees(AUSTIN.lon, AUSTIN.lat, 0);
+  const [first, second] = await heightsOf(viewer).clampBatch([
+    position,
+    fromDegrees(10, 10, 0),
+  ]);
+  assert.ok(near(toLonLatH(first).height, 150));
   assert.equal(second, null);
-});
-
-test('supported reports whether the drawn surface can be queried', () => {
-  assert.deepEqual(heightsFor(scene()).supported(), {
-    surface: true,
-    clamp: true,
-  });
-  assert.deepEqual(
-    heightsFor(
-      scene({
-        sampleHeightSupported: false,
-        clampToHeightSupported: undefined,
-      }),
-    ).supported(),
-    { surface: false, clamp: false },
+  assert.notEqual(
+    calls[0][1][0],
+    position,
+    'the caller’s position is not passed on',
   );
 });
 
-test('supported answers without allocating', () => {
-  const s = scene();
-  assert.equal(heightsFor(s).supported(), heightsFor(s).supported());
+test('supported reports the renderer’s sampleHeight capability', () => {
+  assert.deepEqual(heightsOf(bound().viewer).supported(), {
+    surface: true,
+    clamp: true,
+  });
+  assert.deepEqual(heightsOf(bound({ capabilities: [] }).viewer).supported(), {
+    surface: false,
+    clamp: false,
+  });
+  assert.deepEqual(heightsOf({}).supported(), { surface: false, clamp: false });
 });
 
-test('one service per scene', () => {
-  const s = scene();
-  assert.equal(heightsFor(s), heightsFor(s));
-  assert.notEqual(heightsFor(s), heightsFor(scene()));
+test('supported answers without allocating', () => {
+  const { viewer } = bound();
+  assert.equal(heightsOf(viewer).supported(), heightsOf(viewer).supported());
+});
+
+test('one service per host', () => {
+  const { viewer } = bound();
+  assert.equal(heightsOf(viewer), heightsOf(viewer));
+  assert.notEqual(heightsOf(viewer), heightsOf(bound().viewer));
 });
 
 test('height queries go through the service', () => {
-  // A renderer that answers heights from a cache or asynchronously plugs in
-  // at src/queries/heights.js; a site that asks Cesium directly bypasses it.
+  // The app asks the query port through src/queries/heights.js; a site that
+  // asks the port's height members itself, or Cesium directly, bypasses it.
   const SERVICE = 'src/queries/heights.js';
   // The renderer contract's own height members, and the renderer, stub and suite
   // that implement and call them: the Cesium adapter answers them through

@@ -12,7 +12,7 @@
  * own sets.
  */
 import * as Cesium from 'cesium';
-import { heightsFor } from '../../queries/heights.js';
+import { heightsFor } from './heights.js';
 import { findDraw, provideUnboundQuery } from '../rendererOf.js';
 import { toCartesian } from './common.js';
 import { unboundDrawPart } from './draw.js';

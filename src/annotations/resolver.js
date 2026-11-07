@@ -45,7 +45,7 @@ import {
 import { createOutlineRungs } from './outlineRungs.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 // The application operations entry reaches locations.js, whose flights go
 // through the camera and query ports and which cannot load the Cesium adapter
 // itself; this listed module loads the factories a viewer with no renderer

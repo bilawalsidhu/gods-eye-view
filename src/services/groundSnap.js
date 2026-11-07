@@ -47,7 +47,7 @@
  */
 
 import * as Cesium from 'cesium';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a

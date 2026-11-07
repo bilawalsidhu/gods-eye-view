@@ -1,7 +1,7 @@
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import * as Cesium from 'cesium';
 import { DOT_HEIGHT_OFFSET, MAX_WAYPOINTS_PER_ROAD } from './policy.js';
-import { heightsFor } from '../../queries/heights.js';
+import { heightsFor } from '../../render/cesium/heights.js';
 
 function surfaceTilesReady(scene) {
   if (scene.globe?.show) return scene.globe.tilesLoaded !== false;

@@ -2,7 +2,7 @@ import { recordWorkSlice } from '../sources/phaseTiming.js';
 import { ringCentroid } from '../sources/featureGeometry.js';
 import * as Cesium from 'cesium';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 
 /**
  * World-space annotation renderer (Direction A).

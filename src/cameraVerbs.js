@@ -30,7 +30,7 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from './renderGovernor.js';
-import { heightsFor } from './queries/heights.js';
+import { heightsFor } from './render/cesium/heights.js';
 import { cameraOf } from './render/cesium/camera.js';
 import { findCamera } from './render/rendererOf.js';
 

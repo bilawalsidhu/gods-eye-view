@@ -3,7 +3,7 @@ import * as Cesium from 'cesium';
 import { createImportImageBudget } from './geoImportImages.js';
 import { createImportedPins } from './geoImportPins.js';
 import { msg } from '../i18n/marker.js';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 
 /** Largest file accepted, in bytes. */
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;

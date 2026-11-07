@@ -91,7 +91,6 @@
   "src/maps/imagery.js",
   "src/maps/terrain.js",
   "src/overlays/worldOverlay.js",
-  "src/queries/heights.js",
   "src/sceneCommandRelease.js",
   "src/scenes/dataPacks/geometry.js",
   "src/scenes/dataPacks/presentation.js",

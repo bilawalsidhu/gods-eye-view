@@ -28,7 +28,7 @@ import { createImagerySplit } from '../ui/imagerySplit.js';
 import { formatDate, t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 import { cameraOf } from '../render/cesium/camera.js';
 import { findCamera } from '../render/rendererOf.js';
 

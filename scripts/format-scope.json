@@ -65,6 +65,7 @@
   "src/render/cesium/tileRequests.js",
   "src/render/cesium/tileRequests.test.mjs",
   "src/queries/heights.test.mjs",
+  "src/render/cesium/heights.test.mjs",
   "docs/CODE-BOUNDARIES.md",
   "src/main.js",
   "docs/APPLICATION.md",

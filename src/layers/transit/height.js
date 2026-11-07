@@ -7,7 +7,7 @@ import {
   HEIGHT_SAMPLE_MAX_ALTITUDE_M,
   withinViewBounds,
 } from './policy.js';
-import { heightsFor } from '../../queries/heights.js';
+import { heightsFor } from '../../render/cesium/heights.js';
 
 /** Surface preparation off the render path, shared by markers and history. */
 export function createHeight({ state, services, parts }) {

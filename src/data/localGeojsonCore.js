@@ -12,7 +12,7 @@ import {
   applyInfraEvictionGrace,
   shouldRecomputeInfraLod,
 } from './localGeojsonLod.js';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 
 const DEFAULT_LABEL_MAX = 900;
 const DEFAULT_LABEL_GRID_PX = 132;

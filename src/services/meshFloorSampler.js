@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { approxDistanceKm } from '../data/approxDistance.js';
-import { heightsFor } from '../queries/heights.js';
+import { heightsFor } from '../render/cesium/heights.js';
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
