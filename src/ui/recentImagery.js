@@ -22,6 +22,7 @@ import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
   hhmm,
+  lonSpanDeg,
   wvsSnapshotUrl,
 } from '../layers/recentImagery/model.js';
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
@@ -522,6 +523,10 @@ export function createRecentImageryPanel({
 
   function exportsView() {
     const ab = snapshot.mode === 'ab';
+    // Worldview Snapshots rejects a crossing BBOX: say so up front.
+    const crossing = Boolean(
+      snapshot.box && snapshot.box.west > snapshot.box.east,
+    );
     return [
       {
         id: 'export',
@@ -531,10 +536,12 @@ export function createRecentImageryPanel({
           label: ab
             ? t('EXPORT {slot}', { slot: slotId.toUpperCase() })
             : t('EXPORT'),
-          title: ab
-            ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
-            : t('Download the image as a PNG'),
-          disabled: !exportTarget(slotId) || exporting.has(slotId),
+          title: crossing
+            ? t('Select one side of the dateline')
+            : ab
+              ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
+              : t('Download the image as a PNG'),
+          disabled: crossing || !exportTarget(slotId) || exporting.has(slotId),
           reserved: slotId === 'b' ? !ab : undefined,
           onClick: () => void exportImage(slotId),
         })),
@@ -766,13 +773,19 @@ export function createRecentImageryPanel({
     const candidate = exportTarget(slotId);
     if (destroyed || !candidate || !snapshot.box || exporting.has(slotId))
       return false;
+    // Worldview Snapshots rejects a west > east BBOX: say so, request nothing.
+    if (snapshot.box.west > snapshot.box.east) {
+      exportError = t('Select one side of the dateline');
+      preserveScroll(paint);
+      return false;
+    }
     exporting.add(slotId);
     exportError = null;
     preserveScroll(paint);
     // The snapshot is plate carrée: keep the box's degree aspect, with the
     // longer side at the size limit.
     const size = longerSideKm(snapshot.boxSizeKm) > 25 ? 2048 : 1024;
-    const spanLon = Math.abs(snapshot.box.east - snapshot.box.west) || 1;
+    const spanLon = lonSpanDeg(snapshot.box.west, snapshot.box.east) || 1;
     const spanLat = Math.abs(snapshot.box.north - snapshot.box.south) || 1;
     const width = Math.max(
       1,

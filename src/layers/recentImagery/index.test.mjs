@@ -1395,3 +1395,18 @@ test('a voice search cancelled mid-flight says so instead of looking empty', asy
   assert.equal(f.snap().searching, false);
   assert.equal(f.snap().notice, 'Search cancelled');
 });
+
+test('a box dragged across the dateline is searched, listed and draped as one box', async () => {
+  const f = fixture();
+  const box = { west: 179.8, south: 10, east: -179.8, north: 10.4 };
+  f.layer.enable();
+  assert.equal(f.layer.setBox(box), true);
+  assert.equal(f.snap().boxError, null);
+  assert.deepEqual(f.catalog.searches.at(-1).request.box, box);
+  f.catalog.resolveLast();
+  await settle();
+  assert.equal(f.snap().candidates.length, 4);
+  assert.equal(f.snap().preview.key, S18);
+  assert.equal(f.drapes().a, `${S18}|none`, 'the crossing box is draped');
+  assert.equal(f.snap().boxSizeKm.width < 100, true, 'the short arc, not 360°');
+});
