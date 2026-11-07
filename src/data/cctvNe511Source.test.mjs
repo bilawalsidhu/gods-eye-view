@@ -11,7 +11,9 @@ import {
 import {
   NE511_GRAPHQL_URL,
   NE511_GROUND_ELEVATION_M,
+  NE511_IMAGE_ORIGIN,
 } from '../../server/providers/cctv/constants.js';
+import { fetchWithinHost } from '../../server/providers/cctv/media.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 import { DEFAULT_NE511_HEADINGS_FILE } from '../../server/providers/cctv/headings.js';
 
@@ -334,4 +336,24 @@ test('the Nebraska pack stays off unless CCTV_NE511_ENABLED=1', async (t) => {
       t.mock.restoreAll();
     }
   }
+});
+
+test('a redirect on the Nebraska 511 frame host stays inside images/', async () => {
+  const frame = `${NE511_IMAGE_ORIGIN}vid-i80-1.jpg`;
+  const redirectTo = (location) => async (url) =>
+    url === frame
+      ? new Response(null, { status: 302, headers: { location } })
+      : new Response('frame', { headers: { 'content-type': 'image/jpeg' } });
+  for (const location of ['/admin/', '/images/../x.jpg'])
+    assert.equal(
+      await fetchWithinHost(frame, {}, redirectTo(location)),
+      null,
+      location,
+    );
+  const followed = await fetchWithinHost(
+    frame,
+    {},
+    redirectTo('/images/vid-i80-2.jpg'),
+  );
+  assert.equal(await followed.text(), 'frame');
 });
