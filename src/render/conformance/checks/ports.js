@@ -1349,6 +1349,75 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.styles',
+      'flow lines draw draped and in space, and a line with a depth-fail colour moves every frame, without stopping the frame or picks',
+      async (h, r) => {
+        await overAustin(h, r);
+        const lines = r.draw.lines({ id: 'conf:line-styles' });
+        const at = (dLon, height = 0) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat, height });
+        const flow = {
+          kind: 'flow',
+          color: [0.2, 0.8, 1, 0.95],
+          repeat: 8,
+          duty: 0.5,
+          speed: 1,
+        };
+        const head = (height) => ({
+          id: 'head',
+          positions: [at(-0.002, 50), at(0.002, height)],
+          widthPx: 3,
+          mode: '3d',
+          style: { kind: 'solid', color: '#ff00ff' },
+          depthFailColor: [1, 0, 1, 0.45],
+        });
+        lines.set([
+          {
+            id: 'route',
+            positions: [at(-0.003), at(0), at(0.003)],
+            widthPx: 9,
+            mode: 'draped',
+            clampTo: 'both',
+            style: flow,
+          },
+          {
+            id: 'air',
+            positions: [at(-0.003, 200), at(0.003, 200)],
+            widthPx: 4,
+            mode: '3d',
+            style: flow,
+          },
+          head(100),
+        ]);
+        equal(lines.size(), 3, 'every line held');
+        for (let i = 0; i < 4; i++) {
+          lines.upsert([head(100 + 50 * i)]);
+          await drawn(h, r, 1);
+        }
+        equal(lines.size(), 3, 'moved in place, not added');
+        lines.upsert([{ ...head(300), show: false }]);
+        await drawn(h, r);
+        const points = r.draw.points({ id: 'conf:line-styles-points' });
+        const pos = at(0, 0);
+        points.set([{ id: 'p', pos, pixelSize: 16, color: '#ff0000' }]);
+        await drawn(h, r);
+        const s = r.query.project(pos);
+        ok(s, 'the point projects');
+        equal(
+          r.query
+            .drillPick(s.x, s.y)
+            .find((hit) => hit.set === 'conf:line-styles-points')?.id,
+          'p',
+          'picks still find what is drawn among the lines',
+        );
+        lines.clear();
+        await drawn(h, r);
+        equal(lines.size(), 0, 'cleared');
+        points.dispose();
+        lines.dispose();
+      },
+    ),
+    check(
       'draw.points.update',
       'an upserted point is drawn where it now is once drawn again, and shows only within its display range',
       async (h, r) => {

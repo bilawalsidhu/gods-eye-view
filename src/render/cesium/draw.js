@@ -134,6 +134,39 @@ const ANCHORS = {
   top: Cesium.VerticalOrigin.TOP,
 };
 
+/** The `flow` line material's type. */
+const FLOW_MATERIAL = 'DrawFlowLine';
+
+/**
+ * Along the line (`st.s`, 0 at its start, 1 at its end) the pattern repeats
+ * `repeat` times, each cell lit for its first `duty`, scrolled toward the
+ * end by `time * speed` cells; between the dashes the line stays faintly
+ * drawn, and the lit cells glow.
+ */
+const FLOW_SOURCE = `
+czm_material czm_getMaterial(czm_materialInput materialInput) {
+  czm_material m = czm_getDefaultMaterial(materialInput);
+  float s = materialInput.st.s;
+  float flow = fract(s * repeat - time * speed);
+  float on = smoothstep(duty + 0.08, duty - 0.08, flow);
+  float a = max(on, 0.18);
+  m.diffuse = color.rgb;
+  m.emission = color.rgb * on * 0.9;
+  m.alpha = color.a * a;
+  return m;
+}`;
+
+/**
+ * The `flow` lines' clock, seconds, for a line flowing at `speed` cells a
+ * second: wrapped to one cell's time, which draws the same dashes, so the
+ * single-precision uniform never runs out of digits over a long session.
+ */
+function flowTime(speed) {
+  if (!speed) return 0;
+  const cells = (performance.now() / 1000) * speed;
+  return (cells - Math.floor(cells)) / speed;
+}
+
 /**
  * The draw port over `scene`, and what the other ports read of it: the live
  * sets by id, a version that changes with them, the scene's 3D tilesets and
@@ -224,6 +257,7 @@ export function createCesiumDraw({
         // or where an undraped one runs, are changed where they are.
         if (patchPoints(record, list) || patchLines(record, list)) {
           for (const item of list) items.set(item.id, item);
+          if (kind === 'lines') noteFlows(record);
           setsVersion += 1;
           requestRender();
           return;
@@ -444,6 +478,7 @@ export function createCesiumDraw({
     if (record.retiring && !record.retiring.isDestroyed?.() && live())
       scene.primitives.remove(record.retiring);
     record.retiring = null;
+    record.retiringFlows = null;
   }
 
   /**
@@ -485,6 +520,33 @@ export function createCesiumDraw({
         if (placed.primitive.show !== show) placed.primitive.show = show;
       }
     }
+  }
+
+  /** Each frame, before it draws: the flow lines' clock. */
+  function runFlows() {
+    for (const record of sets.values()) {
+      for (const material of record.flowMaterials ?? [])
+        material.uniforms.time = flowTime(material.uniforms.speed);
+      for (const material of record.retiringFlows ?? [])
+        material.uniforms.time = flowTime(material.uniforms.speed);
+    }
+  }
+
+  /** Whether a shown set shows flow lines, which draw on in later frames. */
+  const flowing = () =>
+    [...sets.values()].some(
+      (record) => record.spec.show !== false && record.flowShown,
+    );
+
+  /** Note whether a line set shows any flow line, once its lines change. */
+  function noteFlows(record) {
+    record.flowShown = false;
+    if (!record.flowMaterials?.length) return;
+    for (const item of record.items.values())
+      if (item.style?.kind === 'flow' && item.show !== false) {
+        record.flowShown = true;
+        return;
+      }
   }
 
   function uncull(record) {
@@ -885,8 +947,32 @@ export function createCesiumDraw({
     return billboard;
   }
 
+  /**
+   * A `flow` line's material: dashes that run toward the line's end, over a
+   * faint line between them, at `speed` cells a second (`flowTime` keeps
+   * its clock). The dash pattern of the route annotations, which drew their
+   * routes before the draw port.
+   */
+  function flowMaterial(style) {
+    return new Cesium.Material({
+      fabric: {
+        type: FLOW_MATERIAL,
+        uniforms: {
+          color: toColor(style.color),
+          time: flowTime(style.speed),
+          repeat: style.repeat,
+          duty: style.duty,
+          speed: style.speed,
+        },
+        source: FLOW_SOURCE,
+      },
+    });
+  }
+
   function lineMaterial(style) {
     switch (style.kind) {
+      case 'flow':
+        return flowMaterial(style);
       case 'solid':
         return Cesium.Material.fromType('Color', {
           color: toColor(style.color),
@@ -951,56 +1037,141 @@ export function createCesiumDraw({
     return dense;
   }
 
+  /**
+   * Whether `positions` make a line: two or more of them, not all at one
+   * place.
+   */
+  const drawable = (positions) =>
+    positions.length >= 2 &&
+    positions.some((p) => !Cesium.Cartesian3.equals(p, positions[0]));
+
+  /**
+   * A line not draped that has a `depthFailColor`: a primitive of its own,
+   * drawn in that colour where the surface hides it. Built at once, so one
+   * built anew where it moves draws in the frame it replaces the old one.
+   * Null when its positions make no line.
+   */
+  function depthFailLine(record, item, id) {
+    const positions = linePositions(item);
+    if (!drawable(positions)) return null;
+    const material = lineMaterial(item.style);
+    if (item.style.kind === 'flow') record.flowMaterials.push(material);
+    return new Cesium.Primitive({
+      geometryInstances: new Cesium.GeometryInstance({
+        geometry: new Cesium.PolylineGeometry({
+          positions,
+          width: item.widthPx,
+          vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT,
+          // Straight between the positions, as the collection's lines are
+          // (geodesic ones come densified).
+          arcType: Cesium.ArcType.NONE,
+        }),
+        id,
+      }),
+      appearance: new Cesium.PolylineMaterialAppearance({ material }),
+      depthFailAppearance: new Cesium.PolylineMaterialAppearance({
+        material: Cesium.Material.fromType('Color', {
+          color: toColor(item.depthFailColor),
+        }),
+      }),
+      show: item.show !== false,
+      asynchronous: false,
+    });
+  }
+
   function buildLines(record) {
-    const host = new Cesium.PolylineCollection();
+    // Refused before anything changes, so the set keeps drawing as it was.
+    for (const item of record.items.values())
+      if (
+        item.mode === 'draped' &&
+        item.style.kind !== 'solid' &&
+        item.style.kind !== 'flow'
+      )
+        throw new Error('the Cesium renderer drapes solid and flow lines only');
+    const polylines = new Cesium.PolylineCollection();
     const draped = new Map();
+    const flows = [];
     // Each line as drawn, for upserts that change it in place.
     const parts = new Map();
     record.lineParts = parts;
+    // What the old host's flow lines run on, while it still draws; a host
+    // already retiring keeps drawing in its place, with its own.
+    if (!record.retiring) record.retiringFlows = record.flowMaterials ?? null;
+    record.flowMaterials = [];
+    // Lines with a depth-fail colour, beside the collection.
+    let deep = null;
     for (const item of record.items.values()) {
       if (item.mode === 'draped') {
-        if (item.style.kind !== 'solid')
-          throw new Error('the Cesium renderer drapes solid lines only');
+        const kind = item.style.kind;
         const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
-        if (!draped.has(clampTo)) draped.set(clampTo, []);
         const id = pickId(record, item);
-        parts.set(item.id, {
+        const part = {
           look: lineLook(item),
           positions: flatPositions(item.positions),
           clampTo,
           id,
           ground: null,
-        });
-        draped.get(clampTo).push(
-          new Cesium.GeometryInstance({
-            geometry: new Cesium.GroundPolylineGeometry({
-              positions: linePositions(item),
-              width: item.widthPx,
-              arcType: Cesium.ArcType.GEODESIC,
-            }),
-            attributes: {
-              color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                toColor(item.style.color),
-              ),
-              show: new Cesium.ShowGeometryInstanceAttribute(
-                item.show !== false,
-              ),
-            },
-            id,
-          }),
+        };
+        parts.set(item.id, part);
+        const show = new Cesium.ShowGeometryInstanceAttribute(
+          item.show !== false,
         );
+        const instance = new Cesium.GeometryInstance({
+          geometry: new Cesium.GroundPolylineGeometry({
+            positions: linePositions(item),
+            width: item.widthPx,
+            arcType: Cesium.ArcType.GEODESIC,
+          }),
+          attributes:
+            kind === 'solid'
+              ? {
+                  color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                    toColor(item.style.color),
+                  ),
+                  show,
+                }
+              : { show },
+          id,
+        });
+        if (kind === 'flow') {
+          // A material for the whole primitive: one primitive each.
+          const material = flowMaterial(item.style);
+          record.flowMaterials.push(material);
+          flows.push({ clampTo, instance, material, part });
+          continue;
+        }
+        if (!draped.has(clampTo)) draped.set(clampTo, []);
+        draped.get(clampTo).push(instance);
         continue;
       }
-      const polyline = host.add({
+      if (item.depthFailColor) {
+        deep ??= new Cesium.PrimitiveCollection();
+        const id = pickId(record, item);
+        const primitive = depthFailLine(record, item, id);
+        if (primitive) deep.add(primitive);
+        parts.set(item.id, { look: lineLook(item), id, deep: primitive });
+        continue;
+      }
+      const material = lineMaterial(item.style);
+      if (item.style.kind === 'flow') record.flowMaterials.push(material);
+      const polyline = polylines.add({
         positions: linePositions(item),
         width: item.widthPx,
-        material: lineMaterial(item.style),
+        material,
         show: item.show !== false,
         id: pickId(record, item),
       });
       parts.set(item.id, { look: lineLook(item), polyline });
     }
-    if (!draped.size) return replaceHost(record, host);
+    let own = polylines;
+    if (deep) {
+      own = new Cesium.PrimitiveCollection();
+      own.add(polylines);
+      own.add(deep);
+    }
+    record.deepLines = deep;
+    noteFlows(record);
+    if (!draped.size && !flows.length) return replaceHost(record, own);
     // Draped lines drape as the entities' clamped polylines do.
     const byClamp = new Map();
     const ground = [...draped].map(([clampTo, geometryInstances]) => {
@@ -1014,8 +1185,17 @@ export function createCesiumDraw({
       return primitive;
     });
     for (const part of parts.values())
-      if (part.clampTo) part.ground = byClamp.get(part.clampTo);
-    replaceHost(record, collect(host, ground), ground, host);
+      if (part.clampTo) part.ground = byClamp.get(part.clampTo) ?? null;
+    for (const { clampTo, instance, material, part } of flows) {
+      part.ground = new Cesium.GroundPolylinePrimitive({
+        geometryInstances: [instance],
+        appearance: new Cesium.PolylineMaterialAppearance({ material }),
+        classificationType: classificationOf(clampTo),
+        allowPicking: record.spec.pickable !== false,
+      });
+      ground.push(part.ground);
+    }
+    replaceHost(record, collect(own, ground), ground, own);
   }
 
   /**
@@ -1051,7 +1231,8 @@ export function createCesiumDraw({
   /**
    * Upsert lines in place, without a rebuild, when every item is drawn now
    * and looks the same: then only whether it shows, its `meta`, and where
-   * a line not draped runs change. A draped line keeps its positions, and
+   * a line not draped runs change (one with a depth-fail colour is built
+   * anew, alone). A draped line keeps its positions, and
    * its ground primitive must be ready. False, changing nothing, otherwise.
    */
   function patchLines(record, list) {
@@ -1060,6 +1241,8 @@ export function createCesiumDraw({
     for (const item of list) {
       const was = parts.get(item.id);
       if (!was || was.look !== lineLook(item)) return false;
+      if (was.deep !== undefined && record.deepLines?.isDestroyed())
+        return false;
       if (
         was.ground &&
         (was.ground.isDestroyed() ||
@@ -1075,6 +1258,20 @@ export function createCesiumDraw({
         was.polyline.positions = linePositions(item);
         was.polyline.show = show;
         was.polyline.id.meta = item.meta;
+        continue;
+      }
+      if (was.deep !== undefined) {
+        was.id.meta = item.meta;
+        // Built anew where it now runs, under the same pick id.
+        const deep = record.deepLines;
+        const old = was.deep;
+        if (old)
+          record.flowMaterials = record.flowMaterials.filter(
+            (material) => material !== old.appearance.material,
+          );
+        was.deep = depthFailLine(record, item, was.id);
+        if (was.deep) deep.add(was.deep);
+        if (old) deep.remove(old);
         continue;
       }
       was.id.meta = item.meta;
@@ -1525,17 +1722,21 @@ export function createCesiumDraw({
     /** Whether a set's ground primitives are still being built. */
     building: () => [...sets.values()].some((record) => record.pending),
     /** Each frame, before it draws: the horizon cull. */
-    beforeRender: cullHorizon,
+    beforeRender() {
+      cullHorizon();
+      runFlows();
+    },
     /** Each frame, after it drew: clamp state, and ground swaps. */
     afterRender() {
       watchClamp();
       swapReady();
-      // Rows moving on a live clock draw on in the frames that follow.
-      for (const record of sets.values())
-        if (record.gpu?.animating()) {
-          requestRender();
-          break;
-        }
+      // Rows moving on a live clock, and flowing lines, draw on in the
+      // frames that follow.
+      if (
+        [...sets.values()].some((record) => record.gpu?.animating()) ||
+        flowing()
+      )
+        requestRender();
     },
     /**
      * Let go of the sets; with `removeHosts`, take what they draw out of
