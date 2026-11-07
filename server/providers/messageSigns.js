@@ -9,6 +9,7 @@
  */
 import { loadNe511Signs } from './messageSigns/ne511.js';
 import { readResponseBytesCapped } from './common/http.js';
+import { admitSameSiteKeyless } from './common/same-site.js';
 
 /** Refresh interval for the cached sign list. */
 export const SIGNS_CACHE_MS = 60 * 1000;
@@ -182,6 +183,11 @@ export function messageSignsProxy({
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/signs', async (req, res) => {
+      // Keyless, like /api/cctv: a cross-site page must not be able to drive
+      // this relay (an <img> pointed at /api/signs/image is enough to make the
+      // server fetch from the vendor bucket), while a reverse proxy still
+      // reaches it.
+      if (admitSameSiteKeyless(req, res)) return;
       const url = new URL(req.url || '/', 'http://localhost');
 
       if (url.pathname === '/image') {

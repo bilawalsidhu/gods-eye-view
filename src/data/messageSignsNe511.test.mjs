@@ -404,7 +404,7 @@ test('the pack reports failure and emptiness as different outcomes', async (t) =
 });
 
 /** Drive the plugin's middleware once and capture the response. */
-async function requestSigns(plugin, url) {
+async function requestSigns(plugin, url, headers = {}) {
   let handler = null;
   plugin.configureServer({
     middlewares: { use: (_path, fn) => (handler = fn) },
@@ -415,13 +415,50 @@ async function requestSigns(plugin, url) {
     writeHead(status) {
       this.status = status;
     },
+    set statusCode(status) {
+      this.status = status;
+    },
+    setHeader() {},
     end(body) {
       this.body = String(body ?? '');
     },
   };
-  await handler({ url }, res);
+  await handler({ url, headers: { host: 'localhost:5173', ...headers } }, res);
   return res;
 }
+
+test('the sign routes refuse cross-site browser requests before any upstream work', async () => {
+  let loads = 0;
+  const packs = [
+    {
+      name: 'live',
+      enabled: () => true,
+      load: async () => {
+        loads++;
+        return [sign1('a')];
+      },
+    },
+  ];
+  const plugin = messageSignsProxy({ packs });
+  for (const path of ['/', '/image?sign=a&page=0']) {
+    const foreign = await requestSigns(plugin, path, {
+      origin: 'https://evil.example',
+    });
+    assert.equal(foreign.status, 403, `${path} with a foreign Origin`);
+    const embedded = await requestSigns(plugin, path, {
+      'sec-fetch-site': 'cross-site',
+    });
+    assert.equal(embedded.status, 403, `${path} embedded cross-site`);
+  }
+  assert.equal(loads, 0);
+
+  const sameOrigin = await requestSigns(plugin, '/', {
+    origin: 'http://localhost:5173',
+    'sec-fetch-site': 'same-origin',
+  });
+  assert.equal(sameOrigin.status, 200);
+  assert.equal(loads, 1);
+});
 
 test('the Nebraska 511 sign pack is off unless the operator opts in', (t) => {
   const pack = SIGN_PACKS.find(({ name }) => name === 'ne511');

@@ -5539,7 +5539,8 @@ The route is server-side by necessity: the upstream POST answers
 preflight, and the OPTIONS request is served by the SPA's S3 host as HTML with
 no CORS headers. `server/providers/messageSigns/ne511.js` supplies the pack and
 the shared route serves it at `/api/signs`, cached 60 s, keeping the last good
-list when a refresh fails.
+list when a refresh fails. Both `/api/signs` and `/api/signs/image` refuse cross-site
+browser requests with the keyless checks the CCTV routes use.
 
 Sign titles carry a true travel bearing ("I-80: I-80 WB Mile 447.5"), so
 headings are high-confidence. The board's FACE points the REVERSE of that
