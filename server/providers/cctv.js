@@ -757,7 +757,16 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         }
         // Learn cameras with no public picture. A 5xx/timeout is not
         // evidence of that (see feedAvailability.js).
-        if (source && upstreamCandidate)
+        // Sources fetched through fetchThrottledFrame (world cameras, Ottawa)
+        // have their own refresh floor, stale-frame reuse and failure backoff;
+        // a reused or throttled answer is not a fresh upstream reply, so they
+        // are not learned from here.
+        if (
+          source &&
+          upstreamCandidate &&
+          source.pack !== 'world-cameras' &&
+          source.sourceKind !== 'ottawa-traffic'
+        )
           feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok, {
             transient: fetchOutcome.transient,
           });
