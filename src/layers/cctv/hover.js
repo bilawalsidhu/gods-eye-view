@@ -47,6 +47,7 @@ export function createHover({ state: layerState, services, parts, source }) {
     // stills-only — same rule as the LOD selection).
     const eligible =
       !!record &&
+      record.camera.feedType !== 'embed' &&
       cameraId !== layerState._activeCameraId &&
       !layerState._cardIds.has(cameraId) &&
       !parts.model.isVideoFeedType(

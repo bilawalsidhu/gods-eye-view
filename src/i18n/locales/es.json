@@ -3255,5 +3255,12 @@
   "Maximum event age: {days}d; undated markers are kept": "Antigüedad máxima: {days} días; se conservan los marcadores sin fecha",
   "event age filter|All": "Todos",
   "Event age": "Antigüedad",
-  "Event age: {days}d · undated kept": "Antigüedad: {days} días · se conservan los marcadores sin fecha"
+  "Event age: {days}d · undated kept": "Antigüedad: {days} días · se conservan los marcadores sin fecha",
+  "Approximate location; coverage not calibrated.": "Ubicación aproximada; cobertura sin calibrar.",
+  "LOCATION · APPROXIMATE": "UBICACIÓN · APROXIMADA",
+  "Open official camera page ↗": "Abrir la página oficial de la cámara ↗",
+  "PLAYER IN PANEL": "REPRODUCTOR EN EL PANEL",
+  "PUBLIC PLAYER · EXTERNAL": "REPRODUCTOR PÚBLICO · EXTERNO",
+  "{camera} — public player": "{camera} — reproductor público",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · REPRODUCTOR PÚBLICO · UBICACIÓN APROXIMADA · COBERTURA SIN CALIBRAR"
 }

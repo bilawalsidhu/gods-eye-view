@@ -3480,5 +3480,12 @@
   "Maximum event age: {days}d; undated markers are kept": "الحد الأقصى لعمر الحدث: {days} يوم؛ تُحفظ العلامات غير المؤرخة",
   "event age filter|All": "الكل",
   "Event age": "عمر الحدث",
-  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ"
+  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ",
+  "Approximate location; coverage not calibrated.": "الموقع تقريبي؛ التغطية غير معايرة.",
+  "LOCATION · APPROXIMATE": "الموقع · تقريبي",
+  "Open official camera page ↗": "افتح صفحة الكاميرا الرسمية ↗",
+  "PLAYER IN PANEL": "المشغّل في اللوحة",
+  "PUBLIC PLAYER · EXTERNAL": "مشغّل عام · خارجي",
+  "{camera} — public player": "{camera} — مشغّل عام",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "كاميرا {city} · {name} · مشغّل عام · موقع تقريبي · تغطية غير معايرة"
 }

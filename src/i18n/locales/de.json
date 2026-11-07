@@ -3180,5 +3180,12 @@
   "Maximum event age: {days}d; undated markers are kept": "Maximales Ereignisalter: {days} Tage; undatierte Markierungen bleiben",
   "event age filter|All": "Alle",
   "Event age": "Ereignisalter",
-  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben"
+  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben",
+  "Approximate location; coverage not calibrated.": "Ungefährer Standort; Abdeckung nicht kalibriert.",
+  "LOCATION · APPROXIMATE": "STANDORT · UNGEFÄHR",
+  "Open official camera page ↗": "Offizielle Kameraseite öffnen ↗",
+  "PLAYER IN PANEL": "PLAYER IM PANEL",
+  "PUBLIC PLAYER · EXTERNAL": "ÖFFENTLICHER PLAYER · EXTERN",
+  "{camera} — public player": "{camera} — öffentlicher Player",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ÖFFENTLICHER PLAYER · UNGEFÄHRER STANDORT · ABDECKUNG NICHT KALIBRIERT"
 }

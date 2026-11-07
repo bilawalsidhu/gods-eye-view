@@ -1,6 +1,7 @@
 import { getLocale, keepCodesWithValues, msg, t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
+import { createCctvEmbed } from './cctvEmbed.js';
 import { createCctvVideoSurface } from './cctvVideo.js';
 import { presentCctvCalibration } from './cctvCalibration.js';
 import { roundHeadingDegrees } from '../data/headingDegrees.js';
@@ -56,8 +57,10 @@ export function presentCctvPanel(state, enabled) {
   // CAL promotes to CALIBRATED, RESET CAL clears.
   const badge = activeCamera?.calBadge || null;
   const dirty = !!activeCamera?.calDirty;
+  const embedded = activeCamera?.feedType === 'embed';
   return {
     enabled,
+    embedded,
     navDisabled: !enabled || catalogCount === 0,
     focusDisabled: !enabled || catalogCount === 0 || !activeId,
     toggleDisabled: !enabled,
@@ -75,14 +78,21 @@ export function presentCctvPanel(state, enabled) {
       text: autoHop ? t('AUTO HOP ON') : t('AUTO HOP OFF'),
     },
     projection: {
-      active: showProjection,
-      text: showProjection ? t('PROJECTION ON') : t('PROJECTION OFF'),
+      disabled: !enabled || embedded,
+      active: showProjection && !embedded,
+      text: embedded
+        ? t('PLAYER IN PANEL')
+        : showProjection
+          ? t('PROJECTION ON')
+          : t('PROJECTION OFF'),
     },
     quality: {
-      label: dirty
-        ? t('CAL · EDITED (UNSAVED)')
-        : t('CAL · {badge}', { badge: _calBadgeLabel(badge) }),
-      calBadge: dirty ? 'edited' : badge || '',
+      label: embedded
+        ? t('LOCATION · APPROXIMATE')
+        : dirty
+          ? t('CAL · EDITED (UNSAVED)')
+          : t('CAL · {badge}', { badge: _calBadgeLabel(badge) }),
+      calBadge: embedded ? '' : dirty ? 'edited' : badge || '',
     },
     meta: metaText(state, enabled, activeCamera, catalogCount),
     calibration: presentCctvCalibration(state, enabled),
@@ -99,6 +109,8 @@ function metaText(state, enabled, activeCamera, catalogCount) {
       : '';
     // A partner-supplied feed inside a pack names its owner here.
     const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
+    if (activeCamera.feedType === 'embed')
+      return `${activeCamera.city} · ${provider}${credit} · ${activeCamera.locationNote || t('Approximate location; coverage not calibrated.')}`;
     const calBadge = activeCamera.calBadge
       ? _calBadgeLabel(activeCamera.calBadge)
       : '';
@@ -241,7 +253,21 @@ export function _renderCctvState(state) {
 
   this.store.publish(presentCctvPanel(state, enabled));
 
-  const liveIntent = enabled && !!activeCamera?.isVideo;
+  const embedded = activeCamera?.feedType === 'embed';
+  const embedIntent = enabled && embedded;
+  const liveIntent = enabled && !embedded && !!activeCamera?.isVideo;
+  const panelVisible =
+    (embedIntent || liveIntent) &&
+    !document.hidden &&
+    !this._cctvPanel?.hidden &&
+    !this._cctvPanel?.classList.contains('collapsed') &&
+    this._cctvPanel?.getClientRects?.().length !== 0;
+  if (embedIntent && this._cctvFrameWrap && !this._cctvEmbed)
+    this._cctvEmbed = createCctvEmbed(
+      this._cctvFrameWrap.querySelector?.('#cctv-embed-host') ||
+        this._cctvFrameWrap,
+    );
+  this._cctvEmbed?.update(activeCamera, embedIntent && panelVisible);
   this.store.setLive(liveIntent);
   if (this._cctvVideo) {
     const visible =
@@ -260,7 +286,7 @@ export function _renderCctvState(state) {
     }
   }
 
-  if (this._cctvFrame && !liveIntent) {
+  if (this._cctvFrame && !liveIntent && !embedIntent) {
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
     const cameraChanged = this._frame.cameraId !== nextCameraId;

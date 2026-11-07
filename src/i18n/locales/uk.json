@@ -3330,5 +3330,12 @@
   "Maximum event age: {days}d; undated markers are kept": "Максимальний вік події: {days} дн.; позначки без дати збережено",
   "event age filter|All": "Усі",
   "Event age": "Вік події",
-  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено"
+  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено",
+  "Approximate location; coverage not calibrated.": "Приблизне розташування; покриття не відкалібровано.",
+  "LOCATION · APPROXIMATE": "РОЗТАШУВАННЯ · ПРИБЛИЗНЕ",
+  "Open official camera page ↗": "Відкрити офіційну сторінку камери ↗",
+  "PLAYER IN PANEL": "ПРОГРАВАЧ НА ПАНЕЛІ",
+  "PUBLIC PLAYER · EXTERNAL": "ПУБЛІЧНИЙ ПРОГРАВАЧ · ЗОВНІШНІЙ",
+  "{camera} — public player": "{camera} — публічний програвач",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ПУБЛІЧНИЙ ПРОГРАВАЧ · ПРИБЛИЗНЕ РОЗТАШУВАННЯ · ПОКРИТТЯ НЕ ВІДКАЛІБРОВАНО"
 }

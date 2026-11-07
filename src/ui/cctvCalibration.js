@@ -169,7 +169,8 @@ export function _beginCctvCalValueEdit(chip) {
  */
 export function presentCctvCalibration(state, enabled) {
   const activeCamera = state?.activeCamera || null;
-  const canCalibrate = !!enabled && !!activeCamera;
+  const canCalibrate =
+    !!enabled && !!activeCamera && activeCamera.feedType !== 'embed';
   const adjustOn = !!state?.calibrationMode;
   const values = {};
   for (const [id, field] of Object.entries(CCTV_CAL_FIELDS)) {
