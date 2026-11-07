@@ -1,6 +1,6 @@
 # KNOWN ISSUES
 
-Updated: September 22, 2026
+Updated: November 5, 2026
 
 This file tracks active runtime issues only.
 
@@ -142,6 +142,35 @@ Status: Open (limits)
   fMP4 or byte-range playlists are not supported.
 - When live video fails, the camera falls back to its labeled still, Street View
   or placeholder frame, which is not live video.
+
+---
+
+### News layer without a news server
+Status: Open (limits)
+
+- GDELT's places and categories are machine-coded and approximate. A report can
+  be placed in the wrong town of the same name, or at a country an article only
+  names as a nationality ("Syrian refugees" placed in Syria).
+- Copies of one agency story are merged, but the same event under different
+  wording stays as separate reports.
+- Only the 11 disputed areas in the bundled list
+  (`src/data/local_data/natural_earth/README.md`) and the territories Natural
+  Earth gives no country code (Somaliland, Northern Cyprus, Siachen Glacier,
+  the Spratly Islands and a few more) are named as themselves; everywhere else
+  Natural Earth's default country lines apply, so a place in Western Sahara,
+  for example, is named with the country those lines put it in. GDELT places a whole city at one point: Jerusalem's falls
+  inside East Jerusalem, so it is named "Jerusalem" alone.
+- A country's own stories in Local keep World News API's category (politics as
+  political, business as economy, else other) and carry no severity; fighting
+  there shows through the Conflicts reports placed in the area.
+- When World News API takes 10 to 20 s to answer a country's first read, Local
+  reads unavailable until it is asked again (the next refresh, every 2 minutes
+  while the tab is shown, or the camera settling in another half-degree cell,
+  or a section switch), which is served from that read. A read over 20 s fails
+  and is tried again with the first ask a minute or more later.
+- Local needs a World News API key. Its free plan allows 50 points a day; Core
+  stops at `WORLDNEWSAPI_DAILY_READS` reads (default 30) and Local then says the
+  daily limit is reached.
 
 ---
 

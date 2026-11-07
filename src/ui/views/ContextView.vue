@@ -36,6 +36,10 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
       <template #badge><span id="weather-panel-count" :aria-label="t('Active weather products')">0</span></template>
       <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
+    <RailPanel id="news-panel" hidden :title="t('NEWS')" sideways rail-scroller>
+      <template #badge><span id="news-panel-count" :aria-label="t('News items in the feed')">0</span></template>
+      <div id="news-panel-body" class="ui-scroll" data-rail-scroller></div>
+    </RailPanel>
     <RailPanel id="recent-imagery-panel" hidden :title="t('RECENT IMAGERY')" sideways rail-scroller>
       <template #badge><span id="recent-imagery-panel-count" :aria-label="t('Imagery days in the box')"></span></template>
       <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>

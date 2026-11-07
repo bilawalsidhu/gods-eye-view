@@ -95,6 +95,7 @@ export class PanelLayoutController {
     this._ppToggles = document.getElementById('pp-toggles');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._weatherPanel = document.getElementById('weather-panel');
+    this._newsPanel = document.getElementById('news-panel');
     this._recentImageryPanel = document.getElementById('recent-imagery-panel');
     this._streetLevelPanel = document.getElementById('street-level-panel');
   }
@@ -191,6 +192,7 @@ export class PanelLayoutController {
     for (const panel of [
       this._cctvPanel,
       this._weatherPanel,
+      this._newsPanel,
       this._recentImageryPanel,
       this._streetLevelPanel,
     ]) {
@@ -206,6 +208,7 @@ export class PanelLayoutController {
         this._ppToggles,
         this._cctvPanel,
         this._weatherPanel,
+        this._newsPanel,
         this._recentImageryPanel,
         this._streetLevelPanel,
         globalContextPanel,

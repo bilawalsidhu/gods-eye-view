@@ -457,6 +457,7 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   // query for this layer wait until there is room.
   'drone-airspace':
     'informational airspace layer; no room in the prompt budget',
+  news: 'browsed in the News panel; voice tools are a later step',
   'wildlife-sightings':
     'community observation layer; no room in the prompt budget',
 });
