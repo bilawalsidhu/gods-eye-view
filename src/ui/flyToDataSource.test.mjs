@@ -1,8 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { cancelCameraArrival } from '../data/cameraArrival.js';
-import { dataSourcePoints, flyToDataSource } from './flyToDataSource.js';
+import {
+  cancelCameraArrival,
+  ownCameraArrival,
+} from '../data/cameraArrival.js';
+import { dataSourcePoints } from '../data/geoFileImport.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeSceneQuery } from '../testSupport/fakeCesiumScene.mjs';
+import { flyToFootprint } from './flyToDataSource.js';
+
+/** As the file import flies to one of its files. */
+const flyToDataSource = (viewer, dataSource) =>
+  flyToFootprint(viewer, dataSourcePoints(dataSource));
+
+/** A Cesium-shaped viewer double, bound to the camera and query ports. */
+const bound = (viewer) =>
+  bindFakeCesiumCamera(viewer, { query: fakeSceneQuery(viewer) });
 
 function source() {
   const ds = new Cesium.CustomDataSource('t');
@@ -36,22 +50,27 @@ test('points come from positions, lines and polygons, as lon/lat only', () => {
 
 test('the camera frames the footprint at the surface, never a buried center', () => {
   const calls = [];
-  const viewer = {
+  const viewer = bound({
+    scene: {},
     camera: {
       heading: 0,
+      positionWC: Cesium.Cartesian3.fromDegrees(-122.49, 37.77, 900),
+      directionWC: new Cesium.Cartesian3(0, 0, -1),
+      upWC: new Cesium.Cartesian3(0, 1, 0),
       flyToBoundingSphere: (sphere, options) => calls.push({ sphere, options }),
     },
     flyTo: () => calls.push('viewer.flyTo'),
-  };
+  });
   assert.equal(flyToDataSource(viewer, source()), true);
   const center = Cesium.Cartographic.fromCartesian(calls[0].sphere.center);
   assert.ok(Math.abs(center.height) < 50, `center height ${center.height}`);
   assert.ok(calls[0].options.offset.range >= 800);
-  assert.equal(
-    typeof calls[0].options.complete,
-    'function',
-    'the ground guard runs on landing',
-  );
+  // Landing starts the ground guard, which takes over the arrival.
+  let handedOver = false;
+  ownCameraArrival(viewer, () => (handedOver = true));
+  calls[0].options.complete();
+  assert.equal(handedOver, true, 'the ground guard runs on landing');
+  cancelCameraArrival(viewer);
   assert.equal(
     flyToDataSource(viewer, new Cesium.CustomDataSource('empty')),
     false,
@@ -113,13 +132,13 @@ test('portrait framing accounts for FOV, high ground and symmetric extents', () 
     },
   });
   const calls = [];
-  const viewer = {
+  const viewer = bound({
     scene: { globe: { getHeight: () => 2600 } },
     camera: {
-      frustum: { fov: Math.PI / 3, aspectRatio: 390 / 844 },
+      frustum: { fovy: Math.PI / 3, aspectRatio: 390 / 844 },
       flyToBoundingSphere: (sphere, options) => calls.push({ sphere, options }),
     },
-  };
+  });
   flyToDataSource(viewer, ds);
   assert.ok(
     Math.abs(

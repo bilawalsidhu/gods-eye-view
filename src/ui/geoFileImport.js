@@ -2,10 +2,15 @@
 import {
   GeoImportError,
   MAX_IMPORTED_FILES,
+  dataSourcePoints,
   loadGeoFile,
 } from '../data/geoFileImport.js';
 import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
-import { flyToDataSource } from './flyToDataSource.js';
+import { flyToFootprint } from './flyToDataSource.js';
+
+/** Fly to the whole footprint of one imported file's data source. */
+const flyToDataSource = (viewer, dataSource, options) =>
+  flyToFootprint(viewer, dataSourcePoints(dataSource), options);
 
 // One color per file, in import order, from the whiteboard palette.
 const COLORS = ['#39d0ff', '#ffb547', '#5dff9f', '#ff6b6b', '#8be9ff'];

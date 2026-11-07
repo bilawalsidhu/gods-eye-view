@@ -156,6 +156,9 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
           ...(Number.isFinite(fake.frustum?.fovy)
             ? { fovy: fake.frustum.fovy }
             : {}),
+          ...(Number.isFinite(fake.frustum?.aspectRatio)
+            ? { aspectRatio: fake.frustum.aspectRatio }
+            : {}),
           lon: c ? toDegrees(c.longitude) : NaN,
           lat: c ? toDegrees(c.latitude) : NaN,
           height: c ? c.height : NaN,

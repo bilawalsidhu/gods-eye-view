@@ -4,6 +4,7 @@
 // works from a predicted ground height. The guard measures the real surface
 // after arrival and lifts the eye; these tests pin when it acts.
 import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
+import { fakeSceneQuery } from './testSupport/fakeCesiumScene.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -55,10 +56,11 @@ function fakeViewer({ cameraHeightM, surfaceM }) {
     30.3141,
     cameraHeightM,
   );
-  return bindFakeCesiumCamera({
+  const viewer = {
     flights,
     scene: {
       canvas: null,
+      sampleHeightSupported: true,
       sampleHeight: (carto) =>
         typeof surfaceM === 'function' ? surfaceM(carto) : surfaceM,
     },
@@ -71,12 +73,14 @@ function fakeViewer({ cameraHeightM, surfaceM }) {
       pitch: -0.55,
       roll: 0,
       // As Cesium does: a flight is under way until it completes.
+      _currentFlight: undefined,
       flyTo(options) {
         flights.push(options);
         this._currentFlight = {};
       },
     },
-  });
+  };
+  return bindFakeCesiumCamera(viewer, { query: fakeSceneQuery(viewer) });
 }
 
 test('the guard lifts a buried arrival once the surface answers', async () => {

@@ -99,6 +99,23 @@ test('a viewer of its own, with no renderer bound, is queried through a built po
   other.dispose();
 });
 
+test('terrain heights answer without depth textures; the drawn surface does not', () => {
+  const viewer = fakeViewer();
+  viewer.scene.sampleHeightSupported = false;
+  viewer.scene.globe = { getHeight: () => 2600 };
+  const query = queryOf(viewer);
+  const point = { lon: 1, lat: 2 };
+  assert.equal(query.sampleHeightNow(point, { against: 'terrain' }), 2600);
+  assert.equal(query.sampleHeightNow(point), null);
+  const out = new Float64Array(1);
+  query.sampleHeightNowMany(new Float64Array([1, 2]), out, {
+    against: 'terrain',
+  });
+  assert.equal(out[0], 2600);
+  query.sampleHeightNowMany(new Float64Array([1, 2]), out);
+  assert.ok(Number.isNaN(out[0]));
+});
+
 test('nothing to query, no port', () => {
   assert.equal(findQuery({ scene: {} }), null);
   assert.throws(() => queryOf({ scene: {} }), /no renderer to query/);

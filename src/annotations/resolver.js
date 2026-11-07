@@ -46,6 +46,11 @@ import { createOutlineRungs } from './outlineRungs.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { heightsFor } from '../queries/heights.js';
+// The application operations entry reaches locations.js, whose flights go
+// through the camera and query ports and which cannot load the Cesium adapter
+// itself; this listed module loads the factories a viewer with no renderer
+// bound gets them from.
+import '../render/cesium/camera.js';
 
 /** Prepare only local dateline outlines for planar admission and centering. */
 function localOutlineFrame(fp) {

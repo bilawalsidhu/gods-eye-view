@@ -253,11 +253,15 @@ export function createCesiumQuery({
       return !occluder.isPointVisible(toCartesian(position));
     },
     sampleHeightNow(point, { against = 'surface', exclude } = {}) {
+      // Terrain answers from the globe's own tiles, without depth textures.
+      if (against === 'terrain') return heightNow(point, against);
       if (!can('sampleHeight')) return null;
       return heightNow(point, against, seeThrough(exclude));
     },
     sampleHeightNowMany(points, out, { against = 'surface', exclude } = {}) {
-      const excluded = can('sampleHeight') && seeThrough(exclude);
+      // Terrain sees through nothing, so it needs no sets to see through.
+      const excluded =
+        against === 'terrain' || (can('sampleHeight') && seeThrough(exclude));
       const point = { lon: 0, lat: 0 };
       for (let i = 0; i < out.length; i++) {
         point.lon = points[i * 2];

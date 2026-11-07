@@ -15,11 +15,9 @@
  * held, so the correction reads as the shot settling.
  */
 import { onFollowChanged } from './data/followed.js';
-import * as Cesium from 'cesium';
 import { ownCameraArrival } from './data/cameraArrival.js';
-import { heightsFor } from './queries/heights.js';
-import { cameraOf } from './render/cesium/camera.js';
-import { cameraFlightActive } from './render/cesium/internals.js';
+import { distance, dot, fromDegrees, toLonLatH } from './geo/index.js';
+import { findCamera, findQuery } from './render/rendererOf.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
 export const MIN_EYE_CLEARANCE_M = 120;
@@ -32,71 +30,71 @@ const GUARD_EPSILON_M = 2;
 const MOVED_M = 0.01;
 const TURNED_COS = 1 - 1e-9;
 
-const groundScratch = new Cesium.Cartesian3();
-
-const probeScratch = new Cesium.Cartographic();
-
 /**
  * Highest rendered surface across a few cells, with how many cells answered.
  * A cell whose tiles are not streamed yet contributes nothing.
- * @param {Cesium.Scene} scene Live scene.
+ * @param {object|null} query The scene's query port.
  * @param {Array<{lat: number, lon: number}>} cells Cells to probe.
  * @returns {{heightM: number, sampled: number}} Reading.
  */
-function sampleSurfaceM(scene, cells) {
+function sampleSurfaceM(query, cells) {
   let heightM = Number.NaN;
   let sampled = 0;
-  if (!scene) return { heightM, sampled };
-  const heights = heightsFor(scene);
+  if (!query) return { heightM, sampled };
   for (const cell of cells) {
     // A miss is a cell whose tiles are not ready.
-    const height = heights.now(
-      Cesium.Cartographic.fromDegrees(cell.lon, cell.lat, 0, probeScratch),
-    );
-    if (height === null) continue;
+    const height = query.sampleHeightNow({ lon: cell.lon, lat: cell.lat });
+    if (!Number.isFinite(height)) continue;
     sampled += 1;
     heightM = Number.isFinite(heightM) ? Math.max(heightM, height) : height;
   }
   return { heightM, sampled };
 }
 
+/**
+ * The eye as the camera port poses it: where it is (from its position) and
+ * which way it looks; null when the pose cannot be read.
+ */
+function eyeOf(camera) {
+  try {
+    const pose = camera?.pose();
+    const at = pose?.position && toLonLatH(pose.position);
+    if (!at || !pose.direction || !pose.up) return null;
+    return { ...pose, lon: at.lon, lat: at.lat, height: at.height };
+  } catch {
+    return null;
+  }
+}
+
 /** The eye's ground point (height 0), its height, and which way it looks. */
-function poseOf(camera) {
-  const carto =
-    camera?.positionWC && Cesium.Cartographic.fromCartesian(camera.positionWC);
-  if (!carto || !camera.directionWC || !camera.upWC) return null;
+function poseOf(eye) {
+  if (!eye) return null;
   return {
-    ground: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude),
-    height: carto.height,
-    direction: Cesium.Cartesian3.clone(camera.directionWC),
-    up: Cesium.Cartesian3.clone(camera.upWC),
+    ground: fromDegrees(eye.lon, eye.lat),
+    height: eye.height,
+    direction: { ...eye.direction },
+    up: { ...eye.up },
   };
 }
 
 /**
  * Whether another owner has moved the camera off `pose`: across the ground,
- * down, or around. A pure rise is not one: Cesium's terrain collision lifts a
- * buried eye straight up as tiles load, which is the case the guard exists
- * for, so `pose` follows the highest eye seen and the guard keeps measuring.
+ * down, or around. A pure rise is not one: the renderer's terrain collision
+ * lifts a buried eye straight up as tiles load, which is the case the guard
+ * exists for, so `pose` follows the highest eye seen and the guard keeps
+ * measuring.
  */
-function moved(camera, pose) {
-  const carto = Cesium.Cartographic.fromCartesian(camera.positionWC);
-  if (!carto) return true;
-  const ground = Cesium.Cartesian3.fromRadians(
-    carto.longitude,
-    carto.latitude,
-    0,
-    undefined,
-    groundScratch,
-  );
+function moved(now, pose) {
+  if (!now) return true;
+  const ground = fromDegrees(now.lon, now.lat);
   if (
-    Cesium.Cartesian3.distance(ground, pose.ground) > MOVED_M ||
-    carto.height < pose.height - MOVED_M ||
-    Cesium.Cartesian3.dot(camera.directionWC, pose.direction) < TURNED_COS ||
-    Cesium.Cartesian3.dot(camera.upWC, pose.up) < TURNED_COS
+    distance(ground, pose.ground) > MOVED_M ||
+    now.height < pose.height - MOVED_M ||
+    dot(now.direction, pose.direction) < TURNED_COS ||
+    dot(now.up, pose.up) < TURNED_COS
   )
     return true;
-  pose.height = Math.max(pose.height, carto.height);
+  pose.height = Math.max(pose.height, now.height);
   return false;
 }
 
@@ -127,7 +125,7 @@ export function groundClearanceDeficitM(
  * newer arrival owns the camera, or any other caller moving the camera or
  * starting a flight in the meantime: the guard only ever corrects the pose it
  * was started on.
- * @param {Cesium.Viewer} viewer Live viewer.
+ * @param {object} viewer Live viewer.
  * @param {{lat: number, lon: number}} at Destination being framed.
  * @param {{clearanceM?: number, attempts?: number, intervalMs?: number,
  *   isStale?: () => boolean, onLift?: (liftM: number) => void}} [options]
@@ -145,7 +143,7 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     return () => {};
 
   // Without a readable pose the guard could not tell a later owner's move.
-  const arrival = poseOf(viewer.camera);
+  const arrival = poseOf(eyeOf(findCamera(viewer)));
   if (!arrival) return () => {};
 
   let timer = null;
@@ -175,39 +173,28 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
   const attempt = () => {
     if (done) return;
     if (isStale() || viewer.isDestroyed?.()) return stop();
-    const camera = viewer.camera;
+    const camera = findCamera(viewer);
+    const now = eyeOf(camera);
     // Another caller owns the camera now; lifting would undo its move.
-    if (cameraFlightActive(camera) || moved(camera, arrival)) return stop();
+    if (!camera || camera.flying || moved(now, arrival)) return stop();
     remaining -= 1;
-    const carto = camera.positionCartographic;
     // The eye must clear both the framed target and the ground beneath it.
-    const below = {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
-    };
-    const { heightM, sampled } = sampleSurfaceM(viewer.scene, [
+    const below = { lat: now.lat, lon: now.lon };
+    const { heightM, sampled } = sampleSurfaceM(findQuery(viewer), [
       { lat: at.lat, lon: at.lon },
       below,
     ]);
     if (sampled > 0 && Number.isFinite(heightM)) {
-      const deficit = groundClearanceDeficitM(
-        carto.height,
-        heightM,
-        clearanceM,
-      );
+      const deficit = groundClearanceDeficitM(now.height, heightM, clearanceM);
       if (deficit > 0) {
         stop();
-        cameraOf(viewer).flyTo(
-          Cesium.Cartesian3.fromRadians(
-            carto.longitude,
-            carto.latitude,
-            carto.height + deficit,
-          ),
+        camera.flyTo(
+          { lon: now.lon, lat: now.lat, height: now.height + deficit },
           {
             orientation: {
-              heading: camera.heading,
-              pitch: camera.pitch,
-              roll: camera.roll,
+              heading: now.heading,
+              pitch: now.pitch,
+              roll: now.roll,
             },
             durationS: 0.9,
             easing: 'cubicInOut',
