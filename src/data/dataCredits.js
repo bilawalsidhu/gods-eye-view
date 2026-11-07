@@ -306,6 +306,14 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'colorado-cctv',
+    html:
+      'Traffic cameras (Colorado, when enabled): ' +
+      '<a href="https://www.cotrip.org/" target="_blank" rel="noopener">COtrip</a>, ' +
+      'Colorado Department of Transportation; some cameras are supplied by partners ' +
+      '(e.g. Douglas County), each named in the CCTV panel',
+  },
+  {
     key: 'florida-cctv',
     html:
       'Traffic cameras (Florida): FL511, Florida Department of Transportation. ' +

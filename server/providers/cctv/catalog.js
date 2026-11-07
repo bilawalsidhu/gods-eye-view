@@ -31,6 +31,7 @@ import {
   loadFloridaSourcesFromOpenData,
   loadHoustonSourcesFromOpenData,
   loadA22SourcesFromOpenDataHub,
+  loadColoradoSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -182,6 +183,14 @@ const LIVE_PACKS = [
     name: 'a22',
     enabled: () => envEnabled('CCTV_A22_ENABLED'),
     load: loadA22SourcesFromOpenDataHub,
+  },
+  {
+    // Opt-in until CDOT confirms that its COtrip camera stills may be shown by
+    // a third-party app: the feed is the COtrip map's own backend and carries
+    // no published licence or terms (see DATA_SOURCES.md).
+    name: 'colorado',
+    enabled: () => envOptIn('CCTV_COLORADO_ENABLED'),
+    load: loadColoradoSourcesFromOpenData,
   },
 ];
 /**
