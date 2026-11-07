@@ -58,8 +58,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // control_cockpit states the own-layer entry rule (Contacts not required).
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute with its -45 default, with steps sent as a direction.
-    // Message signs adds its context enum value.
-    '4f0245878d31babcd6f2a9d3556779519804b596a5b2989255546fcb3ab4ab98',
+    '6a0d154e68beb787c4e20f12d29a5c86577dc343f3e71d8b5651998ea45d8c3c',
   );
 });
 

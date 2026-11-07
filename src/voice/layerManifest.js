@@ -337,8 +337,10 @@ const layers = [
     noQuery: 'use control_cctv',
   },
   {
-    // Voice reads a selected or pointed-at board through get_entity_context;
-    // the layer itself is toggled from the panel.
+    // Voice reads a selected or pointed-at board through get_entity_context
+    // (scope selected/pointer needs no layerId); the layer itself is toggled
+    // from the panel. It stays out of the layerId enum: the Realtime prompt
+    // sits at its 55,500-character budget.
     id: 'message-signs',
     aliases: [
       'message signs',
@@ -348,7 +350,6 @@ const layers = [
       'variable message signs',
     ],
     toggle: false,
-    context: true,
     noQuery: 'sign text is read through get_entity_context',
   },
   {
