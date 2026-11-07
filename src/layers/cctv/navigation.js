@@ -34,6 +34,36 @@ export function createNavigation({
   }
 
   /**
+   * The camera the layer opens on when none is selected: the one nearest the
+   * viewer, or the first record when the viewer has no position yet.
+   * @returns {string|null} Camera ID, or null when the catalog is empty.
+   */
+
+  function openingCameraId() {
+    return (
+      nearestCameraIdToViewer() || layerState._records[0]?.camera?.id || null
+    );
+  }
+
+  /**
+   * After a settled move, moves the opening camera to the one nearest the
+   * view, until someone chooses a camera. A shared view's flight lands after
+   * enable() picked from the startup view.
+   * @returns {boolean} True when the active camera changed.
+   */
+
+  function reopenNearestCamera() {
+    if (!layerState._openingCameraProvisional || !layerState._enabled)
+      return false;
+    const nearest = nearestCameraIdToViewer();
+    if (!nearest || nearest === layerState._activeCameraId) return false;
+    parts.selection.setActiveCamera(nearest);
+    // setActiveCamera ends the opening pick; this is still that pick.
+    layerState._openingCameraProvisional = true;
+    return true;
+  }
+
+  /**
    * Flies the Cesium viewer camera to frame the specified CCTV camera,
    * looking along its heading from above.
    * @param {Cesium.Viewer|null} viewer Cesium viewer that owns the camera.
@@ -149,6 +179,8 @@ export function createNavigation({
   }
   return {
     nearestCameraIdToViewer,
+    openingCameraId,
+    reopenNearestCamera,
     focusCctvRecord,
     focusCamera,
     maybeAutoHop,
