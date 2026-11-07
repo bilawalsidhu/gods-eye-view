@@ -32,6 +32,9 @@ import {
 
 import * as Cesium from 'cesium';
 import { cameraOf } from '../render/cesium/camera.js';
+// Loads the effects factory, so visual settings on a viewer with no renderer
+// bound still get an effects port.
+import '../render/cesium/effects.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 

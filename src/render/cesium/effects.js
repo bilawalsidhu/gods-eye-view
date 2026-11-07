@@ -22,7 +22,8 @@
  * in its own shader, not the frame.
  */
 import * as Cesium from 'cesium';
-import { listenerList } from './common.js';
+import { provideUnboundEffects } from '../rendererOf.js';
+import { listenerList, uncaught } from './common.js';
 
 /** Below this a style, bloom or sharpen draws nothing, so it runs no pass. */
 const OFF = 0.001;
@@ -135,6 +136,9 @@ export function createCesiumEffects(
   let disposed = false;
   const started = performance.now();
 
+  // Disposed, or the scene went first and took its stages with it.
+  const gone = () => disposed || scene.isDestroyed?.() === true;
+
   const drawing = (record) =>
     (record.id === current || fading.has(record.id)) && record.intensity > OFF;
 
@@ -197,7 +201,7 @@ export function createCesiumEffects(
   }
 
   function changed(reason) {
-    if (disposed) return;
+    if (gone()) return;
     apply();
     frame.requestRender(reason);
     listeners.fire(port.diagnostics());
@@ -217,7 +221,7 @@ export function createCesiumEffects(
         : [],
     defineStyle(definition) {
       if (
-        disposed ||
+        gone() ||
         !capabilities.has('styles') ||
         typeof definition?.shader?.glsl !== 'string'
       )
@@ -260,7 +264,7 @@ export function createCesiumEffects(
       return () => {
         if (removed) return;
         removed = true;
-        if (disposed || styles.get(id) !== record) return;
+        if (gone() || styles.get(id) !== record) return;
         styles.delete(id);
         stages.remove(record.stage);
         fading.delete(id);
@@ -269,7 +273,7 @@ export function createCesiumEffects(
       };
     },
     setStyle(id, params) {
-      if (disposed || !capabilities.has('styles')) return;
+      if (gone() || !capabilities.has('styles')) return;
       const next = id === null || id === undefined ? null : String(id);
       if (next !== null && !styles.has(next)) return;
       if (next !== current) {
@@ -282,19 +286,19 @@ export function createCesiumEffects(
       changed('effects-style');
     },
     setStyleIntensity(id, intensity) {
-      if (disposed || !known(id)) return;
+      if (gone() || !known(id)) return;
       const record = styles.get(id);
       record.intensity = clamp01(intensity);
       if (record.intensity <= OFF) fading.delete(id);
       changed('effects-style');
     },
     setStyleParams(id, params) {
-      if (disposed || !known(id)) return;
+      if (gone() || !known(id)) return;
       assignParams(styles.get(id), params);
       changed('effects-style');
     },
     bloom({ enabled, strength } = {}) {
-      if (disposed || !capabilities.has('bloom')) return;
+      if (gone() || !capabilities.has('bloom')) return;
       const bloom = scene.postProcessStages.bloom;
       if (!bloomTaken) {
         bloomTaken = {
@@ -311,7 +315,7 @@ export function createCesiumEffects(
       changed('effects-bloom');
     },
     sharpen({ enabled, amount } = {}) {
-      if (disposed || !capabilities.has('sharpen')) return;
+      if (gone() || !capabilities.has('sharpen')) return;
       sharpenEnabled = Boolean(enabled);
       if (amount !== undefined) sharpenAmount = clamp01(amount);
       if (!sharpenStage) makeSharpen();
@@ -352,6 +356,13 @@ export function createCesiumEffects(
       disposed = true;
       stopClock();
       listeners.clear();
+      // A destroyed scene took its stages with it.
+      if (scene.isDestroyed?.()) {
+        styles.clear();
+        sharpenStage = null;
+        bloomTaken = null;
+        return;
+      }
       for (const record of styles.values()) stages.remove(record.stage);
       styles.clear();
       if (sharpenStage) stages.remove(sharpenStage);
@@ -365,3 +376,51 @@ export function createCesiumEffects(
     },
   };
 }
+
+/**
+ * The frame port's members the effects port uses, straight over a scene no
+ * renderer drives: a hold asks for the next frame after each one drawn.
+ * @param {object} scene
+ */
+function sceneFrame(scene) {
+  return {
+    on: (phase, cb) =>
+      scene[phase].addEventListener(() => cb({ now: performance.now() })),
+    requestRender: () => scene.requestRender(),
+    holdContinuous() {
+      const off = scene.postRender.addEventListener(() =>
+        scene.requestRender(),
+      );
+      scene.requestRender();
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        off();
+        if (!scene.isDestroyed?.()) scene.requestRender();
+      };
+    },
+  };
+}
+
+// A Cesium viewer of a consumer's own, with no renderer bound to it, gets an
+// effects port over its scene when code first asks `findEffects` for one.
+provideUnboundEffects((viewer) => {
+  const scene = viewer.scene;
+  // By shape, not `instanceof`: a consumer's viewer may come from another
+  // copy of Cesium.
+  if (
+    typeof scene?.postProcessStages?.add !== 'function' ||
+    typeof scene.postProcessStages.remove !== 'function' ||
+    !scene.postProcessStages.bloom ||
+    typeof scene.preRender?.addEventListener !== 'function' ||
+    typeof scene.postRender?.addEventListener !== 'function' ||
+    typeof scene.requestRender !== 'function'
+  )
+    return null;
+  return createCesiumEffects(scene, {
+    capabilities: new Set(['styles', 'bloom', 'sharpen']),
+    frame: sceneFrame(scene),
+    report: uncaught,
+  });
+});

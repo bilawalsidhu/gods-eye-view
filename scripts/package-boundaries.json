@@ -1000,6 +1000,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/render/cesium/effects.js",
       "src/data/followed.js",
       "src/render/cesium/camera.js",
       "src/render/cesium/credits.js",

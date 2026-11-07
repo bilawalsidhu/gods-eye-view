@@ -9,15 +9,59 @@
 const renderers = new WeakMap();
 
 /**
- * Camera ports built for scene objects no renderer is bound to (a viewer of
- * a consumer's own, say), each `{port, dispose}` and kept for as long as its
- * scene object lives, or until a renderer is bound to it.
+ * Ports built for scene objects no renderer is bound to (a viewer of a
+ * consumer's own, say), per port: each `{port, dispose}` kept for as long
+ * as its scene object lives, or until a renderer is bound to it. The
+ * renderer adapter provides the factory each is built with as it loads.
  */
-const unboundCameras = new WeakMap();
-let buildUnboundCamera = null;
-/** Credits ports built likewise, each `{port, dispose, release}`. */
-const unboundCredits = new WeakMap();
-let buildUnboundCredits = null;
+function unboundPorts(member) {
+  const built = new WeakMap();
+  let build = null;
+  return {
+    provide(factory) {
+      build = factory;
+    },
+    drop(host, port) {
+      const entry = built.get(host);
+      if (!entry || (port !== undefined && entry.port !== port)) return;
+      built.delete(host);
+      entry.dispose();
+    },
+    /**
+     * A renderer bound to `host` supersedes its built port: released when
+     * it can be (it stops working for new callers but keeps what it did),
+     * else disposed.
+     */
+    supersede(host) {
+      const entry = built.get(host);
+      if (!entry) return;
+      built.delete(host);
+      if (entry.release) entry.release();
+      else entry.dispose();
+    },
+    find(host) {
+      const port = rendererOf(host)?.[member];
+      if (port) return port;
+      if (!host || typeof host !== 'object') return null;
+      if (host.isDestroyed?.()) {
+        // Gone with its scene: let the built port go with it.
+        this.drop(host);
+        return null;
+      }
+      let entry = built.get(host);
+      if (!entry && build) {
+        entry = build(host);
+        if (entry) built.set(host, entry);
+      }
+      return entry?.port ?? null;
+    },
+  };
+}
+
+const unboundCameras = unboundPorts('camera');
+const unboundEffects = unboundPorts('effects');
+/** Credits ports are `{port, dispose, release}`: see `bindRenderer`. */
+const unboundCredits = unboundPorts('credits');
 
 /**
  * Provide the factory `cameraOf` builds a camera port with for a scene
@@ -26,7 +70,7 @@ let buildUnboundCredits = null;
  * @param {(host: object) => ({port: object, dispose: () => void} | null)} build
  */
 export function provideUnboundCamera(build) {
-  buildUnboundCamera = build;
+  unboundCameras.provide(build);
 }
 
 /**
@@ -37,27 +81,45 @@ export function provideUnboundCamera(build) {
  *   release: () => void} | null)} build
  */
 export function provideUnboundCredits(build) {
-  buildUnboundCredits = build;
+  unboundCredits.provide(build);
 }
 
 /**
- * Bind a renderer to its scene object. A camera `cameraOf` built for it
- * while it had no renderer is disposed: its listeners hear nothing more,
- * and `cameraOf` answers with the renderer's camera from then on.
+ * Provide the factory `findEffects` builds an effects port with for a
+ * scene object no renderer is bound to, as `provideUnboundCamera` does.
+ * @param {(host: object) => ({port: object, dispose: () => void} | null)} build
+ */
+export function provideUnboundEffects(build) {
+  unboundEffects.provide(build);
+}
+
+/**
+ * Let go of `port`, if it is the effects port `findEffects` built for
+ * `host`: its passes go and the scene's own settings come back. A
+ * renderer's own port, or one built later, is left alone.
+ * @param {object|null|undefined} host
+ * @param {object|null|undefined} port
+ */
+export function releaseUnboundEffects(host, port) {
+  if (host && typeof host === 'object' && port) unboundEffects.drop(host, port);
+}
+
+/**
+ * Bind a renderer to its scene object. A port `cameraOf` or `findEffects`
+ * built for it while it had no renderer is disposed: its listeners hear
+ * nothing more, and they answer with the renderer's ports from then on.
+ * A credits port `findCredits` built is released, not disposed: the
+ * credits added through it stay shown until their own Off.
  * @param {object} host The scene object callers hold.
  * @param {object} renderer
  * @returns {() => void} Unbinds, if the binding is still this one.
  */
 export function bindRenderer(host, renderer) {
   if (renderers.has(host)) throw new Error('This scene already has a renderer');
-  // The renderer's camera supersedes one built while there was none.
-  unboundCameras.get(host)?.dispose();
-  unboundCameras.delete(host);
-  // Its credits port does too for credits added from now on; one built
-  // before is released, not disposed: the credits added through it stay
-  // shown until their own Off.
-  unboundCredits.get(host)?.release?.();
-  unboundCredits.delete(host);
+  // The renderer's ports supersede ones built while there was none.
+  unboundCameras.drop(host);
+  unboundEffects.drop(host);
+  unboundCredits.supersede(host);
   renderers.set(host, renderer);
   return () => {
     if (renderers.get(host) === renderer) renderers.delete(host);
@@ -79,10 +141,20 @@ export const rendererOf = (host) => (host && renderers.get(host)) || null;
  *   has no renderer and no camera can be built for it, or is destroyed.
  */
 export function findCamera(host) {
-  return (
-    rendererOf(host)?.camera ??
-    findUnbound(host, unboundCameras, buildUnboundCamera)
-  );
+  return unboundCameras.find(host);
+}
+
+/**
+ * The effects port of the renderer bound to `host`; with no renderer bound,
+ * one built over `host` by the provided factory and kept with it while
+ * `host` lives.
+ * @param {object|null|undefined} host
+ * @returns {import('./contract/effects').EffectsPort | null} Null when
+ *   `host` has no renderer and no effects can be built for it, or is
+ *   destroyed.
+ */
+export function findEffects(host) {
+  return unboundEffects.find(host);
 }
 
 /**
@@ -93,26 +165,7 @@ export function findCamera(host) {
  * @returns {import('./contract/credits').CreditsPort | null}
  */
 export function findCredits(host) {
-  return (
-    rendererOf(host)?.credits ??
-    findUnbound(host, unboundCredits, buildUnboundCredits)
-  );
-}
-
-function findUnbound(host, built, build) {
-  if (!host || typeof host !== 'object') return null;
-  if (host.isDestroyed?.()) {
-    // Gone with its scene: let the built port go with it.
-    built.get(host)?.dispose();
-    built.delete(host);
-    return null;
-  }
-  let part = built.get(host);
-  if (!part && build) {
-    part = build(host);
-    if (part) built.set(host, part);
-  }
-  return part?.port ?? null;
+  return unboundCredits.find(host);
 }
 
 /**

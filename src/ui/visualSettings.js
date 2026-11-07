@@ -5,7 +5,7 @@ import { useDisplayStore } from './stores/display.js';
 import { applicationPinia } from './vueRuntime.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
-import { rendererOf } from '../render/rendererOf.js';
+import { findEffects, releaseUnboundEffects } from '../render/rendererOf.js';
 import {
   VisualEffects,
   STYLES,
@@ -196,7 +196,7 @@ export class VisualSettings {
       setStyleParameter: (name, value) => this.setStyleParameter(name, value),
     });
     this._visualEffects = new VisualEffects({
-      effects: rendererOf(viewer)?.effects ?? null,
+      effects: findEffects(viewer),
       viewer,
       requestRender: services.governorRequestRender,
       holdRender: services.holdContinuousRender,
@@ -1621,5 +1621,7 @@ export class VisualSettings {
     this.stop();
     this.releaseIrBoost();
     this._visualEffects.destroy();
+    // On a viewer of a consumer's own, its bloom comes back as it was.
+    releaseUnboundEffects(this.viewer, this._visualEffects.effects);
   }
 }

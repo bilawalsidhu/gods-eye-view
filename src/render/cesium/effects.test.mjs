@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bloomUniforms, createCesiumEffects } from './effects.js';
+import { findEffects, releaseUnboundEffects } from '../rendererOf.js';
 
 const ALL = new Set(['styles', 'bloom', 'sharpen']);
 
@@ -299,4 +300,91 @@ test('dispose removes every stage and releases the clock', () => {
   assert.deepEqual(f.liveHolds(), []);
   f.effects.setStyle('anim');
   assert.equal(f.stages.length, 0);
+});
+
+test('a viewer with no renderer gets an effects port over its scene', () => {
+  const events = () => {
+    const cbs = new Set();
+    return {
+      cbs,
+      addEventListener(cb) {
+        cbs.add(cb);
+        return () => cbs.delete(cb);
+      },
+      raise: () => [...cbs].forEach((cb) => cb()),
+    };
+  };
+  const stages = [];
+  let requests = 0;
+  const scene = {
+    postProcessStages: {
+      bloom: { enabled: false, uniforms: {} },
+      add: (stage) => stages.push(stage),
+      remove: (stage) => stages.splice(stages.indexOf(stage), 1),
+    },
+    preRender: events(),
+    postRender: events(),
+    requestRender: () => (requests += 1),
+  };
+  const viewer = { scene };
+  const effects = findEffects(viewer);
+  assert.ok(effects, 'built');
+  assert.equal(findEffects(viewer), effects, 'kept');
+  assert.equal(findEffects({ scene: {} }), null, 'not a Cesium scene');
+  effects.bloom({ enabled: true, strength: 1 });
+  assert.equal(scene.postProcessStages.bloom.enabled, true);
+  // An animated style draws every frame while it shows.
+  effects.defineStyle(style('anim', { animated: true }));
+  effects.setStyle('anim');
+  assert.equal(scene.postRender.cbs.size, 1, 'held');
+  const before = requests;
+  scene.postRender.raise();
+  assert.equal(requests, before + 1, 'the next frame is asked for');
+  effects.setStyleIntensity('anim', 0);
+  assert.equal(scene.postRender.cbs.size, 0, 'released');
+  assert.equal(scene.preRender.cbs.size, 0);
+  releaseUnboundEffects(viewer, {});
+  assert.ok(stages.length > 0, 'another port is not let go of');
+  releaseUnboundEffects(viewer, effects);
+  assert.equal(stages.length, 0, 'let go: its passes are gone');
+  assert.equal(
+    scene.postProcessStages.bloom.enabled,
+    false,
+    'bloom given back',
+  );
+  assert.notEqual(findEffects(viewer), effects, 'a later lookup builds anew');
+});
+
+test('a destroyed scene is let go of without touching it', () => {
+  let destroyed = false;
+  const scene = {
+    isDestroyed: () => destroyed,
+    postProcessStages: {
+      bloom: { enabled: false, uniforms: {} },
+      add() {},
+      remove() {
+        if (destroyed) throw new Error('destroyed');
+      },
+    },
+    preRender: { addEventListener: () => () => {} },
+    postRender: { addEventListener: () => () => {} },
+    requestRender() {
+      if (destroyed) throw new Error('destroyed');
+    },
+  };
+  const viewer = { scene, isDestroyed: () => destroyed };
+  const effects = findEffects(viewer);
+  effects.defineStyle(style('anim', { animated: true }));
+  effects.setStyle('anim');
+  effects.bloom({ enabled: true, strength: 1 });
+  effects.sharpen({ enabled: true, amount: 1 });
+  const off = effects.defineStyle(style('plain'));
+  destroyed = true;
+  // Core's own teardown after the scene went: nothing throws.
+  off();
+  effects.bloom({ enabled: false });
+  effects.sharpen({ enabled: false });
+  effects.setStyle(null);
+  releaseUnboundEffects(viewer, effects);
+  assert.equal(findEffects(viewer), null);
 });
