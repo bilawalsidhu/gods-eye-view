@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createInteraction } from './interaction.js';
 import { RADIO_PICK_WINDOW_PX } from './policy.js';
+import { radioStationIdFromPick } from './rendering.js';
 
 function interaction() {
   const state = { _stationById: new Map([['kexp', {}]]) };
@@ -16,7 +17,7 @@ function interaction() {
       },
       overlays: { setOverlaySourceVisible() {} },
     },
-    parts: {},
+    parts: { rendering: { radioStationIdFromPick } },
   });
 }
 

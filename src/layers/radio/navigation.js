@@ -152,11 +152,11 @@ export function createNavigation({
   /** Radio may move the globe only while no tracked entity owns the follow camera. */
 
   function radioCameraNavigationAllowed(viewer = layerState._viewer) {
-    return Boolean(viewer?.camera) && !isFollowing(viewer);
+    return Boolean(findCamera(viewer)) && !isFollowing(viewer);
   }
 
   function radioGlobeRecenterPlan(viewer = layerState._viewer) {
-    const pose = viewer?.camera ? findCamera(viewer)?.pose() : null;
+    const pose = findCamera(viewer)?.pose() ?? null;
     const canvas = viewer?.scene?.canvas;
     const width = canvas?.clientWidth || canvas?.width;
     const height = canvas?.clientHeight || canvas?.height;

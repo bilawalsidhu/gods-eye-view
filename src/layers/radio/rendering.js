@@ -12,6 +12,34 @@ import {
   DEFAULT_RADIO_FILTER,
 } from './policy.js';
 
+/**
+ * A station id from ordinary, selected, or Cesium cluster pick shapes.
+ * @param {object|null|undefined} picked A scene pick result.
+ * @returns {string|null}
+ */
+export function radioStationIdFromPick(picked) {
+  const pending = [picked?.id, picked?.primitive?.id];
+  const seen = new Set();
+  while (pending.length) {
+    const value = pending.shift();
+    if (typeof value === 'string' || typeof value === 'number') {
+      const id = String(value);
+      if (id.startsWith(`${RADIO_PREFIX}selected:`))
+        return id.slice(`${RADIO_PREFIX}selected:`.length);
+      if (id.startsWith(RADIO_PREFIX)) return id.slice(RADIO_PREFIX.length);
+      continue;
+    }
+    if (!value || typeof value !== 'object' || seen.has(value)) continue;
+    seen.add(value);
+    if (Array.isArray(value)) pending.push(...value);
+    else {
+      pending.push(value.id);
+      if (value.primitive) pending.push(value.primitive.id);
+    }
+  }
+  return null;
+}
+
 export function createRendering({
   state: layerState,
   services,
@@ -395,7 +423,37 @@ export function createRendering({
         scheduleRadioOverlayPublish();
       });
   }
+  /** Show or hide the stations' entities. */
+  function setStationsShown(shown) {
+    if (layerState._dataSource) layerState._dataSource.show = shown;
+  }
+
+  /** Remove the selected station's entity, if there is one. */
+  function removeSelectionEntity() {
+    if (layerState._selectedEntity && layerState._viewer)
+      layerState._viewer.entities.remove(layerState._selectedEntity);
+    layerState._selectedEntity = null;
+  }
+
+  /**
+   * Entity visibility changes do not invalidate Cesium's existing cluster
+   * primitives. Toggle a public clustering input twice to mark the current
+   * cluster set dirty without changing its effective configuration.
+   */
+  function reclusterStations() {
+    if (!layerState._dataSource?.clustering?.enabled) return;
+    const clustering = layerState._dataSource.clustering;
+    const clusterPoints = clustering.clusterPoints;
+    clustering.clusterPoints = !clusterPoints;
+    clustering.clusterPoints = clusterPoints;
+    layerState._viewer?.scene?.requestRender();
+  }
+
   return {
+    radioStationIdFromPick,
+    setStationsShown,
+    removeSelectionEntity,
+    reclusterStations,
     markerPosition,
     updateSelectionEntity,
     clusterPointCollection,

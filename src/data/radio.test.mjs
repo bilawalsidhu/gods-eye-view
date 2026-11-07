@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  fakeCameraPort,
+} from '../testSupport/fakeCameraPort.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
 import {
   buildRadioTunerBand,
   buildRadioTunerTicks,
@@ -1652,8 +1656,10 @@ test('Radio recovery preserves closer altitude and caps extreme full-globe zoom'
 });
 
 test('Radio camera navigation yields to every live tracked-entity owner', () => {
-  const viewer = { camera: {} };
+  const viewer = {};
+  bindRenderer(viewer, { camera: fakeCameraPort().port });
   assert.equal(radioCameraNavigationAllowed(viewer), true);
+  assert.equal(radioCameraNavigationAllowed({}), false, 'no camera to move');
   for (const trackedId of ['flights:abc123', 'military:def456']) {
     const trackedEntity = withEntityRecord({}, { trackedId });
     viewer.trackedEntity = trackedEntity;

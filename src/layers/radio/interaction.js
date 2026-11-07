@@ -20,31 +20,6 @@ export function createInteraction({
   } = services.picking;
   const { setOverlaySourceVisible } = services.overlays;
 
-  /** Resolve a station id from ordinary, selected, or Cesium cluster pick shapes. */
-
-  function radioStationIdFromPick(picked) {
-    const pending = [picked?.id, picked?.primitive?.id];
-    const seen = new Set();
-    while (pending.length) {
-      const value = pending.shift();
-      if (typeof value === 'string' || typeof value === 'number') {
-        const id = String(value);
-        if (id.startsWith(`${RADIO_PREFIX}selected:`))
-          return id.slice(`${RADIO_PREFIX}selected:`.length);
-        if (id.startsWith(RADIO_PREFIX)) return id.slice(RADIO_PREFIX.length);
-        continue;
-      }
-      if (!value || typeof value !== 'object' || seen.has(value)) continue;
-      seen.add(value);
-      if (Array.isArray(value)) pending.push(...value);
-      else {
-        pending.push(value.id);
-        if (value.primitive) pending.push(value.primitive.id);
-      }
-    }
-    return null;
-  }
-
   /**
    * The station under a click: the pick itself, then one drill through a
    * window around it, which also catches a near miss. Both passes are the
@@ -56,7 +31,7 @@ export function createInteraction({
     if (!event) return null;
 
     const stationFromPick = (picked) => {
-      const stationId = radioStationIdFromPick(picked);
+      const stationId = parts.rendering.radioStationIdFromPick(picked);
       return stationId && layerState._stationById.has(stationId)
         ? stationId
         : null;
@@ -90,7 +65,7 @@ export function createInteraction({
 
   function syncRadioLifecyclePresentation() {
     const visible = radioPresentationAllowed();
-    if (layerState._dataSource) layerState._dataSource.show = visible;
+    parts.rendering.setStationsShown(visible);
     setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, visible);
     if (visible) {
       installInteraction();
@@ -99,9 +74,7 @@ export function createInteraction({
       parts.rendering.scheduleRadioOverlayPublish();
     } else {
       removeInteraction();
-      if (layerState._selectedEntity && layerState._viewer)
-        layerState._viewer.entities.remove(layerState._selectedEntity);
-      layerState._selectedEntity = null;
+      parts.rendering.removeSelectionEntity();
     }
   }
 
@@ -142,7 +115,6 @@ export function createInteraction({
     layerState._horizonTimer = null;
   }
   return {
-    radioStationIdFromPick,
     pickedRadioStationAt,
     radioPresentationAllowed,
     syncRadioLifecyclePresentation,
