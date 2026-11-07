@@ -19,6 +19,15 @@ export function createState({ services }) {
 
   state._lastError = null;
 
+  state._lastErrorAt = null;
+
+  state._entryCameraView = null;
+
+  state._entryLandedView = null;
+
+  /** Navigation took the camera; set until the layer flies again. */
+  state._cameraReleased = false;
+
   state._stale = false;
 
   state._orbitMatches = 0;

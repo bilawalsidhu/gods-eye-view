@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream';
 import { rm } from 'node:fs/promises';
 import { localProviderPlugins } from '../server/providers/local.js';
 import { standaloneVoiceTools } from '../server/standalone/voiceTools.js';
+import { offeredTools } from '../server/providers/openai/tools.js';
 import {
   KEY_SETUP_KEYS,
   keySetupStatus,
@@ -60,8 +61,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     plugin[hook]({
       middlewares: {
         use(route, value) {
-          assert.equal(route, '/api/gemini/token');
-          handler = value;
+          if (route === '/api/gemini/token') handler = value;
         },
       },
     });
@@ -85,13 +85,15 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     assert.equal(calls.length, 1);
     const locked = JSON.parse(calls[0].options.body).bidiGenerateContentSetup
       .tools[0].functionDeclarations;
+    // Without an operator Overpass, osm_query is left out of the session.
+    const offered = offeredTools(tools);
     assert.deepEqual(
       locked.map(({ name }) => name),
-      tools.map(({ name }) => name),
+      offered.map(({ name }) => name),
     );
     assert.deepEqual(
       locked.map(({ parametersJsonSchema }) => parametersJsonSchema),
-      tools.map(({ parameters }) => parameters),
+      offered.map(({ parameters }) => parameters),
     );
     assert.ok(locked.every(({ behavior }) => behavior === 'BLOCKING'));
     assert.deepEqual(res.body.config.tools[0].functionDeclarations, locked);

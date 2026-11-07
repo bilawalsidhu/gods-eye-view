@@ -49,10 +49,10 @@ const weatherLabel = computed(() =>
       <span class="cockpit-context-qualifier">{{ t('CONTEXT ONLY') }}</span>
     </header>
     <div class="cockpit-context-cohorts" role="list" :aria-label="t('Nearby cohort counts')">
-      <div v-class-toggle="{ unknown: c.cohorts.flights.unknown }" role="listitem" data-context-cohort="flights"><span>{{ t('FLT') }}</span><strong>{{ c.cohorts.flights.count }}</strong><small translate="no">OpenSky</small></div>
-      <div v-class-toggle="{ unknown: c.cohorts.military.unknown }" role="listitem" data-context-cohort="military"><span>{{ t('MIL') }}</span><strong>{{ c.cohorts.military.count }}</strong><small translate="no">adsb.lol</small></div>
-      <div v-class-toggle="{ unknown: c.cohorts['ais-live-vessels'].unknown }" role="listitem" data-context-cohort="ais-live-vessels"><span translate="no">AIS</span><strong>{{ c.cohorts['ais-live-vessels'].count }}</strong><small translate="no">AISStream</small></div>
-      <div v-class-toggle="{ unknown: c.cohorts['military-installations'].unknown }" role="listitem" data-context-cohort="military-installations"><span>{{ t('SITE') }}</span><strong>{{ c.cohorts['military-installations'].count }}</strong><small translate="no">OpenStreetMap</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts.flights.unknown }" role="listitem" data-context-cohort="flights"><span>{{ t('FLT') }}</span><strong>{{ c.cohorts.flights.count }}</strong><small translate="no" :title="c.cohorts.flights.source">{{ c.cohorts.flights.source }}</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts.military.unknown }" role="listitem" data-context-cohort="military"><span>{{ t('MIL') }}</span><strong>{{ c.cohorts.military.count }}</strong><small translate="no" :title="c.cohorts.military.source">{{ c.cohorts.military.source }}</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts['ais-live-vessels'].unknown }" role="listitem" data-context-cohort="ais-live-vessels"><span translate="no">AIS</span><strong>{{ c.cohorts['ais-live-vessels'].count }}</strong><small translate="no" :title="c.cohorts['ais-live-vessels'].source">{{ c.cohorts['ais-live-vessels'].source }}</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts['military-installations'].unknown }" role="listitem" data-context-cohort="military-installations"><span>{{ t('SITE') }}</span><strong>{{ c.cohorts['military-installations'].count }}</strong><small translate="no" :title="c.cohorts['military-installations'].source">{{ c.cohorts['military-installations'].source }}</small></div>
     </div>
     <div class="cockpit-context-nearest">
       <span id="cockpit-context-direction" v-class-toggle="{ unknown: c.direction.unknown }" class="material-symbols-outlined" :style="directionStyle" aria-hidden="true">navigation</span>

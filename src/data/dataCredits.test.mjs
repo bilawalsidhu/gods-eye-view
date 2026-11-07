@@ -129,6 +129,18 @@ test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
   assert.match(credit.html, /observe posted signage/);
 });
 
+test("the Houston camera credit names TranStar's terms and the permission they require", () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'houston-cctv');
+  assert.ok(credit, 'Houston TranStar camera frames must be credited');
+  assert.match(credit.html, /\(Houston, when enabled\)/);
+  assert.ok(
+    credit.html.includes(
+      'href="https://traffic.houstontranstar.org/disclaimer.aspx"',
+    ),
+  );
+  assert.match(credit.html, /TxDOT's written permission/);
+});
+
 test('every Street Level imagery source is in the attribution lightbox', () => {
   for (const key of [
     'mapillary',
@@ -140,4 +152,18 @@ test('every Street Level imagery source is in the attribution lightbox', () => {
       DATA_CREDITS.some((entry) => entry.key === key),
       `${key} has no credit`,
     );
+});
+
+test('the PR #1506 camera packs are credited with their sources and terms', () => {
+  const html = (key) => DATA_CREDITS.find((entry) => entry.key === key)?.html;
+  assert.match(html('ottawa-cctv') || '', /traffic\.ottawa\.ca/);
+  assert.match(html('quebec-cctv') || '', /CC BY 4\.0/);
+  assert.match(html('quebec-cctv') || '', /OpenStreetMap contributors/);
+  assert.match(html('tripcheck-cctv') || '', /courtesy of ODOT/);
+  // MLIT's terms ask for the source in this form, with the page link.
+  assert.match(html('mlit-river-cctv') || '', /出典：国土交通省/);
+  assert.match(
+    html('mlit-river-cctv') || '',
+    /href="https:\/\/www\.river\.go\.jp\//,
+  );
 });
