@@ -843,7 +843,7 @@ test('changing an option rebuilds only the kinds that build it in, in their plac
   }
 });
 
-test('restyling points that stay put changes them in place; moving one rebuilds', () => {
+test('restyling or moving unclamped points changes them in place; a new one rebuilds', () => {
   const { scene, draw } = drawOver();
   const set = draw.points({ id: 'restyled', blend: 'translucent' });
   const dot = (id, lon, extra = {}) => ({
@@ -867,10 +867,26 @@ test('restyling points that stay put changes them in place; moving one rebuilds'
   assert.equal(a.id.meta, 7, 'picks read the new meta');
   assert.equal(set.size(), 2);
 
+  const b = host.get(1);
   set.upsert([dot('b', 2)]);
-  assert.notEqual(scene.added[0], host, 'moved: rebuilt');
+  assert.equal(scene.added[0], host, 'moved: the same collection');
+  assert.equal(host.get(1), b, 'the same point');
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(
+      b.position,
+      Cesium.Cartesian3.fromDegrees(2, 0, 2),
+      1e-6,
+    ),
+    'where it now is',
+  );
+  // Clamped now: a billboard dot, so rebuilt.
+  set.upsert([dot('b', 2, { height: 'clampGround' })]);
+  assert.notEqual(scene.added[0], host, 'clamped: rebuilt');
+  set.upsert([dot('b', 2)]);
+  const rebuilt = scene.added[0];
   set.upsert([dot('c', 3)]);
-  assert.equal(set.size(), 3, 'a new item rebuilds too');
+  assert.equal(set.size(), 3);
+  assert.notEqual(scene.added[0], rebuilt, 'a new item rebuilds');
   assert.equal(scene.added[0].length, 3);
   set.dispose();
 });
@@ -888,9 +904,68 @@ test('a position object changed and sent again moves its point', () => {
   const host = scene.added[0];
   item.pos.lon = 90;
   set.upsert([item]);
-  assert.notEqual(scene.added[0], host, 'rebuilt where it now is');
+  assert.equal(scene.added[0], host, 'moved where it is');
   const at = Cesium.Cartographic.fromCartesian(scene.added[0].get(0).position);
   assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) - 90) < 1e-9);
+  set.dispose();
+});
+
+test('a point moved in place is horizon culled where it now is', () => {
+  const { scene, draw, frame } = drawOver();
+  const set = draw.points({ id: 'culled-moving', horizonCull: true });
+  const dot = (lon) => ({
+    id: 'a',
+    pos: { lon, lat: 0, height: 10 },
+    pixelSize: 4,
+    color: '#fff',
+  });
+  // The eye is over lon 0.
+  set.set([dot(0)]);
+  const point = scene.added[0].get(0);
+  frame();
+  assert.equal(point.show, true, 'under the eye');
+  set.upsert([dot(180)]);
+  assert.equal(scene.added[0].get(0), point, 'the same point');
+  frame();
+  assert.equal(point.show, false, 'past the horizon');
+  set.upsert([dot(1)]);
+  frame();
+  assert.equal(point.show, true, 'back in view');
+  set.dispose();
+});
+
+test('points show only within their display range', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.points({ id: 'ranged' });
+  const dot = (id, extra = {}) => ({
+    id,
+    pos: { lon: 0, lat: 0 },
+    pixelSize: 4,
+    color: '#fff',
+    ...extra,
+  });
+  set.set([
+    dot('near', { displayRange: [0, 2e6] }),
+    dot('empty', { displayRange: [5, 5] }),
+    dot('clamped', { displayRange: [0, 1e3], height: 'clampGround' }),
+  ]);
+  const [host] = scene.added;
+  const points = host.get(0);
+  const dots = host.get(1);
+  const near = points.get(0);
+  assert.equal(near.distanceDisplayCondition.near, 0);
+  assert.equal(near.distanceDisplayCondition.far, 2e6);
+  assert.equal(points.get(1).show, false, 'an empty range shows nowhere');
+  assert.equal(points.get(1).distanceDisplayCondition, undefined);
+  assert.equal(dots.get(0).distanceDisplayCondition.far, 1e3, 'clamped too');
+  // Changed and dropped in place.
+  set.upsert([dot('near', { displayRange: [10, 20] })]);
+  assert.equal(points.get(0), near);
+  assert.equal(near.distanceDisplayCondition.far, 20);
+  set.upsert([dot('near')]);
+  assert.equal(near.distanceDisplayCondition, undefined, 'dropped');
+  set.upsert([dot('empty')]);
+  assert.equal(points.get(1).show, true, 'no range shows it');
   set.dispose();
 });
 

@@ -3,7 +3,7 @@
  * @description The Cesium renderer's draw port
  * (`src/render/contract/draw.d.ts`): batched sets of items, each set one
  * primitive collection in the scene, rebuilt when its items change (icon
- * sets, and points restyled where they are, change in place). Every
+ * sets, and unclamped points restyled or moved, change in place). Every
  * item carries a pick id `{set, id, meta, lodGroup}`, which the query port
  * (`ports.js`) reads picks back through.
  *
@@ -220,7 +220,8 @@ export function createCesiumDraw({
           record.gpu.write(list);
           return patched();
         }
-        // Items that only change how they look are changed where they are.
+        // Points restyled or moved, and lines that only change how they show
+        // or where an undraped one runs, are changed where they are.
         if (patchPoints(record, list) || patchLines(record, list)) {
           for (const item of list) items.set(item.id, item);
           setsVersion += 1;
@@ -738,7 +739,8 @@ export function createCesiumDraw({
     let dots = null;
     for (const item of record.items.values()) {
       const position = toCartesian(item.pos);
-      const show = item.show !== false;
+      // An empty range shows it nowhere.
+      const show = item.show !== false && displayable(item.displayRange);
       const heightReference = heightReferenceOf(
         item.height,
         record.spec.clampTo,
@@ -770,6 +772,7 @@ export function createCesiumDraw({
           position,
           heightReference,
           show,
+          distanceDisplayCondition: displayConditionOf(item.displayRange),
           id: pickId(record, item),
         });
       }
@@ -794,6 +797,7 @@ export function createCesiumDraw({
       disableDepthTestDistance: item.disableDepthTest ?? 0,
       scaleByDistance: nearFarOf(item.scaleByDistance),
       translucencyByDistance: nearFarOf(item.fadeByDistance),
+      distanceDisplayCondition: displayConditionOf(item.displayRange),
     };
   }
 
@@ -808,9 +812,10 @@ export function createCesiumDraw({
 
   /**
    * Upsert unclamped points in place, without a rebuild, when every item
-   * is one the set draws as a point primitive now and keeps its position,
-   * height mode and LOD group: then only how it looks, its `meta` and
-   * whether it shows change. False, changing nothing, otherwise.
+   * is one the set draws as a point primitive now and stays unclamped in
+   * the same LOD group: then how it looks, where it is, its `meta` and
+   * whether it shows change on the point it has. False, changing nothing,
+   * otherwise.
    */
   function patchPoints(record, list) {
     const patchable = record.patchable;
@@ -821,14 +826,20 @@ export function createCesiumDraw({
         !was ||
         heightReferenceOf(item.height, record.spec.clampTo) !==
           Cesium.HeightReference.NONE ||
-        item.lodGroup !== was.lodGroup ||
-        placeOf(item).some((value, i) => value !== was.at[i])
+        item.lodGroup !== was.lodGroup
       )
         return false;
     }
     for (const item of list) {
       const was = patchable.get(item.id);
-      const show = item.show !== false;
+      const show = item.show !== false && displayable(item.displayRange);
+      const at = placeOf(item);
+      if (at.some((value, i) => !Object.is(value, was.at[i]))) {
+        const position = toCartesian(item.pos);
+        was.primitive.position = position;
+        was.placed.position = position;
+        was.at = at;
+      }
       Object.assign(was.primitive, pointLook(item));
       was.primitive.id.meta = item.meta;
       was.placed.shown = show;

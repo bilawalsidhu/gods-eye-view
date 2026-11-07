@@ -1349,6 +1349,51 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.points.update',
+      'an upserted point is drawn where it now is once drawn again, and shows only within its display range',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.points({ id: 'conf:points-update' });
+        const a = h.toEcef({ ...AUSTIN, height: 0 });
+        const b = h.toEcef({ lon: AUSTIN.lon + 0.004, lat: AUSTIN.lat });
+        const point = (pos, extra = {}) => ({
+          id: 'one',
+          pos,
+          pixelSize: 16,
+          color: '#ff0000',
+          meta: { n: 1 },
+          ...extra,
+        });
+        set.set([point(a)]);
+        await drawn(h, r);
+        const sa = r.query.project(a);
+        const sb = r.query.project(b);
+        ok(sa && sb, 'both places project');
+        const mine = (s) =>
+          r.query.pick(s.x, s.y)?.set === 'conf:points-update';
+        ok(mine(sa) && !mine(sb), 'drawn where it was put');
+        set.upsert([point(b, { meta: { n: 2 } })]);
+        await drawn(h, r);
+        ok(!mine(sa), 'moved: gone from where it was');
+        deepEqual(
+          r.query.pick(sb.x, sb.y)?.meta,
+          { n: 2 },
+          'moved: picked where it now is, with its new meta',
+        );
+        // The eye is 2 km off.
+        set.upsert([point(b, { displayRange: [0, 100] })]);
+        await drawn(h, r);
+        ok(!mine(sb), 'out of its display range: not drawn');
+        set.upsert([point(b, { displayRange: [0, 1e6] })]);
+        await drawn(h, r);
+        ok(mine(sb), 'in its display range: drawn');
+        set.upsert([point(b, { displayRange: [1e4, 1e6] })]);
+        await drawn(h, r);
+        ok(!mine(sb), 'nearer than its display range: not drawn');
+        set.dispose();
+      },
+    ),
+    check(
       'draw.columns',
       'column updates are rows: sized, picked, removed',
       async (h, r) => {

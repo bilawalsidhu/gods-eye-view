@@ -48,6 +48,8 @@ export const CESIUM_CHECKS = new Set([
   'draw.motion.live',
   'draw.motion.shared',
   'draw.pick',
+  'draw.points.update',
+  'draw.lodGroup',
   'draw.sets',
   'effects.crossfade',
   'effects.defineStyle',
