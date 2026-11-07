@@ -678,3 +678,74 @@ test('a row keeps the course it showed when its item’s motion is changed in pl
   );
   assert.ok(Math.abs(course('a', at + 2500) - 90) < 0.01, 'there by 2 s');
 });
+
+test('an SVG takes the atlas at its own size, other images at the item’s', async () => {
+  const { iconAtlas } = await import('../../data/iconAtlas.js');
+  const { svgRasterPx } = await import('./gpuIcons.js');
+  const svg = (w, h, extra = '') =>
+    `<svg xmlns="http://www.w3.org/2000/svg" ${extra} width="${w}" height="${h}" viewBox="0 0 10 10"><rect stroke-width="9"/></svg>`;
+  const b64 = (text) => 'data:image/svg+xml;base64,' + btoa(text);
+  const enc = (text) =>
+    'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(text);
+  assert.equal(svgRasterPx(b64(svg(192, 192, 'stroke-width="3"'))), 192);
+  assert.equal(
+    svgRasterPx(
+      enc(
+        `<!-- <svg width="4096" height="4096"> -->${svg(32, 32, 'data-x="a>b"')}`,
+      ),
+    ),
+    32,
+    'the root, past comments and quoted >',
+  );
+  assert.equal(svgRasterPx(enc(svg(1024, 1024))), 256, 'at most 256 px');
+  assert.equal(svgRasterPx(enc(svg('48px', 30))), 48, 'px, the larger side');
+  assert.equal(svgRasterPx(enc(svg('50%', 30))), null, 'not pixels');
+  assert.equal(
+    svgRasterPx(enc('<svg xmlns="http://www.w3.org/2000/svg"/>')),
+    null,
+    'no size',
+  );
+  assert.equal(svgRasterPx('ship.png'), null);
+  assert.equal(svgRasterPx('data:image/svg+xml;base64,@@@'), null);
+
+  const { part, draw } = drawOver();
+  const set = draw.icons({ id: 'gpu:raster' });
+  const far = b64(svg(64, 64));
+  const near = b64(svg(192, 192));
+  set.set([
+    icon('a', {
+      image: far,
+      size: [20, 20],
+      imageLod: { near, switchPx: 30 },
+      motion: { kind: 'hold' },
+    }),
+    icon('b', {
+      image: 'gpu-raster.png',
+      size: [24, 18],
+      motion: { kind: 'hold' },
+    }),
+    icon('c', {
+      image: { svg: svg(40, 40) },
+      size: [20, 20],
+      motion: { kind: 'hold' },
+    }),
+  ]);
+  const { set: rowsOf } = rows(part, 'gpu:raster');
+  const a = rowsOf.row('a');
+  assert.ok(iconAtlas.has(far, 64) && iconAtlas.has(near, 192));
+  assert.equal(rowsOf.imageFar(a), iconAtlas.slot(far, 64), 'far at 64 px');
+  assert.equal(rowsOf.imageNear(a), iconAtlas.slot(near, 192), 'near at 192');
+  assert.equal(rowsOf.width(a), 20, 'drawn at its size');
+  assert.equal(
+    rowsOf.imageFar(rowsOf.row('b')),
+    iconAtlas.slot('gpu-raster.png', 24),
+    'a URL at the item’s larger side',
+  );
+  assert.ok(
+    iconAtlas.has(
+      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg(40, 40))}`,
+      40,
+    ),
+    'an svg ref at its own',
+  );
+});

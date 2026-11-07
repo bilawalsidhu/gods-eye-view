@@ -16,8 +16,10 @@
  * `fadeByDistance`, `displayRange`, pixel and eye offsets, anchors other
  * than the centre, axis and screen rotations, opaque and additive blends,
  * and images other than URLs, SVG and atlas slots of those. Their images
- * are rasterised square, at the item's larger side, into the icon atlas
- * every GPU icon set shares, and refused when it has no room left for them.
+ * are rasterised square into the icon atlas every GPU icon set shares, and
+ * refused when it has no room left for them: an SVG at its own size (its
+ * root's larger `width`/`height`, as a billboard rasterises it), any other
+ * image at the item's larger side.
  *
  * Choices the contract leaves open, taken conservatively:
  * - `horizonCull` judges each row no lower than `ICON_CULL_HEIGHT_M` above
@@ -104,8 +106,62 @@ function sameFields(a, b) {
 /** Whether two `motionOf`s write the same segment. */
 const sameMotion = (a, b) => Boolean(a) && sameFields(a, b);
 
-/** The square raster size an item's images take in the atlas. */
-function rasterPxOf(item) {
+/** SVG URLs' own raster sizes (px; null: none given), as parsed. */
+const svgSizes = new Map();
+const SVG_SIZES_KEPT = 128;
+/**
+ * The largest an SVG is rasterised at its own size (px): past it, at this,
+ * so an icon exported at 1024 px still packs.
+ */
+export const MAX_OWN_RASTER_PX = 256;
+
+/**
+ * An SVG data URL's own raster size: the larger of its root's `width` and
+ * `height` in pixels (unitless or `px`), at most `MAX_OWN_RASTER_PX`, or null
+ * when it gives no such size.
+ */
+export function svgRasterPx(url) {
+  if (!/^data:image\/svg\+xml[;,]/i.test(url)) return null;
+  let px = svgSizes.get(url);
+  if (px !== undefined) return px;
+  px = null;
+  try {
+    const comma = url.indexOf(',');
+    const body = url.slice(comma + 1);
+    const text = /;base64$/i.test(url.slice(0, comma))
+      ? atob(body)
+      : decodeURIComponent(body);
+    // The root tag, comments aside, quoted values whole.
+    const root =
+      /<svg\b(?:[^>"']|"[^"]*"|'[^']*')*>/i.exec(
+        text.replace(/<!--[\s\S]*?-->/g, ''),
+      )?.[0] ?? '';
+    const side = (name) => {
+      const m = new RegExp(
+        `\\s${name}\\s*=\\s*["']\\s*([0-9]*\\.?[0-9]+)\\s*(px)?\\s*["']`,
+        'i',
+      ).exec(root);
+      return m ? Number(m[1]) : NaN;
+    };
+    const width = side('width');
+    const height = side('height');
+    if (width > 0 && height > 0)
+      px = Math.min(
+        MAX_OWN_RASTER_PX,
+        Math.max(1, Math.round(Math.max(width, height))),
+      );
+  } catch {
+    // Not decodable: drawn at the item's size.
+  }
+  if (svgSizes.size >= SVG_SIZES_KEPT) svgSizes.clear();
+  svgSizes.set(url, px);
+  return px;
+}
+
+/** The square raster size an image (its atlas URL) takes for an item. */
+function rasterPxOf(url, item) {
+  const own = url === null ? null : svgRasterPx(url);
+  if (own !== null) return own;
   const [width = 0, height = 0] = item.size ?? [];
   return Math.max(1, Math.round(Math.max(width, height)));
 }
@@ -184,7 +240,7 @@ export function createGpuIcons({
         )
           refuse('images but URLs and SVG');
         const url = imageUrl(image);
-        const px = rasterPxOf(item);
+        const px = rasterPxOf(url, item);
         if (url !== null && !iconAtlas.has(url, px)) fresh.add(`${px}|${url}`);
       }
     }
@@ -260,12 +316,12 @@ export function createGpuIcons({
     // Written in full on the first write.
     let fresh = true;
 
-    /** An image as its atlas slot, or -1 while it is not registered. */
-    function slotOf(image, sizePx) {
+    /** An item's image as its atlas slot, or -1 while it is not registered. */
+    function slotOf(image, item) {
       const resolved = imageOf(record, image);
       if (resolved === undefined) return -1;
       const url = imageUrl(resolved);
-      if (url !== null) return iconAtlas.slot(url, sizePx);
+      if (url !== null) return iconAtlas.slot(url, rasterPxOf(url, item));
       throw new Error(
         "the Cesium renderer's GPU icons have no images but URLs and SVG",
       );
@@ -334,9 +390,8 @@ export function createGpuIcons({
           ? null
           : iconCourse(drawn.get(item.id), now);
       const [width = 0, height = 0] = item.size ?? [];
-      const rasterPx = rasterPxOf(item);
-      const far = slotOf(item.image, rasterPx);
-      const near = item.imageLod ? slotOf(item.imageLod.near, rasterPx) : far;
+      const far = slotOf(item.image, item);
+      const near = item.imageLod ? slotOf(item.imageLod.near, item) : far;
       set.setImage(row, far, near);
       // A switch at 0 px or less is near at any size.
       set.setImageSwitch(
