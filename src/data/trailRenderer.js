@@ -49,7 +49,7 @@ const MIN_SEGMENT_DISTANCE_SQ = 0.01;
  * @param {object} options - Trail options.
  * @param {string} options.color - CSS color string for the trail hue.
  * @param {number} [options.width=2.5] - Polyline width in pixels.
- * @returns {{setPositions: function(Cesium.Cartesian3[]): void, setVisible: function(boolean): void, clear: function(): void, destroy: function(): void}}
+ * @returns {{setPositions: function(Array<Cesium.Cartesian3|{x: number, y: number, z: number}>): void, setVisible: function(boolean): void, clear: function(): void, destroy: function(): void}}
  *   Trail handle: setPositions replaces the geometry, setVisible temporarily
  *   hides it without discarding history, clear empties it, and destroy removes
  *   the entity permanently.
@@ -92,7 +92,8 @@ export function createTrail(viewer, { color, width = 2.5 }) {
     /**
      * Replace the trail geometry with a chronological position list
      * (oldest first). Fewer than 2 distinct positions clears the trail.
-     * @param {Cesium.Cartesian3[]} cartesians - Positions, oldest -> newest.
+     * @param {Array<Cesium.Cartesian3|{x: number, y: number, z: number}>} cartesians
+     *   ECEF positions, oldest -> newest.
      */
     setPositions(cartesians) {
       if (destroyed || !viewer || viewer.isDestroyed()) return;
@@ -107,7 +108,12 @@ export function createTrail(viewer, { color, width = 2.5 }) {
             MIN_SEGMENT_DISTANCE_SQ
         )
           continue;
-        positions.push(position);
+        // Callers may hand plain ECEF {x, y, z}: the polyline gets Cartesian3s.
+        positions.push(
+          position instanceof Cesium.Cartesian3
+            ? position
+            : new Cesium.Cartesian3(position.x, position.y, position.z),
+        );
       }
       current = positions.length >= 2 ? positions : [];
       ensureEntity();

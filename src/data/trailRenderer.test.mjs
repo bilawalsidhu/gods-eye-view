@@ -37,3 +37,26 @@ test('trail visibility can change without discarding its accumulated geometry', 
   trail.destroy();
   assert.deepEqual(removed, [added[0]]);
 });
+
+test('trail positions may be plain ECEF: the polyline still draws Cartesian3s', () => {
+  const added = [];
+  const viewer = {
+    isDestroyed: () => false,
+    entities: {
+      add(definition) {
+        added.push(definition);
+        return definition;
+      },
+      remove() {},
+    },
+  };
+  const trail = createTrail(viewer, { color: '#ffffff' });
+  const given = new Cesium.Cartesian3(1, 2, 3);
+  trail.setPositions([given, { x: 1, y: 2, z: 3.01 }, { x: 4, y: 5, z: 6 }]);
+  const drawn = added[0].polyline.positions.getValue();
+  // The near-duplicate merges; a Cartesian3 given passes through as it is.
+  assert.equal(drawn.length, 2);
+  assert.equal(drawn[0], given);
+  assert.ok(drawn[1] instanceof Cesium.Cartesian3);
+  assert.deepEqual([drawn[1].x, drawn[1].y, drawn[1].z], [4, 5, 6]);
+});

@@ -65,16 +65,23 @@ export function createRendering({
       };
       visualRecords.set(record, visual);
     }
+    visual.position = anchorPosition(record);
+    return visual;
+  }
+
+  /**
+   * Where a record's icon is anchored: VESSEL_LIFT_M above the sea surface
+   * (the geoid, once its grid has loaded).
+   * @param {Object} record - Vessel record with a finite lat/lon.
+   * @returns {Cesium.Cartesian3} A Cesium position: icon rows, focus and the
+   *   layer's queries take it as it is.
+   */
+  function anchorPosition(record) {
     const heightM = components.queries.vesselDatumHeightM(
       components.tracking.currentGeoidN(record.lat, record.lon),
       VESSEL_LIFT_M,
     );
-    visual.position = Cesium.Cartesian3.fromDegrees(
-      record.lon,
-      record.lat,
-      heightM,
-    );
-    return visual;
+    return Cesium.Cartesian3.fromDegrees(record.lon, record.lat, heightM);
   }
 
   function resetRecordVisuals() {
@@ -594,6 +601,7 @@ export function createRendering({
     getVisual,
     iconPosition,
     prepareRecordVisual,
+    anchorPosition,
     resetRecordVisuals,
     renderRowLimit,
     labelRowLimit,
