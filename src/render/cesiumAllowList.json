@@ -117,7 +117,6 @@
   "src/layers/military/state.js",
   "src/layers/military/testing.js",
   "src/layers/military/tracking.js",
-  "src/layers/perimeters/index.js",
   "src/layers/radio/lifecycle.js",
   "src/layers/radio/rendering.js",
   "src/layers/recentImagery/rendering.js",

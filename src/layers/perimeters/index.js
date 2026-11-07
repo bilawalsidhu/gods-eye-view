@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf } from '../../render/rendererOf.js';
+import { hexColor } from '../../render/color.js';
 import {
   PERIMETER_OVERLAY_SOURCE_ID,
   perimeterAnchorDegrees,
@@ -17,13 +19,24 @@ export { createWfigsPerimeterSource } from './source.js';
 export * from './cards.js';
 export * from './inciweb.js';
 
-/** Fill/line color for a perimeter by containment progress (same ramp as the card accent). */
+/**
+ * Fill/line colour for a perimeter by containment progress (same ramp as the
+ * card accent), as a renderer colour `[r, g, b, a]`.
+ */
 export function containmentColor(containedPct) {
-  return Cesium.Color.fromCssColorString(containmentAccent(containedPct));
+  return hexColor(containmentAccent(containedPct));
 }
 
-const ringPositions = (ring) =>
-  ring.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat));
+const withAlpha = ([r, g, b], alpha) => [r, g, b, alpha];
+const ringDegrees = (ring) => ring.map(([lon, lat]) => ({ lon, lat }));
+
+/**
+ * The draw sets the perimeters are drawn in start with this; each layer has
+ * its own (`fire-perimeters:1:fills`, …), so several can share a renderer.
+ * Picks name them as `Hit.set`.
+ */
+export const PERIMETER_SET_PREFIX = 'fire-perimeters';
+let instances = 0;
 
 const PICK_PREFIX = 'fire-perimeter:';
 const CARD_HOST_OPTIONS = Object.freeze({
@@ -36,7 +49,14 @@ const CARD_HOST_OPTIONS = Object.freeze({
 // of near-identical bytes.
 const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
 
-/** Own one fire-perimeter display, its refresh lifecycle, and click selection. */
+/**
+ * Own one fire-perimeter display, its refresh lifecycle, and click selection.
+ *
+ * Each perimeter is a ground-clamped fill in one renderer draw set and its
+ * fire line a draped line in another (`drawOf(viewer)`), made at `init`.
+ * Given a Cesium viewer with no renderer bound, the
+ * caller loads the package's `./render/cesium/unbound` export first.
+ */
 export function createFirePerimetersLayer({
   source,
   overlayHost = null,
@@ -52,7 +72,9 @@ export function createFirePerimetersLayer({
   let _request = null;
   let _linkRequest = null;
   let _snapshotSignature = null;
-  let _dataSource = null;
+  let _fills = null;
+  let _lines = null;
+  let _setIds = new Set();
   let _count = 0;
   let _lastUpdate = null;
   // The proxy's last snapshot, served while WFIGS is unreachable.
@@ -155,7 +177,7 @@ export function createFirePerimetersLayer({
       candidate && _linkVerdicts.get(candidate) === true ? candidate : null;
     const card = {
       ...buildIncidentCard(row, Date.now(), { link: _selectedLink }),
-      position: Cesium.Cartesian3.fromDegrees(row.anchor.lon, row.anchor.lat),
+      position: fromDegrees(row.anchor.lon, row.anchor.lat),
     };
     if (!openExternal) card.interactive = false;
     if (_selectedLink && openExternal) {
@@ -174,12 +196,15 @@ export function createFirePerimetersLayer({
     );
   }
 
-  /** Resolve a scene pick to one of this layer's incident ids, or null. */
-  function pickedIncidentId(picked) {
-    const pickId = picking.resolvePickId(picked);
-    if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX))
+  /**
+   * The incident a click's draw hit (`Hit`, query.d.ts) belongs to: an item
+   * of this layer's own sets, for an incident drawn now; else null.
+   */
+  function pickedIncidentId(hit) {
+    if (!hit || hit.surface || !_setIds.has(hit.set)) return null;
+    if (typeof hit.id !== 'string' || !hit.id.startsWith(PICK_PREFIX))
       return null;
-    const incidentId = pickId.slice(PICK_PREFIX.length).split(':')[0];
+    const incidentId = hit.id.slice(PICK_PREFIX.length).split(':')[0];
     return _rowById.has(incidentId) ? incidentId : null;
   }
 
@@ -203,7 +228,7 @@ export function createFirePerimetersLayer({
         return;
       }
       const picked = event.pick;
-      const incidentId = picked ? pickedIncidentId(picked) : null;
+      const incidentId = picked ? pickedIncidentId(event.drawHit) : null;
       if (incidentId) {
         abortLinkVerification();
         _selectedId = incidentId;
@@ -250,10 +275,20 @@ export function createFirePerimetersLayer({
     init(viewer) {
       if (_viewer)
         throw new Error('Fire perimeter layer is already initialized');
+      const draw = drawOf(viewer);
+      const prefix = `${PERIMETER_SET_PREFIX}:${++instances}`;
+      _fills = draw.shapes({
+        id: `${prefix}:fills`,
+        clampTo: 'both',
+        show: false,
+      });
+      _lines = draw.lines({
+        id: `${prefix}:lines`,
+        clampTo: 'both',
+        show: false,
+      });
+      _setIds = new Set([_fills.id, _lines.id]);
       _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource('fire-perimeters');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -264,7 +299,7 @@ export function createFirePerimetersLayer({
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      if (_fills) _fills.show = _lines.show = true;
       overlayHost?.setVisible?.(PERIMETER_OVERLAY_SOURCE_ID, true);
       installClickHandler();
     },
@@ -273,13 +308,13 @@ export function createFirePerimetersLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      if (_fills) _fills.show = _lines.show = false;
       removeClickHandler();
       clearSelection();
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled || !_fills) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -314,40 +349,29 @@ export function createFirePerimetersLayer({
           return true;
         }
         abortLinkVerification();
-        const nextEntities = [];
+        const nextFills = [];
+        const nextLines = [];
         _rowById.clear();
         for (const row of rows) {
           const color = containmentColor(row.containedPct);
           for (const [index, rings] of row.polygons.entries()) {
-            const [outer, ...holes] = rings;
-            const outerPositions = ringPositions(outer);
-            nextEntities.push(
-              new Cesium.Entity({
-                id: `fire-perimeter:${row.stableId}:${index}`,
-                polygon: {
-                  hierarchy: new Cesium.PolygonHierarchy(
-                    outerPositions,
-                    holes.map(
-                      (hole) =>
-                        new Cesium.PolygonHierarchy(ringPositions(hole)),
-                    ),
-                  ),
-                  material: new Cesium.ColorMaterialProperty(
-                    color.withAlpha(0.25),
-                  ),
-                },
-                // The fire line: ground-clamped outline (entity polygons cannot
-                // outline clamped geometry themselves).
-                polyline: {
-                  positions: outerPositions,
-                  clampToGround: true,
-                  width: 2,
-                  material: new Cesium.ColorMaterialProperty(
-                    color.withAlpha(0.9),
-                  ),
-                },
-              }),
-            );
+            const id = `${PICK_PREFIX}${row.stableId}:${index}`;
+            // Each exterior keeps its own holes.
+            nextFills.push({
+              id,
+              geometry: { kind: 'polygon', rings: rings.map(ringDegrees) },
+              fill: withAlpha(color, 0.25),
+              height: 'clampGround',
+            });
+            // The fire line: the exterior ring draped on the ground (lines
+            // take ECEF, draw.d.ts `LineItem`).
+            nextLines.push({
+              id,
+              positions: rings[0].map(([lon, lat]) => fromDegrees(lon, lat)),
+              widthPx: 2,
+              mode: 'draped',
+              style: { kind: 'solid', color: withAlpha(color, 0.9) },
+            });
           }
           // Keep a geometry-free projection: the coordinate arrays would
           // otherwise be retained for the layer's lifetime while only the
@@ -359,8 +383,8 @@ export function createFirePerimetersLayer({
           });
         }
 
-        _dataSource.entities.removeAll();
-        for (const entity of nextEntities) _dataSource.entities.add(entity);
+        _fills.set(nextFills);
+        _lines.set(nextLines);
         _snapshotSignature = signature;
         // Refresh (or drop) the selected incident's card against the new feed.
         if (_selectedId) publishSelectedCard();
@@ -368,7 +392,7 @@ export function createFirePerimetersLayer({
         _lastUpdate = updatedAt;
         _lastError = null;
         console.log(
-          `[Data:FirePerimeters] Updated: ${_count} incidents, ${nextEntities.length} polygons`,
+          `[Data:FirePerimeters] Updated: ${_count} incidents, ${nextFills.length} polygons`,
         );
         return true;
       } catch (e) {
@@ -384,7 +408,7 @@ export function createFirePerimetersLayer({
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
       removeClickHandler();
@@ -396,10 +420,10 @@ export function createFirePerimetersLayer({
       _linkVerdicts.clear();
       _viewer = null;
       _enabled = false;
-      if (_dataSource) {
-        viewer.dataSources.remove(_dataSource, true);
-        _dataSource = null;
-      }
+      _fills?.dispose();
+      _lines?.dispose();
+      _fills = _lines = null;
+      _setIds = new Set();
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -408,7 +432,7 @@ export function createFirePerimetersLayer({
 
     /** Snapshot incident facts (with card-anchor coordinates) for the analyst query engine. */
     getAnalystRecords(maxCount = 2000) {
-      if (!_dataSource || !_dataSource.show) return [];
+      if (!_fills || !_fills.show) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;

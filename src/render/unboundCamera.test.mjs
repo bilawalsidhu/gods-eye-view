@@ -67,6 +67,7 @@ const FALLS_BACK = new Set(['src/data/followed.js']);
 const DRAW_FROM_CALLER = new Set([
   './layers/earthquakes',
   './layers/bikeshare',
+  './layers/perimeters',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));

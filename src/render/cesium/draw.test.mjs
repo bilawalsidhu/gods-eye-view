@@ -751,3 +751,52 @@ test('a position object changed and sent again moves its point', () => {
   assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) - 90) < 1e-9);
   set.dispose();
 });
+
+test('the fire perimeters layer draws holed ground fills and draped fire lines on a viewer of its own', async () => {
+  const { createFirePerimetersLayer } =
+    await import('../../layers/perimeters/index.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const outer = [
+    [-108.1, 35.2],
+    [-108.0, 35.2],
+    [-108.0, 35.3],
+    [-108.1, 35.2],
+  ];
+  const hole = [
+    [-108.08, 35.22],
+    [-108.02, 35.22],
+    [-108.02, 35.25],
+    [-108.08, 35.22],
+  ];
+  const layer = createFirePerimetersLayer({
+    source: {
+      getSnapshot: async () => [
+        { stableId: 'a', containedPct: 0, polygons: [[outer, hole]] },
+      ],
+    },
+  });
+  layer.init(viewer);
+  layer.enable(viewer);
+  assert.equal(await layer.update(viewer), true);
+  const all = (host, out = []) => {
+    out.push(host);
+    if (host instanceof Cesium.PrimitiveCollection)
+      for (let i = 0; i < host.length; i++) all(host.get(i), out);
+    return out;
+  };
+  const primitives = scene.added.flatMap((host) => all(host));
+  const of = (type) => primitives.filter((p) => p instanceof type);
+  const [fill] = of(Cesium.GroundPrimitive);
+  assert.equal(fill.classificationType, Cesium.ClassificationType.BOTH);
+  const [instance] = fill.geometryInstances;
+  assert.equal(instance.id.id, 'fire-perimeter:a:0');
+  assert.equal(instance.geometry._polygonHierarchy.holes.length, 1);
+  const [line] = of(Cesium.GroundPolylinePrimitive);
+  assert.equal(line.classificationType, Cesium.ClassificationType.BOTH);
+  assert.equal(line.geometryInstances.length, 1, 'the exterior ring only');
+  assert.equal(line.geometryInstances[0].geometry.width, 2);
+  assert.equal(line.geometryInstances[0].id.id, 'fire-perimeter:a:0');
+  layer.destroy();
+  assert.equal(scene.added.length, 0);
+});
