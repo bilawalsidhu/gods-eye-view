@@ -298,6 +298,7 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
   }),
   radio: Object.freeze({ filter: 'all', volume: 0.8 }),
   'wildlife-sightings': Object.freeze({ confirmed: false, taxa: 'all' }),
+  'sea-surface-temperature': Object.freeze({ view: 'temperature' }),
 });
 
 /** The frozen meaning of an omitted option; unlisted options are always written. */
