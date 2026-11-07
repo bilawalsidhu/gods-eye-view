@@ -552,3 +552,48 @@ test('Rio feeds are CC BY 4.0 and live', () => {
     'Rio has a DATA_SOURCES row',
   );
 });
+
+test('Porto STCP covers the city and its neighbours, and not Lisbon', () => {
+  const ids = (lat, lon) =>
+    transitFeedsInRange(lat, lon).map((feed) => feed.id);
+  for (const [place, lat, lon] of [
+    ['Aliados', 41.1486, -8.6109],
+    ['Vila Nova de Gaia', 41.1239, -8.6118],
+    ['Matosinhos', 41.1844, -8.6963],
+    ['Maia', 41.2357, -8.6199],
+  ]) {
+    assert.ok(ids(lat, lon).includes('stcp-porto'), `STCP reaches ${place}`);
+  }
+  assert.equal(
+    ids(38.7223, -9.1393).includes('stcp-porto'),
+    false,
+    'Lisbon, 275 km away, never polls Porto',
+  );
+});
+
+test('Porto STCP is CC0, live, declares its NGSI format, and is documented', () => {
+  const feed = getTransitFeed('stcp-porto');
+  assert.equal(feed.defaultEnabled, true);
+  assert.equal(feed.format, 'ngsi-v2');
+  assert.equal(feed.license, 'CC0 1.0');
+  assert.equal(
+    feed.licenseUrl,
+    'https://dados.gov.pt/datasets/urban-platform-bus-location',
+  );
+  assert.match(feed.attribution, /STCP/);
+  assert.equal(feed.speedUnit, undefined, 'NGSI speeds are already m/s');
+  assert.equal(transitModeFor(feed, '200'), 'bus');
+  assert.equal(transitRouteLabel(feed, '200'), '200');
+  const formats = new Set(
+    TRANSIT_FEED_REGISTRY.map((entry) => entry.format ?? 'gtfs-rt'),
+  );
+  assert.deepEqual([...formats].sort(), ['gtfs-rt', 'ngsi-v2']);
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources.split('\n').some((line) => line.startsWith('| **STCP Porto')),
+    'Porto has a DATA_SOURCES row',
+  );
+});

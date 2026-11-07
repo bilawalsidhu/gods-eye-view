@@ -18,7 +18,39 @@ import {
   GTFS_INCREMENTALITY_FULL_DATASET,
   decodeVehiclePositions,
 } from './gtfsRealtime.js';
+import { decodeNgsiVehicles } from './ngsiVehicles.js';
 import { getTransitFeed } from './transitFeeds.js';
+
+/**
+ * Wire formats a registry entry may declare in `format`. Absent means
+ * GTFS-Realtime protobuf, which is every feed but those that say otherwise.
+ * Each format names its decoder and what to ask the upstream for; both decode
+ * into the same vehicle records, so nothing past the proxy knows the format.
+ */
+export const TRANSIT_FEED_FORMATS = Object.freeze({
+  'gtfs-rt': Object.freeze({
+    decode: decodeVehiclePositions,
+    accept: 'application/x-protobuf, application/octet-stream;q=0.9, */*;q=0.1',
+  }),
+  'ngsi-v2': Object.freeze({
+    decode: decodeNgsiVehicles,
+    accept: 'application/json',
+  }),
+});
+
+/**
+ * The format entry for a feed. An unknown declared format is a registry
+ * mistake, and guessing a decoder for it would render garbage, so it throws.
+ * @param {object} feed Registry entry.
+ * @returns {{ decode: Function, accept: string }}
+ */
+export function transitFeedFormat(feed) {
+  const name = feed?.format ?? 'gtfs-rt';
+  if (!Object.hasOwn(TRANSIT_FEED_FORMATS, name)) {
+    throw new Error(`unknown transit feed format: ${String(name)}`);
+  }
+  return TRANSIT_FEED_FORMATS[name];
+}
 
 /** Fresh window: a snapshot younger than this is served without refetching. */
 export const TRANSIT_PROXY_TTL_MS = 15_000;
@@ -114,7 +146,7 @@ export function transitUpstreamHeaders(feed, validators = null) {
   return {
     'User-Agent':
       'gods-eye-view-transit-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
-    Accept: 'application/x-protobuf, application/octet-stream;q=0.9, */*;q=0.1',
+    Accept: transitFeedFormat(feed).accept,
     'Accept-Encoding': 'gzip',
     ...(validators?.etag ? { 'If-None-Match': validators.etag } : {}),
     ...(validators?.lastModified
@@ -233,14 +265,17 @@ export function repairVehicleTimestamps(vehicles, headerTimestamp, fetchedAtS) {
  * not implemented, so the honest answer is to decline the feed, not to render
  * a wrong one.
  *
+ * The feed's declared `format` picks the decoder (GTFS-RT protobuf unless it
+ * says `ngsi-v2`); everything after decoding is shared.
+ *
  * @param {object} feed Registry entry.
- * @param {Uint8Array|ArrayBuffer} bytes Raw GTFS-RT FeedMessage.
+ * @param {Uint8Array|ArrayBuffer} bytes Raw upstream body.
  * @param {number} [now=Date.now()] Fetch time (ms epoch).
  * @returns {{ feedId: string, name: string, fetchedAt: number, feedTimestamp: number|null,
  *   version: string|null, entityCount: number, truncated: boolean, count: number, vehicles: object[] }}
  */
 export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
-  const decoded = decodeVehiclePositions(bytes);
+  const decoded = transitFeedFormat(feed).decode(bytes);
   if (decoded.incrementality !== GTFS_INCREMENTALITY_FULL_DATASET) {
     throw new TransitFeedShapeError(
       `feed is differential (incrementality ${decoded.incrementality})`,
