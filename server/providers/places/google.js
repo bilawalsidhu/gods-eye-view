@@ -71,6 +71,9 @@ const GEOCODE_UPSTREAM_TIMEOUT_MS = 10_000;
 
 const GEOCODE_MAX_RESPONSE_BYTES = 256 * 1024;
 
+/** Geocoding statuses that answer the query; the rest report a failure. */
+const GEOCODE_ANSWER_STATUSES = new Set(['OK', 'ZERO_RESULTS']);
+
 /** Validate a free-text geocoder query before consuming request quota. */
 export function validateGeocodeAddress(searchParams) {
   const address = String(searchParams.get('address') || '').trim();
@@ -199,7 +202,12 @@ export function googlePlacesContextProxy({
 
         res.statusCode = response.ok ? 200 : response.status;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.setHeader('Cache-Control', 'private, max-age=300');
+        // A refusal (bad key, API not enabled, quota) is not kept: the browser
+        // would replay it for five minutes after the key is fixed.
+        res.setHeader(
+          'Cache-Control',
+          response.ok ? 'private, max-age=300' : 'no-store',
+        );
         res.end(
           JSON.stringify({
             places,
@@ -320,7 +328,12 @@ export function googlePlacesContextProxy({
 
         res.statusCode = response.ok ? 200 : response.status;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.setHeader('Cache-Control', 'private, max-age=300');
+        // A refusal (bad key, API not enabled, quota) is not kept: the browser
+        // would replay it for five minutes after the key is fixed.
+        res.setHeader(
+          'Cache-Control',
+          response.ok ? 'private, max-age=300' : 'no-store',
+        );
         res.end(
           JSON.stringify({
             places,
@@ -446,7 +459,14 @@ export function googlePlacesContextProxy({
 
           res.statusCode = response.ok ? 200 : response.status;
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.setHeader('Cache-Control', 'private, max-age=300');
+          // Geocoding reports a denied key or spent quota as HTTP 200 with a
+          // status of its own; only an answer is worth keeping.
+          res.setHeader(
+            'Cache-Control',
+            response.ok && GEOCODE_ANSWER_STATUSES.has(data.status)
+              ? 'private, max-age=300'
+              : 'no-store',
+          );
           res.end(JSON.stringify(data));
         } catch {
           // Fixed public text: a transport, URL or runtime message would
