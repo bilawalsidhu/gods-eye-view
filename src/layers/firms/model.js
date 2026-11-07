@@ -541,7 +541,8 @@ export function createModel({
     if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
     const hours = deltaMs / 3600000;
     if (hours < 1) return '<1h';
-    if (hours < 48) return `${Math.round(hours)}h`;
+    const wholeHours = Math.round(hours);
+    if (wholeHours < 48) return `${wholeHours}h`;
     return `${Math.round(hours / 24)}d`;
   }
 
@@ -576,8 +577,9 @@ export function createModel({
     if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
     const hours = deltaMs / 3600000;
     if (hours < 1) return t('<1h', { context: 'age' });
-    if (hours < 48)
-      return t('{count}h', { context: 'age', count: Math.round(hours) });
+    const wholeHours = Math.round(hours);
+    if (wholeHours < 48)
+      return t('{count}h', { context: 'age', count: wholeHours });
     return t('{count}d', { context: 'age', count: Math.round(hours / 24) });
   }
 
