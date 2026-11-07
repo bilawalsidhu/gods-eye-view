@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { findQuery } from '../../render/rendererOf.js';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
 
 export function createEvidence({
@@ -38,16 +38,12 @@ export function createEvidence({
 
   function _focusEvidenceVesselSnapshot() {
     if (!FOCUS_EVIDENCE_DEV || !state.viewer) return [];
+    const query = findQuery(state.viewer);
     return state.records.all.map((record) => {
       const visual = components.rendering.getVisual(record);
       const row = state.icons?.row(visual.iconId) ?? -1;
       const position = row >= 0 ? visual.position : null;
-      const screen = position
-        ? Cesium.SceneTransforms.worldToWindowCoordinates(
-            state.viewer.scene,
-            position,
-          )
-        : null;
+      const screen = position ? query?.project(position) : null;
       return {
         id: record.mmsi,
         show: row >= 0 && visual.visible === true,

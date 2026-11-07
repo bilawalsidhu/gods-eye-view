@@ -1,4 +1,8 @@
 import * as Cesium from 'cesium';
+// The Cesium camera factory, which loads the query factory: given a viewer
+// of a caller's own, with no renderer bound, the view area and evidence
+// reads still find a camera and a query port.
+import '../../render/cesium/camera.js';
 import { t } from '../../i18n/index.js';
 import {
   vesselTypeCss,
