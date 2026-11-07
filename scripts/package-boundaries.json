@@ -4915,6 +4915,7 @@
       "src/layers/ghostMaps/source.js",
       "src/sources/httpBody.js",
       "src/data/geoFileImport.js",
+      "src/icons.js",
       "src/i18n/marker.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
