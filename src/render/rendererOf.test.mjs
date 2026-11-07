@@ -5,8 +5,10 @@ import {
   cameraOf,
   findCamera,
   findCredits,
+  findEffects,
   provideUnboundCamera,
   provideUnboundCredits,
+  provideUnboundEffects,
   rendererOf,
 } from './rendererOf.js';
 
@@ -129,4 +131,37 @@ test('with no renderer bound, findCredits builds one port per scene and keeps it
   destroyed = true;
   assert.equal(findCredits(gone), null);
   assert.equal(built.find((entry) => entry.port === port).disposed, 1);
+});
+
+test('with no renderer bound, findEffects builds one effects port per scene until a renderer is bound', (t) => {
+  t.after(() => provideUnboundEffects(null));
+  const built = [];
+  provideUnboundEffects((host) => {
+    if (!host.scene) return null;
+    const entry = { port: { id: built.length }, disposed: 0 };
+    entry.dispose = () => (entry.disposed += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { scene: {} };
+  assert.equal(findEffects(viewer), built[0].port);
+  assert.equal(findEffects(viewer), built[0].port, 'kept, not rebuilt');
+  assert.equal(findEffects({}), null, 'nothing to build over');
+  assert.equal(findEffects(null), null);
+  const effects = { styles() {} };
+  const unbind = bindRenderer(viewer, { effects });
+  assert.equal(built[0].disposed, 1, 'the renderer supersedes the built port');
+  assert.equal(findEffects(viewer), effects);
+  unbind();
+  assert.equal(
+    findEffects(viewer),
+    built[1].port,
+    'unbound again: a fresh one',
+  );
+  let destroyed = false;
+  const gone = { scene: {}, isDestroyed: () => destroyed };
+  findEffects(gone);
+  destroyed = true;
+  assert.equal(findEffects(gone), null);
+  assert.equal(built[2].disposed, 1, 'let go with its scene');
 });

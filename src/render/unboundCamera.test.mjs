@@ -5,6 +5,8 @@
  * provides as `render/cesium/camera.js` loads, so every such entry must load
  * that module too. It loads `render/cesium/credits.js`, whose factory
  * builds `findCredits`' port for such a viewer the same way.
+ * Likewise an entry that reaches a caller of `findEffects` must load
+ * `render/cesium/effects.js`, which provides the effects factory.
  *
  * The graph is every static import, re-export and literal dynamic import of
  * the entry's module and those it reaches, read by the parsers the Cesium
@@ -24,26 +26,26 @@ const root = path.resolve(
 );
 const BRIDGE = 'src/render/rendererOf.js';
 const FACTORY = 'src/render/cesium/camera.js';
+const EFFECTS_FACTORY = 'src/render/cesium/effects.js';
 
 /**
  * Entries that take their Cesium code injected: the module named here is
- * GEV's Cesium side for them, and must load the factory. Given another, the
- * entry's flight finds no camera (`findCamera`) and does nothing.
+ * GEV's Cesium side for them, and must load the factories. Given another, the
+ * entry's flight finds no camera (`findCamera`) and does nothing. Visual
+ * settings are given their viewer by the application shell, which loads
+ * both factories; without it, their styles keep records and draw nothing.
  */
 const INJECTED = {
   './layers/recent-imagery': 'src/layers/recentImagery/rendering.js',
+  './ui/visual-settings': 'src/ui/applicationShell.js',
 };
 
 /**
  * Modules whose use of the bridge holds up without the factory: with no
  * port they read Cesium's `trackedEntity` instead, which is all an unbound
- * viewer can follow by; visual settings ask for the renderer's effects
- * only, never a camera, and keep their own records without one.
+ * viewer can follow by.
  */
-const FALLS_BACK = new Set([
-  'src/data/followed.js',
-  'src/ui/visualSettings.js',
-]);
+const FALLS_BACK = new Set(['src/data/followed.js']);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 
@@ -161,5 +163,31 @@ test('every public entry that reaches the renderer bridge loads the unbound came
     missing,
     [],
     `These entries can reach cameraOf without ${FACTORY}; import it where the entry first reaches the bridge.`,
+  );
+});
+
+test('every public entry that reaches a findEffects caller loads the unbound effects factory', () => {
+  const missing = [];
+  let reaching = 0;
+  const callsFindEffects = (file) =>
+    !file.startsWith('src/render/') &&
+    /\.(m?js|vue)$/.test(file) &&
+    readFileSync(path.join(root, file), 'utf8').includes('findEffects(');
+  for (const [key, declaration] of Object.entries(pkg.exports)) {
+    const target = browserTarget(declaration);
+    if (typeof target !== 'string' || !target.startsWith('./src/')) continue;
+    const entry = path.normalize(target.slice(2));
+    if (![...reachable(entry)].some(callsFindEffects)) continue;
+    reaching += 1;
+    const carrier = INJECTED[key];
+    const loads = (file) =>
+      reachable(file, { eager: true }).has(EFFECTS_FACTORY);
+    if (!loads(entry) && !(carrier && loads(carrier))) missing.push(key);
+  }
+  assert.ok(reaching > 0, 'no entry reaches findEffects: the walk is broken');
+  assert.deepEqual(
+    missing,
+    [],
+    `These entries can reach findEffects without ${EFFECTS_FACTORY}; import it where the entry first reaches the lookup.`,
   );
 });
