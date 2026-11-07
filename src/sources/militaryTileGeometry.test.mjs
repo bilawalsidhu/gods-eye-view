@@ -220,7 +220,7 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
     source: {},
     parts: {
       model: {
-        colorFor: () => C.Color.ORANGE,
+        colorFor: () => [1, 165 / 255, 0, 1],
         installationSourceLabel: () => 'OpenStreetMap',
       },
     },
@@ -299,7 +299,7 @@ test('cold names reconcile selection through enrichment, identical groups at ano
     source: {},
     parts: {
       model: {
-        colorFor: () => C.Color.ORANGE,
+        colorFor: () => [1, 165 / 255, 0, 1],
         installationSourceLabel: () => 'OpenStreetMap',
       },
     },

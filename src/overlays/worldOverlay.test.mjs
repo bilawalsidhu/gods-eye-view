@@ -2260,7 +2260,7 @@ test('installation titles share persistent card arbitration and retain a bounded
   const state = { enabled: true, viewer: env.viewer, contextAnchor: {} };
   const markers = createNamedMarkers({ state,
     services: { render: { governorRequestRender() {} } },
-    parts: { model: { colorFor: () => Cesium.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0 } },
+    parts: { model: { colorFor: () => [1, 165 / 255, 0, 1] }, rendering: { installationSurfaceHeightM: () => 0 } },
     overlayHost: { setEntries: setOverlayEntries, clearSource: clearOverlaySource,
       setVisible: setOverlaySourceVisible, getDiagnostics: getWorldOverlayDiagnostics },
   });

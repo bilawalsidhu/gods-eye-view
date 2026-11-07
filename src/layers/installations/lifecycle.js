@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
-import { LAYER_ID } from './policy.js';
+import { cameraOf } from '../../render/rendererOf.js';
+import { CAMERA_CHANGED_THRESHOLD, LAYER_ID } from './policy.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
@@ -17,17 +17,18 @@ export function createLifecycle({
   const methods = {
     init(viewer) {
       layerState.viewer = viewer;
-      layerState.dataSource = new Cesium.CustomDataSource(
-        'military-installations',
-      );
-      viewer.dataSources.add(layerState.dataSource);
+      parts.rendering.attach(viewer);
       const cameraChanged = () => {
         if (!layerState.contextAnchor) parts.viewport.scheduleLoad();
       };
-      layerState.moveEndRemove =
-        viewer.camera.moveEnd.addEventListener(cameraChanged);
-      layerState.changedRemove =
-        viewer.camera.changed?.addEventListener(cameraChanged);
+      const camera = cameraOf(viewer);
+      layerState.moveEndRemove = camera.on('moveEnd', cameraChanged);
+      // Measured for this listener alone; off, a load is never scheduled.
+      // The sensitivity claim in enable() is for raw camera listeners
+      // elsewhere, which this layer has always made finer while on.
+      layerState.changedRemove = camera.on('changed', cameraChanged, {
+        threshold: CAMERA_CHANGED_THRESHOLD,
+      });
       parts.selection.installInteraction(viewer);
     },
 
@@ -51,7 +52,11 @@ export function createLifecycle({
         });
       parts.namedMarkers?.enable();
       parts.namedMarkers?.sync(layerState.records || []);
-      claimCameraSensitivity(layerState.viewer.camera, LAYER_ID, 0.01);
+      claimCameraSensitivity(
+        layerState.viewer.camera,
+        LAYER_ID,
+        CAMERA_CHANGED_THRESHOLD,
+      );
       registerPickOwner(LAYER_ID, (id) => layerState.recordById.has(id));
       layerState.dataSource.show = true;
       // DataLayerManager invokes update() immediately after enable(), which owns
@@ -97,9 +102,7 @@ export function createLifecycle({
       layerState.clickSubscription = null;
       parts.namedMarkers?.destroy();
       parts.rendering.clearRendered();
-      if (layerState.dataSource && viewer)
-        viewer.dataSources.remove(layerState.dataSource, true);
-      layerState.dataSource = null;
+      parts.rendering.detach(viewer);
     },
   };
 

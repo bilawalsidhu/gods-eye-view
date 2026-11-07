@@ -1,11 +1,5 @@
-import * as Cesium from 'cesium';
-
 export function createState({ services }) {
   const state = {};
-
-  state.distanceEndpointScratch = new Cesium.Cartographic();
-
-  state.distanceGeodesicScratch = new Cesium.EllipsoidGeodesic();
 
   Object.assign(state, {
     viewer: null,

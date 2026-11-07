@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { describeInstallationFeedback } from '../../data/installationFeedback.js';
 import {
   LAYER_ID,
@@ -6,7 +5,10 @@ import {
   ANCHOR_REFRESH_M,
 } from './policy.js';
 import { formatNumber, t, tn } from '../../i18n/index.js';
-import { cameraOf } from '../../render/cesium/camera.js';
+import { fromDegrees, toCartographicRadians } from '../../geo/ellipsoid.js';
+import { surfaceDistance } from '../../geo/geodesic.js';
+import { toDegrees, toRadians } from '../../geo/vector.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 // installationFeedback.js is shared with the HUD (src/loadingFeedback.js) and
 // hands back msg()-marked English plus values; getStats translates them here.
@@ -66,7 +68,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * only area that answers "what is near this contact". The window moves
      * only after the subject travels ANCHOR_REFRESH_M, and cached tiles make
      * that cheap. Passing null returns the layer to viewport loading.
-     * @param {Cesium.Cartesian3|{latitude:number, longitude:number}|null} position
+     * @param {{x:number, y:number, z:number}|{latitude:number, longitude:number}|null} position
      *   Subject position.
      * @returns {boolean} Whether a new load was scheduled.
      */
@@ -79,17 +81,17 @@ export function createControls({ state: layerState, services, parts, source }) {
         )
           next = { latitude: position.latitude, longitude: position.longitude };
         else {
-          const carto = Cesium.Cartographic.fromCartesian(position);
+          const carto = toCartographicRadians(position);
           if (carto)
             next = {
-              latitude: Cesium.Math.toDegrees(carto.latitude),
-              longitude: Cesium.Math.toDegrees(carto.longitude),
+              latitude: toDegrees(carto.lat),
+              longitude: toDegrees(carto.lon),
             };
         }
       }
       // Keep the live centre even when the coarse fetch anchor has not moved.
       layerState.contextPosition = next
-        ? Cesium.Cartesian3.fromDegrees(next.longitude, next.latitude)
+        ? fromDegrees(next.longitude, next.latitude)
         : null;
       const previous = layerState.contextAnchor;
       if (!next) {
@@ -101,8 +103,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (
         previous &&
         parts.model.approximateSurfaceDistanceM(
-          Cesium.Math.toRadians(previous.latitude),
-          Cesium.Math.toRadians(previous.longitude),
+          toRadians(previous.latitude),
+          toRadians(previous.longitude),
           next.latitude,
           next.longitude,
         ) < ANCHOR_REFRESH_M
@@ -116,7 +118,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     getNearby(center, rangeM, maxCount = 50) {
       if (!center) return [];
       const range = Number.isFinite(rangeM) ? rangeM : Infinity;
-      const centerCartographic = Cesium.Cartographic.fromCartesian(center);
+      const centerCartographic = toCartographicRadians(center);
       if (!centerCartographic) return [];
       const nearby = [];
       const approximateLimit = Number.isFinite(range)
@@ -126,31 +128,23 @@ export function createControls({ state: layerState, services, parts, source }) {
         if (record.kind !== 'installation') continue;
         if (
           parts.model.approximateSurfaceDistanceM(
-            centerCartographic.latitude,
-            centerCartographic.longitude,
+            centerCartographic.lat,
+            centerCartographic.lon,
             record.latitude,
             record.longitude,
           ) > approximateLimit
         )
           continue;
         // The awareness disk is projected onto the ground. Confirm candidates
-        // with an exact ellipsoidal surface distance and reusable scratch state.
-        layerState.distanceEndpointScratch.longitude = Cesium.Math.toRadians(
-          record.longitude,
-        );
-        layerState.distanceEndpointScratch.latitude = Cesium.Math.toRadians(
-          record.latitude,
-        );
-        layerState.distanceEndpointScratch.height = 0;
-        layerState.distanceGeodesicScratch.setEndPoints(
-          centerCartographic,
-          layerState.distanceEndpointScratch,
-        );
-        const distanceM = layerState.distanceGeodesicScratch.surfaceDistance;
+        // with an exact ellipsoidal surface distance.
+        const distanceM = surfaceDistance(centerCartographic, {
+          lon: toRadians(record.longitude),
+          lat: toRadians(record.latitude),
+        });
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         nearby.push({
           ...record,
-          position: Cesium.Cartesian3.fromDegrees(
+          position: fromDegrees(
             record.longitude,
             record.latitude,
             parts.rendering.installationSurfaceHeightM(record),

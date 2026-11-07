@@ -165,7 +165,11 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
         };
       },
     },
-    viewRectangle: { value: () => null },
+    // A fake that computes a view rectangle answers with it, as the
+    // renderer does; one that does not has none.
+    viewRectangle: {
+      value: () => (fake.computeViewRectangle ? real.viewRectangle() : null),
+    },
     on: {
       value(event, cb) {
         const source = fake[event];

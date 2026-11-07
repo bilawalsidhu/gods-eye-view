@@ -66,7 +66,7 @@ function harness(t) {
   };
   const parts = {
     model: {
-      colorFor: () => Cesium.Color.ORANGE,
+      colorFor: () => [1, 165 / 255, 0, 1],
       installationSourceLabel: () => 'OpenStreetMap',
     },
   };

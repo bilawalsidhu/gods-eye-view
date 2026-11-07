@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as C from 'cesium';
 import { createNamedMarkers } from './namedMarkers.js';
 import { createLifecycle } from './lifecycle.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { createLocalInfrastructureOverlayEntry } from '../../data/localGeojsonCore.js';
 
 function setup(t) {
@@ -20,9 +21,10 @@ function setup(t) {
   t.mock.method(C.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => { projections.add(scratch); scratch.x = x; scratch.y = 300; return scratch; });
   const camera = { changed: new C.Event(), moveEnd: new C.Event(), positionWC: C.Cartesian3.fromDegrees(0, 0, 1e6), viewMatrix: C.Matrix4.clone(C.Matrix4.IDENTITY) };
   const state = { viewer: { camera, dataSources: { add() {}, remove() {} }, scene: { canvas: { clientWidth: 1280, clientHeight: 800 }, preRender: new C.Event(), primitives: { add: (p) => p, remove() {} } } }, enabled: true, contextAnchor: { latitude: 0, longitude: 0 } };
+  bindFakeCesiumCamera(state.viewer);
   const services = { render: { governorRequestRender() {} }, picking: { registerPickOwner() {}, unregisterPickOwner() {} }, context: { clearSelectedEntityContextForLayer() {} } };
   let loads = 0;
-  const parts = { model: { colorFor: () => C.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0, clearRendered() {} }, viewport: { scheduleLoad: () => loads++, clearUnavailableRetry() {} }, selection: { installInteraction() {} }, ingestion: { setInstallationStatus() {} } };
+  const parts = { model: { colorFor: () => [1, 165 / 255, 0, 1] }, rendering: { attach() { state.dataSource = { show: false }; }, detach() {}, installationSurfaceHeightM: () => 0, clearRendered() {} }, viewport: { scheduleLoad: () => loads++, clearUnavailableRetry() {} }, selection: { installInteraction() {} }, ingestion: { setInstallationStatus() {} } };
   const ctx = { state, services, parts, source: {}, overlayHost };
   parts.namedMarkers = createNamedMarkers(ctx);
   const lifecycle = createLifecycle(ctx).methods;
@@ -57,7 +59,7 @@ test('Contacts camera motion reprojects and declutters existing labels without s
   assert.equal(h.publications(), 5);
   h.lifecycle.destroy(h.state.viewer);
   assert.equal(h.camera.changed.numberOfListeners, 0);
-  assert.equal(h.camera.moveEnd.numberOfListeners, 0);
+  assert.equal(h.camera.moveEnd.numberOfListeners, 1, "only the camera port's own");
   assert.equal(h.state.viewer.scene.preRender.numberOfListeners, 0);
 });
 

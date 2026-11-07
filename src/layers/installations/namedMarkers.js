@@ -157,7 +157,7 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
             id: { installationId: record.id },
             position,
             pixelSize: 7,
-            color: parts.model.colorFor(record),
+            color: new Cesium.Color(...parts.model.colorFor(record)),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 1,
             disableDepthTestDistance: Infinity,

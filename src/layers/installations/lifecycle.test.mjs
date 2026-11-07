@@ -38,7 +38,7 @@ for (const source of [
           markersVisible = false;
         },
       },
-      rendering: {},
+      rendering: { attach: noop, detach: noop },
       viewport: { clearUnavailableRetry: noop },
       ingestion: { setInstallationStatus: noop },
     };

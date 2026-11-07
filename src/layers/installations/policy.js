@@ -2,6 +2,9 @@ export const LAYER_ID = 'military-installations';
 
 export const REQUEST_DEBOUNCE_MS = 180;
 
+/** How far the view moves before the layer looks again (camera `changed`). */
+export const CAMERA_CHANGED_THRESHOLD = 0.01;
+
 export const MAX_RENDERED = 700;
 
 export const GOOGLE_MILITARY_PLACE_TYPES = new Set(['military_base']);

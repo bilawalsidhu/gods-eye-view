@@ -1,5 +1,8 @@
 import { installationClassLabel, installationTitle } from './classLabel.js';
 import * as Cesium from 'cesium';
+// Still Cesium for its entities, so this layer loads the unbound camera
+// factory its other parts reach the renderer through.
+import '../../render/cesium/camera.js';
 import { t } from '../../i18n/index.js';
 import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from './policy.js';
 import { entityRecord } from '../../data/entityRecords.js';
@@ -20,6 +23,29 @@ export function createRendering({
   } = services.context;
   const { governorRequestRender } = services.render;
   const { warmFireAnchorFloors } = services.anchors;
+
+  /** A record's class colour, for the entities. */
+  function colorFor(record) {
+    const [r, g, b, a] = parts.model.colorFor(record);
+    return new Cesium.Color(r, g, b, a);
+  }
+
+  /**
+   * The layer's entities. They stay entities: the camera can follow a site
+   * (double-click), and the tracked card reads what it shows from them.
+   */
+  function attach(viewer) {
+    layerState.dataSource = new Cesium.CustomDataSource(
+      'military-installations',
+    );
+    viewer.dataSources.add(layerState.dataSource);
+  }
+
+  function detach(viewer) {
+    if (layerState.dataSource && viewer)
+      viewer.dataSources.remove(layerState.dataSource, true);
+    layerState.dataSource = null;
+  }
 
   /**
    * Shared rendered-surface height for an installation anchor or footprint.
@@ -65,7 +91,7 @@ export function createRendering({
     const footprints =
       record.footprints || (record.footprint ? [[record.footprint]] : []);
     const material = new Cesium.ColorMaterialProperty(
-      parts.model.colorFor(record).withAlpha(0.22),
+      colorFor(record).withAlpha(0.22),
     );
     for (let i = 0; i < footprints.length; i++) {
       const rings = footprints[i];
@@ -207,7 +233,7 @@ export function createRendering({
     for (const [id, rendered] of [...layerState.renderedKeys])
       if (keys.get(id) !== rendered.key) removeRecordEntities(id);
     for (const record of records) {
-      const color = parts.model.colorFor(record);
+      const color = colorFor(record);
       const surfaceHeightM = installationSurfaceHeightM(record);
       const displayPosition = Cesium.Cartesian3.fromDegrees(
         record.longitude,
@@ -357,6 +383,8 @@ export function createRendering({
     });
   }
   return {
+    attach,
+    detach,
     installationSurfaceHeightM,
     clearSelectionFill,
     syncSelectionFill,

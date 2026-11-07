@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createViewport } from './viewport.js';
 import { createLifecycle } from './lifecycle.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 
 test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and recover from wide views', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -18,11 +19,18 @@ test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and 
     scene: { globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
     dataSources: { add() {}, remove() {} },
   };
+  bindFakeCesiumCamera(viewer);
   const state = { enabled: false, renderedKeys: new Map() };
   const loads = [];
   const parts = {
     selection: { installInteraction() {} },
-    rendering: { clearRendered() {} },
+    rendering: {
+      attach() {
+        state.dataSource = { show: false };
+      },
+      detach() {},
+      clearRendered() {},
+    },
     ingestion: {
       loadInstallations() {
         state.abort = new AbortController();
@@ -92,7 +100,8 @@ test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and 
   assert.equal(loads.at(-1).coverage.kind, 'viewport');
   life.destroy(viewer);
   assert.equal(camera.changed.numberOfListeners, 0);
-  assert.equal(camera.moveEnd.numberOfListeners, 0);
+  // The camera port's own moveEnd listener stays; the layer's is gone.
+  assert.equal(camera.moveEnd.numberOfListeners, 1);
   assert.equal(camera.percentageChanged, 0.5);
 });
 
@@ -104,6 +113,7 @@ test('an aborting real ingestion cannot clear the next scheduled view key', asyn
     camera: { computeViewRectangle: () => rectangle },
     scene: { globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
   };
+  bindFakeCesiumCamera(viewer);
   const state = { enabled: true, viewer };
   const pending = [];
   const parts = {
@@ -167,7 +177,10 @@ test('wide views refresh screen decluttering when the globe rectangle stays unch
   };
   const state = {
     enabled: true,
-    viewer: { camera, scene: { globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } } },
+    viewer: bindFakeCesiumCamera({
+      camera,
+      scene: { globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
+    }),
   };
   let loads = 0;
   const parts = {

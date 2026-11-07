@@ -12,7 +12,7 @@ function harness() {
   let listener, removed = 0;
   const noop = () => {};
   const services = { ground: { floorAltitudeM: () => 0, cachedGroundFloor: () => 0 }, anchors: {}, render: { governorRequestRender: noop }, context: { removeEntityContextsForLayer: noop, clearSelectedEntityContextForLayer: noop }, picking: { registerPickOwner: noop, unregisterPickOwner: noop }, maps: { subscribeMapStack(cb) { listener = cb; return () => { listener = null; removed++; }; } } };
-  const parts = { model: { colorFor: () => C.Color.ORANGE, installationSourceLabel: () => 'OpenStreetMap' }, viewport: { clearUnavailableRetry: noop }, ingestion: { setInstallationStatus: noop } };
+  const parts = { model: { colorFor: () => [1, 165 / 255, 0, 1], installationSourceLabel: () => 'OpenStreetMap' }, viewport: { clearUnavailableRetry: noop }, ingestion: { setInstallationStatus: noop } };
   parts.rendering = createRendering({ state, services, parts });
   const lifecycle = createLifecycle({ state, services, parts, source: {} }).methods;
   return { state, record, parts, lifecycle, changeSurface: () => listener(), removed: () => removed };
