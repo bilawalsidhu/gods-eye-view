@@ -119,3 +119,65 @@ test('Escape closes the search field only while it is open; panel collapse alway
   LocationNavigation.prototype.closeSearch.call(owner);
   assert.equal(closed, 2);
 });
+
+test('exact aircraft search frames a fresh single match without starting follow', () => {
+  let called = null;
+  const owner = {
+    viewer: { camera: { flyTo: (options) => { called = options; } } },
+    services: {
+      flightsLayer: {
+        findExactFlightMatches: () => ({
+          status: 'found',
+          matches: [{
+            callsign: 'UAL123', icao24: 'abc123', latitude: 40,
+            longitude: -73, altitudeM: 1250,
+          }],
+        }),
+      },
+    },
+  };
+  const identity = { kind: 'callsign', value: 'UAL123' };
+  const result = LocationNavigation.prototype._searchObservedFlight.call(
+    owner, identity, { beforeFly: () => true },
+  );
+  assert.equal(result.navigationMode, 'aircraft-snapshot');
+  assert.match(result.label, /not following/);
+  assert.ok(called?.destination);
+  assert.equal(called.duration, 2.3);
+});
+
+test('flight search never moves the camera on ambiguous, disabled or cancelled lookup', () => {
+  let moved = 0;
+  const owner = {
+    viewer: { camera: { flyTo: () => moved++ } },
+    services: { flightsLayer: {
+      findExactFlightMatches: () => ({
+        status: 'found',
+        matches: [{ icao24: 'abc123' }, { icao24: 'def456' }],
+      }),
+    } },
+  };
+  const invoke = (options) =>
+    LocationNavigation.prototype._searchObservedFlight.call(
+      owner, { kind: 'callsign', value: 'UAL123' }, options,
+    );
+  assert.throws(() => invoke(), /Several aircraft match/);
+  owner.services.flightsLayer.findExactFlightMatches = () => ({ status: 'disabled', matches: [] });
+  assert.throws(() => invoke(), /Enable Live Flights/);
+  owner.services.flightsLayer.findExactFlightMatches = () => ({
+    status: 'found', matches: [{ icao24: 'abc123', latitude: 40, longitude: -73, altitudeM: 900 }],
+  });
+  assert.deepEqual(invoke({ beforeFly: () => false }), { cancelled: true });
+  assert.equal(moved, 0);
+});
+
+test('flight lookup refusals remain visible after failed lookup settles', () => {
+  const n = navigation();
+  n.handle('searching', 'started');
+  LocationNavigation.prototype._handleLocationSearchState.call(
+    n.owner,
+    { status: 'failed', query: 'UAL123', error: { message: 'Flight search: No exact match in currently loaded flights.' } },
+    { type: 'failed', generation: 7 },
+  );
+  assert.equal(n.errors.at(-1), 'Flight search: No exact match in currently loaded flights.');
+});

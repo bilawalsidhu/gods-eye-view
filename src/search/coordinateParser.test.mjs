@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import {
   parseCoordinateQuery,
   formatCoordinateLabel,
+  parseFlightSearchQuery,
 } from './coordinateParser.js';
 
 test('a plain decimal pair is latitude then longitude', () => {
@@ -245,4 +246,14 @@ test('a signed plain component leaves a spaced letter with the other component',
     parseCoordinateQuery('40 N -74'),
     parseCoordinateQuery('40 N, -74'),
   );
+});
+
+test('flight lookup accepts exact ICAO-format callsigns but never vague place text', () => {
+  for (const query of ['UAL123', 'ual 123', ' Flight Ual123 ', 'callsign UAL123'])
+    assert.deepEqual(parseFlightSearchQuery(query), { kind: 'callsign', value: 'UAL123' });
+  assert.deepEqual(parseFlightSearchQuery('icao24: A1B2C3'), { kind: 'icao24', value: 'a1b2c3' });
+  assert.deepEqual(parseFlightSearchQuery('hex a1b2c3'), { kind: 'icao24', value: 'a1b2c3' });
+  assert.deepEqual(parseFlightSearchQuery('ABC123'), { kind: 'either', value: 'ABC123' });
+  for (const query of ['New York', 'Paris 15', 'UA 123', 'United 123', '123 UAL', 'UAL123 extra', 'geo:40,-74', '', 'UAL12;ignore', 'UAL12345', 'hello UAL123 world'])
+    assert.equal(parseFlightSearchQuery(query), null, query);
 });
